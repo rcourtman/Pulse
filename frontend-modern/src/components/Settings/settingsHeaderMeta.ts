@@ -40,8 +40,8 @@ export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
     description: 'Configure Pulse relay connectivity for secure remote access.',
   },
   'system-pro': {
-    title: 'Pulse Pro',
-    description: 'Manage license activation and Pulse Pro feature access.',
+    title: 'Pro',
+    description: 'Manage license activation and Pro feature access.',
   },
   'organization-overview': {
     title: 'Organization Overview',

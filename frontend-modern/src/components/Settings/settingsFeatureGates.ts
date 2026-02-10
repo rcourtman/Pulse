@@ -44,5 +44,5 @@ export function getTabLockReason(
   if (primaryRequiredFeature) {
     trackPaywallViewed(primaryRequiredFeature, 'settings_tab');
   }
-  return 'This settings section requires Pulse Pro.';
+  return 'This settings section requires Pro.';
 }

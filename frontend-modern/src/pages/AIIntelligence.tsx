@@ -793,7 +793,7 @@ export function AIIntelligence() {
                     <button
                       onClick={() => handleAutonomyChange(level)}
                       disabled={isDisabled()}
-                      title={isProLocked() ? 'Upgrade to Pulse Pro for automatic fixes' : undefined}
+                      title={isProLocked() ? 'Upgrade to Pro for automatic fixes' : undefined}
                       class={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${isActive()
                         ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
                         : isDisabled()

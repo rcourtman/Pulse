@@ -530,7 +530,7 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
             <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
               <div>
                 <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Add SAML Provider</h3>
-                <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Pulse Pro feature</p>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Pro feature</p>
               </div>
               <button
                 type="button"
@@ -543,7 +543,7 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
             </div>
             <div class="px-6 py-5 space-y-4">
               <p class="text-sm text-gray-600 dark:text-gray-300">
-                SAML 2.0 and multi-provider SSO requires Pulse Pro.
+                SAML 2.0 and multi-provider SSO requires Pro.
               </p>
               <div class="flex items-center justify-end gap-2">
                 <button
@@ -576,7 +576,7 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
             <div class="flex-1">
               <h4 class="text-base font-semibold text-gray-900 dark:text-white">Advanced SSO</h4>
               <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                SAML 2.0 and multi-provider SSO requires Pulse Pro. Basic OIDC is available in the free tier.
+                SAML 2.0 and multi-provider SSO requires Pro. Basic OIDC is available in the free tier.
               </p>
             </div>
             <a

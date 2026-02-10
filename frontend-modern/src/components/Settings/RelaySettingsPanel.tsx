@@ -186,10 +186,10 @@ export const RelaySettingsPanel: Component = () => {
               <RadioTower size={20} class="text-blue-500 mt-0.5 flex-shrink-0" strokeWidth={2} />
               <div>
                 <p class="text-sm font-medium text-gray-900 dark:text-gray-100">
-                  Pulse Pro Required
+                  Pro Required
                 </p>
                 <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                  Remote access via Pulse Relay requires a Pulse Pro license. Upgrade to access your infrastructure from anywhere.
+                  Remote access via Pulse Relay requires a Pro license. Upgrade to access your infrastructure from anywhere.
                 </p>
               </div>
             </div>

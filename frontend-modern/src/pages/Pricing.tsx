@@ -246,7 +246,9 @@ export default function Pricing() {
           <div class="mt-6">
             <a
               class="w-full inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-800 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700/60"
-              href="mailto:hello@pulserelay.pro?subject=Pulse%20Cloud%20Waitlist"
+              href={getUpgradeActionUrlOrFallback('cloud')}
+              target="_blank"
+              rel="noreferrer"
             >
               Contact Us
             </a>
@@ -295,4 +297,3 @@ export default function Pricing() {
     </div>
   );
 }
-

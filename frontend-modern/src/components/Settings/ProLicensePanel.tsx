@@ -174,7 +174,7 @@ export const ProLicensePanel: Component = () => {
   };
 
   const handleClear = async () => {
-    if (!confirm('Clear the current Pulse Pro license?')) {
+    if (!confirm('Clear the current Pro license?')) {
       return;
     }
     setClearing(true);
@@ -192,8 +192,8 @@ export const ProLicensePanel: Component = () => {
   return (
     <div class="space-y-6">
       <SettingsPanel
-        title="Pulse Pro License"
-        description="Activate your Pulse Pro license to unlock auto-fix, alert-triggered AI, and advanced features."
+        title="Pro License"
+        description="Activate your Pro license to unlock auto-fix, alert-triggered AI, and advanced features."
         icon={<ShieldCheck class="w-5 h-5" />}
         action={
           <button
@@ -213,7 +213,7 @@ export const ProLicensePanel: Component = () => {
           <textarea
             id="pulse-pro-license-key"
             class={controlClass('min-h-[120px] font-mono')}
-            placeholder="Paste your Pulse Pro license key"
+            placeholder="Paste your Pro license key"
             value={licenseKey()}
             onInput={(event) => setLicenseKey(event.currentTarget.value)}
           />
@@ -240,7 +240,7 @@ export const ProLicensePanel: Component = () => {
 
         <Show when={showTrialStart()}>
           <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30 p-3">
-            <p class="text-sm font-medium text-gray-900 dark:text-gray-100">Try Pulse Pro free</p>
+            <p class="text-sm font-medium text-gray-900 dark:text-gray-100">Try Pro for free</p>
             <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">
               Start a 14-day Pro trial for this organization.
             </p>
@@ -261,22 +261,22 @@ export const ProLicensePanel: Component = () => {
         description="Review your active tier, expiry, and available features."
         icon={<BadgeCheck class="w-5 h-5" />}
       >
-        <Show when={subscriptionState() === 'expired'}>
-          <div class="mb-4 rounded-lg border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-900/20 p-3 text-sm text-red-900 dark:text-red-100">
-            <p class="font-medium">Your Pro trial has ended</p>
-            <p class="text-xs text-red-800/80 dark:text-red-200/80 mt-1">
-              Upgrade to keep Pulse Pro features.
-            </p>
-            <a
-              class="inline-flex items-center gap-1 mt-2 text-xs font-medium text-red-900 dark:text-red-100 hover:underline"
-              href={getUpgradeActionUrlOrFallback('trial_expired')}
-              target="_blank"
-              rel="noreferrer"
-            >
-              View Pulse Pro plans
-            </a>
-          </div>
-        </Show>
+	        <Show when={subscriptionState() === 'expired'}>
+	          <div class="mb-4 rounded-lg border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-900/20 p-3 text-sm text-red-900 dark:text-red-100">
+	            <p class="font-medium">Your Pro trial has ended</p>
+	            <p class="text-xs text-red-800/80 dark:text-red-200/80 mt-1">
+	              Upgrade to keep Pro features.
+	            </p>
+	            <a
+	              class="inline-flex items-center gap-1 mt-2 text-xs font-medium text-red-900 dark:text-red-100 hover:underline"
+	              href={getUpgradeActionUrlOrFallback('trial_expired')}
+	              target="_blank"
+	              rel="noreferrer"
+	            >
+	              View Pro plans
+	            </a>
+	          </div>
+	        </Show>
         <Show when={!loading()} fallback={<p class="text-sm text-gray-500">Loading license status...</p>}>
           <div class="flex flex-wrap items-center gap-2">
             <span class={`px-2 py-1 text-xs font-medium rounded-full ${statusTone()}`}>
@@ -289,11 +289,11 @@ export const ProLicensePanel: Component = () => {
             </Show>
           </div>
 
-          <Show when={hasLicenseDetails()} fallback={
-            <div class="text-sm text-gray-500 dark:text-gray-400">
-              No Pulse Pro license is active.
-            </div>
-          }>
+	          <Show when={hasLicenseDetails()} fallback={
+	            <div class="text-sm text-gray-500 dark:text-gray-400">
+	              No Pro license is active.
+	            </div>
+	          }>
             <div class="grid gap-4 sm:grid-cols-2">
               <div>
                 <p class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Tier</p>
@@ -352,22 +352,22 @@ export const ProLicensePanel: Component = () => {
             </Show>
           </Show>
 
-          <Show when={!status()?.valid && subscriptionState() !== 'expired'}>
-            <div class="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-3 text-sm text-amber-800 dark:text-amber-200">
-              <p class="font-medium">Upgrade to Pulse Pro</p>
-              <p class="text-xs text-amber-700 dark:text-amber-300 mt-1">
-                Unlock Pulse Patrol, alert analysis, auto-fix, and more.
-              </p>
-              <a
-                class="inline-flex items-center gap-1 mt-2 text-xs font-medium text-amber-800 dark:text-amber-200 hover:underline"
-                href={getUpgradeActionUrlOrFallback('ai_autofix')}
-                target="_blank"
-                rel="noreferrer"
-              >
-                View Pulse Pro plans
-              </a>
-            </div>
-          </Show>
+	          <Show when={!status()?.valid && subscriptionState() !== 'expired'}>
+	            <div class="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-3 text-sm text-amber-800 dark:text-amber-200">
+	              <p class="font-medium">Upgrade to Pro</p>
+	              <p class="text-xs text-amber-700 dark:text-amber-300 mt-1">
+	                Unlock Pulse Patrol, alert analysis, auto-fix, and more.
+	              </p>
+	              <a
+	                class="inline-flex items-center gap-1 mt-2 text-xs font-medium text-amber-800 dark:text-amber-200 hover:underline"
+	                href={getUpgradeActionUrlOrFallback('ai_autofix')}
+	                target="_blank"
+	                rel="noreferrer"
+	              >
+	                View Pro plans
+	              </a>
+	            </div>
+	          </Show>
         </Show>
       </SettingsPanel>
     </div>

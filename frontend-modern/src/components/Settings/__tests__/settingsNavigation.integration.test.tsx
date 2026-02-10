@@ -17,6 +17,7 @@ const canonicalTabPaths = {
   'organization-overview': '/settings/organization',
   'organization-access': '/settings/organization/access',
   'organization-billing': '/settings/organization/billing',
+  'organization-billing-admin': '/settings/organization/billing-admin',
   'organization-sharing': '/settings/organization/sharing',
   api: '/settings/integrations/api',
   'security-overview': '/settings/security-overview',
@@ -43,6 +44,7 @@ const gatedTabs: Array<[SettingsTab, string]> = [
   ['organization-access', 'multi_tenant'],
   ['organization-sharing', 'multi_tenant'],
   ['organization-billing', 'multi_tenant'],
+  ['organization-billing-admin', 'multi_tenant'],
 ];
 
 describe('settingsNavigation integration scaffold', () => {
@@ -93,7 +95,7 @@ describe('settingsNavigation integration scaffold', () => {
     it('getTabLockReason returns reason for locked tabs and null for unlocked', () => {
       for (const [tab, requiredFeature] of gatedTabs) {
         expect(getTabLockReason(tab, hasFeatures([]), () => true)).toBe(
-          'This settings section requires Pulse Pro.',
+          'This settings section requires Pro.',
         );
         expect(getTabLockReason(tab, hasFeatures([requiredFeature]), () => true)).toBeNull();
       }

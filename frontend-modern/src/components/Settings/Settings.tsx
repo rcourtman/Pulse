@@ -44,7 +44,7 @@ import Container from 'lucide-solid/icons/container';
 import type { NodeConfigWithStatus } from '@/types/nodes';
 import type { SecurityStatus as SecurityStatusInfo } from '@/types/config';
 import { eventBus } from '@/stores/events';
-import { hasFeature, isMultiTenantEnabled, licenseLoaded, loadLicenseStatus } from '@/stores/license';
+import { hasFeature, isHostedModeEnabled, isMultiTenantEnabled, licenseLoaded, loadLicenseStatus } from '@/stores/license';
 import { SETTINGS_HEADER_META } from './settingsHeaderMeta';
 import { baseTabGroups } from './settingsTabs';
 import { getTabLockReason, isFeatureLocked, isTabLocked } from './settingsFeatureGates';
@@ -356,7 +356,21 @@ const Settings: Component<SettingsProps> = (props) => {
     baseTabGroups
       .map((group) => {
         const items = group.items
-          .filter((item) => !(item.features?.includes('multi_tenant') && !isMultiTenantEnabled()))
+          .filter((item) => {
+            if (item.features?.includes('multi_tenant') && !isMultiTenantEnabled()) {
+              return false;
+            }
+            if (item.hostedOnly && !isHostedModeEnabled()) {
+              return false;
+            }
+            if (item.adminOnly) {
+              const status = securityStatus();
+              if (status?.hasProxyAuth && status.proxyAuthIsAdmin === false) {
+                return false;
+              }
+            }
+            return true;
+          })
           .map((item) => {
             const lockedByFeature = isFeatureLockedForLicense(item.features);
             return {
@@ -390,7 +404,7 @@ const Settings: Component<SettingsProps> = (props) => {
       return;
     }
     if (tab !== 'system-pro') {
-      notificationStore.info('This settings section requires Pulse Pro.');
+      notificationStore.info('This settings section requires Pro.');
       setActiveTab('system-pro');
     }
   });
@@ -806,7 +820,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                 }}
                                 title={
                                   sidebarCollapsed()
-                                    ? `${item.label}${item.badge ? ` (${item.badge})` : ''}${isLocked() ? ' - requires Pulse Pro' : ''}`
+                                    ? `${item.label}${item.badge ? ` (${item.badge})` : ''}${isLocked() ? ' - requires Pro' : ''}`
                                     : undefined
                                 }
                               >

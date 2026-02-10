@@ -149,7 +149,7 @@ export const baseTabGroups: SettingsNavGroup[] = [
       },
       {
         id: 'system-pro',
-        label: 'Pulse Pro',
+        label: 'Pro',
         icon: PulseLogoIcon,
       },
     ],

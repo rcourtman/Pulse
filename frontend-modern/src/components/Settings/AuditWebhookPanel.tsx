@@ -93,9 +93,9 @@ export function AuditWebhookPanel() {
                 <Show when={!loading()} fallback={<div class="text-sm text-gray-500 dark:text-gray-400">Loading...</div>}>
                     <Card tone="info" padding="md">
                         <div class="text-sm">
-                            <p class="font-semibold text-gray-900 dark:text-gray-100">Pulse Pro Required</p>
+                            <p class="font-semibold text-gray-900 dark:text-gray-100">Pro Required</p>
                             <p class="mt-1 text-gray-600 dark:text-gray-400">
-                                Audit webhooks are part of the audit logging feature set and require Pulse Pro.
+                                Audit webhooks are part of the audit logging feature set and require Pro.
                             </p>
                         </div>
                     </Card>

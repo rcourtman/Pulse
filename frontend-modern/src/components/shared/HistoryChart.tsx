@@ -655,7 +655,7 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
                         </div>
                         <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-1">{lockDays()}-Day History</h3>
                         <p class="text-sm text-gray-600 dark:text-gray-300 text-center max-w-[200px] mb-4">
-                            Upgrade to Pulse Pro to unlock {lockDays()} days of historical data retention.
+                            Upgrade to Pro to unlock {lockDays()} days of historical data retention.
                         </p>
                         <div class="flex flex-col items-center gap-2">
                             <a

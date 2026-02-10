@@ -32,7 +32,7 @@ export function InvestigateAlertButton(props: InvestigateAlertButtonProps) {
         e.stopPropagation();
         e.preventDefault();
         if (isLocked()) {
-            notificationStore.warning('Pulse Pro required to investigate alerts with Pulse Assistant.');
+            notificationStore.warning('Pro required to investigate alerts with Pulse Assistant.');
             return;
         }
 
@@ -117,7 +117,7 @@ Please:
           hover:border-purple-300 dark:hover:border-purple-600
           ${isLocked() ? 'opacity-60 cursor-not-allowed hover:bg-purple-500/10' : ''}
           ${props.class || ''}`}
-                title={isLocked() ? 'Pulse Pro required to investigate alerts with Pulse Assistant' : 'Ask Pulse Assistant to investigate this alert'}
+                title={isLocked() ? 'Pro required to investigate alerts with Pulse Assistant' : 'Ask Pulse Assistant to investigate this alert'}
                 aria-disabled={isLocked()}
             >
                 <svg
@@ -155,7 +155,7 @@ Please:
           gap-1.5
           ${isLocked() ? 'opacity-60 cursor-not-allowed hover:bg-purple-500/10' : ''}
           ${props.class || ''}`}
-                title={isLocked() ? 'Pulse Pro required to investigate alerts with Pulse Assistant' : 'Ask Pulse Assistant to investigate this alert'}
+                title={isLocked() ? 'Pro required to investigate alerts with Pulse Assistant' : 'Ask Pulse Assistant to investigate this alert'}
                 aria-disabled={isLocked()}
             >
                 <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -186,7 +186,7 @@ Please:
         gap-2
         ${isLocked() ? 'opacity-60 cursor-not-allowed hover:bg-purple-500' : ''}
         ${props.class || ''}`}
-            title={isLocked() ? 'Pulse Pro required to investigate alerts with Pulse Assistant' : 'Ask Pulse Assistant to investigate this alert'}
+            title={isLocked() ? 'Pro required to investigate alerts with Pulse Assistant' : 'Ask Pulse Assistant to investigate this alert'}
             aria-disabled={isLocked()}
         >
             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
