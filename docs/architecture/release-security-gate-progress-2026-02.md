@@ -3,7 +3,7 @@
 Linked plan:
 - `docs/architecture/release-security-gate-plan-2026-02.md`
 
-Status: Complete — `GO_WITH_CONDITIONS`
+Status: Complete — `GO`
 Date: 2026-02-09
 
 ## Rules
@@ -378,6 +378,26 @@ Rollback:
 - 4 operational runbooks verified for incident response, rollback, and kill-switch readiness.
 
 **Certification date:** 2026-02-09
+
+---
+
+## Addendum (2026-02-09): Conditions Resolved, Verdict Upgraded to `GO`
+
+All `GO_WITH_CONDITIONS` items from SEC-04 have been resolved:
+
+1. **Go toolchain upgraded** to `go1.25.7` (repo `go.mod` toolchain directive updated; CI and Docker pinned accordingly).
+2. **Hosted public signup cleanup hardening** implemented: on any post-init provisioning failure (including RBAC failure), the org directory is cleaned up and any cached RBAC manager is closed/removed. A regression test was added.
+
+### Evidence (rerun)
+
+Commands run + exit codes:
+1. `go env GOVERSION` -> `go1.25.7`
+2. `$(go env GOPATH)/bin/govulncheck ./...` -> exit 0 (No vulnerabilities found)
+3. `go test ./... -count=1` -> exit 0
+
+### UPDATED FINAL SECURITY VERDICT: `GO`
+
+All predecessor packets remain `DONE/APPROVED`. There are **zero** unresolved P0/P1 security findings, and the previously accepted P1 conditions have been remediated.
 
 ### SEC-04 Review Record
 

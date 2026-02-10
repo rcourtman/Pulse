@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createResource, createSignal, type Accessor } from 'solid-js';
+import { createEffect, createMemo, createSignal, type Accessor } from 'solid-js';
 import {
   ChartsAPI as ChartService,
   type AggregatedMetricPoint,
@@ -34,6 +34,8 @@ export interface DashboardTrends {
 interface HistoryTarget {
   id: string;
   resourceType: HistoryResourceType;
+  /** The unified resource ID used as the map key (may differ from the API resource ID). */
+  originalId: string;
 }
 
 interface DashboardTrendRequest {
@@ -129,7 +131,7 @@ function buildHistoryTargets(
     if (mt) {
       const historyType = asHistoryResourceType(mt.resourceType);
       if (historyType) {
-        targets.push({ id: mt.resourceId, resourceType: historyType });
+        targets.push({ id: mt.resourceId, resourceType: historyType, originalId: id });
         continue;
       }
     }
@@ -140,7 +142,7 @@ function buildHistoryTargets(
     if (!mappedType) continue;
     const historyType = asHistoryResourceType(mappedType);
     if (!historyType) continue;
-    targets.push({ id, resourceType: historyType });
+    targets.push({ id, resourceType: historyType, originalId: id });
   }
 
   return targets;
@@ -263,10 +265,10 @@ async function fetchDashboardTrendSnapshot(request: DashboardTrendRequest): Prom
             request.infrastructureRange,
             SPARKLINE_POINTS,
           );
-          return [target.id, extractTrendData(points)] as const;
+          return [target.originalId, extractTrendData(points)] as const;
         } catch (error) {
           captureError(error);
-          return [target.id, createEmptyTrendData()] as const;
+          return [target.originalId, createEmptyTrendData()] as const;
         }
       }),
     ),
@@ -280,10 +282,10 @@ async function fetchDashboardTrendSnapshot(request: DashboardTrendRequest): Prom
             request.infrastructureRange,
             SPARKLINE_POINTS,
           );
-          return [target.id, extractTrendData(points)] as const;
+          return [target.originalId, extractTrendData(points)] as const;
         } catch (error) {
           captureError(error);
-          return [target.id, createEmptyTrendData()] as const;
+          return [target.originalId, createEmptyTrendData()] as const;
         }
       }),
     ),
@@ -359,35 +361,66 @@ export function useDashboardTrends(
     };
   });
 
-  const requestKey = createMemo(() => JSON.stringify(trendRequest()));
+  // Stabilize the request key: sort targets by ID so that metric-value
+  // fluctuations don't shuffle the ordering and trigger unnecessary refetches.
+  const requestKey = createMemo(() => {
+    const req = trendRequest();
+    const stableReq = {
+      cpu: [...req.cpu].sort((a, b) => a.id.localeCompare(b.id)),
+      memory: [...req.memory].sort((a, b) => a.id.localeCompare(b.id)),
+      storage: [...req.storage].sort(),
+      infrastructureRange: req.infrastructureRange,
+    };
+    return JSON.stringify(stableReq);
+  });
+
   const initialSnapshot = createEmptyTrendSnapshot();
+  const [snapshot, setSnapshot] = createSignal<DashboardTrendSnapshot>(initialSnapshot);
+  const [trendLoading, setTrendLoading] = createSignal(false);
 
-  const [trendResource] = createResource(
-    requestKey,
-    async () => fetchDashboardTrendSnapshot(trendRequest()),
-    { initialValue: initialSnapshot },
-  );
+  // Track the latest request to discard stale responses.
+  let latestRequestId = 0;
 
+  // Use manual async fetching instead of createResource so that refetches
+  // never trigger the app-level <Suspense> boundary (which would unmount
+  // the entire page and reset scroll position).
   createEffect(() => {
-    const snapshot = trendResource();
-    const resourceError = trendResource.error;
-    if (snapshot?.error) {
-      setError(snapshot.error);
-      return;
-    }
-    if (resourceError) {
-      setError(toErrorMessage(resourceError));
-      return;
-    }
-    setError(null);
+    requestKey(); // track dependency — re-run effect when key changes
+    const request = trendRequest();
+
+    // Skip empty requests (no targets yet).
+    if (request.cpu.length === 0 && request.memory.length === 0 && request.storage.length === 0) return;
+
+    const requestId = ++latestRequestId;
+    setTrendLoading(true);
+
+    fetchDashboardTrendSnapshot(request)
+      .then((result) => {
+        if (requestId !== latestRequestId) return; // stale
+        setSnapshot(result);
+        if (result.error) {
+          setError(result.error);
+        } else {
+          setError(null);
+        }
+      })
+      .catch((err) => {
+        if (requestId !== latestRequestId) return;
+        setError(toErrorMessage(err));
+      })
+      .finally(() => {
+        if (requestId === latestRequestId) {
+          setTrendLoading(false);
+        }
+      });
   });
 
   return createMemo<DashboardTrends>(() => {
-    const snapshot = trendResource() ?? initialSnapshot;
+    const current = snapshot();
     return {
-      infrastructure: snapshot.infrastructure,
-      storage: snapshot.storage,
-      loading: trendResource.loading,
+      infrastructure: current.infrastructure,
+      storage: current.storage,
+      loading: trendLoading(),
       error: error(),
     };
   });

@@ -1,4 +1,4 @@
-import { Component, Show } from 'solid-js';
+import { Component, Show, type JSX } from 'solid-js';
 import { Card } from '@/components/shared/Card';
 import { SearchInput } from '@/components/shared/SearchInput';
 import { ColumnPicker } from '@/components/shared/ColumnPicker';
@@ -6,22 +6,28 @@ import type { ColumnDef } from '@/hooks/useColumnVisibility';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import type { StorageSourceOption } from './storageSourceOptions';
 
+export type StorageStatusFilter = 'all' | 'available' | 'warning' | 'critical' | 'offline' | 'unknown';
+export type StorageGroupByFilter = 'node' | 'type' | 'status';
+
 interface StorageFilterProps {
   search: () => string;
   setSearch: (value: string) => void;
-  groupBy?: () => 'node' | 'storage';
-  setGroupBy?: (value: 'node' | 'storage') => void;
+  groupBy?: () => StorageGroupByFilter;
+  setGroupBy?: (value: StorageGroupByFilter) => void;
   sortKey: () => string;
   setSortKey: (value: string) => void;
   sortDirection: () => 'asc' | 'desc';
   setSortDirection: (value: 'asc' | 'desc') => void;
   sortOptions?: { value: string; label: string }[];
+  sortDisabled?: boolean;
   searchInputRef?: (el: HTMLInputElement) => void;
-  statusFilter?: () => 'all' | 'available' | 'offline';
-  setStatusFilter?: (value: 'all' | 'available' | 'offline') => void;
+  statusFilter?: () => StorageStatusFilter;
+  setStatusFilter?: (value: StorageStatusFilter) => void;
   sourceFilter?: () => string;
   setSourceFilter?: (value: string) => void;
   sourceOptions?: StorageSourceOption[];
+  // Slot for page-specific filters (e.g., view toggle, node selector).
+  leadingFilters?: JSX.Element;
   // Column visibility (optional)
   columnVisibility?: {
     availableToggles: () => ColumnDef[];
@@ -103,12 +109,15 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
 
         {/* Row 2: Filters - Compact horizontal layout */}
         <div class="flex flex-wrap items-center gap-x-1.5 sm:gap-x-2 gap-y-2">
+          {props.leadingFilters}
+
           {/* Group By Filter */}
           <Show when={props.groupBy && props.setGroupBy}>
-            <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+            <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5" role="group" aria-label="Group By">
               <button
                 type="button"
                 onClick={() => props.setGroupBy!('node')}
+                aria-pressed={props.groupBy!() === 'node'}
                 class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.groupBy!() === 'node'
                   ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
                   : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
@@ -118,13 +127,25 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
               </button>
               <button
                 type="button"
-                onClick={() => props.setGroupBy!(props.groupBy!() === 'storage' ? 'node' : 'storage')}
-                class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.groupBy!() === 'storage'
+                onClick={() => props.setGroupBy!('type')}
+                aria-pressed={props.groupBy!() === 'type'}
+                class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.groupBy!() === 'type'
                   ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
                   : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
                   }`}
               >
-                By Storage
+                By Type
+              </button>
+              <button
+                type="button"
+                onClick={() => props.setGroupBy!('status')}
+                aria-pressed={props.groupBy!() === 'status'}
+                class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.groupBy!() === 'status'
+                  ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                  }`}
+              >
+                By Status
               </button>
             </div>
             <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
@@ -132,13 +153,14 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
 
           {/* Source Filter */}
           <Show when={props.sourceFilter && props.setSourceFilter}>
-            <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+            <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5" role="group" aria-label="Source">
               {sourceOptions().map((option) => {
                 const active = () => props.sourceFilter!() === option.key;
                 return (
                   <button
                     type="button"
                     onClick={() => props.setSourceFilter!(option.key)}
+                    aria-pressed={active()}
                     class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${sourceToneClasses(
                       option.tone,
                       active(),
@@ -153,10 +175,11 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
           </Show>
 
           {/* Status Filter */}
-          <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+          <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5" role="group" aria-label="Health">
             <button
               type="button"
               onClick={() => props.setStatusFilter && props.setStatusFilter('all')}
+              aria-pressed={props.statusFilter && props.statusFilter() === 'all'}
               class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.statusFilter && props.statusFilter() === 'all'
                 ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
                 : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
@@ -167,22 +190,57 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
             <button
               type="button"
               onClick={() => props.setStatusFilter && props.setStatusFilter('available')}
+              aria-pressed={props.statusFilter && props.statusFilter() === 'available'}
               class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.statusFilter && props.statusFilter() === 'available'
                 ? 'bg-white dark:bg-gray-800 text-green-600 dark:text-green-400 shadow-sm'
                 : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
                 }`}
             >
-              Available
+              Healthy
+            </button>
+            <button
+              type="button"
+              onClick={() => props.setStatusFilter && props.setStatusFilter('warning')}
+              aria-pressed={props.statusFilter && props.statusFilter() === 'warning'}
+              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.statusFilter && props.statusFilter() === 'warning'
+                ? 'bg-white dark:bg-gray-800 text-yellow-700 dark:text-yellow-300 shadow-sm'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                }`}
+            >
+              Warning
+            </button>
+            <button
+              type="button"
+              onClick={() => props.setStatusFilter && props.setStatusFilter('critical')}
+              aria-pressed={props.statusFilter && props.statusFilter() === 'critical'}
+              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.statusFilter && props.statusFilter() === 'critical'
+                ? 'bg-white dark:bg-gray-800 text-red-600 dark:text-red-400 shadow-sm'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                }`}
+            >
+              Critical
             </button>
             <button
               type="button"
               onClick={() => props.setStatusFilter && props.setStatusFilter('offline')}
+              aria-pressed={props.statusFilter && props.statusFilter() === 'offline'}
               class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.statusFilter && props.statusFilter() === 'offline'
                 ? 'bg-white dark:bg-gray-800 text-red-600 dark:text-red-400 shadow-sm'
                 : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
                 }`}
             >
               Offline
+            </button>
+            <button
+              type="button"
+              onClick={() => props.setStatusFilter && props.setStatusFilter('unknown')}
+              aria-pressed={props.statusFilter && props.statusFilter() === 'unknown'}
+              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.statusFilter && props.statusFilter() === 'unknown'
+                ? 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 shadow-sm'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                }`}
+            >
+              Unknown
             </button>
           </div>
 
@@ -193,6 +251,8 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
             <select
               value={props.sortKey()}
               onChange={(e) => props.setSortKey(e.currentTarget.value)}
+              disabled={props.sortDisabled}
+              aria-label="Sort By"
               class="px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
             >
               {sortOptions.map((option) => (
@@ -202,9 +262,9 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
             <button
               type="button"
               title={`Sort ${props.sortDirection() === 'asc' ? 'descending' : 'ascending'}`}
-              onClick={() =>
-                props.setSortDirection(props.sortDirection() === 'asc' ? 'desc' : 'asc')
-              }
+              onClick={() => props.setSortDirection(props.sortDirection() === 'asc' ? 'desc' : 'asc')}
+              disabled={props.sortDisabled}
+              aria-label="Sort Direction"
               class="inline-flex items-center justify-center h-7 w-7 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
             >
               <svg
@@ -242,10 +302,10 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
                 props.setSearch('');
                 props.setSortKey('name');
                 props.setSortDirection('asc');
-              if (props.setGroupBy) props.setGroupBy('node');
-              if (props.setStatusFilter) props.setStatusFilter('all');
-              if (props.setSourceFilter) props.setSourceFilter('all');
-            }}
+                if (props.setGroupBy) props.setGroupBy('node');
+                if (props.setStatusFilter) props.setStatusFilter('all');
+                if (props.setSourceFilter) props.setSourceFilter('all');
+              }}
               title="Reset all filters"
               class="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg transition-colors
                      text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/50 hover:bg-blue-200 dark:hover:bg-blue-900/70"

@@ -51,7 +51,7 @@ export const PRIORITY_ORDER: Record<ActionPriority, number> = {
   low: 3,
 };
 
-export const MAX_ACTION_ITEMS = 8;
+export const MAX_ACTION_ITEMS = 5;
 
 export function priorityBadgeClass(priority: ActionPriority): string {
   switch (priority) {

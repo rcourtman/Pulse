@@ -32,7 +32,7 @@ const (
 	// MSP/Enterprise tier features (for volume deals)
 	FeatureMultiUser   = "multi_user"   // Multi-user (likely merged with RBAC)
 	FeatureWhiteLabel  = "white_label"  // Custom branding - NOT IMPLEMENTED YET
-	FeatureMultiTenant = "multi_tenant" // Multi-tenant - NOT IMPLEMENTED YET
+	FeatureMultiTenant = "multi_tenant" // Multi-tenant organizations
 	FeatureUnlimited   = "unlimited"    // Unlimited instances (for MSP/volume deals)
 )
 
@@ -116,8 +116,7 @@ var TierFeatures = map[Tier][]string{
 		FeatureAuditLogging,
 		FeatureAdvancedReporting,
 		FeatureLongTermMetrics,
-		// Note: FeatureMultiUser, FeatureWhiteLabel, FeatureMultiTenant
-		// are on the roadmap but NOT included until implemented
+		// Note: FeatureMultiUser, FeatureWhiteLabel are not yet included in MSP tier
 	},
 	TierEnterprise: {
 		FeatureAIPatrol,

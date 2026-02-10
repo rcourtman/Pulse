@@ -3,7 +3,7 @@
 Linked plan:
 - `docs/architecture/release-final-certification-plan-2026-02.md`
 
-Status: Complete — `GO_WITH_CONDITIONS`
+Status: Complete — `GO`
 Date: 2026-02-09
 
 ## Rules
@@ -34,12 +34,12 @@ Date: 2026-02-09
 
 | Lane | Tracker File | Status | Packets Complete | Final Verdict |
 |------|-------------|--------|-----------------|---------------|
-| SEC | `release-security-gate-progress-2026-02.md` | Complete | 5/5 | `GO_WITH_CONDITIONS` |
+| SEC | `release-security-gate-progress-2026-02.md` | Complete | 5/5 | `GO` |
 | RGS | `release-regression-bug-sweep-progress-2026-02.md` | Complete | 5/5 | `GO` |
 | DOC | `release-documentation-readiness-progress-2026-02.md` | Complete | 5/5 | `GO` |
 | RAT | `release-conformance-ratification-progress-2026-02.md` | Complete | 7/7 | `GO` |
 
-**Disposition**: All four dependency lanes are COMPLETE. SEC: GO_WITH_CONDITIONS (Go stdlib P1 vulns — upgrade to go1.25.7). RGS: GO. DOC: GO. RAT: GO (post-LEX conformance replay confirmed all baselines green, 2026-02-09). No P0 findings in any lane.
+**Disposition**: All four dependency lanes are COMPLETE. SEC: GO (conditions resolved). RGS: GO. DOC: GO. RAT: GO (post-LEX conformance replay confirmed all baselines green, 2026-02-09). No P0 findings in any lane.
 
 ### Frozen Certification Command Set
 
@@ -170,7 +170,7 @@ Rollback:
 
 | Lane | Final Verdict | Conditions |
 |------|-------------|------------|
-| SEC | `GO_WITH_CONDITIONS` | Go stdlib P1 vulns (GO-2026-4337/4340/4341) — upgrade Go toolchain to go1.25.7 |
+| SEC | `GO` | None |
 | RGS | `GO` | None |
 | DOC | `GO` | None |
 
@@ -178,12 +178,9 @@ Rollback:
 
 ### Final Release Recommendation
 
-## **Verdict: `GO_WITH_CONDITIONS`**
+## **Verdict: `GO`**
 
-Pulse is approved for public release with the following conditions:
-
-**Conditions:**
-1. **Go toolchain upgrade** — Upgrade from go1.25.5 to go1.25.7 to resolve 3 P1 Go stdlib findings (crypto/tls session handling, net/url memory exhaustion). These are DoS/TLS edge cases mitigated by existing rate limiting. Target: pre-release or first post-release patch.
+Pulse is approved for public release with no release-blocking conditions.
 
 **Evidence basis:**
 - All 6 certification baseline commands pass with exit 0 (reviewer independently verified)
@@ -200,9 +197,8 @@ Pulse is approved for public release with the following conditions:
 
 | # | Risk | Severity | Owner | Follow-up |
 |---|------|----------|-------|-----------|
-| 1 | Go stdlib P1 vulns (GO-2026-4337/4340/4341) | P1 | Engineering | Upgrade Go toolchain to go1.25.7 pre-release or first post-release patch |
-| 2 | `TestTrueNASPollerRecordsMetrics` marginal timing sensitivity | P2 | Engineering | Post-release test hardening |
-| 3 | Kill-switch patterns are heterogeneous across runbooks (2 runtime API, 2 restart-required) | P2 | Operations | Post-release unification |
+| 1 | `TestTrueNASPollerRecordsMetrics` marginal timing sensitivity | P2 | Engineering | Post-release test hardening |
+| 2 | Kill-switch patterns are heterogeneous across runbooks (2 runtime API, 2 restart-required) | P2 | Operations | Post-release unification |
 
 ---
 
@@ -233,8 +229,8 @@ Pulse is approved for public release with the following conditions:
 
 ### Review Gates
 
-- [x] P0 PASS — RFC-00 and RFC-01 both DONE/APPROVED; all dependency lanes complete with GO/GO_WITH_CONDITIONS.
-- [x] P1 PASS — Final verdict is evidence-backed; conditions are explicit and actionable.
+- [x] P0 PASS — RFC-00 and RFC-01 both DONE/APPROVED; all dependency lanes complete with `GO`.
+- [x] P1 PASS — Final verdict is evidence-backed; no release-blocking conditions remain.
 - [x] P2 PASS — Tracker accurately reflects all evidence, verdicts, and residual risks.
 - [x] Verdict recorded: APPROVED
 
@@ -249,7 +245,7 @@ Commands run + exit codes:
 
 Gate checklist:
 - P0: PASS (predecessors verified; all lanes complete)
-- P1: PASS (verdict evidence-backed; conditions actionable)
+- P1: PASS (verdict evidence-backed; no conditions required)
 - P2: PASS (tracker accurate)
 
 Verdict: APPROVED
@@ -258,7 +254,7 @@ Commit:
 - `c4d64c7e` (docs(RFC-02): final release certification — GO_WITH_CONDITIONS for public release)
 
 Residual risk:
-- 3 items documented in residual risks table above (1 P1, 2 P2). None are P0.
+- 2 items documented in residual risks table above (2 P2). None are P0.
 
 Rollback:
 - Revert checkpoint commit.

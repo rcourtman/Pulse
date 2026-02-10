@@ -1,10 +1,12 @@
 import { Component, Show, createSignal, onMount, onCleanup, For, createMemo, createEffect } from 'solid-js';
+import { unwrap } from 'solid-js/store';
 import { AIAPI } from '@/api/ai';
 import { AIChatAPI, type ChatSession } from '@/api/aiChat';
 import { notificationStore } from '@/stores/notifications';
 import { aiChatStore } from '@/stores/aiChat';
 import { logger } from '@/utils/logger';
-import { useAIChatResources } from '@/hooks/useResources';
+import { useResources } from '@/hooks/useResources';
+import type { Resource } from '@/types/resource';
 import { useChat } from './hooks/useChat';
 import { ChatMessages } from './ChatMessages';
 import { ModelSelector } from './ModelSelector';
@@ -44,7 +46,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const [discoveryEnabled, setDiscoveryEnabled] = createSignal<boolean | null>(null); // null = loading
   const [discoveryHintDismissed, setDiscoveryHintDismissed] = createSignal(false);
   const [autonomousBannerDismissed, setAutonomousBannerDismissed] = createSignal(false);
-  const chatResources = useAIChatResources();
+  const { byType } = useResources();
+  const isCluster = createMemo(() => byType('node').length > 1);
 
   // @ mention autocomplete state
   const [mentionActive, setMentionActive] = createSignal(false);
@@ -329,51 +332,94 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
   // Build resources for @ mention autocomplete from unified selectors
   createEffect(() => {
-    const nodes = chatResources.nodes();
-    const vms = chatResources.vms();
-    const containers = chatResources.containers();
-    const dockerHosts = chatResources.dockerHosts();
-    const hosts = chatResources.hosts();
+    const readPlatformData = (resource: Resource): Record<string, unknown> | undefined => {
+      return resource.platformData ? (unwrap(resource.platformData) as Record<string, unknown>) : undefined;
+    };
+
+    const parseLegacyVmid = (resource: Resource, platformData: Record<string, unknown> | undefined): number => {
+      const vmidRaw = platformData?.vmid;
+      if (typeof vmidRaw === 'number' && Number.isFinite(vmidRaw)) return vmidRaw;
+      if (typeof vmidRaw === 'string') {
+        const parsed = parseInt(vmidRaw, 10);
+        if (Number.isFinite(parsed)) return parsed;
+      }
+      const idTail = resource.id.split('-').pop() ?? '0';
+      const parsed = parseInt(idTail, 10);
+      return Number.isFinite(parsed) ? parsed : 0;
+    };
+
+    const nodes = byType('node');
+    const vms = byType('vm');
+    const containers = [...byType('container'), ...byType('oci-container')];
+    const dockerHosts = byType('docker-host');
+    const dockerContainers = byType('docker-container');
+    const hosts = byType('host');
     const resources: MentionResource[] = [];
 
     // Add VMs
     for (const vm of vms) {
+      const platformData = readPlatformData(vm);
+      const nodeRaw = platformData?.node;
+      const node = typeof nodeRaw === 'string' ? nodeRaw : '';
+      const vmid = parseLegacyVmid(vm, platformData);
       resources.push({
-        id: `vm:${vm.node}:${vm.vmid}`,
+        id: `vm:${node}:${vmid}`,
         name: vm.name,
         type: 'vm',
-        status: vm.status,
-        node: vm.node,
+        status: vm.status === 'running' ? 'running' : 'stopped',
+        node,
       });
     }
 
-    // Add LXC containers
+    // Add LXC containers (includes OCI containers; preserve legacy mention ID format)
     for (const container of containers) {
+      const platformData = readPlatformData(container);
+      const nodeRaw = platformData?.node;
+      const node = typeof nodeRaw === 'string' ? nodeRaw : '';
+      const vmid = parseLegacyVmid(container, platformData);
       resources.push({
-        id: `lxc:${container.node}:${container.vmid}`,
+        id: `lxc:${node}:${vmid}`,
         name: container.name,
         type: 'container',
-        status: container.status,
-        node: container.node,
+        status: container.status === 'running' ? 'running' : 'stopped',
+        node,
       });
     }
 
     // Add Docker hosts
+    const dockerContainersByHostId = new Map<string, Resource[]>();
+    for (const dockerContainer of dockerContainers) {
+      if (!dockerContainer.parentId) continue;
+      const existing = dockerContainersByHostId.get(dockerContainer.parentId);
+      if (existing) {
+        existing.push(dockerContainer);
+      } else {
+        dockerContainersByHostId.set(dockerContainer.parentId, [dockerContainer]);
+      }
+    }
+
     for (const host of dockerHosts) {
+      const displayName = host.displayName || host.identity?.hostname || host.name || host.id;
+      const hostnameOrId = host.identity?.hostname || host.name || host.id;
+      const hostStatus = host.status === 'online' || host.status === 'running' ? 'online' : (host.status || 'online');
       resources.push({
         id: `host:${host.id}`,
-        name: host.displayName || host.hostname || host.id,
+        name: displayName,
         type: 'host',
-        status: host.status || 'online',
+        status: hostStatus,
       });
+
       // Add Docker containers
-      for (const container of host.containers || []) {
+      for (const container of dockerContainersByHostId.get(host.id) || []) {
+        const originalContainerId = container.id.includes('/')
+          ? (container.id.split('/').pop() || container.id)
+          : container.id;
         resources.push({
-          id: `docker:${host.id}:${container.id}`,
+          id: `docker:${host.id}:${originalContainerId}`,
           name: container.name,
           type: 'docker',
-          status: container.state,
-          node: host.hostname || host.id,
+          status: container.status === 'running' ? 'running' : 'exited',
+          node: hostnameOrId,
         });
       }
     }
@@ -381,7 +427,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
     // Add nodes
     for (const node of nodes) {
       resources.push({
-        id: `node:${node.instance}:${node.name}`,
+        id: `node:${node.platformId || ''}:${node.name}`,
         name: node.name,
         type: 'node',
         status: node.status,
@@ -390,11 +436,13 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
     // Add standalone host agents
     for (const host of hosts) {
+      const name = host.displayName || host.identity?.hostname || host.name;
+      const hostStatus = host.status === 'online' || host.status === 'running' ? 'online' : host.status;
       resources.push({
         id: `host:${host.id}`,
-        name: host.displayName || host.hostname,
+        name,
         type: 'host',
-        status: host.status,
+        status: hostStatus,
       });
     }
 
@@ -858,7 +906,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
           onLoadSession={handleLoadSession}
           emptyState={{
             title: 'Pulse Assistant ready',
-            suggestions: chatResources.isCluster() ? [
+            suggestions: isCluster() ? [
               'Analyze overall cluster health',
               'Check node load balancing',
               'Find and fix failed services',

@@ -1,7 +1,7 @@
-export { HealthStatusBar } from './HealthStatusBar';
+export { DashboardHero } from './DashboardHero';
 export { KPIStrip } from './KPIStrip';
 export { TrendCharts } from './TrendCharts';
-export { ActionQueue } from './ActionQueue';
+export { CompositionPanel } from './CompositionPanel';
 export { BackupStatusPanel } from './BackupStatusPanel';
 export { StoragePanel } from './StoragePanel';
 export { RecentAlertsPanel } from './RecentAlertsPanel';

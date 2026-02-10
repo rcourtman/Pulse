@@ -84,11 +84,32 @@ export function TrendCharts(props: TrendChartsProps) {
   const rangeLabel = createMemo(() => SUMMARY_TIME_RANGE_LABEL[selectedRange()]);
 
   return (
-    <div class="space-y-3">
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card>
-          <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">CPU Trends</p>
-          <div class="mt-2 h-[200px]">
+    <div>
+      <div class="flex items-center justify-between mb-1.5">
+        <p class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Trends</p>
+        <div class="flex items-center gap-1.5">
+          <For each={SUMMARY_TIME_RANGES}>
+            {(range) => {
+              const active = () => selectedRange() === range;
+              const className = () =>
+                active()
+                  ? 'px-2 py-0.5 rounded bg-blue-600 text-white text-[11px] font-medium'
+                  : 'px-2 py-0.5 rounded border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 text-[11px] font-medium hover:bg-gray-50 dark:hover:bg-gray-700/40 transition-colors';
+
+              return (
+                <button type="button" class={className()} onClick={() => props.setTrendRange(range)}>
+                  {SUMMARY_TIME_RANGE_LABEL[range]}
+                </button>
+              );
+            }}
+          </For>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <Card padding="none" class="px-4 py-3">
+          <p class="text-[11px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">CPU</p>
+          <div class="h-[240px] mt-1">
             <InteractiveSparkline
               series={cpuSeries()}
               yMode="percent"
@@ -99,9 +120,9 @@ export function TrendCharts(props: TrendChartsProps) {
           </div>
         </Card>
 
-        <Card>
-          <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">Memory Trends</p>
-          <div class="mt-2 h-[200px]">
+        <Card padding="none" class="px-4 py-3">
+          <p class="text-[11px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Memory</p>
+          <div class="h-[240px] mt-1">
             <InteractiveSparkline
               series={memorySeries()}
               yMode="percent"
@@ -111,24 +132,6 @@ export function TrendCharts(props: TrendChartsProps) {
             />
           </div>
         </Card>
-      </div>
-
-      <div class="flex items-center justify-center gap-2 flex-wrap">
-        <For each={SUMMARY_TIME_RANGES}>
-          {(range) => {
-            const active = () => selectedRange() === range;
-            const className = () =>
-              active()
-                ? 'px-3 py-1.5 rounded-md bg-blue-600 text-white text-sm font-medium'
-                : 'px-3 py-1.5 rounded-md border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700/40 transition-colors';
-
-            return (
-              <button type="button" class={className()} onClick={() => props.setTrendRange(range)}>
-                {SUMMARY_TIME_RANGE_LABEL[range]}
-              </button>
-            );
-          }}
-        </For>
       </div>
     </div>
   );

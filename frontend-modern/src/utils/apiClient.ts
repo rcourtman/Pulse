@@ -286,6 +286,12 @@ class ApiClient {
   // Ensure CSRF token is available by making a GET request if needed
   // The backend issues CSRF cookies on GET requests to /api/* endpoints
   private async ensureCSRFToken(): Promise<string | null> {
+    // Unit tests run without a real backend and should not attempt network calls.
+    // This avoids noisy warnings like "Failed to parse URL from /api/health" from Node's fetch.
+    if (import.meta.env.MODE === 'test') {
+      return null;
+    }
+
     try {
       // Make a simple GET request to trigger CSRF cookie issuance
       const response = await fetch('/api/health', {

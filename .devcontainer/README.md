@@ -5,7 +5,7 @@ This dev container provides a complete, reproducible development environment for
 ## What's Included
 
 ### Development Tools
-- **Go 1.24** - Backend development
+- **Go 1.25.7** - Backend development
 - **Node.js 20** - Frontend development  
 - **gopls v0.17.0** - Go language server
 - **Delve** - Go debugger
@@ -225,7 +225,7 @@ Custom overrides: Create `.env.devcontainer` (gitignored)
 ## Resources
 
 - **VM Specs**: 8GB RAM, 30GB disk, 2 CPU cores
-- **Base Image**: `golang:1.24` (Ubuntu-based)
+- **Base Image**: `golang:1.25.7` (Ubuntu-based)
 - **Caches**: ~2-3GB for Go modules and build artifacts
 
 ## Tips & Tricks
@@ -247,7 +247,7 @@ MacBook (VS Code)
 dev-containers VM (Proxmox)
     ↓ Docker
 Dev Container
-    ├── Go 1.24 + tools
+    ├── Go 1.25.7 + tools
     ├── Node 20 + npm
     ├── Your code (/workspaces/pulse)
     ├── Hot reload watchers

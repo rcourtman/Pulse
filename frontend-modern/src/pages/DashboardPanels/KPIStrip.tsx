@@ -36,57 +36,54 @@ export function KPIStrip(props: KPIStripProps) {
   };
 
   return (
-    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
-      <Card hoverable class="h-full">
-        <a href={INFRASTRUCTURE_PATH} class="block">
-          <p class="text-xs font-medium text-gray-600 dark:text-gray-400">Infrastructure</p>
-          <p class="mt-1 text-2xl font-mono text-gray-900 dark:text-gray-100">
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+      <a href={INFRASTRUCTURE_PATH} class="group block">
+        <Card hoverable border={false} padding="none" class="h-full px-3.5 py-2.5 bg-gray-50 dark:bg-gray-800/60 group-hover:bg-gray-100 dark:group-hover:bg-gray-700/50 transition-colors">
+          <p class="text-[11px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Infrastructure</p>
+          <p class="text-2xl font-mono font-semibold text-gray-900 dark:text-gray-100 mt-0.5">
             {props.infrastructure.total}
           </p>
-          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-            <span class="font-mono">{props.infrastructure.online}</span> online
+          <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+            <span class="font-mono font-medium text-gray-700 dark:text-gray-300">{props.infrastructure.online}</span> online
           </p>
-        </a>
-      </Card>
+        </Card>
+      </a>
 
-      <Card hoverable class="h-full">
-        <a href={WORKLOADS_PATH} class="block">
-          <p class="text-xs font-medium text-gray-600 dark:text-gray-400">Workloads</p>
-          <p class="mt-1 text-2xl font-mono text-gray-900 dark:text-gray-100">
+      <a href={WORKLOADS_PATH} class="group block">
+        <Card hoverable border={false} padding="none" class="h-full px-3.5 py-2.5 bg-gray-50 dark:bg-gray-800/60 group-hover:bg-gray-100 dark:group-hover:bg-gray-700/50 transition-colors">
+          <p class="text-[11px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Workloads</p>
+          <p class="text-2xl font-mono font-semibold text-gray-900 dark:text-gray-100 mt-0.5">
             {props.workloads.total}
           </p>
-          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-            <span class="font-mono">{props.workloads.running}</span> running /{' '}
-            <span class="font-mono">{props.workloads.total}</span> total
+          <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+            <span class="font-mono font-medium text-gray-700 dark:text-gray-300">{props.workloads.running}</span> running
           </p>
-        </a>
-      </Card>
+        </Card>
+      </a>
 
-      <Card hoverable class="h-full">
-        <a href={buildStoragePath()} class="block">
-          <p class="text-xs font-medium text-gray-600 dark:text-gray-400">Storage</p>
-          <p class="mt-1 text-2xl font-mono text-gray-900 dark:text-gray-100">
+      <a href={buildStoragePath()} class="group block">
+        <Card hoverable border={false} padding="none" class="h-full px-3.5 py-2.5 bg-gray-50 dark:bg-gray-800/60 group-hover:bg-gray-100 dark:group-hover:bg-gray-700/50 transition-colors">
+          <p class="text-[11px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Storage</p>
+          <p class="text-2xl font-mono font-semibold text-gray-900 dark:text-gray-100 mt-0.5">
             {Math.round(props.storage.capacityPercent)}%
           </p>
-          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
             {formatBytes(props.storage.totalUsed)} / {formatBytes(props.storage.totalCapacity)}
           </p>
-        </a>
-      </Card>
+        </Card>
+      </a>
 
-      <Card hoverable tone={alertsTone()} class="h-full">
-        <a href={ALERTS_OVERVIEW_PATH} class="block">
-          <p class="text-xs font-medium text-gray-600 dark:text-gray-400">Alerts</p>
-          <p class="mt-1 text-2xl font-mono text-gray-900 dark:text-gray-100">{props.alerts.total}</p>
-          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-            <span class="font-mono">{props.alerts.activeCritical}</span> critical ·{' '}
-            <span class="font-mono">{props.alerts.activeWarning}</span> warning
+      <a href={ALERTS_OVERVIEW_PATH} class="group block">
+        <Card hoverable tone={alertsTone()} border={false} padding="none" class="h-full px-3.5 py-2.5 group-hover:brightness-95 dark:group-hover:brightness-110 transition-all">
+          <p class="text-[11px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Alerts</p>
+          <p class="text-2xl font-mono font-semibold text-gray-900 dark:text-gray-100 mt-0.5">{props.alerts.total}</p>
+          <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+            <span class="font-mono font-medium text-red-600 dark:text-red-400">{props.alerts.activeCritical}</span> critical · <span class="font-mono font-medium text-amber-600 dark:text-amber-400">{props.alerts.activeWarning}</span> warning
           </p>
-        </a>
-      </Card>
+        </Card>
+      </a>
     </div>
   );
 }
 
 export default KPIStrip;
-

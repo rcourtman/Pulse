@@ -8,7 +8,7 @@ import type { HistoryTimeRange } from '@/api/charts';
 import type { Alert } from '@/types/api';
 import { isInfrastructure, isStorage } from '@/types/resource';
 import { ALERTS_OVERVIEW_PATH, buildStoragePath, INFRASTRUCTURE_PATH } from '@/routing/resourceLinks';
-import { ActionQueue, BackupStatusPanel, HealthStatusBar, KPIStrip, RecentAlertsPanel, StoragePanel, TrendCharts } from './DashboardPanels';
+import { BackupStatusPanel, CompositionPanel, DashboardHero, RecentAlertsPanel, StoragePanel, TrendCharts } from './DashboardPanels';
 import { type ActionItem, MAX_ACTION_ITEMS, PRIORITY_ORDER } from './DashboardPanels/dashboardHelpers';
 
 export default function Dashboard() {
@@ -32,6 +32,16 @@ export default function Dashboard() {
   let loadingTimeout: number | undefined;
 
   const isLoading = createMemo(() => dashboardResources.loading());
+
+  // Track whether we've completed the initial load so that subsequent
+  // background refetches don't tear down the content tree (which causes
+  // flickering and scroll-position resets).
+  const [initialLoadComplete, setInitialLoadComplete] = createSignal(false);
+  createEffect(() => {
+    if (!isLoading() && !initialLoadComplete()) {
+      setInitialLoadComplete(true);
+    }
+  });
 
   createEffect(() => {
     if (isLoading()) {
@@ -118,7 +128,7 @@ export default function Dashboard() {
   });
 
   const displayedActions = createMemo(() => actionItems().slice(0, MAX_ACTION_ITEMS));
-  const overflowCount = createMemo(() => Math.max(0, actionItems().length - MAX_ACTION_ITEMS));
+
 
   const storageCapacityPercent = createMemo(() => {
     const { totalUsed, totalCapacity } = overview().storage;
@@ -127,14 +137,10 @@ export default function Dashboard() {
   });
 
   return (
-    <main data-testid="dashboard-page" aria-labelledby="dashboard-title" class="space-y-6">
-      <h1 id="dashboard-title" class="text-xl sm:text-2xl font-semibold text-gray-900 dark:text-gray-100">
-        Dashboard
-      </h1>
-
+    <main data-testid="dashboard-page" aria-labelledby="dashboard-title" class="space-y-3">
       <Switch>
-        <Match when={isLoading()}>
-          <section class="space-y-6" data-testid="dashboard-loading">
+        <Match when={isLoading() && !initialLoadComplete()}>
+          <section class="space-y-2" data-testid="dashboard-loading">
             <div class="border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-4 sm:p-5 bg-white dark:bg-gray-800">
               <div class="space-y-4">
                 <For each={['h-4 w-44', 'h-10 w-40']}>
@@ -147,7 +153,7 @@ export default function Dashboard() {
                 </div>
               </div>
             </div>
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
               <For each={Array.from({ length: 2 })}>
                 {() => (
                   <div data-testid="dashboard-skeleton-block" class="border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-4 sm:p-5 bg-white dark:bg-gray-800"><div class="animate-pulse bg-gray-200 dark:bg-gray-700 rounded h-24" /></div>
@@ -178,16 +184,14 @@ export default function Dashboard() {
           </section>
         </Match>
 
-        <Match when={!isLoading() && !hasConnectionError() && !isEmpty()}>
-          <section class="space-y-6">
-            <HealthStatusBar
+        <Match when={initialLoadComplete() && !hasConnectionError() && !isEmpty()}>
+          <section class="space-y-5">
+            <DashboardHero
+              title="Dashboard"
               totalResources={overview().health.totalResources}
               criticalAlerts={overview().health.criticalAlerts}
               warningAlerts={overview().health.warningAlerts}
               byStatus={overview().health.byStatus}
-            />
-
-            <KPIStrip
               infrastructure={{
                 total: overview().infrastructure.total,
                 online: overview().infrastructure.byStatus.online ?? 0,
@@ -206,6 +210,7 @@ export default function Dashboard() {
                 activeWarning: overview().alerts.activeWarning,
                 total: overview().alerts.total,
               }}
+              topIssues={displayedActions()}
             />
 
             <TrendCharts
@@ -215,21 +220,20 @@ export default function Dashboard() {
               setTrendRange={setTrendRange}
             />
 
-            {actionItems().length > 0 && (
-              <ActionQueue items={displayedActions()} overflowCount={overflowCount()} />
-            )}
-
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-start">
+              <CompositionPanel
+                infrastructureByType={overview().infrastructure.byType}
+                workloadsByType={overview().workloads.byType}
+              />
               <BackupStatusPanel backups={backups()} />
               <StoragePanel storage={overview().storage} storageTrend={trends().storage.capacity} loading={trends().loading} />
+              <RecentAlertsPanel
+                alerts={alertsList()}
+                criticalCount={overview().alerts.activeCritical}
+                warningCount={overview().alerts.activeWarning}
+                totalCount={overview().alerts.total}
+              />
             </div>
-
-            <RecentAlertsPanel
-              alerts={alertsList()}
-              criticalCount={overview().alerts.activeCritical}
-              warningCount={overview().alerts.activeWarning}
-              totalCount={overview().alerts.total}
-            />
           </section>
         </Match>
       </Switch>

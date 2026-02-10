@@ -39,7 +39,7 @@ export function BackupStatusPanel(props: BackupStatusPanelProps) {
   const isStale = createMemo(() => (latestAgeMs() ?? 0) > 24 * 60 * 60_000);
 
   return (
-    <Card padding="none" class="px-3 py-2.5">
+    <Card padding="none" class="px-4 py-3.5">
       <div class="flex items-center justify-between gap-3">
         <h2 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Backup Status</h2>
         <a
