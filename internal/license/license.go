@@ -268,9 +268,9 @@ func (s *Service) SetLicenseChangeCallback(cb func(*License)) {
 	s.onLicenseChange = cb
 }
 
-// SetEvaluator sets the canonical entitlement evaluator.
-// When set, HasFeature will delegate capability checks to the evaluator.
-// This is opt-in - if not set, existing tier-based logic is used.
+// SetEvaluator overrides the entitlement evaluator.
+// In normal operation, Activate and Clear manage the evaluator automatically.
+// This method exists for testing; production code should not call it directly.
 func (s *Service) SetEvaluator(eval *entitlements.Evaluator) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -301,6 +301,8 @@ func (s *Service) Activate(licenseKey string) (*License, error) {
 
 	s.mu.Lock()
 	s.license = license
+	source := entitlements.NewTokenSource(&license.Claims)
+	s.evaluator = entitlements.NewEvaluator(source)
 	cb := s.onLicenseChange
 	s.mu.Unlock()
 
@@ -315,6 +317,7 @@ func (s *Service) Activate(licenseKey string) (*License, error) {
 func (s *Service) Clear() {
 	s.mu.Lock()
 	s.license = nil
+	s.evaluator = nil
 	cb := s.onLicenseChange
 	s.mu.Unlock()
 
@@ -361,6 +364,16 @@ func (s *Service) HasFeature(feature string) bool {
 	// If evaluator is set, delegate to it for capability checks.
 	// The evaluator already handles legacy derivation via TokenSource.
 	if s.evaluator != nil {
+		if s.license == nil {
+			return TierHasFeature(TierFree, feature)
+		}
+		if s.license.IsExpired() {
+			s.ensureGracePeriodEnd()
+			if s.license.GracePeriodEnd != nil && time.Now().Before(*s.license.GracePeriodEnd) {
+				return s.evaluator.HasCapability(feature)
+			}
+			return TierHasFeature(TierFree, feature)
+		}
 		return s.evaluator.HasCapability(feature)
 	}
 

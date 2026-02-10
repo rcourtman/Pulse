@@ -1052,6 +1052,8 @@ func TestServiceHasFeature_WithEvaluator(t *testing.T) {
 	svc := setupTestServiceWithTier(t, TierPro)
 	proSet := asFeatureSet(TierFeatures[TierPro])
 
+	// Clear auto-set evaluator to capture tier-based baseline
+	svc.SetEvaluator(nil)
 	withoutEvaluator := captureFeatureResults(svc, allFeatures)
 	for _, feature := range allFeatures {
 		_, inPro := proSet[feature]
@@ -1098,7 +1100,15 @@ func TestServiceHasFeature_WithEvaluator_FreeTier(t *testing.T) {
 		}
 	}
 
-	freeClaims := &Claims{Tier: TierFree}
+	// Set a free-tier license and evaluator to simulate realistic state
+	freeClaims := &Claims{
+		LicenseID: "test_free",
+		Email:     "free@example.com",
+		Tier:      TierFree,
+	}
+	svc.mu.Lock()
+	svc.license = &License{Claims: *freeClaims}
+	svc.mu.Unlock()
 	svc.SetEvaluator(entitlements.NewEvaluator(entitlements.NewTokenSource(freeClaims)))
 
 	withEvaluator := captureFeatureResults(svc, allFeatures)
@@ -1134,8 +1144,9 @@ func TestServiceHasFeature_EvaluatorNilFallback(t *testing.T) {
 	}
 
 	proSvc := setupTestServiceWithTier(t, TierPro)
-	if proSvc.Evaluator() != nil {
-		t.Fatal("expected evaluator to remain nil when not set")
+	// Activate() now auto-sets the evaluator
+	if proSvc.Evaluator() == nil {
+		t.Fatal("expected evaluator to be set after Activate()")
 	}
 	for _, feature := range allFeatures {
 		got := proSvc.HasFeature(feature)
@@ -1244,8 +1255,11 @@ func TestServiceHasFeature_ContractParity(t *testing.T) {
 		t.Run(string(tier), func(t *testing.T) {
 			svc := setupTestServiceWithTier(t, tier)
 
+			// Save auto-set evaluator, then clear it for the "without" baseline
+			savedEval := svc.Evaluator()
+			svc.SetEvaluator(nil)
 			withoutEvaluator := captureFeatureResults(svc, allFeatures)
-			svc.SetEvaluator(evaluatorForService(svc))
+			svc.SetEvaluator(savedEval)
 			withEvaluator := captureFeatureResults(svc, allFeatures)
 
 			for _, feature := range allFeatures {
@@ -1255,5 +1269,67 @@ func TestServiceHasFeature_ContractParity(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestServiceHasFeature_EvaluatorExpiredPastGrace(t *testing.T) {
+	t.Setenv("PULSE_DEV", "false")
+	t.Setenv("PULSE_MOCK_MODE", "false")
+	t.Setenv("PULSE_LICENSE_DEV_MODE", "true")
+
+	svc := setupTestServiceWithTier(t, TierPro)
+
+	// Expire the license 10 days ago (past the 7-day grace period)
+	svc.mu.Lock()
+	svc.license.Claims.ExpiresAt = time.Now().Add(-10 * 24 * time.Hour).Unix()
+	svc.license.GracePeriodEnd = nil // Force re-calculation
+	svc.mu.Unlock()
+
+	// Evaluator is auto-set by Activate, verify it's present
+	if svc.Evaluator() == nil {
+		t.Fatal("expected evaluator to be set after Activate()")
+	}
+
+	freeSet := asFeatureSet(TierFeatures[TierFree])
+	for _, feature := range allFeatures {
+		got := svc.HasFeature(feature)
+		_, inFree := freeSet[feature]
+		if inFree && !got {
+			t.Fatalf("expired past grace: expected free-tier feature %q to be granted", feature)
+		}
+		if !inFree && got {
+			t.Fatalf("expired past grace: expected non-free feature %q to be denied", feature)
+		}
+	}
+}
+
+func TestServiceHasFeature_EvaluatorExpiredWithinGrace(t *testing.T) {
+	t.Setenv("PULSE_DEV", "false")
+	t.Setenv("PULSE_MOCK_MODE", "false")
+	t.Setenv("PULSE_LICENSE_DEV_MODE", "true")
+
+	svc := setupTestServiceWithTier(t, TierPro)
+
+	// Expire the license 3 days ago (within the 7-day grace period)
+	svc.mu.Lock()
+	svc.license.Claims.ExpiresAt = time.Now().Add(-3 * 24 * time.Hour).Unix()
+	svc.license.GracePeriodEnd = nil // Force re-calculation via ensureGracePeriodEnd
+	svc.mu.Unlock()
+
+	// Evaluator is auto-set by Activate, verify it's present
+	if svc.Evaluator() == nil {
+		t.Fatal("expected evaluator to be set after Activate()")
+	}
+
+	proSet := asFeatureSet(TierFeatures[TierPro])
+	for _, feature := range allFeatures {
+		got := svc.HasFeature(feature)
+		_, inPro := proSet[feature]
+		if inPro && !got {
+			t.Fatalf("expired within grace: expected Pro feature %q to still be granted", feature)
+		}
+		if !inPro && got {
+			t.Fatalf("expired within grace: expected non-Pro feature %q to be denied", feature)
+		}
 	}
 }
