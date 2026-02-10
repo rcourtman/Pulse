@@ -3,12 +3,14 @@ package audit
 import (
 	"path/filepath"
 	"sync"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 )
 
 // TenantLoggerManager manages per-tenant audit loggers.
-// Each tenant gets their own isolated audit database at <orgDir>/audit.db
+// Each tenant gets their own isolated audit database at <orgDir>/audit/audit.db
 type TenantLoggerManager struct {
 	mu       sync.RWMutex
 	loggers  map[string]Logger
@@ -93,6 +95,8 @@ func (m *TenantLoggerManager) GetLogger(orgID string) Logger {
 func (m *TenantLoggerManager) Log(orgID, eventType, user, ip, path string, success bool, details string) error {
 	logger := m.GetLogger(orgID)
 	event := Event{
+		ID:        uuid.NewString(),
+		Timestamp: time.Now(),
 		EventType: eventType,
 		User:      user,
 		IP:        ip,

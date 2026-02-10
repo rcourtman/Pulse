@@ -18,8 +18,10 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/api"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/crypto"
 	"github.com/rcourtman/pulse-go-rewrite/internal/hosted"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license"
+	"github.com/rcourtman/pulse-go-rewrite/internal/license/conversion"
 	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
 	_ "github.com/rcourtman/pulse-go-rewrite/internal/mock" // Import for init() to run
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
@@ -91,12 +93,13 @@ func Run(ctx context.Context, version string) error {
 	// Initialize license public key for Pro feature validation
 	license.InitPublicKey()
 
+	// Multi-tenant persistence is the canonical way to resolve the base data directory.
+	// It uses cfg.DataPath, which already includes PULSE_DATA_DIR overrides.
+	mtPersistence := config.NewMultiTenantPersistence(cfg.DataPath)
+	baseDataDir := mtPersistence.BaseDataDir()
+
 	// Initialize RBAC manager for role-based access control
-	dataDir := os.Getenv("PULSE_DATA_DIR")
-	if dataDir == "" {
-		dataDir = "/etc/pulse"
-	}
-	rbacManager, err := auth.NewFileManager(dataDir)
+	rbacManager, err := auth.NewFileManager(baseDataDir)
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to initialize RBAC manager, role management will be unavailable")
 	} else {
@@ -107,14 +110,55 @@ func Run(ctx context.Context, version string) error {
 	// Run multi-tenant data migration only when the feature is explicitly enabled.
 	// This prevents any on-disk layout changes for default (single-tenant) users.
 	if api.IsMultiTenantEnabled() {
-		if err := config.RunMigrationIfNeeded(dataDir); err != nil {
+		if err := config.RunMigrationIfNeeded(baseDataDir); err != nil {
 			log.Error().Err(err).Msg("Multi-tenant data migration failed")
 			// Continue anyway - migration failure shouldn't block startup
 		}
 	}
 
+	// Conversion telemetry must be durable and tenant-aware (P0-6).
+	conversionStore, err := conversion.NewConversionStore(filepath.Join(baseDataDir, "conversion.db"))
+	if err != nil {
+		return fmt.Errorf("failed to initialize conversion telemetry store: %w", err)
+	}
+	conversionStoreClosed := false
+	closeConversionStore := func() {
+		if conversionStoreClosed {
+			return
+		}
+		conversionStoreClosed = true
+		if err := conversionStore.Close(); err != nil {
+			log.Error().Err(err).Msg("Failed to close conversion store")
+		}
+	}
+	defer closeConversionStore()
+
+	// Always capture audit events to SQLite (defense in depth). Read/export endpoints are license-gated.
+	// For the default org, TenantLoggerManager routes to the global logger, so initialize it as SQLite too.
+	var globalCrypto audit.CryptoEncryptor
+	if cm, err := crypto.NewCryptoManagerAt(baseDataDir); err != nil {
+		log.Warn().Err(err).Str("data_dir", baseDataDir).Msg("Failed to initialize crypto manager for audit signing; signatures will be disabled")
+	} else {
+		globalCrypto = cm
+		if sqliteLogger, err := audit.NewSQLiteLogger(audit.SQLiteLoggerConfig{
+			DataDir:   baseDataDir,
+			CryptoMgr: cm,
+		}); err != nil {
+			log.Warn().Err(err).Str("data_dir", baseDataDir).Msg("Failed to initialize global SQLite audit logger; falling back to console logger")
+		} else {
+			audit.SetLogger(sqliteLogger)
+		}
+	}
+
 	// Initialize tenant audit manager for per-tenant audit logging
-	tenantAuditManager := audit.NewTenantLoggerManager(dataDir, nil)
+	tenantAuditManager := audit.NewTenantLoggerManager(baseDataDir, &audit.SQLiteLoggerFactory{
+		// Prefer per-tenant crypto managers so each org has its own .encryption.key.
+		CryptoMgrForDataDir: func(dataDir string) (audit.CryptoEncryptor, error) {
+			return crypto.NewCryptoManagerAt(dataDir)
+		},
+		// Fallback for environments where per-tenant crypto initialization fails.
+		CryptoMgr: globalCrypto,
+	})
 	api.SetTenantAuditManager(tenantAuditManager)
 	log.Info().Msg("Tenant audit manager initialized")
 
@@ -155,7 +199,6 @@ func Run(ctx context.Context, version string) error {
 	go wsHub.Run()
 
 	// Initialize reloadable monitoring system
-	mtPersistence := config.NewMultiTenantPersistence(cfg.DataPath)
 	reloadableMonitor, err := monitoring.NewReloadableMonitor(cfg, mtPersistence, wsHub)
 	if err != nil {
 		return fmt.Errorf("failed to initialize monitoring system: %w", err)
@@ -256,7 +299,7 @@ func Run(ctx context.Context, version string) error {
 		}
 		return nil
 	}
-	router = api.NewRouter(cfg, reloadableMonitor.GetMonitor(), reloadableMonitor.GetMultiTenantMonitor(), wsHub, reloadFunc, version)
+	router = api.NewRouter(cfg, reloadableMonitor.GetMonitor(), reloadableMonitor.GetMultiTenantMonitor(), wsHub, reloadFunc, version, conversionStore)
 
 	// Inject resource store into monitor for WebSocket broadcasts
 	router.SetMonitor(reloadableMonitor.GetMonitor())
@@ -410,6 +453,7 @@ shutdown:
 	if err := audit.Close(); err != nil {
 		log.Error().Err(err).Msg("Failed to close audit logger")
 	}
+	closeConversionStore()
 
 	log.Info().Msg("Server stopped")
 	return nil

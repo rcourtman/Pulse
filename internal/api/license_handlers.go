@@ -11,7 +11,6 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/license"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license/entitlements"
-	"github.com/rcourtman/pulse-go-rewrite/pkg/audit"
 	"github.com/rs/zerolog/log"
 )
 
@@ -21,8 +20,6 @@ type LicenseHandlers struct {
 	mtPersistence *config.MultiTenantPersistence
 	hostedMode    bool
 	services      sync.Map // map[string]*license.Service
-	configDir     string   // Base config dir, though we use mtPersistence for tenants
-	auditOnce     sync.Once
 }
 
 // NewLicenseHandlers creates a new license handlers instance.
@@ -79,11 +76,6 @@ func (h *LicenseHandlers) getTenantComponents(ctx context.Context) (*license.Ser
 					lic.GracePeriodEnd = &gracePeriodEnd
 				}
 				log.Info().Str("org_id", orgID).Msg("Loaded saved Pulse Pro license")
-
-				// Initialize audit logger (globally) if licensed
-				// This is a trade-off: if ANY tenant is licensed, we enable audit logging globally (or for that path?)
-				// Since audit logger is global, we do this once.
-				h.initAuditLoggerIfLicensed(service, persistence)
 			}
 		}
 	}
@@ -98,45 +90,6 @@ func (h *LicenseHandlers) getPersistenceForOrg(orgID string) (*license.Persisten
 		return nil, err
 	}
 	return license.NewPersistence(configPersistence.GetConfigDir())
-}
-
-// initAuditLoggerIfLicensed initializes the SQLite audit logger if the license
-// includes the audit_logging feature. This enables persistent audit logs with
-// HMAC signing for Pro users.
-func (h *LicenseHandlers) initAuditLoggerIfLicensed(service *license.Service, persistence *license.Persistence) {
-	if !service.HasFeature(license.FeatureAuditLogging) {
-		return
-	}
-
-	h.auditOnce.Do(func() {
-		// Check if we already have a SQLiteLogger (avoid re-initialization)
-		if _, ok := audit.GetLogger().(*audit.SQLiteLogger); ok {
-			return
-		}
-
-		// Use the directory of the license persistence as base?
-		// Or stick to the first tenant's dir? Or global?
-		// For now, let's use the directory where this license was found.
-		// Note: This relies on license.Persistence exposing methods or we assume logic.
-		// Since license.Persistence doesn't expose dir, we might need a workaround or pass dir.
-		// But in getTenantComponents we construct persistence from configDir.
-		// We'll trust audit.NewSQLiteLogger to handle it.
-		// Wait, we don't have configDir easily here unless we pass it.
-		// But we can assume audit should go to the same place as the license.
-		// Actually, let's just use the `configDir` passed to NewLicenseHandlers?
-		// No, we removed it.
-		// We'll use the directory from the persistence if possible, or just default.
-		// Let's assume passed persistence knows its path? No.
-		// We'll skip passing dir for now and rely on global settings or revisit.
-		// Wait, audit.NewSQLiteLogger NEEDS a DataDir.
-		// I'll grab it from the calling context in getTenantComponents?
-		// Refactoring: getTenantComponents calls getPersistenceForOrg which uses configPersistence.GetConfigDir().
-		// I'll assume we can use that directory.
-	})
-
-	// Re-check lock outside Once to avoid blocking, but for simplicity:
-	// If Global logger is already set, we are good.
-	// NOTE: We are merely enabling it.
 }
 
 // Service returns the license service for use by other handlers.
@@ -298,9 +251,6 @@ func (h *LicenseHandlers) HandleActivateLicense(w http.ResponseWriter, r *http.R
 		Str("tier", string(lic.Claims.Tier)).
 		Bool("lifetime", lic.IsLifetime()).
 		Msg("Pulse Pro license activated")
-
-	// Initialize audit logger if the new license has audit_logging feature
-	h.initAuditLoggerIfLicensed(service, persistence)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(ActivateLicenseResponse{

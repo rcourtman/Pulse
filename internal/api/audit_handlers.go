@@ -35,6 +35,9 @@ func (h *AuditHandlers) HandleListAuditEvents(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	orgID := GetOrgID(r.Context())
+	logger := getLoggerForOrg(orgID)
+
 	query := r.URL.Query()
 
 	filter := audit.QueryFilter{
@@ -78,8 +81,6 @@ func (h *AuditHandlers) HandleListAuditEvents(w http.ResponseWriter, r *http.Req
 		filter.Success = &success
 	}
 
-	logger := audit.GetLogger()
-
 	// Query events from the current logger
 	events, err := logger.Query(filter)
 	if err != nil {
@@ -102,7 +103,7 @@ func (h *AuditHandlers) HandleListAuditEvents(w http.ResponseWriter, r *http.Req
 	response := map[string]interface{}{
 		"events":            events,
 		"total":             totalCount,
-		"persistentLogging": len(events) > 0 || isPersistentLogger(),
+		"persistentLogging": len(events) > 0 || isPersistentLogger(logger),
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -115,6 +116,9 @@ func (h *AuditHandlers) HandleVerifyAuditEvent(w http.ResponseWriter, r *http.Re
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+
+	orgID := GetOrgID(r.Context())
+	logger := getLoggerForOrg(orgID)
 
 	eventID := r.PathValue("id")
 	if eventID == "" {
@@ -129,7 +133,7 @@ func (h *AuditHandlers) HandleVerifyAuditEvent(w http.ResponseWriter, r *http.Re
 	}
 
 	// For OSS, return not_available
-	if !isPersistentLogger() {
+	if !isPersistentLogger(logger) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"available": false,
@@ -138,7 +142,6 @@ func (h *AuditHandlers) HandleVerifyAuditEvent(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	logger := audit.GetLogger()
 	verifier, ok := logger.(interface {
 		VerifySignature(event audit.Event) bool
 	})
@@ -181,7 +184,8 @@ func (h *AuditHandlers) HandleGetWebhooks(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	logger := audit.GetLogger()
+	orgID := GetOrgID(r.Context())
+	logger := getLoggerForOrg(orgID)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"urls": logger.GetWebhookURLs(),
@@ -216,7 +220,8 @@ func (h *AuditHandlers) HandleUpdateWebhooks(w http.ResponseWriter, r *http.Requ
 		validatedURLs = append(validatedURLs, rawURL)
 	}
 
-	logger := audit.GetLogger()
+	orgID := GetOrgID(r.Context())
+	logger := getLoggerForOrg(orgID)
 	if err := logger.UpdateWebhookURLs(validatedURLs); err != nil {
 		writeErrorResponse(w, http.StatusInternalServerError, "update_failed", "Failed to update webhooks", nil)
 		return
@@ -324,8 +329,7 @@ func isPrivateOrReservedIP(ip net.IP) bool {
 }
 
 // isPersistentLogger checks if we're using a persistent audit logger (enterprise).
-func isPersistentLogger() bool {
-	logger := audit.GetLogger()
+func isPersistentLogger(logger audit.Logger) bool {
 	_, isConsole := logger.(*audit.ConsoleLogger)
 	return !isConsole
 }
@@ -337,8 +341,11 @@ func (h *AuditHandlers) HandleExportAuditEvents(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	orgID := GetOrgID(r.Context())
+	logger := getLoggerForOrg(orgID)
+
 	// Check if persistent logger is available
-	if !isPersistentLogger() {
+	if !isPersistentLogger(logger) {
 		writeErrorResponse(w, http.StatusNotImplemented, "export_unavailable",
 			"Export requires Pulse Pro with enterprise audit logging", nil)
 		return
@@ -381,8 +388,6 @@ func (h *AuditHandlers) HandleExportAuditEvents(w http.ResponseWriter, r *http.R
 	// Parse verification flag
 	includeVerification := query.Get("verify") == "true"
 
-	// Get the logger and check if it's persistent
-	logger := audit.GetLogger()
 	persistentLogger, ok := logger.(audit.PersistentLogger)
 	if !ok {
 		writeErrorResponse(w, http.StatusNotImplemented, "export_unavailable",
@@ -413,8 +418,11 @@ func (h *AuditHandlers) HandleAuditSummary(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	orgID := GetOrgID(r.Context())
+	logger := getLoggerForOrg(orgID)
+
 	// Check if persistent logger is available
-	if !isPersistentLogger() {
+	if !isPersistentLogger(logger) {
 		writeErrorResponse(w, http.StatusNotImplemented, "summary_unavailable",
 			"Summary requires Pulse Pro with enterprise audit logging", nil)
 		return
@@ -445,8 +453,6 @@ func (h *AuditHandlers) HandleAuditSummary(w http.ResponseWriter, r *http.Reques
 	// Parse verification flag
 	verifySignatures := query.Get("verify") == "true"
 
-	// Get the logger and check if it's persistent
-	logger := audit.GetLogger()
 	persistentLogger, ok := logger.(audit.PersistentLogger)
 	if !ok {
 		writeErrorResponse(w, http.StatusNotImplemented, "summary_unavailable",
@@ -465,4 +471,11 @@ func (h *AuditHandlers) HandleAuditSummary(w http.ResponseWriter, r *http.Reques
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(summary)
+}
+
+func getLoggerForOrg(orgID string) audit.Logger {
+	if mgr := GetTenantAuditManager(); mgr != nil {
+		return mgr.GetLogger(orgID)
+	}
+	return audit.GetLogger()
 }
