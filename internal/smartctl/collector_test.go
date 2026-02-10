@@ -354,6 +354,68 @@ func TestParseSMARTAttributes_Standby(t *testing.T) {
 	}
 }
 
+func TestParseRawValue(t *testing.T) {
+	tests := []struct {
+		name     string
+		str      string
+		value    int64
+		expected int64
+	}{
+		{"plain number", "16951", 150323855943, 16951},
+		{"seagate power-on hours", "16951 (223 173 0)", 150323855943, 16951},
+		{"simple value matches", "12345", 12345, 12345},
+		{"empty string fallback", "", 42, 42},
+		{"whitespace only fallback", "   ", 42, 42},
+		{"zero", "0", 999, 0},
+		{"non-numeric fallback", "unknown", 77, 77},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parseRawValue(tt.str, tt.value)
+			if got != tt.expected {
+				t.Errorf("parseRawValue(%q, %d) = %d, want %d", tt.str, tt.value, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestParseSMARTAttributes_SeagateRawValues(t *testing.T) {
+	// Seagate drives pack vendor-specific data in upper bytes of the 48-bit raw
+	// value, making raw.value huge. raw.string contains the correct interpretation.
+	data := &smartctlJSON{}
+	data.ATASmartAttributes.Table = []struct {
+		ID     int    `json:"id"`
+		Name   string `json:"name"`
+		Value  int    `json:"value"`
+		Worst  int    `json:"worst"`
+		Thresh int    `json:"thresh"`
+		Raw    struct {
+			Value  int64  `json:"value"`
+			String string `json:"string"`
+		} `json:"raw"`
+	}{
+		{ID: 9, Name: "Power_On_Hours", Raw: struct {
+			Value  int64  `json:"value"`
+			String string `json:"string"`
+		}{Value: 150323855943, String: "16951 (223 173 0)"}},
+		{ID: 12, Name: "Power_Cycle_Count", Raw: struct {
+			Value  int64  `json:"value"`
+			String string `json:"string"`
+		}{Value: 94, String: "94"}},
+	}
+
+	attrs := parseSMARTAttributes(data, "sata")
+	if attrs == nil {
+		t.Fatal("expected non-nil attributes")
+	}
+	if attrs.PowerOnHours == nil || *attrs.PowerOnHours != 16951 {
+		t.Errorf("PowerOnHours: got %v, want 16951 (should parse from raw.string, not raw.value)", attrs.PowerOnHours)
+	}
+	if attrs.PowerCycles == nil || *attrs.PowerCycles != 94 {
+		t.Errorf("PowerCycles: got %v, want 94", attrs.PowerCycles)
+	}
+}
+
 func TestMatchesDeviceExclude(t *testing.T) {
 	tests := []struct {
 		name       string

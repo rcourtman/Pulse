@@ -354,7 +354,7 @@ func parseSMARTAttributes(data *smartctlJSON, diskType string) *SMARTAttributes 
 		// SATA / SAS — iterate the ATA attributes table
 		for _, attr := range data.ATASmartAttributes.Table {
 			hasData = true
-			raw := attr.Raw.Value
+			raw := parseRawValue(attr.Raw.String, attr.Raw.Value)
 			switch attr.ID {
 			case 5: // Reallocated Sector Count
 				v := raw
@@ -382,6 +382,30 @@ func parseSMARTAttributes(data *smartctlJSON, diskType string) *SMARTAttributes 
 		return nil
 	}
 	return attrs
+}
+
+// parseRawValue extracts the primary integer from a SMART attribute's raw string.
+// Some drives (notably Seagate) pack vendor-specific data in the upper bytes of
+// the 48-bit raw value, making raw.value unreliable. For example, Power_On_Hours
+// may report raw.value=150323855943 while raw.string="16951 (223 173 0)" where
+// only 16951 is the actual hours. Falls back to rawValue if string parsing fails.
+func parseRawValue(rawString string, rawValue int64) int64 {
+	s := strings.TrimSpace(rawString)
+	if s == "" {
+		return rawValue
+	}
+	end := 0
+	for end < len(s) && s[end] >= '0' && s[end] <= '9' {
+		end++
+	}
+	if end == 0 {
+		return rawValue
+	}
+	v, err := strconv.ParseInt(s[:end], 10, 64)
+	if err != nil {
+		return rawValue
+	}
+	return v
 }
 
 // detectDiskType determines the disk transport type from smartctl output.
