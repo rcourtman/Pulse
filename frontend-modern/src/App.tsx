@@ -621,6 +621,15 @@ function App() {
             // Ensure settings are marked as loaded so UI doesn't stay in loading state
             markSystemSettingsLoadedWithDefaults();
           }
+        } else {
+          setHasLoadedServerTheme(true);
+          // Still load system settings for other features (Docker update actions, etc.)
+          SettingsAPI.getSystemSettings()
+            .then((settings) => updateSystemSettingsFromResponse(settings))
+            .catch((error) => {
+              logger.warn('Failed to load system settings', error);
+              markSystemSettingsLoadedWithDefaults();
+            });
         }
 
         // Load version info
@@ -673,6 +682,15 @@ function App() {
             // Ensure settings are marked as loaded so UI doesn't stay in loading state
             markSystemSettingsLoadedWithDefaults();
           }
+        } else {
+          setHasLoadedServerTheme(true);
+          // Still load system settings for other features (Docker update actions, etc.)
+          SettingsAPI.getSystemSettings()
+            .then((settings) => updateSystemSettingsFromResponse(settings))
+            .catch((error) => {
+              logger.warn('Failed to load system settings', error);
+              markSystemSettingsLoadedWithDefaults();
+            });
         }
 
         // Load version info
