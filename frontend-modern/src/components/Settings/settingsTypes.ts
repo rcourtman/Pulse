@@ -18,6 +18,8 @@ export interface SettingsNavItem {
   iconProps?: { strokeWidth?: number };
   disabled?: boolean;
   locked?: boolean;
+  hostedOnly?: boolean;
+  adminOnly?: boolean;
   badge?: string;
   features?: string[];
   permissions?: string[];

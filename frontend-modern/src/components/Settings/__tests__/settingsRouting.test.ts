@@ -24,6 +24,7 @@ const canonicalTabPaths = {
   'organization-overview': '/settings/organization',
   'organization-access': '/settings/organization/access',
   'organization-billing': '/settings/organization/billing',
+  'organization-billing-admin': '/settings/organization/billing-admin',
   'organization-sharing': '/settings/organization/sharing',
   api: '/settings/integrations/api',
   'security-overview': '/settings/security-overview',

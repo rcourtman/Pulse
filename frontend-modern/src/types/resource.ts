@@ -151,6 +151,10 @@ export interface Resource {
 
     // Platform-specific data (varies by type)
     platformData?: Record<string, unknown>;
+
+    // Optional enriched facets (not always present in state payloads).
+    // Consumers should narrow/validate at runtime before use.
+    storage?: unknown;
 }
 
 /**
