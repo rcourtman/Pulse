@@ -39,23 +39,23 @@ Welcome to the Pulse documentation portal. Here you'll find everything you need 
 - **[Auto Updates](AUTO_UPDATE.md)** – One-click updates for supported deployments.
 - **[Kubernetes](KUBERNETES.md)** – Helm deployment (ingress, persistence, HA patterns).
 
-## 🚀 Pulse Pro
+## 💳 Plans (Community / Pro / Cloud)
 
-Pulse Pro unlocks **Auto-Fix and advanced AI analysis** — **Pulse Patrol is available to all with BYOK**.
+Pulse is available in three plans:
+
+- **Community**: Pulse Patrol is available to everyone with BYOK (your own AI provider).
+- **Pro**: Unlocks auto-fix, alert-triggered analysis, Kubernetes AI analysis, reporting, and agent profiles.
+- **Cloud**: Everything in Pro, plus enterprise-grade multi-tenant and volume capabilities (where licensed).
 
 - **[Learn more at pulserelay.pro](https://pulserelay.pro)**
-- **[AI Patrol deep dive](AI.md)**
-- **[Pulse Pro technical overview](PULSE_PRO.md)**
-- **What you actually get**: Auto-fix + autonomous mode, alert-triggered deep dives, Kubernetes AI analysis, reporting, and agent profiles.
-- **Technical highlights**: correlation across nodes/VMs/backups/containers, trend-based capacity predictions, and findings you can resolve/suppress.
-- **Scheduling**: 10 minutes to 7 days (default 6 hours).
-- **Agent Profiles (Pro)**: centralized agent configuration profiles. See [Centralized Agent Management](CENTRALIZED_MANAGEMENT.md).
-- **[Multi-Tenant Organizations (Enterprise)](MULTI_TENANT.md)** — Isolate infrastructure by organization for MSPs and multi-datacenter deployments.
+- **[Plans and entitlements](PULSE_PRO.md)** (includes the Community/Pro/Cloud matrix)
+- **[AI deep dive](AI.md)**
+- **[Multi-Tenant Organizations (Cloud Enterprise)](MULTI_TENANT.md)** — Isolate infrastructure by organization for MSPs and multi-datacenter deployments.
 
 ## 📡 Monitoring & Agents
 
 - **[Unified Agent](UNIFIED_AGENT.md)** – Single binary for host, Docker, and Kubernetes monitoring.
-- **[Centralized Agent Management (Pro)](CENTRALIZED_MANAGEMENT.md)** – Agent profiles and remote config.
+- **[Centralized Agent Management (Pro/Cloud)](CENTRALIZED_MANAGEMENT.md)** – Agent profiles and remote config.
 - **[Proxmox Backup Server](PBS.md)** – PBS integration, direct API vs PVE passthrough, token setup.
 - **[VM Disk Monitoring](VM_DISK_MONITORING.md)** – Enabling QEMU Guest Agent for disk stats.
 - **[Temperature Monitoring](TEMPERATURE_MONITORING.md)** – Agent-based temperature monitoring (`pulse-agent --enable-proxmox`). Sensor proxy has been removed.

@@ -1,6 +1,6 @@
-# Centralized Agent Management (Pulse Pro)
+# Centralized Agent Management (Pro/Cloud)
 
-Pulse Pro supports centralized management of agent configurations, allowing administrators to define "Configuration Profiles" and assign them to specific agents. This enables bulk updates and consistent configuration across your fleet without manually editing configuration files on each host.
+Pro and Cloud support centralized management of agent configurations, allowing administrators to define "Configuration Profiles" and assign them to specific agents. This enables bulk updates and consistent configuration across your fleet without manually editing configuration files on each host.
 
 Profiles are managed in the UI: **Settings → Agents → Agent Profiles**.
 
@@ -38,7 +38,7 @@ Notes:
 
 ## API Usage
 
-All endpoints require **Admin** authentication and a **Pulse Pro** license.
+All endpoints require **Admin** authentication and a Pro/Cloud license.
 
 ### 1. Create a Profile
 

@@ -71,7 +71,7 @@ curl -H "X-API-Token: $TOKEN" \
   "http://localhost:7655/api/metrics-store/history?resourceType=vm&resourceId=pve1:node1:100&range=7d&metric=cpu"
 ```
 
-> **License**: Requests beyond `7d` require the Pulse Pro `long_term_metrics` feature. Unlicensed requests return `402 Payment Required`.
+> **License**: Requests beyond `7d` require the Pro/Cloud `long_term_metrics` feature. Unlicensed requests return `402 Payment Required`.
 > **Aliases**: `guest` (VM/LXC) and `docker` (Docker container) are accepted, but persistent store data uses the canonical types above.
 
 ## Troubleshooting

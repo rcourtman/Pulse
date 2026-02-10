@@ -6,7 +6,7 @@ Pulse uses a split-configuration model to ensure security and flexibility.
 | ------ | --------- | ---------------- |
 | `.env` | Authentication & Secrets | 🔒 **Critical** (Read-only by owner) |
 | `.encryption.key` | Encryption key for `.enc` files | 🔒 **Critical** |
-| `.audit-signing.key` | Audit log signing key (Pulse Pro, encrypted) | 🔒 **Sensitive** |
+| `.audit-signing.key` | Audit log signing key (Pro/Cloud, encrypted) | 🔒 **Sensitive** |
 | `system.json` | General Settings | 📝 Standard |
 | `nodes.enc` | Node Credentials | 🔒 **Encrypted** (AES-256-GCM) |
 | `alerts.json` | Alert Rules | 📝 Standard |
@@ -22,20 +22,20 @@ Pulse uses a split-configuration model to ensure security and flexibility.
 | `ai_patrol_runs.json` | AI Patrol run history | 📝 Standard |
 | `ai_usage_history.json` | AI usage history | 📝 Standard |
 | `ai_chat_sessions.json` | Legacy AI chat sessions (UI sync) | 📝 Standard |
-| `license.enc` | Pulse Pro license key | 🔒 **Encrypted** |
+| `license.enc` | Pro/Cloud license key | 🔒 **Encrypted** |
 | `host_metadata.json` | Host notes, tags, and AI command overrides | 📝 Standard |
 | `docker_metadata.json` | Docker metadata cache | 📝 Standard |
 | `guest_metadata.json` | Guest notes and metadata | 📝 Standard |
-| `agent_profiles.json` | Agent configuration profiles (Pulse Pro) | 📝 Standard |
-| `agent_profile_assignments.json` | Agent profile assignments (Pulse Pro) | 📝 Standard |
-| `profile-versions.json` | Agent profile version history (Pulse Pro) | 📝 Standard |
-| `profile-deployments.json` | Agent profile deployment status (Pulse Pro) | 📝 Standard |
-| `profile-changelog.json` | Agent profile change log (Pulse Pro) | 📝 Standard |
+| `agent_profiles.json` | Agent configuration profiles (Pro/Cloud) | 📝 Standard |
+| `agent_profile_assignments.json` | Agent profile assignments (Pro/Cloud) | 📝 Standard |
+| `profile-versions.json` | Agent profile version history (Pro/Cloud) | 📝 Standard |
+| `profile-deployments.json` | Agent profile deployment status (Pro/Cloud) | 📝 Standard |
+| `profile-changelog.json` | Agent profile change log (Pro/Cloud) | 📝 Standard |
 | `recovery_tokens.json` | Recovery tokens (short-lived) | 🔒 **Sensitive** |
 | `sessions.json` | Persistent sessions (includes OIDC refresh tokens) | 🔒 **Sensitive** |
 | `update-history.jsonl` | Update history log (in-app updates) | 📝 Standard |
 | `metrics.db` | Persistent metrics history (SQLite) | 📝 Standard |
-| `audit.db` | Audit log database (Pulse Pro, SQLite) | 🔒 **Sensitive** |
+| `audit.db` | Audit log database (Pro/Cloud, SQLite) | 🔒 **Sensitive** |
 | `baselines.json` | AI baseline data for anomaly detection | 📝 Standard |
 | `ai_correlations.json` | AI correlation analysis cache | 📝 Standard |
 | `ai_patterns.json` | AI pattern detection data | 📝 Standard |
@@ -112,7 +112,7 @@ Environment overrides (lock the corresponding UI fields):
 | `OIDC_ALLOWED_GROUPS` | Allowed groups (space or comma-separated) |
 | `OIDC_ALLOWED_DOMAINS` | Allowed email domains (space or comma-separated) |
 | `OIDC_ALLOWED_EMAILS` | Allowed emails (space or comma-separated) |
-| `OIDC_GROUP_ROLE_MAPPINGS` | Comma-separated group=role mappings (Pulse Pro) |
+| `OIDC_GROUP_ROLE_MAPPINGS` | Comma-separated group=role mappings (Pro/Cloud) |
 | `OIDC_CA_BUNDLE` | Custom CA bundle path |
 
 </details>

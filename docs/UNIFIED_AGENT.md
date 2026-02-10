@@ -200,9 +200,9 @@ curl -fsSL http://<pulse-ip>:7655/install.sh | \
 PULSE_DISABLE_AUTO_UPDATE=true
 ```
 
-## Remote Configuration (Agent Profiles, Pro)
+## Remote Configuration (Agent Profiles, Pro/Cloud)
 
-Pulse Pro can push centralized settings to agents via Agent Profiles.
+Pro and Cloud can push centralized settings to agents via Agent Profiles.
 
 Behavior:
 - The agent fetches remote config on startup from `/api/agents/host/{agent_id}/config`.

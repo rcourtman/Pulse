@@ -409,7 +409,7 @@ Returns a new raw token (shown once) and updates stored hashes:
 
 ## 🧾 Audit Log (Pro)
 
-These endpoints require admin access and the `settings:read` scope. In OSS builds, the list endpoint returns an empty set and `persistentLogging: false`.
+These endpoints require admin access and the `settings:read` scope. On Community, the list endpoint returns an empty set and `persistentLogging: false`.
 
 ### List Audit Events
 `GET /api/audit?limit=100&event=login&user=admin&success=true&startTime=2024-01-01T00:00:00Z&endTime=2024-01-31T23:59:59Z`
@@ -570,7 +570,7 @@ Initiate OIDC login flow.
 
 ---
 
-## 💳 License (Pulse Pro)
+## 💳 License (Pro / Cloud)
 
 ### License Status (Admin)
 `GET /api/license/status`
@@ -711,7 +711,7 @@ Revoke a resource share. Admin or owner role required.
 
 ## 🤖 Pulse AI *(v5)*
 
-**Pro gating:** endpoints labeled "(Pro)" require a Pulse Pro license and return `402 Payment Required` if the feature is not licensed.
+**Pro gating:** endpoints labeled "(Pro)" require the relevant Pro/Cloud capability and return `402 Payment Required` if the feature is not licensed.
 
 ### Get AI Settings
 `GET /api/settings/ai`
@@ -771,7 +771,7 @@ Streaming variant of execute (used by the UI for incremental responses).
 ```json
 { "cluster_id": "cluster-id" }
 ```
-Requires a Pulse Pro license with the `kubernetes_ai` feature enabled.
+Requires Pro/Cloud with the `kubernetes_ai` feature enabled.
 
 ### Alert Investigation (Pro)
 `POST /api/ai/investigate-alert`
@@ -879,7 +879,7 @@ Query params:
 - `range` (optional): `1h`, `6h`, `12h`, `24h`, `1d`, `7d`, `30d`, `90d` (default `24h`; duration strings also accepted)
 - `maxPoints` (optional): Downsample to a target number of points
 
-> **License**: Requests beyond `7d` require the Pulse Pro `long_term_metrics` feature. Unlicensed requests return `402 Payment Required`.
+> **License**: Requests beyond `7d` require the Pro/Cloud `long_term_metrics` feature. Unlicensed requests return `402 Payment Required`.
 > **Aliases**: `guest` (VM/LXC) and `docker` (Docker container) are accepted, but persistent store data uses the canonical types above.
 
 ---

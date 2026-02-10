@@ -46,12 +46,12 @@ sudo pulse bootstrap-token
 #### Audit Log verification shows unsigned events
 - **Symptom**: Audit Log entries show “Unsigned” or verification fails in the UI.
 - **Root cause**: Audit signing is disabled (crypto manager unavailable), so events are stored without signatures.
-- **Fix**: Ensure `.encryption.key` is present and Pulse Pro audit logging is enabled, then restart Pulse to regenerate `.audit-signing.key`. Newly created events will be signed; existing unsigned events remain unsigned.
+- **Fix**: Ensure `.encryption.key` is present and Pro/Cloud audit logging is enabled, then restart Pulse to regenerate `.audit-signing.key`. Newly created events will be signed; existing unsigned events remain unsigned.
 
 #### Audit Log is empty
 - **Symptom**: Audit Log shows zero events or "Console Logging Only."
-- **Root cause**: OSS build uses console logging only, or Pulse Pro audit logging is not enabled.
-- **Fix**: Use Pulse Pro with audit logging enabled, then generate new audit events (logins, token creation, password changes).
+- **Root cause**: Community plan uses console logging only, or Pro/Cloud audit logging is not enabled.
+- **Fix**: Use Pro/Cloud with audit logging enabled, then generate new audit events (logins, token creation, password changes).
 
 #### Audit Log verification fails for older events
 - **Symptom**: Older events fail verification while newer events pass.
