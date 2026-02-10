@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -18,7 +19,8 @@ var (
 	runCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		return exec.CommandContext(ctx, name, args...).Output()
 	}
-	timeNow = time.Now
+	timeNow     = time.Now
+	runtimeGOOS = runtime.GOOS
 )
 
 // DiskSMART represents S.M.A.R.T. data for a single disk.
@@ -135,7 +137,14 @@ func CollectLocal(ctx context.Context, diskExclude []string) ([]DiskSMART, error
 // listBlockDevices returns a list of block devices suitable for SMART queries.
 // Devices matching any of the diskExclude patterns are skipped.
 func listBlockDevices(ctx context.Context, diskExclude []string) ([]string, error) {
-	// Use lsblk to find disks (not partitions)
+	if runtimeGOOS == "freebsd" {
+		return listBlockDevicesFreeBSD(ctx, diskExclude)
+	}
+	return listBlockDevicesLinux(ctx, diskExclude)
+}
+
+// listBlockDevicesLinux uses lsblk to find disks on Linux.
+func listBlockDevicesLinux(ctx context.Context, diskExclude []string) ([]string, error) {
 	output, err := runCommandOutput(ctx, "lsblk", "-d", "-n", "-o", "NAME,TYPE")
 	if err != nil {
 		return nil, err
@@ -151,13 +160,35 @@ func listBlockDevices(ctx context.Context, diskExclude []string) ([]string, erro
 		// Only include disk types (not loop, rom, partition)
 		if devType == "disk" {
 			devicePath := "/dev/" + name
-			// Check exclusion patterns
 			if matchesDeviceExclude(name, devicePath, diskExclude) {
 				log.Debug().Str("device", devicePath).Msg("Skipping excluded device for SMART collection")
 				continue
 			}
 			devices = append(devices, devicePath)
 		}
+	}
+
+	return devices, nil
+}
+
+// listBlockDevicesFreeBSD uses sysctl kern.disks to find disks on FreeBSD.
+func listBlockDevicesFreeBSD(ctx context.Context, diskExclude []string) ([]string, error) {
+	output, err := runCommandOutput(ctx, "sysctl", "-n", "kern.disks")
+	if err != nil {
+		return nil, err
+	}
+
+	var devices []string
+	for _, name := range strings.Fields(strings.TrimSpace(string(output))) {
+		if name == "" {
+			continue
+		}
+		devicePath := "/dev/" + name
+		if matchesDeviceExclude(name, devicePath, diskExclude) {
+			log.Debug().Str("device", devicePath).Msg("Skipping excluded device for SMART collection")
+			continue
+		}
+		devices = append(devices, devicePath)
 	}
 
 	return devices, nil

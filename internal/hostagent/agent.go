@@ -740,8 +740,8 @@ func (a *Agent) collectCephStatus(ctx context.Context) *agentshost.CephCluster {
 // collectSMARTData collects S.M.A.R.T. data from local disks.
 // Returns nil if smartctl is not available or no disks are found.
 func (a *Agent) collectSMARTData(ctx context.Context) []agentshost.DiskSMART {
-	// Only collect on Linux (smartctl works on other platforms but disk paths differ)
-	if a.collector.GOOS() != "linux" {
+	goos := a.collector.GOOS()
+	if goos != "linux" && goos != "freebsd" {
 		return nil
 	}
 
