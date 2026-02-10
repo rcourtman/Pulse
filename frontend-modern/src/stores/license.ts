@@ -27,7 +27,8 @@ export async function loadLicenseStatus(force = false): Promise<void> {
         setEntitlements({
             capabilities: ['update_alerts', 'sso', 'ai_patrol'],
             limits: [],
-            subscription_state: 'active',
+            // Match backend behavior when no license is present.
+            subscription_state: 'expired',
             upgrade_reasons: [],
             tier: 'free',
             hosted_mode: false,
@@ -42,7 +43,10 @@ export async function loadLicenseStatus(force = false): Promise<void> {
  * Start a Pro trial for the current org, then refresh entitlements.
  */
 export async function startProTrial(): Promise<void> {
-    await LicenseAPI.startTrial();
+    const res = await LicenseAPI.startTrial();
+    if (!res.ok) {
+        throw new Error(`Failed to start trial (status ${res.status})`);
+    }
     await loadLicenseStatus(true);
 }
 
@@ -122,4 +126,4 @@ export function isRangeLocked(range: string): boolean {
 /**
  * Get the full license status.
  */
-export { entitlements as licenseStatus, loading as licenseLoading, loaded as licenseLoaded };
+export { entitlements, entitlements as licenseStatus, loading as licenseLoading, loaded as licenseLoaded };

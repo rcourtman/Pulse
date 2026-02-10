@@ -18,6 +18,7 @@ func (r *Router) registerHostedRoutes(hostedSignupHandlers *HostedSignupHandlers
 
 	billingHandlers := NewBillingStateHandlers(config.NewFileBillingStore(routerConfig.DataPath), r.hostedMode)
 	lifecycleHandlers := NewOrgLifecycleHandlers(r.multiTenant, r.hostedMode)
+	hostedOrgAdminHandlers := NewHostedOrgAdminHandlers(r.multiTenant, r.hostedMode)
 	r.mux.HandleFunc(
 		"GET /api/admin/orgs/{id}/billing-state",
 		RequireAdmin(routerConfig, RequireScope(config.ScopeSettingsRead, billingHandlers.HandleGetBillingState)),
@@ -37,6 +38,10 @@ func (r *Router) registerHostedRoutes(hostedSignupHandlers *HostedSignupHandlers
 	r.mux.HandleFunc(
 		"POST /api/admin/orgs/{id}/soft-delete",
 		RequireAdmin(routerConfig, RequireScope(config.ScopeSettingsWrite, lifecycleHandlers.HandleSoftDeleteOrg)),
+	)
+	r.mux.HandleFunc(
+		"GET /api/hosted/organizations",
+		RequireAdmin(routerConfig, RequireScope(config.ScopeSettingsRead, hostedOrgAdminHandlers.HandleListOrganizations)),
 	)
 
 	if hostedSignupHandlers != nil {

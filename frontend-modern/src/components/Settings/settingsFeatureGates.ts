@@ -9,6 +9,7 @@ export const tabFeatureRequirements: Partial<Record<SettingsTab, string[]>> = {
   'organization-access': ['multi_tenant'],
   'organization-sharing': ['multi_tenant'],
   'organization-billing': ['multi_tenant'],
+  'organization-billing-admin': ['multi_tenant'],
 };
 
 export function isFeatureLocked(

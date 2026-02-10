@@ -38,6 +38,7 @@ const OrganizationOverviewPanel = lazy(() => import('./OrganizationOverviewPanel
 const OrganizationAccessPanel = lazy(() => import('./OrganizationAccessPanel'));
 const OrganizationSharingPanel = lazy(() => import('./OrganizationSharingPanel'));
 const OrganizationBillingPanel = lazy(() => import('./OrganizationBillingPanel'));
+const BillingAdminPanel = lazy(() => import('./BillingAdminPanel'));
 const APIAccessPanel = lazy(() =>
   import('./APIAccessPanel').then((m) => ({ default: m.APIAccessPanel })),
 );
@@ -139,6 +140,9 @@ export const createSettingsPanelRegistry = (
   'organization-billing': {
     component: OrganizationBillingPanel,
     getProps: context.getOrganizationBillingPanelProps,
+  },
+  'organization-billing-admin': {
+    component: BillingAdminPanel,
   },
   api: {
     component: APIAccessPanel,

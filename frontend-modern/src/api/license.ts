@@ -59,11 +59,6 @@ export interface LicenseFeatureStatus {
   upgrade_url: string;
 }
 
-export interface StartTrialResponse {
-  success?: boolean;
-  message?: string;
-}
-
 export class LicenseAPI {
   private static baseUrl = '/api/license';
 
@@ -93,45 +88,11 @@ export class LicenseAPI {
     }) as Promise<ClearLicenseResponse>;
   }
 
-  static async startTrial(): Promise<StartTrialResponse | null> {
-    const response = await apiClient.fetch(`${this.baseUrl}/trial/start`, {
+  static async startTrial(): Promise<Response> {
+    // Return the raw Response so callers can handle status codes (409 trial_already_used, 429 rate limited, etc.)
+    return apiClient.fetch(`${this.baseUrl}/trial/start`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
-      body: JSON.stringify({}),
+      headers: { Accept: 'application/json' },
     });
-
-    if (!response.ok) {
-      const status = response.status;
-      let message = '';
-      try {
-        const text = await response.text();
-        try {
-          const parsed = JSON.parse(text) as { message?: string; error?: string };
-          message = parsed.message || parsed.error || text;
-        } catch {
-          message = text;
-        }
-      } catch {
-        // ignore
-      }
-
-      const err = new Error(message || `Request failed with status ${status}`) as Error & {
-        status?: number;
-      };
-      err.status = status;
-      throw err;
-    }
-
-    // Some handlers may return no body.
-    try {
-      const text = await response.text();
-      if (!text) return null;
-      return JSON.parse(text) as StartTrialResponse;
-    } catch {
-      return null;
-    }
   }
 }

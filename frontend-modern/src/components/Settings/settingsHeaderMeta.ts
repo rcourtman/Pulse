@@ -59,6 +59,10 @@ export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
     title: 'Organization Billing',
     description: 'Track plan tier, usage, and upgrade options for multi-tenant deployments.',
   },
+  'organization-billing-admin': {
+    title: 'Billing Admin',
+    description: 'Review and manage tenant billing state across all organizations (hosted mode only).',
+  },
   api: {
     title: 'API Access',
     description:

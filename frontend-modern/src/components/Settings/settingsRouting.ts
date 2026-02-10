@@ -13,6 +13,7 @@ export type SettingsTab =
   | 'organization-overview'
   | 'organization-access'
   | 'organization-billing'
+  | 'organization-billing-admin'
   | 'organization-sharing'
   | 'api'
   | 'security-overview'
@@ -106,6 +107,7 @@ export function deriveTabFromPath(path: string): SettingsTab {
   if (canonicalPath.includes('/settings/system-pro')) return 'system-pro';
   if (canonicalPath.includes('/settings/organization/access')) return 'organization-access';
   if (canonicalPath.includes('/settings/organization/sharing')) return 'organization-sharing';
+  if (canonicalPath.includes('/settings/organization/billing-admin')) return 'organization-billing-admin';
   if (canonicalPath.includes('/settings/billing')) return 'organization-billing';
   if (canonicalPath.includes('/settings/plan')) return 'organization-billing';
   if (canonicalPath.includes('/settings/organization/billing')) return 'organization-billing';
@@ -199,6 +201,8 @@ export function deriveTabFromQuery(search: string): SettingsTab | null {
     case 'billing':
     case 'plan':
       return 'organization-billing';
+    case 'billing-admin':
+      return 'organization-billing-admin';
     case 'security':
     case 'security-overview':
       return 'security-overview';
@@ -241,6 +245,8 @@ export function settingsTabPath(tab: SettingsTab): string {
       return '/settings/organization/sharing';
     case 'organization-billing':
       return '/settings/organization/billing';
+    case 'organization-billing-admin':
+      return '/settings/organization/billing-admin';
     case 'api':
       return '/settings/integrations/api';
     case 'system-relay':

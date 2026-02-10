@@ -65,6 +65,15 @@ export const baseTabGroups: SettingsNavGroup[] = [
         iconProps: { strokeWidth: 2 },
         features: ['multi_tenant'],
       },
+      {
+        id: 'organization-billing-admin',
+        label: 'Billing Admin',
+        icon: CreditCard,
+        iconProps: { strokeWidth: 2 },
+        features: ['multi_tenant'],
+        hostedOnly: true,
+        adminOnly: true,
+      },
     ],
   },
   {

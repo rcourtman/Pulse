@@ -42,6 +42,10 @@ type EntitlementPayload struct {
 
 	// TrialDaysRemaining is the number of whole or partial days remaining in trial.
 	TrialDaysRemaining *int `json:"trial_days_remaining,omitempty"`
+
+	// HostedMode indicates that this server is running in Pulse hosted mode.
+	// It is used by the frontend to gate hosted-control-plane-only UI.
+	HostedMode bool `json:"hosted_mode"`
 }
 
 // LimitStatus represents a quantitative limit with current usage state.
@@ -91,6 +95,7 @@ func (h *LicenseHandlers) HandleEntitlements(w http.ResponseWriter, r *http.Requ
 	usage := h.entitlementUsageSnapshot(r.Context())
 	trialEndsAtUnix := trialEndsAtUnixFromService(svc)
 	payload := buildEntitlementPayloadWithUsage(status, svc.SubscriptionState(), usage, trialEndsAtUnix)
+	payload.HostedMode = h != nil && h.hostedMode
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(payload)
