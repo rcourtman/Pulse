@@ -525,6 +525,8 @@ type Manager struct {
 	dockerRestartTracking map[string]*dockerRestartRecord // Track restart counts and times for restart loop detection
 	dockerLastExitCode    map[string]int                  // Track last exit code for OOM detection
 	dockerUpdateFirstSeen map[string]time.Time            // Track when image updates were first detected for alert delay
+	// Stable identity tracking prevents update-delay resets when host IDs churn.
+	dockerUpdateFirstSeenByIdentity map[string]time.Time
 	// PMG quarantine growth tracking
 	pmgQuarantineHistory map[string][]pmgQuarantineSnapshot // Track quarantine snapshots for growth detection
 	// PMG anomaly detection tracking
@@ -577,29 +579,30 @@ func NewManagerWithDataDir(dataDir string) *Manager {
 	alertsDir := filepath.Join(dataDir, "alerts")
 	alertOrphaned := true
 	m := &Manager{
-		activeAlerts:          make(map[string]*Alert),
-		historyManager:        NewHistoryManager(alertsDir),
-		escalationStop:        make(chan struct{}),
-		alertRateLimit:        make(map[string][]time.Time),
-		recentAlerts:          make(map[string]*Alert),
-		suppressedUntil:       make(map[string]time.Time),
-		recentlyResolved:      make(map[string]*ResolvedAlert),
-		pendingAlerts:         make(map[string]time.Time),
-		nodeOfflineCount:      make(map[string]int),
-		offlineConfirmations:  make(map[string]int),
-		dockerOfflineCount:    make(map[string]int),
-		dockerStateConfirm:    make(map[string]int),
-		dockerRestartTracking: make(map[string]*dockerRestartRecord),
-		dockerLastExitCode:    make(map[string]int),
-		dockerUpdateFirstSeen: make(map[string]time.Time),
-		pmgQuarantineHistory:  make(map[string][]pmgQuarantineSnapshot),
-		pmgAnomalyTrackers:    make(map[string]*pmgAnomalyTracker),
-		ackState:              make(map[string]ackRecord),
-		flappingHistory:       make(map[string][]time.Time),
-		flappingActive:        make(map[string]bool),
-		cleanupStop:           make(chan struct{}),
-		hostAgentHostnames:    make(map[string]struct{}),
-		nodeDisplayNames:      make(map[string]string),
+		activeAlerts:                    make(map[string]*Alert),
+		historyManager:                  NewHistoryManager(alertsDir),
+		escalationStop:                  make(chan struct{}),
+		alertRateLimit:                  make(map[string][]time.Time),
+		recentAlerts:                    make(map[string]*Alert),
+		suppressedUntil:                 make(map[string]time.Time),
+		recentlyResolved:                make(map[string]*ResolvedAlert),
+		pendingAlerts:                   make(map[string]time.Time),
+		nodeOfflineCount:                make(map[string]int),
+		offlineConfirmations:            make(map[string]int),
+		dockerOfflineCount:              make(map[string]int),
+		dockerStateConfirm:              make(map[string]int),
+		dockerRestartTracking:           make(map[string]*dockerRestartRecord),
+		dockerLastExitCode:              make(map[string]int),
+		dockerUpdateFirstSeen:           make(map[string]time.Time),
+		dockerUpdateFirstSeenByIdentity: make(map[string]time.Time),
+		pmgQuarantineHistory:            make(map[string][]pmgQuarantineSnapshot),
+		pmgAnomalyTrackers:              make(map[string]*pmgAnomalyTracker),
+		ackState:                        make(map[string]ackRecord),
+		flappingHistory:                 make(map[string][]time.Time),
+		flappingActive:                  make(map[string]bool),
+		cleanupStop:                     make(chan struct{}),
+		hostAgentHostnames:              make(map[string]struct{}),
+		nodeDisplayNames:                make(map[string]string),
 		config: AlertConfig{
 			Enabled:                true,
 			ActivationState:        ActivationPending,
@@ -1686,6 +1689,8 @@ func (m *Manager) applyGlobalOfflineSettingsLocked() {
 		m.dockerStateConfirm = make(map[string]int)
 		m.dockerRestartTracking = make(map[string]*dockerRestartRecord)
 		m.dockerLastExitCode = make(map[string]int)
+		m.dockerUpdateFirstSeen = make(map[string]time.Time)
+		m.dockerUpdateFirstSeenByIdentity = make(map[string]time.Time)
 	}
 	if m.config.DisableAllDockerServices {
 		var serviceAlerts []string
@@ -3717,6 +3722,56 @@ func dockerResourceID(hostID, containerID string) string {
 	return fmt.Sprintf("docker:%s/%s", hostID, containerID)
 }
 
+func normalizeDockerUpdateTrackingPart(part string) string {
+	return strings.ToLower(strings.TrimSpace(part))
+}
+
+// dockerUpdateTrackingHostKey builds a stable host identity for Docker update timing.
+func dockerUpdateTrackingHostKey(host models.DockerHost) string {
+	switch {
+	case normalizeDockerUpdateTrackingPart(host.AgentID) != "":
+		return "agent:" + normalizeDockerUpdateTrackingPart(host.AgentID)
+	case normalizeDockerUpdateTrackingPart(host.TokenID) != "":
+		return "token:" + normalizeDockerUpdateTrackingPart(host.TokenID)
+	case normalizeDockerUpdateTrackingPart(host.MachineID) != "":
+		return "machine:" + normalizeDockerUpdateTrackingPart(host.MachineID)
+	case normalizeDockerUpdateTrackingPart(host.Hostname) != "":
+		return "hostname:" + normalizeDockerUpdateTrackingPart(host.Hostname)
+	case normalizeDockerUpdateTrackingPart(host.ID) != "":
+		return "id:" + normalizeDockerUpdateTrackingPart(host.ID)
+	case normalizeDockerUpdateTrackingPart(host.DisplayName) != "":
+		return "name:" + normalizeDockerUpdateTrackingPart(host.DisplayName)
+	default:
+		return "unknown-host"
+	}
+}
+
+func dockerUpdateTrackingContainerKey(container models.DockerContainer) string {
+	if id := normalizeDockerUpdateTrackingPart(container.ID); id != "" {
+		return "id:" + id
+	}
+
+	name := normalizeDockerUpdateTrackingPart(container.Name)
+	name = strings.TrimPrefix(name, "/")
+	if name != "" {
+		return "name:" + name
+	}
+
+	if image := normalizeDockerUpdateTrackingPart(container.Image); image != "" {
+		return "image:" + image
+	}
+
+	return "unknown-container"
+}
+
+func dockerUpdateTrackingKey(host models.DockerHost, container models.DockerContainer) string {
+	return fmt.Sprintf("docker-update:%s/%s", dockerUpdateTrackingHostKey(host), dockerUpdateTrackingContainerKey(container))
+}
+
+func dockerUpdateTrackingHostPrefix(host models.DockerHost) string {
+	return fmt.Sprintf("docker-update:%s/", dockerUpdateTrackingHostKey(host))
+}
+
 // dockerServiceDisplayName normalizes the service name for alert readability.
 func dockerServiceDisplayName(service models.DockerService) string {
 	name := strings.TrimSpace(service.Name)
@@ -3814,9 +3869,11 @@ func (m *Manager) CheckDockerHost(host models.DockerHost) {
 	}
 
 	seen := make(map[string]struct{}, len(host.Containers)+len(host.Services))
+	seenUpdateTracking := make(map[string]struct{}, len(host.Containers))
 	for _, container := range host.Containers {
 		containerName := dockerContainerDisplayName(container)
 		resourceID := dockerResourceID(host.ID, container.ID)
+		updateTrackingKey := dockerUpdateTrackingKey(host, container)
 
 		if matchesDockerIgnoredPrefix(containerName, container.ID, ignoredPrefixes) {
 			log.Debug().
@@ -3833,10 +3890,12 @@ func (m *Manager) CheckDockerHost(host models.DockerHost) {
 			delete(m.dockerRestartTracking, resourceID)
 			delete(m.dockerLastExitCode, resourceID)
 			m.mu.Unlock()
+			m.clearDockerContainerUpdateTracking(resourceID, updateTrackingKey)
 			continue
 		}
 
 		seen[resourceID] = struct{}{}
+		seenUpdateTracking[updateTrackingKey] = struct{}{}
 		m.evaluateDockerContainer(host, container, resourceID)
 	}
 
@@ -3846,7 +3905,7 @@ func (m *Manager) CheckDockerHost(host models.DockerHost) {
 		m.evaluateDockerService(host, service, resourceID)
 	}
 
-	m.cleanupDockerContainerAlerts(host, seen)
+	m.cleanupDockerContainerAlertsWithTracking(host, seen, seenUpdateTracking)
 }
 
 func (m *Manager) evaluateDockerContainer(host models.DockerHost, container models.DockerContainer, resourceID string) {
@@ -4181,7 +4240,7 @@ func (m *Manager) HandleDockerHostRemoved(host models.DockerHost) {
 	// Reuse the online handler to clear offline alerts and tracking.
 	m.HandleDockerHostOnline(host)
 	// Drop any container alerts and host-scoped tracking entries.
-	m.clearDockerHostContainerAlerts(host.ID)
+	m.clearDockerHostContainerAlerts(host)
 }
 
 // HandleDockerHostOffline raises an alert when a Docker host stops reporting.
@@ -4306,7 +4365,7 @@ func (m *Manager) HandleDockerHostOffline(host models.DockerHost) {
 		Str("hostname", host.Hostname).
 		Msg("CRITICAL: Docker host is offline")
 
-	m.clearDockerHostContainerAlerts(host.ID)
+	m.clearDockerHostContainerAlerts(host)
 }
 
 func (m *Manager) checkDockerContainerState(host models.DockerHost, container models.DockerContainer, resourceID, containerName, instanceName, nodeName string) {
@@ -4750,9 +4809,19 @@ func (m *Manager) clearDockerContainerMetricAlerts(resourceID string, metrics ..
 	}
 }
 
+func (m *Manager) clearDockerContainerUpdateTracking(resourceID, trackingKey string) {
+	m.mu.Lock()
+	delete(m.dockerUpdateFirstSeen, resourceID)
+	if trackingKey != "" {
+		delete(m.dockerUpdateFirstSeenByIdentity, trackingKey)
+	}
+	m.mu.Unlock()
+}
+
 // checkDockerContainerImageUpdate checks if an image update has been pending for too long
 func (m *Manager) checkDockerContainerImageUpdate(host models.DockerHost, container models.DockerContainer, resourceID, containerName, instanceName, nodeName string) {
 	alertID := fmt.Sprintf("docker-container-update-%s", resourceID)
+	updateTrackingKey := dockerUpdateTrackingKey(host, container)
 
 	// Check if update detection is enabled
 	m.mu.RLock()
@@ -4762,9 +4831,7 @@ func (m *Manager) checkDockerContainerImageUpdate(host models.DockerHost, contai
 	// Negative value means disabled
 	if delayHours < 0 {
 		m.clearAlert(alertID)
-		m.mu.Lock()
-		delete(m.dockerUpdateFirstSeen, resourceID)
-		m.mu.Unlock()
+		m.clearDockerContainerUpdateTracking(resourceID, updateTrackingKey)
 		return
 	}
 
@@ -4772,9 +4839,7 @@ func (m *Manager) checkDockerContainerImageUpdate(host models.DockerHost, contai
 	if container.UpdateStatus == nil {
 		// No update status - clear any tracking and alerts
 		m.clearAlert(alertID)
-		m.mu.Lock()
-		delete(m.dockerUpdateFirstSeen, resourceID)
-		m.mu.Unlock()
+		m.clearDockerContainerUpdateTracking(resourceID, updateTrackingKey)
 		return
 	}
 
@@ -4789,19 +4854,21 @@ func (m *Manager) checkDockerContainerImageUpdate(host models.DockerHost, contai
 	if !container.UpdateStatus.UpdateAvailable {
 		// No update available - clear tracking and alert
 		m.clearAlert(alertID)
-		m.mu.Lock()
-		delete(m.dockerUpdateFirstSeen, resourceID)
-		m.mu.Unlock()
+		m.clearDockerContainerUpdateTracking(resourceID, updateTrackingKey)
 		return
 	}
 
 	// Update is available - track when we first saw it
 	m.mu.Lock()
-	firstSeen, exists := m.dockerUpdateFirstSeen[resourceID]
+	firstSeen, exists := m.dockerUpdateFirstSeenByIdentity[updateTrackingKey]
+	if !exists {
+		firstSeen, exists = m.dockerUpdateFirstSeen[resourceID]
+	}
 	if !exists {
 		firstSeen = time.Now()
-		m.dockerUpdateFirstSeen[resourceID] = firstSeen
 	}
+	m.dockerUpdateFirstSeen[resourceID] = firstSeen
+	m.dockerUpdateFirstSeenByIdentity[updateTrackingKey] = firstSeen
 	m.mu.Unlock()
 
 	// Check if we've exceeded the delay threshold
@@ -4876,7 +4943,12 @@ func (m *Manager) checkDockerContainerImageUpdate(host models.DockerHost, contai
 }
 
 func (m *Manager) cleanupDockerContainerAlerts(host models.DockerHost, seen map[string]struct{}) {
+	m.cleanupDockerContainerAlertsWithTracking(host, seen, nil)
+}
+
+func (m *Manager) cleanupDockerContainerAlertsWithTracking(host models.DockerHost, seen map[string]struct{}, seenUpdateTracking map[string]struct{}) {
 	prefix := fmt.Sprintf("docker:%s/", strings.TrimSpace(host.ID))
+	updateTrackingPrefix := dockerUpdateTrackingHostPrefix(host)
 
 	m.mu.Lock()
 	toClear := make([]string, 0)
@@ -4904,6 +4976,16 @@ func (m *Manager) cleanupDockerContainerAlerts(host models.DockerHost, seen map[
 			}
 		}
 	}
+	if seenUpdateTracking != nil {
+		for trackingKey := range m.dockerUpdateFirstSeenByIdentity {
+			if !strings.HasPrefix(trackingKey, updateTrackingPrefix) {
+				continue
+			}
+			if _, exists := seenUpdateTracking[trackingKey]; !exists {
+				delete(m.dockerUpdateFirstSeenByIdentity, trackingKey)
+			}
+		}
+	}
 	m.mu.Unlock()
 
 	for _, alertID := range toClear {
@@ -4911,8 +4993,9 @@ func (m *Manager) cleanupDockerContainerAlerts(host models.DockerHost, seen map[
 	}
 }
 
-func (m *Manager) clearDockerHostContainerAlerts(hostID string) {
-	prefix := fmt.Sprintf("docker:%s/", strings.TrimSpace(hostID))
+func (m *Manager) clearDockerHostContainerAlerts(host models.DockerHost) {
+	prefix := fmt.Sprintf("docker:%s/", strings.TrimSpace(host.ID))
+	updateTrackingPrefix := dockerUpdateTrackingHostPrefix(host)
 
 	m.mu.Lock()
 	toClear := make([]string, 0)
@@ -4939,6 +5022,11 @@ func (m *Manager) clearDockerHostContainerAlerts(hostID string) {
 	for resourceID := range m.dockerUpdateFirstSeen {
 		if strings.HasPrefix(resourceID, prefix) {
 			delete(m.dockerUpdateFirstSeen, resourceID)
+		}
+	}
+	for trackingKey := range m.dockerUpdateFirstSeenByIdentity {
+		if strings.HasPrefix(trackingKey, updateTrackingPrefix) {
+			delete(m.dockerUpdateFirstSeenByIdentity, trackingKey)
 		}
 	}
 	m.mu.Unlock()
@@ -9397,6 +9485,10 @@ func (m *Manager) ClearActiveAlerts() {
 	m.offlineConfirmations = make(map[string]int)
 	m.dockerOfflineCount = make(map[string]int)
 	m.dockerStateConfirm = make(map[string]int)
+	m.dockerRestartTracking = make(map[string]*dockerRestartRecord)
+	m.dockerLastExitCode = make(map[string]int)
+	m.dockerUpdateFirstSeen = make(map[string]time.Time)
+	m.dockerUpdateFirstSeenByIdentity = make(map[string]time.Time)
 	m.ackState = make(map[string]ackRecord)
 	m.mu.Unlock()
 
@@ -9565,6 +9657,12 @@ func (m *Manager) cleanupStaleMaps() {
 	for containerID, firstSeen := range m.dockerUpdateFirstSeen {
 		if now.Sub(firstSeen) > staleThreshold {
 			delete(m.dockerUpdateFirstSeen, containerID)
+			cleaned++
+		}
+	}
+	for containerID, firstSeen := range m.dockerUpdateFirstSeenByIdentity {
+		if now.Sub(firstSeen) > staleThreshold {
+			delete(m.dockerUpdateFirstSeenByIdentity, containerID)
 			cleaned++
 		}
 	}
