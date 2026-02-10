@@ -352,7 +352,7 @@ func TestExecuteGetBaselines_FilterAndErrors(t *testing.T) {
 
 	executor = NewPulseToolExecutor(ExecutorConfig{
 		StateProvider: &mockStateProvider{state: models.StateSnapshot{
-			VMs: []models.VM{{VMID: 100}, {VMID: 101}},
+			VMs: []models.VM{{ID: "vm100", VMID: 100, Name: "vm-100"}, {ID: "vm101", VMID: 101, Name: "vm-101"}},
 		}},
 		BaselineProvider: &stubBaselineProvider{
 			baselines: map[string]map[string]*MetricBaseline{

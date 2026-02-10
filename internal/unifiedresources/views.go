@@ -797,6 +797,13 @@ func (v DockerHostView) Name() string {
 	return v.r.Name
 }
 
+func (v DockerHostView) HostSourceID() string {
+	if v.r == nil || v.r.Docker == nil {
+		return ""
+	}
+	return v.r.Docker.HostSourceID
+}
+
 func (v DockerHostView) Hostname() string {
 	if v.r == nil || v.r.Docker == nil {
 		return ""
@@ -1255,6 +1262,13 @@ func (v PMGInstanceView) Name() string {
 	return v.r.Name
 }
 
+func (v PMGInstanceView) InstanceID() string {
+	if v.r == nil || v.r.PMG == nil {
+		return ""
+	}
+	return v.r.PMG.InstanceID
+}
+
 func (v PMGInstanceView) Status() ResourceStatus {
 	if v.r == nil {
 		return ""
@@ -1423,6 +1437,13 @@ func (v K8sClusterView) ClusterName() string {
 		return ""
 	}
 	return v.r.Kubernetes.ClusterName
+}
+
+func (v K8sClusterView) SourceName() string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return ""
+	}
+	return v.r.Kubernetes.SourceName
 }
 
 func (v K8sClusterView) AgentID() string {

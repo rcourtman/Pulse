@@ -237,7 +237,8 @@ func (e *PulseToolExecutor) executeGetDiscovery(ctx context.Context, args map[st
 			// Not a number - try to resolve the name to a VMID
 			resolved := false
 
-			if rs := e.getReadState(); rs != nil {
+			rs, err := e.readStateForControl()
+			if err == nil {
 				if resourceType == "lxc" {
 					for _, c := range rs.Containers() {
 						if strings.EqualFold(c.Name(), resourceID) && nodeMatchesHostID(c.Node(), hostID) {

@@ -302,53 +302,36 @@ func (e *PulseToolExecutor) resolveDockerHostID(hostArg string) string {
 		return ""
 	}
 
-	if rs := e.getReadState(); rs != nil {
-		for _, host := range rs.DockerHosts() {
-			if host.ID() == hostArg || host.Hostname() == hostArg || host.Name() == hostArg {
-				return host.ID()
-			}
-		}
-	}
-
-	if e.stateProvider == nil {
+	rs, err := e.readStateForControl()
+	if err != nil {
 		return hostArg
 	}
-
-	state := e.stateProvider.GetState()
-	for _, host := range state.DockerHosts {
-		if host.ID == hostArg || host.Hostname == hostArg || host.DisplayName == hostArg {
-			return host.ID
+	for _, host := range rs.DockerHosts() {
+		if host.ID() == hostArg || host.HostSourceID() == hostArg || host.Hostname() == hostArg || host.Name() == hostArg {
+			// Return source ID when available (updates provider uses raw model IDs)
+			if sid := host.HostSourceID(); sid != "" {
+				return sid
+			}
+			return host.ID()
 		}
 	}
-	return hostArg // Return as-is if not found (provider will handle error)
+	return hostArg // Return as-is if not found
 }
 
 func (e *PulseToolExecutor) getDockerHostName(hostID string) string {
-	if rs := e.getReadState(); rs != nil {
-		for _, host := range rs.DockerHosts() {
-			if host.ID() == hostID {
-				if host.Name() != "" {
-					return host.Name()
-				}
-				if host.Hostname() != "" {
-					return host.Hostname()
-				}
-				return host.ID()
-			}
-		}
-	}
-
-	if e.stateProvider == nil {
+	rs, err := e.readStateForControl()
+	if err != nil {
 		return hostID
 	}
-
-	state := e.stateProvider.GetState()
-	for _, host := range state.DockerHosts {
-		if host.ID == hostID {
-			if host.DisplayName != "" {
-				return host.DisplayName
+	for _, host := range rs.DockerHosts() {
+		if host.ID() == hostID || host.HostSourceID() == hostID {
+			if host.Name() != "" {
+				return host.Name()
 			}
-			return host.Hostname
+			if host.Hostname() != "" {
+				return host.Hostname()
+			}
+			return host.ID()
 		}
 	}
 	return hostID

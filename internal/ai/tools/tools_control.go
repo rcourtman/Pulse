@@ -11,6 +11,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/safety"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
 
@@ -667,65 +668,51 @@ func (e *PulseToolExecutor) findAgentForCommand(runOnHost bool, targetHost strin
 	return agentID
 }
 
-func (e *PulseToolExecutor) resolveGuest(guestID string) (*GuestInfo, error) {
+func (e *PulseToolExecutor) readStateForControl() (unifiedresources.ReadState, error) {
+	if rs := e.getReadState(); rs != nil {
+		return rs, nil
+	}
 	if e.stateProvider == nil {
-		return nil, fmt.Errorf("state provider not available")
+		return nil, fmt.Errorf("read state not available")
 	}
 
-	vmid, err := strconv.Atoi(guestID)
+	// Compatibility bridge for tests and any remaining legacy wiring:
+	// build a typed ReadState view from the current StateSnapshot.
+	rr := unifiedresources.NewRegistry(nil)
+	rr.IngestSnapshot(e.stateProvider.GetState())
+	return rr, nil
+}
 
-	if rs := e.getReadState(); rs != nil {
-		for _, vm := range rs.VMs() {
-			if (err == nil && vm.VMID() == vmid) || vm.Name() == guestID || vm.ID() == guestID {
-				return &GuestInfo{
-					VMID:     vm.VMID(),
-					Name:     vm.Name(),
-					Node:     vm.Node(),
-					Type:     "vm",
-					Status:   string(vm.Status()),
-					Instance: vm.Instance(),
-				}, nil
-			}
-		}
+func (e *PulseToolExecutor) resolveGuest(guestID string) (*GuestInfo, error) {
+	rs, err := e.readStateForControl()
+	if err != nil {
+		return nil, err
+	}
 
-		for _, ct := range rs.Containers() {
-			if (err == nil && ct.VMID() == vmid) || ct.Name() == guestID || ct.ID() == guestID {
-				return &GuestInfo{
-					VMID:     ct.VMID(),
-					Name:     ct.Name(),
-					Node:     ct.Node(),
-					Type:     "lxc",
-					Status:   string(ct.Status()),
-					Instance: ct.Instance(),
-				}, nil
-			}
+	vmid, convErr := strconv.Atoi(guestID)
+	for _, vm := range rs.VMs() {
+		if (convErr == nil && vm.VMID() == vmid) || vm.Name() == guestID || vm.ID() == guestID {
+			return &GuestInfo{
+				VMID:     vm.VMID(),
+				Name:     vm.Name(),
+				Node:     vm.Node(),
+				Type:     "vm",
+				Status:   string(vm.Status()),
+				Instance: vm.Instance(),
+			}, nil
 		}
-	} else {
-		state := e.stateProvider.GetState()
-		for _, vm := range state.VMs {
-			if (err == nil && vm.VMID == vmid) || vm.Name == guestID || vm.ID == guestID {
-				return &GuestInfo{
-					VMID:     vm.VMID,
-					Name:     vm.Name,
-					Node:     vm.Node,
-					Type:     "vm",
-					Status:   vm.Status,
-					Instance: vm.Instance,
-				}, nil
-			}
-		}
+	}
 
-		for _, ct := range state.Containers {
-			if (err == nil && ct.VMID == vmid) || ct.Name == guestID || ct.ID == guestID {
-				return &GuestInfo{
-					VMID:     ct.VMID,
-					Name:     ct.Name,
-					Node:     ct.Node,
-					Type:     "lxc",
-					Status:   ct.Status,
-					Instance: ct.Instance,
-				}, nil
-			}
+	for _, ct := range rs.Containers() {
+		if (convErr == nil && ct.VMID() == vmid) || ct.Name() == guestID || ct.ID() == guestID {
+			return &GuestInfo{
+				VMID:     ct.VMID(),
+				Name:     ct.Name(),
+				Node:     ct.Node(),
+				Type:     "lxc",
+				Status:   string(ct.Status()),
+				Instance: ct.Instance(),
+			}, nil
 		}
 	}
 
@@ -810,46 +797,34 @@ func (e *PulseToolExecutor) findAgentForNode(nodeName string) string {
 		}
 	}
 
-	if rs := e.getReadState(); rs != nil {
-		// Map linked node IDs to node names for quick lookup.
-		nodeNamesByID := make(map[string]string)
-		for _, node := range rs.Nodes() {
-			name := node.Name()
-			if name == "" {
-				name = node.NodeName()
-			}
-			if node.ID() != "" {
-				nodeNamesByID[node.ID()] = name
-			}
-		}
+	rs, err := e.readStateForControl()
+	if err != nil {
+		return ""
+	}
 
-		for _, host := range rs.Hosts() {
-			linked := host.LinkedNodeID()
-			if linked == "" {
-				continue
-			}
-			if nodeNamesByID[linked] != nodeName {
-				continue
-			}
-			for _, agent := range agents {
-				if agent.Hostname == host.Hostname() || agent.AgentID == host.ID() {
-					return agent.AgentID
-				}
-			}
+	// Map linked node IDs to node names for quick lookup.
+	nodeNamesByID := make(map[string]string)
+	for _, node := range rs.Nodes() {
+		name := node.Name()
+		if name == "" {
+			name = node.NodeName()
 		}
-	} else if e.stateProvider != nil {
-		state := e.stateProvider.GetState()
-		for _, host := range state.Hosts {
-			if host.LinkedNodeID != "" {
-				for _, node := range state.Nodes {
-					if node.ID == host.LinkedNodeID && node.Name == nodeName {
-						for _, agent := range agents {
-							if agent.Hostname == host.Hostname || agent.AgentID == host.ID {
-								return agent.AgentID
-							}
-						}
-					}
-				}
+		if node.ID() != "" {
+			nodeNamesByID[node.ID()] = name
+		}
+	}
+
+	for _, host := range rs.Hosts() {
+		linked := host.LinkedNodeID()
+		if linked == "" {
+			continue
+		}
+		if nodeNamesByID[linked] != nodeName {
+			continue
+		}
+		for _, agent := range agents {
+			if agent.Hostname == host.Hostname() || agent.AgentID == host.ID() {
+				return agent.AgentID
 			}
 		}
 	}
@@ -919,7 +894,7 @@ func (e *PulseToolExecutor) resolveDockerHostRoutingFull(dockerHost *models.Dock
 	}
 
 	// STEP 1: Check topology — is the Docker host actually an LXC or VM?
-	if rs := e.getReadState(); rs != nil {
+	if rs, err := e.readStateForControl(); err == nil {
 		// Check LXCs
 		for _, ct := range rs.Containers() {
 			if ct.Name() == dockerHost.Hostname {
@@ -960,56 +935,6 @@ func (e *PulseToolExecutor) resolveDockerHostRoutingFull(dockerHost *models.Dock
 						Str("docker_host", dockerHost.Hostname).
 						Str("node", vm.Node()).
 						Int("vmid", vm.VMID()).
-						Str("agent", nodeAgentID).
-						Str("transport", result.Transport).
-						Msg("Resolved Docker host as VM, routing through Proxmox agent")
-				}
-				return result
-			}
-		}
-	} else if e.stateProvider != nil {
-		state := e.stateProvider.GetState()
-
-		// Check LXCs
-		for _, ct := range state.Containers {
-			if ct.Name == dockerHost.Hostname {
-				result.ResolvedKind = "lxc"
-				result.ResolvedNode = ct.Node
-				result.TargetType = "container"
-				result.TargetID = fmt.Sprintf("%d", ct.VMID)
-				result.Transport = "pct_exec"
-				nodeAgentID := e.findAgentForNode(ct.Node)
-				if nodeAgentID != "" {
-					result.AgentID = nodeAgentID
-					result.AgentHostname = ct.Node
-					log.Debug().
-						Str("docker_host", dockerHost.Hostname).
-						Str("node", ct.Node).
-						Int("vmid", ct.VMID).
-						Str("agent", nodeAgentID).
-						Str("transport", result.Transport).
-						Msg("Resolved Docker host as LXC, routing through Proxmox agent")
-				}
-				return result
-			}
-		}
-
-		// Check VMs
-		for _, vm := range state.VMs {
-			if vm.Name == dockerHost.Hostname {
-				result.ResolvedKind = "vm"
-				result.ResolvedNode = vm.Node
-				result.TargetType = "vm"
-				result.TargetID = fmt.Sprintf("%d", vm.VMID)
-				result.Transport = "qm_guest_exec"
-				nodeAgentID := e.findAgentForNode(vm.Node)
-				if nodeAgentID != "" {
-					result.AgentID = nodeAgentID
-					result.AgentHostname = vm.Node
-					log.Debug().
-						Str("docker_host", dockerHost.Hostname).
-						Str("node", vm.Node).
-						Int("vmid", vm.VMID).
 						Str("agent", nodeAgentID).
 						Str("transport", result.Transport).
 						Msg("Resolved Docker host as VM, routing through Proxmox agent")

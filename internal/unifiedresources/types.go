@@ -270,6 +270,7 @@ type AgentData struct {
 
 // DockerData contains Docker host-specific data.
 type DockerData struct {
+	HostSourceID      string             `json:"hostSourceId,omitempty"` // raw model ID for the docker host
 	ContainerID       string             `json:"containerId,omitempty"`
 	Hostname          string             `json:"hostname,omitempty"`
 	Image             string             `json:"image,omitempty"`
@@ -336,6 +337,7 @@ type K8sMetricCapabilities struct {
 type K8sData struct {
 	ClusterID               string                 `json:"clusterId,omitempty"`
 	ClusterName             string                 `json:"clusterName,omitempty"`
+	SourceName              string                 `json:"sourceName,omitempty"` // raw model Name before display-name resolution
 	AgentID                 string                 `json:"agentId,omitempty"`
 	Context                 string                 `json:"context,omitempty"`
 	Server                  string                 `json:"server,omitempty"`

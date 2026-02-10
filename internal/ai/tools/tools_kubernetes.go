@@ -386,68 +386,53 @@ func (e *PulseToolExecutor) executeGetKubernetesDeployments(_ context.Context, a
 
 // findAgentForKubernetesCluster finds the agent for a Kubernetes cluster
 func (e *PulseToolExecutor) findAgentForKubernetesCluster(clusterArg string) (string, *models.KubernetesCluster, error) {
-	// Prefer ReadState for the primary lookup when available, but keep state fallback
-	// because cluster sub-resources (nodes, pods, deployments) still live in StateSnapshot.
-	if rs := e.getReadState(); rs != nil {
-		for _, c := range rs.K8sClusters() {
-			if c.ID() == clusterArg || c.ClusterID() == clusterArg || c.Name() == clusterArg || c.ClusterName() == clusterArg {
-				agentID := c.AgentID()
-				if agentID == "" {
-					return "", nil, fmt.Errorf("cluster '%s' has no agent configured - kubectl commands cannot be executed", clusterArg)
-				}
-
-				// Try to return the real models.KubernetesCluster when available (richer display name fields).
-				if e.stateProvider != nil {
-					state := e.stateProvider.GetState()
-					for i := range state.KubernetesClusters {
-						sc := &state.KubernetesClusters[i]
-						if sc.ID == clusterArg || sc.Name == clusterArg || sc.DisplayName == clusterArg || sc.CustomDisplayName == clusterArg {
-							return agentID, sc, nil
-						}
-						// Also match by agent ID + server/context when the arg was an ID-like value.
-						if sc.AgentID == agentID && (sc.ID == c.ClusterID() || sc.Name == c.ClusterName()) {
-							return agentID, sc, nil
-						}
-					}
-				}
-
-				// Fallback: synthesize a minimal cluster struct for approval labels.
-				display := c.ClusterName()
-				if display == "" {
-					display = c.Name()
-				}
-				if display == "" {
-					display = c.ID()
-				}
-				return agentID, &models.KubernetesCluster{
-					ID:          c.ID(),
-					AgentID:     agentID,
-					Name:        c.ClusterName(),
-					DisplayName: display,
-					Server:      c.Server(),
-					Context:     c.Context(),
-					Version:     c.Version(),
-					Status:      string(c.Status()),
-				}, nil
-			}
-		}
+	rs, err := e.readStateForControl()
+	if err != nil {
+		return "", nil, fmt.Errorf("state not available: %w", err)
 	}
-
-	if e.stateProvider == nil {
-		return "", nil, fmt.Errorf("state provider not available")
-	}
-
-	state := e.stateProvider.GetState()
-
-	for i := range state.KubernetesClusters {
-		c := &state.KubernetesClusters[i]
-		if c.ID == clusterArg || c.Name == clusterArg || c.DisplayName == clusterArg || c.CustomDisplayName == clusterArg {
-			if c.AgentID == "" {
+	for _, c := range rs.K8sClusters() {
+		if c.ID() == clusterArg || c.ClusterID() == clusterArg || c.Name() == clusterArg || c.ClusterName() == clusterArg || c.SourceName() == clusterArg {
+			agentID := c.AgentID()
+			if agentID == "" {
 				return "", nil, fmt.Errorf("cluster '%s' has no agent configured - kubectl commands cannot be executed", clusterArg)
 			}
-			return c.AgentID, c, nil
+
+			// Try to return the real models.KubernetesCluster when available (richer display name fields).
+			if e.stateProvider != nil {
+				state := e.stateProvider.GetState()
+				for i := range state.KubernetesClusters {
+					sc := &state.KubernetesClusters[i]
+					if sc.ID == clusterArg || sc.Name == clusterArg || sc.DisplayName == clusterArg || sc.CustomDisplayName == clusterArg {
+						return agentID, sc, nil
+					}
+					// Also match by agent ID + server/context when the arg was an ID-like value.
+					if sc.AgentID == agentID && (sc.ID == c.ClusterID() || sc.Name == c.ClusterName()) {
+						return agentID, sc, nil
+					}
+				}
+			}
+
+			// Fallback: synthesize a minimal cluster struct for approval labels.
+			display := c.ClusterName()
+			if display == "" {
+				display = c.Name()
+			}
+			if display == "" {
+				display = c.ID()
+			}
+			return agentID, &models.KubernetesCluster{
+				ID:          c.ID(),
+				AgentID:     agentID,
+				Name:        c.ClusterName(),
+				DisplayName: display,
+				Server:      c.Server(),
+				Context:     c.Context(),
+				Version:     c.Version(),
+				Status:      string(c.Status()),
+			}, nil
 		}
 	}
+
 	return "", nil, fmt.Errorf("kubernetes cluster '%s' not found", clusterArg)
 }
 

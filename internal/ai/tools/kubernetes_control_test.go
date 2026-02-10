@@ -49,7 +49,7 @@ func TestFindAgentForKubernetesCluster(t *testing.T) {
 		assert.Error(t, err)
 		assert.Empty(t, agentID)
 		assert.Nil(t, cluster)
-		assert.Contains(t, err.Error(), "state provider not available")
+		assert.Contains(t, err.Error(), "state not available")
 	})
 
 	t.Run("ClusterNotFound", func(t *testing.T) {

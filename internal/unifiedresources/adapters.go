@@ -122,6 +122,7 @@ func resourceFromDockerHost(host models.DockerHost) (Resource, ResourceIdentity)
 	}
 
 	docker := &DockerData{
+		HostSourceID:      host.ID,
 		Hostname:          host.Hostname,
 		Temperature:       host.Temperature,
 		Runtime:           host.Runtime,
@@ -601,6 +602,7 @@ func resourceFromKubernetesCluster(cluster models.KubernetesCluster, linkedHosts
 		Kubernetes: &K8sData{
 			ClusterID:          cluster.ID,
 			ClusterName:        clusterName,
+			SourceName:         cluster.Name,
 			AgentID:            cluster.AgentID,
 			Context:            cluster.Context,
 			Server:             cluster.Server,

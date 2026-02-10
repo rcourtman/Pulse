@@ -265,31 +265,19 @@ func (e *PulseToolExecutor) executeGetBaselines(_ context.Context, args map[stri
 	var typeIndex map[string]string
 	if resourceType != "" {
 		typeIndex = make(map[string]string)
-		if rs := e.getReadState(); rs != nil {
-			for _, vm := range rs.VMs() {
-				typeIndex[fmt.Sprintf("%d", vm.VMID())] = "vm"
-			}
-			for _, ct := range rs.Containers() {
-				typeIndex[fmt.Sprintf("%d", ct.VMID())] = "container"
-			}
-			for _, node := range rs.Nodes() {
-				if node.ID() != "" {
-					typeIndex[node.ID()] = "node"
-				}
-			}
-		} else {
-			if e.stateProvider == nil {
-				return NewErrorResult(fmt.Errorf("state provider not available")), nil
-			}
-			state := e.stateProvider.GetState()
-			for _, vm := range state.VMs {
-				typeIndex[fmt.Sprintf("%d", vm.VMID)] = "vm"
-			}
-			for _, ct := range state.Containers {
-				typeIndex[fmt.Sprintf("%d", ct.VMID)] = "container"
-			}
-			for _, node := range state.Nodes {
-				typeIndex[node.ID] = "node"
+		rs, err := e.readStateForControl()
+		if err != nil {
+			return NewErrorResult(err), nil
+		}
+		for _, vm := range rs.VMs() {
+			typeIndex[fmt.Sprintf("%d", vm.VMID())] = "vm"
+		}
+		for _, ct := range rs.Containers() {
+			typeIndex[fmt.Sprintf("%d", ct.VMID())] = "container"
+		}
+		for _, node := range rs.Nodes() {
+			if node.ID() != "" {
+				typeIndex[node.ID()] = "node"
 			}
 		}
 	}
