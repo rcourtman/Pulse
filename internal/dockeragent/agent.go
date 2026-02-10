@@ -76,28 +76,27 @@ const (
 
 // Agent collects Docker metrics and posts them to Pulse.
 type Agent struct {
-	cfg                 Config
-	docker              dockerClient
-	daemonHost          string
-	daemonID            string // Cached at init; Podman can return unstable IDs across calls
-	runtime             RuntimeKind
-	runtimeVer          string
-	agentVersion        string
-	supportsSwarm       bool
-	httpClients         map[bool]*http.Client
-	logger              zerolog.Logger
-	machineID           string
-	hostName            string
-	cpuCount            int
-	targets             []TargetConfig
-	allowedStates       map[string]struct{}
-	stateFilters        []string
-	hostID              string
-	prevContainerCPU    map[string]cpuSample
-	cpuMu               sync.Mutex // protects prevContainerCPU and preCPUStatsFailures
-	preCPUStatsFailures int
-	reportBuffer        *buffer.Queue[agentsdocker.Report]
-	registryChecker     *RegistryChecker // For checking container image updates
+	cfg              Config
+	docker           dockerClient
+	daemonHost       string
+	daemonID         string // Cached at init; Podman can return unstable IDs across calls
+	runtime          RuntimeKind
+	runtimeVer       string
+	agentVersion     string
+	supportsSwarm    bool
+	httpClients      map[bool]*http.Client
+	logger           zerolog.Logger
+	machineID        string
+	hostName         string
+	cpuCount         int
+	targets          []TargetConfig
+	allowedStates    map[string]struct{}
+	stateFilters     []string
+	hostID           string
+	prevContainerCPU map[string]cpuSample
+	cpuMu            sync.Mutex // protects prevContainerCPU
+	reportBuffer     *buffer.Queue[agentsdocker.Report]
+	registryChecker  *RegistryChecker // For checking container image updates
 }
 
 // ErrStopRequested indicates the agent should terminate gracefully after acknowledging a stop command.

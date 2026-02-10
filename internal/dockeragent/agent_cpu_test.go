@@ -11,32 +11,42 @@ import (
 func TestCalculateContainerCPUPercent(t *testing.T) {
 	logger := zerolog.Nop()
 
-	t.Run("uses precpu stats", func(t *testing.T) {
+	t.Run("manual delta across two calls", func(t *testing.T) {
 		agent := &Agent{
 			logger:           logger,
 			prevContainerCPU: make(map[string]cpuSample),
 			cpuCount:         2,
 		}
 
-		stats := containertypes.StatsResponse{
+		// First call: stores sample, returns 0
+		stats1 := containertypes.StatsResponse{
+			Read: time.Now().Add(-time.Second),
+			CPUStats: containertypes.CPUStats{
+				CPUUsage:    containertypes.CPUUsage{TotalUsage: 100},
+				SystemUsage: 1000,
+				OnlineCPUs:  2,
+			},
+		}
+		got := agent.calculateContainerCPUPercent("container-123456", stats1)
+		if got != 0 {
+			t.Fatalf("first call: expected 0, got %f", got)
+		}
+		if _, ok := agent.prevContainerCPU["container-123456"]; !ok {
+			t.Fatal("expected sample to be stored after first call")
+		}
+
+		// Second call: computes delta from stored sample
+		stats2 := containertypes.StatsResponse{
 			Read: time.Now(),
 			CPUStats: containertypes.CPUStats{
 				CPUUsage:    containertypes.CPUUsage{TotalUsage: 200},
 				SystemUsage: 2000,
 				OnlineCPUs:  2,
 			},
-			PreCPUStats: containertypes.CPUStats{
-				CPUUsage:    containertypes.CPUUsage{TotalUsage: 100},
-				SystemUsage: 1000,
-			},
 		}
-
-		got := agent.calculateContainerCPUPercent("container-123456", stats)
+		got = agent.calculateContainerCPUPercent("container-123456", stats2)
 		if got <= 0 {
-			t.Fatalf("expected percent > 0, got %f", got)
-		}
-		if _, ok := agent.prevContainerCPU["container-123456"]; !ok {
-			t.Fatal("expected current sample to be stored")
+			t.Fatalf("second call: expected percent > 0, got %f", got)
 		}
 	})
 
@@ -286,17 +296,21 @@ func TestCalculateContainerCPUPercent(t *testing.T) {
 		}
 	})
 
-	t.Run("warn after repeated failures", func(t *testing.T) {
+	t.Run("ignores stale precpu stats", func(t *testing.T) {
 		agent := &Agent{
 			logger:           logger,
 			prevContainerCPU: make(map[string]cpuSample),
+			cpuCount:         2,
 		}
 
+		// Even with valid-looking PreCPUStats, we use manual tracking.
+		// First call stores sample and returns 0.
 		stats := containertypes.StatsResponse{
 			Read: time.Now(),
 			CPUStats: containertypes.CPUStats{
-				CPUUsage:    containertypes.CPUUsage{TotalUsage: 100},
-				SystemUsage: 1000,
+				CPUUsage:    containertypes.CPUUsage{TotalUsage: 200},
+				SystemUsage: 2000,
+				OnlineCPUs:  2,
 			},
 			PreCPUStats: containertypes.CPUStats{
 				CPUUsage:    containertypes.CPUUsage{TotalUsage: 100},
@@ -304,8 +318,9 @@ func TestCalculateContainerCPUPercent(t *testing.T) {
 			},
 		}
 
-		for i := 0; i < 10; i++ {
-			_ = agent.calculateContainerCPUPercent("container-123456", stats)
+		got := agent.calculateContainerCPUPercent("container-123456", stats)
+		if got != 0 {
+			t.Fatalf("expected 0 on first call (manual tracking), got %f", got)
 		}
 	})
 }
