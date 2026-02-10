@@ -27,11 +27,12 @@ type ReapResult struct {
 }
 
 type Reaper struct {
-	lister       OrgLister
-	deleter      OrgDeleter
-	scanInterval time.Duration
-	liveMode     bool
-	now          func() time.Time
+	lister         OrgLister
+	deleter        OrgDeleter
+	scanInterval   time.Duration
+	liveMode       bool
+	now            func() time.Time
+	OnBeforeDelete func(orgID string) error
 }
 
 func NewReaper(lister OrgLister, deleter OrgDeleter, scanInterval time.Duration, liveMode bool) *Reaper {
@@ -123,6 +124,17 @@ func (r *Reaper) scan() []ReapResult {
 					Str("org_id", org.ID).
 					Msg("Hosted reaper is in live mode but deleter is nil")
 			} else {
+				if r.OnBeforeDelete != nil {
+					if err := r.OnBeforeDelete(org.ID); err != nil {
+						result.Error = err
+						log.Error().
+							Err(err).
+							Str("org_id", org.ID).
+							Msg("Hosted reaper OnBeforeDelete hook failed")
+						results = append(results, result)
+						continue
+					}
+				}
 				result.Error = r.deleter.DeleteOrganization(org.ID)
 				if result.Error != nil {
 					log.Error().

@@ -179,6 +179,94 @@ func TestReaperLiveModeDeletes(t *testing.T) {
 	}
 }
 
+type recordingDeleter struct {
+	calls []string
+	err   error
+}
+
+func (d *recordingDeleter) DeleteOrganization(orgID string) error {
+	d.calls = append(d.calls, "delete:"+orgID)
+	return d.err
+}
+
+func TestReaperOnBeforeDeleteHookCalled(t *testing.T) {
+	fixedTime := time.Date(2026, 2, 9, 12, 0, 0, 0, time.UTC)
+	requestedAt := fixedTime.Add(-31 * 24 * time.Hour)
+
+	lister := &mockOrgLister{
+		orgs: []*models.Organization{
+			{
+				ID:                  "org-hook-called",
+				Status:              models.OrgStatusPendingDeletion,
+				DeletionRequestedAt: &requestedAt,
+				RetentionDays:       30,
+			},
+		},
+	}
+	deleter := &recordingDeleter{}
+	r := NewReaper(lister, deleter, time.Hour, true)
+	r.now = func() time.Time { return fixedTime }
+
+	var order []string
+	r.OnBeforeDelete = func(orgID string) error {
+		order = append(order, "hook:"+orgID)
+		return nil
+	}
+
+	results := r.scan()
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	if results[0].Error != nil {
+		t.Fatalf("expected nil result error, got %v", results[0].Error)
+	}
+
+	if len(deleter.calls) != 1 || deleter.calls[0] != "delete:org-hook-called" {
+		t.Fatalf("expected deleter called for org-hook-called, got %v", deleter.calls)
+	}
+	if len(order) != 1 || order[0] != "hook:org-hook-called" {
+		t.Fatalf("expected hook called for org-hook-called, got %v", order)
+	}
+
+	combined := append(append([]string{}, order...), deleter.calls...)
+	if len(combined) != 2 || combined[0] != "hook:org-hook-called" || combined[1] != "delete:org-hook-called" {
+		t.Fatalf("expected hook called before delete, got %v", combined)
+	}
+}
+
+func TestReaperOnBeforeDeleteHookErrorSkipsDelete(t *testing.T) {
+	fixedTime := time.Date(2026, 2, 9, 12, 0, 0, 0, time.UTC)
+	requestedAt := fixedTime.Add(-31 * 24 * time.Hour)
+
+	lister := &mockOrgLister{
+		orgs: []*models.Organization{
+			{
+				ID:                  "org-hook-error",
+				Status:              models.OrgStatusPendingDeletion,
+				DeletionRequestedAt: &requestedAt,
+				RetentionDays:       30,
+			},
+		},
+	}
+	deleter := &recordingDeleter{}
+	r := NewReaper(lister, deleter, time.Hour, true)
+	r.now = func() time.Time { return fixedTime }
+	r.OnBeforeDelete = func(orgID string) error {
+		return errors.New("hook error")
+	}
+
+	results := r.scan()
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	if results[0].Error == nil {
+		t.Fatal("expected result error, got nil")
+	}
+	if len(deleter.calls) != 0 {
+		t.Fatalf("expected no delete calls when hook errors, got %v", deleter.calls)
+	}
+}
+
 func TestReaperDryRunDoesNotDelete(t *testing.T) {
 	fixedTime := time.Date(2026, 2, 9, 12, 0, 0, 0, time.UTC)
 	requestedAt := fixedTime.Add(-31 * 24 * time.Hour)

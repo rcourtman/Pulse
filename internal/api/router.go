@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"hash/fnv"
 	"io"
@@ -84,6 +85,7 @@ type Router struct {
 	reportingHandlers         *ReportingHandlers
 	configProfileHandler      *ConfigProfileHandler
 	licenseHandlers           *LicenseHandlers
+	rbacProvider              *TenantRBACProvider
 	logHandlers               *LogHandlers
 	agentExecServer           *agentexec.Server
 	wsHub                     *websocket.Hub
@@ -284,6 +286,7 @@ func (r *Router) setupRoutes() {
 	r.configProfileHandler = NewConfigProfileHandler(r.multiTenant)
 	r.licenseHandlers = NewLicenseHandlers(r.multiTenant)
 	rbacProvider := NewTenantRBACProvider(r.config.DataPath)
+	r.rbacProvider = rbacProvider
 	orgHandlers := NewOrgHandlers(r.multiTenant, r.mtMonitor, rbacProvider)
 	// Wire license service provider so middleware can access per-tenant license services
 	SetLicenseServiceProvider(r.licenseHandlers)
@@ -420,6 +423,37 @@ func (r *Router) setupRoutes() {
 
 	// Note: Frontend handler is handled manually in ServeHTTP to prevent redirect issues
 	// See issue #334 - ServeMux redirects empty path to "./" which breaks reverse proxies
+}
+
+// CleanupTenant removes all per-tenant resources (RBAC, AI, License) for a deleted org.
+func (r *Router) CleanupTenant(ctx context.Context, orgID string) error {
+	var errs []error
+
+	if r.rbacProvider != nil {
+		if err := r.rbacProvider.RemoveTenant(orgID); err != nil {
+			errs = append(errs, fmt.Errorf("rbac cleanup: %w", err))
+		}
+	}
+
+	if r.aiHandler != nil {
+		if err := r.aiHandler.RemoveTenantService(ctx, orgID); err != nil {
+			errs = append(errs, fmt.Errorf("ai cleanup: %w", err))
+		}
+	}
+
+	if r.licenseHandlers != nil {
+		r.licenseHandlers.RemoveTenantService(orgID)
+	}
+
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
+	return nil
+}
+
+// RemoveTenantService removes the cached license service for a deleted org.
+func (h *LicenseHandlers) RemoveTenantService(orgID string) {
+	h.services.Delete(orgID)
 }
 
 // routeAISessions routes session-specific AI chat requests

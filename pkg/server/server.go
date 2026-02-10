@@ -18,6 +18,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/api"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/hosted"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license"
 	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
 	_ "github.com/rcourtman/pulse-go-rewrite/internal/mock" // Import for init() to run
@@ -267,6 +268,16 @@ func Run(ctx context.Context, version string) error {
 
 	// Start AI chat service
 	router.StartAIChat(ctx)
+
+	// Start hosted tenant reaper for automatic soft-delete cleanup
+	if os.Getenv("PULSE_HOSTED_MODE") == "true" {
+		reaper := hosted.NewReaper(mtPersistence, mtPersistence, 5*time.Minute, true)
+		reaper.OnBeforeDelete = func(orgID string) error {
+			return router.CleanupTenant(ctx, orgID)
+		}
+		go reaper.Run(ctx)
+		log.Info().Msg("Hosted tenant reaper started")
+	}
 
 	// Start relay client for mobile remote access
 	router.StartRelay(ctx)
