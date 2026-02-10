@@ -1,11 +1,17 @@
 package api
 
 import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license"
+	"github.com/rcourtman/pulse-go-rewrite/internal/license/entitlements"
 )
 
 func TestBuildEntitlementPayload_ActiveLicense(t *testing.T) {
@@ -186,5 +192,92 @@ func TestBuildEntitlementPayload_TrialState(t *testing.T) {
 	}
 	if *payload.TrialDaysRemaining != 2 {
 		t.Fatalf("expected trial_days_remaining 2, got %d", *payload.TrialDaysRemaining)
+	}
+}
+
+func TestEntitlementHandler_UsesEvaluatorWhenNoLicense(t *testing.T) {
+	baseDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(baseDir)
+
+	orgID := "test-hosted-entitlements"
+	if _, err := mtp.GetPersistence(orgID); err != nil {
+		t.Fatalf("GetPersistence(%s) failed: %v", orgID, err)
+	}
+
+	store := config.NewFileBillingStore(baseDir)
+	if err := store.SaveBillingState(orgID, &entitlements.BillingState{
+		Capabilities: []string{
+			license.FeatureAIPatrol,
+			license.FeatureAIAutoFix,
+		},
+		Limits: map[string]int64{
+			"max_nodes": 5,
+		},
+		PlanVersion:       "pro",
+		SubscriptionState: entitlements.SubStateActive,
+	}); err != nil {
+		t.Fatalf("SaveBillingState(%s) failed: %v", orgID, err)
+	}
+
+	h := NewLicenseHandlers(mtp, true)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/license/entitlements", nil)
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, orgID))
+	rec := httptest.NewRecorder()
+	h.HandleEntitlements(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d, want %d", rec.Code, http.StatusOK)
+	}
+
+	var payload EntitlementPayload
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal payload failed: %v", err)
+	}
+
+	if payload.SubscriptionState != string(license.SubStateActive) {
+		t.Fatalf("subscription_state=%q, want %q", payload.SubscriptionState, license.SubStateActive)
+	}
+
+	contains := func(values []string, key string) bool {
+		for _, v := range values {
+			if v == key {
+				return true
+			}
+		}
+		return false
+	}
+
+	if !contains(payload.Capabilities, license.FeatureAIAutoFix) {
+		t.Fatalf("expected capabilities to include %q, got %v", license.FeatureAIAutoFix, payload.Capabilities)
+	}
+	if !contains(payload.Capabilities, license.FeatureAIPatrol) {
+		t.Fatalf("expected capabilities to include %q, got %v", license.FeatureAIPatrol, payload.Capabilities)
+	}
+
+	var maxNodes *LimitStatus
+	for i := range payload.Limits {
+		if payload.Limits[i].Key == "max_nodes" {
+			maxNodes = &payload.Limits[i]
+			break
+		}
+	}
+	if maxNodes == nil {
+		t.Fatalf("expected max_nodes limit in payload, got %v", payload.Limits)
+	}
+	if maxNodes.Limit != 5 {
+		t.Fatalf("max_nodes.limit=%d, want %d", maxNodes.Limit, 5)
+	}
+
+	// Parity: every advertised capability must be enforced by HasFeature.
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, orgID)
+	svc, _, err := h.getTenantComponents(ctx)
+	if err != nil {
+		t.Fatalf("getTenantComponents failed: %v", err)
+	}
+	for _, cap := range payload.Capabilities {
+		if !svc.HasFeature(cap) {
+			t.Fatalf("parity mismatch: HasFeature(%q)=false but capability present in payload", cap)
+		}
 	}
 }

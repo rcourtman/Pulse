@@ -1048,6 +1048,65 @@ func asFeatureSet(features []string) map[string]struct{} {
 	return set
 }
 
+type staticEntitlementSource struct {
+	capabilities      []string
+	limits            map[string]int64
+	metersEnabled     []string
+	planVersion       string
+	subscriptionState entitlements.SubscriptionState
+}
+
+func (s staticEntitlementSource) Capabilities() []string {
+	out := make([]string, len(s.capabilities))
+	copy(out, s.capabilities)
+	return out
+}
+
+func (s staticEntitlementSource) Limits() map[string]int64 {
+	if s.limits == nil {
+		return nil
+	}
+	out := make(map[string]int64, len(s.limits))
+	for k, v := range s.limits {
+		out[k] = v
+	}
+	return out
+}
+
+func (s staticEntitlementSource) MetersEnabled() []string {
+	out := make([]string, len(s.metersEnabled))
+	copy(out, s.metersEnabled)
+	return out
+}
+
+func (s staticEntitlementSource) PlanVersion() string {
+	return s.planVersion
+}
+
+func (s staticEntitlementSource) SubscriptionState() entitlements.SubscriptionState {
+	if s.subscriptionState == "" {
+		return entitlements.SubStateActive
+	}
+	return s.subscriptionState
+}
+
+func featureSet(features []string) map[string]struct{} {
+	set := make(map[string]struct{}, len(features))
+	for _, f := range features {
+		set[f] = struct{}{}
+	}
+	return set
+}
+
+func assertFeatureSetEq(t *testing.T, got []string, want []string) {
+	t.Helper()
+	gotSet := featureSet(got)
+	wantSet := featureSet(want)
+	if !reflect.DeepEqual(gotSet, wantSet) {
+		t.Fatalf("feature set mismatch: got=%v want=%v", got, want)
+	}
+}
+
 func TestServiceHasFeature_WithEvaluator(t *testing.T) {
 	svc := setupTestServiceWithTier(t, TierPro)
 	proSet := asFeatureSet(TierFeatures[TierPro])
@@ -1080,6 +1139,124 @@ func TestServiceHasFeature_WithEvaluator(t *testing.T) {
 				feature, withoutEvaluator[feature], withEvaluator[feature])
 		}
 	}
+}
+
+func TestEvaluatorMatrix(t *testing.T) {
+	t.Setenv("PULSE_DEV", "false")
+	t.Setenv("PULSE_MOCK_MODE", "false")
+
+	t.Run("license=nil evaluator=nil => free/expired", func(t *testing.T) {
+		svc := NewService()
+
+		if got := svc.HasFeature(FeatureAIAutoFix); got {
+			t.Fatalf("HasFeature(%q)=%v, want false", FeatureAIAutoFix, got)
+		}
+		if got := svc.HasFeature(FeatureAIPatrol); !got {
+			t.Fatalf("HasFeature(%q)=%v, want true", FeatureAIPatrol, got)
+		}
+		if got := svc.SubscriptionState(); got != string(SubStateExpired) {
+			t.Fatalf("SubscriptionState()=%q, want %q", got, SubStateExpired)
+		}
+
+		status := svc.Status()
+		if status.Valid {
+			t.Fatalf("Status().Valid=%v, want false", status.Valid)
+		}
+		if status.Tier != TierFree {
+			t.Fatalf("Status().Tier=%q, want %q", status.Tier, TierFree)
+		}
+		if !reflect.DeepEqual(status.Features, TierFeatures[TierFree]) {
+			t.Fatalf("Status().Features=%v, want %v", status.Features, TierFeatures[TierFree])
+		}
+	})
+
+	t.Run("license=nil evaluator!=nil => evaluator drives (hosted)", func(t *testing.T) {
+		svc := NewService()
+		eval := entitlements.NewEvaluator(staticEntitlementSource{
+			capabilities: []string{
+				FeatureAIPatrol,
+				FeatureAIAutoFix,
+			},
+			limits: map[string]int64{
+				"max_nodes":  42,
+				"max_guests": 13,
+			},
+			subscriptionState: entitlements.SubStateActive,
+		})
+		svc.SetEvaluator(eval)
+
+		if got := svc.HasFeature(FeatureAIAutoFix); !got {
+			t.Fatalf("HasFeature(%q)=%v, want true", FeatureAIAutoFix, got)
+		}
+		if got := svc.HasFeature(FeatureAIPatrol); !got {
+			t.Fatalf("HasFeature(%q)=%v, want true", FeatureAIPatrol, got)
+		}
+		if got := svc.SubscriptionState(); got != string(SubStateActive) {
+			t.Fatalf("SubscriptionState()=%q, want %q", got, SubStateActive)
+		}
+
+		status := svc.Status()
+		if !status.Valid {
+			t.Fatalf("Status().Valid=%v, want true", status.Valid)
+		}
+		if status.Tier != TierPro {
+			t.Fatalf("Status().Tier=%q, want %q", status.Tier, TierPro)
+		}
+		assertFeatureSetEq(t, status.Features, []string{FeatureAIPatrol, FeatureAIAutoFix})
+		if status.MaxNodes != 42 {
+			t.Fatalf("Status().MaxNodes=%d, want %d", status.MaxNodes, 42)
+		}
+		if status.MaxGuests != 13 {
+			t.Fatalf("Status().MaxGuests=%d, want %d", status.MaxGuests, 13)
+		}
+	})
+
+	t.Run("license!=nil evaluator=nil => JWT drives", func(t *testing.T) {
+		svc := setupTestServiceWithTier(t, TierPro)
+		svc.SetEvaluator(nil) // ensure evaluator is not in the decision path
+
+		if got := svc.HasFeature(FeatureAIAutoFix); !got {
+			t.Fatalf("HasFeature(%q)=%v, want true", FeatureAIAutoFix, got)
+		}
+		if got := svc.HasFeature(FeatureAIPatrol); !got {
+			t.Fatalf("HasFeature(%q)=%v, want true", FeatureAIPatrol, got)
+		}
+		if got := svc.SubscriptionState(); got != string(SubStateActive) {
+			t.Fatalf("SubscriptionState()=%q, want %q", got, SubStateActive)
+		}
+
+		status := svc.Status()
+		if !status.Valid {
+			t.Fatalf("Status().Valid=%v, want true", status.Valid)
+		}
+		if status.Tier != TierPro {
+			t.Fatalf("Status().Tier=%q, want %q", status.Tier, TierPro)
+		}
+	})
+
+	t.Run("license!=nil evaluator!=nil => JWT takes precedence (hybrid)", func(t *testing.T) {
+		svc := setupTestServiceWithTier(t, TierPro)
+		// Install an evaluator that would otherwise deny the Pro-only feature.
+		svc.SetEvaluator(entitlements.NewEvaluator(staticEntitlementSource{
+			capabilities:      []string{FeatureAIPatrol},
+			subscriptionState: entitlements.SubStateExpired,
+		}))
+
+		if got := svc.HasFeature(FeatureAIAutoFix); !got {
+			t.Fatalf("HasFeature(%q)=%v, want true", FeatureAIAutoFix, got)
+		}
+		if got := svc.SubscriptionState(); got != string(SubStateActive) {
+			t.Fatalf("SubscriptionState()=%q, want %q", got, SubStateActive)
+		}
+
+		status := svc.Status()
+		if !status.Valid {
+			t.Fatalf("Status().Valid=%v, want true", status.Valid)
+		}
+		if status.Tier != TierPro {
+			t.Fatalf("Status().Tier=%q, want %q", status.Tier, TierPro)
+		}
+	})
 }
 
 func TestServiceHasFeature_WithEvaluator_FreeTier(t *testing.T) {

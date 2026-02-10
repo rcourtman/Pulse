@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -15,9 +16,9 @@ import (
 )
 
 func TestHostedSignupSuccess(t *testing.T) {
-	router, persistence, rbacProvider, _ := newHostedSignupTestRouter(t, true)
+	router, persistence, rbacProvider, emailer, _ := newHostedSignupTestRouter(t, true)
 
-	rec := doHostedSignupRequest(router, `{"email":"owner@example.com","password":"securepass123","org_name":"My Organization"}`)
+	rec := doHostedSignupRequest(router, `{"email":"owner@example.com","org_name":"My Organization"}`)
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -36,7 +37,7 @@ func TestHostedSignupSuccess(t *testing.T) {
 	if response.UserID != "owner@example.com" {
 		t.Fatalf("expected user_id owner@example.com, got %q", response.UserID)
 	}
-	if response.Message != "Tenant provisioned successfully" {
+	if response.Message != "Check your email for a magic link to finish signing in." {
 		t.Fatalf("unexpected message: %q", response.Message)
 	}
 
@@ -62,6 +63,19 @@ func TestHostedSignupSuccess(t *testing.T) {
 	if !containsRoleID(assignment.RoleIDs, auth.RoleAdmin) {
 		t.Fatalf("expected admin role assignment, got roles: %v", assignment.RoleIDs)
 	}
+
+	// Verify a magic link was "sent".
+	emailer.mu.Lock()
+	defer emailer.mu.Unlock()
+	if emailer.calls != 1 {
+		t.Fatalf("expected 1 magic link email, got %d", emailer.calls)
+	}
+	if emailer.to != "owner@example.com" {
+		t.Fatalf("magic link to = %q, want owner@example.com", emailer.to)
+	}
+	if !strings.Contains(emailer.magicLinkURL, "/api/public/magic-link/verify?token=") {
+		t.Fatalf("magic link url = %q, expected verify endpoint with token", emailer.magicLinkURL)
+	}
 }
 
 func TestHostedSignupValidationFailures(t *testing.T) {
@@ -71,25 +85,21 @@ func TestHostedSignupValidationFailures(t *testing.T) {
 	}{
 		{
 			name: "missing email",
-			body: `{"password":"securepass123","org_name":"My Organization"}`,
+			body: `{"org_name":"My Organization"}`,
 		},
 		{
 			name: "invalid email",
-			body: `{"email":"userexample.com","password":"securepass123","org_name":"My Organization"}`,
-		},
-		{
-			name: "short password",
-			body: `{"email":"user@example.com","password":"short","org_name":"My Organization"}`,
+			body: `{"email":"userexample.com","org_name":"My Organization"}`,
 		},
 		{
 			name: "invalid org_name",
-			body: `{"email":"user@example.com","password":"securepass123","org_name":"../evil"}`,
+			body: `{"email":"user@example.com","org_name":"../evil"}`,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			router, _, _, _ := newHostedSignupTestRouter(t, true)
+			router, _, _, _, _ := newHostedSignupTestRouter(t, true)
 			rec := doHostedSignupRequest(router, tc.body)
 			if rec.Code != http.StatusBadRequest {
 				t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
@@ -99,20 +109,20 @@ func TestHostedSignupValidationFailures(t *testing.T) {
 }
 
 func TestHostedSignupHostedModeGate(t *testing.T) {
-	router, _, _, _ := newHostedSignupTestRouter(t, false)
+	router, _, _, _, _ := newHostedSignupTestRouter(t, false)
 
-	rec := doHostedSignupRequest(router, `{"email":"owner@example.com","password":"securepass123","org_name":"My Organization"}`)
+	rec := doHostedSignupRequest(router, `{"email":"owner@example.com","org_name":"My Organization"}`)
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("expected 404 when hosted mode is disabled, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 
 func TestHostedSignupRateLimit(t *testing.T) {
-	router, _, _, _ := newHostedSignupTestRouter(t, true)
+	router, _, _, _, _ := newHostedSignupTestRouter(t, true)
 
 	for i := 1; i <= 6; i++ {
 		body := fmt.Sprintf(
-			`{"email":"user%d@example.com","password":"securepass123","org_name":"Org %d"}`,
+			`{"email":"user%d@example.com","org_name":"Org %d"}`,
 			i,
 			i,
 		)
@@ -139,9 +149,9 @@ func TestHostedSignupCleanupOnRBACFailure(t *testing.T) {
 		failUpdate: true,
 	}
 
-	router := newHostedSignupTestRouterWithDeps(t, true, persistence, wrapped)
+	router, _ := newHostedSignupTestRouterWithDeps(t, true, persistence, wrapped)
 
-	rec := doHostedSignupRequest(router, `{"email":"owner@example.com","password":"securepass123","org_name":"My Organization"}`)
+	rec := doHostedSignupRequest(router, `{"email":"owner@example.com","org_name":"My Organization"}`)
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -160,7 +170,7 @@ func TestHostedSignupCleanupOnRBACFailure(t *testing.T) {
 	}
 }
 
-func newHostedSignupTestRouter(t *testing.T, hostedMode bool) (*Router, *config.MultiTenantPersistence, *TenantRBACProvider, string) {
+func newHostedSignupTestRouter(t *testing.T, hostedMode bool) (*Router, *config.MultiTenantPersistence, *TenantRBACProvider, *captureMagicLinkEmailer, string) {
 	t.Helper()
 
 	baseDir := t.TempDir()
@@ -170,12 +180,18 @@ func newHostedSignupTestRouter(t *testing.T, hostedMode bool) (*Router, *config.
 		_ = rbacProvider.Close()
 	})
 
-	router := newHostedSignupTestRouterWithDeps(t, hostedMode, persistence, rbacProvider)
-	return router, persistence, rbacProvider, baseDir
+	router, emailer := newHostedSignupTestRouterWithDeps(t, hostedMode, persistence, rbacProvider)
+	return router, persistence, rbacProvider, emailer, baseDir
 }
 
-func newHostedSignupTestRouterWithDeps(t *testing.T, hostedMode bool, persistence *config.MultiTenantPersistence, rbacProvider HostedRBACProvider) *Router {
+func newHostedSignupTestRouterWithDeps(t *testing.T, hostedMode bool, persistence *config.MultiTenantPersistence, rbacProvider HostedRBACProvider) (*Router, *captureMagicLinkEmailer) {
 	t.Helper()
+
+	emailer := &captureMagicLinkEmailer{}
+	// Use a stable key to avoid flakiness.
+	key := []byte("0123456789abcdef0123456789abcdef")
+	magicLinks := NewMagicLinkServiceWithKey(key, nil, emailer, NewRateLimiter(1000, 1*time.Hour))
+	t.Cleanup(func() { magicLinks.Stop() })
 
 	router := &Router{
 		mux:               http.NewServeMux(),
@@ -186,10 +202,10 @@ func newHostedSignupTestRouterWithDeps(t *testing.T, hostedMode bool, persistenc
 		router.signupRateLimiter.Stop()
 	})
 
-	hostedSignupHandlers := NewHostedSignupHandlers(persistence, rbacProvider, hostedMode)
-	router.registerHostedRoutes(hostedSignupHandlers)
+	hostedSignupHandlers := NewHostedSignupHandlers(persistence, rbacProvider, magicLinks, nil, hostedMode)
+	router.registerHostedRoutes(hostedSignupHandlers, nil)
 
-	return router
+	return router, emailer
 }
 
 func doHostedSignupRequest(router *Router, body string) *httptest.ResponseRecorder {
@@ -238,4 +254,20 @@ type failingManager struct {
 
 func (m failingManager) UpdateUserRoles(username string, roleIDs []string) error {
 	return fmt.Errorf("forced UpdateUserRoles failure")
+}
+
+type captureMagicLinkEmailer struct {
+	mu           sync.Mutex
+	calls        int
+	to           string
+	magicLinkURL string
+}
+
+func (c *captureMagicLinkEmailer) SendMagicLink(to, magicLinkURL string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.calls++
+	c.to = to
+	c.magicLinkURL = magicLinkURL
+	return nil
 }

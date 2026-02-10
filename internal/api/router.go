@@ -43,6 +43,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license"
+	"github.com/rcourtman/pulse-go-rewrite/internal/license/conversion"
 	"github.com/rcourtman/pulse-go-rewrite/internal/metrics"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -121,6 +122,7 @@ type Router struct {
 	relayClient          *relay.Client
 	relayCancel          context.CancelFunc
 	hostedMode           bool
+	conversionStore      *conversion.ConversionStore
 }
 
 func pulseBinDir() string {
@@ -151,7 +153,12 @@ func isDirectLoopbackRequest(req *http.Request) bool {
 }
 
 // NewRouter creates a new router instance
-func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monitoring.MultiTenantMonitor, wsHub *websocket.Hub, reloadFunc func() error, serverVersion string) *Router {
+func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monitoring.MultiTenantMonitor, wsHub *websocket.Hub, reloadFunc func() error, serverVersion string, conversionStore ...*conversion.ConversionStore) *Router {
+	var store *conversion.ConversionStore
+	if len(conversionStore) > 0 {
+		store = conversionStore[0]
+	}
+
 	// Initialize persistent session and CSRF stores
 	InitSessionStore(cfg.DataPath)
 	InitCSRFStore(cfg.DataPath)
@@ -188,6 +195,7 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monit
 		projectRoot:       projectRoot,
 		checksumCache:     make(map[string]checksumCacheEntry),
 		hostedMode:        os.Getenv("PULSE_HOSTED_MODE") == "true",
+		conversionStore:   store,
 	}
 	if r.hostedMode {
 		// Use defaults: 2000 req/min per org.
@@ -305,7 +313,19 @@ func (r *Router) setupRoutes() {
 	r.reportingHandlers = NewReportingHandlers(r.mtMonitor, r.resourceRegistry)
 	r.logHandlers = NewLogHandlers(r.config, r.persistence)
 	rbacHandlers := NewRBACHandlers(r.config, rbacProvider)
-	hostedSignupHandlers := NewHostedSignupHandlers(r.multiTenant, rbacProvider, r.hostedMode)
+	var magicLinkService *MagicLinkService
+	var magicLinkHandlers *MagicLinkHandlers
+	if r.hostedMode {
+		svc, err := NewMagicLinkServiceForDataPath(r.config.DataPath, nil)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to initialize magic link service")
+		} else {
+			magicLinkService = svc
+		}
+		magicLinkHandlers = NewMagicLinkHandlers(r.multiTenant, magicLinkService, r.hostedMode, r.resolvePublicURL)
+	}
+
+	hostedSignupHandlers := NewHostedSignupHandlers(r.multiTenant, rbacProvider, magicLinkService, r.resolvePublicURL, r.hostedMode)
 	infraUpdateHandlers := NewUpdateDetectionHandlers(r.monitor)
 	auditHandlers := NewAuditHandlers()
 
@@ -431,7 +451,7 @@ func (r *Router) setupRoutes() {
 	r.registerConfigSystemRoutes(updateHandlers)
 	r.registerAIRelayRoutes()
 	r.registerOrgLicenseRoutes(orgHandlers, rbacHandlers, auditHandlers)
-	r.registerHostedRoutes(hostedSignupHandlers)
+	r.registerHostedRoutes(hostedSignupHandlers, magicLinkHandlers)
 
 	// Note: Frontend handler is handled manually in ServeHTTP to prevent redirect issues
 	// See issue #334 - ServeMux redirects empty path to "./" which breaks reverse proxies
@@ -2675,6 +2695,9 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				"/api/version",
 				"/api/login", // Add login endpoint as public
 				"/api/oidc/login",
+				"/api/public/signup",             // Hosted mode: public signup
+				"/api/public/magic-link/request", // Hosted mode: request magic link
+				"/api/public/magic-link/verify",  // Hosted mode: verify magic link
 				config.DefaultOIDCCallbackPath,
 				"/install-docker-agent.sh",       // Docker agent bootstrap script must be public
 				"/install-container-agent.sh",    // Container agent bootstrap script must be public
@@ -2808,6 +2831,10 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 		// Skip CSRF for login to avoid blocking re-auth when a stale session cookie exists.
 		if req.URL.Path == "/api/login" {
+			skipCSRF = true
+		}
+		// Skip CSRF for hosted public endpoints (may be called without a session or with a stale cookie).
+		if req.URL.Path == "/api/public/signup" || req.URL.Path == "/api/public/magic-link/request" {
 			skipCSRF = true
 		}
 		if strings.HasPrefix(req.URL.Path, "/api/") && !skipCSRF && !CheckCSRF(w, req) {

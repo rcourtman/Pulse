@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -232,7 +233,8 @@ type Service struct {
 	onLicenseChange func(*License)
 
 	// Optional canonical evaluator for B2 entitlement checks.
-	// When set, HasFeature delegates to evaluator.HasCapability.
+	// When set and no JWT license is active, HasFeature/Status/SubscriptionState
+	// delegate to evaluator primitives (capabilities/limits/subscription state).
 	// When nil, falls through to existing tier-based logic.
 	evaluator *entitlements.Evaluator
 
@@ -361,27 +363,16 @@ func (s *Service) HasFeature(feature string) bool {
 	s.mu.Lock() // Need write lock since we may update grace period
 	defer s.mu.Unlock()
 
-	// If evaluator is set, delegate to it for capability checks.
-	// The evaluator already handles legacy derivation via TokenSource.
-	if s.evaluator != nil {
-		if s.license == nil {
-			return TierHasFeature(TierFree, feature)
-		}
-		if s.license.IsExpired() {
-			s.ensureGracePeriodEnd()
-			if s.license.GracePeriodEnd != nil && time.Now().Before(*s.license.GracePeriodEnd) {
-				return s.evaluator.HasCapability(feature)
-			}
-			return TierHasFeature(TierFree, feature)
-		}
-		return s.evaluator.HasCapability(feature)
-	}
-
-	// Fallback to existing tier-based logic when no evaluator is set.
 	if s.license == nil {
+		// Hosted path: evaluator drives entitlements when no JWT is present.
+		if s.evaluator != nil {
+			return s.evaluator.HasCapability(feature)
+		}
 		// No license activated — still grant free tier features
 		return TierHasFeature(TierFree, feature)
 	}
+
+	// JWT takes precedence whenever a license is present (including hybrid mode).
 	if s.license.IsExpired() {
 		s.ensureGracePeriodEnd()
 		// Check grace period - still allow features during grace
@@ -459,6 +450,9 @@ func (s *Service) SubscriptionState() string {
 	if s.stateMachine != nil && s.license != nil && s.license.Claims.SubState != "" {
 		return string(s.license.Claims.SubState)
 	}
+	if s.license == nil && s.evaluator != nil {
+		return string(s.evaluator.SubscriptionState())
+	}
 	if s.license == nil {
 		return string(SubStateExpired)
 	}
@@ -484,6 +478,29 @@ func (s *Service) Status() *LicenseStatus {
 	}
 
 	if s.license == nil {
+		// Hosted path: evaluator drives status when no JWT is present.
+		if s.evaluator != nil {
+			status.Tier = TierPro // hosted billing-backed tenants are effectively "pro" for display
+			status.Features = evaluatorFeatures(s.evaluator)
+
+			if maxNodes, ok := s.evaluator.GetLimit("max_nodes"); ok {
+				status.MaxNodes = safeIntFromInt64(maxNodes)
+			}
+			if maxGuests, ok := s.evaluator.GetLimit("max_guests"); ok {
+				status.MaxGuests = safeIntFromInt64(maxGuests)
+			}
+
+			subState := s.evaluator.SubscriptionState()
+			switch subState {
+			case SubStateActive, SubStateTrial, SubStateGrace:
+				status.Valid = true
+				if subState == SubStateGrace {
+					status.InGracePeriod = true
+				}
+			default:
+				status.Valid = false
+			}
+		}
 		return status
 	}
 
@@ -518,6 +535,42 @@ func (s *Service) Status() *LicenseStatus {
 	}
 
 	return status
+}
+
+func evaluatorFeatures(eval *entitlements.Evaluator) []string {
+	if eval == nil {
+		return []string{}
+	}
+
+	// Derive a stable, known capability list from the evaluator by enumerating
+	// all feature keys currently used by tier-based gating.
+	known := make(map[string]struct{}, 32)
+	for _, features := range TierFeatures {
+		for _, feature := range features {
+			known[feature] = struct{}{}
+		}
+	}
+
+	caps := make([]string, 0, len(known))
+	for feature := range known {
+		if eval.HasCapability(feature) {
+			caps = append(caps, feature)
+		}
+	}
+	sort.Strings(caps)
+	return caps
+}
+
+func safeIntFromInt64(v int64) int {
+	// Avoid overflow on 32-bit platforms; clamp to max int.
+	maxInt := int64(^uint(0) >> 1)
+	if v > maxInt {
+		return int(maxInt)
+	}
+	if v < 0 {
+		return 0
+	}
+	return int(v)
 }
 
 // LicenseStatus is the JSON response for license status API.
