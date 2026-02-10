@@ -98,7 +98,7 @@ func (r *Router) registerAIRelayRoutesGroup() {
 	r.mux.HandleFunc("/api/ai/patrol/suppressions/", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleDeleteSuppressionRule)))
 	r.mux.HandleFunc("/api/ai/patrol/dismissed", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleGetDismissedFindings)))
 
-	// Patrol Autonomy - monitor/approval free, assisted/full require Pro (enforced in handlers)
+	// Patrol Autonomy - Community is locked to "monitor"; approval/assisted/full require Pro (enforced in handlers)
 	r.mux.HandleFunc("/api/ai/patrol/autonomy", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
 		case http.MethodGet:
@@ -110,7 +110,7 @@ func (r *Router) registerAIRelayRoutesGroup() {
 		}
 	})))
 
-	// Investigation endpoints - viewing and reinvestigation are free, fix execution (reapprove) requires Pro
+	// Investigation endpoints - viewing is free; reinvestigation and fix execution require Pro
 	// SECURITY: Require ai:execute scope to prevent low-privilege tokens from reading investigation details
 	r.mux.HandleFunc("/api/ai/findings/", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, func(w http.ResponseWriter, req *http.Request) {
 		path := req.URL.Path
@@ -120,7 +120,8 @@ func (r *Router) registerAIRelayRoutesGroup() {
 		case strings.HasSuffix(path, "/investigation"):
 			r.aiSettingsHandler.HandleGetInvestigation(w, req)
 		case strings.HasSuffix(path, "/reinvestigate"):
-			r.aiSettingsHandler.HandleReinvestigateFinding(w, req)
+			// Reinvestigation is investigation and requires Pro license
+			RequireLicenseFeature(r.licenseHandlers, license.FeatureAIAutoFix, r.aiSettingsHandler.HandleReinvestigateFinding)(w, req)
 		case strings.HasSuffix(path, "/reapprove"):
 			// Fix execution requires Pro license
 			RequireLicenseFeature(r.licenseHandlers, license.FeatureAIAutoFix, r.aiSettingsHandler.HandleReapproveInvestigationFix)(w, req)

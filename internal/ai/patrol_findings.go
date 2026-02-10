@@ -1132,11 +1132,10 @@ func (p *PatrolService) MaybeInvestigateFinding(f *Finding) {
 	if aiService == nil {
 		return
 	}
-	cfg := aiService.GetConfig()
-	if cfg == nil {
+	if aiService.GetConfig() == nil {
 		return
 	}
-	autonomyLevel := cfg.GetPatrolAutonomyLevel()
+	autonomyLevel := aiService.GetEffectivePatrolAutonomyLevel()
 
 	// Check if finding should be investigated
 	if !f.ShouldInvestigate(autonomyLevel) {
@@ -1167,7 +1166,7 @@ func (p *PatrolService) MaybeInvestigateFinding(f *Finding) {
 			log.Warn().Str("finding_id", f.ID).Msg("AI config unavailable at investigation start, aborting")
 			return
 		}
-		currentAutonomy := currentCfg.GetPatrolAutonomyLevel()
+		currentAutonomy := aiService.GetEffectivePatrolAutonomyLevel()
 
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		defer cancel()

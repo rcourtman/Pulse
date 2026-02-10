@@ -907,11 +907,7 @@ func (a *autonomyLevelProviderAdapter) GetCurrentAutonomyLevel() string {
 	if a.svc == nil {
 		return config.PatrolAutonomyMonitor
 	}
-	cfg := a.svc.GetConfig()
-	if cfg == nil {
-		return config.PatrolAutonomyMonitor
-	}
-	return cfg.GetPatrolAutonomyLevel()
+	return a.svc.GetEffectivePatrolAutonomyLevel()
 }
 
 func (a *autonomyLevelProviderAdapter) IsFullModeUnlocked() bool {
@@ -3399,6 +3395,19 @@ func (h *AISettingsHandler) HandleForcePatrol(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	// Cadence cap: Community tier is limited to 1 patrol run per hour.
+	// Patrol itself is free (ai_patrol), but higher cadence is gated behind Pro/Cloud.
+	if !aiService.HasLicenseFeature(license.FeatureAIAutoFix) {
+		if last := patrol.GetStatus().LastPatrolAt; last != nil {
+			if since := time.Since(*last); since < 1*time.Hour {
+				remaining := (1*time.Hour - since).Round(time.Minute)
+				writeErrorResponse(w, http.StatusTooManyRequests, "patrol_rate_limited",
+					fmt.Sprintf("Community tier is limited to 1 patrol run per hour. Try again in %s.", remaining), nil)
+				return
+			}
+		}
+	}
+
 	// Trigger patrol asynchronously
 	patrol.ForcePatrol(r.Context())
 
@@ -5376,10 +5385,12 @@ func (h *AISettingsHandler) HandleGetPatrolAutonomy(w http.ResponseWriter, r *ht
 	}
 
 	autonomyLevel := cfg.GetPatrolAutonomyLevel()
-	// Clamp for free tier: assisted/full require Pro (ai_autofix)
+	// Community tier lock: without ai_autofix, patrol autonomy is findings-only ("monitor").
+	// If config contains a higher level from a previous Pro/trial period, clamp the effective
+	// value at read time so the UI reflects runtime enforcement.
 	hasAutoFix := aiService.HasLicenseFeature(license.FeatureAIAutoFix)
-	if !hasAutoFix && (autonomyLevel == config.PatrolAutonomyAssisted || autonomyLevel == config.PatrolAutonomyFull) {
-		autonomyLevel = config.PatrolAutonomyApproval
+	if !hasAutoFix && autonomyLevel != config.PatrolAutonomyMonitor {
+		autonomyLevel = config.PatrolAutonomyMonitor
 	}
 
 	settings := PatrolAutonomyResponse{
@@ -5419,10 +5430,9 @@ func (h *AISettingsHandler) HandleUpdatePatrolAutonomy(w http.ResponseWriter, r 
 		return
 	}
 
-	// License-based autonomy clamping: assisted/full require Pro (ai_autofix)
-	if !aiService.HasLicenseFeature(license.FeatureAIAutoFix) &&
-		(req.AutonomyLevel == config.PatrolAutonomyAssisted || req.AutonomyLevel == config.PatrolAutonomyFull) {
-		WriteLicenseRequired(w, license.FeatureAIAutoFix, "Auto-fix requires Pulse Pro. Free tier supports Monitor and Investigate modes.")
+	// Community tier lock: ANY autonomy above "monitor" implies investigation and requires Pro.
+	if !aiService.HasLicenseFeature(license.FeatureAIAutoFix) && req.AutonomyLevel != config.PatrolAutonomyMonitor {
+		WriteLicenseRequired(w, license.FeatureAIAutoFix, "Investigation and auto-fix require Pulse Pro. Community tier is limited to Monitor (findings-only) autonomy.")
 		return
 	}
 
@@ -5703,6 +5713,18 @@ func (h *AISettingsHandler) HandleReinvestigateFinding(w http.ResponseWriter, r 
 	}
 
 	aiService := h.GetAIService(r.Context())
+	if aiService == nil {
+		writeErrorResponse(w, http.StatusServiceUnavailable, "service_unavailable", "Pulse Patrol service not available", nil)
+		return
+	}
+
+	// Reinvestigation is investigation and requires Pro (ai_autofix).
+	// This is defense-in-depth in addition to the route-level RequireLicenseFeature gate.
+	if !aiService.HasLicenseFeature(license.FeatureAIAutoFix) {
+		WriteLicenseRequired(w, license.FeatureAIAutoFix, "Reinvestigation requires Pulse Pro (AI Auto-Fix feature).")
+		return
+	}
+
 	cfg := aiService.GetConfig()
 	if cfg == nil {
 		writeErrorResponse(w, http.StatusServiceUnavailable, "not_configured", "Pulse Patrol not configured", nil)

@@ -683,6 +683,38 @@ func (s *Service) HasLicenseFeature(feature string) bool {
 	return checker.HasFeature(feature)
 }
 
+const minCommunityPatrolInterval = 1 * time.Hour
+
+// GetEffectivePatrolAutonomyLevel returns the autonomy level that should be enforced at runtime
+// for the current license state.
+//
+// Community tier is locked to "monitor" (findings-only). Higher levels imply investigation and
+// are gated behind ai_autofix (Pro/Cloud).
+func (s *Service) GetEffectivePatrolAutonomyLevel() string {
+	cfg := s.GetConfig()
+	if cfg == nil {
+		return config.PatrolAutonomyMonitor
+	}
+	if !s.HasLicenseFeature(FeatureAIAutoFix) {
+		return config.PatrolAutonomyMonitor
+	}
+	return cfg.GetPatrolAutonomyLevel()
+}
+
+func (s *Service) getEffectivePatrolInterval(cfg *config.AIConfig) time.Duration {
+	if cfg == nil {
+		return 0
+	}
+	interval := cfg.GetPatrolInterval()
+	if interval <= 0 {
+		return interval
+	}
+	if !s.HasLicenseFeature(FeatureAIAutoFix) && interval < minCommunityPatrolInterval {
+		return minCommunityPatrolInterval
+	}
+	return interval
+}
+
 // GetLicenseState returns the current license state and whether features are available
 func (s *Service) GetLicenseState() (string, bool) {
 	s.mu.RLock()
@@ -731,7 +763,7 @@ func (s *Service) StartPatrol(ctx context.Context) {
 	// Configure patrol from AI config (preserve defaults for resource types not in AI config)
 	patrolCfg := DefaultPatrolConfig()
 	patrolCfg.Enabled = true
-	patrolCfg.Interval = cfg.GetPatrolInterval()
+	patrolCfg.Interval = s.getEffectivePatrolInterval(cfg)
 	patrolCfg.AnalyzeNodes = cfg.PatrolAnalyzeNodes
 	patrolCfg.AnalyzeGuests = cfg.PatrolAnalyzeGuests
 	patrolCfg.AnalyzeDocker = cfg.PatrolAnalyzeDocker
@@ -809,7 +841,7 @@ func (s *Service) ReconfigurePatrol() {
 	// Update patrol configuration (preserve defaults for resource types not in AI config)
 	patrolCfg := DefaultPatrolConfig()
 	patrolCfg.Enabled = cfg.IsPatrolEnabled()
-	patrolCfg.Interval = cfg.GetPatrolInterval()
+	patrolCfg.Interval = s.getEffectivePatrolInterval(cfg)
 	patrolCfg.AnalyzeNodes = cfg.PatrolAnalyzeNodes
 	patrolCfg.AnalyzeGuests = cfg.PatrolAnalyzeGuests
 	patrolCfg.AnalyzeDocker = cfg.PatrolAnalyzeDocker

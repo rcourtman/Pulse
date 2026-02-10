@@ -2694,6 +2694,7 @@ func TestAILicensedEndpointsRequireLicenseFeature(t *testing.T) {
 	paths := []string{
 		"/api/ai/kubernetes/analyze",
 		"/api/ai/investigate-alert",
+		"/api/ai/findings/f-1/reinvestigate",
 		"/api/ai/findings/f-1/reapprove",
 	}
 
