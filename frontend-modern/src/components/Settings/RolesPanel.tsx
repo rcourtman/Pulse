@@ -1,10 +1,11 @@
-import { Component, createSignal, onMount, Show, For } from 'solid-js';
+import { Component, createEffect, createSignal, onMount, Show, For } from 'solid-js';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { RBACAPI } from '@/api/rbac';
 import type { Role, Permission } from '@/types/rbac';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import { getUpgradeActionUrlOrFallback, hasFeature, loadLicenseStatus, licenseLoaded } from '@/stores/license';
+import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/conversionEvents';
 import Plus from 'lucide-solid/icons/plus';
 import Pencil from 'lucide-solid/icons/pencil';
 import Trash2 from 'lucide-solid/icons/trash-2';
@@ -45,6 +46,14 @@ export const RolesPanel: Component = () => {
         loadLicenseStatus();
         loadRoles();
     });
+
+    createEffect((wasPaywallVisible) => {
+        const isPaywallVisible = licenseLoaded() && !hasFeature('rbac') && !loading();
+        if (isPaywallVisible && !wasPaywallVisible) {
+            trackPaywallViewed('rbac', 'settings_roles_panel');
+        }
+        return isPaywallVisible;
+    }, false);
 
     const handleCreate = () => {
         setEditingRole(null);
@@ -157,6 +166,7 @@ export const RolesPanel: Component = () => {
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 class="px-5 py-2.5 text-sm font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                                onClick={() => trackUpgradeClicked('settings_roles_panel', 'rbac')}
                             >
                                 Upgrade to Pro
                             </a>

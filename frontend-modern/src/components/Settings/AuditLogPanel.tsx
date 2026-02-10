@@ -18,6 +18,7 @@ import {
 } from '@/utils/localStorage';
 import { showSuccess, showWarning, showToast } from '@/utils/toast';
 import { getUpgradeActionUrlOrFallback, hasFeature, loadLicenseStatus, licenseLoaded } from '@/stores/license';
+import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/conversionEvents';
 
 interface AuditEvent {
     id: string;
@@ -70,6 +71,16 @@ export default function AuditLogPanel() {
         STORAGE_KEYS.AUDIT_VERIFICATION_FILTER,
         'all',
     );
+
+    // Track when the in-panel Audit Logging paywall is actually shown.
+    // Note: settings tab gating is tracked separately via settingsFeatureGates.
+    createEffect((wasPaywallVisible) => {
+        const isPaywallVisible = licenseLoaded() && !hasFeature('audit_logging') && !loading();
+        if (isPaywallVisible && !wasPaywallVisible) {
+            trackPaywallViewed('audit_logging', 'settings_audit_log_panel');
+        }
+        return isPaywallVisible;
+    }, false);
     const allowedVerificationFilters = new Set(['all', 'needs', 'verified', 'failed']);
     const allowedSuccessFilters = new Set(['all', 'success', 'failed']);
     const [pageSize, setPageSize] = createLocalStorageNumberSignal(
@@ -514,7 +525,9 @@ export default function AuditLogPanel() {
                         <a
                             href={getUpgradeActionUrlOrFallback('audit_logging')}
                             target="_blank"
+                            rel="noopener noreferrer"
                             class="px-5 py-2.5 text-sm font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                            onClick={() => trackUpgradeClicked('settings_audit_log_panel', 'audit_logging')}
                         >
                             Upgrade to Pro
                         </a>

@@ -1,10 +1,11 @@
-import { Component, createSignal, createMemo, onMount, Show, For } from 'solid-js';
+import { Component, createSignal, createMemo, createEffect, onMount, Show, For } from 'solid-js';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { RBACAPI } from '@/api/rbac';
 import type { Role, UserRoleAssignment, Permission } from '@/types/rbac';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import { getUpgradeActionUrlOrFallback, hasFeature, loadLicenseStatus, licenseLoaded } from '@/stores/license';
+import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/conversionEvents';
 import Users from 'lucide-solid/icons/users';
 import Shield from 'lucide-solid/icons/shield';
 import BadgeCheck from 'lucide-solid/icons/badge-check';
@@ -47,6 +48,14 @@ export const UserAssignmentsPanel: Component = () => {
         loadLicenseStatus();
         loadData();
     });
+
+    createEffect((wasPaywallVisible) => {
+        const isPaywallVisible = licenseLoaded() && !hasFeature('rbac') && !loading();
+        if (isPaywallVisible && !wasPaywallVisible) {
+            trackPaywallViewed('rbac', 'settings_user_assignments_panel');
+        }
+        return isPaywallVisible;
+    }, false);
 
     const filteredAssignments = createMemo(() => {
         const query = searchQuery().toLowerCase();
@@ -139,6 +148,7 @@ export const UserAssignmentsPanel: Component = () => {
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 class="px-5 py-2.5 text-sm font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                                onClick={() => trackUpgradeClicked('settings_user_assignments_panel', 'rbac')}
                             >
                                 Upgrade to Pro
                             </a>

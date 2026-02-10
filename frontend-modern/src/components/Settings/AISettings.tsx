@@ -1,4 +1,4 @@
-import { Component, Show, createSignal, onMount, For, createMemo } from 'solid-js';
+import { Component, Show, createSignal, onMount, For, createMemo, createEffect } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { useNavigate } from '@solidjs/router';
 import SettingsPanel from '@/components/shared/SettingsPanel';
@@ -11,6 +11,7 @@ import { logger } from '@/utils/logger';
 import { AIAPI } from '@/api/ai';
 import { AIChatAPI, type ChatSession, type FileChange } from '@/api/aiChat';
 import { getUpgradeActionUrlOrFallback, hasFeature, loadLicenseStatus } from '@/stores/license';
+import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/conversionEvents';
 import type { AISettings as AISettingsType, AIProvider, AuthMethod } from '@/types/ai';
 
 // Providers are now configured via accordion sections, not a single-provider selector
@@ -121,6 +122,14 @@ export const AISettings: Component = () => {
   const [providerTestResult, setProviderTestResult] = createSignal<{ provider: string; success: boolean; message: string } | null>(null);
   const hasAutoFixFeature = createMemo(() => hasFeature('ai_autofix'));
   const autoFixLocked = createMemo(() => !hasAutoFixFeature());
+
+  createEffect((wasPaywallVisible) => {
+    const isPaywallVisible = form.controlLevel === 'autonomous' && autoFixLocked();
+    if (isPaywallVisible && !wasPaywallVisible) {
+      trackPaywallViewed('ai_autofix', 'settings_ai_autonomous_mode');
+    }
+    return isPaywallVisible;
+  }, false);
 
   // Auto-fix acknowledgement state (not persisted - must acknowledge each session)
   // Note: autoFixAcknowledged removed — auto-fix UI moved to Patrol page
@@ -1556,7 +1565,8 @@ export const AISettings: Component = () => {
                       class="text-blue-600 dark:text-blue-400 font-medium hover:underline"
                       href={getUpgradeActionUrlOrFallback('ai_autofix')}
                       target="_blank"
-                      rel="noreferrer"
+                      rel="noopener noreferrer"
+                      onClick={() => trackUpgradeClicked('settings_ai_autonomous_mode', 'ai_autofix')}
                     >
                       Upgrade to Pro
                     </a>{' '}

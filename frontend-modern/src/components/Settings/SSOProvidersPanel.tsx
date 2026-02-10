@@ -1,4 +1,4 @@
-import { Component, Show, For, createSignal, onMount, createMemo } from 'solid-js';
+import { Component, Show, For, createSignal, onMount, createMemo, createEffect } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { Toggle } from '@/components/shared/Toggle';
@@ -6,6 +6,7 @@ import { formField, labelClass, controlClass, formHelpText } from '@/components/
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import { getUpgradeActionUrlOrFallback, hasFeature, loadLicenseStatus, licenseLoaded } from '@/stores/license';
+import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/conversionEvents';
 import Plus from 'lucide-solid/icons/plus';
 import Pencil from 'lucide-solid/icons/pencil';
 import Trash2 from 'lucide-solid/icons/trash-2';
@@ -182,6 +183,8 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
   const [deleteConfirm, setDeleteConfirm] = createSignal<string | null>(null);
   const [publicUrl, setPublicUrl] = createSignal<string>('');
 
+  const [showSamlUpsell, setShowSamlUpsell] = createSignal(false);
+
   // Test connection state
   const [testing, setTesting] = createSignal(false);
   const [testResult, setTestResult] = createSignal<TestResult | null>(null);
@@ -192,6 +195,22 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
   const [loadingPreview, setLoadingPreview] = createSignal(false);
 
   const hasAdvancedSSO = createMemo(() => hasFeature('advanced_sso'));
+
+  createEffect((wasBannerVisible) => {
+    const isBannerVisible = licenseLoaded() && !hasAdvancedSSO() && !loading();
+    if (isBannerVisible && !wasBannerVisible) {
+      trackPaywallViewed('advanced_sso', 'settings_sso_providers_banner');
+    }
+    return isBannerVisible;
+  }, false);
+
+  createEffect((wasUpsellVisible) => {
+    const isUpsellVisible = showSamlUpsell();
+    if (isUpsellVisible && !wasUpsellVisible) {
+      trackPaywallViewed('advanced_sso', 'settings_sso_providers_add_saml_gate');
+    }
+    return isUpsellVisible;
+  }, false);
 
   const loadProviders = async () => {
     setLoading(true);
@@ -505,6 +524,51 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
 
   return (
     <div class="space-y-6">
+      <Show when={showSamlUpsell()}>
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div class="w-full max-w-lg bg-white dark:bg-gray-900 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 mx-4">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+              <div>
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Add SAML Provider</h3>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Pulse Pro feature</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowSamlUpsell(false)}
+                class="p-1.5 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:hover:text-gray-300 dark:hover:bg-gray-800"
+                aria-label="Close"
+              >
+                <X class="w-5 h-5" />
+              </button>
+            </div>
+            <div class="px-6 py-5 space-y-4">
+              <p class="text-sm text-gray-600 dark:text-gray-300">
+                SAML 2.0 and multi-provider SSO requires Pulse Pro.
+              </p>
+              <div class="flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowSamlUpsell(false)}
+                  class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600"
+                >
+                  Not now
+                </button>
+                <a
+                  href={getUpgradeActionUrlOrFallback('advanced_sso')}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="px-4 py-2 text-sm font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors inline-flex items-center gap-2"
+                  onClick={() => trackUpgradeClicked('settings_sso_providers_add_saml_gate', 'advanced_sso')}
+                >
+                  Upgrade to Pro
+                  <ExternalLink class="w-4 h-4" />
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Show>
+
       {/* License banner */}
       <Show when={licenseLoaded() && !hasAdvancedSSO() && !loading()}>
         <div class="p-4 bg-gray-50 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-700 rounded-xl">
@@ -518,7 +582,9 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
             <a
               href={getUpgradeActionUrlOrFallback('advanced_sso')}
               target="_blank"
+              rel="noopener noreferrer"
               class="px-5 py-2.5 text-sm font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+              onClick={() => trackUpgradeClicked('settings_sso_providers_banner', 'advanced_sso')}
             >
               Upgrade to Pro
               <ExternalLink class="w-4 h-4" />
@@ -550,6 +616,16 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
               >
                 <Plus class="w-4 h-4" />
                 Add SAML
+              </button>
+            </Show>
+            <Show when={licenseLoaded() && !hasAdvancedSSO()}>
+              <button
+                type="button"
+                onClick={() => setShowSamlUpsell(true)}
+                class="px-3 py-1.5 text-sm font-medium border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center gap-1.5"
+              >
+                <Plus class="w-4 h-4" />
+                Add SAML (Pro)
               </button>
             </Show>
           </div>

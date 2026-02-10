@@ -1,4 +1,4 @@
-import { Component, Show, createSignal, onMount } from 'solid-js';
+import { Component, Show, createEffect, createSignal, onMount } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { Toggle } from '@/components/shared/Toggle';
@@ -6,6 +6,7 @@ import { formField, labelClass, controlClass, formHelpText } from '@/components/
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import { getUpgradeActionUrlOrFallback, hasFeature, loadLicenseStatus, licenseLoaded } from '@/stores/license';
+import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/conversionEvents';
 import Globe from 'lucide-solid/icons/globe';
 
 interface OIDCConfigResponse {
@@ -151,6 +152,14 @@ export const OIDCPanel: Component<Props> = (props) => {
     loadConfig();
   });
 
+  createEffect((wasPaywallVisible) => {
+    const isPaywallVisible = licenseLoaded() && !hasFeature('sso') && !loading();
+    if (isPaywallVisible && !wasPaywallVisible) {
+      trackPaywallViewed('sso', 'settings_oidc_panel');
+    }
+    return isPaywallVisible;
+  }, false);
+
   const handleSave = async (event?: Event) => {
     event?.preventDefault();
     if (isEnvLocked()) {
@@ -269,7 +278,9 @@ export const OIDCPanel: Component<Props> = (props) => {
             <a
               href={getUpgradeActionUrlOrFallback('advanced_sso')}
               target="_blank"
+              rel="noopener noreferrer"
               class="px-5 py-2.5 text-sm font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              onClick={() => trackUpgradeClicked('settings_oidc_panel', 'sso')}
             >
               Upgrade to Pro
             </a>

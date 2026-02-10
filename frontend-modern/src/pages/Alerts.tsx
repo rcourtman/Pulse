@@ -21,6 +21,8 @@ import { showTooltip, hideTooltip } from '@/components/shared/Tooltip';
 import { AlertsAPI } from '@/api/alerts';
 import { NotificationsAPI, Webhook } from '@/api/notifications';
 import { hasFeature, licenseLoaded, licenseLoading as entitlementsLoading, loadLicenseStatus } from '@/stores/license';
+import { aiChatStore } from '@/stores/aiChat';
+import { trackPaywallViewed } from '@/utils/conversionEvents';
 import type { EmailConfig, AppriseConfig } from '@/api/notifications';
 import type { HysteresisThreshold } from '@/types/alerts';
 import type { Alert, Incident, IncidentEvent, State } from '@/types/api';
@@ -633,6 +635,14 @@ export function Alerts() {
 
   const licenseLoading = createMemo(() => !licenseLoaded() || entitlementsLoading());
   const hasAIAlertsFeature = createMemo(() => !licenseLoaded() || hasFeature('ai_alerts'));
+
+  createEffect((wasPaywallVisible) => {
+    const isPaywallVisible = licenseLoaded() && aiChatStore.enabled === true && !hasFeature('ai_alerts');
+    if (isPaywallVisible && !wasPaywallVisible) {
+      trackPaywallViewed('ai_alerts', 'alerts_page');
+    }
+    return isPaywallVisible;
+  }, false);
 
   onMount(() => {
     void loadLicenseStatus();

@@ -1,4 +1,4 @@
-import { Component, createSignal, createMemo, onMount, Show, For } from 'solid-js';
+import { Component, createSignal, createMemo, createEffect, onMount, Show, For } from 'solid-js';
 import { useResources } from '@/hooks/useResources';
 import { Card } from '@/components/shared/Card';
 import SettingsPanel from '@/components/shared/SettingsPanel';
@@ -8,6 +8,7 @@ import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import { formatRelativeTime } from '@/utils/format';
 import { getUpgradeActionUrlOrFallback, hasFeature as hasEntitlement, licenseLoaded, loadLicenseStatus, licenseLoading } from '@/stores/license';
+import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/conversionEvents';
 import { SuggestProfileModal } from './SuggestProfileModal';
 import { KNOWN_SETTINGS, type SelectSetting, type StringSetting } from './agentProfileSettings';
 import Plus from 'lucide-solid/icons/plus';
@@ -24,6 +25,14 @@ export const AgentProfilesPanel: Component = () => {
 
     const checkingLicense = () => !licenseLoaded() || licenseLoading();
     const hasAgentProfiles = () => hasEntitlement('agent_profiles');
+
+    createEffect((wasPaywallVisible) => {
+        const isPaywallVisible = !checkingLicense() && !hasAgentProfiles();
+        if (isPaywallVisible && !wasPaywallVisible) {
+            trackPaywallViewed('agent_profiles', 'settings_agent_profiles_panel');
+        }
+        return isPaywallVisible;
+    }, false);
 
     // AI state - only show AI features if enabled
     const [aiAvailable, setAiAvailable] = createSignal(false);
@@ -272,6 +281,7 @@ export const AgentProfilesPanel: Component = () => {
                             target="_blank"
                             rel="noopener noreferrer"
                             class="inline-flex items-center gap-2 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-100 dark:bg-amber-900/40 px-4 py-2 text-sm font-medium text-amber-800 dark:text-amber-100 transition-colors hover:bg-amber-200 dark:hover:bg-amber-900/60"
+                            onClick={() => trackUpgradeClicked('settings_agent_profiles_panel', 'agent_profiles')}
                         >
                             <Crown class="w-4 h-4" />
                             Upgrade to Pro
