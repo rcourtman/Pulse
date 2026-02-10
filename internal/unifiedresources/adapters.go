@@ -131,6 +131,7 @@ func resourceFromDockerHost(host models.DockerHost) (Resource, ResourceIdentity)
 		KernelVersion:     host.KernelVersion,
 		Architecture:      host.Architecture,
 		AgentVersion:      host.AgentVersion,
+		UptimeSeconds:     host.UptimeSeconds,
 		Swarm:             convertSwarm(host.Swarm),
 		NetworkInterfaces: convertInterfaces(host.NetworkInterfaces),
 		Disks:             convertDisks(host.Disks),
