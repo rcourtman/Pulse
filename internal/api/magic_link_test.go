@@ -2,7 +2,6 @@ package api
 
 import (
 	"errors"
-	"strings"
 	"testing"
 	"time"
 )
@@ -71,7 +70,7 @@ func TestMagicLinkUsedTokenRejected(t *testing.T) {
 	}
 }
 
-func TestMagicLinkInvalidSignatureRejected(t *testing.T) {
+func TestMagicLinkInvalidTokenRejected(t *testing.T) {
 	svc := NewMagicLinkServiceWithKey([]byte("0123456789abcdef0123456789abcdef"), nil, nil, nil)
 	t.Cleanup(func() { svc.Stop() })
 
@@ -80,12 +79,7 @@ func TestMagicLinkInvalidSignatureRejected(t *testing.T) {
 		t.Fatalf("GenerateToken error: %v", err)
 	}
 
-	// Corrupt the signature portion while keeping base64url decodable.
-	parts := strings.Split(token, ".")
-	if len(parts) != 2 {
-		t.Fatalf("unexpected token format")
-	}
-	bad := parts[0] + "." + parts[1][:len(parts[1])-1] + "A"
+	bad := token + "x"
 
 	_, err = svc.ValidateToken(bad)
 	if !errors.Is(err, ErrMagicLinkInvalidToken) {

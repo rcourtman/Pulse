@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -40,7 +41,12 @@ type MagicLinkEmailer interface {
 type LogEmailer struct{}
 
 func (e LogEmailer) SendMagicLink(to, magicLinkURL string) error {
-	log.Info().Str("to", to).Str("magic_link_url", magicLinkURL).Msg("Magic link email (log-only)")
+	// SECURITY: Do not log full magic link URLs (token in query string). Even opaque tokens are auth
+	// credentials and can be replayed if leaked via logs.
+	log.Info().
+		Str("to", to).
+		Str("magic_link_url_redacted", redactMagicLinkURL(magicLinkURL)).
+		Msg("Magic link email (log-only)")
 	return nil
 }
 
@@ -49,20 +55,19 @@ type MagicLinkToken struct {
 	OrgID     string
 	ExpiresAt time.Time
 	Used      bool
-	Token     string // HMAC-signed opaque token (base64url(payload).base64url(sig))
+	Token     string // Opaque random token ID (not self-describing)
 }
 
 type MagicLinkStore interface {
-	Put(token *MagicLinkToken) error
-	Get(token string) (*MagicLinkToken, bool)
-	MarkUsed(token string) (*MagicLinkToken, error)
+	Put(tokenHash []byte, token *MagicLinkToken) error
+	Consume(tokenHash []byte, now time.Time) (*MagicLinkToken, error)
 	DeleteExpired(now time.Time)
 	Stop()
 }
 
 type InMemoryMagicLinkStore struct {
 	mu     sync.RWMutex
-	tokens map[string]*MagicLinkToken
+	tokens map[string]*MagicLinkToken // keyed by hex(tokenHash)
 
 	stopCleanup chan struct{}
 }
@@ -99,33 +104,36 @@ func (s *InMemoryMagicLinkStore) Stop() {
 	}
 }
 
-func (s *InMemoryMagicLinkStore) Put(token *MagicLinkToken) error {
-	if token == nil || token.Token == "" {
-		return fmt.Errorf("token is required")
+func (s *InMemoryMagicLinkStore) Put(tokenHash []byte, token *MagicLinkToken) error {
+	if len(tokenHash) == 0 {
+		return fmt.Errorf("tokenHash is required")
+	}
+	if token == nil || token.Email == "" || token.OrgID == "" || token.ExpiresAt.IsZero() {
+		return fmt.Errorf("token record is required")
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.tokens[token.Token] = token
+	key := hex.EncodeToString(tokenHash)
+	clone := *token
+	clone.Used = false
+	clone.Token = ""
+	s.tokens[key] = &clone
 	return nil
 }
 
-func (s *InMemoryMagicLinkStore) Get(token string) (*MagicLinkToken, bool) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	t, ok := s.tokens[token]
-	if !ok || t == nil {
-		return nil, false
+func (s *InMemoryMagicLinkStore) Consume(tokenHash []byte, now time.Time) (*MagicLinkToken, error) {
+	if len(tokenHash) == 0 {
+		return nil, ErrMagicLinkInvalidToken
 	}
-	clone := *t
-	return &clone, true
-}
-
-func (s *InMemoryMagicLinkStore) MarkUsed(token string) (*MagicLinkToken, error) {
+	key := hex.EncodeToString(tokenHash)
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	t, ok := s.tokens[token]
+	t, ok := s.tokens[key]
 	if !ok || t == nil {
 		return nil, ErrMagicLinkInvalidToken
+	}
+	if now.After(t.ExpiresAt) {
+		return nil, ErrMagicLinkExpired
 	}
 	if t.Used {
 		return nil, ErrMagicLinkUsed
@@ -151,7 +159,7 @@ func (s *InMemoryMagicLinkStore) DeleteExpired(now time.Time) {
 }
 
 type MagicLinkService struct {
-	hmacKey []byte
+	hmacKey []byte // used to derive a stable lookup key for opaque tokens (HMAC-SHA256(token))
 	store   MagicLinkStore
 	emailer MagicLinkEmailer
 
@@ -171,7 +179,11 @@ func NewMagicLinkServiceForDataPath(dataPath string, emailer MagicLinkEmailer) (
 	if err != nil {
 		return nil, fmt.Errorf("derive hmac key: %w", err)
 	}
-	return NewMagicLinkServiceWithKey(key, nil, emailer, nil), nil
+	store, err := NewSQLiteMagicLinkStore(dataPath)
+	if err != nil {
+		return nil, fmt.Errorf("init magic link store: %w", err)
+	}
+	return NewMagicLinkServiceWithKey(key, store, emailer, nil), nil
 }
 
 func NewMagicLinkServiceWithKey(hmacKey []byte, store MagicLinkStore, emailer MagicLinkEmailer, limiter *RateLimiter) *MagicLinkService {
@@ -232,23 +244,21 @@ func (s *MagicLinkService) GenerateToken(email, orgID string) (string, error) {
 	}
 
 	expiresAt := s.now().UTC().Add(s.ttl)
-	// The signed payload stores seconds; truncate to seconds so validation can compare exactly.
+	// Store expiry at second precision for stable comparisons across stores.
 	expiresAt = time.Unix(expiresAt.Unix(), 0).UTC()
-	nonce, err := randomNonce(18)
+
+	token, err := randomOpaqueTokenID()
 	if err != nil {
 		return "", err
 	}
+	tokenHash := signHMACSHA256(s.hmacKey, token)
 
-	payload := fmt.Sprintf("%s|%s|%d|%s", email, orgID, expiresAt.Unix(), nonce)
-	sig := signHMACSHA256(s.hmacKey, payload)
-	token := base64.RawURLEncoding.EncodeToString([]byte(payload)) + "." + base64.RawURLEncoding.EncodeToString(sig)
-
-	if err := s.store.Put(&MagicLinkToken{
+	if err := s.store.Put(tokenHash, &MagicLinkToken{
 		Email:     email,
 		OrgID:     orgID,
 		ExpiresAt: expiresAt,
 		Used:      false,
-		Token:     token,
+		Token:     "",
 	}); err != nil {
 		return "", err
 	}
@@ -265,31 +275,14 @@ func (s *MagicLinkService) ValidateToken(token string) (*MagicLinkToken, error) 
 		return nil, ErrMagicLinkInvalidToken
 	}
 
-	email, orgID, expiresAt, err := validateAndParseSignedToken(s.hmacKey, token)
-	if err != nil {
-		return nil, err
-	}
-
 	now := s.now().UTC()
-	if now.After(expiresAt) {
-		return nil, ErrMagicLinkExpired
-	}
+	tokenHash := signHMACSHA256(s.hmacKey, token)
 
-	// Single-use: require presence in store and atomically mark used.
-	stored, ok := s.store.Get(token)
-	if !ok || stored == nil {
-		return nil, ErrMagicLinkInvalidToken
-	}
-	if stored.Used {
-		return nil, ErrMagicLinkUsed
-	}
-	if stored.Email != email || stored.OrgID != orgID || !stored.ExpiresAt.Equal(expiresAt) {
-		return nil, ErrMagicLinkInvalidToken
-	}
-	used, err := s.store.MarkUsed(token)
+	used, err := s.store.Consume(tokenHash, now)
 	if err != nil {
 		return nil, err
 	}
+	used.Token = token
 	return used, nil
 }
 
@@ -329,72 +322,28 @@ func (s *MagicLinkService) SendMagicLink(email, orgID, token, baseURL string) er
 	return s.emailer.SendMagicLink(email, magicURL)
 }
 
-func randomNonce(n int) (string, error) {
-	if n <= 0 {
-		n = 18
-	}
-	b := make([]byte, n)
-	if _, err := io.ReadFull(rand.Reader, b); err != nil {
-		return "", fmt.Errorf("nonce: %w", err)
-	}
-	return base64.RawURLEncoding.EncodeToString(b), nil
-}
-
 func signHMACSHA256(key []byte, payload string) []byte {
 	mac := hmac.New(sha256.New, key)
 	_, _ = mac.Write([]byte(payload))
 	return mac.Sum(nil)
 }
 
-func validateAndParseSignedToken(key []byte, token string) (email string, orgID string, expiresAt time.Time, err error) {
-	parts := strings.Split(token, ".")
-	if len(parts) != 2 {
-		return "", "", time.Time{}, ErrMagicLinkInvalidToken
+func randomOpaqueTokenID() (string, error) {
+	// 32 bytes => 43 chars base64url (no padding). Prefix enables future migrations/format checks.
+	raw := make([]byte, 32)
+	if _, err := io.ReadFull(rand.Reader, raw); err != nil {
+		return "", fmt.Errorf("token id: %w", err)
 	}
-
-	payloadBytes, decErr := base64.RawURLEncoding.DecodeString(parts[0])
-	if decErr != nil {
-		return "", "", time.Time{}, ErrMagicLinkInvalidToken
-	}
-	sigBytes, decErr := base64.RawURLEncoding.DecodeString(parts[1])
-	if decErr != nil || len(sigBytes) != sha256.Size {
-		return "", "", time.Time{}, ErrMagicLinkInvalidToken
-	}
-
-	payload := string(payloadBytes)
-	expected := signHMACSHA256(key, payload)
-	if !hmac.Equal(sigBytes, expected) {
-		return "", "", time.Time{}, ErrMagicLinkInvalidToken
-	}
-
-	fields := strings.Split(payload, "|")
-	if len(fields) != 4 {
-		return "", "", time.Time{}, ErrMagicLinkInvalidToken
-	}
-
-	email = strings.ToLower(strings.TrimSpace(fields[0]))
-	orgID = strings.TrimSpace(fields[1])
-	expUnixStr := strings.TrimSpace(fields[2])
-	nonce := strings.TrimSpace(fields[3])
-	if email == "" || orgID == "" || expUnixStr == "" || nonce == "" {
-		return "", "", time.Time{}, ErrMagicLinkInvalidToken
-	}
-
-	expUnix, parseErr := parseInt64(expUnixStr)
-	if parseErr != nil {
-		return "", "", time.Time{}, ErrMagicLinkInvalidToken
-	}
-	expiresAt = time.Unix(expUnix, 0).UTC()
-	return email, orgID, expiresAt, nil
+	return "ml1_" + base64.RawURLEncoding.EncodeToString(raw), nil
 }
 
-func parseInt64(s string) (int64, error) {
-	var n int64
-	for i := 0; i < len(s); i++ {
-		if s[i] < '0' || s[i] > '9' {
-			return 0, fmt.Errorf("not a number")
-		}
-		n = n*10 + int64(s[i]-'0')
+func redactMagicLinkURL(raw string) string {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || u == nil {
+		return ""
 	}
-	return n, nil
+	// Keep scheme/host/path. Drop query/fragment entirely to avoid logging credentials.
+	u.RawQuery = ""
+	u.Fragment = ""
+	return u.String()
 }
