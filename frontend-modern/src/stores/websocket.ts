@@ -107,8 +107,6 @@ export function createWebSocketStore(url: string) {
     hosts: [],
     replicationJobs: [],
     storage: [],
-    cephClusters: [],
-    physicalDisks: [],
     pbs: [],
     pmg: [],
     metrics: [],
@@ -451,8 +449,6 @@ export function createWebSocketStore(url: string) {
               setState('removedKubernetesClusters', reconcile(removed, { key: 'id' }));
             }
             if (message.data.storage !== undefined) setState('storage', reconcile(message.data.storage, { key: 'id' }));
-            if (message.data.cephClusters !== undefined)
-              setState('cephClusters', reconcile(message.data.cephClusters, { key: 'id' }));
             if (message.data.pbs !== undefined) setState('pbs', reconcile(message.data.pbs, { key: 'id' }));
             if (message.data.pmg !== undefined) setState('pmg', reconcile(message.data.pmg, { key: 'id' }));
             if (message.data.replicationJobs !== undefined)
@@ -478,8 +474,6 @@ export function createWebSocketStore(url: string) {
             if (message.data.connectionHealth !== undefined)
               setState('connectionHealth', message.data.connectionHealth);
             if (message.data.stats !== undefined) setState('stats', message.data.stats);
-            if (message.data.physicalDisks !== undefined)
-              setState('physicalDisks', reconcile(message.data.physicalDisks, { key: 'id' }));
             // Handle unified resources
             if (message.data.resources !== undefined) {
               logger.debug('[WebSocket] Updating resources', {

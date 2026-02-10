@@ -846,39 +846,6 @@ func (s Storage) ToFrontend() StorageFrontend {
 	}
 }
 
-// ToFrontend converts a CephCluster to CephClusterFrontend
-func (c CephCluster) ToFrontend() CephClusterFrontend {
-	frontend := CephClusterFrontend{
-		ID:             c.ID,
-		Instance:       c.Instance,
-		Name:           c.Name,
-		FSID:           c.FSID,
-		Health:         c.Health,
-		HealthMessage:  c.HealthMessage,
-		TotalBytes:     c.TotalBytes,
-		UsedBytes:      c.UsedBytes,
-		AvailableBytes: c.AvailableBytes,
-		UsagePercent:   c.UsagePercent,
-		NumMons:        c.NumMons,
-		NumMgrs:        c.NumMgrs,
-		NumOSDs:        c.NumOSDs,
-		NumOSDsUp:      c.NumOSDsUp,
-		NumOSDsIn:      c.NumOSDsIn,
-		NumPGs:         c.NumPGs,
-		LastUpdated:    c.LastUpdated.Unix() * 1000,
-	}
-
-	if len(c.Pools) > 0 {
-		frontend.Pools = append([]CephPool(nil), c.Pools...)
-	}
-
-	if len(c.Services) > 0 {
-		frontend.Services = append([]CephServiceStatus(nil), c.Services...)
-	}
-
-	return frontend
-}
-
 // ToFrontend converts a replication job to a frontend representation.
 func (r ReplicationJob) ToFrontend() ReplicationJobFrontend {
 	frontend := ReplicationJobFrontend{

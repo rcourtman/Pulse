@@ -815,8 +815,6 @@ func TestWebsocketPayloadContractShape(t *testing.T) {
 		RemovedDockerHosts: []models.RemovedDockerHostFrontend{{ID: "removed-docker-host-1"}},
 		Hosts:              []models.HostFrontend{{ID: "host-1", DisplayName: "Host 1"}},
 		Storage:            []models.StorageFrontend{{ID: "storage-1", Name: "local"}},
-		CephClusters:       []models.CephClusterFrontend{{ID: "ceph-1", Name: "ceph"}},
-		PhysicalDisks:      []models.PhysicalDisk{{ID: "disk-1"}},
 		PBS:                []models.PBSInstance{{ID: "pbs-1", Name: "pbs-1"}},
 		PMG:                []models.PMGInstance{{ID: "pmg-1", Name: "pmg-1"}},
 		Backups: models.Backups{
@@ -852,8 +850,6 @@ func TestWebsocketPayloadContractShape(t *testing.T) {
 		"removedDockerHosts",
 		"hosts",
 		"storage",
-		"cephClusters",
-		"physicalDisks",
 		"resources",
 		"pbs",
 		"pmg",
@@ -941,8 +937,6 @@ func TestWebsocketLegacyCompatMode(t *testing.T) {
 		RemovedDockerHosts: []models.RemovedDockerHostFrontend{{ID: "removed-docker-host-1"}},
 		Hosts:              []models.HostFrontend{{ID: "host-1", DisplayName: "Host 1"}},
 		Storage:            []models.StorageFrontend{{ID: "storage-1", Name: "local"}},
-		CephClusters:       []models.CephClusterFrontend{{ID: "ceph-1", Name: "ceph"}},
-		PhysicalDisks:      []models.PhysicalDisk{{ID: "disk-1"}},
 		PBS:                []models.PBSInstance{{ID: "pbs-1", Name: "pbs-1"}},
 		PMG:                []models.PMGInstance{{ID: "pmg-1", Name: "pmg-1"}},
 		Backups: models.Backups{
@@ -990,8 +984,6 @@ func TestWebsocketLegacyCompatMode(t *testing.T) {
 		"removedDockerHosts",
 		"hosts",
 		"storage",
-		"cephClusters",
-		"physicalDisks",
 	}
 	for _, key := range strippedLegacyKeys {
 		val, ok := strippedPayload[key]

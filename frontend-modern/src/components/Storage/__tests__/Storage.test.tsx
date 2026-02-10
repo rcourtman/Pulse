@@ -15,9 +15,7 @@ let wsActiveAlerts: Record<string, Alert> = {};
 let wsState: any = {
   resources: [] as Resource[],
   storage: [],
-  cephClusters: [],
   pbs: [],
-  physicalDisks: [],
 };
 const reconnectSpy = vi.fn();
 
@@ -188,9 +186,7 @@ describe('Storage', () => {
     wsState = {
       resources: [],
       storage: [],
-      cephClusters: [],
       pbs: [],
-      physicalDisks: [],
     };
     nodeResources = [
       {

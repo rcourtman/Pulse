@@ -12,8 +12,6 @@ const baseState = (overrides: Partial<State> = {}): State =>
     hosts: [],
     replicationJobs: [],
     storage: [],
-    cephClusters: [],
-    physicalDisks: [],
     pbs: [],
     pmg: [],
     pbsBackups: [],

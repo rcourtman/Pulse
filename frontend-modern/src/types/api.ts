@@ -13,8 +13,6 @@ export interface State {
   hosts: Host[];
   replicationJobs: ReplicationJob[];
   storage: Storage[];
-  cephClusters: CephCluster[];
-  physicalDisks: PhysicalDisk[];
   pbs: PBSInstance[];
   pmg: PMGInstance[];
   pbsBackups: PBSBackup[];

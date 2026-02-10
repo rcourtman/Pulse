@@ -345,8 +345,6 @@ function App() {
     removedDockerHosts: [],
     hosts: [],
     storage: [],
-    cephClusters: [],
-    physicalDisks: [],
     pbs: [],
     pmg: [],
     replicationJobs: [],

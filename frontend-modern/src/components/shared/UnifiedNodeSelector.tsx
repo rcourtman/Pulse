@@ -69,13 +69,13 @@ export const UnifiedNodeSelector: Component<UnifiedNodeSelectorProps> = (props) 
     return counts;
   });
 
-  // Physical disks are NOT unified resources — compute from legacy state
+  // Physical disks now come from unified resources
   const diskCounts = createMemo(() => {
     const counts: Record<string, number> = {};
-    const nodes = props.nodes || state.nodes || [];
-    (state.physicalDisks ?? []).forEach((disk) => {
-      const node = nodes.find(n => n.instance === disk.instance && n.name === disk.node);
-      if (node) counts[node.id] = (counts[node.id] || 0) + 1;
+    byType('physical_disk').forEach((disk) => {
+      if (disk.parentId) {
+        counts[disk.parentId] = (counts[disk.parentId] || 0) + 1;
+      }
     });
     return counts;
   });

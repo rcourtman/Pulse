@@ -574,8 +574,6 @@ type StateFrontend struct {
 	RemovedKubernetesClusters    []RemovedKubernetesClusterFrontend `json:"removedKubernetesClusters"`
 	Hosts                        []HostFrontend                     `json:"hosts"`
 	Storage                      []StorageFrontend                  `json:"storage"`
-	CephClusters                 []CephClusterFrontend              `json:"cephClusters"`
-	PhysicalDisks                []PhysicalDisk                     `json:"physicalDisks"`
 	PBS                          []PBSInstance                      `json:"pbs"` // Keep as is
 	PMG                          []PMGInstance                      `json:"pmg"`
 	PBSBackups                   []PBSBackup                        `json:"pbsBackups"`
@@ -608,8 +606,6 @@ func (s *StateFrontend) StripLegacyArrays() {
 	s.RemovedDockerHosts = nil
 	s.Hosts = nil
 	s.Storage = nil
-	s.CephClusters = nil
-	s.PhysicalDisks = nil
 	// Keep PBS, PMG, and Backups fields while they are not fully migrated.
 }
 
