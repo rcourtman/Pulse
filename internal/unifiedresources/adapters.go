@@ -88,6 +88,82 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 		LinkedContainerID: host.LinkedContainerID,
 	}
 
+	// Populate sensors
+	if len(host.Sensors.TemperatureCelsius) > 0 || len(host.Sensors.FanRPM) > 0 || len(host.Sensors.SMART) > 0 {
+		sensorMeta := &HostSensorMeta{}
+		if len(host.Sensors.TemperatureCelsius) > 0 {
+			sensorMeta.TemperatureCelsius = make(map[string]float64, len(host.Sensors.TemperatureCelsius))
+			for k, v := range host.Sensors.TemperatureCelsius {
+				sensorMeta.TemperatureCelsius[k] = v
+			}
+		}
+		if len(host.Sensors.FanRPM) > 0 {
+			sensorMeta.FanRPM = make(map[string]float64, len(host.Sensors.FanRPM))
+			for k, v := range host.Sensors.FanRPM {
+				sensorMeta.FanRPM[k] = v
+			}
+		}
+		if len(host.Sensors.SMART) > 0 {
+			sensorMeta.SMART = make([]HostSMARTMeta, len(host.Sensors.SMART))
+			for i, s := range host.Sensors.SMART {
+				sensorMeta.SMART[i] = HostSMARTMeta{
+					Device:      s.Device,
+					Model:       s.Model,
+					Serial:      s.Serial,
+					Temperature: s.Temperature,
+					Health:      s.Health,
+				}
+			}
+		}
+		agent.Sensors = sensorMeta
+	}
+
+	// Populate RAID
+	if len(host.RAID) > 0 {
+		raid := make([]HostRAIDMeta, len(host.RAID))
+		for i, r := range host.RAID {
+			raid[i] = HostRAIDMeta{
+				Device:     r.Device,
+				Name:       r.Name,
+				Level:      r.Level,
+				State:      r.State,
+				Total:      r.TotalDevices,
+				Active:     r.ActiveDevices,
+				Failed:     r.FailedDevices,
+				RebuildPct: r.RebuildPercent,
+			}
+		}
+		agent.RAID = raid
+	}
+
+	// Populate DiskIO
+	if len(host.DiskIO) > 0 {
+		diskIO := make([]HostDiskIOMeta, len(host.DiskIO))
+		for i, d := range host.DiskIO {
+			diskIO[i] = HostDiskIOMeta{
+				Device:     d.Device,
+				ReadBytes:  d.ReadBytes,
+				WriteBytes: d.WriteBytes,
+				ReadOps:    d.ReadOps,
+				WriteOps:   d.WriteOps,
+			}
+		}
+		agent.DiskIO = diskIO
+	}
+
+	// Populate Ceph
+	if host.Ceph != nil {
+		agent.Ceph = &HostCephMeta{
+			FSID:         host.Ceph.FSID,
+			HealthStatus: host.Ceph.Health.Status,
+			NumOSDs:      host.Ceph.OSDMap.NumOSDs,
+			NumOSDsUp:    host.Ceph.OSDMap.NumUp,
+			NumOSDsIn:    host.Ceph.OSDMap.NumIn,
+			NumPGs:       host.Ceph.PGMap.NumPGs,
+			UsagePercent: host.Ceph.PGMap.UsagePercent,
+		}
+	}
+
 	metrics := metricsFromHost(host)
 
 	resource := Resource{
@@ -183,6 +259,23 @@ func resourceFromPBSInstance(instance models.PBSInstance) (Resource, ResourceIde
 		},
 	}
 
+	if len(instance.Datastores) > 0 {
+		datastores := make([]PBSDatastoreMeta, len(instance.Datastores))
+		for i, ds := range instance.Datastores {
+			datastores[i] = PBSDatastoreMeta{
+				Name:                ds.Name,
+				Total:               ds.Total,
+				Used:                ds.Used,
+				Available:           ds.Free,
+				UsagePercent:        ds.Usage,
+				Status:              ds.Status,
+				Error:               ds.Error,
+				DeduplicationFactor: ds.DeduplicationFactor,
+			}
+		}
+		resource.PBS.Datastores = datastores
+	}
+
 	identity := ResourceIdentity{
 		Hostnames: uniqueStrings([]string{
 			instance.Name,
@@ -227,6 +320,72 @@ func resourceFromPMGInstance(instance models.PMGInstance) (Resource, ResourceIde
 	resource.PMG.QueueHold = queue.Hold
 	resource.PMG.QueueIncoming = queue.Incoming
 	resource.PMG.QueueTotal = queue.Total
+
+	// Populate per-node data
+	if len(instance.Nodes) > 0 {
+		nodes := make([]PMGNodeMeta, len(instance.Nodes))
+		for i, n := range instance.Nodes {
+			nodes[i] = PMGNodeMeta{
+				Name:    n.Name,
+				Status:  n.Status,
+				Role:    n.Role,
+				Uptime:  n.Uptime,
+				LoadAvg: n.LoadAvg,
+			}
+			if n.QueueStatus != nil {
+				nodes[i].QueueStatus = &PMGQueueMeta{
+					Active:   n.QueueStatus.Active,
+					Deferred: n.QueueStatus.Deferred,
+					Hold:     n.QueueStatus.Hold,
+					Incoming: n.QueueStatus.Incoming,
+					Total:    n.QueueStatus.Total,
+				}
+			}
+		}
+		resource.PMG.Nodes = nodes
+	}
+
+	// Populate mail stats
+	if instance.MailStats != nil {
+		resource.PMG.MailStats = &PMGMailStatsMeta{
+			Timeframe:            instance.MailStats.Timeframe,
+			CountIn:              instance.MailStats.CountIn,
+			CountOut:             instance.MailStats.CountOut,
+			SpamIn:               instance.MailStats.SpamIn,
+			SpamOut:              instance.MailStats.SpamOut,
+			VirusIn:              instance.MailStats.VirusIn,
+			VirusOut:             instance.MailStats.VirusOut,
+			BouncesIn:            instance.MailStats.BouncesIn,
+			BouncesOut:           instance.MailStats.BouncesOut,
+			BytesIn:              instance.MailStats.BytesIn,
+			BytesOut:             instance.MailStats.BytesOut,
+			GreylistCount:        instance.MailStats.GreylistCount,
+			RBLRejects:           instance.MailStats.RBLRejects,
+			AverageProcessTimeMs: instance.MailStats.AverageProcessTimeMs,
+		}
+	}
+
+	// Populate quarantine
+	if instance.Quarantine != nil {
+		resource.PMG.Quarantine = &PMGQuarantineMeta{
+			Spam:        instance.Quarantine.Spam,
+			Virus:       instance.Quarantine.Virus,
+			Attachment:  instance.Quarantine.Attachment,
+			Blacklisted: instance.Quarantine.Blacklisted,
+		}
+	}
+
+	// Populate spam distribution
+	if len(instance.SpamDistribution) > 0 {
+		buckets := make([]PMGSpamBucketMeta, len(instance.SpamDistribution))
+		for i, b := range instance.SpamDistribution {
+			buckets[i] = PMGSpamBucketMeta{
+				Bucket: b.Score,
+				Count:  b.Count,
+			}
+		}
+		resource.PMG.SpamDistribution = buckets
+	}
 
 	identity := ResourceIdentity{
 		Hostnames: uniqueStrings([]string{
@@ -574,6 +733,57 @@ func isZFSStorageType(storageType string) bool {
 
 func resourceFromDockerContainer(ct models.DockerContainer) (Resource, ResourceIdentity) {
 	metrics := metricsFromDockerContainer(ct)
+	docker := &DockerData{
+		ContainerID:    ct.ID,
+		Image:          ct.Image,
+		UptimeSeconds:  ct.UptimeSeconds,
+		ContainerState: ct.State,
+		Health:         ct.Health,
+		RestartCount:   ct.RestartCount,
+		ExitCode:       ct.ExitCode,
+		Labels:         cloneLabelMap(ct.Labels),
+	}
+	if len(ct.Ports) > 0 {
+		docker.Ports = make([]DockerPortMeta, len(ct.Ports))
+		for i, p := range ct.Ports {
+			docker.Ports[i] = DockerPortMeta{
+				PrivatePort: p.PrivatePort,
+				PublicPort:  p.PublicPort,
+				Protocol:    p.Protocol,
+				IP:          p.IP,
+			}
+		}
+	}
+	if len(ct.Networks) > 0 {
+		docker.Networks = make([]DockerNetworkMeta, len(ct.Networks))
+		for i, n := range ct.Networks {
+			docker.Networks[i] = DockerNetworkMeta{
+				Name: n.Name,
+				IPv4: n.IPv4,
+				IPv6: n.IPv6,
+			}
+		}
+	}
+	if len(ct.Mounts) > 0 {
+		docker.Mounts = make([]DockerMountMeta, len(ct.Mounts))
+		for i, m := range ct.Mounts {
+			docker.Mounts[i] = DockerMountMeta{
+				Type:        m.Type,
+				Source:      m.Source,
+				Destination: m.Destination,
+				Mode:        m.Mode,
+				RW:          m.RW,
+			}
+		}
+	}
+	if ct.UpdateStatus != nil {
+		docker.UpdateStatus = &DockerUpdateStatusMeta{
+			UpdateAvailable: ct.UpdateStatus.UpdateAvailable,
+			CurrentDigest:   ct.UpdateStatus.CurrentDigest,
+			LatestDigest:    ct.UpdateStatus.LatestDigest,
+			Error:           ct.UpdateStatus.Error,
+		}
+	}
 	resource := Resource{
 		Type:      ResourceTypeContainer,
 		Name:      ct.Name,
@@ -581,8 +791,8 @@ func resourceFromDockerContainer(ct models.DockerContainer) (Resource, ResourceI
 		LastSeen:  time.Now().UTC(),
 		UpdatedAt: time.Now().UTC(),
 		Metrics:   metrics,
-		Docker:    &DockerData{ContainerID: ct.ID, Image: ct.Image, UptimeSeconds: ct.UptimeSeconds},
 	}
+	resource.Docker = docker
 	identity := ResourceIdentity{
 		Hostnames: uniqueStrings([]string{ct.Name}),
 	}

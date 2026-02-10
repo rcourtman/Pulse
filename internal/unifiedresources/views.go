@@ -774,6 +774,34 @@ func (v HostView) DiskPercent() float64 {
 	return viewMetricPercent(v.r.Metrics, selectMetricsDisk)
 }
 
+func (v HostView) Sensors() *HostSensorMeta {
+	if v.r == nil || v.r.Agent == nil {
+		return nil
+	}
+	return v.r.Agent.Sensors
+}
+
+func (v HostView) RAID() []HostRAIDMeta {
+	if v.r == nil || v.r.Agent == nil {
+		return nil
+	}
+	return v.r.Agent.RAID
+}
+
+func (v HostView) DiskIO() []HostDiskIOMeta {
+	if v.r == nil || v.r.Agent == nil {
+		return nil
+	}
+	return v.r.Agent.DiskIO
+}
+
+func (v HostView) Ceph() *HostCephMeta {
+	if v.r == nil || v.r.Agent == nil {
+		return nil
+	}
+	return v.r.Agent.Ceph
+}
+
 // DockerHostView wraps a host-type resource with Docker data.
 type DockerHostView struct{ r *Resource }
 
@@ -1155,6 +1183,13 @@ func (v PBSInstanceView) DatastoreCount() int {
 	return v.r.PBS.DatastoreCount
 }
 
+func (v PBSInstanceView) Datastores() []PBSDatastoreMeta {
+	if v.r == nil || v.r.PBS == nil {
+		return nil
+	}
+	return v.r.PBS.Datastores
+}
+
 func (v PBSInstanceView) BackupJobCount() int {
 	if v.r == nil || v.r.PBS == nil {
 		return 0
@@ -1393,6 +1428,34 @@ func (v PMGInstanceView) CustomURL() string {
 		return ""
 	}
 	return v.r.CustomURL
+}
+
+func (v PMGInstanceView) Nodes() []PMGNodeMeta {
+	if v.r == nil || v.r.PMG == nil {
+		return nil
+	}
+	return v.r.PMG.Nodes
+}
+
+func (v PMGInstanceView) MailStats() *PMGMailStatsMeta {
+	if v.r == nil || v.r.PMG == nil {
+		return nil
+	}
+	return v.r.PMG.MailStats
+}
+
+func (v PMGInstanceView) Quarantine() *PMGQuarantineMeta {
+	if v.r == nil || v.r.PMG == nil {
+		return nil
+	}
+	return v.r.PMG.Quarantine
+}
+
+func (v PMGInstanceView) SpamDistribution() []PMGSpamBucketMeta {
+	if v.r == nil || v.r.PMG == nil {
+		return nil
+	}
+	return v.r.PMG.SpamDistribution
 }
 
 // K8sClusterView wraps a Kubernetes cluster resource.
@@ -1694,4 +1757,582 @@ func (v InfrastructureView) ChildCount() int {
 		return 0
 	}
 	return v.r.ChildCount
+}
+
+// K8sNodeView wraps a Kubernetes node resource (ResourceTypeK8sNode).
+type K8sNodeView struct{ r *Resource }
+
+func NewK8sNodeView(r *Resource) K8sNodeView { return K8sNodeView{r: r} }
+
+func (v K8sNodeView) String() string { return fmt.Sprintf("K8sNodeView(%s, %q)", v.ID(), v.Name()) }
+
+func (v K8sNodeView) ID() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.ID
+}
+
+func (v K8sNodeView) Name() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.Name
+}
+
+func (v K8sNodeView) Status() ResourceStatus {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.Status
+}
+
+func (v K8sNodeView) ClusterName() string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return ""
+	}
+	return v.r.Kubernetes.ClusterName
+}
+
+func (v K8sNodeView) NodeUID() string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return ""
+	}
+	return v.r.Kubernetes.NodeUID
+}
+
+func (v K8sNodeView) NodeName() string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return ""
+	}
+	return v.r.Kubernetes.NodeName
+}
+
+func (v K8sNodeView) Ready() bool {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return false
+	}
+	return v.r.Kubernetes.Ready
+}
+
+func (v K8sNodeView) Unschedulable() bool {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return false
+	}
+	return v.r.Kubernetes.Unschedulable
+}
+
+func (v K8sNodeView) Roles() []string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return nil
+	}
+	return v.r.Kubernetes.Roles
+}
+
+func (v K8sNodeView) KubeletVersion() string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return ""
+	}
+	return v.r.Kubernetes.KubeletVersion
+}
+
+func (v K8sNodeView) ContainerRuntimeVersion() string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return ""
+	}
+	return v.r.Kubernetes.ContainerRuntimeVersion
+}
+
+func (v K8sNodeView) OSImage() string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return ""
+	}
+	return v.r.Kubernetes.OSImage
+}
+
+func (v K8sNodeView) KernelVersion() string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return ""
+	}
+	return v.r.Kubernetes.KernelVersion
+}
+
+func (v K8sNodeView) Architecture() string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return ""
+	}
+	return v.r.Kubernetes.Architecture
+}
+
+func (v K8sNodeView) CapacityCPU() int64 {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return 0
+	}
+	return v.r.Kubernetes.CapacityCPU
+}
+
+func (v K8sNodeView) CapacityMemoryBytes() int64 {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return 0
+	}
+	return v.r.Kubernetes.CapacityMemoryBytes
+}
+
+func (v K8sNodeView) CapacityPods() int64 {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return 0
+	}
+	return v.r.Kubernetes.CapacityPods
+}
+
+func (v K8sNodeView) AllocCPU() int64 {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return 0
+	}
+	return v.r.Kubernetes.AllocCPU
+}
+
+func (v K8sNodeView) AllocMemoryBytes() int64 {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return 0
+	}
+	return v.r.Kubernetes.AllocMemoryBytes
+}
+
+func (v K8sNodeView) AllocPods() int64 {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return 0
+	}
+	return v.r.Kubernetes.AllocPods
+}
+
+func (v K8sNodeView) CPUPercent() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricPercent(v.r.Metrics, selectMetricsCPU)
+}
+
+func (v K8sNodeView) MemoryPercent() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricPercent(v.r.Metrics, selectMetricsMemory)
+}
+
+func (v K8sNodeView) Tags() []string {
+	if v.r == nil {
+		return nil
+	}
+	return v.r.Tags
+}
+
+func (v K8sNodeView) LastSeen() time.Time {
+	if v.r == nil {
+		return time.Time{}
+	}
+	return v.r.LastSeen
+}
+
+func (v K8sNodeView) ParentID() string {
+	if v.r == nil || v.r.ParentID == nil {
+		return ""
+	}
+	return *v.r.ParentID
+}
+
+// PodView wraps a Pod resource (ResourceTypePod).
+type PodView struct{ r *Resource }
+
+func NewPodView(r *Resource) PodView { return PodView{r: r} }
+
+func (v PodView) String() string { return fmt.Sprintf("PodView(%s, %q)", v.ID(), v.Name()) }
+
+func (v PodView) ID() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.ID
+}
+
+func (v PodView) Name() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.Name
+}
+
+func (v PodView) Status() ResourceStatus {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.Status
+}
+
+func (v PodView) ClusterName() string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return ""
+	}
+	return v.r.Kubernetes.ClusterName
+}
+
+func (v PodView) Namespace() string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return ""
+	}
+	return v.r.Kubernetes.Namespace
+}
+
+func (v PodView) PodUID() string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return ""
+	}
+	return v.r.Kubernetes.PodUID
+}
+
+func (v PodView) PodPhase() string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return ""
+	}
+	return v.r.Kubernetes.PodPhase
+}
+
+func (v PodView) Restarts() int {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return 0
+	}
+	return v.r.Kubernetes.Restarts
+}
+
+func (v PodView) OwnerKind() string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return ""
+	}
+	return v.r.Kubernetes.OwnerKind
+}
+
+func (v PodView) OwnerName() string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return ""
+	}
+	return v.r.Kubernetes.OwnerName
+}
+
+func (v PodView) Image() string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return ""
+	}
+	return v.r.Kubernetes.Image
+}
+
+func (v PodView) Labels() map[string]string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return nil
+	}
+	return v.r.Kubernetes.Labels
+}
+
+func (v PodView) CPUPercent() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricPercent(v.r.Metrics, selectMetricsCPU)
+}
+
+func (v PodView) MemoryPercent() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricPercent(v.r.Metrics, selectMetricsMemory)
+}
+
+func (v PodView) Tags() []string {
+	if v.r == nil {
+		return nil
+	}
+	return v.r.Tags
+}
+
+func (v PodView) LastSeen() time.Time {
+	if v.r == nil {
+		return time.Time{}
+	}
+	return v.r.LastSeen
+}
+
+func (v PodView) ParentID() string {
+	if v.r == nil || v.r.ParentID == nil {
+		return ""
+	}
+	return *v.r.ParentID
+}
+
+// K8sDeploymentView wraps a Kubernetes deployment resource (ResourceTypeK8sDeployment).
+type K8sDeploymentView struct{ r *Resource }
+
+func NewK8sDeploymentView(r *Resource) K8sDeploymentView { return K8sDeploymentView{r: r} }
+
+func (v K8sDeploymentView) String() string {
+	return fmt.Sprintf("K8sDeploymentView(%s, %q)", v.ID(), v.Name())
+}
+
+func (v K8sDeploymentView) ID() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.ID
+}
+
+func (v K8sDeploymentView) Name() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.Name
+}
+
+func (v K8sDeploymentView) Status() ResourceStatus {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.Status
+}
+
+func (v K8sDeploymentView) ClusterName() string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return ""
+	}
+	return v.r.Kubernetes.ClusterName
+}
+
+func (v K8sDeploymentView) Namespace() string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return ""
+	}
+	return v.r.Kubernetes.Namespace
+}
+
+func (v K8sDeploymentView) DeploymentUID() string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return ""
+	}
+	return v.r.Kubernetes.DeploymentUID
+}
+
+func (v K8sDeploymentView) DesiredReplicas() int32 {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return 0
+	}
+	return v.r.Kubernetes.DesiredReplicas
+}
+
+func (v K8sDeploymentView) UpdatedReplicas() int32 {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return 0
+	}
+	return v.r.Kubernetes.UpdatedReplicas
+}
+
+func (v K8sDeploymentView) ReadyReplicas() int32 {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return 0
+	}
+	return v.r.Kubernetes.ReadyReplicas
+}
+
+func (v K8sDeploymentView) AvailableReplicas() int32 {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return 0
+	}
+	return v.r.Kubernetes.AvailableReplicas
+}
+
+func (v K8sDeploymentView) Labels() map[string]string {
+	if v.r == nil || v.r.Kubernetes == nil {
+		return nil
+	}
+	return v.r.Kubernetes.Labels
+}
+
+func (v K8sDeploymentView) Tags() []string {
+	if v.r == nil {
+		return nil
+	}
+	return v.r.Tags
+}
+
+func (v K8sDeploymentView) LastSeen() time.Time {
+	if v.r == nil {
+		return time.Time{}
+	}
+	return v.r.LastSeen
+}
+
+func (v K8sDeploymentView) ParentID() string {
+	if v.r == nil || v.r.ParentID == nil {
+		return ""
+	}
+	return *v.r.ParentID
+}
+
+// DockerContainerView wraps a Docker container resource (ResourceTypeContainer).
+type DockerContainerView struct{ r *Resource }
+
+func NewDockerContainerView(r *Resource) DockerContainerView { return DockerContainerView{r: r} }
+
+func (v DockerContainerView) String() string {
+	return fmt.Sprintf("DockerContainerView(%s, %q)", v.ID(), v.Name())
+}
+
+func (v DockerContainerView) ID() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.ID
+}
+
+func (v DockerContainerView) Name() string {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.Name
+}
+
+func (v DockerContainerView) Status() ResourceStatus {
+	if v.r == nil {
+		return ""
+	}
+	return v.r.Status
+}
+
+func (v DockerContainerView) ContainerID() string {
+	if v.r == nil || v.r.Docker == nil {
+		return ""
+	}
+	return v.r.Docker.ContainerID
+}
+
+func (v DockerContainerView) Image() string {
+	if v.r == nil || v.r.Docker == nil {
+		return ""
+	}
+	return v.r.Docker.Image
+}
+
+func (v DockerContainerView) ContainerState() string {
+	if v.r == nil || v.r.Docker == nil {
+		return ""
+	}
+	return v.r.Docker.ContainerState
+}
+
+func (v DockerContainerView) Health() string {
+	if v.r == nil || v.r.Docker == nil {
+		return ""
+	}
+	return v.r.Docker.Health
+}
+
+func (v DockerContainerView) RestartCount() int {
+	if v.r == nil || v.r.Docker == nil {
+		return 0
+	}
+	return v.r.Docker.RestartCount
+}
+
+func (v DockerContainerView) ExitCode() int {
+	if v.r == nil || v.r.Docker == nil {
+		return 0
+	}
+	return v.r.Docker.ExitCode
+}
+
+func (v DockerContainerView) CPUPercent() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricPercent(v.r.Metrics, selectMetricsCPU)
+}
+
+func (v DockerContainerView) MemoryUsed() int64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricUsed(v.r.Metrics, selectMetricsMemory)
+}
+
+func (v DockerContainerView) MemoryTotal() int64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricTotal(v.r.Metrics, selectMetricsMemory)
+}
+
+func (v DockerContainerView) MemoryPercent() float64 {
+	if v.r == nil {
+		return 0
+	}
+	return viewMetricPercent(v.r.Metrics, selectMetricsMemory)
+}
+
+func (v DockerContainerView) UptimeSeconds() int64 {
+	if v.r == nil || v.r.Docker == nil {
+		return 0
+	}
+	return v.r.Docker.UptimeSeconds
+}
+
+func (v DockerContainerView) Ports() []DockerPortMeta {
+	if v.r == nil || v.r.Docker == nil {
+		return nil
+	}
+	return v.r.Docker.Ports
+}
+
+func (v DockerContainerView) Labels() map[string]string {
+	if v.r == nil || v.r.Docker == nil {
+		return nil
+	}
+	return v.r.Docker.Labels
+}
+
+func (v DockerContainerView) Networks() []DockerNetworkMeta {
+	if v.r == nil || v.r.Docker == nil {
+		return nil
+	}
+	return v.r.Docker.Networks
+}
+
+func (v DockerContainerView) Mounts() []DockerMountMeta {
+	if v.r == nil || v.r.Docker == nil {
+		return nil
+	}
+	return v.r.Docker.Mounts
+}
+
+func (v DockerContainerView) UpdateStatus() *DockerUpdateStatusMeta {
+	if v.r == nil || v.r.Docker == nil {
+		return nil
+	}
+	return v.r.Docker.UpdateStatus
+}
+
+func (v DockerContainerView) ParentID() string {
+	if v.r == nil || v.r.ParentID == nil {
+		return ""
+	}
+	return *v.r.ParentID
+}
+
+func (v DockerContainerView) Tags() []string {
+	if v.r == nil {
+		return nil
+	}
+	return v.r.Tags
+}
+
+func (v DockerContainerView) LastSeen() time.Time {
+	if v.r == nil {
+		return time.Time{}
+	}
+	return v.r.LastSeen
 }

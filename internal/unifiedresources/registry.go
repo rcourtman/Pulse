@@ -45,18 +45,22 @@ type ResourceRegistry struct {
 	// Cached typed view indexes. Invalidated on ingest, rebuilt lazily on
 	// first access. Protected by mu — callers hold RLock to read, and the
 	// rebuild path upgrades to a write lock only when needed.
-	viewsDirty     bool
-	cachedVMs      []*VMView
-	cachedLXC      []*ContainerView
-	cachedNodes    []*NodeView
-	cachedHosts    []*HostView
-	cachedDocker   []*DockerHostView
-	cachedStorage  []*StoragePoolView
-	cachedPBS      []*PBSInstanceView
-	cachedPMG      []*PMGInstanceView
-	cachedK8s      []*K8sClusterView
-	cachedWorkload []*WorkloadView
-	cachedInfra    []*InfrastructureView
+	viewsDirty             bool
+	cachedVMs              []*VMView
+	cachedLXC              []*ContainerView
+	cachedNodes            []*NodeView
+	cachedHosts            []*HostView
+	cachedDocker           []*DockerHostView
+	cachedDockerContainers []*DockerContainerView
+	cachedStorage          []*StoragePoolView
+	cachedPBS              []*PBSInstanceView
+	cachedPMG              []*PMGInstanceView
+	cachedK8s              []*K8sClusterView
+	cachedK8sNodes         []*K8sNodeView
+	cachedPods             []*PodView
+	cachedK8sDeployments   []*K8sDeploymentView
+	cachedWorkload         []*WorkloadView
+	cachedInfra            []*InfrastructureView
 }
 
 // NewRegistry creates a new registry using the provided store for overrides.
@@ -1063,10 +1067,14 @@ func (rr *ResourceRegistry) rebuildViews() {
 	rr.cachedNodes = nil
 	rr.cachedHosts = nil
 	rr.cachedDocker = nil
+	rr.cachedDockerContainers = nil
 	rr.cachedStorage = nil
 	rr.cachedPBS = nil
 	rr.cachedPMG = nil
 	rr.cachedK8s = nil
+	rr.cachedK8sNodes = nil
+	rr.cachedPods = nil
+	rr.cachedK8sDeployments = nil
 	rr.cachedWorkload = nil
 	rr.cachedInfra = nil
 
@@ -1082,6 +1090,9 @@ func (rr *ResourceRegistry) rebuildViews() {
 			rr.cachedLXC = append(rr.cachedLXC, &v)
 			w := NewWorkloadView(r)
 			rr.cachedWorkload = append(rr.cachedWorkload, &w)
+		case ResourceTypeContainer:
+			v := NewDockerContainerView(r)
+			rr.cachedDockerContainers = append(rr.cachedDockerContainers, &v)
 		case ResourceTypeHost:
 			inf := NewInfrastructureView(r)
 			rr.cachedInfra = append(rr.cachedInfra, &inf)
@@ -1109,6 +1120,15 @@ func (rr *ResourceRegistry) rebuildViews() {
 		case ResourceTypeK8sCluster:
 			v := NewK8sClusterView(r)
 			rr.cachedK8s = append(rr.cachedK8s, &v)
+		case ResourceTypeK8sNode:
+			v := NewK8sNodeView(r)
+			rr.cachedK8sNodes = append(rr.cachedK8sNodes, &v)
+		case ResourceTypePod:
+			v := NewPodView(r)
+			rr.cachedPods = append(rr.cachedPods, &v)
+		case ResourceTypeK8sDeployment:
+			v := NewK8sDeploymentView(r)
+			rr.cachedK8sDeployments = append(rr.cachedK8sDeployments, &v)
 		}
 	}
 
@@ -1118,10 +1138,14 @@ func (rr *ResourceRegistry) rebuildViews() {
 	sort.Slice(rr.cachedNodes, func(i, j int) bool { return rr.cachedNodes[i].Name() < rr.cachedNodes[j].Name() })
 	sort.Slice(rr.cachedHosts, func(i, j int) bool { return rr.cachedHosts[i].Name() < rr.cachedHosts[j].Name() })
 	sort.Slice(rr.cachedDocker, func(i, j int) bool { return rr.cachedDocker[i].Name() < rr.cachedDocker[j].Name() })
+	sort.Slice(rr.cachedDockerContainers, func(i, j int) bool { return rr.cachedDockerContainers[i].Name() < rr.cachedDockerContainers[j].Name() })
 	sort.Slice(rr.cachedStorage, func(i, j int) bool { return rr.cachedStorage[i].Name() < rr.cachedStorage[j].Name() })
 	sort.Slice(rr.cachedPBS, func(i, j int) bool { return rr.cachedPBS[i].Name() < rr.cachedPBS[j].Name() })
 	sort.Slice(rr.cachedPMG, func(i, j int) bool { return rr.cachedPMG[i].Name() < rr.cachedPMG[j].Name() })
 	sort.Slice(rr.cachedK8s, func(i, j int) bool { return rr.cachedK8s[i].Name() < rr.cachedK8s[j].Name() })
+	sort.Slice(rr.cachedK8sNodes, func(i, j int) bool { return rr.cachedK8sNodes[i].Name() < rr.cachedK8sNodes[j].Name() })
+	sort.Slice(rr.cachedPods, func(i, j int) bool { return rr.cachedPods[i].Name() < rr.cachedPods[j].Name() })
+	sort.Slice(rr.cachedK8sDeployments, func(i, j int) bool { return rr.cachedK8sDeployments[i].Name() < rr.cachedK8sDeployments[j].Name() })
 	sort.Slice(rr.cachedWorkload, func(i, j int) bool { return rr.cachedWorkload[i].Name() < rr.cachedWorkload[j].Name() })
 	sort.Slice(rr.cachedInfra, func(i, j int) bool { return rr.cachedInfra[i].Name() < rr.cachedInfra[j].Name() })
 
@@ -1156,6 +1180,10 @@ func (rr *ResourceRegistry) DockerHosts() []*DockerHostView {
 	return withViewCache(rr, func() []*DockerHostView { return rr.cachedDocker })
 }
 
+func (rr *ResourceRegistry) DockerContainers() []*DockerContainerView {
+	return withViewCache(rr, func() []*DockerContainerView { return rr.cachedDockerContainers })
+}
+
 // StoragePools returns cached storage pool views sorted by name.
 func (rr *ResourceRegistry) StoragePools() []*StoragePoolView {
 	return withViewCache(rr, func() []*StoragePoolView { return rr.cachedStorage })
@@ -1174,6 +1202,18 @@ func (rr *ResourceRegistry) PMGInstances() []*PMGInstanceView {
 // K8sClusters returns cached Kubernetes cluster views sorted by name.
 func (rr *ResourceRegistry) K8sClusters() []*K8sClusterView {
 	return withViewCache(rr, func() []*K8sClusterView { return rr.cachedK8s })
+}
+
+func (rr *ResourceRegistry) K8sNodes() []*K8sNodeView {
+	return withViewCache(rr, func() []*K8sNodeView { return rr.cachedK8sNodes })
+}
+
+func (rr *ResourceRegistry) Pods() []*PodView {
+	return withViewCache(rr, func() []*PodView { return rr.cachedPods })
+}
+
+func (rr *ResourceRegistry) K8sDeployments() []*K8sDeploymentView {
+	return withViewCache(rr, func() []*K8sDeploymentView { return rr.cachedK8sDeployments })
 }
 
 // Workloads returns a unified slice of VM + LXC container views sorted by name.

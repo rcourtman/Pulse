@@ -248,6 +248,54 @@ type SMARTMeta struct {
 	UnsafeShutdowns      int64 `json:"unsafeShutdowns,omitempty"`
 }
 
+// HostSensorMeta contains host sensor readings.
+type HostSensorMeta struct {
+	TemperatureCelsius map[string]float64 `json:"temperatureCelsius,omitempty"`
+	FanRPM             map[string]float64 `json:"fanRpm,omitempty"`
+	SMART              []HostSMARTMeta    `json:"smart,omitempty"`
+}
+
+// HostSMARTMeta describes a disk's SMART data.
+type HostSMARTMeta struct {
+	Device      string `json:"device"`
+	Model       string `json:"model,omitempty"`
+	Serial      string `json:"serial,omitempty"`
+	Temperature int    `json:"temperature"`
+	Health      string `json:"health"`
+}
+
+// HostRAIDMeta describes a RAID array.
+type HostRAIDMeta struct {
+	Device     string  `json:"device"`
+	Name       string  `json:"name,omitempty"`
+	Level      string  `json:"level"`
+	State      string  `json:"state"`
+	Total      int     `json:"total"`
+	Active     int     `json:"active"`
+	Failed     int     `json:"failed"`
+	RebuildPct float64 `json:"rebuildPct,omitempty"`
+}
+
+// HostDiskIOMeta describes disk I/O counters.
+type HostDiskIOMeta struct {
+	Device     string `json:"device"`
+	ReadBytes  uint64 `json:"readBytes"`
+	WriteBytes uint64 `json:"writeBytes"`
+	ReadOps    uint64 `json:"readOps"`
+	WriteOps   uint64 `json:"writeOps"`
+}
+
+// HostCephMeta describes host-level Ceph cluster data.
+type HostCephMeta struct {
+	FSID         string  `json:"fsid"`
+	HealthStatus string  `json:"healthStatus"`
+	NumOSDs      int     `json:"numOsds"`
+	NumOSDsUp    int     `json:"numOsdsUp"`
+	NumOSDsIn    int     `json:"numOsdsIn"`
+	NumPGs       int     `json:"numPGs"`
+	UsagePercent float64 `json:"usagePercent"`
+}
+
 // AgentData contains host agent-specific data.
 type AgentData struct {
 	AgentID           string             `json:"agentId,omitempty"`
@@ -262,45 +310,159 @@ type AgentData struct {
 	Temperature       *float64           `json:"temperature,omitempty"` // Max CPU temp in Celsius
 	NetworkInterfaces []NetworkInterface `json:"networkInterfaces,omitempty"`
 	Disks             []DiskInfo         `json:"disks,omitempty"`
+	Sensors           *HostSensorMeta    `json:"sensors,omitempty"`
+	RAID              []HostRAIDMeta     `json:"raid,omitempty"`
+	DiskIO            []HostDiskIOMeta   `json:"diskIo,omitempty"`
+	Ceph              *HostCephMeta      `json:"ceph,omitempty"`
 	// Internal link hints to proxmox resources.
 	LinkedNodeID      string `json:"-"`
 	LinkedVMID        string `json:"-"`
 	LinkedContainerID string `json:"-"`
 }
 
-// DockerData contains Docker host-specific data.
+// DockerPortMeta describes a container port mapping.
+type DockerPortMeta struct {
+	PrivatePort int    `json:"privatePort"`
+	PublicPort  int    `json:"publicPort,omitempty"`
+	Protocol    string `json:"protocol"`
+	IP          string `json:"ip,omitempty"`
+}
+
+// DockerNetworkMeta describes a container network attachment.
+type DockerNetworkMeta struct {
+	Name string `json:"name"`
+	IPv4 string `json:"ipv4,omitempty"`
+	IPv6 string `json:"ipv6,omitempty"`
+}
+
+// DockerMountMeta describes a container volume mount.
+type DockerMountMeta struct {
+	Type        string `json:"type,omitempty"`
+	Source      string `json:"source,omitempty"`
+	Destination string `json:"destination,omitempty"`
+	Mode        string `json:"mode,omitempty"`
+	RW          bool   `json:"rw"`
+}
+
+// DockerUpdateStatusMeta describes container image update status.
+type DockerUpdateStatusMeta struct {
+	UpdateAvailable bool   `json:"updateAvailable"`
+	CurrentDigest   string `json:"currentDigest,omitempty"`
+	LatestDigest    string `json:"latestDigest,omitempty"`
+	Error           string `json:"error,omitempty"`
+}
+
+// DockerData contains Docker host- and container-specific data.
 type DockerData struct {
-	HostSourceID      string             `json:"hostSourceId,omitempty"` // raw model ID for the docker host
-	ContainerID       string             `json:"containerId,omitempty"`
-	Hostname          string             `json:"hostname,omitempty"`
-	Image             string             `json:"image,omitempty"`
-	Temperature       *float64           `json:"temperature,omitempty"`
-	Runtime           string             `json:"runtime,omitempty"`
-	RuntimeVersion    string             `json:"runtimeVersion,omitempty"`
-	DockerVersion     string             `json:"dockerVersion,omitempty"`
-	OS                string             `json:"os,omitempty"`
-	KernelVersion     string             `json:"kernelVersion,omitempty"`
-	Architecture      string             `json:"architecture,omitempty"`
-	AgentVersion      string             `json:"agentVersion,omitempty"`
-	UptimeSeconds     int64              `json:"uptimeSeconds,omitempty"`
+	HostSourceID   string   `json:"hostSourceId,omitempty"` // raw model ID for the docker host
+	ContainerID    string   `json:"containerId,omitempty"`
+	Hostname       string   `json:"hostname,omitempty"`
+	Image          string   `json:"image,omitempty"`
+	Temperature    *float64 `json:"temperature,omitempty"`
+	Runtime        string   `json:"runtime,omitempty"`
+	RuntimeVersion string   `json:"runtimeVersion,omitempty"`
+	DockerVersion  string   `json:"dockerVersion,omitempty"`
+	OS             string   `json:"os,omitempty"`
+	KernelVersion  string   `json:"kernelVersion,omitempty"`
+	Architecture   string   `json:"architecture,omitempty"`
+	AgentVersion   string   `json:"agentVersion,omitempty"`
+	UptimeSeconds  int64    `json:"uptimeSeconds,omitempty"`
+
+	// Container-specific fields (populated when Resource.Type == ResourceTypeContainer)
+	ContainerState string                  `json:"containerState,omitempty"`
+	Health         string                  `json:"health,omitempty"`
+	RestartCount   int                     `json:"restartCount,omitempty"`
+	ExitCode       int                     `json:"exitCode,omitempty"`
+	Ports          []DockerPortMeta        `json:"ports,omitempty"`
+	Labels         map[string]string       `json:"labels,omitempty"`
+	Networks       []DockerNetworkMeta     `json:"networks,omitempty"`
+	Mounts         []DockerMountMeta       `json:"mounts,omitempty"`
+	UpdateStatus   *DockerUpdateStatusMeta `json:"updateStatus,omitempty"`
+
 	Swarm             *DockerSwarmInfo   `json:"swarm,omitempty"`
 	NetworkInterfaces []NetworkInterface `json:"networkInterfaces,omitempty"`
 	Disks             []DiskInfo         `json:"disks,omitempty"`
 }
 
 // PBSData contains Proxmox Backup Server data.
+//
+// NOTE: Some tools need per-datastore details; those are exposed via Datastores.
 type PBSData struct {
-	InstanceID       string `json:"instanceId,omitempty"`
-	Hostname         string `json:"hostname,omitempty"`
-	Version          string `json:"version,omitempty"`
-	UptimeSeconds    int64  `json:"uptimeSeconds,omitempty"`
-	DatastoreCount   int    `json:"datastoreCount,omitempty"`
-	BackupJobCount   int    `json:"backupJobCount,omitempty"`
-	SyncJobCount     int    `json:"syncJobCount,omitempty"`
-	VerifyJobCount   int    `json:"verifyJobCount,omitempty"`
-	PruneJobCount    int    `json:"pruneJobCount,omitempty"`
-	GarbageJobCount  int    `json:"garbageJobCount,omitempty"`
-	ConnectionHealth string `json:"connectionHealth,omitempty"`
+	InstanceID       string             `json:"instanceId,omitempty"`
+	Hostname         string             `json:"hostname,omitempty"`
+	Version          string             `json:"version,omitempty"`
+	UptimeSeconds    int64              `json:"uptimeSeconds,omitempty"`
+	DatastoreCount   int                `json:"datastoreCount,omitempty"`
+	Datastores       []PBSDatastoreMeta `json:"datastores,omitempty"`
+	BackupJobCount   int                `json:"backupJobCount,omitempty"`
+	SyncJobCount     int                `json:"syncJobCount,omitempty"`
+	VerifyJobCount   int                `json:"verifyJobCount,omitempty"`
+	PruneJobCount    int                `json:"pruneJobCount,omitempty"`
+	GarbageJobCount  int                `json:"garbageJobCount,omitempty"`
+	ConnectionHealth string             `json:"connectionHealth,omitempty"`
+}
+
+// PBSDatastoreMeta describes a single PBS datastore.
+type PBSDatastoreMeta struct {
+	Name                string  `json:"name"`
+	Total               int64   `json:"total"`
+	Used                int64   `json:"used"`
+	Available           int64   `json:"available"`
+	UsagePercent        float64 `json:"usagePercent"`
+	Status              string  `json:"status"`
+	Error               string  `json:"error,omitempty"`
+	DeduplicationFactor float64 `json:"deduplicationFactor,omitempty"`
+}
+
+// PMGNodeMeta describes a PMG cluster node.
+type PMGNodeMeta struct {
+	Name        string        `json:"name"`
+	Status      string        `json:"status"`
+	Role        string        `json:"role,omitempty"`
+	Uptime      int64         `json:"uptime,omitempty"`
+	LoadAvg     string        `json:"loadAvg,omitempty"`
+	QueueStatus *PMGQueueMeta `json:"queueStatus,omitempty"`
+}
+
+// PMGQueueMeta describes a PMG node's postfix queue status.
+type PMGQueueMeta struct {
+	Active   int `json:"active"`
+	Deferred int `json:"deferred"`
+	Hold     int `json:"hold"`
+	Incoming int `json:"incoming"`
+	Total    int `json:"total"`
+}
+
+// PMGMailStatsMeta describes PMG mail statistics.
+type PMGMailStatsMeta struct {
+	Timeframe            string  `json:"timeframe"`
+	CountIn              float64 `json:"countIn"`
+	CountOut             float64 `json:"countOut"`
+	SpamIn               float64 `json:"spamIn"`
+	SpamOut              float64 `json:"spamOut"`
+	VirusIn              float64 `json:"virusIn"`
+	VirusOut             float64 `json:"virusOut"`
+	BouncesIn            float64 `json:"bouncesIn"`
+	BouncesOut           float64 `json:"bouncesOut"`
+	BytesIn              float64 `json:"bytesIn"`
+	BytesOut             float64 `json:"bytesOut"`
+	GreylistCount        float64 `json:"greylistCount"`
+	RBLRejects           float64 `json:"rblRejects"`
+	AverageProcessTimeMs float64 `json:"averageProcessTimeMs"`
+}
+
+// PMGQuarantineMeta describes PMG quarantine totals.
+type PMGQuarantineMeta struct {
+	Spam        int `json:"spam"`
+	Virus       int `json:"virus"`
+	Attachment  int `json:"attachment"`
+	Blacklisted int `json:"blacklisted"`
+}
+
+// PMGSpamBucketMeta describes a spam score distribution bucket.
+type PMGSpamBucketMeta struct {
+	Bucket string  `json:"bucket"`
+	Count  float64 `json:"count"`
 }
 
 // PMGData contains Proxmox Mail Gateway data.
@@ -320,6 +482,11 @@ type PMGData struct {
 	VirusIn          float64   `json:"virusIn,omitempty"`
 	ConnectionHealth string    `json:"connectionHealth,omitempty"`
 	LastUpdated      time.Time `json:"lastUpdated,omitempty"`
+
+	Nodes            []PMGNodeMeta       `json:"nodes,omitempty"`
+	MailStats        *PMGMailStatsMeta   `json:"mailStats,omitempty"`
+	Quarantine       *PMGQuarantineMeta  `json:"quarantine,omitempty"`
+	SpamDistribution []PMGSpamBucketMeta `json:"spamDistribution,omitempty"`
 }
 
 // K8sMetricCapabilities describes which Kubernetes metric families are available

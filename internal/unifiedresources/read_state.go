@@ -19,6 +19,7 @@ type ReadState interface {
 	Nodes() []*NodeView             // Proxmox nodes (host resources with Proxmox data)
 	Hosts() []*HostView             // Host agent resources (host resources with Agent data)
 	DockerHosts() []*DockerHostView // Docker host resources (host resources with Docker data)
+	DockerContainers() []*DockerContainerView
 
 	// Storage
 	StoragePools() []*StoragePoolView
@@ -29,6 +30,10 @@ type ReadState interface {
 
 	// Kubernetes
 	K8sClusters() []*K8sClusterView
+	// Kubernetes sub-resources
+	K8sNodes() []*K8sNodeView
+	Pods() []*PodView
+	K8sDeployments() []*K8sDeploymentView
 
 	// Polymorphic accessors for mixed-type iteration
 	Workloads() []*WorkloadView            // VMs + LXC containers
