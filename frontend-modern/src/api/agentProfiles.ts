@@ -97,7 +97,7 @@ export class AgentProfilesAPI {
      */
     static async listProfiles(): Promise<AgentProfile[]> {
         try {
-            const response = await apiFetchJSON<AgentProfile[]>(this.baseUrl);
+            const response = await apiFetchJSON<AgentProfile[]>(`${this.baseUrl}/`);
             return response || [];
         } catch (err) {
             // Handle 402 gracefully - means not licensed
@@ -126,7 +126,7 @@ export class AgentProfilesAPI {
      * Create a new profile.
      */
     static async createProfile(name: string, config: Record<string, unknown>, description?: string): Promise<AgentProfile> {
-        const response = await apiFetch(this.baseUrl, {
+        const response = await apiFetch(`${this.baseUrl}/`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name, description, config }),
