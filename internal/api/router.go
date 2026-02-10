@@ -95,6 +95,7 @@ type Router struct {
 	exportLimiter             *RateLimiter
 	downloadLimiter           *RateLimiter
 	signupRateLimiter         *RateLimiter
+	tenantRateLimiter         *TenantRateLimiter
 	persistence               *config.ConfigPersistence
 	multiTenant               *config.MultiTenantPersistence
 	oidcMu                    sync.Mutex
@@ -188,6 +189,10 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monit
 		checksumCache:     make(map[string]checksumCacheEntry),
 		hostedMode:        os.Getenv("PULSE_HOSTED_MODE") == "true",
 	}
+	if r.hostedMode {
+		// Use defaults: 2000 req/min per org.
+		r.tenantRateLimiter = NewTenantRateLimiter(0, 0)
+	}
 	r.resourceRegistry = unifiedresources.NewRegistry(nil)
 	r.monitorResourceAdapter = unifiedresources.NewMonitorAdapter(r.resourceRegistry)
 	r.aiUnifiedAdapter = unifiedresources.NewUnifiedAIAdapter(r.resourceRegistry)
@@ -241,6 +246,13 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monit
 	}
 	authChecker := NewAuthorizationChecker(orgLoader)
 	tenantMiddleware.SetAuthChecker(authChecker)
+
+	// Per-tenant rate limiting (hosted mode only).
+	// This relies on org ID stored in context by TenantMiddleware; because the chain is built inside-out,
+	// it must be wrapped before TenantMiddleware so TenantMiddleware runs first.
+	if r.tenantRateLimiter != nil {
+		handler = TenantRateLimitMiddleware(r.tenantRateLimiter)(handler)
+	}
 	handler = tenantMiddleware.Middleware(handler)
 
 	// Auth context middleware extracts user/token info BEFORE tenant middleware
