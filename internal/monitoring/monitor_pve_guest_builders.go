@@ -569,10 +569,10 @@ func (m *Monitor) updateVMDisksFromGuestAgentFSInfo(
 		allocatedDiskGB := float64(res.MaxDisk) / 1073741824
 		reportedDiskGB := float64(summary.totalBytes) / 1073741824
 
-		// If reported disk is more than 2x the allocated disk, log a warning
-		// This could indicate we're getting host disk or network shares
+		// If reported disk is more than 2x the allocated disk, log for debugging.
+		// This is expected for pass-through disks and can also indicate we're getting host disk or network shares.
 		if allocatedDiskGB > 0 && reportedDiskGB > allocatedDiskGB*2 {
-			log.Warn().
+			log.Debug().
 				Str("instance", instanceName).
 				Str("vm", res.Name).
 				Int("vmid", res.VMID).

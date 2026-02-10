@@ -6,6 +6,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -6835,6 +6836,14 @@ func (m *Manager) GetActiveAlerts() []Alert {
 		}
 		alerts = append(alerts, a)
 	}
+
+	sort.Slice(alerts, func(i, j int) bool {
+		if alerts[i].Node != alerts[j].Node {
+			return alerts[i].Node < alerts[j].Node
+		}
+		return alerts[i].ID < alerts[j].ID
+	})
+
 	return alerts
 }
 
