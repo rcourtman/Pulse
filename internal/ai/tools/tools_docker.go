@@ -4,8 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/safety"
 	"github.com/rs/zerolog/log"
 )
 
@@ -169,14 +172,93 @@ func (e *PulseToolExecutor) executeDockerControl(ctx context.Context, args map[s
 		output += "\n" + result.Stderr
 	}
 
-	if result.ExitCode == 0 {
-		return NewTextResult(fmt.Sprintf("Successfully executed 'docker %s' on container '%s' (host: %s). State updates in ~10s.\n%s", operation, container.Name, dockerHost.Hostname, output)), nil
+	if redacted, n := safety.RedactSensitiveText(output); n > 0 {
+		output = redacted + fmt.Sprintf("\n\n[redacted %d sensitive value(s)]", n)
 	}
 
-	return NewTextResult(fmt.Sprintf("Command failed (exit code %d):\n%s", result.ExitCode, output)), nil
+	verify := e.verifyDockerContainerState(ctx, routing, container.ID, operation)
+	verify["ok"] = result.ExitCode == 0
+
+	response := map[string]interface{}{
+		"success":      result.ExitCode == 0,
+		"action":       "control",
+		"operation":    operation,
+		"container":    container.Name,
+		"container_id": container.ID,
+		"host":         dockerHost.Hostname,
+		"command":      command,
+		"exit_code":    result.ExitCode,
+		"output":       output,
+		"verification": verify,
+	}
+
+	return NewJSONResultWithIsError(response, result.ExitCode != 0), nil
 }
 
 // ========== Docker Updates Handler Implementations ==========
+
+func (e *PulseToolExecutor) verifyDockerContainerState(ctx context.Context, routing CommandRoutingResult, containerID, operation string) map[string]interface{} {
+	expectRunning := false
+	switch operation {
+	case "start", "restart":
+		expectRunning = true
+	case "stop":
+		expectRunning = false
+	}
+
+	inspectCmd := fmt.Sprintf("docker inspect -f '{{.State.Status}} {{.State.Running}}' %s", shellEscape(containerID))
+
+	var lastOut string
+	var lastExit int
+	for attempt := 1; attempt <= 3; attempt++ {
+		res, err := e.agentServer.ExecuteCommand(ctx, routing.AgentID, agentexec.ExecuteCommandPayload{
+			Command:    inspectCmd,
+			TargetType: routing.TargetType,
+			TargetID:   routing.TargetID,
+		})
+		if err != nil {
+			return map[string]interface{}{"confirmed": false, "method": "docker_inspect", "command": inspectCmd, "note": err.Error()}
+		}
+		lastExit = res.ExitCode
+		lastOut = strings.TrimSpace(res.Stdout + "\n" + res.Stderr)
+
+		fields := strings.Fields(strings.ToLower(lastOut))
+		observedRunning := false
+		observedStatus := ""
+		if len(fields) >= 1 {
+			observedStatus = fields[0]
+		}
+		if len(fields) >= 2 {
+			observedRunning = fields[1] == "true"
+		}
+
+		if res.ExitCode == 0 && observedStatus != "" && observedRunning == expectRunning {
+			return map[string]interface{}{
+				"confirmed": true,
+				"method":    "docker_inspect",
+				"command":   inspectCmd,
+				"expected":  map[string]interface{}{"running": expectRunning},
+				"observed":  map[string]interface{}{"status": observedStatus, "running": observedRunning},
+			}
+		}
+
+		// Allow a brief settle window for restart/start/stop to propagate.
+		select {
+		case <-ctx.Done():
+			return map[string]interface{}{"confirmed": false, "method": "docker_inspect", "command": inspectCmd, "note": "context canceled", "raw": lastOut, "exit_code": lastExit}
+		case <-time.After(500 * time.Millisecond):
+		}
+	}
+
+	return map[string]interface{}{
+		"confirmed": false,
+		"method":    "docker_inspect",
+		"command":   inspectCmd,
+		"expected":  map[string]interface{}{"running": expectRunning},
+		"raw":       lastOut,
+		"exit_code": lastExit,
+	}
+}
 
 func (e *PulseToolExecutor) executeListDockerUpdates(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
 	if e.updatesProvider == nil {

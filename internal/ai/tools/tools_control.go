@@ -200,16 +200,22 @@ func (e *PulseToolExecutor) executeRunCommand(ctx context.Context, args map[stri
 	if result.Stderr != "" {
 		output += "\n" + result.Stderr
 	}
-	if result.ExitCode != 0 {
-		return NewTextResult(fmt.Sprintf("Command failed (exit code %d):\n%s", result.ExitCode, output)), nil
+	if redacted, n := safety.RedactSensitiveText(output); n > 0 {
+		output = redacted + fmt.Sprintf("\n\n[redacted %d sensitive value(s)]", n)
 	}
 
-	// Success - always show output explicitly to prevent LLM hallucination
-	// When output is empty, we must be explicit about it so the LLM doesn't fabricate results
-	if output == "" {
-		return NewTextResult("Command completed successfully (exit code 0).\n\nOutput:\n(no output)"), nil
+	success := result.ExitCode == 0
+	response := map[string]interface{}{
+		"success":      success,
+		"type":         "command",
+		"command":      command,
+		"target_host":  targetHost,
+		"exit_code":    result.ExitCode,
+		"output":       output,
+		"execution":    buildExecutionProvenance(targetHost, routing),
+		"verification": map[string]interface{}{"ok": success, "method": "exit_code", "exit_code": result.ExitCode},
 	}
-	return NewTextResult(fmt.Sprintf("Command completed successfully (exit code 0).\n\nOutput:\n%s", output)), nil
+	return NewJSONResultWithIsError(response, !success), nil
 }
 
 func (e *PulseToolExecutor) executeControlGuest(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
@@ -336,10 +342,6 @@ func (e *PulseToolExecutor) executeControlGuest(ctx context.Context, args map[st
 		output += "\n" + result.Stderr
 	}
 
-	if result.ExitCode == 0 {
-		return NewTextResult(fmt.Sprintf("✓ Successfully executed '%s' on %s (VMID %d). The action is complete.\n%s", action, guest.Name, guest.VMID, output)), nil
-	}
-
 	// Detect idempotent success: the guest is already in the desired state.
 	// Proxmox returns exit code 255 with "not running" for stop/shutdown on a stopped guest,
 	// or "already running" for start on a running guest. These aren't failures — the desired
@@ -353,15 +355,69 @@ func (e *PulseToolExecutor) executeControlGuest(ctx context.Context, args map[st
 		alreadyDone = strings.Contains(outputLower, "already running")
 	}
 	if alreadyDone {
-		return NewTextResult(fmt.Sprintf("✓ %s (VMID %d) is already %s. No action needed.\n", guest.Name, guest.VMID, func() string {
-			if action == "start" {
-				return "running"
-			}
-			return "stopped"
-		}())), nil
+		result.ExitCode = 0
+		output = fmt.Sprintf("%s\n(idempotent: desired state already set)", output)
 	}
 
-	return NewTextResult(fmt.Sprintf("Command failed (exit code %d):\n%s", result.ExitCode, output)), nil
+	if redacted, n := safety.RedactSensitiveText(output); n > 0 {
+		output = redacted + fmt.Sprintf("\n\n[redacted %d sensitive value(s)]", n)
+	}
+
+	verify := e.verifyGuestAction(ctx, agentID, cmdTool, guest.VMID, action)
+	verify["ok"] = result.ExitCode == 0
+	success := result.ExitCode == 0
+	response := map[string]interface{}{
+		"success":      success,
+		"type":         "guest",
+		"guest":        guest.Name,
+		"guest_id":     fmt.Sprintf("%d", guest.VMID),
+		"guest_type":   guest.Type,
+		"node":         guest.Node,
+		"action":       action,
+		"command":      command,
+		"exit_code":    result.ExitCode,
+		"output":       output,
+		"verification": verify,
+	}
+	return NewJSONResultWithIsError(response, !success), nil
+}
+
+func (e *PulseToolExecutor) verifyGuestAction(ctx context.Context, agentID, cmdTool string, vmid int, action string) map[string]interface{} {
+	expect := ""
+	switch action {
+	case "start", "restart":
+		expect = "running"
+	case "stop", "shutdown":
+		expect = "stopped"
+	case "delete":
+		expect = "deleted"
+	}
+
+	statusCmd := fmt.Sprintf("%s status %d", cmdTool, vmid)
+	res, err := e.agentServer.ExecuteCommand(ctx, agentID, agentexec.ExecuteCommandPayload{
+		Command:    statusCmd,
+		TargetType: "host",
+	})
+	if err != nil {
+		return map[string]interface{}{"confirmed": false, "method": "status", "command": statusCmd, "note": err.Error()}
+	}
+	out := strings.TrimSpace(res.Stdout + "\n" + res.Stderr)
+	outLower := strings.ToLower(out)
+
+	// Delete verification: status should fail with does-not-exist semantics.
+	if action == "delete" {
+		confirmed := res.ExitCode != 0 && (strings.Contains(outLower, "does not exist") || strings.Contains(outLower, "no such") || strings.Contains(outLower, "not found"))
+		return map[string]interface{}{"confirmed": confirmed, "method": "status", "command": statusCmd, "expected": expect, "raw": out}
+	}
+
+	observed := ""
+	if strings.Contains(outLower, "status: running") {
+		observed = "running"
+	} else if strings.Contains(outLower, "status: stopped") {
+		observed = "stopped"
+	}
+	confirmed := res.ExitCode == 0 && observed != "" && observed == expect
+	return map[string]interface{}{"confirmed": confirmed, "method": "status", "command": statusCmd, "expected": expect, "observed": observed, "raw": out}
 }
 
 func (e *PulseToolExecutor) executeControlDocker(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {

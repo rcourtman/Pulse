@@ -307,6 +307,7 @@ func (e *PulseToolExecutor) executeResolveFinding(_ context.Context, args map[st
 		"finding_id":      findingID,
 		"action":          "resolved",
 		"resolution_note": resolutionNote,
+		"verification":    map[string]interface{}{"ok": true, "method": "store"},
 	}), nil
 }
 
@@ -334,11 +335,12 @@ func (e *PulseToolExecutor) executeDismissFinding(_ context.Context, args map[st
 	}
 
 	return NewJSONResult(map[string]interface{}{
-		"success":    true,
-		"finding_id": findingID,
-		"action":     "dismissed",
-		"reason":     reason,
-		"note":       note,
+		"success":      true,
+		"finding_id":   findingID,
+		"action":       "dismissed",
+		"reason":       reason,
+		"note":         note,
+		"verification": map[string]interface{}{"ok": true, "method": "store"},
 	}), nil
 }
 

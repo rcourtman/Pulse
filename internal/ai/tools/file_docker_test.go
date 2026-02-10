@@ -2,7 +2,9 @@ package tools
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -137,6 +139,8 @@ func TestExecuteFileWriteDocker(t *testing.T) {
 	t.Run("WriteToDockerContainer", func(t *testing.T) {
 		content := `{"new": "config"}`
 		encodedContent := base64.StdEncoding.EncodeToString([]byte(content))
+		expected := sha256.Sum256([]byte(content))
+		expectedHex := hex.EncodeToString(expected[:])
 
 		agents := []agentexec.ConnectedAgent{{AgentID: "agent-1", Hostname: "tower"}}
 		mockAgent := &mockAgentServer{}
@@ -153,6 +157,15 @@ func TestExecuteFileWriteDocker(t *testing.T) {
 			ExitCode: 0,
 			Stdout:   "",
 		}, nil)
+		mockAgent.On("ExecuteCommand", mock.Anything, "agent-1", mock.MatchedBy(func(cmd agentexec.ExecuteCommandPayload) bool {
+			return strings.Contains(cmd.Command, "docker exec") &&
+				strings.Contains(cmd.Command, "nginx") &&
+				strings.Contains(cmd.Command, "sha256sum") &&
+				strings.Contains(cmd.Command, "/etc/nginx/nginx.conf")
+		})).Return(&agentexec.CommandResultPayload{
+			ExitCode: 0,
+			Stdout:   expectedHex + "  /etc/nginx/nginx.conf\n",
+		}, nil)
 
 		exec := NewPulseToolExecutor(ExecutorConfig{
 			StateProvider: &mockStateProvider{state: models.StateSnapshot{}},
@@ -168,6 +181,9 @@ func TestExecuteFileWriteDocker(t *testing.T) {
 		assert.Equal(t, "write", resp["action"])
 		assert.Equal(t, "nginx", resp["docker_container"])
 		assert.Equal(t, float64(len(content)), resp["bytes_written"])
+		if v, ok := resp["verification"].(map[string]interface{}); ok {
+			assert.True(t, v["ok"].(bool))
+		}
 		mockAgent.AssertExpectations(t)
 	})
 
@@ -194,6 +210,8 @@ func TestExecuteFileAppendDocker(t *testing.T) {
 	t.Run("AppendToDockerContainer", func(t *testing.T) {
 		content := "\nnew line"
 		encodedContent := base64.StdEncoding.EncodeToString([]byte(content))
+		expected := sha256.Sum256([]byte(content))
+		expectedHex := hex.EncodeToString(expected[:])
 
 		agents := []agentexec.ConnectedAgent{{AgentID: "agent-1", Hostname: "tower"}}
 		mockAgent := &mockAgentServer{}
@@ -209,6 +227,15 @@ func TestExecuteFileAppendDocker(t *testing.T) {
 			ExitCode: 0,
 			Stdout:   "",
 		}, nil)
+		mockAgent.On("ExecuteCommand", mock.Anything, "agent-1", mock.MatchedBy(func(cmd agentexec.ExecuteCommandPayload) bool {
+			return strings.Contains(cmd.Command, "docker exec") &&
+				strings.Contains(cmd.Command, "logcontainer") &&
+				strings.Contains(cmd.Command, "tail -c") &&
+				(strings.Contains(cmd.Command, "sha256sum") || strings.Contains(cmd.Command, "shasum"))
+		})).Return(&agentexec.CommandResultPayload{
+			ExitCode: 0,
+			Stdout:   expectedHex + "  -\n",
+		}, nil)
 
 		exec := NewPulseToolExecutor(ExecutorConfig{
 			StateProvider: &mockStateProvider{state: models.StateSnapshot{}},
@@ -223,6 +250,9 @@ func TestExecuteFileAppendDocker(t *testing.T) {
 		assert.True(t, resp["success"].(bool))
 		assert.Equal(t, "append", resp["action"])
 		assert.Equal(t, "logcontainer", resp["docker_container"])
+		if v, ok := resp["verification"].(map[string]interface{}); ok {
+			assert.True(t, v["ok"].(bool))
+		}
 		mockAgent.AssertExpectations(t)
 	})
 }
@@ -235,6 +265,8 @@ func TestExecuteFileWriteLXCVMTargets(t *testing.T) {
 		// Agent handles sh -c wrapping, so tool sends raw pipeline command
 		content := "test content"
 		encodedContent := base64.StdEncoding.EncodeToString([]byte(content))
+		expected := sha256.Sum256([]byte(content))
+		expectedHex := hex.EncodeToString(expected[:])
 
 		agents := []agentexec.ConnectedAgent{{AgentID: "proxmox-agent", Hostname: "delly"}}
 		mockAgent := &mockAgentServer{}
@@ -249,6 +281,16 @@ func TestExecuteFileWriteLXCVMTargets(t *testing.T) {
 		})).Return(&agentexec.CommandResultPayload{
 			ExitCode: 0,
 			Stdout:   "",
+		}, nil)
+		mockAgent.On("ExecuteCommand", mock.Anything, "proxmox-agent", mock.MatchedBy(func(cmd agentexec.ExecuteCommandPayload) bool {
+			return cmd.TargetType == "container" &&
+				cmd.TargetID == "141" &&
+				strings.Contains(cmd.Command, "sha256sum") &&
+				strings.Contains(cmd.Command, "/opt/test/config.yaml") &&
+				!strings.Contains(cmd.Command, "docker exec")
+		})).Return(&agentexec.CommandResultPayload{
+			ExitCode: 0,
+			Stdout:   expectedHex + "  /opt/test/config.yaml\n",
 		}, nil)
 
 		state := models.StateSnapshot{
@@ -270,6 +312,9 @@ func TestExecuteFileWriteLXCVMTargets(t *testing.T) {
 		assert.True(t, resp["success"].(bool))
 		assert.Equal(t, "write", resp["action"])
 		assert.Nil(t, resp["docker_container"]) // No Docker container
+		if v, ok := resp["verification"].(map[string]interface{}); ok {
+			assert.True(t, v["ok"].(bool))
+		}
 		mockAgent.AssertExpectations(t)
 	})
 
@@ -277,6 +322,8 @@ func TestExecuteFileWriteLXCVMTargets(t *testing.T) {
 		// Test that file writes to VMs are routed with correct target type/ID
 		content := "vm config"
 		encodedContent := base64.StdEncoding.EncodeToString([]byte(content))
+		expected := sha256.Sum256([]byte(content))
+		expectedHex := hex.EncodeToString(expected[:])
 
 		agents := []agentexec.ConnectedAgent{{AgentID: "proxmox-agent", Hostname: "delly"}}
 		mockAgent := &mockAgentServer{}
@@ -288,6 +335,16 @@ func TestExecuteFileWriteLXCVMTargets(t *testing.T) {
 		})).Return(&agentexec.CommandResultPayload{
 			ExitCode: 0,
 			Stdout:   "",
+		}, nil)
+		mockAgent.On("ExecuteCommand", mock.Anything, "proxmox-agent", mock.MatchedBy(func(cmd agentexec.ExecuteCommandPayload) bool {
+			return cmd.TargetType == "vm" &&
+				cmd.TargetID == "100" &&
+				strings.Contains(cmd.Command, "sha256sum") &&
+				strings.Contains(cmd.Command, "/etc/test.conf") &&
+				!strings.Contains(cmd.Command, "docker exec")
+		})).Return(&agentexec.CommandResultPayload{
+			ExitCode: 0,
+			Stdout:   expectedHex + "  /etc/test.conf\n",
 		}, nil)
 
 		state := models.StateSnapshot{
@@ -307,6 +364,9 @@ func TestExecuteFileWriteLXCVMTargets(t *testing.T) {
 		var resp map[string]interface{}
 		require.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &resp))
 		assert.True(t, resp["success"].(bool))
+		if v, ok := resp["verification"].(map[string]interface{}); ok {
+			assert.True(t, v["ok"].(bool))
+		}
 		mockAgent.AssertExpectations(t)
 	})
 
@@ -314,6 +374,8 @@ func TestExecuteFileWriteLXCVMTargets(t *testing.T) {
 		// Direct host writes use raw pipeline command
 		content := "host config"
 		encodedContent := base64.StdEncoding.EncodeToString([]byte(content))
+		expected := sha256.Sum256([]byte(content))
+		expectedHex := hex.EncodeToString(expected[:])
 
 		agents := []agentexec.ConnectedAgent{{AgentID: "host-agent", Hostname: "tower"}}
 		mockAgent := &mockAgentServer{}
@@ -325,6 +387,15 @@ func TestExecuteFileWriteLXCVMTargets(t *testing.T) {
 		})).Return(&agentexec.CommandResultPayload{
 			ExitCode: 0,
 			Stdout:   "",
+		}, nil)
+		mockAgent.On("ExecuteCommand", mock.Anything, "host-agent", mock.MatchedBy(func(cmd agentexec.ExecuteCommandPayload) bool {
+			return cmd.TargetType == "host" &&
+				strings.Contains(cmd.Command, "sha256sum") &&
+				strings.Contains(cmd.Command, "/tmp/test.txt") &&
+				!strings.Contains(cmd.Command, "docker exec")
+		})).Return(&agentexec.CommandResultPayload{
+			ExitCode: 0,
+			Stdout:   expectedHex + "  /tmp/test.txt\n",
 		}, nil)
 
 		exec := NewPulseToolExecutor(ExecutorConfig{
@@ -338,6 +409,9 @@ func TestExecuteFileWriteLXCVMTargets(t *testing.T) {
 		var resp map[string]interface{}
 		require.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &resp))
 		assert.True(t, resp["success"].(bool))
+		if v, ok := resp["verification"].(map[string]interface{}); ok {
+			assert.True(t, v["ok"].(bool))
+		}
 		mockAgent.AssertExpectations(t)
 	})
 
@@ -345,6 +419,8 @@ func TestExecuteFileWriteLXCVMTargets(t *testing.T) {
 		// Append operations to LXC are routed with correct target type/ID
 		content := "\nnew line"
 		encodedContent := base64.StdEncoding.EncodeToString([]byte(content))
+		expected := sha256.Sum256([]byte(content))
+		expectedHex := hex.EncodeToString(expected[:])
 
 		agents := []agentexec.ConnectedAgent{{AgentID: "proxmox-agent", Hostname: "delly"}}
 		mockAgent := &mockAgentServer{}
@@ -357,6 +433,17 @@ func TestExecuteFileWriteLXCVMTargets(t *testing.T) {
 		})).Return(&agentexec.CommandResultPayload{
 			ExitCode: 0,
 			Stdout:   "",
+		}, nil)
+		mockAgent.On("ExecuteCommand", mock.Anything, "proxmox-agent", mock.MatchedBy(func(cmd agentexec.ExecuteCommandPayload) bool {
+			return cmd.TargetType == "container" &&
+				cmd.TargetID == "141" &&
+				strings.Contains(cmd.Command, "tail -c") &&
+				strings.Contains(cmd.Command, "/var/log/app.log") &&
+				(strings.Contains(cmd.Command, "sha256sum") || strings.Contains(cmd.Command, "shasum")) &&
+				!strings.Contains(cmd.Command, "docker exec")
+		})).Return(&agentexec.CommandResultPayload{
+			ExitCode: 0,
+			Stdout:   expectedHex + "  -\n",
 		}, nil)
 
 		state := models.StateSnapshot{
@@ -377,6 +464,9 @@ func TestExecuteFileWriteLXCVMTargets(t *testing.T) {
 		require.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &resp))
 		assert.True(t, resp["success"].(bool))
 		assert.Equal(t, "append", resp["action"])
+		if v, ok := resp["verification"].(map[string]interface{}); ok {
+			assert.True(t, v["ok"].(bool))
+		}
 		mockAgent.AssertExpectations(t)
 	})
 }

@@ -2,6 +2,8 @@ package tools
 
 import (
 	"context"
+	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -10,6 +12,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
+
+func mustParseJSONMapControl(t *testing.T, text string) map[string]interface{} {
+	t.Helper()
+	var out map[string]interface{}
+	assert.NoError(t, json.Unmarshal([]byte(text), &out))
+	return out
+}
 
 func TestPulseToolExecutor_ExecuteListBackups(t *testing.T) {
 	backupProv := &mockBackupProvider{}
@@ -69,6 +78,13 @@ func TestPulseToolExecutor_ExecuteControlGuest(t *testing.T) {
 		ExitCode: 0,
 	}, nil)
 
+	agentSrv.On("ExecuteCommand", mock.Anything, "agent1", mock.MatchedBy(func(payload agentexec.ExecuteCommandPayload) bool {
+		return payload.Command == "qm status 100"
+	})).Return(&agentexec.CommandResultPayload{
+		Stdout:   "status: stopped",
+		ExitCode: 0,
+	}, nil)
+
 	// Use pulse_control tool with type: "guest"
 	result, err := exec.ExecuteTool(context.Background(), "pulse_control", map[string]interface{}{
 		"type":     "guest",
@@ -76,7 +92,11 @@ func TestPulseToolExecutor_ExecuteControlGuest(t *testing.T) {
 		"action":   "stop",
 	})
 	assert.NoError(t, err)
-	assert.Contains(t, result.Content[0].Text, "Successfully executed 'stop'")
+	resp := mustParseJSONMapControl(t, result.Content[0].Text)
+	assert.Equal(t, true, resp["success"])
+	if v, ok := resp["verification"].(map[string]interface{}); ok {
+		assert.Equal(t, true, v["ok"])
+	}
 }
 
 func TestPulseToolExecutor_ExecuteControlDocker(t *testing.T) {
@@ -112,6 +132,13 @@ func TestPulseToolExecutor_ExecuteControlDocker(t *testing.T) {
 		ExitCode: 0,
 	}, nil)
 
+	agentSrv.On("ExecuteCommand", mock.Anything, "agent1", mock.MatchedBy(func(payload agentexec.ExecuteCommandPayload) bool {
+		return strings.HasPrefix(payload.Command, "docker inspect -f")
+	})).Return(&agentexec.CommandResultPayload{
+		Stdout:   "running true",
+		ExitCode: 0,
+	}, nil)
+
 	// Use pulse_docker tool with action: "control"
 	result, err := exec.ExecuteTool(context.Background(), "pulse_docker", map[string]interface{}{
 		"action":    "control",
@@ -119,5 +146,9 @@ func TestPulseToolExecutor_ExecuteControlDocker(t *testing.T) {
 		"operation": "restart",
 	})
 	assert.NoError(t, err)
-	assert.Contains(t, result.Content[0].Text, "Successfully executed 'docker restart'")
+	resp := mustParseJSONMapControl(t, result.Content[0].Text)
+	assert.Equal(t, true, resp["success"])
+	if v, ok := resp["verification"].(map[string]interface{}); ok {
+		assert.Equal(t, true, v["ok"])
+	}
 }

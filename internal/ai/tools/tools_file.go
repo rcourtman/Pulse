@@ -2,11 +2,14 @@ package tools
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/safety"
 	"github.com/rs/zerolog/log"
 )
 
@@ -144,6 +147,18 @@ func (e *PulseToolExecutor) executeFileRead(ctx context.Context, path, targetHos
 		return NewErrorResult(fmt.Errorf("no agent server available")), nil
 	}
 
+	if blocked, reason := safety.IsSensitivePath(path); blocked {
+		return NewToolResponseResult(NewToolBlockedError(
+			"SENSITIVE_PATH",
+			fmt.Sprintf("Refusing to read sensitive path '%s' (%s).", path, reason),
+			map[string]interface{}{
+				"path":          path,
+				"reason":        reason,
+				"recovery_hint": "Avoid reading credential files. If you need a value, provide it manually or scope the request to non-sensitive config/log files.",
+			},
+		)), nil
+	}
+
 	// Validate routing context - block if targeting a Proxmox host when child resources exist
 	// This prevents accidentally reading files from the host when user meant to read from an LXC/VM
 	routingResult := e.validateRoutingContext(targetHost)
@@ -189,12 +204,16 @@ func (e *PulseToolExecutor) executeFileRead(ctx context.Context, path, targetHos
 		return NewTextResult(fmt.Sprintf("Failed to read file (exit code %d): %s", result.ExitCode, errMsg)), nil
 	}
 
+	redacted, redactionCount := safety.RedactSensitiveText(result.Stdout)
+
 	response := map[string]interface{}{
-		"success": true,
-		"path":    path,
-		"content": result.Stdout,
-		"host":    targetHost,
-		"size":    len(result.Stdout),
+		"success":    true,
+		"path":       path,
+		"content":    redacted,
+		"host":       targetHost,
+		"size":       len(redacted),
+		"redacted":   redactionCount > 0,
+		"redactions": redactionCount,
 	}
 	if dockerContainer != "" {
 		response["docker_container"] = dockerContainer
@@ -208,6 +227,18 @@ func (e *PulseToolExecutor) executeFileRead(ctx context.Context, path, targetHos
 func (e *PulseToolExecutor) executeFileAppend(ctx context.Context, path, content, targetHost, dockerContainer string, args map[string]interface{}) (CallToolResult, error) {
 	if e.agentServer == nil {
 		return NewErrorResult(fmt.Errorf("no agent server available")), nil
+	}
+
+	if blocked, reason := safety.IsSensitivePath(path); blocked {
+		return NewToolResponseResult(NewToolBlockedError(
+			"SENSITIVE_PATH",
+			fmt.Sprintf("Refusing to write sensitive path '%s' (%s).", path, reason),
+			map[string]interface{}{
+				"path":          path,
+				"reason":        reason,
+				"recovery_hint": "Avoid modifying credential files via AI. Apply this change manually if needed.",
+			},
+		)), nil
 	}
 
 	// Validate routing context - block if targeting a Proxmox host when child resources exist
@@ -287,10 +318,27 @@ func (e *PulseToolExecutor) executeFileAppend(ctx context.Context, path, content
 			errMsg = result.Stdout
 		}
 		if dockerContainer != "" {
-			return NewTextResult(fmt.Sprintf("Failed to append to file in container '%s' (exit code %d): %s", dockerContainer, result.ExitCode, errMsg)), nil
+			return NewJSONResultWithIsError(map[string]interface{}{
+				"success":          false,
+				"action":           "append",
+				"path":             path,
+				"host":             targetHost,
+				"docker_container": dockerContainer,
+				"exit_code":        result.ExitCode,
+				"error":            errMsg,
+			}, true), nil
 		}
-		return NewTextResult(fmt.Sprintf("Failed to append to file (exit code %d): %s", result.ExitCode, errMsg)), nil
+		return NewJSONResultWithIsError(map[string]interface{}{
+			"success":   false,
+			"action":    "append",
+			"path":      path,
+			"host":      targetHost,
+			"exit_code": result.ExitCode,
+			"error":     errMsg,
+		}, true), nil
 	}
+
+	verify := e.verifyFileTailHash(ctx, routing, path, dockerContainer, content)
 
 	response := map[string]interface{}{
 		"success":       true,
@@ -298,6 +346,7 @@ func (e *PulseToolExecutor) executeFileAppend(ctx context.Context, path, content
 		"path":          path,
 		"host":          targetHost,
 		"bytes_written": len(content),
+		"verification":  verify,
 	}
 	if dockerContainer != "" {
 		response["docker_container"] = dockerContainer
@@ -311,6 +360,18 @@ func (e *PulseToolExecutor) executeFileAppend(ctx context.Context, path, content
 func (e *PulseToolExecutor) executeFileWrite(ctx context.Context, path, content, targetHost, dockerContainer string, args map[string]interface{}) (CallToolResult, error) {
 	if e.agentServer == nil {
 		return NewErrorResult(fmt.Errorf("no agent server available")), nil
+	}
+
+	if blocked, reason := safety.IsSensitivePath(path); blocked {
+		return NewToolResponseResult(NewToolBlockedError(
+			"SENSITIVE_PATH",
+			fmt.Sprintf("Refusing to write sensitive path '%s' (%s).", path, reason),
+			map[string]interface{}{
+				"path":          path,
+				"reason":        reason,
+				"recovery_hint": "Avoid modifying credential files via AI. Apply this change manually if needed.",
+			},
+		)), nil
 	}
 
 	// Validate routing context - block if targeting a Proxmox host when child resources exist
@@ -390,10 +451,27 @@ func (e *PulseToolExecutor) executeFileWrite(ctx context.Context, path, content,
 			errMsg = result.Stdout
 		}
 		if dockerContainer != "" {
-			return NewTextResult(fmt.Sprintf("Failed to write file in container '%s' (exit code %d): %s", dockerContainer, result.ExitCode, errMsg)), nil
+			return NewJSONResultWithIsError(map[string]interface{}{
+				"success":          false,
+				"action":           "write",
+				"path":             path,
+				"host":             targetHost,
+				"docker_container": dockerContainer,
+				"exit_code":        result.ExitCode,
+				"error":            errMsg,
+			}, true), nil
 		}
-		return NewTextResult(fmt.Sprintf("Failed to write file (exit code %d): %s", result.ExitCode, errMsg)), nil
+		return NewJSONResultWithIsError(map[string]interface{}{
+			"success":   false,
+			"action":    "write",
+			"path":      path,
+			"host":      targetHost,
+			"exit_code": result.ExitCode,
+			"error":     errMsg,
+		}, true), nil
 	}
+
+	verify := e.verifyFileSHA256(ctx, routing, path, dockerContainer, content)
 
 	response := map[string]interface{}{
 		"success":       true,
@@ -401,6 +479,7 @@ func (e *PulseToolExecutor) executeFileWrite(ctx context.Context, path, content,
 		"path":          path,
 		"host":          targetHost,
 		"bytes_written": len(content),
+		"verification":  verify,
 	}
 	if dockerContainer != "" {
 		response["docker_container"] = dockerContainer
@@ -408,6 +487,88 @@ func (e *PulseToolExecutor) executeFileWrite(ctx context.Context, path, content,
 	// Include execution provenance for observability
 	response["execution"] = buildExecutionProvenance(targetHost, routing)
 	return NewJSONResult(response), nil
+}
+
+func (e *PulseToolExecutor) verifyFileSHA256(ctx context.Context, routing CommandRoutingResult, path, dockerContainer, content string) map[string]interface{} {
+	expected := sha256.Sum256([]byte(content))
+	expectedHex := hex.EncodeToString(expected[:])
+
+	// Use a portable command chain; not all systems have sha256sum.
+	hashCmd := fmt.Sprintf("sha256sum %s 2>/dev/null || shasum -a 256 %s 2>/dev/null || openssl dgst -sha256 %s 2>/dev/null", shellEscape(path), shellEscape(path), shellEscape(path))
+	if dockerContainer != "" {
+		hashCmd = fmt.Sprintf("docker exec %s sh -c %s", shellEscape(dockerContainer), shellEscape(hashCmd))
+	}
+
+	res, err := e.agentServer.ExecuteCommand(ctx, routing.AgentID, agentexec.ExecuteCommandPayload{
+		Command:    hashCmd,
+		TargetType: routing.TargetType,
+		TargetID:   routing.TargetID,
+	})
+	if err != nil {
+		return map[string]interface{}{
+			"ok":     true,
+			"method": "exit_code",
+			"note":   fmt.Sprintf("sha256 verification unavailable: %v", err),
+		}
+	}
+	combined := strings.TrimSpace(res.Stdout + "\n" + res.Stderr)
+	actualHex := ""
+	if fields := strings.Fields(combined); len(fields) > 0 {
+		actualHex = fields[0]
+	}
+	if res.ExitCode != 0 || actualHex == "" {
+		return map[string]interface{}{
+			"ok":     true,
+			"method": "exit_code",
+			"note":   "sha256 verification unavailable on target (missing tools or non-zero exit)",
+		}
+	}
+	ok := strings.EqualFold(actualHex, expectedHex)
+	return map[string]interface{}{
+		"ok":       ok,
+		"method":   "sha256",
+		"expected": expectedHex,
+		"actual":   actualHex,
+	}
+}
+
+func (e *PulseToolExecutor) verifyFileTailHash(ctx context.Context, routing CommandRoutingResult, path, dockerContainer, appended string) map[string]interface{} {
+	// Verify that the file's trailing bytes match what we appended, without re-reading the full file.
+	n := len(appended)
+	if n <= 0 {
+		return map[string]interface{}{"ok": true, "method": "tail_sha256", "note": "no appended content"}
+	}
+	expected := sha256.Sum256([]byte(appended))
+	expectedHex := hex.EncodeToString(expected[:])
+
+	tailCmd := fmt.Sprintf("tail -c %d %s 2>/dev/null | (sha256sum 2>/dev/null || shasum -a 256 2>/dev/null)", n, shellEscape(path))
+	if dockerContainer != "" {
+		tailCmd = fmt.Sprintf("docker exec %s sh -c %s", shellEscape(dockerContainer), shellEscape(tailCmd))
+	}
+
+	res, err := e.agentServer.ExecuteCommand(ctx, routing.AgentID, agentexec.ExecuteCommandPayload{
+		Command:    tailCmd,
+		TargetType: routing.TargetType,
+		TargetID:   routing.TargetID,
+	})
+	if err != nil {
+		return map[string]interface{}{"ok": true, "method": "exit_code", "note": fmt.Sprintf("tail sha256 verification unavailable: %v", err)}
+	}
+	combined := strings.TrimSpace(res.Stdout + "\n" + res.Stderr)
+	actualHex := ""
+	if fields := strings.Fields(combined); len(fields) > 0 {
+		actualHex = fields[0]
+	}
+	if res.ExitCode != 0 || actualHex == "" {
+		return map[string]interface{}{"ok": true, "method": "exit_code", "note": "tail sha256 verification unavailable on target (missing tools or non-zero exit)"}
+	}
+	ok := strings.EqualFold(actualHex, expectedHex)
+	return map[string]interface{}{
+		"ok":       ok,
+		"method":   "tail_sha256",
+		"expected": expectedHex,
+		"actual":   actualHex,
+	}
 }
 
 // ErrExecutionContextUnavailable is returned when a write operation targets a child resource

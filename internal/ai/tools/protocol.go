@@ -321,6 +321,20 @@ func NewJSONResult(data interface{}) CallToolResult {
 	}
 }
 
+// NewJSONResultWithIsError creates a JSON tool result with explicit error state.
+// Use this when you want to return structured JSON to the model/UI while still
+// signalling a failure to the agentic loop (IsError=true).
+func NewJSONResultWithIsError(data interface{}, isError bool) CallToolResult {
+	b, err := json.Marshal(data)
+	if err != nil {
+		return NewErrorResult(err)
+	}
+	return CallToolResult{
+		Content: []Content{NewTextContent(string(b))},
+		IsError: isError,
+	}
+}
+
 // NewToolResponseResult creates a CallToolResult from a ToolResponse
 // This provides the consistent envelope while maintaining MCP protocol compatibility
 func NewToolResponseResult(resp ToolResponse) CallToolResult {

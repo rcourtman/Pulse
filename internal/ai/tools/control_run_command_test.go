@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
@@ -11,6 +12,13 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
+
+func mustParseJSONMap(t *testing.T, text string) map[string]interface{} {
+	t.Helper()
+	var out map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(text), &out))
+	return out
+}
 
 func TestPulseToolExecutor_ExecuteRunCommand(t *testing.T) {
 	ctx := context.Background()
@@ -82,8 +90,13 @@ func TestPulseToolExecutor_ExecuteRunCommand(t *testing.T) {
 			"run_on_host": true,
 		})
 		assert.NoError(t, err)
-		assert.Contains(t, result.Content[0].Text, "Command completed successfully")
-		assert.Contains(t, result.Content[0].Text, "ok")
+		resp := mustParseJSONMap(t, result.Content[0].Text)
+		assert.Equal(t, true, resp["success"])
+		assert.Equal(t, float64(0), resp["exit_code"])
+		assert.Contains(t, resp["output"].(string), "ok")
+		if v, ok := resp["verification"].(map[string]interface{}); ok {
+			assert.Equal(t, true, v["ok"])
+		}
 		agentSrv.AssertExpectations(t)
 	})
 }
@@ -123,7 +136,9 @@ func TestPulseToolExecutor_RunCommandLXCRouting(t *testing.T) {
 			"target_host": "jellyfin",
 		})
 		require.NoError(t, err)
-		assert.Contains(t, result.Content[0].Text, "Command completed successfully")
+		resp := mustParseJSONMap(t, result.Content[0].Text)
+		assert.Equal(t, true, resp["success"])
+		assert.Equal(t, "jellyfin", resp["target_host"])
 		mockAgent.AssertExpectations(t)
 	})
 
@@ -157,7 +172,9 @@ func TestPulseToolExecutor_RunCommandLXCRouting(t *testing.T) {
 			"target_host": "test-vm",
 		})
 		require.NoError(t, err)
-		assert.Contains(t, result.Content[0].Text, "Command completed successfully")
+		resp := mustParseJSONMap(t, result.Content[0].Text)
+		assert.Equal(t, true, resp["success"])
+		assert.Equal(t, "test-vm", resp["target_host"])
 		mockAgent.AssertExpectations(t)
 	})
 
@@ -184,7 +201,9 @@ func TestPulseToolExecutor_RunCommandLXCRouting(t *testing.T) {
 			"target_host": "tower",
 		})
 		require.NoError(t, err)
-		assert.Contains(t, result.Content[0].Text, "Command completed successfully")
+		resp := mustParseJSONMap(t, result.Content[0].Text)
+		assert.Equal(t, true, resp["success"])
+		assert.Equal(t, "tower", resp["target_host"])
 		mockAgent.AssertExpectations(t)
 	})
 }

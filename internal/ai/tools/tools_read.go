@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/safety"
 	"github.com/rs/zerolog/log"
 )
 
@@ -114,6 +115,18 @@ func (e *PulseToolExecutor) executeReadExec(ctx context.Context, args map[string
 		return NewErrorResult(fmt.Errorf("target_host is required")), nil
 	}
 
+	// High-confidence secret exfiltration blocks.
+	if blocked, reason := safety.CommandTouchesSensitivePath(command); blocked {
+		return NewToolResponseResult(NewToolBlockedError(
+			"SENSITIVE_COMMAND",
+			fmt.Sprintf("Refusing to run command that touches sensitive paths (%s).", reason),
+			map[string]interface{}{
+				"reason":        reason,
+				"recovery_hint": "Avoid reading credential files or process env via AI tools. Scope the request to non-sensitive logs/status output instead.",
+			},
+		)), nil
+	}
+
 	// STRUCTURAL ENFORCEMENT: Reject non-read-only commands at the tool layer
 	// This is enforced HERE, not in the model's prompt
 	// Uses ExecutionIntent: ReadOnlyCertain and ReadOnlyConditional are allowed;
@@ -218,6 +231,10 @@ func (e *PulseToolExecutor) executeReadExec(ctx context.Context, args map[string
 			output += "\n"
 		}
 		output += result.Stderr
+	}
+
+	if redacted, n := safety.RedactSensitiveText(output); n > 0 {
+		output = redacted + fmt.Sprintf("\n\n[redacted %d sensitive value(s)]", n)
 	}
 
 	if result.ExitCode != 0 {
