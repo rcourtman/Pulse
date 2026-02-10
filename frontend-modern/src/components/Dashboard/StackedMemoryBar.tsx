@@ -27,7 +27,7 @@ const anomalySeverityClass: Record<string, string> = {
 // Colors for memory segments
 const MEMORY_COLORS = {
     active: 'rgba(34, 197, 94, 0.6)',   // green (base, overridden by threshold)
-    balloon: 'rgba(234, 179, 8, 0.6)',  // yellow
+    balloon: 'rgba(59, 130, 246, 0.6)',  // yellow to blue
     swap: 'rgba(168, 85, 247, 0.6)',    // purple
 };
 
@@ -253,7 +253,7 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
 
                                     <Show when={(props.balloon || 0) > 0 && (props.balloon || 0) < props.total}>
                                         <div class="flex justify-between gap-3 py-0.5 border-t border-gray-700/50">
-                                            <span class="text-yellow-400">Balloon Limit</span>
+                                            <span class="text-blue-400">Balloon Limit</span>
                                             <span class="whitespace-nowrap text-gray-300">
                                                 {formatBytes(props.balloon || 0)}
                                             </span>
