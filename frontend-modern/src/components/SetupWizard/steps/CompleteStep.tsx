@@ -1,12 +1,16 @@
-import { Component, createSignal, createEffect, onCleanup, Show, For } from 'solid-js';
+import { Component, createSignal, createEffect, onCleanup, onMount, Show, For } from 'solid-js';
 // Note: For is still used for connectedAgents list
+import { useNavigate } from '@solidjs/router';
 import { copyToClipboard } from '@/utils/clipboard';
 import { logger } from '@/utils/logger';
-import { apiFetchJSON } from '@/utils/apiClient';
+import { apiFetch, apiFetchJSON } from '@/utils/apiClient';
 import { getPulseBaseUrl } from '@/utils/url';
 import type { State } from '@/types/api';
 import { SecurityAPI } from '@/api/security';
 import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
+import { showSuccess, showError } from '@/utils/toast';
+import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/conversionEvents';
+import { loadLicenseStatus, entitlements, getUpgradeActionUrlOrFallback } from '@/stores/license';
 import type { WizardState } from '../SetupWizard';
 
 interface CompleteStepProps {
@@ -24,12 +28,22 @@ interface ConnectedAgent {
     addedAt: Date;
 }
 
+const RELAY_SETTINGS_PATH = '/settings/system-relay';
+
 export const CompleteStep: Component<CompleteStepProps> = (props) => {
+    const navigate = useNavigate();
     const [copied, setCopied] = createSignal<'password' | 'token' | 'install' | null>(null);
     const [showCredentials, setShowCredentials] = createSignal(false);
     const [connectedAgents, setConnectedAgents] = createSignal<ConnectedAgent[]>([]);
     const [currentInstallToken, setCurrentInstallToken] = createSignal(props.state.apiToken);
     const [generatingToken, setGeneratingToken] = createSignal(false);
+    const [trialStarting, setTrialStarting] = createSignal(false);
+    const [trialStarted, setTrialStarted] = createSignal(false);
+
+    // Track paywall view for conversion analytics.
+    onMount(() => {
+        trackPaywallViewed('relay', 'setup_wizard');
+    });
 
     // Poll for agent connections since WebSocket isn't available during setup
     createEffect(() => {
@@ -200,6 +214,51 @@ Keep these credentials secure!
         // Simple command - the install script auto-detects Docker, Kubernetes, and Proxmox
         // Note: sudo removed - users should run as root (via su or sudo) since some systems (like Proxmox) don't have sudo installed
         return `curl -sSL ${baseUrl}/install.sh | bash -s -- --url "${baseUrl}" --token "${currentInstallToken()}"`;
+    };
+
+    const handleStartTrial = async () => {
+        trackUpgradeClicked('setup_wizard', 'relay');
+        if (trialStarting()) return;
+
+        setTrialStarting(true);
+        try {
+            const res = await apiFetch('/api/license/trial/start', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-API-Token': props.state.apiToken,
+                },
+                body: JSON.stringify({}),
+            });
+
+            if (!res.ok) {
+                // 409 means trial already started — treat as success.
+                if (res.status === 409) {
+                    setTrialStarted(true);
+                    return;
+                }
+                const text = await res.text().catch(() => '');
+                throw new Error(text || `Trial start failed (${res.status})`);
+            }
+
+            showSuccess('14-day Pro trial started! Set up Relay to monitor from your phone.');
+            setTrialStarted(true);
+            await loadLicenseStatus(true);
+        } catch (err) {
+            logger.warn('[CompleteStep] Failed to start trial; falling back to upgrade URL', err);
+            showError('Unable to start trial. Redirecting to upgrade options...');
+            const upgradeUrl = getUpgradeActionUrlOrFallback('relay');
+            if (typeof window !== 'undefined') {
+                window.location.href = upgradeUrl;
+            }
+        } finally {
+            setTrialStarting(false);
+        }
+    };
+
+    const handleSetupRelay = () => {
+        props.onComplete();
+        navigate(RELAY_SETTINGS_PATH);
     };
 
     return (
@@ -438,6 +497,58 @@ Keep these credentials secure!
                         </button>
                     </div>
                 </Show>
+            </div>
+
+            {/* Mobile Access — Relay hero CTA */}
+            <div class="bg-gradient-to-r from-blue-500/20 to-purple-500/20 backdrop-blur-xl rounded-xl border border-blue-400/30 p-4 text-left mb-4">
+                <div class="flex items-start gap-3">
+                    <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-500 text-white shadow-lg shadow-blue-500/30 shrink-0">
+                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                        </svg>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <h3 class="text-sm font-semibold text-white mb-1">Monitor from Anywhere</h3>
+                        <p class="text-xs text-white/70 mb-3">
+                            Get push notifications and manage your infrastructure from your phone with Pulse Relay.
+                        </p>
+                        <Show
+                            when={!trialStarted() && entitlements()?.subscription_state !== 'trial'}
+                            fallback={
+                                <button
+                                    type="button"
+                                    onClick={handleSetupRelay}
+                                    class="inline-flex items-center gap-1.5 rounded-lg bg-blue-500 hover:bg-blue-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm transition-all"
+                                >
+                                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                                    </svg>
+                                    Set Up Relay
+                                </button>
+                            }
+                        >
+                            <button
+                                type="button"
+                                onClick={() => void handleStartTrial()}
+                                disabled={trialStarting()}
+                                class="inline-flex items-center gap-1.5 rounded-lg bg-blue-500 hover:bg-blue-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm transition-all disabled:opacity-50"
+                            >
+                                {trialStarting() ? (
+                                    <>
+                                        <svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                                        </svg>
+                                        Starting trial...
+                                    </>
+                                ) : (
+                                    'Start Free Trial & Set Up Mobile'
+                                )}
+                            </button>
+                        </Show>
+                        <p class="mt-2 text-[10px] text-white/40">14-day Pro trial &middot; No credit card required</p>
+                    </div>
+                </div>
             </div>
 
             {/* Launch button */}

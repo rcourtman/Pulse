@@ -11,6 +11,12 @@ type BillingState struct {
 	TrialStartedAt *int64 `json:"trial_started_at,omitempty"`
 	// TrialEndsAt is the Unix timestamp when a trial expires.
 	TrialEndsAt *int64 `json:"trial_ends_at,omitempty"`
+	// TrialExtendedAt is the Unix timestamp when the trial was extended (one extension per trial).
+	TrialExtendedAt *int64 `json:"trial_extended_at,omitempty"`
+
+	// Integrity is an HMAC-SHA256 over critical billing fields.
+	// Used for tamper detection on self-hosted installations.
+	Integrity string `json:"integrity,omitempty"`
 
 	// Stripe identifiers (Cloud).
 	// These fields allow webhook events to reconcile Stripe customers/subscriptions back to an org.

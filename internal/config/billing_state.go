@@ -1,11 +1,16 @@
 package config
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 
@@ -28,16 +33,18 @@ func NewFileBillingStore(baseDataDir string) *FileBillingStore {
 
 // GetBillingState returns the current billing state for an org.
 // Missing billing files are treated as "no state yet" and return (nil, nil).
+// If the state has been tampered with (invalid HMAC), it is treated as nonexistent.
 func (s *FileBillingStore) GetBillingState(orgID string) (*entitlements.BillingState, error) {
 	billingPath, err := s.billingStatePath(orgID)
 	if err != nil {
 		return nil, err
 	}
 
+	// Read file under read lock, then release before potential migration write.
 	s.mu.RLock()
-	defer s.mu.RUnlock()
-
 	data, err := os.ReadFile(billingPath)
+	s.mu.RUnlock()
+
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, nil
@@ -53,6 +60,20 @@ func (s *FileBillingStore) GetBillingState(orgID string) (*entitlements.BillingS
 		return nil, fmt.Errorf("decode billing state for org %q: %w", orgID, err)
 	}
 
+	// Integrity verification: derive HMAC key from .encryption.key.
+	// If the key is unavailable (new install, key not yet created), skip checks.
+	hmacKey, keyErr := s.loadHMACKey()
+	if keyErr == nil {
+		if state.Integrity == "" {
+			// Migration: pre-upgrade state without integrity. Compute and persist.
+			state.Integrity = billingIntegrity(&state, hmacKey)
+			_ = s.SaveBillingState(orgID, &state) // best-effort persist
+		} else if !verifyBillingIntegrity(&state, hmacKey) {
+			// Tampered state — treat as nonexistent (free tier).
+			return nil, nil
+		}
+	}
+
 	return &state, nil
 }
 
@@ -60,6 +81,11 @@ func (s *FileBillingStore) GetBillingState(orgID string) (*entitlements.BillingS
 func (s *FileBillingStore) SaveBillingState(orgID string, state *entitlements.BillingState) error {
 	if state == nil {
 		return errors.New("billing state is required")
+	}
+
+	// Compute integrity HMAC if encryption key is available.
+	if hmacKey, err := s.loadHMACKey(); err == nil {
+		state.Integrity = billingIntegrity(state, hmacKey)
 	}
 
 	billingPath, err := s.billingStatePath(orgID)
@@ -112,4 +138,65 @@ func (s *FileBillingStore) resolveDataDir() string {
 		return dir
 	}
 	return "/etc/pulse"
+}
+
+// loadHMACKey derives a purpose-specific HMAC key from the .encryption.key file.
+// Returns an error if the key file is missing or invalid (graceful degradation).
+func (s *FileBillingStore) loadHMACKey() ([]byte, error) {
+	keyPath := filepath.Join(s.resolveDataDir(), ".encryption.key")
+	raw, err := os.ReadFile(keyPath)
+	if err != nil {
+		return nil, err
+	}
+
+	trimmed := strings.TrimSpace(string(raw))
+	decoded := make([]byte, base64.StdEncoding.DecodedLen(len(trimmed)))
+	n, err := base64.StdEncoding.Decode(decoded, []byte(trimmed))
+	if err != nil || n != 32 {
+		return nil, fmt.Errorf("invalid encryption key")
+	}
+
+	// Domain-separated key: SHA256("pulse-billing-integrity-" || raw_key)
+	h := sha256.New()
+	h.Write([]byte("pulse-billing-integrity-"))
+	h.Write(decoded[:n])
+	return h.Sum(nil), nil
+}
+
+// billingIntegrityPayload contains only the critical fields used for HMAC computation.
+// Adding non-critical fields to BillingState won't break existing signatures.
+type billingIntegrityPayload struct {
+	Capabilities      []string                       `json:"capabilities"`
+	PlanVersion       string                         `json:"plan_version"`
+	SubscriptionState entitlements.SubscriptionState `json:"subscription_state"`
+	TrialStartedAt    *int64                         `json:"trial_started_at"`
+	TrialEndsAt       *int64                         `json:"trial_ends_at"`
+	TrialExtendedAt   *int64                         `json:"trial_extended_at"`
+}
+
+// billingIntegrity computes the HMAC-SHA256 over the critical billing fields.
+func billingIntegrity(state *entitlements.BillingState, key []byte) string {
+	caps := make([]string, len(state.Capabilities))
+	copy(caps, state.Capabilities)
+	sort.Strings(caps)
+
+	payload := billingIntegrityPayload{
+		Capabilities:      caps,
+		PlanVersion:       state.PlanVersion,
+		SubscriptionState: state.SubscriptionState,
+		TrialStartedAt:    state.TrialStartedAt,
+		TrialEndsAt:       state.TrialEndsAt,
+		TrialExtendedAt:   state.TrialExtendedAt,
+	}
+
+	data, _ := json.Marshal(payload) // struct marshal cannot fail
+	mac := hmac.New(sha256.New, key)
+	mac.Write(data)
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
+// verifyBillingIntegrity checks whether the stored HMAC matches the computed one.
+func verifyBillingIntegrity(state *entitlements.BillingState, key []byte) bool {
+	expected := billingIntegrity(state, key)
+	return hmac.Equal([]byte(expected), []byte(state.Integrity))
 }
