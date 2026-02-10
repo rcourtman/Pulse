@@ -27,6 +27,29 @@ Go to **Settings → Proxmox**.
 
 If you want Pulse to find servers automatically, enable discovery in **Settings → System → Network** and then return to **Settings → Proxmox** to review discovered servers.
 
+### How do I access the LXC console to run commands?
+If you installed Pulse using the LXC installer, the container is created *without a root password*.  The LXC container uses Proxmox host-level authentication via **pct enter** rather than traditional password login. This is the recommended approach for Proxmox-managed containers.
+
+To access the console and run commands (like `update` or `journalctl -u pulse` or `pulse bootstrap-token`), use the Proxmox host shell:
+
+**From Proxmox Host Shell** (SSH into your Proxmox host first):
+```bash
+pct enter <VMID>  # e.g., pct enter 100
+```
+
+This gives you direct root access without requiring a password.
+
+**Find your container ID**:
+```bash
+pct list | grep -i pulse
+```
+
+**Note**: The Proxmox web console will show a `login:` prompt, but you cannot log in without first setting a password. To set a password for web console or SSH access:
+```bash
+pct enter <VMID>
+passwd  # Set root password
+```
+
 ### How do I change the port?
 - **Systemd**: `sudo systemctl edit pulse`, add `Environment="FRONTEND_PORT=8080"`, restart.
 - **Docker**: Use `-p 8080:7655` in your run command.
