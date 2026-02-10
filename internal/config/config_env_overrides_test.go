@@ -18,6 +18,9 @@ func TestLoad_EnvOverrides_Comprehensive(t *testing.T) {
 		"ENABLE_TEMPERATURE_MONITORING",
 		"PULSE_AUTH_HIDE_LOCAL_LOGIN",
 		"PULSE_DISABLE_DOCKER_UPDATE_ACTIONS",
+		"DISABLE_DOCKER_UPDATE_ACTIONS",
+		"PULSE_HIDE_DOCKER_UPDATE_ACTIONS",
+		"HIDE_DOCKER_UPDATE_ACTIONS",
 		"PULSE_DISABLE_LEGACY_ROUTE_REDIRECTS",
 		"ENABLE_BACKUP_POLLING",
 		"ADAPTIVE_POLLING_ENABLED",
@@ -140,4 +143,35 @@ func TestLoad_EnvOverrides_PBSAndPMG(t *testing.T) {
 
 	assert.Equal(t, 45*time.Second, cfg.PBSPollingInterval)
 	assert.Equal(t, 120*time.Second, cfg.PMGPollingInterval)
+}
+
+func TestLoad_EnvOverrides_DockerUpdateActionsAliases(t *testing.T) {
+	cases := []struct {
+		name   string
+		envVar string
+		value  string
+		want   bool
+	}{
+		{name: "canonical", envVar: "PULSE_DISABLE_DOCKER_UPDATE_ACTIONS", value: "true", want: true},
+		{name: "legacy disable", envVar: "DISABLE_DOCKER_UPDATE_ACTIONS", value: "true", want: true},
+		{name: "legacy pulse hide", envVar: "PULSE_HIDE_DOCKER_UPDATE_ACTIONS", value: "true", want: true},
+		{name: "legacy hide", envVar: "HIDE_DOCKER_UPDATE_ACTIONS", value: "true", want: true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tempDir := t.TempDir()
+			t.Setenv("PULSE_DATA_DIR", tempDir)
+			t.Setenv("PULSE_DISABLE_DOCKER_UPDATE_ACTIONS", "")
+			t.Setenv("DISABLE_DOCKER_UPDATE_ACTIONS", "")
+			t.Setenv("PULSE_HIDE_DOCKER_UPDATE_ACTIONS", "")
+			t.Setenv("HIDE_DOCKER_UPDATE_ACTIONS", "")
+			t.Setenv(tc.envVar, tc.value)
+
+			cfg, err := Load()
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, cfg.DisableDockerUpdateActions)
+			assert.True(t, cfg.EnvOverrides["disableDockerUpdateActions"])
+		})
+	}
 }

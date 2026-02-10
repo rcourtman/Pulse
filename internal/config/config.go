@@ -967,15 +967,38 @@ func Load() (*Config, error) {
 		}
 	}
 
-	if disableDockerUpdateActionsStr := utils.GetenvTrim("PULSE_DISABLE_DOCKER_UPDATE_ACTIONS"); disableDockerUpdateActionsStr != "" {
-		if disabled, err := strconv.ParseBool(disableDockerUpdateActionsStr); err == nil {
-			cfg.DisableDockerUpdateActions = disabled
-			cfg.EnvOverrides["PULSE_DISABLE_DOCKER_UPDATE_ACTIONS"] = true
-			cfg.EnvOverrides["disableDockerUpdateActions"] = true
-			log.Info().Bool("disabled", disabled).Msg("Overriding Docker update actions setting from environment")
-		} else {
-			log.Warn().Str("value", disableDockerUpdateActionsStr).Msg("Invalid PULSE_DISABLE_DOCKER_UPDATE_ACTIONS value, ignoring")
+	// Support legacy aliases so existing env files continue to work.
+	// Canonical key remains PULSE_DISABLE_DOCKER_UPDATE_ACTIONS.
+	dockerUpdateActionsEnvVars := []string{
+		"PULSE_DISABLE_DOCKER_UPDATE_ACTIONS",
+		"DISABLE_DOCKER_UPDATE_ACTIONS",
+		"PULSE_HIDE_DOCKER_UPDATE_ACTIONS",
+		"HIDE_DOCKER_UPDATE_ACTIONS",
+	}
+	for _, envVar := range dockerUpdateActionsEnvVars {
+		value := utils.GetenvTrim(envVar)
+		if value == "" {
+			continue
 		}
+
+		disabled, err := strconv.ParseBool(value)
+		if err != nil {
+			log.Warn().
+				Str("env", envVar).
+				Str("value", value).
+				Msg("Invalid Docker update actions env var value, ignoring")
+			break
+		}
+
+		cfg.DisableDockerUpdateActions = disabled
+		cfg.EnvOverrides[envVar] = true
+		cfg.EnvOverrides["PULSE_DISABLE_DOCKER_UPDATE_ACTIONS"] = true
+		cfg.EnvOverrides["disableDockerUpdateActions"] = true
+		log.Info().
+			Str("env", envVar).
+			Bool("disabled", disabled).
+			Msg("Overriding Docker update actions setting from environment")
+		break
 	}
 
 	if disableLegacyRouteRedirectsStr := utils.GetenvTrim("PULSE_DISABLE_LEGACY_ROUTE_REDIRECTS"); disableLegacyRouteRedirectsStr != "" {
