@@ -195,7 +195,7 @@ func newBillingStateTestRouter(t *testing.T, hostedMode bool) (*Router, string) 
 		config:     &config.Config{DataPath: baseDir},
 		hostedMode: hostedMode,
 	}
-	router.registerHostedRoutes(nil, nil)
+	router.registerHostedRoutes(nil, nil, nil)
 	t.Cleanup(func() {
 		if router.signupRateLimiter != nil {
 			router.signupRateLimiter.Stop()

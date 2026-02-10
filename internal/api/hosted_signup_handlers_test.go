@@ -203,7 +203,7 @@ func newHostedSignupTestRouterWithDeps(t *testing.T, hostedMode bool, persistenc
 	})
 
 	hostedSignupHandlers := NewHostedSignupHandlers(persistence, rbacProvider, magicLinks, nil, hostedMode)
-	router.registerHostedRoutes(hostedSignupHandlers, nil)
+	router.registerHostedRoutes(hostedSignupHandlers, nil, nil)
 
 	return router, emailer
 }

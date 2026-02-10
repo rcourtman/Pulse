@@ -33,6 +33,14 @@ func (s staticSource) SubscriptionState() license.SubscriptionState {
 	return license.SubStateActive
 }
 
+func (s staticSource) TrialStartedAt() *int64 {
+	return nil
+}
+
+func (s staticSource) TrialEndsAt() *int64 {
+	return nil
+}
+
 type panicSource struct {
 	panicCapabilities bool
 	panicLimits       bool
@@ -62,6 +70,14 @@ func (p panicSource) PlanVersion() string {
 
 func (p panicSource) SubscriptionState() license.SubscriptionState {
 	return license.SubStateActive
+}
+
+func (p panicSource) TrialStartedAt() *int64 {
+	return nil
+}
+
+func (p panicSource) TrialEndsAt() *int64 {
+	return nil
 }
 
 func TestSafeEvaluatorHasCapability_Normal(t *testing.T) {

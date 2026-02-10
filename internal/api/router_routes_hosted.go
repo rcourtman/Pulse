@@ -6,7 +6,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
 
-func (r *Router) registerHostedRoutes(hostedSignupHandlers *HostedSignupHandlers, magicLinkHandlers *MagicLinkHandlers) {
+func (r *Router) registerHostedRoutes(hostedSignupHandlers *HostedSignupHandlers, magicLinkHandlers *MagicLinkHandlers, stripeWebhookHandlers *StripeWebhookHandlers) {
 	if r.signupRateLimiter == nil {
 		r.signupRateLimiter = NewRateLimiter(5, 1*time.Hour)
 	}
@@ -47,5 +47,9 @@ func (r *Router) registerHostedRoutes(hostedSignupHandlers *HostedSignupHandlers
 	if magicLinkHandlers != nil {
 		r.mux.HandleFunc("/api/public/magic-link/request", magicLinkHandlers.HandlePublicMagicLinkRequest)
 		r.mux.HandleFunc("/api/public/magic-link/verify", magicLinkHandlers.HandlePublicMagicLinkVerify)
+	}
+	if stripeWebhookHandlers != nil {
+		// No auth: Stripe calls this endpoint. Signature verification is the auth layer.
+		r.mux.HandleFunc("/api/webhooks/stripe", stripeWebhookHandlers.HandleStripeWebhook)
 	}
 }

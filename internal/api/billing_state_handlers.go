@@ -129,6 +129,12 @@ func normalizeBillingState(state *entitlements.BillingState) *entitlements.Billi
 		MetersEnabled:     append([]string(nil), state.MetersEnabled...),
 		PlanVersion:       strings.TrimSpace(state.PlanVersion),
 		SubscriptionState: entitlements.SubscriptionState(strings.ToLower(strings.TrimSpace(string(state.SubscriptionState)))),
+		TrialStartedAt:    state.TrialStartedAt,
+		TrialEndsAt:       state.TrialEndsAt,
+
+		StripeCustomerID:     strings.TrimSpace(state.StripeCustomerID),
+		StripeSubscriptionID: strings.TrimSpace(state.StripeSubscriptionID),
+		StripePriceID:        strings.TrimSpace(state.StripePriceID),
 	}
 	for key, value := range state.Limits {
 		normalized.Limits[key] = value
@@ -156,7 +162,8 @@ func isValidBillingSubscriptionState(state entitlements.SubscriptionState) bool 
 		entitlements.SubStateActive,
 		entitlements.SubStateGrace,
 		entitlements.SubStateExpired,
-		entitlements.SubStateSuspended:
+		entitlements.SubStateSuspended,
+		entitlements.SubStateCanceled:
 		return true
 	default:
 		return false

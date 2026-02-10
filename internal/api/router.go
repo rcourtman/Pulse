@@ -326,6 +326,15 @@ func (r *Router) setupRoutes() {
 	}
 
 	hostedSignupHandlers := NewHostedSignupHandlers(r.multiTenant, rbacProvider, magicLinkService, r.resolvePublicURL, r.hostedMode)
+	stripeWebhookHandlers := NewStripeWebhookHandlers(
+		config.NewFileBillingStore(r.config.DataPath),
+		r.multiTenant,
+		rbacProvider,
+		magicLinkService,
+		r.resolvePublicURL,
+		r.hostedMode,
+		r.config.DataPath,
+	)
 	infraUpdateHandlers := NewUpdateDetectionHandlers(r.monitor)
 	auditHandlers := NewAuditHandlers()
 
@@ -451,7 +460,7 @@ func (r *Router) setupRoutes() {
 	r.registerConfigSystemRoutes(updateHandlers)
 	r.registerAIRelayRoutes()
 	r.registerOrgLicenseRoutes(orgHandlers, rbacHandlers, auditHandlers)
-	r.registerHostedRoutes(hostedSignupHandlers, magicLinkHandlers)
+	r.registerHostedRoutes(hostedSignupHandlers, magicLinkHandlers, stripeWebhookHandlers)
 
 	// Note: Frontend handler is handled manually in ServeHTTP to prevent redirect issues
 	// See issue #334 - ServeMux redirects empty path to "./" which breaks reverse proxies
