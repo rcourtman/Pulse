@@ -102,3 +102,14 @@ func GenerateUpgradeReasons(capabilities []string) []ReasonEntry {
 
 	return reasons
 }
+
+// UpgradeURLForFeature returns the action URL for a given feature from the upgrade matrix.
+// Falls back to a generic pricing URL if the feature is not in the matrix.
+func UpgradeURLForFeature(feature string) string {
+	for _, entry := range UpgradeReasonMatrix {
+		if entry.Feature == feature {
+			return entry.ActionURL
+		}
+	}
+	return "https://pulserelay.pro/pricing?utm_source=pulse&utm_medium=app&utm_campaign=upgrade"
+}

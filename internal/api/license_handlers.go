@@ -10,6 +10,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/license"
+	"github.com/rcourtman/pulse-go-rewrite/internal/license/conversion"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license/entitlements"
 	"github.com/rs/zerolog/log"
 )
@@ -286,7 +287,7 @@ func (h *LicenseHandlers) HandleLicenseFeatures(w http.ResponseWriter, r *http.R
 			// Multi-tenant
 			license.FeatureMultiTenant: service.HasFeature(license.FeatureMultiTenant),
 		},
-		UpgradeURL: "https://pulserelay.pro/",
+		UpgradeURL: conversion.UpgradeURLForFeature(""),
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -419,14 +420,20 @@ func (h *LicenseHandlers) HandleClearLicense(w http.ResponseWriter, r *http.Requ
 // Returns HTTP 402 Payment Required if the feature is not licensed.
 // WriteLicenseRequired writes a 402 Payment Required response for a missing license feature.
 // ALL license gate responses in handlers MUST use this function to ensure consistent response format.
-func WriteLicenseRequired(w http.ResponseWriter, feature, message string) {
+//
+// NOTE: Direct 402 responses are intentionally centralized in this file to keep API behavior consistent.
+func writePaymentRequired(w http.ResponseWriter, payload map[string]interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusPaymentRequired)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(payload)
+}
+
+func WriteLicenseRequired(w http.ResponseWriter, feature, message string) {
+	writePaymentRequired(w, map[string]interface{}{
 		"error":       "license_required",
 		"message":     message,
 		"feature":     feature,
-		"upgrade_url": "https://pulserelay.pro/",
+		"upgrade_url": conversion.UpgradeURLForFeature(feature),
 	})
 }
 

@@ -32,6 +32,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/unified"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license"
+	"github.com/rcourtman/pulse-go-rewrite/internal/license/conversion"
 	"github.com/rcourtman/pulse-go-rewrite/internal/metrics"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
@@ -3093,7 +3094,7 @@ func (h *AISettingsHandler) HandleGetPatrolStatus(w http.ResponseWriter, r *http
 			Healthy:         true,
 			LicenseRequired: true,
 			LicenseStatus:   "none",
-			UpgradeURL:      "https://pulserelay.pro/",
+			UpgradeURL:      conversion.UpgradeURLForFeature(license.FeatureAIAutoFix),
 		}
 		if err := utils.WriteJSONResponse(w, response); err != nil {
 			log.Error().Err(err).Msg("Failed to write patrol status response (no AI service)")
@@ -3114,7 +3115,7 @@ func (h *AISettingsHandler) HandleGetPatrolStatus(w http.ResponseWriter, r *http
 			LicenseStatus:   licenseStatus,
 		}
 		if !hasAutoFixFeature {
-			response.UpgradeURL = "https://pulserelay.pro/"
+			response.UpgradeURL = conversion.UpgradeURLForFeature(license.FeatureAIAutoFix)
 		}
 		if err := utils.WriteJSONResponse(w, response); err != nil {
 			log.Error().Err(err).Msg("Failed to write patrol status response")
@@ -3155,7 +3156,7 @@ func (h *AISettingsHandler) HandleGetPatrolStatus(w http.ResponseWriter, r *http
 		LicenseStatus:    licenseStatus,
 	}
 	if !hasAutoFixFeature {
-		response.UpgradeURL = "https://pulserelay.pro/"
+		response.UpgradeURL = conversion.UpgradeURLForFeature(license.FeatureAIAutoFix)
 	}
 	response.Summary.Critical = summary.Critical
 	response.Summary.Warning = summary.Warning

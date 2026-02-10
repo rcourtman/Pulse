@@ -14,12 +14,15 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/remediation"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/unified"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license"
+	"github.com/rcourtman/pulse-go-rewrite/internal/license/conversion"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog/log"
 )
 
-const aiIntelligenceUpgradeURL = "https://pulserelay.pro/"
+func aiIntelligenceUpgradeURL() string {
+	return conversion.UpgradeURLForFeature(license.FeatureAIPatrol)
+}
 
 // HandleGetPatterns returns detected failure patterns (GET /api/ai/intelligence/patterns)
 func (h *AISettingsHandler) HandleGetPatterns(w http.ResponseWriter, r *http.Request) {
@@ -94,7 +97,7 @@ func (h *AISettingsHandler) HandleGetPatterns(w http.ResponseWriter, r *http.Req
 		"patterns":         result,
 		"count":            count,
 		"license_required": locked,
-		"upgrade_url":      aiIntelligenceUpgradeURL,
+		"upgrade_url":      aiIntelligenceUpgradeURL(),
 	}); err != nil {
 		log.Error().Err(err).Msg("Failed to write patterns response")
 	}
@@ -176,7 +179,7 @@ func (h *AISettingsHandler) HandleGetPredictions(w http.ResponseWriter, r *http.
 		"predictions":      result,
 		"count":            count,
 		"license_required": locked,
-		"upgrade_url":      aiIntelligenceUpgradeURL,
+		"upgrade_url":      aiIntelligenceUpgradeURL(),
 	}); err != nil {
 		log.Error().Err(err).Msg("Failed to write predictions response")
 	}
@@ -262,7 +265,7 @@ func (h *AISettingsHandler) HandleGetCorrelations(w http.ResponseWriter, r *http
 		"correlations":     result,
 		"count":            count,
 		"license_required": locked,
-		"upgrade_url":      aiIntelligenceUpgradeURL,
+		"upgrade_url":      aiIntelligenceUpgradeURL(),
 	}); err != nil {
 		log.Error().Err(err).Msg("Failed to write correlations response")
 	}
@@ -348,7 +351,7 @@ func (h *AISettingsHandler) HandleGetRecentChanges(w http.ResponseWriter, r *htt
 		"count":            count,
 		"hours":            hours,
 		"license_required": locked,
-		"upgrade_url":      aiIntelligenceUpgradeURL,
+		"upgrade_url":      aiIntelligenceUpgradeURL(),
 	}); err != nil {
 		log.Error().Err(err).Msg("Failed to write changes response")
 	}
@@ -429,7 +432,7 @@ func (h *AISettingsHandler) HandleGetBaselines(w http.ResponseWriter, r *http.Re
 		"baselines":        result,
 		"count":            count,
 		"license_required": locked,
-		"upgrade_url":      aiIntelligenceUpgradeURL,
+		"upgrade_url":      aiIntelligenceUpgradeURL(),
 	}); err != nil {
 		log.Error().Err(err).Msg("Failed to write baselines response")
 	}
@@ -456,7 +459,7 @@ func (h *AISettingsHandler) HandleGetRemediations(w http.ResponseWriter, r *http
 			"remediations":     []interface{}{},
 			"message":          "Pulse Patrol is not enabled",
 			"license_required": locked,
-			"upgrade_url":      aiIntelligenceUpgradeURL,
+			"upgrade_url":      aiIntelligenceUpgradeURL(),
 		}); err != nil {
 			log.Error().Err(err).Msg("Failed to write remediations response")
 		}
@@ -469,7 +472,7 @@ func (h *AISettingsHandler) HandleGetRemediations(w http.ResponseWriter, r *http
 			"remediations":     []interface{}{},
 			"message":          "Patrol service not initialized",
 			"license_required": locked,
-			"upgrade_url":      aiIntelligenceUpgradeURL,
+			"upgrade_url":      aiIntelligenceUpgradeURL(),
 		}); err != nil {
 			log.Error().Err(err).Msg("Failed to write remediations response")
 		}
@@ -482,7 +485,7 @@ func (h *AISettingsHandler) HandleGetRemediations(w http.ResponseWriter, r *http
 			"remediations":     []interface{}{},
 			"message":          "Remediation log not initialized",
 			"license_required": locked,
-			"upgrade_url":      aiIntelligenceUpgradeURL,
+			"upgrade_url":      aiIntelligenceUpgradeURL(),
 		}); err != nil {
 			log.Error().Err(err).Msg("Failed to write remediations response")
 		}
@@ -558,7 +561,7 @@ func (h *AISettingsHandler) HandleGetRemediations(w http.ResponseWriter, r *http
 		"count":            count,
 		"stats":            stats,
 		"license_required": locked,
-		"upgrade_url":      aiIntelligenceUpgradeURL,
+		"upgrade_url":      aiIntelligenceUpgradeURL(),
 	}); err != nil {
 		log.Error().Err(err).Msg("Failed to write remediations response")
 	}
