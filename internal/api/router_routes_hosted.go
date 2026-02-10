@@ -61,4 +61,8 @@ func (r *Router) registerHostedRoutes(hostedSignupHandlers *HostedSignupHandlers
 		// No auth: Stripe calls this endpoint. Signature verification is the auth layer.
 		r.mux.HandleFunc("/api/webhooks/stripe", stripeWebhookHandlers.HandleStripeWebhook)
 	}
+
+	// Cloud handoff: control-plane redirects here after magic link verification.
+	// Handler self-guards via handoff key file check — returns 404 if not a cloud tenant.
+	r.mux.HandleFunc("/auth/cloud-handoff", HandleCloudHandoff(routerConfig.DataPath))
 }

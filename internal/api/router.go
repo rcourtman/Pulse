@@ -245,15 +245,18 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monit
 	handler = ErrorHandler(handler)
 	handler = DemoModeMiddleware(cfg, handler)
 
-	// Create tenant middleware with authorization checker
-	tenantMiddleware := NewTenantMiddleware(r.multiTenant)
-	// Wire authorization checker for org access control with org loader for membership checks
+	// Create tenant middleware with authorization checker.
+	// In hosted mode, tenant routing uses subscription lifecycle checks instead of FeatureMultiTenant.
 	var orgLoader OrganizationLoader
 	if r.multiTenant != nil {
 		orgLoader = NewMultiTenantOrganizationLoader(r.multiTenant)
 	}
 	authChecker := NewAuthorizationChecker(orgLoader)
-	tenantMiddleware.SetAuthChecker(authChecker)
+	tenantMiddleware := NewTenantMiddlewareWithConfig(TenantMiddlewareConfig{
+		Persistence: r.multiTenant,
+		AuthChecker: authChecker,
+		HostedMode:  r.hostedMode,
+	})
 
 	// Per-tenant rate limiting (hosted mode only).
 	// This relies on org ID stored in context by TenantMiddleware; because the chain is built inside-out,
@@ -2725,6 +2728,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				"/api/server/info",               // Server info for installer script
 				"/api/install/install-docker.sh", // Docker turnkey installer
 				"/api/ai/oauth/callback",         // OAuth callback from Anthropic for Claude subscription auth
+				"/auth/cloud-handoff",            // Cloud control plane handoff (token-authenticated)
 			}
 
 			// Also allow static assets without auth (JS, CSS, etc)
@@ -2845,6 +2849,10 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 		// Skip CSRF for hosted public endpoints (may be called without a session or with a stale cookie).
 		if req.URL.Path == "/api/public/signup" || req.URL.Path == "/api/public/magic-link/request" {
+			skipCSRF = true
+		}
+		// Skip CSRF for cloud handoff (GET with token param, no prior session).
+		if req.URL.Path == "/auth/cloud-handoff" {
 			skipCSRF = true
 		}
 		if strings.HasPrefix(req.URL.Path, "/api/") && !skipCSRF && !CheckCSRF(w, req) {

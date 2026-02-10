@@ -134,4 +134,5 @@ var publicPathsAllowlist = []string{
 	"/api/server/info",
 	"/api/install/install-docker.sh",
 	"/api/ai/oauth/callback",
+	"/auth/cloud-handoff",
 }

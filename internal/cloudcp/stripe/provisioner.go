@@ -2,29 +2,152 @@ package stripe
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
+	"time"
 
+	cpauth "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/auth"
+	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/docker"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license/entitlements"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/cloudauth"
 	"github.com/rs/zerolog/log"
 )
 
-// Provisioner orchestrates tenant creation, billing state updates, and (later)
+// Provisioner orchestrates tenant creation, billing state updates, and
 // container lifecycle in response to Stripe events.
 type Provisioner struct {
 	registry   *registry.TenantRegistry
 	tenantsDir string
+	docker     *docker.Manager // nil if Docker is unavailable
+	magicLinks *cpauth.Service // nil if magic links disabled
+	baseURL    string          // e.g. "https://cloud.pulserelay.pro"
 }
 
 // NewProvisioner creates a Provisioner.
-func NewProvisioner(reg *registry.TenantRegistry, tenantsDir string) *Provisioner {
+func NewProvisioner(reg *registry.TenantRegistry, tenantsDir string, dockerMgr *docker.Manager, magicLinks *cpauth.Service, baseURL string) *Provisioner {
 	return &Provisioner{
 		registry:   reg,
 		tenantsDir: tenantsDir,
+		docker:     dockerMgr,
+		magicLinks: magicLinks,
+		baseURL:    baseURL,
 	}
+}
+
+func (p *Provisioner) tenantDataDir(tenantID string) string {
+	return filepath.Join(p.tenantsDir, tenantID)
+}
+
+func (p *Provisioner) ensureTenantDirs(tenantID string) (tenantDataDir, secretsDir string, err error) {
+	tenantDataDir = p.tenantDataDir(tenantID)
+	if err := os.MkdirAll(tenantDataDir, 0o755); err != nil {
+		return "", "", fmt.Errorf("create tenant data dir: %w", err)
+	}
+	secretsDir = filepath.Join(tenantDataDir, "secrets")
+	if err := os.MkdirAll(secretsDir, 0o700); err != nil {
+		return "", "", fmt.Errorf("create tenant secrets dir: %w", err)
+	}
+	return tenantDataDir, secretsDir, nil
+}
+
+func (p *Provisioner) writeHandoffKey(secretsDir string) error {
+	key := make([]byte, 32)
+	if _, err := rand.Read(key); err != nil {
+		return fmt.Errorf("generate handoff key: %w", err)
+	}
+	path := filepath.Join(secretsDir, "handoff.key")
+	if err := os.WriteFile(path, key, 0o600); err != nil {
+		return fmt.Errorf("write handoff key: %w", err)
+	}
+	return nil
+}
+
+func (p *Provisioner) writeCloudHandoffKey(tenantDataDir string) error {
+	key, err := cloudauth.GenerateHandoffKey()
+	if err != nil {
+		return err
+	}
+	path := filepath.Join(tenantDataDir, cloudauth.HandoffKeyFile)
+	if err := os.WriteFile(path, key, 0o600); err != nil {
+		return fmt.Errorf("write cloud handoff key: %w", err)
+	}
+	return nil
+}
+
+func (p *Provisioner) pollHealth(ctx context.Context, containerID string) bool {
+	if p.docker == nil || containerID == "" {
+		return false
+	}
+	const (
+		interval = 2 * time.Second
+		timeout  = 60 * time.Second
+	)
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		ok, err := p.docker.HealthCheck(ctx, containerID)
+		if err == nil && ok {
+			return true
+		}
+		select {
+		case <-ctx.Done():
+			return false
+		case <-time.After(interval):
+		}
+	}
+	return false
+}
+
+func (p *Provisioner) generateAndLogMagicLink(email, tenantID string) {
+	if p.magicLinks == nil || email == "" {
+		return
+	}
+	token, err := p.magicLinks.GenerateToken(email, tenantID)
+	if err != nil {
+		log.Error().Err(err).Str("tenant_id", tenantID).Msg("Failed to generate magic link token")
+		return
+	}
+	magicURL := cpauth.BuildVerifyURL(p.baseURL, token)
+	if magicURL == "" {
+		log.Error().Str("tenant_id", tenantID).Msg("Failed to build magic link URL (empty baseURL?)")
+		return
+	}
+	log.Info().
+		Str("tenant_id", tenantID).
+		Str("email", email).
+		Str("magic_link_url", magicURL).
+		Msg("Magic link generated for new tenant")
+}
+
+func (p *Provisioner) writeBillingState(tenantDataDir string, state *entitlements.BillingState) error {
+	billingStore := config.NewFileBillingStore(tenantDataDir)
+	if err := billingStore.SaveBillingState("default", state); err != nil {
+		return fmt.Errorf("write billing state: %w", err)
+	}
+	return nil
+}
+
+func (p *Provisioner) maybeStartContainer(ctx context.Context, tenantID, tenantDataDir string) (containerID string, err error) {
+	if p.docker == nil {
+		return "", nil
+	}
+	id, err := p.docker.CreateAndStart(ctx, tenantID, tenantDataDir)
+	if err != nil {
+		return "", err
+	}
+	return id, nil
+}
+
+func (p *Provisioner) maybeStopAndRemoveContainer(ctx context.Context, containerID string) error {
+	if p.docker == nil || strings.TrimSpace(containerID) == "" {
+		return nil
+	}
+	return p.docker.StopAndRemove(ctx, containerID)
 }
 
 // HandleCheckout provisions a new tenant from a checkout.session.completed event.
@@ -40,6 +163,17 @@ func (p *Provisioner) HandleCheckout(ctx context.Context, session CheckoutSessio
 	email := strings.ToLower(strings.TrimSpace(session.CustomerEmail))
 	if email == "" {
 		email = strings.ToLower(strings.TrimSpace(session.CustomerDetails.Email))
+	}
+
+	// Consolidated billing: one Stripe customer per account.
+	// For individual Cloud signups, we create an "individual" account on first checkout.
+	accountID := ""
+	sa, err := p.registry.GetStripeAccountByCustomerID(customerID)
+	if err != nil {
+		return fmt.Errorf("lookup stripe account by customer: %w", err)
+	}
+	if sa != nil {
+		accountID = strings.TrimSpace(sa.AccountID)
 	}
 
 	// Check if a tenant already exists for this Stripe customer
@@ -63,11 +197,87 @@ func (p *Provisioner) HandleCheckout(ctx context.Context, session CheckoutSessio
 
 	planVersion := DerivePlanVersion(session.Metadata, "")
 
-	// Write billing.json to tenant data dir.
-	// FileBillingStore with baseDataDir=<tenantDir> + SaveBillingState("default", state)
-	// writes billing.json at the root of the tenant data dir.
-	tenantDataDir := p.tenantsDir + "/" + tenantID
-	billingStore := config.NewFileBillingStore(tenantDataDir)
+	// Ensure the account exists for this Stripe customer (individual Cloud signup path).
+	if accountID == "" {
+		kind := registry.AccountKindIndividual
+		if session.Metadata != nil {
+			switch strings.ToLower(strings.TrimSpace(session.Metadata["account_kind"])) {
+			case "msp":
+				kind = registry.AccountKindMSP
+			case "individual", "":
+				kind = registry.AccountKindIndividual
+			}
+		}
+
+		displayName := ""
+		if session.Metadata != nil {
+			displayName = strings.TrimSpace(session.Metadata["account_display_name"])
+			if displayName == "" {
+				displayName = strings.TrimSpace(session.Metadata["display_name"])
+			}
+		}
+		if displayName == "" {
+			displayName = email
+		}
+
+		newAccountID, err := registry.GenerateAccountID()
+		if err != nil {
+			return fmt.Errorf("generate account id: %w", err)
+		}
+		a := &registry.Account{
+			ID:          newAccountID,
+			Kind:        kind,
+			DisplayName: displayName,
+		}
+		if err := p.registry.CreateAccount(a); err != nil {
+			return fmt.Errorf("create account: %w", err)
+		}
+
+		newSA := &registry.StripeAccount{
+			AccountID:                 a.ID,
+			StripeCustomerID:          customerID,
+			StripeSubscriptionID:      strings.TrimSpace(session.Subscription),
+			PlanVersion:               planVersion,
+			SubscriptionState:         "trial",
+			StripeSubItemWorkspacesID: "",
+		}
+		if err := p.registry.CreateStripeAccount(newSA); err != nil {
+			// Best-effort fallback: if a competing worker created the row, reuse it.
+			existingSA, getErr := p.registry.GetStripeAccountByCustomerID(customerID)
+			if getErr != nil || existingSA == nil {
+				return fmt.Errorf("create stripe account mapping: %w", err)
+			}
+			accountID = strings.TrimSpace(existingSA.AccountID)
+		} else {
+			accountID = a.ID
+		}
+	} else if sa != nil {
+		// Backfill subscription ID/plan version if the mapping exists but hasn't been updated yet.
+		changed := false
+		if strings.TrimSpace(sa.StripeSubscriptionID) == "" && strings.TrimSpace(session.Subscription) != "" {
+			sa.StripeSubscriptionID = strings.TrimSpace(session.Subscription)
+			changed = true
+		}
+		if strings.TrimSpace(sa.PlanVersion) == "" && strings.TrimSpace(planVersion) != "" {
+			sa.PlanVersion = strings.TrimSpace(planVersion)
+			changed = true
+		}
+		if changed {
+			_ = p.registry.UpdateStripeAccount(sa)
+		}
+	}
+
+	tenantDataDir, secretsDir, err := p.ensureTenantDirs(tenantID)
+	if err != nil {
+		return err
+	}
+	if err := p.writeHandoffKey(secretsDir); err != nil {
+		return err
+	}
+	if err := p.writeCloudHandoffKey(tenantDataDir); err != nil {
+		return err
+	}
+
 	state := &entitlements.BillingState{
 		Capabilities:         license.DeriveCapabilitiesFromTier(license.TierCloud, nil),
 		Limits:               map[string]int64{},
@@ -77,13 +287,14 @@ func (p *Provisioner) HandleCheckout(ctx context.Context, session CheckoutSessio
 		StripeCustomerID:     customerID,
 		StripeSubscriptionID: strings.TrimSpace(session.Subscription),
 	}
-	if err := billingStore.SaveBillingState("default", state); err != nil {
-		return fmt.Errorf("write billing state: %w", err)
+	if err := p.writeBillingState(tenantDataDir, state); err != nil {
+		return err
 	}
 
 	// Insert registry record
 	tenant := &registry.Tenant{
 		ID:                   tenantID,
+		AccountID:            strings.TrimSpace(accountID),
 		Email:                email,
 		State:                registry.TenantStateProvisioning,
 		StripeCustomerID:     customerID,
@@ -94,6 +305,35 @@ func (p *Provisioner) HandleCheckout(ctx context.Context, session CheckoutSessio
 		return fmt.Errorf("create tenant record: %w", err)
 	}
 
+	// Start container if Docker is available.
+	containerID, err := p.maybeStartContainer(ctx, tenantID, tenantDataDir)
+	if err != nil {
+		return fmt.Errorf("start container: %w", err)
+	}
+	tenant.ContainerID = containerID
+
+	// Poll health check before declaring the tenant active.
+	if containerID != "" && p.pollHealth(ctx, containerID) {
+		tenant.State = registry.TenantStateActive
+		if err := p.registry.Update(tenant); err != nil {
+			return fmt.Errorf("update tenant record: %w", err)
+		}
+		p.generateAndLogMagicLink(email, tenantID)
+	} else {
+		if containerID != "" {
+			log.Warn().
+				Str("tenant_id", tenantID).
+				Str("container_id", containerID[:min(12, len(containerID))]).
+				Msg("Container health check timed out, leaving tenant in provisioning state")
+		}
+		// No Docker or timeout — still mark active for now, magic link generated without health gate.
+		tenant.State = registry.TenantStateActive
+		if err := p.registry.Update(tenant); err != nil {
+			return fmt.Errorf("update tenant record: %w", err)
+		}
+		p.generateAndLogMagicLink(email, tenantID)
+	}
+
 	log.Info().
 		Str("tenant_id", tenantID).
 		Str("customer_id", customerID).
@@ -101,6 +341,107 @@ func (p *Provisioner) HandleCheckout(ctx context.Context, session CheckoutSessio
 		Str("plan_version", planVersion).
 		Msg("Tenant provisioned from checkout")
 
+	return nil
+}
+
+func normalizeStripeAccountSubscriptionState(status string) string {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "active":
+		return "active"
+	case "trialing":
+		return "trial"
+	case "canceled":
+		return "canceled"
+	case "past_due", "unpaid", "paused", "incomplete", "incomplete_expired":
+		return "past_due"
+	default:
+		return "past_due"
+	}
+}
+
+func planVersionFromMetadata(metadata map[string]string, fallback string) string {
+	if metadata != nil {
+		if v := strings.TrimSpace(metadata["plan_version"]); v != "" {
+			return v
+		}
+		if v := strings.TrimSpace(metadata["plan"]); v != "" {
+			return v
+		}
+	}
+	return strings.TrimSpace(fallback)
+}
+
+// ProvisionWorkspace provisions a new workspace (tenant) under an account, without Stripe checkout.
+func (p *Provisioner) ProvisionWorkspace(ctx context.Context, accountID, displayName string) (*registry.Tenant, error) {
+	accountID = strings.TrimSpace(accountID)
+	displayName = strings.TrimSpace(displayName)
+	if accountID == "" {
+		return nil, fmt.Errorf("missing account id")
+	}
+	if displayName == "" {
+		return nil, fmt.Errorf("missing display name")
+	}
+
+	tenantID, err := registry.GenerateTenantID()
+	if err != nil {
+		return nil, fmt.Errorf("generate tenant id: %w", err)
+	}
+
+	tenantDataDir, secretsDir, err := p.ensureTenantDirs(tenantID)
+	if err != nil {
+		return nil, err
+	}
+	if err := p.writeHandoffKey(secretsDir); err != nil {
+		return nil, err
+	}
+	if err := p.writeCloudHandoffKey(tenantDataDir); err != nil {
+		return nil, err
+	}
+
+	planVersion := "msp_hosted_v1"
+	state := &entitlements.BillingState{
+		Capabilities:      license.DeriveCapabilitiesFromTier(license.TierCloud, nil),
+		Limits:            map[string]int64{},
+		MetersEnabled:     []string{},
+		PlanVersion:       planVersion,
+		SubscriptionState: entitlements.SubStateActive,
+	}
+	if err := p.writeBillingState(tenantDataDir, state); err != nil {
+		return nil, err
+	}
+
+	tenant := &registry.Tenant{
+		ID:          tenantID,
+		AccountID:   accountID,
+		DisplayName: displayName,
+		State:       registry.TenantStateProvisioning,
+		PlanVersion: planVersion,
+	}
+	if err := p.registry.Create(tenant); err != nil {
+		return nil, fmt.Errorf("create tenant record: %w", err)
+	}
+
+	containerID, err := p.maybeStartContainer(ctx, tenantID, tenantDataDir)
+	if err != nil {
+		return nil, fmt.Errorf("start container: %w", err)
+	}
+	tenant.ContainerID = containerID
+	tenant.State = registry.TenantStateActive
+	if err := p.registry.Update(tenant); err != nil {
+		return nil, fmt.Errorf("update tenant record: %w", err)
+	}
+
+	return tenant, nil
+}
+
+// DeprovisionWorkspaceContainer stops/removes a workspace container if Docker is available.
+func (p *Provisioner) DeprovisionWorkspaceContainer(ctx context.Context, tenant *registry.Tenant) error {
+	if tenant == nil {
+		return nil
+	}
+	if err := p.maybeStopAndRemoveContainer(ctx, tenant.ContainerID); err != nil {
+		return fmt.Errorf("stop/remove container: %w", err)
+	}
 	return nil
 }
 
@@ -130,8 +471,7 @@ func (p *Provisioner) HandleSubscriptionUpdated(ctx context.Context, sub Subscri
 		caps = license.DeriveCapabilitiesFromTier(license.TierCloud, nil)
 	}
 
-	tenantDataDir := p.tenantsDir + "/" + tenant.ID
-	billingStore := config.NewFileBillingStore(tenantDataDir)
+	tenantDataDir := p.tenantDataDir(tenant.ID)
 	state := &entitlements.BillingState{
 		Capabilities:         caps,
 		Limits:               map[string]int64{},
@@ -142,8 +482,8 @@ func (p *Provisioner) HandleSubscriptionUpdated(ctx context.Context, sub Subscri
 		StripeSubscriptionID: strings.TrimSpace(sub.ID),
 		StripePriceID:        priceID,
 	}
-	if err := billingStore.SaveBillingState("default", state); err != nil {
-		return fmt.Errorf("save billing state: %w", err)
+	if err := p.writeBillingState(tenantDataDir, state); err != nil {
+		return err
 	}
 
 	// Update registry
@@ -185,8 +525,7 @@ func (p *Provisioner) HandleSubscriptionDeleted(ctx context.Context, sub Subscri
 	}
 
 	// Revoke capabilities immediately
-	tenantDataDir := p.tenantsDir + "/" + tenant.ID
-	billingStore := config.NewFileBillingStore(tenantDataDir)
+	tenantDataDir := p.tenantDataDir(tenant.ID)
 	state := &entitlements.BillingState{
 		Capabilities:         []string{},
 		Limits:               map[string]int64{},
@@ -196,8 +535,8 @@ func (p *Provisioner) HandleSubscriptionDeleted(ctx context.Context, sub Subscri
 		StripeCustomerID:     customerID,
 		StripeSubscriptionID: strings.TrimSpace(sub.ID),
 	}
-	if err := billingStore.SaveBillingState("default", state); err != nil {
-		return fmt.Errorf("save billing state: %w", err)
+	if err := p.writeBillingState(tenantDataDir, state); err != nil {
+		return err
 	}
 
 	// Update registry
@@ -210,6 +549,176 @@ func (p *Provisioner) HandleSubscriptionDeleted(ctx context.Context, sub Subscri
 		Str("tenant_id", tenant.ID).
 		Str("customer_id", customerID).
 		Msg("Subscription deleted, capabilities revoked")
+
+	return nil
+}
+
+// HandleMSPSubscriptionUpdated updates billing state for all tenants under an MSP account.
+func (p *Provisioner) HandleMSPSubscriptionUpdated(ctx context.Context, sub Subscription) error {
+	customerID := strings.TrimSpace(sub.Customer)
+	if customerID == "" {
+		return fmt.Errorf("subscription missing customer")
+	}
+
+	sa, err := p.registry.GetStripeAccountByCustomerID(customerID)
+	if err != nil {
+		return fmt.Errorf("lookup stripe account by customer: %w", err)
+	}
+	if sa == nil {
+		log.Warn().Str("customer_id", customerID).Msg("msp subscription.updated: stripe account mapping not found")
+		return nil
+	}
+
+	account, err := p.registry.GetAccount(sa.AccountID)
+	if err != nil {
+		return fmt.Errorf("lookup account: %w", err)
+	}
+	if account == nil {
+		log.Warn().Str("account_id", sa.AccountID).Msg("msp subscription.updated: account not found")
+		return nil
+	}
+	if account.Kind != registry.AccountKindMSP {
+		return p.HandleSubscriptionUpdated(ctx, sub)
+	}
+
+	subState := MapSubscriptionStatus(sub.Status)
+	priceID := sub.FirstPriceID()
+
+	planVersion := planVersionFromMetadata(sub.Metadata, sa.PlanVersion)
+	if planVersion == "" {
+		planVersion = "msp_hosted_v1"
+	}
+
+	// Persist account-level Stripe state.
+	sa.StripeSubscriptionID = strings.TrimSpace(sub.ID)
+	sa.PlanVersion = planVersion
+	sa.SubscriptionState = normalizeStripeAccountSubscriptionState(sub.Status)
+	if err := p.registry.UpdateStripeAccount(sa); err != nil {
+		return fmt.Errorf("update stripe account: %w", err)
+	}
+
+	tenants, err := p.registry.ListByAccountID(sa.AccountID)
+	if err != nil {
+		return fmt.Errorf("list tenants by account: %w", err)
+	}
+
+	var caps []string
+	if ShouldGrantCapabilities(subState) {
+		caps = license.DeriveCapabilitiesFromTier(license.TierCloud, nil)
+	}
+
+	for _, tenant := range tenants {
+		if tenant == nil {
+			continue
+		}
+		tenantDataDir := p.tenantDataDir(tenant.ID)
+		state := &entitlements.BillingState{
+			Capabilities:         caps,
+			Limits:               map[string]int64{},
+			MetersEnabled:        []string{},
+			PlanVersion:          planVersion,
+			SubscriptionState:    subState,
+			StripeCustomerID:     customerID,
+			StripeSubscriptionID: strings.TrimSpace(sub.ID),
+			StripePriceID:        priceID,
+		}
+		if err := p.writeBillingState(tenantDataDir, state); err != nil {
+			return err
+		}
+
+		tenant.PlanVersion = planVersion
+		switch subState {
+		case entitlements.SubStateSuspended:
+			tenant.State = registry.TenantStateSuspended
+		case entitlements.SubStateCanceled, entitlements.SubStateExpired:
+			tenant.State = registry.TenantStateCanceled
+		default:
+			tenant.State = registry.TenantStateActive
+		}
+		if err := p.registry.Update(tenant); err != nil {
+			return fmt.Errorf("update tenant record: %w", err)
+		}
+	}
+
+	log.Info().
+		Str("account_id", sa.AccountID).
+		Str("customer_id", customerID).
+		Str("subscription_state", string(subState)).
+		Int("tenants", len(tenants)).
+		Msg("MSP subscription updated")
+
+	return nil
+}
+
+// HandleMSPSubscriptionDeleted revokes capabilities for all tenants under an MSP account.
+func (p *Provisioner) HandleMSPSubscriptionDeleted(ctx context.Context, sub Subscription) error {
+	customerID := strings.TrimSpace(sub.Customer)
+	if customerID == "" {
+		return fmt.Errorf("subscription missing customer")
+	}
+
+	sa, err := p.registry.GetStripeAccountByCustomerID(customerID)
+	if err != nil {
+		return fmt.Errorf("lookup stripe account by customer: %w", err)
+	}
+	if sa == nil {
+		log.Warn().Str("customer_id", customerID).Msg("msp subscription.deleted: stripe account mapping not found")
+		return nil
+	}
+
+	account, err := p.registry.GetAccount(sa.AccountID)
+	if err != nil {
+		return fmt.Errorf("lookup account: %w", err)
+	}
+	if account == nil {
+		log.Warn().Str("account_id", sa.AccountID).Msg("msp subscription.deleted: account not found")
+		return nil
+	}
+	if account.Kind != registry.AccountKindMSP {
+		return p.HandleSubscriptionDeleted(ctx, sub)
+	}
+
+	// Persist account-level Stripe state.
+	sa.StripeSubscriptionID = strings.TrimSpace(sub.ID)
+	sa.SubscriptionState = "canceled"
+	if err := p.registry.UpdateStripeAccount(sa); err != nil {
+		return fmt.Errorf("update stripe account: %w", err)
+	}
+
+	tenants, err := p.registry.ListByAccountID(sa.AccountID)
+	if err != nil {
+		return fmt.Errorf("list tenants by account: %w", err)
+	}
+
+	for _, tenant := range tenants {
+		if tenant == nil {
+			continue
+		}
+		tenantDataDir := p.tenantDataDir(tenant.ID)
+		state := &entitlements.BillingState{
+			Capabilities:         []string{},
+			Limits:               map[string]int64{},
+			MetersEnabled:        []string{},
+			PlanVersion:          tenant.PlanVersion,
+			SubscriptionState:    entitlements.SubStateCanceled,
+			StripeCustomerID:     customerID,
+			StripeSubscriptionID: strings.TrimSpace(sub.ID),
+		}
+		if err := p.writeBillingState(tenantDataDir, state); err != nil {
+			return err
+		}
+
+		tenant.State = registry.TenantStateCanceled
+		if err := p.registry.Update(tenant); err != nil {
+			return fmt.Errorf("update tenant record: %w", err)
+		}
+	}
+
+	log.Info().
+		Str("account_id", sa.AccountID).
+		Str("customer_id", customerID).
+		Int("tenants", len(tenants)).
+		Msg("MSP subscription deleted, capabilities revoked")
 
 	return nil
 }

@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	cpauth "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/auth"
 	cpDocker "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/docker"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/health"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
@@ -62,13 +63,21 @@ func Run(ctx context.Context, version string) error {
 		defer dockerMgr.Close()
 	}
 
+	// Initialize magic link service
+	magicLinkSvc, err := cpauth.NewService(cfg.ControlPlaneDir())
+	if err != nil {
+		return fmt.Errorf("init magic link service: %w", err)
+	}
+	defer magicLinkSvc.Close()
+
 	// Build HTTP routes
 	mux := http.NewServeMux()
 	deps := &Deps{
-		Config:   cfg,
-		Registry: reg,
-		Docker:   dockerMgr,
-		Version:  version,
+		Config:     cfg,
+		Registry:   reg,
+		Docker:     dockerMgr,
+		MagicLinks: magicLinkSvc,
+		Version:    version,
 	}
 	RegisterRoutes(mux, deps)
 
