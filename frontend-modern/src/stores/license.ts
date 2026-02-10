@@ -30,11 +30,20 @@ export async function loadLicenseStatus(force = false): Promise<void> {
             subscription_state: 'active',
             upgrade_reasons: [],
             tier: 'free',
+            hosted_mode: false,
         });
         setLoaded(true);
     } finally {
         setLoading(false);
     }
+}
+
+/**
+ * Start a Pro trial for the current org, then refresh entitlements.
+ */
+export async function startProTrial(): Promise<void> {
+    await LicenseAPI.startTrial();
+    await loadLicenseStatus(true);
 }
 
 /**
@@ -58,6 +67,10 @@ export function hasFeature(feature: string): boolean {
 
 export function isMultiTenantEnabled(): boolean {
     return hasFeature('multi_tenant');
+}
+
+export function isHostedModeEnabled(): boolean {
+    return Boolean(entitlements()?.hosted_mode);
 }
 
 export function getUpgradeReason(key: string) {

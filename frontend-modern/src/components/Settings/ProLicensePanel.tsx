@@ -2,11 +2,18 @@ import { Component, Show, createMemo, createSignal, onMount, For } from 'solid-j
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { formField, formHelpText, labelClass, controlClass } from '@/components/shared/Form';
 import { notificationStore } from '@/stores/notifications';
-import { getUpgradeActionUrlOrFallback, isMultiTenantEnabled } from '@/stores/license';
+import {
+  getUpgradeActionUrlOrFallback,
+  isMultiTenantEnabled,
+  licenseStatus,
+  loadLicenseStatus,
+  startProTrial,
+} from '@/stores/license';
 import { LicenseAPI, type LicenseStatus } from '@/api/license';
 import RefreshCw from 'lucide-solid/icons/refresh-cw';
 import ShieldCheck from 'lucide-solid/icons/shield-check';
 import BadgeCheck from 'lucide-solid/icons/badge-check';
+import { trackConversionEvent } from '@/utils/conversionEvents';
 
 const TIER_LABELS: Record<string, string> = {
   free: 'Free',
@@ -45,6 +52,14 @@ export const ProLicensePanel: Component = () => {
   const [loading, setLoading] = createSignal(false);
   const [activating, setActivating] = createSignal(false);
   const [clearing, setClearing] = createSignal(false);
+  const [startingTrial, setStartingTrial] = createSignal(false);
+
+  const subscriptionState = createMemo(() => licenseStatus()?.subscription_state);
+  const showTrialStart = createMemo(() => {
+    const state = subscriptionState();
+    if (!state) return false;
+    return state !== 'active' && state !== 'trial';
+  });
 
   const loadStatus = async () => {
     setLoading(true);
@@ -59,8 +74,30 @@ export const ProLicensePanel: Component = () => {
   };
 
   onMount(() => {
+    void loadLicenseStatus();
     void loadStatus();
   });
+
+  const handleStartTrial = async () => {
+    if (startingTrial()) return;
+    setStartingTrial(true);
+    try {
+      await startProTrial();
+      trackConversionEvent({ type: 'trial_started', surface: 'license_panel' });
+      notificationStore.success('Pro trial started');
+    } catch (err) {
+      const statusCode = (err as { status?: number } | null)?.status;
+      if (statusCode === 409) {
+        notificationStore.error('Trial already used');
+      } else if (statusCode === 429) {
+        notificationStore.error('Try again later');
+      } else {
+        notificationStore.error(err instanceof Error ? err.message : 'Failed to start Pro trial');
+      }
+    } finally {
+      setStartingTrial(false);
+    }
+  };
 
   const statusLabel = createMemo(() => {
     const current = status();
@@ -200,6 +237,23 @@ export const ProLicensePanel: Component = () => {
             {clearing() ? 'Clearing...' : 'Clear License'}
           </button>
         </div>
+
+        <Show when={showTrialStart()}>
+          <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30 p-3">
+            <p class="text-sm font-medium text-gray-900 dark:text-gray-100">Try Pulse Pro free</p>
+            <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">
+              Start a 14-day Pro trial for this organization.
+            </p>
+            <button
+              type="button"
+              class="mt-3 inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md bg-emerald-600 text-white hover:bg-emerald-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              disabled={startingTrial()}
+              onClick={handleStartTrial}
+            >
+              {startingTrial() ? 'Starting...' : 'Start 14-day Pro Trial'}
+            </button>
+          </div>
+        </Show>
       </SettingsPanel>
 
       <SettingsPanel
@@ -207,6 +261,22 @@ export const ProLicensePanel: Component = () => {
         description="Review your active tier, expiry, and available features."
         icon={<BadgeCheck class="w-5 h-5" />}
       >
+        <Show when={subscriptionState() === 'expired'}>
+          <div class="mb-4 rounded-lg border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-900/20 p-3 text-sm text-red-900 dark:text-red-100">
+            <p class="font-medium">Your Pro trial has ended</p>
+            <p class="text-xs text-red-800/80 dark:text-red-200/80 mt-1">
+              Upgrade to keep Pulse Pro features.
+            </p>
+            <a
+              class="inline-flex items-center gap-1 mt-2 text-xs font-medium text-red-900 dark:text-red-100 hover:underline"
+              href={getUpgradeActionUrlOrFallback('trial_expired')}
+              target="_blank"
+              rel="noreferrer"
+            >
+              View Pulse Pro plans
+            </a>
+          </div>
+        </Show>
         <Show when={!loading()} fallback={<p class="text-sm text-gray-500">Loading license status...</p>}>
           <div class="flex flex-wrap items-center gap-2">
             <span class={`px-2 py-1 text-xs font-medium rounded-full ${statusTone()}`}>
@@ -282,7 +352,7 @@ export const ProLicensePanel: Component = () => {
             </Show>
           </Show>
 
-          <Show when={!status()?.valid}>
+          <Show when={!status()?.valid && subscriptionState() !== 'expired'}>
             <div class="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-3 text-sm text-amber-800 dark:text-amber-200">
               <p class="font-medium">Upgrade to Pulse Pro</p>
               <p class="text-xs text-amber-700 dark:text-amber-300 mt-1">

@@ -38,6 +38,7 @@ import { updateStore } from './stores/updates';
 import { UpdateBanner } from './components/UpdateBanner';
 import { DemoBanner } from './components/DemoBanner';
 import { GitHubStarBanner } from './components/GitHubStarBanner';
+import { TrialBanner } from './components/shared/TrialBanner';
 import { WhatsNewModal } from './components/shared/WhatsNewModal';
 import { KeyboardShortcutsModal } from './components/shared/KeyboardShortcutsModal';
 import { CommandPaletteModal } from './components/shared/CommandPaletteModal';
@@ -91,6 +92,11 @@ import { isMultiTenantEnabled, licenseLoaded, loadLicenseStatus } from '@/stores
 
 import { showToast } from '@/utils/toast';
 
+function isPublicRoutePath(pathname: string): boolean {
+  // Public routes must be viewable without authentication.
+  // Keep the list small and explicit.
+  return pathname === '/pricing';
+}
 
 const Dashboard = lazy(() =>
   import('./components/Dashboard/Dashboard').then((module) => ({ default: module.Dashboard })),
@@ -109,6 +115,7 @@ const AIIntelligencePage = lazy(() =>
   import('./pages/AIIntelligence').then((module) => ({ default: module.AIIntelligence })),
 );
 const MigrationGuidePage = lazy(() => import('./pages/MigrationGuide'));
+const PricingPage = lazy(() => import('./pages/Pricing'));
 const ROOT_INFRASTRUCTURE_PATH = buildInfrastructurePath();
 const ROOT_WORKLOADS_PATH = buildWorkloadsPath();
 const STORAGE_PATH = buildStoragePath();
@@ -984,6 +991,8 @@ function App() {
   const RootLayout = (props: { children?: JSX.Element }) => {
     const [shortcutsOpen, setShortcutsOpen] = createSignal(false);
     const [commandPaletteOpen, setCommandPaletteOpen] = createSignal(false);
+    const location = useLocation();
+    const isPublicRoute = createMemo(() => isPublicRoutePath(location.pathname));
 
 
 
@@ -1045,67 +1054,79 @@ function App() {
           </div>
         }
       >
-        <Show when={!needsAuth()} fallback={<Login onLogin={handleLogin} hasAuth={hasAuth()} securityStatus={securityStatus() ?? undefined} />}>
-          <ErrorBoundary>
-            <Show when={enhancedStore()} fallback={
-              <div class="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
-                <div class="text-gray-600 dark:text-gray-400">Initializing...</div>
-              </div>
-            }>
-              <WebSocketContext.Provider value={enhancedStore()!}>
-                <DarkModeContext.Provider value={darkMode}>
-                  <Show when={!kioskMode()}>
-                    <SecurityWarning />
-                    <DemoBanner />
-                    <UpdateBanner />
-                    <GitHubStarBanner />
-                    <WhatsNewModal />
-                    <GlobalUpdateProgressWatcher />
-                  </Show>
-                  {/* Main layout container - flexbox to allow AI panel to push content */}
-                  <div class="flex h-screen overflow-hidden">
-                    {/* Main content area - shrinks when AI panel is open, scrolls independently */}
-                    <div
-                      class={`app-scroll-shell flex-1 min-w-0 overflow-y-scroll bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 font-sans py-4 sm:py-6 transition-all duration-300`}
-                    >
-                      <AppLayout
-                        connected={connected}
-                        reconnecting={reconnecting}
-                        dataUpdated={dataUpdated}
-                        lastUpdateText={lastUpdateText}
-                        versionInfo={versionInfo}
-                        hasAuth={hasAuth}
-                        needsAuth={needsAuth}
-                        proxyAuthInfo={proxyAuthInfo}
-                        handleLogout={handleLogout}
-                        state={state}
-                        tokenScopes={() => securityStatus()?.tokenScopes}
-                        organizations={organizations}
-                        activeOrgID={activeOrgID}
-                        orgsLoading={orgsLoading}
-                        onSwitchOrg={handleOrgSwitch}
-                      >
-                        {props.children}
-                      </AppLayout>
-                    </div>
-                    {/* AI Panel - slides in from right, pushes content */}
-                    <AIChat onClose={() => aiChatStore.close()} />
+        <Show
+          when={isPublicRoute()}
+          fallback={
+            <Show when={!needsAuth()} fallback={<Login onLogin={handleLogin} hasAuth={hasAuth()} securityStatus={securityStatus() ?? undefined} />}>
+              <ErrorBoundary>
+                <Show when={enhancedStore()} fallback={
+                  <div class="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
+                    <div class="text-gray-600 dark:text-gray-400">Initializing...</div>
                   </div>
-                  <KeyboardShortcutsModal
-                    isOpen={shortcutsOpen()}
-                    onClose={() => setShortcutsOpen(false)}
-                  />
-                  <CommandPaletteModal
-                    isOpen={commandPaletteOpen()}
-                    onClose={() => setCommandPaletteOpen(false)}
-                  />
-                  <TokenRevealDialog />
-                  {/* AI Assistant Button moved to AppLayout to access kioskMode state */}
-                  <TooltipRoot />
-                </DarkModeContext.Provider>
-              </WebSocketContext.Provider>
+                }>
+                  <WebSocketContext.Provider value={enhancedStore()!}>
+                    <DarkModeContext.Provider value={darkMode}>
+                      <Show when={!kioskMode()}>
+                        <SecurityWarning />
+                        <DemoBanner />
+                        <UpdateBanner />
+                        <TrialBanner />
+                        <GitHubStarBanner />
+                        <WhatsNewModal />
+                        <GlobalUpdateProgressWatcher />
+                      </Show>
+                      {/* Main layout container - flexbox to allow AI panel to push content */}
+                      <div class="flex h-screen overflow-hidden">
+                        {/* Main content area - shrinks when AI panel is open, scrolls independently */}
+                        <div
+                          class={`app-scroll-shell flex-1 min-w-0 overflow-y-scroll bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 font-sans py-4 sm:py-6 transition-all duration-300`}
+                        >
+                          <AppLayout
+                            connected={connected}
+                            reconnecting={reconnecting}
+                            dataUpdated={dataUpdated}
+                            lastUpdateText={lastUpdateText}
+                            versionInfo={versionInfo}
+                            hasAuth={hasAuth}
+                            needsAuth={needsAuth}
+                            proxyAuthInfo={proxyAuthInfo}
+                            handleLogout={handleLogout}
+                            state={state}
+                            tokenScopes={() => securityStatus()?.tokenScopes}
+                            organizations={organizations}
+                            activeOrgID={activeOrgID}
+                            orgsLoading={orgsLoading}
+                            onSwitchOrg={handleOrgSwitch}
+                          >
+                            {props.children}
+                          </AppLayout>
+                        </div>
+                        {/* AI Panel - slides in from right, pushes content */}
+                        <AIChat onClose={() => aiChatStore.close()} />
+                      </div>
+                      <KeyboardShortcutsModal
+                        isOpen={shortcutsOpen()}
+                        onClose={() => setShortcutsOpen(false)}
+                      />
+                      <CommandPaletteModal
+                        isOpen={commandPaletteOpen()}
+                        onClose={() => setCommandPaletteOpen(false)}
+                      />
+                      <TokenRevealDialog />
+                      {/* AI Assistant Button moved to AppLayout to access kioskMode state */}
+                      <TooltipRoot />
+                    </DarkModeContext.Provider>
+                  </WebSocketContext.Provider>
+                </Show>
+              </ErrorBoundary>
             </Show>
-          </ErrorBoundary>
+          }
+        >
+          <div class="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 font-sans">
+            <div class="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">
+              {props.children}
+            </div>
+          </div>
         </Show>
         <ToastContainer />
       </Show>
@@ -1115,6 +1136,7 @@ function App() {
   // Use Router with routes
   return (
     <Router root={RootLayout}>
+      <Route path="/pricing" component={PricingPage} />
       <Route path="/dashboard" component={DashboardPage} />
       <Route path="/" component={() => <Navigate href={ROOT_INFRASTRUCTURE_PATH} />} />
       <Route path={ROOT_WORKLOADS_PATH} component={WorkloadsView} />

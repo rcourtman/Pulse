@@ -51,7 +51,13 @@ import { PulsePatrolLogo } from '@/components/Brand/PulsePatrolLogo';
 import { TogglePrimitive, Toggle } from '@/components/shared/Toggle';
 import { ApprovalBanner, PatrolStatusBar, RunHistoryPanel, CountdownTimer } from '@/components/patrol';
 import { usePatrolStream } from '@/hooks/usePatrolStream';
-import { getUpgradeActionUrlOrFallback, hasFeature } from '@/stores/license';
+import {
+  getUpgradeActionUrlOrFallback,
+  hasFeature,
+  licenseStatus,
+  loadLicenseStatus,
+  startProTrial,
+} from '@/stores/license';
 import { formatRelativeTime } from '@/utils/format';
 import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/conversionEvents';
 import {
@@ -151,6 +157,33 @@ export function AIIntelligence() {
   const [isTogglingPatrol, setIsTogglingPatrol] = createSignal(false);
   const [isTriggeringPatrol, setIsTriggeringPatrol] = createSignal(false);
   const [alertTriggeredAnalysis, setAlertTriggeredAnalysis] = createSignal<boolean>(false);
+  const [startingTrial, setStartingTrial] = createSignal(false);
+
+  const canStartTrial = createMemo(() => {
+    const state = licenseStatus()?.subscription_state;
+    if (!state) return false;
+    return state !== 'active' && state !== 'trial';
+  });
+
+  const handleStartTrial = async () => {
+    if (startingTrial()) return;
+    setStartingTrial(true);
+    try {
+      await startProTrial();
+      notificationStore.success('Pro trial started');
+    } catch (err) {
+      const statusCode = (err as { status?: number } | null)?.status;
+      if (statusCode === 409) {
+        notificationStore.error('Trial already used');
+      } else if (statusCode === 429) {
+        notificationStore.error('Try again later');
+      } else {
+        notificationStore.error(err instanceof Error ? err.message : 'Failed to start Pro trial');
+      }
+    } finally {
+      setStartingTrial(false);
+    }
+  };
 
 
 
@@ -541,7 +574,7 @@ export function AIIntelligence() {
   }
 
   onMount(async () => {
-    await Promise.all([loadAllData(), loadAutonomySettings(), loadModels(), loadAISettings()]);
+    await Promise.all([loadLicenseStatus(), loadAllData(), loadAutonomySettings(), loadModels(), loadAISettings()]);
   });
 
   // Polling intervals — paused when tab is hidden to save resources
@@ -841,6 +874,17 @@ export function AIIntelligence() {
                           <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
                             <a class="text-indigo-600 dark:text-indigo-400 font-medium hover:underline" href={getUpgradeActionUrlOrFallback('ai_autofix')} target="_blank" rel="noreferrer" onClick={() => trackUpgradeClicked('ai_intelligence', 'ai_autofix')}>Upgrade to Pro</a>
                             {' '}to unlock auto-fix.
+                            <Show when={canStartTrial()}>
+                              {' '}
+                              <button
+                                type="button"
+                                class="text-indigo-600 dark:text-indigo-400 font-medium hover:underline disabled:opacity-60"
+                                disabled={startingTrial()}
+                                onClick={handleStartTrial}
+                              >
+                                Or start a free 14-day trial
+                              </button>
+                            </Show>
                           </p>
                         </Show>
                         <Show when={!autoFixLocked() && !(autonomyLevel() === 'assisted' || autonomyLevel() === 'full')}>
@@ -877,6 +921,17 @@ export function AIIntelligence() {
                           <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
                             <a class="text-indigo-600 dark:text-indigo-400 font-medium hover:underline" href={getUpgradeActionUrlOrFallback('ai_alerts')} target="_blank" rel="noreferrer" onClick={() => trackUpgradeClicked('ai_intelligence', 'ai_alerts')}>Upgrade to Pro</a>
                             {' '}to enable alert-triggered analysis.
+                            <Show when={canStartTrial()}>
+                              {' '}
+                              <button
+                                type="button"
+                                class="text-indigo-600 dark:text-indigo-400 font-medium hover:underline disabled:opacity-60"
+                                disabled={startingTrial()}
+                                onClick={handleStartTrial}
+                              >
+                                Or start a free 14-day trial
+                              </button>
+                            </Show>
                           </p>
                         </Show>
                       </div>

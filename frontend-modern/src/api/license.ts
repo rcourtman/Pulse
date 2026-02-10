@@ -1,4 +1,4 @@
-import { apiFetchJSON } from '@/utils/apiClient';
+import { apiClient, apiFetchJSON } from '@/utils/apiClient';
 
 export interface LicenseStatus {
   valid: boolean;
@@ -39,6 +39,7 @@ export interface LicenseEntitlements {
   tier: string;
   trial_expires_at?: number;
   trial_days_remaining?: number;
+  hosted_mode?: boolean;
 }
 
 export interface ActivateLicenseResponse {
@@ -56,6 +57,11 @@ export interface LicenseFeatureStatus {
   license_status: string;
   features: Record<string, boolean>;
   upgrade_url: string;
+}
+
+export interface StartTrialResponse {
+  success?: boolean;
+  message?: string;
 }
 
 export class LicenseAPI {
@@ -85,5 +91,47 @@ export class LicenseAPI {
       method: 'POST',
       body: JSON.stringify({}),
     }) as Promise<ClearLicenseResponse>;
+  }
+
+  static async startTrial(): Promise<StartTrialResponse | null> {
+    const response = await apiClient.fetch(`${this.baseUrl}/trial/start`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({}),
+    });
+
+    if (!response.ok) {
+      const status = response.status;
+      let message = '';
+      try {
+        const text = await response.text();
+        try {
+          const parsed = JSON.parse(text) as { message?: string; error?: string };
+          message = parsed.message || parsed.error || text;
+        } catch {
+          message = text;
+        }
+      } catch {
+        // ignore
+      }
+
+      const err = new Error(message || `Request failed with status ${status}`) as Error & {
+        status?: number;
+      };
+      err.status = status;
+      throw err;
+    }
+
+    // Some handlers may return no body.
+    try {
+      const text = await response.text();
+      if (!text) return null;
+      return JSON.parse(text) as StartTrialResponse;
+    } catch {
+      return null;
+    }
   }
 }

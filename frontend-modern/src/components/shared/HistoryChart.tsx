@@ -7,12 +7,19 @@
 
 import { Component, createEffect, createSignal, onCleanup, Show, createMemo, onMount } from 'solid-js';
 import { ChartsAPI, type ResourceType, type HistoryTimeRange, type AggregatedMetricPoint } from '@/api/charts';
-import { getUpgradeActionUrlOrFallback, isRangeLocked, loadLicenseStatus } from '@/stores/license';
+import {
+    getUpgradeActionUrlOrFallback,
+    isRangeLocked,
+    licenseStatus,
+    loadLicenseStatus,
+    startProTrial,
+} from '@/stores/license';
 import { Portal } from 'solid-js/web';
 import { formatBytes } from '@/utils/format';
 import { calculateOptimalPoints } from '@/utils/downsample';
 import { setupCanvasDPR } from '@/utils/canvasRenderQueue';
 import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/conversionEvents';
+import { notificationStore } from '@/stores/notifications';
 
 
 /** Format a tooltip value according to the metric unit. */
@@ -60,6 +67,33 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
     const [hasLoadedOnce, setHasLoadedOnce] = createSignal(false);
     // Track cursor X position for crosshair line (null when not hovering)
     const [cursorX, setCursorX] = createSignal<number | null>(null);
+    const [startingTrial, setStartingTrial] = createSignal(false);
+
+    const canStartTrial = createMemo(() => {
+        const state = licenseStatus()?.subscription_state;
+        if (!state) return false;
+        return state !== 'active' && state !== 'trial';
+    });
+
+    const handleStartTrial = async () => {
+        if (startingTrial()) return;
+        setStartingTrial(true);
+        try {
+            await startProTrial();
+            notificationStore.success('Pro trial started');
+        } catch (err) {
+            const statusCode = (err as { status?: number } | null)?.status;
+            if (statusCode === 409) {
+                notificationStore.error('Trial already used');
+            } else if (statusCode === 429) {
+                notificationStore.error('Try again later');
+            } else {
+                notificationStore.error(err instanceof Error ? err.message : 'Failed to start Pro trial');
+            }
+        } finally {
+            setStartingTrial(false);
+        }
+    };
 
     const refreshIntervalMs = createMemo(() => {
         const r = range();
@@ -623,14 +657,26 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
                         <p class="text-sm text-gray-600 dark:text-gray-300 text-center max-w-[200px] mb-4">
                             Upgrade to Pulse Pro to unlock {lockDays()} days of historical data retention.
                         </p>
-                        <a
-                            href={getUpgradeActionUrlOrFallback('long_term_metrics')}
-                            target="_blank"
-                            onClick={() => trackUpgradeClicked('history_chart', 'long_term_metrics')}
-                            class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-md shadow-sm transition-colors"
-                        >
-                            Unlock Pro Features
-                        </a>
+                        <div class="flex flex-col items-center gap-2">
+                            <a
+                                href={getUpgradeActionUrlOrFallback('long_term_metrics')}
+                                target="_blank"
+                                onClick={() => trackUpgradeClicked('history_chart', 'long_term_metrics')}
+                                class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-md shadow-sm transition-colors"
+                            >
+                                Unlock Pro Features
+                            </a>
+                            <Show when={canStartTrial()}>
+                                <button
+                                    type="button"
+                                    class="text-xs font-semibold text-indigo-700 dark:text-indigo-300 hover:underline disabled:opacity-60"
+                                    disabled={startingTrial()}
+                                    onClick={handleStartTrial}
+                                >
+                                    Or start a free 14-day trial
+                                </button>
+                            </Show>
+                        </div>
                     </div>
                 </Show>
             </div>
