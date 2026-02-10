@@ -2,31 +2,42 @@ package unifiedresources
 
 // Unified Resources Architecture — Code Standards Enforcement
 //
-// This codebase has two data access layers for infrastructure resources:
+// END STATE (State Read Consolidation — SRC):
+//
+// The Unified Resources Registry is the PRIMARY read surface for all
+// internal business logic. StateSnapshot is the write/ingest buffer and
+// frontend wire DTO only.
+//
+// Architecture:
 //
 //   1. StateSnapshot (models.StateSnapshot)
-//      The canonical typed observation from monitoring. Contains rich typed
-//      arrays (state.VMs, state.Containers, state.Nodes, etc.) populated by
-//      the monitoring/polling layer. Passed as a function parameter to internal
-//      code that needs current metric values or resource iteration.
+//      WRITE-ONLY ingest buffer. Monitoring/polling populates typed arrays.
+//      The registry reads from it via IngestSnapshot(). Frontend reads via
+//      ToFrontend()/WebSocket. Internal business logic MUST NOT read from
+//      StateSnapshot directly — use the ReadState interface instead.
 //
 //   2. Unified Resources Registry (unifiedresources.ResourceRegistry)
-//      A derived projection built from StateSnapshot via IngestSnapshot().
-//      Provides cross-source identity resolution, deduplication, and a
-//      normalized resource model. Adds real value for host/agent merging,
-//      physical disk dedup (by serial), and Ceph cluster dedup (by FSID).
+//      The canonical read model. Provides cross-source identity resolution,
+//      deduplication, typed views, and a normalized resource model.
+//      Implements the ReadState interface with typed accessor methods
+//      (VMs(), Containers(), Nodes(), etc.) backed by cached per-type
+//      indexes that are O(1) to read and invalidated per ingest cycle.
 //
-// Policy — which layer to use:
+// Consumer package policy:
 //
-//   - API handlers, AI tools, reporting, and consumer-facing surfaces that
-//     benefit from cross-source identity: USE THE REGISTRY.
+//   - internal/ai/*, internal/api/*, internal/infradiscovery/,
+//     internal/servicediscovery/: MUST use ReadState. Direct state reads
+//     are banned for all migrated resource types.
 //
-//   - Monitoring/polling, mock data generation, ingestion pipelines, and
-//     internal computation that naturally iterates typed slices: USE STATE.
+//   - internal/monitoring/, internal/mock/, internal/models/,
+//     internal/websocket/: Exempt (producer/wire-format packages).
 //
-//   - Resource types with completed registry migrations (PhysicalDisks, Ceph,
-//     Storage pools) MUST use the registry in consumer code. Direct state
-//     reads for these types are banned in consumer packages.
+//   - Resource types with completed migrations are enforced below.
+//     As SRC progresses, more patterns will be banned until all
+//     state.* access is removed from consumer packages.
+//
+// See: docs/architecture/state-read-consolidation-plan-2026-02.md
+// Progress: docs/architecture/state-read-consolidation-progress-2026-02.md
 //
 // The tests below enforce these rules by scanning consumer packages for
 // banned direct-state access patterns.

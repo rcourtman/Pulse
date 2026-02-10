@@ -153,18 +153,20 @@ type MetricValue struct {
 
 // ProxmoxData contains Proxmox-specific data for a resource.
 type ProxmoxData struct {
-	NodeName      string    `json:"nodeName,omitempty"`
-	ClusterName   string    `json:"clusterName,omitempty"`
-	Instance      string    `json:"instance,omitempty"`
-	VMID          int       `json:"vmid,omitempty"`
-	CPUs          int       `json:"cpus,omitempty"`
-	Template      bool      `json:"template,omitempty"`
-	Temperature   *float64  `json:"temperature,omitempty"` // Max node CPU temp in Celsius
-	PVEVersion    string    `json:"pveVersion,omitempty"`
-	KernelVersion string    `json:"kernelVersion,omitempty"`
-	Uptime        int64     `json:"uptime,omitempty"`
-	LastBackup    time.Time `json:"lastBackup,omitempty"`
-	CPUInfo       *CPUInfo  `json:"cpuInfo,omitempty"`
+	NodeName       string    `json:"nodeName,omitempty"`
+	ClusterName    string    `json:"clusterName,omitempty"`
+	Instance       string    `json:"instance,omitempty"`
+	VMID           int       `json:"vmid,omitempty"`
+	CPUs           int       `json:"cpus,omitempty"`
+	Template       bool      `json:"template,omitempty"`
+	Temperature    *float64  `json:"temperature,omitempty"` // Max node CPU temp in Celsius
+	PVEVersion     string    `json:"pveVersion,omitempty"`
+	KernelVersion  string    `json:"kernelVersion,omitempty"`
+	Uptime         int64     `json:"uptime,omitempty"`
+	LastBackup     time.Time `json:"lastBackup,omitempty"`
+	CPUInfo        *CPUInfo  `json:"cpuInfo,omitempty"`
+	LoadAverage    []float64 `json:"loadAverage,omitempty"`
+	PendingUpdates int       `json:"pendingUpdates,omitempty"`
 	// Internal link hint to a host agent resource.
 	LinkedHostAgentID string `json:"-"`
 }

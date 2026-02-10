@@ -41,6 +41,22 @@ type ResourceRegistry struct {
 	store      ResourceStore
 	links      []ResourceLink
 	exclusions map[string]struct{}
+
+	// Cached typed view indexes. Invalidated on ingest, rebuilt lazily on
+	// first access. Protected by mu — callers hold RLock to read, and the
+	// rebuild path upgrades to a write lock only when needed.
+	viewsDirty     bool
+	cachedVMs      []*VMView
+	cachedLXC      []*ContainerView
+	cachedNodes    []*NodeView
+	cachedHosts    []*HostView
+	cachedDocker   []*DockerHostView
+	cachedStorage  []*StoragePoolView
+	cachedPBS      []*PBSInstanceView
+	cachedPMG      []*PMGInstanceView
+	cachedK8s      []*K8sClusterView
+	cachedWorkload []*WorkloadView
+	cachedInfra    []*InfrastructureView
 }
 
 // NewRegistry creates a new registry using the provided store for overrides.
@@ -142,6 +158,7 @@ func (rr *ResourceRegistry) IngestSnapshot(snapshot models.StateSnapshot) {
 	rr.applyManualLinks()
 	rr.buildChildCounts()
 	rr.MarkStale(time.Now().UTC(), nil)
+	rr.viewsDirty = true
 }
 
 // IngestRecords ingests normalized records for a single source.
@@ -161,6 +178,7 @@ func (rr *ResourceRegistry) IngestRecords(source DataSource, records []IngestRec
 	}
 
 	rr.buildChildCounts()
+	rr.viewsDirty = true
 }
 
 // List returns all resources.
@@ -1012,3 +1030,161 @@ func sortResourcesByName(resources []Resource) {
 		return strings.ToLower(resources[i].Name) < strings.ToLower(resources[j].Name)
 	})
 }
+
+// ---------------------------------------------------------------------------
+// ReadState implementation — typed, cached view accessors
+// ---------------------------------------------------------------------------
+
+// ensureViewsLocked rebuilds all cached view slices if dirty.
+// Caller must hold rr.mu for writing.
+func (rr *ResourceRegistry) ensureViewsLocked() {
+	if !rr.viewsDirty {
+		return
+	}
+	rr.rebuildViews()
+}
+
+// withViewCache acquires a write lock to ensure views are fresh, then
+// downgrades to a read lock and calls fn. This avoids TOCTOU gaps.
+func withViewCache[T any](rr *ResourceRegistry, fn func() T) T {
+	rr.mu.Lock()
+	rr.ensureViewsLocked()
+	rr.mu.Unlock()
+	rr.mu.RLock()
+	defer rr.mu.RUnlock()
+	return fn()
+}
+
+// rebuildViews recomputes all cached view slices from the current resource map.
+// Caller must hold rr.mu for writing.
+func (rr *ResourceRegistry) rebuildViews() {
+	rr.cachedVMs = nil
+	rr.cachedLXC = nil
+	rr.cachedNodes = nil
+	rr.cachedHosts = nil
+	rr.cachedDocker = nil
+	rr.cachedStorage = nil
+	rr.cachedPBS = nil
+	rr.cachedPMG = nil
+	rr.cachedK8s = nil
+	rr.cachedWorkload = nil
+	rr.cachedInfra = nil
+
+	for _, r := range rr.resources {
+		switch r.Type {
+		case ResourceTypeVM:
+			v := NewVMView(r)
+			rr.cachedVMs = append(rr.cachedVMs, &v)
+			w := NewWorkloadView(r)
+			rr.cachedWorkload = append(rr.cachedWorkload, &w)
+		case ResourceTypeLXC:
+			v := NewContainerView(r)
+			rr.cachedLXC = append(rr.cachedLXC, &v)
+			w := NewWorkloadView(r)
+			rr.cachedWorkload = append(rr.cachedWorkload, &w)
+		case ResourceTypeHost:
+			inf := NewInfrastructureView(r)
+			rr.cachedInfra = append(rr.cachedInfra, &inf)
+			if r.Proxmox != nil {
+				v := NewNodeView(r)
+				rr.cachedNodes = append(rr.cachedNodes, &v)
+			}
+			if r.Agent != nil {
+				v := NewHostView(r)
+				rr.cachedHosts = append(rr.cachedHosts, &v)
+			}
+			if r.Docker != nil {
+				v := NewDockerHostView(r)
+				rr.cachedDocker = append(rr.cachedDocker, &v)
+			}
+		case ResourceTypeStorage:
+			v := NewStoragePoolView(r)
+			rr.cachedStorage = append(rr.cachedStorage, &v)
+		case ResourceTypePBS:
+			v := NewPBSInstanceView(r)
+			rr.cachedPBS = append(rr.cachedPBS, &v)
+		case ResourceTypePMG:
+			v := NewPMGInstanceView(r)
+			rr.cachedPMG = append(rr.cachedPMG, &v)
+		case ResourceTypeK8sCluster:
+			v := NewK8sClusterView(r)
+			rr.cachedK8s = append(rr.cachedK8s, &v)
+		}
+	}
+
+	// Sort all caches by name for deterministic output.
+	sort.Slice(rr.cachedVMs, func(i, j int) bool { return rr.cachedVMs[i].Name() < rr.cachedVMs[j].Name() })
+	sort.Slice(rr.cachedLXC, func(i, j int) bool { return rr.cachedLXC[i].Name() < rr.cachedLXC[j].Name() })
+	sort.Slice(rr.cachedNodes, func(i, j int) bool { return rr.cachedNodes[i].Name() < rr.cachedNodes[j].Name() })
+	sort.Slice(rr.cachedHosts, func(i, j int) bool { return rr.cachedHosts[i].Name() < rr.cachedHosts[j].Name() })
+	sort.Slice(rr.cachedDocker, func(i, j int) bool { return rr.cachedDocker[i].Name() < rr.cachedDocker[j].Name() })
+	sort.Slice(rr.cachedStorage, func(i, j int) bool { return rr.cachedStorage[i].Name() < rr.cachedStorage[j].Name() })
+	sort.Slice(rr.cachedPBS, func(i, j int) bool { return rr.cachedPBS[i].Name() < rr.cachedPBS[j].Name() })
+	sort.Slice(rr.cachedPMG, func(i, j int) bool { return rr.cachedPMG[i].Name() < rr.cachedPMG[j].Name() })
+	sort.Slice(rr.cachedK8s, func(i, j int) bool { return rr.cachedK8s[i].Name() < rr.cachedK8s[j].Name() })
+	sort.Slice(rr.cachedWorkload, func(i, j int) bool { return rr.cachedWorkload[i].Name() < rr.cachedWorkload[j].Name() })
+	sort.Slice(rr.cachedInfra, func(i, j int) bool { return rr.cachedInfra[i].Name() < rr.cachedInfra[j].Name() })
+
+	rr.viewsDirty = false
+}
+
+// VMs returns cached VM views sorted by name.
+func (rr *ResourceRegistry) VMs() []*VMView {
+	return withViewCache(rr, func() []*VMView { return rr.cachedVMs })
+}
+
+// Containers returns cached LXC container views sorted by name.
+func (rr *ResourceRegistry) Containers() []*ContainerView {
+	return withViewCache(rr, func() []*ContainerView { return rr.cachedLXC })
+}
+
+// Nodes returns cached Proxmox node views sorted by name.
+// Only includes host resources that have Proxmox data.
+func (rr *ResourceRegistry) Nodes() []*NodeView {
+	return withViewCache(rr, func() []*NodeView { return rr.cachedNodes })
+}
+
+// Hosts returns cached host agent views sorted by name.
+// Only includes host resources that have Agent data.
+func (rr *ResourceRegistry) Hosts() []*HostView {
+	return withViewCache(rr, func() []*HostView { return rr.cachedHosts })
+}
+
+// DockerHosts returns cached Docker host views sorted by name.
+// Only includes host resources that have Docker data.
+func (rr *ResourceRegistry) DockerHosts() []*DockerHostView {
+	return withViewCache(rr, func() []*DockerHostView { return rr.cachedDocker })
+}
+
+// StoragePools returns cached storage pool views sorted by name.
+func (rr *ResourceRegistry) StoragePools() []*StoragePoolView {
+	return withViewCache(rr, func() []*StoragePoolView { return rr.cachedStorage })
+}
+
+// PBSInstances returns cached PBS instance views sorted by name.
+func (rr *ResourceRegistry) PBSInstances() []*PBSInstanceView {
+	return withViewCache(rr, func() []*PBSInstanceView { return rr.cachedPBS })
+}
+
+// PMGInstances returns cached PMG instance views sorted by name.
+func (rr *ResourceRegistry) PMGInstances() []*PMGInstanceView {
+	return withViewCache(rr, func() []*PMGInstanceView { return rr.cachedPMG })
+}
+
+// K8sClusters returns cached Kubernetes cluster views sorted by name.
+func (rr *ResourceRegistry) K8sClusters() []*K8sClusterView {
+	return withViewCache(rr, func() []*K8sClusterView { return rr.cachedK8s })
+}
+
+// Workloads returns a unified slice of VM + LXC container views sorted by name.
+func (rr *ResourceRegistry) Workloads() []*WorkloadView {
+	return withViewCache(rr, func() []*WorkloadView { return rr.cachedWorkload })
+}
+
+// Infrastructure returns a unified slice of all host-type resource views sorted by name.
+func (rr *ResourceRegistry) Infrastructure() []*InfrastructureView {
+	return withViewCache(rr, func() []*InfrastructureView { return rr.cachedInfra })
+}
+
+// Compile-time check: ResourceRegistry implements ReadState.
+var _ ReadState = (*ResourceRegistry)(nil)

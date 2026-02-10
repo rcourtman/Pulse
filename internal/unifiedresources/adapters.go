@@ -31,6 +31,8 @@ func resourceFromProxmoxNode(node models.Node) (Resource, ResourceIdentity) {
 		KernelVersion:     node.KernelVersion,
 		Uptime:            node.Uptime,
 		CPUInfo:           &CPUInfo{Model: node.CPUInfo.Model, Cores: node.CPUInfo.Cores, Sockets: node.CPUInfo.Sockets},
+		LoadAverage:       append([]float64(nil), node.LoadAverage...),
+		PendingUpdates:    node.PendingUpdates,
 		LinkedHostAgentID: node.LinkedHostAgentID,
 	}
 
