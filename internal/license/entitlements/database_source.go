@@ -20,9 +20,10 @@ type DatabaseSource struct {
 
 // NewDatabaseSource creates a DatabaseSource for a hosted org.
 func NewDatabaseSource(store BillingStore, orgID string, cacheTTL time.Duration) *DatabaseSource {
-	if cacheTTL <= 0 {
-		cacheTTL = defaultDatabaseSourceCacheTTL
-	}
+	// cacheTTL semantics:
+	// - cacheTTL > 0: cache for that duration
+	// - cacheTTL == 0: no caching (always refresh)
+	// - cacheTTL < 0: defaults only (never consult store)
 
 	return &DatabaseSource{
 		store:    store,
@@ -77,17 +78,19 @@ func (d *DatabaseSource) currentState() BillingState {
 	}
 
 	cacheTTL := d.cacheTTL
-	// cacheTTL == 0 means "no caching" (always refresh). cacheTTL < 0 uses defaults.
-	noCache := cacheTTL == 0
+	now := time.Now()
+
+	// cacheTTL < 0 means "defaults only" (e.g., fail-open / offline mode).
 	if cacheTTL < 0 {
-		cacheTTL = defaultDatabaseSourceCacheTTL
-	}
-	if cacheTTL == 0 {
-		// Preserve the no-cache signal below; don't convert to defaults.
-		cacheTTL = defaultDatabaseSourceCacheTTL
+		return normalizeTrialExpiry(defaults, now)
 	}
 
-	now := time.Now()
+	// cacheTTL == 0 means "no caching" (always refresh).
+	noCache := cacheTTL == 0
+	if cacheTTL == 0 {
+		// Placeholder value so TTL comparisons compile; guarded by noCache.
+		cacheTTL = defaultDatabaseSourceCacheTTL
+	}
 
 	d.mu.RLock()
 	if !noCache && d.cache != nil && now.Sub(d.cacheTime) <= cacheTTL {

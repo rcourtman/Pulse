@@ -49,6 +49,12 @@ func NewReaper(lister OrgLister, deleter OrgDeleter, scanInterval time.Duration,
 	}
 }
 
+// ScanOnce runs a single scan cycle and returns the results.
+// This is used by integration tests and operational tooling to avoid ticker-based timing.
+func (r *Reaper) ScanOnce() []ReapResult {
+	return r.scan()
+}
+
 func (r *Reaper) Run(ctx context.Context) error {
 	if r == nil {
 		return nil
