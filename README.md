@@ -48,7 +48,7 @@ Power-user shortcuts:
 ### AI-Powered
 - **Chat Assistant (BYOK)**: Ask questions about your infrastructure in natural language
 - **Patrol (BYOK)**: Background health checks that generate findings on a schedule
-- **Alert Analysis (Pro)**: Optional AI analysis when alerts fire
+- **Alert Analysis (Pro/Cloud)**: Optional AI analysis when alerts fire
 - **Cost Tracking**: Track usage and costs per provider/model
 
 ### Multi-Platform
@@ -103,23 +103,29 @@ Community-maintained integrations and addons:
 
 - **[Home Assistant Addons](https://github.com/Kosztyk/homeassistant-addons)** - Run Pulse Agent and Pulse Server as Home Assistant addons.
 
-## 🚀 Pulse Pro
+## 💳 Plans (Community / Pro / Cloud)
 
-**[Pulse Pro](https://pulserelay.pro)** unlocks **Auto-Fix and advanced AI analysis** — **Pulse Patrol is available to everyone with BYOK**.
+Pulse is full-featured for core monitoring in every tier. Paid tiers unlock additional capabilities (and Cloud removes hosting/AI setup friction).
 
-| Feature | Free | Pro |
-|---------|------|-----|
-| Real-time dashboard | ✅ | ✅ |
-| Threshold alerts | ✅ | ✅ |
-| AI Chat (BYOK) | ✅ | ✅ |
-| **Pulse Patrol (BYOK)** | ✅ | ✅ |
-| Alert-triggered AI analysis | — | ✅ |
-| Kubernetes AI analysis | — | ✅ |
-| Auto-fix + autonomous mode | — | ✅ |
-| Centralized agent profiles | — | ✅ |
-| **Advanced Reporting (PDF/CSV)** | — | ✅ |
-| **Audit Webhooks (SIEM integration)** | — | ✅ |
-| Priority support | — | ✅ |
+**Community** is free and self-hosted. **Pro** is a paid, self-hosted license. **Cloud** is the hosted plan and includes Pro capabilities.
+
+The table below is derived from the canonical entitlement source of truth: `docs/architecture/ENTITLEMENT_MATRIX.md`.
+
+| Capability | Community | Pro | Cloud |
+|---|:---:|:---:|:---:|
+| Pulse Patrol (Background Health Checks) | ✅ | ✅ | ✅ |
+| Alert Analysis | — | ✅ | ✅ |
+| Pulse Patrol Auto-Fix | — | ✅ | ✅ |
+| Kubernetes Analysis | — | ✅ | ✅ |
+| Centralized Agent Profiles | — | ✅ | ✅ |
+| Update Alerts (Container/Package Updates) | ✅ | ✅ | ✅ |
+| Basic SSO (OIDC) | ✅ | ✅ | ✅ |
+| Advanced SSO (SAML/Multi-Provider) | — | ✅ | ✅ |
+| Role-Based Access Control (RBAC) | — | ✅ | ✅ |
+| Enterprise Audit Logging | — | ✅ | ✅ |
+| Advanced Infrastructure Reporting (PDF/CSV) | — | ✅ | ✅ |
+| 90-Day Metric History | — | ✅ | ✅ |
+| Remote Access (Mobile Relay) | — | ✅ | ✅ |
 
 Pulse Patrol runs on your schedule (every 10 minutes to every 7 days, default 6 hours) and finds:
 - ZFS pools approaching capacity
@@ -128,11 +134,11 @@ Pulse Patrol runs on your schedule (every 10 minutes to every 7 days, default 6 
 - Clock drift across cluster nodes
 - Container health check failures
 
-Pulse Patrol uses your configured provider (BYOK) and runs entirely on your server.
+On self-hosted installs, Pulse Patrol uses your configured provider (BYOK) and runs entirely on your server.
 
 Technical highlights:
 - Cross-system context (nodes, VMs, backups, containers, and metrics history)
-- LLM analysis with your provider + alert-triggered deep dives (Pro)
+- LLM analysis with your provider + alert-triggered deep dives (Pro/Cloud)
 - Optional auto-fix with command safety policies and audit trail
 - Centralized agent profiles for consistent fleet settings
 
