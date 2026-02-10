@@ -413,7 +413,7 @@ func TestService_FilterToolsForPrompt_ReadOnlyFiltersWriteTools(t *testing.T) {
 	require.True(t, hasTool(service.executor.ListTools(), "pulse_query"))
 
 	// Read-only prompts should exclude write tools
-	filtered := service.filterToolsForPrompt(context.Background(), "run uptime")
+	filtered := service.filterToolsForPrompt(context.Background(), "run uptime", false)
 	assert.False(t, hasProviderTool(filtered, "pulse_control"))
 	assert.False(t, hasProviderTool(filtered, "pulse_docker"))
 	assert.True(t, hasProviderTool(filtered, "pulse_query"))
@@ -429,7 +429,7 @@ func TestService_FilterToolsForPrompt_WriteIntentIncludesWriteTools(t *testing.T
 	require.True(t, hasTool(service.executor.ListTools(), "pulse_docker"))
 	require.True(t, hasTool(service.executor.ListTools(), "pulse_query"))
 
-	filtered := service.filterToolsForPrompt(context.Background(), "restart vm 101")
+	filtered := service.filterToolsForPrompt(context.Background(), "restart vm 101", false)
 	assert.True(t, hasProviderTool(filtered, "pulse_control"))
 	assert.True(t, hasProviderTool(filtered, "pulse_docker"))
 	assert.True(t, hasProviderTool(filtered, "pulse_query"))

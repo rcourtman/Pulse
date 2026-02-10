@@ -44,7 +44,7 @@ func TestFilterToolsForPrompt_ReadOnlyAndSpecialty(t *testing.T) {
 
 	svc := &Service{executor: exec}
 
-	readOnlyTools := svc.filterToolsForPrompt(context.Background(), "show node status")
+	readOnlyTools := svc.filterToolsForPrompt(context.Background(), "show node status", false)
 	readOnlySet := toolNameSet(readOnlyTools)
 	if readOnlySet["pulse_control"] || readOnlySet["pulse_file_edit"] || readOnlySet["pulse_docker"] {
 		t.Fatalf("expected write tools to be filtered for read-only prompt")
@@ -53,7 +53,7 @@ func TestFilterToolsForPrompt_ReadOnlyAndSpecialty(t *testing.T) {
 		t.Fatalf("expected specialty tools to remain when no specialty keyword detected")
 	}
 
-	k8sTools := svc.filterToolsForPrompt(context.Background(), "check kubernetes pods")
+	k8sTools := svc.filterToolsForPrompt(context.Background(), "check kubernetes pods", false)
 	k8sSet := toolNameSet(k8sTools)
 	if !k8sSet["pulse_kubernetes"] {
 		t.Fatalf("expected kubernetes tool to be included")
@@ -71,7 +71,7 @@ func TestFilterToolsForPrompt_BroadInfraKeepsStorage(t *testing.T) {
 	})
 
 	svc := &Service{executor: exec}
-	toolsList := svc.filterToolsForPrompt(context.Background(), "full status overview")
+	toolsList := svc.filterToolsForPrompt(context.Background(), "full status overview", false)
 	set := toolNameSet(toolsList)
 	if !set["pulse_storage"] {
 		t.Fatalf("expected storage tool to be kept for broad infrastructure prompt")

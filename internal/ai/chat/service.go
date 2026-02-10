@@ -440,7 +440,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 	}
 
 	// Run agentic loop
-	filteredTools := s.filterToolsForPrompt(ctx, req.Prompt)
+	filteredTools := s.filterToolsForPrompt(ctx, req.Prompt, autonomousMode)
 	log.Debug().
 		Str("session_id", session.ID).
 		Int("tools_count", len(filteredTools)).
@@ -667,8 +667,8 @@ func (s *Service) ExecutePatrolStream(ctx context.Context, req PatrolRequest, ca
 		return nil, fmt.Errorf("failed to get patrol messages: %w", err)
 	}
 
-	// Get all tools
-	filteredTools := s.filterToolsForPrompt(ctx, req.Prompt)
+	// Get all tools (patrol runs in autonomous mode)
+	filteredTools := s.filterToolsForPrompt(ctx, req.Prompt, true)
 
 	// Run the agentic loop
 	resultMessages, err := tempLoop.ExecuteWithTools(ctx, session.ID, messages, filteredTools, callback)
@@ -775,7 +775,7 @@ func (s *Service) ListAvailableTools(ctx context.Context, prompt string) []strin
 		return nil
 	}
 
-	tools := s.filterToolsForPrompt(ctx, prompt)
+	tools := s.filterToolsForPrompt(ctx, prompt, s.isAutonomousModeEnabled())
 	names := make([]string, 0, len(tools))
 	for _, tool := range tools {
 		if tool.Name == "" {
@@ -1331,7 +1331,7 @@ func (s *Service) injectRecentContextIfNeeded(prompt, sessionID string, messages
 	messages[lastIdx].Content = summary + "\n\n---\nExplicit target: " + primaryName + "\nUser question (targeted): " + messages[lastIdx].Content
 }
 
-func (s *Service) filterToolsForPrompt(ctx context.Context, prompt string) []providers.Tool {
+func (s *Service) filterToolsForPrompt(ctx context.Context, prompt string, autonomousMode bool) []providers.Tool {
 	mcpTools := s.executor.ListTools()
 	providerTools := ConvertMCPToolsToProvider(mcpTools)
 
@@ -1394,6 +1394,11 @@ func (s *Service) filterToolsForPrompt(ctx context.Context, prompt string) []pro
 		Bool("specialty_filter_active", !noSpecialtyDetected).
 		Str("prompt_prefix", truncateForLog(prompt, 80)).
 		Msg("[filterToolsForPrompt] Filtered tools for prompt")
+
+	// pulse_question is interactive; exclude it for autonomous runs (Pulse Patrol).
+	if !autonomousMode {
+		filtered = append(filtered, userQuestionTool())
+	}
 
 	return filtered
 }
