@@ -1,0 +1,163 @@
+package stripe
+
+import (
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"strings"
+
+	"github.com/rs/zerolog/log"
+	stripelib "github.com/stripe/stripe-go/v82"
+	"github.com/stripe/stripe-go/v82/webhook"
+)
+
+const webhookBodyLimit = 1024 * 1024 // 1 MiB
+
+// WebhookHandler handles incoming Stripe webhook events.
+type WebhookHandler struct {
+	secret      string
+	provisioner *Provisioner
+}
+
+// NewWebhookHandler creates a Stripe webhook HTTP handler.
+func NewWebhookHandler(secret string, provisioner *Provisioner) *WebhookHandler {
+	return &WebhookHandler{
+		secret:      secret,
+		provisioner: provisioner,
+	}
+}
+
+// ServeHTTP verifies the Stripe signature and dispatches the event.
+func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if strings.TrimSpace(h.secret) == "" {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{
+			"error": "webhook secret not configured",
+		})
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, webhookBodyLimit)
+	payload, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "failed to read request body",
+		})
+		return
+	}
+
+	sigHeader := r.Header.Get("Stripe-Signature")
+	if strings.TrimSpace(sigHeader) == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "missing Stripe signature",
+		})
+		return
+	}
+
+	event, err := webhook.ConstructEventWithOptions(payload, sigHeader, h.secret, webhook.ConstructEventOptions{
+		IgnoreAPIVersionMismatch: true,
+	})
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "invalid Stripe signature",
+		})
+		return
+	}
+
+	if err := h.handleEvent(r, &event); err != nil {
+		log.Error().Err(err).
+			Str("event_id", event.ID).
+			Str("type", string(event.Type)).
+			Msg("Stripe webhook processing failed")
+		writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "processing failed",
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"received": true,
+	})
+}
+
+func (h *WebhookHandler) handleEvent(r *http.Request, event *stripelib.Event) error {
+	switch event.Type {
+	case "checkout.session.completed":
+		var session CheckoutSession
+		if err := json.Unmarshal(event.Data.Raw, &session); err != nil {
+			return fmt.Errorf("decode checkout.session: %w", err)
+		}
+		return h.provisioner.HandleCheckout(r.Context(), session)
+
+	case "customer.subscription.updated":
+		var sub Subscription
+		if err := json.Unmarshal(event.Data.Raw, &sub); err != nil {
+			return fmt.Errorf("decode subscription: %w", err)
+		}
+		return h.provisioner.HandleSubscriptionUpdated(r.Context(), sub)
+
+	case "customer.subscription.deleted":
+		var sub Subscription
+		if err := json.Unmarshal(event.Data.Raw, &sub); err != nil {
+			return fmt.Errorf("decode subscription: %w", err)
+		}
+		return h.provisioner.HandleSubscriptionDeleted(r.Context(), sub)
+
+	default:
+		log.Info().
+			Str("type", string(event.Type)).
+			Str("event_id", event.ID).
+			Msg("Stripe webhook ignored (unhandled type)")
+		return nil
+	}
+}
+
+// CheckoutSession is a minimal representation of a Stripe checkout.session event.
+type CheckoutSession struct {
+	ID              string `json:"id"`
+	Mode            string `json:"mode"`
+	Customer        string `json:"customer"`
+	Subscription    string `json:"subscription"`
+	CustomerEmail   string `json:"customer_email"`
+	CustomerDetails struct {
+		Email string `json:"email"`
+	} `json:"customer_details"`
+	Metadata map[string]string `json:"metadata"`
+}
+
+// Subscription is a minimal representation of a Stripe subscription event.
+type Subscription struct {
+	ID                string `json:"id"`
+	Customer          string `json:"customer"`
+	Status            string `json:"status"`
+	CancelAtPeriodEnd bool   `json:"cancel_at_period_end"`
+	Items             struct {
+		Data []struct {
+			Price struct {
+				ID       string            `json:"id"`
+				Metadata map[string]string `json:"metadata"`
+			} `json:"price"`
+		} `json:"data"`
+	} `json:"items"`
+	Metadata map[string]string `json:"metadata"`
+}
+
+// FirstPriceID returns the price ID from the first subscription item.
+func (s *Subscription) FirstPriceID() string {
+	for _, item := range s.Items.Data {
+		if id := strings.TrimSpace(item.Price.ID); id != "" {
+			return id
+		}
+	}
+	return ""
+}
+
+func writeJSON(w http.ResponseWriter, status int, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(v)
+}

@@ -1,6 +1,6 @@
 # Pulse Makefile for development
 
-.PHONY: build run dev frontend backend all clean distclean dev-hot lint lint-backend lint-frontend format format-backend format-frontend build-agents
+.PHONY: build run dev frontend backend all clean distclean dev-hot lint lint-backend lint-frontend format format-backend format-frontend build-agents control-plane
 
 FRONTEND_DIR := frontend-modern
 FRONTEND_DIST := $(FRONTEND_DIR)/dist
@@ -68,6 +68,10 @@ format-backend:
 
 format-frontend:
 	npm --prefix $(FRONTEND_DIR) run format
+
+# Build control plane binary
+control-plane:
+	go build -o pulse-control-plane ./cmd/pulse-control-plane
 
 test:
 	@./scripts/ensure_test_assets.sh
