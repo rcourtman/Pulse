@@ -75,6 +75,7 @@ type Service struct {
 	cfg               *config.AIConfig
 	dataDir           string
 	stateProvider     StateProvider
+	readState         unifiedresources.ReadState
 	agentServer       AgentServer
 	executor          *tools.PulseToolExecutor
 	sessions          *SessionStore
@@ -125,6 +126,7 @@ func NewService(cfg Config) *Service {
 		cfg:           cfg.AIConfig,
 		dataDir:       cfg.DataDir,
 		stateProvider: cfg.StateProvider,
+		readState:     cfg.ReadState,
 		agentServer:   cfg.AgentServer,
 		executor:      executor,
 	}
@@ -1051,7 +1053,7 @@ func (s *Service) SetDiscoveryProvider(provider MCPDiscoveryProvider) {
 	}
 	// Create/update context prefetcher with the discovery provider
 	if s.stateProvider != nil && provider != nil {
-		s.contextPrefetcher = NewContextPrefetcher(s.stateProvider, provider)
+		s.contextPrefetcher = NewContextPrefetcher(s.stateProvider, s.readState, provider)
 		log.Info().Msg("[ChatService] Context prefetcher created with discovery provider")
 	} else {
 		log.Warn().

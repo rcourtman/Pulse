@@ -14,6 +14,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/remediation"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/unified"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog/log"
 )
@@ -638,12 +639,13 @@ func (h *AISettingsHandler) HandleGetAnomalies(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// Get current metrics from state provider
-	stateProvider := aiService.GetStateProvider()
-	if stateProvider == nil {
+	// ReadState is the canonical resource read surface for AI intelligence endpoints.
+	// If this isn't wired, we can't reliably join baselines to live resources.
+	rs := h.readState
+	if rs == nil {
 		if err := utils.WriteJSONResponse(w, map[string]interface{}{
 			"anomalies": []interface{}{},
-			"message":   "State provider not available",
+			"message":   "ReadState not available",
 		}); err != nil {
 			log.Error().Err(err).Msg("Failed to write anomalies response")
 		}
@@ -672,43 +674,45 @@ func (h *AISettingsHandler) HandleGetAnomalies(w http.ResponseWriter, r *http.Re
 		}
 	}
 
-	// Get current state to extract live metrics
-	state := stateProvider.GetState()
-
 	// Check VMs
-	for _, vm := range state.VMs {
-		if vm.Template {
+	for _, vm := range rs.VMs() {
+		if vm == nil {
+			continue
+		}
+		if vm.Template() {
 			continue // Skip templates
 		}
 
 		// Skip VMs that aren't running - stopped VMs with 0% usage is expected, not an anomaly
-		if vm.Status != "running" {
+		if vm.Status() != unifiedresources.StatusOnline {
 			continue
 		}
 
 		// Skip if we don't have baselines for this resource
-		if _, ok := resourceMetrics[vm.ID]; !ok {
+		if _, ok := resourceMetrics[vm.ID()]; !ok {
 			if resourceID == "" {
 				continue
 			}
-			if vm.ID != resourceID {
+			if vm.ID() != resourceID {
 				continue
 			}
 		}
 
 		metrics := map[string]float64{
-			"cpu":    vm.CPU * 100,    // CPU is already 0-1, convert to percentage
-			"memory": vm.Memory.Usage, // Memory.Usage is already in percentage
+			"memory": vm.MemoryPercent(),
 		}
-		if vm.Disk.Usage > 0 {
-			metrics["disk"] = vm.Disk.Usage
+		if cpu := vm.CPUPercent(); cpu > 0 {
+			metrics["cpu"] = cpu
+		}
+		if disk := vm.DiskPercent(); disk > 0 {
+			metrics["disk"] = disk
 		}
 
-		anomalies := baselineStore.CheckResourceAnomaliesReadOnly(vm.ID, metrics)
+		anomalies := baselineStore.CheckResourceAnomaliesReadOnly(vm.ID(), metrics)
 		for _, anomaly := range anomalies {
 			result = append(result, map[string]interface{}{
 				"resource_id":      anomaly.ResourceID,
-				"resource_name":    vm.Name,
+				"resource_name":    vm.Name(),
 				"resource_type":    "vm",
 				"metric":           anomaly.Metric,
 				"current_value":    anomaly.CurrentValue,
@@ -721,43 +725,48 @@ func (h *AISettingsHandler) HandleGetAnomalies(w http.ResponseWriter, r *http.Re
 		}
 
 		// Store info for any additional processing
-		resourceInfo[vm.ID] = struct{ name, rtype string }{vm.Name, "vm"}
+		resourceInfo[vm.ID()] = struct{ name, rtype string }{vm.Name(), "vm"}
 	}
 
 	// Check Containers
-	for _, ct := range state.Containers {
-		if ct.Template {
+	for _, ct := range rs.Containers() {
+		if ct == nil {
+			continue
+		}
+		if ct.Template() {
 			continue // Skip templates
 		}
 
 		// Skip containers that aren't running - stopped containers with 0% usage is expected, not an anomaly
-		if ct.Status != "running" {
+		if ct.Status() != unifiedresources.StatusOnline {
 			continue
 		}
 
 		// Skip if we don't have baselines for this resource
-		if _, ok := resourceMetrics[ct.ID]; !ok {
+		if _, ok := resourceMetrics[ct.ID()]; !ok {
 			if resourceID == "" {
 				continue
 			}
-			if ct.ID != resourceID {
+			if ct.ID() != resourceID {
 				continue
 			}
 		}
 
 		metrics := map[string]float64{
-			"cpu":    ct.CPU * 100,    // CPU is already 0-1, convert to percentage
-			"memory": ct.Memory.Usage, // Memory.Usage is already in percentage
+			"memory": ct.MemoryPercent(),
 		}
-		if ct.Disk.Usage > 0 {
-			metrics["disk"] = ct.Disk.Usage
+		if cpu := ct.CPUPercent(); cpu > 0 {
+			metrics["cpu"] = cpu
+		}
+		if disk := ct.DiskPercent(); disk > 0 {
+			metrics["disk"] = disk
 		}
 
-		anomalies := baselineStore.CheckResourceAnomaliesReadOnly(ct.ID, metrics)
+		anomalies := baselineStore.CheckResourceAnomaliesReadOnly(ct.ID(), metrics)
 		for _, anomaly := range anomalies {
 			result = append(result, map[string]interface{}{
 				"resource_id":      anomaly.ResourceID,
-				"resource_name":    ct.Name,
+				"resource_name":    ct.Name(),
 				"resource_type":    "container",
 				"metric":           anomaly.Metric,
 				"current_value":    anomaly.CurrentValue,
@@ -770,12 +779,15 @@ func (h *AISettingsHandler) HandleGetAnomalies(w http.ResponseWriter, r *http.Re
 		}
 
 		// Store info for any additional processing
-		resourceInfo[ct.ID] = struct{ name, rtype string }{ct.Name, "container"}
+		resourceInfo[ct.ID()] = struct{ name, rtype string }{ct.Name(), "container"}
 	}
 
 	// Check nodes
-	for _, node := range state.Nodes {
-		nodeID := node.ID
+	for _, node := range rs.Nodes() {
+		if node == nil {
+			continue
+		}
+		nodeID := node.ID()
 
 		// Skip if we don't have baselines for this resource
 		if _, ok := resourceMetrics[nodeID]; !ok {
@@ -788,15 +800,15 @@ func (h *AISettingsHandler) HandleGetAnomalies(w http.ResponseWriter, r *http.Re
 		}
 
 		metrics := map[string]float64{
-			"cpu":    node.CPU * 100,    // CPU is already 0-1, convert to percentage
-			"memory": node.Memory.Usage, // Memory.Usage is already in percentage
+			"cpu":    node.CPUPercent(),
+			"memory": node.MemoryPercent(),
 		}
 
 		anomalies := baselineStore.CheckResourceAnomaliesReadOnly(nodeID, metrics)
 		for _, anomaly := range anomalies {
 			result = append(result, map[string]interface{}{
 				"resource_id":      anomaly.ResourceID,
-				"resource_name":    node.Name,
+				"resource_name":    node.Name(),
 				"resource_type":    "node",
 				"metric":           anomaly.Metric,
 				"current_value":    anomaly.CurrentValue,

@@ -7,6 +7,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 type mockPrefetchStateProvider struct {
@@ -71,8 +72,14 @@ func (m *mockDiscoveryProvider) TriggerDiscovery(ctx context.Context, resourceTy
 	}, nil
 }
 
+func newTestReadState(snapshot models.StateSnapshot) unifiedresources.ReadState {
+	rr := unifiedresources.NewRegistry(nil)
+	rr.IngestSnapshot(snapshot)
+	return rr
+}
+
 func TestContextPrefetcher_NoStateProvider(t *testing.T) {
-	prefetcher := NewContextPrefetcher(nil, nil)
+	prefetcher := NewContextPrefetcher(nil, nil, nil)
 	if ctx := prefetcher.Prefetch(context.Background(), "check @missing", nil); ctx != nil {
 		t.Fatalf("expected nil context when state provider missing")
 	}
@@ -80,7 +87,7 @@ func TestContextPrefetcher_NoStateProvider(t *testing.T) {
 
 func TestContextPrefetcher_UnresolvedMention(t *testing.T) {
 	state := models.StateSnapshot{}
-	prefetcher := NewContextPrefetcher(mockPrefetchStateProvider{state: state}, nil)
+	prefetcher := NewContextPrefetcher(mockPrefetchStateProvider{state: state}, nil, nil)
 	ctx := prefetcher.Prefetch(context.Background(), "check @missing", nil)
 	if ctx == nil || !strings.Contains(ctx.Summary, "NOT found") {
 		t.Fatalf("expected unresolved mention summary, got %#v", ctx)
@@ -121,8 +128,9 @@ func TestContextPrefetcher_ExtractResourceMentions(t *testing.T) {
 		}},
 	}
 
-	prefetcher := NewContextPrefetcher(mockPrefetchStateProvider{state: state}, nil)
-	mentions := prefetcher.extractResourceMentions("alpha beta homepage node1 host1 pod1 dep1", state)
+	rs := newTestReadState(state)
+	prefetcher := NewContextPrefetcher(mockPrefetchStateProvider{state: state}, rs, nil)
+	mentions := prefetcher.extractResourceMentions("alpha beta homepage node1 host1 pod1 dep1", state, rs)
 	if len(mentions) == 0 {
 		t.Fatalf("expected mentions to be detected")
 	}
@@ -161,7 +169,7 @@ func TestContextPrefetcher_ResolveStructuredMentions(t *testing.T) {
 		Hosts: []models.Host{{ID: "host1", Hostname: "host1"}},
 	}
 
-	prefetcher := NewContextPrefetcher(mockPrefetchStateProvider{state: state}, nil)
+	prefetcher := NewContextPrefetcher(mockPrefetchStateProvider{state: state}, nil, nil)
 	structured := []StructuredMention{
 		{ID: "docker:dock1:cid:part", Name: "homepage", Type: "docker"},
 		{ID: "host:host1", Name: "host1", Type: "host"},
@@ -194,7 +202,7 @@ func TestContextPrefetcher_ResolveStructuredMentions(t *testing.T) {
 
 func TestContextPrefetcher_GetOrTriggerDiscovery(t *testing.T) {
 	provider := &mockDiscoveryProvider{existing: map[string]*tools.ResourceDiscoveryInfo{}}
-	prefetcher := NewContextPrefetcher(mockPrefetchStateProvider{}, provider)
+	prefetcher := NewContextPrefetcher(mockPrefetchStateProvider{}, nil, provider)
 
 	provider.existing[provider.key("vm", "node1", "101")] = &tools.ResourceDiscoveryInfo{
 		ResourceType: "vm",
@@ -228,7 +236,7 @@ func TestContextPrefetcher_GetOrTriggerDiscovery(t *testing.T) {
 }
 
 func TestContextPrefetcher_FormatContextSummary(t *testing.T) {
-	prefetcher := NewContextPrefetcher(mockPrefetchStateProvider{}, nil)
+	prefetcher := NewContextPrefetcher(mockPrefetchStateProvider{}, nil, nil)
 
 	mentions := []ResourceMention{
 		{
@@ -310,7 +318,7 @@ func TestContextPrefetcher_PrefetchStructuredMentions(t *testing.T) {
 		},
 	}}
 
-	prefetcher := NewContextPrefetcher(mockPrefetchStateProvider{state: state}, provider)
+	prefetcher := NewContextPrefetcher(mockPrefetchStateProvider{state: state}, nil, provider)
 	ctx := prefetcher.Prefetch(context.Background(), "@alpha", []StructuredMention{
 		{ID: "vm:node1:101", Name: "alpha", Type: "vm", Node: "node1"},
 	})

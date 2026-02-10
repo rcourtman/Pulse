@@ -7,6 +7,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
 
@@ -43,13 +44,15 @@ type PrefetchedContext struct {
 // ContextPrefetcher proactively gathers context based on user message content
 type ContextPrefetcher struct {
 	stateProvider     StateProvider
+	readState         unifiedresources.ReadState
 	discoveryProvider tools.DiscoveryProvider
 }
 
 // NewContextPrefetcher creates a new context prefetcher
-func NewContextPrefetcher(stateProvider StateProvider, discoveryProvider tools.DiscoveryProvider) *ContextPrefetcher {
+func NewContextPrefetcher(stateProvider StateProvider, readState unifiedresources.ReadState, discoveryProvider tools.DiscoveryProvider) *ContextPrefetcher {
 	return &ContextPrefetcher{
 		stateProvider:     stateProvider,
+		readState:         readState,
 		discoveryProvider: discoveryProvider,
 	}
 }
@@ -60,6 +63,7 @@ func NewContextPrefetcher(stateProvider StateProvider, discoveryProvider tools.D
 func (p *ContextPrefetcher) Prefetch(ctx context.Context, message string, structuredMentions []StructuredMention) *PrefetchedContext {
 	log.Info().
 		Bool("hasStateProvider", p.stateProvider != nil).
+		Bool("hasReadState", p.readState != nil).
 		Bool("hasDiscoveryProvider", p.discoveryProvider != nil).
 		Int("structured_mentions", len(structuredMentions)).
 		Msg("[ContextPrefetch] Starting prefetch")
@@ -70,9 +74,18 @@ func (p *ContextPrefetcher) Prefetch(ctx context.Context, message string, struct
 	}
 
 	state := p.stateProvider.GetState()
+	vmsCount := 0
+	containersCount := 0
+	nodesCount := 0
+	if p.readState != nil {
+		vmsCount = len(p.readState.VMs())
+		containersCount = len(p.readState.Containers())
+		nodesCount = len(p.readState.Nodes())
+	}
 	log.Info().
-		Int("vms", len(state.VMs)).
-		Int("containers", len(state.Containers)).
+		Int("vms", vmsCount).
+		Int("containers", containersCount).
+		Int("nodes", nodesCount).
 		Int("dockerHosts", len(state.DockerHosts)).
 		Msg("[ContextPrefetch] Got state for matching")
 
@@ -89,7 +102,7 @@ func (p *ContextPrefetcher) Prefetch(ctx context.Context, message string, struct
 	} else {
 		// Fallback: fuzzy-match resource names from the message text.
 		// Used when the user types @name manually without selecting from autocomplete.
-		mentions = p.extractResourceMentions(message, state)
+		mentions = p.extractResourceMentions(message, state, p.readState)
 	}
 
 	if len(mentions) == 0 {
@@ -156,7 +169,7 @@ func (p *ContextPrefetcher) Prefetch(ctx context.Context, message string, struct
 // It supports two modes:
 // 1. Explicit @ mentions: @homepage, @influxdb (high confidence, exact match)
 // 2. Fuzzy name matching: "homepage" matches "homepage-docker" (fallback)
-func (p *ContextPrefetcher) extractResourceMentions(message string, state models.StateSnapshot) []ResourceMention {
+func (p *ContextPrefetcher) extractResourceMentions(message string, state models.StateSnapshot, rs unifiedresources.ReadState) []ResourceMention {
 	messageLower := strings.ToLower(message)
 	var mentions []ResourceMention
 	seen := make(map[string]bool) // Deduplicate by name
@@ -164,39 +177,48 @@ func (p *ContextPrefetcher) extractResourceMentions(message string, state models
 	// Extract words from message (3+ chars) for partial matching
 	messageWords := extractWords(messageLower)
 
-	// Check VMs
-	for _, vm := range state.VMs {
-		nameLower := strings.ToLower(vm.Name)
-		if nameLower != "" && len(nameLower) >= 3 && matchesResource(messageLower, messageWords, nameLower) {
-			if !seen[nameLower] {
-				seen[nameLower] = true
-				mentions = append(mentions, ResourceMention{
-					Name:         vm.Name,
-					ResourceType: "vm",
-					ResourceID:   fmt.Sprintf("%d", vm.VMID),
-					HostID:       vm.Node,
-					MatchedText:  vm.Name,
-				})
+	// Check VMs (via ReadState)
+	if rs != nil {
+		for _, vm := range rs.VMs() {
+			if vm == nil {
+				continue
+			}
+			name := vm.Name()
+			nameLower := strings.ToLower(name)
+			if nameLower != "" && len(nameLower) >= 3 && matchesResource(messageLower, messageWords, nameLower) {
+				if !seen[nameLower] {
+					seen[nameLower] = true
+					mentions = append(mentions, ResourceMention{
+						Name:         name,
+						ResourceType: "vm",
+						ResourceID:   fmt.Sprintf("%d", vm.VMID()),
+						HostID:       vm.Node(),
+						MatchedText:  name,
+					})
+				}
 			}
 		}
 	}
 
-	// Check LXC containers (in StateSnapshot, LXCs are in Containers with Type "lxc")
-	for _, container := range state.Containers {
-		if container.Type != "lxc" {
-			continue
-		}
-		nameLower := strings.ToLower(container.Name)
-		if nameLower != "" && len(nameLower) >= 3 && matchesResource(messageLower, messageWords, nameLower) {
-			if !seen[nameLower] {
-				seen[nameLower] = true
-				mentions = append(mentions, ResourceMention{
-					Name:         container.Name,
-					ResourceType: "lxc",
-					ResourceID:   fmt.Sprintf("%d", container.VMID),
-					HostID:       container.Node,
-					MatchedText:  container.Name,
-				})
+	// Check LXC containers (via ReadState)
+	if rs != nil {
+		for _, ct := range rs.Containers() {
+			if ct == nil {
+				continue
+			}
+			name := ct.Name()
+			nameLower := strings.ToLower(name)
+			if nameLower != "" && len(nameLower) >= 3 && matchesResource(messageLower, messageWords, nameLower) {
+				if !seen[nameLower] {
+					seen[nameLower] = true
+					mentions = append(mentions, ResourceMention{
+						Name:         name,
+						ResourceType: "lxc",
+						ResourceID:   fmt.Sprintf("%d", ct.VMID()),
+						HostID:       ct.Node(),
+						MatchedText:  name,
+					})
+				}
 			}
 		}
 	}
@@ -241,21 +263,27 @@ func (p *ContextPrefetcher) extractResourceMentions(message string, state models
 		}
 	}
 
-	// Check Proxmox nodes
-	for _, node := range state.Nodes {
-		nameLower := strings.ToLower(node.Name)
-		if nameLower != "" && len(nameLower) >= 3 && matchesResource(messageLower, messageWords, nameLower) {
-			if !seen[nameLower] {
-				seen[nameLower] = true
-				loc := state.ResolveResource(node.Name)
-				mentions = append(mentions, ResourceMention{
-					Name:         node.Name,
-					ResourceType: "node",
-					ResourceID:   node.Name,
-					HostID:       node.Name,
-					MatchedText:  node.Name,
-					TargetHost:   loc.TargetHost,
-				})
+	// Check Proxmox nodes (via ReadState)
+	if rs != nil {
+		for _, node := range rs.Nodes() {
+			if node == nil {
+				continue
+			}
+			name := node.Name()
+			nameLower := strings.ToLower(name)
+			if nameLower != "" && len(nameLower) >= 3 && matchesResource(messageLower, messageWords, nameLower) {
+				if !seen[nameLower] {
+					seen[nameLower] = true
+					loc := state.ResolveResource(name)
+					mentions = append(mentions, ResourceMention{
+						Name:         name,
+						ResourceType: "node",
+						ResourceID:   name,
+						HostID:       name,
+						MatchedText:  name,
+						TargetHost:   loc.TargetHost,
+					})
+				}
 			}
 		}
 	}

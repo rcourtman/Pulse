@@ -114,7 +114,7 @@ func TestService_ExecuteStream_PrefetchMentionsAndOverrideModel(t *testing.T) {
 		sessions:          store,
 		executor:          executor,
 		agenticLoop:       loop,
-		contextPrefetcher: NewContextPrefetcher(&mockStateProvider{state: state}, nil),
+		contextPrefetcher: NewContextPrefetcher(&mockStateProvider{state: state}, nil, nil),
 		started:           true,
 		providerFactory: func(modelStr string) (providers.StreamingProvider, error) {
 			capturedModel = modelStr

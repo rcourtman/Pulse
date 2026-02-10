@@ -75,24 +75,13 @@ func TestHandleGetAnomalies_NoStateProvider(t *testing.T) {
 	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if payload["message"] != "State provider not available" {
+	if payload["message"] != "ReadState not available" {
 		t.Fatalf("unexpected message: %#v", payload["message"])
 	}
 }
 
 func TestHandleGetAnomalies_MixedResources(t *testing.T) {
 	svc := newEnabledAIService(t)
-	store := ai.NewBaselineStore(ai.BaselineConfig{MinSamples: 1})
-	addBaseline(t, store, "vm-1", "vm", "cpu", 10)
-	addBaseline(t, store, "vm-1", "vm", "memory", 10)
-	addBaseline(t, store, "vm-1", "vm", "disk", 10)
-	addBaseline(t, store, "ct-1", "container", "cpu", 10)
-	addBaseline(t, store, "ct-1", "container", "memory", 10)
-	addBaseline(t, store, "ct-1", "container", "disk", 10)
-	addBaseline(t, store, "node-1", "node", "cpu", 10)
-	addBaseline(t, store, "node-1", "node", "memory", 10)
-	svc.SetBaselineStore(store)
-
 	state := models.StateSnapshot{
 		VMs: []models.VM{
 			{ID: "vm-1", Name: "vm-one", Status: "running", CPU: 0.9, Memory: models.Memory{Usage: 85}, Disk: models.Disk{Usage: 90}},
@@ -110,7 +99,45 @@ func TestHandleGetAnomalies_MixedResources(t *testing.T) {
 	}
 	svc.SetStateProvider(snapshotStateProvider{state: state})
 
+	rs := newTestReadState(state)
+	vmID := ""
+	for _, v := range rs.VMs() {
+		if v != nil && v.Name() == "vm-one" {
+			vmID = v.ID()
+			break
+		}
+	}
+	ctID := ""
+	for _, c := range rs.Containers() {
+		if c != nil && c.Name() == "ct-one" {
+			ctID = c.ID()
+			break
+		}
+	}
+	nodeID := ""
+	for _, n := range rs.Nodes() {
+		if n != nil && n.Name() == "node-one" {
+			nodeID = n.ID()
+			break
+		}
+	}
+	if vmID == "" || ctID == "" || nodeID == "" {
+		t.Fatalf("expected ReadState to contain test resources (vm=%q ct=%q node=%q)", vmID, ctID, nodeID)
+	}
+
+	store := ai.NewBaselineStore(ai.BaselineConfig{MinSamples: 1})
+	addBaseline(t, store, vmID, "vm", "cpu", 10)
+	addBaseline(t, store, vmID, "vm", "memory", 10)
+	addBaseline(t, store, vmID, "vm", "disk", 10)
+	addBaseline(t, store, ctID, "container", "cpu", 10)
+	addBaseline(t, store, ctID, "container", "memory", 10)
+	addBaseline(t, store, ctID, "container", "disk", 10)
+	addBaseline(t, store, nodeID, "node", "cpu", 10)
+	addBaseline(t, store, nodeID, "node", "memory", 10)
+	svc.SetBaselineStore(store)
+
 	handler := &AISettingsHandler{legacyAIService: svc}
+	handler.SetReadState(rs)
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/intelligence/anomalies", nil)
 	rec := httptest.NewRecorder()
 

@@ -281,7 +281,12 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 		runStats.dockerChecked = len(state.DockerHosts)
 	}
 	if cfg.AnalyzeStorage {
-		runStats.storageChecked = len(state.Storage)
+		// Prefer the canonical resource read surface.
+		if p.readState != nil {
+			runStats.storageChecked = len(p.readState.StoragePools())
+		} else {
+			runStats.storageChecked = 0
+		}
 	}
 	if cfg.AnalyzePBS {
 		runStats.pbsChecked = len(state.PBSInstances)

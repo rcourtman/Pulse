@@ -11,6 +11,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/learning"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/unified"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 type snapshotStateProvider struct {
@@ -19,6 +20,12 @@ type snapshotStateProvider struct {
 
 func (s snapshotStateProvider) GetState() models.StateSnapshot {
 	return s.state
+}
+
+func newTestReadState(snapshot models.StateSnapshot) unifiedresources.ReadState {
+	rr := unifiedresources.NewRegistry(nil)
+	rr.IngestSnapshot(snapshot)
+	return rr
 }
 
 func buildBaselineStore(t *testing.T) *ai.BaselineStore {
@@ -121,8 +128,6 @@ func TestHandleGetLearningStatus_WithBaselines(t *testing.T) {
 
 func TestHandleGetAnomalies_WithBaseline(t *testing.T) {
 	svc := newEnabledAIService(t)
-	store := buildBaselineStore(t)
-	svc.SetBaselineStore(store)
 
 	state := models.StateSnapshot{
 		VMs: []models.VM{{
@@ -135,8 +140,25 @@ func TestHandleGetAnomalies_WithBaseline(t *testing.T) {
 	}
 	svc.SetStateProvider(snapshotStateProvider{state: state})
 
+	rs := newTestReadState(state)
+	vmID := ""
+	if vms := rs.VMs(); len(vms) > 0 && vms[0] != nil {
+		vmID = vms[0].ID()
+	}
+	if vmID == "" {
+		t.Fatalf("expected ReadState to contain the test VM")
+	}
+
+	store := ai.NewBaselineStore(ai.BaselineConfig{MinSamples: 1})
+	points := []ai.BaselineMetricPoint{{Value: 10, Timestamp: time.Now()}}
+	if err := store.Learn(vmID, "vm", "cpu", points); err != nil {
+		t.Fatalf("baseline Learn error: %v", err)
+	}
+	svc.SetBaselineStore(store)
+
 	handler := &AISettingsHandler{legacyAIService: svc}
-	req := httptest.NewRequest(http.MethodGet, "/api/ai/intelligence/anomalies?resource_id=vm-1", nil)
+	handler.SetReadState(rs)
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/intelligence/anomalies?resource_id="+vmID, nil)
 	rec := httptest.NewRecorder()
 
 	handler.HandleGetAnomalies(rec, req)
