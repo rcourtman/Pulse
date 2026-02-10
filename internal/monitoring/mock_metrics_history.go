@@ -815,7 +815,7 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, state models.
 				containerDisk = float64(container.WritableLayerBytes) / float64(container.RootFilesystemBytes) * 100
 				containerDisk = clampFloat(containerDisk, 0, 100)
 			}
-			recordGuest("docker:"+container.ID, "docker", container.ID, container.CPUPercent, container.MemoryPercent, containerDisk, 0, 0, 0, 0, true, false, false)
+			recordGuest("docker:"+container.ID, "dockerContainer", container.ID, container.CPUPercent, container.MemoryPercent, containerDisk, 0, 0, 0, 0, true, false, false)
 		}
 		time.Sleep(50 * time.Millisecond) // Add delay for docker hosts
 	}
@@ -1099,9 +1099,9 @@ func recordMockStateToMetricsHistory(mh *MetricsHistory, ms *metrics.Store, stat
 			mh.AddGuestMetric(metricKey, "disk", containerDisk, ts)
 
 			if ms != nil {
-				ms.Write("docker", container.ID, "cpu", container.CPUPercent, ts)
-				ms.Write("docker", container.ID, "memory", container.MemoryPercent, ts)
-				ms.Write("docker", container.ID, "disk", containerDisk, ts)
+				ms.Write("dockerContainer", container.ID, "cpu", container.CPUPercent, ts)
+				ms.Write("dockerContainer", container.ID, "memory", container.MemoryPercent, ts)
+				ms.Write("dockerContainer", container.ID, "disk", containerDisk, ts)
 			}
 		}
 	}
