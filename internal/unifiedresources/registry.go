@@ -174,6 +174,26 @@ func (rr *ResourceRegistry) List() []Resource {
 	return out
 }
 
+// ListByType returns all resources of the provided type.
+//
+// The returned slice is sorted by resource ID to provide deterministic results.
+func (rr *ResourceRegistry) ListByType(t ResourceType) []Resource {
+	rr.mu.RLock()
+	defer rr.mu.RUnlock()
+
+	out := make([]Resource, 0, len(rr.resources))
+	for _, r := range rr.resources {
+		if r.Type != t {
+			continue
+		}
+		out = append(out, *r)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].ID < out[j].ID
+	})
+	return out
+}
+
 // Get returns a resource by ID.
 func (rr *ResourceRegistry) Get(id string) (*Resource, bool) {
 	rr.mu.RLock()
