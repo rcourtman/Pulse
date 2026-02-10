@@ -12,6 +12,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license/entitlements"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/stripe/stripe-go/v82/webhook"
 )
 
@@ -39,6 +40,33 @@ func (e *captureEmailer) Count() int {
 	return len(e.calls)
 }
 
+func createTestOrg(t *testing.T, persistence *config.MultiTenantPersistence, orgID, ownerEmail string) {
+	t.Helper()
+
+	if _, err := persistence.GetPersistence(orgID); err != nil {
+		t.Fatalf("GetPersistence(%s): %v", orgID, err)
+	}
+
+	now := time.Now().UTC()
+	org := &models.Organization{
+		ID:          orgID,
+		DisplayName: orgID,
+		CreatedAt:   now,
+		OwnerUserID: ownerEmail,
+		Members: []models.OrganizationMember{
+			{
+				UserID:  ownerEmail,
+				Role:    models.OrgRoleOwner,
+				AddedAt: now,
+				AddedBy: ownerEmail,
+			},
+		},
+	}
+	if err := persistence.SaveOrganization(org); err != nil {
+		t.Fatalf("SaveOrganization(%s): %v", orgID, err)
+	}
+}
+
 func TestStripeWebhook_SignatureVerification(t *testing.T) {
 	t.Setenv("STRIPE_WEBHOOK_SECRET", "whsec_test_123")
 
@@ -51,7 +79,8 @@ func TestStripeWebhook_SignatureVerification(t *testing.T) {
 	magicLinks := NewMagicLinkServiceWithKey([]byte("01234567890123456789012345678901"), nil, emailer, nil)
 	t.Cleanup(magicLinks.Stop)
 
-	h := NewStripeWebhookHandlers(billingStore, persistence, rbacProvider, magicLinks, nil, true, tmp)
+	publicURL := func(_ *http.Request) string { return "https://pulse.example.test" }
+	h := NewStripeWebhookHandlers(billingStore, persistence, rbacProvider, magicLinks, publicURL, true, tmp)
 
 	event := map[string]any{
 		"id":   "evt_1",
@@ -138,7 +167,11 @@ func TestStripeWebhook_CheckoutCompleted_IdempotentProvisioning(t *testing.T) {
 	magicLinks := NewMagicLinkServiceWithKey([]byte("01234567890123456789012345678901"), nil, emailer, nil)
 	t.Cleanup(magicLinks.Stop)
 
-	h := NewStripeWebhookHandlers(billingStore, persistence, rbacProvider, magicLinks, nil, true, tmp)
+	publicURL := func(_ *http.Request) string { return "https://pulse.example.test" }
+	h := NewStripeWebhookHandlers(billingStore, persistence, rbacProvider, magicLinks, publicURL, true, tmp)
+
+	orgID := "org_beta"
+	createTestOrg(t, persistence, orgID, "user2@example.com")
 
 	event := map[string]any{
 		"id":   "evt_checkout_1",
@@ -151,6 +184,7 @@ func TestStripeWebhook_CheckoutCompleted_IdempotentProvisioning(t *testing.T) {
 				"customer_email": "user2@example.com",
 				"subscription":   "sub_abc",
 				"metadata": map[string]any{
+					"org_id":       orgID,
 					"org_name":     "Beta Org",
 					"plan_version": "cloud-v1",
 				},
@@ -182,21 +216,7 @@ func TestStripeWebhook_CheckoutCompleted_IdempotentProvisioning(t *testing.T) {
 		t.Fatalf("second post status=%d, want %d", code, http.StatusOK)
 	}
 
-	orgs, err := persistence.ListOrganizations()
-	if err != nil {
-		t.Fatalf("ListOrganizations: %v", err)
-	}
-	var foundOrgID string
-	for _, org := range orgs {
-		if org != nil && org.OwnerUserID == "user2@example.com" {
-			foundOrgID = org.ID
-		}
-	}
-	if foundOrgID == "" {
-		t.Fatalf("expected org for owner email")
-	}
-
-	state, err := billingStore.GetBillingState(foundOrgID)
+	state, err := billingStore.GetBillingState(orgID)
 	if err != nil {
 		t.Fatalf("GetBillingState: %v", err)
 	}
@@ -227,6 +247,64 @@ func TestStripeWebhook_CheckoutCompleted_IdempotentProvisioning(t *testing.T) {
 	}
 }
 
+func TestStripeWebhook_DoesNotSendMagicLinkWithoutPublicURL(t *testing.T) {
+	t.Setenv("STRIPE_WEBHOOK_SECRET", "whsec_test_no_url")
+
+	tmp := t.TempDir()
+	persistence := config.NewMultiTenantPersistence(tmp)
+	rbacProvider := NewTenantRBACProvider(tmp)
+	billingStore := config.NewFileBillingStore(tmp)
+
+	emailer := &captureEmailer{}
+	magicLinks := NewMagicLinkServiceWithKey([]byte("01234567890123456789012345678901"), nil, emailer, nil)
+	t.Cleanup(magicLinks.Stop)
+
+	// publicURL callback intentionally omitted to simulate missing canonical URL.
+	h := NewStripeWebhookHandlers(billingStore, persistence, rbacProvider, magicLinks, nil, true, tmp)
+
+	orgID := "org_no_url"
+	createTestOrg(t, persistence, orgID, "no-url@example.com")
+
+	event := map[string]any{
+		"id":   "evt_checkout_no_url",
+		"type": "checkout.session.completed",
+		"data": map[string]any{
+			"object": map[string]any{
+				"id":             "cs_no_url",
+				"mode":           "subscription",
+				"customer":       "cus_no_url",
+				"customer_email": "no-url@example.com",
+				"subscription":   "sub_no_url",
+				"metadata": map[string]any{
+					"org_id":       orgID,
+					"org_name":     "No URL Org",
+					"plan_version": "cloud-v1",
+				},
+			},
+		},
+	}
+	payload, _ := json.Marshal(event)
+	signed := webhook.GenerateTestSignedPayload(&webhook.UnsignedPayload{
+		Payload:   payload,
+		Secret:    "whsec_test_no_url",
+		Timestamp: time.Now(),
+		Scheme:    "v1",
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/webhooks/stripe", bytes.NewReader(payload))
+	// Even if Host is set, hosted mode must not use it for magic links.
+	req.Host = "attacker.example.test"
+	req.Header.Set("Stripe-Signature", signed.Header)
+	rr := httptest.NewRecorder()
+	h.HandleStripeWebhook(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d, want %d", rr.Code, http.StatusOK)
+	}
+	if emailer.Count() != 0 {
+		t.Fatalf("magic link send count=%d, want %d (public url missing must fail closed)", emailer.Count(), 0)
+	}
+}
+
 func TestStripeWebhook_SubscriptionDeleted_RevokesCapabilities(t *testing.T) {
 	t.Setenv("STRIPE_WEBHOOK_SECRET", "whsec_test_789")
 
@@ -236,6 +314,9 @@ func TestStripeWebhook_SubscriptionDeleted_RevokesCapabilities(t *testing.T) {
 	billingStore := config.NewFileBillingStore(tmp)
 
 	h := NewStripeWebhookHandlers(billingStore, persistence, rbacProvider, nil, nil, true, tmp)
+
+	orgID := "org_gamma"
+	createTestOrg(t, persistence, orgID, "user3@example.com")
 
 	// First: provision via checkout to establish customer->org mapping.
 	checkout := map[string]any{
@@ -249,6 +330,7 @@ func TestStripeWebhook_SubscriptionDeleted_RevokesCapabilities(t *testing.T) {
 				"customer_email": "user3@example.com",
 				"subscription":   "sub_del",
 				"metadata": map[string]any{
+					"org_id":       orgID,
 					"org_name":     "Gamma Org",
 					"plan_version": "cloud-v1",
 				},
@@ -267,17 +349,6 @@ func TestStripeWebhook_SubscriptionDeleted_RevokesCapabilities(t *testing.T) {
 	h.HandleStripeWebhook(rr, req)
 	if rr.Code != http.StatusOK {
 		t.Fatalf("checkout status=%d, want %d", rr.Code, http.StatusOK)
-	}
-
-	orgs, _ := persistence.ListOrganizations()
-	var orgID string
-	for _, org := range orgs {
-		if org != nil && org.OwnerUserID == "user3@example.com" {
-			orgID = org.ID
-		}
-	}
-	if orgID == "" {
-		t.Fatalf("expected provisioned org id")
 	}
 
 	// Then: delete subscription should cancel + strip capabilities.
@@ -315,5 +386,72 @@ func TestStripeWebhook_SubscriptionDeleted_RevokesCapabilities(t *testing.T) {
 	}
 	if len(state.Capabilities) != 0 {
 		t.Fatalf("capabilities=%v, want empty", state.Capabilities)
+	}
+}
+
+func TestStripeWebhook_CheckoutCompleted_EmailCollisionDoesNotCrossProvision(t *testing.T) {
+	t.Setenv("STRIPE_WEBHOOK_SECRET", "whsec_test_collision")
+
+	tmp := t.TempDir()
+	persistence := config.NewMultiTenantPersistence(tmp)
+	rbacProvider := NewTenantRBACProvider(tmp)
+	billingStore := config.NewFileBillingStore(tmp)
+
+	h := NewStripeWebhookHandlers(billingStore, persistence, rbacProvider, nil, nil, true, tmp)
+
+	victimOrgID := "org_victim"
+	attackerOrgID := "org_attacker"
+	createTestOrg(t, persistence, victimOrgID, "victim@example.com")
+	createTestOrg(t, persistence, attackerOrgID, "attacker@example.com")
+
+	// Attacker pays with victim's email, but the checkout session is linked to the attacker's org.
+	event := map[string]any{
+		"id":   "evt_checkout_collision",
+		"type": "checkout.session.completed",
+		"data": map[string]any{
+			"object": map[string]any{
+				"id":             "cs_collision",
+				"mode":           "subscription",
+				"customer":       "cus_collision",
+				"customer_email": "victim@example.com",
+				"subscription":   "sub_collision",
+				"metadata": map[string]any{
+					"org_id":       attackerOrgID,
+					"org_name":     "Attacker Org",
+					"plan_version": "cloud-v1",
+				},
+			},
+		},
+	}
+	payload, _ := json.Marshal(event)
+	signed := webhook.GenerateTestSignedPayload(&webhook.UnsignedPayload{
+		Payload:   payload,
+		Secret:    "whsec_test_collision",
+		Timestamp: time.Now(),
+		Scheme:    "v1",
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/webhooks/stripe", bytes.NewReader(payload))
+	req.Header.Set("Stripe-Signature", signed.Header)
+	rr := httptest.NewRecorder()
+	h.HandleStripeWebhook(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d, want %d", rr.Code, http.StatusOK)
+	}
+
+	attackerState, err := billingStore.GetBillingState(attackerOrgID)
+	if err != nil {
+		t.Fatalf("GetBillingState(attacker): %v", err)
+	}
+	if attackerState == nil || attackerState.SubscriptionState != entitlements.SubStateActive {
+		t.Fatalf("attacker billing state=%v, want subscription_state=%q", attackerState, entitlements.SubStateActive)
+	}
+
+	victimState, err := billingStore.GetBillingState(victimOrgID)
+	if err != nil {
+		t.Fatalf("GetBillingState(victim): %v", err)
+	}
+	if victimState != nil {
+		t.Fatalf("victim billing state should be untouched (nil), got %+v", victimState)
 	}
 }

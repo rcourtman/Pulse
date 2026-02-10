@@ -15,18 +15,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license/entitlements"
-	"github.com/rcourtman/pulse-go-rewrite/internal/models"
-	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rs/zerolog/log"
 	"github.com/stripe/stripe-go/v82"
 	"github.com/stripe/stripe-go/v82/webhook"
 )
 
 const stripeWebhookBodyLimit = 1024 * 1024 // 1MiB
+
+var errStripeWebhookEventInFlight = errors.New("stripe webhook event is in-flight")
 
 // StripeWebhookHandlers handles Stripe webhooks for hosted Cloud provisioning.
 //
@@ -116,6 +115,14 @@ func (h *StripeWebhookHandlers) HandleStripeWebhook(w http.ResponseWriter, r *ht
 		return h.handleEvent(r.Context(), &event, r)
 	})
 	if err != nil {
+		if errors.Is(err, errStripeWebhookEventInFlight) {
+			log.Warn().
+				Str("event_id", event.ID).
+				Str("type", string(event.Type)).
+				Msg("Stripe webhook event is already in-flight; returning non-2xx so Stripe retries")
+			writeErrorResponse(w, http.StatusConflict, "stripe_in_flight", "Stripe webhook is being processed; retry later", nil)
+			return
+		}
 		log.Error().Err(err).Str("event_id", event.ID).Str("type", string(event.Type)).Msg("Stripe webhook processing failed")
 		writeErrorResponse(w, http.StatusInternalServerError, "stripe_processing_failed", "Failed to process Stripe webhook", nil)
 		return
@@ -208,14 +215,12 @@ func (h *StripeWebhookHandlers) handleCheckoutSessionCompleted(ctx context.Conte
 		return fmt.Errorf("checkout session missing customer")
 	}
 
-	email := strings.TrimSpace(session.CustomerEmail)
+	// SECURITY: customer email is not a safe org identifier.
+	// If present, it's used only for best-effort post-checkout UX (magic link) and audit logs.
+	email := strings.ToLower(strings.TrimSpace(session.CustomerEmail))
 	if email == "" {
-		email = strings.TrimSpace(session.CustomerDetails.Email)
+		email = strings.ToLower(strings.TrimSpace(session.CustomerDetails.Email))
 	}
-	if email == "" {
-		return fmt.Errorf("checkout session missing customer email")
-	}
-	email = strings.ToLower(email)
 
 	orgName := ""
 	if session.Metadata != nil {
@@ -224,20 +229,61 @@ func (h *StripeWebhookHandlers) handleCheckoutSessionCompleted(ctx context.Conte
 			orgName = strings.TrimSpace(session.Metadata["org"])
 		}
 	}
-	if orgName == "" {
-		orgName = defaultOrgNameForEmail(email)
-	}
-
-	// Prefer existing mapping by customer ID; otherwise fall back to email match.
+	// Prefer existing mapping by customer ID; otherwise require server-owned linkage (metadata/client_reference_id).
 	orgID, ok, err := h.index.LookupOrgID(session.Customer)
 	if err != nil {
 		return fmt.Errorf("lookup org by customer id: %w", err)
 	}
+	orgResolvedBy := "customer_index"
 	if !ok {
-		orgID, err = h.ensureOrgForEmail(ctx, email, orgName)
-		if err != nil {
-			return err
+		orgID = ""
+		if session.Metadata != nil {
+			orgID = strings.TrimSpace(session.Metadata["org_id"])
 		}
+		if orgID == "" {
+			orgID = strings.TrimSpace(session.ClientReference)
+		}
+		orgResolvedBy = "session_linkage"
+	}
+	orgID = strings.TrimSpace(orgID)
+	if orgID == "" {
+		log.Warn().
+			Str("session_id", strings.TrimSpace(session.ID)).
+			Str("customer_id", strings.TrimSpace(session.Customer)).
+			Str("subscription_id", strings.TrimSpace(session.Subscription)).
+			Msg("Stripe checkout.session.completed: missing org linkage (refusing to provision)")
+		return nil
+	}
+	if !isValidOrganizationID(orgID) {
+		log.Warn().
+			Str("session_id", strings.TrimSpace(session.ID)).
+			Str("customer_id", strings.TrimSpace(session.Customer)).
+			Str("org_id", orgID).
+			Str("resolved_by", orgResolvedBy).
+			Msg("Stripe checkout.session.completed: invalid org id linkage (refusing to provision)")
+		return nil
+	}
+
+	// SECURITY: only provision into an org that already exists. Do not create tenants from webhook payloads.
+	org, err := h.persistence.LoadOrganizationStrict(orgID)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			log.Warn().
+				Str("session_id", strings.TrimSpace(session.ID)).
+				Str("customer_id", strings.TrimSpace(session.Customer)).
+				Str("org_id", orgID).
+				Str("resolved_by", orgResolvedBy).
+				Msg("Stripe checkout.session.completed: org not found for linkage (refusing to provision)")
+			return nil
+		}
+		return fmt.Errorf("load org: %w", err)
+	}
+	if org == nil {
+		return fmt.Errorf("load org: empty org")
+	}
+
+	// Persist customer->org mapping once the linkage has been validated.
+	if !ok {
 		if err := h.index.Save(session.Customer, orgID); err != nil {
 			return fmt.Errorf("save customer index: %w", err)
 		}
@@ -261,19 +307,30 @@ func (h *StripeWebhookHandlers) handleCheckoutSessionCompleted(ctx context.Conte
 
 	// Best-effort: issue a magic link so the user can sign in quickly after checkout.
 	// (In dev/staging this is log-only; production should swap in a real emailer.)
-	if h.magicLinks != nil && h.magicLinks.AllowRequest(email) {
-		token, genErr := h.magicLinks.GenerateToken(email, orgID)
-		if genErr == nil {
-			baseURL := ""
-			if h.publicURL != nil && r != nil {
-				baseURL = h.publicURL(r)
+	if h.magicLinks != nil && email != "" {
+		// Only send a link to an existing org member/owner. Stripe customer email is user-controlled.
+		sendTo := ""
+		if strings.EqualFold(org.OwnerUserID, email) {
+			sendTo = org.OwnerUserID
+		} else {
+			for _, m := range org.Members {
+				if strings.EqualFold(m.UserID, email) {
+					sendTo = m.UserID
+					break
+				}
 			}
-			if baseURL == "" && r != nil {
-				baseURL = "https://" + r.Host
-			}
-			if baseURL != "" {
-				if sendErr := h.magicLinks.SendMagicLink(email, orgID, token, baseURL); sendErr != nil {
-					log.Warn().Err(sendErr).Str("email", email).Str("org_id", orgID).Msg("Stripe checkout: failed to send magic link")
+		}
+		if sendTo != "" && h.magicLinks.AllowRequest(sendTo) {
+			token, genErr := h.magicLinks.GenerateToken(sendTo, orgID)
+			if genErr == nil {
+				baseURL := ""
+				if h.publicURL != nil && r != nil {
+					baseURL = h.publicURL(r)
+				}
+				if baseURL != "" {
+					if sendErr := h.magicLinks.SendMagicLink(sendTo, orgID, token, baseURL); sendErr != nil {
+						log.Warn().Err(sendErr).Str("email", sendTo).Str("org_id", orgID).Msg("Stripe checkout: failed to send magic link")
+					}
 				}
 			}
 		}
@@ -282,7 +339,9 @@ func (h *StripeWebhookHandlers) handleCheckoutSessionCompleted(ctx context.Conte
 	log.Info().
 		Str("org_id", orgID).
 		Str("email", email).
+		Str("org_name", orgName).
 		Str("customer_id", session.Customer).
+		Str("resolved_by", orgResolvedBy).
 		Msg("Stripe checkout.session.completed processed")
 
 	return nil
@@ -397,66 +456,6 @@ func (h *StripeWebhookHandlers) handleSubscriptionDeleted(ctx context.Context, s
 	return nil
 }
 
-func (h *StripeWebhookHandlers) ensureOrgForEmail(ctx context.Context, email, orgName string) (string, error) {
-	email = strings.ToLower(strings.TrimSpace(email))
-	orgName = strings.TrimSpace(orgName)
-	if email == "" {
-		return "", fmt.Errorf("email is required")
-	}
-	if orgName == "" {
-		orgName = defaultOrgNameForEmail(email)
-	}
-
-	orgs, err := h.persistence.ListOrganizations()
-	if err != nil {
-		return "", fmt.Errorf("list organizations: %w", err)
-	}
-	for _, org := range orgs {
-		if org == nil {
-			continue
-		}
-		if strings.EqualFold(org.OwnerUserID, email) {
-			return org.ID, nil
-		}
-	}
-
-	orgID := uuid.NewString()
-
-	// Create tenant directory (same EnsureConfigDir-backed path as multi-tenant persistence).
-	if _, err := h.persistence.GetPersistence(orgID); err != nil {
-		return "", fmt.Errorf("initialize tenant directory: %w", err)
-	}
-
-	now := h.now().UTC()
-	org := &models.Organization{
-		ID:          orgID,
-		DisplayName: orgName,
-		CreatedAt:   now,
-		OwnerUserID: email,
-		Members: []models.OrganizationMember{
-			{
-				UserID:  email,
-				Role:    models.OrgRoleOwner,
-				AddedAt: now,
-				AddedBy: email,
-			},
-		},
-	}
-	if err := h.persistence.SaveOrganization(org); err != nil {
-		return "", fmt.Errorf("save organization: %w", err)
-	}
-
-	authManager, err := h.rbacProvider.GetManager(orgID)
-	if err != nil {
-		return "", fmt.Errorf("initialize org auth manager: %w", err)
-	}
-	if err := authManager.UpdateUserRoles(email, []string{auth.RoleAdmin}); err != nil {
-		return "", fmt.Errorf("create admin user: %w", err)
-	}
-
-	return orgID, nil
-}
-
 func (h *StripeWebhookHandlers) scanOrgByStripeCustomerID(customerID string) (string, bool, error) {
 	orgs, err := h.persistence.ListOrganizations()
 	if err != nil {
@@ -536,25 +535,6 @@ func derivePlanVersion(metadata map[string]string, priceID string) string {
 	return "stripe"
 }
 
-func defaultOrgNameForEmail(email string) string {
-	email = strings.TrimSpace(email)
-	if email == "" {
-		return "Pulse Cloud"
-	}
-	local := email
-	if at := strings.Index(local, "@"); at > 0 {
-		local = local[:at]
-	}
-	local = strings.TrimSpace(local)
-	if local == "" {
-		return "Pulse Cloud"
-	}
-	if len(local) > 64 {
-		local = local[:64]
-	}
-	return local
-}
-
 func resolvePulseDataDir(dataPath string) string {
 	if dir := strings.TrimSpace(dataPath); dir != "" {
 		return dir
@@ -607,12 +587,13 @@ func (d *stripeWebhookDeduper) Do(eventID string, fn func() error) (already bool
 		return false, lockErr
 	}
 	if !acquired {
-		// Another in-flight processor exists; treat as already handled for Stripe retry purposes.
-		// If the lock is stale, acquireLock will break it.
+		// Another in-flight processor exists. If processing has already completed, treat as a duplicate.
+		// If the lock exists but the done file does not, we must return a non-2xx so Stripe retries later.
+		// (Otherwise a concurrent Stripe retry could stop retrying while the original attempt still fails.)
 		if fileExists(donePath) {
 			return true, nil
 		}
-		return true, nil
+		return false, errStripeWebhookEventInFlight
 	}
 
 	defer func() {
