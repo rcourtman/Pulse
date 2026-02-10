@@ -17,6 +17,7 @@ import { EnhancedCPUBar } from '@/components/Dashboard/EnhancedCPUBar';
 import { TemperatureGauge } from '@/components/shared/TemperatureGauge';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { useMetricsViewMode } from '@/stores/metricsViewMode';
+import { ScrollableTable } from '@/components/shared/ScrollableTable';
 
 // Lazy load NodeDrawer to avoid circular dependencies and reduce bundle size
 const NodeDrawer = lazy(() => import('./NodeDrawer').then(m => ({ default: m.NodeDrawer })));
@@ -371,8 +372,8 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
 
   return (
     <Card padding="none" tone="glass" class="mb-4 overflow-hidden">
-      <div class="overflow-x-auto">
-        <table class="w-full border-collapse whitespace-nowrap" style={{ "table-layout": "fixed", "min-width": "800px" }}>
+      <ScrollableTable persistKey="node-summary" minWidth="1000px" mobileMinWidth="1000px">
+        <table class="w-full border-collapse whitespace-nowrap" style={{ "table-layout": "fixed", "min-width": "1000px" }}>
           <thead>
             <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
 
@@ -857,7 +858,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
             </For>
           </tbody>
         </table>
-      </div>
-    </Card >
+      </ScrollableTable>
+    </Card>
   );
 };

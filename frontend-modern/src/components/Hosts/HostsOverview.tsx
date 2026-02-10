@@ -23,6 +23,7 @@ import { useAlertsActivation } from '@/stores/alertsActivation';
 import { HostMetadataAPI, type HostMetadata } from '@/api/hostMetadata';
 
 import { logger } from '@/utils/logger';
+import { ScrollableTable } from '@/components/shared/ScrollableTable';
 import { buildMetricKey } from '@/utils/metricsKeys';
 import { isKioskMode, subscribeToKioskMode } from '@/utils/url';
 import { HostDrawer } from './HostDrawer';
@@ -985,9 +986,8 @@ export const HostsOverview: Component = () => {
                 }
               >
                 <Card padding="none" tone="glass" class="overflow-hidden">
-                  <div class="overflow-x-auto" style="scrollbar-width: none; -ms-overflow-style: none;">
-                    <style>{`.overflow-x-auto::-webkit-scrollbar { display: none; }`}</style>
-                    <table class="w-full border-collapse whitespace-nowrap" style={{ "table-layout": "fixed", "min-width": "800px" }}>
+                  <ScrollableTable persistKey="hosts-overview" minWidth="1000px" mobileMinWidth="1000px">
+                    <table class="w-full border-collapse whitespace-nowrap" style={{ "table-layout": "fixed", "min-width": "1000px" }}>
                       <thead>
                         <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
                           {/* Essential columns */}
@@ -1071,7 +1071,7 @@ export const HostsOverview: Component = () => {
                         </For>
                       </tbody>
                     </table>
-                  </div>
+                  </ScrollableTable>
                 </Card>
               </Show>
             </>
