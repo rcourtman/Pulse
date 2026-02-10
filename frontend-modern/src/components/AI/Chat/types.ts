@@ -8,8 +8,10 @@ export interface ToolExecution {
 }
 
 export interface PendingTool {
+  id: string;
   name: string;
   input: string;
+  rawInput?: string;
 }
 
 export interface PendingApproval {
@@ -26,18 +28,19 @@ export interface PendingApproval {
 export interface QuestionOption {
   label: string;
   value: string;
+  description?: string;
 }
 
 export interface Question {
   id: string;
   type: 'text' | 'select';
   question: string;
+  header?: string;
   options?: QuestionOption[];
 }
 
 export interface PendingQuestion {
   questionId: string;
-  sessionId: string;
   questions: Question[];
   isAnswering?: boolean;
 }
@@ -78,62 +81,4 @@ export interface ModelInfo {
   name: string;
   description?: string;
   notable?: boolean;
-}
-
-// Stream event types from backend
-export type StreamEventKind =
-  | 'content'
-  | 'thinking'
-  | 'tool_start'
-  | 'tool_end'
-  | 'approval_needed'
-  | 'question'
-  | 'processing'
-  | 'complete'
-  | 'done'
-  | 'error';
-
-export interface StreamQuestionData {
-  question_id: string;
-  session_id: string;
-  questions: Array<{
-    id: string;
-    type: 'text' | 'select';
-    question: string;
-    options?: Array<{ label: string; value: string }>;
-  }>;
-}
-
-export interface StreamToolStartData {
-  name: string;
-  input: string;
-}
-
-export interface StreamToolEndData {
-  name: string;
-  input: string;
-  output: string;
-  success: boolean;
-}
-
-export interface StreamApprovalNeededData {
-  command: string;
-  tool_id: string;
-  tool_name: string;
-  run_on_host: boolean;
-  target_host?: string;
-  approval_id?: string;
-}
-
-export interface StreamCompleteData {
-  model: string;
-  input_tokens: number;
-  output_tokens: number;
-  tool_calls?: ToolExecution[];
-}
-
-export interface StreamDoneData {
-  session_id?: string;
-  input_tokens?: number;
-  output_tokens?: number;
 }

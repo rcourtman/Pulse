@@ -52,6 +52,11 @@ export const QuestionCard: Component<QuestionCardProps> = (props) => {
         <For each={props.question.questions}>
           {(q) => (
             <div class="space-y-2">
+              <Show when={q.header}>
+                <p class="text-[11px] text-slate-600 dark:text-slate-300">
+                  {q.header}
+                </p>
+              </Show>
               <p class="text-sm font-medium text-gray-800 dark:text-gray-200">
                 {q.question}
               </p>
@@ -81,7 +86,14 @@ export const QuestionCard: Component<QuestionCardProps> = (props) => {
                             : 'bg-white dark:bg-gray-800 border-blue-200 dark:border-blue-700 text-gray-700 dark:text-gray-300 hover:bg-blue-50 dark:hover:bg-blue-900/30'
                         } ${props.question.isAnswering ? 'opacity-50 cursor-not-allowed' : ''}`}
                       >
-                        {option.label}
+                        <div class="flex flex-col gap-0.5">
+                          <span>{option.label}</span>
+                          <Show when={option.description}>
+                            <span class="text-[11px] text-slate-500 dark:text-slate-400">
+                              {option.description}
+                            </span>
+                          </Show>
+                        </div>
                       </button>
                     )}
                   </For>

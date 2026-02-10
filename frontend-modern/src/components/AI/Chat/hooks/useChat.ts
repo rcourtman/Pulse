@@ -7,6 +7,7 @@ import type {
   ToolExecution,
   StreamDisplayEvent,
   PendingQuestion,
+  PendingTool,
 } from '../types';
 
 const generateId = () => Math.random().toString(36).substring(2, 9);
@@ -108,6 +109,15 @@ export function useChat(options: UseChatOptions = {}) {
     };
   };
 
+  const extractErrorMessage = (data: unknown): string => {
+    if (typeof data === 'string') return data;
+    if (data && typeof data === 'object') {
+      const record = data as Record<string, unknown>;
+      if (typeof record.message === 'string') return record.message;
+    }
+    return '';
+  };
+
   const processEvent = (
     assistantId: string,
     event: StreamEvent
@@ -142,15 +152,22 @@ export function useChat(options: UseChatOptions = {}) {
           }
 
           case 'tool_start': {
-            const data = (event.data || {}) as { name?: string; input?: string };
+            const data = (event.data || {}) as { id?: string; name?: string; input?: string; raw_input?: string };
 
             // Skip tool_start for "question" - these are handled by the question event type
             if (data.name === 'question' || data.name === 'Question') {
               return msg;
             }
 
-            const toolId = generateId(); // Unique ID to track this tool
-            const pendingTool = { name: data.name || 'unknown', input: data.input || '{}' };
+            // Prefer backend tool call ID for robust matching across parallel calls.
+            // Fall back to a local ID if backend didn't send one (older servers).
+            const toolId = data.id || generateId();
+            const pendingTool: PendingTool = {
+              id: toolId,
+              name: data.name || 'unknown',
+              input: data.input || '{}',
+              rawInput: data.raw_input,
+            };
 
             // Add to streamEvents in chronological position
             const updated = addStreamEvent(msg, {
@@ -161,12 +178,12 @@ export function useChat(options: UseChatOptions = {}) {
 
             return {
               ...updated,
-              pendingTools: [...(msg.pendingTools || []), { ...pendingTool, id: toolId } as any],
+              pendingTools: [...(msg.pendingTools || []), pendingTool],
             };
           }
 
           case 'tool_end': {
-            const data = event.data as { name: string; input: string; output: string; success: boolean };
+            const data = event.data as { id?: string; name: string; input: string; raw_input?: string; output: string; success: boolean };
             const pendingTools = msg.pendingTools || [];
             const events = msg.streamEvents || [];
 
@@ -174,12 +191,12 @@ export function useChat(options: UseChatOptions = {}) {
             const normalizeToolName = (name: string) => (name || '').replace(/^(pulse_)+/, '');
             const normalizedEndName = normalizeToolName(data.name || '');
 
-            // Find the matching pending tool (by normalized name)
-            const matchingPendingIndex = pendingTools.findIndex(
-              (t) => normalizeToolName(t.name) === normalizedEndName
-            );
-            const updatedPending = matchingPendingIndex >= 0
-              ? [...pendingTools.slice(0, matchingPendingIndex), ...pendingTools.slice(matchingPendingIndex + 1)]
+            // Find the matching pending tool (prefer tool ID, then fall back to name).
+            const resolvedPendingIndex = data.id
+              ? pendingTools.findIndex((t) => t.id === data.id)
+              : pendingTools.findIndex((t) => normalizeToolName(t.name) === normalizedEndName);
+            const updatedPending = resolvedPendingIndex >= 0
+              ? [...pendingTools.slice(0, resolvedPendingIndex), ...pendingTools.slice(resolvedPendingIndex + 1)]
               : pendingTools;
 
             const newToolCall: ToolExecution = {
@@ -193,17 +210,19 @@ export function useChat(options: UseChatOptions = {}) {
             // If so, we need to remove both the pending_tool AND the approval,
             // then add the completed tool at the end (since execution happened AFTER approval)
             const hasApproval = events.some(
-              (evt) => evt.type === 'approval' && normalizeToolName(evt.approval?.toolName || '') === normalizedEndName
+              (evt) =>
+                evt.type === 'approval' &&
+                (data.id ? evt.approval?.toolId === data.id : normalizeToolName(evt.approval?.toolName || '') === normalizedEndName)
             );
 
             let updatedEvents: typeof events;
             if (hasApproval) {
               // Remove pending_tool and approval, add completed tool at end
               updatedEvents = events.filter((evt) => {
-                if (evt.type === 'pending_tool' && normalizeToolName(evt.pendingTool?.name || '') === normalizedEndName) {
+                if (evt.type === 'pending_tool' && (data.id ? evt.toolId === data.id : normalizeToolName(evt.pendingTool?.name || '') === normalizedEndName)) {
                   return false;
                 }
-                if (evt.type === 'approval' && normalizeToolName(evt.approval?.toolName || '') === normalizedEndName) {
+                if (evt.type === 'approval' && (data.id ? evt.approval?.toolId === data.id : normalizeToolName(evt.approval?.toolName || '') === normalizedEndName)) {
                   return false;
                 }
                 return true;
@@ -214,7 +233,7 @@ export function useChat(options: UseChatOptions = {}) {
               updatedEvents = [...events];
               for (let i = events.length - 1; i >= 0; i--) {
                 const evt = events[i];
-                if (evt.type === 'pending_tool' && normalizeToolName(evt.pendingTool?.name || '') === normalizedEndName) {
+                if (evt.type === 'pending_tool' && (data.id ? evt.toolId === data.id : normalizeToolName(evt.pendingTool?.name || '') === normalizedEndName)) {
                   updatedEvents[i] = { type: 'tool', tool: newToolCall };
                   break;
                 }
@@ -223,7 +242,7 @@ export function useChat(options: UseChatOptions = {}) {
 
             // Also remove from pendingApprovals if present
             const updatedApprovals = (msg.pendingApprovals || []).filter(
-              (a) => normalizeToolName(a.toolName || '') !== normalizedEndName
+              (a) => (data.id ? a.toolId !== data.id : normalizeToolName(a.toolName || '') !== normalizedEndName)
             );
 
             return {
@@ -265,21 +284,23 @@ export function useChat(options: UseChatOptions = {}) {
           }
 
           case 'question': {
-            const data = event.data as {
-              question_id: string;
-              session_id: string;
-              questions: Array<{
-                id: string;
-                type: 'text' | 'select';
-                question: string;
-                options?: Array<{ label: string; value: string }>;
-              }>;
-            };
+            const data = event.data as { question_id: string; questions: Array<any> };
 
             const pendingQuestion: PendingQuestion = {
               questionId: data.question_id,
-              sessionId: data.session_id,
-              questions: data.questions,
+              questions: (data.questions || []).map((q) => ({
+                id: String(q.id || ''),
+                type: q.type === 'select' || (Array.isArray(q.options) && q.options.length > 0) ? 'select' : 'text',
+                header: typeof q.header === 'string' ? q.header : undefined,
+                question: String(q.question || ''),
+                options: Array.isArray(q.options)
+                  ? q.options.map((opt: any) => ({
+                      label: String(opt.label || ''),
+                      value: String(opt.value ?? opt.label ?? ''),
+                      description: typeof opt.description === 'string' ? opt.description : undefined,
+                    }))
+                  : undefined,
+              })),
               isAnswering: false,
             };
 
@@ -301,12 +322,12 @@ export function useChat(options: UseChatOptions = {}) {
           }
 
           case 'error': {
-            const errorMsg = event.data as string;
+            const errorMsg = extractErrorMessage(event.data);
             return {
               ...msg,
               isStreaming: false,
               pendingTools: [],
-              content: `Error: ${errorMsg}`,
+              content: `Error: ${errorMsg || 'Request failed'}`,
             };
           }
 

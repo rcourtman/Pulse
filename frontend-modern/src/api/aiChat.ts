@@ -1,5 +1,8 @@
 import { apiFetchJSON, apiFetch } from '@/utils/apiClient';
 import { logger } from '@/utils/logger';
+import type {
+  AIChatStreamEvent,
+} from './generated/aiChatEvents';
 
 // AI Chat API - Simplified AI interface
 
@@ -27,10 +30,7 @@ export interface ToolCall {
   success: boolean;
 }
 
-export interface StreamEvent {
-  type: 'content' | 'thinking' | 'tool_start' | 'tool_end' | 'tool' | 'approval_needed' | 'question' | 'done' | 'error';
-  data?: any;
-}
+export type StreamEvent = AIChatStreamEvent;
 
 export interface AIStatus {
   running: boolean;

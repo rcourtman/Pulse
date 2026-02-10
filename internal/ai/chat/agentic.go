@@ -61,6 +61,7 @@ func NewAgenticLoop(provider providers.StreamingProvider, executor *tools.PulseT
 	// Convert MCP tools to provider format
 	mcpTools := executor.ListTools()
 	providerTools := ConvertMCPToolsToProvider(mcpTools)
+	providerTools = append(providerTools, userQuestionTool())
 
 	return &AgenticLoop{
 		provider:         provider,
@@ -76,7 +77,8 @@ func NewAgenticLoop(provider providers.StreamingProvider, executor *tools.PulseT
 // UpdateTools refreshes the tool list from the executor
 func (a *AgenticLoop) UpdateTools() {
 	mcpTools := a.executor.ListTools()
-	a.tools = ConvertMCPToolsToProvider(mcpTools)
+	tools := ConvertMCPToolsToProvider(mcpTools)
+	a.tools = append(tools, userQuestionTool())
 }
 
 // Execute runs the agentic loop with streaming
@@ -295,41 +297,13 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 
 			case "tool_start":
 				if data, ok := event.Data.(providers.ToolStartEvent); ok {
+					// pulse_question is rendered as a dedicated "question" card; suppress tool UI events.
+					if data.Name == pulseQuestionToolName {
+						return
+					}
 					// Format input for frontend display
 					// For control tools, show a human-readable summary instead of raw JSON to avoid "hallucination" look
-					inputStr := "{}"
-					rawInput := ""
-					if data.Input != nil {
-						if inputBytes, err := json.Marshal(data.Input); err == nil {
-							rawInput = string(inputBytes)
-						}
-						// Special handling for command execution tools to avoid showing raw JSON
-						if data.Name == "pulse_control" || data.Name == "pulse_run_command" || data.Name == "control" {
-							if cmd, ok := data.Input["command"].(string); ok {
-								// Just show the command being run
-								inputStr = fmt.Sprintf("Running: %s", cmd)
-							} else if action, ok := data.Input["action"].(string); ok {
-								// Show action (e.g. for guest control)
-								target := ""
-								if t, ok := data.Input["guest_id"].(string); ok {
-									target = t
-								} else if t, ok := data.Input["container"].(string); ok {
-									target = t
-								}
-								inputStr = fmt.Sprintf("%s %s", action, target)
-							} else {
-								// Fallback to JSON
-								if inputBytes, err := json.Marshal(data.Input); err == nil {
-									inputStr = string(inputBytes)
-								}
-							}
-						} else {
-							// Standard JSON for other tools
-							if inputBytes, err := json.Marshal(data.Input); err == nil {
-								inputStr = string(inputBytes)
-							}
-						}
-					}
+					inputStr, rawInput := formatToolInputForFrontend(data.Name, data.Input, false)
 					jsonData, _ := json.Marshal(ToolStartData{
 						ID:       data.ID,
 						Name:     data.Name,
@@ -574,6 +548,204 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			toolKind ToolKind
 		}
 		var pendingExec []pendingToolExec
+
+		// pulse_question is interactive and must not run in parallel with other tools.
+		// If the provider emits multiple tool calls alongside pulse_question, skip the
+		// others and let the model retry after receiving the user's answer.
+		hasPulseQuestion := false
+		for _, tc := range toolCalls {
+			if tc.Name == pulseQuestionToolName {
+				hasPulseQuestion = true
+				break
+			}
+		}
+		if hasPulseQuestion {
+			for _, tc := range toolCalls {
+				log.Debug().
+					Str("tool", tc.Name).
+					Str("id", tc.ID).
+					Msg("Processing interactive tool call set (pulse_question present)")
+
+				toolKind := ClassifyToolCall(tc.Name, tc.Input)
+
+				// FSM enforcement still applies (even if we're skipping execution).
+				if fsm != nil {
+					if fsmErr := fsm.CanExecuteTool(toolKind, tc.Name); fsmErr != nil {
+						log.Warn().
+							Str("tool", tc.Name).
+							Str("kind", toolKind.String()).
+							Str("state", string(fsm.State)).
+							Err(fsmErr).
+							Msg("[AgenticLoop] FSM blocked tool execution (interactive set)")
+
+						fsmBlockedErr, ok := fsmErr.(*FSMBlockedError)
+						var recoveryHint string
+						if ok && fsmBlockedErr.Recoverable {
+							recoveryHint = " Use a discovery or read tool first, then retry."
+							fsm.TrackPendingRecovery("FSM_BLOCKED", tc.Name)
+							if metrics := GetAIMetrics(); metrics != nil {
+								metrics.RecordAutoRecoveryAttempt("FSM_BLOCKED", tc.Name)
+							}
+						}
+
+						inputStr, rawInput := formatToolInputForFrontend(tc.Name, tc.Input, true)
+						jsonData, _ := json.Marshal(ToolEndData{
+							ID:       tc.ID,
+							Name:     tc.Name,
+							Input:    inputStr,
+							RawInput: rawInput,
+							Output:   fsmErr.Error() + recoveryHint,
+							Success:  false,
+						})
+						callback(StreamEvent{Type: "tool_end", Data: jsonData})
+
+						toolResultMsg := Message{
+							ID:        uuid.New().String(),
+							Role:      "user",
+							Timestamp: time.Now(),
+							ToolResult: &ToolResult{
+								ToolUseID: tc.ID,
+								Content:   fsmErr.Error() + recoveryHint,
+								IsError:   true,
+							},
+						}
+						resultMessages = append(resultMessages, toolResultMsg)
+						providerMessages = append(providerMessages, providers.Message{
+							Role: "user",
+							ToolResult: &providers.ToolResult{
+								ToolUseID: tc.ID,
+								Content:   truncateToolResultForModel(fsmErr.Error() + recoveryHint),
+								IsError:   true,
+							},
+						})
+						continue
+					}
+				}
+
+				// LOOP DETECTION
+				callKey := toolCallKey(tc.Name, tc.Input)
+				recentCallCounts[callKey]++
+				if recentCallCounts[callKey] > maxIdenticalCalls {
+					loopMsg := fmt.Sprintf("LOOP_DETECTED: You have called %s with the same arguments %d times. This call is blocked. Try a different tool or approach.", tc.Name, recentCallCounts[callKey])
+
+					inputStr, rawInput := formatToolInputForFrontend(tc.Name, tc.Input, true)
+					jsonData, _ := json.Marshal(ToolEndData{
+						ID:       tc.ID,
+						Name:     tc.Name,
+						Input:    inputStr,
+						RawInput: rawInput,
+						Output:   loopMsg,
+						Success:  false,
+					})
+					callback(StreamEvent{Type: "tool_end", Data: jsonData})
+
+					toolResultMsg := Message{
+						ID:        uuid.New().String(),
+						Role:      "user",
+						Timestamp: time.Now(),
+						ToolResult: &ToolResult{
+							ToolUseID: tc.ID,
+							Content:   loopMsg,
+							IsError:   true,
+						},
+					}
+					resultMessages = append(resultMessages, toolResultMsg)
+					providerMessages = append(providerMessages, providers.Message{
+						Role: "user",
+						ToolResult: &providers.ToolResult{
+							ToolUseID: tc.ID,
+							Content:   truncateToolResultForModel(loopMsg),
+							IsError:   true,
+						},
+					})
+					continue
+				}
+
+				// Skip non-question tools in this turn; the model must retry after user input.
+				if tc.Name != pulseQuestionToolName {
+					skipMsg := fmt.Sprintf("SKIPPED: %s was requested this turn. Wait for the user's answer, then re-issue this tool call with the clarified inputs.", pulseQuestionToolName)
+
+					inputStr, rawInput := formatToolInputForFrontend(tc.Name, tc.Input, true)
+					jsonData, _ := json.Marshal(ToolEndData{
+						ID:       tc.ID,
+						Name:     tc.Name,
+						Input:    inputStr,
+						RawInput: rawInput,
+						Output:   skipMsg,
+						Success:  false,
+					})
+					callback(StreamEvent{Type: "tool_end", Data: jsonData})
+
+					toolResultMsg := Message{
+						ID:        uuid.New().String(),
+						Role:      "user",
+						Timestamp: time.Now(),
+						ToolResult: &ToolResult{
+							ToolUseID: tc.ID,
+							Content:   skipMsg,
+							IsError:   true,
+						},
+					}
+					resultMessages = append(resultMessages, toolResultMsg)
+					providerMessages = append(providerMessages, providers.Message{
+						Role: "user",
+						ToolResult: &providers.ToolResult{
+							ToolUseID: tc.ID,
+							Content:   truncateToolResultForModel(skipMsg),
+							IsError:   true,
+						},
+					})
+					continue
+				}
+
+				// Execute the interactive question tool synchronously (blocks until user answers).
+				resultText, isError := a.executeQuestionTool(ctx, sessionID, tc, callback)
+
+				// For pulse_question we suppress tool_end on success (UI uses the question card).
+				if isError {
+					inputStr, rawInput := formatToolInputForFrontend(tc.Name, tc.Input, true)
+					jsonData, _ := json.Marshal(ToolEndData{
+						ID:       tc.ID,
+						Name:     tc.Name,
+						Input:    inputStr,
+						RawInput: rawInput,
+						Output:   resultText,
+						Success:  false,
+					})
+					callback(StreamEvent{Type: "tool_end", Data: jsonData})
+				}
+
+				if fsm != nil && !isError {
+					fsm.OnToolSuccess(toolKind, tc.Name)
+				}
+
+				toolResultMsg := Message{
+					ID:        uuid.New().String(),
+					Role:      "user",
+					Timestamp: time.Now(),
+					ToolResult: &ToolResult{
+						ToolUseID: tc.ID,
+						Content:   resultText,
+						IsError:   isError,
+					},
+				}
+				resultMessages = append(resultMessages, toolResultMsg)
+
+				providerMessages = append(providerMessages, providers.Message{
+					Role: "user",
+					ToolResult: &providers.ToolResult{
+						ToolUseID: tc.ID,
+						Content:   truncateToolResultForModel(resultText),
+						IsError:   isError,
+					},
+				})
+			}
+
+			// Mark the start of the next turn's messages for compaction tracking.
+			currentTurnStartIndex = len(providerMessages)
+			turn++
+			continue
+		}
 
 		for _, tc := range toolCalls {
 			log.Debug().
@@ -998,38 +1170,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 
 			// Send tool_end event
 			// Convert input to JSON string for frontend display
-			inputStr := ""
-			rawInput := ""
-			if tc.Input != nil {
-				if inputBytes, err := json.Marshal(tc.Input); err == nil {
-					rawInput = string(inputBytes)
-				}
-				// Special handling for command execution tools to avoid showing raw JSON
-				if tc.Name == "pulse_control" || tc.Name == "pulse_run_command" || tc.Name == "control" {
-					if cmd, ok := tc.Input["command"].(string); ok {
-						// Just show the command being run
-						inputStr = fmt.Sprintf("Running: %s", cmd)
-					} else if action, ok := tc.Input["action"].(string); ok {
-						// Show action (e.g. for guest control)
-						target := ""
-						if t, ok := tc.Input["guest_id"].(string); ok {
-							target = t
-						} else if t, ok := tc.Input["container"].(string); ok {
-							target = t
-						}
-						inputStr = fmt.Sprintf("%s %s", action, target)
-					} else {
-						// Fallback to JSON
-						if inputBytes, err := json.Marshal(tc.Input); err == nil {
-							inputStr = string(inputBytes)
-						}
-					}
-				} else {
-					if inputBytes, err := json.Marshal(tc.Input); err == nil {
-						inputStr = string(inputBytes)
-					}
-				}
-			}
+			inputStr, rawInput := formatToolInputForFrontend(tc.Name, tc.Input, true)
 			jsonData, _ := json.Marshal(ToolEndData{
 				ID:       tc.ID,
 				Name:     tc.Name,
@@ -1055,31 +1196,22 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 						Msg("[AgenticLoop] FSM verification complete after read, transitioning to READING")
 				}
 
-				// === AUTO-VERIFY: After a write, advance the FSM past VERIFYING ===
-				// The FSM requires a read after every write. Rather than querying
-				// infrastructure (which returns stale cached data that contradicts
-				// the success message and confuses the model), we advance the FSM
-				// directly. The control tool already confirms success/failure —
-				// that IS the verification.
-				if fsm.State == StateVerifying && toolKind == ToolKindWrite {
-					log.Info().
-						Str("write_tool", tc.Name).
-						Msg("[AgenticLoop] Auto-advancing FSM past VERIFYING — control tool result is the verification")
-
-					// Simulate a successful read to satisfy the FSM
-					fsm.OnToolSuccess(ToolKindRead, "auto_verify")
+				// If a write tool includes self-verification evidence, we can satisfy
+				// the "verify after write" invariant without requiring a separate read
+				// tool call (which may be stale depending on reporting cadence).
+				//
+				// Verification evidence is a structured field in the tool output:
+				//   { "verification": { "ok": true, ... } }
+				if toolKind == ToolKindWrite && toolResultHasVerificationOK(resultText) {
+					fsm.OnToolSuccess(ToolKindRead, "self_verify")
 					if fsm.State == StateVerifying && fsm.ReadAfterWrite {
 						fsm.CompleteVerification()
 					}
-					log.Info().
-						Str("new_state", string(fsm.State)).
-						Msg("[AgenticLoop] FSM advanced past VERIFYING")
-
-					// Force the model to produce a text response on the next turn.
-					// Without this, the model calls read tools to verify the write,
-					// but Pulse's cached state is stale and contradicts the success
-					// message, causing the model to loop.
 					writeCompletedLastTurn = true
+					log.Info().
+						Str("tool", tc.Name).
+						Str("new_state", string(fsm.State)).
+						Msg("[AgenticLoop] Write tool provided verification evidence; FSM verification satisfied")
 				}
 
 				log.Debug().
@@ -1169,1120 +1301,4 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 	log.Warn().Int("max_turns", maxTurns).Str("session_id", sessionID).Msg("Agentic loop hit max turns limit")
 	resultMessages = a.ensureFinalTextResponse(ctx, sessionID, resultMessages, providerMessages, callback)
 	return resultMessages, nil
-}
-
-// ensureFinalTextResponse checks if the result messages contain any assistant text.
-// If not, it makes one last text-only LLM call to force the model to summarize its findings.
-// This prevents the loop from exiting silently after making tool calls without answering.
-func (a *AgenticLoop) ensureFinalTextResponse(
-	ctx context.Context,
-	sessionID string,
-	resultMessages []Message,
-	providerMessages []providers.Message,
-	callback StreamCallback,
-) []Message {
-	// Check if any assistant message has text content
-	for i := len(resultMessages) - 1; i >= 0; i-- {
-		if resultMessages[i].Role == "assistant" && strings.TrimSpace(resultMessages[i].Content) != "" {
-			return resultMessages // Already has text — nothing to do
-		}
-	}
-
-	// No text content from the model. Make a final text-only call.
-	log.Warn().Str("session_id", sessionID).Msg("[AgenticLoop] No text content produced — making final summary call")
-
-	// Build clean message history for the summary call:
-	// 1. Strip any trailing empty assistant messages (the model already failed to produce
-	//    text with these, so including them would just get the same empty result).
-	// 2. Append a user-role nudge to give the model a clear instruction.
-	cleanMessages := make([]providers.Message, len(providerMessages))
-	copy(cleanMessages, providerMessages)
-	for len(cleanMessages) > 0 {
-		last := cleanMessages[len(cleanMessages)-1]
-		if last.Role == "assistant" && strings.TrimSpace(last.Content) == "" && len(last.ToolCalls) == 0 {
-			cleanMessages = cleanMessages[:len(cleanMessages)-1]
-		} else {
-			break
-		}
-	}
-	cleanMessages = append(cleanMessages, providers.Message{
-		Role:    "user",
-		Content: "Based on what you've investigated above, provide a complete response to the user. Explain what you found or did, mention any issues or caveats they should know about, and suggest next steps if relevant.",
-	})
-
-	summaryReq := providers.ChatRequest{
-		Messages:   cleanMessages,
-		System:     a.getSystemPrompt(),
-		ToolChoice: &providers.ToolChoice{Type: providers.ToolChoiceNone},
-		// No Tools field — completely omit tools to prevent hallucinated function calls
-	}
-
-	var summaryBuilder strings.Builder
-
-	summaryErr := a.provider.ChatStream(ctx, summaryReq, func(event providers.StreamEvent) {
-		switch event.Type {
-		case "content":
-			if data, ok := event.Data.(providers.ContentEvent); ok {
-				summaryBuilder.WriteString(data.Text)
-				jsonData, _ := json.Marshal(ContentData{Text: data.Text})
-				callback(StreamEvent{Type: "content", Data: jsonData})
-			}
-		case "done":
-			if data, ok := event.Data.(providers.DoneEvent); ok {
-				a.totalInputTokens += data.InputTokens
-				a.totalOutputTokens += data.OutputTokens
-			}
-		}
-	})
-
-	if summaryErr == nil && summaryBuilder.Len() > 0 {
-		summaryMsg := Message{
-			ID:        uuid.New().String(),
-			Role:      "assistant",
-			Content:   cleanDeepSeekArtifacts(summaryBuilder.String()),
-			Timestamp: time.Now(),
-		}
-		resultMessages = append(resultMessages, summaryMsg)
-		log.Info().Str("session_id", sessionID).Int("summary_len", summaryBuilder.Len()).Msg("[AgenticLoop] Final summary produced")
-	} else if summaryErr != nil {
-		log.Error().Err(summaryErr).Str("session_id", sessionID).Msg("[AgenticLoop] Final summary call failed")
-	} else {
-		log.Warn().Str("session_id", sessionID).Msg("[AgenticLoop] Final summary call returned empty content")
-	}
-
-	return resultMessages
-}
-
-// Abort aborts an ongoing session
-func (a *AgenticLoop) Abort(sessionID string) {
-	a.mu.Lock()
-	a.aborted[sessionID] = true
-	a.mu.Unlock()
-}
-
-// SetAutonomousMode sets whether the loop is in autonomous mode (for investigations).
-// When enabled, approval requests don't block waiting for user input.
-func (a *AgenticLoop) SetAutonomousMode(enabled bool) {
-	a.mu.Lock()
-	a.autonomousMode = enabled
-	a.mu.Unlock()
-}
-
-// SetSessionFSM sets the workflow FSM for the current session.
-// This must be called before ExecuteWithTools to enable structural guarantees.
-func (a *AgenticLoop) SetSessionFSM(fsm *SessionFSM) {
-	a.mu.Lock()
-	a.sessionFSM = fsm
-	a.mu.Unlock()
-}
-
-// SetKnowledgeAccumulator sets the knowledge accumulator for fact extraction.
-// This must be called before Execute to enable knowledge accumulation.
-func (a *AgenticLoop) SetKnowledgeAccumulator(ka *KnowledgeAccumulator) {
-	a.mu.Lock()
-	a.knowledgeAccumulator = ka
-	a.mu.Unlock()
-}
-
-// SetMaxTurns overrides the maximum number of agentic turns for this loop.
-func (a *AgenticLoop) SetMaxTurns(n int) {
-	a.mu.Lock()
-	a.maxTurns = n
-	a.mu.Unlock()
-}
-
-// SetProviderInfo sets the provider/model info for telemetry.
-func (a *AgenticLoop) SetProviderInfo(provider, model string) {
-	a.mu.Lock()
-	a.providerName = provider
-	a.modelName = model
-	a.mu.Unlock()
-}
-
-// SetBudgetChecker sets a function called after each agentic turn to enforce
-// token spending limits. If the checker returns an error, the loop stops.
-func (a *AgenticLoop) SetBudgetChecker(fn func() error) {
-	a.budgetChecker = fn
-}
-
-// GetTotalInputTokens returns the accumulated input tokens across all turns.
-func (a *AgenticLoop) GetTotalInputTokens() int {
-	return a.totalInputTokens
-}
-
-// GetTotalOutputTokens returns the accumulated output tokens across all turns.
-func (a *AgenticLoop) GetTotalOutputTokens() int {
-	return a.totalOutputTokens
-}
-
-// ResetTokenCounts resets the accumulated token counts (for reuse across executions).
-func (a *AgenticLoop) ResetTokenCounts() {
-	a.totalInputTokens = 0
-	a.totalOutputTokens = 0
-}
-
-// hasPhantomExecution detects when the model claims to have executed something
-// but no actual tool calls were made. This catches models that "hallucinate"
-// tool execution by writing about it instead of calling tools.
-//
-// We're intentionally conservative here to avoid false positives like:
-// - "I checked the docs..." (not a tool)
-// - "I ran through the logic..." (not a command)
-//
-// We only trigger when the model asserts:
-// 1. Concrete system metrics/values (CPU %, memory usage, etc.)
-// 2. Infrastructure state that requires live queries (running/stopped)
-// 3. Fake tool call formatting
-// summarizeForNegativeMarker creates a concise summary of a tool result for
-// use in negative markers. Tries to extract meaningful context from JSON
-// responses rather than blindly truncating.
-func summarizeForNegativeMarker(resultText string) string {
-	if len(resultText) == 0 {
-		return "empty response"
-	}
-
-	// Try to parse as JSON and extract key indicators
-	var obj map[string]interface{}
-	if err := json.Unmarshal([]byte(resultText), &obj); err == nil {
-		var indicators []string
-
-		// Check for common empty-result patterns
-		for _, arrayKey := range []string{"points", "pools", "disks", "alerts", "findings", "jobs", "tasks", "snapshots", "resources", "containers", "vms", "nodes", "updates"} {
-			if arr, ok := obj[arrayKey]; ok {
-				if slice, ok := arr.([]interface{}); ok {
-					indicators = append(indicators, fmt.Sprintf("%s: %d items", arrayKey, len(slice)))
-				}
-			}
-		}
-
-		// Check for total field
-		if total, ok := obj["total"]; ok {
-			indicators = append(indicators, fmt.Sprintf("total=%v", total))
-		}
-
-		// Check for period/resource_id context
-		if rid, ok := obj["resource_id"]; ok {
-			indicators = append(indicators, fmt.Sprintf("resource=%v", rid))
-		}
-		if period, ok := obj["period"]; ok {
-			indicators = append(indicators, fmt.Sprintf("period=%v", period))
-		}
-
-		// Check for error field
-		if errVal, ok := obj["error"]; ok {
-			indicators = append(indicators, fmt.Sprintf("error=%v", errVal))
-		}
-
-		if len(indicators) > 0 {
-			result := strings.Join(indicators, ", ")
-			if len(result) > 200 {
-				result = result[:200]
-			}
-			return result
-		}
-	}
-
-	// Try JSON array
-	var arr []interface{}
-	if err := json.Unmarshal([]byte(resultText), &arr); err == nil {
-		return fmt.Sprintf("array with %d items", len(arr))
-	}
-
-	// Fall back to truncated text
-	summary := resultText
-	if len(summary) > 200 {
-		summary = summary[:200] + "..."
-	}
-	return summary
-}
-
-// detectFreshDataIntent returns true when the user's latest message explicitly
-// requests updated/fresh data (e.g. "check again", "refresh", "what's the
-// latest status"). This bypasses the knowledge gate for the first turn so
-// tools re-execute instead of returning cached results.
-func detectFreshDataIntent(messages []Message) bool {
-	// Walk backwards to find the last user message
-	var lastUserContent string
-	for i := len(messages) - 1; i >= 0; i-- {
-		if messages[i].Role == "user" && messages[i].Content != "" {
-			lastUserContent = strings.ToLower(messages[i].Content)
-			break
-		}
-	}
-	if lastUserContent == "" {
-		return false
-	}
-
-	// Strong refresh signals — these clearly indicate the user wants re-execution
-	strongPatterns := []string{
-		"check again", "look again", "try again", "run again",
-		"refresh", "re-check", "recheck", "re check",
-		"fresh data", "fresh look", "latest data",
-		"has it changed", "did it change", "any changes",
-		"what's happening now", "what is happening now",
-	}
-	for _, p := range strongPatterns {
-		if strings.Contains(lastUserContent, p) {
-			return true
-		}
-	}
-	return false
-}
-
-func hasPhantomExecution(content string) bool {
-	if content == "" {
-		return false
-	}
-
-	lower := strings.ToLower(content)
-
-	// Category 1: Concrete metrics/values that MUST come from tools
-	// These are specific enough that they can't be "general knowledge"
-	metricsPatterns := []string{
-		"cpu usage is ", "cpu is at ", "cpu at ",
-		"memory usage is ", "memory is at ", "memory at ",
-		"disk usage is ", "disk is at ", "storage at ",
-		"using % ", "% cpu", "% memory", "% disk",
-		"mb of ram", "gb of ram", "mb of memory", "gb of memory",
-	}
-
-	for _, pattern := range metricsPatterns {
-		if strings.Contains(lower, pattern) {
-			return true
-		}
-	}
-
-	// Category 2: Claims of infrastructure state that require live queries
-	// Must be specific claims about current state, not general discussion
-	statePatterns := []string{
-		"is currently running", "is currently stopped", "is currently down",
-		"is now running", "is now stopped", "is now restarted",
-		"the service is running", "the container is running",
-		"the service is stopped", "the container is stopped",
-		"the logs show", "the output shows", "the result shows",
-		"according to the logs", "according to the output",
-	}
-
-	for _, pattern := range statePatterns {
-		if strings.Contains(lower, pattern) {
-			return true
-		}
-	}
-
-	// Category 3: Fake tool call formatting (definite hallucination)
-	fakeToolPatterns := []string{
-		"```tool", "```json\n{\"tool", "tool_result:",
-		"function_call:", "<tool_call>", "</tool_call>",
-		"pulse_query(", "pulse_run_command(", "pulse_control(",
-	}
-
-	for _, pattern := range fakeToolPatterns {
-		if strings.Contains(lower, pattern) {
-			return true
-		}
-	}
-
-	// Category 4: Past tense claims of SPECIFIC infrastructure actions
-	// Only trigger if followed by concrete results (not "I checked and...")
-	actionResultPatterns := []string{
-		"i restarted the", "i stopped the", "i started the",
-		"i killed the", "i terminated the",
-		"successfully restarted", "successfully stopped", "successfully started",
-		"has been restarted", "has been stopped", "has been started",
-	}
-
-	for _, pattern := range actionResultPatterns {
-		if strings.Contains(lower, pattern) {
-			return true
-		}
-	}
-
-	return false
-}
-
-// truncateForLog truncates a string for logging, adding "..." if truncated
-func truncateForLog(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	return s[:maxLen] + "..."
-}
-
-// tryAutoRecovery checks if a tool result is auto-recoverable and returns the suggested rewrite.
-// Returns (suggestedRewrite, alreadyAttempted) where:
-// - suggestedRewrite is the command to retry with (empty if not recoverable)
-// - alreadyAttempted is true if auto-recovery was already attempted for this call
-func tryAutoRecovery(result tools.CallToolResult, tc providers.ToolCall, executor *tools.PulseToolExecutor, ctx context.Context) (string, bool) {
-	// Check if this is already a recovery attempt
-	if _, ok := tc.Input["_auto_recovery_attempt"]; ok {
-		return "", true // Already attempted, don't retry again
-	}
-
-	// Parse the result to check for auto_recoverable flag
-	resultStr := FormatToolResult(result)
-
-	// Look for the structured error response pattern
-	// The result should contain JSON with auto_recoverable and suggested_rewrite
-	if !strings.Contains(resultStr, `"auto_recoverable"`) {
-		return "", false
-	}
-
-	// Extract the JSON portion from the result
-	// Results are formatted as "Error: {json}" or just "{json}"
-	jsonStart := strings.Index(resultStr, "{")
-	if jsonStart == -1 {
-		return "", false
-	}
-
-	var parsed struct {
-		Error struct {
-			Details struct {
-				AutoRecoverable  bool   `json:"auto_recoverable"`
-				SuggestedRewrite string `json:"suggested_rewrite"`
-				Category         string `json:"category"`
-			} `json:"details"`
-		} `json:"error"`
-	}
-
-	if err := json.Unmarshal([]byte(resultStr[jsonStart:]), &parsed); err != nil {
-		// Try alternative format where details are at top level
-		var altParsed struct {
-			AutoRecoverable  bool   `json:"auto_recoverable"`
-			SuggestedRewrite string `json:"suggested_rewrite"`
-		}
-		if err2 := json.Unmarshal([]byte(resultStr[jsonStart:]), &altParsed); err2 != nil {
-			return "", false
-		}
-		if altParsed.AutoRecoverable && altParsed.SuggestedRewrite != "" {
-			return altParsed.SuggestedRewrite, false
-		}
-		return "", false
-	}
-
-	if parsed.Error.Details.AutoRecoverable && parsed.Error.Details.SuggestedRewrite != "" {
-		return parsed.Error.Details.SuggestedRewrite, false
-	}
-
-	return "", false
-}
-
-// toolCallKey returns a string key for a tool call (name + serialized input)
-// used to detect repeated identical calls in the agentic loop.
-func toolCallKey(name string, input map[string]interface{}) string {
-	inputBytes, err := json.Marshal(input)
-	if err != nil {
-		return name
-	}
-	return name + ":" + string(inputBytes)
-}
-
-// getCommandFromInput extracts the command from tool input for logging.
-func getCommandFromInput(input map[string]interface{}) string {
-	if cmd, ok := input["command"].(string); ok {
-		return cmd
-	}
-	return "<unknown>"
-}
-
-// requiresToolUse determines if the user's message requires live data or an action.
-// Returns true for messages that need infrastructure access (check status, restart, etc.)
-// Returns false for conceptual questions (What is TCP?, How does Docker work?)
-func requiresToolUse(messages []providers.Message) bool {
-	// Find the last user message
-	var lastUserContent string
-	for i := len(messages) - 1; i >= 0; i-- {
-		if messages[i].Role == "user" && messages[i].ToolResult == nil {
-			lastUserContent = strings.ToLower(messages[i].Content)
-			break
-		}
-	}
-
-	if lastUserContent == "" {
-		return false
-	}
-
-	// First, check for explicit conceptual question patterns
-	// These should NOT require tools even if they mention infrastructure terms
-	conceptualPatterns := []string{
-		"what is ", "what's the difference", "what are the",
-		"explain ", "how does ", "how do i ", "how to ",
-		"why do ", "why does ", "why is it ",
-		"tell me about ", "describe ",
-		"can you explain", "help me understand",
-		"difference between", "best way to", "best practice",
-		"is it hard", "is it difficult", "is it easy",
-		"should i ", "would you recommend", "what do you think",
-	}
-
-	for _, pattern := range conceptualPatterns {
-		if strings.Contains(lastUserContent, pattern) {
-			// Exception: questions about MY specific infrastructure state are action queries
-			// e.g., "what is the status of my server" or "what is my CPU usage"
-			hasMyInfra := strings.Contains(lastUserContent, "my ") ||
-				strings.Contains(lastUserContent, "on my") ||
-				strings.Contains(lastUserContent, "@")
-			hasStateQuery := strings.Contains(lastUserContent, "status") ||
-				strings.Contains(lastUserContent, "doing") ||
-				strings.Contains(lastUserContent, "running") ||
-				strings.Contains(lastUserContent, "using") ||
-				strings.Contains(lastUserContent, "usage")
-
-			if hasMyInfra && hasStateQuery {
-				return true // Explicit state query about user's infrastructure
-			}
-
-			// Exception: explicit resource references should trigger tools even in "tell me about" queries.
-			resourceNouns := []string{
-				"container", "vm", "lxc", "node", "pod", "deployment", "service", "host", "cluster",
-			}
-			hasResourceNoun := false
-			for _, noun := range resourceNouns {
-				if strings.Contains(lastUserContent, noun) {
-					hasResourceNoun = true
-					break
-				}
-			}
-			explicitIndicator := strings.Contains(lastUserContent, "@") ||
-				strings.Contains(lastUserContent, "\"") ||
-				strings.Contains(lastUserContent, "-") ||
-				strings.Contains(lastUserContent, "_") ||
-				strings.Contains(lastUserContent, "/")
-
-			if hasResourceNoun && explicitIndicator {
-				return true // Treat as action: specific resource is referenced
-			}
-
-			return false
-		}
-	}
-
-	// Pattern 1: @mentions indicate infrastructure references
-	if strings.Contains(lastUserContent, "@") {
-		return true
-	}
-
-	// Pattern 2: Action verbs that require live data
-	// These are more specific to avoid matching conceptual discussions
-	actionPatterns := []string{
-		// Direct action commands
-		"restart ", "start ", "stop ", "reboot ", "shutdown ",
-		"kill ", "terminate ",
-		// Status checks (specific phrasing)
-		"check ", "check the", "status of", "is it running", "is it up", "is it down",
-		"is running", "is stopped", "is down",
-		// "is X running?" pattern
-		" running?", " up?", " down?", " stopped?",
-		// Live data queries
-		"show me the", "list my", "list the", "list all",
-		"what's the cpu", "what's the memory", "what's the disk",
-		"cpu usage", "memory usage", "disk usage", "storage usage",
-		"how much memory", "how much cpu", "how much disk",
-		// Logs and debugging
-		"show logs", "show the logs", "check logs", "view logs",
-		"why is my", "why did my", "troubleshoot my", "debug my", "diagnose my",
-		// Discovery of MY resources
-		"where is my", "which of my", "find my",
-		// Questions about "my" specific infrastructure
-		"my server", "my container", "my vm", "my host", "my infrastructure",
-		"my node", "my cluster", "my proxmox", "my docker",
-		// Inventory-style queries
-		"what nodes do i have", "what proxmox nodes",
-		"what containers do i have", "what vms do i have",
-		"what is running on", "what's running on",
-	}
-
-	for _, pattern := range actionPatterns {
-		if strings.Contains(lastUserContent, pattern) {
-			return true
-		}
-	}
-
-	// Logs or journal queries should always hit tools.
-	if strings.Contains(lastUserContent, "logs") ||
-		strings.Contains(lastUserContent, " log") ||
-		strings.Contains(lastUserContent, "journal") ||
-		strings.Contains(lastUserContent, "journald") {
-		return true
-	}
-
-	// Default: assume conceptual question, don't force tools
-	return false
-}
-
-// getPreferredTool returns a tool name if the user explicitly requested one.
-// Only returns tools that are available for this request.
-func getPreferredTool(messages []providers.Message, tools []providers.Tool) string {
-	var lastUserContent string
-	for i := len(messages) - 1; i >= 0; i-- {
-		if messages[i].Role == "user" && messages[i].ToolResult == nil {
-			lastUserContent = strings.ToLower(messages[i].Content)
-			break
-		}
-	}
-	if lastUserContent == "" {
-		return ""
-	}
-
-	toolSet := make(map[string]bool, len(tools))
-	for _, tool := range tools {
-		if tool.Name != "" {
-			toolSet[tool.Name] = true
-		}
-	}
-
-	// Explicit tool mentions
-	explicitTools := []string{
-		"pulse_read",
-		"pulse_control",
-		"pulse_query",
-		"pulse_discovery",
-		"pulse_docker",
-		"pulse_kubernetes",
-		"pulse_metrics",
-		"pulse_storage",
-	}
-	for _, tool := range explicitTools {
-		if strings.Contains(lastUserContent, tool) && toolSet[tool] {
-			return tool
-		}
-	}
-
-	// Natural language aliases
-	if (strings.Contains(lastUserContent, "read-only tool") || strings.Contains(lastUserContent, "read only tool")) && toolSet["pulse_read"] {
-		return "pulse_read"
-	}
-	if strings.Contains(lastUserContent, "control tool") && toolSet["pulse_control"] {
-		return "pulse_control"
-	}
-	if strings.Contains(lastUserContent, "query tool") && toolSet["pulse_query"] {
-		return "pulse_query"
-	}
-
-	// Context carryover: if we injected an explicit target and logs are requested, force pulse_read.
-	if strings.Contains(lastUserContent, "explicit target") &&
-		(strings.Contains(lastUserContent, "log") || strings.Contains(lastUserContent, "journal")) &&
-		toolSet["pulse_read"] {
-		return "pulse_read"
-	}
-
-	return ""
-}
-
-// isSingleToolRequest detects user instructions to use exactly one tool call.
-func isSingleToolRequest(messages []providers.Message) bool {
-	var lastUserContent string
-	for i := len(messages) - 1; i >= 0; i-- {
-		if messages[i].Role == "user" && messages[i].ToolResult == nil {
-			lastUserContent = strings.ToLower(messages[i].Content)
-			break
-		}
-	}
-	if lastUserContent == "" {
-		return false
-	}
-
-	patterns := []string{
-		"only that tool once",
-		"only this tool once",
-		"call only that tool once",
-		"call only this tool once",
-		"call only that tool",
-		"call only this tool",
-		"call only one tool",
-		"only one tool",
-		"single tool",
-		"use only that tool",
-		"use only this tool",
-		"do not call any other tools",
-		"don't call any other tools",
-		"no other tools",
-	}
-
-	for _, pattern := range patterns {
-		if strings.Contains(lastUserContent, pattern) {
-			return true
-		}
-	}
-
-	return false
-}
-
-// hasWriteIntent checks if the user's message contains explicit write/control intent.
-// Returns true if the user is asking for an action (stop, start, restart, run command, etc.).
-// Returns false if the intent is read-only (status check, logs, monitoring).
-// This is used to structurally block control tools on read-only requests.
-func hasWriteIntent(messages []providers.Message) bool {
-	var lastUserContent string
-	for i := len(messages) - 1; i >= 0; i-- {
-		if messages[i].Role == "user" && messages[i].ToolResult == nil {
-			lastUserContent = strings.ToLower(messages[i].Content)
-			break
-		}
-	}
-	if lastUserContent == "" {
-		return false
-	}
-
-	// Explicit write/control action verbs
-	writePatterns := []string{
-		"stop ", "start ", "restart ", "reboot ", "shutdown ", "shut down",
-		"kill ", "terminate ",
-		"turn off", "turn on", "bring up", "bring down", "bring back",
-		"run command", "run the command", "execute ",
-		"using the control tool", "use pulse_control",
-		"using pulse_control",
-		// File editing
-		"edit ", "modify ", "change ", "update ", "write ",
-		"use pulse_file_edit",
-	}
-
-	for _, pattern := range writePatterns {
-		if strings.Contains(lastUserContent, pattern) {
-			return true
-		}
-	}
-
-	return false
-}
-
-// isWriteTool returns true if the tool name is a write/control tool that modifies infrastructure.
-func isWriteTool(name string) bool {
-	switch name {
-	case "pulse_control", "pulse_docker", "pulse_file_edit":
-		return true
-	default:
-		return false
-	}
-}
-
-// getSystemPrompt builds the full system prompt including the current mode context.
-// This is called at request time so the prompt reflects the current mode.
-func (a *AgenticLoop) getSystemPrompt() string {
-	a.mu.Lock()
-	isAutonomous := a.autonomousMode
-	a.mu.Unlock()
-
-	var modeContext string
-	if isAutonomous {
-		modeContext = `
-EXECUTION MODE: Autonomous
-Commands execute immediately without user approval. Follow the Discover → Investigate → Act
-workflow. Gather information before taking action. Use the tools freely to explore logs, check
-status, and understand the situation before attempting fixes.`
-	} else {
-		modeContext = `
-EXECUTION MODE: Controlled
-Commands require user approval before execution. The system handles this automatically via a
-confirmation prompt - you don't need to ask "Would you like me to...?" Just execute what's
-needed and the system will prompt the user to approve if required.`
-	}
-
-	prompt := a.baseSystemPrompt + modeContext
-
-	// Append accumulated knowledge facts to system prompt
-	if ka := a.knowledgeAccumulator; ka != nil && ka.Len() > 0 {
-		prompt += "\n\n" + ka.Render()
-	}
-
-	return prompt
-}
-
-// AnswerQuestion provides an answer to a pending question
-func (a *AgenticLoop) AnswerQuestion(questionID string, answers []QuestionAnswer) error {
-	a.mu.Lock()
-	ch, exists := a.pendingQs[questionID]
-	a.mu.Unlock()
-
-	if !exists {
-		return fmt.Errorf("no pending question with ID: %s", questionID)
-	}
-
-	// Non-blocking send
-	select {
-	case ch <- answers:
-		return nil
-	default:
-		return fmt.Errorf("question already answered: %s", questionID)
-	}
-}
-
-// waitForApprovalDecision polls for an approval decision
-func waitForApprovalDecision(ctx context.Context, store *approval.Store, approvalID string) (*approval.ApprovalRequest, error) {
-	ticker := time.NewTicker(500 * time.Millisecond)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case <-ticker.C:
-			req, ok := store.GetApproval(approvalID)
-			if !ok {
-				return nil, fmt.Errorf("approval request not found: %s", approvalID)
-			}
-			if req.Status != approval.StatusPending {
-				return req, nil
-			}
-		}
-	}
-}
-
-func pruneMessagesForModel(messages []Message) []Message {
-	if len(messages) == 0 {
-		return messages
-	}
-
-	if StatelessContext {
-		for i := len(messages) - 1; i >= 0; i-- {
-			msg := messages[i]
-			if msg.Role == "user" && msg.ToolResult == nil && msg.Content != "" {
-				return []Message{msg}
-			}
-		}
-		return []Message{messages[len(messages)-1]}
-	}
-
-	if MaxContextMessagesLimit <= 0 || len(messages) <= MaxContextMessagesLimit {
-		return messages
-	}
-
-	start := len(messages) - MaxContextMessagesLimit
-	log.Warn().
-		Int("total_messages", len(messages)).
-		Int("limit", MaxContextMessagesLimit).
-		Int("dropped", start).
-		Msg("[AgenticLoop] Pruning oldest messages to fit context limit")
-	pruned := messages[start:]
-
-	// Skip leading tool results (orphaned from pruned tool calls)
-	for len(pruned) > 0 && pruned[0].ToolResult != nil {
-		pruned = pruned[1:]
-	}
-
-	// If we start with an assistant message that has tool calls,
-	// skip it and its following tool results — we've pruned the
-	// user message that preceded it, so the sequence is broken.
-	for len(pruned) > 0 && pruned[0].Role == "assistant" && len(pruned[0].ToolCalls) > 0 {
-		pruned = pruned[1:]
-		// Also skip the tool results that followed
-		for len(pruned) > 0 && pruned[0].ToolResult != nil {
-			pruned = pruned[1:]
-		}
-	}
-
-	return pruned
-}
-
-func truncateToolResultForModel(text string) string {
-	if MaxToolResultCharsLimit <= 0 || len(text) <= MaxToolResultCharsLimit {
-		return text
-	}
-
-	truncated := text[:MaxToolResultCharsLimit]
-	truncatedChars := len(text) - MaxToolResultCharsLimit
-	log.Warn().
-		Int("original_chars", len(text)).
-		Int("truncated_to", MaxToolResultCharsLimit).
-		Int("chars_cut", truncatedChars).
-		Msg("[AgenticLoop] Truncating oversized tool result")
-	return fmt.Sprintf("%s\n\n---\n[TRUNCATED: %d characters cut. The result was too large. If you need specific details that may have been cut, make a more targeted query (e.g., filter by specific resource or type).]", truncated, truncatedChars)
-}
-
-// convertToProviderMessages converts our messages to provider format
-func convertToProviderMessages(messages []Message) []providers.Message {
-	result := make([]providers.Message, 0, len(messages))
-
-	for _, m := range messages {
-		pm := providers.Message{
-			Role:             m.Role,
-			Content:          m.Content,
-			ReasoningContent: m.ReasoningContent,
-		}
-
-		if len(m.ToolCalls) > 0 {
-			for _, tc := range m.ToolCalls {
-				pm.ToolCalls = append(pm.ToolCalls, providers.ToolCall{
-					ID:               tc.ID,
-					Name:             tc.Name,
-					Input:            tc.Input,
-					ThoughtSignature: tc.ThoughtSignature,
-				})
-			}
-		}
-
-		if m.ToolResult != nil {
-			pm.ToolResult = &providers.ToolResult{
-				ToolUseID: m.ToolResult.ToolUseID,
-				Content:   truncateToolResultForModel(m.ToolResult.Content),
-				IsError:   m.ToolResult.IsError,
-			}
-		}
-
-		result = append(result, pm)
-	}
-
-	return result
-}
-
-// compactOldToolResults replaces full tool result content with short summaries
-// for tool results from older turns. This prevents context window blowout during
-// long agentic loops (e.g., patrol runs with 20+ tool calls).
-//
-// Only tool results before currentTurnStartIndex are candidates for compaction.
-// Results from the most recent keepTurns turns are kept in full.
-// Results shorter than minChars are not compacted (not worth it).
-//
-// The model retains all its assistant messages (reasoning, analysis, findings) in full.
-// Only the raw tool result data from older turns gets replaced with a summary line.
-func compactOldToolResults(messages []providers.Message, currentTurnStartIndex, keepTurns, minChars int, ka *KnowledgeAccumulator) {
-	if currentTurnStartIndex <= 0 || keepTurns < 0 {
-		return
-	}
-
-	// Walk backwards from currentTurnStartIndex to find the compaction boundary.
-	// We keep the last keepTurns turns' tool results in full. Each "turn" starts
-	// with an assistant message. Once we've skipped keepTurns assistant messages,
-	// everything before that point is old enough to compact.
-	var compactBefore int
-	if keepTurns <= 0 {
-		// Compact everything before the current turn
-		compactBefore = currentTurnStartIndex
-	} else {
-		turnsFound := 0
-		for i := currentTurnStartIndex - 1; i >= 0; i-- {
-			if messages[i].Role == "assistant" {
-				turnsFound++
-				if turnsFound >= keepTurns {
-					// This is the keepTurns-th assistant message from the end.
-					// Everything before this index is old enough to compact.
-					compactBefore = i
-					break
-				}
-			}
-		}
-	}
-
-	// Nothing old enough to compact
-	if compactBefore <= 0 {
-		return
-	}
-
-	// Build a map of tool call ID -> (name, input) from assistant messages,
-	// so we can label compacted results with the tool name and key params.
-	toolCallInfo := make(map[string]struct {
-		Name  string
-		Input map[string]interface{}
-	})
-	for i := 0; i < compactBefore; i++ {
-		msg := messages[i]
-		if msg.Role == "assistant" {
-			for _, tc := range msg.ToolCalls {
-				toolCallInfo[tc.ID] = struct {
-					Name  string
-					Input map[string]interface{}
-				}{Name: tc.Name, Input: tc.Input}
-			}
-		}
-	}
-
-	// Compact tool results before the boundary
-	compacted := 0
-	savedChars := 0
-	for i := 0; i < compactBefore; i++ {
-		msg := &messages[i]
-		if msg.ToolResult == nil || msg.ToolResult.IsError {
-			continue
-		}
-		content := msg.ToolResult.Content
-		if len(content) < minChars {
-			continue
-		}
-
-		// Build summary
-		toolName := "unknown_tool"
-		var toolInput map[string]interface{}
-		if info, ok := toolCallInfo[msg.ToolResult.ToolUseID]; ok {
-			toolName = info.Name
-			toolInput = info.Input
-		}
-
-		summary := buildCompactSummary(toolName, toolInput, content, ka, msg.ToolResult.ToolUseID)
-		savedChars += len(content) - len(summary)
-		msg.ToolResult.Content = summary
-		compacted++
-	}
-
-	if compacted > 0 {
-		log.Info().
-			Int("compacted_results", compacted).
-			Int("saved_chars", savedChars).
-			Int("compact_before_index", compactBefore).
-			Int("total_messages", len(messages)).
-			Msg("[AgenticLoop] Compacted old tool results to reduce context size")
-	}
-}
-
-// buildCompactSummary creates a short summary line for a compacted tool result.
-// When a KnowledgeAccumulator is provided and has facts for this tool_use_id,
-// the summary includes those facts so the model knows what it learned.
-func buildCompactSummary(toolName string, toolInput map[string]interface{}, originalContent string, ka *KnowledgeAccumulator, toolUseID string) string {
-	params := formatKeyParams(toolInput)
-	charCount := len(originalContent)
-
-	// Try to include KA facts for this specific tool call
-	if ka != nil && toolUseID != "" {
-		if factSummary := ka.FactSummaryForTool(toolUseID); factSummary != "" {
-			var summary string
-			if params != "" {
-				summary = fmt.Sprintf("[Compacted: %s(%s) — Key facts: %s]",
-					toolName, params, factSummary)
-			} else {
-				summary = fmt.Sprintf("[Compacted: %s — Key facts: %s]",
-					toolName, factSummary)
-			}
-			log.Info().
-				Str("tool", toolName).
-				Str("tool_use_id", toolUseID).
-				Int("original_chars", charCount).
-				Int("summary_chars", len(summary)).
-				Msg("[SmartCompaction] Used KA facts for compacted summary")
-			return summary
-		}
-	}
-
-	// Fallback: generic format when no KA facts available
-	lineCount := strings.Count(originalContent, "\n") + 1
-	if params != "" {
-		return fmt.Sprintf("[Tool result compacted: %s(%s) — %d chars, %d lines. Full data was provided to the model in an earlier turn and has already been processed.]",
-			toolName, params, charCount, lineCount)
-	}
-	return fmt.Sprintf("[Tool result compacted: %s — %d chars, %d lines. Full data was provided to the model in an earlier turn and has already been processed.]",
-		toolName, charCount, lineCount)
-}
-
-// maybeInjectWrapUpNudge appends a system hint to the last non-error tool result in
-// providerMessages when totalCalls exceeds the threshold. This nudges the model to
-// start wrapping up without forcing text-only mode.
-// Returns true if a nudge was injected.
-func maybeInjectWrapUpNudge(messages []providers.Message, totalCalls, maxTurns, currentTurn, threshold int) bool {
-	if totalCalls < threshold {
-		return false
-	}
-
-	turnsRemaining := maxTurns - currentTurn - 1
-	nudge := fmt.Sprintf("\n\n[System: You have made %d tool calls (%d turns remaining). You likely have enough data to answer. Start forming your response. You may make 1-2 more targeted calls if critical information is missing, but avoid exploratory calls.]",
-		totalCalls, turnsRemaining)
-
-	// Find the last non-error tool result in messages and append the nudge
-	for i := len(messages) - 1; i >= 0; i-- {
-		if messages[i].ToolResult != nil && !messages[i].ToolResult.IsError {
-			messages[i].ToolResult.Content += nudge
-			log.Info().
-				Int("total_calls", totalCalls).
-				Int("turns_remaining", turnsRemaining).
-				Int("message_index", i).
-				Msg("[WrapUpNudge] Injected wrap-up nudge into tool result")
-			return true
-		}
-	}
-	return false
-}
-
-// maybeInjectWrapUpEscalation appends a strong wrap-up directive to the last non-error
-// tool result. Called once when the model ignores the initial nudge and reaches 18+ calls.
-// Returns true if an escalation was injected.
-func maybeInjectWrapUpEscalation(messages []providers.Message, totalCalls int) bool {
-	escalation := fmt.Sprintf("\n\n[System: WRAP UP NOW. You have made %d tool calls — well past the recommended limit. You MUST respond with your findings on this turn. Do NOT make any more tool calls.]",
-		totalCalls)
-
-	for i := len(messages) - 1; i >= 0; i-- {
-		if messages[i].ToolResult != nil && !messages[i].ToolResult.IsError {
-			messages[i].ToolResult.Content += escalation
-			log.Info().
-				Int("total_calls", totalCalls).
-				Int("message_index", i).
-				Msg("[WrapUpEscalation] Injected wrap-up escalation into tool result")
-			return true
-		}
-	}
-	return false
-}
-
-// formatKeyParams extracts the most important parameters from tool input for display.
-func formatKeyParams(input map[string]interface{}) string {
-	if len(input) == 0 {
-		return ""
-	}
-
-	// Priority keys that are most informative
-	priorityKeys := []string{"type", "resource_id", "action", "host", "node", "instance", "query", "command", "period"}
-	var parts []string
-
-	for _, key := range priorityKeys {
-		if val, ok := input[key]; ok {
-			if str, ok := val.(string); ok && str != "" {
-				parts = append(parts, fmt.Sprintf("%s=%s", key, str))
-			}
-		}
-	}
-
-	// If nothing from priority keys, take the first 2 non-empty string values
-	if len(parts) == 0 {
-		for key, val := range input {
-			if str, ok := val.(string); ok && str != "" {
-				parts = append(parts, fmt.Sprintf("%s=%s", key, str))
-				if len(parts) >= 2 {
-					break
-				}
-			}
-		}
-	}
-
-	return strings.Join(parts, ", ")
-}
-
-// cleanDeepSeekArtifacts removes DeepSeek's internal tool call format leakage.
-// When DeepSeek doesn't properly use the function calling API, it may output
-// its internal markup like <｜DSML｜function_calls>, <｜DSML｜invoke>, etc.
-// These patterns can appear with Unicode pipe (｜) or ASCII pipe (|).
-// This is applied to chat responses to prevent the artifacts from being shown to users.
-func cleanDeepSeekArtifacts(content string) string {
-	if content == "" {
-		return content
-	}
-
-	// DeepSeek internal function call format markers
-	markers := []string{
-		"<｜DSML｜",  // Unicode pipe variant (opening)
-		"</｜DSML｜", // Unicode pipe variant (closing)
-		"<|DSML|",  // ASCII pipe variant (opening)
-		"</|DSML|", // ASCII pipe variant (closing)
-		"<｜/DSML｜", // Alternative Unicode closing
-		"<|/DSML|", // Alternative ASCII closing
-	}
-
-	for _, marker := range markers {
-		if idx := strings.Index(content, marker); idx >= 0 {
-			// DeepSeek function call blocks typically appear at the end of responses
-			// Remove everything from the marker to the end
-			content = strings.TrimSpace(content[:idx])
-		}
-	}
-
-	return content
-}
-
-// containsDeepSeekMarker checks if the content contains any DeepSeek internal function call markers.
-// This is used during streaming to detect when we should stop forwarding content.
-func containsDeepSeekMarker(content string) bool {
-	markers := []string{
-		"<｜DSML｜", // Unicode pipe variant
-		"<|DSML|", // ASCII pipe variant
-	}
-	for _, marker := range markers {
-		if strings.Contains(content, marker) {
-			return true
-		}
-	}
-	return false
 }

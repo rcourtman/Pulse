@@ -208,6 +208,9 @@ func TestClassifyToolCall(t *testing.T) {
 		{"pulse_discovery", "pulse_discovery", nil, ToolKindResolve},
 		{"pulse_search_resources", "pulse_search_resources", nil, ToolKindResolve},
 
+		// Interactive user input tools
+		{"pulse_question", "pulse_question", nil, ToolKindUserInput},
+
 		// Read tools
 		{"pulse_metrics", "pulse_metrics", nil, ToolKindRead},
 		{"pulse_storage", "pulse_storage", nil, ToolKindRead},
@@ -260,6 +263,25 @@ func TestClassifyToolCall(t *testing.T) {
 				t.Errorf("ClassifyToolCall(%q, %v) = %s, want %s", tt.toolName, tt.args, got, tt.expected)
 			}
 		})
+	}
+}
+
+func TestFSM_UserInputDoesNotAdvanceState(t *testing.T) {
+	fsm := NewSessionFSM()
+	if fsm.State != StateResolving {
+		t.Fatalf("initial state=%s, want %s", fsm.State, StateResolving)
+	}
+
+	fsm.OnToolSuccess(ToolKindUserInput, "pulse_question")
+
+	if fsm.State != StateResolving {
+		t.Fatalf("state after user input=%s, want %s", fsm.State, StateResolving)
+	}
+	if fsm.LastReadTool != "" {
+		t.Fatalf("LastReadTool=%q, want empty", fsm.LastReadTool)
+	}
+	if fsm.WroteThisEpisode {
+		t.Fatalf("WroteThisEpisode=true, want false")
 	}
 }
 

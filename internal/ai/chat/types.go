@@ -124,6 +124,7 @@ type ApprovalNeededData struct {
 
 // QuestionData is the data for "question" events
 type QuestionData struct {
+	SessionID  string     `json:"session_id,omitempty"`
 	QuestionID string     `json:"question_id"`
 	Questions  []Question `json:"questions"`
 }
@@ -131,6 +132,7 @@ type QuestionData struct {
 // Question represents a question from the AI to the user
 type Question struct {
 	ID       string           `json:"id"`
+	Type     string           `json:"type,omitempty"` // "text" | "select"
 	Question string           `json:"question"`
 	Header   string           `json:"header,omitempty"`
 	Options  []QuestionOption `json:"options,omitempty"`
@@ -139,6 +141,7 @@ type Question struct {
 // QuestionOption represents an option for a question
 type QuestionOption struct {
 	Label       string `json:"label"`
+	Value       string `json:"value,omitempty"`
 	Description string `json:"description,omitempty"`
 }
 

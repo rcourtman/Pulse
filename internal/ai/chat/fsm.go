@@ -37,6 +37,9 @@ const (
 
 	// ToolKindWrite - mutating tools (restart, stop, start, delete, file write)
 	ToolKindWrite
+
+	// ToolKindUserInput - interactive tools that request user input (does not advance FSM state)
+	ToolKindUserInput
 )
 
 func (k ToolKind) String() string {
@@ -47,6 +50,8 @@ func (k ToolKind) String() string {
 		return "read"
 	case ToolKindWrite:
 		return "write"
+	case ToolKindUserInput:
+		return "user_input"
 	default:
 		return "unknown"
 	}
@@ -239,6 +244,10 @@ func (fsm *SessionFSM) OnToolSuccess(kind ToolKind, toolName string) {
 		fsm.ReadAfterWrite = false
 		fsm.LastWriteTool = toolName
 		fsm.LastWriteAt = now
+
+	case ToolKindUserInput:
+		// Interactive user input does not advance state (it is neither discovery nor verification).
+		return
 	}
 }
 
@@ -305,6 +314,9 @@ func classifyToolByName(toolName string, args map[string]interface{}) ToolKind {
 	operationLower := strings.ToLower(operation)
 
 	switch toolName {
+	case "pulse_question":
+		return ToolKindUserInput
+
 	// === Query/Discovery tools (Resolve) ===
 	case "pulse_query":
 		// query actions: search, get, config, topology, list, health
