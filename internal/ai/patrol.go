@@ -52,6 +52,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/relay"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 // ThresholdProvider provides user-configured alert thresholds for patrol to use
@@ -252,6 +253,10 @@ type PatrolService struct {
 
 	// Unified resource provider — reads physical disks, Ceph, etc. from canonical model
 	unifiedResourceProvider UnifiedResourceProvider
+	// ReadState provides typed read-only views over resource state (VMs, nodes, hosts, etc.).
+	// This is injected separately from stateProvider since stateProvider also contains
+	// non-resource telemetry (alerts, backups, connection health) that isn't modeled as resources yet.
+	readState unifiedresources.ReadState
 
 	// New AI intelligence providers (Phase 6)
 	learningProvider     LearningProvider     // For learned preferences from user feedback

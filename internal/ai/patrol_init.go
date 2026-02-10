@@ -13,6 +13,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/remediation"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
 
@@ -404,6 +405,19 @@ func (p *PatrolService) SetUnifiedResourceProvider(urp UnifiedResourceProvider) 
 	defer p.mu.Unlock()
 	p.unifiedResourceProvider = urp
 	log.Info().Msg("AI Patrol: Unified resource provider set")
+}
+
+// SetReadState sets the typed ReadState view provider for resource iteration.
+// When nil, patrol will fall back to legacy models.StateSnapshot field iteration.
+func (p *PatrolService) SetReadState(rs unifiedresources.ReadState) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.readState = rs
+	if rs != nil {
+		log.Info().Msg("AI Patrol: ReadState configured")
+	} else {
+		log.Info().Msg("AI Patrol: ReadState cleared")
+	}
 }
 
 // SetDiscoveryStore sets the discovery store for infrastructure context

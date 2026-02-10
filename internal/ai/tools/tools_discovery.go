@@ -235,23 +235,46 @@ func (e *PulseToolExecutor) executeGetDiscovery(ctx context.Context, args map[st
 	if (resourceType == "lxc" || resourceType == "vm") && e.stateProvider != nil {
 		if _, err := strconv.Atoi(resourceID); err != nil {
 			// Not a number - try to resolve the name to a VMID
-			state := e.stateProvider.GetState()
 			resolved := false
 
-			if resourceType == "lxc" {
-				for _, c := range state.Containers {
-					if strings.EqualFold(c.Name, resourceID) && nodeMatchesHostID(c.Node, hostID) {
-						resourceID = fmt.Sprintf("%d", c.VMID)
-						resolved = true
-						break
+			if rs := e.getReadState(); rs != nil {
+				if resourceType == "lxc" {
+					for _, c := range rs.Containers() {
+						if strings.EqualFold(c.Name(), resourceID) && nodeMatchesHostID(c.Node(), hostID) {
+							resourceID = fmt.Sprintf("%d", c.VMID())
+							resolved = true
+							break
+						}
+					}
+				} else if resourceType == "vm" {
+					for _, vm := range rs.VMs() {
+						if strings.EqualFold(vm.Name(), resourceID) && nodeMatchesHostID(vm.Node(), hostID) {
+							resourceID = fmt.Sprintf("%d", vm.VMID())
+							resolved = true
+							break
+						}
 					}
 				}
-			} else if resourceType == "vm" {
-				for _, vm := range state.VMs {
-					if strings.EqualFold(vm.Name, resourceID) && nodeMatchesHostID(vm.Node, hostID) {
-						resourceID = fmt.Sprintf("%d", vm.VMID)
-						resolved = true
-						break
+			}
+
+			// Fallback to legacy StateSnapshot when typed views are unavailable or couldn't resolve.
+			if !resolved {
+				state := e.stateProvider.GetState()
+				if resourceType == "lxc" {
+					for _, c := range state.Containers {
+						if strings.EqualFold(c.Name, resourceID) && nodeMatchesHostID(c.Node, hostID) {
+							resourceID = fmt.Sprintf("%d", c.VMID)
+							resolved = true
+							break
+						}
+					}
+				} else if resourceType == "vm" {
+					for _, vm := range state.VMs {
+						if strings.EqualFold(vm.Name, resourceID) && nodeMatchesHostID(vm.Node, hostID) {
+							resourceID = fmt.Sprintf("%d", vm.VMID)
+							resolved = true
+							break
+						}
 					}
 				}
 			}

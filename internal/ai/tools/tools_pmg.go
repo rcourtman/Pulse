@@ -3,6 +3,8 @@ package tools
 import (
 	"context"
 	"fmt"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
 // registerPMGTools registers the pulse_pmg tool
@@ -57,37 +59,121 @@ func (e *PulseToolExecutor) executeGetPMGStatus(_ context.Context, args map[stri
 
 	instanceFilter, _ := args["instance"].(string)
 
+	rs := e.getReadState()
 	state := e.stateProvider.GetState()
 
-	if len(state.PMGInstances) == 0 {
+	// Prefer ReadState for instance selection when available.
+	var wantID, wantName string
+	if rs != nil && instanceFilter != "" {
+		found := false
+		for _, v := range rs.PMGInstances() {
+			if v.ID() == instanceFilter || v.Name() == instanceFilter {
+				wantID = v.ID()
+				wantName = v.Name()
+				found = true
+				break
+			}
+		}
+		if !found {
+			return NewTextResult(fmt.Sprintf("PMG instance '%s' not found.", instanceFilter)), nil
+		}
+	}
+
+	if rs == nil && len(state.PMGInstances) == 0 {
+		return NewTextResult("No Proxmox Mail Gateway instances found. PMG monitoring may not be configured."), nil
+	}
+	if rs != nil && len(rs.PMGInstances()) == 0 && len(state.PMGInstances) == 0 {
 		return NewTextResult("No Proxmox Mail Gateway instances found. PMG monitoring may not be configured."), nil
 	}
 
 	var instances []PMGInstanceSummary
-	for _, pmg := range state.PMGInstances {
-		if instanceFilter != "" && pmg.ID != instanceFilter && pmg.Name != instanceFilter {
-			continue
-		}
+	if rs != nil {
+		// Build results in ReadState order; enrich from StateSnapshot when available.
+		for _, v := range rs.PMGInstances() {
+			if instanceFilter != "" && v.ID() != instanceFilter && v.Name() != instanceFilter && v.ID() != wantID && v.Name() != wantName {
+				continue
+			}
 
-		var nodes []PMGNodeSummary
-		for _, node := range pmg.Nodes {
-			nodes = append(nodes, PMGNodeSummary{
-				Name:    node.Name,
-				Status:  node.Status,
-				Role:    node.Role,
-				Uptime:  node.Uptime,
-				LoadAvg: node.LoadAvg,
+			var fromState *models.PMGInstance
+			for i := range state.PMGInstances {
+				p := &state.PMGInstances[i]
+				if (wantID != "" && p.ID == wantID) || (wantName != "" && p.Name == wantName) || p.ID == v.ID() || p.Name == v.Name() {
+					fromState = p
+					break
+				}
+			}
+
+			var nodes []PMGNodeSummary
+			if fromState != nil {
+				for _, node := range fromState.Nodes {
+					nodes = append(nodes, PMGNodeSummary{
+						Name:    node.Name,
+						Status:  node.Status,
+						Role:    node.Role,
+						Uptime:  node.Uptime,
+						LoadAvg: node.LoadAvg,
+					})
+				}
+			}
+
+			id := v.ID()
+			name := v.Name()
+			host := v.Hostname()
+			status := string(v.Status())
+			version := v.Version()
+			if fromState != nil {
+				if fromState.ID != "" {
+					id = fromState.ID
+				}
+				if fromState.Name != "" {
+					name = fromState.Name
+				}
+				if fromState.Host != "" {
+					host = fromState.Host
+				}
+				if fromState.Status != "" {
+					status = fromState.Status
+				}
+				if fromState.Version != "" {
+					version = fromState.Version
+				}
+			}
+
+			instances = append(instances, PMGInstanceSummary{
+				ID:      id,
+				Name:    name,
+				Host:    host,
+				Status:  status,
+				Version: version,
+				Nodes:   nodes,
 			})
 		}
+	} else {
+		for _, pmg := range state.PMGInstances {
+			if instanceFilter != "" && pmg.ID != instanceFilter && pmg.Name != instanceFilter {
+				continue
+			}
 
-		instances = append(instances, PMGInstanceSummary{
-			ID:      pmg.ID,
-			Name:    pmg.Name,
-			Host:    pmg.Host,
-			Status:  pmg.Status,
-			Version: pmg.Version,
-			Nodes:   nodes,
-		})
+			var nodes []PMGNodeSummary
+			for _, node := range pmg.Nodes {
+				nodes = append(nodes, PMGNodeSummary{
+					Name:    node.Name,
+					Status:  node.Status,
+					Role:    node.Role,
+					Uptime:  node.Uptime,
+					LoadAvg: node.LoadAvg,
+				})
+			}
+
+			instances = append(instances, PMGInstanceSummary{
+				ID:      pmg.ID,
+				Name:    pmg.Name,
+				Host:    pmg.Host,
+				Status:  pmg.Status,
+				Version: pmg.Version,
+				Nodes:   nodes,
+			})
+		}
 	}
 
 	if len(instances) == 0 && instanceFilter != "" {
@@ -116,6 +202,24 @@ func (e *PulseToolExecutor) executeGetMailStats(_ context.Context, args map[stri
 
 	instanceFilter, _ := args["instance"].(string)
 
+	// Prefer ReadState for instance selection when available.
+	rs := e.getReadState()
+	var wantID, wantName string
+	if rs != nil && instanceFilter != "" {
+		found := false
+		for _, v := range rs.PMGInstances() {
+			if v.ID() == instanceFilter || v.Name() == instanceFilter {
+				wantID = v.ID()
+				wantName = v.Name()
+				found = true
+				break
+			}
+		}
+		if !found {
+			return NewTextResult(fmt.Sprintf("PMG instance '%s' not found.", instanceFilter)), nil
+		}
+	}
+
 	state := e.stateProvider.GetState()
 
 	if len(state.PMGInstances) == 0 {
@@ -124,8 +228,13 @@ func (e *PulseToolExecutor) executeGetMailStats(_ context.Context, args map[stri
 
 	// If filtering, find that specific instance
 	for _, pmg := range state.PMGInstances {
-		if instanceFilter != "" && pmg.ID != instanceFilter && pmg.Name != instanceFilter {
-			continue
+		if instanceFilter != "" {
+			if (wantID != "" || wantName != "") && pmg.ID != wantID && pmg.Name != wantName {
+				continue
+			}
+			if wantID == "" && wantName == "" && pmg.ID != instanceFilter && pmg.Name != instanceFilter {
+				continue
+			}
 		}
 
 		if pmg.MailStats == nil {
@@ -172,6 +281,24 @@ func (e *PulseToolExecutor) executeGetMailQueues(_ context.Context, args map[str
 
 	instanceFilter, _ := args["instance"].(string)
 
+	// Prefer ReadState for instance selection when available.
+	rs := e.getReadState()
+	var wantID, wantName string
+	if rs != nil && instanceFilter != "" {
+		found := false
+		for _, v := range rs.PMGInstances() {
+			if v.ID() == instanceFilter || v.Name() == instanceFilter {
+				wantID = v.ID()
+				wantName = v.Name()
+				found = true
+				break
+			}
+		}
+		if !found {
+			return NewTextResult(fmt.Sprintf("PMG instance '%s' not found.", instanceFilter)), nil
+		}
+	}
+
 	state := e.stateProvider.GetState()
 
 	if len(state.PMGInstances) == 0 {
@@ -180,8 +307,13 @@ func (e *PulseToolExecutor) executeGetMailQueues(_ context.Context, args map[str
 
 	// Collect queue data from all instances (or filtered instance)
 	for _, pmg := range state.PMGInstances {
-		if instanceFilter != "" && pmg.ID != instanceFilter && pmg.Name != instanceFilter {
-			continue
+		if instanceFilter != "" {
+			if (wantID != "" || wantName != "") && pmg.ID != wantID && pmg.Name != wantName {
+				continue
+			}
+			if wantID == "" && wantName == "" && pmg.ID != instanceFilter && pmg.Name != instanceFilter {
+				continue
+			}
 		}
 
 		var queues []PMGQueueSummary
@@ -228,6 +360,24 @@ func (e *PulseToolExecutor) executeGetSpamStats(_ context.Context, args map[stri
 
 	instanceFilter, _ := args["instance"].(string)
 
+	// Prefer ReadState for instance selection when available.
+	rs := e.getReadState()
+	var wantID, wantName string
+	if rs != nil && instanceFilter != "" {
+		found := false
+		for _, v := range rs.PMGInstances() {
+			if v.ID() == instanceFilter || v.Name() == instanceFilter {
+				wantID = v.ID()
+				wantName = v.Name()
+				found = true
+				break
+			}
+		}
+		if !found {
+			return NewTextResult(fmt.Sprintf("PMG instance '%s' not found.", instanceFilter)), nil
+		}
+	}
+
 	state := e.stateProvider.GetState()
 
 	if len(state.PMGInstances) == 0 {
@@ -235,8 +385,13 @@ func (e *PulseToolExecutor) executeGetSpamStats(_ context.Context, args map[stri
 	}
 
 	for _, pmg := range state.PMGInstances {
-		if instanceFilter != "" && pmg.ID != instanceFilter && pmg.Name != instanceFilter {
-			continue
+		if instanceFilter != "" {
+			if (wantID != "" || wantName != "") && pmg.ID != wantID && pmg.Name != wantName {
+				continue
+			}
+			if wantID == "" && wantName == "" && pmg.ID != instanceFilter && pmg.Name != instanceFilter {
+				continue
+			}
 		}
 
 		quarantine := PMGQuarantineSummary{}

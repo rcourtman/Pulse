@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -1166,6 +1167,7 @@ func (p *PatrolService) seedPrecomputeIntelligence(state models.StateSnapshot, s
 	pd := p.patternDetector
 	cd := p.changeDetector
 	corrDet := p.correlationDetector
+	rs := p.readState
 	p.mu.RUnlock()
 
 	var intel seedIntelligence
@@ -1173,63 +1175,128 @@ func (p *PatrolService) seedPrecomputeIntelligence(state models.StateSnapshot, s
 
 	// Anomalies
 	if bs != nil {
-		for _, n := range state.Nodes {
-			if !seedIsInScope(scopedSet, n.ID) {
-				continue
-			}
-			metrics := map[string]float64{"cpu": n.CPU, "memory": n.Memory.Usage}
-			anomalies := bs.CheckResourceAnomaliesReadOnly(n.ID, metrics)
-			for i := range anomalies {
-				if anomalies[i].ResourceName == "" {
-					anomalies[i].ResourceName = n.Name
+		if rs != nil {
+			for _, nv := range rs.Nodes() {
+				if !seedIsInScope(scopedSet, nv.ID()) {
+					continue
 				}
-			}
-			intel.anomalies = append(intel.anomalies, anomalies...)
-		}
-		for _, vm := range state.VMs {
-			if vm.Template || vm.Status != "running" || !seedIsInScope(scopedSet, vm.ID) {
-				continue
-			}
-			metrics := map[string]float64{"memory": vm.Memory.Usage, "disk": vm.Disk.Usage}
-			if vm.CPU > 0 {
-				metrics["cpu"] = vm.CPU
-			}
-			anomalies := bs.CheckResourceAnomaliesReadOnly(vm.ID, metrics)
-			for i := range anomalies {
-				if anomalies[i].ResourceName == "" {
-					anomalies[i].ResourceName = vm.Name
+				metrics := map[string]float64{
+					// Baselines historically use CPU as 0-1 fraction.
+					"cpu":    nv.CPUPercent() / 100,
+					"memory": nv.MemoryPercent(),
 				}
-			}
-			intel.anomalies = append(intel.anomalies, anomalies...)
-		}
-		for _, ct := range state.Containers {
-			if ct.Template || ct.Status != "running" || !seedIsInScope(scopedSet, ct.ID) {
-				continue
-			}
-			metrics := map[string]float64{"memory": ct.Memory.Usage, "disk": ct.Disk.Usage}
-			if ct.CPU > 0 {
-				metrics["cpu"] = ct.CPU
-			}
-			anomalies := bs.CheckResourceAnomaliesReadOnly(ct.ID, metrics)
-			for i := range anomalies {
-				if anomalies[i].ResourceName == "" {
-					anomalies[i].ResourceName = ct.Name
+				anomalies := bs.CheckResourceAnomaliesReadOnly(nv.ID(), metrics)
+				for i := range anomalies {
+					if anomalies[i].ResourceName == "" {
+						anomalies[i].ResourceName = nv.Name()
+					}
 				}
+				intel.anomalies = append(intel.anomalies, anomalies...)
 			}
-			intel.anomalies = append(intel.anomalies, anomalies...)
-		}
-		for _, s := range state.Storage {
-			if !seedIsInScope(scopedSet, s.ID) {
-				continue
-			}
-			metrics := map[string]float64{"usage": s.Usage}
-			anomalies := bs.CheckResourceAnomaliesReadOnly(s.ID, metrics)
-			for i := range anomalies {
-				if anomalies[i].ResourceName == "" {
-					anomalies[i].ResourceName = s.Name
+			for _, vmv := range rs.VMs() {
+				if vmv.Template() || vmv.Status() != "running" || !seedIsInScope(scopedSet, vmv.ID()) {
+					continue
 				}
+				metrics := map[string]float64{"memory": vmv.MemoryPercent(), "disk": vmv.DiskPercent()}
+				if cpu := vmv.CPUPercent(); cpu > 0 {
+					metrics["cpu"] = cpu / 100
+				}
+				anomalies := bs.CheckResourceAnomaliesReadOnly(vmv.ID(), metrics)
+				for i := range anomalies {
+					if anomalies[i].ResourceName == "" {
+						anomalies[i].ResourceName = vmv.Name()
+					}
+				}
+				intel.anomalies = append(intel.anomalies, anomalies...)
 			}
-			intel.anomalies = append(intel.anomalies, anomalies...)
+			for _, ctv := range rs.Containers() {
+				if ctv.Template() || ctv.Status() != "running" || !seedIsInScope(scopedSet, ctv.ID()) {
+					continue
+				}
+				metrics := map[string]float64{"memory": ctv.MemoryPercent(), "disk": ctv.DiskPercent()}
+				if cpu := ctv.CPUPercent(); cpu > 0 {
+					metrics["cpu"] = cpu / 100
+				}
+				anomalies := bs.CheckResourceAnomaliesReadOnly(ctv.ID(), metrics)
+				for i := range anomalies {
+					if anomalies[i].ResourceName == "" {
+						anomalies[i].ResourceName = ctv.Name()
+					}
+				}
+				intel.anomalies = append(intel.anomalies, anomalies...)
+			}
+			for _, spv := range rs.StoragePools() {
+				if !seedIsInScope(scopedSet, spv.ID()) {
+					continue
+				}
+				metrics := map[string]float64{"usage": spv.DiskPercent()}
+				anomalies := bs.CheckResourceAnomaliesReadOnly(spv.ID(), metrics)
+				for i := range anomalies {
+					if anomalies[i].ResourceName == "" {
+						anomalies[i].ResourceName = spv.Name()
+					}
+				}
+				intel.anomalies = append(intel.anomalies, anomalies...)
+			}
+		} else {
+			for _, n := range state.Nodes {
+				if !seedIsInScope(scopedSet, n.ID) {
+					continue
+				}
+				metrics := map[string]float64{"cpu": n.CPU, "memory": n.Memory.Usage}
+				anomalies := bs.CheckResourceAnomaliesReadOnly(n.ID, metrics)
+				for i := range anomalies {
+					if anomalies[i].ResourceName == "" {
+						anomalies[i].ResourceName = n.Name
+					}
+				}
+				intel.anomalies = append(intel.anomalies, anomalies...)
+			}
+			for _, vm := range state.VMs {
+				if vm.Template || vm.Status != "running" || !seedIsInScope(scopedSet, vm.ID) {
+					continue
+				}
+				metrics := map[string]float64{"memory": vm.Memory.Usage, "disk": vm.Disk.Usage}
+				if vm.CPU > 0 {
+					metrics["cpu"] = vm.CPU
+				}
+				anomalies := bs.CheckResourceAnomaliesReadOnly(vm.ID, metrics)
+				for i := range anomalies {
+					if anomalies[i].ResourceName == "" {
+						anomalies[i].ResourceName = vm.Name
+					}
+				}
+				intel.anomalies = append(intel.anomalies, anomalies...)
+			}
+			for _, ct := range state.Containers {
+				if ct.Template || ct.Status != "running" || !seedIsInScope(scopedSet, ct.ID) {
+					continue
+				}
+				metrics := map[string]float64{"memory": ct.Memory.Usage, "disk": ct.Disk.Usage}
+				if ct.CPU > 0 {
+					metrics["cpu"] = ct.CPU
+				}
+				anomalies := bs.CheckResourceAnomaliesReadOnly(ct.ID, metrics)
+				for i := range anomalies {
+					if anomalies[i].ResourceName == "" {
+						anomalies[i].ResourceName = ct.Name
+					}
+				}
+				intel.anomalies = append(intel.anomalies, anomalies...)
+			}
+			for _, s := range state.Storage {
+				if !seedIsInScope(scopedSet, s.ID) {
+					continue
+				}
+				metrics := map[string]float64{"usage": s.Usage}
+				anomalies := bs.CheckResourceAnomaliesReadOnly(s.ID, metrics)
+				for i := range anomalies {
+					if anomalies[i].ResourceName == "" {
+						anomalies[i].ResourceName = s.Name
+					}
+				}
+				intel.anomalies = append(intel.anomalies, anomalies...)
+			}
 		}
 	}
 
@@ -1256,43 +1323,85 @@ func (p *PatrolService) seedPrecomputeIntelligence(state models.StateSnapshot, s
 				})
 			}
 		}
-		for _, n := range state.Nodes {
-			if !seedIsInScope(scopedSet, n.ID) {
-				continue
+		if rs != nil {
+			for _, nv := range rs.Nodes() {
+				if !seedIsInScope(scopedSet, nv.ID()) {
+					continue
+				}
+				if pts := mh.GetNodeMetrics(nv.ID(), "memory", 48*time.Hour); len(pts) >= 5 {
+					addForecast(nv.ID(), nv.Name(), "memory", pts, nv.MemoryPercent())
+				}
 			}
-			if pts := mh.GetNodeMetrics(n.ID, "memory", 48*time.Hour); len(pts) >= 5 {
-				addForecast(n.ID, n.Name, "memory", pts, n.Memory.Usage)
+			for _, vmv := range rs.VMs() {
+				if vmv.Template() || vmv.Status() != "running" || !seedIsInScope(scopedSet, vmv.ID()) {
+					continue
+				}
+				if pts := mh.GetGuestMetrics(vmv.ID(), "memory", 48*time.Hour); len(pts) >= 5 {
+					addForecast(vmv.ID(), vmv.Name(), "memory", pts, vmv.MemoryPercent())
+				}
+				if pts := mh.GetGuestMetrics(vmv.ID(), "disk", 48*time.Hour); len(pts) >= 5 {
+					addForecast(vmv.ID(), vmv.Name(), "disk", pts, vmv.DiskPercent())
+				}
 			}
-		}
-		for _, vm := range state.VMs {
-			if vm.Template || vm.Status != "running" || !seedIsInScope(scopedSet, vm.ID) {
-				continue
+			for _, ctv := range rs.Containers() {
+				if ctv.Template() || ctv.Status() != "running" || !seedIsInScope(scopedSet, ctv.ID()) {
+					continue
+				}
+				if pts := mh.GetGuestMetrics(ctv.ID(), "memory", 48*time.Hour); len(pts) >= 5 {
+					addForecast(ctv.ID(), ctv.Name(), "memory", pts, ctv.MemoryPercent())
+				}
+				if pts := mh.GetGuestMetrics(ctv.ID(), "disk", 48*time.Hour); len(pts) >= 5 {
+					addForecast(ctv.ID(), ctv.Name(), "disk", pts, ctv.DiskPercent())
+				}
 			}
-			if pts := mh.GetGuestMetrics(vm.ID, "memory", 48*time.Hour); len(pts) >= 5 {
-				addForecast(vm.ID, vm.Name, "memory", pts, vm.Memory.Usage)
+			for _, spv := range rs.StoragePools() {
+				if !seedIsInScope(scopedSet, spv.ID()) {
+					continue
+				}
+				allMetrics := mh.GetAllStorageMetrics(spv.ID(), 48*time.Hour)
+				if pts, ok := allMetrics["usage"]; ok && len(pts) >= 5 {
+					addForecast(spv.ID(), spv.Name(), "usage", pts, spv.DiskPercent())
+				}
 			}
-			if pts := mh.GetGuestMetrics(vm.ID, "disk", 48*time.Hour); len(pts) >= 5 {
-				addForecast(vm.ID, vm.Name, "disk", pts, vm.Disk.Usage)
+		} else {
+			for _, n := range state.Nodes {
+				if !seedIsInScope(scopedSet, n.ID) {
+					continue
+				}
+				if pts := mh.GetNodeMetrics(n.ID, "memory", 48*time.Hour); len(pts) >= 5 {
+					addForecast(n.ID, n.Name, "memory", pts, n.Memory.Usage)
+				}
 			}
-		}
-		for _, ct := range state.Containers {
-			if ct.Template || ct.Status != "running" || !seedIsInScope(scopedSet, ct.ID) {
-				continue
+			for _, vm := range state.VMs {
+				if vm.Template || vm.Status != "running" || !seedIsInScope(scopedSet, vm.ID) {
+					continue
+				}
+				if pts := mh.GetGuestMetrics(vm.ID, "memory", 48*time.Hour); len(pts) >= 5 {
+					addForecast(vm.ID, vm.Name, "memory", pts, vm.Memory.Usage)
+				}
+				if pts := mh.GetGuestMetrics(vm.ID, "disk", 48*time.Hour); len(pts) >= 5 {
+					addForecast(vm.ID, vm.Name, "disk", pts, vm.Disk.Usage)
+				}
 			}
-			if pts := mh.GetGuestMetrics(ct.ID, "memory", 48*time.Hour); len(pts) >= 5 {
-				addForecast(ct.ID, ct.Name, "memory", pts, ct.Memory.Usage)
+			for _, ct := range state.Containers {
+				if ct.Template || ct.Status != "running" || !seedIsInScope(scopedSet, ct.ID) {
+					continue
+				}
+				if pts := mh.GetGuestMetrics(ct.ID, "memory", 48*time.Hour); len(pts) >= 5 {
+					addForecast(ct.ID, ct.Name, "memory", pts, ct.Memory.Usage)
+				}
+				if pts := mh.GetGuestMetrics(ct.ID, "disk", 48*time.Hour); len(pts) >= 5 {
+					addForecast(ct.ID, ct.Name, "disk", pts, ct.Disk.Usage)
+				}
 			}
-			if pts := mh.GetGuestMetrics(ct.ID, "disk", 48*time.Hour); len(pts) >= 5 {
-				addForecast(ct.ID, ct.Name, "disk", pts, ct.Disk.Usage)
-			}
-		}
-		for _, s := range state.Storage {
-			if !seedIsInScope(scopedSet, s.ID) {
-				continue
-			}
-			allMetrics := mh.GetAllStorageMetrics(s.ID, 48*time.Hour)
-			if pts, ok := allMetrics["usage"]; ok && len(pts) >= 5 {
-				addForecast(s.ID, s.Name, "usage", pts, s.Usage)
+			for _, s := range state.Storage {
+				if !seedIsInScope(scopedSet, s.ID) {
+					continue
+				}
+				allMetrics := mh.GetAllStorageMetrics(s.ID, 48*time.Hour)
+				if pts, ok := allMetrics["usage"]; ok && len(pts) >= 5 {
+					addForecast(s.ID, s.Name, "usage", pts, s.Usage)
+				}
 			}
 		}
 	}
@@ -1350,33 +1459,77 @@ func (p *PatrolService) seedResourceInventory(state models.StateSnapshot, scoped
 	var sb strings.Builder
 
 	// --- Node Metrics ---
-	if cfg.AnalyzeNodes && len(state.Nodes) > 0 {
-		var scopedNodes []models.Node
-		for _, n := range state.Nodes {
-			if seedIsInScope(scopedSet, n.ID) {
-				scopedNodes = append(scopedNodes, n)
+	if cfg.AnalyzeNodes {
+		type nodeRow struct {
+			id, name, status string
+			cpu, mem, disk   float64
+			load             []float64
+			uptimeSeconds    int64
+			pendingUpdates   int
+		}
+
+		p.mu.RLock()
+		rs := p.readState
+		p.mu.RUnlock()
+
+		var scopedNodes []nodeRow
+		if rs != nil {
+			for _, nv := range rs.Nodes() {
+				if seedIsInScope(scopedSet, nv.ID()) {
+					scopedNodes = append(scopedNodes, nodeRow{
+						id:            nv.ID(),
+						name:          nv.Name(),
+						status:        string(nv.Status()),
+						cpu:           nv.CPUPercent(),
+						mem:           nv.MemoryPercent(),
+						disk:          nv.DiskPercent(),
+						load:          nv.LoadAverage(),
+						uptimeSeconds: nv.Uptime(),
+						pendingUpdates: func() int {
+							return nv.PendingUpdates()
+						}(),
+					})
+				}
+			}
+		} else {
+			for _, n := range state.Nodes {
+				if seedIsInScope(scopedSet, n.ID) {
+					scopedNodes = append(scopedNodes, nodeRow{
+						id:            n.ID,
+						name:          n.Name,
+						status:        n.Status,
+						cpu:           n.CPU * 100,
+						mem:           n.Memory.Usage,
+						disk:          n.Disk.Usage,
+						load:          n.LoadAverage,
+						uptimeSeconds: n.Uptime,
+						pendingUpdates: func() int {
+							return n.PendingUpdates
+						}(),
+					})
+				}
 			}
 		}
+
 		if len(scopedNodes) > 0 {
 			if isQuiet && scopedSet == nil {
 				minCPU, maxCPU := 100.0, 0.0
 				minMem, maxMem := 100.0, 0.0
 				allHealthy := true
 				for _, n := range scopedNodes {
-					cpu := n.CPU * 100
-					if cpu < minCPU {
-						minCPU = cpu
+					if n.cpu < minCPU {
+						minCPU = n.cpu
 					}
-					if cpu > maxCPU {
-						maxCPU = cpu
+					if n.cpu > maxCPU {
+						maxCPU = n.cpu
 					}
-					if n.Memory.Usage < minMem {
-						minMem = n.Memory.Usage
+					if n.mem < minMem {
+						minMem = n.mem
 					}
-					if n.Memory.Usage > maxMem {
-						maxMem = n.Memory.Usage
+					if n.mem > maxMem {
+						maxMem = n.mem
 					}
-					if n.Status != "online" {
+					if n.status != "online" {
 						allHealthy = false
 					}
 				}
@@ -1392,16 +1545,16 @@ func (p *PatrolService) seedResourceInventory(state models.StateSnapshot, scoped
 				sb.WriteString("|------|--------|-----|-----|------|---------------|--------|---------|\n")
 				for _, n := range scopedNodes {
 					load := "—"
-					if len(n.LoadAverage) >= 3 {
-						load = fmt.Sprintf("%.1f/%.1f/%.1f", n.LoadAverage[0], n.LoadAverage[1], n.LoadAverage[2])
+					if len(n.load) >= 3 {
+						load = fmt.Sprintf("%.1f/%.1f/%.1f", n.load[0], n.load[1], n.load[2])
 					}
-					uptime := seedFormatDuration(time.Duration(n.Uptime) * time.Second)
+					uptime := seedFormatDuration(time.Duration(n.uptimeSeconds) * time.Second)
 					updates := "—"
-					if n.PendingUpdates > 0 {
-						updates = fmt.Sprintf("%d", n.PendingUpdates)
+					if n.pendingUpdates > 0 {
+						updates = fmt.Sprintf("%d", n.pendingUpdates)
 					}
 					sb.WriteString(fmt.Sprintf("| %s | %s | %.0f%% | %.0f%% | %.0f%% | %s | %s | %s |\n",
-						n.Name, n.Status, n.CPU*100, n.Memory.Usage, n.Disk.Usage, load, uptime, updates))
+						n.name, n.status, n.cpu, n.mem, n.disk, load, uptime, updates))
 				}
 				sb.WriteString("\n")
 			}
@@ -1419,31 +1572,64 @@ func (p *PatrolService) seedResourceInventory(state models.StateSnapshot, scoped
 	var guests []guestRow
 
 	if cfg.AnalyzeGuests {
-		for _, vm := range state.VMs {
-			if vm.Template || !seedIsInScope(scopedSet, vm.ID) {
-				continue
+		p.mu.RLock()
+		rs := p.readState
+		p.mu.RUnlock()
+
+		if rs != nil {
+			for _, vmv := range rs.VMs() {
+				if vmv.Template() || !seedIsInScope(scopedSet, vmv.ID()) {
+					continue
+				}
+				gi := guestIntel[vmv.ID()]
+				guests = append(guests, guestRow{
+					name: vmv.Name(), gType: "vm", node: vmv.Node(), status: string(vmv.Status()),
+					cpu: vmv.CPUPercent(), mem: vmv.MemoryPercent(), disk: vmv.DiskPercent(),
+					lastBackup: vmv.LastBackup(),
+					service:    formatService(gi),
+					reachable:  formatReachable(reachableFromIntel(gi)),
+				})
 			}
-			gi := guestIntel[vm.ID]
-			guests = append(guests, guestRow{
-				name: vm.Name, gType: "vm", node: vm.Node, status: vm.Status,
-				cpu: vm.CPU * 100, mem: vm.Memory.Usage, disk: vm.Disk.Usage,
-				lastBackup: vm.LastBackup,
-				service:    formatService(gi),
-				reachable:  formatReachable(reachableFromIntel(gi)),
-			})
-		}
-		for _, ct := range state.Containers {
-			if ct.Template || !seedIsInScope(scopedSet, ct.ID) {
-				continue
+			for _, ctv := range rs.Containers() {
+				if ctv.Template() || !seedIsInScope(scopedSet, ctv.ID()) {
+					continue
+				}
+				gi := guestIntel[ctv.ID()]
+				guests = append(guests, guestRow{
+					name: ctv.Name(), gType: "lxc", node: ctv.Node(), status: string(ctv.Status()),
+					cpu: ctv.CPUPercent(), mem: ctv.MemoryPercent(), disk: ctv.DiskPercent(),
+					lastBackup: ctv.LastBackup(),
+					service:    formatService(gi),
+					reachable:  formatReachable(reachableFromIntel(gi)),
+				})
 			}
-			gi := guestIntel[ct.ID]
-			guests = append(guests, guestRow{
-				name: ct.Name, gType: "lxc", node: ct.Node, status: ct.Status,
-				cpu: ct.CPU * 100, mem: ct.Memory.Usage, disk: ct.Disk.Usage,
-				lastBackup: ct.LastBackup,
-				service:    formatService(gi),
-				reachable:  formatReachable(reachableFromIntel(gi)),
-			})
+		} else {
+			for _, vm := range state.VMs {
+				if vm.Template || !seedIsInScope(scopedSet, vm.ID) {
+					continue
+				}
+				gi := guestIntel[vm.ID]
+				guests = append(guests, guestRow{
+					name: vm.Name, gType: "vm", node: vm.Node, status: vm.Status,
+					cpu: vm.CPU * 100, mem: vm.Memory.Usage, disk: vm.Disk.Usage,
+					lastBackup: vm.LastBackup,
+					service:    formatService(gi),
+					reachable:  formatReachable(reachableFromIntel(gi)),
+				})
+			}
+			for _, ct := range state.Containers {
+				if ct.Template || !seedIsInScope(scopedSet, ct.ID) {
+					continue
+				}
+				gi := guestIntel[ct.ID]
+				guests = append(guests, guestRow{
+					name: ct.Name, gType: "lxc", node: ct.Node, status: ct.Status,
+					cpu: ct.CPU * 100, mem: ct.Memory.Usage, disk: ct.Disk.Usage,
+					lastBackup: ct.LastBackup,
+					service:    formatService(gi),
+					reachable:  formatReachable(reachableFromIntel(gi)),
+				})
+			}
 		}
 	}
 
@@ -1514,36 +1700,100 @@ func (p *PatrolService) seedResourceInventory(state models.StateSnapshot, scoped
 	}
 
 	// --- Docker ---
-	if cfg.AnalyzeDocker && len(state.DockerHosts) > 0 {
-		sb.WriteString("# Docker\n")
-		sb.WriteString("| Host | Containers | Running | Stopped |\n")
-		sb.WriteString("|------|------------|---------|--------|\n")
-		for _, dh := range state.DockerHosts {
-			if !seedIsInScope(scopedSet, dh.ID) {
-				continue
+	if cfg.AnalyzeDocker {
+		p.mu.RLock()
+		rs := p.readState
+		p.mu.RUnlock()
+
+		if rs != nil {
+			legacyByID := make(map[string]models.DockerHost, len(state.DockerHosts))
+			for _, dh := range state.DockerHosts {
+				legacyByID[dh.ID] = dh
 			}
-			running, stopped := 0, 0
-			for _, c := range dh.Containers {
-				if c.State == "running" {
-					running++
-				} else {
-					stopped++
+
+			dhosts := rs.DockerHosts()
+			if len(dhosts) > 0 {
+				sb.WriteString("# Docker\n")
+				sb.WriteString("| Host | Containers | Running | Stopped |\n")
+				sb.WriteString("|------|------------|---------|--------|\n")
+				for _, dhv := range dhosts {
+					if !seedIsInScope(scopedSet, dhv.ID()) {
+						continue
+					}
+					host := strings.TrimSpace(dhv.Hostname())
+					if host == "" {
+						host = strings.TrimSpace(dhv.Name())
+					}
+					containers := "—"
+					runningStr, stoppedStr := "—", "—"
+
+					if legacy, ok := legacyByID[dhv.ID()]; ok && len(legacy.Containers) > 0 {
+						running, stopped := 0, 0
+						for _, c := range legacy.Containers {
+							if c.State == "running" {
+								running++
+							} else {
+								stopped++
+							}
+						}
+						containers = fmt.Sprintf("%d", len(legacy.Containers))
+						runningStr = fmt.Sprintf("%d", running)
+						stoppedStr = fmt.Sprintf("%d", stopped)
+					} else if dhv.ChildCount() > 0 {
+						containers = fmt.Sprintf("%d", dhv.ChildCount())
+					}
+
+					sb.WriteString(fmt.Sprintf("| %s | %s | %s | %s |\n", host, containers, runningStr, stoppedStr))
+				}
+
+				// Preserve detailed per-container health output when legacy snapshot contains it.
+				for _, dhv := range dhosts {
+					if !seedIsInScope(scopedSet, dhv.ID()) {
+						continue
+					}
+					legacy, ok := legacyByID[dhv.ID()]
+					if !ok {
+						continue
+					}
+					for _, c := range legacy.Containers {
+						if c.Health != "" && c.Health != "healthy" && c.State == "running" {
+							sb.WriteString(fmt.Sprintf("- %s/%s: health=%s\n", legacy.Hostname, c.Name, c.Health))
+						}
+					}
+				}
+				sb.WriteString("\n")
+			}
+		} else if len(state.DockerHosts) > 0 {
+			sb.WriteString("# Docker\n")
+			sb.WriteString("| Host | Containers | Running | Stopped |\n")
+			sb.WriteString("|------|------------|---------|--------|\n")
+			for _, dh := range state.DockerHosts {
+				if !seedIsInScope(scopedSet, dh.ID) {
+					continue
+				}
+				running, stopped := 0, 0
+				for _, c := range dh.Containers {
+					if c.State == "running" {
+						running++
+					} else {
+						stopped++
+					}
+				}
+				sb.WriteString(fmt.Sprintf("| %s | %d | %d | %d |\n",
+					dh.Hostname, len(dh.Containers), running, stopped))
+			}
+			for _, dh := range state.DockerHosts {
+				if !seedIsInScope(scopedSet, dh.ID) {
+					continue
+				}
+				for _, c := range dh.Containers {
+					if c.Health != "" && c.Health != "healthy" && c.State == "running" {
+						sb.WriteString(fmt.Sprintf("- %s/%s: health=%s\n", dh.Hostname, c.Name, c.Health))
+					}
 				}
 			}
-			sb.WriteString(fmt.Sprintf("| %s | %d | %d | %d |\n",
-				dh.Hostname, len(dh.Containers), running, stopped))
+			sb.WriteString("\n")
 		}
-		for _, dh := range state.DockerHosts {
-			if !seedIsInScope(scopedSet, dh.ID) {
-				continue
-			}
-			for _, c := range dh.Containers {
-				if c.Health != "" && c.Health != "healthy" && c.State == "running" {
-					sb.WriteString(fmt.Sprintf("- %s/%s: health=%s\n", dh.Hostname, c.Name, c.Health))
-				}
-			}
-		}
-		sb.WriteString("\n")
 	}
 
 	// --- Storage Pools ---
@@ -1728,35 +1978,134 @@ func (p *PatrolService) seedResourceInventory(state models.StateSnapshot, scoped
 
 // seedPMGSnapshot adds Proxmox Mail Gateway status to the seed context
 func (p *PatrolService) seedPMGSnapshot(sb *strings.Builder, state models.StateSnapshot, scopedSet map[string]bool, cfg PatrolConfig, isQuiet bool) {
-	if !cfg.AnalyzePMG || len(state.PMGInstances) == 0 {
+	if !cfg.AnalyzePMG {
 		return
 	}
 
-	var scopedPMG []models.PMGInstance
-	for _, pmg := range state.PMGInstances {
-		if seedIsInScope(scopedSet, pmg.ID) {
-			scopedPMG = append(scopedPMG, pmg)
+	p.mu.RLock()
+	rs := p.readState
+	p.mu.RUnlock()
+
+	if rs == nil {
+		// Legacy fallback.
+		if len(state.PMGInstances) == 0 {
+			return
 		}
+
+		var scopedPMG []models.PMGInstance
+		for _, pmg := range state.PMGInstances {
+			if seedIsInScope(scopedSet, pmg.ID) {
+				scopedPMG = append(scopedPMG, pmg)
+			}
+		}
+
+		if len(scopedPMG) == 0 {
+			return
+		}
+
+		if isQuiet && scopedSet == nil {
+			allHealthy := true
+			for _, pmg := range scopedPMG {
+				if pmg.Status != "online" {
+					allHealthy = false
+					break
+				}
+				// basic health check on mail stats if available
+				if pmg.MailStats != nil {
+					// if average process time > 5s, consider it noteworthy/unhealthy for quiet mode
+					if pmg.MailStats.AverageProcessTimeMs > 5000 {
+						allHealthy = false
+						break
+					}
+				}
+			}
+			if allHealthy {
+				sb.WriteString(fmt.Sprintf("# PMG: %d gateways, all healthy and processing mail normally.\n\n", len(scopedPMG)))
+				return
+			}
+		}
+
+		sb.WriteString("# Proxmox Mail Gateway (PMG)\n")
+		sb.WriteString("| Instance | Status | Version | In/Out | Spam/Virus | Avg Time | Queue (Active/Deferred/Hold) |\n")
+		sb.WriteString("|----------|--------|---------|--------|------------|----------|------------------------------|\n")
+
+		for _, pmg := range scopedPMG {
+			version := pmg.Version
+			if version == "" {
+				version = "—"
+			}
+
+			traffic := "—"
+			spamVirus := "—"
+			avgTime := "—"
+
+			if stats := pmg.MailStats; stats != nil {
+				traffic = fmt.Sprintf("%.0f/%.0f", stats.CountIn, stats.CountOut)
+				spamVirus = fmt.Sprintf("%.0f/%.0f", stats.SpamIn+stats.SpamOut, stats.VirusIn+stats.VirusOut)
+				avgTime = fmt.Sprintf("%.0fms", stats.AverageProcessTimeMs)
+			}
+
+			// Aggregate queues from nodes
+			active, deferred, hold := 0, 0, 0
+			for _, node := range pmg.Nodes {
+				if node.QueueStatus != nil {
+					active += node.QueueStatus.Active
+					deferred += node.QueueStatus.Deferred
+					hold += node.QueueStatus.Hold
+				}
+			}
+			queueStr := fmt.Sprintf("%d/%d/%d", active, deferred, hold)
+
+			sb.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %s | %s | %s |\n",
+				pmg.Name, pmg.Status, version, traffic, spamVirus, avgTime, queueStr))
+		}
+		sb.WriteString("\n")
+		return
 	}
 
+	pmgViews := rs.PMGInstances()
+	if len(pmgViews) == 0 {
+		return
+	}
+
+	legacyByID := make(map[string]models.PMGInstance, len(state.PMGInstances))
+	for _, pmg := range state.PMGInstances {
+		legacyByID[pmg.ID] = pmg
+	}
+
+	var scopedPMG []*unifiedresources.PMGInstanceView
+	for _, pmgv := range pmgViews {
+		if seedIsInScope(scopedSet, pmgv.ID()) {
+			scopedPMG = append(scopedPMG, pmgv)
+		}
+	}
 	if len(scopedPMG) == 0 {
 		return
 	}
 
 	if isQuiet && scopedSet == nil {
 		allHealthy := true
-		for _, pmg := range scopedPMG {
-			if pmg.Status != "online" {
-				allHealthy = false
-				break
-			}
-			// basic health check on mail stats if available
-			if pmg.MailStats != nil {
-				// if average process time > 5s, consider it noteworthy/unhealthy for quiet mode
-				if pmg.MailStats.AverageProcessTimeMs > 5000 {
+		for _, pmgv := range scopedPMG {
+			// Prefer legacy health heuristics when available (richer fields).
+			if legacy, ok := legacyByID[pmgv.ID()]; ok {
+				if legacy.Status != "online" {
 					allHealthy = false
 					break
 				}
+				if legacy.MailStats != nil && legacy.MailStats.AverageProcessTimeMs > 5000 {
+					allHealthy = false
+					break
+				}
+				continue
+			}
+
+			if string(pmgv.Status()) != "online" {
+				allHealthy = false
+				break
+			}
+			if ch := strings.TrimSpace(pmgv.ConnectionHealth()); ch != "" && ch != "connected" && ch != "ok" {
+				allHealthy = false
+				break
 			}
 		}
 		if allHealthy {
@@ -1769,8 +2118,40 @@ func (p *PatrolService) seedPMGSnapshot(sb *strings.Builder, state models.StateS
 	sb.WriteString("| Instance | Status | Version | In/Out | Spam/Virus | Avg Time | Queue (Active/Deferred/Hold) |\n")
 	sb.WriteString("|----------|--------|---------|--------|------------|----------|------------------------------|\n")
 
-	for _, pmg := range scopedPMG {
-		version := pmg.Version
+	for _, pmgv := range scopedPMG {
+		if legacy, ok := legacyByID[pmgv.ID()]; ok {
+			// Preserve legacy richer stats when present.
+			pmg := legacy
+			version := pmg.Version
+			if version == "" {
+				version = "—"
+			}
+
+			traffic := "—"
+			spamVirus := "—"
+			avgTime := "—"
+
+			if stats := pmg.MailStats; stats != nil {
+				traffic = fmt.Sprintf("%.0f/%.0f", stats.CountIn, stats.CountOut)
+				spamVirus = fmt.Sprintf("%.0f/%.0f", stats.SpamIn+stats.SpamOut, stats.VirusIn+stats.VirusOut)
+				avgTime = fmt.Sprintf("%.0fms", stats.AverageProcessTimeMs)
+			}
+
+			active, deferred, hold := 0, 0, 0
+			for _, node := range pmg.Nodes {
+				if node.QueueStatus != nil {
+					active += node.QueueStatus.Active
+					deferred += node.QueueStatus.Deferred
+					hold += node.QueueStatus.Hold
+				}
+			}
+			queueStr := fmt.Sprintf("%d/%d/%d", active, deferred, hold)
+			sb.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %s | %s | %s |\n",
+				pmg.Name, pmg.Status, version, traffic, spamVirus, avgTime, queueStr))
+			continue
+		}
+
+		version := strings.TrimSpace(pmgv.Version())
 		if version == "" {
 			version = "—"
 		}
@@ -1778,26 +2159,21 @@ func (p *PatrolService) seedPMGSnapshot(sb *strings.Builder, state models.StateS
 		traffic := "—"
 		spamVirus := "—"
 		avgTime := "—"
-
-		if stats := pmg.MailStats; stats != nil {
-			traffic = fmt.Sprintf("%.0f/%.0f", stats.CountIn, stats.CountOut)
-			spamVirus = fmt.Sprintf("%.0f/%.0f", stats.SpamIn+stats.SpamOut, stats.VirusIn+stats.VirusOut)
-			avgTime = fmt.Sprintf("%.0fms", stats.AverageProcessTimeMs)
+		// Best-effort stats from typed view (legacy has richer per-direction traffic + avg processing time).
+		if total := pmgv.MailCountTotal(); total > 0 {
+			traffic = fmt.Sprintf("%.0f", total)
+		}
+		if pmgv.SpamIn() > 0 || pmgv.VirusIn() > 0 {
+			spamVirus = fmt.Sprintf("%.0f/%.0f", pmgv.SpamIn(), pmgv.VirusIn())
 		}
 
-		// Aggregate queues from nodes
-		active, deferred, hold := 0, 0, 0
-		for _, node := range pmg.Nodes {
-			if node.QueueStatus != nil {
-				active += node.QueueStatus.Active
-				deferred += node.QueueStatus.Deferred
-				hold += node.QueueStatus.Hold
-			}
-		}
+		active := pmgv.QueueActive()
+		deferred := pmgv.QueueDeferred()
+		hold := 0
 		queueStr := fmt.Sprintf("%d/%d/%d", active, deferred, hold)
 
 		sb.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %s | %s | %s |\n",
-			pmg.Name, pmg.Status, version, traffic, spamVirus, avgTime, queueStr))
+			pmgv.Name(), string(pmgv.Status()), version, traffic, spamVirus, avgTime, queueStr))
 	}
 	sb.WriteString("\n")
 }
@@ -1811,11 +2187,27 @@ func (p *PatrolService) seedBackupAnalysis(state models.StateSnapshot, now time.
 	guestBackups := make(map[string]*backupInfo)
 
 	vmidToName := make(map[int]string)
-	for _, vm := range state.VMs {
-		vmidToName[vm.VMID] = vm.Name
-	}
-	for _, ct := range state.Containers {
-		vmidToName[ct.VMID] = ct.Name
+	p.mu.RLock()
+	rs := p.readState
+	p.mu.RUnlock()
+	if rs != nil {
+		for _, vmv := range rs.VMs() {
+			if id := vmv.VMID(); id > 0 {
+				vmidToName[id] = vmv.Name()
+			}
+		}
+		for _, ctv := range rs.Containers() {
+			if id := ctv.VMID(); id > 0 {
+				vmidToName[id] = ctv.Name()
+			}
+		}
+	} else {
+		for _, vm := range state.VMs {
+			vmidToName[vm.VMID] = vm.Name
+		}
+		for _, ct := range state.Containers {
+			vmidToName[ct.VMID] = ct.Name
+		}
 	}
 
 	for _, bt := range state.PVEBackups.BackupTasks {
@@ -1843,16 +2235,9 @@ func (p *PatrolService) seedBackupAnalysis(state models.StateSnapshot, now time.
 
 	for _, pb := range state.PBSBackups {
 		name := pb.VMID
-		for _, vm := range state.VMs {
-			if fmt.Sprintf("%d", vm.VMID) == pb.VMID {
-				name = vm.Name
-				break
-			}
-		}
-		for _, ct := range state.Containers {
-			if fmt.Sprintf("%d", ct.VMID) == pb.VMID {
-				name = ct.Name
-				break
+		if id, err := strconv.Atoi(pb.VMID); err == nil {
+			if n := vmidToName[id]; n != "" {
+				name = n
 			}
 		}
 		if existing, ok := guestBackups[name]; !ok || pb.BackupTime.After(existing.lastBackup) {
@@ -1860,32 +2245,66 @@ func (p *PatrolService) seedBackupAnalysis(state models.StateSnapshot, now time.
 		}
 	}
 
-	for _, vm := range state.VMs {
-		if vm.Template || vm.LastBackup.IsZero() {
-			continue
+	if rs != nil {
+		for _, vmv := range rs.VMs() {
+			if vmv.Template() || vmv.LastBackup().IsZero() {
+				continue
+			}
+			name := vmv.Name()
+			if existing, ok := guestBackups[name]; !ok || vmv.LastBackup().After(existing.lastBackup) {
+				guestBackups[name] = &backupInfo{lastBackup: vmv.LastBackup(), source: "pve"}
+			}
 		}
-		if existing, ok := guestBackups[vm.Name]; !ok || vm.LastBackup.After(existing.lastBackup) {
-			guestBackups[vm.Name] = &backupInfo{lastBackup: vm.LastBackup, source: "pve"}
+		for _, ctv := range rs.Containers() {
+			if ctv.Template() || ctv.LastBackup().IsZero() {
+				continue
+			}
+			name := ctv.Name()
+			if existing, ok := guestBackups[name]; !ok || ctv.LastBackup().After(existing.lastBackup) {
+				guestBackups[name] = &backupInfo{lastBackup: ctv.LastBackup(), source: "pve"}
+			}
 		}
-	}
-	for _, ct := range state.Containers {
-		if ct.Template || ct.LastBackup.IsZero() {
-			continue
+	} else {
+		for _, vm := range state.VMs {
+			if vm.Template || vm.LastBackup.IsZero() {
+				continue
+			}
+			if existing, ok := guestBackups[vm.Name]; !ok || vm.LastBackup.After(existing.lastBackup) {
+				guestBackups[vm.Name] = &backupInfo{lastBackup: vm.LastBackup, source: "pve"}
+			}
 		}
-		if existing, ok := guestBackups[ct.Name]; !ok || ct.LastBackup.After(existing.lastBackup) {
-			guestBackups[ct.Name] = &backupInfo{lastBackup: ct.LastBackup, source: "pve"}
+		for _, ct := range state.Containers {
+			if ct.Template || ct.LastBackup.IsZero() {
+				continue
+			}
+			if existing, ok := guestBackups[ct.Name]; !ok || ct.LastBackup.After(existing.lastBackup) {
+				guestBackups[ct.Name] = &backupInfo{lastBackup: ct.LastBackup, source: "pve"}
+			}
 		}
 	}
 
 	totalGuests := 0
-	for _, vm := range state.VMs {
-		if !vm.Template {
-			totalGuests++
+	if rs != nil {
+		for _, vmv := range rs.VMs() {
+			if !vmv.Template() {
+				totalGuests++
+			}
 		}
-	}
-	for _, ct := range state.Containers {
-		if !ct.Template {
-			totalGuests++
+		for _, ctv := range rs.Containers() {
+			if !ctv.Template() {
+				totalGuests++
+			}
+		}
+	} else {
+		for _, vm := range state.VMs {
+			if !vm.Template {
+				totalGuests++
+			}
+		}
+		for _, ct := range state.Containers {
+			if !ct.Template {
+				totalGuests++
+			}
 		}
 	}
 
@@ -1901,14 +2320,27 @@ func (p *PatrolService) seedBackupAnalysis(state models.StateSnapshot, now time.
 	threshold48h := now.Add(-48 * time.Hour)
 
 	allGuestNames := make(map[string]bool)
-	for _, vm := range state.VMs {
-		if !vm.Template {
-			allGuestNames[vm.Name] = true
+	if rs != nil {
+		for _, vmv := range rs.VMs() {
+			if !vmv.Template() {
+				allGuestNames[vmv.Name()] = true
+			}
 		}
-	}
-	for _, ct := range state.Containers {
-		if !ct.Template {
-			allGuestNames[ct.Name] = true
+		for _, ctv := range rs.Containers() {
+			if !ctv.Template() {
+				allGuestNames[ctv.Name()] = true
+			}
+		}
+	} else {
+		for _, vm := range state.VMs {
+			if !vm.Template {
+				allGuestNames[vm.Name] = true
+			}
+		}
+		for _, ct := range state.Containers {
+			if !ct.Template {
+				allGuestNames[ct.Name] = true
+			}
 		}
 	}
 
@@ -1936,6 +2368,10 @@ func (p *PatrolService) seedBackupAnalysis(state models.StateSnapshot, now time.
 // seedHealthAndAlerts builds the disk health, alerts, connection health, kubernetes, and hosts sections.
 func (p *PatrolService) seedHealthAndAlerts(state models.StateSnapshot, scopedSet map[string]bool, cfg PatrolConfig, now time.Time) string {
 	var sb strings.Builder
+
+	p.mu.RLock()
+	rs := p.readState
+	p.mu.RUnlock()
 
 	// --- Disk Health ---
 	p.mu.RLock()
@@ -2029,21 +2465,61 @@ func (p *PatrolService) seedHealthAndAlerts(state models.StateSnapshot, scopedSe
 	}
 
 	// --- Kubernetes ---
-	if cfg.AnalyzeKubernetes && len(state.KubernetesClusters) > 0 {
-		sb.WriteString("# Kubernetes Clusters\n")
-		for _, k := range state.KubernetesClusters {
-			sb.WriteString(fmt.Sprintf("- %s (Nodes: %d)\n", k.Name, len(k.Nodes)))
+	if cfg.AnalyzeKubernetes {
+		if rs != nil {
+			k8sViews := rs.K8sClusters()
+			if len(k8sViews) > 0 {
+				legacyByID := make(map[string]models.KubernetesCluster, len(state.KubernetesClusters))
+				for _, k := range state.KubernetesClusters {
+					legacyByID[k.ID] = k
+				}
+				sb.WriteString("# Kubernetes Clusters\n")
+				for _, kv := range k8sViews {
+					if !seedIsInScope(scopedSet, kv.ID()) {
+						continue
+					}
+					nodes := kv.ChildCount()
+					if legacy, ok := legacyByID[kv.ID()]; ok && len(legacy.Nodes) > 0 {
+						nodes = len(legacy.Nodes)
+					}
+					sb.WriteString(fmt.Sprintf("- %s (Nodes: %d)\n", kv.Name(), nodes))
+				}
+				sb.WriteString("\n")
+			}
+		} else if len(state.KubernetesClusters) > 0 {
+			sb.WriteString("# Kubernetes Clusters\n")
+			for _, k := range state.KubernetesClusters {
+				sb.WriteString(fmt.Sprintf("- %s (Nodes: %d)\n", k.Name, len(k.Nodes)))
+			}
+			sb.WriteString("\n")
 		}
-		sb.WriteString("\n")
 	}
 
 	// --- Hosts ---
-	if cfg.AnalyzeHosts && len(state.Hosts) > 0 {
-		sb.WriteString("# Hosts\n")
-		for _, h := range state.Hosts {
-			sb.WriteString(fmt.Sprintf("- %s (ID: %s)\n", h.Hostname, h.ID))
+	if cfg.AnalyzeHosts {
+		if rs != nil {
+			hosts := rs.Hosts()
+			if len(hosts) > 0 {
+				sb.WriteString("# Hosts\n")
+				for _, hv := range hosts {
+					if !seedIsInScope(scopedSet, hv.ID()) {
+						continue
+					}
+					name := hv.Hostname()
+					if strings.TrimSpace(name) == "" {
+						name = hv.Name()
+					}
+					sb.WriteString(fmt.Sprintf("- %s (ID: %s)\n", name, hv.ID()))
+				}
+				sb.WriteString("\n")
+			}
+		} else if len(state.Hosts) > 0 {
+			sb.WriteString("# Hosts\n")
+			for _, h := range state.Hosts {
+				sb.WriteString(fmt.Sprintf("- %s (ID: %s)\n", h.Hostname, h.ID))
+			}
+			sb.WriteString("\n")
 		}
-		sb.WriteString("\n")
 	}
 
 	return sb.String()
@@ -2156,21 +2632,69 @@ func (p *PatrolService) seedFindingsAndContext(scope *PatrolScope, state models.
 
 	// Build set of known resource IDs/names for existence checks
 	knownResources := make(map[string]bool)
-	for _, n := range state.Nodes {
-		knownResources[n.ID] = true
-		knownResources[n.Name] = true
-	}
-	for _, vm := range state.VMs {
-		knownResources[vm.ID] = true
-		knownResources[vm.Name] = true
-	}
-	for _, ct := range state.Containers {
-		knownResources[ct.ID] = true
-		knownResources[ct.Name] = true
-	}
-	for _, s := range state.Storage {
-		knownResources[s.ID] = true
-		knownResources[s.Name] = true
+	p.mu.RLock()
+	rs := p.readState
+	p.mu.RUnlock()
+	if rs != nil {
+		for _, n := range rs.Nodes() {
+			knownResources[n.ID()] = true
+			knownResources[n.Name()] = true
+		}
+		for _, vm := range rs.VMs() {
+			knownResources[vm.ID()] = true
+			knownResources[vm.Name()] = true
+		}
+		for _, ct := range rs.Containers() {
+			knownResources[ct.ID()] = true
+			knownResources[ct.Name()] = true
+		}
+		for _, s := range rs.StoragePools() {
+			knownResources[s.ID()] = true
+			knownResources[s.Name()] = true
+		}
+		for _, dh := range rs.DockerHosts() {
+			knownResources[dh.ID()] = true
+			knownResources[dh.Name()] = true
+			if hn := strings.TrimSpace(dh.Hostname()); hn != "" {
+				knownResources[hn] = true
+			}
+		}
+		for _, h := range rs.Hosts() {
+			knownResources[h.ID()] = true
+			knownResources[h.Name()] = true
+			if hn := strings.TrimSpace(h.Hostname()); hn != "" {
+				knownResources[hn] = true
+			}
+		}
+		for _, pbs := range rs.PBSInstances() {
+			knownResources[pbs.ID()] = true
+			knownResources[pbs.Name()] = true
+		}
+		for _, pmg := range rs.PMGInstances() {
+			knownResources[pmg.ID()] = true
+			knownResources[pmg.Name()] = true
+		}
+		for _, k := range rs.K8sClusters() {
+			knownResources[k.ID()] = true
+			knownResources[k.Name()] = true
+		}
+	} else {
+		for _, n := range state.Nodes {
+			knownResources[n.ID] = true
+			knownResources[n.Name] = true
+		}
+		for _, vm := range state.VMs {
+			knownResources[vm.ID] = true
+			knownResources[vm.Name] = true
+		}
+		for _, ct := range state.Containers {
+			knownResources[ct.ID] = true
+			knownResources[ct.Name] = true
+		}
+		for _, s := range state.Storage {
+			knownResources[s.ID] = true
+			knownResources[s.Name] = true
+		}
 	}
 	stateHasResources := len(knownResources) > 0
 

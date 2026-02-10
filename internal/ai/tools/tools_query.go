@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
 
@@ -1936,11 +1937,61 @@ type recentChildInfo struct {
 // This is used by validateRoutingContext to detect when the user referenced a child resource
 // in the current turn/exchange, indicating they probably intended to target that child.
 func (e *PulseToolExecutor) findRecentlyReferencedChildrenOnNode(nodeName string) []recentChildInfo {
-	if e.resolvedContext == nil || e.stateProvider == nil {
+	if e.resolvedContext == nil {
 		return nil
 	}
 
 	var children []recentChildInfo
+
+	// Prefer typed views when available.
+	if rs := e.getReadState(); rs != nil {
+		// Check LXC containers on this node
+		for _, ct := range rs.Containers() {
+			if ct.Node() != nodeName {
+				continue
+			}
+			// Check if this LXC is in the resolved context AND was recently accessed
+			if res, found := e.resolvedContext.GetResolvedResourceByAlias(ct.Name()); found {
+				if res.GetKind() == "lxc" {
+					resourceID := res.GetResourceID()
+					if e.resolvedContext.WasRecentlyAccessed(resourceID, RecentAccessWindow) {
+						children = append(children, recentChildInfo{
+							Name:       ct.Name(),
+							ResourceID: resourceID,
+							Kind:       "lxc",
+						})
+					}
+				}
+			}
+		}
+
+		// Check VMs on this node
+		for _, vm := range rs.VMs() {
+			if vm.Node() != nodeName {
+				continue
+			}
+			// Check if this VM is in the resolved context AND was recently accessed
+			if res, found := e.resolvedContext.GetResolvedResourceByAlias(vm.Name()); found {
+				if res.GetKind() == "vm" {
+					resourceID := res.GetResourceID()
+					if e.resolvedContext.WasRecentlyAccessed(resourceID, RecentAccessWindow) {
+						children = append(children, recentChildInfo{
+							Name:       vm.Name(),
+							ResourceID: resourceID,
+							Kind:       "vm",
+						})
+					}
+				}
+			}
+		}
+
+		return children
+	}
+
+	if e.stateProvider == nil {
+		return nil
+	}
+
 	state := e.stateProvider.GetState()
 
 	// Check LXC containers on this node
@@ -2127,6 +2178,7 @@ func (e *PulseToolExecutor) executeListInfrastructure(_ context.Context, args ma
 	if e.stateProvider == nil {
 		return NewErrorResult(fmt.Errorf("state provider not available")), nil
 	}
+	rs := e.getReadState()
 
 	filterType, _ := args["type"].(string)
 	filterStatus, _ := args["status"].(string)
@@ -2161,30 +2213,57 @@ func (e *PulseToolExecutor) executeListInfrastructure(_ context.Context, args ma
 			DockerHosts: len(state.DockerHosts),
 		},
 	}
+	if rs != nil {
+		response.Total.Nodes = len(rs.Nodes())
+		response.Total.VMs = len(rs.VMs())
+		response.Total.Containers = len(rs.Containers())
+	}
 
 	totalMatches := 0
 
 	// Nodes
 	if filterType == "" || filterType == "nodes" {
 		count := 0
-		for _, node := range state.Nodes {
-			if filterStatus != "" && filterStatus != "all" && node.Status != filterStatus {
-				continue
-			}
-			if count < offset {
+		if rs != nil {
+			for _, node := range rs.Nodes() {
+				if filterStatus != "" && filterStatus != "all" && string(node.Status()) != filterStatus {
+					continue
+				}
+				if count < offset {
+					count++
+					continue
+				}
+				if len(response.Nodes) >= limit {
+					count++
+					continue
+				}
+				response.Nodes = append(response.Nodes, NodeSummary{
+					Name:           node.Name(),
+					Status:         string(node.Status()),
+					AgentConnected: connectedAgentHostnames[node.Name()],
+				})
 				count++
-				continue
 			}
-			if len(response.Nodes) >= limit {
+		} else {
+			for _, node := range state.Nodes {
+				if filterStatus != "" && filterStatus != "all" && node.Status != filterStatus {
+					continue
+				}
+				if count < offset {
+					count++
+					continue
+				}
+				if len(response.Nodes) >= limit {
+					count++
+					continue
+				}
+				response.Nodes = append(response.Nodes, NodeSummary{
+					Name:           node.Name,
+					Status:         node.Status,
+					AgentConnected: connectedAgentHostnames[node.Name],
+				})
 				count++
-				continue
 			}
-			response.Nodes = append(response.Nodes, NodeSummary{
-				Name:           node.Name,
-				Status:         node.Status,
-				AgentConnected: connectedAgentHostnames[node.Name],
-			})
-			count++
 		}
 		if filterType == "nodes" {
 			totalMatches = count
@@ -2194,27 +2273,52 @@ func (e *PulseToolExecutor) executeListInfrastructure(_ context.Context, args ma
 	// VMs
 	if filterType == "" || filterType == "vms" {
 		count := 0
-		for _, vm := range state.VMs {
-			if filterStatus != "" && filterStatus != "all" && vm.Status != filterStatus {
-				continue
-			}
-			if count < offset {
+		if rs != nil {
+			for _, vm := range rs.VMs() {
+				if filterStatus != "" && filterStatus != "all" && string(vm.Status()) != filterStatus {
+					continue
+				}
+				if count < offset {
+					count++
+					continue
+				}
+				if len(response.VMs) >= limit {
+					count++
+					continue
+				}
+				response.VMs = append(response.VMs, VMSummary{
+					VMID:   vm.VMID(),
+					Name:   vm.Name(),
+					Status: string(vm.Status()),
+					Node:   vm.Node(),
+					CPU:    vm.CPUPercent(),
+					Memory: vm.MemoryPercent(),
+				})
 				count++
-				continue
 			}
-			if len(response.VMs) >= limit {
+		} else {
+			for _, vm := range state.VMs {
+				if filterStatus != "" && filterStatus != "all" && vm.Status != filterStatus {
+					continue
+				}
+				if count < offset {
+					count++
+					continue
+				}
+				if len(response.VMs) >= limit {
+					count++
+					continue
+				}
+				response.VMs = append(response.VMs, VMSummary{
+					VMID:   vm.VMID,
+					Name:   vm.Name,
+					Status: vm.Status,
+					Node:   vm.Node,
+					CPU:    vm.CPU * 100,
+					Memory: vm.Memory.Usage, // Already 0-100 from safePercentage
+				})
 				count++
-				continue
 			}
-			response.VMs = append(response.VMs, VMSummary{
-				VMID:   vm.VMID,
-				Name:   vm.Name,
-				Status: vm.Status,
-				Node:   vm.Node,
-				CPU:    vm.CPU * 100,
-				Memory: vm.Memory.Usage, // Already 0-100 from safePercentage
-			})
-			count++
 		}
 		if filterType == "vms" {
 			totalMatches = count
@@ -2224,27 +2328,52 @@ func (e *PulseToolExecutor) executeListInfrastructure(_ context.Context, args ma
 	// Containers (LXC)
 	if filterType == "" || filterType == "containers" {
 		count := 0
-		for _, ct := range state.Containers {
-			if filterStatus != "" && filterStatus != "all" && ct.Status != filterStatus {
-				continue
-			}
-			if count < offset {
+		if rs != nil {
+			for _, ct := range rs.Containers() {
+				if filterStatus != "" && filterStatus != "all" && string(ct.Status()) != filterStatus {
+					continue
+				}
+				if count < offset {
+					count++
+					continue
+				}
+				if len(response.Containers) >= limit {
+					count++
+					continue
+				}
+				response.Containers = append(response.Containers, ContainerSummary{
+					VMID:   ct.VMID(),
+					Name:   ct.Name(),
+					Status: string(ct.Status()),
+					Node:   ct.Node(),
+					CPU:    ct.CPUPercent(),
+					Memory: ct.MemoryPercent(),
+				})
 				count++
-				continue
 			}
-			if len(response.Containers) >= limit {
+		} else {
+			for _, ct := range state.Containers {
+				if filterStatus != "" && filterStatus != "all" && ct.Status != filterStatus {
+					continue
+				}
+				if count < offset {
+					count++
+					continue
+				}
+				if len(response.Containers) >= limit {
+					count++
+					continue
+				}
+				response.Containers = append(response.Containers, ContainerSummary{
+					VMID:   ct.VMID,
+					Name:   ct.Name,
+					Status: ct.Status,
+					Node:   ct.Node,
+					CPU:    ct.CPU * 100,
+					Memory: ct.Memory.Usage, // Already 0-100 from safePercentage
+				})
 				count++
-				continue
 			}
-			response.Containers = append(response.Containers, ContainerSummary{
-				VMID:   ct.VMID,
-				Name:   ct.Name,
-				Status: ct.Status,
-				Node:   ct.Node,
-				CPU:    ct.CPU * 100,
-				Memory: ct.Memory.Usage, // Already 0-100 from safePercentage
-			})
-			count++
 		}
 		if filterType == "containers" {
 			totalMatches = count
@@ -2356,6 +2485,7 @@ func (e *PulseToolExecutor) executeGetTopology(_ context.Context, args map[strin
 	}
 
 	state := e.stateProvider.GetState()
+	rs := e.getReadState()
 
 	// Build a set of connected agent hostnames for quick lookup
 	connectedAgentHostnames := make(map[string]bool)
@@ -2378,10 +2508,23 @@ func (e *PulseToolExecutor) executeGetTopology(_ context.Context, args map[strin
 		TotalLXCContainers: len(state.Containers),
 		TotalDockerHosts:   len(state.DockerHosts),
 	}
+	if rs != nil {
+		summary.TotalNodes = len(rs.Nodes())
+		summary.TotalVMs = len(rs.VMs())
+		summary.TotalLXCContainers = len(rs.Containers())
+	}
 
-	for _, node := range state.Nodes {
-		if connectedAgentHostnames[node.Name] {
-			summary.NodesWithAgents++
+	if rs != nil {
+		for _, node := range rs.Nodes() {
+			if connectedAgentHostnames[node.Name()] {
+				summary.NodesWithAgents++
+			}
+		}
+	} else {
+		for _, node := range state.Nodes {
+			if connectedAgentHostnames[node.Name] {
+				summary.NodesWithAgents++
+			}
 		}
 	}
 	for _, host := range state.DockerHosts {
@@ -2393,18 +2536,36 @@ func (e *PulseToolExecutor) executeGetTopology(_ context.Context, args map[strin
 	// Build Proxmox topology - group VMs and containers by node
 	nodeMap := make(map[string]*ProxmoxNodeTopology)
 	if includeProxmox && !summaryOnly {
-		for _, node := range state.Nodes {
-			if maxNodes > 0 && len(nodeMap) >= maxNodes {
-				break
+		if rs != nil {
+			for _, node := range rs.Nodes() {
+				if maxNodes > 0 && len(nodeMap) >= maxNodes {
+					break
+				}
+				name := node.Name()
+				hasAgent := connectedAgentHostnames[name]
+				nodeMap[name] = &ProxmoxNodeTopology{
+					Name:           name,
+					Status:         string(node.Status()),
+					AgentConnected: hasAgent,
+					CanExecute:     hasAgent && controlEnabled,
+					VMs:            []TopologyVM{},
+					Containers:     []TopologyLXC{},
+				}
 			}
-			hasAgent := connectedAgentHostnames[node.Name]
-			nodeMap[node.Name] = &ProxmoxNodeTopology{
-				Name:           node.Name,
-				Status:         node.Status,
-				AgentConnected: hasAgent,
-				CanExecute:     hasAgent && controlEnabled,
-				VMs:            []TopologyVM{},
-				Containers:     []TopologyLXC{},
+		} else {
+			for _, node := range state.Nodes {
+				if maxNodes > 0 && len(nodeMap) >= maxNodes {
+					break
+				}
+				hasAgent := connectedAgentHostnames[node.Name]
+				nodeMap[node.Name] = &ProxmoxNodeTopology{
+					Name:           node.Name,
+					Status:         node.Status,
+					AgentConnected: hasAgent,
+					CanExecute:     hasAgent && controlEnabled,
+					VMs:            []TopologyVM{},
+					Containers:     []TopologyLXC{},
+				}
 			}
 		}
 	}
@@ -2432,53 +2593,105 @@ func (e *PulseToolExecutor) executeGetTopology(_ context.Context, args map[strin
 	}
 
 	// Add VMs to their nodes
-	for _, vm := range state.VMs {
-		if vm.Status == "running" {
-			summary.RunningVMs++
-		}
+	if rs != nil {
+		for _, vm := range rs.VMs() {
+			status := string(vm.Status())
+			if status == "running" || status == string(unifiedresources.StatusOnline) {
+				summary.RunningVMs++
+			}
 
-		nodeTopology := ensureNode(vm.Node, "unknown")
-		if nodeTopology == nil {
-			continue
-		}
+			nodeTopology := ensureNode(vm.Node(), "unknown")
+			if nodeTopology == nil {
+				continue
+			}
 
-		nodeTopology.VMCount++
-		if maxVMsPerNode <= 0 || len(nodeTopology.VMs) < maxVMsPerNode {
-			nodeTopology.VMs = append(nodeTopology.VMs, TopologyVM{
-				VMID:   vm.VMID,
-				Name:   vm.Name,
-				Status: vm.Status,
-				CPU:    vm.CPU * 100,
-				Memory: vm.Memory.Usage, // Already 0-100 from safePercentage
-				OS:     vm.OSName,
-				Tags:   vm.Tags,
-			})
+			nodeTopology.VMCount++
+			if maxVMsPerNode <= 0 || len(nodeTopology.VMs) < maxVMsPerNode {
+				nodeTopology.VMs = append(nodeTopology.VMs, TopologyVM{
+					VMID:   vm.VMID(),
+					Name:   vm.Name(),
+					Status: status,
+					CPU:    vm.CPUPercent(),
+					Memory: vm.MemoryPercent(),
+					Tags:   vm.Tags(),
+				})
+			}
+		}
+	} else {
+		for _, vm := range state.VMs {
+			if vm.Status == "running" {
+				summary.RunningVMs++
+			}
+
+			nodeTopology := ensureNode(vm.Node, "unknown")
+			if nodeTopology == nil {
+				continue
+			}
+
+			nodeTopology.VMCount++
+			if maxVMsPerNode <= 0 || len(nodeTopology.VMs) < maxVMsPerNode {
+				nodeTopology.VMs = append(nodeTopology.VMs, TopologyVM{
+					VMID:   vm.VMID,
+					Name:   vm.Name,
+					Status: vm.Status,
+					CPU:    vm.CPU * 100,
+					Memory: vm.Memory.Usage, // Already 0-100 from safePercentage
+					OS:     vm.OSName,
+					Tags:   vm.Tags,
+				})
+			}
 		}
 	}
 
 	// Add containers to their nodes
-	for _, ct := range state.Containers {
-		if ct.Status == "running" {
-			summary.RunningLXC++
-		}
+	if rs != nil {
+		for _, ct := range rs.Containers() {
+			status := string(ct.Status())
+			if status == "running" || status == string(unifiedresources.StatusOnline) {
+				summary.RunningLXC++
+			}
 
-		nodeTopology := ensureNode(ct.Node, "unknown")
-		if nodeTopology == nil {
-			continue
-		}
+			nodeTopology := ensureNode(ct.Node(), "unknown")
+			if nodeTopology == nil {
+				continue
+			}
 
-		nodeTopology.ContainerCount++
-		if maxContainersPerNode <= 0 || len(nodeTopology.Containers) < maxContainersPerNode {
-			nodeTopology.Containers = append(nodeTopology.Containers, TopologyLXC{
-				VMID:      ct.VMID,
-				Name:      ct.Name,
-				Status:    ct.Status,
-				CPU:       ct.CPU * 100,
-				Memory:    ct.Memory.Usage, // Already 0-100 from safePercentage
-				OS:        ct.OSName,
-				Tags:      ct.Tags,
-				HasDocker: ct.HasDocker,
-			})
+			nodeTopology.ContainerCount++
+			if maxContainersPerNode <= 0 || len(nodeTopology.Containers) < maxContainersPerNode {
+				nodeTopology.Containers = append(nodeTopology.Containers, TopologyLXC{
+					VMID:   ct.VMID(),
+					Name:   ct.Name(),
+					Status: status,
+					CPU:    ct.CPUPercent(),
+					Memory: ct.MemoryPercent(),
+					Tags:   ct.Tags(),
+				})
+			}
+		}
+	} else {
+		for _, ct := range state.Containers {
+			if ct.Status == "running" {
+				summary.RunningLXC++
+			}
+
+			nodeTopology := ensureNode(ct.Node, "unknown")
+			if nodeTopology == nil {
+				continue
+			}
+
+			nodeTopology.ContainerCount++
+			if maxContainersPerNode <= 0 || len(nodeTopology.Containers) < maxContainersPerNode {
+				nodeTopology.Containers = append(nodeTopology.Containers, TopologyLXC{
+					VMID:      ct.VMID,
+					Name:      ct.Name,
+					Status:    ct.Status,
+					CPU:       ct.CPU * 100,
+					Memory:    ct.Memory.Usage, // Already 0-100 from safePercentage
+					OS:        ct.OSName,
+					Tags:      ct.Tags,
+					HasDocker: ct.HasDocker,
+				})
+			}
 		}
 	}
 
@@ -2559,57 +2772,109 @@ func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[strin
 	}
 
 	state := e.stateProvider.GetState()
+	rs := e.getReadState()
 
 	switch resourceType {
 	case "vm":
-		for _, vm := range state.VMs {
-			if fmt.Sprintf("%d", vm.VMID) == resourceID || vm.Name == resourceID || vm.ID == resourceID {
-				response := ResourceResponse{
-					Type:   "vm",
-					ID:     vm.ID,
-					Name:   vm.Name,
-					Status: vm.Status,
-					Node:   vm.Node,
-					CPU: ResourceCPU{
-						Percent: vm.CPU * 100,
-						Cores:   vm.CPUs,
-					},
-					Memory: ResourceMemory{
-						Percent: vm.Memory.Usage, // Already 0-100 from safePercentage
-						UsedGB:  float64(vm.Memory.Used) / (1024 * 1024 * 1024),
-						TotalGB: float64(vm.Memory.Total) / (1024 * 1024 * 1024),
-					},
-					OS:   vm.OSName,
-					Tags: vm.Tags,
-				}
-				if !vm.LastBackup.IsZero() {
-					response.LastBackup = &vm.LastBackup
-				}
-				for _, nic := range vm.NetworkInterfaces {
-					response.Networks = append(response.Networks, NetworkInfo{
-						Name:      nic.Name,
-						Addresses: nic.Addresses,
+		if rs != nil {
+			for _, vm := range rs.VMs() {
+				if fmt.Sprintf("%d", vm.VMID()) == resourceID || vm.Name() == resourceID || vm.ID() == resourceID {
+					used := vm.MemoryUsed()
+					total := vm.MemoryTotal()
+					response := ResourceResponse{
+						Type:   "vm",
+						ID:     vm.ID(),
+						Name:   vm.Name(),
+						Status: string(vm.Status()),
+						Node:   vm.Node(),
+						CPU: ResourceCPU{
+							Percent: vm.CPUPercent(),
+							Cores:   vm.CPUs(),
+						},
+						Memory: ResourceMemory{
+							Percent: vm.MemoryPercent(),
+							UsedGB:  float64(used) / (1024 * 1024 * 1024),
+							TotalGB: float64(total) / (1024 * 1024 * 1024),
+						},
+						Tags: vm.Tags(),
+					}
+					if !vm.LastBackup().IsZero() {
+						t := vm.LastBackup()
+						response.LastBackup = &t
+					}
+
+					// Register in resolved context WITH explicit access (single-resource get operation)
+					e.registerResolvedResourceWithExplicitAccess(ResourceRegistration{
+						Kind:          "vm",
+						ProviderUID:   fmt.Sprintf("%d", vm.VMID()), // VMID is the stable provider ID
+						Name:          vm.Name(),
+						Aliases:       []string{vm.Name(), fmt.Sprintf("%d", vm.VMID()), vm.ID()},
+						HostUID:       vm.Node(),
+						HostName:      vm.Node(),
+						VMID:          vm.VMID(),
+						Node:          vm.Node(),
+						LocationChain: []string{"node:" + vm.Node(), "vm:" + vm.Name()},
+						Executors: []ExecutorRegistration{{
+							ExecutorID: vm.Node(),
+							Adapter:    "qm",
+							Actions:    []string{"query", "get", "logs", "console"},
+							Priority:   10,
+						}},
 					})
+
+					return NewJSONResult(response), nil
 				}
-				// Register in resolved context WITH explicit access (single-resource get operation)
-				e.registerResolvedResourceWithExplicitAccess(ResourceRegistration{
-					Kind:          "vm",
-					ProviderUID:   fmt.Sprintf("%d", vm.VMID), // VMID is the stable provider ID
-					Name:          vm.Name,
-					Aliases:       []string{vm.Name, fmt.Sprintf("%d", vm.VMID), vm.ID},
-					HostUID:       vm.Node,
-					HostName:      vm.Node,
-					VMID:          vm.VMID,
-					Node:          vm.Node,
-					LocationChain: []string{"node:" + vm.Node, "vm:" + vm.Name},
-					Executors: []ExecutorRegistration{{
-						ExecutorID: vm.Node,
-						Adapter:    "qm",
-						Actions:    []string{"query", "get", "logs", "console"},
-						Priority:   10,
-					}},
-				})
-				return NewJSONResult(response), nil
+			}
+		} else {
+			for _, vm := range state.VMs {
+				if fmt.Sprintf("%d", vm.VMID) == resourceID || vm.Name == resourceID || vm.ID == resourceID {
+					response := ResourceResponse{
+						Type:   "vm",
+						ID:     vm.ID,
+						Name:   vm.Name,
+						Status: vm.Status,
+						Node:   vm.Node,
+						CPU: ResourceCPU{
+							Percent: vm.CPU * 100,
+							Cores:   vm.CPUs,
+						},
+						Memory: ResourceMemory{
+							Percent: vm.Memory.Usage, // Already 0-100 from safePercentage
+							UsedGB:  float64(vm.Memory.Used) / (1024 * 1024 * 1024),
+							TotalGB: float64(vm.Memory.Total) / (1024 * 1024 * 1024),
+						},
+						OS:   vm.OSName,
+						Tags: vm.Tags,
+					}
+					if !vm.LastBackup.IsZero() {
+						response.LastBackup = &vm.LastBackup
+					}
+					for _, nic := range vm.NetworkInterfaces {
+						response.Networks = append(response.Networks, NetworkInfo{
+							Name:      nic.Name,
+							Addresses: nic.Addresses,
+						})
+					}
+					// Register in resolved context WITH explicit access (single-resource get operation)
+					e.registerResolvedResourceWithExplicitAccess(ResourceRegistration{
+						Kind:          "vm",
+						ProviderUID:   fmt.Sprintf("%d", vm.VMID), // VMID is the stable provider ID
+						Name:          vm.Name,
+						Aliases:       []string{vm.Name, fmt.Sprintf("%d", vm.VMID), vm.ID},
+						HostUID:       vm.Node,
+						HostName:      vm.Node,
+						VMID:          vm.VMID,
+						Node:          vm.Node,
+						LocationChain: []string{"node:" + vm.Node, "vm:" + vm.Name},
+						Executors: []ExecutorRegistration{{
+							ExecutorID: vm.Node,
+							Adapter:    "qm",
+							Actions:    []string{"query", "get", "logs", "console"},
+							Priority:   10,
+						}},
+					})
+					return NewJSONResult(response), nil
+				}
 			}
 		}
 		return NewJSONResult(map[string]interface{}{
@@ -2619,54 +2884,105 @@ func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[strin
 		}), nil
 
 	case "container":
-		for _, ct := range state.Containers {
-			if fmt.Sprintf("%d", ct.VMID) == resourceID || ct.Name == resourceID || ct.ID == resourceID {
-				response := ResourceResponse{
-					Type:   "container",
-					ID:     ct.ID,
-					Name:   ct.Name,
-					Status: ct.Status,
-					Node:   ct.Node,
-					CPU: ResourceCPU{
-						Percent: ct.CPU * 100,
-						Cores:   ct.CPUs,
-					},
-					Memory: ResourceMemory{
-						Percent: ct.Memory.Usage, // Already 0-100 from safePercentage
-						UsedGB:  float64(ct.Memory.Used) / (1024 * 1024 * 1024),
-						TotalGB: float64(ct.Memory.Total) / (1024 * 1024 * 1024),
-					},
-					OS:   ct.OSName,
-					Tags: ct.Tags,
-				}
-				if !ct.LastBackup.IsZero() {
-					response.LastBackup = &ct.LastBackup
-				}
-				for _, nic := range ct.NetworkInterfaces {
-					response.Networks = append(response.Networks, NetworkInfo{
-						Name:      nic.Name,
-						Addresses: nic.Addresses,
+		if rs != nil {
+			for _, ct := range rs.Containers() {
+				if fmt.Sprintf("%d", ct.VMID()) == resourceID || ct.Name() == resourceID || ct.ID() == resourceID {
+					used := ct.MemoryUsed()
+					total := ct.MemoryTotal()
+					response := ResourceResponse{
+						Type:   "container",
+						ID:     ct.ID(),
+						Name:   ct.Name(),
+						Status: string(ct.Status()),
+						Node:   ct.Node(),
+						CPU: ResourceCPU{
+							Percent: ct.CPUPercent(),
+							Cores:   ct.CPUs(),
+						},
+						Memory: ResourceMemory{
+							Percent: ct.MemoryPercent(),
+							UsedGB:  float64(used) / (1024 * 1024 * 1024),
+							TotalGB: float64(total) / (1024 * 1024 * 1024),
+						},
+						Tags: ct.Tags(),
+					}
+					if !ct.LastBackup().IsZero() {
+						t := ct.LastBackup()
+						response.LastBackup = &t
+					}
+
+					// Register in resolved context WITH explicit access (single-resource get operation)
+					e.registerResolvedResourceWithExplicitAccess(ResourceRegistration{
+						Kind:          "lxc",
+						ProviderUID:   fmt.Sprintf("%d", ct.VMID()), // VMID is the stable provider ID
+						Name:          ct.Name(),
+						Aliases:       []string{ct.Name(), fmt.Sprintf("%d", ct.VMID()), ct.ID()},
+						HostUID:       ct.Node(),
+						HostName:      ct.Node(),
+						VMID:          ct.VMID(),
+						Node:          ct.Node(),
+						LocationChain: []string{"node:" + ct.Node(), "lxc:" + ct.Name()},
+						Executors: []ExecutorRegistration{{
+							ExecutorID: ct.Node(),
+							Adapter:    "pct",
+							Actions:    []string{"query", "get", "logs", "console", "exec"},
+							Priority:   10,
+						}},
 					})
+
+					return NewJSONResult(response), nil
 				}
-				// Register in resolved context WITH explicit access (single-resource get operation)
-				e.registerResolvedResourceWithExplicitAccess(ResourceRegistration{
-					Kind:          "lxc",
-					ProviderUID:   fmt.Sprintf("%d", ct.VMID), // VMID is the stable provider ID
-					Name:          ct.Name,
-					Aliases:       []string{ct.Name, fmt.Sprintf("%d", ct.VMID), ct.ID},
-					HostUID:       ct.Node,
-					HostName:      ct.Node,
-					VMID:          ct.VMID,
-					Node:          ct.Node,
-					LocationChain: []string{"node:" + ct.Node, "lxc:" + ct.Name},
-					Executors: []ExecutorRegistration{{
-						ExecutorID: ct.Node,
-						Adapter:    "pct",
-						Actions:    []string{"query", "get", "logs", "console", "exec"},
-						Priority:   10,
-					}},
-				})
-				return NewJSONResult(response), nil
+			}
+		} else {
+			for _, ct := range state.Containers {
+				if fmt.Sprintf("%d", ct.VMID) == resourceID || ct.Name == resourceID || ct.ID == resourceID {
+					response := ResourceResponse{
+						Type:   "container",
+						ID:     ct.ID,
+						Name:   ct.Name,
+						Status: ct.Status,
+						Node:   ct.Node,
+						CPU: ResourceCPU{
+							Percent: ct.CPU * 100,
+							Cores:   ct.CPUs,
+						},
+						Memory: ResourceMemory{
+							Percent: ct.Memory.Usage, // Already 0-100 from safePercentage
+							UsedGB:  float64(ct.Memory.Used) / (1024 * 1024 * 1024),
+							TotalGB: float64(ct.Memory.Total) / (1024 * 1024 * 1024),
+						},
+						OS:   ct.OSName,
+						Tags: ct.Tags,
+					}
+					if !ct.LastBackup.IsZero() {
+						response.LastBackup = &ct.LastBackup
+					}
+					for _, nic := range ct.NetworkInterfaces {
+						response.Networks = append(response.Networks, NetworkInfo{
+							Name:      nic.Name,
+							Addresses: nic.Addresses,
+						})
+					}
+					// Register in resolved context WITH explicit access (single-resource get operation)
+					e.registerResolvedResourceWithExplicitAccess(ResourceRegistration{
+						Kind:          "lxc",
+						ProviderUID:   fmt.Sprintf("%d", ct.VMID), // VMID is the stable provider ID
+						Name:          ct.Name,
+						Aliases:       []string{ct.Name, fmt.Sprintf("%d", ct.VMID), ct.ID},
+						HostUID:       ct.Node,
+						HostName:      ct.Node,
+						VMID:          ct.VMID,
+						Node:          ct.Node,
+						LocationChain: []string{"node:" + ct.Node, "lxc:" + ct.Name},
+						Executors: []ExecutorRegistration{{
+							ExecutorID: ct.Node,
+							Adapter:    "pct",
+							Actions:    []string{"query", "get", "logs", "console", "exec"},
+							Priority:   10,
+						}},
+					})
+					return NewJSONResult(response), nil
+				}
 			}
 		}
 		return NewJSONResult(map[string]interface{}{
@@ -2779,8 +3095,20 @@ func (e *PulseToolExecutor) executeGetGuestConfig(_ context.Context, args map[st
 		return NewTextResult("Guest configuration not available."), nil
 	}
 
-	state := e.stateProvider.GetState()
-	guestType, vmid, name, node, instance, err := resolveGuestFromState(state, resourceType, resourceID)
+	var (
+		guestType string
+		vmid      int
+		name      string
+		node      string
+		instance  string
+	)
+	var err error
+	if rs := e.getReadState(); rs != nil {
+		guestType, vmid, name, node, instance, err = resolveGuestFromReadState(rs, resourceType, resourceID)
+	} else {
+		state := e.stateProvider.GetState()
+		guestType, vmid, name, node, instance, err = resolveGuestFromState(state, resourceType, resourceID)
+	}
 	if err != nil {
 		return NewErrorResult(err), nil
 	}
@@ -2837,6 +3165,33 @@ func resolveGuestFromState(state models.StateSnapshot, resourceType, resourceID 
 		for _, vm := range state.VMs {
 			if fmt.Sprintf("%d", vm.VMID) == resourceID || vm.Name == resourceID || vm.ID == resourceID {
 				return "vm", vm.VMID, vm.Name, vm.Node, vm.Instance, nil
+			}
+		}
+		return "", 0, "", "", "", fmt.Errorf("vm not found: %s", resourceID)
+	default:
+		return "", 0, "", "", "", fmt.Errorf("invalid resource_type: %s", resourceType)
+	}
+}
+
+func resolveGuestFromReadState(rs unifiedresources.ReadState, resourceType, resourceID string) (guestType string, vmid int, name, node, instance string, err error) {
+	resourceType = strings.ToLower(strings.TrimSpace(resourceType))
+	resourceID = strings.TrimSpace(resourceID)
+	if resourceType == "" || resourceID == "" {
+		return "", 0, "", "", "", fmt.Errorf("resource_type and resource_id are required")
+	}
+
+	switch resourceType {
+	case "container", "lxc":
+		for _, ct := range rs.Containers() {
+			if fmt.Sprintf("%d", ct.VMID()) == resourceID || ct.Name() == resourceID || ct.ID() == resourceID {
+				return "container", ct.VMID(), ct.Name(), ct.Node(), ct.Instance(), nil
+			}
+		}
+		return "", 0, "", "", "", fmt.Errorf("container not found: %s", resourceID)
+	case "vm":
+		for _, vm := range rs.VMs() {
+			if fmt.Sprintf("%d", vm.VMID()) == resourceID || vm.Name() == resourceID || vm.ID() == resourceID {
+				return "vm", vm.VMID(), vm.Name(), vm.Node(), vm.Instance(), nil
 			}
 		}
 		return "", 0, "", "", "", fmt.Errorf("vm not found: %s", resourceID)
@@ -3080,6 +3435,7 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 
 	queryLower := strings.ToLower(query)
 	state := e.stateProvider.GetState()
+	rs := e.getReadState()
 
 	// Build a set of connected agent hostnames for quick lookup
 	connectedAgentHostnames := make(map[string]bool)
@@ -3106,73 +3462,145 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 	}
 
 	if typeFilter == "" || typeFilter == "node" {
-		for _, node := range state.Nodes {
-			if statusFilter != "" && !strings.EqualFold(node.Status, statusFilter) {
-				continue
+		if rs != nil {
+			for _, node := range rs.Nodes() {
+				status := string(node.Status())
+				if statusFilter != "" && !strings.EqualFold(status, statusFilter) {
+					continue
+				}
+				if !matchesQuery(queryLower, node.Name(), node.ID()) {
+					continue
+				}
+				addMatch(ResourceMatch{
+					Type:           "node",
+					Name:           node.Name(),
+					Status:         status,
+					AgentConnected: connectedAgentHostnames[node.Name()],
+				})
 			}
-			if !matchesQuery(queryLower, node.Name, node.ID) {
-				continue
+		} else {
+			for _, node := range state.Nodes {
+				if statusFilter != "" && !strings.EqualFold(node.Status, statusFilter) {
+					continue
+				}
+				if !matchesQuery(queryLower, node.Name, node.ID) {
+					continue
+				}
+				addMatch(ResourceMatch{
+					Type:           "node",
+					Name:           node.Name,
+					Status:         node.Status,
+					AgentConnected: connectedAgentHostnames[node.Name],
+				})
 			}
-			addMatch(ResourceMatch{
-				Type:           "node",
-				Name:           node.Name,
-				Status:         node.Status,
-				AgentConnected: connectedAgentHostnames[node.Name],
-			})
 		}
 	}
 
 	if typeFilter == "" || typeFilter == "vm" {
-		for _, vm := range state.VMs {
-			if statusFilter != "" && !strings.EqualFold(vm.Status, statusFilter) {
-				continue
-			}
-			// Build searchable candidates: name, ID, VMID, IPs, tags
-			candidates := []string{vm.Name, vm.ID, fmt.Sprintf("%d", vm.VMID)}
-			candidates = append(candidates, vm.IPAddresses...)
-			candidates = append(candidates, vm.Tags...)
-			candidates = append(candidates, collectGuestIPs(vm.NetworkInterfaces)...)
+		if rs != nil {
+			for _, vm := range rs.VMs() {
+				status := string(vm.Status())
+				if statusFilter != "" && !strings.EqualFold(status, statusFilter) {
+					continue
+				}
+				// Build searchable candidates: name, ID, VMID, IPs, tags
+				candidates := []string{vm.Name(), vm.ID(), fmt.Sprintf("%d", vm.VMID())}
+				candidates = append(candidates, vm.IPAddresses()...)
+				candidates = append(candidates, vm.Tags()...)
 
-			if !matchesQuery(queryLower, candidates...) {
-				continue
+				if !matchesQuery(queryLower, candidates...) {
+					continue
+				}
+				addMatch(ResourceMatch{
+					Type:           "vm",
+					ID:             vm.ID(),
+					Name:           vm.Name(),
+					Status:         status,
+					Node:           vm.Node(),
+					NodeHasAgent:   connectedAgentHostnames[vm.Node()],
+					VMID:           vm.VMID(),
+					AgentConnected: connectedAgentHostnames[vm.Name()],
+				})
 			}
-			addMatch(ResourceMatch{
-				Type:           "vm",
-				ID:             vm.ID,
-				Name:           vm.Name,
-				Status:         vm.Status,
-				Node:           vm.Node,
-				NodeHasAgent:   connectedAgentHostnames[vm.Node],
-				VMID:           vm.VMID,
-				AgentConnected: connectedAgentHostnames[vm.Name],
-			})
+		} else {
+			for _, vm := range state.VMs {
+				if statusFilter != "" && !strings.EqualFold(vm.Status, statusFilter) {
+					continue
+				}
+				// Build searchable candidates: name, ID, VMID, IPs, tags
+				candidates := []string{vm.Name, vm.ID, fmt.Sprintf("%d", vm.VMID)}
+				candidates = append(candidates, vm.IPAddresses...)
+				candidates = append(candidates, vm.Tags...)
+				candidates = append(candidates, collectGuestIPs(vm.NetworkInterfaces)...)
+
+				if !matchesQuery(queryLower, candidates...) {
+					continue
+				}
+				addMatch(ResourceMatch{
+					Type:           "vm",
+					ID:             vm.ID,
+					Name:           vm.Name,
+					Status:         vm.Status,
+					Node:           vm.Node,
+					NodeHasAgent:   connectedAgentHostnames[vm.Node],
+					VMID:           vm.VMID,
+					AgentConnected: connectedAgentHostnames[vm.Name],
+				})
+			}
 		}
 	}
 
 	if typeFilter == "" || typeFilter == "container" {
-		for _, ct := range state.Containers {
-			if statusFilter != "" && !strings.EqualFold(ct.Status, statusFilter) {
-				continue
-			}
-			// Build searchable candidates: name, ID, VMID, IPs, tags
-			candidates := []string{ct.Name, ct.ID, fmt.Sprintf("%d", ct.VMID)}
-			candidates = append(candidates, ct.IPAddresses...)
-			candidates = append(candidates, ct.Tags...)
-			candidates = append(candidates, collectGuestIPs(ct.NetworkInterfaces)...)
+		if rs != nil {
+			for _, ct := range rs.Containers() {
+				status := string(ct.Status())
+				if statusFilter != "" && !strings.EqualFold(status, statusFilter) {
+					continue
+				}
+				// Build searchable candidates: name, ID, VMID, IPs, tags
+				candidates := []string{ct.Name(), ct.ID(), fmt.Sprintf("%d", ct.VMID())}
+				candidates = append(candidates, ct.IPAddresses()...)
+				candidates = append(candidates, ct.Tags()...)
 
-			if !matchesQuery(queryLower, candidates...) {
-				continue
+				if !matchesQuery(queryLower, candidates...) {
+					continue
+				}
+				addMatch(ResourceMatch{
+					Type:           "container",
+					ID:             ct.ID(),
+					Name:           ct.Name(),
+					Status:         status,
+					Node:           ct.Node(),
+					NodeHasAgent:   connectedAgentHostnames[ct.Node()],
+					VMID:           ct.VMID(),
+					AgentConnected: connectedAgentHostnames[ct.Name()],
+				})
 			}
-			addMatch(ResourceMatch{
-				Type:           "container",
-				ID:             ct.ID,
-				Name:           ct.Name,
-				Status:         ct.Status,
-				Node:           ct.Node,
-				NodeHasAgent:   connectedAgentHostnames[ct.Node],
-				VMID:           ct.VMID,
-				AgentConnected: connectedAgentHostnames[ct.Name],
-			})
+		} else {
+			for _, ct := range state.Containers {
+				if statusFilter != "" && !strings.EqualFold(ct.Status, statusFilter) {
+					continue
+				}
+				// Build searchable candidates: name, ID, VMID, IPs, tags
+				candidates := []string{ct.Name, ct.ID, fmt.Sprintf("%d", ct.VMID)}
+				candidates = append(candidates, ct.IPAddresses...)
+				candidates = append(candidates, ct.Tags...)
+				candidates = append(candidates, collectGuestIPs(ct.NetworkInterfaces)...)
+
+				if !matchesQuery(queryLower, candidates...) {
+					continue
+				}
+				addMatch(ResourceMatch{
+					Type:           "container",
+					ID:             ct.ID,
+					Name:           ct.Name,
+					Status:         ct.Status,
+					Node:           ct.Node,
+					NodeHasAgent:   connectedAgentHostnames[ct.Node],
+					VMID:           ct.VMID,
+					AgentConnected: connectedAgentHostnames[ct.Name],
+				})
+			}
 		}
 	}
 

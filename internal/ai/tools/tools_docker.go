@@ -301,6 +301,15 @@ func (e *PulseToolExecutor) resolveDockerHostID(hostArg string) string {
 	if hostArg == "" {
 		return ""
 	}
+
+	if rs := e.getReadState(); rs != nil {
+		for _, host := range rs.DockerHosts() {
+			if host.ID() == hostArg || host.Hostname() == hostArg || host.Name() == hostArg {
+				return host.ID()
+			}
+		}
+	}
+
 	if e.stateProvider == nil {
 		return hostArg
 	}
@@ -315,6 +324,20 @@ func (e *PulseToolExecutor) resolveDockerHostID(hostArg string) string {
 }
 
 func (e *PulseToolExecutor) getDockerHostName(hostID string) string {
+	if rs := e.getReadState(); rs != nil {
+		for _, host := range rs.DockerHosts() {
+			if host.ID() == hostID {
+				if host.Name() != "" {
+					return host.Name()
+				}
+				if host.Hostname() != "" {
+					return host.Hostname()
+				}
+				return host.ID()
+			}
+		}
+	}
+
 	if e.stateProvider == nil {
 		return hostID
 	}

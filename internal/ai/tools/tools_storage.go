@@ -622,11 +622,19 @@ func (e *PulseToolExecutor) executeListSnapshots(_ context.Context, args map[str
 
 	// Build VM name map for enrichment
 	vmNames := make(map[int]string)
-	for _, vm := range state.VMs {
-		vmNames[vm.VMID] = vm.Name
-	}
-	for _, ct := range state.Containers {
-		vmNames[ct.VMID] = ct.Name
+	if rs := e.getReadState(); rs != nil {
+		for _, w := range rs.Workloads() {
+			if w.VMID() > 0 && w.Name() != "" {
+				vmNames[w.VMID()] = w.Name()
+			}
+		}
+	} else {
+		for _, vm := range state.VMs {
+			vmNames[vm.VMID] = vm.Name
+		}
+		for _, ct := range state.Containers {
+			vmNames[ct.VMID] = ct.Name
+		}
 	}
 
 	var snapshots []SnapshotSummary
@@ -810,11 +818,19 @@ func (e *PulseToolExecutor) executeListBackupTasks(_ context.Context, args map[s
 
 	// Build VM name map
 	vmNames := make(map[int]string)
-	for _, vm := range state.VMs {
-		vmNames[vm.VMID] = vm.Name
-	}
-	for _, ct := range state.Containers {
-		vmNames[ct.VMID] = ct.Name
+	if rs := e.getReadState(); rs != nil {
+		for _, w := range rs.Workloads() {
+			if w.VMID() > 0 && w.Name() != "" {
+				vmNames[w.VMID()] = w.Name()
+			}
+		}
+	} else {
+		for _, vm := range state.VMs {
+			vmNames[vm.VMID] = vm.Name
+		}
+		for _, ct := range state.Containers {
+			vmNames[ct.VMID] = ct.Name
+		}
 	}
 
 	var tasks []BackupTaskDetail

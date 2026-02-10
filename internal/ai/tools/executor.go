@@ -348,6 +348,9 @@ type ExecutorConfig struct {
 
 	// Optional providers - unified resources
 	UnifiedResourceProvider UnifiedResourceProvider
+	// Optional typed read access to current infrastructure state.
+	// When provided, tool handlers should prefer this over models.StateSnapshot iteration.
+	ReadState unifiedresources.ReadState
 
 	// Control settings
 	ControlLevel    ControlLevel
@@ -391,6 +394,8 @@ type PulseToolExecutor struct {
 
 	// Unified resources provider
 	unifiedResourceProvider UnifiedResourceProvider
+	// Typed state reader. Nil means "legacy-only": tools must fall back to StateSnapshot access.
+	readState unifiedresources.ReadState
 
 	// Control settings
 	controlLevel    ControlLevel
@@ -459,6 +464,7 @@ func NewPulseToolExecutor(cfg ExecutorConfig) *PulseToolExecutor {
 		knowledgeStoreProvider:   cfg.KnowledgeStoreProvider,
 		discoveryProvider:        cfg.DiscoveryProvider,
 		unifiedResourceProvider:  cfg.UnifiedResourceProvider,
+		readState:                cfg.ReadState,
 		controlLevel:             cfg.ControlLevel,
 		protectedGuests:          cfg.ProtectedGuests,
 		registry:                 NewToolRegistry(),
@@ -468,6 +474,10 @@ func NewPulseToolExecutor(cfg ExecutorConfig) *PulseToolExecutor {
 	e.registerTools()
 
 	return e
+}
+
+func (e *PulseToolExecutor) getReadState() unifiedresources.ReadState {
+	return e.readState
 }
 
 // SetContext sets the current execution context
