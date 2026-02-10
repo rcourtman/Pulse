@@ -1,6 +1,6 @@
 services:
   traefik:
-    image: traefik:v3.3
+    image: traefik:latest
     ports:
       - "80:80"
       - "443:443"
@@ -12,7 +12,8 @@ services:
     env_file:
       - .env
     environment:
-      - DO_AUTH_TOKEN=${DO_AUTH_TOKEN}
+      - CF_API_EMAIL=${CF_API_EMAIL}
+      - CF_API_KEY=${CF_API_KEY}
       # Avoid relying on YAML interpolation support; force ACME email via env override.
       - TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL=${ACME_EMAIL}
       - TRAEFIK_CERTIFICATESRESOLVERS_LE_ACME_EMAIL=${ACME_EMAIL}
@@ -64,8 +65,8 @@ services:
 
 networks:
   pulse-cloud:
+    external: true
     name: pulse-cloud
-    driver: bridge
 
 volumes:
   acme-data:

@@ -27,20 +27,20 @@ providers:
 certificatesResolvers:
   letsencrypt:
     acme:
-      email: "${ACME_EMAIL}"
+      email: "admin@pulserelay.pro"
       storage: /etc/traefik/acme/acme.json
       dnsChallenge:
-        provider: digitalocean
+        provider: cloudflare
         resolvers:
           - "1.1.1.1:53"
           - "8.8.8.8:53"
   # Back-compat with internal/cloudcp/docker/labels.go (uses certresolver=le).
   le:
     acme:
-      email: "${ACME_EMAIL}"
+      email: "admin@pulserelay.pro"
       storage: /etc/traefik/acme/acme.json
       dnsChallenge:
-        provider: digitalocean
+        provider: cloudflare
         resolvers:
           - "1.1.1.1:53"
           - "8.8.8.8:53"

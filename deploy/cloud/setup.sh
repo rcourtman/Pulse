@@ -204,7 +204,8 @@ Created ${env_path} from .env.example.
 Edit it now and set required values:
   - DOMAIN
   - ACME_EMAIL
-  - DO_AUTH_TOKEN
+  - CF_API_EMAIL
+  - CF_API_KEY
   - CP_ADMIN_KEY
   - STRIPE_WEBHOOK_SECRET
   - STRIPE_API_KEY
@@ -224,7 +225,7 @@ validate_env_file() {
 
   local missing=()
   local k v
-  for k in DOMAIN ACME_EMAIL DO_AUTH_TOKEN CP_ADMIN_KEY STRIPE_WEBHOOK_SECRET STRIPE_API_KEY; do
+  for k in DOMAIN ACME_EMAIL CF_API_EMAIL CF_API_KEY CP_ADMIN_KEY STRIPE_WEBHOOK_SECRET STRIPE_API_KEY; do
     v="$(grep -E "^${k}=" "${env_path}" | tail -n 1 | cut -d= -f2- || true)"
     # Trim surrounding quotes and whitespace.
     v="${v%\"}"; v="${v#\"}"
