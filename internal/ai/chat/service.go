@@ -43,7 +43,6 @@ type (
 	MCPPatternProvider         = tools.PatternProvider
 	MCPMetricsHistoryProvider  = tools.MetricsHistoryProvider
 	MCPBackupProvider          = tools.BackupProvider
-	MCPStorageProvider         = tools.StorageProvider
 	MCPGuestConfigProvider     = tools.GuestConfigProvider
 	MCPDiskHealthProvider      = tools.DiskHealthProvider
 	MCPUpdatesProvider         = tools.UpdatesProvider
@@ -950,14 +949,6 @@ func (s *Service) SetBackupProvider(provider MCPBackupProvider) {
 	defer s.mu.Unlock()
 	if s.executor != nil {
 		s.executor.SetBackupProvider(provider)
-	}
-}
-
-func (s *Service) SetStorageProvider(provider MCPStorageProvider) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.executor != nil {
-		s.executor.SetStorageProvider(provider)
 	}
 }
 

@@ -383,7 +383,6 @@ func TestService_SettersAndUpdateControlSettings(t *testing.T) {
 	service.SetPatternProvider(nil)
 	service.SetMetricsHistory(nil)
 	service.SetBackupProvider(nil)
-	service.SetStorageProvider(nil)
 	service.SetDiskHealthProvider(nil)
 	service.SetUpdatesProvider(nil)
 	service.SetAgentProfileManager(nil)

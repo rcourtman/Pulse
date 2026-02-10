@@ -145,15 +145,6 @@ func (m *mockBackupProvider) GetPBSInstances() []models.PBSInstance {
 	return args.Get(0).([]models.PBSInstance)
 }
 
-type mockStorageProvider struct {
-	mock.Mock
-}
-
-func (m *mockStorageProvider) GetStorage() []models.Storage {
-	args := m.Called()
-	return args.Get(0).([]models.Storage)
-}
-
 // stubUnifiedResourceProvider is a simple mock for UnifiedResourceProvider.
 type stubUnifiedResourceProvider struct {
 	resources []unifiedresources.Resource

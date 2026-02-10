@@ -24,14 +24,6 @@ func (s *stubBackupProvider) GetPBSInstances() []models.PBSInstance {
 	return s.pbs
 }
 
-type stubStorageProvider struct {
-	storage []models.Storage
-}
-
-func (s *stubStorageProvider) GetStorage() []models.Storage {
-	return s.storage
-}
-
 type stubDiskHealthProvider struct {
 	hosts []models.Host
 }
@@ -146,35 +138,36 @@ func TestExecuteListBackupsAndStorage(t *testing.T) {
 		t.Fatalf("unexpected recent tasks: %+v", backupsResp.RecentTasks)
 	}
 
-	executor.storageProvider = &stubStorageProvider{
-		storage: []models.Storage{
-			{
-				ID:      "store1",
-				Name:    "store1",
-				Type:    "zfs",
-				Status:  "active",
-				Usage:   25.0,
-				Used:    1024 * 1024 * 1024,
-				Total:   4 * 1024 * 1024 * 1024,
-				Free:    3 * 1024 * 1024 * 1024,
-				Content: "images",
-				Shared:  false,
-				ZFSPool: &models.ZFSPool{
-					Name:           "tank",
-					State:          "ONLINE",
-					ReadErrors:     0,
-					WriteErrors:    0,
-					ChecksumErrors: 0,
-					Scan:           "scrub",
-				},
-			},
-		},
-	}
-	// Ceph data comes from unified resource provider
-	usedBytes := int64(2 * 1024 * 1024 * 1024 * 1024)
-	totalBytes := int64(4 * 1024 * 1024 * 1024 * 1024)
+	// Storage pools and Ceph data come from the unified resource provider.
+	storageUsedBytes := int64(1024 * 1024 * 1024)
+	storageTotalBytes := int64(4 * 1024 * 1024 * 1024)
+	cephUsedBytes := int64(2 * 1024 * 1024 * 1024 * 1024)
+	cephTotalBytes := int64(4 * 1024 * 1024 * 1024 * 1024)
 	executor.unifiedResourceProvider = &stubUnifiedResourceProvider{
 		resources: []unifiedresources.Resource{
+			{
+				ID:     "store1",
+				Name:   "store1",
+				Type:   unifiedresources.ResourceTypeStorage,
+				Status: unifiedresources.StatusOnline,
+				Proxmox: &unifiedresources.ProxmoxData{
+					NodeName: "node1",
+					Instance: "pve1",
+				},
+				Storage: &unifiedresources.StorageMeta{
+					Type:    "zfs",
+					Content: "images",
+					Shared:  false,
+					IsZFS:   true,
+				},
+				Metrics: &unifiedresources.ResourceMetrics{
+					Disk: &unifiedresources.MetricValue{
+						Used:    &storageUsedBytes,
+						Total:   &storageTotalBytes,
+						Percent: 25.0,
+					},
+				},
+			},
 			{
 				Name: "ceph1",
 				Type: unifiedresources.ResourceTypeCeph,
@@ -189,8 +182,8 @@ func TestExecuteListBackupsAndStorage(t *testing.T) {
 				},
 				Metrics: &unifiedresources.ResourceMetrics{
 					Disk: &unifiedresources.MetricValue{
-						Used:  &usedBytes,
-						Total: &totalBytes,
+						Used:  &cephUsedBytes,
+						Total: &cephTotalBytes,
 					},
 				},
 			},
@@ -202,11 +195,10 @@ func TestExecuteListBackupsAndStorage(t *testing.T) {
 	if err := json.Unmarshal([]byte(result.Content[0].Text), &storageResp); err != nil {
 		t.Fatalf("decode storage response: %v", err)
 	}
-	if len(storageResp.Pools) != 1 || storageResp.Pools[0].ZFS == nil {
+	if len(storageResp.Pools) != 1 {
 		t.Fatalf("unexpected storage pools: %+v", storageResp.Pools)
 	}
 	// Verify UsagePercent is passed through directly (not double-multiplied).
-	// Storage.Usage is already in 0-100 range from safePercentage().
 	if storageResp.Pools[0].UsagePercent != 25.0 {
 		t.Errorf("storage pool UsagePercent = %v, want 25.0 (was double-multiplied before fix)", storageResp.Pools[0].UsagePercent)
 	}
@@ -247,12 +239,26 @@ func TestStorageUsagePercentNotDoubled(t *testing.T) {
 	}
 
 	// Storage pool path
-	executor.storageProvider = &stubStorageProvider{
-		storage: []models.Storage{
+	storageUsedBytes := int64(1024 * 1024 * 1024)
+	storageTotalBytes := int64(4 * 1024 * 1024 * 1024)
+	executor.unifiedResourceProvider = &stubUnifiedResourceProvider{
+		resources: []unifiedresources.Resource{
 			{
-				ID: "s1", Name: "s1", Type: "dir", Status: "active",
-				Usage: 45.7,
-				Used:  1024 * 1024 * 1024, Total: 4 * 1024 * 1024 * 1024, Free: 3 * 1024 * 1024 * 1024,
+				ID:     "s1",
+				Name:   "s1",
+				Type:   unifiedresources.ResourceTypeStorage,
+				Status: unifiedresources.StatusOnline,
+				Storage: &unifiedresources.StorageMeta{
+					Type:    "dir",
+					Content: "images",
+				},
+				Metrics: &unifiedresources.ResourceMetrics{
+					Disk: &unifiedresources.MetricValue{
+						Used:    &storageUsedBytes,
+						Total:   &storageTotalBytes,
+						Percent: 45.7,
+					},
+				},
 			},
 		},
 	}

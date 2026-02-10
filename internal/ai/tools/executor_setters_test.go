@@ -74,10 +74,6 @@ func TestPulseToolExecutor_Setters(t *testing.T) {
 	exec.SetBackupProvider(backupProvider)
 	assert.Equal(t, backupProvider, exec.backupProvider)
 
-	storageProvider := &stubStorageProvider{}
-	exec.SetStorageProvider(storageProvider)
-	assert.Equal(t, storageProvider, exec.storageProvider)
-
 	diskHealthProvider := &mockDiskHealthProvider{}
 	exec.SetDiskHealthProvider(diskHealthProvider)
 	assert.Equal(t, diskHealthProvider, exec.diskHealthProvider)

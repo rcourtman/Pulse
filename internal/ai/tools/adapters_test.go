@@ -173,28 +173,14 @@ func TestAlertManagerMCPAdapter(t *testing.T) {
 	}
 }
 
-func TestStorageBackupDiskAdapters(t *testing.T) {
+func TestBackupAndDiskAdapters(t *testing.T) {
 	state := models.StateSnapshot{
-		Storage:      []models.Storage{{ID: "s1"}},
 		CephClusters: []models.CephCluster{{ID: "c1"}},
 		Backups: models.Backups{PVE: models.PVEBackups{
 			BackupTasks: []models.BackupTask{{ID: "task1"}},
 		}},
 		PBSInstances: []models.PBSInstance{{ID: "pbs1"}},
 		Hosts:        []models.Host{{ID: "h1"}},
-	}
-
-	if NewStorageMCPAdapter(nil) != nil {
-		t.Fatal("expected nil storage adapter for nil state")
-	}
-	emptyStorage := (&StorageMCPAdapter{}).GetStorage()
-	if emptyStorage != nil {
-		t.Fatal("expected nil storage when state getter missing")
-	}
-
-	storageAdapter := NewStorageMCPAdapter(fakeStateGetter{state: state})
-	if len(storageAdapter.GetStorage()) != 1 {
-		t.Fatal("expected storage data")
 	}
 	if NewBackupMCPAdapter(nil) != nil {
 		t.Fatal("expected nil backup adapter for nil state")

@@ -240,18 +240,19 @@ func (e *PulseToolExecutor) executeListStorage(_ context.Context, args map[strin
 	limit := intArg(args, "limit", 100)
 	offset := intArg(args, "offset", 0)
 
-	if e.storageProvider == nil {
-		return NewTextResult("Storage information not available."), nil
-	}
-
-	storage := e.storageProvider.GetStorage()
-
 	response := StorageResponse{}
 
 	// Storage pools
 	count := 0
-	for _, s := range storage {
-		if storageID != "" && s.ID != storageID && s.Name != storageID {
+	var storageResources []unifiedresources.Resource
+	if e.unifiedResourceProvider != nil {
+		storageResources = e.unifiedResourceProvider.GetByType(unifiedresources.ResourceTypeStorage)
+	}
+	for _, r := range storageResources {
+		if r.Storage == nil {
+			continue
+		}
+		if storageID != "" && r.ID != storageID && r.Name != storageID {
 			continue
 		}
 		if count < offset {
@@ -262,36 +263,7 @@ func (e *PulseToolExecutor) executeListStorage(_ context.Context, args map[strin
 			break
 		}
 
-		pool := StoragePoolSummary{
-			ID:           s.ID,
-			Name:         s.Name,
-			Node:         s.Node,
-			Instance:     s.Instance,
-			Nodes:        s.Nodes,
-			Type:         s.Type,
-			Status:       s.Status,
-			Enabled:      s.Enabled,
-			Active:       s.Active,
-			Path:         s.Path,
-			UsagePercent: s.Usage,
-			UsedGB:       float64(s.Used) / (1024 * 1024 * 1024),
-			TotalGB:      float64(s.Total) / (1024 * 1024 * 1024),
-			FreeGB:       float64(s.Free) / (1024 * 1024 * 1024),
-			Content:      s.Content,
-			Shared:       s.Shared,
-		}
-
-		if s.ZFSPool != nil {
-			pool.ZFS = &ZFSPoolSummary{
-				Name:           s.ZFSPool.Name,
-				State:          s.ZFSPool.State,
-				ReadErrors:     s.ZFSPool.ReadErrors,
-				WriteErrors:    s.ZFSPool.WriteErrors,
-				ChecksumErrors: s.ZFSPool.ChecksumErrors,
-				Scan:           s.ZFSPool.Scan,
-			}
-		}
-
+		pool := storagePoolSummaryFromResource(r)
 		response.Pools = append(response.Pools, pool)
 		count++
 	}
@@ -335,6 +307,78 @@ func (e *PulseToolExecutor) executeListStorage(_ context.Context, args map[strin
 	return NewJSONResult(response), nil
 }
 
+func storagePoolSummaryFromResource(r unifiedresources.Resource) StoragePoolSummary {
+	var (
+		poolType     string
+		content      string
+		shared       bool
+		node         string
+		instance     string
+		usedBytes    int64
+		totalBytes   int64
+		usagePercent float64
+	)
+
+	if r.Storage != nil {
+		poolType = r.Storage.Type
+		content = r.Storage.Content
+		shared = r.Storage.Shared
+		if content == "" && len(r.Storage.ContentTypes) > 0 {
+			content = strings.Join(r.Storage.ContentTypes, ",")
+		}
+	}
+	if r.Proxmox != nil {
+		node = r.Proxmox.NodeName
+		instance = r.Proxmox.Instance
+	}
+	if r.Metrics != nil && r.Metrics.Disk != nil {
+		if r.Metrics.Disk.Used != nil {
+			usedBytes = *r.Metrics.Disk.Used
+		}
+		if r.Metrics.Disk.Total != nil {
+			totalBytes = *r.Metrics.Disk.Total
+		}
+		usagePercent = r.Metrics.Disk.Percent
+	}
+	if usagePercent == 0 && totalBytes > 0 {
+		usagePercent = float64(usedBytes) / float64(totalBytes) * 100
+	}
+
+	freeBytes := int64(0)
+	if totalBytes > usedBytes {
+		freeBytes = totalBytes - usedBytes
+	}
+
+	active := r.Status != unifiedresources.StatusOffline
+	enabled := r.Status != unifiedresources.StatusOffline
+
+	id := r.ID
+	if id == "" {
+		id = r.Name
+	}
+	name := r.Name
+	if name == "" {
+		name = id
+	}
+
+	return StoragePoolSummary{
+		ID:           id,
+		Name:         name,
+		Node:         node,
+		Instance:     instance,
+		Type:         poolType,
+		Status:       string(r.Status),
+		Enabled:      enabled,
+		Active:       active,
+		UsagePercent: usagePercent,
+		UsedGB:       float64(usedBytes) / (1024 * 1024 * 1024),
+		TotalGB:      float64(totalBytes) / (1024 * 1024 * 1024),
+		FreeGB:       float64(freeBytes) / (1024 * 1024 * 1024),
+		Content:      content,
+		Shared:       shared,
+	}
+}
+
 // cephBytesFromResource extracts used/total bytes from a unified Ceph resource.
 // It prefers the Metrics.Disk values (which carry absolute bytes), falling back
 // to summing pool-level data from CephMeta.
@@ -352,7 +396,7 @@ func cephBytesFromResource(r unifiedresources.Resource) (usedBytes, totalBytes i
 }
 
 func (e *PulseToolExecutor) executeGetDiskHealth(_ context.Context, _ map[string]interface{}) (CallToolResult, error) {
-	if e.diskHealthProvider == nil && e.storageProvider == nil {
+	if e.diskHealthProvider == nil {
 		return NewTextResult("Disk health information not available."), nil
 	}
 

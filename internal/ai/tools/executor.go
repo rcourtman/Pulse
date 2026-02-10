@@ -129,11 +129,6 @@ type BackupProvider interface {
 	GetPBSInstances() []models.PBSInstance
 }
 
-// StorageProvider provides storage information
-type StorageProvider interface {
-	GetStorage() []models.Storage
-}
-
 // GuestConfigProvider provides guest configuration data (VM/LXC).
 type GuestConfigProvider interface {
 	GetGuestConfig(guestType, instance, node string, vmid int) (map[string]interface{}, error)
@@ -331,8 +326,7 @@ type ExecutorConfig struct {
 	FindingsProvider FindingsProvider
 
 	// Optional providers - infrastructure
-	BackupProvider  BackupProvider
-	StorageProvider StorageProvider
+	BackupProvider BackupProvider
 
 	GuestConfigProvider GuestConfigProvider
 	DiskHealthProvider  DiskHealthProvider
@@ -375,8 +369,7 @@ type PulseToolExecutor struct {
 	findingsProvider FindingsProvider
 
 	// Infrastructure context providers
-	backupProvider  BackupProvider
-	storageProvider StorageProvider
+	backupProvider BackupProvider
 
 	guestConfigProvider GuestConfigProvider
 	diskHealthProvider  DiskHealthProvider
@@ -453,7 +446,6 @@ func NewPulseToolExecutor(cfg ExecutorConfig) *PulseToolExecutor {
 		alertProvider:    cfg.AlertProvider,
 		findingsProvider: cfg.FindingsProvider,
 		backupProvider:   cfg.BackupProvider,
-		storageProvider:  cfg.StorageProvider,
 
 		guestConfigProvider:      cfg.GuestConfigProvider,
 		diskHealthProvider:       cfg.DiskHealthProvider,
@@ -540,11 +532,6 @@ func (e *PulseToolExecutor) SetFindingsProvider(provider FindingsProvider) {
 // SetBackupProvider sets the backup provider
 func (e *PulseToolExecutor) SetBackupProvider(provider BackupProvider) {
 	e.backupProvider = provider
-}
-
-// SetStorageProvider sets the storage provider
-func (e *PulseToolExecutor) SetStorageProvider(provider StorageProvider) {
-	e.storageProvider = provider
 }
 
 // SetGuestConfigProvider sets the guest config provider
@@ -652,7 +639,7 @@ func (e *PulseToolExecutor) isToolAvailable(name string) bool {
 	case "pulse_metrics":
 		return e.stateProvider != nil || e.metricsHistory != nil || e.baselineProvider != nil || e.patternProvider != nil
 	case "pulse_storage":
-		return e.stateProvider != nil || e.storageProvider != nil || e.backupProvider != nil || e.diskHealthProvider != nil
+		return e.stateProvider != nil || e.unifiedResourceProvider != nil || e.backupProvider != nil || e.diskHealthProvider != nil
 	case "pulse_docker":
 		return e.stateProvider != nil || e.updatesProvider != nil
 	case "pulse_kubernetes":

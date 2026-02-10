@@ -58,28 +58,6 @@ func (a *AlertManagerMCPAdapter) GetActiveAlerts() []ActiveAlert {
 	return result
 }
 
-// StorageMCPAdapter adapts the monitor state to MCP StorageProvider interface
-type StorageMCPAdapter struct {
-	stateGetter StateGetter
-}
-
-// NewStorageMCPAdapter creates a new adapter for storage data
-func NewStorageMCPAdapter(stateGetter StateGetter) *StorageMCPAdapter {
-	if stateGetter == nil {
-		return nil
-	}
-	return &StorageMCPAdapter{stateGetter: stateGetter}
-}
-
-// GetStorage implements mcp.StorageProvider
-func (a *StorageMCPAdapter) GetStorage() []models.Storage {
-	if a.stateGetter == nil {
-		return nil
-	}
-	state := a.stateGetter.GetState()
-	return state.Storage
-}
-
 // GuestConfigSource provides guest configuration data with context.
 type GuestConfigSource interface {
 	GetGuestConfig(ctx context.Context, guestType, instance, node string, vmid int) (map[string]interface{}, error)

@@ -123,8 +123,7 @@ func (m *MockAIService) SetPatternProvider(provider chat.MCPPatternProvider)   {
 func (m *MockAIService) SetMetricsHistory(provider chat.MCPMetricsHistoryProvider) {
 	m.Called(provider)
 }
-func (m *MockAIService) SetBackupProvider(provider chat.MCPBackupProvider)   { m.Called(provider) }
-func (m *MockAIService) SetStorageProvider(provider chat.MCPStorageProvider) { m.Called(provider) }
+func (m *MockAIService) SetBackupProvider(provider chat.MCPBackupProvider) { m.Called(provider) }
 func (m *MockAIService) SetGuestConfigProvider(provider chat.MCPGuestConfigProvider) {
 	m.Called(provider)
 }
@@ -719,7 +718,6 @@ func TestProviders(t *testing.T) {
 	mockSvc.On("SetPatternProvider", mock.Anything).Return()
 	mockSvc.On("SetMetricsHistory", mock.Anything).Return()
 	mockSvc.On("SetAgentProfileManager", mock.Anything).Return()
-	mockSvc.On("SetStorageProvider", mock.Anything).Return()
 	mockSvc.On("SetBackupProvider", mock.Anything).Return()
 	mockSvc.On("SetDiskHealthProvider", mock.Anything).Return()
 	mockSvc.On("SetUpdatesProvider", mock.Anything).Return()
@@ -730,7 +728,6 @@ func TestProviders(t *testing.T) {
 	h.SetPatternProvider(nil)
 	h.SetMetricsHistory(nil)
 	h.SetAgentProfileManager(nil)
-	h.SetStorageProvider(nil)
 	h.SetBackupProvider(nil)
 	h.SetDiskHealthProvider(nil)
 	h.SetUpdatesProvider(nil)
