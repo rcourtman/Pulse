@@ -414,13 +414,22 @@ func (c *Client) request(ctx context.Context, method, path string, data url.Valu
 
 		// Log auth issues for debugging (595 is Proxmox "no ticket" error)
 		if resp.StatusCode == 595 || resp.StatusCode == 401 || resp.StatusCode == 403 {
-			log.Warn().
+			// Some endpoints are optional and may return 403 if the token is intentionally
+			// scoped read-only. Avoid warning-level log spam for those.
+			event := log.Warn()
+			msg := "Proxmox authentication error"
+			if resp.StatusCode == 403 && strings.Contains(req.URL.Path, "/apt/update") {
+				event = log.Debug()
+				msg = "Proxmox permission error (optional endpoint)"
+			}
+
+			event.
 				Str("url", req.URL.String()).
 				Int("status", resp.StatusCode).
 				Bool("hasToken", c.config.TokenName != "").
 				Bool("hasPassword", c.config.Password != "").
 				Str("tokenName", c.config.TokenName).
-				Msg("Proxmox authentication error")
+				Msg(msg)
 		}
 
 		// Wrap with appropriate error type

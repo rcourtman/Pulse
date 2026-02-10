@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -231,6 +232,130 @@ func TestProxmoxSetup_RunForType(t *testing.T) {
 			t.Errorf("got %s", res.TokenValue)
 		}
 	})
+}
+
+func TestPrivProbeRoleName_Sanitizes(t *testing.T) {
+	got := privProbeRoleName("VM.GuestAgent.Audit")
+	if got != "PulseTmpPrivCheck_VM_GuestAgent_Audit" {
+		t.Fatalf("unexpected role name: %q", got)
+	}
+
+	got2 := privProbeRoleName("a:b/c d,e.f")
+	if strings.ContainsAny(got2, ".:/ ,") {
+		t.Fatalf("expected sanitized role name, got: %q", got2)
+	}
+}
+
+func TestProxmoxSetup_ProbePVEPrivilege_CreatesAndDeletesRole(t *testing.T) {
+	mc := &mockCollector{}
+	addCalls := 0
+	deleteCalls := 0
+
+	mc.commandCombinedOutputFn = func(ctx context.Context, name string, arg ...string) (string, error) {
+		if name != "pveum" || len(arg) < 3 {
+			return "", nil
+		}
+		if arg[0] == "role" && arg[1] == "add" && strings.HasPrefix(arg[2], "PulseTmpPrivCheck_") {
+			addCalls++
+			return "", nil
+		}
+		if arg[0] == "role" && arg[1] == "delete" && strings.HasPrefix(arg[2], "PulseTmpPrivCheck_") {
+			deleteCalls++
+			return "", nil
+		}
+		return "", nil
+	}
+
+	p := &ProxmoxSetup{
+		logger:    zerolog.Nop(),
+		collector: mc,
+	}
+
+	if ok := p.probePVEPrivilege(context.Background(), "Sys.Audit"); !ok {
+		t.Fatalf("expected probe to succeed")
+	}
+	if addCalls != 1 || deleteCalls != 1 {
+		t.Fatalf("expected 1 add and 1 delete call, got add=%d delete=%d", addCalls, deleteCalls)
+	}
+}
+
+func TestProxmoxSetup_ProbePVEPrivilege_ReturnsFalseOnAddError(t *testing.T) {
+	mc := &mockCollector{}
+	deleteCalls := 0
+	mc.commandCombinedOutputFn = func(ctx context.Context, name string, arg ...string) (string, error) {
+		if name == "pveum" && len(arg) >= 3 && arg[0] == "role" && arg[1] == "add" && strings.HasPrefix(arg[2], "PulseTmpPrivCheck_") {
+			return "", fmt.Errorf("unknown privilege")
+		}
+		if name == "pveum" && len(arg) >= 3 && arg[0] == "role" && arg[1] == "delete" {
+			deleteCalls++
+		}
+		return "", nil
+	}
+
+	p := &ProxmoxSetup{
+		logger:    zerolog.Nop(),
+		collector: mc,
+	}
+
+	if ok := p.probePVEPrivilege(context.Background(), "VM.Monitor"); ok {
+		t.Fatalf("expected probe to fail")
+	}
+	if deleteCalls != 0 {
+		t.Fatalf("expected no delete calls when add fails, got %d", deleteCalls)
+	}
+}
+
+func TestProxmoxSetup_ConfigurePVEPermissions_FallsBackToGuestAgentAudit(t *testing.T) {
+	mc := &mockCollector{}
+	var pulseMonitorPrivs string
+
+	mc.commandCombinedOutputFn = func(ctx context.Context, name string, arg ...string) (string, error) {
+		if name != "pveum" {
+			return "", nil
+		}
+
+		// Temp role privilege probe: pveum role add PulseTmpPrivCheck_* -privs <priv>
+		if len(arg) >= 5 && arg[0] == "role" && arg[1] == "add" && strings.HasPrefix(arg[2], "PulseTmpPrivCheck_") {
+			for i := 0; i < len(arg)-1; i++ {
+				if arg[i] == "-privs" {
+					priv := arg[i+1]
+					if priv == "VM.Monitor" {
+						return "", fmt.Errorf("unknown privilege")
+					}
+					return "", nil
+				}
+			}
+		}
+
+		// Capture configured privileges for PulseMonitor role.
+		if len(arg) >= 5 && arg[0] == "role" && (arg[1] == "modify" || arg[1] == "add") && arg[2] == proxmoxMonitorRole {
+			for i := 0; i < len(arg)-1; i++ {
+				if arg[i] == "-privs" {
+					pulseMonitorPrivs = arg[i+1]
+				}
+			}
+			return "", nil
+		}
+
+		return "", nil
+	}
+
+	p := &ProxmoxSetup{
+		logger:    zerolog.Nop(),
+		collector: mc,
+	}
+
+	p.configurePVEPermissions(context.Background())
+
+	if !strings.Contains(pulseMonitorPrivs, "VM.GuestAgent.Audit") {
+		t.Fatalf("expected PulseMonitor privileges to include VM.GuestAgent.Audit, got %q", pulseMonitorPrivs)
+	}
+	if strings.Contains(pulseMonitorPrivs, "VM.Monitor") {
+		t.Fatalf("did not expect PulseMonitor privileges to include VM.Monitor when it is unavailable, got %q", pulseMonitorPrivs)
+	}
+	if strings.Contains(pulseMonitorPrivs, " ") {
+		t.Fatalf("expected comma-separated privileges, got %q", pulseMonitorPrivs)
+	}
 }
 
 func TestProxmoxSetup_RunAll(t *testing.T) {
