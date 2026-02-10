@@ -1,9 +1,10 @@
 import { Component, For, Show, createMemo, createSignal, createEffect, onCleanup } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { useWebSocket } from '@/App';
+import { useResources } from '@/hooks/useResources';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
-import type { CephPool, CephServiceStatus } from '@/types/api';
+import type { CephCluster, CephPool, CephServiceStatus } from '@/types/api';
 import { formatBytes } from '@/utils/format';
 
 // Service type icon component with proper styling
@@ -238,7 +239,8 @@ const UsageBar: Component<{ percent: number; size?: 'sm' | 'md' }> = (props) => 
 
 // Main Ceph Page Component
 const Ceph: Component = () => {
-    const { state, connected, initialDataReceived, reconnecting, reconnect } = useWebSocket();
+    const { connected, initialDataReceived, reconnecting, reconnect } = useWebSocket();
+    const { byType } = useResources();
 
     const [searchTerm, setSearchTerm] = createSignal('');
     let searchInputRef: HTMLInputElement | undefined;
@@ -269,7 +271,45 @@ const Ceph: Component = () => {
         onCleanup(() => document.removeEventListener('keydown', handleKeyDown));
     });
 
-    const clusters = createMemo(() => state.cephClusters || []);
+    const cephResources = createMemo(() => byType('ceph'));
+
+    const clusters = createMemo<CephCluster[]>(() => {
+        return cephResources().map((r) => {
+            const cephMeta = (r.platformData as any)?.ceph || {};
+            return {
+                id: r.id,
+                instance: (r.platformData as any)?.proxmox?.instance || r.platformId || '',
+                name: r.name,
+                fsid: cephMeta.fsid,
+                health: cephMeta.healthStatus || 'HEALTH_UNKNOWN',
+                healthMessage: cephMeta.healthMessage || '',
+                totalBytes: r.disk?.total || 0,
+                usedBytes: r.disk?.used || 0,
+                availableBytes: r.disk?.free || 0,
+                usagePercent: r.disk?.current || 0,
+                numMons: cephMeta.numMons || 0,
+                numMgrs: cephMeta.numMgrs || 0,
+                numOsds: cephMeta.numOsds || 0,
+                numOsdsUp: cephMeta.numOsdsUp || 0,
+                numOsdsIn: cephMeta.numOsdsIn || 0,
+                numPGs: cephMeta.numPGs || 0,
+                pools: cephMeta.pools?.map((p: any) => ({
+                    id: 0,
+                    name: p.name || '',
+                    storedBytes: p.storedBytes || 0,
+                    availableBytes: p.availableBytes || 0,
+                    objects: p.objects || 0,
+                    percentUsed: p.percentUsed || 0,
+                })),
+                services: cephMeta.services?.map((s: any) => ({
+                    type: s.type || '',
+                    running: s.running || 0,
+                    total: s.total || 0,
+                })),
+                lastUpdated: r.lastSeen || Date.now(),
+            } as CephCluster;
+        });
+    });
     const hasClusters = createMemo(() => clusters().length > 0);
 
     // Aggregate all pools from all clusters

@@ -4,6 +4,7 @@ import {
 } from '@/features/storageBackups/storageDomain';
 import type { StorageRecord } from '@/features/storageBackups/models';
 import type { CephCluster } from '@/types/api';
+import type { Resource } from '@/types/resource';
 import { formatBytes, formatPercent } from '@/utils/format';
 import {
   getRecordNodeLabel,
@@ -13,7 +14,7 @@ import {
 
 type UseStorageCephModelOptions = {
   records: Accessor<StorageRecord[]>;
-  cephClusters: Accessor<CephCluster[] | undefined>;
+  cephResources: Accessor<Resource[]>;
 };
 
 export const isCephRecord = (record: StorageRecord): boolean => {
@@ -28,8 +29,49 @@ export const getCephClusterKeyFromRecord = (record: StorageRecord): string => {
 };
 
 export const useStorageCephModel = (options: UseStorageCephModelOptions) => {
+  const explicitCephClusters = createMemo<CephCluster[]>(() => {
+    const resources = options.cephResources() || [];
+    if (!resources.length) return [];
+
+    return resources.map((r) => {
+      const cephMeta = (r.platformData as any)?.ceph || {};
+      return {
+        id: r.id,
+        instance: (r.platformData as any)?.proxmox?.instance || r.platformId || '',
+        name: r.name,
+        fsid: cephMeta.fsid,
+        health: cephMeta.healthStatus || 'HEALTH_UNKNOWN',
+        healthMessage: cephMeta.healthMessage || '',
+        totalBytes: r.disk?.total || 0,
+        usedBytes: r.disk?.used || 0,
+        availableBytes: r.disk?.free || 0,
+        usagePercent: r.disk?.current || 0,
+        numMons: cephMeta.numMons || 0,
+        numMgrs: cephMeta.numMgrs || 0,
+        numOsds: cephMeta.numOsds || 0,
+        numOsdsUp: cephMeta.numOsdsUp || 0,
+        numOsdsIn: cephMeta.numOsdsIn || 0,
+        numPGs: cephMeta.numPGs || 0,
+        pools: cephMeta.pools?.map((p: any) => ({
+          id: 0,
+          name: p.name || '',
+          storedBytes: p.storedBytes || 0,
+          availableBytes: p.availableBytes || 0,
+          objects: p.objects || 0,
+          percentUsed: p.percentUsed || 0,
+        })),
+        services: cephMeta.services?.map((s: any) => ({
+          type: s.type || '',
+          running: s.running || 0,
+          total: s.total || 0,
+        })),
+        lastUpdated: r.lastSeen || Date.now(),
+      } as CephCluster;
+    });
+  });
+
   const visibleCephClusters = createMemo<CephCluster[]>(() => {
-    const explicit = options.cephClusters() || [];
+    const explicit = explicitCephClusters();
     if (explicit.length > 0) return explicit;
 
     const summaryByKey = new Map<

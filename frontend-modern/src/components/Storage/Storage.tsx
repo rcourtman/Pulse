@@ -102,6 +102,7 @@ const Storage: Component = () => {
   const { byType } = useResources();
   const nodes = createMemo(() => byType('node'));
   const physicalDisks = createMemo(() => byType('physical_disk'));
+  const cephResources = createMemo(() => byType('ceph'));
   const storageBackupsResources = useStorageBackupsResources();
   const alertsActivation = useAlertsActivation();
   const alertsEnabled = createMemo(() => alertsActivation.activationState() === 'active');
@@ -174,7 +175,7 @@ const Storage: Component = () => {
 
   const { cephSummaryStats, resolveCephCluster, getCephSummaryText, getCephPoolsText } = useStorageCephModel({
     records,
-    cephClusters: () => state.cephClusters,
+    cephResources,
   });
 
   const nextPlatforms = createMemo(() =>

@@ -43,24 +43,6 @@ const baseState = (overrides: Partial<State> = {}): State =>
     ...overrides,
   }) as State;
 
-const makeLegacyStorage = (overrides: Record<string, unknown> = {}) => ({
-  id: 'legacy-storage-1',
-  name: 'local-zfs',
-  node: 'pve1',
-  instance: 'cluster-a',
-  type: 'zfspool',
-  status: 'available',
-  total: 1000,
-  used: 900,
-  free: 100,
-  usage: 90,
-  content: 'images',
-  shared: true,
-  enabled: true,
-  active: true,
-  ...overrides,
-});
-
 const makeResourceStorage = (overrides: Partial<Resource> = {}): Resource =>
   ({
     id: 'resource-storage-1',
@@ -83,6 +65,49 @@ const makeResourceStorage = (overrides: Partial<Resource> = {}): Resource =>
   }) as Resource;
 
 describe('storageAdapters', () => {
+  it('does not emit records from legacy state when unified resources are absent', () => {
+    const state = baseState({
+      storage: [
+        {
+          id: 'legacy-storage-1',
+          name: 'local-zfs',
+          node: 'pve1',
+          instance: 'cluster-a',
+          type: 'zfspool',
+          status: 'available',
+          total: 1000,
+          used: 900,
+          free: 100,
+          usage: 90,
+          content: 'images',
+          shared: true,
+          enabled: true,
+          active: true,
+        } as any,
+      ],
+      pbs: [
+        {
+          id: 'pbs-1',
+          name: 'pbs-main',
+          datastores: [
+            {
+              name: 'primary',
+              total: 1000,
+              used: 250,
+              free: 750,
+              usage: 25,
+              status: 'available',
+              namespaces: [],
+            },
+          ],
+        } as any,
+      ],
+    });
+
+    const records = buildStorageRecords({ state, resources: [] });
+    expect(records).toHaveLength(0);
+  });
+
   it('prefers enriched storage metadata over legacy platformData inference', () => {
     const enriched = {
       ...makeResourceStorage({
@@ -115,13 +140,10 @@ describe('storageAdapters', () => {
     expect(records[0].capabilities).toContain('replication');
   });
 
-  it('collapses mixed-origin records by canonical identity and keeps resource-origin winner', () => {
-    const state = baseState({
-      storage: [makeLegacyStorage({ id: 'legacy-storage-id', status: 'degraded', used: 950, usage: 95, shared: true })],
-    });
+  it('collapses duplicate resource records by canonical identity and merges capabilities/details', () => {
     const resources: Resource[] = [
       makeResourceStorage({
-        id: 'resource-storage-id',
+        id: 'resource-storage-a',
         status: 'online',
         disk: { current: 40, total: 1000, used: 400, free: 600 },
         platformData: {
@@ -131,50 +153,50 @@ describe('storageAdapters', () => {
           shared: false,
         },
       }),
-    ];
-
-    const records = buildStorageRecords({ state, resources });
-
-    expect(records).toHaveLength(1);
-    expect(records[0].id).toBe('resource-storage-id');
-    expect(records[0].source.origin).toBe('resource');
-    expect(records[0].health).toBe('healthy');
-    expect(records[0].capacity.usedBytes).toBe(400);
-    expect(records[0].details?.shared).toBe(false);
-  });
-
-  it('applies deterministic precedence where resource-origin data wins over legacy', () => {
-    const state = baseState({
-      storage: [makeLegacyStorage({ status: 'degraded', used: 950, usage: 95, shared: true })],
-    });
-    const resources: Resource[] = [
       makeResourceStorage({
+        id: 'resource-storage-b',
         status: 'online',
-        disk: { current: 40, total: 1000, used: 400, free: 600 },
+        disk: { current: 55, total: 1000, used: 550, free: 450 },
         platformData: {
           type: 'zfspool',
           node: 'pve1',
           instance: 'cluster-a',
           shared: false,
         },
+        storage: {
+          type: 'zfspool',
+          // Add a capability-bearing hint to ensure merge doesn't duplicate entries
+          isZfs: true,
+        } as any,
       }),
     ];
-    const records = buildStorageRecords({ state, resources });
+
+    const records = buildStorageRecords({ state: baseState(), resources });
 
     expect(records).toHaveLength(1);
+    expect(records[0].id).toBe('resource-storage-a');
     expect(records[0].source.origin).toBe('resource');
     expect(records[0].health).toBe('healthy');
     expect(records[0].capacity.usedBytes).toBe(400);
     expect(records[0].details?.shared).toBe(false);
+    expect(records[0].capabilities.filter((capability) => capability === 'compression')).toHaveLength(1);
   });
 
   it('keeps records separate when canonical identities differ', () => {
-    const state = baseState({
-      storage: [makeLegacyStorage({ id: 'legacy-storage-a', node: 'pve1' })],
-    });
     const resources: Resource[] = [
       makeResourceStorage({
+        id: 'resource-storage-a',
+        name: 'local-zfs',
+        platformData: {
+          type: 'zfspool',
+          node: 'pve1',
+          instance: 'cluster-a',
+          shared: false,
+        },
+      }),
+      makeResourceStorage({
         id: 'resource-storage-b',
+        name: 'local-zfs-2',
         platformData: {
           type: 'zfspool',
           node: 'pve2',
@@ -184,74 +206,10 @@ describe('storageAdapters', () => {
       }),
     ];
 
-    const records = buildStorageRecords({ state, resources });
+    const records = buildStorageRecords({ state: baseState(), resources });
 
     expect(records).toHaveLength(2);
-    expect(new Set(records.map((record) => record.location.label))).toEqual(new Set(['pve1', 'pve2']));
-  });
-
-  it('deduplicates capabilities when mixed-origin records are merged', () => {
-    const state = baseState({
-      pbs: [
-        {
-          id: 'pbs-1',
-          name: 'pbs-main',
-          host: 'https://pbs.local',
-          status: 'online',
-          version: '3.0',
-          cpu: 10,
-          memory: 20,
-          memoryUsed: 2,
-          memoryTotal: 10,
-          uptime: 100,
-          datastores: [
-            {
-              name: 'primary',
-              total: 1000,
-              used: 250,
-              free: 750,
-              usage: 25,
-              status: 'available',
-              error: '',
-              namespaces: [],
-              deduplicationFactor: 2.1,
-            },
-          ],
-          backupJobs: [],
-          syncJobs: [],
-          verifyJobs: [],
-          pruneJobs: [],
-          garbageJobs: [],
-          connectionHealth: 'healthy',
-          lastSeen: new Date().toISOString(),
-        },
-      ],
-    });
-
-    const resources: Resource[] = [
-      {
-        id: 'resource-datastore-1',
-        type: 'datastore',
-        name: 'primary',
-        displayName: 'primary',
-        platformId: 'pbs-1',
-        platformType: 'proxmox-pbs',
-        sourceType: 'api',
-        status: 'online',
-        disk: { current: 25, total: 1000, used: 250, free: 750 },
-        lastSeen: 1731000005000,
-        parentId: 'pbs-1',
-        platformData: {
-          pbsInstanceName: 'pbs-main',
-          type: 'pbs',
-        },
-      },
-    ];
-
-    const records = buildStorageRecords({ state, resources });
-    expect(records).toHaveLength(1);
-    expect(records[0].capabilities.filter((capability) => capability === 'deduplication')).toHaveLength(1);
-    expect(records[0].capabilities.filter((capability) => capability === 'backup-repository')).toHaveLength(1);
+    expect(new Set(records.map((record) => record.name))).toEqual(new Set(['local-zfs', 'local-zfs-2']));
   });
 
   it('maps a TrueNAS pool to StorageRecord with zfs metadata and healthy health', () => {

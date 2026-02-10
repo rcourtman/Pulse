@@ -1,4 +1,3 @@
-import type { PBSDatastore, Storage } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import { STORAGE_DATA_ORIGIN_PRECEDENCE } from './models';
 import type {
@@ -157,13 +156,6 @@ const normalizeHealthValue = (value: string | undefined): NormalizedHealth | und
 const normalizeResourceHealth = (status: string | undefined, tags: string[] | undefined): NormalizedHealth =>
   normalizeHealthValue(extractHealthTag(tags)) || normalizeHealthValue(status) || 'unknown';
 
-const normalizeLegacyStorageHealth = (status: string | undefined): NormalizedHealth => {
-  if ((status || '').toLowerCase() === 'available') return 'healthy';
-  if ((status || '').toLowerCase() === 'degraded') return 'warning';
-  if ((status || '').toLowerCase() === 'offline') return 'offline';
-  return 'unknown';
-};
-
 const categoryFromStorageType = (type: string | undefined): StorageCategory => {
   const value = (type || '').toLowerCase();
   if (!value) return 'other';
@@ -297,78 +289,6 @@ const mapResourceStorageRecord = (resource: Resource, adapterId: string): Storag
   };
 };
 
-const mapLegacyStorageRecord = (storage: Storage, adapterId: string): StorageRecord => {
-  const usagePercent = Number.isFinite(storage.usage) ? storage.usage : null;
-  const totalBytes = Number.isFinite(storage.total) ? storage.total : null;
-  const usedBytes = Number.isFinite(storage.used) ? storage.used : null;
-  const freeBytes = Number.isFinite(storage.free) ? storage.free : null;
-  const type = storage.type || '';
-
-  return {
-    id: storage.id || `${storage.instance}-${storage.node}-${storage.name}`,
-    name: storage.name || 'Storage',
-    category: categoryFromStorageType(type),
-    health: normalizeLegacyStorageHealth(storage.status),
-    location: {
-      label: storage.node || storage.instance || 'Unknown',
-      scope: storage.shared ? 'cluster' : 'node',
-    },
-    capacity: capacity(totalBytes, usedBytes, freeBytes, usagePercent),
-    capabilities: capabilitiesForStorage(type),
-    source: fromSource('proxmox-pve', adapterId, 'legacy'),
-    observedAt: Date.now(),
-    refs: {
-      legacyStorageId: storage.id,
-      platformEntityId: storage.instance,
-    },
-    details: {
-      type,
-      content: storage.content,
-      shared: storage.shared,
-      nodes: storage.nodes || [],
-      node: storage.node,
-      status: storage.status,
-      zfsPool: storage.zfsPool,
-    },
-  };
-};
-
-const mapLegacyPBSDatastore = (
-  instance: { id: string; name: string; datastores: PBSDatastore[] },
-  datastore: PBSDatastore,
-  adapterId: string,
-): StorageRecord => {
-  const usagePercent = Number.isFinite(datastore.usage) ? datastore.usage : null;
-  const totalBytes = Number.isFinite(datastore.total) ? datastore.total : null;
-  const usedBytes = Number.isFinite(datastore.used) ? datastore.used : null;
-  const freeBytes = Number.isFinite(datastore.free) ? datastore.free : null;
-  const datastoreID = `pbs-${instance.id}-${datastore.name || 'datastore'}`;
-
-  return {
-    id: datastoreID,
-    name: datastore.name || 'PBS Datastore',
-    category: 'backup-repository',
-    health: normalizeLegacyStorageHealth(datastore.status),
-    location: {
-      label: instance.name || instance.id || 'PBS',
-      scope: 'cluster',
-    },
-    capacity: capacity(totalBytes, usedBytes, freeBytes, usagePercent),
-    capabilities: ['capacity', 'health', 'backup-repository', 'deduplication', 'namespaces'],
-    source: fromSource('proxmox-pbs', adapterId, 'legacy'),
-    observedAt: Date.now(),
-    refs: {
-      legacyStorageId: datastoreID,
-      platformEntityId: instance.id,
-    },
-    details: {
-      deduplicationFactor: datastore.deduplicationFactor,
-      namespaceCount: datastore.namespaces?.length || 0,
-      error: datastore.error,
-    },
-  };
-};
-
 const resourceStorageAdapter: StorageAdapter = {
   id: 'resource-storage',
   supports: (ctx) => Array.isArray(ctx.resources) && ctx.resources.length > 0,
@@ -378,31 +298,8 @@ const resourceStorageAdapter: StorageAdapter = {
       .map((resource) => mapResourceStorageRecord(resource, 'resource-storage')),
 };
 
-const legacyStorageAdapter: StorageAdapter = {
-  id: 'legacy-storage',
-  supports: (ctx) => (ctx.state.storage || []).length > 0,
-  build: (ctx) => (ctx.state.storage || []).map((storage) => mapLegacyStorageRecord(storage, 'legacy-storage')),
-};
-
-const legacyPbsDatastoreAdapter: StorageAdapter = {
-  id: 'legacy-pbs-datastore',
-  supports: (ctx) => (ctx.state.pbs || []).some((instance) => (instance.datastores || []).length > 0),
-  build: (ctx) =>
-    (ctx.state.pbs || []).flatMap((instance) =>
-      (instance.datastores || []).map((datastore) =>
-        mapLegacyPBSDatastore(
-          { id: instance.id, name: instance.name, datastores: instance.datastores || [] },
-          datastore,
-          'legacy-pbs-datastore',
-        ),
-      ),
-    ),
-};
-
 export const DEFAULT_STORAGE_ADAPTERS: StorageAdapter[] = [
   resourceStorageAdapter,
-  legacyStorageAdapter,
-  legacyPbsDatastoreAdapter,
 ];
 
 const mergeStorageRecords = (current: StorageRecord, incoming: StorageRecord): StorageRecord => {

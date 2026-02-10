@@ -279,9 +279,7 @@ describe('Storage', () => {
       expect(beta.compareDocumentPosition(alpha) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     });
 
-    fireEvent.change(screen.getByLabelText('Group By'), {
-      target: { value: 'status' },
-    });
+    fireEvent.click(screen.getByRole('button', { name: 'By Status' }));
 
     expect(screen.getByText('Status: degraded')).toBeInTheDocument();
     expect(screen.getByText('Status: online')).toBeInTheDocument();
@@ -311,16 +309,17 @@ describe('Storage', () => {
     expect(initialParams.get('from')).toBe('proxmox-overview');
     expect(initialParams.get('search')).toBeNull();
     expect(initialOptions?.replace).toBe(true);
-    expect((screen.getByLabelText('View') as HTMLSelectElement).value).toBe('disks');
+    expect(screen.getByRole('button', { name: 'Physical Disks' })).toHaveAttribute('aria-pressed', 'true');
     expect((screen.getByLabelText('Node') as HTMLSelectElement).value).toBe('node-2');
-    expect((screen.getByLabelText('Source') as HTMLSelectElement).value).toBe('proxmox-pve');
-    expect((screen.getByLabelText('Health') as HTMLSelectElement).value).toBe('warning');
-    expect((screen.getByLabelText('Group By') as HTMLSelectElement).value).toBe('status');
     expect((screen.getByLabelText('Sort By') as HTMLSelectElement).value).toBe('usage');
+    expect(screen.getByRole('button', { name: 'PVE' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Warning' })).toHaveAttribute('aria-pressed', 'true');
 
-    fireEvent.change(screen.getByLabelText('Group By'), {
-      target: { value: 'type' },
-    });
+    // Grouping controls are only shown on the Pools view.
+    fireEvent.click(screen.getByRole('button', { name: 'Pools' }));
+    expect(screen.getByRole('button', { name: 'By Status' })).toHaveAttribute('aria-pressed', 'true');
+
+    fireEvent.click(screen.getByRole('button', { name: 'By Type' }));
 
     await waitFor(() => {
       const [nextPath] = navigateSpy.mock.calls.at(-1) as [string];
@@ -336,9 +335,9 @@ describe('Storage', () => {
     render(() => <Storage />);
 
     expect(screen.getByTestId('disk-list')).toHaveTextContent('disk-view:node-2:ceph');
-    expect((screen.getByLabelText('View') as HTMLSelectElement).value).toBe('disks');
+    expect(screen.getByRole('button', { name: 'Physical Disks' })).toHaveAttribute('aria-pressed', 'true');
     expect((screen.getByLabelText('Node') as HTMLSelectElement).value).toBe('node-2');
-    expect((screen.getByLabelText('Source') as HTMLSelectElement).value).toBe('proxmox-pve');
+    expect(screen.getByRole('button', { name: 'PVE' })).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('shows ceph summary and expandable ceph drawer details', async () => {
@@ -353,40 +352,44 @@ describe('Storage', () => {
       }),
     ];
 
-    wsState = {
-      ...wsState,
-      cephClusters: [
-        {
-          id: 'ceph-1',
-          instance: 'cluster-main',
-          name: 'Primary Ceph',
-          health: 'HEALTH_WARN',
-          healthMessage: '1 OSD nearfull',
-          totalBytes: 1_000,
-          usedBytes: 350,
-          availableBytes: 650,
-          usagePercent: 35,
-          numMons: 3,
-          numMgrs: 2,
-          numOsds: 6,
-          numOsdsUp: 6,
-          numOsdsIn: 6,
-          numPGs: 256,
-          pools: [
-            {
-              id: 1,
-              name: 'rbd',
-              storedBytes: 350,
-              availableBytes: 650,
-              objects: 10_000,
-              percentUsed: 35,
-            },
-          ],
-          services: [],
-          lastUpdated: Date.now(),
+    nodeResources = [
+      ...nodeResources,
+      {
+        id: 'ceph-1',
+        type: 'ceph',
+        name: 'Primary Ceph',
+        displayName: 'Primary Ceph',
+        platformId: 'cluster-main',
+        platformType: 'proxmox-pve',
+        sourceType: 'api',
+        status: 'online',
+        disk: { current: 35, total: 1_000, used: 350, free: 650 },
+        lastSeen: Date.now(),
+        platformData: {
+          proxmox: { instance: 'cluster-main' },
+          ceph: {
+            healthStatus: 'HEALTH_WARN',
+            healthMessage: '1 OSD nearfull',
+            numMons: 3,
+            numMgrs: 2,
+            numOsds: 6,
+            numOsdsUp: 6,
+            numOsdsIn: 6,
+            numPGs: 256,
+            pools: [
+              {
+                name: 'rbd',
+                storedBytes: 350,
+                availableBytes: 650,
+                objects: 10_000,
+                percentUsed: 35,
+              },
+            ],
+            services: [],
+          },
         },
-      ],
-    };
+      } as Resource,
+    ];
 
     render(() => <Storage />);
 
@@ -457,25 +460,16 @@ describe('Storage', () => {
     });
   });
 
-  it('shows zfs health indicators when legacy storage carries pool errors', async () => {
-    wsState = {
-      ...wsState,
-      storage: [
-        {
-          id: 'storage-zfs',
-          name: 'local-zfs',
-          node: 'pve1',
-          instance: 'cluster-main',
-          type: 'zfspool',
-          status: 'available',
-          total: 1_000,
-          used: 600,
-          free: 400,
-          usage: 60,
-          content: 'images,rootdir',
-          shared: false,
-          enabled: true,
-          active: true,
+  it('shows zfs health indicators when unified storage resources carry pool errors', async () => {
+    hookResources = [
+      buildStorageResource('storage-zfs', 'local-zfs', 'pve1', {
+        platformId: 'cluster-main',
+        storageType: 'zfspool',
+        current: 60,
+        used: 600,
+        free: 400,
+        total: 1_000,
+        platformData: {
           zfsPool: {
             name: 'rpool',
             state: 'DEGRADED',
@@ -496,8 +490,8 @@ describe('Storage', () => {
             ],
           },
         },
-      ],
-    };
+      }),
+    ];
 
     render(() => <Storage />);
 
@@ -553,9 +547,7 @@ describe('Storage', () => {
   it('switches to physical disks view', () => {
     render(() => <Storage />);
 
-    fireEvent.change(screen.getByLabelText('View'), {
-      target: { value: 'disks' },
-    });
+    fireEvent.click(screen.getByRole('button', { name: 'Physical Disks' }));
 
     expect(screen.getByTestId('disk-list')).toBeInTheDocument();
   });
