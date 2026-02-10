@@ -330,6 +330,53 @@ export const AIChat: Component<AIChatProps> = (props) => {
     onCleanup(() => document.removeEventListener('click', handleClickOutside));
   });
 
+  const normalizeMentionKeyPart = (value?: string | null) => (value || '').trim().toLowerCase();
+
+  const mentionStatusRank = (status?: string) => {
+    switch (normalizeMentionKeyPart(status || '')) {
+      case 'running':
+      case 'online':
+        return 3;
+      case 'stopped':
+      case 'offline':
+      case 'exited':
+        return 2;
+      case 'unknown':
+        return 1;
+      default:
+        return 0;
+    }
+  };
+
+  const dedupeMentionResources = (resources: MentionResource[]) => {
+    // Only dedupe host mentions: VMs/containers/docker containers can legitimately share names across nodes/hosts.
+    const byKey = new Map<string, { resource: MentionResource; index: number }>();
+    const out: MentionResource[] = [];
+
+    for (const resource of resources) {
+      if (resource.type !== 'host') {
+        out.push(resource);
+        continue;
+      }
+
+      const key = `${normalizeMentionKeyPart(resource.name)}:${resource.type}`;
+      const existing = byKey.get(key);
+      if (!existing) {
+        const index = out.length;
+        byKey.set(key, { resource, index });
+        out.push(resource);
+        continue;
+      }
+
+      if (mentionStatusRank(resource.status) > mentionStatusRank(existing.resource.status)) {
+        existing.resource = resource;
+        out[existing.index] = resource;
+      }
+    }
+
+    return out;
+  };
+
   // Build resources for @ mention autocomplete from unified selectors
   createEffect(() => {
     const readPlatformData = (resource: Resource): Record<string, unknown> | undefined => {
@@ -446,7 +493,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
       });
     }
 
-    setMentionResources(resources);
+    setMentionResources(dedupeMentionResources(resources));
   });
 
   // Handle submit
