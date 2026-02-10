@@ -10,6 +10,7 @@ import { isInfrastructure, isStorage } from '@/types/resource';
 import { ALERTS_OVERVIEW_PATH, buildStoragePath, INFRASTRUCTURE_PATH } from '@/routing/resourceLinks';
 import { BackupStatusPanel, CompositionPanel, DashboardHero, RecentAlertsPanel, StoragePanel, TrendCharts } from './DashboardPanels';
 import { type ActionItem, MAX_ACTION_ITEMS, PRIORITY_ORDER } from './DashboardPanels/dashboardHelpers';
+import { RelayOnboardingCard } from '@/components/Dashboard/RelayOnboardingCard';
 
 export default function Dashboard() {
   const { connected, reconnecting, reconnect, activeAlerts } = useWebSocket();
@@ -182,6 +183,7 @@ export default function Dashboard() {
             <h2 class="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100">No resources yet</h2>
             <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">Once connected platforms report resources, your dashboard overview will appear here.</p>
           </section>
+          <RelayOnboardingCard />
         </Match>
 
         <Match when={initialLoadComplete() && !hasConnectionError() && !isEmpty()}>
@@ -212,6 +214,8 @@ export default function Dashboard() {
               }}
               topIssues={displayedActions()}
             />
+
+            <RelayOnboardingCard />
 
             <TrendCharts
               trends={trends()}
