@@ -1547,53 +1547,135 @@ func (p *PatrolService) seedResourceInventory(state models.StateSnapshot, scoped
 	}
 
 	// --- Storage Pools ---
-	if cfg.AnalyzeStorage && len(state.Storage) > 0 {
-		var scopedStorage []models.Storage
-		for _, s := range state.Storage {
-			if seedIsInScope(scopedSet, s.ID) {
-				scopedStorage = append(scopedStorage, s)
-			}
-		}
-		if len(scopedStorage) > 0 {
-			if isQuiet && scopedSet == nil {
-				minUsage, maxUsage := 100.0, 0.0
-				for _, s := range scopedStorage {
-					if s.Usage < minUsage {
-						minUsage = s.Usage
-					}
-					if s.Usage > maxUsage {
-						maxUsage = s.Usage
-					}
+	if cfg.AnalyzeStorage {
+		p.mu.RLock()
+		urp := p.unifiedResourceProvider
+		p.mu.RUnlock()
+		if urp != nil {
+			storageResources := urp.GetByType(unifiedresources.ResourceTypeStorage)
+			if len(storageResources) > 0 {
+				type seedStorageRow struct {
+					id, name, stype, node, status string
+					used, total                   int64
+					hasBytes                      bool
+					usage                         float64
+					zfsRead, zfsWrite, zfsCksum   int64
+					hasZFSErrors                  bool
 				}
-				sb.WriteString(fmt.Sprintf("# Storage: %d pools, all within normal range (%.0f-%.0f%% used).\n\n",
-					len(scopedStorage), minUsage, maxUsage))
-			} else {
-				sb.WriteString("# Storage\n")
-				sb.WriteString("| Pool | Type | Node | Usage | Used | Total | Status |\n")
-				sb.WriteString("|------|------|------|-------|------|-------|--------|\n")
-				for _, s := range scopedStorage {
-					node := s.Node
-					if node == "" && s.Shared {
+
+				rows := make([]seedStorageRow, 0, len(storageResources))
+				for _, r := range storageResources {
+					if scopedSet != nil && !seedIsInScope(scopedSet, r.ID) {
+						continue
+					}
+					if r.Storage == nil {
+						continue
+					}
+
+					name := strings.TrimSpace(r.Name)
+					if name == "" {
+						name = strings.TrimSpace(r.ID)
+					}
+					stype := strings.TrimSpace(r.Storage.Type)
+					if stype == "" {
+						stype = "-"
+					}
+
+					node := ""
+					if r.Proxmox != nil {
+						node = strings.TrimSpace(r.Proxmox.NodeName)
+					}
+					if node == "" && r.Storage.Shared {
 						node = "shared"
 					}
+
+					used, total := int64(0), int64(0)
+					hasBytes := false
+					usage := 0.0
+					if r.Metrics != nil && r.Metrics.Disk != nil {
+						if r.Metrics.Disk.Used != nil && r.Metrics.Disk.Total != nil {
+							used, total = *r.Metrics.Disk.Used, *r.Metrics.Disk.Total
+							hasBytes = true
+						}
+						if r.Metrics.Disk.Percent > 0 {
+							usage = r.Metrics.Disk.Percent
+						} else if hasBytes && total > 0 {
+							usage = (float64(used) / float64(total)) * 100
+						}
+					}
+
 					status := "active"
-					if !s.Active {
+					switch r.Status {
+					case unifiedresources.StatusOffline:
 						status = "inactive"
+					case unifiedresources.StatusUnknown:
+						status = "unknown"
 					}
-					if s.ZFSPool != nil {
-						status = s.ZFSPool.State
+					if r.Storage.IsZFS && strings.TrimSpace(r.Storage.ZFSPoolState) != "" {
+						status = strings.TrimSpace(r.Storage.ZFSPoolState)
 					}
-					sb.WriteString(fmt.Sprintf("| %s | %s | %s | %.0f%% | %s | %s | %s |\n",
-						s.Name, s.Type, node, s.Usage,
-						seedFormatBytes(s.Used), seedFormatBytes(s.Total), status))
+
+					zfsRead := r.Storage.ZFSReadErrors
+					zfsWrite := r.Storage.ZFSWriteErrors
+					zfsCksum := r.Storage.ZFSChecksumErrors
+					hasZFSErrors := r.Storage.IsZFS && (zfsRead > 0 || zfsWrite > 0 || zfsCksum > 0)
+
+					rows = append(rows, seedStorageRow{
+						id:           r.ID,
+						name:         name,
+						stype:        stype,
+						node:         node,
+						status:       status,
+						used:         used,
+						total:        total,
+						hasBytes:     hasBytes,
+						usage:        usage,
+						zfsRead:      zfsRead,
+						zfsWrite:     zfsWrite,
+						zfsCksum:     zfsCksum,
+						hasZFSErrors: hasZFSErrors,
+					})
 				}
-				for _, s := range scopedStorage {
-					if s.ZFSPool != nil && (s.ZFSPool.ReadErrors > 0 || s.ZFSPool.WriteErrors > 0 || s.ZFSPool.ChecksumErrors > 0) {
-						sb.WriteString(fmt.Sprintf("- %s ZFS errors: read=%d write=%d checksum=%d\n",
-							s.Name, s.ZFSPool.ReadErrors, s.ZFSPool.WriteErrors, s.ZFSPool.ChecksumErrors))
+
+				if len(rows) > 0 {
+					sort.Slice(rows, func(i, j int) bool { return rows[i].name < rows[j].name })
+					if isQuiet && scopedSet == nil {
+						minUsage, maxUsage := 100.0, 0.0
+						for _, row := range rows {
+							if row.usage < minUsage {
+								minUsage = row.usage
+							}
+							if row.usage > maxUsage {
+								maxUsage = row.usage
+							}
+						}
+						sb.WriteString(fmt.Sprintf("# Storage: %d pools, all within normal range (%.0f-%.0f%% used).\n\n",
+							len(rows), minUsage, maxUsage))
+					} else {
+						sb.WriteString("# Storage\n")
+						sb.WriteString("| Pool | Type | Node | Usage | Used | Total | Status |\n")
+						sb.WriteString("|------|------|------|-------|------|-------|--------|\n")
+						for _, row := range rows {
+							usedStr, totalStr := "—", "—"
+							if row.hasBytes {
+								usedStr, totalStr = seedFormatBytes(row.used), seedFormatBytes(row.total)
+							}
+							node := row.node
+							if node == "" {
+								node = "—"
+							}
+							sb.WriteString(fmt.Sprintf("| %s | %s | %s | %.0f%% | %s | %s | %s |\n",
+								row.name, row.stype, node, row.usage, usedStr, totalStr, row.status))
+						}
+						for _, row := range rows {
+							if row.hasZFSErrors {
+								sb.WriteString(fmt.Sprintf("- %s ZFS errors: read=%d write=%d checksum=%d\n",
+									row.name, row.zfsRead, row.zfsWrite, row.zfsCksum))
+							}
+						}
+						sb.WriteString("\n")
 					}
 				}
-				sb.WriteString("\n")
 			}
 		}
 	}

@@ -366,24 +366,6 @@ func TestSeedResourceInventory_DetailedSections(t *testing.T) {
 				},
 			},
 		},
-		Storage: []models.Storage{
-			{
-				ID:     "store-1",
-				Name:   "store-1",
-				Type:   "zfs",
-				Usage:  70.0,
-				Used:   700 * 1024 * 1024,
-				Total:  1000 * 1024 * 1024,
-				Shared: true,
-				Active: true,
-				ZFSPool: &models.ZFSPool{
-					State:          "DEGRADED",
-					ReadErrors:     1,
-					WriteErrors:    2,
-					ChecksumErrors: 3,
-				},
-			},
-		},
 		PBSInstances: []models.PBSInstance{
 			{
 				Name: "pbs-1",
@@ -396,8 +378,36 @@ func TestSeedResourceInventory_DetailedSections(t *testing.T) {
 
 	usedBytes := int64(450 * 1024 * 1024)
 	totalBytes := int64(1000 * 1024 * 1024)
+	storeUsedBytes := int64(700 * 1024 * 1024)
+	storeTotalBytes := int64(1000 * 1024 * 1024)
 	ps.SetUnifiedResourceProvider(&mockUnifiedResourceProvider{
 		getByTypeFunc: func(t unifiedresources.ResourceType) []unifiedresources.Resource {
+			if t == unifiedresources.ResourceTypeStorage {
+				return []unifiedresources.Resource{
+					{
+						ID:     "store-1",
+						Name:   "store-1",
+						Type:   unifiedresources.ResourceTypeStorage,
+						Status: unifiedresources.StatusWarning,
+						Storage: &unifiedresources.StorageMeta{
+							Type:              "zfs",
+							Shared:            true,
+							IsZFS:             true,
+							ZFSPoolState:      "DEGRADED",
+							ZFSReadErrors:     1,
+							ZFSWriteErrors:    2,
+							ZFSChecksumErrors: 3,
+						},
+						Metrics: &unifiedresources.ResourceMetrics{
+							Disk: &unifiedresources.MetricValue{
+								Used:    &storeUsedBytes,
+								Total:   &storeTotalBytes,
+								Percent: 70.0,
+							},
+						},
+					},
+				}
+			}
 			if t == unifiedresources.ResourceTypeCeph {
 				return []unifiedresources.Resource{
 					{

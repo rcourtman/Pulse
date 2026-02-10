@@ -177,6 +177,12 @@ type StorageMeta struct {
 	Shared       bool     `json:"shared"`
 	IsCeph       bool     `json:"isCeph"`
 	IsZFS        bool     `json:"isZfs"`
+
+	// ZFS metadata (when IsZFS is true and the source provides details).
+	ZFSPoolState      string `json:"zfsPoolState,omitempty"`
+	ZFSReadErrors     int64  `json:"zfsReadErrors,omitempty"`
+	ZFSWriteErrors    int64  `json:"zfsWriteErrors,omitempty"`
+	ZFSChecksumErrors int64  `json:"zfsChecksumErrors,omitempty"`
 }
 
 // PhysicalDiskMeta contains physical disk-specific metadata.

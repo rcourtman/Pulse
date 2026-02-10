@@ -298,6 +298,15 @@ func resourceFromStorage(storage models.Storage) (Resource, ResourceIdentity) {
 	content := strings.TrimSpace(storage.Content)
 	now := time.Now().UTC()
 
+	zfsPoolState := ""
+	var zfsReadErrors, zfsWriteErrors, zfsChecksumErrors int64
+	if storage.ZFSPool != nil {
+		zfsPoolState = strings.TrimSpace(storage.ZFSPool.State)
+		zfsReadErrors = storage.ZFSPool.ReadErrors
+		zfsWriteErrors = storage.ZFSPool.WriteErrors
+		zfsChecksumErrors = storage.ZFSPool.ChecksumErrors
+	}
+
 	resource := Resource{
 		Type:      ResourceTypeStorage,
 		Name:      name,
@@ -310,12 +319,16 @@ func resourceFromStorage(storage models.Storage) (Resource, ResourceIdentity) {
 			Instance: storage.Instance,
 		},
 		Storage: &StorageMeta{
-			Type:         storageType,
-			Content:      content,
-			ContentTypes: parseStorageContentTypes(content),
-			Shared:       storage.Shared,
-			IsCeph:       isCephStorageType(storageType),
-			IsZFS:        isZFSStorageType(storageType) || storage.ZFSPool != nil,
+			Type:              storageType,
+			Content:           content,
+			ContentTypes:      parseStorageContentTypes(content),
+			Shared:            storage.Shared,
+			IsCeph:            isCephStorageType(storageType),
+			IsZFS:             isZFSStorageType(storageType) || storage.ZFSPool != nil,
+			ZFSPoolState:      zfsPoolState,
+			ZFSReadErrors:     zfsReadErrors,
+			ZFSWriteErrors:    zfsWriteErrors,
+			ZFSChecksumErrors: zfsChecksumErrors,
 		},
 	}
 
