@@ -44,7 +44,12 @@ func NewRateLimiter(limit int, window time.Duration) *RateLimiter {
 
 // Stop stops the cleanup routine
 func (rl *RateLimiter) Stop() {
-	close(rl.stopCleanup)
+	select {
+	case <-rl.stopCleanup:
+		return
+	default:
+		close(rl.stopCleanup)
+	}
 }
 
 // Allow checks if a request from the given IP address is within the rate limit.

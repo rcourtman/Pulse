@@ -4,6 +4,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
 	"io"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog/log"
+	"golang.org/x/crypto/hkdf"
 )
 
 var defaultDataDirFn = utils.GetDataDir
@@ -28,6 +30,27 @@ var newGCM = cipher.NewGCM
 type CryptoManager struct {
 	key     []byte
 	keyPath string // Path to the encryption key file for runtime validation
+}
+
+// DeriveKey derives a purpose-specific key from the master encryption key using HKDF-SHA256.
+// This avoids reusing the raw encryption key across unrelated cryptographic contexts.
+func (c *CryptoManager) DeriveKey(purpose string, length int) ([]byte, error) {
+	if c == nil || len(c.key) == 0 {
+		return nil, fmt.Errorf("crypto manager not initialized")
+	}
+	if length <= 0 {
+		return nil, fmt.Errorf("invalid derived key length: %d", length)
+	}
+	if purpose == "" {
+		return nil, fmt.Errorf("purpose is required")
+	}
+
+	out := make([]byte, length)
+	hkdfReader := hkdf.New(sha256.New, c.key, nil, []byte(purpose))
+	if _, err := io.ReadFull(hkdfReader, out); err != nil {
+		return nil, fmt.Errorf("hkdf read: %w", err)
+	}
+	return out, nil
 }
 
 // NewCryptoManagerAt creates a new crypto manager with an explicit data directory override.

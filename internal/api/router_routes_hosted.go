@@ -6,7 +6,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
 
-func (r *Router) registerHostedRoutes(hostedSignupHandlers *HostedSignupHandlers) {
+func (r *Router) registerHostedRoutes(hostedSignupHandlers *HostedSignupHandlers, magicLinkHandlers *MagicLinkHandlers) {
 	if r.signupRateLimiter == nil {
 		r.signupRateLimiter = NewRateLimiter(5, 1*time.Hour)
 	}
@@ -40,6 +40,12 @@ func (r *Router) registerHostedRoutes(hostedSignupHandlers *HostedSignupHandlers
 	)
 
 	if hostedSignupHandlers != nil {
-		r.mux.HandleFunc("POST /api/public/signup", r.signupRateLimiter.Middleware(hostedSignupHandlers.HandlePublicSignup))
+		// Register bare paths and let handlers enforce the method checks.
+		// This keeps inventory tests and auth bypass logic consistent across the codebase.
+		r.mux.HandleFunc("/api/public/signup", r.signupRateLimiter.Middleware(hostedSignupHandlers.HandlePublicSignup))
+	}
+	if magicLinkHandlers != nil {
+		r.mux.HandleFunc("/api/public/magic-link/request", magicLinkHandlers.HandlePublicMagicLinkRequest)
+		r.mux.HandleFunc("/api/public/magic-link/verify", magicLinkHandlers.HandlePublicMagicLinkVerify)
 	}
 }

@@ -27,13 +27,14 @@ type HostedRBACProvider interface {
 type HostedSignupHandlers struct {
 	persistence  *config.MultiTenantPersistence
 	rbacProvider HostedRBACProvider
+	magicLinks   *MagicLinkService
+	publicURL    func(*http.Request) string
 	hostedMode   bool
 }
 
 type hostedSignupRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
-	OrgName  string `json:"org_name"`
+	Email   string `json:"email"`
+	OrgName string `json:"org_name"`
 }
 
 type hostedSignupResponse struct {
@@ -45,11 +46,15 @@ type hostedSignupResponse struct {
 func NewHostedSignupHandlers(
 	persistence *config.MultiTenantPersistence,
 	rbacProvider HostedRBACProvider,
+	magicLinks *MagicLinkService,
+	publicURL func(*http.Request) string,
 	hostedMode bool,
 ) *HostedSignupHandlers {
 	return &HostedSignupHandlers{
 		persistence:  persistence,
 		rbacProvider: rbacProvider,
+		magicLinks:   magicLinks,
+		publicURL:    publicURL,
 		hostedMode:   hostedMode,
 	}
 }
@@ -71,6 +76,10 @@ func (h *HostedSignupHandlers) HandlePublicSignup(w http.ResponseWriter, r *http
 		writeErrorResponse(w, http.StatusNotImplemented, "provisioner_not_available", "provisioner not yet available", nil)
 		return
 	}
+	if h.magicLinks == nil {
+		writeErrorResponse(w, http.StatusServiceUnavailable, "magic_links_unavailable", "Magic link service is not configured", nil)
+		return
+	}
 
 	r.Body = http.MaxBytesReader(w, r.Body, hostedSignupRequestBodyLimit)
 	var req hostedSignupRequest
@@ -83,10 +92,6 @@ func (h *HostedSignupHandlers) HandlePublicSignup(w http.ResponseWriter, r *http
 	req.OrgName = strings.TrimSpace(req.OrgName)
 	if !isValidSignupEmail(req.Email) {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_email", "Invalid email format", nil)
-		return
-	}
-	if len(req.Password) < 8 {
-		writeErrorResponse(w, http.StatusBadRequest, "invalid_password", "Password must be at least 8 characters", nil)
 		return
 	}
 	if !isValidHostedOrgName(req.OrgName) {
@@ -152,12 +157,38 @@ func (h *HostedSignupHandlers) HandlePublicSignup(w http.ResponseWriter, r *http
 		return
 	}
 
+	// Issue a magic link for passwordless sign-in.
+	// Rate limiting is enforced per-email to prevent abuse.
+	if !h.magicLinks.AllowRequest(userID) {
+		writeErrorResponse(w, http.StatusTooManyRequests, "rate_limited", "Too many magic link requests. Please wait and try again.", nil)
+		return
+	}
+	token, err := h.magicLinks.GenerateToken(userID, orgID)
+	if err != nil {
+		cleanupProvisioning()
+		writeErrorResponse(w, http.StatusInternalServerError, "magic_link_failed", "Failed to generate magic link", nil)
+		return
+	}
+	baseURL := ""
+	if h.publicURL != nil {
+		baseURL = h.publicURL(r)
+	}
+	if baseURL == "" {
+		// Best-effort fallback; hosted deployments should set PublicURL/AgentConnectURL.
+		baseURL = "https://" + r.Host
+	}
+	if err := h.magicLinks.SendMagicLink(userID, orgID, token, baseURL); err != nil {
+		cleanupProvisioning()
+		writeErrorResponse(w, http.StatusInternalServerError, "magic_link_failed", "Failed to send magic link", nil)
+		return
+	}
+
 	hosted.GetHostedMetrics().RecordSignup()
 	hosted.GetHostedMetrics().RecordProvision("success")
 	writeJSON(w, http.StatusCreated, hostedSignupResponse{
 		OrgID:   orgID,
 		UserID:  userID,
-		Message: "Tenant provisioned successfully",
+		Message: "Check your email for a magic link to finish signing in.",
 	})
 }
 
