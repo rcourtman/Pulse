@@ -58,7 +58,7 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
   };
 
   // Load investigation details when outcome indicates a fix was proposed/executed
-  const fixRelatedOutcomes = new Set(['fix_queued', 'fix_executed', 'fix_failed', 'fix_verified', 'fix_verification_failed']);
+  const fixRelatedOutcomes = new Set(['fix_queued', 'fix_executed', 'fix_failed', 'fix_verified', 'fix_verification_failed', 'fix_verification_unknown']);
   const [investigation] = createResource(
     () => ({ findingId: props.findingId, outcome: props.investigationOutcome }),
     async ({ findingId, outcome }) => {
@@ -80,8 +80,15 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
     investigation()?.proposed_fix
   );
 
+  const isVerificationUnknown = createMemo(() =>
+    props.investigationOutcome === 'fix_verification_unknown'
+  );
+
   const isExecuted = createMemo(() =>
-    props.investigationOutcome === 'fix_executed' || props.investigationOutcome === 'fix_verified' || executionResult()?.success
+    props.investigationOutcome === 'fix_executed' ||
+    props.investigationOutcome === 'fix_verified' ||
+    props.investigationOutcome === 'fix_verification_unknown' ||
+    executionResult()?.success
   );
 
   const isFailed = createMemo(() =>
@@ -301,11 +308,17 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
 
         {/* Executed (from backend state, no local result) */}
         <Show when={isExecuted() && !executionResult()}>
-          <div class="flex items-center gap-2 text-green-600 dark:text-green-400">
+          <div class={`flex items-center gap-2 ${isVerificationUnknown() ? 'text-amber-700 dark:text-amber-300' : 'text-green-600 dark:text-green-400'}`}>
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <span class="text-sm font-medium">{props.investigationOutcome === 'fix_verified' ? 'Fix verified — issue resolved' : 'Fix executed successfully'}</span>
+            <span class="text-sm font-medium">
+              {props.investigationOutcome === 'fix_verified'
+                ? 'Fix verified — issue resolved'
+                : props.investigationOutcome === 'fix_verification_unknown'
+                  ? 'Fix executed — verification inconclusive'
+                  : 'Fix executed successfully'}
+            </span>
           </div>
           <Show when={investigation()?.proposed_fix}>
             {(fix) => (

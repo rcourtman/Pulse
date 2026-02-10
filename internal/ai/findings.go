@@ -74,15 +74,16 @@ const (
 type InvestigationOutcome string
 
 const (
-	InvestigationOutcomeResolved              InvestigationOutcome = "resolved"                // Issue was automatically fixed
-	InvestigationOutcomeFixQueued             InvestigationOutcome = "fix_queued"              // Fix identified, awaiting approval
-	InvestigationOutcomeFixExecuted           InvestigationOutcome = "fix_executed"            // Fix command executed
-	InvestigationOutcomeFixFailed             InvestigationOutcome = "fix_failed"              // Fix command failed
-	InvestigationOutcomeFixVerified           InvestigationOutcome = "fix_verified"            // Fix command verified successful
-	InvestigationOutcomeFixVerificationFailed InvestigationOutcome = "fix_verification_failed" // Fix ran but issue persists
-	InvestigationOutcomeNeedsAttention        InvestigationOutcome = "needs_attention"         // Requires user intervention
-	InvestigationOutcomeCannotFix             InvestigationOutcome = "cannot_fix"              // AI determined it cannot fix this
-	InvestigationOutcomeTimedOut              InvestigationOutcome = "timed_out"               // Transient timeout, will retry sooner
+	InvestigationOutcomeResolved               InvestigationOutcome = "resolved"                 // Issue was automatically fixed
+	InvestigationOutcomeFixQueued              InvestigationOutcome = "fix_queued"               // Fix identified, awaiting approval
+	InvestigationOutcomeFixExecuted            InvestigationOutcome = "fix_executed"             // Fix command executed
+	InvestigationOutcomeFixFailed              InvestigationOutcome = "fix_failed"               // Fix command failed
+	InvestigationOutcomeFixVerified            InvestigationOutcome = "fix_verified"             // Fix command verified successful
+	InvestigationOutcomeFixVerificationFailed  InvestigationOutcome = "fix_verification_failed"  // Fix ran but issue persists
+	InvestigationOutcomeFixVerificationUnknown InvestigationOutcome = "fix_verification_unknown" // Fix ran but verification was inconclusive
+	InvestigationOutcomeNeedsAttention         InvestigationOutcome = "needs_attention"          // Requires user intervention
+	InvestigationOutcomeCannotFix              InvestigationOutcome = "cannot_fix"               // AI determined it cannot fix this
+	InvestigationOutcomeTimedOut               InvestigationOutcome = "timed_out"                // Transient timeout, will retry sooner
 )
 
 // FindingLifecycleEvent represents an append-only log entry of finding lifecycle transitions.
@@ -203,7 +204,7 @@ func deriveLoopState(f *Finding) FindingLoopState {
 		return FindingLoopStateRemediating
 	case InvestigationOutcomeFixFailed, InvestigationOutcomeFixVerificationFailed:
 		return FindingLoopStateRemediationFailed
-	case InvestigationOutcomeNeedsAttention, InvestigationOutcomeCannotFix:
+	case InvestigationOutcomeFixVerificationUnknown, InvestigationOutcomeNeedsAttention, InvestigationOutcomeCannotFix:
 		return FindingLoopStateNeedsAttention
 	case InvestigationOutcomeTimedOut:
 		return FindingLoopStateTimedOut
@@ -252,7 +253,8 @@ func (f *Finding) ShouldInvestigate(autonomyLevel string) bool {
 	if InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeFixVerified ||
 		InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeResolved ||
 		InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeCannotFix ||
-		InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeNeedsAttention {
+		InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeNeedsAttention ||
+		InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeFixVerificationUnknown {
 		return false
 	}
 
@@ -351,7 +353,8 @@ func (f *Finding) CanRetryInvestigation() bool {
 		InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeFixVerified ||
 		InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeResolved ||
 		InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeCannotFix ||
-		InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeNeedsAttention {
+		InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeNeedsAttention ||
+		InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeFixVerificationUnknown {
 		return false
 	}
 	// Can't retry if currently running
@@ -433,6 +436,14 @@ type FindingsPersistence interface {
 	LoadFindings() (map[string]*Finding, error)
 }
 
+// FindingsPersistenceWithSuppression extends persistence to include explicit suppression rules.
+// This is versioned separately to keep backwards compatibility with existing persistence adapters.
+type FindingsPersistenceWithSuppression interface {
+	FindingsPersistence
+	SaveFindingsAndSuppression(findings map[string]*Finding, suppressionRules map[string]*SuppressionRule) error
+	LoadFindingsAndSuppression() (map[string]*Finding, map[string]*SuppressionRule, error)
+}
+
 // FindingsStore provides thread-safe storage for AI findings with optional persistence
 type FindingsStore struct {
 	mu       sync.RWMutex
@@ -474,23 +485,47 @@ func (s *FindingsStore) SetPersistence(p FindingsPersistence) error {
 
 	// Load existing findings from disk
 	if p != nil {
-		findings, err := p.LoadFindings()
+		var (
+			findings map[string]*Finding
+			rules    map[string]*SuppressionRule
+			err      error
+		)
+		if p2, ok := p.(FindingsPersistenceWithSuppression); ok {
+			findings, rules, err = p2.LoadFindingsAndSuppression()
+		} else {
+			findings, err = p.LoadFindings()
+		}
 		if err != nil {
 			return err
 		}
-		if len(findings) > 0 {
-			s.mu.Lock()
-			for id, f := range findings {
-				// Ensure derived fields are consistent after load.
-				f.syncLoopState()
-				s.findings[id] = f
-				s.byResource[f.ResourceID] = append(s.byResource[f.ResourceID], id)
-				if f.IsActive() {
-					s.activeCounts[f.Severity]++
+
+		s.mu.Lock()
+		// Reset derived indices/caches before rehydrating.
+		s.byResource = make(map[string][]string)
+		s.activeCounts = make(map[FindingSeverity]int)
+		if rules != nil {
+			s.suppressionRules = make(map[string]*SuppressionRule, len(rules))
+			for id, r := range rules {
+				if r == nil {
+					continue
 				}
+				copy := *r
+				s.suppressionRules[id] = &copy
 			}
-			s.mu.Unlock()
 		}
+		for id, f := range findings {
+			if f == nil {
+				continue
+			}
+			// Ensure derived fields are consistent after load.
+			f.syncLoopState()
+			s.findings[id] = f
+			s.byResource[f.ResourceID] = append(s.byResource[f.ResourceID], id)
+			if f.IsActive() {
+				s.activeCounts[f.Severity]++
+			}
+		}
+		s.mu.Unlock()
 	}
 	return nil
 }
@@ -519,12 +554,26 @@ func (s *FindingsStore) scheduleSave() {
 			copy := *f
 			findingsCopy[id] = &copy
 		}
+		rulesCopy := make(map[string]*SuppressionRule, len(s.suppressionRules))
+		for id, r := range s.suppressionRules {
+			if r == nil {
+				continue
+			}
+			copy := *r
+			rulesCopy[id] = &copy
+		}
 		persistence := s.persistence
 		onError := s.onSaveError
 		s.mu.Unlock()
 
 		if persistence != nil {
-			if err := persistence.SaveFindings(findingsCopy); err != nil {
+			var err error
+			if p2, ok := persistence.(FindingsPersistenceWithSuppression); ok {
+				err = p2.SaveFindingsAndSuppression(findingsCopy, rulesCopy)
+			} else {
+				err = persistence.SaveFindings(findingsCopy)
+			}
+			if err != nil {
 				// Track the error for visibility
 				s.mu.Lock()
 				s.lastSaveError = err
@@ -562,10 +611,21 @@ func (s *FindingsStore) ForceSave() error {
 		copy := *f
 		findingsCopy[id] = &copy
 	}
+	rulesCopy := make(map[string]*SuppressionRule, len(s.suppressionRules))
+	for id, r := range s.suppressionRules {
+		if r == nil {
+			continue
+		}
+		copy := *r
+		rulesCopy[id] = &copy
+	}
 	persistence := s.persistence
 	s.mu.Unlock()
 
 	if persistence != nil {
+		if p2, ok := persistence.(FindingsPersistenceWithSuppression); ok {
+			return p2.SaveFindingsAndSuppression(findingsCopy, rulesCopy)
+		}
 		return persistence.SaveFindings(findingsCopy)
 	}
 	return nil

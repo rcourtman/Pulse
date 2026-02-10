@@ -7,18 +7,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
 
-// FindingsPersistenceAdapter bridges ConfigPersistence to FindingsPersistence interface
-type FindingsPersistenceAdapter struct {
-	config *config.ConfigPersistence
-}
-
-// NewFindingsPersistenceAdapter creates a new adapter
-func NewFindingsPersistenceAdapter(cfg *config.ConfigPersistence) *FindingsPersistenceAdapter {
-	return &FindingsPersistenceAdapter{config: cfg}
-}
-
-// SaveFindings saves findings to disk via ConfigPersistence
-func (a *FindingsPersistenceAdapter) SaveFindings(findings map[string]*Finding) error {
+func findingsToRecords(findings map[string]*Finding) map[string]*config.AIFindingRecord {
 	// Convert from Finding to AIFindingRecord
 	records := make(map[string]*config.AIFindingRecord, len(findings))
 	for id, f := range findings {
@@ -85,19 +74,13 @@ func (a *FindingsPersistenceAdapter) SaveFindings(findings map[string]*Finding) 
 			LastRegressionAt:       f.LastRegressionAt,
 		}
 	}
-	return a.config.SaveAIFindings(records)
+	return records
 }
 
-// LoadFindings loads findings from disk via ConfigPersistence
-func (a *FindingsPersistenceAdapter) LoadFindings() (map[string]*Finding, error) {
-	data, err := a.config.LoadAIFindings()
-	if err != nil {
-		return nil, err
-	}
-
+func recordsToFindings(records map[string]*config.AIFindingRecord) map[string]*Finding {
 	// Convert from AIFindingRecord to Finding
-	findings := make(map[string]*Finding, len(data.Findings))
-	for id, r := range data.Findings {
+	findings := make(map[string]*Finding, len(records))
+	for id, r := range records {
 		lifecycle := make([]FindingLifecycleEvent, 0, len(r.Lifecycle))
 		for _, e := range r.Lifecycle {
 			lifecycle = append(lifecycle, FindingLifecycleEvent{
@@ -147,5 +130,89 @@ func (a *FindingsPersistenceAdapter) LoadFindings() (map[string]*Finding, error)
 			LastRegressionAt:       r.LastRegressionAt,
 		}
 	}
-	return findings, nil
+	return findings
+}
+
+func suppressionRulesToRecords(rules map[string]*SuppressionRule) map[string]*config.AISuppressionRuleRecord {
+	records := make(map[string]*config.AISuppressionRuleRecord, len(rules))
+	for id, r := range rules {
+		if r == nil {
+			continue
+		}
+		records[id] = &config.AISuppressionRuleRecord{
+			ID:              r.ID,
+			ResourceID:      r.ResourceID,
+			ResourceName:    r.ResourceName,
+			Category:        string(r.Category),
+			Description:     r.Description,
+			DismissedReason: r.DismissedReason,
+			CreatedAt:       r.CreatedAt,
+			CreatedFrom:     r.CreatedFrom,
+			FindingID:       r.FindingID,
+		}
+	}
+	return records
+}
+
+func recordsToSuppressionRules(records map[string]*config.AISuppressionRuleRecord) map[string]*SuppressionRule {
+	rules := make(map[string]*SuppressionRule, len(records))
+	for id, r := range records {
+		if r == nil {
+			continue
+		}
+		rules[id] = &SuppressionRule{
+			ID:              r.ID,
+			ResourceID:      r.ResourceID,
+			ResourceName:    r.ResourceName,
+			Category:        FindingCategory(r.Category),
+			Description:     r.Description,
+			DismissedReason: r.DismissedReason,
+			CreatedAt:       r.CreatedAt,
+			CreatedFrom:     r.CreatedFrom,
+			FindingID:       r.FindingID,
+		}
+	}
+	return rules
+}
+
+// FindingsPersistenceAdapter bridges ConfigPersistence to FindingsPersistence interface
+type FindingsPersistenceAdapter struct {
+	config *config.ConfigPersistence
+}
+
+// NewFindingsPersistenceAdapter creates a new adapter
+func NewFindingsPersistenceAdapter(cfg *config.ConfigPersistence) *FindingsPersistenceAdapter {
+	return &FindingsPersistenceAdapter{config: cfg}
+}
+
+// SaveFindings saves findings to disk via ConfigPersistence
+func (a *FindingsPersistenceAdapter) SaveFindings(findings map[string]*Finding) error {
+	records := findingsToRecords(findings)
+	// Preserve existing suppression rules if present.
+	return a.config.SaveAIFindingsWithSuppression(records, nil)
+}
+
+// LoadFindings loads findings from disk via ConfigPersistence
+func (a *FindingsPersistenceAdapter) LoadFindings() (map[string]*Finding, error) {
+	data, err := a.config.LoadAIFindings()
+	if err != nil {
+		return nil, err
+	}
+	return recordsToFindings(data.Findings), nil
+}
+
+// SaveFindingsAndSuppression saves findings and explicit suppression rules to disk.
+func (a *FindingsPersistenceAdapter) SaveFindingsAndSuppression(findings map[string]*Finding, suppressionRules map[string]*SuppressionRule) error {
+	records := findingsToRecords(findings)
+	ruleRecords := suppressionRulesToRecords(suppressionRules)
+	return a.config.SaveAIFindingsWithSuppression(records, ruleRecords)
+}
+
+// LoadFindingsAndSuppression loads findings and explicit suppression rules from disk.
+func (a *FindingsPersistenceAdapter) LoadFindingsAndSuppression() (map[string]*Finding, map[string]*SuppressionRule, error) {
+	data, err := a.config.LoadAIFindings()
+	if err != nil {
+		return nil, nil, err
+	}
+	return recordsToFindings(data.Findings), recordsToSuppressionRules(data.SuppressionRules), nil
 }

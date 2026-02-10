@@ -487,7 +487,17 @@ export interface ApprovalExecutionResult {
 // ============================================
 
 export type InvestigationStatus = 'pending' | 'running' | 'completed' | 'failed' | 'needs_attention';
-export type InvestigationOutcome = 'resolved' | 'fix_queued' | 'fix_executed' | 'fix_failed' | 'needs_attention' | 'cannot_fix' | 'timed_out' | 'fix_verified' | 'fix_verification_failed';
+export type InvestigationOutcome =
+  | 'resolved'
+  | 'fix_queued'
+  | 'fix_executed'
+  | 'fix_failed'
+  | 'needs_attention'
+  | 'cannot_fix'
+  | 'timed_out'
+  | 'fix_verified'
+  | 'fix_verification_failed'
+  | 'fix_verification_unknown';
 
 export interface ProposedFix {
   id: string;

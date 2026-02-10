@@ -26,7 +26,7 @@ import { logger } from '@/utils/logger';
 const VALID_INVESTIGATION_STATUSES = new Set<string>(['pending', 'running', 'completed', 'failed', 'needs_attention']);
 const VALID_INVESTIGATION_OUTCOMES = new Set<string>([
   'resolved', 'fix_queued', 'fix_executed', 'fix_failed',
-  'needs_attention', 'cannot_fix', 'timed_out', 'fix_verified', 'fix_verification_failed',
+  'needs_attention', 'cannot_fix', 'timed_out', 'fix_verified', 'fix_verification_failed', 'fix_verification_unknown',
 ]);
 const VALID_SEVERITIES = new Set<string>(['critical', 'warning', 'info', 'watch']);
 const VALID_SOURCES = new Set<string>(['threshold', 'ai-patrol', 'ai-chat', 'anomaly', 'correlation', 'forecast']);
@@ -81,7 +81,7 @@ export interface UnifiedFinding {
   // Investigation fields (Patrol Autonomy)
   investigationSessionId?: string;
   investigationStatus?: 'pending' | 'running' | 'completed' | 'failed' | 'needs_attention';
-  investigationOutcome?: 'resolved' | 'fix_queued' | 'fix_executed' | 'fix_failed' | 'needs_attention' | 'cannot_fix' | 'timed_out' | 'fix_verified' | 'fix_verification_failed';
+  investigationOutcome?: 'resolved' | 'fix_queued' | 'fix_executed' | 'fix_failed' | 'needs_attention' | 'cannot_fix' | 'timed_out' | 'fix_verified' | 'fix_verification_failed' | 'fix_verification_unknown';
   lastInvestigatedAt?: string;
   investigationAttempts?: number;
   loopState?: string;
@@ -318,7 +318,7 @@ export const aiIntelligenceStore = {
   },
 
   get findingsNeedingAttention() {
-    const actionableOutcomes = new Set(['fix_verification_failed', 'fix_failed', 'timed_out', 'needs_attention', 'cannot_fix']);
+    const actionableOutcomes = new Set(['fix_verification_failed', 'fix_verification_unknown', 'fix_failed', 'timed_out', 'needs_attention', 'cannot_fix']);
     return unifiedFindings().filter(f =>
       f.status === 'active' && f.investigationOutcome && actionableOutcomes.has(f.investigationOutcome)
     );

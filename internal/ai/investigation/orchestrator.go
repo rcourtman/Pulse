@@ -828,11 +828,20 @@ func (o *Orchestrator) processResult(ctx context.Context, investigation *Investi
 						vmc := o.metricsCallback
 						o.mu.RUnlock()
 						if verifyErr != nil {
-							log.Error().Err(verifyErr).Str("finding_id", finding.ID).Msg("Fix verification failed with error")
-							outcome = OutcomeFixVerificationFailed
-							fix.Rationale += fmt.Sprintf("\n\nVerification error: %v", verifyErr)
-							if vmc != nil {
-								vmc.RecordFixVerification("error")
+							if errors.Is(verifyErr, ErrVerificationUnknown) {
+								log.Warn().Err(verifyErr).Str("finding_id", finding.ID).Msg("Fix verification inconclusive")
+								outcome = OutcomeFixVerificationUnknown
+								fix.Rationale += fmt.Sprintf("\n\nVerification inconclusive: %v", verifyErr)
+								if vmc != nil {
+									vmc.RecordFixVerification("unknown")
+								}
+							} else {
+								log.Error().Err(verifyErr).Str("finding_id", finding.ID).Msg("Fix verification failed with error")
+								outcome = OutcomeFixVerificationFailed
+								fix.Rationale += fmt.Sprintf("\n\nVerification error: %v", verifyErr)
+								if vmc != nil {
+									vmc.RecordFixVerification("error")
+								}
 							}
 						} else if !verified {
 							log.Warn().Str("finding_id", finding.ID).Msg("Fix executed but issue persists")

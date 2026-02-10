@@ -217,6 +217,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     // Outcome priority: findings needing attention sort first
     const outcomeOrder: Record<string, number> = {
       fix_verification_failed: 0,
+      fix_verification_unknown: 1,
       fix_failed: 0,
       timed_out: 1,
       needs_attention: 1,
@@ -454,6 +455,8 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
           return `Resolved while fix was pending ${resolvedTime}`;
         case 'fix_verification_failed':
           return `Resolved after failed verification ${resolvedTime}`;
+        case 'fix_verification_unknown':
+          return `Resolved after inconclusive verification ${resolvedTime}`;
         case 'timed_out':
           return `Resolved after investigation timeout ${resolvedTime}`;
         case 'cannot_fix':
@@ -901,7 +904,8 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
         finding.investigationOutcome === 'fix_executed' ||
         finding.investigationOutcome === 'fix_failed' ||
         finding.investigationOutcome === 'fix_verified' ||
-        finding.investigationOutcome === 'fix_verification_failed'
+        finding.investigationOutcome === 'fix_verification_failed' ||
+        finding.investigationOutcome === 'fix_verification_unknown'
       )}>
         <ApprovalSection
           findingId={finding.id}

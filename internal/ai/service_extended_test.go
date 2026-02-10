@@ -766,7 +766,12 @@ func TestService_PatrolManagement(t *testing.T) {
 	// 1. Start Patrol
 	svc.StartPatrol(ctx)
 
-	if patrol.GetConfig().Interval != 30*time.Minute {
+	// Community installs enforce a minimum patrol interval unless licensed for auto-fix.
+	expectedInterval := 30 * time.Minute
+	if !mockLicense.features[FeatureAIAutoFix] && expectedInterval < minCommunityPatrolInterval {
+		expectedInterval = minCommunityPatrolInterval
+	}
+	if patrol.GetConfig().Interval != expectedInterval {
 		t.Errorf("Patrol interval not set correctly: %v", patrol.GetConfig().Interval)
 	}
 	if !alertAnalyzer.IsEnabled() {

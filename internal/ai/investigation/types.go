@@ -41,15 +41,16 @@ const (
 type Outcome string
 
 const (
-	OutcomeResolved              Outcome = "resolved"
-	OutcomeFixQueued             Outcome = "fix_queued"
-	OutcomeFixExecuted           Outcome = "fix_executed"            // Fix was auto-executed successfully
-	OutcomeFixFailed             Outcome = "fix_failed"              // Fix was attempted but failed
-	OutcomeFixVerified           Outcome = "fix_verified"            // Fix worked, issue resolved
-	OutcomeFixVerificationFailed Outcome = "fix_verification_failed" // Fix ran but issue persists
-	OutcomeNeedsAttention        Outcome = "needs_attention"
-	OutcomeCannotFix             Outcome = "cannot_fix"
-	OutcomeTimedOut              Outcome = "timed_out" // Transient timeout, will retry sooner
+	OutcomeResolved               Outcome = "resolved"
+	OutcomeFixQueued              Outcome = "fix_queued"
+	OutcomeFixExecuted            Outcome = "fix_executed"             // Fix was auto-executed successfully
+	OutcomeFixFailed              Outcome = "fix_failed"               // Fix was attempted but failed
+	OutcomeFixVerified            Outcome = "fix_verified"             // Fix worked, issue resolved
+	OutcomeFixVerificationFailed  Outcome = "fix_verification_failed"  // Fix ran but issue persists
+	OutcomeFixVerificationUnknown Outcome = "fix_verification_unknown" // Fix ran but verification was inconclusive
+	OutcomeNeedsAttention         Outcome = "needs_attention"
+	OutcomeCannotFix              Outcome = "cannot_fix"
+	OutcomeTimedOut               Outcome = "timed_out" // Transient timeout, will retry sooner
 )
 
 // Fix represents a proposed remediation action

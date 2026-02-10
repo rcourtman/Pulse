@@ -42,7 +42,17 @@ export interface Finding {
 }
 
 export type InvestigationStatus = 'pending' | 'running' | 'completed' | 'failed' | 'needs_attention';
-export type InvestigationOutcome = 'resolved' | 'fix_queued' | 'fix_executed' | 'fix_failed' | 'needs_attention' | 'cannot_fix' | 'timed_out' | 'fix_verified' | 'fix_verification_failed';
+export type InvestigationOutcome =
+  | 'resolved'
+  | 'fix_queued'
+  | 'fix_executed'
+  | 'fix_failed'
+  | 'needs_attention'
+  | 'cannot_fix'
+  | 'timed_out'
+  | 'fix_verified'
+  | 'fix_verification_failed'
+  | 'fix_verification_unknown';
 export type PatrolAutonomyLevel = 'monitor' | 'approval' | 'assisted' | 'full';
 
 export interface PatrolAutonomySettings {
@@ -297,6 +307,7 @@ export const investigationOutcomeLabels: Record<InvestigationOutcome, string> = 
     timed_out: 'Timed Out — Will Retry',
     fix_verified: 'Fix Verified',
     fix_verification_failed: 'Verification Failed',
+    fix_verification_unknown: 'Verification Inconclusive',
 };
 
 /**
@@ -312,6 +323,7 @@ export const investigationOutcomeColors: Record<InvestigationOutcome, string> = 
     timed_out: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
     fix_verified: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
     fix_verification_failed: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
+    fix_verification_unknown: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
 };
 
 // =============================================================================

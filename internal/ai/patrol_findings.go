@@ -5,6 +5,7 @@ package ai
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/baseline"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/investigation"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/remediation"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/safety"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
@@ -1247,61 +1249,54 @@ func (p *PatrolService) MaybeInvestigateFinding(f *Finding) {
 // It bypasses tryStartRun (the patrol mutex) because verification runs inline
 // within the investigation goroutine.
 func (p *PatrolService) VerifyFixResolved(ctx context.Context, resourceID, resourceType, findingKey, findingID string) (bool, error) {
-	if p.stateProvider == nil {
-		return false, fmt.Errorf("no state provider available for verification")
+	if p == nil || p.stateProvider == nil {
+		return false, fmt.Errorf("%w: no state provider available", investigation.ErrVerificationUnknown)
 	}
-	if p.aiService == nil {
-		return false, fmt.Errorf("AI service not available for verification")
+	if ctx == nil {
+		ctx = context.Background()
 	}
 
-	// Check circuit breaker before making LLM calls
-	if p.circuitBreaker != nil && !p.circuitBreaker.Allow() {
-		return false, fmt.Errorf("circuit breaker open, skipping verification")
+	startTime := time.Now()
+
+	// Prefer canonical finding details from store when available.
+	var finding *Finding
+	if p.findings != nil && findingID != "" {
+		finding = p.findings.Get(findingID)
+	}
+	if finding != nil {
+		if resourceID == "" {
+			resourceID = finding.ResourceID
+		}
+		if resourceType == "" {
+			resourceType = finding.ResourceType
+		}
+		if findingKey == "" {
+			findingKey = finding.Key
+		}
 	}
 
 	log.Info().
 		Str("finding_id", findingID).
 		Str("resource_id", resourceID).
-		Msg("Running verification patrol to confirm fix")
+		Str("key", findingKey).
+		Msg("Running deterministic verification to confirm fix")
 
-	scope := PatrolScope{
-		ResourceIDs:   []string{resourceID},
-		ResourceTypes: []string{resourceType},
-		Depth:         PatrolDepthQuick,
-		Reason:        TriggerReasonVerification,
-		Context:       fmt.Sprintf("Verifying fix for finding: %s", findingID),
-		FindingID:     findingID,
-		NoStream:      true,
-	}
+	verified, verifyErr := p.verifyFixDeterministically(ctx, finding, resourceID, resourceType, findingKey, findingID)
 
-	startTime := time.Now()
-
-	fullState := p.stateProvider.GetState()
-	filteredState := p.filterStateByScope(fullState, scope)
-
-	result, err := p.runAIAnalysis(ctx, filteredState, &scope)
-	if err != nil {
-		if p.circuitBreaker != nil {
-			p.circuitBreaker.RecordFailure(err)
-		}
-		return false, fmt.Errorf("verification patrol failed: %w", err)
-	}
-	if result == nil {
-		return false, fmt.Errorf("verification patrol returned no result")
-	}
-	if p.circuitBreaker != nil {
-		p.circuitBreaker.RecordSuccess()
-	}
-
-	// Record verification run in patrol history
 	endTime := time.Now()
 	duration := endTime.Sub(startTime)
-	status := "completed"
-	findingsSummary := "Verification: no issues found"
-	if len(result.Findings) > 0 {
-		findingsSummary = fmt.Sprintf("Verification: %d issue(s) still present", len(result.Findings))
+
+	// Persist a verification run record for debugging and user transparency.
+	status := "healthy"
+	summary := "Verification: issue resolved"
+	if verifyErr != nil {
+		status = "error"
+		summary = fmt.Sprintf("Verification inconclusive: %v", verifyErr)
+	} else if !verified {
 		status = "issues_found"
+		summary = "Verification: issue still present"
 	}
+
 	verifyRecord := PatrolRunRecord{
 		ID:                 fmt.Sprintf("%d", startTime.UnixNano()),
 		StartedAt:          startTime,
@@ -1310,34 +1305,371 @@ func (p *PatrolService) VerifyFixResolved(ctx context.Context, resourceID, resou
 		DurationMs:         duration.Milliseconds(),
 		Type:               "verification",
 		TriggerReason:      string(TriggerReasonVerification),
-		ScopeResourceIDs:   scope.ResourceIDs,
-		ScopeResourceTypes: scope.ResourceTypes,
-		ScopeContext:       scope.Context,
+		ScopeResourceIDs:   []string{resourceID},
+		ScopeResourceTypes: []string{resourceType},
+		ScopeContext:       fmt.Sprintf("Verifying fix for finding: %s", findingID),
 		FindingID:          findingID,
-		NewFindings:        len(result.Findings),
-		FindingsSummary:    findingsSummary,
+		NewFindings:        0,
+		FindingsSummary:    summary,
 		Status:             status,
-		InputTokens:        result.InputTokens,
-		OutputTokens:       result.OutputTokens,
 	}
 	if p.runHistoryStore != nil {
 		p.runHistoryStore.Add(verifyRecord)
 	}
 
-	// Check if the original finding was re-detected
-	for _, f := range result.Findings {
-		if (findingKey != "" && f.Key == findingKey) || f.ResourceID == resourceID {
-			log.Info().
-				Str("finding_id", findingID).
-				Str("re_detected_key", f.Key).
-				Msg("Verification patrol re-detected the issue")
-			return false, nil // Issue still present
+	return verified, verifyErr
+}
+
+func (p *PatrolService) verifyFixDeterministically(
+	ctx context.Context,
+	finding *Finding,
+	resourceID, resourceType, findingKey, findingID string,
+) (bool, error) {
+	key := normalizeFindingKey(findingKey)
+	if key == "" {
+		return false, fmt.Errorf("%w: missing finding key", investigation.ErrVerificationUnknown)
+	}
+
+	// State-only verifiers (no tools required).
+	fullState := p.stateProvider.GetState()
+	switch key {
+	case "backup-stale":
+		ok, err := verifyBackupFresh(fullState, resourceID)
+		if err != nil {
+			return false, err
+		}
+		return ok, nil
+	case "cpu-high", "memory-high", "disk-high":
+		ok, err := verifyMetricRecovered(fullState, p.thresholds, key, resourceID, resourceType)
+		if err != nil {
+			return false, err
+		}
+		return ok, nil
+	case "guest-unreachable":
+		ok, err := p.verifyGuestReachability(ctx, fullState, resourceID)
+		if err != nil {
+			return false, err
+		}
+		return ok, nil
+	}
+
+	// Tool-based verifiers (deterministic tool calls + deterministic signal parsing).
+	executor, execErr := p.getExecutorForVerification()
+	if execErr != nil {
+		return false, execErr
+	}
+
+	p.mu.RLock()
+	sigThresholds := SignalThresholdsFromPatrol(p.thresholds)
+	p.mu.RUnlock()
+
+	switch key {
+	case "smart-failure":
+		node := strings.TrimSpace(resourceID)
+		device := ""
+		if finding != nil {
+			device = strings.TrimSpace(finding.ResourceName)
+		}
+		return p.verifyBySignals(ctx, executor, sigThresholds, key, node, device)
+	case "backup-failed":
+		guestID := strings.TrimSpace(resourceID)
+		return p.verifyBySignals(ctx, executor, sigThresholds, key, guestID, "")
+	default:
+		return false, fmt.Errorf("%w: no deterministic verifier for key=%q (finding_id=%s)", investigation.ErrVerificationUnknown, key, findingID)
+	}
+}
+
+func (p *PatrolService) getExecutorForVerification() (*tools.PulseToolExecutor, error) {
+	if p == nil || p.aiService == nil {
+		return nil, fmt.Errorf("%w: AI service unavailable", investigation.ErrVerificationUnknown)
+	}
+	cs := p.aiService.GetChatService()
+	if cs == nil {
+		return nil, fmt.Errorf("%w: chat service unavailable", investigation.ErrVerificationUnknown)
+	}
+	executorAccessor, ok := cs.(chatServiceExecutorAccessor)
+	if !ok {
+		return nil, fmt.Errorf("%w: chat service does not expose tool executor", investigation.ErrVerificationUnknown)
+	}
+	exec := executorAccessor.GetExecutor()
+	if exec == nil {
+		return nil, fmt.Errorf("%w: tool executor unavailable", investigation.ErrVerificationUnknown)
+	}
+	return exec, nil
+}
+
+func (p *PatrolService) verifyBySignals(
+	ctx context.Context,
+	executor *tools.PulseToolExecutor,
+	thresholds SignalThresholds,
+	findingKey string,
+	resourceID string,
+	resourceName string,
+) (bool, error) {
+	if executor == nil {
+		return false, fmt.Errorf("%w: tool executor unavailable", investigation.ErrVerificationUnknown)
+	}
+
+	var toolName string
+	args := map[string]interface{}{}
+	switch findingKey {
+	case "smart-failure":
+		toolName = "pulse_storage"
+		args = map[string]interface{}{"type": "disk_health"}
+		if strings.TrimSpace(resourceID) != "" {
+			args["node"] = resourceID
+		}
+	case "backup-failed":
+		toolName = "pulse_storage"
+		args = map[string]interface{}{"type": "backup_tasks"}
+		if strings.TrimSpace(resourceID) != "" {
+			args["guest_id"] = resourceID
+		}
+	default:
+		return false, fmt.Errorf("%w: unhandled signal verifier key=%q", investigation.ErrVerificationUnknown, findingKey)
+	}
+
+	tc, err := executeToolCall(ctx, executor, toolName, args)
+	if err != nil {
+		return false, err
+	}
+
+	signals := DetectSignals([]ToolCallRecord{tc}, thresholds)
+	persisting := false
+	for _, s := range signals {
+		switch findingKey {
+		case "smart-failure":
+			if s.SignalType == SignalSMARTFailure {
+				if resourceName == "" || strings.TrimSpace(strings.ToLower(s.ResourceName)) == strings.TrimSpace(strings.ToLower(resourceName)) {
+					persisting = true
+				}
+			}
+		case "backup-failed":
+			if s.SignalType == SignalBackupFailed && (resourceID == "" || s.ResourceID == resourceID) {
+				persisting = true
+			}
+		}
+	}
+	if persisting {
+		return false, nil
+	}
+	return true, nil
+}
+
+func executeToolCall(ctx context.Context, executor *tools.PulseToolExecutor, toolName string, args map[string]interface{}) (ToolCallRecord, error) {
+	if executor == nil {
+		return ToolCallRecord{}, fmt.Errorf("%w: tool executor unavailable", investigation.ErrVerificationUnknown)
+	}
+	if toolName == "" {
+		return ToolCallRecord{}, fmt.Errorf("%w: missing tool name", investigation.ErrVerificationUnknown)
+	}
+	if args == nil {
+		args = map[string]interface{}{}
+	}
+	inputBytes, _ := json.Marshal(args)
+	inputStr := string(inputBytes)
+	start := time.Now().UnixMilli()
+
+	result, execErr := executor.ExecuteTool(ctx, toolName, args)
+	output := ""
+	success := false
+	if execErr != nil {
+		output = execErr.Error()
+	} else {
+		output = formatToolResult(result)
+		success = !result.IsError
+	}
+	end := time.Now().UnixMilli()
+
+	if execErr != nil {
+		return ToolCallRecord{}, fmt.Errorf("%w: tool execution failed (%s): %v", investigation.ErrVerificationUnknown, toolName, execErr)
+	}
+	if result.IsError {
+		return ToolCallRecord{}, fmt.Errorf("%w: tool returned error (%s): %s", investigation.ErrVerificationUnknown, toolName, output)
+	}
+	// Most verification probes rely on parsing structured JSON outputs. If we receive
+	// non-JSON text, treat verification as inconclusive rather than "resolved".
+	if toolName == "pulse_storage" || toolName == "pulse_metrics" || toolName == "pulse_alerts" {
+		if !isValidJSON(output) {
+			return ToolCallRecord{}, fmt.Errorf("%w: tool returned non-JSON output (%s)", investigation.ErrVerificationUnknown, toolName)
 		}
 	}
 
-	log.Info().
-		Str("finding_id", findingID).
-		Int("findings_count", len(result.Findings)).
-		Msg("Verification patrol found no matching issues - fix confirmed")
-	return true, nil // No matching finding = issue resolved
+	return ToolCallRecord{
+		ID:        fmt.Sprintf("verify-%d", time.Now().UnixNano()),
+		ToolName:  toolName,
+		Input:     truncateString(inputStr, MaxToolInputSize),
+		Output:    output,
+		Success:   success,
+		StartTime: start,
+		EndTime:   end,
+		Duration:  end - start,
+	}, nil
+}
+
+func isValidJSON(s string) bool {
+	trimmed := strings.TrimSpace(s)
+	if trimmed == "" {
+		return false
+	}
+	if trimmed[0] != '{' && trimmed[0] != '[' {
+		return false
+	}
+	var v interface{}
+	return json.Unmarshal([]byte(trimmed), &v) == nil
+}
+
+func verifyBackupFresh(state models.StateSnapshot, guestID string) (bool, error) {
+	vmid := strings.TrimSpace(guestID)
+	if vmid == "" {
+		return false, fmt.Errorf("%w: missing guest id", investigation.ErrVerificationUnknown)
+	}
+
+	now := time.Now()
+	var last time.Time
+	for _, vm := range state.VMs {
+		if fmt.Sprintf("%d", vm.VMID) == vmid || vm.ID == vmid || vm.Name == vmid {
+			last = vm.LastBackup
+			break
+		}
+	}
+	if last.IsZero() {
+		for _, ct := range state.Containers {
+			if fmt.Sprintf("%d", ct.VMID) == vmid || ct.ID == vmid || ct.Name == vmid {
+				last = ct.LastBackup
+				break
+			}
+		}
+	}
+	if last.IsZero() {
+		// If the guest cannot be found, verification can't be concluded deterministically.
+		return false, fmt.Errorf("%w: guest not found for backup verification (%s)", investigation.ErrVerificationUnknown, vmid)
+	}
+
+	if now.Sub(last) <= 48*time.Hour {
+		return true, nil
+	}
+	return false, nil
+}
+
+func verifyMetricRecovered(state models.StateSnapshot, thresholds PatrolThresholds, key, resourceID, resourceType string) (bool, error) {
+	rid := strings.TrimSpace(resourceID)
+	if rid == "" {
+		return false, fmt.Errorf("%w: missing resource id", investigation.ErrVerificationUnknown)
+	}
+
+	// Use a small margin to avoid flapping around exact thresholds.
+	const margin = 0.95
+
+	// Nodes
+	for _, n := range state.Nodes {
+		if n.ID != rid && n.Name != rid {
+			continue
+		}
+		switch key {
+		case "cpu-high":
+			return (n.CPU * 100) < thresholds.NodeCPUWarning*margin, nil
+		case "memory-high":
+			return n.Memory.Usage < thresholds.NodeMemWarning*margin, nil
+		}
+	}
+
+	// Guests
+	for _, vm := range state.VMs {
+		if vm.ID != rid && vm.Name != rid && fmt.Sprintf("%d", vm.VMID) != rid {
+			continue
+		}
+		switch key {
+		case "cpu-high":
+			return (vm.CPU * 100) < thresholds.NodeCPUWarning*margin, nil
+		case "memory-high":
+			return vm.Memory.Usage < thresholds.GuestMemWarning*margin, nil
+		case "disk-high":
+			return vm.Disk.Usage < thresholds.GuestDiskWarn*margin, nil
+		}
+	}
+	for _, ct := range state.Containers {
+		if ct.ID != rid && ct.Name != rid && fmt.Sprintf("%d", ct.VMID) != rid {
+			continue
+		}
+		switch key {
+		case "cpu-high":
+			return (ct.CPU * 100) < thresholds.NodeCPUWarning*margin, nil
+		case "memory-high":
+			return ct.Memory.Usage < thresholds.GuestMemWarning*margin, nil
+		case "disk-high":
+			return ct.Disk.Usage < thresholds.GuestDiskWarn*margin, nil
+		}
+	}
+
+	// Storage pools
+	for _, s := range state.Storage {
+		if s.ID != rid && s.Name != rid {
+			continue
+		}
+		switch key {
+		case "disk-high":
+			return s.Usage < thresholds.StorageWarning*margin, nil
+		}
+	}
+
+	// If we can't locate the resource, verification is inconclusive.
+	return false, fmt.Errorf("%w: resource not found for metric verification (%s)", investigation.ErrVerificationUnknown, rid)
+}
+
+func (p *PatrolService) verifyGuestReachability(ctx context.Context, state models.StateSnapshot, guestID string) (bool, error) {
+	p.mu.RLock()
+	prober := p.guestProber
+	p.mu.RUnlock()
+	if prober == nil {
+		return false, fmt.Errorf("%w: guest prober not configured", investigation.ErrVerificationUnknown)
+	}
+
+	vmid := strings.TrimSpace(guestID)
+	if vmid == "" {
+		return false, fmt.Errorf("%w: missing guest id", investigation.ErrVerificationUnknown)
+	}
+
+	var node string
+	var ip string
+	for _, vm := range state.VMs {
+		if vm.ID == vmid || vm.Name == vmid || fmt.Sprintf("%d", vm.VMID) == vmid {
+			node = vm.Node
+			if len(vm.IPAddresses) > 0 {
+				ip = vm.IPAddresses[0]
+			}
+			break
+		}
+	}
+	if node == "" {
+		for _, ct := range state.Containers {
+			if ct.ID == vmid || ct.Name == vmid || fmt.Sprintf("%d", ct.VMID) == vmid {
+				node = ct.Node
+				if len(ct.IPAddresses) > 0 {
+					ip = ct.IPAddresses[0]
+				}
+				break
+			}
+		}
+	}
+	if node == "" || ip == "" {
+		return false, fmt.Errorf("%w: missing node/ip for guest reachability verification (guest=%s)", investigation.ErrVerificationUnknown, vmid)
+	}
+
+	agentID, ok := prober.GetAgentForHost(node)
+	if !ok || strings.TrimSpace(agentID) == "" {
+		return false, fmt.Errorf("%w: no agent available for host %s", investigation.ErrVerificationUnknown, node)
+	}
+
+	results, err := prober.PingGuests(ctx, agentID, []string{ip})
+	if err != nil {
+		return false, fmt.Errorf("%w: reachability probe failed: %v", investigation.ErrVerificationUnknown, err)
+	}
+	if res, ok := results[ip]; ok {
+		if res.Reachable {
+			return true, nil
+		}
+		return false, nil
+	}
+	return false, fmt.Errorf("%w: missing ping result for %s", investigation.ErrVerificationUnknown, ip)
 }

@@ -1908,6 +1908,22 @@ type AIFindingsData struct {
 	LastSaved time.Time `json:"last_saved"`
 	// Findings is a map of finding ID to finding data
 	Findings map[string]*AIFindingRecord `json:"findings"`
+	// SuppressionRules stores explicit suppression rules created by the user (or derived from a "suppress" action).
+	// These must persist across restarts; they are distinct from dismissed findings.
+	SuppressionRules map[string]*AISuppressionRuleRecord `json:"suppression_rules,omitempty"`
+}
+
+// AISuppressionRuleRecord is a persisted suppression rule.
+type AISuppressionRuleRecord struct {
+	ID              string    `json:"id"`
+	ResourceID      string    `json:"resource_id,omitempty"`      // Empty means "any resource"
+	ResourceName    string    `json:"resource_name,omitempty"`    // Human-readable name for display
+	Category        string    `json:"category,omitempty"`         // Empty means "any category"
+	Description     string    `json:"description"`                // User's reason
+	DismissedReason string    `json:"dismissed_reason,omitempty"` // Optional
+	CreatedAt       time.Time `json:"created_at"`
+	CreatedFrom     string    `json:"created_from,omitempty"` // "finding"/"dismissed"/"manual"/"suppress"
+	FindingID       string    `json:"finding_id,omitempty"`   // Original finding ID (if derived)
 }
 
 // AIFindingRecord is a persisted finding with full history
@@ -1958,33 +1974,39 @@ type AIFindingRecord struct {
 	LastRegressionAt *time.Time `json:"last_regression_at,omitempty"`
 }
 
-// SaveAIFindings persists AI findings to disk
+// SaveAIFindings persists AI findings to disk, preserving any existing suppression rules.
 func (c *ConfigPersistence) SaveAIFindings(findings map[string]*AIFindingRecord) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	return c.SaveAIFindingsWithSuppression(findings, nil)
+}
 
-	if err := c.EnsureConfigDir(); err != nil {
-		return err
+// SaveAIFindingsWithSuppression persists AI findings + explicit suppression rules to disk.
+// If suppressionRules is nil, existing suppression rules (if any) are preserved.
+func (c *ConfigPersistence) SaveAIFindingsWithSuppression(findings map[string]*AIFindingRecord, suppressionRules map[string]*AISuppressionRuleRecord) error {
+	// Preserve suppression rules if caller didn't provide them.
+	if suppressionRules == nil {
+		if existing, err := c.LoadAIFindings(); err == nil && existing != nil && existing.SuppressionRules != nil {
+			suppressionRules = existing.SuppressionRules
+		}
+	}
+	if findings == nil {
+		findings = make(map[string]*AIFindingRecord)
 	}
 
 	data := AIFindingsData{
-		Version:   2, // Bumped from 1: finding IDs now include issue key
-		LastSaved: time.Now(),
-		Findings:  findings,
+		Version:          3, // Bumped from 2: persisted suppression rules alongside findings
+		LastSaved:        time.Now(),
+		Findings:         findings,
+		SuppressionRules: suppressionRules,
 	}
 
-	jsonData, err := json.Marshal(data)
-	if err != nil {
-		return err
-	}
-
-	if err := c.writeConfigFileLocked(c.aiFindingsFile, jsonData, 0600); err != nil {
+	if err := saveJSON(c, c.aiFindingsFile, data, false); err != nil {
 		return err
 	}
 
 	log.Debug().
 		Str("file", c.aiFindingsFile).
 		Int("count", len(findings)).
+		Int("suppression_rules", len(suppressionRules)).
 		Msg("AI findings saved")
 	return nil
 }
@@ -2007,8 +2029,9 @@ func (c *ConfigPersistence) LoadAIFindings() (*AIFindingsData, error) {
 		if os.IsNotExist(err) {
 			// Return empty data if file doesn't exist
 			return &AIFindingsData{
-				Version:  2,
-				Findings: make(map[string]*AIFindingRecord),
+				Version:          3,
+				Findings:         make(map[string]*AIFindingRecord),
+				SuppressionRules: make(map[string]*AISuppressionRuleRecord),
 			}, nil
 		}
 		return nil, err
@@ -2019,13 +2042,17 @@ func (c *ConfigPersistence) LoadAIFindings() (*AIFindingsData, error) {
 		log.Error().Err(err).Str("file", c.aiFindingsFile).Msg("Failed to parse AI findings file")
 		// Return empty data on parse error rather than failing
 		return &AIFindingsData{
-			Version:  2,
-			Findings: make(map[string]*AIFindingRecord),
+			Version:          3,
+			Findings:         make(map[string]*AIFindingRecord),
+			SuppressionRules: make(map[string]*AISuppressionRuleRecord),
 		}, nil
 	}
 
 	if findingsData.Findings == nil {
 		findingsData.Findings = make(map[string]*AIFindingRecord)
+	}
+	if findingsData.SuppressionRules == nil {
+		findingsData.SuppressionRules = make(map[string]*AISuppressionRuleRecord)
 	}
 
 	// Version 2 changed finding ID format to include issue key.
@@ -2033,16 +2060,28 @@ func (c *ConfigPersistence) LoadAIFindings() (*AIFindingsData, error) {
 	if findingsData.Version < 2 {
 		oldCount := len(findingsData.Findings)
 		findingsData.Findings = make(map[string]*AIFindingRecord)
-		findingsData.Version = 2
+		findingsData.SuppressionRules = make(map[string]*AISuppressionRuleRecord)
+		findingsData.Version = 3
 		findingsData.LastSaved = time.Now()
 
 		if oldCount > 0 {
 			log.Info().
 				Int("cleared_count", oldCount).
-				Msg("AI findings cleared due to schema upgrade (v1 -> v2)")
+				Msg("AI findings cleared due to schema upgrade (v1 -> v3)")
 		}
 
-		// Persist the migrated (empty) v2 file immediately to avoid re-migrating on restart
+		// Persist the migrated (empty) file immediately to avoid re-migrating on restart
+		c.mu.Lock()
+		if jsonData, err := json.Marshal(findingsData); err == nil {
+			if err := c.writeConfigFileLocked(c.aiFindingsFile, jsonData, 0600); err != nil {
+				log.Warn().Err(err).Msg("Failed to persist migrated AI findings file")
+			}
+		}
+		c.mu.Unlock()
+	} else if findingsData.Version < 3 {
+		// v2 -> v3: keep findings; start persisting explicit suppression rules.
+		findingsData.Version = 3
+		findingsData.LastSaved = time.Now()
 		c.mu.Lock()
 		if jsonData, err := json.Marshal(findingsData); err == nil {
 			if err := c.writeConfigFileLocked(c.aiFindingsFile, jsonData, 0600); err != nil {
@@ -2055,6 +2094,7 @@ func (c *ConfigPersistence) LoadAIFindings() (*AIFindingsData, error) {
 	log.Info().
 		Str("file", c.aiFindingsFile).
 		Int("count", len(findingsData.Findings)).
+		Int("suppression_rules", len(findingsData.SuppressionRules)).
 		Time("last_saved", findingsData.LastSaved).
 		Msg("AI findings loaded")
 	return &findingsData, nil

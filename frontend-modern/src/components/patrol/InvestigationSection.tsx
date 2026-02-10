@@ -68,7 +68,13 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
     const inv = investigation();
     if (!inv) return true; // No investigation yet
     if (inv.status === 'running') return false;
-    return inv.status === 'failed' || inv.status === 'needs_attention' || inv.outcome === 'cannot_fix' || inv.outcome === 'timed_out' || inv.outcome === 'fix_verification_failed' || inv.outcome === 'fix_failed';
+    return inv.status === 'failed' ||
+      inv.status === 'needs_attention' ||
+      inv.outcome === 'cannot_fix' ||
+      inv.outcome === 'timed_out' ||
+      inv.outcome === 'fix_verification_failed' ||
+      inv.outcome === 'fix_verification_unknown' ||
+      inv.outcome === 'fix_failed';
   };
 
   const handleReinvestigate = async (e: Event) => {
@@ -149,7 +155,7 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
         {(inv) => (
           <div class="space-y-2">
             {/* Error message for failed investigations */}
-            <Show when={inv().error && (inv().status === 'failed' || inv().outcome === 'timed_out' || inv().outcome === 'fix_failed' || inv().outcome === 'fix_verification_failed' || inv().outcome === 'needs_attention' || inv().outcome === 'cannot_fix')}>
+          <Show when={inv().error && (inv().status === 'failed' || inv().outcome === 'timed_out' || inv().outcome === 'fix_failed' || inv().outcome === 'fix_verification_failed' || inv().outcome === 'fix_verification_unknown' || inv().outcome === 'needs_attention' || inv().outcome === 'cannot_fix')}>
               <div class="text-xs text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded p-2">
                 {inv().error}
               </div>
