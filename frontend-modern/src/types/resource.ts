@@ -29,7 +29,9 @@ export type ResourceType =
     | 'pool'            // ZFS/Ceph pool
     | 'dataset'         // ZFS dataset
     | 'pbs'             // Proxmox Backup Server
-    | 'pmg';            // Proxmox Mail Gateway
+    | 'pmg'             // Proxmox Mail Gateway
+    | 'physical_disk'   // Physical disk
+    | 'ceph';           // Ceph cluster
 
 // Platform types - which system the resource comes from
 export type PlatformType =
@@ -96,7 +98,7 @@ export interface ResourceIdentity {
 }
 
 export interface ResourceDiscoveryTarget {
-    resourceType: 'host' | 'vm' | 'lxc' | 'docker' | 'k8s';
+    resourceType: 'host' | 'vm' | 'lxc' | 'docker' | 'k8s' | 'disk' | 'ceph';
     hostId: string;
     resourceId: string;
     hostname?: string;
@@ -163,7 +165,7 @@ export function isWorkload(r: Resource): boolean {
 }
 
 export function isStorage(r: Resource): boolean {
-    return ['storage', 'datastore', 'pool', 'dataset'].includes(r.type);
+    return ['storage', 'datastore', 'pool', 'dataset', 'physical_disk', 'ceph'].includes(r.type);
 }
 
 /**

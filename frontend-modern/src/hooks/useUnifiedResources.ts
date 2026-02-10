@@ -7,7 +7,7 @@ import type { Resource, PlatformType, SourceType, ResourceStatus, ResourceType }
 const UNIFIED_RESOURCES_BASE_URL = '/api/resources';
 const DEFAULT_UNIFIED_RESOURCES_QUERY = 'type=host,pbs,pmg,k8s_cluster,k8s_node';
 const STORAGE_BACKUPS_UNIFIED_RESOURCES_QUERY =
-  'type=storage,pbs,pmg,vm,lxc,container,pod,host,k8s_cluster,k8s_node';
+  'type=storage,pbs,pmg,vm,lxc,container,pod,host,k8s_cluster,k8s_node,physical_disk,ceph';
 const UNIFIED_RESOURCES_PAGE_LIMIT = 100;
 const UNIFIED_RESOURCES_MAX_PAGES = 20;
 const UNIFIED_RESOURCES_CACHE_MAX_AGE_MS = 15_000;
@@ -94,6 +94,54 @@ type APIResource = {
     lastUpdated?: string;
   };
   kubernetes?: APIKubernetesData;
+  physicalDisk?: {
+    devPath?: string;
+    model?: string;
+    serial?: string;
+    wwn?: string;
+    diskType?: string;
+    sizeBytes?: number;
+    health?: string;
+    wearout?: number;
+    temperature?: number;
+    rpm?: number;
+    used?: string;
+    smart?: {
+      powerOnHours?: number;
+      powerCycles?: number;
+      reallocatedSectors?: number;
+      pendingSectors?: number;
+      offlineUncorrectable?: number;
+      udmaCrcErrors?: number;
+      percentageUsed?: number;
+      availableSpare?: number;
+      mediaErrors?: number;
+      unsafeShutdowns?: number;
+    };
+  };
+  ceph?: {
+    fsid?: string;
+    healthStatus?: string;
+    healthMessage?: string;
+    numMons?: number;
+    numMgrs?: number;
+    numOsds?: number;
+    numOsdsUp?: number;
+    numOsdsIn?: number;
+    numPGs?: number;
+    pools?: Array<{
+      name: string;
+      storedBytes: number;
+      availableBytes: number;
+      objects: number;
+      percentUsed: number;
+    }>;
+    services?: Array<{
+      type: string;
+      running: number;
+      total: number;
+    }>;
+  };
   discoveryTarget?: {
     resourceType?: string;
     hostId?: string;
@@ -255,7 +303,11 @@ const resolveType = (value?: string): ResourceType => {
     case 'pmg':
       return 'pmg';
     case 'ceph':
-      return 'storage';
+      return 'ceph';
+    case 'physical_disk':
+      return 'physical_disk';
+    case 'physical-disk':
+      return 'physical_disk';
     default:
       return 'host';
   }
@@ -292,7 +344,7 @@ const toResource = (v2: APIResource): Resource => {
     v2.discoveryTarget?.hostId &&
     v2.discoveryTarget?.resourceId
       ? {
-        resourceType: v2.discoveryTarget.resourceType as 'host' | 'vm' | 'lxc' | 'docker' | 'k8s',
+        resourceType: v2.discoveryTarget.resourceType as 'host' | 'vm' | 'lxc' | 'docker' | 'k8s' | 'disk' | 'ceph',
         hostId: v2.discoveryTarget.hostId,
         resourceId: v2.discoveryTarget.resourceId,
         hostname: v2.discoveryTarget.hostname,
@@ -342,7 +394,8 @@ const toResource = (v2: APIResource): Resource => {
       v2.agent?.temperature ??
       v2.proxmox?.temperature ??
       v2.docker?.temperature ??
-      v2.kubernetes?.temperature,
+      v2.kubernetes?.temperature ??
+      v2.physicalDisk?.temperature,
     tags: v2.tags,
     lastSeen: Number.isFinite(lastSeen) ? lastSeen : Date.now(),
     identity: {
@@ -361,6 +414,8 @@ const toResource = (v2: APIResource): Resource => {
       pbs: v2.pbs,
       pmg: v2.pmg,
       kubernetes: v2.kubernetes,
+      physicalDisk: v2.physicalDisk,
+      ceph: v2.ceph,
       metrics: v2.metrics,
       discoveryTarget: v2.discoveryTarget,
     },

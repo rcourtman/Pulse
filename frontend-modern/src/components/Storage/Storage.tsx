@@ -6,6 +6,7 @@ import { Card } from '@/components/shared/Card';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { DiskList } from '@/components/Storage/DiskList';
 import { EnhancedStorageBar } from '@/components/Storage/EnhancedStorageBar';
+import { StorageHero } from '@/components/Storage/StorageHero';
 import { ZFSHealthMap } from '@/components/Storage/ZFSHealthMap';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { buildStorageRecords } from '@/features/storageBackups/storageAdapters';
@@ -25,6 +26,7 @@ import { getProxmoxData } from '@/utils/resourcePlatformData';
 import { useStorageRouteState } from './useStorageRouteState';
 import { getCephClusterKeyFromRecord, isCephRecord, useStorageCephModel } from './useStorageCephModel';
 import { useStorageAlertState } from './useStorageAlertState';
+import { StorageFilter, type StorageGroupByFilter, type StorageStatusFilter } from './StorageFilter';
 import {
   type StorageGroupKey,
   type StorageSortKey,
@@ -53,12 +55,6 @@ const STORAGE_SORT_OPTIONS: Array<{ value: StorageSortKey; label: string }> = [
   { value: 'name', label: 'Name' },
   { value: 'usage', label: 'Usage %' },
   { value: 'type', label: 'Type' },
-];
-
-const STORAGE_GROUP_OPTIONS: Array<{ value: StorageGroupKey; label: string }> = [
-  { value: 'node', label: 'Node' },
-  { value: 'type', label: 'Type' },
-  { value: 'status', label: 'Status' },
 ];
 
 const normalizeHealthFilter = (value: string): 'all' | NormalizedHealth => {
@@ -105,6 +101,7 @@ const Storage: Component = () => {
   const { state, activeAlerts, connected, initialDataReceived, reconnecting, reconnect } = useWebSocket();
   const { byType } = useResources();
   const nodes = createMemo(() => byType('node'));
+  const physicalDisks = createMemo(() => byType('physical_disk'));
   const storageBackupsResources = useStorageBackupsResources();
   const alertsActivation = useAlertsActivation();
   const alertsEnabled = createMemo(() => alertsActivation.activationState() === 'active');
@@ -183,6 +180,61 @@ const Storage: Component = () => {
   const nextPlatforms = createMemo(() =>
     PLATFORM_BLUEPRINTS.filter((platform) => platform.stage === 'next').map((platform) => platform.label),
   );
+
+  // Health breakdown is already computed from filteredRecords() inside useStorageModel (summary().byHealth).
+  // Reuse that source to avoid an extra pass and guarantee consistent counts across the page.
+  const healthBreakdown = createMemo(() => summary().byHealth);
+
+  const storageFilterGroupBy = (): StorageGroupByFilter => {
+    const current = groupBy();
+    return current === 'type' || current === 'status' ? current : 'node';
+  };
+
+  const storageFilterStatus = (): StorageStatusFilter => {
+    const current = healthFilter();
+    if (current === 'all') return 'all';
+    if (current === 'healthy') return 'available';
+    return current;
+  };
+
+  const setStorageFilterStatus = (value: StorageStatusFilter) => {
+    if (value === 'all') {
+      setHealthFilter('all');
+      return;
+    }
+    if (value === 'available') {
+      setHealthFilter('healthy');
+      return;
+    }
+    setHealthFilter(value);
+  };
+
+  const sourceFilterOptions = createMemo(() => {
+    const toneForKey = (key: string) => {
+      switch (key) {
+        case 'proxmox':
+        case 'proxmox-pve':
+          return { label: 'PVE', tone: 'blue' as const };
+        case 'pbs':
+        case 'proxmox-pbs':
+          return { label: 'PBS', tone: 'emerald' as const };
+        case 'ceph':
+          return { label: 'Ceph', tone: 'violet' as const };
+        case 'kubernetes':
+          return { label: 'K8s', tone: 'cyan' as const };
+        case 'pmg':
+          return { label: 'PMG', tone: 'blue' as const };
+        default:
+          return { label: sourceLabel(key), tone: 'slate' as const };
+      }
+    };
+
+    return sourceOptions().map((key) => {
+      if (key === 'all') return { key: 'all', label: 'All Sources', tone: 'slate' as const };
+      const preset = toneForKey(key);
+      return { key, ...preset };
+    });
+  });
 
   const isWaitingForData = createMemo(
     () =>
@@ -288,46 +340,16 @@ const Storage: Component = () => {
 
   return (
     <div class="space-y-4">
-      <Card padding="md" tone="glass">
-        <div class="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Storage</h2>
-            <p class="text-xs text-gray-600 dark:text-gray-400">
-              Storage capacity and health across connected platforms.
-            </p>
-          </div>
-          <div class="text-xs text-gray-500 dark:text-gray-400">
-            Next platforms: {nextPlatforms().join(', ')}
-          </div>
-        </div>
-      </Card>
-
-      <Card padding="md">
-        <div class="grid gap-3 sm:grid-cols-4">
-          <div>
-            <div class="text-[11px] uppercase text-gray-500 dark:text-gray-400">Records</div>
-            <div class="text-lg font-semibold text-gray-900 dark:text-gray-100">{summary().count}</div>
-          </div>
-          <div>
-            <div class="text-[11px] uppercase text-gray-500 dark:text-gray-400">Total Capacity</div>
-            <div class="text-lg font-semibold text-gray-900 dark:text-gray-100">
-              {formatBytes(summary().totalBytes)}
-            </div>
-          </div>
-          <div>
-            <div class="text-[11px] uppercase text-gray-500 dark:text-gray-400">Used</div>
-            <div class="text-lg font-semibold text-gray-900 dark:text-gray-100">
-              {formatBytes(summary().usedBytes)}
-            </div>
-          </div>
-          <div>
-            <div class="text-[11px] uppercase text-gray-500 dark:text-gray-400">Usage</div>
-            <div class="text-lg font-semibold text-gray-900 dark:text-gray-100">
-              {formatPercent(summary().usagePercent)}
-            </div>
-          </div>
-        </div>
-      </Card>
+      <div class="flex flex-col gap-1">
+        <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Storage</h2>
+        <p class="text-sm text-gray-600 dark:text-gray-400">
+          Storage capacity and health across connected platforms.
+        </p>
+      </div>
+      <StorageHero summary={summary()} healthBreakdown={healthBreakdown()} />
+      <div class="px-1 text-xs text-gray-500 dark:text-gray-400">
+        Next platforms: {nextPlatforms().join(', ')}
+      </div>
 
       <Show
         when={
@@ -396,100 +418,62 @@ const Storage: Component = () => {
         </Card>
       </Show>
 
-      <Card padding="md">
-        <div class="grid gap-2 md:grid-cols-[minmax(140px,1fr)_minmax(180px,1fr)_minmax(120px,1fr)_minmax(140px,1fr)_minmax(140px,1fr)_minmax(140px,1fr)_minmax(130px,1fr)_auto]">
-          <select
-            value={view()}
-            onChange={(event) => setView(event.currentTarget.value as StorageView)}
-            class="rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
-            aria-label="View"
-          >
-            <option value="pools">Pools</option>
-            <option value="disks">Physical Disks</option>
-          </select>
-          <select
-            value={selectedNodeId()}
-            onChange={(event) => setSelectedNodeId(event.currentTarget.value)}
-            class="rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
-            aria-label="Node"
-          >
-            <option value="all">all nodes</option>
-            <For each={nodeOptions()}>{(node) => <option value={node.id}>{node.label}</option>}</For>
-          </select>
-          <select
-            value={sourceFilter()}
-            onChange={(event) => setSourceFilter(event.currentTarget.value)}
-            class="rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
-            aria-label="Source"
-          >
-            <For each={sourceOptions()}>
-              {(option) => <option value={option}>{option === 'all' ? 'all sources' : sourceLabel(option)}</option>}
-            </For>
-          </select>
-          <select
-            value={healthFilter()}
-            onChange={(event) => setHealthFilter(event.currentTarget.value as 'all' | NormalizedHealth)}
-            class="rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
-            aria-label="Health"
-          >
-            <option value="all">all health states</option>
-            <option value="healthy">healthy</option>
-            <option value="warning">warning</option>
-            <option value="critical">critical</option>
-            <option value="offline">offline</option>
-            <option value="unknown">unknown</option>
-          </select>
-          <select
-            value={groupBy()}
-            onChange={(event) => setGroupBy(event.currentTarget.value as StorageGroupKey)}
-            class="rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
-            aria-label="Group By"
-            disabled={view() !== 'pools'}
-          >
-            <For each={STORAGE_GROUP_OPTIONS}>
-              {(option) => <option value={option.value}>{`group: ${option.label.toLowerCase()}`}</option>}
-            </For>
-          </select>
-          <select
-            value={sortKey()}
-            onChange={(event) => setSortKey(event.currentTarget.value as StorageSortKey)}
-            class="rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
-            aria-label="Sort By"
-            disabled={view() !== 'pools'}
-          >
-            <For each={STORAGE_SORT_OPTIONS}>
-              {(option) => <option value={option.value}>{`sort: ${option.label.toLowerCase()}`}</option>}
-            </For>
-          </select>
-          <div class="flex items-center justify-start md:justify-center">
-            <button
-              type="button"
-              onClick={() => setSortDirection((current) => (current === 'asc' ? 'desc' : 'asc'))}
-              class="inline-flex h-10 w-10 items-center justify-center rounded border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-800 disabled:opacity-50"
-              aria-label="Sort Direction"
-              disabled={view() !== 'pools'}
-            >
-              <svg
-                class={`h-4 w-4 transition-transform ${sortDirection() === 'asc' ? 'rotate-180' : ''}`}
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
+      <StorageFilter
+        search={search}
+        setSearch={setSearch}
+        groupBy={view() === 'pools' ? storageFilterGroupBy : undefined}
+        setGroupBy={view() === 'pools' ? ((value) => setGroupBy(value)) : undefined}
+        sortKey={sortKey}
+        setSortKey={(value) => setSortKey(normalizeSortKey(value))}
+        sortDirection={sortDirection}
+        setSortDirection={setSortDirection}
+        sortOptions={STORAGE_SORT_OPTIONS}
+        sortDisabled={view() !== 'pools'}
+        statusFilter={storageFilterStatus}
+        setStatusFilter={setStorageFilterStatus}
+        sourceFilter={sourceFilter}
+        setSourceFilter={setSourceFilter}
+        sourceOptions={sourceFilterOptions()}
+        leadingFilters={
+          <>
+            <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5" role="group" aria-label="View">
+              <button
+                type="button"
+                onClick={() => setView('pools')}
+                aria-pressed={view() === 'pools'}
+                class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${view() === 'pools'
+                  ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                  }`}
               >
-                <path stroke-linecap="round" stroke-linejoin="round" d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
-              </svg>
-            </button>
-          </div>
-          <input
-            type="text"
-            value={search()}
-            onInput={(event) => setSearch(event.currentTarget.value)}
-            placeholder="Search name, location, source, capability..."
-            aria-label="Search"
-            class="rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500 md:col-span-3 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
-          />
-        </div>
-      </Card>
+                Pools
+              </button>
+              <button
+                type="button"
+                onClick={() => setView('disks')}
+                aria-pressed={view() === 'disks'}
+                class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${view() === 'disks'
+                  ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                  }`}
+              >
+                Physical Disks
+              </button>
+            </div>
+            <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
+            <select
+              value={selectedNodeId()}
+              onChange={(event) => setSelectedNodeId(event.currentTarget.value)}
+              class="px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+              aria-label="Node"
+            >
+              <option value="all">All Nodes</option>
+              <For each={nodeOptions()}>{(node) => <option value={node.id}>{node.label}</option>}</For>
+            </select>
+            <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
+          </>
+        }
+      />
 
       <Show when={reconnecting()}>
         <Card padding="sm" tone="warning">
@@ -543,7 +527,7 @@ const Storage: Component = () => {
         <Show when={view() === 'disks'}>
           <div class="p-2">
             <DiskList
-              disks={state.physicalDisks || []}
+              disks={physicalDisks()}
               nodes={nodes()}
               selectedNode={selectedNode()?.id || null}
               searchTerm={search()}

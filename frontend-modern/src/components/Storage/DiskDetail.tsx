@@ -1,13 +1,66 @@
-import { Component, Show, createSignal, createMemo } from 'solid-js';
-import type { PhysicalDisk } from '@/types/api';
-import { diskResourceId } from '@/types/api';
+import { Component, Show, createSignal, createMemo, createEffect, onCleanup } from 'solid-js';
+import type { Resource } from '@/types/resource';
 import { HistoryChart } from '@/components/shared/HistoryChart';
 import type { HistoryTimeRange, AggregatedMetricPoint } from '@/api/charts';
 import { formatTemperature } from '@/utils/temperature';
 import { formatPowerOnHours } from '@/utils/format';
-import { useWebSocket } from '@/App';
+import { getProxmoxData, getLinkedAgentId } from '@/utils/resourcePlatformData';
 import { getDiskMetricHistory, getDiskMetricsVersion } from '@/stores/diskMetricsHistory';
-import { createEffect, onCleanup } from 'solid-js';
+
+interface PhysicalDiskData {
+  node: string;
+  instance: string;
+  devPath: string;
+  model: string;
+  serial: string;
+  wwn: string;
+  type: string;
+  temperature: number;
+  smartAttributes?: {
+    powerOnHours?: number;
+    powerCycles?: number;
+    reallocatedSectors?: number;
+    pendingSectors?: number;
+    offlineUncorrectable?: number;
+    udmaCrcErrors?: number;
+    percentageUsed?: number;
+    availableSpare?: number;
+    mediaErrors?: number;
+    unsafeShutdowns?: number;
+  };
+}
+
+function extractDiskData(resource: Resource): PhysicalDiskData {
+  const platformData = (resource.platformData as any) || {};
+  const pd = platformData.physicalDisk || {};
+  const proxmox = platformData.proxmox || {};
+  const smart = pd.smart || {};
+
+  return {
+    node: proxmox.nodeName || resource.platformId || '',
+    instance: proxmox.instance || '',
+    devPath: pd.devPath || '',
+    model: pd.model || resource.name || '',
+    serial: pd.serial || '',
+    wwn: pd.wwn || '',
+    type: pd.diskType || '',
+    temperature: pd.temperature ?? 0,
+    smartAttributes: pd.smart
+      ? {
+        powerOnHours: smart.powerOnHours,
+        powerCycles: smart.powerCycles,
+        reallocatedSectors: smart.reallocatedSectors,
+        pendingSectors: smart.pendingSectors,
+        offlineUncorrectable: smart.offlineUncorrectable,
+        udmaCrcErrors: smart.udmaCrcErrors,
+        percentageUsed: smart.percentageUsed,
+        availableSpare: smart.availableSpare,
+        mediaErrors: smart.mediaErrors,
+        unsafeShutdowns: smart.unsafeShutdowns,
+      }
+      : undefined,
+  };
+}
 
 
 /** Color class for attribute values. */
@@ -18,26 +71,35 @@ function attrColor(ok: boolean): string {
 }
 
 interface DiskDetailProps {
-  disk: PhysicalDisk;
+  disk: Resource;
+  nodes: Resource[];
 }
 
 export const DiskDetail: Component<DiskDetailProps> = (props) => {
   const [chartRange, setChartRange] = createSignal<HistoryTimeRange>('24h');
 
-  const resId = () => diskResourceId(props.disk);
-  const attrs = () => props.disk.smartAttributes;
-  const isNvme = () => props.disk.type?.toLowerCase() === 'nvme';
-
-  const { state } = useWebSocket();
+  const diskData = createMemo(() => extractDiskData(props.disk));
+  const resId = createMemo(() => diskData().serial || diskData().wwn || null);
+  const attrs = createMemo(() => diskData().smartAttributes);
+  const isNvme = createMemo(() => diskData().type?.toLowerCase() === 'nvme');
 
   const getMetricResourceId = () => {
-    const nodeName = props.disk.node;
-    const instance = props.disk.instance;
-    const node = state.nodes?.find(n => n.name === nodeName && n.instance === instance);
-    const hostId = node?.linkedHostAgentId;
+    if (props.disk.metricsTarget?.resourceId) {
+      return props.disk.metricsTarget.resourceId;
+    }
+
+    const data = diskData();
+    const nodeName = data.node;
+    const instance = data.instance;
+    const node = props.nodes.find(
+      (n) =>
+        n.id === props.disk.parentId ||
+        (n.name === nodeName && getProxmoxData(n)?.instance === instance),
+    );
+    const hostId = node ? getLinkedAgentId(node) : undefined;
 
     if (!hostId) return null;
-    const deviceName = props.disk.devPath.replace('/dev/', '');
+    const deviceName = data.devPath.replace('/dev/', '');
     return `${hostId}:${deviceName}`;
   };
 
@@ -71,21 +133,21 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
   return (
     <div class="space-y-3">
       {/* Disk info */}
-      {/* Header: Info & Selector */}
+          {/* Header: Info & Selector */}
       <div class="flex flex-wrap items-end justify-between gap-3 border-b border-gray-100 dark:border-gray-800 pb-3">
         <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
           <span class="font-semibold text-gray-900 dark:text-gray-100 text-sm">
-            {props.disk.model || 'Unknown Disk'}
+            {diskData().model || 'Unknown Disk'}
           </span>
           <span class="text-gray-500 dark:text-gray-400 font-mono bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded border border-gray-200 dark:border-gray-700">
-            {props.disk.devPath}
+            {diskData().devPath}
           </span>
           <span class="text-gray-500 dark:text-gray-400">
-            {props.disk.node}
+            {diskData().node}
           </span>
-          <Show when={props.disk.serial}>
+          <Show when={diskData().serial}>
             <span class="text-gray-400 font-mono">
-              S/N: {props.disk.serial}
+              S/N: {diskData().serial}
             </span>
           </Show>
         </div>
@@ -123,11 +185,11 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
               ok={true}
             />
           </Show>
-          <Show when={props.disk.temperature > 0}>
+          <Show when={diskData().temperature > 0}>
             <AttrCard
               label="Temperature"
-              value={formatTemperature(props.disk.temperature)}
-              ok={props.disk.temperature <= 60}
+              value={formatTemperature(diskData().temperature)}
+              ok={diskData().temperature <= 60}
             />
           </Show>
           <Show when={attrs()!.powerCycles != null}>
@@ -248,7 +310,7 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
           {/* Charts grid */}
           <div class="flex flex-wrap gap-3 [&>*]:flex-1 [&>*]:basis-[calc(33.333%-0.5rem)] [&>*]:min-w-[250px]">
             {/* Temperature chart (all disk types) */}
-            <Show when={props.disk.temperature > 0}>
+            <Show when={diskData().temperature > 0}>
               <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
                 <HistoryChart
                   resourceType="disk"

@@ -2,14 +2,78 @@ import { Component, For, Show, createMemo, createSignal } from 'solid-js';
 import { Card } from '@/components/shared/Card';
 import { formatBytes, formatPowerOnHours } from '@/utils/format';
 import { formatTemperature } from '@/utils/temperature';
-import type { PhysicalDisk } from '@/types/api';
-import { useWebSocket } from '@/App';
+import type { Resource } from '@/types/resource';
+import { getProxmoxData, getLinkedAgentId } from '@/utils/resourcePlatformData';
 import { DiskDetail } from './DiskDetail';
 import { DiskLiveMetric } from './DiskLiveMetric';
 
+interface PhysicalDiskData {
+  node: string;
+  instance: string;
+  devPath: string;
+  model: string;
+  serial: string;
+  wwn: string;
+  type: string;
+  size: number;
+  health: string;
+  wearout: number;
+  temperature: number;
+  rpm: number;
+  used: string;
+  smartAttributes?: {
+    powerOnHours?: number;
+    powerCycles?: number;
+    reallocatedSectors?: number;
+    pendingSectors?: number;
+    offlineUncorrectable?: number;
+    udmaCrcErrors?: number;
+    percentageUsed?: number;
+    availableSpare?: number;
+    mediaErrors?: number;
+    unsafeShutdowns?: number;
+  };
+}
+
+function extractDiskData(resource: Resource): PhysicalDiskData {
+  const platformData = (resource.platformData as any) || {};
+  const pd = platformData.physicalDisk || {};
+  const proxmox = platformData.proxmox || {};
+  const smart = pd.smart || {};
+
+  return {
+    node: proxmox.nodeName || resource.platformId || '',
+    instance: proxmox.instance || '',
+    devPath: pd.devPath || '',
+    model: pd.model || resource.name || '',
+    serial: pd.serial || '',
+    wwn: pd.wwn || '',
+    type: pd.diskType || '',
+    size: pd.sizeBytes || 0,
+    health: pd.health || 'UNKNOWN',
+    wearout: pd.wearout ?? -1,
+    temperature: pd.temperature ?? 0,
+    rpm: pd.rpm ?? 0,
+    used: pd.used || '',
+    smartAttributes: pd.smart
+      ? {
+        powerOnHours: smart.powerOnHours,
+        powerCycles: smart.powerCycles,
+        reallocatedSectors: smart.reallocatedSectors,
+        pendingSectors: smart.pendingSectors,
+        offlineUncorrectable: smart.offlineUncorrectable,
+        udmaCrcErrors: smart.udmaCrcErrors,
+        percentageUsed: smart.percentageUsed,
+        availableSpare: smart.availableSpare,
+        mediaErrors: smart.mediaErrors,
+        unsafeShutdowns: smart.unsafeShutdowns,
+      }
+      : undefined,
+  };
+}
 
 /** Returns true if any critical SMART counters are non-zero. */
-function hasSmartWarning(disk: PhysicalDisk): boolean {
+function hasSmartWarning(disk: PhysicalDiskData): boolean {
   const attrs = disk.smartAttributes;
   if (!attrs) return false;
   if (attrs.reallocatedSectors && attrs.reallocatedSectors > 0) return true;
@@ -19,19 +83,31 @@ function hasSmartWarning(disk: PhysicalDisk): boolean {
 }
 
 interface DiskListProps {
-  disks: PhysicalDisk[];
+  disks: Resource[];
+  nodes: Resource[];
   selectedNode: string | null;
   searchTerm: string;
 }
 
 export const DiskList: Component<DiskListProps> = (props) => {
-  const { state } = useWebSocket();
-  const [selectedDisk, setSelectedDisk] = createSignal<PhysicalDisk | null>(null);
+  const [selectedDisk, setSelectedDisk] = createSignal<Resource | null>(null);
 
   // Check if there are any PVE nodes configured
   const hasPVENodes = createMemo(() => {
-    return (state.nodes || []).length > 0;
+    return props.nodes.length > 0;
   });
+
+  const diskDataById = createMemo(() => {
+    const map = new Map<string, PhysicalDiskData>();
+    for (const disk of props.disks || []) {
+      map.set(disk.id, extractDiskData(disk));
+    }
+    return map;
+  });
+
+  const getDiskData = (disk: Resource): PhysicalDiskData => {
+    return diskDataById().get(disk.id) ?? extractDiskData(disk);
+  };
 
   // Filter disks based on selected node and search term
   const filteredDisks = createMemo(() => {
@@ -39,10 +115,11 @@ export const DiskList: Component<DiskListProps> = (props) => {
 
     // Filter by node if selected using both instance and node name
     if (props.selectedNode) {
-      const node = state.nodes?.find((n) => n.id === props.selectedNode);
+      const node = props.nodes.find((n) => n.id === props.selectedNode);
       if (node) {
+        const instance = getProxmoxData(node)?.instance;
         disks = disks.filter(
-          (d) => d.instance === node.instance && d.node === node.name,
+          (d) => d.parentId === node.id || (getDiskData(d).instance === instance && getDiskData(d).node === node.name),
         );
       }
     }
@@ -51,23 +128,29 @@ export const DiskList: Component<DiskListProps> = (props) => {
     if (props.searchTerm) {
       const term = props.searchTerm.toLowerCase();
       disks = disks.filter(
-        (d) =>
-          d.model.toLowerCase().includes(term) ||
-          d.devPath.toLowerCase().includes(term) ||
-          d.serial.toLowerCase().includes(term) ||
-          d.node.toLowerCase().includes(term),
+        (d) => {
+          const data = getDiskData(d);
+          return (
+            data.model.toLowerCase().includes(term) ||
+            data.devPath.toLowerCase().includes(term) ||
+            data.serial.toLowerCase().includes(term) ||
+            data.node.toLowerCase().includes(term)
+          );
+        },
       );
     }
 
     // Sort by node and devPath - create a copy to avoid mutating store
     return [...disks].sort((a, b) => {
-      if (a.node !== b.node) return a.node.localeCompare(b.node);
-      return a.devPath.localeCompare(b.devPath);
+      const aData = getDiskData(a);
+      const bData = getDiskData(b);
+      if (aData.node !== bData.node) return aData.node.localeCompare(bData.node);
+      return aData.devPath.localeCompare(bData.devPath);
     });
   });
 
   // Get health status color and badge
-  const getHealthStatus = (disk: PhysicalDisk) => {
+  const getHealthStatus = (disk: PhysicalDiskData) => {
     const healthValue = (disk.health || '').trim();
     const normalizedHealth = healthValue.toUpperCase();
     const isHealthy =
@@ -121,11 +204,11 @@ export const DiskList: Component<DiskListProps> = (props) => {
   // Get selected node name for display
   const selectedNodeName = createMemo(() => {
     if (!props.selectedNode) return null;
-    const node = state.nodes?.find(n => n.id === props.selectedNode);
+    const node = props.nodes.find(n => n.id === props.selectedNode);
     return node?.name || null;
   });
 
-  const handleRowClick = (disk: PhysicalDisk) => {
+  const handleRowClick = (disk: Resource) => {
     const current = selectedDisk();
     if (current && current.id === disk.id) {
       setSelectedDisk(null);
@@ -135,15 +218,21 @@ export const DiskList: Component<DiskListProps> = (props) => {
   };
 
   const getNodeHostId = (nodeName: string, instance: string) => {
-    const node = state.nodes?.find(n => n.name === nodeName && n.instance === instance);
-    return node?.linkedHostAgentId;
+    const node = props.nodes.find(n => n.name === nodeName && getProxmoxData(n)?.instance === instance);
+    return node ? getLinkedAgentId(node) : undefined;
   };
 
-  const getMetricResourceId = (disk: PhysicalDisk) => {
-    const hostId = getNodeHostId(disk.node, disk.instance);
+  const getMetricResourceId = (disk: Resource) => {
+    // Use the metrics target from the unified resource API
+    if (disk.metricsTarget?.resourceId) {
+      return disk.metricsTarget.resourceId;
+    }
+    // Fallback: try to construct from platform data
+    const data = getDiskData(disk);
+    const hostId = getNodeHostId(data.node, data.instance);
     if (!hostId) return null;
     // Strip /dev/ if present to match agent metric key
-    const deviceName = disk.devPath.replace('/dev/', '');
+    const deviceName = data.devPath.replace('/dev/', '');
     return `${hostId}:${deviceName}`;
   };
 
@@ -235,9 +324,10 @@ export const DiskList: Component<DiskListProps> = (props) => {
               <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
                 <For each={filteredDisks()}>
                   {(disk) => {
-                    const health = getHealthStatus(disk);
+                    const data = getDiskData(disk);
+                    const health = getHealthStatus(data);
                     const isSelected = () => selectedDisk()?.id === disk.id;
-                    const warning = hasSmartWarning(disk);
+                    const warning = hasSmartWarning(data);
 
                     return (
                       <>
@@ -255,34 +345,34 @@ export const DiskList: Component<DiskListProps> = (props) => {
                                 </svg>
                               </div>
                               <span class="font-medium text-gray-900 dark:text-gray-100">
-                                {disk.node}
+                                {data.node}
                               </span>
                             </div>
                           </td>
                           <td class="px-1 py-1.5 text-xs">
                             <span class="font-mono text-gray-600 dark:text-gray-400">
-                              {disk.devPath}
+                              {data.devPath}
                             </span>
                           </td>
                           <td class="px-1 py-1.5 text-xs">
                             <span class="text-gray-700 dark:text-gray-300">
-                              {disk.model || 'Unknown'}
+                              {data.model || 'Unknown'}
                             </span>
                           </td>
                           <td class="px-1 py-1.5 text-xs">
                             <span
-                              class={`inline-block px-1.5 py-0.5 text-[10px] font-medium rounded ${getDiskTypeBadge(disk.type)}`}
+                              class={`inline-block px-1.5 py-0.5 text-[10px] font-medium rounded ${getDiskTypeBadge(data.type)}`}
                             >
-                              {disk.type.toUpperCase()}
+                              {data.type.toUpperCase()}
                             </span>
                           </td>
                           <td class="px-1 py-1.5 text-xs">
                             <Show
-                              when={disk.used && disk.used !== 'unknown'}
+                              when={data.used && data.used !== 'unknown'}
                               fallback={<span class="text-gray-400">-</span>}
                             >
                               <span class="text-[10px] font-mono text-gray-600 dark:text-gray-400">
-                                {disk.used}
+                                {data.used}
                               </span>
                             </Show>
                           </td>
@@ -300,51 +390,51 @@ export const DiskList: Component<DiskListProps> = (props) => {
                           </td>
                           <td class="px-1 py-1.5 text-xs">
                             <Show
-                              when={disk.wearout > 0}
+                              when={data.wearout > 0}
                               fallback={<span class="text-gray-400">-</span>}
                             >
                               <div class="relative w-24 h-3.5 rounded overflow-hidden bg-gray-200 dark:bg-gray-600">
                                 <div
-                                  class={`absolute top-0 left-0 h-full ${disk.wearout >= 50
+                                  class={`absolute top-0 left-0 h-full ${data.wearout >= 50
                                     ? 'bg-green-500/60 dark:bg-green-500/50'
-                                    : disk.wearout >= 20
+                                    : data.wearout >= 20
                                       ? 'bg-yellow-500/60 dark:bg-yellow-500/50'
-                                      : disk.wearout >= 10
+                                      : data.wearout >= 10
                                         ? 'bg-orange-500/60 dark:bg-orange-500/50'
                                         : 'bg-red-500/60 dark:bg-red-500/50'
                                     }`}
-                                  style={{ width: `${disk.wearout}%` }}
+                                  style={{ width: `${data.wearout}%` }}
                                 />
                                 <span class="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-gray-800 dark:text-gray-100 leading-none">
-                                  <span class="whitespace-nowrap px-0.5">{disk.wearout}%</span>
+                                  <span class="whitespace-nowrap px-0.5">{data.wearout}%</span>
                                 </span>
                               </div>
                             </Show>
                           </td>
                           <td class="px-1 py-1.5 text-xs">
                             <Show
-                              when={disk.smartAttributes?.powerOnHours != null}
+                              when={data.smartAttributes?.powerOnHours != null}
                               fallback={<span class="text-gray-400">-</span>}
                             >
                               <span class="text-gray-700 dark:text-gray-300">
-                                {formatPowerOnHours(disk.smartAttributes!.powerOnHours!, true)}
+                                {formatPowerOnHours(data.smartAttributes!.powerOnHours!, true)}
                               </span>
                             </Show>
                           </td>
                           <td class="px-1 py-1.5 text-xs">
                             <Show
-                              when={typeof disk.temperature === 'number'}
+                              when={typeof data.temperature === 'number'}
                               fallback={<span class="font-medium text-gray-400">-</span>}
                             >
                               <span
-                                class={`font-medium ${disk.temperature > 70
+                                class={`font-medium ${data.temperature > 70
                                   ? 'text-red-600 dark:text-red-400'
-                                  : disk.temperature > 60
+                                  : data.temperature > 60
                                     ? 'text-yellow-600 dark:text-yellow-400'
                                     : 'text-green-600 dark:text-green-400'
                                   }`}
                               >
-                                {formatTemperature(disk.temperature)}
+                                {formatTemperature(data.temperature)}
                               </span>
                             </Show>
                           </td>
@@ -371,14 +461,14 @@ export const DiskList: Component<DiskListProps> = (props) => {
                           </td>
                           <td class="px-1 py-1.5 text-xs whitespace-nowrap">
                             <span class="text-gray-700 dark:text-gray-300">
-                              {formatBytes(disk.size)}
+                              {formatBytes(data.size)}
                             </span>
                           </td>
                         </tr>
                         <Show when={isSelected()}>
                           <tr>
                             <td colSpan={13} class="bg-gray-50/50 dark:bg-gray-900/20 px-4 py-4 border-b border-gray-100 dark:border-gray-700 shadow-inner">
-                              <DiskDetail disk={disk} />
+                              <DiskDetail disk={disk} nodes={props.nodes} />
                             </td>
                           </tr>
                         </Show>
