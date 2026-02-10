@@ -12,6 +12,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/hosted"
+	"github.com/rcourtman/pulse-go-rewrite/internal/license"
+	"github.com/rcourtman/pulse-go-rewrite/internal/license/entitlements"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rs/zerolog/log"
@@ -26,6 +28,7 @@ type HostedRBACProvider interface {
 
 type HostedSignupHandlers struct {
 	persistence  *config.MultiTenantPersistence
+	billingStore *config.FileBillingStore
 	rbacProvider HostedRBACProvider
 	magicLinks   *MagicLinkService
 	publicURL    func(*http.Request) string
@@ -50,8 +53,13 @@ func NewHostedSignupHandlers(
 	publicURL func(*http.Request) string,
 	hostedMode bool,
 ) *HostedSignupHandlers {
+	var billingStore *config.FileBillingStore
+	if persistence != nil {
+		billingStore = config.NewFileBillingStore(persistence.BaseDataDir())
+	}
 	return &HostedSignupHandlers{
 		persistence:  persistence,
+		billingStore: billingStore,
 		rbacProvider: rbacProvider,
 		magicLinks:   magicLinks,
 		publicURL:    publicURL,
@@ -143,6 +151,27 @@ func (h *HostedSignupHandlers) HandlePublicSignup(w http.ResponseWriter, r *http
 		cleanupProvisioning()
 		writeErrorResponse(w, http.StatusInternalServerError, "create_failed", "Failed to create organization", nil)
 		return
+	}
+
+	// Seed trial billing state so the tenant is usable immediately (before Stripe checkout completes).
+	// Stripe webhook will overwrite this with active subscription state on successful checkout.
+	if h.billingStore != nil {
+		trialStartedAt := now.Unix()
+		trialEndsAt := now.Add(14 * 24 * time.Hour).Unix()
+		trialState := &entitlements.BillingState{
+			Capabilities:      license.DeriveCapabilitiesFromTier(license.TierCloud, nil),
+			Limits:            map[string]int64{},
+			MetersEnabled:     []string{},
+			PlanVersion:       "cloud_trial",
+			SubscriptionState: entitlements.SubStateTrial,
+			TrialStartedAt:    &trialStartedAt,
+			TrialEndsAt:       &trialEndsAt,
+		}
+		if err := h.billingStore.SaveBillingState(orgID, trialState); err != nil {
+			cleanupProvisioning()
+			writeErrorResponse(w, http.StatusInternalServerError, "billing_init_failed", "Failed to initialize billing state", nil)
+			return
+		}
 	}
 
 	authManager, err := h.rbacProvider.GetManager(orgID)

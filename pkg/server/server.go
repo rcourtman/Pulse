@@ -270,7 +270,8 @@ func Run(ctx context.Context, version string) error {
 
 	// Set multi-tenant checker for WebSocket connections
 	// This ensures the feature flag and license are checked before allowing non-default org connections
-	wsHub.SetMultiTenantChecker(api.NewMultiTenantChecker())
+	hostedMode := os.Getenv("PULSE_HOSTED_MODE") == "true"
+	wsHub.SetMultiTenantChecker(api.NewMultiTenantChecker(hostedMode))
 
 	// Wire up Prometheus metrics for alert lifecycle
 	alerts.SetMetricHooks(

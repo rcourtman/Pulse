@@ -44,6 +44,7 @@ const (
 	TierPro        Tier = "pro"
 	TierProAnnual  Tier = "pro_annual"
 	TierLifetime   Tier = "lifetime"
+	TierCloud      Tier = "cloud"
 	TierMSP        Tier = "msp"
 	TierEnterprise Tier = "enterprise"
 )
@@ -87,6 +88,21 @@ var TierFeatures = map[Tier][]string{
 		FeatureLongTermMetrics,
 	},
 	TierLifetime: {
+		FeatureAIPatrol,
+		FeatureAIAlerts,
+		FeatureAIAutoFix,
+		FeatureKubernetesAI,
+		FeatureAgentProfiles,
+		FeatureUpdateAlerts,
+		FeatureRelay,
+		FeatureSSO,
+		FeatureAdvancedSSO,
+		FeatureRBAC,
+		FeatureAuditLogging,
+		FeatureAdvancedReporting,
+		FeatureLongTermMetrics,
+	},
+	TierCloud: {
 		FeatureAIPatrol,
 		FeatureAIAlerts,
 		FeatureAIAutoFix,
@@ -197,6 +213,8 @@ func GetTierDisplayName(tier Tier) string {
 		return "Pro Intelligence (Annual)"
 	case TierLifetime:
 		return "Pro Intelligence (Lifetime)"
+	case TierCloud:
+		return "Cloud"
 	case TierMSP:
 		return "MSP"
 	case TierEnterprise:

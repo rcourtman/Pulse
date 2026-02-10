@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/license/entitlements"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rs/zerolog/log"
@@ -25,12 +26,14 @@ const (
 type TenantMiddleware struct {
 	persistence *config.MultiTenantPersistence
 	authChecker AuthorizationChecker
+	hostedMode  bool
 }
 
 // TenantMiddlewareConfig holds configuration for the tenant middleware.
 type TenantMiddlewareConfig struct {
 	Persistence *config.MultiTenantPersistence
 	AuthChecker AuthorizationChecker
+	HostedMode  bool
 }
 
 func resolveTenantOrgID(r *http.Request) string {
@@ -78,6 +81,7 @@ func NewTenantMiddlewareWithConfig(cfg TenantMiddlewareConfig) *TenantMiddleware
 	return &TenantMiddleware{
 		persistence: cfg.Persistence,
 		authChecker: cfg.AuthChecker,
+		hostedMode:  cfg.HostedMode,
 	}
 }
 
@@ -123,21 +127,28 @@ func (m *TenantMiddleware) Middleware(next http.Handler) http.Handler {
 			}
 		}
 
-		// 3. Feature flag and License Check for multi-tenant access
-		// Non-default orgs require:
-		// 1. Feature flag enabled (PULSE_MULTI_TENANT_ENABLED=true) - returns 501 if disabled
-		// 2. Enterprise license - returns 402 if unlicensed
+		// 3. Tenant access gating for non-default orgs.
+		// Hosted mode: tenant routing is infrastructure — check subscription lifecycle instead of FeatureMultiTenant.
+		// Self-hosted mode: non-default orgs require PULSE_MULTI_TENANT_ENABLED=true AND FeatureMultiTenant (Enterprise/MSP).
 		if orgID != "default" {
-			// Check feature flag first - 501 Not Implemented if disabled
-			if !IsMultiTenantEnabled() {
-				writeMultiTenantDisabledError(w)
-				return
-			}
-			// Feature is enabled, check license - 402 Payment Required if unlicensed
-			checkCtx := context.WithValue(r.Context(), OrgIDContextKey, orgID)
-			if !hasMultiTenantFeatureForContext(checkCtx) {
-				writeMultiTenantRequiredError(w)
-				return
+			if m.hostedMode {
+				// Hosted mode: verify the org has a valid subscription or bounded trial.
+				checkCtx := context.WithValue(r.Context(), OrgIDContextKey, orgID)
+				if !isHostedSubscriptionValid(checkCtx) {
+					writeHostedSubscriptionRequiredError(w)
+					return
+				}
+			} else {
+				// Self-hosted mode: multi-tenant requires feature flag + Enterprise license.
+				if !IsMultiTenantEnabled() {
+					writeMultiTenantDisabledError(w)
+					return
+				}
+				checkCtx := context.WithValue(r.Context(), OrgIDContextKey, orgID)
+				if !hasMultiTenantFeatureForContext(checkCtx) {
+					writeMultiTenantRequiredError(w)
+					return
+				}
 			}
 		}
 
@@ -217,4 +228,31 @@ func GetOrganization(ctx context.Context) *models.Organization {
 		return org
 	}
 	return &models.Organization{ID: "default", DisplayName: "Default Organization"}
+}
+
+// isHostedSubscriptionValid checks whether a hosted Cloud tenant has a valid subscription
+// or a bounded trial. This replaces the FeatureMultiTenant check for hosted mode, where
+// tenant routing is infrastructure rather than a paid feature.
+func isHostedSubscriptionValid(ctx context.Context) bool {
+	svc := getLicenseServiceForContext(ctx)
+	subState := entitlements.SubscriptionState(svc.SubscriptionState())
+	switch subState {
+	case entitlements.SubStateActive, entitlements.SubStateGrace:
+		return true
+	case entitlements.SubStateTrial:
+		// Only allow trials with an explicit end date to prevent "infinite free Cloud".
+		eval := svc.Evaluator()
+		return eval != nil && eval.TrialEndsAt() != nil
+	default:
+		return false
+	}
+}
+
+// writeHostedSubscriptionRequiredError writes a 402 response for Cloud tenants
+// whose subscription is not active (expired, canceled, or missing).
+func writeHostedSubscriptionRequiredError(w http.ResponseWriter) {
+	writePaymentRequired(w, map[string]interface{}{
+		"error":   "subscription_required",
+		"message": "Your Cloud subscription is not active. Please check your billing status.",
+	})
 }

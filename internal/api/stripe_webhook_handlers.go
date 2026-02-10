@@ -292,7 +292,7 @@ func (h *StripeWebhookHandlers) handleCheckoutSessionCompleted(ctx context.Conte
 	planVersion := derivePlanVersion(session.Metadata, "")
 
 	state := &entitlements.BillingState{
-		Capabilities:         license.DeriveCapabilitiesFromTier(license.TierPro, nil),
+		Capabilities:         license.DeriveCapabilitiesFromTier(license.TierCloud, nil),
 		Limits:               map[string]int64{},
 		MetersEnabled:        []string{},
 		PlanVersion:          planVersion,
@@ -388,7 +388,7 @@ func (h *StripeWebhookHandlers) handleSubscriptionUpdated(ctx context.Context, s
 	state.PlanVersion = derivePlanVersion(sub.Metadata, priceID)
 
 	if shouldGrantPaidCapabilities(subState) {
-		state.Capabilities = license.DeriveCapabilitiesFromTier(license.TierPro, nil)
+		state.Capabilities = license.DeriveCapabilitiesFromTier(license.TierCloud, nil)
 	} else {
 		state.Capabilities = []string{}
 	}

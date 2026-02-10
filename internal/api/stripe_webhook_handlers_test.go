@@ -229,8 +229,8 @@ func TestStripeWebhook_CheckoutCompleted_IdempotentProvisioning(t *testing.T) {
 	if state.StripeCustomerID != "cus_abc" {
 		t.Fatalf("stripe_customer_id=%q, want %q", state.StripeCustomerID, "cus_abc")
 	}
-	if !license.TierHasFeature(license.TierPro, license.FeatureAIAutoFix) {
-		t.Fatalf("sanity: pro tier must include ai_autofix")
+	if !license.TierHasFeature(license.TierCloud, license.FeatureAIAutoFix) {
+		t.Fatalf("sanity: cloud tier must include ai_autofix")
 	}
 	hasAutoFix := false
 	for _, cap := range state.Capabilities {
@@ -239,7 +239,7 @@ func TestStripeWebhook_CheckoutCompleted_IdempotentProvisioning(t *testing.T) {
 		}
 	}
 	if !hasAutoFix {
-		t.Fatalf("expected pro capabilities to include %q, got %v", license.FeatureAIAutoFix, state.Capabilities)
+		t.Fatalf("expected cloud capabilities to include %q, got %v", license.FeatureAIAutoFix, state.Capabilities)
 	}
 
 	if emailer.Count() != 1 {

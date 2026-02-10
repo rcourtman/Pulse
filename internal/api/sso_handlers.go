@@ -19,6 +19,7 @@ import (
 	"github.com/crewjam/saml"
 	"github.com/google/uuid"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/license"
 	"github.com/rs/zerolog/log"
 )
 
@@ -223,6 +224,15 @@ func (r *Router) handleCreateSSOProvider(w http.ResponseWriter, req *http.Reques
 		return
 	}
 
+	// SAML requires Advanced SSO license (OIDC is free)
+	if provider.Type == config.SSOProviderTypeSAML {
+		svc := r.licenseHandlers.Service(req.Context())
+		if err := svc.RequireFeature(license.FeatureAdvancedSSO); err != nil {
+			WriteLicenseRequired(w, license.FeatureAdvancedSSO, "SAML SSO requires a Pro license. Basic OIDC SSO is available on all tiers.")
+			return
+		}
+	}
+
 	// Security: Validate OIDC configuration
 	if provider.Type == config.SSOProviderTypeOIDC {
 		if provider.OIDC == nil {
@@ -334,6 +344,15 @@ func (r *Router) handleUpdateSSOProvider(w http.ResponseWriter, req *http.Reques
 	if updated.Name == "" {
 		writeErrorResponse(w, http.StatusBadRequest, "validation_error", "Provider name is required", nil)
 		return
+	}
+
+	// SAML requires Advanced SSO license (OIDC is free)
+	if updated.Type == config.SSOProviderTypeSAML {
+		svc := r.licenseHandlers.Service(req.Context())
+		if err := svc.RequireFeature(license.FeatureAdvancedSSO); err != nil {
+			WriteLicenseRequired(w, license.FeatureAdvancedSSO, "SAML SSO requires a Pro license. Basic OIDC SSO is available on all tiers.")
+			return
+		}
 	}
 
 	// Security: Validate URLs for OIDC

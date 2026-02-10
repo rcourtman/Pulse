@@ -35,7 +35,7 @@ func TestWebSocketIsolation_Permanent(t *testing.T) {
 	// Reset global state
 	defer SetMultiTenantEnabled(false)
 
-	checker := NewMultiTenantChecker()
+	checker := NewMultiTenantChecker(false) // self-hosted mode for existing tests
 
 	// Case 1: Default Org always allowed
 	result := checker.CheckMultiTenant(context.Background(), "default")

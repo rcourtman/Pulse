@@ -24,9 +24,12 @@ func IsMultiTenantEnabled() bool {
 }
 
 // DefaultMultiTenantChecker implements websocket.MultiTenantChecker for use with the WebSocket hub.
-type DefaultMultiTenantChecker struct{}
+type DefaultMultiTenantChecker struct {
+	hostedMode bool
+}
 
 // CheckMultiTenant checks if multi-tenant is enabled (feature flag) and licensed for the org.
+// In hosted mode, tenant routing uses subscription lifecycle checks instead of FeatureMultiTenant.
 // Uses the LicenseServiceProvider for proper per-tenant license lookup.
 func (c *DefaultMultiTenantChecker) CheckMultiTenant(ctx context.Context, orgID string) websocket.MultiTenantCheckResult {
 	// Default org is always allowed
@@ -38,7 +41,26 @@ func (c *DefaultMultiTenantChecker) CheckMultiTenant(ctx context.Context, orgID 
 		}
 	}
 
-	// Check feature flag first
+	if c.hostedMode {
+		// Hosted mode: tenant routing is infrastructure. Check subscription lifecycle
+		// instead of FeatureMultiTenant so Cloud customers can connect.
+		checkCtx := context.WithValue(ctx, OrgIDContextKey, orgID)
+		if isHostedSubscriptionValid(checkCtx) {
+			return websocket.MultiTenantCheckResult{
+				Allowed:        true,
+				FeatureEnabled: true,
+				Licensed:       true,
+			}
+		}
+		return websocket.MultiTenantCheckResult{
+			Allowed:        false,
+			FeatureEnabled: true,
+			Licensed:       false,
+			Reason:         "Cloud subscription is not active",
+		}
+	}
+
+	// Self-hosted mode: check feature flag first
 	if !multiTenantEnabled {
 		return websocket.MultiTenantCheckResult{
 			Allowed:        false,
@@ -67,8 +89,8 @@ func (c *DefaultMultiTenantChecker) CheckMultiTenant(ctx context.Context, orgID 
 }
 
 // NewMultiTenantChecker creates a new DefaultMultiTenantChecker.
-func NewMultiTenantChecker() *DefaultMultiTenantChecker {
-	return &DefaultMultiTenantChecker{}
+func NewMultiTenantChecker(hostedMode bool) *DefaultMultiTenantChecker {
+	return &DefaultMultiTenantChecker{hostedMode: hostedMode}
 }
 
 // SetMultiTenantEnabled allows programmatic control of the feature flag (for testing).
@@ -174,9 +196,7 @@ func RequireMultiTenantHandler(next http.Handler) http.Handler {
 // writeMultiTenantRequiredError writes a 402 Payment Required response
 // indicating that multi-tenant requires an Enterprise license.
 func writeMultiTenantRequiredError(w http.ResponseWriter) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusPaymentRequired)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writePaymentRequired(w, map[string]interface{}{
 		"error":   "license_required",
 		"message": "Multi-tenant access requires an Enterprise license",
 		"feature": license.FeatureMultiTenant,
