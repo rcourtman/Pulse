@@ -14,6 +14,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 type noExecutorChatService struct{}
@@ -383,19 +384,6 @@ func TestSeedResourceInventory_DetailedSections(t *testing.T) {
 				},
 			},
 		},
-		CephClusters: []models.CephCluster{
-			{
-				Name:          "ceph-1",
-				Health:        "HEALTH_WARN",
-				HealthMessage: "OSD down",
-				UsagePercent:  45.0,
-				UsedBytes:     450 * 1024 * 1024,
-				TotalBytes:    1000 * 1024 * 1024,
-				NumOSDs:       3,
-				NumOSDsUp:     2,
-				NumOSDsIn:     3,
-			},
-		},
 		PBSInstances: []models.PBSInstance{
 			{
 				Name: "pbs-1",
@@ -405,6 +393,35 @@ func TestSeedResourceInventory_DetailedSections(t *testing.T) {
 			},
 		},
 	}
+
+	usedBytes := int64(450 * 1024 * 1024)
+	totalBytes := int64(1000 * 1024 * 1024)
+	ps.SetUnifiedResourceProvider(&mockUnifiedResourceProvider{
+		getByTypeFunc: func(t unifiedresources.ResourceType) []unifiedresources.Resource {
+			if t == unifiedresources.ResourceTypeCeph {
+				return []unifiedresources.Resource{
+					{
+						Name: "ceph-1",
+						Type: unifiedresources.ResourceTypeCeph,
+						Ceph: &unifiedresources.CephMeta{
+							HealthStatus:  "HEALTH_WARN",
+							HealthMessage: "OSD down",
+							NumOSDs:       3,
+							NumOSDsUp:     2,
+							NumOSDsIn:     3,
+						},
+						Metrics: &unifiedresources.ResourceMetrics{
+							Disk: &unifiedresources.MetricValue{
+								Used:  &usedBytes,
+								Total: &totalBytes,
+							},
+						},
+					},
+				}
+			}
+			return nil
+		},
+	})
 
 	out := ps.seedResourceInventory(state, nil, cfg, now, false, nil)
 	for _, part := range []string{
@@ -429,17 +446,29 @@ func TestSeedHealthAndAlerts_NoIssues(t *testing.T) {
 	cfg := DefaultPatrolConfig()
 	now := time.Now()
 
-	state := models.StateSnapshot{
-		PhysicalDisks: []models.PhysicalDisk{
-			{
-				Node:        "node-1",
-				DevPath:     "/dev/sda",
-				Model:       "disk",
-				Health:      "PASSED",
-				Wearout:     100,
-				Temperature: 40,
-			},
+	ps.SetUnifiedResourceProvider(&mockUnifiedResourceProvider{
+		getByTypeFunc: func(t unifiedresources.ResourceType) []unifiedresources.Resource {
+			if t == unifiedresources.ResourceTypePhysicalDisk {
+				return []unifiedresources.Resource{
+					{
+						Name:       "disk",
+						Type:       unifiedresources.ResourceTypePhysicalDisk,
+						ParentName: "node-1",
+						PhysicalDisk: &unifiedresources.PhysicalDiskMeta{
+							DevPath:     "/dev/sda",
+							Model:       "disk",
+							Health:      "PASSED",
+							Wearout:     100,
+							Temperature: 40,
+						},
+					},
+				}
+			}
+			return nil
 		},
+	})
+
+	state := models.StateSnapshot{
 		ConnectionHealth: map[string]bool{
 			"node-1": true,
 			"node-2": true,
@@ -460,17 +489,29 @@ func TestSeedHealthAndAlerts_WithIssues(t *testing.T) {
 	cfg := DefaultPatrolConfig()
 	now := time.Now()
 
-	state := models.StateSnapshot{
-		PhysicalDisks: []models.PhysicalDisk{
-			{
-				Node:        "node-1",
-				DevPath:     "/dev/sda",
-				Model:       "disk",
-				Health:      "FAILED",
-				Wearout:     10,
-				Temperature: 60,
-			},
+	ps.SetUnifiedResourceProvider(&mockUnifiedResourceProvider{
+		getByTypeFunc: func(t unifiedresources.ResourceType) []unifiedresources.Resource {
+			if t == unifiedresources.ResourceTypePhysicalDisk {
+				return []unifiedresources.Resource{
+					{
+						Name:       "disk",
+						Type:       unifiedresources.ResourceTypePhysicalDisk,
+						ParentName: "node-1",
+						PhysicalDisk: &unifiedresources.PhysicalDiskMeta{
+							DevPath:     "/dev/sda",
+							Model:       "disk",
+							Health:      "FAILED",
+							Wearout:     10,
+							Temperature: 60,
+						},
+					},
+				}
+			}
+			return nil
 		},
+	})
+
+	state := models.StateSnapshot{
 		ActiveAlerts: []models.Alert{
 			{Level: "warning", Message: "CPU high", StartTime: now.Add(-time.Hour)},
 		},

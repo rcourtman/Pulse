@@ -250,6 +250,9 @@ type PatrolService struct {
 	incidentStore       *memory.IncidentStore   // For incident timeline capture
 	alertResolver       AlertResolver           // For AI-based alert resolution
 
+	// Unified resource provider — reads physical disks, Ceph, etc. from canonical model
+	unifiedResourceProvider UnifiedResourceProvider
+
 	// New AI intelligence providers (Phase 6)
 	learningProvider     LearningProvider     // For learned preferences from user feedback
 	proxmoxEventProvider ProxmoxEventProvider // For recent Proxmox operations

@@ -196,10 +196,6 @@ func TestStorageBackupDiskAdapters(t *testing.T) {
 	if len(storageAdapter.GetStorage()) != 1 {
 		t.Fatal("expected storage data")
 	}
-	if len(storageAdapter.GetCephClusters()) != 1 {
-		t.Fatal("expected ceph data")
-	}
-
 	if NewBackupMCPAdapter(nil) != nil {
 		t.Fatal("expected nil backup adapter for nil state")
 	}

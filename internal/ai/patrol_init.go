@@ -397,6 +397,15 @@ func (p *PatrolService) GetKnowledgeStore() *knowledge.Store {
 	return p.knowledgeStore
 }
 
+// SetUnifiedResourceProvider sets the unified resource provider for reading
+// physical disks, Ceph clusters, etc. from the canonical resource registry.
+func (p *PatrolService) SetUnifiedResourceProvider(urp UnifiedResourceProvider) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.unifiedResourceProvider = urp
+	log.Info().Msg("AI Patrol: Unified resource provider set")
+}
+
 // SetDiscoveryStore sets the discovery store for infrastructure context
 // This enables the patrol service to include discovered service info in prompts
 func (p *PatrolService) SetDiscoveryStore(store *servicediscovery.Store) {

@@ -7,6 +7,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 // registerMetricsTools registers the pulse_metrics tool
@@ -564,89 +566,105 @@ func (e *PulseToolExecutor) executeGetDiskIOStats(_ context.Context, args map[st
 }
 
 func (e *PulseToolExecutor) executeListPhysicalDisks(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
-	if e.stateProvider == nil {
-		return NewTextResult("State provider not available."), nil
-	}
-
 	instanceFilter, _ := args["instance"].(string)
 	nodeFilter, _ := args["node"].(string)
 	healthFilter, _ := args["health"].(string)
 	typeFilter, _ := args["type"].(string)
 	limit := intArg(args, "limit", 100)
 
-	state := e.stateProvider.GetState()
+	// Prefer unified resources when available
+	if e.unifiedResourceProvider != nil {
+		resources := e.unifiedResourceProvider.GetByType(unifiedresources.ResourceTypePhysicalDisk)
+		if len(resources) == 0 {
+			return NewTextResult("No physical disk data available. Physical disk information is collected from Proxmox nodes."), nil
+		}
 
-	if len(state.PhysicalDisks) == 0 {
-		return NewTextResult("No physical disk data available. Physical disk information is collected from Proxmox nodes."), nil
+		var disks []PhysicalDiskSummary
+		totalCount := 0
+
+		for _, r := range resources {
+			pd := r.PhysicalDisk
+			if pd == nil {
+				continue
+			}
+
+			node := r.ParentName
+			if node == "" && len(r.Identity.Hostnames) > 0 {
+				node = r.Identity.Hostnames[0]
+			}
+
+			// Apply filters
+			if instanceFilter != "" {
+				// Instance is encoded in the resource ID as "{instance}-{node}-..."
+				// Skip if no match found in tags or ID
+				matched := false
+				for _, tag := range r.Tags {
+					if strings.EqualFold(tag, instanceFilter) {
+						matched = true
+						break
+					}
+				}
+				if !matched && !strings.HasPrefix(r.ID, instanceFilter) {
+					continue
+				}
+			}
+			if nodeFilter != "" && !strings.EqualFold(node, nodeFilter) {
+				continue
+			}
+			if healthFilter != "" && !strings.EqualFold(pd.Health, healthFilter) {
+				continue
+			}
+			if typeFilter != "" && !strings.EqualFold(pd.DiskType, typeFilter) {
+				continue
+			}
+
+			totalCount++
+			if len(disks) >= limit {
+				continue
+			}
+
+			summary := PhysicalDiskSummary{
+				ID:          r.ID,
+				Node:        node,
+				DevPath:     pd.DevPath,
+				Model:       pd.Model,
+				Serial:      pd.Serial,
+				WWN:         pd.WWN,
+				Type:        pd.DiskType,
+				SizeBytes:   pd.SizeBytes,
+				Health:      pd.Health,
+				Used:        pd.Used,
+				LastChecked: r.LastSeen,
+			}
+
+			if pd.Wearout >= 0 {
+				wearout := pd.Wearout
+				summary.Wearout = &wearout
+			}
+			if pd.Temperature > 0 {
+				temp := pd.Temperature
+				summary.Temperature = &temp
+			}
+			if pd.RPM > 0 {
+				rpm := pd.RPM
+				summary.RPM = &rpm
+			}
+
+			disks = append(disks, summary)
+		}
+
+		if disks == nil {
+			disks = []PhysicalDiskSummary{}
+		}
+
+		return NewJSONResult(PhysicalDisksResponse{
+			Disks:    disks,
+			Total:    len(resources),
+			Filtered: totalCount,
+		}), nil
 	}
 
-	var disks []PhysicalDiskSummary
-	totalCount := 0
-
-	for _, disk := range state.PhysicalDisks {
-		// Apply filters
-		if instanceFilter != "" && disk.Instance != instanceFilter {
-			continue
-		}
-		if nodeFilter != "" && disk.Node != nodeFilter {
-			continue
-		}
-		if healthFilter != "" && !strings.EqualFold(disk.Health, healthFilter) {
-			continue
-		}
-		if typeFilter != "" && !strings.EqualFold(disk.Type, typeFilter) {
-			continue
-		}
-
-		totalCount++
-
-		if len(disks) >= limit {
-			continue
-		}
-
-		summary := PhysicalDiskSummary{
-			ID:          disk.ID,
-			Node:        disk.Node,
-			Instance:    disk.Instance,
-			DevPath:     disk.DevPath,
-			Model:       disk.Model,
-			Serial:      disk.Serial,
-			WWN:         disk.WWN,
-			Type:        disk.Type,
-			SizeBytes:   disk.Size,
-			Health:      disk.Health,
-			Used:        disk.Used,
-			LastChecked: disk.LastChecked,
-		}
-
-		// Only include optional fields if they have meaningful values
-		if disk.Wearout >= 0 {
-			wearout := disk.Wearout
-			summary.Wearout = &wearout
-		}
-		if disk.Temperature > 0 {
-			temp := disk.Temperature
-			summary.Temperature = &temp
-		}
-		if disk.RPM > 0 {
-			rpm := disk.RPM
-			summary.RPM = &rpm
-		}
-
-		disks = append(disks, summary)
-	}
-
-	if disks == nil {
-		disks = []PhysicalDiskSummary{}
-	}
-
-	response := PhysicalDisksResponse{
-		Disks:    disks,
-		Total:    len(state.PhysicalDisks),
-		Filtered: totalCount,
-	}
-
-	return NewJSONResult(response), nil
+	return NewTextResult("No physical disk data available. Physical disk information is collected from Proxmox nodes."), nil
 }
 
 // maxMetricPoints is the maximum number of metric data points returned per resource.

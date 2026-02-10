@@ -24,10 +24,16 @@ type UnifiedResourceProvider interface {
 }
 
 // SetUnifiedResourceProvider sets the unified-resource-native provider.
+// It also forwards the provider to the patrol service so seed context
+// can read from the unified resource registry.
 func (s *Service) SetUnifiedResourceProvider(urp UnifiedResourceProvider) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.unifiedResourceProvider = urp
+
+	if s.patrolService != nil {
+		s.patrolService.SetUnifiedResourceProvider(urp)
+	}
 }
 
 // buildUnifiedResourceContext creates AI context from the unified resource model.

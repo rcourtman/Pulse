@@ -12,6 +12,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 type metricsHistoryResponse struct {
@@ -103,8 +104,12 @@ func TestMetricsHistoryFallbackMockDiskSynthesizesSeries(t *testing.T) {
 		t.Fatalf("expected at least one mock physical disk with serial and temperature")
 	}
 
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(state)
+	adapter := unifiedresources.NewUnifiedAIAdapter(registry)
+
 	monitor := &monitoring.Monitor{}
-	router := &Router{monitor: monitor}
+	router := &Router{monitor: monitor, resourceRegistry: registry, aiUnifiedAdapter: adapter}
 
 	req := httptest.NewRequest(
 		http.MethodGet,

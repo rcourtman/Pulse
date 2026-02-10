@@ -48,6 +48,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/relay"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
+	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
@@ -273,7 +274,11 @@ func (r *Router) setupRoutes() {
 	r.kubernetesAgentHandlers = NewKubernetesAgentHandlers(r.mtMonitor, r.monitor, r.wsHub)
 	r.hostAgentHandlers = NewHostAgentHandlers(r.mtMonitor, r.monitor, r.wsHub)
 	r.resourceHandlers = NewResourceHandlers(r.config)
-	if r.trueNASPoller != nil {
+	if mock.IsMockEnabled() {
+		truenas.SetFeatureEnabled(true)
+		mockTrueNASProvider := truenas.NewDefaultProvider()
+		r.resourceHandlers.SetSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, trueNASRecordsAdapter{provider: mockTrueNASProvider})
+	} else if r.trueNASPoller != nil {
 		r.resourceHandlers.SetSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, r.trueNASPoller)
 	}
 	r.configProfileHandler = NewConfigProfileHandler(r.multiTenant)
@@ -282,7 +287,7 @@ func (r *Router) setupRoutes() {
 	orgHandlers := NewOrgHandlers(r.multiTenant, r.mtMonitor, rbacProvider)
 	// Wire license service provider so middleware can access per-tenant license services
 	SetLicenseServiceProvider(r.licenseHandlers)
-	r.reportingHandlers = NewReportingHandlers(r.mtMonitor)
+	r.reportingHandlers = NewReportingHandlers(r.mtMonitor, r.resourceRegistry)
 	r.logHandlers = NewLogHandlers(r.config, r.persistence)
 	rbacHandlers := NewRBACHandlers(r.config, rbacProvider)
 	hostedSignupHandlers := NewHostedSignupHandlers(r.multiTenant, rbacProvider, r.hostedMode)
@@ -1736,6 +1741,12 @@ func (r *Router) wireAIChatProviders() {
 				}
 			}
 		}
+	}
+
+	// Wire unified resource provider for physical disks, Ceph, etc.
+	if r.aiUnifiedAdapter != nil {
+		service.SetUnifiedResourceProvider(r.aiUnifiedAdapter)
+		log.Debug().Msg("AI chat: Unified resource provider wired")
 	}
 
 	log.Info().Msg("AI chat MCP tool providers wired")
@@ -6323,11 +6334,16 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		return nil
 	}
 
-	findDisk := func(id string) *models.PhysicalDisk {
-		for i := range state.PhysicalDisks {
-			d := &state.PhysicalDisks[i]
-			if d.Serial == id || d.WWN == id || d.ID == id {
-				return d
+	findDisk := func(id string) *unifiedresources.Resource {
+		if r.aiUnifiedAdapter == nil {
+			return nil
+		}
+		for _, res := range r.aiUnifiedAdapter.GetByType(unifiedresources.ResourceTypePhysicalDisk) {
+			if res.PhysicalDisk == nil {
+				continue
+			}
+			if res.PhysicalDisk.Serial == id || res.PhysicalDisk.WWN == id || res.ID == id {
+				return &res
 			}
 		}
 		return nil
@@ -6432,43 +6448,44 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			}
 		case "disk":
 			disk := findDisk(resourceID)
-			if disk == nil {
+			if disk == nil || disk.PhysicalDisk == nil {
 				return points
 			}
-			if disk.Temperature > 0 {
-				points["smart_temp"] = monitoring.MetricPoint{Timestamp: now, Value: float64(disk.Temperature)}
+			pd := disk.PhysicalDisk
+			if pd.Temperature > 0 {
+				points["smart_temp"] = monitoring.MetricPoint{Timestamp: now, Value: float64(pd.Temperature)}
 			}
-			if disk.SmartAttributes != nil {
-				attrs := disk.SmartAttributes
-				if attrs.PowerOnHours != nil {
-					points["smart_power_on_hours"] = monitoring.MetricPoint{Timestamp: now, Value: float64(*attrs.PowerOnHours)}
+			if pd.SMART != nil {
+				s := pd.SMART
+				if s.PowerOnHours > 0 {
+					points["smart_power_on_hours"] = monitoring.MetricPoint{Timestamp: now, Value: float64(s.PowerOnHours)}
 				}
-				if attrs.PowerCycles != nil {
-					points["smart_power_cycles"] = monitoring.MetricPoint{Timestamp: now, Value: float64(*attrs.PowerCycles)}
+				if s.PowerCycles > 0 {
+					points["smart_power_cycles"] = monitoring.MetricPoint{Timestamp: now, Value: float64(s.PowerCycles)}
 				}
-				if attrs.ReallocatedSectors != nil {
-					points["smart_reallocated_sectors"] = monitoring.MetricPoint{Timestamp: now, Value: float64(*attrs.ReallocatedSectors)}
+				if s.ReallocatedSectors > 0 {
+					points["smart_reallocated_sectors"] = monitoring.MetricPoint{Timestamp: now, Value: float64(s.ReallocatedSectors)}
 				}
-				if attrs.PendingSectors != nil {
-					points["smart_pending_sectors"] = monitoring.MetricPoint{Timestamp: now, Value: float64(*attrs.PendingSectors)}
+				if s.PendingSectors > 0 {
+					points["smart_pending_sectors"] = monitoring.MetricPoint{Timestamp: now, Value: float64(s.PendingSectors)}
 				}
-				if attrs.OfflineUncorrectable != nil {
-					points["smart_offline_uncorrectable"] = monitoring.MetricPoint{Timestamp: now, Value: float64(*attrs.OfflineUncorrectable)}
+				if s.OfflineUncorrectable > 0 {
+					points["smart_offline_uncorrectable"] = monitoring.MetricPoint{Timestamp: now, Value: float64(s.OfflineUncorrectable)}
 				}
-				if attrs.UDMACRCErrors != nil {
-					points["smart_crc_errors"] = monitoring.MetricPoint{Timestamp: now, Value: float64(*attrs.UDMACRCErrors)}
+				if s.UDMACRCErrors > 0 {
+					points["smart_crc_errors"] = monitoring.MetricPoint{Timestamp: now, Value: float64(s.UDMACRCErrors)}
 				}
-				if attrs.PercentageUsed != nil {
-					points["smart_percentage_used"] = monitoring.MetricPoint{Timestamp: now, Value: float64(*attrs.PercentageUsed)}
+				if s.PercentageUsed > 0 {
+					points["smart_percentage_used"] = monitoring.MetricPoint{Timestamp: now, Value: float64(s.PercentageUsed)}
 				}
-				if attrs.AvailableSpare != nil {
-					points["smart_available_spare"] = monitoring.MetricPoint{Timestamp: now, Value: float64(*attrs.AvailableSpare)}
+				if s.AvailableSpare > 0 {
+					points["smart_available_spare"] = monitoring.MetricPoint{Timestamp: now, Value: float64(s.AvailableSpare)}
 				}
-				if attrs.MediaErrors != nil {
-					points["smart_media_errors"] = monitoring.MetricPoint{Timestamp: now, Value: float64(*attrs.MediaErrors)}
+				if s.MediaErrors > 0 {
+					points["smart_media_errors"] = monitoring.MetricPoint{Timestamp: now, Value: float64(s.MediaErrors)}
 				}
-				if attrs.UnsafeShutdowns != nil {
-					points["smart_unsafe_shutdowns"] = monitoring.MetricPoint{Timestamp: now, Value: float64(*attrs.UnsafeShutdowns)}
+				if s.UnsafeShutdowns > 0 {
+					points["smart_unsafe_shutdowns"] = monitoring.MetricPoint{Timestamp: now, Value: float64(s.UnsafeShutdowns)}
 				}
 			}
 		}
@@ -6482,14 +6499,14 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		}
 
 		if mockModeEnabled && resourceType == "disk" && metricType == "smart_temp" {
-			if disk := findDisk(resourceID); disk != nil && disk.Temperature > 0 {
+			if disk := findDisk(resourceID); disk != nil && disk.PhysicalDisk != nil && disk.PhysicalDisk.Temperature > 0 {
 				series := buildSyntheticMetricHistorySeries(
 					end,
 					duration,
 					historyMaxPoints,
 					resourceID,
 					metricType,
-					float64(disk.Temperature),
+					float64(disk.PhysicalDisk.Temperature),
 				)
 				if len(series) > 0 {
 					return buildHistoryPoints(series, stepSecs), historySourceMock, true
@@ -6718,8 +6735,8 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			targetPoints := targetMockSeriesPoints(duration, historyMaxPoints)
 			if len(points) > 0 && len(points) < targetPoints {
 				current := points[len(points)-1].Value
-				if disk := findDisk(resourceID); disk != nil && disk.Temperature > 0 {
-					current = float64(disk.Temperature)
+				if disk := findDisk(resourceID); disk != nil && disk.PhysicalDisk != nil && disk.PhysicalDisk.Temperature > 0 {
+					current = float64(disk.PhysicalDisk.Temperature)
 				}
 				series := buildSyntheticMetricHistorySeries(
 					end,
@@ -7949,6 +7966,18 @@ func (w *knowledgeStoreProviderWrapper) GetKnowledge(resourceID string, category
 		})
 	}
 	return result
+}
+
+// trueNASRecordsAdapter wraps a truenas.Provider to satisfy SupplementalRecordsProvider.
+type trueNASRecordsAdapter struct {
+	provider *truenas.Provider
+}
+
+func (a trueNASRecordsAdapter) GetCurrentRecords() []unifiedresources.IngestRecord {
+	if a.provider == nil {
+		return nil
+	}
+	return a.provider.Records()
 }
 
 // trigger rebuild Fri Jan 16 10:52:41 UTC 2026

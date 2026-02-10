@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 // registerStorageTools registers the pulse_storage tool
@@ -243,7 +245,6 @@ func (e *PulseToolExecutor) executeListStorage(_ context.Context, args map[strin
 	}
 
 	storage := e.storageProvider.GetStorage()
-	cephClusters := e.storageProvider.GetCephClusters()
 
 	response := StorageResponse{}
 
@@ -295,21 +296,32 @@ func (e *PulseToolExecutor) executeListStorage(_ context.Context, args map[strin
 		count++
 	}
 
-	// Ceph clusters
-	for _, c := range cephClusters {
-		response.CephClusters = append(response.CephClusters, CephClusterSummary{
-			Name:          c.Name,
-			Health:        c.Health,
-			HealthMessage: c.HealthMessage,
-			UsagePercent:  c.UsagePercent,
-			UsedTB:        float64(c.UsedBytes) / (1024 * 1024 * 1024 * 1024),
-			TotalTB:       float64(c.TotalBytes) / (1024 * 1024 * 1024 * 1024),
-			NumOSDs:       c.NumOSDs,
-			NumOSDsUp:     c.NumOSDsUp,
-			NumOSDsIn:     c.NumOSDsIn,
-			NumMons:       c.NumMons,
-			NumMgrs:       c.NumMgrs,
-		})
+	// Ceph clusters from unified resources
+	if e.unifiedResourceProvider != nil {
+		for _, r := range e.unifiedResourceProvider.GetByType(unifiedresources.ResourceTypeCeph) {
+			if r.Ceph == nil {
+				continue
+			}
+			c := r.Ceph
+			usedBytes, totalBytes := cephBytesFromResource(r)
+			usagePercent := 0.0
+			if totalBytes > 0 {
+				usagePercent = float64(usedBytes) / float64(totalBytes) * 100
+			}
+			response.CephClusters = append(response.CephClusters, CephClusterSummary{
+				Name:          r.Name,
+				Health:        c.HealthStatus,
+				HealthMessage: c.HealthMessage,
+				UsagePercent:  usagePercent,
+				UsedTB:        float64(usedBytes) / (1024 * 1024 * 1024 * 1024),
+				TotalTB:       float64(totalBytes) / (1024 * 1024 * 1024 * 1024),
+				NumOSDs:       c.NumOSDs,
+				NumOSDsUp:     c.NumOSDsUp,
+				NumOSDsIn:     c.NumOSDsIn,
+				NumMons:       c.NumMons,
+				NumMgrs:       c.NumMgrs,
+			})
+		}
 	}
 
 	// Ensure non-nil slices
@@ -321,6 +333,22 @@ func (e *PulseToolExecutor) executeListStorage(_ context.Context, args map[strin
 	}
 
 	return NewJSONResult(response), nil
+}
+
+// cephBytesFromResource extracts used/total bytes from a unified Ceph resource.
+// It prefers the Metrics.Disk values (which carry absolute bytes), falling back
+// to summing pool-level data from CephMeta.
+func cephBytesFromResource(r unifiedresources.Resource) (usedBytes, totalBytes int64) {
+	if r.Metrics != nil && r.Metrics.Disk != nil && r.Metrics.Disk.Used != nil && r.Metrics.Disk.Total != nil {
+		return *r.Metrics.Disk.Used, *r.Metrics.Disk.Total
+	}
+	if r.Ceph != nil {
+		for _, p := range r.Ceph.Pools {
+			usedBytes += p.StoredBytes
+			totalBytes += p.StoredBytes + p.AvailableBytes
+		}
+	}
+	return
 }
 
 func (e *PulseToolExecutor) executeGetDiskHealth(_ context.Context, _ map[string]interface{}) (CallToolResult, error) {
@@ -397,12 +425,6 @@ func (e *PulseToolExecutor) executeGetDiskHealth(_ context.Context, _ map[string
 func (e *PulseToolExecutor) executeGetCephStatus(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
 	clusterFilter, _ := args["cluster"].(string)
 
-	state := e.stateProvider.GetState()
-
-	if len(state.CephClusters) == 0 {
-		return NewTextResult("No Ceph clusters found. Ceph may not be configured or data is not yet available."), nil
-	}
-
 	type CephSummary struct {
 		Name    string                 `json:"name"`
 		Health  string                 `json:"health"`
@@ -411,45 +433,53 @@ func (e *PulseToolExecutor) executeGetCephStatus(_ context.Context, args map[str
 
 	var results []CephSummary
 
-	for _, cluster := range state.CephClusters {
-		if clusterFilter != "" && cluster.Name != clusterFilter {
-			continue
+	if e.unifiedResourceProvider != nil {
+		resources := e.unifiedResourceProvider.GetByType(unifiedresources.ResourceTypeCeph)
+		for _, r := range resources {
+			if r.Ceph == nil {
+				continue
+			}
+			if clusterFilter != "" && r.Name != clusterFilter {
+				continue
+			}
+			c := r.Ceph
+			summary := CephSummary{
+				Name:    r.Name,
+				Health:  c.HealthStatus,
+				Details: make(map[string]interface{}),
+			}
+			if c.HealthMessage != "" {
+				summary.Details["health_message"] = c.HealthMessage
+			}
+			if c.NumOSDs > 0 {
+				summary.Details["osd_count"] = c.NumOSDs
+				summary.Details["osds_up"] = c.NumOSDsUp
+				summary.Details["osds_in"] = c.NumOSDsIn
+				summary.Details["osds_down"] = c.NumOSDs - c.NumOSDsUp
+			}
+			if c.NumMons > 0 {
+				summary.Details["monitors"] = c.NumMons
+			}
+			usedBytes, totalBytes := cephBytesFromResource(r)
+			if totalBytes > 0 {
+				summary.Details["total_bytes"] = totalBytes
+				summary.Details["used_bytes"] = usedBytes
+				summary.Details["available_bytes"] = totalBytes - usedBytes
+				usagePercent := float64(usedBytes) / float64(totalBytes) * 100
+				summary.Details["usage_percent"] = usagePercent
+			}
+			if len(c.Pools) > 0 {
+				summary.Details["pools"] = c.Pools
+			}
+			results = append(results, summary)
 		}
-
-		summary := CephSummary{
-			Name:    cluster.Name,
-			Health:  cluster.Health,
-			Details: make(map[string]interface{}),
-		}
-
-		// Add relevant details
-		if cluster.HealthMessage != "" {
-			summary.Details["health_message"] = cluster.HealthMessage
-		}
-		if cluster.NumOSDs > 0 {
-			summary.Details["osd_count"] = cluster.NumOSDs
-			summary.Details["osds_up"] = cluster.NumOSDsUp
-			summary.Details["osds_in"] = cluster.NumOSDsIn
-			summary.Details["osds_down"] = cluster.NumOSDs - cluster.NumOSDsUp
-		}
-		if cluster.NumMons > 0 {
-			summary.Details["monitors"] = cluster.NumMons
-		}
-		if cluster.TotalBytes > 0 {
-			summary.Details["total_bytes"] = cluster.TotalBytes
-			summary.Details["used_bytes"] = cluster.UsedBytes
-			summary.Details["available_bytes"] = cluster.AvailableBytes
-			summary.Details["usage_percent"] = cluster.UsagePercent
-		}
-		if len(cluster.Pools) > 0 {
-			summary.Details["pools"] = cluster.Pools
-		}
-
-		results = append(results, summary)
 	}
 
-	if len(results) == 0 && clusterFilter != "" {
-		return NewTextResult(fmt.Sprintf("Ceph cluster '%s' not found.", clusterFilter)), nil
+	if len(results) == 0 {
+		if clusterFilter != "" {
+			return NewTextResult(fmt.Sprintf("Ceph cluster '%s' not found.", clusterFilter)), nil
+		}
+		return NewTextResult("No Ceph clusters found. Ceph may not be configured or data is not yet available."), nil
 	}
 
 	output, _ := json.MarshalIndent(results, "", "  ")

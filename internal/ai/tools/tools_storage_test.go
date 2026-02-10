@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 type stubBackupProvider struct {
@@ -25,15 +26,10 @@ func (s *stubBackupProvider) GetPBSInstances() []models.PBSInstance {
 
 type stubStorageProvider struct {
 	storage []models.Storage
-	ceph    []models.CephCluster
 }
 
 func (s *stubStorageProvider) GetStorage() []models.Storage {
 	return s.storage
-}
-
-func (s *stubStorageProvider) GetCephClusters() []models.CephCluster {
-	return s.ceph
 }
 
 type stubDiskHealthProvider struct {
@@ -173,19 +169,30 @@ func TestExecuteListBackupsAndStorage(t *testing.T) {
 				},
 			},
 		},
-		ceph: []models.CephCluster{
+	}
+	// Ceph data comes from unified resource provider
+	usedBytes := int64(2 * 1024 * 1024 * 1024 * 1024)
+	totalBytes := int64(4 * 1024 * 1024 * 1024 * 1024)
+	executor.unifiedResourceProvider = &stubUnifiedResourceProvider{
+		resources: []unifiedresources.Resource{
 			{
-				Name:          "ceph1",
-				Health:        "HEALTH_OK",
-				HealthMessage: "ok",
-				UsagePercent:  12.5,
-				UsedBytes:     2 * 1024 * 1024 * 1024 * 1024,
-				TotalBytes:    4 * 1024 * 1024 * 1024 * 1024,
-				NumOSDs:       3,
-				NumOSDsUp:     3,
-				NumOSDsIn:     3,
-				NumMons:       1,
-				NumMgrs:       1,
+				Name: "ceph1",
+				Type: unifiedresources.ResourceTypeCeph,
+				Ceph: &unifiedresources.CephMeta{
+					HealthStatus:  "HEALTH_OK",
+					HealthMessage: "ok",
+					NumOSDs:       3,
+					NumOSDsUp:     3,
+					NumOSDsIn:     3,
+					NumMons:       1,
+					NumMgrs:       1,
+				},
+				Metrics: &unifiedresources.ResourceMetrics{
+					Disk: &unifiedresources.MetricValue{
+						Used:  &usedBytes,
+						Total: &totalBytes,
+					},
+				},
 			},
 		},
 	}

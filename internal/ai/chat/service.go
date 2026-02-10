@@ -37,24 +37,25 @@ type AgentServer interface {
 
 // MCP provider type aliases for external use
 type (
-	MCPAlertProvider          = tools.AlertProvider
-	MCPFindingsProvider       = tools.FindingsProvider
-	MCPBaselineProvider       = tools.BaselineProvider
-	MCPPatternProvider        = tools.PatternProvider
-	MCPMetricsHistoryProvider = tools.MetricsHistoryProvider
-	MCPBackupProvider         = tools.BackupProvider
-	MCPStorageProvider        = tools.StorageProvider
-	MCPGuestConfigProvider    = tools.GuestConfigProvider
-	MCPDiskHealthProvider     = tools.DiskHealthProvider
-	MCPUpdatesProvider        = tools.UpdatesProvider
-	AgentProfileManager       = tools.AgentProfileManager
-	FindingsManager           = tools.FindingsManager
-	MetadataUpdater           = tools.MetadataUpdater
-	IncidentRecorderProvider  = tools.IncidentRecorderProvider
-	EventCorrelatorProvider   = tools.EventCorrelatorProvider
-	TopologyProvider          = tools.TopologyProvider
-	KnowledgeStoreProvider    = tools.KnowledgeStoreProvider
-	MCPDiscoveryProvider      = tools.DiscoveryProvider
+	MCPAlertProvider           = tools.AlertProvider
+	MCPFindingsProvider        = tools.FindingsProvider
+	MCPBaselineProvider        = tools.BaselineProvider
+	MCPPatternProvider         = tools.PatternProvider
+	MCPMetricsHistoryProvider  = tools.MetricsHistoryProvider
+	MCPBackupProvider          = tools.BackupProvider
+	MCPStorageProvider         = tools.StorageProvider
+	MCPGuestConfigProvider     = tools.GuestConfigProvider
+	MCPDiskHealthProvider      = tools.DiskHealthProvider
+	MCPUpdatesProvider         = tools.UpdatesProvider
+	AgentProfileManager        = tools.AgentProfileManager
+	FindingsManager            = tools.FindingsManager
+	MetadataUpdater            = tools.MetadataUpdater
+	IncidentRecorderProvider   = tools.IncidentRecorderProvider
+	EventCorrelatorProvider    = tools.EventCorrelatorProvider
+	TopologyProvider           = tools.TopologyProvider
+	KnowledgeStoreProvider     = tools.KnowledgeStoreProvider
+	MCPDiscoveryProvider       = tools.DiscoveryProvider
+	MCPUnifiedResourceProvider = tools.UnifiedResourceProvider
 )
 
 // Config holds service configuration
@@ -1037,6 +1038,14 @@ func (s *Service) SetKnowledgeStoreProvider(provider KnowledgeStoreProvider) {
 	defer s.mu.Unlock()
 	if s.executor != nil {
 		s.executor.SetKnowledgeStoreProvider(provider)
+	}
+}
+
+func (s *Service) SetUnifiedResourceProvider(provider tools.UnifiedResourceProvider) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.executor != nil {
+		s.executor.SetUnifiedResourceProvider(provider)
 	}
 }
 

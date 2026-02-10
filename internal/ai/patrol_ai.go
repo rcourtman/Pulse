@@ -16,6 +16,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
 
@@ -1598,18 +1599,33 @@ func (p *PatrolService) seedResourceInventory(state models.StateSnapshot, scoped
 	}
 
 	// --- Ceph Clusters ---
-	if len(state.CephClusters) > 0 {
-		sb.WriteString("# Ceph\n")
-		for _, c := range state.CephClusters {
-			sb.WriteString(fmt.Sprintf("- %s: %s — %.0f%% used (%s / %s), %d OSDs (%d up, %d in)\n",
-				c.Name, c.Health, c.UsagePercent,
-				seedFormatBytes(c.UsedBytes), seedFormatBytes(c.TotalBytes),
-				c.NumOSDs, c.NumOSDsUp, c.NumOSDsIn))
-			if c.HealthMessage != "" && c.Health != "HEALTH_OK" {
-				sb.WriteString(fmt.Sprintf("  Message: %s\n", c.HealthMessage))
+	p.mu.RLock()
+	urp := p.unifiedResourceProvider
+	p.mu.RUnlock()
+	if urp != nil {
+		cephResources := urp.GetByType(unifiedresources.ResourceTypeCeph)
+		if len(cephResources) > 0 {
+			sb.WriteString("# Ceph\n")
+			for _, r := range cephResources {
+				if r.Ceph == nil {
+					continue
+				}
+				c := r.Ceph
+				usedBytes, totalBytes := seedCephBytes(r)
+				usagePercent := 0.0
+				if totalBytes > 0 {
+					usagePercent = float64(usedBytes) / float64(totalBytes) * 100
+				}
+				sb.WriteString(fmt.Sprintf("- %s: %s — %.0f%% used (%s / %s), %d OSDs (%d up, %d in)\n",
+					r.Name, c.HealthStatus, usagePercent,
+					seedFormatBytes(usedBytes), seedFormatBytes(totalBytes),
+					c.NumOSDs, c.NumOSDsUp, c.NumOSDsIn))
+				if c.HealthMessage != "" && c.HealthStatus != "HEALTH_OK" {
+					sb.WriteString(fmt.Sprintf("  Message: %s\n", c.HealthMessage))
+				}
 			}
+			sb.WriteString("\n")
 		}
-		sb.WriteString("\n")
 	}
 
 	// --- PBS Instances ---
@@ -1840,35 +1856,52 @@ func (p *PatrolService) seedHealthAndAlerts(state models.StateSnapshot, scopedSe
 	var sb strings.Builder
 
 	// --- Disk Health ---
-	if len(state.PhysicalDisks) > 0 {
-		hasIssues := false
-		for _, d := range state.PhysicalDisks {
-			if d.Health != "PASSED" || (d.Wearout > 0 && d.Wearout < 20) || d.Temperature > 55 {
-				hasIssues = true
-				break
-			}
-		}
-
-		sb.WriteString("# Disk Health\n")
-		if !hasIssues {
-			sb.WriteString(fmt.Sprintf("All %d disks healthy (SMART PASSED).\n", len(state.PhysicalDisks)))
-		} else {
-			sb.WriteString("| Node | Device | Model | Health | Wearout | Temp |\n")
-			sb.WriteString("|------|--------|-------|--------|---------|------|\n")
-			for _, d := range state.PhysicalDisks {
-				wearout := "—"
-				if d.Wearout >= 0 {
-					wearout = fmt.Sprintf("%d%%", d.Wearout)
+	p.mu.RLock()
+	diskURP := p.unifiedResourceProvider
+	p.mu.RUnlock()
+	if diskURP != nil {
+		diskResources := diskURP.GetByType(unifiedresources.ResourceTypePhysicalDisk)
+		if len(diskResources) > 0 {
+			hasIssues := false
+			for _, r := range diskResources {
+				if r.PhysicalDisk == nil {
+					continue
 				}
-				temp := "—"
-				if d.Temperature > 0 {
-					temp = fmt.Sprintf("%d°C", d.Temperature)
+				d := r.PhysicalDisk
+				if d.Health != "PASSED" || (d.Wearout > 0 && d.Wearout < 20) || d.Temperature > 55 {
+					hasIssues = true
+					break
 				}
-				sb.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %s | %s |\n",
-					d.Node, d.DevPath, d.Model, d.Health, wearout, temp))
 			}
+			sb.WriteString("# Disk Health\n")
+			if !hasIssues {
+				sb.WriteString(fmt.Sprintf("All %d disks healthy (SMART PASSED).\n", len(diskResources)))
+			} else {
+				sb.WriteString("| Node | Device | Model | Health | Wearout | Temp |\n")
+				sb.WriteString("|------|--------|-------|--------|---------|------|\n")
+				for _, r := range diskResources {
+					if r.PhysicalDisk == nil {
+						continue
+					}
+					d := r.PhysicalDisk
+					node := r.ParentName
+					if node == "" && len(r.Identity.Hostnames) > 0 {
+						node = r.Identity.Hostnames[0]
+					}
+					wearout := "—"
+					if d.Wearout >= 0 {
+						wearout = fmt.Sprintf("%d%%", d.Wearout)
+					}
+					temp := "—"
+					if d.Temperature > 0 {
+						temp = fmt.Sprintf("%d°C", d.Temperature)
+					}
+					sb.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %s | %s |\n",
+						node, d.DevPath, d.Model, d.Health, wearout, temp))
+				}
+			}
+			sb.WriteString("\n")
 		}
-		sb.WriteString("\n")
 	}
 
 	// --- Active Alerts ---
@@ -2134,6 +2167,20 @@ func seedIsInScope(scopedSet map[string]bool, resourceID string) bool {
 }
 
 // seedFormatBytes formats bytes into a human-readable string (e.g. "1.5 GB").
+// seedCephBytes extracts used/total bytes from a unified Ceph resource.
+func seedCephBytes(r unifiedresources.Resource) (usedBytes, totalBytes int64) {
+	if r.Metrics != nil && r.Metrics.Disk != nil && r.Metrics.Disk.Used != nil && r.Metrics.Disk.Total != nil {
+		return *r.Metrics.Disk.Used, *r.Metrics.Disk.Total
+	}
+	if r.Ceph != nil {
+		for _, p := range r.Ceph.Pools {
+			usedBytes += p.StoredBytes
+			totalBytes += p.StoredBytes + p.AvailableBytes
+		}
+	}
+	return
+}
+
 func seedFormatBytes(b int64) string {
 	const (
 		KB = 1024

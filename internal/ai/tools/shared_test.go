@@ -6,6 +6,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/stretchr/testify/mock"
 )
 
@@ -153,7 +154,17 @@ func (m *mockStorageProvider) GetStorage() []models.Storage {
 	return args.Get(0).([]models.Storage)
 }
 
-func (m *mockStorageProvider) GetCephClusters() []models.CephCluster {
-	args := m.Called()
-	return args.Get(0).([]models.CephCluster)
+// stubUnifiedResourceProvider is a simple mock for UnifiedResourceProvider.
+type stubUnifiedResourceProvider struct {
+	resources []unifiedresources.Resource
+}
+
+func (s *stubUnifiedResourceProvider) GetByType(t unifiedresources.ResourceType) []unifiedresources.Resource {
+	var out []unifiedresources.Resource
+	for _, r := range s.resources {
+		if r.Type == t {
+			out = append(out, r)
+		}
+	}
+	return out
 }

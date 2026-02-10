@@ -7,8 +7,16 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
+
+// UnifiedResourceProvider gives the executor access to the unified resource
+// registry so that tool handlers can read physical disks, Ceph clusters, etc.
+// from the canonical model instead of raw StateSnapshot fields.
+type UnifiedResourceProvider interface {
+	GetByType(t unifiedresources.ResourceType) []unifiedresources.Resource
+}
 
 // ServerVersion is the version of the MCP tool implementation
 const ServerVersion = "1.0.0"
@@ -124,7 +132,6 @@ type BackupProvider interface {
 // StorageProvider provides storage information
 type StorageProvider interface {
 	GetStorage() []models.Storage
-	GetCephClusters() []models.CephCluster
 }
 
 // GuestConfigProvider provides guest configuration data (VM/LXC).
@@ -345,6 +352,9 @@ type ExecutorConfig struct {
 	// Optional providers - discovery
 	DiscoveryProvider DiscoveryProvider
 
+	// Optional providers - unified resources
+	UnifiedResourceProvider UnifiedResourceProvider
+
 	// Control settings
 	ControlLevel    ControlLevel
 	ProtectedGuests []string // VMIDs that AI cannot control
@@ -385,6 +395,9 @@ type PulseToolExecutor struct {
 
 	// Discovery provider
 	discoveryProvider DiscoveryProvider
+
+	// Unified resources provider
+	unifiedResourceProvider UnifiedResourceProvider
 
 	// Control settings
 	controlLevel    ControlLevel
@@ -453,6 +466,7 @@ func NewPulseToolExecutor(cfg ExecutorConfig) *PulseToolExecutor {
 		topologyProvider:         cfg.TopologyProvider,
 		knowledgeStoreProvider:   cfg.KnowledgeStoreProvider,
 		discoveryProvider:        cfg.DiscoveryProvider,
+		unifiedResourceProvider:  cfg.UnifiedResourceProvider,
 		controlLevel:             cfg.ControlLevel,
 		protectedGuests:          cfg.ProtectedGuests,
 		registry:                 NewToolRegistry(),
@@ -576,6 +590,11 @@ func (e *PulseToolExecutor) SetKnowledgeStoreProvider(provider KnowledgeStorePro
 // SetDiscoveryProvider sets the discovery provider for infrastructure discovery
 func (e *PulseToolExecutor) SetDiscoveryProvider(provider DiscoveryProvider) {
 	e.discoveryProvider = provider
+}
+
+// SetUnifiedResourceProvider sets the unified resource provider
+func (e *PulseToolExecutor) SetUnifiedResourceProvider(provider UnifiedResourceProvider) {
+	e.unifiedResourceProvider = provider
 }
 
 // SetResolvedContext sets the session-scoped resolved context for resource validation.

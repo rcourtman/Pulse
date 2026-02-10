@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -19,20 +20,26 @@ func TestExecuteGetCephStatus(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "No Ceph clusters found. Ceph may not be configured or data is not yet available.", result.Content[0].Text)
 
-	state := models.StateSnapshot{
-		CephClusters: []models.CephCluster{
+	cephProvider := &stubUnifiedResourceProvider{
+		resources: []unifiedresources.Resource{
 			{
-				Name:          "alpha",
-				Health:        "HEALTH_OK",
-				HealthMessage: "ok",
-				NumOSDs:       3,
-				NumOSDsUp:     2,
-				NumOSDsIn:     3,
-				NumMons:       1,
+				Name: "alpha",
+				Type: unifiedresources.ResourceTypeCeph,
+				Ceph: &unifiedresources.CephMeta{
+					HealthStatus:  "HEALTH_OK",
+					HealthMessage: "ok",
+					NumOSDs:       3,
+					NumOSDsUp:     2,
+					NumOSDsIn:     3,
+					NumMons:       1,
+				},
 			},
 		},
 	}
-	exec = NewPulseToolExecutor(ExecutorConfig{StateProvider: &mockStateProvider{state: state}})
+	exec = NewPulseToolExecutor(ExecutorConfig{
+		StateProvider:           &mockStateProvider{state: models.StateSnapshot{}},
+		UnifiedResourceProvider: cephProvider,
+	})
 
 	result, err = exec.executeGetCephStatus(ctx, map[string]interface{}{
 		"cluster": "beta",
@@ -238,29 +245,37 @@ func TestExecuteGetDiskIOStats(t *testing.T) {
 func TestExecuteListPhysicalDisks(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now()
-	state := models.StateSnapshot{
-		PhysicalDisks: []models.PhysicalDisk{
+
+	diskProvider := &stubUnifiedResourceProvider{
+		resources: []unifiedresources.Resource{
 			{
-				ID:          "disk1",
-				Node:        "node1",
-				Instance:    "pve1",
-				DevPath:     "/dev/sda",
-				Model:       "model",
-				Serial:      "serial",
-				WWN:         "wwn",
-				Type:        "sata",
-				Size:        1,
-				Health:      "PASSED",
-				Wearout:     10,
-				Temperature: 30,
-				RPM:         7200,
-				Used:        "used",
-				LastChecked: now,
+				ID:   "disk1",
+				Name: "model",
+				Type: unifiedresources.ResourceTypePhysicalDisk,
+				PhysicalDisk: &unifiedresources.PhysicalDiskMeta{
+					DevPath:     "/dev/sda",
+					Model:       "model",
+					Serial:      "serial",
+					WWN:         "wwn",
+					DiskType:    "sata",
+					SizeBytes:   1,
+					Health:      "PASSED",
+					Wearout:     10,
+					Temperature: 30,
+					RPM:         7200,
+					Used:        "used",
+				},
+				ParentName: "node1",
+				Tags:       []string{"sata", "passed", "node1"},
+				LastSeen:   now,
 			},
 		},
 	}
 
-	exec := NewPulseToolExecutor(ExecutorConfig{StateProvider: &mockStateProvider{state: state}})
+	exec := NewPulseToolExecutor(ExecutorConfig{
+		StateProvider:           &mockStateProvider{state: models.StateSnapshot{}},
+		UnifiedResourceProvider: diskProvider,
+	})
 	result, err := exec.executeListPhysicalDisks(ctx, map[string]interface{}{
 		"type": "sata",
 	})

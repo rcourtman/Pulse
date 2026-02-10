@@ -10,6 +10,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/reporting"
 )
 
@@ -18,13 +19,15 @@ var validResourceID = regexp.MustCompile(`^[a-zA-Z0-9._:-]+$`)
 
 // ReportingHandlers handles reporting-related requests
 type ReportingHandlers struct {
-	mtMonitor *monitoring.MultiTenantMonitor
+	mtMonitor        *monitoring.MultiTenantMonitor
+	resourceRegistry *unifiedresources.ResourceRegistry
 }
 
 // NewReportingHandlers creates a new ReportingHandlers
-func NewReportingHandlers(mtMonitor *monitoring.MultiTenantMonitor) *ReportingHandlers {
+func NewReportingHandlers(mtMonitor *monitoring.MultiTenantMonitor, registry *unifiedresources.ResourceRegistry) *ReportingHandlers {
 	return &ReportingHandlers{
-		mtMonitor: mtMonitor,
+		mtMonitor:        mtMonitor,
+		resourceRegistry: registry,
 	}
 }
 
@@ -231,18 +234,29 @@ func (h *ReportingHandlers) enrichNodeReport(req *reporting.MetricReportRequest,
 		}
 	}
 
-	// Find physical disks for this node
-	for _, disk := range state.PhysicalDisks {
-		if disk.Node == node.Name {
+	// Find physical disks for this node via unified resources
+	if h.resourceRegistry != nil {
+		for _, r := range h.resourceRegistry.List() {
+			if r.Type != unifiedresources.ResourceTypePhysicalDisk || r.PhysicalDisk == nil {
+				continue
+			}
+			diskNode := r.ParentName
+			if diskNode == "" && len(r.Identity.Hostnames) > 0 {
+				diskNode = r.Identity.Hostnames[0]
+			}
+			if diskNode != node.Name {
+				continue
+			}
+			pd := r.PhysicalDisk
 			req.Disks = append(req.Disks, reporting.DiskInfo{
-				Device:      disk.DevPath,
-				Model:       disk.Model,
-				Serial:      disk.Serial,
-				Type:        disk.Type,
-				Size:        disk.Size,
-				Health:      disk.Health,
-				Temperature: disk.Temperature,
-				WearLevel:   disk.Wearout,
+				Device:      pd.DevPath,
+				Model:       pd.Model,
+				Serial:      pd.Serial,
+				Type:        pd.DiskType,
+				Size:        pd.SizeBytes,
+				Health:      pd.Health,
+				Temperature: pd.Temperature,
+				WearLevel:   pd.Wearout,
 			})
 		}
 	}

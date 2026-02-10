@@ -65,6 +65,7 @@ type AIService interface {
 	SetEventCorrelatorProvider(provider chat.EventCorrelatorProvider)
 	SetTopologyProvider(provider chat.TopologyProvider)
 	SetDiscoveryProvider(provider chat.MCPDiscoveryProvider)
+	SetUnifiedResourceProvider(provider chat.MCPUnifiedResourceProvider)
 	UpdateControlSettings(cfg *config.AIConfig)
 	GetBaseURL() string
 }
@@ -993,6 +994,13 @@ func (h *AIHandler) SetFindingsManager(manager chat.FindingsManager) {
 func (h *AIHandler) SetMetadataUpdater(updater chat.MetadataUpdater) {
 	if h.legacyService != nil {
 		h.legacyService.SetMetadataUpdater(updater)
+	}
+}
+
+// SetUnifiedResourceProvider sets the unified resource provider for MCP tools
+func (h *AIHandler) SetUnifiedResourceProvider(provider chat.MCPUnifiedResourceProvider) {
+	if h.legacyService != nil {
+		h.legacyService.SetUnifiedResourceProvider(provider)
 	}
 }
 

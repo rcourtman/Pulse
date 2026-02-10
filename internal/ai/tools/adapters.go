@@ -80,15 +80,6 @@ func (a *StorageMCPAdapter) GetStorage() []models.Storage {
 	return state.Storage
 }
 
-// GetCephClusters implements mcp.StorageProvider
-func (a *StorageMCPAdapter) GetCephClusters() []models.CephCluster {
-	if a.stateGetter == nil {
-		return nil
-	}
-	state := a.stateGetter.GetState()
-	return state.CephClusters
-}
-
 // GuestConfigSource provides guest configuration data with context.
 type GuestConfigSource interface {
 	GetGuestConfig(ctx context.Context, guestType, instance, node string, vmid int) (map[string]interface{}, error)

@@ -150,6 +150,9 @@ func (m *MockAIService) SetTopologyProvider(provider chat.TopologyProvider) { m.
 func (m *MockAIService) SetDiscoveryProvider(provider chat.MCPDiscoveryProvider) {
 	m.Called(provider)
 }
+func (m *MockAIService) SetUnifiedResourceProvider(provider chat.MCPUnifiedResourceProvider) {
+	m.Called(provider)
+}
 
 func (m *MockAIService) UpdateControlSettings(cfg *config.AIConfig) { m.Called(cfg) }
 func (m *MockAIService) GetBaseURL() string {
