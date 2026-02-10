@@ -152,3 +152,74 @@ func TestNoDirectStateAccessForMigratedResources(t *testing.T) {
 		}
 	}
 }
+
+// legacyStateRatchet defines a state.* access pattern and its maximum allowed
+// count across all consumer packages. The ceiling is the count at the time
+// the ratchet was added. Each cleanup PR that removes fallback paths should
+// lower these numbers. Adding new state.* usage will cause the test to fail.
+type legacyStateRatchet struct {
+	re       *regexp.Regexp
+	field    string
+	ceiling  int
+	readView string // the ReadState accessor to use instead
+}
+
+// Ceilings captured after SRC-03 + SRC-04a (Feb 2026).
+// These represent legacy nil-fallback paths that are dead code when
+// ReadState is wired. Each number must only decrease over time.
+var legacyStateRatchets = []legacyStateRatchet{
+	{regexp.MustCompile(`state\.VMs\b`), "state.VMs", 62, "ReadState.VMs()"},
+	{regexp.MustCompile(`state\.Containers\b`), "state.Containers", 62, "ReadState.Containers()"},
+	{regexp.MustCompile(`state\.Nodes\b`), "state.Nodes", 51, "ReadState.Nodes()"},
+	{regexp.MustCompile(`state\.DockerHosts\b`), "state.DockerHosts", 47, "ReadState.DockerHosts()"},
+	{regexp.MustCompile(`state\.Hosts\b`), "state.Hosts", 27, "ReadState.Hosts()"},
+	{regexp.MustCompile(`state\.Storage\b`), "state.Storage", 21, "ReadState.StoragePools()"},
+	{regexp.MustCompile(`state\.KubernetesClusters\b`), "state.KubernetesClusters", 21, "ReadState.K8sClusters()"},
+	{regexp.MustCompile(`state\.PBSInstances\b`), "state.PBSInstances", 9, "ReadState.PBSInstances()"},
+	{regexp.MustCompile(`state\.PMGInstances\b`), "state.PMGInstances", 18, "ReadState.PMGInstances()"},
+}
+
+// TestLegacyStateAccessRatchet is a monotonic ratchet that prevents new
+// state.* direct access from being added to consumer packages.
+//
+// Existing references are in nil-fallback branches from the SRC-03 migration.
+// They are dead code when ReadState is wired (SRC-04a) but remain as a safety
+// net. As fallback branches are removed, lower the ceiling numbers above.
+//
+// If this test fails with "count N exceeds ceiling M":
+//
+//	You added new state.* access — use ReadState views instead.
+//
+// If the count drops below the ceiling:
+//
+//	Great! Lower the ceiling constant to lock in the improvement.
+func TestLegacyStateAccessRatchet(t *testing.T) {
+	// Collect all consumer file contents, deduplicating across overlapping
+	// package entries (e.g., "ai" walks into "ai/tools" and "ai/chat").
+	allFiles := make(map[string]string)
+	for _, pkg := range consumerPackages {
+		for path, content := range readConsumerGoFiles(t, pkg.dir) {
+			allFiles[path] = content
+		}
+	}
+	allContent := make([]string, 0, len(allFiles))
+	for _, content := range allFiles {
+		allContent = append(allContent, content)
+	}
+
+	for _, r := range legacyStateRatchets {
+		count := 0
+		for _, content := range allContent {
+			count += len(r.re.FindAllStringIndex(content, -1))
+		}
+
+		if count > r.ceiling {
+			t.Errorf("%s: count %d exceeds ceiling %d — use %s instead of adding new %s access",
+				r.field, count, r.ceiling, r.readView, r.field)
+		}
+		if count < r.ceiling {
+			t.Logf("%s: count %d is below ceiling %d — lower the ceiling in legacyStateRatchets to lock in this improvement",
+				r.field, count, r.ceiling)
+		}
+	}
+}
