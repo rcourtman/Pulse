@@ -1,0 +1,71 @@
+services:
+  traefik:
+    image: traefik:v3.3
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./traefik-dynamic.yml:/etc/traefik/traefik-dynamic.yml:ro
+      - acme-data:/etc/traefik/acme
+    env_file:
+      - .env
+    environment:
+      - DO_AUTH_TOKEN=${DO_AUTH_TOKEN}
+      # Avoid relying on YAML interpolation support; force ACME email via env override.
+      - TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL=${ACME_EMAIL}
+      - TRAEFIK_CERTIFICATESRESOLVERS_LE_ACME_EMAIL=${ACME_EMAIL}
+    networks:
+      - pulse-cloud
+    restart: unless-stopped
+
+  control-plane:
+    # Choose ONE:
+    # - Use a prebuilt image (recommended for production)
+    image: ghcr.io/rcourtman/pulse-control-plane:latest
+    # - Or build locally from this repo:
+    # build:
+    #   context: ../../
+    #   dockerfile: deploy/cloud/Dockerfile.control-plane
+    volumes:
+      - /data:/data
+      # Control plane manages tenant containers via the host Docker daemon.
+      - /var/run/docker.sock:/var/run/docker.sock
+    env_file:
+      - .env
+    environment:
+      - CP_DATA_DIR=/data
+      - CP_BIND_ADDRESS=0.0.0.0
+      - CP_PORT=8443
+      - CP_ADMIN_KEY=${CP_ADMIN_KEY}
+      - CP_BASE_URL=https://${DOMAIN}
+      - CP_PULSE_IMAGE=${CP_PULSE_IMAGE:-ghcr.io/rcourtman/pulse:latest}
+      - CP_DOCKER_NETWORK=pulse-cloud
+      - CP_TENANT_MEMORY_LIMIT=${CP_TENANT_MEMORY_LIMIT:-536870912}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
+      - STRIPE_API_KEY=${STRIPE_API_KEY}
+    networks:
+      - pulse-cloud
+    depends_on:
+      - traefik
+    restart: unless-stopped
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=pulse-cloud
+      - traefik.http.routers.control-plane.rule=Host(`${DOMAIN}`)
+      - traefik.http.routers.control-plane.entrypoints=websecure
+      - traefik.http.routers.control-plane.tls=true
+      - traefik.http.routers.control-plane.tls.certresolver=letsencrypt
+      # Request wildcard cert for tenant subdomains (e.g. t-xyz.${DOMAIN}).
+      - traefik.http.routers.control-plane.tls.domains[0].main=${DOMAIN}
+      - traefik.http.routers.control-plane.tls.domains[0].sans=*.${DOMAIN}
+      - traefik.http.services.control-plane.loadbalancer.server.port=8443
+
+networks:
+  pulse-cloud:
+    name: pulse-cloud
+    driver: bridge
+
+volumes:
+  acme-data:
