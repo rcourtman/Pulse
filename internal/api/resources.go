@@ -766,6 +766,8 @@ func parseResourceTypes(raw string) map[unified.ResourceType]struct{} {
 			result[unified.ResourceTypePMG] = struct{}{}
 		case "ceph":
 			result[unified.ResourceTypeCeph] = struct{}{}
+		case "physical_disk", "physical-disk", "physicaldisk", "disk":
+			result[unified.ResourceTypePhysicalDisk] = struct{}{}
 		}
 	}
 	return result
@@ -888,6 +890,10 @@ func buildMetricsTarget(resource unified.Resource, registry *unified.ResourceReg
 		if st, ok := bySource[unified.SourceProxmox]; ok {
 			return &unified.MetricsTarget{ResourceType: "storage", ResourceID: st.SourceID}
 		}
+	case unified.ResourceTypePhysicalDisk:
+		if st, ok := bySource[unified.SourceProxmox]; ok {
+			return &unified.MetricsTarget{ResourceType: "disk", ResourceID: st.SourceID}
+		}
 	case unified.ResourceTypePod:
 		if st, ok := bySource[unified.SourceK8s]; ok {
 			return &unified.MetricsTarget{ResourceType: "k8s", ResourceID: st.SourceID}
@@ -921,6 +927,8 @@ func buildDiscoveryTarget(resource unified.Resource) *unified.DiscoveryTarget {
 		return hostDiscoveryTarget(resource)
 	case unified.ResourceTypePMG:
 		return hostDiscoveryTarget(resource)
+	case unified.ResourceTypeCeph:
+		return cephDiscoveryTarget(resource)
 	case unified.ResourceTypeK8sCluster:
 		return kubernetesDiscoveryTarget(resource, "cluster")
 	case unified.ResourceTypeK8sNode:
@@ -929,8 +937,30 @@ func buildDiscoveryTarget(resource unified.Resource) *unified.DiscoveryTarget {
 		return kubernetesDiscoveryTarget(resource, "pod")
 	case unified.ResourceTypeK8sDeployment:
 		return kubernetesDiscoveryTarget(resource, "deployment")
+	case unified.ResourceTypePhysicalDisk:
+		return physicalDiskDiscoveryTarget(resource)
 	default:
 		return nil
+	}
+}
+
+func cephDiscoveryTarget(resource unified.Resource) *unified.DiscoveryTarget {
+	if resource.Ceph == nil {
+		return nil
+	}
+	hostID := firstNonEmptyTrimmed(
+		resource.Ceph.FSID,
+		resource.Name,
+		resource.ID,
+	)
+	if hostID == "" {
+		return nil
+	}
+	return &unified.DiscoveryTarget{
+		ResourceType: "ceph",
+		HostID:       hostID,
+		ResourceID:   resource.ID,
+		Hostname:     resource.Name,
 	}
 }
 
@@ -1046,6 +1076,28 @@ func kubernetesDiscoveryTarget(resource unified.Resource, kind string) *unified.
 			resource.Kubernetes.Context,
 			resource.Name,
 		),
+	}
+}
+
+func physicalDiskDiscoveryTarget(resource unified.Resource) *unified.DiscoveryTarget {
+	if resource.PhysicalDisk == nil {
+		return nil
+	}
+	hostID := ""
+	if resource.Proxmox != nil {
+		hostID = resource.Proxmox.NodeName
+	}
+	if hostID == "" {
+		hostID = firstNonEmptyTrimmed(firstResourceHostname(resource), resource.Name)
+	}
+	if hostID == "" {
+		return nil
+	}
+	return &unified.DiscoveryTarget{
+		ResourceType: "disk",
+		HostID:       hostID,
+		ResourceID:   resource.ID,
+		Hostname:     hostID,
 	}
 }
 

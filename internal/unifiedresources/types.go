@@ -28,13 +28,15 @@ type Resource struct {
 	CustomURL string   `json:"customUrl,omitempty"`
 
 	// Source-specific payloads
-	Proxmox    *ProxmoxData `json:"proxmox,omitempty"`
-	Storage    *StorageMeta `json:"storage,omitempty"`
-	Agent      *AgentData   `json:"agent,omitempty"`
-	Docker     *DockerData  `json:"docker,omitempty"`
-	PBS        *PBSData     `json:"pbs,omitempty"`
-	PMG        *PMGData     `json:"pmg,omitempty"`
-	Kubernetes *K8sData     `json:"kubernetes,omitempty"`
+	Proxmox      *ProxmoxData      `json:"proxmox,omitempty"`
+	Storage      *StorageMeta      `json:"storage,omitempty"`
+	Agent        *AgentData        `json:"agent,omitempty"`
+	Docker       *DockerData       `json:"docker,omitempty"`
+	PBS          *PBSData          `json:"pbs,omitempty"`
+	PMG          *PMGData          `json:"pmg,omitempty"`
+	Kubernetes   *K8sData          `json:"kubernetes,omitempty"`
+	PhysicalDisk *PhysicalDiskMeta `json:"physicalDisk,omitempty"`
+	Ceph         *CephMeta         `json:"ceph,omitempty"`
 }
 
 // DiscoveryTarget describes the canonical discovery request coordinates
@@ -69,6 +71,7 @@ const (
 	ResourceTypePBS           ResourceType = "pbs"
 	ResourceTypePMG           ResourceType = "pmg"
 	ResourceTypeCeph          ResourceType = "ceph"
+	ResourceTypePhysicalDisk  ResourceType = "physical_disk"
 )
 
 // ResourceStatus represents the high-level status of a resource.
@@ -174,6 +177,67 @@ type StorageMeta struct {
 	Shared       bool     `json:"shared"`
 	IsCeph       bool     `json:"isCeph"`
 	IsZFS        bool     `json:"isZfs"`
+}
+
+// PhysicalDiskMeta contains physical disk-specific metadata.
+type PhysicalDiskMeta struct {
+	DevPath     string     `json:"devPath"`
+	Model       string     `json:"model,omitempty"`
+	Serial      string     `json:"serial,omitempty"`
+	WWN         string     `json:"wwn,omitempty"`
+	DiskType    string     `json:"diskType"` // nvme, sata, sas
+	SizeBytes   int64      `json:"sizeBytes"`
+	Health      string     `json:"health"`      // PASSED, FAILED, UNKNOWN
+	Wearout     int        `json:"wearout"`     // 0-100, -1 unavailable
+	Temperature int        `json:"temperature"` // Celsius
+	RPM         int        `json:"rpm"`
+	Used        string     `json:"used,omitempty"`
+	SMART       *SMARTMeta `json:"smart,omitempty"`
+}
+
+// CephMeta contains Ceph cluster-specific metadata.
+type CephMeta struct {
+	FSID          string            `json:"fsid,omitempty"`
+	HealthStatus  string            `json:"healthStatus"`
+	HealthMessage string            `json:"healthMessage,omitempty"`
+	NumMons       int               `json:"numMons"`
+	NumMgrs       int               `json:"numMgrs"`
+	NumOSDs       int               `json:"numOsds"`
+	NumOSDsUp     int               `json:"numOsdsUp"`
+	NumOSDsIn     int               `json:"numOsdsIn"`
+	NumPGs        int               `json:"numPGs"`
+	Pools         []CephPoolMeta    `json:"pools,omitempty"`
+	Services      []CephServiceMeta `json:"services,omitempty"`
+}
+
+// CephPoolMeta describes a Ceph storage pool.
+type CephPoolMeta struct {
+	Name           string  `json:"name"`
+	StoredBytes    int64   `json:"storedBytes"`
+	AvailableBytes int64   `json:"availableBytes"`
+	Objects        int64   `json:"objects"`
+	PercentUsed    float64 `json:"percentUsed"`
+}
+
+// CephServiceMeta describes a Ceph daemon service.
+type CephServiceMeta struct {
+	Type    string `json:"type"`
+	Running int    `json:"running"`
+	Total   int    `json:"total"`
+}
+
+// SMARTMeta contains SMART attribute data for a physical disk.
+type SMARTMeta struct {
+	PowerOnHours         int64 `json:"powerOnHours,omitempty"`
+	PowerCycles          int64 `json:"powerCycles,omitempty"`
+	ReallocatedSectors   int64 `json:"reallocatedSectors,omitempty"`
+	PendingSectors       int64 `json:"pendingSectors,omitempty"`
+	OfflineUncorrectable int64 `json:"offlineUncorrectable,omitempty"`
+	UDMACRCErrors        int64 `json:"udmaCrcErrors,omitempty"`
+	PercentageUsed       int   `json:"percentageUsed,omitempty"`
+	AvailableSpare       int   `json:"availableSpare,omitempty"`
+	MediaErrors          int64 `json:"mediaErrors,omitempty"`
+	UnsafeShutdowns      int64 `json:"unsafeShutdowns,omitempty"`
 }
 
 // AgentData contains host agent-specific data.

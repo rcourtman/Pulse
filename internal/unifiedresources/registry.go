@@ -108,6 +108,12 @@ func (rr *ResourceRegistry) IngestSnapshot(snapshot models.StateSnapshot) {
 	for _, storage := range snapshot.Storage {
 		rr.ingestStorage(storage)
 	}
+	for _, disk := range snapshot.PhysicalDisks {
+		rr.ingestPhysicalDisk(disk)
+	}
+	for _, cluster := range snapshot.CephClusters {
+		rr.ingestCephCluster(cluster)
+	}
 	for _, dh := range snapshot.DockerHosts {
 		for _, dc := range dh.Containers {
 			rr.ingestDockerContainer(dc, dh)
@@ -318,6 +324,24 @@ func (rr *ResourceRegistry) ingestStorage(storage models.Storage) {
 		resource.ParentID = &parentID
 	}
 	rr.ingest(SourceProxmox, storage.ID, resource, identity)
+}
+
+func (rr *ResourceRegistry) ingestPhysicalDisk(disk models.PhysicalDisk) {
+	resource, identity := resourceFromPhysicalDisk(disk)
+	parentSourceID := proxmoxNodeSourceID(disk.Instance, disk.Node)
+	if parentID, ok := rr.bySource[SourceProxmox][parentSourceID]; ok {
+		resource.ParentID = &parentID
+	}
+	rr.ingest(SourceProxmox, disk.ID, resource, identity)
+}
+
+func (rr *ResourceRegistry) ingestCephCluster(cluster models.CephCluster) {
+	resource, identity := resourceFromCephCluster(cluster)
+	sourceID := cluster.FSID
+	if sourceID == "" {
+		sourceID = cluster.ID
+	}
+	rr.ingest(SourceProxmox, sourceID, resource, identity)
 }
 
 func (rr *ResourceRegistry) ingestDockerContainer(ct models.DockerContainer, host models.DockerHost) {
@@ -596,6 +620,12 @@ func (rr *ResourceRegistry) mergeResourceData(primary *Resource, other *Resource
 	}
 	if primary.Kubernetes == nil {
 		primary.Kubernetes = other.Kubernetes
+	}
+	if primary.PhysicalDisk == nil {
+		primary.PhysicalDisk = other.PhysicalDisk
+	}
+	if primary.Ceph == nil {
+		primary.Ceph = other.Ceph
 	}
 
 	primary.Metrics = mergeMetrics(primary.Metrics, other.Metrics, SourceAgent)

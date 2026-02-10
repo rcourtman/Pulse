@@ -63,6 +63,30 @@ func statusFromStorage(storage models.Storage) ResourceStatus {
 	return StatusOnline
 }
 
+func statusFromPhysicalDisk(health string) ResourceStatus {
+	switch strings.ToUpper(strings.TrimSpace(health)) {
+	case "PASSED", "OK":
+		return StatusOnline
+	case "FAILED":
+		return StatusOffline
+	default:
+		return StatusUnknown
+	}
+}
+
+func statusFromCephHealth(health string) ResourceStatus {
+	switch strings.ToUpper(strings.TrimSpace(health)) {
+	case "HEALTH_OK":
+		return StatusOnline
+	case "HEALTH_WARN":
+		return StatusWarning
+	case "HEALTH_ERR":
+		return StatusOffline
+	default:
+		return StatusUnknown
+	}
+}
+
 func statusFromDockerState(state string) ResourceStatus {
 	switch strings.ToLower(strings.TrimSpace(state)) {
 	case "running":

@@ -328,6 +328,192 @@ func resourceFromStorage(storage models.Storage) (Resource, ResourceIdentity) {
 	return resource, identity
 }
 
+func resourceFromCephCluster(cluster models.CephCluster) (Resource, ResourceIdentity) {
+	name := cluster.Name
+	if name == "" {
+		name = cluster.FSID
+	}
+	if name == "" {
+		name = cluster.ID
+	}
+
+	cephMeta := &CephMeta{
+		FSID:          cluster.FSID,
+		HealthStatus:  cluster.Health,
+		HealthMessage: cluster.HealthMessage,
+		NumMons:       cluster.NumMons,
+		NumMgrs:       cluster.NumMgrs,
+		NumOSDs:       cluster.NumOSDs,
+		NumOSDsUp:     cluster.NumOSDsUp,
+		NumOSDsIn:     cluster.NumOSDsIn,
+		NumPGs:        cluster.NumPGs,
+		Pools:         convertCephPools(cluster.Pools),
+		Services:      convertCephServices(cluster.Services),
+	}
+
+	resource := Resource{
+		Type:      ResourceTypeCeph,
+		Name:      name,
+		Status:    statusFromCephHealth(cluster.Health),
+		LastSeen:  cluster.LastUpdated,
+		UpdatedAt: time.Now().UTC(),
+		Metrics:   metricsFromCephCluster(cluster),
+		Ceph:      cephMeta,
+		Tags:      cephClusterTags(cluster),
+	}
+
+	identity := ResourceIdentity{}
+	if cluster.FSID != "" {
+		identity.MachineID = cluster.FSID
+	}
+	identity.Hostnames = uniqueStrings([]string{cluster.Name, cluster.Instance})
+
+	return resource, identity
+}
+
+func convertCephPools(pools []models.CephPool) []CephPoolMeta {
+	if len(pools) == 0 {
+		return nil
+	}
+	out := make([]CephPoolMeta, 0, len(pools))
+	for _, p := range pools {
+		out = append(out, CephPoolMeta{
+			Name:           p.Name,
+			StoredBytes:    p.StoredBytes,
+			AvailableBytes: p.AvailableBytes,
+			Objects:        p.Objects,
+			PercentUsed:    p.PercentUsed,
+		})
+	}
+	return out
+}
+
+func convertCephServices(services []models.CephServiceStatus) []CephServiceMeta {
+	if len(services) == 0 {
+		return nil
+	}
+	out := make([]CephServiceMeta, 0, len(services))
+	for _, s := range services {
+		out = append(out, CephServiceMeta{
+			Type:    s.Type,
+			Running: s.Running,
+			Total:   s.Total,
+		})
+	}
+	return out
+}
+
+func cephClusterTags(cluster models.CephCluster) []string {
+	var tags []string
+	tags = append(tags, "ceph")
+	if cluster.Health != "" {
+		tags = append(tags, strings.ToLower(cluster.Health))
+	}
+	if cluster.Instance != "" {
+		tags = append(tags, cluster.Instance)
+	}
+	return uniqueStrings(tags)
+}
+
+func resourceFromPhysicalDisk(disk models.PhysicalDisk) (Resource, ResourceIdentity) {
+	name := disk.Model
+	if name == "" {
+		name = disk.DevPath
+	}
+
+	pdMeta := &PhysicalDiskMeta{
+		DevPath:     disk.DevPath,
+		Model:       disk.Model,
+		Serial:      disk.Serial,
+		WWN:         disk.WWN,
+		DiskType:    disk.Type,
+		SizeBytes:   disk.Size,
+		Health:      disk.Health,
+		Wearout:     disk.Wearout,
+		Temperature: disk.Temperature,
+		RPM:         disk.RPM,
+		Used:        disk.Used,
+	}
+
+	if disk.SmartAttributes != nil {
+		pdMeta.SMART = convertSMARTAttributes(disk.SmartAttributes)
+	}
+
+	resource := Resource{
+		Type:         ResourceTypePhysicalDisk,
+		Name:         name,
+		Status:       statusFromPhysicalDisk(disk.Health),
+		LastSeen:     disk.LastChecked,
+		UpdatedAt:    time.Now().UTC(),
+		Metrics:      metricsFromPhysicalDisk(disk),
+		PhysicalDisk: pdMeta,
+		Tags:         physicalDiskTags(disk),
+	}
+
+	identity := ResourceIdentity{
+		Hostnames: uniqueStrings([]string{disk.Node}),
+	}
+	if disk.Serial != "" {
+		identity.MachineID = disk.Serial
+	} else if disk.WWN != "" {
+		identity.MachineID = disk.WWN
+	}
+
+	return resource, identity
+}
+
+func convertSMARTAttributes(attrs *models.SMARTAttributes) *SMARTMeta {
+	if attrs == nil {
+		return nil
+	}
+	m := &SMARTMeta{}
+	if attrs.PowerOnHours != nil {
+		m.PowerOnHours = *attrs.PowerOnHours
+	}
+	if attrs.PowerCycles != nil {
+		m.PowerCycles = *attrs.PowerCycles
+	}
+	if attrs.ReallocatedSectors != nil {
+		m.ReallocatedSectors = *attrs.ReallocatedSectors
+	}
+	if attrs.PendingSectors != nil {
+		m.PendingSectors = *attrs.PendingSectors
+	}
+	if attrs.OfflineUncorrectable != nil {
+		m.OfflineUncorrectable = *attrs.OfflineUncorrectable
+	}
+	if attrs.UDMACRCErrors != nil {
+		m.UDMACRCErrors = *attrs.UDMACRCErrors
+	}
+	if attrs.PercentageUsed != nil {
+		m.PercentageUsed = *attrs.PercentageUsed
+	}
+	if attrs.AvailableSpare != nil {
+		m.AvailableSpare = *attrs.AvailableSpare
+	}
+	if attrs.MediaErrors != nil {
+		m.MediaErrors = *attrs.MediaErrors
+	}
+	if attrs.UnsafeShutdowns != nil {
+		m.UnsafeShutdowns = *attrs.UnsafeShutdowns
+	}
+	return m
+}
+
+func physicalDiskTags(disk models.PhysicalDisk) []string {
+	var tags []string
+	if disk.Type != "" {
+		tags = append(tags, disk.Type)
+	}
+	if disk.Health != "" {
+		tags = append(tags, strings.ToLower(disk.Health))
+	}
+	if disk.Node != "" {
+		tags = append(tags, disk.Node)
+	}
+	return uniqueStrings(tags)
+}
+
 func parseStorageContentTypes(content string) []string {
 	if strings.TrimSpace(content) == "" {
 		return nil

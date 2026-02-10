@@ -11,6 +11,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 	"github.com/rs/zerolog/log"
 )
@@ -753,6 +754,37 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, state models.
 		queueMetric("disk", resourceID, "smart_temp", float64(disk.Temperature), now)
 	}
 
+	log.Debug().Int("count", len(state.CephClusters)).Msg("Mock seeding: processing ceph clusters")
+	for _, cluster := range state.CephClusters {
+		if cluster.TotalBytes <= 0 {
+			continue
+		}
+		cephID := cluster.FSID
+		if cephID == "" {
+			cephID = cluster.ID
+		}
+		if cephID == "" {
+			continue
+		}
+
+		numPoints := len(seedTimestamps)
+		usageSeries := GenerateSeededSeries(
+			cluster.UsagePercent,
+			numPoints,
+			HashSeed("ceph", cephID, "usage"),
+			0,
+			100,
+			styleFlat,
+		)
+		for i := 0; i < numPoints; i++ {
+			ts := seedTimestamps[i]
+			queueMetric("ceph", cephID, "usage", usageSeries[i], ts)
+		}
+
+		// Ensure the latest point lands at "now" for full-range charts.
+		queueMetric("ceph", cephID, "usage", cluster.UsagePercent, now)
+	}
+
 	log.Debug().Int("count", len(state.DockerHosts)).Msg("Mock seeding: processing docker hosts")
 	for _, host := range state.DockerHosts {
 		if host.ID == "" {
@@ -801,6 +833,58 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, state models.
 
 		recordGuest("host:"+host.ID, "host", host.ID, host.CPUUsage, host.Memory.Usage, diskPercent, host.DiskReadRate, host.DiskWriteRate, host.NetInRate, host.NetOutRate, true, true, true)
 		time.Sleep(50 * time.Millisecond)
+	}
+
+	// Seed TrueNAS pool/dataset disk-usage metrics
+	fixtures := truenas.DefaultFixtures()
+	log.Debug().Int("pools", len(fixtures.Pools)).Int("datasets", len(fixtures.Datasets)).Msg("Mock seeding: processing TrueNAS fixtures")
+
+	// System host: aggregated disk usage across all pools
+	totalCap, totalUsed := int64(0), int64(0)
+	for _, pool := range fixtures.Pools {
+		totalCap += pool.TotalBytes
+		totalUsed += pool.UsedBytes
+	}
+	systemDisk := float64(0)
+	if totalCap > 0 {
+		systemDisk = float64(totalUsed) / float64(totalCap) * 100
+	}
+	systemKey := "system:" + fixtures.System.Hostname
+	recordGuest(systemKey, "truenas", fixtures.System.Hostname, 0, 0, systemDisk, 0, 0, 0, 0, true, false, false)
+
+	for _, pool := range fixtures.Pools {
+		poolKey := "pool:" + pool.Name
+		diskPercent := float64(0)
+		if pool.TotalBytes > 0 {
+			diskPercent = float64(pool.UsedBytes) / float64(pool.TotalBytes) * 100
+		}
+		numPoints := len(seedTimestamps)
+		diskSeries := GenerateSeededSeries(diskPercent, numPoints, HashSeed("pool", pool.Name, "disk"), 0, 100, styleFlat)
+		for i := 0; i < numPoints; i++ {
+			ts := seedTimestamps[i]
+			mh.AddGuestMetric(poolKey, "disk", diskSeries[i], ts)
+			queueMetric("pool", pool.Name, "disk", diskSeries[i], ts)
+		}
+		mh.AddGuestMetric(poolKey, "disk", diskPercent, now)
+		queueMetric("pool", pool.Name, "disk", diskPercent, now)
+	}
+
+	for _, dataset := range fixtures.Datasets {
+		dsKey := "dataset:" + dataset.Name
+		totalBytes := dataset.UsedBytes + dataset.AvailBytes
+		diskPercent := float64(0)
+		if totalBytes > 0 {
+			diskPercent = float64(dataset.UsedBytes) / float64(totalBytes) * 100
+		}
+		numPoints := len(seedTimestamps)
+		diskSeries := GenerateSeededSeries(diskPercent, numPoints, HashSeed("dataset", dataset.Name, "disk"), 0, 100, styleFlat)
+		for i := 0; i < numPoints; i++ {
+			ts := seedTimestamps[i]
+			mh.AddGuestMetric(dsKey, "disk", diskSeries[i], ts)
+			queueMetric("dataset", dataset.Name, "disk", diskSeries[i], ts)
+		}
+		mh.AddGuestMetric(dsKey, "disk", diskPercent, now)
+		queueMetric("dataset", dataset.Name, "disk", diskPercent, now)
 	}
 
 	if ms != nil && len(seedBatch) > 0 {
@@ -953,6 +1037,23 @@ func recordMockStateToMetricsHistory(mh *MetricsHistory, ms *metrics.Store, stat
 		}
 	}
 
+	for _, cluster := range state.CephClusters {
+		if cluster.TotalBytes <= 0 {
+			continue
+		}
+		cephID := cluster.FSID
+		if cephID == "" {
+			cephID = cluster.ID
+		}
+		if cephID == "" {
+			continue
+		}
+
+		if ms != nil {
+			ms.Write("ceph", cephID, "usage", cluster.UsagePercent, ts)
+		}
+	}
+
 	for _, host := range state.DockerHosts {
 		if host.ID == "" || host.Status != "online" {
 			continue
@@ -1032,6 +1133,46 @@ func recordMockStateToMetricsHistory(mh *MetricsHistory, ms *metrics.Store, stat
 			ms.Write("host", host.ID, "diskwrite", host.DiskWriteRate, ts)
 			ms.Write("host", host.ID, "netin", host.NetInRate, ts)
 			ms.Write("host", host.ID, "netout", host.NetOutRate, ts)
+		}
+	}
+
+	// Record TrueNAS pool/dataset disk-usage live ticks
+	fixtures := truenas.DefaultFixtures()
+
+	totalCap, totalUsed := int64(0), int64(0)
+	for _, pool := range fixtures.Pools {
+		totalCap += pool.TotalBytes
+		totalUsed += pool.UsedBytes
+	}
+	if totalCap > 0 {
+		systemKey := "system:" + fixtures.System.Hostname
+		systemDisk := float64(totalUsed) / float64(totalCap) * 100
+		mh.AddGuestMetric(systemKey, "disk", systemDisk, ts)
+		if ms != nil {
+			ms.Write("truenas", fixtures.System.Hostname, "disk", systemDisk, ts)
+		}
+	}
+
+	for _, pool := range fixtures.Pools {
+		if pool.TotalBytes > 0 {
+			poolKey := "pool:" + pool.Name
+			diskPct := float64(pool.UsedBytes) / float64(pool.TotalBytes) * 100
+			mh.AddGuestMetric(poolKey, "disk", diskPct, ts)
+			if ms != nil {
+				ms.Write("pool", pool.Name, "disk", diskPct, ts)
+			}
+		}
+	}
+
+	for _, dataset := range fixtures.Datasets {
+		totalBytes := dataset.UsedBytes + dataset.AvailBytes
+		if totalBytes > 0 {
+			dsKey := "dataset:" + dataset.Name
+			diskPct := float64(dataset.UsedBytes) / float64(totalBytes) * 100
+			mh.AddGuestMetric(dsKey, "disk", diskPct, ts)
+			if ms != nil {
+				ms.Write("dataset", dataset.Name, "disk", diskPct, ts)
+			}
 		}
 	}
 }

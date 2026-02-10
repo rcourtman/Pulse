@@ -186,6 +186,41 @@ func metricsFromStorage(storage models.Storage) *ResourceMetrics {
 	return metrics
 }
 
+func metricsFromCephCluster(cluster models.CephCluster) *ResourceMetrics {
+	metrics := &ResourceMetrics{}
+	if cluster.TotalBytes > 0 {
+		used := cluster.UsedBytes
+		total := cluster.TotalBytes
+		percent := clampMetricValue(cluster.UsagePercent, 0, 100)
+		if percent == 0 && total > 0 {
+			percent = clampMetricValue((float64(used)/float64(total))*100, 0, 100)
+		}
+		metrics.Disk = &MetricValue{
+			Used:    &used,
+			Total:   &total,
+			Percent: percent,
+			Unit:    "bytes",
+			Source:  SourceProxmox,
+		}
+	}
+	return metrics
+}
+
+func metricsFromPhysicalDisk(disk models.PhysicalDisk) *ResourceMetrics {
+	metrics := &ResourceMetrics{}
+	if disk.Size > 0 {
+		used := int64(0)
+		total := disk.Size
+		metrics.Disk = &MetricValue{
+			Used:   &used,
+			Total:  &total,
+			Unit:   "bytes",
+			Source: SourceProxmox,
+		}
+	}
+	return metrics
+}
+
 func metricsFromDockerContainer(ct models.DockerContainer) *ResourceMetrics {
 	metrics := &ResourceMetrics{}
 	cpuPercent := percentFromUsage(ct.CPUPercent)
