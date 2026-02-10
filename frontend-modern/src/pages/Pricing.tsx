@@ -239,7 +239,6 @@ export default function Pricing() {
           <ul class="mt-4 space-y-2 text-sm text-gray-700 dark:text-gray-200">
             <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>Everything in Pro</span></li>
             <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>Managed hosting</span></li>
-            <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>Managed AI (no API key needed)</span></li>
             <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>Automatic backups</span></li>
             <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>Priority support</span></li>
           </ul>
