@@ -89,7 +89,7 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 	}
 
 	// Populate sensors
-	if len(host.Sensors.TemperatureCelsius) > 0 || len(host.Sensors.FanRPM) > 0 || len(host.Sensors.SMART) > 0 {
+	if len(host.Sensors.TemperatureCelsius) > 0 || len(host.Sensors.FanRPM) > 0 || len(host.Sensors.Additional) > 0 || len(host.Sensors.SMART) > 0 {
 		sensorMeta := &HostSensorMeta{}
 		if len(host.Sensors.TemperatureCelsius) > 0 {
 			sensorMeta.TemperatureCelsius = make(map[string]float64, len(host.Sensors.TemperatureCelsius))
@@ -101,6 +101,12 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 			sensorMeta.FanRPM = make(map[string]float64, len(host.Sensors.FanRPM))
 			for k, v := range host.Sensors.FanRPM {
 				sensorMeta.FanRPM[k] = v
+			}
+		}
+		if len(host.Sensors.Additional) > 0 {
+			sensorMeta.Additional = make(map[string]float64, len(host.Sensors.Additional))
+			for k, v := range host.Sensors.Additional {
+				sensorMeta.Additional[k] = v
 			}
 		}
 		if len(host.Sensors.SMART) > 0 {
