@@ -21,7 +21,7 @@ func createTestHandler(t *testing.T) *LicenseHandlers {
 	if err != nil {
 		t.Fatalf("Failed to initialize default persistence: %v", err)
 	}
-	return NewLicenseHandlers(mtp)
+	return NewLicenseHandlers(mtp, false)
 }
 
 type licenseFeaturesResponse struct {

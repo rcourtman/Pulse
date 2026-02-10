@@ -119,7 +119,7 @@ func TestHandleMetricsHistory_LicenseRequired(t *testing.T) {
 
 	router := &Router{
 		monitor:         monitor,
-		licenseHandlers: NewLicenseHandlers(mtp),
+		licenseHandlers: NewLicenseHandlers(mtp, false),
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/metrics-store/history?resourceType=vm&resourceId=vm-1&range=30d", nil)

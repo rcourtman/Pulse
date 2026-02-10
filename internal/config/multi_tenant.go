@@ -27,6 +27,11 @@ func NewMultiTenantPersistence(baseDataDir string) *MultiTenantPersistence {
 	}
 }
 
+// BaseDataDir returns the base data directory used by multi-tenant persistence.
+func (mtp *MultiTenantPersistence) BaseDataDir() string {
+	return mtp.baseDataDir
+}
+
 func isValidOrgID(orgID string) bool {
 	return filepath.Base(orgID) == orgID && orgID != "" && orgID != "." && orgID != ".."
 }

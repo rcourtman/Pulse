@@ -59,7 +59,7 @@ func TestMetricsHistoryFallbackUsesLivePoint(t *testing.T) {
 
 	router := &Router{
 		monitor:         monitor,
-		licenseHandlers: NewLicenseHandlers(mtp),
+		licenseHandlers: NewLicenseHandlers(mtp, false),
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/metrics-store/history?resourceType=vm&resourceId=pve1:node1:101&metric=cpu&range=24h", nil)

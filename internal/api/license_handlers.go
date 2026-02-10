@@ -10,6 +10,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/license"
+	"github.com/rcourtman/pulse-go-rewrite/internal/license/entitlements"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/audit"
 	"github.com/rs/zerolog/log"
 )
@@ -18,15 +19,18 @@ import (
 // LicenseHandlers handles license management API endpoints.
 type LicenseHandlers struct {
 	mtPersistence *config.MultiTenantPersistence
+	hostedMode    bool
 	services      sync.Map // map[string]*license.Service
 	configDir     string   // Base config dir, though we use mtPersistence for tenants
 	auditOnce     sync.Once
 }
 
 // NewLicenseHandlers creates a new license handlers instance.
-func NewLicenseHandlers(mtp *config.MultiTenantPersistence) *LicenseHandlers {
+
+func NewLicenseHandlers(mtp *config.MultiTenantPersistence, hostedMode bool) *LicenseHandlers {
 	return &LicenseHandlers{
 		mtPersistence: mtp,
+		hostedMode:    hostedMode,
 	}
 }
 
@@ -53,6 +57,14 @@ func (h *LicenseHandlers) getTenantComponents(ctx context.Context) (*license.Ser
 	}
 
 	service := license.NewService()
+
+	// For hosted non-default tenants, derive entitlements from billing state
+	if h.hostedMode && orgID != "default" && orgID != "" {
+		billingStore := config.NewFileBillingStore(h.mtPersistence.BaseDataDir())
+		dbSource := entitlements.NewDatabaseSource(billingStore, orgID, time.Hour)
+		evaluator := entitlements.NewEvaluator(dbSource)
+		service.SetEvaluator(evaluator)
+	}
 
 	// Try to load existing license
 	if persistence != nil {
