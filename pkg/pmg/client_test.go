@@ -417,3 +417,321 @@ func TestMailEndpointsHandleNullAndStringValues(t *testing.T) {
 		t.Fatalf("expected oldest age 600, got %d", queue.OldestAge.Int64())
 	}
 }
+
+func TestClientTokenNameIncludesUserAndRealm(t *testing.T) {
+	t.Parallel()
+
+	var authHeader string
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api2/json/statistics/mail":
+			authHeader = r.Header.Get("Authorization")
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, `{"data":{"count":1}}`)
+		default:
+			t.Fatalf("unexpected request path: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	client, err := NewClient(ClientConfig{
+		Host:       server.URL,
+		TokenName:  "apiuser@custom!apitoken",
+		TokenValue: "secret",
+		VerifySSL:  false,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error creating client: %v", err)
+	}
+
+	stats, err := client.GetMailStatistics(context.Background(), "")
+	if err != nil {
+		t.Fatalf("get mail statistics failed: %v", err)
+	}
+	if stats == nil || stats.Count.Float64() != 1 {
+		t.Fatalf("expected statistics count 1, got %+v", stats)
+	}
+
+	expected := "PMGAPIToken=apiuser@custom!apitoken:secret"
+	if authHeader != expected {
+		t.Fatalf("expected authorization header %q, got %q", expected, authHeader)
+	}
+}
+
+func TestClientRequestAuthError(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api2/json/statistics/mail":
+			w.WriteHeader(http.StatusUnauthorized)
+			fmt.Fprint(w, "unauthorized")
+		default:
+			t.Fatalf("unexpected request path: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	client, err := NewClient(ClientConfig{
+		Host:       server.URL,
+		TokenName:  "apitoken",
+		TokenValue: "secret",
+		VerifySSL:  false,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error creating client: %v", err)
+	}
+
+	_, err = client.GetMailStatistics(context.Background(), "")
+	if err == nil || !strings.Contains(err.Error(), "authentication error") {
+		t.Fatalf("expected authentication error, got %v", err)
+	}
+}
+
+func TestClientRequestNonAuthError(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api2/json/statistics/mail":
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprint(w, "boom")
+		default:
+			t.Fatalf("unexpected request path: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	client, err := NewClient(ClientConfig{
+		Host:       server.URL,
+		TokenName:  "apitoken",
+		TokenValue: "secret",
+		VerifySSL:  false,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error creating client: %v", err)
+	}
+
+	_, err = client.GetMailStatistics(context.Background(), "")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "API error 500") {
+		t.Fatalf("expected API error 500, got %q", msg)
+	}
+	if strings.Contains(strings.ToLower(msg), "authentication error") {
+		t.Fatalf("did not expect authentication error, got %q", msg)
+	}
+}
+
+func TestClientGetVersionInvalidJSON(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api2/json/version":
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, `{"data":`)
+		default:
+			t.Fatalf("unexpected request path: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	client, err := NewClient(ClientConfig{
+		Host:       server.URL,
+		TokenName:  "apitoken",
+		TokenValue: "secret",
+		VerifySSL:  false,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error creating client: %v", err)
+	}
+
+	if _, err := client.GetVersion(context.Background()); err == nil || !strings.Contains(err.Error(), "failed to decode response") {
+		t.Fatalf("expected decode error, got %v", err)
+	}
+}
+
+func TestClientMailCountTimespanParam(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api2/json/statistics/mailcount" {
+			t.Fatalf("unexpected request path: %s", r.URL.Path)
+		}
+		if got := r.URL.Query().Get("timespan"); got != "3600" {
+			t.Fatalf("expected timespan=3600, got %q", got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"data":[]}`)
+	}))
+	defer server.Close()
+
+	client, err := NewClient(ClientConfig{
+		Host:       server.URL,
+		TokenName:  "apitoken",
+		TokenValue: "secret",
+		VerifySSL:  false,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error creating client: %v", err)
+	}
+
+	if _, err := client.GetMailCount(context.Background(), 3600); err != nil {
+		t.Fatalf("GetMailCount failed: %v", err)
+	}
+}
+
+func TestClientClusterStatusListSingle(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api2/json/config/cluster/status" {
+			t.Fatalf("unexpected request path: %s", r.URL.Path)
+		}
+		if got := r.URL.Query().Get("list_single_node"); got != "1" {
+			t.Fatalf("expected list_single_node=1, got %q", got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"data":[]}`)
+	}))
+	defer server.Close()
+
+	client, err := NewClient(ClientConfig{
+		Host:       server.URL,
+		TokenName:  "apitoken",
+		TokenValue: "secret",
+		VerifySSL:  false,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error creating client: %v", err)
+	}
+
+	if _, err := client.GetClusterStatus(context.Background(), true); err != nil {
+		t.Fatalf("GetClusterStatus failed: %v", err)
+	}
+}
+
+func TestClientListBackupsEscapesNode(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api2/json/nodes/node/1/backup" {
+			t.Fatalf("unexpected request path: %s", r.URL.Path)
+		}
+		if r.URL.EscapedPath() != "/api2/json/nodes/node%2F1/backup" {
+			t.Fatalf("expected escaped path, got %s", r.URL.EscapedPath())
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"data":[]}`)
+	}))
+	defer server.Close()
+
+	client, err := NewClient(ClientConfig{
+		Host:       server.URL,
+		TokenName:  "apitoken",
+		TokenValue: "secret",
+		VerifySSL:  false,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error creating client: %v", err)
+	}
+
+	if _, err := client.ListBackups(context.Background(), "node/1"); err != nil {
+		t.Fatalf("ListBackups failed: %v", err)
+	}
+}
+
+func TestClientGetSpamScores(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api2/json/statistics/spamscores" {
+			t.Fatalf("unexpected request path: %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"data":[{"level":"high","count":"2","ratio":"0.5"}]}`)
+	}))
+	defer server.Close()
+
+	client, err := NewClient(ClientConfig{
+		Host:       server.URL,
+		TokenName:  "apitoken",
+		TokenValue: "secret",
+		VerifySSL:  false,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error creating client: %v", err)
+	}
+
+	scores, err := client.GetSpamScores(context.Background())
+	if err != nil {
+		t.Fatalf("GetSpamScores failed: %v", err)
+	}
+	if len(scores) != 1 || scores[0].Level != "high" || scores[0].Count.Int() != 2 {
+		t.Fatalf("unexpected spam scores: %+v", scores)
+	}
+}
+
+func TestClientMailCountNoTimespanParam(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api2/json/statistics/mailcount" {
+			t.Fatalf("unexpected request path: %s", r.URL.Path)
+		}
+		if got := r.URL.Query().Get("timespan"); got != "" {
+			t.Fatalf("expected no timespan param, got %q", got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"data":[]}`)
+	}))
+	defer server.Close()
+
+	client, err := NewClient(ClientConfig{
+		Host:       server.URL,
+		TokenName:  "apitoken",
+		TokenValue: "secret",
+		VerifySSL:  false,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error creating client: %v", err)
+	}
+
+	if _, err := client.GetMailCount(context.Background(), 0); err != nil {
+		t.Fatalf("GetMailCount failed: %v", err)
+	}
+}
+
+func TestClientClusterStatusNoParam(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api2/json/config/cluster/status" {
+			t.Fatalf("unexpected request path: %s", r.URL.Path)
+		}
+		if len(r.URL.Query()) != 0 {
+			t.Fatalf("expected no query params, got %v", r.URL.Query())
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"data":[]}`)
+	}))
+	defer server.Close()
+
+	client, err := NewClient(ClientConfig{
+		Host:       server.URL,
+		TokenName:  "apitoken",
+		TokenValue: "secret",
+		VerifySSL:  false,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error creating client: %v", err)
+	}
+
+	if _, err := client.GetClusterStatus(context.Background(), false); err != nil {
+		t.Fatalf("GetClusterStatus failed: %v", err)
+	}
+}
