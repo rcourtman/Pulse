@@ -35,6 +35,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/metrics"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog/log"
 )
@@ -54,6 +55,7 @@ type AISettingsHandler struct {
 
 	// Providers to be applied to new services
 	stateProvider           ai.StateProvider
+	readState               unifiedresources.ReadState
 	unifiedResourceProvider ai.UnifiedResourceProvider
 	metadataProvider        ai.MetadataProvider
 	patrolThresholdProvider ai.ThresholdProvider
@@ -162,6 +164,9 @@ func (h *AISettingsHandler) GetAIService(ctx context.Context) *ai.Service {
 	// Set providers on new service
 	if h.stateProvider != nil {
 		svc.SetStateProvider(h.stateProvider)
+	}
+	if h.readState != nil {
+		svc.SetReadState(h.readState)
 	}
 	if h.unifiedResourceProvider != nil {
 		svc.SetUnifiedResourceProvider(h.unifiedResourceProvider)
@@ -330,6 +335,26 @@ func (h *AISettingsHandler) SetStateProvider(sp ai.StateProvider) {
 // GetStateProvider returns the state provider for infrastructure context
 func (h *AISettingsHandler) GetStateProvider() ai.StateProvider {
 	return h.stateProvider
+}
+
+// SetReadState injects unified read-state context into AI services (patrol path).
+func (h *AISettingsHandler) SetReadState(rs unifiedresources.ReadState) {
+	if h == nil {
+		return
+	}
+	h.readState = rs
+
+	if h.legacyAIService != nil {
+		h.legacyAIService.SetReadState(rs)
+	}
+
+	h.aiServicesMu.Lock()
+	for _, svc := range h.aiServices {
+		if svc != nil {
+			svc.SetReadState(rs)
+		}
+	}
+	h.aiServicesMu.Unlock()
 }
 
 // SetMetadataProvider sets the metadata provider for AI URL discovery

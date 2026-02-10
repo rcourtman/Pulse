@@ -18,6 +18,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
 
@@ -82,6 +83,7 @@ type AIHandler struct {
 	stateProvidersMu  sync.RWMutex
 	unifiedStoreMu    sync.RWMutex
 	unifiedStore      *unified.UnifiedStore
+	readState         unifiedresources.ReadState
 }
 
 // newChatService is the factory function for creating the AI service.
@@ -122,6 +124,14 @@ func (h *AIHandler) SetUnifiedStore(store *unified.UnifiedStore) {
 	h.unifiedStoreMu.Lock()
 	h.unifiedStore = store
 	h.unifiedStoreMu.Unlock()
+}
+
+// SetReadState stores a unified read-state provider for injection into newly created chat services.
+func (h *AIHandler) SetReadState(rs unifiedresources.ReadState) {
+	if h == nil {
+		return
+	}
+	h.readState = rs
 }
 
 // GetService returns the AI service for the current context
@@ -202,6 +212,7 @@ func (h *AIHandler) initTenantService(ctx context.Context, orgID string) AIServi
 		AIConfig:    aiCfg,
 		DataDir:     dataDir,
 		AgentServer: h.agentServer,
+		ReadState:   h.readState,
 	}
 
 	// Get monitor for state provider
@@ -298,6 +309,7 @@ func (h *AIHandler) Start(ctx context.Context, stateProvider AIStateProvider) er
 		DataDir:       dataDir,
 		StateProvider: stateProvider,
 		AgentServer:   h.agentServer,
+		ReadState:     h.readState,
 	}
 
 	h.legacyService = newChatService(chatCfg)

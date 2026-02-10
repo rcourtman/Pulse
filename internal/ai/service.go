@@ -29,6 +29,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/types"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
 
@@ -147,6 +148,7 @@ type Service struct {
 	agentServer             AgentServer
 	policy                  CommandPolicy
 	stateProvider           StateProvider
+	readState               unifiedresources.ReadState
 	alertProvider           AlertProvider
 	knowledgeStore          *knowledge.Store
 	costStore               *cost.Store
@@ -291,6 +293,18 @@ func (s *Service) CheckBudget(useCase string) error {
 	return s.enforceBudget(useCase)
 }
 
+// SetReadState injects a unified read-state provider for context enrichment.
+// This is forwarded to PatrolService when available.
+func (s *Service) SetReadState(rs unifiedresources.ReadState) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.readState = rs
+
+	if s.patrolService != nil {
+		s.patrolService.SetReadState(rs)
+	}
+}
+
 // SetStateProvider sets the state provider for infrastructure context
 func (s *Service) SetStateProvider(sp StateProvider) {
 	s.mu.Lock()
@@ -310,6 +324,10 @@ func (s *Service) SetStateProvider(sp StateProvider) {
 		// Connect discovery store for deep infrastructure context
 		if s.discoveryStore != nil {
 			s.patrolService.SetDiscoveryStore(s.discoveryStore)
+		}
+		// Forward unified ReadState if already configured.
+		if s.readState != nil {
+			s.patrolService.SetReadState(s.readState)
 		}
 	}
 

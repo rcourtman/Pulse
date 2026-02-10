@@ -16,6 +16,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
 
@@ -61,6 +62,7 @@ type (
 type Config struct {
 	AIConfig      *config.AIConfig
 	StateProvider StateProvider
+	ReadState     unifiedresources.ReadState
 	Policy        CommandPolicy
 	AgentServer   AgentServer
 	DataDir       string
@@ -104,6 +106,7 @@ func NewService(cfg Config) *Service {
 
 	execCfg := tools.ExecutorConfig{
 		StateProvider: stateProvider,
+		ReadState:     cfg.ReadState,
 		Policy:        policy,
 		AgentServer:   agentServer,
 	}

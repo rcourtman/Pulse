@@ -339,6 +339,7 @@ func (r *Router) setupRoutes() {
 	// Inject state provider so AI has access to full infrastructure context (VMs, containers, IPs)
 	if r.monitor != nil {
 		r.aiSettingsHandler.SetStateProvider(r.monitor)
+		r.aiSettingsHandler.SetReadState(r.resourceRegistry)
 		// Inject alert provider so AI has awareness of current alerts
 		// Also inject alert resolver so AI Patrol can autonomously resolve alerts when issues are fixed
 		if alertManager := r.monitor.GetAlertManager(); alertManager != nil {
@@ -367,6 +368,7 @@ func (r *Router) setupRoutes() {
 
 	// AI chat handler
 	r.aiHandler = NewAIHandler(r.multiTenant, r.mtMonitor, r.agentExecServer)
+	r.aiHandler.SetReadState(r.resourceRegistry)
 
 	// AI-powered infrastructure discovery handlers
 	// Note: The actual service is wired up later via SetDiscoveryService
@@ -730,6 +732,7 @@ func (r *Router) SetMonitor(m *monitoring.Monitor) {
 		// (Critical: patrol service is created lazily in SetStateProvider)
 		if r.aiSettingsHandler != nil {
 			r.aiSettingsHandler.SetStateProvider(m)
+			r.aiSettingsHandler.SetReadState(r.resourceRegistry)
 			// Also inject alert provider and resolver now that monitor is available
 			if alertManager := m.GetAlertManager(); alertManager != nil {
 				alertAdapter := ai.NewAlertManagerAdapter(alertManager)
