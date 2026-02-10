@@ -9,10 +9,11 @@ import (
 
 func TestRecorderRecordValidEvent(t *testing.T) {
 	agg := metering.NewWindowedAggregator()
-	recorder := NewRecorder(agg)
+	recorder := NewRecorder(agg, nil)
 
 	err := recorder.Record(ConversionEvent{
 		Type:           EventPaywallViewed,
+		OrgID:          "default",
 		Capability:     "long_term_metrics",
 		Surface:        "history_chart",
 		Timestamp:      time.Now().UnixMilli(),
@@ -44,10 +45,11 @@ func TestRecorderRecordValidEvent(t *testing.T) {
 
 func TestRecorderRecordIdempotency(t *testing.T) {
 	agg := metering.NewWindowedAggregator()
-	recorder := NewRecorder(agg)
+	recorder := NewRecorder(agg, nil)
 
 	event := ConversionEvent{
 		Type:           EventUpgradeClicked,
+		OrgID:          "default",
 		Capability:     "ai_autofix",
 		Surface:        "ai_intelligence",
 		Timestamp:      time.Now().UnixMilli(),
@@ -72,10 +74,11 @@ func TestRecorderRecordIdempotency(t *testing.T) {
 
 func TestRecorderRecordValidationRejection(t *testing.T) {
 	agg := metering.NewWindowedAggregator()
-	recorder := NewRecorder(agg)
+	recorder := NewRecorder(agg, nil)
 
 	err := recorder.Record(ConversionEvent{
 		Type:      EventPaywallViewed,
+		OrgID:     "default",
 		Surface:   "settings_tab",
 		Timestamp: time.Now().UnixMilli(),
 		// missing capability for paywall_viewed
@@ -87,7 +90,7 @@ func TestRecorderRecordValidationRejection(t *testing.T) {
 }
 
 func TestRecorderRecordNilAggregator(t *testing.T) {
-	recorder := NewRecorder(nil)
+	recorder := NewRecorder(nil, nil)
 
 	err := recorder.Record(ConversionEvent{
 		Type:           EventTrialStarted,

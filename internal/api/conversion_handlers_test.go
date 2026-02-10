@@ -2,10 +2,12 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -14,7 +16,7 @@ import (
 )
 
 func TestConversionHandleRecordEventValidPOST(t *testing.T) {
-	handlers := NewConversionHandlers(nil, nil, nil)
+	handlers := NewConversionHandlers(nil, nil, nil, nil)
 
 	body := []byte(fmt.Sprintf(`{
 		"type":"paywall_viewed",
@@ -44,7 +46,7 @@ func TestConversionHandleRecordEventValidPOST(t *testing.T) {
 }
 
 func TestConversionHandleRecordEventInvalidBody(t *testing.T) {
-	handlers := NewConversionHandlers(nil, nil, nil)
+	handlers := NewConversionHandlers(nil, nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/conversion/events", bytes.NewReader([]byte("{")))
 	rec := httptest.NewRecorder()
@@ -65,7 +67,7 @@ func TestConversionHandleRecordEventInvalidBody(t *testing.T) {
 }
 
 func TestConversionHandleRecordEventMissingRequiredFields(t *testing.T) {
-	handlers := NewConversionHandlers(nil, nil, nil)
+	handlers := NewConversionHandlers(nil, nil, nil, nil)
 
 	body := []byte(fmt.Sprintf(`{
 		"type":"paywall_viewed",
@@ -93,7 +95,7 @@ func TestConversionHandleRecordEventMissingRequiredFields(t *testing.T) {
 }
 
 func TestConversionHandleRecordEventNonPOST(t *testing.T) {
-	handlers := NewConversionHandlers(nil, nil, nil)
+	handlers := NewConversionHandlers(nil, nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/conversion/events", nil)
 	rec := httptest.NewRecorder()
@@ -107,12 +109,13 @@ func TestConversionHandleRecordEventNonPOST(t *testing.T) {
 
 func TestConversionHandleGetStats(t *testing.T) {
 	agg := metering.NewWindowedAggregator()
-	recorder := conversion.NewRecorder(agg)
-	handlers := NewConversionHandlers(recorder, nil, nil)
+	recorder := conversion.NewRecorder(agg, nil)
+	handlers := NewConversionHandlers(recorder, nil, nil, nil)
 
 	events := []conversion.ConversionEvent{
 		{
 			Type:           conversion.EventPaywallViewed,
+			OrgID:          "default",
 			Capability:     "long_term_metrics",
 			Surface:        "history_chart",
 			Timestamp:      time.Now().UnixMilli(),
@@ -120,6 +123,7 @@ func TestConversionHandleGetStats(t *testing.T) {
 		},
 		{
 			Type:           conversion.EventPaywallViewed,
+			OrgID:          "default",
 			Capability:     "long_term_metrics",
 			Surface:        "history_chart",
 			Timestamp:      time.Now().UnixMilli(),
@@ -127,6 +131,7 @@ func TestConversionHandleGetStats(t *testing.T) {
 		},
 		{
 			Type:           conversion.EventTrialStarted,
+			OrgID:          "default",
 			Surface:        "license_panel",
 			Timestamp:      time.Now().UnixMilli(),
 			IdempotencyKey: "trial_started:license_panel::1",
@@ -222,7 +227,7 @@ func TestConversionHandleGetStats(t *testing.T) {
 }
 
 func TestConversionHandleGetStatsNonGET(t *testing.T) {
-	handlers := NewConversionHandlers(nil, nil, nil)
+	handlers := NewConversionHandlers(nil, nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/conversion/stats", nil)
 	rec := httptest.NewRecorder()
@@ -236,7 +241,7 @@ func TestConversionHandleGetStatsNonGET(t *testing.T) {
 
 func TestConversionHandleGetHealth(t *testing.T) {
 	health := conversion.NewPipelineHealth()
-	handlers := NewConversionHandlers(nil, health, nil)
+	handlers := NewConversionHandlers(nil, health, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/conversion/health", nil)
 	rec := httptest.NewRecorder()
@@ -264,7 +269,7 @@ func TestConversionHandleGetHealth(t *testing.T) {
 }
 
 func TestConversionHandleGetHealthNonGET(t *testing.T) {
-	handlers := NewConversionHandlers(nil, nil, nil)
+	handlers := NewConversionHandlers(nil, nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/conversion/health", nil)
 	rec := httptest.NewRecorder()
@@ -278,9 +283,9 @@ func TestConversionHandleGetHealthNonGET(t *testing.T) {
 
 func TestConversionHandleRecordEventUpdatesHealth(t *testing.T) {
 	agg := metering.NewWindowedAggregator()
-	recorder := conversion.NewRecorder(agg)
+	recorder := conversion.NewRecorder(agg, nil)
 	health := conversion.NewPipelineHealth()
-	handlers := NewConversionHandlers(recorder, health, nil)
+	handlers := NewConversionHandlers(recorder, health, nil, nil)
 
 	body := []byte(fmt.Sprintf(`{
 		"type":"paywall_viewed",
@@ -320,7 +325,7 @@ func TestConversionHandleRecordEventUpdatesHealth(t *testing.T) {
 }
 
 func TestConversionHandleGetConfigDefaults(t *testing.T) {
-	handlers := NewConversionHandlers(nil, nil, conversion.NewCollectionConfig())
+	handlers := NewConversionHandlers(nil, nil, conversion.NewCollectionConfig(), nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/conversion/config", nil)
 	rec := httptest.NewRecorder()
@@ -345,7 +350,7 @@ func TestConversionHandleGetConfigDefaults(t *testing.T) {
 
 func TestConversionHandleUpdateConfigDisablesCollection(t *testing.T) {
 	config := conversion.NewCollectionConfig()
-	handlers := NewConversionHandlers(nil, nil, config)
+	handlers := NewConversionHandlers(nil, nil, config, nil)
 
 	body := []byte(`{"enabled":false,"disabled_surfaces":["history_chart"]}`)
 	req := httptest.NewRequest(http.MethodPut, "/api/conversion/config", bytes.NewReader(body))
@@ -371,10 +376,10 @@ func TestConversionHandleUpdateConfigDisablesCollection(t *testing.T) {
 
 func TestConversionHandleRecordEventReturnsAcceptedWhenCollectionDisabled(t *testing.T) {
 	agg := metering.NewWindowedAggregator()
-	recorder := conversion.NewRecorder(agg)
+	recorder := conversion.NewRecorder(agg, nil)
 	config := conversion.NewCollectionConfig()
 	config.UpdateConfig(conversion.CollectionConfigSnapshot{Enabled: false})
-	handlers := NewConversionHandlers(recorder, nil, config)
+	handlers := NewConversionHandlers(recorder, nil, config, nil)
 
 	body := []byte(fmt.Sprintf(`{
 		"type":"paywall_viewed",
@@ -401,7 +406,7 @@ func TestConversionHandleRecordEventReturnsAcceptedWhenCollectionDisabled(t *tes
 }
 
 func TestConversionHandleConfigMethodNotAllowed(t *testing.T) {
-	handlers := NewConversionHandlers(nil, nil, conversion.NewCollectionConfig())
+	handlers := NewConversionHandlers(nil, nil, conversion.NewCollectionConfig(), nil)
 
 	getReq := httptest.NewRequest(http.MethodPost, "/api/conversion/config", nil)
 	getRec := httptest.NewRecorder()
@@ -415,5 +420,107 @@ func TestConversionHandleConfigMethodNotAllowed(t *testing.T) {
 	handlers.HandleUpdateConfig(putRec, putReq)
 	if putRec.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("PUT handler status = %d, want %d", putRec.Code, http.StatusMethodNotAllowed)
+	}
+}
+
+func TestConversionHandleConversionFunnelAggregatesPerOrg(t *testing.T) {
+	tmp := t.TempDir()
+	store, err := conversion.NewConversionStore(filepath.Join(tmp, "conversion.db"))
+	if err != nil {
+		t.Fatalf("NewConversionStore() error = %v", err)
+	}
+	defer store.Close()
+
+	recorder := conversion.NewRecorder(nil, store)
+	handlers := NewConversionHandlers(recorder, nil, nil, store)
+
+	now := time.Now().UTC()
+	post := func(orgID string, payload string) {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodPost, "/api/conversion/events", bytes.NewReader([]byte(payload)))
+		req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, orgID))
+		rec := httptest.NewRecorder()
+		handlers.HandleRecordEvent(rec, req)
+		if rec.Code != http.StatusAccepted {
+			t.Fatalf("record status = %d, want %d (%s)", rec.Code, http.StatusAccepted, rec.Body.String())
+		}
+	}
+
+	post("org-a", fmt.Sprintf(`{"type":"paywall_viewed","capability":"long_term_metrics","surface":"history_chart","timestamp":%d,"idempotency_key":"a:pv:1"}`, now.UnixMilli()))
+	post("org-a", fmt.Sprintf(`{"type":"trial_started","surface":"license_panel","timestamp":%d,"idempotency_key":"a:ts:1"}`, now.UnixMilli()))
+	post("org-a", fmt.Sprintf(`{"type":"upgrade_clicked","capability":"relay","surface":"paywall_modal","timestamp":%d,"idempotency_key":"a:uc:1"}`, now.UnixMilli()))
+	post("org-a", fmt.Sprintf(`{"type":"checkout_completed","surface":"stripe_return","timestamp":%d,"idempotency_key":"a:cc:1"}`, now.UnixMilli()))
+	post("org-b", fmt.Sprintf(`{"type":"paywall_viewed","capability":"relay","surface":"mobile_onboarding","timestamp":%d,"idempotency_key":"b:pv:1"}`, now.UnixMilli()))
+
+	from := now.Add(-1 * time.Hour)
+	to := now.Add(1 * time.Hour)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/conversion-funnel", nil)
+	q := req.URL.Query()
+	q.Set("org_id", "org-a")
+	q.Set("from", from.Format(time.RFC3339Nano))
+	q.Set("to", to.Format(time.RFC3339Nano))
+	req.URL.RawQuery = q.Encode()
+	rec := httptest.NewRecorder()
+	handlers.HandleConversionFunnel(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d (%s)", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	var summary conversion.FunnelSummary
+	if err := json.NewDecoder(rec.Body).Decode(&summary); err != nil {
+		t.Fatalf("failed decoding response: %v", err)
+	}
+	if summary.PaywallViewed != 1 {
+		t.Fatalf("PaywallViewed = %d, want 1", summary.PaywallViewed)
+	}
+	if summary.TrialStarted != 1 {
+		t.Fatalf("TrialStarted = %d, want 1", summary.TrialStarted)
+	}
+	if summary.UpgradeClicked != 1 {
+		t.Fatalf("UpgradeClicked = %d, want 1", summary.UpgradeClicked)
+	}
+	if summary.CheckoutCompleted != 1 {
+		t.Fatalf("CheckoutCompleted = %d, want 1", summary.CheckoutCompleted)
+	}
+
+	reqAll := httptest.NewRequest(http.MethodGet, "/api/admin/conversion-funnel", nil)
+	qAll := reqAll.URL.Query()
+	qAll.Set("from", from.Format(time.RFC3339Nano))
+	qAll.Set("to", to.Format(time.RFC3339Nano))
+	reqAll.URL.RawQuery = qAll.Encode()
+	recAll := httptest.NewRecorder()
+	handlers.HandleConversionFunnel(recAll, reqAll)
+	if recAll.Code != http.StatusOK {
+		t.Fatalf("status(all) = %d, want %d (%s)", recAll.Code, http.StatusOK, recAll.Body.String())
+	}
+	var summaryAll conversion.FunnelSummary
+	if err := json.NewDecoder(recAll.Body).Decode(&summaryAll); err != nil {
+		t.Fatalf("failed decoding all-org response: %v", err)
+	}
+	if summaryAll.PaywallViewed != 2 {
+		t.Fatalf("all PaywallViewed = %d, want 2", summaryAll.PaywallViewed)
+	}
+}
+
+func TestConversionConversionFunnelRouteRequiresAdminProxyRole(t *testing.T) {
+	cfg := newTestConfigWithTokens(t)
+	cfg.ProxyAuthSecret = "proxy-secret"
+	cfg.ProxyAuthUserHeader = "X-Proxy-User"
+	cfg.ProxyAuthRoleHeader = "X-Proxy-Roles"
+	cfg.ProxyAuthAdminRole = "admin"
+
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/conversion-funnel", nil)
+	req.Header.Set("X-Proxy-Secret", cfg.ProxyAuthSecret)
+	req.Header.Set(cfg.ProxyAuthUserHeader, "alice")
+	req.Header.Set(cfg.ProxyAuthRoleHeader, "viewer|user")
+	rec := httptest.NewRecorder()
+
+	router.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected status %d, got %d (%s)", http.StatusForbidden, rec.Code, rec.Body.String())
 	}
 }

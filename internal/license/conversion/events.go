@@ -12,6 +12,7 @@ const (
 	EventLicenseActivationFailed = "license_activation_failed"
 	EventUpgradeClicked          = "upgrade_clicked"
 	EventCheckoutStarted         = "checkout_started"
+	EventCheckoutCompleted       = "checkout_completed"
 	EventLimitWarningShown       = "limit_warning_shown"
 	EventLimitBlocked            = "limit_blocked"
 )
@@ -19,6 +20,7 @@ const (
 // ConversionEvent is the canonical conversion instrumentation envelope.
 type ConversionEvent struct {
 	Type           string `json:"type"`
+	OrgID          string `json:"org_id,omitempty"`
 	Capability     string `json:"capability,omitempty"`
 	Surface        string `json:"surface"`
 	TenantMode     string `json:"tenant_mode,omitempty"`
@@ -77,6 +79,7 @@ func isKnownType(eventType string) bool {
 		EventLicenseActivationFailed,
 		EventUpgradeClicked,
 		EventCheckoutStarted,
+		EventCheckoutCompleted,
 		EventLimitWarningShown,
 		EventLimitBlocked:
 		return true

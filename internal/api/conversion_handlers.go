@@ -2,7 +2,9 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -14,13 +16,15 @@ type ConversionHandlers struct {
 	recorder *conversion.Recorder
 	health   *conversion.PipelineHealth
 	config   *conversion.CollectionConfig
+	store    *conversion.ConversionStore
 }
 
-func NewConversionHandlers(recorder *conversion.Recorder, health *conversion.PipelineHealth, config *conversion.CollectionConfig) *ConversionHandlers {
+func NewConversionHandlers(recorder *conversion.Recorder, health *conversion.PipelineHealth, config *conversion.CollectionConfig, store *conversion.ConversionStore) *ConversionHandlers {
 	return &ConversionHandlers{
 		recorder: recorder,
 		health:   health,
 		config:   config,
+		store:    store,
 	}
 }
 
@@ -41,6 +45,11 @@ func (h *ConversionHandlers) HandleRecordEvent(w http.ResponseWriter, r *http.Re
 		conversion.GetConversionMetrics().RecordInvalid(conversionValidationReason(err))
 		writeConversionValidationError(w, err.Error())
 		return
+	}
+
+	// Persisted conversion telemetry must always be tenant-aware; use request context when clients omit org_id.
+	if strings.TrimSpace(event.OrgID) == "" {
+		event.OrgID = GetOrgID(r.Context())
 	}
 
 	if h != nil && h.config != nil && !h.config.IsSurfaceEnabled(event.Surface) {
@@ -66,6 +75,49 @@ func (h *ConversionHandlers) HandleRecordEvent(w http.ResponseWriter, r *http.Re
 	}
 
 	writeConversionAccepted(w)
+}
+
+// HandleConversionFunnel returns conversion funnel counts for admin reporting.
+// GET /api/admin/conversion-funnel?org_id=...&from=...&to=...
+func (h *ConversionHandlers) HandleConversionFunnel(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if h == nil || h.store == nil {
+		http.Error(w, "Conversion store unavailable", http.StatusServiceUnavailable)
+		return
+	}
+
+	orgID := strings.TrimSpace(r.URL.Query().Get("org_id"))
+
+	now := time.Now().UTC()
+	to, err := parseOptionalTimeParam(r.URL.Query().Get("to"), now)
+	if err != nil {
+		http.Error(w, "invalid to", http.StatusBadRequest)
+		return
+	}
+	fromDefault := to.Add(-30 * 24 * time.Hour)
+	from, err := parseOptionalTimeParam(r.URL.Query().Get("from"), fromDefault)
+	if err != nil {
+		http.Error(w, "invalid from", http.StatusBadRequest)
+		return
+	}
+	if from.After(to) {
+		http.Error(w, "from must be <= to", http.StatusBadRequest)
+		return
+	}
+
+	summary, err := h.store.FunnelSummary(orgID, from, to)
+	if err != nil {
+		http.Error(w, "failed to query funnel", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(summary)
 }
 
 // HandleGetHealth returns conversion pipeline health status.
@@ -238,4 +290,35 @@ func writeConversionAccepted(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
 	_ = json.NewEncoder(w).Encode(map[string]bool{"accepted": true})
+}
+
+func parseOptionalTimeParam(raw string, defaultValue time.Time) (time.Time, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return defaultValue.UTC(), nil
+	}
+
+	// RFC3339 / RFC3339Nano
+	if t, err := time.Parse(time.RFC3339Nano, raw); err == nil {
+		return t.UTC(), nil
+	}
+	if t, err := time.Parse(time.RFC3339, raw); err == nil {
+		return t.UTC(), nil
+	}
+
+	// Date-only (local midnight is ambiguous; use UTC midnight).
+	if t, err := time.ParseInLocation("2006-01-02", raw, time.UTC); err == nil {
+		return t.UTC(), nil
+	}
+
+	// Unix seconds or milliseconds.
+	if i, err := strconv.ParseInt(raw, 10, 64); err == nil {
+		// Heuristic: >= 10^12 is likely ms.
+		if i >= 1_000_000_000_000 {
+			return time.UnixMilli(i).UTC(), nil
+		}
+		return time.Unix(i, 0).UTC(), nil
+	}
+
+	return time.Time{}, fmt.Errorf("unsupported time format")
 }

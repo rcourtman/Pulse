@@ -11,12 +11,8 @@ const pipelineStaleThreshold = 5 * time.Minute
 var knownConversionEventTypes = []string{
 	EventPaywallViewed,
 	EventTrialStarted,
-	EventLicenseActivated,
-	EventLicenseActivationFailed,
 	EventUpgradeClicked,
-	EventCheckoutStarted,
-	EventLimitWarningShown,
-	EventLimitBlocked,
+	EventCheckoutCompleted,
 }
 
 // HealthStatus describes conversion pipeline health and recent activity.

@@ -84,7 +84,7 @@ func newIntegrationServerWithConfig(t *testing.T, customize func(*config.Config)
 	router := api.NewRouter(cfg, monitor, nil, hub, func() error {
 		monitor.SyncAlertState()
 		return nil
-	}, version)
+	}, version, nil)
 
 	srv := newIPv4HTTPServer(t, router.Handler())
 	t.Cleanup(func() {

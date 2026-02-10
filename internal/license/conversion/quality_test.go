@@ -10,8 +10,8 @@ func TestPipelineHealthHealthy(t *testing.T) {
 	health := NewPipelineHealth()
 	health.RecordEvent(EventPaywallViewed)
 	health.RecordEvent(EventTrialStarted)
-	health.RecordEvent(EventLicenseActivated)
-	health.RecordEvent(EventCheckoutStarted)
+	health.RecordEvent(EventUpgradeClicked)
+	health.RecordEvent(EventCheckoutCompleted)
 
 	status := health.CheckHealth()
 
