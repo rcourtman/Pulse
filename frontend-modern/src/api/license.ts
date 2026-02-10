@@ -14,6 +14,33 @@ export interface LicenseStatus {
   grace_period_end?: string | null;
 }
 
+export interface EntitlementLimitStatus {
+  key: string;
+  // 0 means unlimited
+  limit: number;
+  current: number;
+  // "ok" | "warning" | "enforced" (string for forward-compat)
+  state: string;
+}
+
+export interface EntitlementUpgradeReason {
+  key: string;
+  reason: string;
+  action_url?: string;
+}
+
+// Mirrors internal/api/entitlement_handlers.go:EntitlementPayload
+export interface LicenseEntitlements {
+  capabilities: string[];
+  limits: EntitlementLimitStatus[];
+  subscription_state: string;
+  upgrade_reasons: EntitlementUpgradeReason[];
+  plan_version?: string;
+  tier: string;
+  trial_expires_at?: number;
+  trial_days_remaining?: number;
+}
+
 export interface ActivateLicenseResponse {
   success: boolean;
   message?: string;
@@ -36,6 +63,10 @@ export class LicenseAPI {
 
   static async getStatus(): Promise<LicenseStatus> {
     return apiFetchJSON(`${this.baseUrl}/status`) as Promise<LicenseStatus>;
+  }
+
+  static async getEntitlements(): Promise<LicenseEntitlements> {
+    return apiFetchJSON(`${this.baseUrl}/entitlements`) as Promise<LicenseEntitlements>;
   }
 
   static async getFeatures(): Promise<LicenseFeatureStatus> {

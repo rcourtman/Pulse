@@ -7,7 +7,7 @@
 
 import { Component, createEffect, createSignal, onCleanup, Show, createMemo, onMount } from 'solid-js';
 import { ChartsAPI, type ResourceType, type HistoryTimeRange, type AggregatedMetricPoint } from '@/api/charts';
-import { isRangeLocked, loadLicenseStatus } from '@/stores/license';
+import { getUpgradeActionUrlOrFallback, isRangeLocked, loadLicenseStatus } from '@/stores/license';
 import { Portal } from 'solid-js/web';
 import { formatBytes } from '@/utils/format';
 import { calculateOptimalPoints } from '@/utils/downsample';
@@ -624,7 +624,7 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
                             Upgrade to Pulse Pro to unlock {lockDays()} days of historical data retention.
                         </p>
                         <a
-                            href="https://pulserelay.pro/pricing"
+                            href={getUpgradeActionUrlOrFallback('long_term_metrics')}
                             target="_blank"
                             onClick={() => trackUpgradeClicked('history_chart', 'long_term_metrics')}
                             class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-md shadow-sm transition-colors"

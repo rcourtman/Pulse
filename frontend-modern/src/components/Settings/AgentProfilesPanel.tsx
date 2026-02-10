@@ -4,10 +4,10 @@ import { Card } from '@/components/shared/Card';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { AgentProfilesAPI, type AgentProfile, type AgentProfileAssignment, type ProfileSuggestion } from '@/api/agentProfiles';
 import { AIAPI } from '@/api/ai';
-import { LicenseAPI } from '@/api/license';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import { formatRelativeTime } from '@/utils/format';
+import { getUpgradeActionUrlOrFallback, hasFeature as hasEntitlement, licenseLoaded, loadLicenseStatus, licenseLoading } from '@/stores/license';
 import { SuggestProfileModal } from './SuggestProfileModal';
 import { KNOWN_SETTINGS, type SelectSetting, type StringSetting } from './agentProfileSettings';
 import Plus from 'lucide-solid/icons/plus';
@@ -22,9 +22,8 @@ import Lightbulb from 'lucide-solid/icons/lightbulb';
 export const AgentProfilesPanel: Component = () => {
     const { byType } = useResources();
 
-    // License state
-    const [hasFeature, setHasFeature] = createSignal(false);
-    const [checkingLicense, setCheckingLicense] = createSignal(true);
+    const checkingLicense = () => !licenseLoaded() || licenseLoading();
+    const hasAgentProfiles = () => hasEntitlement('agent_profiles');
 
     // AI state - only show AI features if enabled
     const [aiAvailable, setAiAvailable] = createSignal(false);
@@ -106,15 +105,7 @@ export const AgentProfilesPanel: Component = () => {
 
     // Check license and AI availability on mount
     onMount(async () => {
-        try {
-            const features = await LicenseAPI.getFeatures();
-            setHasFeature(features.features?.['agent_profiles'] === true);
-        } catch (err) {
-            logger.error('Failed to check license', err);
-            setHasFeature(false);
-        } finally {
-            setCheckingLicense(false);
-        }
+        await loadLicenseStatus();
 
         // Check if AI is available (enabled and configured) - silently fail if not
         try {
@@ -125,7 +116,7 @@ export const AgentProfilesPanel: Component = () => {
             setAiAvailable(false);
         }
 
-        if (hasFeature()) {
+        if (hasAgentProfiles()) {
             await loadData();
         } else {
             setLoading(false);
@@ -260,7 +251,7 @@ export const AgentProfilesPanel: Component = () => {
             }
         >
             <Show
-                when={hasFeature()}
+                when={hasAgentProfiles()}
                 fallback={
                     <Card padding="lg" class="space-y-4">
                         <div class="flex items-center gap-3">
@@ -277,7 +268,7 @@ export const AgentProfilesPanel: Component = () => {
                             logging levels, and reporting intervals from a central location.
                         </p>
                         <a
-                            href="https://pulserelay.pro/"
+                            href={getUpgradeActionUrlOrFallback('agent_profiles')}
                             target="_blank"
                             rel="noopener noreferrer"
                             class="inline-flex items-center gap-2 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-100 dark:bg-amber-900/40 px-4 py-2 text-sm font-medium text-amber-800 dark:text-amber-100 transition-colors hover:bg-amber-200 dark:hover:bg-amber-900/60"

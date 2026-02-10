@@ -1,33 +1,35 @@
 import { createSignal, createMemo, createRoot } from 'solid-js';
-import { LicenseAPI, type LicenseStatus } from '@/api/license';
+import { LicenseAPI, type LicenseEntitlements } from '@/api/license';
 import { logger } from '@/utils/logger';
 
-// Reactive signals for license status
-const [licenseStatus, setLicenseStatus] = createSignal<LicenseStatus | null>(null);
+// Reactive signals for entitlements (canonical gating source).
+const [entitlements, setEntitlements] = createSignal<LicenseEntitlements | null>(null);
 const [loading, setLoading] = createSignal(false);
 const [loaded, setLoaded] = createSignal(false);
 
 /**
- * Load the license status from the server.
+ * Load the entitlements payload from the server.
+ *
+ * This is the canonical feature-gating source (do not gate on tier strings).
  */
 export async function loadLicenseStatus(force = false): Promise<void> {
     if (loaded() && !force) return;
 
     setLoading(true);
     try {
-        const status = await LicenseAPI.getStatus();
-        setLicenseStatus(status);
+        const next = await LicenseAPI.getEntitlements();
+        setEntitlements(next);
         setLoaded(true);
-        logger.debug('[licenseStore] License status loaded', { tier: status.tier, valid: status.valid });
+        logger.debug('[licenseStore] Entitlements loaded', { tier: next.tier, sub_state: next.subscription_state });
     } catch (err) {
-        logger.error('[licenseStore] Failed to load license status', err);
-        // Fallback to free tier on error to avoid breaking UI
-        setLicenseStatus({
-            valid: false,
+        logger.error('[licenseStore] Failed to load entitlements', err);
+        // Best-effort fallback to avoid breaking the UI.
+        setEntitlements({
+            capabilities: ['update_alerts', 'sso', 'ai_patrol'],
+            limits: [],
+            subscription_state: 'active',
+            upgrade_reasons: [],
             tier: 'free',
-            is_lifetime: false,
-            days_remaining: 0,
-            features: ['update_alerts', 'sso', 'ai_patrol'],
         });
         setLoaded(true);
     } finally {
@@ -40,23 +42,47 @@ export async function loadLicenseStatus(force = false): Promise<void> {
  */
 export const isPro = createRoot(() =>
     createMemo(() => {
-        const current = licenseStatus();
-        return Boolean(current?.valid && current.tier !== 'free');
+        const current = entitlements();
+        return Boolean(current && current.tier !== 'free');
     })
 );
 
 /**
  * Check if a specific feature is enabled by the current license.
- * Free tier features (e.g., ai_patrol) are available even without a valid Pro license.
  */
 export function hasFeature(feature: string): boolean {
-    const current = licenseStatus();
+    const current = entitlements();
     if (!current) return false;
-    return current.features.includes(feature);
+    return current.capabilities.includes(feature);
 }
 
 export function isMultiTenantEnabled(): boolean {
     return hasFeature('multi_tenant');
+}
+
+export function getUpgradeReason(key: string) {
+    const current = entitlements();
+    if (!current?.upgrade_reasons?.length) return undefined;
+    return current.upgrade_reasons.find((reason) => reason.key === key);
+}
+
+export function getUpgradeActionUrl(key: string): string | undefined {
+    return getUpgradeReason(key)?.action_url;
+}
+
+export function getFirstUpgradeActionUrl(): string | undefined {
+    const current = entitlements();
+    return current?.upgrade_reasons?.[0]?.action_url;
+}
+
+export function getUpgradeActionUrlOrFallback(key: string): string {
+    return getUpgradeActionUrl(key) || getFirstUpgradeActionUrl() || `/pricing?feature=${encodeURIComponent(key)}`;
+}
+
+export function getLimit(key: string) {
+    const current = entitlements();
+    if (!current?.limits?.length) return undefined;
+    return current.limits.find((limit) => limit.key === key);
 }
 
 /**
@@ -83,4 +109,4 @@ export function isRangeLocked(range: string): boolean {
 /**
  * Get the full license status.
  */
-export { licenseStatus, loading as licenseLoading, loaded as licenseLoaded };
+export { entitlements as licenseStatus, loading as licenseLoading, loaded as licenseLoaded };

@@ -263,7 +263,7 @@ export const RelaySettingsPanel: Component = () => {
               class={controlClass()}
               value={serverUrl()}
               onInput={(e) => setServerUrl(e.currentTarget.value)}
-              placeholder="wss://relay.pulserelay.pro/ws/instance"
+              placeholder="wss://relay.example.com/ws/instance"
               disabled={saving()}
             />
             <Show when={serverUrl() !== config()?.server_url}>

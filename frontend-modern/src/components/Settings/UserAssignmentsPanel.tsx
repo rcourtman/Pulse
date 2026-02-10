@@ -4,7 +4,7 @@ import { RBACAPI } from '@/api/rbac';
 import type { Role, UserRoleAssignment, Permission } from '@/types/rbac';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
-import { hasFeature, loadLicenseStatus, licenseLoaded } from '@/stores/license';
+import { getUpgradeActionUrlOrFallback, hasFeature, loadLicenseStatus, licenseLoaded } from '@/stores/license';
 import Users from 'lucide-solid/icons/users';
 import Shield from 'lucide-solid/icons/shield';
 import BadgeCheck from 'lucide-solid/icons/badge-check';
@@ -135,7 +135,7 @@ export const UserAssignmentsPanel: Component = () => {
                                 </p>
                             </div>
                             <a
-                                href="https://pulserelay.pro/"
+                                href={getUpgradeActionUrlOrFallback('rbac')}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 class="px-5 py-2.5 text-sm font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"

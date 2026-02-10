@@ -5,7 +5,7 @@ import { Toggle } from '@/components/shared/Toggle';
 import { formField, labelClass, controlClass, formHelpText } from '@/components/shared/Form';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
-import { hasFeature, loadLicenseStatus, licenseLoaded } from '@/stores/license';
+import { getUpgradeActionUrlOrFallback, hasFeature, loadLicenseStatus, licenseLoaded } from '@/stores/license';
 import Globe from 'lucide-solid/icons/globe';
 
 interface OIDCConfigResponse {
@@ -267,7 +267,7 @@ export const OIDCPanel: Component<Props> = (props) => {
               </p>
             </div>
             <a
-              href="https://pulserelay.pro/"
+              href={getUpgradeActionUrlOrFallback('advanced_sso')}
               target="_blank"
               class="px-5 py-2.5 text-sm font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             >

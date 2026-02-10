@@ -10,7 +10,7 @@ import { aiChatStore } from '@/stores/aiChat';
 import { logger } from '@/utils/logger';
 import { AIAPI } from '@/api/ai';
 import { AIChatAPI, type ChatSession, type FileChange } from '@/api/aiChat';
-import { hasFeature, loadLicenseStatus } from '@/stores/license';
+import { getUpgradeActionUrlOrFallback, hasFeature, loadLicenseStatus } from '@/stores/license';
 import type { AISettings as AISettingsType, AIProvider, AuthMethod } from '@/types/ai';
 
 // Providers are now configured via accordion sections, not a single-provider selector
@@ -1554,7 +1554,7 @@ export const AISettings: Component = () => {
                   <p class="text-xs text-gray-500 dark:text-gray-400">
                     <a
                       class="text-blue-600 dark:text-blue-400 font-medium hover:underline"
-                      href="https://pulserelay.pro/"
+                      href={getUpgradeActionUrlOrFallback('ai_autofix')}
                       target="_blank"
                       rel="noreferrer"
                     >

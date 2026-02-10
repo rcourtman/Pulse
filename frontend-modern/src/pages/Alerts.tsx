@@ -20,7 +20,7 @@ import { notificationStore } from '@/stores/notifications';
 import { showTooltip, hideTooltip } from '@/components/shared/Tooltip';
 import { AlertsAPI } from '@/api/alerts';
 import { NotificationsAPI, Webhook } from '@/api/notifications';
-import { LicenseAPI, type LicenseFeatureStatus } from '@/api/license';
+import { hasFeature, licenseLoaded, licenseLoading as entitlementsLoading, loadLicenseStatus } from '@/stores/license';
 import type { EmailConfig, AppriseConfig } from '@/api/notifications';
 import type { HysteresisThreshold } from '@/types/alerts';
 import type { Alert, Incident, IncidentEvent, State } from '@/types/api';
@@ -631,27 +631,11 @@ export function Alerts() {
     localStorage.getItem('hideAlertsQuickTip') !== 'true',
   );
 
-  const [licenseFeatures, setLicenseFeatures] = createSignal<LicenseFeatureStatus | null>(null);
-  const [licenseLoading, setLicenseLoading] = createSignal(false);
-  const hasAIAlertsFeature = createMemo(() => {
-    const status = licenseFeatures();
-    if (!status) return true;
-    return Boolean(status.features?.['ai_alerts']);
-  });
+  const licenseLoading = createMemo(() => !licenseLoaded() || entitlementsLoading());
+  const hasAIAlertsFeature = createMemo(() => !licenseLoaded() || hasFeature('ai_alerts'));
 
   onMount(() => {
-    void (async () => {
-      setLicenseLoading(true);
-      try {
-        const status = await LicenseAPI.getFeatures();
-        setLicenseFeatures(status);
-      } catch (err) {
-        logger.debug('Failed to load license status for AI alerts gating', err);
-        setLicenseFeatures(null);
-      } finally {
-        setLicenseLoading(false);
-      }
-    })();
+    void loadLicenseStatus();
   });
 
   const dismissQuickTip = () => {

@@ -404,7 +404,8 @@ const LoginForm: Component<{
   // Check if we're on the demo server
   const isDemoServer = () => {
     const hostname = window.location.hostname;
-    return hostname === 'demo.pulserelay.pro' || hostname.includes('demo.');
+    const normalized = hostname.toLowerCase();
+    return normalized === 'demo' || normalized.startsWith('demo.') || normalized.includes('.demo.');
   };
 
   return (

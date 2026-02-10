@@ -17,7 +17,7 @@ import {
     STORAGE_KEYS,
 } from '@/utils/localStorage';
 import { showSuccess, showWarning, showToast } from '@/utils/toast';
-import { hasFeature, loadLicenseStatus, licenseLoaded } from '@/stores/license';
+import { getUpgradeActionUrlOrFallback, hasFeature, loadLicenseStatus, licenseLoaded } from '@/stores/license';
 
 interface AuditEvent {
     id: string;
@@ -512,7 +512,7 @@ export default function AuditLogPanel() {
                             </p>
                         </div>
                         <a
-                            href="https://pulserelay.pro/"
+                            href={getUpgradeActionUrlOrFallback('audit_logging')}
                             target="_blank"
                             class="px-5 py-2.5 text-sm font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                         >

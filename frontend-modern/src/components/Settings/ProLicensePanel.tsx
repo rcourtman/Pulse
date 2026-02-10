@@ -2,14 +2,11 @@ import { Component, Show, createMemo, createSignal, onMount, For } from 'solid-j
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { formField, formHelpText, labelClass, controlClass } from '@/components/shared/Form';
 import { notificationStore } from '@/stores/notifications';
-import { isMultiTenantEnabled } from '@/stores/license';
+import { getUpgradeActionUrlOrFallback, isMultiTenantEnabled } from '@/stores/license';
 import { LicenseAPI, type LicenseStatus } from '@/api/license';
 import RefreshCw from 'lucide-solid/icons/refresh-cw';
 import ShieldCheck from 'lucide-solid/icons/shield-check';
 import BadgeCheck from 'lucide-solid/icons/badge-check';
-
-const PULSE_PRO_URL = 'https://pulserelay.pro/';
-const PULSE_PRO_MANAGE_URL = 'https://pulserelay.pro/manage';
 
 const TIER_LABELS: Record<string, string> = {
   free: 'Free',
@@ -266,18 +263,7 @@ export const ProLicensePanel: Component = () => {
                   })()}
                 </p>
               </div>
-            </div>
-
-            <Show when={status()?.valid && status()?.tier !== 'free' && !status()?.is_lifetime}>
-              <a
-                class="inline-flex items-center gap-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline"
-                href={`${PULSE_PRO_MANAGE_URL}?email=${encodeURIComponent(status()?.email ?? '')}`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                Manage Subscription
-              </a>
-            </Show>
+          </div>
 
             <Show when={formattedFeatures().length > 0}>
               <div>
@@ -304,7 +290,7 @@ export const ProLicensePanel: Component = () => {
               </p>
               <a
                 class="inline-flex items-center gap-1 mt-2 text-xs font-medium text-amber-800 dark:text-amber-200 hover:underline"
-                href={PULSE_PRO_URL}
+                href={getUpgradeActionUrlOrFallback('ai_autofix')}
                 target="_blank"
                 rel="noreferrer"
               >
