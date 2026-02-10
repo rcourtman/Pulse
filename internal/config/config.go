@@ -1615,15 +1615,29 @@ func Load() (*Config, error) {
 		cfg.EnvOverrides["allowedOrigins"] = true
 		log.Info().Str("origins", allowedOrigins).Msg("Allowed origins overridden by ALLOWED_ORIGINS env var")
 	}
+
+	// Hosted mode: prefer an explicit canonical URL for external links.
+	// PULSE_HOSTED_URL is an alias for PULSE_PUBLIC_URL, intended for hosted deployments.
+	if hostedURL := utils.GetenvTrim("PULSE_HOSTED_URL"); hostedURL != "" && utils.GetenvTrim("PULSE_PUBLIC_URL") == "" {
+		cfg.PublicURL = hostedURL
+		cfg.EnvOverrides["publicURL"] = true
+		log.Info().Str("url", hostedURL).Msg("Public URL configured from PULSE_HOSTED_URL env var")
+	}
+
 	if publicURL := os.Getenv("PULSE_PUBLIC_URL"); publicURL != "" {
 		cfg.PublicURL = publicURL
 		cfg.EnvOverrides["publicURL"] = true
 		log.Info().Str("url", publicURL).Msg("Public URL configured from PULSE_PUBLIC_URL env var")
 	} else {
-		// Try to auto-detect public URL if not explicitly configured
-		if detectedURL := detectPublicURL(cfg.FrontendPort); detectedURL != "" {
-			cfg.PublicURL = detectedURL
-			log.Info().Str("url", detectedURL).Msg("Auto-detected public URL for webhook notifications")
+		// In hosted mode, fail closed unless explicitly configured.
+		if os.Getenv("PULSE_HOSTED_MODE") == "true" {
+			log.Warn().Msg("Hosted mode enabled: public URL not configured; external links (e.g., magic links) will be disabled. Set PULSE_HOSTED_URL or PULSE_PUBLIC_URL.")
+		} else {
+			// Try to auto-detect public URL if not explicitly configured
+			if detectedURL := detectPublicURL(cfg.FrontendPort); detectedURL != "" {
+				cfg.PublicURL = detectedURL
+				log.Info().Str("url", detectedURL).Msg("Auto-detected public URL for webhook notifications")
+			}
 		}
 	}
 

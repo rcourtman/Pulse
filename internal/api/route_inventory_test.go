@@ -171,7 +171,7 @@ func isProtectedHandler(expr ast.Expr) bool {
 
 func isAuthWrapper(name string) bool {
 	switch name {
-	case "RequireAuth", "RequireAdmin", "RequirePermission":
+	case "RequireAuth", "RequireAdmin", "RequirePermission", "RequireOrgOwnerOrPlatformAdmin":
 		return true
 	default:
 		return false
@@ -423,6 +423,7 @@ var allRouteAllowlist = []string{
 	"POST /api/admin/orgs/{id}/unsuspend",
 	"POST /api/admin/orgs/{id}/soft-delete",
 	"GET /api/hosted/organizations",
+	"POST /api/admin/orgs/{id}/agent-install-command",
 	"/api/public/signup",
 	"/api/public/magic-link/request",
 	"/api/public/magic-link/verify",

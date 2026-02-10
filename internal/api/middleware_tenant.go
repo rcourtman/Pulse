@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -32,6 +33,42 @@ type TenantMiddlewareConfig struct {
 	AuthChecker AuthorizationChecker
 }
 
+func resolveTenantOrgID(r *http.Request) string {
+	orgID := ""
+	explicitOrg := false
+
+	if r != nil {
+		orgID = strings.TrimSpace(r.Header.Get("X-Pulse-Org-ID"))
+		explicitOrg = orgID != ""
+		if orgID == "" {
+			if cookie, err := r.Cookie("pulse_org_id"); err == nil {
+				orgID = strings.TrimSpace(cookie.Value)
+				explicitOrg = orgID != ""
+			}
+		}
+	}
+
+	if orgID == "" {
+		orgID = "default"
+	}
+
+	// Cloud/agent UX: if no org was explicitly selected, prefer an org-bound token.
+	// This enables tenant-scoped install commands that only need --token.
+	if !explicitOrg && orgID == "default" && r != nil {
+		if tokenVal := auth.GetAPIToken(r.Context()); tokenVal != nil {
+			if t, ok := tokenVal.(*config.APITokenRecord); ok && t != nil {
+				if strings.TrimSpace(t.OrgID) != "" {
+					orgID = strings.TrimSpace(t.OrgID)
+				} else if len(t.OrgIDs) == 1 && strings.TrimSpace(t.OrgIDs[0]) != "" {
+					orgID = strings.TrimSpace(t.OrgIDs[0])
+				}
+			}
+		}
+	}
+
+	return orgID
+}
+
 func NewTenantMiddleware(p *config.MultiTenantPersistence) *TenantMiddleware {
 	return &TenantMiddleware{persistence: p}
 }
@@ -57,18 +94,7 @@ func (m *TenantMiddleware) Middleware(next http.Handler) http.Handler {
 		// 2. Cookie: pulse_org_id (for browser session)
 		// 3. Fallback: "default" (for backward compatibility)
 
-		orgID := r.Header.Get("X-Pulse-Org-ID")
-		if orgID == "" {
-			// Check cookie
-			if cookie, err := r.Cookie("pulse_org_id"); err == nil {
-				orgID = cookie.Value
-			}
-		}
-
-		// Fallback to default
-		if orgID == "" {
-			orgID = "default"
-		}
+		orgID := resolveTenantOrgID(r)
 
 		var loadedOrg *models.Organization
 

@@ -113,6 +113,15 @@ func (mtm *MultiTenantMonitor) GetMonitor(orgID string) (*Monitor, error) {
 	return monitor, nil
 }
 
+// PeekMonitor returns the tenant monitor instance if it is already initialized.
+// It does not create a new monitor.
+func (mtm *MultiTenantMonitor) PeekMonitor(orgID string) (*Monitor, bool) {
+	mtm.mu.RLock()
+	defer mtm.mu.RUnlock()
+	monitor, exists := mtm.monitors[orgID]
+	return monitor, exists
+}
+
 // Stop stops all tenant monitors.
 func (mtm *MultiTenantMonitor) Stop() {
 	mtm.mu.Lock()

@@ -170,6 +170,28 @@ func TestHostedSignupCleanupOnRBACFailure(t *testing.T) {
 	}
 }
 
+func TestHostedSignupFailsClosedWithoutPublicURL(t *testing.T) {
+	baseDir := t.TempDir()
+	persistence := config.NewMultiTenantPersistence(baseDir)
+	rbacProvider := NewTenantRBACProvider(baseDir)
+	t.Cleanup(func() {
+		_ = rbacProvider.Close()
+	})
+
+	router, emailer := newHostedSignupTestRouterWithDepsAndPublicURL(t, true, persistence, rbacProvider, "")
+
+	rec := doHostedSignupRequest(router, `{"email":"owner@example.com","org_name":"My Organization"}`)
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	emailer.mu.Lock()
+	defer emailer.mu.Unlock()
+	if emailer.calls != 0 {
+		t.Fatalf("expected 0 magic link emails, got %d (public url missing must fail closed)", emailer.calls)
+	}
+}
+
 func newHostedSignupTestRouter(t *testing.T, hostedMode bool) (*Router, *config.MultiTenantPersistence, *TenantRBACProvider, *captureMagicLinkEmailer, string) {
 	t.Helper()
 
@@ -180,11 +202,17 @@ func newHostedSignupTestRouter(t *testing.T, hostedMode bool) (*Router, *config.
 		_ = rbacProvider.Close()
 	})
 
-	router, emailer := newHostedSignupTestRouterWithDeps(t, hostedMode, persistence, rbacProvider)
+	router, emailer := newHostedSignupTestRouterWithDepsAndPublicURL(t, hostedMode, persistence, rbacProvider, "https://pulse.example.test")
 	return router, persistence, rbacProvider, emailer, baseDir
 }
 
 func newHostedSignupTestRouterWithDeps(t *testing.T, hostedMode bool, persistence *config.MultiTenantPersistence, rbacProvider HostedRBACProvider) (*Router, *captureMagicLinkEmailer) {
+	t.Helper()
+
+	return newHostedSignupTestRouterWithDepsAndPublicURL(t, hostedMode, persistence, rbacProvider, "https://pulse.example.test")
+}
+
+func newHostedSignupTestRouterWithDepsAndPublicURL(t *testing.T, hostedMode bool, persistence *config.MultiTenantPersistence, rbacProvider HostedRBACProvider, publicURL string) (*Router, *captureMagicLinkEmailer) {
 	t.Helper()
 
 	emailer := &captureMagicLinkEmailer{}
@@ -202,7 +230,10 @@ func newHostedSignupTestRouterWithDeps(t *testing.T, hostedMode bool, persistenc
 		router.signupRateLimiter.Stop()
 	})
 
-	hostedSignupHandlers := NewHostedSignupHandlers(persistence, rbacProvider, magicLinks, nil, hostedMode)
+	resolvePublicURL := func(_ *http.Request) string {
+		return strings.TrimSpace(publicURL)
+	}
+	hostedSignupHandlers := NewHostedSignupHandlers(persistence, rbacProvider, magicLinks, resolvePublicURL, hostedMode)
 	router.registerHostedRoutes(hostedSignupHandlers, nil, nil)
 
 	return router, emailer

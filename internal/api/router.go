@@ -2707,6 +2707,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				"/api/public/signup",             // Hosted mode: public signup
 				"/api/public/magic-link/request", // Hosted mode: request magic link
 				"/api/public/magic-link/verify",  // Hosted mode: verify magic link
+				"/api/webhooks/stripe",           // Hosted mode: Stripe webhook (signature verification is auth)
 				config.DefaultOIDCCallbackPath,
 				"/install-docker-agent.sh",       // Docker agent bootstrap script must be public
 				"/install-container-agent.sh",    // Container agent bootstrap script must be public
@@ -2919,6 +2920,12 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 func (r *Router) capturePublicURLFromRequest(req *http.Request) {
 	if req == nil || r == nil || r.config == nil {
+		return
+	}
+
+	// Hosted mode must never derive a "public" URL from inbound requests.
+	// It is too easy to abuse Host / forwarded headers and poison config.
+	if r.hostedMode {
 		return
 	}
 
@@ -7936,6 +7943,18 @@ func (r *Router) handleDownloadDockerInstallerScript(w http.ResponseWriter, req 
 }
 
 func (r *Router) resolvePublicURL(req *http.Request) string {
+	// Hosted mode must never fall back to request host or localhost.
+	// A canonical externally-reachable URL must be configured via PublicURL / AgentConnectURL.
+	if r != nil && r.hostedMode {
+		if agentConnectURL := strings.TrimSpace(r.config.AgentConnectURL); agentConnectURL != "" {
+			return strings.TrimRight(agentConnectURL, "/")
+		}
+		if publicURL := strings.TrimSpace(r.config.PublicURL); publicURL != "" {
+			return strings.TrimRight(publicURL, "/")
+		}
+		return ""
+	}
+
 	if agentConnectURL := strings.TrimSpace(r.config.AgentConnectURL); agentConnectURL != "" {
 		return strings.TrimRight(agentConnectURL, "/")
 	}

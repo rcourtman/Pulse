@@ -21,11 +21,11 @@ func (r *Router) registerHostedRoutes(hostedSignupHandlers *HostedSignupHandlers
 	hostedOrgAdminHandlers := NewHostedOrgAdminHandlers(r.multiTenant, r.hostedMode)
 	r.mux.HandleFunc(
 		"GET /api/admin/orgs/{id}/billing-state",
-		RequireAdmin(routerConfig, RequireScope(config.ScopeSettingsRead, billingHandlers.HandleGetBillingState)),
+		RequireOrgOwnerOrPlatformAdmin(routerConfig, r.multiTenant, RequireScope(config.ScopeSettingsRead, billingHandlers.HandleGetBillingState)),
 	)
 	r.mux.HandleFunc(
 		"PUT /api/admin/orgs/{id}/billing-state",
-		RequireAdmin(routerConfig, RequireScope(config.ScopeSettingsWrite, billingHandlers.HandlePutBillingState)),
+		RequireOrgOwnerOrPlatformAdmin(routerConfig, r.multiTenant, RequireScope(config.ScopeSettingsWrite, billingHandlers.HandlePutBillingState)),
 	)
 	r.mux.HandleFunc(
 		"POST /api/admin/orgs/{id}/suspend",
@@ -42,6 +42,10 @@ func (r *Router) registerHostedRoutes(hostedSignupHandlers *HostedSignupHandlers
 	r.mux.HandleFunc(
 		"GET /api/hosted/organizations",
 		RequireAdmin(routerConfig, RequireScope(config.ScopeSettingsRead, hostedOrgAdminHandlers.HandleListOrganizations)),
+	)
+	r.mux.HandleFunc(
+		"POST /api/admin/orgs/{id}/agent-install-command",
+		RequireAdmin(routerConfig, RequireScope(config.ScopeSettingsWrite, r.handleHostedTenantAgentInstallCommand)),
 	)
 
 	if hostedSignupHandlers != nil {

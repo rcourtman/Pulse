@@ -124,6 +124,22 @@ func (mtp *MultiTenantPersistence) LoadOrganization(orgID string) (*models.Organ
 	return org, nil
 }
 
+// LoadOrganizationStrict loads organization metadata from org.json and returns an error when it does not exist.
+// This is useful for hosted control-plane paths that need to distinguish "missing org metadata" from defaults.
+func (mtp *MultiTenantPersistence) LoadOrganizationStrict(orgID string) (*models.Organization, error) {
+	if mtp == nil {
+		return nil, fmt.Errorf("no persistence configured")
+	}
+	if orgID != "default" && !mtp.OrgExists(orgID) {
+		return nil, os.ErrNotExist
+	}
+	persistence, err := mtp.GetPersistence(orgID)
+	if err != nil {
+		return nil, err
+	}
+	return persistence.LoadOrganization()
+}
+
 // SaveOrganization saves the organization metadata.
 func (mtp *MultiTenantPersistence) SaveOrganization(org *models.Organization) error {
 	persistence, err := mtp.GetPersistence(org.ID)

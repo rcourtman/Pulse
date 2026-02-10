@@ -117,6 +117,7 @@ var publicPathsAllowlist = []string{
 	"/api/public/signup",
 	"/api/public/magic-link/request",
 	"/api/public/magic-link/verify",
+	"/api/webhooks/stripe",
 	"/install-docker-agent.sh",
 	"/install-container-agent.sh",
 	"/download/pulse-docker-agent",

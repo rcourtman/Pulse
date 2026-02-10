@@ -105,9 +105,14 @@ func (h *MagicLinkHandlers) HandlePublicMagicLinkRequest(w http.ResponseWriter, 
 	if h.resolvePublicURL != nil {
 		baseURL = h.resolvePublicURL(r)
 	}
+	// Hosted mode must never fall back to request Host header (host header injection risk).
+	// If public URL isn't configured, fail closed by not sending any email.
 	if baseURL == "" {
-		// Fall back to request host; hosted deployments should provide PublicURL/AgentConnectURL.
-		baseURL = "https://" + r.Host
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"success": true,
+			"message": "If that email is registered, you'll receive a magic link shortly.",
+		})
+		return
 	}
 
 	if err := h.service.SendMagicLink(email, orgID, token, baseURL); err != nil {

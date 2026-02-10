@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license/entitlements"
+	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
 func TestBillingStateGetReturnsDefaultWhenMissing(t *testing.T) {
@@ -190,10 +192,15 @@ func newBillingStateTestRouter(t *testing.T, hostedMode bool) (*Router, string) 
 	t.Helper()
 
 	baseDir := t.TempDir()
+	hashed, err := internalauth.HashPassword("Password!1")
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
 	router := &Router{
-		mux:        http.NewServeMux(),
-		config:     &config.Config{DataPath: baseDir},
-		hostedMode: hostedMode,
+		mux:         http.NewServeMux(),
+		config:      &config.Config{DataPath: baseDir, AuthUser: "admin", AuthPass: hashed},
+		multiTenant: config.NewMultiTenantPersistence(baseDir),
+		hostedMode:  hostedMode,
 	}
 	router.registerHostedRoutes(nil, nil, nil)
 	t.Cleanup(func() {
@@ -210,6 +217,7 @@ func doBillingStateRequest(router *Router, method, path, body string) *httptest.
 	if method == http.MethodPut {
 		req.Header.Set("Content-Type", "application/json")
 	}
+	req.Header.Set("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte("admin:Password!1")))
 	rec := httptest.NewRecorder()
 	router.mux.ServeHTTP(rec, req)
 	return rec

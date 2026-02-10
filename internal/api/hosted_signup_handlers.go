@@ -174,8 +174,11 @@ func (h *HostedSignupHandlers) HandlePublicSignup(w http.ResponseWriter, r *http
 		baseURL = h.publicURL(r)
 	}
 	if baseURL == "" {
-		// Best-effort fallback; hosted deployments should set PublicURL/AgentConnectURL.
-		baseURL = "https://" + r.Host
+		// Hosted mode must have a configured canonical URL for external links.
+		// Never fall back to request Host header (host header injection risk).
+		cleanupProvisioning()
+		writeErrorResponse(w, http.StatusServiceUnavailable, "public_url_missing", "Public URL is not configured", nil)
+		return
 	}
 	if err := h.magicLinks.SendMagicLink(userID, orgID, token, baseURL); err != nil {
 		cleanupProvisioning()
