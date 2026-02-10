@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
 	"github.com/rs/zerolog/log"
 	stripelib "github.com/stripe/stripe-go/v82"
 	"github.com/stripe/stripe-go/v82/webhook"
@@ -98,14 +99,14 @@ func (h *WebhookHandler) handleEvent(r *http.Request, event *stripelib.Event) er
 		if err := json.Unmarshal(event.Data.Raw, &sub); err != nil {
 			return fmt.Errorf("decode subscription: %w", err)
 		}
-		return h.provisioner.HandleSubscriptionUpdated(r.Context(), sub)
+		return h.routeSubscriptionUpdated(r, sub)
 
 	case "customer.subscription.deleted":
 		var sub Subscription
 		if err := json.Unmarshal(event.Data.Raw, &sub); err != nil {
 			return fmt.Errorf("decode subscription: %w", err)
 		}
-		return h.provisioner.HandleSubscriptionDeleted(r.Context(), sub)
+		return h.routeSubscriptionDeleted(r, sub)
 
 	default:
 		log.Info().
@@ -114,6 +115,46 @@ func (h *WebhookHandler) handleEvent(r *http.Request, event *stripelib.Event) er
 			Msg("Stripe webhook ignored (unhandled type)")
 		return nil
 	}
+}
+
+func (h *WebhookHandler) routeSubscriptionUpdated(r *http.Request, sub Subscription) error {
+	customerID := strings.TrimSpace(sub.Customer)
+	if customerID != "" {
+		sa, err := h.provisioner.registry.GetStripeAccountByCustomerID(customerID)
+		if err != nil {
+			return fmt.Errorf("lookup stripe account by customer: %w", err)
+		}
+		if sa != nil {
+			acct, err := h.provisioner.registry.GetAccount(sa.AccountID)
+			if err != nil {
+				return fmt.Errorf("lookup account: %w", err)
+			}
+			if acct != nil && acct.Kind == registry.AccountKindMSP {
+				return h.provisioner.HandleMSPSubscriptionUpdated(r.Context(), sub)
+			}
+		}
+	}
+	return h.provisioner.HandleSubscriptionUpdated(r.Context(), sub)
+}
+
+func (h *WebhookHandler) routeSubscriptionDeleted(r *http.Request, sub Subscription) error {
+	customerID := strings.TrimSpace(sub.Customer)
+	if customerID != "" {
+		sa, err := h.provisioner.registry.GetStripeAccountByCustomerID(customerID)
+		if err != nil {
+			return fmt.Errorf("lookup stripe account by customer: %w", err)
+		}
+		if sa != nil {
+			acct, err := h.provisioner.registry.GetAccount(sa.AccountID)
+			if err != nil {
+				return fmt.Errorf("lookup account: %w", err)
+			}
+			if acct != nil && acct.Kind == registry.AccountKindMSP {
+				return h.provisioner.HandleMSPSubscriptionDeleted(r.Context(), sub)
+			}
+		}
+	}
+	return h.provisioner.HandleSubscriptionDeleted(r.Context(), sub)
 }
 
 // CheckoutSession is a minimal representation of a Stripe checkout.session event.

@@ -7,6 +7,8 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/admin"
 	cpauth "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/auth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/docker"
+	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/handoff"
+	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/portal"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
 	cpstripe "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/stripe"
 )
@@ -99,4 +101,12 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 
 	mux.Handle("/api/accounts/{account_id}/tenants", admin.AdminKeyMiddleware(deps.Config.AdminKey, tenantsCollection))
 	mux.Handle("/api/accounts/{account_id}/tenants/{tenant_id}", admin.AdminKeyMiddleware(deps.Config.AdminKey, tenant))
+
+	// Tenant switching handoff (admin-key authenticated for now; session auth in M-4)
+	handoffHandler := handoff.HandleHandoff(deps.Registry, deps.Config.TenantsDir())
+	mux.Handle("/api/accounts/{account_id}/tenants/{tenant_id}/handoff", admin.AdminKeyMiddleware(deps.Config.AdminKey, handoffHandler))
+
+	// MSP portal API (admin-key authenticated for now; session auth in M-4)
+	mux.Handle("/api/portal/dashboard", admin.AdminKeyMiddleware(deps.Config.AdminKey, portal.HandlePortalDashboard(deps.Registry)))
+	mux.Handle("/api/portal/workspaces/{tenant_id}", admin.AdminKeyMiddleware(deps.Config.AdminKey, portal.HandlePortalWorkspaceDetail(deps.Registry)))
 }

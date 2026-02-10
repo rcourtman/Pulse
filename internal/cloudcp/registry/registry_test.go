@@ -59,6 +59,32 @@ func TestGenerateTenantID_CrockfordCharset(t *testing.T) {
 	}
 }
 
+func TestGenerateAccountID(t *testing.T) {
+	id, err := GenerateAccountID()
+	if err != nil {
+		t.Fatalf("GenerateAccountID: %v", err)
+	}
+	if !strings.HasPrefix(id, "a_") {
+		t.Errorf("expected prefix a_, got %q", id)
+	}
+	if len(id) != 12 { // "a_" + 10 chars
+		t.Errorf("expected length 12, got %d (%q)", len(id), id)
+	}
+}
+
+func TestGenerateUserID(t *testing.T) {
+	id, err := GenerateUserID()
+	if err != nil {
+		t.Fatalf("GenerateUserID: %v", err)
+	}
+	if !strings.HasPrefix(id, "u_") {
+		t.Errorf("expected prefix u_, got %q", id)
+	}
+	if len(id) != 12 { // "u_" + 10 chars
+		t.Errorf("expected length 12, got %d (%q)", len(id), id)
+	}
+}
+
 func TestCRUD(t *testing.T) {
 	reg := newTestRegistry(t)
 
@@ -137,6 +163,226 @@ func TestCRUD(t *testing.T) {
 	}
 }
 
+func TestAccountCRUD(t *testing.T) {
+	reg := newTestRegistry(t)
+
+	accountID, err := GenerateAccountID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := &Account{
+		ID:          accountID,
+		Kind:        AccountKindMSP,
+		DisplayName: "Test MSP",
+	}
+
+	// Create
+	if err := reg.CreateAccount(a); err != nil {
+		t.Fatalf("CreateAccount: %v", err)
+	}
+	if a.CreatedAt.IsZero() {
+		t.Error("CreatedAt should be set")
+	}
+	if a.UpdatedAt.IsZero() {
+		t.Error("UpdatedAt should be set")
+	}
+
+	// Get
+	got, err := reg.GetAccount(accountID)
+	if err != nil {
+		t.Fatalf("GetAccount: %v", err)
+	}
+	if got == nil {
+		t.Fatal("GetAccount returned nil")
+	}
+	if got.Kind != AccountKindMSP {
+		t.Errorf("Kind = %q, want %q", got.Kind, AccountKindMSP)
+	}
+	if got.DisplayName != "Test MSP" {
+		t.Errorf("DisplayName = %q, want %q", got.DisplayName, "Test MSP")
+	}
+
+	// Update
+	got.DisplayName = "Renamed MSP"
+	if err := reg.UpdateAccount(got); err != nil {
+		t.Fatalf("UpdateAccount: %v", err)
+	}
+	got2, err := reg.GetAccount(accountID)
+	if err != nil {
+		t.Fatalf("GetAccount after update: %v", err)
+	}
+	if got2.DisplayName != "Renamed MSP" {
+		t.Errorf("DisplayName after update = %q, want %q", got2.DisplayName, "Renamed MSP")
+	}
+
+	// List
+	accounts, err := reg.ListAccounts()
+	if err != nil {
+		t.Fatalf("ListAccounts: %v", err)
+	}
+	if len(accounts) != 1 {
+		t.Fatalf("expected 1 account, got %d", len(accounts))
+	}
+	if accounts[0].ID != accountID {
+		t.Errorf("accounts[0].ID = %q, want %q", accounts[0].ID, accountID)
+	}
+}
+
+func TestUserCRUD(t *testing.T) {
+	reg := newTestRegistry(t)
+
+	userID, err := GenerateUserID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	u := &User{
+		ID:    userID,
+		Email: "user@example.com",
+	}
+
+	// Create
+	if err := reg.CreateUser(u); err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	if u.CreatedAt.IsZero() {
+		t.Error("CreatedAt should be set")
+	}
+
+	// Get by ID
+	got, err := reg.GetUser(userID)
+	if err != nil {
+		t.Fatalf("GetUser: %v", err)
+	}
+	if got == nil {
+		t.Fatal("GetUser returned nil")
+	}
+	if got.Email != "user@example.com" {
+		t.Errorf("Email = %q, want %q", got.Email, "user@example.com")
+	}
+	if got.LastLoginAt != nil {
+		t.Errorf("LastLoginAt = %v, want nil", got.LastLoginAt)
+	}
+
+	// Get by email
+	got2, err := reg.GetUserByEmail("user@example.com")
+	if err != nil {
+		t.Fatalf("GetUserByEmail: %v", err)
+	}
+	if got2 == nil || got2.ID != userID {
+		t.Fatalf("GetUserByEmail returned %+v, want id=%q", got2, userID)
+	}
+
+	// Update last login
+	before := time.Now().UTC()
+	if err := reg.UpdateUserLastLogin(userID); err != nil {
+		t.Fatalf("UpdateUserLastLogin: %v", err)
+	}
+	after := time.Now().UTC()
+
+	got3, err := reg.GetUser(userID)
+	if err != nil {
+		t.Fatalf("GetUser after last login update: %v", err)
+	}
+	if got3.LastLoginAt == nil {
+		t.Fatal("LastLoginAt should be set")
+	}
+	ll := *got3.LastLoginAt
+	if ll.Before(before.Add(-2*time.Second)) || ll.After(after.Add(2*time.Second)) {
+		t.Fatalf("LastLoginAt=%s out of expected range [%s, %s]", ll, before, after)
+	}
+}
+
+func TestMembershipCRUD(t *testing.T) {
+	reg := newTestRegistry(t)
+
+	accountID, err := GenerateAccountID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	userID, err := GenerateUserID()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := reg.CreateAccount(&Account{ID: accountID, Kind: AccountKindMSP, DisplayName: "Account"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateUser(&User{ID: userID, Email: "member@example.com"}); err != nil {
+		t.Fatal(err)
+	}
+
+	m := &AccountMembership{
+		AccountID: accountID,
+		UserID:    userID,
+		Role:      MemberRoleOwner,
+	}
+
+	// Create
+	if err := reg.CreateMembership(m); err != nil {
+		t.Fatalf("CreateMembership: %v", err)
+	}
+	if m.CreatedAt.IsZero() {
+		t.Error("CreatedAt should be set")
+	}
+
+	// Get
+	got, err := reg.GetMembership(accountID, userID)
+	if err != nil {
+		t.Fatalf("GetMembership: %v", err)
+	}
+	if got == nil {
+		t.Fatal("GetMembership returned nil")
+	}
+	if got.Role != MemberRoleOwner {
+		t.Errorf("Role = %q, want %q", got.Role, MemberRoleOwner)
+	}
+
+	// List by account
+	members, err := reg.ListMembersByAccount(accountID)
+	if err != nil {
+		t.Fatalf("ListMembersByAccount: %v", err)
+	}
+	if len(members) != 1 {
+		t.Fatalf("expected 1 member, got %d", len(members))
+	}
+	if members[0].UserID != userID {
+		t.Errorf("members[0].UserID = %q, want %q", members[0].UserID, userID)
+	}
+
+	// List accounts by user
+	accounts, err := reg.ListAccountsByUser(userID)
+	if err != nil {
+		t.Fatalf("ListAccountsByUser: %v", err)
+	}
+	if len(accounts) != 1 || accounts[0] != accountID {
+		t.Fatalf("accounts=%v, want [%q]", accounts, accountID)
+	}
+
+	// Update role
+	if err := reg.UpdateMembershipRole(accountID, userID, MemberRoleAdmin); err != nil {
+		t.Fatalf("UpdateMembershipRole: %v", err)
+	}
+	got2, err := reg.GetMembership(accountID, userID)
+	if err != nil {
+		t.Fatalf("GetMembership after role update: %v", err)
+	}
+	if got2.Role != MemberRoleAdmin {
+		t.Errorf("Role after update = %q, want %q", got2.Role, MemberRoleAdmin)
+	}
+
+	// Delete
+	if err := reg.DeleteMembership(accountID, userID); err != nil {
+		t.Fatalf("DeleteMembership: %v", err)
+	}
+	got3, err := reg.GetMembership(accountID, userID)
+	if err != nil {
+		t.Fatalf("GetMembership after delete: %v", err)
+	}
+	if got3 != nil {
+		t.Fatalf("expected nil membership after delete, got %+v", got3)
+	}
+}
+
 func TestList(t *testing.T) {
 	reg := newTestRegistry(t)
 
@@ -196,6 +442,46 @@ func TestListByState(t *testing.T) {
 	}
 	if len(suspended) != 1 {
 		t.Errorf("expected 1 suspended, got %d", len(suspended))
+	}
+}
+
+func TestListByAccountID(t *testing.T) {
+	reg := newTestRegistry(t)
+
+	accountID, err := GenerateAccountID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateAccount(&Account{ID: accountID, Kind: AccountKindMSP, DisplayName: "Account"}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := reg.Create(&Tenant{ID: "t-ACCNT0001", AccountID: accountID, State: TenantStateActive}); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.Create(&Tenant{ID: "t-ACCNT0002", AccountID: accountID, State: TenantStateActive}); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.Create(&Tenant{ID: "t-ACCNT0003", State: TenantStateActive}); err != nil {
+		t.Fatal(err)
+	}
+
+	tenants, err := reg.ListByAccountID(accountID)
+	if err != nil {
+		t.Fatalf("ListByAccountID: %v", err)
+	}
+	if len(tenants) != 2 {
+		t.Fatalf("expected 2 tenants, got %d", len(tenants))
+	}
+	seen := make(map[string]bool)
+	for _, tnt := range tenants {
+		seen[tnt.ID] = true
+		if tnt.AccountID != accountID {
+			t.Errorf("tenant %s AccountID=%q, want %q", tnt.ID, tnt.AccountID, accountID)
+		}
+	}
+	if !seen["t-ACCNT0001"] || !seen["t-ACCNT0002"] {
+		t.Fatalf("expected tenants t-ACCNT0001 and t-ACCNT0002, got %+v", tenants)
 	}
 }
 
@@ -278,5 +564,109 @@ func TestNewTenantRegistry_InvalidDir(t *testing.T) {
 		if _, statErr := os.Stat("/proc/nonexistent/path"); statErr != nil {
 			t.Log("Skipping: path creation succeeded unexpectedly")
 		}
+	}
+}
+
+func TestStripeAccountCRUD(t *testing.T) {
+	reg := newTestRegistry(t)
+
+	accountID, err := GenerateAccountID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateAccount(&Account{
+		ID:          accountID,
+		Kind:        AccountKindMSP,
+		DisplayName: "Test MSP",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	trialEnds := time.Now().UTC().Add(7 * 24 * time.Hour).Unix()
+	periodEnd := time.Now().UTC().Add(30 * 24 * time.Hour).Unix()
+
+	sa := &StripeAccount{
+		AccountID:                 accountID,
+		StripeCustomerID:          "cus_test_123",
+		StripeSubscriptionID:      "sub_test_123",
+		StripeSubItemWorkspacesID: "si_workspaces_123",
+		PlanVersion:               "msp_hosted_v1",
+		SubscriptionState:         "trial",
+		TrialEndsAt:               &trialEnds,
+		CurrentPeriodEnd:          &periodEnd,
+	}
+
+	// Create
+	if err := reg.CreateStripeAccount(sa); err != nil {
+		t.Fatalf("CreateStripeAccount: %v", err)
+	}
+
+	// Get by account id
+	got, err := reg.GetStripeAccount(accountID)
+	if err != nil {
+		t.Fatalf("GetStripeAccount: %v", err)
+	}
+	if got == nil {
+		t.Fatal("GetStripeAccount returned nil")
+	}
+	if got.StripeCustomerID != "cus_test_123" {
+		t.Errorf("StripeCustomerID = %q, want %q", got.StripeCustomerID, "cus_test_123")
+	}
+	if got.StripeSubscriptionID != "sub_test_123" {
+		t.Errorf("StripeSubscriptionID = %q, want %q", got.StripeSubscriptionID, "sub_test_123")
+	}
+
+	// Get by customer id
+	got2, err := reg.GetStripeAccountByCustomerID("cus_test_123")
+	if err != nil {
+		t.Fatalf("GetStripeAccountByCustomerID: %v", err)
+	}
+	if got2 == nil || got2.AccountID != accountID {
+		t.Fatalf("expected accountID %q, got %#v", accountID, got2)
+	}
+
+	// Update
+	got2.SubscriptionState = "active"
+	got2.PlanVersion = "msp_hosted_v2"
+	got2.StripeSubscriptionID = "sub_test_456"
+	if err := reg.UpdateStripeAccount(got2); err != nil {
+		t.Fatalf("UpdateStripeAccount: %v", err)
+	}
+
+	got3, err := reg.GetStripeAccount(accountID)
+	if err != nil {
+		t.Fatalf("GetStripeAccount after update: %v", err)
+	}
+	if got3.SubscriptionState != "active" {
+		t.Errorf("SubscriptionState = %q, want %q", got3.SubscriptionState, "active")
+	}
+	if got3.PlanVersion != "msp_hosted_v2" {
+		t.Errorf("PlanVersion = %q, want %q", got3.PlanVersion, "msp_hosted_v2")
+	}
+	if got3.StripeSubscriptionID != "sub_test_456" {
+		t.Errorf("StripeSubscriptionID = %q, want %q", got3.StripeSubscriptionID, "sub_test_456")
+	}
+	if got3.UpdatedAt == 0 {
+		t.Error("UpdatedAt should be set")
+	}
+}
+
+func TestStripeEventIdempotency(t *testing.T) {
+	reg := newTestRegistry(t)
+
+	already, err := reg.RecordStripeEvent("evt_test_123", "customer.subscription.updated")
+	if err != nil {
+		t.Fatalf("RecordStripeEvent: %v", err)
+	}
+	if already {
+		t.Fatalf("expected alreadyProcessed=false on first insert")
+	}
+
+	already2, err := reg.RecordStripeEvent("evt_test_123", "customer.subscription.updated")
+	if err != nil {
+		t.Fatalf("RecordStripeEvent duplicate: %v", err)
+	}
+	if !already2 {
+		t.Fatalf("expected alreadyProcessed=true on duplicate insert")
 	}
 }
