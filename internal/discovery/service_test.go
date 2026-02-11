@@ -205,10 +205,10 @@ func TestHistoryEntryAccessors(t *testing.T) {
 
 func TestNewServiceDefaults(t *testing.T) {
 	service := NewService(nil, 0, "", nil)
-	if service.interval != 5*time.Minute {
+	if service.interval != defaultScanInterval {
 		t.Fatalf("expected default interval, got %v", service.interval)
 	}
-	if service.subnet != "auto" {
+	if service.subnet != defaultSubnet {
 		t.Fatalf("expected auto subnet, got %s", service.subnet)
 	}
 	if service.cfgProvider == nil {
@@ -285,6 +285,100 @@ func TestSetInterval(t *testing.T) {
 	service.SetInterval(2 * time.Minute)
 	if service.interval != 2*time.Minute {
 		t.Fatalf("expected interval update")
+	}
+}
+
+func TestSetIntervalNonPositiveUsesDefault(t *testing.T) {
+	service := NewService(nil, time.Minute, "auto", func() config.DiscoveryConfig {
+		return config.DefaultDiscoveryConfig()
+	})
+	service.SetInterval(0)
+	if service.interval != defaultScanInterval {
+		t.Fatalf("expected interval to normalize to default, got %v", service.interval)
+	}
+
+	service.SetInterval(-1 * time.Minute)
+	if service.interval != defaultScanInterval {
+		t.Fatalf("expected negative interval to normalize to default, got %v", service.interval)
+	}
+}
+
+func TestNewServiceNormalizesInvalidInput(t *testing.T) {
+	service := NewService(nil, -1*time.Second, "not-a-subnet", nil)
+	if service.interval != defaultScanInterval {
+		t.Fatalf("expected default interval for invalid input, got %v", service.interval)
+	}
+	if service.subnet != defaultSubnet {
+		t.Fatalf("expected default subnet for invalid input, got %s", service.subnet)
+	}
+}
+
+func TestSetSubnetNormalizesAndFallbacks(t *testing.T) {
+	service := NewService(nil, time.Minute, "auto", nil)
+
+	service.SetSubnet(" 192.168.1.10/24 , invalid ,10.0.0.0/8,192.168.1.0/24 ")
+	if service.subnet != "192.168.1.0/24,10.0.0.0/8" {
+		t.Fatalf("expected normalized subnet list, got %q", service.subnet)
+	}
+
+	service.SetSubnet("  ")
+	if service.subnet != defaultSubnet {
+		t.Fatalf("expected blank subnet to normalize to %q, got %q", defaultSubnet, service.subnet)
+	}
+}
+
+func TestNormalizeDiscoverySubnet(t *testing.T) {
+	tests := []struct {
+		name   string
+		input  string
+		expect string
+	}{
+		{
+			name:   "blank defaults to auto",
+			input:  "   ",
+			expect: defaultSubnet,
+		},
+		{
+			name:   "auto canonicalized",
+			input:  "AUTO",
+			expect: defaultSubnet,
+		},
+		{
+			name:   "invalid defaults to auto",
+			input:  "invalid",
+			expect: defaultSubnet,
+		},
+		{
+			name:   "multiple valid CIDRs deduplicated and canonicalized",
+			input:  "192.168.1.25/24, 10.0.0.0/8, 192.168.1.0/24",
+			expect: "192.168.1.0/24,10.0.0.0/8",
+		},
+		{
+			name:   "mixed valid and invalid keeps valid",
+			input:  "invalid,172.16.10.0/24",
+			expect: "172.16.10.0/24",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := normalizeDiscoverySubnet(tt.input)
+			if got != tt.expect {
+				t.Fatalf("normalizeDiscoverySubnet(%q) = %q, want %q", tt.input, got, tt.expect)
+			}
+		})
+	}
+}
+
+func TestNormalizeScanInterval(t *testing.T) {
+	if got := normalizeScanInterval(0); got != defaultScanInterval {
+		t.Fatalf("normalizeScanInterval(0) = %v, want %v", got, defaultScanInterval)
+	}
+	if got := normalizeScanInterval(-time.Second); got != defaultScanInterval {
+		t.Fatalf("normalizeScanInterval(-1s) = %v, want %v", got, defaultScanInterval)
+	}
+	if got := normalizeScanInterval(time.Second); got != time.Second {
+		t.Fatalf("normalizeScanInterval(1s) = %v, want 1s", got)
 	}
 }
 
