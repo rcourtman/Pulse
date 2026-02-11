@@ -215,6 +215,27 @@ func TestValidatePulseURL(t *testing.T) {
 			t.Fatalf("expected unsupported scheme to be rejected")
 		}
 	})
+
+	t.Run("RejectUserCredentials", func(t *testing.T) {
+		u := newUpdaterForTest("https://user:pass@pulse.example.com")
+		if err := u.validatePulseURL(); err == nil {
+			t.Fatalf("expected URL with credentials to be rejected")
+		}
+	})
+
+	t.Run("RejectQuery", func(t *testing.T) {
+		u := newUpdaterForTest("https://pulse.example.com?redirect=1")
+		if err := u.validatePulseURL(); err == nil {
+			t.Fatalf("expected URL with query to be rejected")
+		}
+	})
+
+	t.Run("RejectFragment", func(t *testing.T) {
+		u := newUpdaterForTest("https://pulse.example.com#frag")
+		if err := u.validatePulseURL(); err == nil {
+			t.Fatalf("expected URL with fragment to be rejected")
+		}
+	})
 }
 
 func TestPerformUpdateWithExecPathInvalidAgentName(t *testing.T) {
@@ -842,6 +863,32 @@ func TestPerformUpdateErrors(t *testing.T) {
 
 		if err := u.performUpdateWithExecPath(context.Background(), execPath); err == nil {
 			t.Fatalf("expected size error")
+		}
+	})
+
+	t.Run("TooLargeContentLength", func(t *testing.T) {
+		_, execPath := writeTempExec(t)
+		u := newUpdaterForTest("https://example")
+		data := testBinary()
+
+		origMax := maxBinarySizeBytes
+		t.Cleanup(func() { maxBinarySizeBytes = origMax })
+		maxBinarySizeBytes = 8
+
+		u.client = &http.Client{
+			Transport: roundTripperFunc(func(r *http.Request) (*http.Response, error) {
+				return &http.Response{
+					StatusCode:    http.StatusOK,
+					Status:        "200 OK",
+					Body:          io.NopCloser(bytes.NewReader(data)),
+					ContentLength: maxBinarySizeBytes + 1,
+					Header:        http.Header{"X-Checksum-Sha256": []string{checksum(data)}},
+				}, nil
+			}),
+		}
+
+		if err := u.performUpdateWithExecPath(context.Background(), execPath); err == nil {
+			t.Fatalf("expected size error from content length")
 		}
 	})
 

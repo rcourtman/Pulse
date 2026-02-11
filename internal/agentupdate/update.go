@@ -30,6 +30,9 @@ const (
 	// maxBinarySize is the maximum allowed size for downloaded binaries (100 MB)
 	maxBinarySize = 100 * 1024 * 1024
 
+	// maxVersionResponseSize is the maximum allowed size for version endpoint responses.
+	maxVersionResponseSize = 16 * 1024
+
 	// downloadTimeout is the maximum time allowed for downloading a binary
 	downloadTimeout = 5 * time.Minute
 )
@@ -113,6 +116,10 @@ func New(cfg Config) *Updater {
 		client: &http.Client{
 			Transport: transport,
 			Timeout:   downloadTimeout,
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				// Prevent credential leakage (X-API-Token / Authorization) on redirects.
+				return fmt.Errorf("server returned redirect to %s", req.URL.Redacted())
+			},
 		},
 		logger: logger,
 	}
@@ -251,7 +258,7 @@ func (u *Updater) getServerVersion(ctx context.Context) (string, error) {
 		Version string `json:"version"`
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&versionResp); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxVersionResponseSize)).Decode(&versionResp); err != nil {
 		return "", fmt.Errorf("failed to decode response: %w", err)
 	}
 
@@ -363,6 +370,12 @@ func (u *Updater) validatePulseURL() error {
 	if parsed.Scheme == "" || parsed.Host == "" {
 		return fmt.Errorf("Pulse URL must include scheme and host")
 	}
+	if parsed.User != nil {
+		return fmt.Errorf("Pulse URL must not include user credentials")
+	}
+	if parsed.RawQuery != "" || parsed.Fragment != "" {
+		return fmt.Errorf("Pulse URL must not include query or fragment")
+	}
 
 	scheme := strings.ToLower(parsed.Scheme)
 	switch scheme {
@@ -443,6 +456,9 @@ func (u *Updater) performUpdateWithExecPath(ctx context.Context, execPath string
 		return lastErr
 	}
 	defer resp.Body.Close()
+	if resp.ContentLength > maxBinarySizeBytes {
+		return fmt.Errorf("downloaded binary exceeds maximum size (%d bytes)", maxBinarySizeBytes)
+	}
 
 	// Verify checksum if provided
 	checksumHeader := strings.TrimSpace(resp.Header.Get("X-Checksum-Sha256"))
