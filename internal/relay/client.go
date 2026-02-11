@@ -77,6 +77,7 @@ type Client struct {
 	lastError    string
 
 	// Lifecycle
+	lifecycleMu sync.Mutex
 	cancel context.CancelFunc
 	done   chan struct{}
 }
@@ -89,14 +90,30 @@ func NewClient(cfg Config, deps ClientDeps, logger zerolog.Logger) *Client {
 		proxy:    NewHTTPProxy(deps.LocalAddr, logger),
 		logger:   logger,
 		channels: make(map[uint32]*channelState),
-		done:     make(chan struct{}),
 	}
 }
 
 // Run starts the reconnect loop. Blocks until ctx is cancelled.
 func (c *Client) Run(ctx context.Context) error {
-	ctx, c.cancel = context.WithCancel(ctx)
-	defer close(c.done)
+	runCtx, runCancel := context.WithCancel(ctx)
+	runDone := make(chan struct{})
+
+	c.lifecycleMu.Lock()
+	c.cancel = runCancel
+	c.done = runDone
+	c.lifecycleMu.Unlock()
+
+	defer func() {
+		c.lifecycleMu.Lock()
+		if c.done == runDone {
+			c.done = nil
+			c.cancel = nil
+		}
+		c.lifecycleMu.Unlock()
+		close(runDone)
+	}()
+
+	ctx = runCtx
 
 	consecutiveFailures := 0
 
@@ -151,12 +168,21 @@ func (c *Client) Run(ctx context.Context) error {
 
 // Close stops the client and closes the connection.
 func (c *Client) Close() {
-	if c.cancel != nil {
-		c.cancel()
+	c.lifecycleMu.Lock()
+	cancel := c.cancel
+	done := c.done
+	c.lifecycleMu.Unlock()
+
+	if cancel != nil {
+		cancel()
 	}
+	if done == nil {
+		return
+	}
+
 	// Wait for Run to finish
 	select {
-	case <-c.done:
+	case <-done:
 	case <-time.After(5 * time.Second):
 	}
 }

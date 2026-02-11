@@ -1034,3 +1034,41 @@ func TestClient_SendPushNotificationDisconnected(t *testing.T) {
 		t.Errorf("expected ErrNotConnected, got %v", err)
 	}
 }
+
+func TestClient_CloseBeforeRunReturnsImmediately(t *testing.T) {
+	logger := zerolog.New(zerolog.NewTestWriter(t))
+	client := NewClient(Config{}, ClientDeps{}, logger)
+
+	start := time.Now()
+	client.Close()
+
+	if elapsed := time.Since(start); elapsed > 200*time.Millisecond {
+		t.Fatalf("Close() took too long before Run(): %v", elapsed)
+	}
+}
+
+func TestClient_CloseBeforeRunConcurrentCalls(t *testing.T) {
+	logger := zerolog.New(zerolog.NewTestWriter(t))
+	client := NewClient(Config{}, ClientDeps{}, logger)
+
+	var wg sync.WaitGroup
+	for i := 0; i < 16; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			client.Close()
+		}()
+	}
+
+	waitCh := make(chan struct{})
+	go func() {
+		defer close(waitCh)
+		wg.Wait()
+	}()
+
+	select {
+	case <-waitCh:
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("concurrent Close() calls blocked before Run()")
+	}
+}
