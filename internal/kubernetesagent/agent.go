@@ -7,6 +7,7 @@ import (
 	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -117,7 +118,7 @@ func New(cfg Config) (*Agent, error) {
 
 	restCfg, contextName, err := buildRESTConfig(cfg.KubeconfigPath, cfg.KubeContext)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("build Kubernetes REST config: %w", err)
 	}
 
 	kubeClient, err := kubernetes.NewForConfig(restCfg)
@@ -262,7 +263,7 @@ func (a *Agent) discoverClusterMetadata(ctx context.Context) error {
 
 	version, err := a.kubeClient.Discovery().ServerVersion()
 	if err != nil {
-		return err
+		return fmt.Errorf("discover cluster server version: %w", err)
 	}
 	if version != nil {
 		a.clusterVersion = strings.TrimSpace(version.GitVersion)
@@ -310,7 +311,10 @@ func (a *Agent) flushReports(ctx context.Context) {
 		if err := a.sendReport(ctx, report); err != nil {
 			return
 		}
-		_, _ = a.reportBuffer.Pop()
+		if _, ok := a.reportBuffer.Pop(); !ok {
+			a.logger.Debug().Msg("Failed to remove buffered report after successful send")
+			return
+		}
 	}
 }
 
@@ -341,17 +345,17 @@ func (a *Agent) collectReport(ctx context.Context) (agentsk8s.Report, error) {
 
 	nodes, err := a.collectNodes(ctx)
 	if err != nil {
-		return agentsk8s.Report{}, err
+		return agentsk8s.Report{}, fmt.Errorf("collect nodes: %w", err)
 	}
 
 	pods, err := a.collectPods(ctx)
 	if err != nil {
-		return agentsk8s.Report{}, err
+		return agentsk8s.Report{}, fmt.Errorf("collect pods: %w", err)
 	}
 
 	deployments, err := a.collectDeployments(ctx)
 	if err != nil {
-		return agentsk8s.Report{}, err
+		return agentsk8s.Report{}, fmt.Errorf("collect deployments: %w", err)
 	}
 
 	nodeUsage, podUsage, usageErr := a.collectUsageMetrics(ctx, nodes)
@@ -513,7 +517,7 @@ func parseNodeMetricsPayload(raw []byte) (map[string]agentsk8s.NodeUsage, error)
 	}
 
 	if err := json.Unmarshal(raw, &payload); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unmarshal node metrics payload: %w", err)
 	}
 
 	result := make(map[string]agentsk8s.NodeUsage, len(payload.Items))
@@ -551,7 +555,7 @@ func parsePodMetricsPayload(raw []byte) (map[string]agentsk8s.PodUsage, error) {
 	}
 
 	if err := json.Unmarshal(raw, &payload); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unmarshal pod metrics payload: %w", err)
 	}
 
 	result := make(map[string]agentsk8s.PodUsage, len(payload.Items))
@@ -602,7 +606,7 @@ func parsePodSummaryMetricsPayload(raw []byte) (map[string]podSummaryUsage, erro
 	}
 
 	if err := json.Unmarshal(raw, &payload); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unmarshal pod summary metrics payload: %w", err)
 	}
 
 	result := make(map[string]podSummaryUsage, len(payload.Pods))
@@ -1025,7 +1029,7 @@ func isProblemDeployment(dep appsv1.Deployment) bool {
 	return dep.Status.AvailableReplicas < desired || dep.Status.ReadyReplicas < desired || dep.Status.UpdatedReplicas < desired
 }
 
-func (a *Agent) sendReport(ctx context.Context, report agentsk8s.Report) error {
+func (a *Agent) sendReport(ctx context.Context, report agentsk8s.Report) (retErr error) {
 	payload, err := json.Marshal(report)
 	if err != nil {
 		return fmt.Errorf("marshal report: %w", err)
@@ -1046,10 +1050,22 @@ func (a *Agent) sendReport(ctx context.Context, report agentsk8s.Report) error {
 	if err != nil {
 		return fmt.Errorf("send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			wrappedCloseErr := fmt.Errorf("close response body: %w", closeErr)
+			if retErr != nil {
+				retErr = errors.Join(retErr, wrappedCloseErr)
+				return
+			}
+			retErr = wrappedCloseErr
+		}
+	}()
 
 	if resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4*1024))
+		body, readErr := io.ReadAll(io.LimitReader(resp.Body, 4*1024))
+		if readErr != nil {
+			return fmt.Errorf("read error response body for status %s: %w", resp.Status, readErr)
+		}
 		msg := strings.TrimSpace(string(body))
 		if msg != "" {
 			return fmt.Errorf("pulse responded with status %s: %s", resp.Status, msg)
