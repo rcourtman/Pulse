@@ -274,7 +274,12 @@ func (cw *ConfigWatcher) handleEvents(events <-chan fsnotify.Event, errors <-cha
 			if !ok {
 				return
 			}
-			log.Error().Err(err).Msg("Config watcher error")
+			log.Error().
+				Err(err).
+				Str("env_path", cw.envPath).
+				Str("api_tokens_path", cw.apiTokensPath).
+				Str("mock_env_path", cw.mockEnvPath).
+				Msg("Config watcher error")
 
 		case <-cw.stopChan:
 			return
@@ -355,7 +360,7 @@ func (cw *ConfigWatcher) reloadConfig() {
 	if err != nil {
 		// File might not exist, which is fine (no auth)
 		if !os.IsNotExist(err) {
-			log.Error().Err(err).Msg("Failed to read .env file")
+			log.Error().Err(err).Str("env_path", cw.envPath).Msg("Failed to read .env file")
 			return
 		}
 		envMap = make(map[string]string)
@@ -470,7 +475,10 @@ func (cw *ConfigWatcher) reloadConfig() {
 
 			if globalPersistence != nil {
 				if err := globalPersistence.SaveAPITokens(cw.config.APITokens); err != nil {
-					log.Error().Err(err).Msg("Failed to persist API tokens from .env reload")
+					log.Error().
+						Err(err).
+						Str("api_tokens_path", cw.apiTokensPath).
+						Msg("Failed to persist API tokens from .env reload")
 				}
 			}
 		}
@@ -502,7 +510,7 @@ func (cw *ConfigWatcher) reloadAPITokens() {
 	defer cw.mu.Unlock()
 
 	if globalPersistence == nil {
-		log.Warn().Msg("Config persistence unavailable; cannot reload API tokens")
+		log.Warn().Str("api_tokens_path", cw.apiTokensPath).Msg("Config persistence unavailable; cannot reload API tokens")
 		return
 	}
 
@@ -528,6 +536,7 @@ func (cw *ConfigWatcher) reloadAPITokens() {
 				Int("attempt", attempt).
 				Int("maxRetries", maxRetries).
 				Dur("retryDelay", retryDelay).
+				Str("api_tokens_path", cw.apiTokensPath).
 				Msg("Failed to reload API tokens, retrying...")
 			time.Sleep(retryDelay)
 			retryDelay *= 2 // Exponential backoff
@@ -538,6 +547,7 @@ func (cw *ConfigWatcher) reloadAPITokens() {
 		log.Error().
 			Err(err).
 			Int("existingTokens", existingCount).
+			Str("api_tokens_path", cw.apiTokensPath).
 			Msg("Failed to reload API tokens after retries - preserving existing tokens")
 		// CRITICAL: Keep existing tokens rather than clearing them
 		return
@@ -592,10 +602,10 @@ func (cw *ConfigWatcher) reloadMockConfig() {
 	envMap, err := godotenv.Read(cw.mockEnvPath)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			log.Error().Err(err).Msg("Failed to read mock.env file")
+			log.Error().Err(err).Str("mock_env_path", cw.mockEnvPath).Msg("Failed to read mock.env file")
 			return
 		}
-		log.Warn().Msg("mock.env file not found")
+		log.Warn().Str("mock_env_path", cw.mockEnvPath).Msg("mock.env file not found")
 		return
 	}
 
@@ -623,7 +633,7 @@ func (cw *ConfigWatcher) reloadMockConfig() {
 
 	// Trigger callback to restart backend if set
 	if callback != nil {
-		log.Info().Msg("Triggering backend restart due to mock.env change")
+		log.Info().Str("mock_env_path", cw.mockEnvPath).Msg("Triggering backend restart due to mock.env change")
 		go func() {
 			defer func() {
 				if r := recover(); r != nil {
