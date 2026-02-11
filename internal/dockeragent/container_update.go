@@ -133,7 +133,7 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 	}
 	// Consume the pull response to ensure the pull completes
 	_, _ = io.Copy(io.Discard, pullResp)
-	pullResp.Close()
+	_ = pullResp.Close()
 
 	a.logger.Info().Str("image", imageName).Msg("Successfully pulled latest image")
 

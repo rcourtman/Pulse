@@ -123,7 +123,7 @@ func resolveSymlink(path string) (string, error) {
 func verifyELFMagic(path string) error {
 	f, err := os.Open(path)
 	if err != nil {
-		return err
+		return fmt.Errorf("open file for ELF verification: %w", err)
 	}
 	defer f.Close()
 
@@ -272,11 +272,11 @@ func (a *Agent) selfUpdate(ctx context.Context) error {
 	limitedReader := io.LimitReader(resp.Body, maxBinarySize+1)
 	written, err := io.Copy(tmpFile, io.TeeReader(limitedReader, hasher))
 	if err != nil {
-		tmpFile.Close()
+		_ = tmpFile.Close()
 		return fmt.Errorf("failed to write downloaded binary: %w", err)
 	}
 	if written > maxBinarySize {
-		tmpFile.Close()
+		_ = tmpFile.Close()
 		return fmt.Errorf("downloaded binary exceeds maximum size (%d bytes)", maxBinarySize)
 	}
 	if err := closeFileFn(tmpFile); err != nil {

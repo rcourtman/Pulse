@@ -621,7 +621,7 @@ func stopTimer(timer *time.Timer) {
 func (a *Agent) collectOnce(ctx context.Context) error {
 	report, err := a.buildReport(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("build docker report: %w", err)
 	}
 
 	if err := a.sendReport(ctx, report); err != nil {
@@ -772,7 +772,7 @@ func (a *Agent) sendReportToTarget(ctx context.Context, target TargetConfig, pay
 		if errors.Is(err, ErrStopRequested) {
 			return ErrStopRequested
 		}
-		return err
+		return fmt.Errorf("handle command from %s: %w", target.URL, err)
 	}
 
 	return nil
@@ -848,7 +848,7 @@ func (a *Agent) handleStopCommand(ctx context.Context, target TargetConfig, comm
 
 func (a *Agent) disableSelf(ctx context.Context) error {
 	if err := disableSystemdService(ctx, "pulse-docker-agent"); err != nil {
-		return err
+		return fmt.Errorf("disable systemd service: %w", err)
 	}
 
 	// Remove Unraid startup script if present to prevent restart on reboot.
@@ -907,7 +907,7 @@ func removeFileIfExists(path string) error {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil
 		}
-		return err
+		return fmt.Errorf("remove %s: %w", path, err)
 	}
 	return nil
 }
