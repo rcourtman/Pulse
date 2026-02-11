@@ -28,6 +28,8 @@ type SSEBroadcaster struct {
 	cachedStatus     UpdateStatus
 	cachedStatusTime time.Time
 	statusMu         sync.RWMutex
+	closeCh          chan struct{}
+	closeOnce        sync.Once
 }
 
 // NewSSEBroadcaster creates a new SSE broadcaster
@@ -35,6 +37,7 @@ func NewSSEBroadcaster() *SSEBroadcaster {
 	b := &SSEBroadcaster{
 		clients:     make(map[string]*SSEClient),
 		messageChan: make(chan UpdateStatus, 100),
+		closeCh:     make(chan struct{}),
 		cachedStatus: UpdateStatus{
 			Status:    "idle",
 			UpdatedAt: time.Now().Format(time.RFC3339),
@@ -53,6 +56,10 @@ func NewSSEBroadcaster() *SSEBroadcaster {
 
 // AddClient registers a new SSE client
 func (b *SSEBroadcaster) AddClient(w http.ResponseWriter, clientID string) *SSEClient {
+	if b.isClosed() {
+		return nil
+	}
+
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		log.Error().Msg("Streaming not supported by response writer")
@@ -68,12 +75,17 @@ func (b *SSEBroadcaster) AddClient(w http.ResponseWriter, clientID string) *SSEC
 	}
 
 	b.mu.Lock()
+	if b.isClosed() {
+		b.mu.Unlock()
+		return nil
+	}
 	b.clients[clientID] = client
+	totalClients := len(b.clients)
 	b.mu.Unlock()
 
 	log.Info().
 		Str("client_id", clientID).
-		Int("total_clients", len(b.clients)).
+		Int("total_clients", totalClients).
 		Msg("SSE client connected")
 
 	// Send the current cached status immediately to the new client
@@ -94,7 +106,7 @@ func (b *SSEBroadcaster) RemoveClient(clientID string) {
 	defer b.mu.Unlock()
 
 	if client, exists := b.clients[clientID]; exists {
-		close(client.Done)
+		closeDone(client.Done)
 		delete(b.clients, clientID)
 		log.Info().
 			Str("client_id", clientID).
@@ -105,6 +117,10 @@ func (b *SSEBroadcaster) RemoveClient(clientID string) {
 
 // Broadcast sends an update status to all connected clients
 func (b *SSEBroadcaster) Broadcast(status UpdateStatus) {
+	if b.isClosed() {
+		return
+	}
+
 	// Update cached status
 	b.statusMu.Lock()
 	b.cachedStatus = status
@@ -113,6 +129,8 @@ func (b *SSEBroadcaster) Broadcast(status UpdateStatus) {
 
 	// Send to message channel (non-blocking)
 	select {
+	case <-b.closeCh:
+		return
 	case b.messageChan <- status:
 	default:
 		log.Warn().Msg("SSE message channel full, dropping message")
@@ -135,24 +153,29 @@ func (b *SSEBroadcaster) GetClientCount() int {
 
 // broadcastLoop continuously broadcasts messages to all clients
 func (b *SSEBroadcaster) broadcastLoop() {
-	for status := range b.messageChan {
-		b.mu.RLock()
-		clients := make([]*SSEClient, 0, len(b.clients))
-		for _, client := range b.clients {
-			clients = append(clients, client)
-		}
-		b.mu.RUnlock()
+	for {
+		select {
+		case <-b.closeCh:
+			return
+		case status := <-b.messageChan:
+			b.mu.RLock()
+			clients := make([]*SSEClient, 0, len(b.clients))
+			for _, client := range b.clients {
+				clients = append(clients, client)
+			}
+			b.mu.RUnlock()
 
-		// Send to all clients in parallel
-		for _, client := range clients {
-			go b.sendToClient(client, status)
-		}
+			// Send to all clients in parallel
+			for _, client := range clients {
+				go b.sendToClient(client, status)
+			}
 
-		log.Debug().
-			Str("status", status.Status).
-			Int("progress", status.Progress).
-			Int("clients", len(clients)).
-			Msg("Broadcasted update status to SSE clients")
+			log.Debug().
+				Str("status", status.Status).
+				Int("progress", status.Progress).
+				Int("clients", len(clients)).
+				Msg("Broadcasted update status to SSE clients")
+		}
 	}
 }
 
@@ -218,39 +241,48 @@ func (b *SSEBroadcaster) cleanupLoop() {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		now := time.Now()
-		b.mu.Lock()
-
-		idsToRemove := make([]string, 0)
-		for id, client := range b.clients {
-			// Acquire client lock to safely read LastActive (written by sendToClient/SendHeartbeat)
-			client.mu.Lock()
-			inactive := now.Sub(client.LastActive) > 5*time.Minute
-			client.mu.Unlock()
-
-			// Remove clients inactive for more than 5 minutes
-			if inactive {
-				idsToRemove = append(idsToRemove, id)
+	for {
+		select {
+		case <-b.closeCh:
+			return
+		case <-ticker.C:
+			now := time.Now()
+			b.mu.RLock()
+			clients := make([]*SSEClient, 0, len(b.clients))
+			for _, client := range b.clients {
+				clients = append(clients, client)
 			}
-		}
+			b.mu.RUnlock()
 
-		for _, id := range idsToRemove {
-			if client, exists := b.clients[id]; exists {
-				close(client.Done)
-				delete(b.clients, id)
+			idsToRemove := make([]string, 0)
+			for _, client := range clients {
+				// Acquire client lock to safely read LastActive (written by sendToClient/SendHeartbeat)
+				client.mu.Lock()
+				inactive := now.Sub(client.LastActive) > 5*time.Minute
+				client.mu.Unlock()
+
+				// Remove clients inactive for more than 5 minutes
+				if inactive {
+					idsToRemove = append(idsToRemove, client.ID)
+				}
+			}
+
+			for _, id := range idsToRemove {
+				b.RemoveClient(id)
 				log.Info().
 					Str("client_id", id).
 					Msg("Removed inactive SSE client")
 			}
 		}
-
-		b.mu.Unlock()
 	}
 }
 
 // SendHeartbeat sends a heartbeat comment to all clients to keep connections alive
 func (b *SSEBroadcaster) SendHeartbeat() {
+	if b.isClosed() {
+		return
+	}
+
 	b.mu.RLock()
 	clients := make([]*SSEClient, 0, len(b.clients))
 	for _, client := range b.clients {
@@ -259,53 +291,70 @@ func (b *SSEBroadcaster) SendHeartbeat() {
 	b.mu.RUnlock()
 
 	for _, client := range clients {
-		go func(c *SSEClient) {
-			select {
-			case <-c.Done:
-				return
-			default:
-			}
-
-			// Acquire client lock to prevent concurrent writes
-			c.mu.Lock()
-			defer c.mu.Unlock()
-
-			// Double-check client is not disconnected while waiting for lock
-			select {
-			case <-c.Done:
-				return
-			default:
-			}
-
-			defer func() {
-				if r := recover(); r != nil {
-					b.RemoveClient(c.ID)
-				}
-			}()
-
-			// Send SSE comment as heartbeat
-			_, err := fmt.Fprint(c.Writer, ": heartbeat\n\n")
-			if err != nil {
-				b.RemoveClient(c.ID)
-				return
-			}
-			c.Flusher.Flush()
-			// Update LastActive so cleanup loop doesn't prune active clients
-			c.LastActive = time.Now()
-		}(client)
+		b.sendHeartbeatToClient(client)
 	}
 }
 
 // Close closes the broadcaster and disconnects all clients
 func (b *SSEBroadcaster) Close() {
-	b.mu.Lock()
-	defer b.mu.Unlock()
+	b.closeOnce.Do(func() {
+		close(b.closeCh)
 
-	for id, client := range b.clients {
-		close(client.Done)
-		delete(b.clients, id)
+		b.mu.Lock()
+		for id, client := range b.clients {
+			closeDone(client.Done)
+			delete(b.clients, id)
+		}
+		b.mu.Unlock()
+
+		log.Info().Msg("SSE broadcaster closed")
+	})
+}
+
+func (b *SSEBroadcaster) sendHeartbeatToClient(c *SSEClient) {
+	select {
+	case <-c.Done:
+		return
+	default:
 	}
 
-	close(b.messageChan)
-	log.Info().Msg("SSE broadcaster closed")
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	select {
+	case <-c.Done:
+		return
+	default:
+	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			b.RemoveClient(c.ID)
+		}
+	}()
+
+	_, err := fmt.Fprint(c.Writer, ": heartbeat\n\n")
+	if err != nil {
+		b.RemoveClient(c.ID)
+		return
+	}
+	c.Flusher.Flush()
+	c.LastActive = time.Now()
+}
+
+func (b *SSEBroadcaster) isClosed() bool {
+	select {
+	case <-b.closeCh:
+		return true
+	default:
+		return false
+	}
+}
+
+func closeDone(ch chan bool) {
+	select {
+	case <-ch:
+	default:
+		close(ch)
+	}
 }

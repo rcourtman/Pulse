@@ -172,9 +172,6 @@ func TestSSEBroadcaster_SendHeartbeat(t *testing.T) {
 
 	broadcaster.SendHeartbeat()
 
-	// Give it a moment to send
-	time.Sleep(10 * time.Millisecond)
-
 	// Verify heartbeat was written
 	body := mockWriter.Body.String()
 	if !strings.Contains(body, ": heartbeat") {
@@ -217,5 +214,23 @@ func TestSSEBroadcaster_Close(t *testing.T) {
 		// Channel closed as expected
 	default:
 		t.Error("Client Done channel should be closed")
+	}
+}
+
+func TestSSEBroadcaster_CloseIdempotentAndNoOpsAfterClose(t *testing.T) {
+	broadcaster := NewSSEBroadcaster()
+	broadcaster.Close()
+	broadcaster.Close()
+
+	broadcaster.Broadcast(UpdateStatus{
+		Status:    "closed",
+		Progress:  0,
+		UpdatedAt: time.Now().Format(time.RFC3339),
+	})
+	broadcaster.SendHeartbeat()
+
+	rec := httptest.NewRecorder()
+	if client := broadcaster.AddClient(rec, "after-close"); client != nil {
+		t.Fatal("expected AddClient to return nil after close")
 	}
 }

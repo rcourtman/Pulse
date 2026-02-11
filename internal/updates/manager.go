@@ -68,16 +68,20 @@ var (
 
 // Manager handles update operations
 type Manager struct {
-	config        *config.Config
-	history       *UpdateHistory
-	status        UpdateStatus
-	statusMu      sync.RWMutex
-	checkCache    map[string]*UpdateInfo // keyed by channel
-	cacheTime     map[string]time.Time   // keyed by channel
-	cacheDuration time.Duration
-	progressChan  chan UpdateStatus
-	queue         *UpdateQueue
-	sseBroadcast  *SSEBroadcaster
+	config         *config.Config
+	history        *UpdateHistory
+	status         UpdateStatus
+	statusMu       sync.RWMutex
+	checkCache     map[string]*UpdateInfo // keyed by channel
+	cacheTime      map[string]time.Time   // keyed by channel
+	cacheDuration  time.Duration
+	progressChan   chan UpdateStatus
+	queue          *UpdateQueue
+	sseBroadcast   *SSEBroadcaster
+	lifecycleMu    sync.RWMutex
+	closed         bool
+	closeOnce      sync.Once
+	heartbeatStopC chan struct{}
 }
 
 // ApplyUpdateRequest describes an update request initiated via the API/UI.
@@ -92,13 +96,14 @@ type ApplyUpdateRequest struct {
 // NewManager creates a new update manager
 func NewManager(cfg *config.Config) *Manager {
 	m := &Manager{
-		config:        cfg,
-		checkCache:    make(map[string]*UpdateInfo),
-		cacheTime:     make(map[string]time.Time),
-		cacheDuration: 5 * time.Minute, // Cache update checks for 5 minutes
-		progressChan:  make(chan UpdateStatus, 100),
-		queue:         NewUpdateQueue(),
-		sseBroadcast:  NewSSEBroadcaster(),
+		config:         cfg,
+		checkCache:     make(map[string]*UpdateInfo),
+		cacheTime:      make(map[string]time.Time),
+		cacheDuration:  5 * time.Minute, // Cache update checks for 5 minutes
+		progressChan:   make(chan UpdateStatus, 100),
+		queue:          NewUpdateQueue(),
+		sseBroadcast:   NewSSEBroadcaster(),
+		heartbeatStopC: make(chan struct{}),
 		status: UpdateStatus{
 			Status:    "idle",
 			UpdatedAt: time.Now().Format(time.RFC3339),
@@ -126,14 +131,24 @@ func (m *Manager) GetProgressChannel() <-chan UpdateStatus {
 
 // Close closes the progress channel and cleans up resources
 func (m *Manager) Close() {
-	close(m.progressChan)
-	if m.sseBroadcast != nil {
-		m.sseBroadcast.Close()
-	}
+	m.closeOnce.Do(func() {
+		close(m.heartbeatStopC)
+
+		m.lifecycleMu.Lock()
+		m.closed = true
+		close(m.progressChan)
+		if m.sseBroadcast != nil {
+			m.sseBroadcast.Close()
+			m.sseBroadcast = nil
+		}
+		m.lifecycleMu.Unlock()
+	})
 }
 
 // GetSSEBroadcaster returns the SSE broadcaster
 func (m *Manager) GetSSEBroadcaster() *SSEBroadcaster {
+	m.lifecycleMu.RLock()
+	defer m.lifecycleMu.RUnlock()
 	return m.sseBroadcast
 }
 
@@ -144,6 +159,8 @@ func (m *Manager) GetQueue() *UpdateQueue {
 
 // AddSSEClient adds a new SSE client for update progress streaming
 func (m *Manager) AddSSEClient(w http.ResponseWriter, clientID string) *SSEClient {
+	m.lifecycleMu.RLock()
+	defer m.lifecycleMu.RUnlock()
 	if m.sseBroadcast == nil {
 		return nil
 	}
@@ -152,6 +169,8 @@ func (m *Manager) AddSSEClient(w http.ResponseWriter, clientID string) *SSEClien
 
 // RemoveSSEClient removes an SSE client
 func (m *Manager) RemoveSSEClient(clientID string) {
+	m.lifecycleMu.RLock()
+	defer m.lifecycleMu.RUnlock()
 	if m.sseBroadcast != nil {
 		m.sseBroadcast.RemoveClient(clientID)
 	}
@@ -159,6 +178,8 @@ func (m *Manager) RemoveSSEClient(clientID string) {
 
 // GetCachedStatus returns the last broadcasted status
 func (m *Manager) GetSSECachedStatus() (UpdateStatus, time.Time) {
+	m.lifecycleMu.RLock()
+	defer m.lifecycleMu.RUnlock()
 	if m.sseBroadcast == nil {
 		return UpdateStatus{}, time.Time{}
 	}
@@ -1437,6 +1458,14 @@ func (m *Manager) updateStatus(status string, progress int, message string, err 
 	statusCopy := m.status
 	m.statusMu.Unlock()
 
+	m.lifecycleMu.RLock()
+	if m.closed {
+		m.lifecycleMu.RUnlock()
+		if delay := statusDelayForStage(status); delay > 0 {
+			time.Sleep(delay)
+		}
+		return
+	}
 	// Send to progress channel (non-blocking) for WebSocket compatibility
 	select {
 	case m.progressChan <- statusCopy:
@@ -1447,6 +1476,7 @@ func (m *Manager) updateStatus(status string, progress int, message string, err 
 	if m.sseBroadcast != nil {
 		m.sseBroadcast.Broadcast(statusCopy)
 	}
+	m.lifecycleMu.RUnlock()
 
 	if delay := statusDelayForStage(status); delay > 0 {
 		time.Sleep(delay)
@@ -1458,9 +1488,17 @@ func (m *Manager) sseHeartbeatLoop() {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		if m.sseBroadcast != nil {
-			m.sseBroadcast.SendHeartbeat()
+	for {
+		select {
+		case <-m.heartbeatStopC:
+			return
+		case <-ticker.C:
+			m.lifecycleMu.RLock()
+			broadcaster := m.sseBroadcast
+			m.lifecycleMu.RUnlock()
+			if broadcaster != nil {
+				broadcaster.SendHeartbeat()
+			}
 		}
 	}
 }
