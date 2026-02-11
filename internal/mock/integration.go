@@ -14,6 +14,8 @@ import (
 
 var (
 	dataMu        sync.RWMutex
+	modeMu        sync.Mutex
+	updateLoopMu  sync.Mutex
 	mockData      models.StateSnapshot
 	mockAlerts    []models.Alert
 	mockConfig    = DefaultConfig
@@ -44,6 +46,9 @@ func SetEnabled(enable bool) {
 }
 
 func setEnabled(enable bool, fromInit bool) {
+	modeMu.Lock()
+	defer modeMu.Unlock()
+
 	current := enabled.Load()
 	if current == enable {
 		// Still update env so other processes see the latest value when not invoked from init.
@@ -81,8 +86,8 @@ func enableMockMode(fromInit bool) {
 	mockAlerts = GenerateAlertHistory(mockData.Nodes, mockData.VMs, mockData.Containers)
 	mockData.LastUpdate = time.Now()
 	enabled.Store(true)
-	startUpdateLoopLocked()
 	dataMu.Unlock()
+	startUpdateLoop()
 
 	log.Info().
 		Int("nodes", config.NodeCount).
@@ -105,13 +110,13 @@ func enableMockMode(fromInit bool) {
 }
 
 func disableMockMode() {
-	dataMu.Lock()
 	if !enabled.Load() {
-		dataMu.Unlock()
 		return
 	}
 	enabled.Store(false)
-	stopUpdateLoopLocked()
+	stopUpdateLoop()
+
+	dataMu.Lock()
 	mockData = models.StateSnapshot{}
 	mockAlerts = nil
 	dataMu.Unlock()
@@ -119,7 +124,10 @@ func disableMockMode() {
 	log.Info().Msg("Mock mode disabled")
 }
 
-func startUpdateLoopLocked() {
+func startUpdateLoop() {
+	updateLoopMu.Lock()
+	defer updateLoopMu.Unlock()
+
 	stopUpdateLoopLocked()
 	stopCh := make(chan struct{})
 	ticker := time.NewTicker(updateInterval)
@@ -139,6 +147,12 @@ func startUpdateLoopLocked() {
 			}
 		}
 	}(stopCh, ticker)
+}
+
+func stopUpdateLoop() {
+	updateLoopMu.Lock()
+	defer updateLoopMu.Unlock()
+	stopUpdateLoopLocked()
 }
 
 func stopUpdateLoopLocked() {
