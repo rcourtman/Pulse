@@ -54,6 +54,13 @@ var requiredHostAgentBinaries = []HostAgentBinary{
 
 var downloadMu sync.Mutex
 
+const (
+	hostAgentDownloadAttempts    = 3
+	hostAgentRetryInitialBackoff = 100 * time.Millisecond
+	hostAgentHTTPErrorBodyLimit  = 2048
+	hostAgentChecksumBodyLimit   = 1024
+)
+
 var (
 	httpClient            = &http.Client{Timeout: 2 * time.Minute}
 	downloadURLForVersion = func(version string) string {
@@ -74,6 +81,7 @@ var (
 	copyFn                                = io.Copy
 	chmodFileFn                           = func(f *os.File, mode os.FileMode) error { return f.Chmod(mode) }
 	closeFileFn                           = func(f *os.File) error { return f.Close() }
+	retrySleepFn                          = time.Sleep
 )
 
 // HostAgentSearchPaths returns the directories to search for host agent binaries.
@@ -169,19 +177,8 @@ func DownloadAndInstallHostAgentBinaries(version string, targetDir string) error
 	}
 	defer removeFn(tempFile.Name())
 
-	resp, err := httpClient.Get(url)
-	if err != nil {
-		return fmt.Errorf("failed to download host agent bundle from %s: %w", url, err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
-		return fmt.Errorf("unexpected status %d downloading %s: %s", resp.StatusCode, url, strings.TrimSpace(string(body)))
-	}
-
-	if _, err := io.Copy(tempFile, resp.Body); err != nil {
-		return fmt.Errorf("failed to save host agent bundle: %w", err)
+	if err := downloadHostAgentBundle(url, tempFile); err != nil {
+		return err
 	}
 
 	if err := closeFileFn(tempFile); err != nil {
@@ -198,6 +195,64 @@ func DownloadAndInstallHostAgentBinaries(version string, targetDir string) error
 	}
 
 	return nil
+}
+
+func downloadHostAgentBundle(url string, tempFile *os.File) error {
+	backoff := hostAgentRetryInitialBackoff
+
+	for attempt := 1; attempt <= hostAgentDownloadAttempts; attempt++ {
+		if err := tempFile.Truncate(0); err != nil {
+			return fmt.Errorf("failed to reset temporary bundle file: %w", err)
+		}
+		if _, err := tempFile.Seek(0, io.SeekStart); err != nil {
+			return fmt.Errorf("failed to seek temporary bundle file: %w", err)
+		}
+
+		resp, err := httpClient.Get(url)
+		if err != nil {
+			if attempt == hostAgentDownloadAttempts {
+				return fmt.Errorf("failed to download host agent bundle from %s: %w", url, err)
+			}
+			retrySleepFn(backoff)
+			backoff *= 2
+			continue
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(io.LimitReader(resp.Body, hostAgentHTTPErrorBodyLimit))
+			resp.Body.Close()
+			err := fmt.Errorf("unexpected status %d downloading %s: %s", resp.StatusCode, url, strings.TrimSpace(string(body)))
+			if !isRetryableHTTPStatus(resp.StatusCode) || attempt == hostAgentDownloadAttempts {
+				return err
+			}
+			retrySleepFn(backoff)
+			backoff *= 2
+			continue
+		}
+
+		if _, err := copyFn(tempFile, resp.Body); err != nil {
+			resp.Body.Close()
+			if attempt == hostAgentDownloadAttempts {
+				return fmt.Errorf("failed to save host agent bundle: %w", err)
+			}
+			retrySleepFn(backoff)
+			backoff *= 2
+			continue
+		}
+
+		if err := resp.Body.Close(); err != nil {
+			if attempt == hostAgentDownloadAttempts {
+				return fmt.Errorf("failed to finalize host agent bundle download: %w", err)
+			}
+			retrySleepFn(backoff)
+			backoff *= 2
+			continue
+		}
+
+		return nil
+	}
+
+	return fmt.Errorf("failed to download host agent bundle from %s", url)
 }
 
 func verifyHostAgentBundleChecksum(bundlePath, bundleURL, checksumURL string) error {
@@ -224,22 +279,54 @@ func verifyHostAgentBundleChecksum(bundlePath, bundleURL, checksumURL string) er
 }
 
 func downloadHostAgentChecksum(checksumURL string) (string, string, error) {
-	resp, err := httpClient.Get(checksumURL)
-	if err != nil {
-		return "", "", fmt.Errorf("failed to download checksum from %s: %w", checksumURL, err)
-	}
-	defer resp.Body.Close()
+	backoff := hostAgentRetryInitialBackoff
 
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
-		return "", "", fmt.Errorf("unexpected status %d downloading checksum %s: %s", resp.StatusCode, checksumURL, strings.TrimSpace(string(body)))
+	for attempt := 1; attempt <= hostAgentDownloadAttempts; attempt++ {
+		resp, err := httpClient.Get(checksumURL)
+		if err != nil {
+			if attempt == hostAgentDownloadAttempts {
+				return "", "", fmt.Errorf("failed to download checksum from %s: %w", checksumURL, err)
+			}
+			retrySleepFn(backoff)
+			backoff *= 2
+			continue
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(io.LimitReader(resp.Body, hostAgentHTTPErrorBodyLimit))
+			resp.Body.Close()
+			err := fmt.Errorf("unexpected status %d downloading checksum %s: %s", resp.StatusCode, checksumURL, strings.TrimSpace(string(body)))
+			if !isRetryableHTTPStatus(resp.StatusCode) || attempt == hostAgentDownloadAttempts {
+				return "", "", err
+			}
+			retrySleepFn(backoff)
+			backoff *= 2
+			continue
+		}
+
+		payload, err := io.ReadAll(io.LimitReader(resp.Body, hostAgentChecksumBodyLimit))
+		resp.Body.Close()
+		if err != nil {
+			if attempt == hostAgentDownloadAttempts {
+				return "", "", fmt.Errorf("failed to read checksum file: %w", err)
+			}
+			retrySleepFn(backoff)
+			backoff *= 2
+			continue
+		}
+
+		checksum, filename, err := parseHostAgentChecksumPayload(payload)
+		if err != nil {
+			return "", "", err
+		}
+
+		return checksum, filename, nil
 	}
 
-	payload, err := io.ReadAll(io.LimitReader(resp.Body, 1024))
-	if err != nil {
-		return "", "", fmt.Errorf("failed to read checksum file: %w", err)
-	}
+	return "", "", fmt.Errorf("failed to download checksum from %s", checksumURL)
+}
 
+func parseHostAgentChecksumPayload(payload []byte) (string, string, error) {
 	fields := strings.Fields(string(payload))
 	if len(fields) == 0 {
 		return "", "", fmt.Errorf("checksum file is empty")
@@ -255,7 +342,7 @@ func downloadHostAgentChecksum(checksumURL string) (string, string, error) {
 
 	filename := ""
 	if len(fields) > 1 {
-		filename = path.Base(fields[1])
+		filename = strings.TrimPrefix(path.Base(fields[1]), "*")
 	}
 
 	return checksum, filename, nil
@@ -374,9 +461,13 @@ func extractHostAgentBinaries(archivePath, targetDir string) error {
 				return fmt.Errorf("agentbinaries.extractHostAgentBinaries: %w", err)
 			}
 		case tar.TypeSymlink:
+			target, err := normalizeHostAgentSymlinkTarget(header.Linkname)
+			if err != nil {
+				return fmt.Errorf("agentbinaries.extractHostAgentBinaries: %w", err)
+			}
 			symlinks = append(symlinks, pendingLink{
 				path:   destPath,
-				target: header.Linkname,
+				target: target,
 			})
 		}
 	}
@@ -395,6 +486,20 @@ func extractHostAgentBinaries(archivePath, targetDir string) error {
 	}
 
 	return nil
+}
+
+func normalizeHostAgentSymlinkTarget(target string) (string, error) {
+	cleaned := strings.TrimSpace(path.Clean(target))
+	if cleaned == "" || cleaned == "." || cleaned == ".." {
+		return "", fmt.Errorf("invalid host agent symlink target %q", target)
+	}
+	if path.IsAbs(cleaned) || strings.Contains(cleaned, "/") || strings.Contains(cleaned, `\`) {
+		return "", fmt.Errorf("invalid host agent symlink target %q", target)
+	}
+	if !strings.HasPrefix(cleaned, "pulse-host-agent-") {
+		return "", fmt.Errorf("invalid host agent symlink target %q", target)
+	}
+	return cleaned, nil
 }
 
 func writeHostAgentFile(destination string, reader io.Reader, mode os.FileMode) error {
@@ -459,4 +564,13 @@ func normalizeExecutableMode(mode os.FileMode) os.FileMode {
 		perms |= 0o755
 	}
 	return (mode &^ os.ModePerm) | perms
+}
+
+func isRetryableHTTPStatus(statusCode int) bool {
+	switch statusCode {
+	case http.StatusRequestTimeout, http.StatusTooManyRequests, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+		return true
+	default:
+		return statusCode >= http.StatusInternalServerError && statusCode <= 599
+	}
 }
