@@ -467,7 +467,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 	// Explore pre-pass (interactive chat only): run a short read-only scout step
 	// and inject its findings into the main loop context.
 	if s.shouldRunExplore(autonomousMode) {
-		exploreSummary := s.runExplorePrepass(
+		exploreResult := s.runExplorePrepass(
 			ctx,
 			session.ID,
 			req.Prompt,
@@ -475,16 +475,27 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 			selectedModel,
 			messages,
 			executor,
-			sessionFSM,
-			ka,
 			loop.provider,
+			callback,
 		)
-		if exploreSummary != "" {
-			injectExploreSummaryIntoLatestUserMessage(messages, exploreSummary)
+		if exploreResult.Summary != "" {
+			injectExploreSummaryIntoLatestUserMessage(messages, exploreResult.Summary, exploreResult.Model)
 			log.Info().
 				Str("session_id", session.ID).
-				Int("summary_len", len(exploreSummary)).
+				Str("outcome", exploreResult.Outcome).
+				Str("model", exploreResult.Model).
+				Int("summary_len", len(exploreResult.Summary)).
+				Int("input_tokens", exploreResult.InputTokens).
+				Int("output_tokens", exploreResult.OutputTokens).
+				Dur("duration", exploreResult.Duration).
 				Msg("[ChatService] Explore pre-pass completed")
+		} else {
+			log.Debug().
+				Str("session_id", session.ID).
+				Str("outcome", exploreResult.Outcome).
+				Str("model", exploreResult.Model).
+				Dur("duration", exploreResult.Duration).
+				Msg("[ChatService] Explore pre-pass skipped or produced no summary")
 		}
 	}
 

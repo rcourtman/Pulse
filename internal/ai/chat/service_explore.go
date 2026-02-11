@@ -2,6 +2,7 @@ package chat
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"strconv"
 	"strings"
@@ -18,6 +19,23 @@ const (
 	exploreTimeout          = 20 * time.Second
 	exploreSummaryCharLimit = 2400
 )
+
+const (
+	exploreOutcomeSuccess      = "success"
+	exploreOutcomeFailed       = "failed"
+	exploreOutcomeSkippedModel = "skipped_no_model"
+	exploreOutcomeSkippedTools = "skipped_no_tools"
+)
+
+type ExplorePrepassResult struct {
+	Summary      string
+	Model        string
+	Outcome      string
+	Duration     time.Duration
+	InputTokens  int
+	OutputTokens int
+	Err          error
+}
 
 func isExploreEnabled() bool {
 	raw := strings.TrimSpace(os.Getenv(exploreEnabledEnvVar))
@@ -162,7 +180,7 @@ func truncateExploreSummary(summary string) string {
 	return summary[:exploreSummaryCharLimit] + "\n\n[Truncated explore summary]"
 }
 
-func injectExploreSummaryIntoLatestUserMessage(messages []Message, summary string) {
+func injectExploreSummaryIntoLatestUserMessage(messages []Message, summary, model string) {
 	if strings.TrimSpace(summary) == "" || len(messages) == 0 {
 		return
 	}
@@ -170,7 +188,25 @@ func injectExploreSummaryIntoLatestUserMessage(messages []Message, summary strin
 	if messages[lastIdx].Role != "user" {
 		return
 	}
-	messages[lastIdx].Content = "Explore findings (read-only pre-pass):\n" + summary + "\n\n---\n" + messages[lastIdx].Content
+
+	header := "Explore scout context (read-only pre-pass)"
+	if model != "" {
+		header += " | model: " + model
+	}
+	block := header +
+		"\n<explore_context>\n" +
+		"Use this as preliminary context. Re-verify facts before write actions.\n\n" +
+		summary +
+		"\n</explore_context>"
+	messages[lastIdx].Content = block + "\n\n---\n" + messages[lastIdx].Content
+}
+
+func emitExploreTrace(callback StreamCallback, text string) {
+	if callback == nil || strings.TrimSpace(text) == "" {
+		return
+	}
+	jsonData, _ := json.Marshal(ThinkingData{Text: text})
+	callback(StreamEvent{Type: "thinking", Data: jsonData})
 }
 
 func (s *Service) runExplorePrepass(
@@ -181,24 +217,40 @@ func (s *Service) runExplorePrepass(
 	selectedModel string,
 	messages []Message,
 	executor *tools.PulseToolExecutor,
-	sessionFSM *SessionFSM,
-	ka *KnowledgeAccumulator,
 	defaultProvider providers.StreamingProvider,
-) string {
+	callback StreamCallback,
+) ExplorePrepassResult {
+	start := time.Now()
+	result := ExplorePrepassResult{
+		Outcome: exploreOutcomeFailed,
+	}
+	defer func() {
+		result.Duration = time.Since(start)
+		if metrics := GetAIMetrics(); metrics != nil {
+			metrics.RecordExploreRun(result.Outcome, result.Model, result.Duration, result.InputTokens, result.OutputTokens)
+		}
+	}()
+
 	exploreTools := s.filterToolsForExplorePrompt(ctx, prompt)
 	if len(exploreTools) == 0 {
-		return ""
+		result.Outcome = exploreOutcomeSkippedTools
+		return result
 	}
 
 	provider, exploreModel := s.resolveExploreProvider(overrideModel, selectedModel, defaultProvider)
 	if provider == nil || exploreModel == "" {
-		return ""
+		result.Outcome = exploreOutcomeSkippedModel
+		return result
 	}
+	result.Model = exploreModel
 
+	emitExploreTrace(callback, "[Explore] Running read-only context pass...\n")
 	exploreLoop := NewAgenticLoop(provider, executor, s.buildExploreSystemPrompt())
 	exploreLoop.SetAutonomousMode(false)
-	exploreLoop.SetSessionFSM(sessionFSM)
-	exploreLoop.SetKnowledgeAccumulator(ka)
+	// Isolate pre-pass state from the main loop to avoid cross-contamination
+	// of FSM enforcement/knowledge behavior.
+	exploreLoop.SetSessionFSM(NewSessionFSM())
+	exploreLoop.SetKnowledgeAccumulator(NewKnowledgeAccumulator())
 	exploreLoop.SetMaxTurns(exploreMaxTurns)
 	if s.budgetChecker != nil {
 		exploreLoop.SetBudgetChecker(s.budgetChecker)
@@ -213,13 +265,22 @@ func (s *Service) runExplorePrepass(
 	defer cancel()
 
 	resultMessages, err := exploreLoop.ExecuteWithTools(exploreCtx, sessionID, messages, exploreTools, func(StreamEvent) {})
+	result.InputTokens = exploreLoop.GetTotalInputTokens()
+	result.OutputTokens = exploreLoop.GetTotalOutputTokens()
 	if err != nil {
 		log.Warn().
 			Str("session_id", sessionID).
+			Str("model", exploreModel).
 			Err(err).
 			Msg("[ChatService] Explore pre-pass failed; continuing with main loop")
-		return ""
+		result.Outcome = exploreOutcomeFailed
+		result.Err = err
+		emitExploreTrace(callback, "[Explore] Read-only context pass failed; continuing with main analysis.\n")
+		return result
 	}
 
-	return truncateExploreSummary(latestAssistantContent(resultMessages))
+	result.Outcome = exploreOutcomeSuccess
+	result.Summary = truncateExploreSummary(latestAssistantContent(resultMessages))
+	emitExploreTrace(callback, "[Explore] Read-only context pass completed.\n")
+	return result
 }

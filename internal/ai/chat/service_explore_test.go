@@ -2,6 +2,7 @@ package chat
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -71,6 +72,8 @@ func TestService_ExecuteStream_ExplorePrepassEnabled(t *testing.T) {
 
 	mainCalls := 0
 	mainSawExploreSummary := false
+	thinkingEvents := 0
+	thinkingSawDone := false
 	mainProvider := &stubServiceProvider{
 		streamFn: func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
 			mainCalls++
@@ -79,7 +82,7 @@ func TestService_ExecuteStream_ExplorePrepassEnabled(t *testing.T) {
 				if msg.Role != "user" || msg.ToolResult != nil {
 					continue
 				}
-				if strings.Contains(msg.Content, "Explore findings (read-only pre-pass):") {
+				if strings.Contains(msg.Content, "<explore_context>") {
 					mainSawExploreSummary = true
 				}
 				break
@@ -125,6 +128,14 @@ func TestService_ExecuteStream_ExplorePrepassEnabled(t *testing.T) {
 		if event.Type == "done" {
 			doneCount++
 		}
+		if event.Type == "thinking" {
+			thinkingEvents++
+			var data ThinkingData
+			_ = json.Unmarshal(event.Data, &data)
+			if strings.Contains(data.Text, "Read-only context pass completed") {
+				thinkingSawDone = true
+			}
+		}
 	})
 	if err != nil {
 		t.Fatalf("ExecuteStream failed: %v", err)
@@ -138,6 +149,12 @@ func TestService_ExecuteStream_ExplorePrepassEnabled(t *testing.T) {
 	}
 	if !mainSawExploreSummary {
 		t.Fatal("expected main loop request to include injected explore summary")
+	}
+	if thinkingEvents == 0 {
+		t.Fatal("expected explore pre-pass to emit visible thinking trace events")
+	}
+	if !thinkingSawDone {
+		t.Fatal("expected explore completion trace in thinking events")
 	}
 	if doneCount != 1 {
 		t.Fatalf("expected done callback once, got %d", doneCount)
@@ -164,7 +181,7 @@ func TestService_ExecuteStream_ExplorePrepassDisabledByEnv(t *testing.T) {
 				if msg.Role != "user" || msg.ToolResult != nil {
 					continue
 				}
-				if strings.Contains(msg.Content, "Explore findings (read-only pre-pass):") {
+				if strings.Contains(msg.Content, "<explore_context>") {
 					mainSawExploreSummary = true
 				}
 				break
@@ -238,7 +255,7 @@ func TestService_ExecuteStream_ExplorePrepassSkipsWithoutExplicitModel(t *testin
 				if msg.Role != "user" || msg.ToolResult != nil {
 					continue
 				}
-				if strings.Contains(msg.Content, "Explore findings (read-only pre-pass):") {
+				if strings.Contains(msg.Content, "<explore_context>") {
 					mainSawExploreSummary = true
 				}
 				break
@@ -288,5 +305,35 @@ func TestService_ExecuteStream_ExplorePrepassSkipsWithoutExplicitModel(t *testin
 	}
 	if mainSawExploreSummary {
 		t.Fatal("did not expect explore summary injection when no explicit explore model is available")
+	}
+}
+
+func TestResolveExploreProvider_FallsBackToNextExplicitModel(t *testing.T) {
+	svc := NewService(Config{
+		AIConfig: &config.AIConfig{
+			// malformed candidate should be skipped
+			DiscoveryModel: "bad-model-format",
+			ChatModel:      "openai:chat-main",
+			OpenAIAPIKey:   "sk-test",
+		},
+		StateProvider: &mockStateProvider{},
+		AgentServer:   &mockAgentServer{},
+	})
+
+	var picked string
+	svc.providerFactory = func(modelStr string) (providers.StreamingProvider, error) {
+		picked = modelStr
+		return &stubServiceProvider{}, nil
+	}
+
+	provider, model := svc.resolveExploreProvider("", "", nil)
+	if provider == nil {
+		t.Fatal("expected explore provider resolution to succeed")
+	}
+	if model != "openai:chat-main" {
+		t.Fatalf("expected fallback to explicit chat model, got %q", model)
+	}
+	if picked != "openai:chat-main" {
+		t.Fatalf("expected provider factory to receive fallback model, got %q", picked)
 	}
 }
