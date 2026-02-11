@@ -17,12 +17,19 @@ type OrgDeleter interface {
 	DeleteOrganization(orgID string) error
 }
 
+type ReapAction string
+
+const (
+	ReapActionDeleted ReapAction = "deleted"
+	ReapActionDryRun  ReapAction = "dry_run"
+)
+
 type ReapResult struct {
 	OrgID         string
 	RequestedAt   time.Time
 	RetentionDays int
 	ExpiredAt     time.Time
-	Action        string
+	Action        ReapAction
 	Error         error
 }
 
@@ -122,7 +129,7 @@ func (r *Reaper) scan() []ReapResult {
 		}
 
 		if r.liveMode {
-			result.Action = "deleted"
+			result.Action = ReapActionDeleted
 
 			if r.deleter == nil {
 				result.Error = errors.New("org deleter is nil")
@@ -154,7 +161,7 @@ func (r *Reaper) scan() []ReapResult {
 				}
 			}
 		} else {
-			result.Action = "dry_run"
+			result.Action = ReapActionDryRun
 			log.Info().Str("org_id", org.ID).Msg("DRY RUN: would delete org")
 		}
 
