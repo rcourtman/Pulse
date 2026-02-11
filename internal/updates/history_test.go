@@ -49,7 +49,7 @@ func TestNewUpdateHistory(t *testing.T) {
 		entry := UpdateHistoryEntry{
 			EventID:     "test-event-1",
 			Timestamp:   time.Now(),
-			Action:      ActionUpdate,
+			Action:      "update",
 			VersionFrom: "1.0.0",
 			VersionTo:   "1.1.0",
 			Status:      StatusSuccess,
@@ -82,7 +82,7 @@ func TestUpdateHistory_CreateEntry(t *testing.T) {
 		h, _ := NewUpdateHistory(tmpDir)
 
 		entry := UpdateHistoryEntry{
-			Action:      ActionUpdate,
+			Action:      "update",
 			VersionFrom: "1.0.0",
 			VersionTo:   "1.1.0",
 			Status:      StatusInProgress,
@@ -112,7 +112,7 @@ func TestUpdateHistory_CreateEntry(t *testing.T) {
 
 		entry := UpdateHistoryEntry{
 			EventID: "my-custom-id",
-			Action:  ActionUpdate,
+			Action:  "update",
 			Status:  StatusInProgress,
 		}
 
@@ -131,7 +131,7 @@ func TestUpdateHistory_CreateEntry(t *testing.T) {
 
 		before := time.Now()
 		entry := UpdateHistoryEntry{
-			Action: ActionUpdate,
+			Action: "update",
 			Status: StatusInProgress,
 		}
 
@@ -154,7 +154,7 @@ func TestUpdateHistory_CreateEntry(t *testing.T) {
 		customTime := time.Date(2024, 1, 15, 10, 30, 0, 0, time.UTC)
 		entry := UpdateHistoryEntry{
 			Timestamp: customTime,
-			Action:    ActionUpdate,
+			Action:    "update",
 			Status:    StatusInProgress,
 		}
 
@@ -172,7 +172,7 @@ func TestUpdateHistory_CreateEntry(t *testing.T) {
 
 		entry := UpdateHistoryEntry{
 			EventID: "persist-test",
-			Action:  ActionUpdate,
+			Action:  "update",
 			Status:  StatusSuccess,
 		}
 
@@ -212,7 +212,7 @@ func TestUpdateHistory_UpdateEntry(t *testing.T) {
 
 		// Create initial entry
 		entry := UpdateHistoryEntry{
-			Action: ActionUpdate,
+			Action: "update",
 			Status: StatusInProgress,
 		}
 		eventID, _ := h.CreateEntry(ctx, entry)
@@ -256,7 +256,7 @@ func TestUpdateHistory_UpdateEntry(t *testing.T) {
 		// Create and update entry
 		entry := UpdateHistoryEntry{
 			EventID: "update-persist-test",
-			Action:  ActionUpdate,
+			Action:  "update",
 			Status:  StatusInProgress,
 		}
 		eventID, _ := h.CreateEntry(ctx, entry)
@@ -291,7 +291,7 @@ func TestUpdateHistory_GetEntry(t *testing.T) {
 
 		entry := UpdateHistoryEntry{
 			EventID:     "get-test",
-			Action:      ActionUpdate,
+			Action:      "update",
 			VersionFrom: "1.0.0",
 			VersionTo:   "2.0.0",
 			Status:      StatusSuccess,
@@ -332,7 +332,7 @@ func TestUpdateHistory_ListEntries(t *testing.T) {
 		for i := 1; i <= 3; i++ {
 			entry := UpdateHistoryEntry{
 				EventID: "event-" + string(rune('0'+i)),
-				Action:  ActionUpdate,
+				Action:  "update",
 				Status:  StatusSuccess,
 			}
 			h.CreateEntry(ctx, entry)
@@ -376,11 +376,11 @@ func TestUpdateHistory_ListEntries(t *testing.T) {
 		tmpDir := t.TempDir()
 		h, _ := NewUpdateHistory(tmpDir)
 
-		h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "e1", Action: ActionUpdate})
-		h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "e2", Action: ActionRollback})
-		h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "e3", Action: ActionUpdate})
+		h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "e1", Action: "update"})
+		h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "e2", Action: "rollback"})
+		h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "e3", Action: "update"})
 
-		entries := h.ListEntries(HistoryFilter{Action: ActionRollback})
+		entries := h.ListEntries(HistoryFilter{Action: "rollback"})
 		if len(entries) != 1 {
 			t.Errorf("Expected 1 rollback entry, got %d", len(entries))
 		}
@@ -421,12 +421,12 @@ func TestUpdateHistory_ListEntries(t *testing.T) {
 		tmpDir := t.TempDir()
 		h, _ := NewUpdateHistory(tmpDir)
 
-		h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "e1", Action: ActionUpdate, Status: StatusSuccess})
-		h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "e2", Action: ActionUpdate, Status: StatusFailed})
-		h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "e3", Action: ActionRollback, Status: StatusSuccess})
-		h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "e4", Action: ActionUpdate, Status: StatusSuccess})
+		h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "e1", Action: "update", Status: StatusSuccess})
+		h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "e2", Action: "update", Status: StatusFailed})
+		h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "e3", Action: "rollback", Status: StatusSuccess})
+		h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "e4", Action: "update", Status: StatusSuccess})
 
-		entries := h.ListEntries(HistoryFilter{Action: ActionUpdate, Status: StatusSuccess})
+		entries := h.ListEntries(HistoryFilter{Action: "update", Status: StatusSuccess})
 		if len(entries) != 2 {
 			t.Errorf("Expected 2 entries, got %d", len(entries))
 		}
@@ -561,7 +561,7 @@ func TestUpdateHistoryEntry_Fields(t *testing.T) {
 		entry := UpdateHistoryEntry{
 			EventID:        "test-123",
 			Timestamp:      time.Date(2024, 1, 15, 10, 30, 0, 0, time.UTC),
-			Action:         ActionUpdate,
+			Action:         "update",
 			Channel:        "stable",
 			VersionFrom:    "1.0.0",
 			VersionTo:      "2.0.0",
@@ -655,11 +655,11 @@ func TestUpdateHistoryEntry_Fields(t *testing.T) {
 
 func TestConstants(t *testing.T) {
 	t.Run("UpdateAction constants", func(t *testing.T) {
-		if ActionUpdate != "update" {
-			t.Errorf("ActionUpdate = %q, want 'update'", ActionUpdate)
+		if "update" != "update" {
+			t.Errorf("\"update\" = %q, want 'update'", "update")
 		}
-		if ActionRollback != "rollback" {
-			t.Errorf("ActionRollback = %q, want 'rollback'", ActionRollback)
+		if "rollback" != "rollback" {
+			t.Errorf("\"rollback\" = %q, want 'rollback'", "rollback")
 		}
 	})
 

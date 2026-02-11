@@ -313,23 +313,19 @@ func TestApplyUpdateFailsOnChecksumError(t *testing.T) {
 	t.Logf("ApplyUpdate returned error (as expected): %v", err)
 
 	// If the error happened early (e.g., Docker detection), no job would be enqueued
-	// If the error happened during update (e.g., checksum), status should be "error"
+	// If the error happened during update (e.g., checksum), status should be "error".
 	status := manager.GetStatus()
-	job := manager.GetQueue().GetCurrentJob()
 
 	// Check if error is recorded appropriately
 	if status.Status == "error" {
 		// Error happened during update process
 		t.Logf("Status correctly shows error: %s", status.Error)
-	} else if job != nil && job.State == JobStateFailed {
-		// Error happened and was recorded in job queue
-		t.Logf("Job correctly shows failure: %v", job.Error)
 	} else if err.Error() == "updates cannot be applied in Docker environment" {
-		// Early rejection before job was created (acceptable in test environment)
+		// Early rejection before update stages run (acceptable in test environment)
 		t.Logf("Update rejected due to Docker environment (acceptable in tests)")
 	} else {
 		// Some other early validation error
-		t.Logf("Update rejected with error: %v (no job created)", err)
+		t.Logf("Update rejected with error: %v", err)
 	}
 }
 
@@ -423,7 +419,7 @@ func TestManagerHistoryEntryLifecycle(t *testing.T) {
 
 	ctx := context.Background()
 	eventID := manager.createHistoryEntry(ctx, UpdateHistoryEntry{
-		Action:         ActionUpdate,
+		Action:         "update",
 		Status:         StatusInProgress,
 		VersionFrom:    "v4.24.0",
 		VersionTo:      "v4.25.0",
