@@ -89,7 +89,6 @@ func saveHostAgentHooks() func() {
 	origCreateTemp := createTempFn
 	origRemove := removeFn
 	origOpen := openFileFn
-	origOpenMode := openFileModeFn
 	origRename := renameFn
 	origSymlink := symlinkFn
 	origCopy := copyFn
@@ -107,7 +106,6 @@ func saveHostAgentHooks() func() {
 		createTempFn = origCreateTemp
 		removeFn = origRemove
 		openFileFn = origOpen
-		openFileModeFn = origOpenMode
 		renameFn = origRename
 		symlinkFn = origSymlink
 		copyFn = origCopy
@@ -533,6 +531,39 @@ func TestExtractHostAgentBinariesSymlinkCopyError(t *testing.T) {
 	}
 }
 
+func TestExtractHostAgentBinariesInvalidSymlinkTarget(t *testing.T) {
+	tmpDir := t.TempDir()
+	payload := buildTarGz(t, []tarEntry{
+		{name: "bin/pulse-host-agent-linux-amd64", body: []byte("binary"), mode: 0o644},
+		{name: "bin/pulse-host-agent-linux-amd64.exe", typeflag: tar.TypeSymlink, linkname: "../outside"},
+	})
+
+	archive := filepath.Join(t.TempDir(), "bundle.tar.gz")
+	if err := os.WriteFile(archive, payload, 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	if err := extractHostAgentBinaries(archive, tmpDir); err == nil {
+		t.Fatalf("expected invalid symlink target error")
+	}
+}
+
+func TestExtractHostAgentBinariesMissingSymlinkTarget(t *testing.T) {
+	tmpDir := t.TempDir()
+	payload := buildTarGz(t, []tarEntry{
+		{name: "bin/pulse-host-agent-linux-amd64.exe", typeflag: tar.TypeSymlink, linkname: "pulse-host-agent-linux-amd64"},
+	})
+
+	archive := filepath.Join(t.TempDir(), "bundle.tar.gz")
+	if err := os.WriteFile(archive, payload, 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	if err := extractHostAgentBinaries(archive, tmpDir); err == nil {
+		t.Fatalf("expected missing symlink target error")
+	}
+}
+
 func TestWriteHostAgentFileErrors(t *testing.T) {
 	t.Run("MkdirAllError", func(t *testing.T) {
 		restore := saveHostAgentHooks()
@@ -633,7 +664,7 @@ func TestCopyHostAgentFileErrors(t *testing.T) {
 		}
 	})
 
-	t.Run("OpenFileError", func(t *testing.T) {
+	t.Run("StatError", func(t *testing.T) {
 		restore := saveHostAgentHooks()
 		t.Cleanup(restore)
 
@@ -641,11 +672,16 @@ func TestCopyHostAgentFileErrors(t *testing.T) {
 		if err := os.WriteFile(src, []byte("data"), 0o644); err != nil {
 			t.Fatalf("write: %v", err)
 		}
-		openFileModeFn = func(string, int, os.FileMode) (*os.File, error) {
-			return nil, errors.New("create fail")
+		openFileFn = func(string) (*os.File, error) {
+			file, err := os.Open(src)
+			if err != nil {
+				return nil, err
+			}
+			_ = file.Close()
+			return file, nil
 		}
 		if err := copyHostAgentFile(src, filepath.Join(t.TempDir(), "dest")); err == nil {
-			t.Fatalf("expected open file error")
+			t.Fatalf("expected stat error")
 		}
 	})
 
@@ -678,6 +714,16 @@ func TestCopyHostAgentFileSuccess(t *testing.T) {
 	}
 	if _, err := os.Stat(dest); err != nil {
 		t.Fatalf("expected dest file: %v", err)
+	}
+}
+
+func TestNormalizeExecutableMode_StripsSpecialBits(t *testing.T) {
+	mode := normalizeExecutableMode(os.ModeSetuid | 0o644)
+	if mode&os.ModeSetuid != 0 {
+		t.Fatalf("expected setuid bit to be stripped, got %v", mode)
+	}
+	if mode&0o111 == 0 {
+		t.Fatalf("expected executable bit to be set, got %v", mode)
 	}
 }
 

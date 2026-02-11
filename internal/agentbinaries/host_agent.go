@@ -68,7 +68,6 @@ var (
 	createTempFn                          = os.CreateTemp
 	removeFn                              = os.Remove
 	openFileFn                            = os.Open
-	openFileModeFn                        = os.OpenFile
 	renameFn                              = os.Rename
 	symlinkFn                             = os.Symlink
 	copyFn                                = io.Copy
@@ -382,6 +381,16 @@ func extractHostAgentBinaries(archivePath, targetDir string) error {
 	}
 
 	for _, link := range symlinks {
+		linkTarget, err := normalizeHostAgentSymlinkTarget(link.target)
+		if err != nil {
+			return fmt.Errorf("invalid host agent symlink target %q: %w", link.target, err)
+		}
+		link.target = linkTarget
+
+		if _, err := os.Stat(filepath.Join(targetDir, link.target)); err != nil {
+			return fmt.Errorf("host agent symlink target %q is unavailable: %w", link.target, err)
+		}
+
 		if err := removeFn(link.path); err != nil && !os.IsNotExist(err) {
 			return fmt.Errorf("failed to replace existing symlink %s: %w", link.path, err)
 		}
@@ -395,6 +404,27 @@ func extractHostAgentBinaries(archivePath, targetDir string) error {
 	}
 
 	return nil
+}
+
+func normalizeHostAgentSymlinkTarget(target string) (string, error) {
+	clean := strings.TrimSpace(target)
+	if clean == "" {
+		return "", fmt.Errorf("target is empty")
+	}
+	clean = path.Clean(clean)
+	if clean == "." || clean == ".." || path.IsAbs(clean) || strings.HasPrefix(clean, "../") {
+		return "", fmt.Errorf("target must be a relative host agent filename")
+	}
+	if path.Base(clean) != clean {
+		return "", fmt.Errorf("target must not contain directory traversal")
+	}
+	if strings.Contains(clean, `\`) {
+		return "", fmt.Errorf("target must not contain path separators")
+	}
+	if !strings.HasPrefix(clean, "pulse-host-agent-") {
+		return "", fmt.Errorf("target must reference a host agent binary")
+	}
+	return clean, nil
 }
 
 func writeHostAgentFile(destination string, reader io.Reader, mode os.FileMode) error {
@@ -436,17 +466,11 @@ func copyHostAgentFile(source, destination string) error {
 	}
 	defer src.Close()
 
-	if err := mkdirAllFn(filepath.Dir(destination), 0o755); err != nil {
-		return fmt.Errorf("failed to prepare directory for %s: %w", destination, err)
-	}
-
-	dst, err := openFileModeFn(destination, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o755)
+	info, err := src.Stat()
 	if err != nil {
-		return fmt.Errorf("failed to create fallback copy %s: %w", destination, err)
+		return fmt.Errorf("failed to stat %s for fallback copy: %w", source, err)
 	}
-	defer dst.Close()
-
-	if _, err := copyFn(dst, src); err != nil {
+	if err := writeHostAgentFile(destination, src, info.Mode()); err != nil {
 		return fmt.Errorf("failed to copy %s to %s: %w", source, destination, err)
 	}
 
@@ -458,5 +482,5 @@ func normalizeExecutableMode(mode os.FileMode) os.FileMode {
 	if perms&0o111 == 0 {
 		perms |= 0o755
 	}
-	return (mode &^ os.ModePerm) | perms
+	return perms
 }
