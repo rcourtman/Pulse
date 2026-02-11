@@ -369,6 +369,11 @@ const (
 	AppriseModeHTTP AppriseMode = "http"
 )
 
+const (
+	defaultSMTPPort       = 587
+	defaultEmailRateLimit = 60
+)
+
 // AppriseConfig holds Apprise notification settings.
 type AppriseConfig struct {
 	Enabled        bool        `json:"enabled"`
@@ -381,6 +386,56 @@ type AppriseConfig struct {
 	APIKey         string      `json:"apiKey,omitempty"`
 	APIKeyHeader   string      `json:"apiKeyHeader,omitempty"`
 	SkipTLSVerify  bool        `json:"skipTlsVerify,omitempty"`
+}
+
+func normalizeEmailConfig(cfg EmailConfig) EmailConfig {
+	normalized := cfg
+	normalized.Provider = strings.TrimSpace(normalized.Provider)
+	normalized.SMTPHost = strings.TrimSpace(normalized.SMTPHost)
+	normalized.Username = strings.TrimSpace(normalized.Username)
+	normalized.From = strings.TrimSpace(normalized.From)
+
+	if normalized.SMTPPort <= 0 || normalized.SMTPPort > 65535 {
+		log.Warn().
+			Int("smtpPort", normalized.SMTPPort).
+			Int("defaultPort", defaultSMTPPort).
+			Msg("Invalid SMTP port in email config, using default")
+		normalized.SMTPPort = defaultSMTPPort
+	}
+
+	if normalized.RateLimit < 0 {
+		log.Warn().
+			Int("rateLimit", normalized.RateLimit).
+			Msg("Invalid negative email rate limit, using default behavior")
+		normalized.RateLimit = 0
+	}
+
+	if len(normalized.To) > 0 {
+		cleaned := make([]string, 0, len(normalized.To))
+		seen := make(map[string]struct{}, len(normalized.To))
+		for _, recipient := range normalized.To {
+			trimmed := strings.TrimSpace(recipient)
+			if trimmed == "" {
+				continue
+			}
+			key := strings.ToLower(trimmed)
+			if _, exists := seen[key]; exists {
+				continue
+			}
+			seen[key] = struct{}{}
+			cleaned = append(cleaned, trimmed)
+		}
+		normalized.To = cleaned
+	}
+
+	return normalized
+}
+
+func effectiveEmailRateLimit(configured int) int {
+	if configured <= 0 {
+		return defaultEmailRateLimit
+	}
+	return configured
 }
 
 // NewNotificationManager creates a new notification manager using the global data directory.
@@ -476,13 +531,11 @@ func (n *NotificationManager) GetPublicURL() string {
 func (n *NotificationManager) SetEmailConfig(config EmailConfig) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
+	config = normalizeEmailConfig(config)
 	n.emailConfig = config
 
 	// Recreate email manager with new config to preserve rate limiting state
-	rateLimit := config.RateLimit
-	if rateLimit <= 0 {
-		rateLimit = 60
-	}
+	rateLimit := effectiveEmailRateLimit(config.RateLimit)
 	providerConfig := EmailProviderConfig{
 		EmailConfig:   config,
 		Provider:      "",
@@ -1450,6 +1503,8 @@ func (n *NotificationManager) sendEmail(alert *alerts.Alert) {
 
 // sendHTMLEmailWithError sends an HTML email with multipart content and returns any error
 func (n *NotificationManager) sendHTMLEmailWithError(subject, htmlBody, textBody string, config EmailConfig) error {
+	config = normalizeEmailConfig(config)
+
 	// Use From address as recipient if To is empty
 	recipients := config.To
 	if len(recipients) == 0 && config.From != "" {
@@ -1466,10 +1521,7 @@ func (n *NotificationManager) sendHTMLEmailWithError(subject, htmlBody, textBody
 
 	if manager == nil {
 		// Create email manager if not yet initialized
-		rl := config.RateLimit
-		if rl <= 0 {
-			rl = 60
-		}
+		rl := effectiveEmailRateLimit(config.RateLimit)
 		enhancedConfig := EmailProviderConfig{
 			EmailConfig: EmailConfig{
 				From:     config.From,
@@ -1489,9 +1541,27 @@ func (n *NotificationManager) sendHTMLEmailWithError(subject, htmlBody, textBody
 		}
 		manager = NewEnhancedEmailManager(enhancedConfig)
 	} else {
-		// Update manager's config but preserve rate limiter
-		manager.config.EmailConfig.From = config.From
-		manager.config.EmailConfig.To = recipients
+		// Update manager config while preserving accumulated rate limiter state.
+		manager.config.EmailConfig = EmailConfig{
+			From:     config.From,
+			To:       recipients,
+			SMTPHost: config.SMTPHost,
+			SMTPPort: config.SMTPPort,
+			Username: config.Username,
+			Password: config.Password,
+			TLS:      config.TLS,
+			StartTLS: config.StartTLS,
+		}
+		manager.config.Provider = config.Provider
+		manager.config.StartTLS = config.StartTLS
+		manager.config.RateLimit = effectiveEmailRateLimit(config.RateLimit)
+		manager.config.AuthRequired = config.Username != "" && config.Password != ""
+
+		if manager.rateLimit != nil {
+			manager.rateLimit.mu.Lock()
+			manager.rateLimit.rate = manager.config.RateLimit
+			manager.rateLimit.mu.Unlock()
+		}
 	}
 
 	log.Info().
@@ -1522,6 +1592,8 @@ func (n *NotificationManager) sendHTMLEmailWithError(subject, htmlBody, textBody
 
 // sendHTMLEmail sends an HTML email with multipart content
 func (n *NotificationManager) sendHTMLEmail(subject, htmlBody, textBody string, config EmailConfig) {
+	config = normalizeEmailConfig(config)
+
 	// Use From address as recipient if To is empty
 	recipients := config.To
 	if len(recipients) == 0 && config.From != "" {
@@ -1532,10 +1604,7 @@ func (n *NotificationManager) sendHTMLEmail(subject, htmlBody, textBody string, 
 	}
 
 	// Create enhanced email configuration with proper STARTTLS support
-	rl := config.RateLimit
-	if rl <= 0 {
-		rl = 60
-	}
+	rl := effectiveEmailRateLimit(config.RateLimit)
 	enhancedConfig := EmailProviderConfig{
 		EmailConfig: EmailConfig{
 			From:     config.From,

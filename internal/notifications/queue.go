@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -15,6 +16,8 @@ import (
 	"github.com/rs/zerolog/log"
 	_ "modernc.org/sqlite"
 )
+
+const defaultQueueMaxAttempts = 3
 
 // NotificationQueueStatus represents the status of a queued notification
 type NotificationQueueStatus string
@@ -62,9 +65,11 @@ type NotificationQueue struct {
 
 // NewNotificationQueue creates a new persistent notification queue
 func NewNotificationQueue(dataDir string) (*NotificationQueue, error) {
+	dataDir = strings.TrimSpace(dataDir)
 	if dataDir == "" {
 		dataDir = filepath.Join(utils.GetDataDir(), "notifications")
 	}
+	dataDir = filepath.Clean(dataDir)
 
 	// Ensure directory exists
 	if err := os.MkdirAll(dataDir, 0755); err != nil {
@@ -176,14 +181,32 @@ func (nq *NotificationQueue) initSchema() error {
 
 // Enqueue adds a notification to the queue
 func (nq *NotificationQueue) Enqueue(notif *QueuedNotification) error {
+	if notif == nil {
+		return fmt.Errorf("notification cannot be nil")
+	}
+
+	notif.Type = strings.TrimSpace(notif.Type)
+	if notif.Type == "" {
+		return fmt.Errorf("notification type cannot be empty")
+	}
+
+	notif.Method = strings.TrimSpace(notif.Method)
+
+	if len(notif.Config) == 0 {
+		return fmt.Errorf("notification config cannot be empty")
+	}
+
 	if notif.ID == "" {
 		notif.ID = fmt.Sprintf("%s-%d", notif.Type, time.Now().UnixNano())
 	}
 	if notif.Status == "" {
 		notif.Status = QueueStatusPending
 	}
-	if notif.MaxAttempts == 0 {
-		notif.MaxAttempts = 3
+	if notif.MaxAttempts <= 0 {
+		notif.MaxAttempts = defaultQueueMaxAttempts
+	}
+	if notif.Attempts < 0 {
+		notif.Attempts = 0
 	}
 	if notif.CreatedAt.IsZero() {
 		notif.CreatedAt = time.Now()
@@ -727,6 +750,13 @@ func (nq *NotificationQueue) Stop() error {
 
 // calculateBackoff calculates exponential backoff duration
 func calculateBackoff(attempt int) time.Duration {
+	if attempt <= 0 {
+		return 1 * time.Second
+	}
+	if attempt >= 6 {
+		return 60 * time.Second
+	}
+
 	// 1s, 2s, 4s, 8s, 16s, 32s, 60s (capped)
 	backoff := time.Duration(1<<uint(attempt)) * time.Second
 	if backoff > 60*time.Second {

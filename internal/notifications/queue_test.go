@@ -3,10 +3,12 @@ package notifications
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 )
 
 func TestCalculateBackoff(t *testing.T) {
@@ -15,6 +17,11 @@ func TestCalculateBackoff(t *testing.T) {
 		attempt  int
 		expected time.Duration
 	}{
+		{
+			name:     "negative attempt defaults to first backoff",
+			attempt:  -1,
+			expected: 1 * time.Second,
+		},
 		{
 			name:     "attempt 0 (first retry)",
 			attempt:  0,
@@ -60,9 +67,11 @@ func TestCalculateBackoff(t *testing.T) {
 			attempt:  10,
 			expected: 60 * time.Second,
 		},
-		// Note: For very large attempt numbers (>= 60 on 64-bit), bit shift
-		// overflows causing duration to be 0. In practice this never happens
-		// as max_attempts is typically 3-10.
+		{
+			name:     "very large attempts stay capped",
+			attempt:  60,
+			expected: 60 * time.Second,
+		},
 	}
 
 	for _, tc := range tests {
@@ -73,6 +82,92 @@ func TestCalculateBackoff(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestNewNotificationQueue_WhitespaceDataDirUsesDefault(t *testing.T) {
+	dataDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", dataDir)
+
+	nq, err := NewNotificationQueue("   \t  ")
+	if err != nil {
+		t.Fatalf("Failed to create notification queue with whitespace data dir: %v", err)
+	}
+	defer nq.Stop()
+
+	expectedDBPath := filepath.Join(utils.GetDataDir(), "notifications", "notification_queue.db")
+	if nq.dbPath != expectedDBPath {
+		t.Fatalf("expected db path %q, got %q", expectedDBPath, nq.dbPath)
+	}
+}
+
+func TestEnqueue_ValidatesAndNormalizesInput(t *testing.T) {
+	tempDir := t.TempDir()
+	nq, err := NewNotificationQueue(tempDir)
+	if err != nil {
+		t.Fatalf("Failed to create notification queue: %v", err)
+	}
+	defer nq.Stop()
+
+	t.Run("rejects nil notification", func(t *testing.T) {
+		err := nq.Enqueue(nil)
+		if err == nil {
+			t.Fatalf("expected error for nil notification")
+		}
+	})
+
+	t.Run("rejects empty type", func(t *testing.T) {
+		err := nq.Enqueue(&QueuedNotification{
+			Config: []byte(`{}`),
+		})
+		if err == nil {
+			t.Fatalf("expected error for empty notification type")
+		}
+	})
+
+	t.Run("rejects empty config", func(t *testing.T) {
+		err := nq.Enqueue(&QueuedNotification{
+			Type: "email",
+		})
+		if err == nil {
+			t.Fatalf("expected error for empty notification config")
+		}
+	})
+
+	t.Run("normalizes attempts and type", func(t *testing.T) {
+		futureRetry := time.Now().Add(1 * time.Hour)
+		notif := &QueuedNotification{
+			ID:          "normalize-test",
+			Type:        "  email  ",
+			Status:      QueueStatusPending,
+			Attempts:    -10,
+			MaxAttempts: -2,
+			Config:      []byte(`{}`),
+			NextRetryAt: &futureRetry, // keep background worker from picking it up
+			Alerts:      []*alerts.Alert{{ID: "a-1"}},
+		}
+
+		if err := nq.Enqueue(notif); err != nil {
+			t.Fatalf("enqueue failed: %v", err)
+		}
+
+		var dbType string
+		var attempts int
+		var maxAttempts int
+		err := nq.db.QueryRow(`SELECT type, attempts, max_attempts FROM notification_queue WHERE id = ?`, notif.ID).Scan(&dbType, &attempts, &maxAttempts)
+		if err != nil {
+			t.Fatalf("failed to query normalized notification: %v", err)
+		}
+
+		if dbType != "email" {
+			t.Fatalf("expected trimmed type 'email', got %q", dbType)
+		}
+		if attempts != 0 {
+			t.Fatalf("expected attempts to normalize to 0, got %d", attempts)
+		}
+		if maxAttempts != defaultQueueMaxAttempts {
+			t.Fatalf("expected max attempts to normalize to %d, got %d", defaultQueueMaxAttempts, maxAttempts)
+		}
+	})
 }
 
 func TestCalculateBackoff_ExponentialGrowth(t *testing.T) {
