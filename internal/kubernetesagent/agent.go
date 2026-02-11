@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -110,10 +111,16 @@ func New(cfg Config) (*Agent, error) {
 		return nil, fmt.Errorf("api token is required")
 	}
 
-	pulseURL := strings.TrimRight(strings.TrimSpace(cfg.PulseURL), "/")
+	pulseURL := strings.TrimSpace(cfg.PulseURL)
 	if pulseURL == "" {
 		pulseURL = "http://localhost:7655"
 	}
+	normalizedPulseURL, err := normalizePulseURL(pulseURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid pulse url: %w", err)
+	}
+	pulseURL = normalizedPulseURL
+	cfg.PulseURL = pulseURL
 
 	restCfg, contextName, err := buildRESTConfig(cfg.KubeconfigPath, cfg.KubeContext)
 	if err != nil {
@@ -190,6 +197,53 @@ func New(cfg Config) (*Agent, error) {
 		Msg("Kubernetes agent initialized")
 
 	return agent, nil
+}
+
+func normalizePulseURL(rawURL string) (string, error) {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return "", fmt.Errorf("pulse URL %q is invalid: %w", rawURL, err)
+	}
+
+	if parsed.Scheme == "" {
+		return "", fmt.Errorf("pulse URL %q must include scheme (https:// or loopback http://)", rawURL)
+	}
+	if parsed.Host == "" {
+		return "", fmt.Errorf("pulse URL %q must include host", rawURL)
+	}
+	if parsed.User != nil {
+		return "", fmt.Errorf("pulse URL %q must not include user credentials", rawURL)
+	}
+	if parsed.RawQuery != "" || parsed.Fragment != "" {
+		return "", fmt.Errorf("pulse URL %q must not include query or fragment", rawURL)
+	}
+
+	scheme := strings.ToLower(parsed.Scheme)
+	switch scheme {
+	case "https":
+		// Always allowed.
+	case "http":
+		if !isLoopbackPulseHost(parsed.Hostname()) {
+			return "", fmt.Errorf("pulse URL %q must use https unless host is loopback", rawURL)
+		}
+	default:
+		return "", fmt.Errorf("pulse URL %q has unsupported scheme %q", rawURL, parsed.Scheme)
+	}
+
+	parsed.Scheme = scheme
+	parsed.Path = strings.TrimRight(parsed.Path, "/")
+	parsed.RawPath = strings.TrimRight(parsed.RawPath, "/")
+
+	return parsed.String(), nil
+}
+
+func isLoopbackPulseHost(host string) bool {
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 func buildRESTConfig(kubeconfigPath, kubeContext string) (*rest.Config, string, error) {
