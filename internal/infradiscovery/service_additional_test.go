@@ -50,6 +50,40 @@ func TestStartStopUpdatesStatus(t *testing.T) {
 	}
 }
 
+func TestStartStopRestartStopIsSafe(t *testing.T) {
+	provider := &mockStateProvider{state: models.StateSnapshot{}}
+	service := NewService(provider, nil, Config{
+		Interval:    10 * time.Millisecond,
+		CacheExpiry: time.Millisecond,
+	})
+	service.SetAIAnalyzer(&mockAIAnalyzer{})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	service.Start(ctx)
+	waitFor(t, 500*time.Millisecond, func() bool {
+		return !service.GetLastRun().IsZero()
+	})
+	service.Stop()
+
+	firstRun := service.GetLastRun()
+	if firstRun.IsZero() {
+		t.Fatal("expected first discovery run timestamp")
+	}
+
+	service.Start(ctx)
+	waitFor(t, 500*time.Millisecond, func() bool {
+		return service.GetLastRun().After(firstRun)
+	})
+	service.Stop()
+
+	status := service.GetStatus()
+	if running, ok := status["running"].(bool); !ok || running {
+		t.Fatalf("expected running status false after second stop, got %v", status["running"])
+	}
+}
+
 func TestForceRefreshUpdatesLastRun(t *testing.T) {
 	provider := &mockStateProvider{state: models.StateSnapshot{}}
 	service := NewService(provider, nil, DefaultConfig())

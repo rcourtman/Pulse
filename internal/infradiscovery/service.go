@@ -149,6 +149,8 @@ func (s *Service) Start(ctx context.Context) {
 		s.mu.Unlock()
 		return
 	}
+	s.stopCh = make(chan struct{})
+	stopCh := s.stopCh
 	s.running = true
 	s.mu.Unlock()
 
@@ -179,7 +181,7 @@ func (s *Service) Start(ctx context.Context) {
 					Msg("Recovered from panic in infrastructure discovery loop")
 			}
 		}()
-		s.discoveryLoop(ctx)
+		s.discoveryLoop(ctx, stopCh)
 	}()
 }
 
@@ -194,7 +196,7 @@ func (s *Service) Stop() {
 }
 
 // discoveryLoop runs periodic discovery.
-func (s *Service) discoveryLoop(ctx context.Context) {
+func (s *Service) discoveryLoop(ctx context.Context, stopCh <-chan struct{}) {
 	ticker := time.NewTicker(s.interval)
 	defer ticker.Stop()
 
@@ -202,7 +204,7 @@ func (s *Service) discoveryLoop(ctx context.Context) {
 		select {
 		case <-ticker.C:
 			s.RunDiscovery(ctx)
-		case <-s.stopCh:
+		case <-stopCh:
 			log.Info().Msg("Stopping infrastructure discovery service")
 			return
 		case <-ctx.Done():
