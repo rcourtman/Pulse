@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog/log"
@@ -30,6 +31,35 @@ var newGCM = cipher.NewGCM
 type CryptoManager struct {
 	key     []byte
 	keyPath string // Path to the encryption key file for runtime validation
+}
+
+func resolveDataDir(dataDir string) (string, error) {
+	dir := strings.TrimSpace(dataDir)
+	if dir == "" {
+		dir = strings.TrimSpace(defaultDataDirFn())
+	}
+	if dir == "" {
+		return "", fmt.Errorf("data directory is required")
+	}
+	return filepath.Clean(dir), nil
+}
+
+func resolveLegacyKeyPath() string {
+	oldKeyPath := legacyKeyPath
+	if v, ok := os.LookupEnv("PULSE_LEGACY_KEY_PATH"); ok {
+		trimmed := strings.TrimSpace(v)
+		switch {
+		case trimmed == "":
+			return oldKeyPath
+		case !filepath.IsAbs(trimmed):
+			log.Warn().
+				Str("legacyKeyPath", trimmed).
+				Msg("Ignoring non-absolute PULSE_LEGACY_KEY_PATH override")
+		default:
+			oldKeyPath = filepath.Clean(trimmed)
+		}
+	}
+	return oldKeyPath
 }
 
 // DeriveKey derives a purpose-specific key from the master encryption key using HKDF-SHA256.
@@ -55,12 +85,13 @@ func (c *CryptoManager) DeriveKey(purpose string, length int) ([]byte, error) {
 
 // NewCryptoManagerAt creates a new crypto manager with an explicit data directory override.
 func NewCryptoManagerAt(dataDir string) (*CryptoManager, error) {
-	if dataDir == "" {
-		dataDir = defaultDataDirFn()
+	resolvedDataDir, err := resolveDataDir(dataDir)
+	if err != nil {
+		return nil, fmt.Errorf("resolve data directory: %w", err)
 	}
-	keyPath := filepath.Join(dataDir, ".encryption.key")
+	keyPath := filepath.Join(resolvedDataDir, ".encryption.key")
 
-	key, err := getOrCreateKeyAt(dataDir)
+	key, err := getOrCreateKeyAt(resolvedDataDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get encryption key: %w", err)
 	}
@@ -73,21 +104,19 @@ func NewCryptoManagerAt(dataDir string) (*CryptoManager, error) {
 
 // getOrCreateKeyAt gets the encryption key or creates one if it doesn't exist
 func getOrCreateKeyAt(dataDir string) ([]byte, error) {
-	if dataDir == "" {
-		dataDir = defaultDataDirFn()
+	resolvedDataDir, err := resolveDataDir(dataDir)
+	if err != nil {
+		return nil, fmt.Errorf("resolve data directory: %w", err)
 	}
 
-	keyPath := filepath.Join(dataDir, ".encryption.key")
-	oldKeyPath := legacyKeyPath
+	keyPath := filepath.Join(resolvedDataDir, ".encryption.key")
 	// Test/ops hook: allow overriding the legacy key location to avoid touching /etc/pulse in unit tests.
-	// This is only used during migration checks and has no effect unless explicitly set.
-	if v := os.Getenv("PULSE_LEGACY_KEY_PATH"); v != "" {
-		oldKeyPath = v
-	}
+	// Invalid overrides are ignored to avoid accidentally reading from relative CWD paths.
+	oldKeyPath := resolveLegacyKeyPath()
 	oldKeyDir := filepath.Dir(oldKeyPath)
 
 	log.Debug().
-		Str("dataDir", dataDir).
+		Str("dataDir", resolvedDataDir).
 		Str("keyPath", keyPath).
 		Msg("Looking for encryption key")
 
@@ -117,9 +146,9 @@ func getOrCreateKeyAt(dataDir string) ([]byte, error) {
 	// Check for key in old location and migrate if found (only if paths differ)
 	// CRITICAL: This code deletes the encryption key at oldKeyPath after migrating it.
 	// Adding extensive logging to diagnose recurring key deletion bug.
-	if dataDir != oldKeyDir && keyPath != oldKeyPath {
+	if resolvedDataDir != oldKeyDir && keyPath != oldKeyPath {
 		log.Warn().
-			Str("dataDir", dataDir).
+			Str("dataDir", resolvedDataDir).
 			Str("keyPath", keyPath).
 			Str("oldKeyPath", oldKeyPath).
 			Msg("ENCRYPTION KEY MIGRATION: Checking if old key exists for migration (this code path CAN delete the key!)")
@@ -151,7 +180,7 @@ func getOrCreateKeyAt(dataDir string) ([]byte, error) {
 				log.Info().
 					Str("oldKeyPath", oldKeyPath).
 					Str("newKeyPath", keyPath).
-					Str("dataDir", dataDir).
+					Str("dataDir", resolvedDataDir).
 					Msg("Key migration complete - PRESERVING old key at original location for safety")
 
 				// DISABLED: Key deletion was causing mysterious key loss bugs.
@@ -172,9 +201,9 @@ func getOrCreateKeyAt(dataDir string) ([]byte, error) {
 		}
 	} else {
 		log.Debug().
-			Str("dataDir", dataDir).
+			Str("dataDir", resolvedDataDir).
 			Str("keyPath", keyPath).
-			Bool("sameAsOldPath", dataDir == oldKeyDir).
+			Bool("sameAsOldPath", resolvedDataDir == oldKeyDir).
 			Msg("Skipping key migration check (dataDir is /etc/pulse or paths match)")
 	}
 
@@ -191,7 +220,7 @@ func getOrCreateKeyAt(dataDir string) ([]byte, error) {
 	hasEncryptedData := false
 	var foundFiles []string
 	for _, pattern := range checkPatterns {
-		matches, _ := filepath.Glob(filepath.Join(dataDir, pattern))
+		matches, _ := filepath.Glob(filepath.Join(resolvedDataDir, pattern))
 		for _, file := range matches {
 			if info, err := os.Stat(file); err == nil && info.Size() > 0 {
 				hasEncryptedData = true
@@ -203,7 +232,7 @@ func getOrCreateKeyAt(dataDir string) ([]byte, error) {
 	if hasEncryptedData {
 		log.Error().
 			Strs("foundFiles", foundFiles).
-			Str("dataDir", dataDir).
+			Str("dataDir", resolvedDataDir).
 			Msg("CRITICAL: Encryption key not found but encrypted/backup/corrupted files exist")
 		return nil, fmt.Errorf("encryption key not found but encrypted data exists (%v) - cannot generate new key as it would orphan existing data. Please restore the encryption key from backup or delete ALL .enc* files to start fresh", foundFiles)
 	}
@@ -233,6 +262,10 @@ func getOrCreateKeyAt(dataDir string) ([]byte, error) {
 // SAFETY: Verifies the encryption key file still exists on disk before encrypting.
 // This prevents orphaned encrypted data if the key was deleted while Pulse was running.
 func (c *CryptoManager) Encrypt(plaintext []byte) ([]byte, error) {
+	if c == nil {
+		return nil, fmt.Errorf("crypto.Encrypt: crypto manager not initialized")
+	}
+
 	// CRITICAL: Verify the key file still exists on disk before encrypting
 	// This prevents creating orphaned encrypted data that can never be decrypted
 	if c.keyPath != "" {
@@ -265,6 +298,10 @@ func (c *CryptoManager) Encrypt(plaintext []byte) ([]byte, error) {
 
 // Decrypt decrypts data using AES-GCM
 func (c *CryptoManager) Decrypt(ciphertext []byte) ([]byte, error) {
+	if c == nil {
+		return nil, fmt.Errorf("crypto.Decrypt: crypto manager not initialized")
+	}
+
 	block, err := newCipher(c.key)
 	if err != nil {
 		return nil, fmt.Errorf("crypto.Decrypt: create AES cipher: %w", err)

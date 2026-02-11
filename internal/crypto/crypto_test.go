@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -202,6 +203,31 @@ func TestNewCryptoManagerAt_DefaultDataDir(t *testing.T) {
 	}
 }
 
+func TestNewCryptoManagerAt_WhitespaceDataDirUsesDefault(t *testing.T) {
+	tmpDir := t.TempDir()
+	withDefaultDataDir(t, tmpDir)
+
+	cm, err := NewCryptoManagerAt("   ")
+	if err != nil {
+		t.Fatalf("NewCryptoManagerAt() error: %v", err)
+	}
+	if cm.keyPath != filepath.Join(tmpDir, ".encryption.key") {
+		t.Fatalf("keyPath = %q, want %q", cm.keyPath, filepath.Join(tmpDir, ".encryption.key"))
+	}
+}
+
+func TestNewCryptoManagerAt_EmptyDefaultDataDirFails(t *testing.T) {
+	withDefaultDataDir(t, "   ")
+
+	_, err := NewCryptoManagerAt("")
+	if err == nil {
+		t.Fatal("Expected error when default data dir is empty")
+	}
+	if !strings.Contains(err.Error(), "data directory is required") {
+		t.Fatalf("expected data directory validation error, got: %v", err)
+	}
+}
+
 func TestNewCryptoManagerAt_KeyError(t *testing.T) {
 	tmpDir := t.TempDir()
 	withLegacyKeyPath(t, filepath.Join(t.TempDir(), ".encryption.key"))
@@ -313,6 +339,38 @@ func TestGetOrCreateKeyAt_MigrateSuccess(t *testing.T) {
 	legacyDir := t.TempDir()
 	legacyPath := filepath.Join(legacyDir, ".encryption.key")
 	withLegacyKeyPath(t, legacyPath)
+
+	oldKey := make([]byte, 32)
+	for i := range oldKey {
+		oldKey[i] = byte(i)
+	}
+	encoded := base64.StdEncoding.EncodeToString(oldKey)
+	if err := os.WriteFile(legacyPath, []byte(encoded), 0600); err != nil {
+		t.Fatalf("Failed to write legacy key: %v", err)
+	}
+
+	newDir := t.TempDir()
+	key, err := getOrCreateKeyAt(newDir)
+	if err != nil {
+		t.Fatalf("getOrCreateKeyAt() error: %v", err)
+	}
+	if !bytes.Equal(key, oldKey) {
+		t.Fatalf("migrated key mismatch")
+	}
+	contents, err := os.ReadFile(filepath.Join(newDir, ".encryption.key"))
+	if err != nil {
+		t.Fatalf("Failed to read migrated key: %v", err)
+	}
+	if string(contents) != encoded {
+		t.Fatalf("migrated key contents mismatch")
+	}
+}
+
+func TestGetOrCreateKeyAt_IgnoresRelativeLegacyOverride(t *testing.T) {
+	legacyDir := t.TempDir()
+	legacyPath := filepath.Join(legacyDir, ".encryption.key")
+	withLegacyKeyPath(t, legacyPath)
+	t.Setenv("PULSE_LEGACY_KEY_PATH", "relative/.encryption.key")
 
 	oldKey := make([]byte, 32)
 	for i := range oldKey {
@@ -632,5 +690,21 @@ func TestEncryptRefusesAfterKeyDeleted(t *testing.T) {
 	}
 	if !bytes.Equal(decrypted, plaintext) {
 		t.Error("Decrypt() returned wrong data")
+	}
+}
+
+func TestEncryptNilManager(t *testing.T) {
+	var cm *CryptoManager
+	_, err := cm.Encrypt([]byte("data"))
+	if err == nil {
+		t.Fatal("Expected error for nil crypto manager")
+	}
+}
+
+func TestDecryptNilManager(t *testing.T) {
+	var cm *CryptoManager
+	_, err := cm.Decrypt([]byte("data"))
+	if err == nil {
+		t.Fatal("Expected error for nil crypto manager")
 	}
 }
