@@ -2,6 +2,7 @@ package unifiedresources
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -85,8 +86,14 @@ func NewSQLiteResourceStore(dataDir, orgID string) (*SQLiteResourceStore, error)
 
 	store := &SQLiteResourceStore{db: db, dbPath: path}
 	if err := store.initSchema(); err != nil {
-		db.Close()
-		return nil, err
+		wrappedInitErr := fmt.Errorf("initialize resource store schema for %q: %w", path, err)
+		if closeErr := db.Close(); closeErr != nil {
+			return nil, errors.Join(
+				wrappedInitErr,
+				fmt.Errorf("close resources db %q after init failure: %w", path, closeErr),
+			)
+		}
+		return nil, wrappedInitErr
 	}
 	return store, nil
 }
@@ -198,7 +205,10 @@ func (s *SQLiteResourceStore) AddLink(link ResourceLink) error {
 			created_by=excluded.created_by,
 			created_at=excluded.created_at
 	`, a, b, link.PrimaryID, link.Reason, link.CreatedBy, link.CreatedAt)
-	return err
+	if err != nil {
+		return fmt.Errorf("upsert resource link %q<->%q: %w", a, b, err)
+	}
+	return nil
 }
 
 func (s *SQLiteResourceStore) AddExclusion(exclusion ResourceExclusion) error {
@@ -219,48 +229,75 @@ func (s *SQLiteResourceStore) AddExclusion(exclusion ResourceExclusion) error {
 			created_by=excluded.created_by,
 			created_at=excluded.created_at
 	`, a, b, exclusion.Reason, exclusion.CreatedBy, exclusion.CreatedAt)
-	return err
+	if err != nil {
+		return fmt.Errorf("upsert resource exclusion %q<->%q: %w", a, b, err)
+	}
+	return nil
 }
 
-func (s *SQLiteResourceStore) GetLinks() ([]ResourceLink, error) {
+func (s *SQLiteResourceStore) GetLinks() (links []ResourceLink, err error) {
 	rows, err := s.db.Query(`SELECT resource_a, resource_b, primary_id, reason, created_by, created_at FROM resource_links`)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("query resource links: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil {
+			wrappedCloseErr := fmt.Errorf("close resource links rows: %w", closeErr)
+			if err != nil {
+				err = errors.Join(err, wrappedCloseErr)
+				return
+			}
+			err = wrappedCloseErr
+		}
+	}()
 
-	var links []ResourceLink
 	for rows.Next() {
 		var link ResourceLink
-		if err := rows.Scan(&link.ResourceA, &link.ResourceB, &link.PrimaryID, &link.Reason, &link.CreatedBy, &link.CreatedAt); err != nil {
-			return nil, err
+		if scanErr := rows.Scan(&link.ResourceA, &link.ResourceB, &link.PrimaryID, &link.Reason, &link.CreatedBy, &link.CreatedAt); scanErr != nil {
+			return nil, fmt.Errorf("scan resource link row: %w", scanErr)
 		}
 		links = append(links, link)
 	}
-	return links, rows.Err()
+	if rowsErr := rows.Err(); rowsErr != nil {
+		return nil, fmt.Errorf("iterate resource links rows: %w", rowsErr)
+	}
+	return links, nil
 }
 
-func (s *SQLiteResourceStore) GetExclusions() ([]ResourceExclusion, error) {
+func (s *SQLiteResourceStore) GetExclusions() (exclusions []ResourceExclusion, err error) {
 	rows, err := s.db.Query(`SELECT resource_a, resource_b, reason, created_by, created_at FROM resource_exclusions`)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("query resource exclusions: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil {
+			wrappedCloseErr := fmt.Errorf("close resource exclusions rows: %w", closeErr)
+			if err != nil {
+				err = errors.Join(err, wrappedCloseErr)
+				return
+			}
+			err = wrappedCloseErr
+		}
+	}()
 
-	var exclusions []ResourceExclusion
 	for rows.Next() {
 		var exclusion ResourceExclusion
-		if err := rows.Scan(&exclusion.ResourceA, &exclusion.ResourceB, &exclusion.Reason, &exclusion.CreatedBy, &exclusion.CreatedAt); err != nil {
-			return nil, err
+		if scanErr := rows.Scan(&exclusion.ResourceA, &exclusion.ResourceB, &exclusion.Reason, &exclusion.CreatedBy, &exclusion.CreatedAt); scanErr != nil {
+			return nil, fmt.Errorf("scan resource exclusion row: %w", scanErr)
 		}
 		exclusions = append(exclusions, exclusion)
 	}
-	return exclusions, rows.Err()
+	if rowsErr := rows.Err(); rowsErr != nil {
+		return nil, fmt.Errorf("iterate resource exclusions rows: %w", rowsErr)
+	}
+	return exclusions, nil
 }
 
 func (s *SQLiteResourceStore) Close() error {
 	if s.db != nil {
-		return s.db.Close()
+		if err := s.db.Close(); err != nil {
+			return fmt.Errorf("close resources db %q: %w", s.dbPath, err)
+		}
 	}
 	return nil
 }
