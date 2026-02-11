@@ -14,11 +14,13 @@ func (a *Agent) cleanupOrphanedBackups(ctx context.Context) {
 	a.logger.Debug().Msg("Checking for orphaned backup containers")
 
 	// List all containers (including stopped ones)
-	list, err := a.docker.ContainerList(ctx, container.ListOptions{
-		All: true,
+	list, err := dockerCallWithRetry(ctx, dockerCleanupCallTimeout, func(callCtx context.Context) ([]container.Summary, error) {
+		return a.docker.ContainerList(callCtx, container.ListOptions{
+			All: true,
+		})
 	})
 	if err != nil {
-		a.logger.Warn().Err(err).Msg("Failed to list containers for cleanup")
+		a.logger.Warn().Err(annotateDockerConnectionError(err)).Msg("Failed to list containers for cleanup")
 		return
 	}
 
@@ -61,8 +63,12 @@ func (a *Agent) cleanupOrphanedBackups(ctx context.Context) {
 				Time("backupTime", backupTime).
 				Msg("Removing orphaned backup container")
 
-			if err := a.docker.ContainerRemove(ctx, c.ID, container.RemoveOptions{Force: true}); err != nil {
-				a.logger.Warn().Err(err).Str("id", c.ID).Msg("Failed to remove orphaned backup container")
+			_, err := dockerCallWithRetry(ctx, dockerCleanupCallTimeout, func(callCtx context.Context) (struct{}, error) {
+				err := a.docker.ContainerRemove(callCtx, c.ID, container.RemoveOptions{Force: true})
+				return struct{}{}, err
+			})
+			if err != nil {
+				a.logger.Warn().Err(annotateDockerConnectionError(err)).Str("id", c.ID).Msg("Failed to remove orphaned backup container")
 			}
 		}
 	}

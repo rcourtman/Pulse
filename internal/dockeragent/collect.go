@@ -13,14 +13,17 @@ import (
 
 	containertypes "github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
+	systemtypes "github.com/docker/docker/api/types/system"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 )
 
 // buildReport gathers all system and container metrics into a single report
 func (a *Agent) buildReport(ctx context.Context) (agentsdocker.Report, error) {
-	info, err := a.docker.Info(ctx)
+	info, err := dockerCallWithRetry(ctx, dockerInfoCallTimeout, func(callCtx context.Context) (systemtypes.Info, error) {
+		return a.docker.Info(callCtx)
+	})
 	if err != nil {
-		return agentsdocker.Report{}, fmt.Errorf("failed to query docker info: %w", err)
+		return agentsdocker.Report{}, fmt.Errorf("failed to query docker info: %w", annotateDockerConnectionError(err))
 	}
 
 	a.runtimeVer = info.ServerVersion
@@ -180,9 +183,11 @@ func (a *Agent) collectContainers(ctx context.Context) ([]agentsdocker.Container
 		options.Filters = filterArgs
 	}
 
-	list, err := a.docker.ContainerList(ctx, options)
+	list, err := dockerCallWithRetry(ctx, dockerContainerListCallTimeout, func(callCtx context.Context) ([]containertypes.Summary, error) {
+		return a.docker.ContainerList(callCtx, options)
+	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to list containers: %w", err)
+		return nil, fmt.Errorf("failed to list containers: %w", annotateDockerConnectionError(err))
 	}
 
 	containers := make([]agentsdocker.Container, 0, len(list))
