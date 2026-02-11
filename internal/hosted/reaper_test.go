@@ -320,3 +320,90 @@ func TestReaperGracefulShutdown(t *testing.T) {
 		t.Fatal("expected Run to exit promptly after context cancellation")
 	}
 }
+
+func TestReaperRunNormalizesInvalidScanInterval(t *testing.T) {
+	testCases := []struct {
+		name     string
+		interval time.Duration
+	}{
+		{name: "zero_interval", interval: 0},
+		{name: "negative_interval", interval: -1 * time.Second},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			r := &Reaper{scanInterval: tc.interval}
+
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+
+			defer func() {
+				if recovered := recover(); recovered != nil {
+					t.Fatalf("Run panicked for scan interval %s: %v", tc.interval, recovered)
+				}
+			}()
+
+			if err := r.Run(ctx); err != nil {
+				t.Fatalf("expected nil error, got %v", err)
+			}
+
+			if r.scanInterval != defaultReaperScanInterval {
+				t.Fatalf("expected scan interval %s, got %s", defaultReaperScanInterval, r.scanInterval)
+			}
+		})
+	}
+}
+
+func TestReaperClampRetentionDays(t *testing.T) {
+	testCases := []struct {
+		name      string
+		input     int
+		want      int
+		clamped   bool
+	}{
+		{name: "in_range", input: 30, want: 30, clamped: false},
+		{name: "upper_bound", input: maxRetentionDays, want: maxRetentionDays, clamped: false},
+		{name: "lower_bound", input: minRetentionDays, want: minRetentionDays, clamped: false},
+		{name: "above_upper_bound", input: maxRetentionDays + 1, want: maxRetentionDays, clamped: true},
+		{name: "below_lower_bound", input: minRetentionDays - 1, want: minRetentionDays, clamped: true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, clamped := clampRetentionDays(tc.input)
+			if got != tc.want {
+				t.Fatalf("expected normalized retention %d, got %d", tc.want, got)
+			}
+			if clamped != tc.clamped {
+				t.Fatalf("expected clamped=%t, got %t", tc.clamped, clamped)
+			}
+		})
+	}
+}
+
+func TestReaperScanClampsRetentionOverflow(t *testing.T) {
+	fixedTime := time.Date(2026, 2, 9, 12, 0, 0, 0, time.UTC)
+	requestedAt := fixedTime.Add(-1 * time.Hour)
+
+	lister := &mockOrgLister{
+		orgs: []*models.Organization{
+			{
+				ID:                  "org-overflow-retention",
+				Status:              models.OrgStatusPendingDeletion,
+				DeletionRequestedAt: &requestedAt,
+				RetentionDays:       maxRetentionDays + 1,
+			},
+		},
+	}
+	deleter := &mockOrgDeleter{}
+	r := NewReaper(lister, deleter, time.Hour, false)
+	r.now = func() time.Time { return fixedTime }
+
+	results := r.scan()
+	if len(results) != 0 {
+		t.Fatalf("expected no expired orgs when retention overflows and is clamped, got %d", len(results))
+	}
+	if deleter.calls != 0 {
+		t.Fatalf("expected no delete calls in dry-run mode, got %d", deleter.calls)
+	}
+}

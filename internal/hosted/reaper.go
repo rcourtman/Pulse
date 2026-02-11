@@ -3,10 +3,17 @@ package hosted
 import (
 	"context"
 	"errors"
+	"math"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rs/zerolog/log"
+)
+
+const (
+	defaultReaperScanInterval = time.Minute
+	maxRetentionDays          = int(math.MaxInt64 / int64(24*time.Hour))
+	minRetentionDays          = -maxRetentionDays
 )
 
 type OrgLister interface {
@@ -36,14 +43,18 @@ type Reaper struct {
 }
 
 func NewReaper(lister OrgLister, deleter OrgDeleter, scanInterval time.Duration, liveMode bool) *Reaper {
-	if scanInterval <= 0 {
-		scanInterval = time.Minute
+	normalizedScanInterval := normalizeReaperScanInterval(scanInterval)
+	if normalizedScanInterval != scanInterval {
+		log.Warn().
+			Dur("scan_interval", scanInterval).
+			Dur("default_scan_interval", defaultReaperScanInterval).
+			Msg("Hosted reaper scan interval must be positive; defaulting to safe value")
 	}
 
 	return &Reaper{
 		lister:       lister,
 		deleter:      deleter,
-		scanInterval: scanInterval,
+		scanInterval: normalizedScanInterval,
 		liveMode:     liveMode,
 		now:          time.Now,
 	}
@@ -60,7 +71,16 @@ func (r *Reaper) Run(ctx context.Context) error {
 		return nil
 	}
 
-	ticker := time.NewTicker(r.scanInterval)
+	scanInterval := normalizeReaperScanInterval(r.scanInterval)
+	if scanInterval != r.scanInterval {
+		log.Warn().
+			Dur("scan_interval", r.scanInterval).
+			Dur("default_scan_interval", defaultReaperScanInterval).
+			Msg("Hosted reaper runtime scan interval was invalid; defaulting to safe value")
+		r.scanInterval = scanInterval
+	}
+
+	ticker := time.NewTicker(scanInterval)
 	defer ticker.Stop()
 
 	for {
@@ -101,7 +121,18 @@ func (r *Reaper) scan() []ReapResult {
 			continue
 		}
 
-		expiry := org.DeletionRequestedAt.Add(time.Duration(org.RetentionDays) * 24 * time.Hour)
+		retentionDays, clamped := clampRetentionDays(org.RetentionDays)
+		if clamped {
+			log.Warn().
+				Str("org_id", org.ID).
+				Int("retention_days", org.RetentionDays).
+				Int("normalized_retention_days", retentionDays).
+				Int("min_retention_days", minRetentionDays).
+				Int("max_retention_days", maxRetentionDays).
+				Msg("Hosted reaper retention days exceeded safe duration bounds; clamped value")
+		}
+
+		expiry := org.DeletionRequestedAt.Add(time.Duration(retentionDays) * 24 * time.Hour)
 		if now.Before(expiry) {
 			continue
 		}
@@ -110,14 +141,14 @@ func (r *Reaper) scan() []ReapResult {
 		log.Info().
 			Str("org_id", org.ID).
 			Time("deletion_requested_at", *org.DeletionRequestedAt).
-			Int("retention_days", org.RetentionDays).
+			Int("retention_days", retentionDays).
 			Dur("expired_for", expiredFor).
 			Msg("Hosted reaper found expired pending-deletion organization")
 
 		result := ReapResult{
 			OrgID:         org.ID,
 			RequestedAt:   *org.DeletionRequestedAt,
-			RetentionDays: org.RetentionDays,
+			RetentionDays: retentionDays,
 			ExpiredAt:     expiry,
 		}
 
@@ -162,4 +193,21 @@ func (r *Reaper) scan() []ReapResult {
 	}
 
 	return results
+}
+
+func normalizeReaperScanInterval(scanInterval time.Duration) time.Duration {
+	if scanInterval <= 0 {
+		return defaultReaperScanInterval
+	}
+	return scanInterval
+}
+
+func clampRetentionDays(retentionDays int) (int, bool) {
+	if retentionDays > maxRetentionDays {
+		return maxRetentionDays, true
+	}
+	if retentionDays < minRetentionDays {
+		return minRetentionDays, true
+	}
+	return retentionDays, false
 }
