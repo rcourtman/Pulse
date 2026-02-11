@@ -5,7 +5,9 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"os/exec"
@@ -192,7 +194,9 @@ func (c *CommandClient) connectAndHandle(ctx context.Context) error {
 		c.connMu.Lock()
 		c.conn = nil
 		c.connMu.Unlock()
-		conn.Close()
+		if closeErr := conn.Close(); closeErr != nil && !errors.Is(closeErr, net.ErrClosed) {
+			c.logger.Debug().Err(closeErr).Msg("Failed to close websocket connection")
+		}
 	}()
 
 	// Send registration
@@ -209,11 +213,19 @@ func (c *CommandClient) connectAndHandle(ctx context.Context) error {
 
 	// Clear any deadlines that may have been set during handshake
 	// The HandshakeTimeout in the Dialer may have set a deadline on the underlying connection
-	conn.SetReadDeadline(time.Time{})
-	conn.SetWriteDeadline(time.Time{})
+	if err := conn.SetReadDeadline(time.Time{}); err != nil {
+		c.logger.Debug().Err(err).Msg("Failed to clear websocket read deadline")
+	}
+	if err := conn.SetWriteDeadline(time.Time{}); err != nil {
+		c.logger.Debug().Err(err).Msg("Failed to clear websocket write deadline")
+	}
 	if netConn := conn.NetConn(); netConn != nil {
-		netConn.SetReadDeadline(time.Time{})
-		netConn.SetWriteDeadline(time.Time{})
+		if err := netConn.SetReadDeadline(time.Time{}); err != nil {
+			c.logger.Debug().Err(err).Msg("Failed to clear network read deadline")
+		}
+		if err := netConn.SetWriteDeadline(time.Time{}); err != nil {
+			c.logger.Debug().Err(err).Msg("Failed to clear network write deadline")
+		}
 	}
 
 	// Start ping loop
@@ -248,13 +260,16 @@ func (c *CommandClient) buildWebSocketURL() (string, error) {
 }
 
 func (c *CommandClient) sendRegistration(conn *websocket.Conn) error {
-	payload, _ := json.Marshal(registerPayload{
+	payload, err := json.Marshal(registerPayload{
 		AgentID:  c.agentID,
 		Hostname: c.hostname,
 		Version:  c.version,
 		Platform: c.platform,
 		Token:    c.apiToken,
 	})
+	if err != nil {
+		return fmt.Errorf("marshal registration payload: %w", err)
+	}
 
 	msg := wsMessage{
 		Type:      msgTypeAgentRegister,
@@ -266,8 +281,14 @@ func (c *CommandClient) sendRegistration(conn *websocket.Conn) error {
 }
 
 func (c *CommandClient) waitForRegistration(conn *websocket.Conn) error {
-	conn.SetReadDeadline(time.Now().Add(30 * time.Second))
-	defer conn.SetReadDeadline(time.Time{})
+	if err := conn.SetReadDeadline(time.Now().Add(30 * time.Second)); err != nil {
+		return fmt.Errorf("set registration read deadline: %w", err)
+	}
+	defer func() {
+		if err := conn.SetReadDeadline(time.Time{}); err != nil {
+			c.logger.Debug().Err(err).Msg("Failed to clear registration read deadline")
+		}
+	}()
 
 	var msg wsMessage
 	if err := conn.ReadJSON(&msg); err != nil {
@@ -372,7 +393,11 @@ func (c *CommandClient) handleExecuteCommand(ctx context.Context, conn *websocke
 	result.Duration = time.Since(startTime).Milliseconds()
 
 	// Send result back
-	resultPayload, _ := json.Marshal(result)
+	resultPayload, err := json.Marshal(result)
+	if err != nil {
+		c.logger.Error().Err(err).Str("request_id", payload.RequestID).Msg("Failed to marshal command result")
+		return
+	}
 	msg := wsMessage{
 		Type:      msgTypeCommandResult,
 		ID:        payload.RequestID,
@@ -381,11 +406,11 @@ func (c *CommandClient) handleExecuteCommand(ctx context.Context, conn *websocke
 	}
 
 	c.connMu.Lock()
-	err := conn.WriteJSON(msg)
+	writeErr := conn.WriteJSON(msg)
 	c.connMu.Unlock()
 
-	if err != nil {
-		c.logger.Error().Err(err).Str("request_id", payload.RequestID).Msg("Failed to send command result")
+	if writeErr != nil {
+		c.logger.Error().Err(writeErr).Str("request_id", payload.RequestID).Msg("Failed to send command result")
 	} else {
 		c.logger.Info().
 			Str("request_id", payload.RequestID).

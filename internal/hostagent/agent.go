@@ -344,7 +344,10 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 	collectCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	uptime, _ := a.collector.HostUptime(collectCtx)
+	uptime, err := a.collector.HostUptime(collectCtx)
+	if err != nil {
+		a.logger.Debug().Err(err).Msg("Failed to collect host uptime; defaulting to 0")
+	}
 	snapshot, err := a.collector.Metrics(collectCtx, a.cfg.DiskExclude)
 	if err != nil {
 		return agentshost.Report{}, fmt.Errorf("collect metrics: %w", err)
@@ -429,7 +432,11 @@ func (a *Agent) sendReport(ctx context.Context, report agentshost.Report) error 
 	if err != nil {
 		return fmt.Errorf("send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			a.logger.Debug().Err(closeErr).Msg("Failed to close report response body")
+		}
+	}()
 
 	if resp.StatusCode >= 300 {
 		return fmt.Errorf("pulse responded with status %s", resp.Status)
