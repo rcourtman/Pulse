@@ -1646,30 +1646,6 @@ func (s *State) SyncGuestBackupTimes() {
 	// Using composite key prevents cross-instance VMID collision issues
 	latestBackup := make(map[string]time.Time)
 
-	// Process PVE storage backups
-	for _, backup := range s.PVEBackups.StorageBackups {
-		if backup.VMID <= 0 || backup.Instance == "" {
-			continue
-		}
-		key := backupKey(backup.Instance, backup.VMID)
-		if existing, ok := latestBackup[key]; !ok || backup.Time.After(existing) {
-			latestBackup[key] = backup.Time
-		}
-	}
-
-	// Process PBS backups (VMID is string, BackupTime is the timestamp)
-	// PBS backups can have a Namespace field that often corresponds to the PVE instance.
-	// We use namespace matching to associate PBS backups with the correct PVE instance.
-	// Structure: map[vmid][]PBSBackup to handle multiple backups per VMID
-	pbsBackupsByVMID := make(map[int][]PBSBackup)
-	for _, backup := range s.PBSBackups {
-		vmid, err := strconv.Atoi(backup.VMID)
-		if err != nil || vmid <= 0 {
-			continue
-		}
-		pbsBackupsByVMID[vmid] = append(pbsBackupsByVMID[vmid], backup)
-	}
-
 	// Build a set of VMIDs that appear on more than one PVE instance.
 	// When a VMID is ambiguous, we must not fall back to VMID-only matching
 	// because we can't tell which guest the backup belongs to.
@@ -1695,6 +1671,54 @@ func (s *State) SyncGuestBackupTimes() {
 		if len(instances) > 1 {
 			vmidIsAmbiguous[vmid] = true
 		}
+	}
+
+	// Detect shared-storage backups: when two standalone PVE hosts mount the same
+	// NFS share, both instances see the same backup files. Each creates its own
+	// StorageBackup entry with its own instance name. If the VMID also exists on
+	// both instances, we can't determine which instance created the backup,
+	// so we skip it rather than randomly assigning it to the wrong guest.
+	sharedVolids := make(map[string]bool) // volid -> appears on multiple instances
+	volidInstance := make(map[string]string)
+	for _, backup := range s.PVEBackups.StorageBackups {
+		if backup.Volid == "" {
+			continue
+		}
+		if prev, ok := volidInstance[backup.Volid]; ok && prev != backup.Instance {
+			sharedVolids[backup.Volid] = true
+		} else if !ok {
+			volidInstance[backup.Volid] = backup.Instance
+		}
+	}
+
+	// Process PVE storage backups
+	for _, backup := range s.PVEBackups.StorageBackups {
+		if backup.VMID <= 0 || backup.Instance == "" {
+			continue
+		}
+		// Skip shared-storage backups when the VMID exists on multiple instances.
+		// We can't determine which instance created the backup, so assigning it
+		// to either guest would be a guess. Better to show no backup than the wrong one.
+		if backup.Volid != "" && sharedVolids[backup.Volid] && vmidIsAmbiguous[backup.VMID] {
+			continue
+		}
+		key := backupKey(backup.Instance, backup.VMID)
+		if existing, ok := latestBackup[key]; !ok || backup.Time.After(existing) {
+			latestBackup[key] = backup.Time
+		}
+	}
+
+	// Process PBS backups (VMID is string, BackupTime is the timestamp)
+	// PBS backups can have a Namespace field that often corresponds to the PVE instance.
+	// We use namespace matching to associate PBS backups with the correct PVE instance.
+	// Structure: map[vmid][]PBSBackup to handle multiple backups per VMID
+	pbsBackupsByVMID := make(map[int][]PBSBackup)
+	for _, backup := range s.PBSBackups {
+		vmid, err := strconv.Atoi(backup.VMID)
+		if err != nil || vmid <= 0 {
+			continue
+		}
+		pbsBackupsByVMID[vmid] = append(pbsBackupsByVMID[vmid], backup)
 	}
 
 	// findBestPBSBackup finds the most recent PBS backup for a given VMID and instance.
