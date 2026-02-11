@@ -468,6 +468,7 @@ func SetMetricHooks(fired func(*Alert), resolved func(*Alert), suppressed func(s
 
 type Manager struct {
 	mu               sync.RWMutex
+	saveMu           sync.Mutex
 	callbackMu       sync.RWMutex
 	config           AlertConfig
 	activeAlerts     map[string]*Alert
@@ -9235,6 +9236,11 @@ func closeSignalChannel(ch chan struct{}) {
 
 // SaveActiveAlerts persists active alerts to disk
 func (m *Manager) SaveActiveAlerts() error {
+	// Serialize snapshots and writes so concurrent async saves cannot
+	// overwrite newer state with an older snapshot.
+	m.saveMu.Lock()
+	defer m.saveMu.Unlock()
+
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
