@@ -66,11 +66,11 @@ func TestParseStatus(t *testing.T) {
 	if status.FSID != "fsid-123" {
 		t.Fatalf("expected FSID fsid-123, got %q", status.FSID)
 	}
-	if status.Health.Status != "HEALTH_WARN" {
+	if status.Health.Status != HealthStateWarn {
 		t.Fatalf("expected HEALTH_WARN, got %q", status.Health.Status)
 	}
 	check, ok := status.Health.Checks["OSD_DOWN"]
-	if !ok || check.Severity != "HEALTH_WARN" || check.Message != "1 osd down" || len(check.Detail) != 1 {
+	if !ok || check.Severity != HealthSeverityWarn || check.Message != "1 osd down" || len(check.Detail) != 1 {
 		t.Fatalf("unexpected parsed health checks: %+v", status.Health.Checks)
 	}
 
@@ -90,6 +90,51 @@ func TestParseStatus(t *testing.T) {
 
 	if len(status.Services) != 3 {
 		t.Fatalf("expected 3 service summaries, got %d", len(status.Services))
+	}
+	if status.Services[0].Type != ServiceTypeMonitor || status.Services[1].Type != ServiceTypeManager || status.Services[2].Type != ServiceTypeOSD {
+		t.Fatalf("unexpected service types: %+v", status.Services)
+	}
+}
+
+func TestNormalizeHealthState(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  HealthState
+	}{
+		{name: "ok", input: "HEALTH_OK", want: HealthStateOK},
+		{name: "warn with spaces and case", input: " health_warn ", want: HealthStateWarn},
+		{name: "empty becomes unknown", input: "", want: HealthStateUnknown},
+		{name: "unknown preserved normalized", input: "custom_state", want: HealthState("CUSTOM_STATE")},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := normalizeHealthState(tt.input); got != tt.want {
+				t.Fatalf("normalizeHealthState(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestNormalizeHealthSeverity(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  HealthSeverity
+	}{
+		{name: "warn", input: "HEALTH_WARN", want: HealthSeverityWarn},
+		{name: "err with spaces and case", input: " health_err ", want: HealthSeverityErr},
+		{name: "empty becomes unknown", input: "", want: HealthSeverityUnknown},
+		{name: "unknown preserved normalized", input: "custom_level", want: HealthSeverity("CUSTOM_LEVEL")},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := normalizeHealthSeverity(tt.input); got != tt.want {
+				t.Fatalf("normalizeHealthSeverity(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
 	}
 }
 

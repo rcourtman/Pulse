@@ -640,7 +640,7 @@ func (a *Agent) collectCephStatus(ctx context.Context) *agentshost.CephCluster {
 	result := &agentshost.CephCluster{
 		FSID: status.FSID,
 		Health: agentshost.CephHealth{
-			Status: status.Health.Status,
+			Status: string(status.Health.Status),
 			Checks: make(map[string]agentshost.CephCheck),
 		},
 		MonMap: agentshost.CephMonitorMap{
@@ -691,7 +691,7 @@ func (a *Agent) collectCephStatus(ctx context.Context) *agentshost.CephCluster {
 	// Convert health checks
 	for name, check := range status.Health.Checks {
 		result.Health.Checks[name] = agentshost.CephCheck{
-			Severity: check.Severity,
+			Severity: string(check.Severity),
 			Message:  check.Message,
 			Detail:   check.Detail,
 		}
@@ -700,7 +700,7 @@ func (a *Agent) collectCephStatus(ctx context.Context) *agentshost.CephCluster {
 	// Convert health summary
 	for _, s := range status.Health.Summary {
 		result.Health.Summary = append(result.Health.Summary, agentshost.CephHealthSummary{
-			Severity: s.Severity,
+			Severity: string(s.Severity),
 			Message:  s.Message,
 		})
 	}
@@ -720,7 +720,7 @@ func (a *Agent) collectCephStatus(ctx context.Context) *agentshost.CephCluster {
 	// Convert services
 	for _, svc := range status.Services {
 		result.Services = append(result.Services, agentshost.CephService{
-			Type:    svc.Type,
+			Type:    string(svc.Type),
 			Running: svc.Running,
 			Total:   svc.Total,
 			Daemons: svc.Daemons,
