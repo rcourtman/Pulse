@@ -56,6 +56,7 @@ var downloadMu sync.Mutex
 
 var (
 	maxHostAgentBinarySize = int64(256 * 1024 * 1024)
+	maxHostAgentBundleSize = int64(512 * 1024 * 1024)
 	httpClient             = &http.Client{Timeout: 2 * time.Minute}
 	downloadURLForVersion  = func(version string) string {
 		return fmt.Sprintf("https://github.com/rcourtman/Pulse/releases/download/%[1]s/pulse-%[1]s.tar.gz", version)
@@ -180,8 +181,17 @@ func DownloadAndInstallHostAgentBinaries(version string, targetDir string) error
 		return fmt.Errorf("unexpected status %d downloading %s: %s", resp.StatusCode, url, strings.TrimSpace(string(body)))
 	}
 
-	if _, err := io.Copy(tempFile, resp.Body); err != nil {
+	if resp.ContentLength > maxHostAgentBundleSize {
+		return fmt.Errorf("host agent bundle exceeds max size %d bytes", maxHostAgentBundleSize)
+	}
+
+	limitedReader := io.LimitReader(resp.Body, maxHostAgentBundleSize+1)
+	written, err := io.Copy(tempFile, limitedReader)
+	if err != nil {
 		return fmt.Errorf("failed to save host agent bundle: %w", err)
+	}
+	if written > maxHostAgentBundleSize {
+		return fmt.Errorf("host agent bundle exceeds max size %d bytes", maxHostAgentBundleSize)
 	}
 
 	if err := closeFileFn(tempFile); err != nil {

@@ -81,6 +81,7 @@ func buildTarGz(t *testing.T, entries []tarEntry) []byte {
 func saveHostAgentHooks() func() {
 	origRequired := requiredHostAgentBinaries
 	origMaxBinarySize := maxHostAgentBinarySize
+	origMaxBundleSize := maxHostAgentBundleSize
 	origDownloadFn := downloadAndInstallHostAgentBinariesFn
 	origFindMissing := findMissingHostAgentBinariesFn
 	origURL := downloadURLForVersion
@@ -99,6 +100,7 @@ func saveHostAgentHooks() func() {
 	return func() {
 		requiredHostAgentBinaries = origRequired
 		maxHostAgentBinarySize = origMaxBinarySize
+		maxHostAgentBundleSize = origMaxBundleSize
 		downloadAndInstallHostAgentBinariesFn = origDownloadFn
 		findMissingHostAgentBinariesFn = origFindMissing
 		downloadURLForVersion = origURL
@@ -310,6 +312,53 @@ func TestDownloadAndInstallHostAgentBinariesErrors(t *testing.T) {
 
 		if err := DownloadAndInstallHostAgentBinaries("v1.0.0", t.TempDir()); err == nil {
 			t.Fatalf("expected status error")
+		}
+	})
+
+	t.Run("ContentLengthTooLarge", func(t *testing.T) {
+		restore := saveHostAgentHooks()
+		t.Cleanup(restore)
+
+		maxHostAgentBundleSize = 4
+		httpClient = &http.Client{
+			Transport: roundTripperFunc(func(*http.Request) (*http.Response, error) {
+				return &http.Response{
+					StatusCode:    http.StatusOK,
+					Status:        "200 OK",
+					ContentLength: maxHostAgentBundleSize + 1,
+					Body:          io.NopCloser(strings.NewReader("tiny")),
+				}, nil
+			}),
+		}
+		downloadURLForVersion = func(string) string { return "http://example/bundle.tar.gz" }
+
+		err := DownloadAndInstallHostAgentBinaries("v1.0.0", t.TempDir())
+		if err == nil || !strings.Contains(err.Error(), "exceeds max size") {
+			t.Fatalf("expected max-size error, got %v", err)
+		}
+	})
+
+	t.Run("BodyTooLargeWithoutContentLength", func(t *testing.T) {
+		restore := saveHostAgentHooks()
+		t.Cleanup(restore)
+
+		maxHostAgentBundleSize = 8
+		body := io.NopCloser(bytes.NewReader(bytes.Repeat([]byte("a"), int(maxHostAgentBundleSize+1))))
+		httpClient = &http.Client{
+			Transport: roundTripperFunc(func(*http.Request) (*http.Response, error) {
+				return &http.Response{
+					StatusCode:    http.StatusOK,
+					Status:        "200 OK",
+					ContentLength: -1,
+					Body:          body,
+				}, nil
+			}),
+		}
+		downloadURLForVersion = func(string) string { return "http://example/bundle.tar.gz" }
+
+		err := DownloadAndInstallHostAgentBinaries("v1.0.0", t.TempDir())
+		if err == nil || !strings.Contains(err.Error(), "exceeds max size") {
+			t.Fatalf("expected max-size error, got %v", err)
 		}
 	})
 
