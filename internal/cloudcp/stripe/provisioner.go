@@ -10,7 +10,9 @@ import (
 	"time"
 
 	cpauth "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/auth"
+	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/cpmetrics"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/docker"
+	cpemail "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/email"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license"
@@ -22,21 +24,25 @@ import (
 // Provisioner orchestrates tenant creation, billing state updates, and
 // container lifecycle in response to Stripe events.
 type Provisioner struct {
-	registry   *registry.TenantRegistry
-	tenantsDir string
-	docker     *docker.Manager // nil if Docker is unavailable
-	magicLinks *cpauth.Service // nil if magic links disabled
-	baseURL    string          // e.g. "https://cloud.pulserelay.pro"
+	registry    *registry.TenantRegistry
+	tenantsDir  string
+	docker      *docker.Manager // nil if Docker is unavailable
+	magicLinks  *cpauth.Service // nil if magic links disabled
+	baseURL     string          // e.g. "https://cloud.pulserelay.pro"
+	emailSender cpemail.Sender
+	emailFrom   string
 }
 
 // NewProvisioner creates a Provisioner.
-func NewProvisioner(reg *registry.TenantRegistry, tenantsDir string, dockerMgr *docker.Manager, magicLinks *cpauth.Service, baseURL string) *Provisioner {
+func NewProvisioner(reg *registry.TenantRegistry, tenantsDir string, dockerMgr *docker.Manager, magicLinks *cpauth.Service, baseURL string, emailSender cpemail.Sender, emailFrom string) *Provisioner {
 	return &Provisioner{
-		registry:   reg,
-		tenantsDir: tenantsDir,
-		docker:     dockerMgr,
-		magicLinks: magicLinks,
-		baseURL:    baseURL,
+		registry:    reg,
+		tenantsDir:  tenantsDir,
+		docker:      dockerMgr,
+		magicLinks:  magicLinks,
+		baseURL:     baseURL,
+		emailSender: emailSender,
+		emailFrom:   strings.TrimSpace(emailFrom),
 	}
 }
 
@@ -117,6 +123,37 @@ func (p *Provisioner) generateAndLogMagicLink(email, tenantID string) {
 		log.Error().Str("tenant_id", tenantID).Msg("Failed to build magic link URL (empty baseURL?)")
 		return
 	}
+
+	// Try to send email
+	if p.emailSender != nil && p.emailFrom != "" {
+		htmlBody, textBody, err := cpemail.RenderMagicLinkEmail(cpemail.MagicLinkData{
+			MagicLinkURL: magicURL,
+		})
+		if err != nil {
+			log.Error().Err(err).Str("tenant_id", tenantID).Msg("Failed to render magic link email")
+		} else {
+			if sendErr := p.emailSender.Send(context.Background(), cpemail.Message{
+				From:    p.emailFrom,
+				To:      email,
+				Subject: "Sign in to Pulse",
+				HTML:    htmlBody,
+				Text:    textBody,
+			}); sendErr != nil {
+				log.Error().Err(sendErr).
+					Str("tenant_id", tenantID).
+					Str("email", email).
+					Msg("Failed to send magic link email — falling back to log")
+			} else {
+				log.Info().
+					Str("tenant_id", tenantID).
+					Str("email", email).
+					Msg("Magic link email sent")
+				return // Email sent successfully, don't log the URL
+			}
+		}
+	}
+
+	// Fallback: log the magic link URL
 	log.Info().
 		Str("tenant_id", tenantID).
 		Str("email", email).
@@ -151,7 +188,19 @@ func (p *Provisioner) maybeStopAndRemoveContainer(ctx context.Context, container
 }
 
 // HandleCheckout provisions a new tenant from a checkout.session.completed event.
-func (p *Provisioner) HandleCheckout(ctx context.Context, session CheckoutSession) error {
+func (p *Provisioner) HandleCheckout(ctx context.Context, session CheckoutSession) (err error) {
+	cpmetrics.ProvisioningTotal.WithLabelValues("attempt").Inc()
+	skippedExisting := false
+	defer func() {
+		outcome := "success"
+		if err != nil {
+			outcome = "error"
+		} else if skippedExisting {
+			outcome = "skipped_existing"
+		}
+		cpmetrics.ProvisioningTotal.WithLabelValues(outcome).Inc()
+	}()
+
 	customerID := strings.TrimSpace(session.Customer)
 	if customerID == "" {
 		return fmt.Errorf("checkout session missing customer")
@@ -186,6 +235,7 @@ func (p *Provisioner) HandleCheckout(ctx context.Context, session CheckoutSessio
 			Str("tenant_id", existing.ID).
 			Str("customer_id", customerID).
 			Msg("Tenant already exists for Stripe customer, skipping provisioning")
+		skippedExisting = true
 		return nil
 	}
 
@@ -372,7 +422,16 @@ func planVersionFromMetadata(metadata map[string]string, fallback string) string
 }
 
 // ProvisionWorkspace provisions a new workspace (tenant) under an account, without Stripe checkout.
-func (p *Provisioner) ProvisionWorkspace(ctx context.Context, accountID, displayName string) (*registry.Tenant, error) {
+func (p *Provisioner) ProvisionWorkspace(ctx context.Context, accountID, displayName string) (tenant *registry.Tenant, err error) {
+	cpmetrics.ProvisioningTotal.WithLabelValues("attempt").Inc()
+	defer func() {
+		outcome := "success"
+		if err != nil {
+			outcome = "error"
+		}
+		cpmetrics.ProvisioningTotal.WithLabelValues(outcome).Inc()
+	}()
+
 	accountID = strings.TrimSpace(accountID)
 	displayName = strings.TrimSpace(displayName)
 	if accountID == "" {
@@ -410,7 +469,7 @@ func (p *Provisioner) ProvisionWorkspace(ctx context.Context, accountID, display
 		return nil, err
 	}
 
-	tenant := &registry.Tenant{
+	tenant = &registry.Tenant{
 		ID:          tenantID,
 		AccountID:   accountID,
 		DisplayName: displayName,

@@ -107,3 +107,68 @@ func TestSecurityTokens_ListCreateDelete(t *testing.T) {
 		t.Fatalf("expected env migration suppression to be recorded")
 	}
 }
+
+func TestSecurityTokens_Create_WithExpiresIn(t *testing.T) {
+	cfg := &config.Config{}
+	persistence := config.NewConfigPersistence(t.TempDir())
+	router := &Router{
+		config:      cfg,
+		persistence: persistence,
+	}
+
+	start := time.Now().UTC()
+	req := httptest.NewRequest(http.MethodPost, "/api/security/tokens", strings.NewReader(`{"name":"test","scopes":["monitoring:read"],"expiresIn":"1h"}`))
+	rr := httptest.NewRecorder()
+	router.handleCreateAPIToken(rr, req)
+	end := time.Now().UTC()
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rr.Code)
+	}
+
+	var createResp struct {
+		Token  string      `json:"token"`
+		Record apiTokenDTO `json:"record"`
+	}
+	if err := json.NewDecoder(rr.Body).Decode(&createResp); err != nil {
+		t.Fatalf("decode create response: %v", err)
+	}
+	if createResp.Record.ExpiresAt == nil {
+		t.Fatalf("expected expiresAt to be set in response record")
+	}
+	if exp := *createResp.Record.ExpiresAt; exp.Before(start.Add(time.Hour)) || exp.After(end.Add(time.Hour).Add(2*time.Second)) {
+		t.Fatalf("unexpected expiresAt: %v (start=%v end=%v)", exp, start, end)
+	}
+	if len(cfg.APITokens) != 1 || cfg.APITokens[0].ExpiresAt == nil {
+		t.Fatalf("expected expiresAt to be stored in config")
+	}
+}
+
+func TestSecurityTokens_Create_WithInvalidExpiresIn(t *testing.T) {
+	cfg := &config.Config{}
+	persistence := config.NewConfigPersistence(t.TempDir())
+	router := &Router{
+		config:      cfg,
+		persistence: persistence,
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/security/tokens", strings.NewReader(`{"name":"test","scopes":["monitoring:read"],"expiresIn":"not-a-duration"}`))
+	rr := httptest.NewRecorder()
+	router.handleCreateAPIToken(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rr.Code)
+	}
+	if len(cfg.APITokens) != 0 {
+		t.Fatalf("expected no token stored in config on invalid expiresIn")
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/api/security/tokens", strings.NewReader(`{"name":"test","scopes":["monitoring:read"],"expiresIn":"30s"}`))
+	rr = httptest.NewRecorder()
+	router.handleCreateAPIToken(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rr.Code)
+	}
+	if len(cfg.APITokens) != 0 {
+		t.Fatalf("expected no token stored in config when expiresIn < 1m")
+	}
+}

@@ -58,6 +58,7 @@ const (
 	TenantStateCanceled     TenantState = "canceled"
 	TenantStateDeleting     TenantState = "deleting"
 	TenantStateDeleted      TenantState = "deleted"
+	TenantStateFailed       TenantState = "failed"
 )
 
 // Tenant represents a Cloud tenant record in the registry.

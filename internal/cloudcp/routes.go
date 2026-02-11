@@ -2,11 +2,14 @@ package cloudcp
 
 import (
 	"net/http"
+	"time"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/account"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/admin"
 	cpauth "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/auth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/docker"
+	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/email"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/handoff"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/portal"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
@@ -15,11 +18,12 @@ import (
 
 // Deps holds shared dependencies injected into HTTP handlers.
 type Deps struct {
-	Config     *CPConfig
-	Registry   *registry.TenantRegistry
-	Docker     *docker.Manager // nil if Docker is unavailable
-	MagicLinks *cpauth.Service // control plane magic link service
-	Version    string
+	Config      *CPConfig
+	Registry    *registry.TenantRegistry
+	Docker      *docker.Manager // nil if Docker is unavailable
+	MagicLinks  *cpauth.Service // control plane magic link service
+	Version     string
+	EmailSender email.Sender
 }
 
 // RegisterRoutes wires all HTTP handlers onto the given ServeMux.
@@ -29,10 +33,14 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 	mux.HandleFunc("/readyz", admin.HandleReadyz(deps.Registry))
 	mux.HandleFunc("/status", admin.HandleStatus(deps.Registry, deps.Version))
 
+	// Prometheus metrics
+	mux.Handle("/metrics", promhttp.Handler())
+
 	// Stripe webhook (signature-authenticated)
-	provisioner := cpstripe.NewProvisioner(deps.Registry, deps.Config.TenantsDir(), deps.Docker, deps.MagicLinks, deps.Config.BaseURL)
+	provisioner := cpstripe.NewProvisioner(deps.Registry, deps.Config.TenantsDir(), deps.Docker, deps.MagicLinks, deps.Config.BaseURL, deps.EmailSender, deps.Config.EmailFrom)
 	webhookHandler := cpstripe.NewWebhookHandler(deps.Config.StripeWebhookSecret, provisioner)
-	mux.Handle("/api/stripe/webhook", webhookHandler)
+	webhookLimiter := NewCPRateLimiter(120, time.Minute)
+	mux.Handle("/api/stripe/webhook", webhookLimiter.Middleware(webhookHandler))
 
 	// Magic link verification (public, token-authenticated)
 	baseDomain := baseDomainFromURL(deps.Config.BaseURL)

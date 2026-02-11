@@ -23,6 +23,8 @@ type CPConfig struct {
 	TenantCPUShares     int64
 	StripeWebhookSecret string
 	StripeAPIKey        string
+	PostmarkServerToken string // Postmark API token (optional — if empty, emails are logged)
+	EmailFrom           string // Sender email address (e.g. "noreply@pulserelay.pro")
 }
 
 // TenantsDir returns the directory where per-tenant data is stored.
@@ -53,6 +55,8 @@ func LoadConfig() (*CPConfig, error) {
 		TenantCPUShares:     envOrDefaultInt64("CP_TENANT_CPU_SHARES", 256),
 		StripeWebhookSecret: strings.TrimSpace(os.Getenv("STRIPE_WEBHOOK_SECRET")),
 		StripeAPIKey:        strings.TrimSpace(os.Getenv("STRIPE_API_KEY")),
+		PostmarkServerToken: strings.TrimSpace(os.Getenv("POSTMARK_SERVER_TOKEN")),
+		EmailFrom:           envOrDefault("PULSE_EMAIL_FROM", "noreply@pulserelay.pro"),
 	}
 
 	if err := cfg.validate(); err != nil {

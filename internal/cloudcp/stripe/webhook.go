@@ -5,8 +5,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/cpmetrics"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
 	"github.com/rs/zerolog/log"
 	stripelib "github.com/stripe/stripe-go/v82"
@@ -31,11 +34,21 @@ func NewWebhookHandler(secret string, provisioner *Provisioner) *WebhookHandler 
 
 // ServeHTTP verifies the Stripe signature and dispatches the event.
 func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+	eventType := "unknown"
+	status := http.StatusOK
+	defer func() {
+		cpmetrics.WebhookRequestsTotal.WithLabelValues(eventType, strconv.Itoa(status)).Inc()
+		cpmetrics.WebhookDuration.WithLabelValues(eventType).Observe(time.Since(start).Seconds())
+	}()
+
 	if r.Method != http.MethodPost {
+		status = http.StatusMethodNotAllowed
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 	if strings.TrimSpace(h.secret) == "" {
+		status = http.StatusServiceUnavailable
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{
 			"error": "webhook secret not configured",
 		})
@@ -45,6 +58,7 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, webhookBodyLimit)
 	payload, err := io.ReadAll(r.Body)
 	if err != nil {
+		status = http.StatusBadRequest
 		writeJSON(w, http.StatusBadRequest, map[string]string{
 			"error": "failed to read request body",
 		})
@@ -53,6 +67,7 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	sigHeader := r.Header.Get("Stripe-Signature")
 	if strings.TrimSpace(sigHeader) == "" {
+		status = http.StatusBadRequest
 		writeJSON(w, http.StatusBadRequest, map[string]string{
 			"error": "missing Stripe signature",
 		})
@@ -63,23 +78,27 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		IgnoreAPIVersionMismatch: true,
 	})
 	if err != nil {
+		status = http.StatusBadRequest
 		writeJSON(w, http.StatusBadRequest, map[string]string{
 			"error": "invalid Stripe signature",
 		})
 		return
 	}
+	eventType = string(event.Type)
 
 	if err := h.handleEvent(r, &event); err != nil {
 		log.Error().Err(err).
 			Str("event_id", event.ID).
 			Str("type", string(event.Type)).
 			Msg("Stripe webhook processing failed")
+		status = http.StatusInternalServerError
 		writeJSON(w, http.StatusInternalServerError, map[string]string{
 			"error": "processing failed",
 		})
 		return
 	}
 
+	status = http.StatusOK
 	writeJSON(w, http.StatusOK, map[string]any{
 		"received": true,
 	})

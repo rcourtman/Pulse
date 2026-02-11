@@ -97,6 +97,10 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 		if !ensureScope(w, req, config.ScopeSettingsWrite) {
 			return
 		}
+		if strings.HasSuffix(req.URL.Path, "/rotate") && req.Method == http.MethodPost {
+			r.handleRotateAPIToken(w, req)
+			return
+		}
 		r.handleDeleteAPIToken(w, req)
 	}))
 	r.mux.HandleFunc("/api/security/status", func(w http.ResponseWriter, req *http.Request) {

@@ -17,7 +17,7 @@ import (
 
 func newTestTenantMux(reg *registry.TenantRegistry, tenantsDir string) (*http.ServeMux, *cpstripe.Provisioner) {
 	mux := http.NewServeMux()
-	provisioner := cpstripe.NewProvisioner(reg, tenantsDir, nil, nil, "https://cloud.example.com")
+	provisioner := cpstripe.NewProvisioner(reg, tenantsDir, nil, nil, "https://cloud.example.com", nil, "")
 
 	listTenants := HandleListTenants(reg)
 	createTenant := HandleCreateTenant(reg, provisioner)

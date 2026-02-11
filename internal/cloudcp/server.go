@@ -11,8 +11,10 @@ import (
 
 	cpauth "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/auth"
 	cpDocker "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/docker"
+	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/email"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/health"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
+	cpstripe "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/stripe"
 	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
 	"github.com/rs/zerolog/log"
 )
@@ -70,14 +72,36 @@ func Run(ctx context.Context, version string) error {
 	}
 	defer magicLinkSvc.Close()
 
+	// Initialize email sender
+	var emailSender email.Sender
+	if cfg.PostmarkServerToken != "" {
+		emailSender = email.NewPostmarkSender(cfg.PostmarkServerToken)
+		log.Info().Msg("Email sender configured (Postmark)")
+	} else {
+		emailSender = email.NewLogSender(func(to, subject, body string) {
+			const maxBody = 4096
+			bodyForLog := body
+			if len(bodyForLog) > maxBody {
+				bodyForLog = bodyForLog[:maxBody] + "...(truncated)"
+			}
+			log.Info().
+				Str("to", to).
+				Str("subject", subject).
+				Str("body", bodyForLog).
+				Msg("Email (log-only, no email provider configured)")
+		})
+		log.Info().Msg("Email sender: log-only (set POSTMARK_SERVER_TOKEN to enable)")
+	}
+
 	// Build HTTP routes
 	mux := http.NewServeMux()
 	deps := &Deps{
-		Config:     cfg,
-		Registry:   reg,
-		Docker:     dockerMgr,
-		MagicLinks: magicLinkSvc,
-		Version:    version,
+		Config:      cfg,
+		Registry:    reg,
+		Docker:      dockerMgr,
+		MagicLinks:  magicLinkSvc,
+		Version:     version,
+		EmailSender: emailSender,
 	}
 	RegisterRoutes(mux, deps)
 
@@ -102,6 +126,17 @@ func Run(ctx context.Context, version string) error {
 		})
 		go monitor.Run(ctx)
 	}
+
+	// Start grace period enforcer
+	graceEnforcer := cpstripe.NewGraceEnforcer(reg)
+	go graceEnforcer.Run(ctx)
+
+	// Start stuck provisioning cleanup
+	stuckCleanup := health.NewStuckProvisioningCleanup(reg)
+	go stuckCleanup.Run(ctx)
+
+	// Start metrics updater
+	go runTenantStateMetrics(ctx, reg)
 
 	// Start server in background
 	go func() {

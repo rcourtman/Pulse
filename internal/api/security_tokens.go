@@ -21,6 +21,7 @@ type apiTokenDTO struct {
 	Suffix     string     `json:"suffix"`
 	CreatedAt  time.Time  `json:"createdAt"`
 	LastUsedAt *time.Time `json:"lastUsedAt,omitempty"`
+	ExpiresAt  *time.Time `json:"expiresAt,omitempty"`
 	Scopes     []string   `json:"scopes"`
 }
 
@@ -32,6 +33,7 @@ func toAPITokenDTO(record config.APITokenRecord) apiTokenDTO {
 		Suffix:     record.Suffix,
 		CreatedAt:  record.CreatedAt,
 		LastUsedAt: record.LastUsedAt,
+		ExpiresAt:  record.ExpiresAt,
 		Scopes:     append([]string{}, record.Scopes...),
 	}
 }
@@ -102,8 +104,9 @@ func (r *Router) handleListAPITokens(w http.ResponseWriter, req *http.Request) {
 }
 
 type createTokenRequest struct {
-	Name   string    `json:"name"`
-	Scopes *[]string `json:"scopes"`
+	Name      string    `json:"name"`
+	Scopes    *[]string `json:"scopes"`
+	ExpiresIn *string   `json:"expiresIn,omitempty"` // e.g. "24h", "720h", "8760h"
 }
 
 // handleCreateAPIToken generates and stores a new API token.
@@ -146,6 +149,20 @@ func (r *Router) handleCreateAPIToken(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
+	if payload.ExpiresIn != nil && *payload.ExpiresIn != "" {
+		dur, err := time.ParseDuration(*payload.ExpiresIn)
+		if err != nil {
+			http.Error(w, "Invalid expiresIn duration: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		if dur < time.Minute {
+			http.Error(w, "Token expiration must be at least 1 minute", http.StatusBadRequest)
+			return
+		}
+		exp := time.Now().UTC().Add(dur)
+		record.ExpiresAt = &exp
+	}
+
 	config.Mu.Lock()
 	defer config.Mu.Unlock()
 
@@ -161,6 +178,13 @@ func (r *Router) handleCreateAPIToken(w http.ResponseWriter, req *http.Request) 
 			return
 		}
 	}
+
+	log.Info().
+		Str("audit_event", "token_created").
+		Str("token_id", record.ID).
+		Str("token_name", record.Name).
+		Str("client_ip", req.RemoteAddr).
+		Msg("API token created")
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
@@ -209,5 +233,118 @@ func (r *Router) handleDeleteAPIToken(w http.ResponseWriter, req *http.Request) 
 		}
 	}
 
+	log.Info().
+		Str("audit_event", "token_deleted").
+		Str("token_id", removed.ID).
+		Str("token_name", removed.Name).
+		Str("client_ip", req.RemoteAddr).
+		Msg("API token deleted")
+
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleRotateAPIToken atomically rotates an API token: creates a new token and removes the old one.
+func (r *Router) handleRotateAPIToken(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Extract token ID: /api/security/tokens/{id}/rotate
+	path := strings.TrimPrefix(req.URL.Path, "/api/security/tokens/")
+	parts := strings.Split(path, "/")
+	if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" || parts[1] != "rotate" {
+		http.Error(w, "Token ID required", http.StatusBadRequest)
+		return
+	}
+	id := strings.TrimSpace(parts[0])
+
+	config.Mu.Lock()
+	defer config.Mu.Unlock()
+
+	// Find existing token
+	var oldRecord config.APITokenRecord
+	found := false
+	for idx := range r.config.APITokens {
+		if r.config.APITokens[idx].ID == id {
+			oldRecord = r.config.APITokens[idx] // copy for safety (slice may reallocate)
+			found = true
+			break
+		}
+	}
+	if !found {
+		http.Error(w, "Token not found", http.StatusNotFound)
+		return
+	}
+
+	// Generate new token
+	rawToken, err := internalauth.GenerateAPIToken()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to generate token during rotation")
+		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
+		return
+	}
+
+	newRecord, err := config.NewAPITokenRecord(rawToken, oldRecord.Name, oldRecord.Scopes)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to construct token record during rotation")
+		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
+		return
+	}
+
+	// Preserve org bindings from old token
+	newRecord.OrgID = oldRecord.OrgID
+	newRecord.OrgIDs = append([]string{}, oldRecord.OrgIDs...)
+	if oldRecord.Metadata != nil {
+		newRecord.Metadata = make(map[string]string, len(oldRecord.Metadata))
+		for k, v := range oldRecord.Metadata {
+			newRecord.Metadata[k] = v
+		}
+	}
+	// Preserve expiration policy if set
+	if oldRecord.ExpiresAt != nil {
+		t := *oldRecord.ExpiresAt
+		newRecord.ExpiresAt = &t
+	}
+
+	// If this was a migrated env token, suppress re-migration on restart.
+	if strings.HasPrefix(oldRecord.Name, "Migrated from .env") {
+		r.config.SuppressEnvMigration(oldRecord.Hash)
+		if r.persistence != nil {
+			if err := r.persistence.SaveEnvTokenSuppressions(r.config.SuppressedEnvMigrations); err != nil {
+				log.Warn().Err(err).Msg("Failed to persist env token suppression list")
+			}
+		}
+	}
+
+	// Remove old, add new (rollback if persistence fails)
+	prevTokens := append([]config.APITokenRecord{}, r.config.APITokens...)
+	r.config.RemoveAPIToken(id)
+	r.config.APITokens = append(r.config.APITokens, *newRecord)
+	r.config.SortAPITokens()
+
+	if r.persistence != nil {
+		if err := r.persistence.SaveAPITokens(r.config.APITokens); err != nil {
+			// Rollback the in-memory rotation so the in-memory config stays consistent with disk.
+			r.config.APITokens = prevTokens
+			r.config.SortAPITokens()
+			log.Error().Err(err).Msg("Failed to persist API tokens after rotation")
+			http.Error(w, "Failed to save rotated token", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	log.Info().
+		Str("audit_event", "token_rotated").
+		Str("old_token_id", id).
+		Str("new_token_id", newRecord.ID).
+		Str("token_name", newRecord.Name).
+		Str("client_ip", req.RemoteAddr).
+		Msg("API token rotated")
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"token":  rawToken,
+		"record": toAPITokenDTO(*newRecord),
+	})
 }

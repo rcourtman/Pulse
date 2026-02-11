@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/cpmetrics"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
 )
 
@@ -36,6 +37,11 @@ func HandleStatus(reg *registry.TenantRegistry, version string) http.HandlerFunc
 		if err != nil {
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
+		}
+
+		// Opportunistically sync gauges on status calls (in addition to the background updater).
+		for state, c := range counts {
+			cpmetrics.TenantsByState.WithLabelValues(string(state)).Set(float64(c))
 		}
 
 		total := 0

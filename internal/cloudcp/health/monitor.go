@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/cpmetrics"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/docker"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
 	"github.com/rs/zerolog/log"
@@ -86,6 +87,12 @@ func (m *Monitor) checkAll(ctx context.Context) {
 		now := time.Now().UTC()
 		tenant.LastHealthCheck = &now
 		tenant.HealthCheckOK = healthy
+
+		if healthy {
+			cpmetrics.HealthCheckResults.WithLabelValues("healthy").Inc()
+		} else {
+			cpmetrics.HealthCheckResults.WithLabelValues("unhealthy").Inc()
+		}
 
 		if err := m.registry.Update(tenant); err != nil {
 			log.Error().Err(err).Str("tenant_id", tenant.ID).Msg("Failed to update health status")

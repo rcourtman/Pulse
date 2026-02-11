@@ -74,3 +74,61 @@ func TestNewHashedAPITokenRecord(t *testing.T) {
 		t.Fatalf("expected CreatedAt to be set")
 	}
 }
+
+func TestAPITokenRecord_IsExpired(t *testing.T) {
+	record := &APITokenRecord{}
+	if record.IsExpired() {
+		t.Fatalf("expected token with nil ExpiresAt to not be expired")
+	}
+
+	past := time.Now().UTC().Add(-time.Minute)
+	record.ExpiresAt = &past
+	if !record.IsExpired() {
+		t.Fatalf("expected token to be expired when ExpiresAt is in the past")
+	}
+
+	future := time.Now().UTC().Add(time.Minute)
+	record.ExpiresAt = &future
+	if record.IsExpired() {
+		t.Fatalf("expected token to not be expired when ExpiresAt is in the future")
+	}
+}
+
+func TestConfig_APITokenExpiration_Enforced(t *testing.T) {
+	rawToken := "token-abcdef123456"
+	record, err := NewAPITokenRecord(rawToken, "name", nil)
+	if err != nil {
+		t.Fatalf("NewAPITokenRecord error: %v", err)
+	}
+
+	expiredAt := time.Now().UTC().Add(-time.Minute)
+	record.ExpiresAt = &expiredAt
+
+	cfg := &Config{
+		APITokens: []APITokenRecord{*record},
+	}
+
+	if got, ok := cfg.ValidateAPIToken(rawToken); ok || got != nil {
+		t.Fatalf("expected expired token to be rejected by ValidateAPIToken")
+	}
+	if cfg.APITokens[0].LastUsedAt != nil {
+		t.Fatalf("expected LastUsedAt to remain nil when token is expired")
+	}
+	if cfg.IsValidAPIToken(rawToken) {
+		t.Fatalf("expected expired token to be rejected by IsValidAPIToken")
+	}
+
+	// Move expiration to the future and ensure the token is accepted.
+	notExpiredAt := time.Now().UTC().Add(time.Minute)
+	cfg.APITokens[0].ExpiresAt = &notExpiredAt
+
+	if got, ok := cfg.ValidateAPIToken(rawToken); !ok || got == nil {
+		t.Fatalf("expected non-expired token to be accepted by ValidateAPIToken")
+	}
+	if cfg.APITokens[0].LastUsedAt == nil {
+		t.Fatalf("expected LastUsedAt to be updated for valid token")
+	}
+	if !cfg.IsValidAPIToken(rawToken) {
+		t.Fatalf("expected non-expired token to be accepted by IsValidAPIToken")
+	}
+}

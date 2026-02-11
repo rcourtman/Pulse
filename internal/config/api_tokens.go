@@ -66,6 +66,7 @@ type APITokenRecord struct {
 	Suffix     string     `json:"suffix,omitempty"`
 	CreatedAt  time.Time  `json:"createdAt"`
 	LastUsedAt *time.Time `json:"lastUsedAt,omitempty"`
+	ExpiresAt  *time.Time `json:"expiresAt,omitempty"`
 	Scopes     []string   `json:"scopes,omitempty"`
 
 	// OrgID binds this token to a single organization.
@@ -96,12 +97,24 @@ func (r *APITokenRecord) ensureScopes() {
 	r.Scopes = scopes
 }
 
+// IsExpired reports whether the token has passed its expiration time.
+func (r *APITokenRecord) IsExpired() bool {
+	if r.ExpiresAt == nil {
+		return false // No expiration set — token never expires.
+	}
+	return time.Now().UTC().After(*r.ExpiresAt)
+}
+
 // Clone returns a copy of the record with duplicated pointer fields.
 func (r *APITokenRecord) Clone() APITokenRecord {
 	clone := *r
 	if r.LastUsedAt != nil {
 		t := *r.LastUsedAt
 		clone.LastUsedAt = &t
+	}
+	if r.ExpiresAt != nil {
+		t := *r.ExpiresAt
+		clone.ExpiresAt = &t
 	}
 	clone.ensureScopes()
 
@@ -298,6 +311,9 @@ func (c *Config) ValidateAPIToken(rawToken string) (*APITokenRecord, bool) {
 
 	for idx, record := range c.APITokens {
 		if auth.CompareAPIToken(rawToken, record.Hash) {
+			if c.APITokens[idx].IsExpired() {
+				return nil, false
+			}
 			now := time.Now().UTC()
 			c.APITokens[idx].LastUsedAt = &now
 			c.APITokens[idx].ensureScopes()
@@ -317,6 +333,9 @@ func (c *Config) IsValidAPIToken(rawToken string) bool {
 
 	for _, record := range c.APITokens {
 		if auth.CompareAPIToken(rawToken, record.Hash) {
+			if record.IsExpired() {
+				return false
+			}
 			return true
 		}
 	}

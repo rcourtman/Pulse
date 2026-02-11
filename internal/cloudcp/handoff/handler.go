@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
+	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -70,6 +71,13 @@ func HandleHandoff(reg *registry.TenantRegistry, tenantsDir string) http.Handler
 			return
 		}
 		if t == nil || strings.TrimSpace(t.AccountID) == "" || t.AccountID != accountID {
+			log.Info().
+				Str("audit_event", "handoff_denied").
+				Str("reason", "tenant_not_found").
+				Str("account_id", accountID).
+				Str("tenant_id", tenantID).
+				Str("client_ip", r.RemoteAddr).
+				Msg("Tenant handoff denied")
 			http.Error(w, "tenant not found", http.StatusNotFound)
 			return
 		}
@@ -90,6 +98,14 @@ func HandleHandoff(reg *registry.TenantRegistry, tenantsDir string) http.Handler
 			return
 		}
 		if m == nil {
+			log.Info().
+				Str("audit_event", "handoff_denied").
+				Str("reason", "forbidden").
+				Str("account_id", accountID).
+				Str("tenant_id", tenantID).
+				Str("user_id", userID).
+				Str("client_ip", r.RemoteAddr).
+				Msg("Tenant handoff denied")
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
@@ -125,6 +141,16 @@ func HandleHandoff(reg *registry.TenantRegistry, tenantsDir string) http.Handler
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
+
+		log.Info().
+			Str("audit_event", "handoff_granted").
+			Str("account_id", accountID).
+			Str("tenant_id", tenantID).
+			Str("user_id", userID).
+			Str("email", u.Email).
+			Str("role", string(m.Role)).
+			Str("client_ip", r.RemoteAddr).
+			Msg("Tenant handoff token minted")
 
 		baseDomain := deriveBaseDomain(r)
 		if baseDomain == "" {
