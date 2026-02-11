@@ -98,6 +98,12 @@ type Agent struct {
 	preCPUStatsFailures int
 	reportBuffer        *buffer.Queue[agentsdocker.Report]
 	registryChecker     *RegistryChecker // For checking container image updates
+	asyncOnce           sync.Once
+	asyncCtx            context.Context
+	asyncCancel         context.CancelFunc
+	asyncWG             sync.WaitGroup
+	closeOnce           sync.Once
+	closeErr            error
 }
 
 // ErrStopRequested indicates the agent should terminate gracefully after acknowledging a stop command.
@@ -256,6 +262,8 @@ func New(cfg Config) (*Agent, error) {
 	for _, state := range stateFilters {
 		agent.allowedStates[state] = struct{}{}
 	}
+
+	agent.ensureAsyncLifecycle()
 
 	return agent, nil
 }
@@ -618,6 +626,39 @@ func stopTimer(timer *time.Timer) {
 	}
 }
 
+func (a *Agent) ensureAsyncLifecycle() {
+	a.asyncOnce.Do(func() {
+		a.asyncCtx, a.asyncCancel = context.WithCancel(context.Background())
+	})
+}
+
+func (a *Agent) runAsync(task func(context.Context)) {
+	a.ensureAsyncLifecycle()
+
+	a.asyncWG.Add(1)
+	go func() {
+		defer a.asyncWG.Done()
+		task(a.asyncCtx)
+	}()
+}
+
+func (a *Agent) waitForAsyncDelay(delay time.Duration) bool {
+	if delay <= 0 {
+		return true
+	}
+
+	a.ensureAsyncLifecycle()
+	timer := newTimerFn(delay)
+	defer stopTimer(timer)
+
+	select {
+	case <-a.asyncCtx.Done():
+		return false
+	case <-timer.C:
+		return true
+	}
+}
+
 func (a *Agent) collectOnce(ctx context.Context) error {
 	report, err := a.buildReport(ctx)
 	if err != nil {
@@ -804,12 +845,20 @@ func (a *Agent) handleCheckUpdatesCommand(ctx context.Context, target TargetConf
 		return fmt.Errorf("send check updates acknowledgement: %w", err)
 	}
 
-	// Trigger an immediate collection cycle to report updates
-	go func() {
-		// Small delay to ensure the ack response completes
-		sleepFn(1 * time.Second)
-		a.collectOnce(ctx)
-	}()
+	// Trigger an immediate collection cycle to report updates.
+	a.runAsync(func(asyncCtx context.Context) {
+		if !a.waitForAsyncDelay(1 * time.Second) {
+			return
+		}
+		select {
+		case <-asyncCtx.Done():
+			return
+		case <-ctx.Done():
+			return
+		default:
+		}
+		_ = a.collectOnce(ctx)
+	})
 
 	return nil
 }
@@ -834,14 +883,18 @@ func (a *Agent) handleStopCommand(ctx context.Context, target TargetConfig, comm
 	// After sending the acknowledgement, stop the systemd service to prevent restart.
 	// This is done after the ack to ensure the acknowledgement is sent before the
 	// process is terminated by systemctl stop.
-	go func() {
-		// Small delay to ensure the ack response completes
-		sleepFn(1 * time.Second)
-		stopServiceCtx := context.Background()
+	a.runAsync(func(asyncCtx context.Context) {
+		// Small delay to ensure the ack response completes.
+		if !a.waitForAsyncDelay(1 * time.Second) {
+			return
+		}
+
+		stopServiceCtx, cancel := context.WithTimeout(asyncCtx, 5*time.Second)
+		defer cancel()
 		if err := stopSystemdService(stopServiceCtx, "pulse-docker-agent"); err != nil {
 			a.logger.Warn().Err(err).Msg("Failed to stop systemd service, agent will exit normally")
 		}
-	}()
+	})
 
 	return ErrStopRequested
 }
@@ -996,7 +1049,39 @@ func newHTTPClient(insecure bool) *http.Client {
 }
 
 func (a *Agent) Close() error {
-	return a.docker.Close()
+	a.closeOnce.Do(func() {
+		a.ensureAsyncLifecycle()
+		a.asyncCancel()
+
+		done := make(chan struct{})
+		go func() {
+			a.asyncWG.Wait()
+			close(done)
+		}()
+
+		waitTimer := newTimerFn(2 * time.Second)
+		select {
+		case <-done:
+			stopTimer(waitTimer)
+		case <-waitTimer.C:
+			a.logger.Warn().Msg("Timed out waiting for docker agent background work to stop")
+		}
+
+		for _, client := range a.httpClients {
+			if client != nil {
+				client.CloseIdleConnections()
+			}
+		}
+		if a.registryChecker != nil && a.registryChecker.httpClient != nil {
+			a.registryChecker.httpClient.CloseIdleConnections()
+		}
+
+		if a.docker != nil {
+			a.closeErr = a.docker.Close()
+		}
+	})
+
+	return a.closeErr
 }
 
 func readMachineID() (string, error) {

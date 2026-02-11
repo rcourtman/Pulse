@@ -555,7 +555,9 @@ func TestHandleStopCommand(t *testing.T) {
 	t.Run("stop service goroutine executes", func(t *testing.T) {
 		marker := filepath.Join(t.TempDir(), "called")
 		writeSystemctl(t, "if [ \"$1\" = \"disable\" ]; then exit 0; fi\nif [ \"$1\" = \"stop\" ]; then : > "+marker+"; exit 2; fi\nexit 0")
-		swap(t, &sleepFn, func(time.Duration) {})
+		swap(t, &newTimerFn, func(time.Duration) *time.Timer {
+			return time.NewTimer(0)
+		})
 
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)

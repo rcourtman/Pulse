@@ -282,17 +282,18 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 
 	result.NewImageDigest = verifyInspect.Image
 
-	// 10. Schedule cleanup of backup container after a delay
-	// This gives time to verify the new container is working
-	go func() {
-		sleepFn(5 * time.Minute)
-		cleanupCtx := context.Background()
-		if err := a.docker.ContainerRemove(cleanupCtx, backupName, container.RemoveOptions{Force: true}); err != nil {
+	// 10. Schedule cleanup of backup container after a delay.
+	// This gives time to verify the new container is working.
+	a.runAsync(func(asyncCtx context.Context) {
+		if !a.waitForAsyncDelay(5 * time.Minute) {
+			return
+		}
+		if err := a.docker.ContainerRemove(asyncCtx, backupName, container.RemoveOptions{Force: true}); err != nil {
 			a.logger.Warn().Err(err).Str("backup", backupName).Msg("Failed to cleanup backup container")
 		} else {
 			a.logger.Info().Str("backup", backupName).Msg("Backup container cleaned up")
 		}
-	}()
+	})
 
 	result.Success = true
 	a.logger.Info().
