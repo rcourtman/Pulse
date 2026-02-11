@@ -593,6 +593,10 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/security/oidc", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.handleOIDCConfig)))
 	r.mux.HandleFunc("/api/oidc/login", r.handleOIDCLogin)
 	r.mux.HandleFunc(config.DefaultOIDCCallbackPath, r.handleOIDCCallback)
+	r.mux.HandleFunc("/api/security/sso/providers", RequireAdmin(r.config, r.handleSSOProviders))
+	r.mux.HandleFunc("/api/security/sso/providers/test", RequireAdmin(r.config, r.handleTestSSOProvider))
+	r.mux.HandleFunc("/api/security/sso/providers/metadata/preview", RequireAdmin(r.config, r.handleMetadataPreview))
+	r.mux.HandleFunc("/api/security/sso/providers/", RequireAdmin(r.config, r.handleSSOProvider))
 	r.mux.HandleFunc("/api/security/tokens", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
 		case http.MethodGet:
