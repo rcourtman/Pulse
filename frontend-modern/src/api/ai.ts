@@ -1,4 +1,5 @@
 import { apiFetchJSON, apiFetch } from '@/utils/apiClient';
+import { readAPIErrorMessage } from './responseUtils';
 import { logger } from '@/utils/logger';
 import type {
   AISettings,
@@ -163,8 +164,7 @@ export class AIAPI {
     });
 
     if (!response.ok) {
-      const text = await response.text();
-      throw new Error(text || `Request failed with status ${response.status}`);
+      throw new Error(await readAPIErrorMessage(response, `Request failed with status ${response.status}`));
     }
 
     const reader = response.body?.getReader();

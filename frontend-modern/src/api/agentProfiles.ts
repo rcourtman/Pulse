@@ -1,4 +1,5 @@
 import { apiFetch, apiFetchJSON } from '@/utils/apiClient';
+import { readAPIErrorMessage } from './responseUtils';
 
 /**
  * Agent profile for centralized configuration management.
@@ -133,8 +134,7 @@ export class AgentProfilesAPI {
         });
 
         if (!response.ok) {
-            const text = await response.text();
-            throw new Error(text || `Failed to create profile: ${response.status}`);
+            throw new Error(await readAPIErrorMessage(response, `Failed to create profile: ${response.status}`));
         }
 
         return response.json();
@@ -151,8 +151,7 @@ export class AgentProfilesAPI {
         });
 
         if (!response.ok) {
-            const text = await response.text();
-            throw new Error(text || `Failed to update profile: ${response.status}`);
+            throw new Error(await readAPIErrorMessage(response, `Failed to update profile: ${response.status}`));
         }
 
         return response.json();
@@ -167,8 +166,7 @@ export class AgentProfilesAPI {
         });
 
         if (!response.ok && response.status !== 204) {
-            const text = await response.text();
-            throw new Error(text || `Failed to delete profile: ${response.status}`);
+            throw new Error(await readAPIErrorMessage(response, `Failed to delete profile: ${response.status}`));
         }
     }
 
@@ -198,8 +196,7 @@ export class AgentProfilesAPI {
         });
 
         if (!response.ok) {
-            const text = await response.text();
-            throw new Error(text || `Failed to assign profile: ${response.status}`);
+            throw new Error(await readAPIErrorMessage(response, `Failed to assign profile: ${response.status}`));
         }
     }
 
@@ -212,8 +209,7 @@ export class AgentProfilesAPI {
         });
 
         if (!response.ok && response.status !== 204) {
-            const text = await response.text();
-            throw new Error(text || `Failed to unassign profile: ${response.status}`);
+            throw new Error(await readAPIErrorMessage(response, `Failed to unassign profile: ${response.status}`));
         }
     }
 
@@ -229,11 +225,10 @@ export class AgentProfilesAPI {
         });
 
         if (!response.ok) {
-            const text = await response.text();
             if (response.status === 503) {
                 throw new Error('Pulse Assistant service is not available. Please check Pulse Assistant settings.');
             }
-            throw new Error(text || `Failed to get suggestion: ${response.status}`);
+            throw new Error(await readAPIErrorMessage(response, `Failed to get suggestion: ${response.status}`));
         }
 
         return response.json();
