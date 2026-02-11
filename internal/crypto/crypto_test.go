@@ -47,6 +47,98 @@ func withNewGCM(t *testing.T, fn func(cipher.Block) (cipher.AEAD, error)) {
 	t.Cleanup(func() { newGCM = orig })
 }
 
+func TestDeriveKeyValidation(t *testing.T) {
+	tests := []struct {
+		name    string
+		cm      *CryptoManager
+		purpose string
+		length  int
+	}{
+		{
+			name:    "nil manager",
+			cm:      nil,
+			purpose: "storage",
+			length:  32,
+		},
+		{
+			name:    "empty manager key",
+			cm:      &CryptoManager{},
+			purpose: "storage",
+			length:  32,
+		},
+		{
+			name:    "zero length",
+			cm:      &CryptoManager{key: make([]byte, 32)},
+			purpose: "storage",
+			length:  0,
+		},
+		{
+			name:    "negative length",
+			cm:      &CryptoManager{key: make([]byte, 32)},
+			purpose: "storage",
+			length:  -1,
+		},
+		{
+			name:    "empty purpose",
+			cm:      &CryptoManager{key: make([]byte, 32)},
+			purpose: "",
+			length:  32,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := tc.cm.DeriveKey(tc.purpose, tc.length)
+			if err == nil {
+				t.Fatal("DeriveKey() expected error")
+			}
+		})
+	}
+}
+
+func TestDeriveKeyDeterministicAndPurposeScoped(t *testing.T) {
+	masterKey := make([]byte, 32)
+	for i := range masterKey {
+		masterKey[i] = byte(i + 1)
+	}
+
+	cm := &CryptoManager{key: masterKey}
+
+	first, err := cm.DeriveKey("storage", 32)
+	if err != nil {
+		t.Fatalf("DeriveKey() first call error: %v", err)
+	}
+	second, err := cm.DeriveKey("storage", 32)
+	if err != nil {
+		t.Fatalf("DeriveKey() second call error: %v", err)
+	}
+	if !bytes.Equal(first, second) {
+		t.Fatal("DeriveKey() should be deterministic for same purpose/length")
+	}
+	if bytes.Equal(first, masterKey) {
+		t.Fatal("DeriveKey() should not return the raw master key bytes")
+	}
+
+	otherPurpose, err := cm.DeriveKey("session", 32)
+	if err != nil {
+		t.Fatalf("DeriveKey() other purpose error: %v", err)
+	}
+	if bytes.Equal(first, otherPurpose) {
+		t.Fatal("DeriveKey() should produce distinct keys for different purposes")
+	}
+
+	short, err := cm.DeriveKey("storage", 16)
+	if err != nil {
+		t.Fatalf("DeriveKey() short length error: %v", err)
+	}
+	if len(short) != 16 {
+		t.Fatalf("DeriveKey() short length = %d, want 16", len(short))
+	}
+	if !bytes.Equal(first[:16], short) {
+		t.Fatal("DeriveKey() output stream prefix mismatch for shorter length")
+	}
+}
+
 func TestEncryptDecrypt(t *testing.T) {
 	// Create a temp directory for the test
 	tmpDir := t.TempDir()
