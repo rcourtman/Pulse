@@ -9429,9 +9429,19 @@ func (m *Manager) LoadActiveAlerts() error {
 			// Use a goroutine and add a small delay to avoid notification spam on startup
 			alertCopy := alert.Clone()
 			go func(a *Alert) {
+				delay := time.NewTimer(10 * time.Second)
+				defer func() {
+					if !delay.Stop() {
+						select {
+						case <-delay.C:
+						default:
+						}
+					}
+				}()
+
 				// Wait for system to stabilize or cancellation
 				select {
-				case <-time.After(10 * time.Second):
+				case <-delay.C:
 					log.Info().
 						Str("alertID", a.ID).
 						Str("resource", a.ResourceName).

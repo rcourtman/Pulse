@@ -307,9 +307,18 @@ func (hm *HistoryManager) cleanupRoutine() {
 	defer ticker.Stop()
 
 	// Also run cleanup on startup after a delay
-	// Also run cleanup on startup after a delay
+	startupDelay := time.NewTimer(1 * time.Minute)
+	defer func() {
+		if !startupDelay.Stop() {
+			select {
+			case <-startupDelay.C:
+			default:
+			}
+		}
+	}()
+
 	select {
-	case <-time.After(1 * time.Minute):
+	case <-startupDelay.C:
 		hm.cleanOldEntries()
 	case <-hm.stopChan:
 		return
