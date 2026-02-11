@@ -163,3 +163,32 @@ func TestCapacityOne(t *testing.T) {
 		t.Errorf("expected (2, true), got (%d, %v)", val, ok)
 	}
 }
+
+func TestZeroCapacityDoesNotPanicAndDropsItems(t *testing.T) {
+	q := New[int](0)
+
+	q.Push(1)
+	q.Push(2)
+
+	if q.Len() != 0 {
+		t.Errorf("expected len 0, got %d", q.Len())
+	}
+
+	if _, ok := q.Pop(); ok {
+		t.Error("expected pop on zero-capacity queue to return false")
+	}
+}
+
+func TestNegativeCapacityDoesNotPanicAndBehavesAsZero(t *testing.T) {
+	q := New[int](-5)
+
+	q.Push(1)
+
+	if q.Len() != 0 {
+		t.Errorf("expected len 0, got %d", q.Len())
+	}
+
+	if _, ok := q.Peek(); ok {
+		t.Error("expected peek on negative-capacity queue to return false")
+	}
+}
