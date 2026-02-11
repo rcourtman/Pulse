@@ -64,8 +64,11 @@ func CollectPower(ctx context.Context) (*PowerData, error) {
 // to calculate instantaneous power in watts.
 func collectRALP(ctx context.Context) (*PowerData, error) {
 	// Check if RAPL is available
-	if _, err := os.Stat(raplBasePath); os.IsNotExist(err) {
-		return nil, fmt.Errorf("RAPL not available: %w", err)
+	if _, err := os.Stat(raplBasePath); err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("RAPL not available: %w", err)
+		}
+		return nil, fmt.Errorf("check RAPL availability: %w", err)
 	}
 
 	data := &PowerData{Source: "rapl"}
@@ -73,7 +76,10 @@ func collectRALP(ctx context.Context) (*PowerData, error) {
 	// Find all RAPL domains (packages)
 	// Typically: intel-rapl:0 (package), intel-rapl:0:0 (core), intel-rapl:0:1 (uncore), etc.
 	packages, err := filepath.Glob(filepath.Join(raplBasePath, "intel-rapl:*"))
-	if err != nil || len(packages) == 0 {
+	if err != nil {
+		return nil, fmt.Errorf("find RAPL packages: %w", err)
+	}
+	if len(packages) == 0 {
 		return nil, fmt.Errorf("no RAPL packages found")
 	}
 
@@ -163,7 +169,10 @@ func readRAPLEnergy(packages []string) (map[string]uint64, error) {
 		}
 
 		// Also read subdomain energy (core, uncore, dram)
-		subdomains, _ := filepath.Glob(filepath.Join(pkgPath, "intel-rapl:*"))
+		subdomains, err := filepath.Glob(filepath.Join(pkgPath, "intel-rapl:*"))
+		if err != nil {
+			return nil, fmt.Errorf("find RAPL subdomains for %s: %w", pkgPath, err)
+		}
 		for _, subPath := range subdomains {
 			energyPath := filepath.Join(subPath, "energy_uj")
 			if energy, err := readUint64File(energyPath); err == nil {
@@ -189,16 +198,20 @@ func readRAPLEnergy(packages []string) (map[string]uint64, error) {
 func readUint64File(path string) (uint64, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("read %s: %w", path, err)
 	}
-	return strconv.ParseUint(strings.TrimSpace(string(data)), 10, 64)
+	value, err := strconv.ParseUint(strings.TrimSpace(string(data)), 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("parse uint64 from %s: %w", path, err)
+	}
+	return value, nil
 }
 
 // readStringFile reads a file containing a single string value.
 func readStringFile(path string) (string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("read %s: %w", path, err)
 	}
 	return strings.TrimSpace(string(data)), nil
 }
@@ -212,7 +225,7 @@ func collectAMDEnergy(ctx context.Context) (*PowerData, error) {
 	// Find hwmon device with amd_energy driver
 	hwmonPath, err := findAMDEnergyHwmon()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("find AMD energy hwmon: %w", err)
 	}
 
 	data := &PowerData{Source: "amd_energy"}
@@ -318,7 +331,10 @@ func readAMDEnergy(hwmonPath string) (map[string]uint64, error) {
 
 	// AMD energy exposes energy*_input files (in microjoules)
 	energyFiles, err := filepath.Glob(filepath.Join(hwmonPath, "energy*_input"))
-	if err != nil || len(energyFiles) == 0 {
+	if err != nil {
+		return nil, fmt.Errorf("find AMD energy files in %s: %w", hwmonPath, err)
+	}
+	if len(energyFiles) == 0 {
 		return nil, fmt.Errorf("no AMD energy files found")
 	}
 
