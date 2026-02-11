@@ -407,3 +407,82 @@ func TestAgentProfile_MergedConfigParentNotFound(t *testing.T) {
 		t.Errorf("expected interval to be '10s', got %v", merged["interval"])
 	}
 }
+
+func TestAgentProfile_MergedConfigCircularInheritance(t *testing.T) {
+	profileA := AgentProfile{
+		ID:       "profile-a",
+		Name:     "Profile A",
+		ParentID: "profile-b",
+		Config: AgentConfigMap{
+			"interval":  "15s",
+			"log_level": "debug",
+		},
+	}
+
+	profileB := AgentProfile{
+		ID:       "profile-b",
+		Name:     "Profile B",
+		ParentID: "profile-a",
+		Config: AgentConfigMap{
+			"enable_docker": true,
+			"log_level":     "info",
+		},
+	}
+
+	merged := profileA.MergedConfig([]AgentProfile{profileA, profileB})
+
+	// Child profile should still override parent values while avoiding infinite recursion.
+	if merged["interval"] != "15s" {
+		t.Errorf("expected interval to be '15s', got %v", merged["interval"])
+	}
+	if merged["log_level"] != "debug" {
+		t.Errorf("expected log_level to be 'debug', got %v", merged["log_level"])
+	}
+	if merged["enable_docker"] != true {
+		t.Errorf("expected enable_docker to be true, got %v", merged["enable_docker"])
+	}
+}
+
+func TestAgentProfile_MergedConfigSelfParent(t *testing.T) {
+	profile := AgentProfile{
+		ID:       "self",
+		Name:     "Self Parent",
+		ParentID: "self",
+		Config: AgentConfigMap{
+			"interval": "45s",
+		},
+	}
+
+	merged := profile.MergedConfig([]AgentProfile{profile})
+	if merged["interval"] != "45s" {
+		t.Errorf("expected interval to be '45s', got %v", merged["interval"])
+	}
+}
+
+func TestAgentProfile_MergedConfigReturnsDefensiveCopy(t *testing.T) {
+	parent := AgentProfile{
+		ID: "parent",
+		Config: AgentConfigMap{
+			"enable_docker": true,
+		},
+	}
+
+	child := AgentProfile{
+		ID:       "child",
+		ParentID: "parent",
+		Config: AgentConfigMap{
+			"interval": "30s",
+		},
+	}
+
+	merged := child.MergedConfig([]AgentProfile{parent, child})
+	merged["interval"] = "10s"
+	merged["enable_docker"] = false
+
+	if child.Config["interval"] != "30s" {
+		t.Fatalf("child config mutated through merged map: got %v", child.Config["interval"])
+	}
+	if parent.Config["enable_docker"] != true {
+		t.Fatalf("parent config mutated through merged map: got %v", parent.Config["enable_docker"])
+	}
+}

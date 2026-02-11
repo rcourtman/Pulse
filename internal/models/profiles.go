@@ -1,6 +1,7 @@
 package models
 
 import (
+	"strings"
 	"time"
 )
 
@@ -69,36 +70,56 @@ type ProfileChangeLog struct {
 	Details     string    `json:"details,omitempty"`
 }
 
+const maxProfileInheritanceDepth = 64
+
 // MergedConfig returns the effective configuration by merging parent configs.
 // Parent configs are applied first, then overridden by child configs.
 func (p *AgentProfile) MergedConfig(profiles []AgentProfile) AgentConfigMap {
-	if p.ParentID == "" {
-		return p.Config
+	if p == nil {
+		return AgentConfigMap{}
 	}
 
-	// Find parent profile
-	var parent *AgentProfile
+	byID := make(map[string]*AgentProfile, len(profiles))
 	for i := range profiles {
-		if profiles[i].ID == p.ParentID {
-			parent = &profiles[i]
+		if profiles[i].ID == "" {
+			continue
+		}
+		byID[profiles[i].ID] = &profiles[i]
+	}
+
+	chain := make([]*AgentProfile, 0, maxProfileInheritanceDepth)
+	visited := make(map[string]struct{}, maxProfileInheritanceDepth)
+	current := p
+
+	for depth := 0; depth < maxProfileInheritanceDepth && current != nil; depth++ {
+		chain = append(chain, current)
+
+		if current.ID != "" {
+			visited[current.ID] = struct{}{}
+		}
+
+		parentID := strings.TrimSpace(current.ParentID)
+		if parentID == "" {
 			break
 		}
+
+		parent, ok := byID[parentID]
+		if !ok {
+			break
+		}
+
+		if _, seen := visited[parent.ID]; seen {
+			break
+		}
+
+		current = parent
 	}
 
-	if parent == nil {
-		return p.Config
-	}
-
-	// Get parent's merged config (recursive)
-	parentConfig := parent.MergedConfig(profiles)
-
-	// Merge: start with parent config, override with current
 	merged := make(AgentConfigMap)
-	for k, v := range parentConfig {
-		merged[k] = v
-	}
-	for k, v := range p.Config {
-		merged[k] = v
+	for i := len(chain) - 1; i >= 0; i-- {
+		for k, v := range chain[i].Config {
+			merged[k] = v
+		}
 	}
 
 	return merged
