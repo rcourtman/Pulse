@@ -116,7 +116,8 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 				r.config.AuthPass != "" ||
 				(oidcCfg != nil && oidcCfg.Enabled) ||
 				r.config.HasAPITokens() ||
-				r.config.ProxyAuthSecret != ""
+				r.config.ProxyAuthSecret != "" ||
+				r.hostedMode
 
 			// Check if .env file exists but hasn't been loaded yet (pending restart)
 			configuredButPendingRestart := false

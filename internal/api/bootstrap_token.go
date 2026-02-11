@@ -70,7 +70,8 @@ func (r *Router) initializeBootstrapToken() {
 	}
 
 	// If any authentication mechanism is already configured, purge stale bootstrap tokens.
-	if r.config.AuthUser != "" || r.config.AuthPass != "" || r.config.HasAPITokens() || r.config.ProxyAuthSecret != "" {
+	// In hosted mode, auth is handled by the cloud handoff — no bootstrap needed.
+	if r.config.AuthUser != "" || r.config.AuthPass != "" || r.config.HasAPITokens() || r.config.ProxyAuthSecret != "" || r.hostedMode {
 		r.clearBootstrapToken()
 		return
 	}
