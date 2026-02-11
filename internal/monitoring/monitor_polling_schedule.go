@@ -6,20 +6,33 @@ import (
 )
 
 func (m *Monitor) describeInstancesForScheduler() []InstanceDescriptor {
-	total := len(m.pveClients) + len(m.pbsClients) + len(m.pmgClients)
+	m.mu.RLock()
+	pveNames := make([]string, 0, len(m.pveClients))
+	for name := range m.pveClients {
+		pveNames = append(pveNames, name)
+	}
+
+	pbsNames := make([]string, 0, len(m.pbsClients))
+	for name := range m.pbsClients {
+		pbsNames = append(pbsNames, name)
+	}
+
+	pmgNames := make([]string, 0, len(m.pmgClients))
+	for name := range m.pmgClients {
+		pmgNames = append(pmgNames, name)
+	}
+	m.mu.RUnlock()
+
+	total := len(pveNames) + len(pbsNames) + len(pmgNames)
 	if total == 0 {
 		return nil
 	}
 
 	descriptors := make([]InstanceDescriptor, 0, total)
 
-	if len(m.pveClients) > 0 {
-		names := make([]string, 0, len(m.pveClients))
-		for name := range m.pveClients {
-			names = append(names, name)
-		}
-		sort.Strings(names)
-		for _, name := range names {
+	if len(pveNames) > 0 {
+		sort.Strings(pveNames)
+		for _, name := range pveNames {
 			desc := InstanceDescriptor{
 				Name: name,
 				Type: InstanceTypePVE,
@@ -41,13 +54,9 @@ func (m *Monitor) describeInstancesForScheduler() []InstanceDescriptor {
 		}
 	}
 
-	if len(m.pbsClients) > 0 {
-		names := make([]string, 0, len(m.pbsClients))
-		for name := range m.pbsClients {
-			names = append(names, name)
-		}
-		sort.Strings(names)
-		for _, name := range names {
+	if len(pbsNames) > 0 {
+		sort.Strings(pbsNames)
+		for _, name := range pbsNames {
 			desc := InstanceDescriptor{
 				Name: name,
 				Type: InstanceTypePBS,
@@ -69,13 +78,9 @@ func (m *Monitor) describeInstancesForScheduler() []InstanceDescriptor {
 		}
 	}
 
-	if len(m.pmgClients) > 0 {
-		names := make([]string, 0, len(m.pmgClients))
-		for name := range m.pmgClients {
-			names = append(names, name)
-		}
-		sort.Strings(names)
-		for _, name := range names {
+	if len(pmgNames) > 0 {
+		sort.Strings(pmgNames)
+		for _, name := range pmgNames {
 			desc := InstanceDescriptor{
 				Name: name,
 				Type: InstanceTypePMG,

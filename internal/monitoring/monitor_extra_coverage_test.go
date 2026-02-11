@@ -744,11 +744,16 @@ func TestMonitor_RetryPVEPortFallback_Detailed_Extra(t *testing.T) {
 	defer func() { newProxmoxClientFunc = orig }()
 
 	m := &Monitor{
-		config:     &config.Config{ConnectionTimeout: time.Second},
+		config: &config.Config{
+			ConnectionTimeout: time.Second,
+			PVEInstances: []config.PVEInstance{
+				{Name: "pve1", Host: "https://localhost:8006"},
+			},
+		},
 		pveClients: make(map[string]PVEClientInterface),
 	}
 
-	instanceCfg := &config.PVEInstance{Host: "https://localhost:8006"}
+	instanceCfg := &config.PVEInstance{Name: "pve1", Host: "https://localhost:8006"}
 	currentClient := &mockPVEClientExtra{}
 	cause := fmt.Errorf("dial tcp 127.0.0.1:8006: connect: connection refused")
 
@@ -766,6 +771,12 @@ func TestMonitor_RetryPVEPortFallback_Detailed_Extra(t *testing.T) {
 	}
 	if client == nil {
 		t.Error("Expected fallback client")
+	}
+	if _, ok := m.pveClients["pve1"]; !ok {
+		t.Error("Expected fallback client to be stored on monitor")
+	}
+	if got := m.config.PVEInstances[0].Host; got != "https://localhost:443" {
+		t.Errorf("Expected config host updated to fallback endpoint, got %q", got)
 	}
 	_ = nodes // ignore
 
