@@ -34,6 +34,7 @@ type mockCollector struct {
 	dialTimeoutFn           func(network, address string, timeout time.Duration) (net.Conn, error)
 	statFn                  func(name string) (os.FileInfo, error)
 	mkdirAllFn              func(path string, perm os.FileMode) error
+	chmodFn                 func(name string, mode os.FileMode) error
 	writeFileFn             func(filename string, data []byte, perm os.FileMode) error
 	commandCombinedOutputFn func(ctx context.Context, name string, arg ...string) (string, error)
 	lookPathFn              func(file string) (string, error)
@@ -161,6 +162,13 @@ func (m *mockCollector) Stat(name string) (os.FileInfo, error) {
 func (m *mockCollector) MkdirAll(path string, perm os.FileMode) error {
 	if m.mkdirAllFn != nil {
 		return m.mkdirAllFn(path, perm)
+	}
+	return nil
+}
+
+func (m *mockCollector) Chmod(name string, mode os.FileMode) error {
+	if m.chmodFn != nil {
+		return m.chmodFn(name, mode)
 	}
 	return nil
 }

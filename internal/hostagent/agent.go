@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"runtime"
 	"sort"
 	"strings"
@@ -106,11 +107,16 @@ func New(cfg Config) (*Agent, error) {
 		return nil, fmt.Errorf("api token is required")
 	}
 
-	pulseURL := cfg.PulseURL
-	if strings.TrimSpace(pulseURL) == "" {
+	pulseURL := strings.TrimSpace(cfg.PulseURL)
+	if pulseURL == "" {
 		pulseURL = "http://localhost:7655"
 	}
-	pulseURL = strings.TrimRight(pulseURL, "/")
+
+	normalizedPulseURL, err := normalizePulseURL(pulseURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid pulse url: %w", err)
+	}
+	pulseURL = normalizedPulseURL
 	cfg.PulseURL = pulseURL
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -493,6 +499,53 @@ func normalisePlatform(platform string) string {
 	default:
 		return platform
 	}
+}
+
+func normalizePulseURL(rawURL string) (string, error) {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return "", fmt.Errorf("pulse URL %q is invalid: %w", rawURL, err)
+	}
+
+	if parsed.Scheme == "" {
+		return "", fmt.Errorf("pulse URL %q must include scheme (https:// or loopback http://)", rawURL)
+	}
+	if parsed.Host == "" {
+		return "", fmt.Errorf("pulse URL %q must include host", rawURL)
+	}
+	if parsed.User != nil {
+		return "", fmt.Errorf("pulse URL %q must not include user credentials", rawURL)
+	}
+	if parsed.RawQuery != "" || parsed.Fragment != "" {
+		return "", fmt.Errorf("pulse URL %q must not include query or fragment", rawURL)
+	}
+
+	scheme := strings.ToLower(parsed.Scheme)
+	switch scheme {
+	case "https":
+		// Always allowed.
+	case "http":
+		if !isLoopbackPulseHost(parsed.Hostname()) {
+			return "", fmt.Errorf("pulse URL %q must use https unless host is loopback", rawURL)
+		}
+	default:
+		return "", fmt.Errorf("pulse URL %q has unsupported scheme %q", rawURL, parsed.Scheme)
+	}
+
+	parsed.Scheme = scheme
+	parsed.Path = strings.TrimRight(parsed.Path, "/")
+	parsed.RawPath = strings.TrimRight(parsed.RawPath, "/")
+
+	return parsed.String(), nil
+}
+
+func isLoopbackPulseHost(host string) bool {
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 // collectTemperatures attempts to collect temperature data from the local system.

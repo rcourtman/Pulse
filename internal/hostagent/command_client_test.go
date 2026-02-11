@@ -79,19 +79,34 @@ func TestCommandClientBuildWebSocketURL(t *testing.T) {
 			want:     "wss://example.invalid/api/agent/ws",
 		},
 		{
-			name:     "http becomes ws",
-			pulseURL: "http://example.invalid",
-			want:     "ws://example.invalid/api/agent/ws",
+			name:     "loopback http becomes ws",
+			pulseURL: "http://localhost:7655",
+			want:     "ws://localhost:7655/api/agent/ws",
 		},
 		{
-			name:     "ws preserved",
-			pulseURL: "ws://example.invalid",
-			want:     "ws://example.invalid/api/agent/ws",
+			name:     "loopback ws preserved",
+			pulseURL: "ws://127.0.0.1:7655",
+			want:     "ws://127.0.0.1:7655/api/agent/ws",
 		},
 		{
 			name:     "wss preserved",
 			pulseURL: "wss://example.invalid",
 			want:     "wss://example.invalid/api/agent/ws",
+		},
+		{
+			name:     "non-loopback http rejected",
+			pulseURL: "http://example.invalid",
+			wantErr:  true,
+		},
+		{
+			name:     "non-loopback ws rejected",
+			pulseURL: "ws://example.invalid",
+			wantErr:  true,
+		},
+		{
+			name:     "query rejected",
+			pulseURL: "https://example.invalid?x=1",
+			wantErr:  true,
 		},
 		{
 			name:     "invalid url returns error",

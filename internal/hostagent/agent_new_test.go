@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/rs/zerolog"
@@ -51,7 +52,7 @@ func TestNew_NormalizesConfigAndTags(t *testing.T) {
 
 	originalTags := []string{"  tag-a ", "tag-a", "", " tag-b", "tag-b "}
 	cfg := Config{
-		PulseURL:           "http://example.com///",
+		PulseURL:           "https://example.com///",
 		APIToken:           "token",
 		Interval:           0,
 		Tags:               originalTags,
@@ -68,8 +69,8 @@ func TestNew_NormalizesConfigAndTags(t *testing.T) {
 	if agent.interval != defaultInterval {
 		t.Fatalf("interval = %v, want %v", agent.interval, defaultInterval)
 	}
-	if agent.trimmedPulseURL != "http://example.com" {
-		t.Fatalf("trimmedPulseURL = %q, want %q", agent.trimmedPulseURL, "http://example.com")
+	if agent.trimmedPulseURL != "https://example.com" {
+		t.Fatalf("trimmedPulseURL = %q, want %q", agent.trimmedPulseURL, "https://example.com")
 	}
 	if agent.hostname != "host-from-info" {
 		t.Fatalf("hostname = %q, want %q", agent.hostname, "host-from-info")
@@ -126,6 +127,58 @@ func TestNew_DefaultPulseURL(t *testing.T) {
 	}
 	if agent.trimmedPulseURL != "http://localhost:7655" {
 		t.Fatalf("trimmedPulseURL = %q, want %q", agent.trimmedPulseURL, "http://localhost:7655")
+	}
+}
+
+func TestNew_RejectsUnsafePulseURL(t *testing.T) {
+	mc := &mockCollector{
+		hostInfoFn: func(context.Context) (*gohost.InfoStat, error) {
+			return &gohost.InfoStat{Hostname: "host", HostID: "hid", KernelArch: runtime.GOARCH}, nil
+		},
+	}
+
+	tests := []struct {
+		name string
+		url  string
+		want string
+	}{
+		{
+			name: "non-loopback http rejected",
+			url:  "http://example.com",
+			want: "must use https unless host is loopback",
+		},
+		{
+			name: "query rejected",
+			url:  "https://example.com?token=abc",
+			want: "must not include query or fragment",
+		},
+		{
+			name: "userinfo rejected",
+			url:  "https://user:pass@example.com",
+			want: "must not include user credentials",
+		},
+		{
+			name: "unsupported scheme rejected",
+			url:  "ftp://example.com",
+			want: "unsupported scheme",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := New(Config{
+				PulseURL:  tt.url,
+				APIToken:  "token",
+				LogLevel:  zerolog.InfoLevel,
+				Collector: mc,
+			})
+			if err == nil {
+				t.Fatalf("expected error for URL %q", tt.url)
+			}
+			if !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("error = %q, want substring %q", err.Error(), tt.want)
+			}
+		})
 	}
 }
 

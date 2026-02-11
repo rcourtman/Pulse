@@ -37,6 +37,7 @@ type SystemCollector interface {
 	DialTimeout(network, address string, timeout time.Duration) (net.Conn, error)
 	Stat(name string) (os.FileInfo, error)
 	MkdirAll(path string, perm os.FileMode) error
+	Chmod(name string, mode os.FileMode) error
 	WriteFile(filename string, data []byte, perm os.FileMode) error
 	CommandCombinedOutput(ctx context.Context, name string, arg ...string) (string, error)
 	LookPath(file string) (string, error)
@@ -119,6 +120,10 @@ func (c *defaultCollector) Stat(name string) (os.FileInfo, error) {
 
 func (c *defaultCollector) MkdirAll(path string, perm os.FileMode) error {
 	return os.MkdirAll(path, perm)
+}
+
+func (c *defaultCollector) Chmod(name string, mode os.FileMode) error {
+	return os.Chmod(name, mode)
 }
 
 func (c *defaultCollector) WriteFile(filename string, data []byte, perm os.FileMode) error {

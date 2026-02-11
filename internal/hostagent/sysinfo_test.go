@@ -62,6 +62,7 @@ func TestDefaultCollector_Smoke(t *testing.T) {
 	c.Stat("/tmp")
 	c.MkdirAll("/tmp/pulse-test-dir", 0755)
 	c.WriteFile("/tmp/pulse-test-file", []byte("test"), 0644)
+	c.Chmod("/tmp/pulse-test-file", 0600)
 	c.CommandCombinedOutput(ctx, "echo", "hi")
 	c.LookPath("ls")
 

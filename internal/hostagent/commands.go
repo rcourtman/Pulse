@@ -228,22 +228,43 @@ func (c *CommandClient) connectAndHandle(ctx context.Context) error {
 func (c *CommandClient) buildWebSocketURL() (string, error) {
 	parsed, err := url.Parse(c.pulseURL)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("pulse URL is invalid: %w", err)
 	}
 
-	// Convert http(s) to ws(s)
-	switch parsed.Scheme {
+	if parsed.Scheme == "" {
+		return "", fmt.Errorf("pulse URL %q must include scheme", c.pulseURL)
+	}
+	if parsed.Host == "" {
+		return "", fmt.Errorf("pulse URL %q must include host", c.pulseURL)
+	}
+	if parsed.User != nil {
+		return "", fmt.Errorf("pulse URL %q must not include user credentials", c.pulseURL)
+	}
+	if parsed.RawQuery != "" || parsed.Fragment != "" {
+		return "", fmt.Errorf("pulse URL %q must not include query or fragment", c.pulseURL)
+	}
+
+	switch strings.ToLower(parsed.Scheme) {
 	case "https":
 		parsed.Scheme = "wss"
 	case "http":
+		if !isLoopbackPulseHost(parsed.Hostname()) {
+			return "", fmt.Errorf("pulse URL %q must use https/wss unless host is loopback", c.pulseURL)
+		}
 		parsed.Scheme = "ws"
-	case "wss", "ws":
-		// Already WebSocket scheme
+	case "wss":
+		parsed.Scheme = "wss"
+	case "ws":
+		if !isLoopbackPulseHost(parsed.Hostname()) {
+			return "", fmt.Errorf("pulse URL %q must use https/wss unless host is loopback", c.pulseURL)
+		}
+		parsed.Scheme = "ws"
 	default:
-		parsed.Scheme = "ws"
+		return "", fmt.Errorf("pulse URL %q has unsupported scheme %q", c.pulseURL, parsed.Scheme)
 	}
 
 	parsed.Path = "/api/agent/ws"
+	parsed.RawPath = ""
 	return parsed.String(), nil
 }
 
