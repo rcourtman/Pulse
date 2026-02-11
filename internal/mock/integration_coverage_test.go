@@ -310,7 +310,7 @@ func TestUpdateAlertSnapshotsAndHistoryAccessors(t *testing.T) {
 	}
 	resolved := []models.ResolvedAlert{
 		{
-			Alert: models.Alert{ID: "r-1", Message: "Recovered"},
+			Alert:        models.Alert{ID: "r-1", Message: "Recovered"},
 			ResolvedTime: resolvedTime,
 		},
 	}
