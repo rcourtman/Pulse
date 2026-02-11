@@ -200,3 +200,28 @@ func TestPersistence(t *testing.T) {
 		}
 	})
 }
+
+func TestNewPersistenceRejectsEmptyConfigDir(t *testing.T) {
+	cases := []string{
+		"",
+		"   ",
+	}
+
+	for _, configDir := range cases {
+		_, err := NewPersistence(configDir)
+		if err == nil {
+			t.Fatalf("expected error for configDir %q", configDir)
+		}
+	}
+}
+
+func TestPersistenceSaveRejectsWhitespaceLicenseKey(t *testing.T) {
+	p, err := NewPersistence(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewPersistence() error = %v", err)
+	}
+
+	if err := p.SaveWithGracePeriod("   \n\t", nil); err == nil {
+		t.Fatal("expected error for whitespace-only license key")
+	}
+}
