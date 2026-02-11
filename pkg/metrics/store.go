@@ -137,13 +137,15 @@ func NewStore(config StoreConfig) (*Store, error) {
 		return nil, fmt.Errorf("failed to initialize schema: %w", err)
 	}
 
+	// Clean up stale data from previous runs before starting the background worker.
+	// This prevents accumulation if Pulse was restarted before hourly retention ran.
+	// Runs BEFORE auto-vacuum migration so the VACUUM operates on a much smaller
+	// dataset (e.g. 60MB of live data instead of 5GB of stale + live).
+	store.runRetention()
+
 	// Migrate existing databases to incremental auto-vacuum. This is a one-time
 	// operation that restructures the file so deleted pages can be reclaimed.
 	store.migrateAutoVacuum()
-
-	// Clean up stale data from previous runs before starting the background worker.
-	// This prevents accumulation if Pulse was restarted before hourly retention ran.
-	store.runRetention()
 
 	// Start background workers
 	go store.backgroundWorker()
