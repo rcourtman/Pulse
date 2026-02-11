@@ -7,6 +7,7 @@ import (
 	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -322,7 +323,7 @@ func (c *Client) FetchSnapshot(ctx context.Context) (*FixtureSnapshot, error) {
 	}, nil
 }
 
-func (c *Client) getJSON(ctx context.Context, method string, path string, destination any) error {
+func (c *Client) getJSON(ctx context.Context, method string, path string, destination any) (err error) {
 	request, err := c.newRequest(ctx, method, path)
 	if err != nil {
 		return err
@@ -332,10 +333,22 @@ func (c *Client) getJSON(ctx context.Context, method string, path string, destin
 	if err != nil {
 		return fmt.Errorf("truenas request %s %s failed: %w", method, path, err)
 	}
-	defer response.Body.Close()
+	defer func() {
+		if closeErr := response.Body.Close(); closeErr != nil {
+			wrappedCloseErr := fmt.Errorf("close truenas response body for %s %s: %w", method, path, closeErr)
+			if err != nil {
+				err = errors.Join(err, wrappedCloseErr)
+				return
+			}
+			err = wrappedCloseErr
+		}
+	}()
 
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
-		body, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
+		body, readErr := io.ReadAll(io.LimitReader(response.Body, 4096))
+		if readErr != nil {
+			return fmt.Errorf("read truenas error response body for %s %s: %w", method, path, readErr)
+		}
 		message := strings.TrimSpace(string(body))
 		if message == "" {
 			message = http.StatusText(response.StatusCode)
@@ -418,7 +431,7 @@ func resolveEndpoint(host string, useHTTPS bool, port int) (bool, string, error)
 
 	hostName, hostPort, err := splitHostPort(rawHost)
 	if err != nil {
-		return false, "", err
+		return false, "", fmt.Errorf("split truenas host %q: %w", rawHost, err)
 	}
 	if hostName == "" {
 		return false, "", fmt.Errorf("invalid truenas host %q", host)
