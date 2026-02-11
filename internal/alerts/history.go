@@ -36,6 +36,7 @@ type AlertCallback func(alert Alert)
 type HistoryManager struct {
 	mu           sync.RWMutex
 	saveMu       sync.Mutex // Serializes disk writes to prevent save race condition
+	stopOnce     sync.Once
 	dataDir      string
 	historyFile  string
 	backupFile   string
@@ -306,9 +307,11 @@ func (hm *HistoryManager) cleanupRoutine() {
 	defer ticker.Stop()
 
 	// Also run cleanup on startup after a delay
-	// Also run cleanup on startup after a delay
+	startupTimer := time.NewTimer(1 * time.Minute)
+	defer startupTimer.Stop()
+
 	select {
-	case <-time.After(1 * time.Minute):
+	case <-startupTimer.C:
 		hm.cleanOldEntries()
 	case <-hm.stopChan:
 		return
@@ -398,15 +401,17 @@ func (hm *HistoryManager) ClearAllHistory() error {
 
 // Stop stops the history manager
 func (hm *HistoryManager) Stop() {
-	close(hm.stopChan)
-	if hm.saveTicker != nil {
-		hm.saveTicker.Stop()
-	}
+	hm.stopOnce.Do(func() {
+		close(hm.stopChan)
+		if hm.saveTicker != nil {
+			hm.saveTicker.Stop()
+		}
 
-	// Save one final time
-	if err := hm.saveHistory(); err != nil {
-		log.Error().Err(err).Msg("Failed to save alert history on shutdown")
-	}
+		// Save one final time
+		if err := hm.saveHistory(); err != nil {
+			log.Error().Err(err).Msg("Failed to save alert history on shutdown")
+		}
+	})
 }
 
 // GetStats returns statistics about the alert history
