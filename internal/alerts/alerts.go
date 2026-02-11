@@ -3419,6 +3419,59 @@ func (m *Manager) clearHostRAIDAlerts(hostID string) {
 	}
 }
 
+func isPBSOffline(pbs models.PBSInstance) bool {
+	status := strings.ToLower(strings.TrimSpace(pbs.Status))
+	health := strings.ToLower(strings.TrimSpace(pbs.ConnectionHealth))
+	return status == "offline" || health == "error" || health == "failed" || health == "unhealthy"
+}
+
+func (m *Manager) clearPBSMetricAlerts(pbsID string) {
+	if strings.TrimSpace(pbsID) == "" {
+		return
+	}
+
+	m.clearAlert(fmt.Sprintf("%s-cpu", pbsID))
+	m.clearAlert(fmt.Sprintf("%s-memory", pbsID))
+}
+
+func isPMGOffline(pmg models.PMGInstance) bool {
+	status := strings.ToLower(strings.TrimSpace(pmg.Status))
+	health := strings.ToLower(strings.TrimSpace(pmg.ConnectionHealth))
+	return status == "offline" || health == "error" || health == "failed" || health == "unhealthy"
+}
+
+func (m *Manager) clearPMGMetricAlerts(pmgID string) {
+	pmgID = strings.TrimSpace(pmgID)
+	if pmgID == "" {
+		return
+	}
+
+	offlineAlertID := fmt.Sprintf("pmg-offline-%s", pmgID)
+	alertPrefix := fmt.Sprintf("%s-", pmgID)
+
+	m.mu.RLock()
+	alertIDs := make([]string, 0)
+	for alertID, alert := range m.activeAlerts {
+		if alertID == offlineAlertID {
+			continue
+		}
+
+		if strings.HasPrefix(alertID, alertPrefix) {
+			alertIDs = append(alertIDs, alertID)
+			continue
+		}
+
+		if alert != nil && alert.ResourceID == pmgID {
+			alertIDs = append(alertIDs, alertID)
+		}
+	}
+	m.mu.RUnlock()
+
+	for _, alertID := range alertIDs {
+		m.clearAlert(alertID)
+	}
+}
+
 // CheckPBS checks PBS instance metrics against thresholds
 func (m *Manager) CheckPBS(pbs models.PBSInstance) {
 	m.mu.RLock()
@@ -3508,6 +3561,8 @@ func (m *Manager) CheckPBS(pbs models.PBSInstance) {
 		return
 	}
 
+	pbsOffline := isPBSOffline(pbs)
+
 	if disablePBSOffline {
 		// Clear tracking and any existing offline alerts when globally disabled
 		m.mu.Lock()
@@ -3516,12 +3571,18 @@ func (m *Manager) CheckPBS(pbs models.PBSInstance) {
 		m.clearAlert(fmt.Sprintf("pbs-offline-%s", pbs.ID))
 	} else {
 		// Check if PBS is offline first (similar to nodes)
-		if pbs.Status == "offline" || pbs.ConnectionHealth == "error" || pbs.ConnectionHealth == "unhealthy" {
+		if pbsOffline {
 			m.checkPBSOffline(pbs)
 		} else {
 			// Clear any existing offline alert if PBS is back online
 			m.clearPBSOfflineAlert(pbs)
 		}
+	}
+
+	// When PBS is offline/unhealthy, clear stale metric alerts immediately.
+	if pbsOffline {
+		m.clearPBSMetricAlerts(pbs.ID)
+		return
 	}
 
 	// Check if there are custom thresholds for this PBS instance
@@ -3534,18 +3595,15 @@ func (m *Manager) CheckPBS(pbs models.PBSInstance) {
 		}
 	}
 
-	// Check metrics only if PBS is online - checkMetric will skip if threshold is nil or <= 0
-	if pbs.Status != "offline" {
-		m.evaluateUnifiedMetrics(&UnifiedResourceInput{
-			ID:       pbs.ID,
-			Type:     "pbs",
-			Name:     pbs.Name,
-			Node:     pbs.Host,
-			Instance: pbs.Name,
-			CPU:      &UnifiedResourceMetric{Percent: pbs.CPU},
-			Memory:   &UnifiedResourceMetric{Percent: pbs.Memory},
-		}, ThresholdConfig{CPU: cpuThreshold, Memory: memoryThreshold}, nil)
-	}
+	m.evaluateUnifiedMetrics(&UnifiedResourceInput{
+		ID:       pbs.ID,
+		Type:     "pbs",
+		Name:     pbs.Name,
+		Node:     pbs.Host,
+		Instance: pbs.Name,
+		CPU:      &UnifiedResourceMetric{Percent: pbs.CPU},
+		Memory:   &UnifiedResourceMetric{Percent: pbs.Memory},
+	}, ThresholdConfig{CPU: cpuThreshold, Memory: memoryThreshold}, nil)
 }
 
 // CheckPMG checks a Proxmox Mail Gateway instance against thresholds
@@ -3557,32 +3615,12 @@ func (m *Manager) CheckPMG(pmg models.PMGInstance) {
 	}
 	if m.config.DisableAllPMG {
 		m.mu.RUnlock()
-		// Clear any existing PMG alerts when all PMG alerts are disabled
+		// Clear any existing PMG alerts when all PMG alerts are disabled.
 		m.mu.Lock()
-		// Reset offline confirmation tracking
 		delete(m.offlineConfirmations, pmg.ID)
-		// Clear all possible PMG alert types
-		alertTypes := []string{"queue-total", "queue-deferred", "queue-hold", "oldest-message"}
-		for _, alertType := range alertTypes {
-			alertID := fmt.Sprintf("%s-%s", pmg.ID, alertType)
-			if _, exists := m.activeAlerts[alertID]; exists {
-				m.clearAlertNoLock(alertID)
-				log.Info().
-					Str("alertID", alertID).
-					Str("pmg", pmg.Name).
-					Msg("Cleared PMG alert - all PMG alerts disabled")
-			}
-		}
-		// Clear offline alert
-		offlineAlertID := fmt.Sprintf("pmg-offline-%s", pmg.ID)
-		if _, exists := m.activeAlerts[offlineAlertID]; exists {
-			m.clearAlertNoLock(offlineAlertID)
-			log.Info().
-				Str("alertID", offlineAlertID).
-				Str("pmg", pmg.Name).
-				Msg("Cleared offline alert - all PMG alerts disabled")
-		}
 		m.mu.Unlock()
+		m.clearPMGMetricAlerts(pmg.ID)
+		m.clearAlert(fmt.Sprintf("pmg-offline-%s", pmg.ID))
 		return
 	}
 
@@ -3595,32 +3633,14 @@ func (m *Manager) CheckPMG(pmg models.PMGInstance) {
 	// Check override disable BEFORE offline detection to prevent spurious notifications
 	if hasOverride && override.Disabled {
 		m.mu.Lock()
-		// Reset offline confirmation tracking
 		delete(m.offlineConfirmations, pmg.ID)
-		// Clear all possible PMG alert types
-		alertTypes := []string{"queue-total", "queue-deferred", "queue-hold", "oldest-message"}
-		for _, alertType := range alertTypes {
-			alertID := fmt.Sprintf("%s-%s", pmg.ID, alertType)
-			if _, exists := m.activeAlerts[alertID]; exists {
-				m.clearAlertNoLock(alertID)
-				log.Debug().
-					Str("alertID", alertID).
-					Str("pmg", pmg.Name).
-					Msg("Cleared PMG alert - PMG has alerts disabled")
-			}
-		}
-		// Clear offline alert
-		offlineAlertID := fmt.Sprintf("pmg-offline-%s", pmg.ID)
-		if _, exists := m.activeAlerts[offlineAlertID]; exists {
-			m.clearAlertNoLock(offlineAlertID)
-			log.Debug().
-				Str("alertID", offlineAlertID).
-				Str("pmg", pmg.Name).
-				Msg("Cleared offline alert - PMG has alerts disabled")
-		}
 		m.mu.Unlock()
+		m.clearPMGMetricAlerts(pmg.ID)
+		m.clearAlert(fmt.Sprintf("pmg-offline-%s", pmg.ID))
 		return
 	}
+
+	pmgOffline := isPMGOffline(pmg)
 
 	// Handle offline detection
 	if disablePMGOffline {
@@ -3631,7 +3651,7 @@ func (m *Manager) CheckPMG(pmg models.PMGInstance) {
 		m.clearAlert(fmt.Sprintf("pmg-offline-%s", pmg.ID))
 	} else {
 		// Check if PMG is offline (similar to PBS/nodes)
-		if pmg.Status == "offline" || pmg.ConnectionHealth == "error" || pmg.ConnectionHealth == "unhealthy" {
+		if pmgOffline {
 			m.checkPMGOffline(pmg)
 		} else {
 			// Clear any existing offline alert if PMG is back online
@@ -3639,19 +3659,22 @@ func (m *Manager) CheckPMG(pmg models.PMGInstance) {
 		}
 	}
 
-	// Check metrics only if PMG is online
-	if pmg.Status != "offline" {
-		// Check queue depths across all nodes
-		m.checkPMGQueueDepths(pmg, pmgDefaults)
-		// Check oldest message age across all nodes
-		m.checkPMGOldestMessage(pmg, pmgDefaults)
-		// Check quarantine backlog and growth
-		m.checkPMGQuarantineBacklog(pmg, pmgDefaults)
-		// Check spam/virus rate anomalies
-		m.checkPMGAnomalies(pmg, pmgDefaults)
-		// Check per-node queue health
-		m.checkPMGNodeQueues(pmg, pmgDefaults)
+	// When PMG is offline/unhealthy, clear stale metric alerts immediately.
+	if pmgOffline {
+		m.clearPMGMetricAlerts(pmg.ID)
+		return
 	}
+
+	// Check queue depths across all nodes
+	m.checkPMGQueueDepths(pmg, pmgDefaults)
+	// Check oldest message age across all nodes
+	m.checkPMGOldestMessage(pmg, pmgDefaults)
+	// Check quarantine backlog and growth
+	m.checkPMGQuarantineBacklog(pmg, pmgDefaults)
+	// Check spam/virus rate anomalies
+	m.checkPMGAnomalies(pmg, pmgDefaults)
+	// Check per-node queue health
+	m.checkPMGNodeQueues(pmg, pmgDefaults)
 }
 
 // dockerInstanceName returns the logical instance name used for Docker alerts.
