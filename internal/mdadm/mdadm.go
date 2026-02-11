@@ -2,6 +2,7 @@ package mdadm
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 	"regexp"
@@ -43,13 +44,19 @@ func CollectArrays(ctx context.Context) ([]host.RAIDArray, error) {
 
 	// Collect detailed info for each array
 	var arrays []host.RAIDArray
+	var detailErrs []error
 	for _, device := range devices {
 		array, err := collectArrayDetail(ctx, device)
 		if err != nil {
-			// Log but don't fail - continue with other arrays
+			detailErrs = append(detailErrs, fmt.Errorf("collect detail for %s: %w", device, err))
 			continue
 		}
 		arrays = append(arrays, array)
+	}
+
+	// Keep best-effort behavior for partial success, but surface failures when all detail probes fail.
+	if len(arrays) == 0 && len(detailErrs) > 0 {
+		return nil, fmt.Errorf("collect mdadm array details: %w", errors.Join(detailErrs...))
 	}
 
 	return arrays, nil
