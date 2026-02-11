@@ -160,8 +160,8 @@ func TestNodeToFrontend(t *testing.T) {
 	if len(frontend.LoadAverage) != 3 {
 		t.Errorf("LoadAverage length = %d, want 3", len(frontend.LoadAverage))
 	}
-	if frontend.LinkedHostAgentId != node.LinkedHostAgentID {
-		t.Errorf("LinkedHostAgentId = %q, want %q", frontend.LinkedHostAgentId, node.LinkedHostAgentID)
+	if frontend.LinkedHostAgentID != node.LinkedHostAgentID {
+		t.Errorf("LinkedHostAgentID = %q, want %q", frontend.LinkedHostAgentID, node.LinkedHostAgentID)
 	}
 }
 
@@ -1132,8 +1132,8 @@ func TestHostToFrontend(t *testing.T) {
 	if frontend.IsLegacy != host.IsLegacy {
 		t.Errorf("IsLegacy = %v, want %v", frontend.IsLegacy, host.IsLegacy)
 	}
-	if frontend.LinkedNodeId != host.LinkedNodeID {
-		t.Errorf("LinkedNodeId = %q, want %q", frontend.LinkedNodeId, host.LinkedNodeID)
+	if frontend.LinkedNodeID != host.LinkedNodeID {
+		t.Errorf("LinkedNodeID = %q, want %q", frontend.LinkedNodeID, host.LinkedNodeID)
 	}
 	if frontend.TokenLastUsedAt == nil || *frontend.TokenLastUsedAt != tokenLastUsed.Unix()*1000 {
 		t.Errorf("TokenLastUsedAt = %v, want %d", frontend.TokenLastUsedAt, tokenLastUsed.Unix()*1000)
