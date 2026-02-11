@@ -3,6 +3,8 @@ package discovery
 import (
 	"context"
 	"errors"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -597,5 +599,86 @@ func TestPerformScan_LegacyErrors(t *testing.T) {
 		}
 	} else {
 		t.Error("expected history entry")
+	}
+}
+
+func TestNormalizeDiscoverySubnet(t *testing.T) {
+	t.Run("auto and empty normalize to auto", func(t *testing.T) {
+		tests := []string{"", "   ", "auto", " AUTO "}
+		for _, input := range tests {
+			got, err := normalizeDiscoverySubnet(input)
+			if err != nil {
+				t.Fatalf("normalizeDiscoverySubnet(%q) returned error: %v", input, err)
+			}
+			if got != "auto" {
+				t.Fatalf("normalizeDiscoverySubnet(%q) = %q, want auto", input, got)
+			}
+		}
+	})
+
+	t.Run("manual subnet list canonicalized and deduplicated", func(t *testing.T) {
+		got, err := normalizeDiscoverySubnet(" 10.0.0.1/24,10.0.0.0/24,192.168.1.0/24 ")
+		if err != nil {
+			t.Fatalf("normalizeDiscoverySubnet returned error: %v", err)
+		}
+		if got != "10.0.0.0/24,192.168.1.0/24" {
+			t.Fatalf("unexpected normalized subnet list: %q", got)
+		}
+	})
+
+	t.Run("invalid subnet rejected", func(t *testing.T) {
+		if _, err := normalizeDiscoverySubnet("not-a-cidr"); err == nil {
+			t.Fatal("expected invalid subnet error")
+		}
+	})
+
+	t.Run("overly long subnet input rejected", func(t *testing.T) {
+		longInput := strings.Repeat("1", maxManualSubnetInputLength+1)
+		if _, err := normalizeDiscoverySubnet(longInput); err == nil {
+			t.Fatal("expected long input error")
+		}
+	})
+
+	t.Run("too many subnets rejected", func(t *testing.T) {
+		parts := make([]string, 0, maxManualSubnetCount+1)
+		for i := 0; i < maxManualSubnetCount+1; i++ {
+			parts = append(parts, "10.0.0."+strconv.Itoa(i)+"/32")
+		}
+		if _, err := normalizeDiscoverySubnet(strings.Join(parts, ",")); err == nil {
+			t.Fatal("expected subnet count limit error")
+		}
+	})
+}
+
+func TestNewServiceInvalidSubnetFallsBackToAuto(t *testing.T) {
+	service := NewService(nil, time.Minute, "invalid-subnet", nil)
+	if service.subnet != "auto" {
+		t.Fatalf("expected fallback subnet auto, got %q", service.subnet)
+	}
+}
+
+func TestSetSubnetRejectsInvalidSubnet(t *testing.T) {
+	scanner := &countingScanner{
+		result: &pkgdiscovery.DiscoveryResult{},
+		calls:  make(chan struct{}, 1),
+	}
+	service := NewService(nil, time.Minute, "auto", func() config.DiscoveryConfig {
+		return config.DefaultDiscoveryConfig()
+	})
+	service.ctx = context.Background()
+	service.scannerFactory = func(config.DiscoveryConfig) (discoveryScanner, error) {
+		return scanner, nil
+	}
+
+	service.SetSubnet("invalid-subnet")
+
+	if service.subnet != "auto" {
+		t.Fatalf("expected subnet to remain auto, got %q", service.subnet)
+	}
+
+	select {
+	case <-scanner.calls:
+		t.Fatal("expected scan not to run for invalid subnet")
+	case <-time.After(150 * time.Millisecond):
 	}
 }
