@@ -164,7 +164,7 @@ func (p *ProxmoxSetup) Run(ctx context.Context) (*ProxmoxSetupResult, error) {
 	p.logger.Info().Str("token_id", tokenID).Msg("Created Proxmox API token")
 
 	// Get the host URL for registration
-	hostURL := p.getHostURL(ptype)
+	hostURL := p.getHostURL(ctx, ptype)
 
 	// Register with Pulse
 	registered := false
@@ -247,7 +247,7 @@ func (p *ProxmoxSetup) runForType(ctx context.Context, ptype string) (*ProxmoxSe
 	p.logger.Info().Str("type", ptype).Str("token_id", tokenID).Msg("Created Proxmox API token")
 
 	// Get the host URL for registration
-	hostURL := p.getHostURL(ptype)
+	hostURL := p.getHostURL(ctx, ptype)
 
 	// Register with Pulse
 	registered := false
@@ -420,10 +420,14 @@ func (p *ProxmoxSetup) parsePBSTokenValue(output string) string {
 
 // getHostURL constructs the host URL for this Proxmox node.
 // Uses the local IP that can reach Pulse, falling back to intelligent IP selection.
-func (p *ProxmoxSetup) getHostURL(ptype string) string {
+func (p *ProxmoxSetup) getHostURL(ctx context.Context, ptype string) string {
 	port := "8006"
 	if ptype == "pbs" {
 		port = "8007"
+	}
+
+	if ctx == nil {
+		ctx = context.Background()
 	}
 
 	// Priority 1: User-specified ReportIP override from configuration.
@@ -442,7 +446,10 @@ func (p *ProxmoxSetup) getHostURL(ptype string) string {
 	}
 
 	// Fallback: Get all IPs and select the best one based on heuristics
-	if out, err := p.collector.CommandCombinedOutput(context.Background(), "hostname", "-I"); err == nil {
+	hostnameCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+
+	if out, err := p.collector.CommandCombinedOutput(hostnameCtx, "hostname", "-I"); err == nil {
 		ips := strings.Fields(out)
 		if len(ips) > 0 {
 			// Get the IP that the system hostname currently resolves to
