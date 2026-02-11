@@ -47,6 +47,28 @@ func (c *countingScanner) DiscoverServersWithCallbacks(ctx context.Context, subn
 	return c.result, c.err
 }
 
+type blockingScanner struct {
+	result        *pkgdiscovery.DiscoveryResult
+	startedSubnet chan string
+	release       chan struct{}
+}
+
+func (b *blockingScanner) DiscoverServersWithCallbacks(ctx context.Context, subnet string, serverCallback pkgdiscovery.ServerCallback, progressCallback pkgdiscovery.ProgressCallback) (*pkgdiscovery.DiscoveryResult, error) {
+	if b.startedSubnet != nil {
+		b.startedSubnet <- subnet
+	}
+	if b.release != nil {
+		select {
+		case <-b.release:
+		case <-ctx.Done():
+		}
+	}
+	if b.result == nil {
+		return &pkgdiscovery.DiscoveryResult{}, nil
+	}
+	return b.result, nil
+}
+
 func TestPerformScanRecordsHistoryAndMetrics(t *testing.T) {
 	service := NewService(nil, time.Minute, "192.168.1.0/24", func() config.DiscoveryConfig {
 		cfg := config.DefaultDiscoveryConfig()
@@ -418,7 +440,7 @@ func TestScanLoopStopsOnStopChan(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		service.scanLoop()
+		service.scanLoop(service.ctx)
 		close(done)
 	}()
 
@@ -453,7 +475,7 @@ func TestScanLoopStopsOnContextCancel(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		service.scanLoop()
+		service.scanLoop(ctx)
 		close(done)
 	}()
 
@@ -597,5 +619,55 @@ func TestPerformScan_LegacyErrors(t *testing.T) {
 		}
 	} else {
 		t.Error("expected history entry")
+	}
+}
+
+func TestPerformScanUsesSnapshotSubnetForHistory(t *testing.T) {
+	initialSubnet := "192.168.1.0/24"
+	updatedSubnet := "10.10.0.0/24"
+
+	service := NewService(nil, time.Minute, initialSubnet, nil)
+	service.ctx = context.Background()
+
+	scanner := &blockingScanner{
+		result:        &pkgdiscovery.DiscoveryResult{},
+		startedSubnet: make(chan string, 1),
+		release:       make(chan struct{}),
+	}
+	service.scannerFactory = func(config.DiscoveryConfig) (discoveryScanner, error) {
+		return scanner, nil
+	}
+
+	scanDone := make(chan struct{})
+	go func() {
+		service.performScan()
+		close(scanDone)
+	}()
+
+	select {
+	case got := <-scanner.startedSubnet:
+		if got != initialSubnet {
+			t.Fatalf("scanner started with subnet %q, want %q", got, initialSubnet)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for scan to start")
+	}
+
+	service.SetSubnet(updatedSubnet)
+
+	close(scanner.release)
+
+	select {
+	case <-scanDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for scan to complete")
+	}
+
+	history := service.GetHistory(1)
+	if len(history) != 1 {
+		t.Fatalf("expected 1 history entry, got %d", len(history))
+	}
+	if history[0].subnet != initialSubnet {
+		t.Fatalf("history subnet = %q, want %q", history[0].subnet, initialSubnet)
 	}
 }

@@ -165,10 +165,19 @@ func NewService(wsHub *websocket.Hub, interval time.Duration, subnet string, cfg
 
 // Start begins the background discovery service
 func (s *Service) Start(ctx context.Context) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	s.mu.Lock()
 	s.ctx = ctx
+	interval := s.interval
+	subnet := s.subnet
+	s.mu.Unlock()
+
 	log.Info().
-		Dur("interval", s.interval).
-		Str("subnet", s.subnet).
+		Dur("interval", interval).
+		Str("subnet", subnet).
 		Msg("Starting background discovery service")
 
 	// Do initial scan immediately
@@ -195,7 +204,7 @@ func (s *Service) Start(ctx context.Context) {
 					Msg("Recovered from panic in discovery scan loop")
 			}
 		}()
-		s.scanLoop()
+		s.scanLoop(ctx)
 	}()
 }
 
@@ -207,8 +216,12 @@ func (s *Service) Stop() {
 }
 
 // scanLoop runs periodic scans
-func (s *Service) scanLoop() {
-	ticker := time.NewTicker(s.interval)
+func (s *Service) scanLoop(ctx context.Context) {
+	s.mu.RLock()
+	interval := s.interval
+	s.mu.RUnlock()
+
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
 	for {
@@ -218,7 +231,7 @@ func (s *Service) scanLoop() {
 		case <-s.stopChan:
 			log.Info().Msg("Stopping background discovery service")
 			return
-		case <-s.ctx.Done():
+		case <-ctx.Done():
 			log.Info().Msg("Background discovery service context cancelled")
 			return
 		}
@@ -274,6 +287,8 @@ func (s *Service) performScan() {
 	s.isScanning = true
 	s.mu.Unlock()
 
+	scanSubnet := s.getSubnet()
+
 	var result *pkgdiscovery.DiscoveryResult
 
 	defer func() {
@@ -307,7 +322,7 @@ func (s *Service) performScan() {
 		s.appendHistory(historyEntry{
 			startedAt:       startTime,
 			completedAt:     completedAt,
-			subnet:          s.subnet,
+			subnet:          scanSubnet,
 			serverCount:     serverCount,
 			errorCount:      errorCount,
 			duration:        duration,
@@ -336,7 +351,7 @@ func (s *Service) performScan() {
 		}
 	}()
 
-	log.Info().Str("subnet", s.subnet).Msg("Starting background discovery scan")
+	log.Info().Str("subnet", scanSubnet).Msg("Starting background discovery scan")
 
 	// Send scan started notification
 	if s.wsHub != nil {
@@ -344,7 +359,7 @@ func (s *Service) performScan() {
 			Type: "discovery_started",
 			Data: map[string]interface{}{
 				"scanning":  true,
-				"subnet":    s.subnet,
+				"subnet":    scanSubnet,
 				"timestamp": time.Now().Unix(),
 			},
 		})
@@ -352,10 +367,7 @@ func (s *Service) performScan() {
 
 	// Create a context with timeout for the scan
 	// Scanning multiple subnets takes longer, allow 2 minutes
-	scanParentCtx := s.ctx
-	if scanParentCtx == nil {
-		scanParentCtx = context.Background()
-	}
+	scanParentCtx := s.getScanContext()
 	scanCtx, cancel := context.WithTimeout(scanParentCtx, 2*time.Minute)
 	defer cancel()
 
@@ -419,7 +431,7 @@ func (s *Service) performScan() {
 		}
 	}
 
-	result, err = newScanner.DiscoverServersWithCallbacks(scanCtx, s.subnet, serverCallback, progressCallback)
+	result, err = newScanner.DiscoverServersWithCallbacks(scanCtx, scanSubnet, serverCallback, progressCallback)
 	scanErr = err
 	if err != nil {
 		// Even if scan timed out, we might have partial results
@@ -559,4 +571,21 @@ func (s *Service) GetStatus() map[string]interface{} {
 		"interval":    s.interval.String(),
 		"subnet":      s.subnet,
 	}
+}
+
+func (s *Service) getScanContext() context.Context {
+	s.mu.RLock()
+	ctx := s.ctx
+	s.mu.RUnlock()
+	if ctx == nil {
+		return context.Background()
+	}
+	return ctx
+}
+
+func (s *Service) getSubnet() string {
+	s.mu.RLock()
+	subnet := s.subnet
+	s.mu.RUnlock()
+	return subnet
 }
