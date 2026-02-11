@@ -364,11 +364,6 @@ func hostFieldMatches(host, field string) bool {
 	return false
 }
 
-// HostFieldMatches reports whether a known_hosts host field matches the provided host.
-func HostFieldMatches(host, field string) bool {
-	return hostFieldMatches(host, field)
-}
-
 func hostCandidates(part string) []string {
 	part = strings.TrimSpace(part)
 	if part == "" {

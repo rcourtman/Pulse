@@ -420,53 +420,6 @@ func TestManagerPath(t *testing.T) {
 	}
 }
 
-func TestHostFieldMatches(t *testing.T) {
-	tests := []struct {
-		host  string
-		field string
-		want  bool
-	}{
-		// Exact matches
-		{"example.com", "example.com", true},
-		{"192.168.1.1", "192.168.1.1", true},
-
-		// Case insensitive
-		{"EXAMPLE.COM", "example.com", true},
-		{"example.com", "EXAMPLE.COM", true},
-
-		// Comma-separated hosts
-		{"example.com", "example.com,192.168.1.1", true},
-		{"192.168.1.1", "example.com,192.168.1.1", true},
-		{"other.com", "example.com,192.168.1.1", false},
-
-		// Bracketed hosts with ports
-		{"[example.com]:2222", "[example.com]:2222", true},
-		{"example.com", "[example.com]:2222", true},
-
-		// Host:port format
-		{"example.com:2222", "example.com:2222", true},
-		{"example.com", "example.com:2222", true},
-
-		// No match
-		{"other.com", "example.com", false},
-		{"example.org", "example.com", false},
-
-		// Empty cases
-		{"example.com", "", false},
-		{"", "example.com", false},
-		{"", "", false},
-	}
-
-	for _, tt := range tests {
-		name := tt.host + "_" + tt.field
-		t.Run(name, func(t *testing.T) {
-			if got := HostFieldMatches(tt.host, tt.field); got != tt.want {
-				t.Errorf("HostFieldMatches(%q, %q) = %v, want %v", tt.host, tt.field, got, tt.want)
-			}
-		})
-	}
-}
-
 func TestEnsureKnownHostsFileMkdirError(t *testing.T) {
 	t.Cleanup(resetKnownHostsFns)
 	mkdirAllFn = func(string, os.FileMode) error {
