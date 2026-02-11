@@ -597,6 +597,30 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/security/sso/providers/test", RequireAdmin(r.config, r.handleTestSSOProvider))
 	r.mux.HandleFunc("/api/security/sso/providers/metadata/preview", RequireAdmin(r.config, r.handleMetadataPreview))
 	r.mux.HandleFunc("/api/security/sso/providers/", RequireAdmin(r.config, r.handleSSOProvider))
+
+	// SAML login flow routes (unauthenticated - these are login/callback endpoints)
+	r.mux.HandleFunc("/api/saml/", func(w http.ResponseWriter, req *http.Request) {
+		parts := strings.Split(strings.TrimPrefix(req.URL.Path, "/"), "/")
+		if len(parts) < 4 {
+			http.NotFound(w, req)
+			return
+		}
+		switch parts[3] {
+		case "login":
+			r.handleSAMLLogin(w, req)
+		case "acs":
+			r.handleSAMLACS(w, req)
+		case "metadata":
+			r.handleSAMLMetadata(w, req)
+		case "logout":
+			r.handleSAMLLogout(w, req)
+		case "slo":
+			r.handleSAMLSLO(w, req)
+		default:
+			http.NotFound(w, req)
+		}
+	})
+
 	r.mux.HandleFunc("/api/security/tokens", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
 		case http.MethodGet:
