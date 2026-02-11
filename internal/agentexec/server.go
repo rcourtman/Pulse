@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -17,7 +19,7 @@ var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
 	CheckOrigin: func(r *http.Request) bool {
-		return true // Agents can connect from anywhere
+		return isAllowedWebSocketOrigin(r)
 	},
 }
 
@@ -27,6 +29,8 @@ var (
 	pingWriteWait   = 5 * time.Second
 	readFileTimeout = 30 * time.Second
 )
+
+const maxWebSocketMessageBytes int64 = 1 << 20 // 1 MiB
 
 // Server manages WebSocket connections from agents
 type Server struct {
@@ -56,6 +60,40 @@ func pendingRequestKey(agentID, requestID string) string {
 	return agentID + "\x00" + requestID
 }
 
+func isAllowedWebSocketOrigin(r *http.Request) bool {
+	origin := strings.TrimSpace(r.Header.Get("Origin"))
+	if origin == "" {
+		// Non-browser clients (expected for agents) usually omit Origin.
+		return true
+	}
+
+	parsed, err := url.Parse(origin)
+	if err != nil || parsed.Host == "" {
+		return false
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return false
+	}
+
+	return normalizeOriginHost(parsed.Host) == normalizeOriginHost(r.Host)
+}
+
+func normalizeOriginHost(host string) string {
+	normalized := strings.TrimSpace(strings.ToLower(host))
+	if normalized == "" {
+		return normalized
+	}
+
+	parsedHost, parsedPort, err := net.SplitHostPort(normalized)
+	if err != nil {
+		return normalized
+	}
+	if parsedPort == "80" || parsedPort == "443" {
+		return parsedHost
+	}
+	return net.JoinHostPort(parsedHost, parsedPort)
+}
+
 // HandleWebSocket handles incoming WebSocket connections from agents
 func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	// CRITICAL: Clear http.Server deadlines BEFORE WebSocket upgrade.
@@ -76,6 +114,7 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		log.Error().Err(err).Msg("Failed to upgrade WebSocket connection")
 		return
 	}
+	conn.SetReadLimit(maxWebSocketMessageBytes)
 
 	// Also clear on the WebSocket's underlying connection as a safety net
 	if netConn := conn.NetConn(); netConn != nil {

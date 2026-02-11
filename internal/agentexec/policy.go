@@ -232,6 +232,7 @@ const (
 // Evaluate checks a command against the policy
 func (p *CommandPolicy) Evaluate(command string) PolicyDecision {
 	command = strings.TrimSpace(command)
+	command = strings.ToLower(command)
 	// Normalize simple sudo prefix so policy applies consistently.
 	// For complex sudo invocations (sudo flags), keep the command as-is (conservative).
 	if strings.HasPrefix(command, "sudo ") {
