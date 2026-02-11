@@ -3,6 +3,7 @@ package agentexec
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"sync"
@@ -25,6 +26,8 @@ var (
 	pingInterval    = 5 * time.Second
 	pingWriteWait   = 5 * time.Second
 	readFileTimeout = 30 * time.Second
+
+	errServerShuttingDown = errors.New("agent execution server is shutting down")
 )
 
 // Server manages WebSocket connections from agents
@@ -33,13 +36,26 @@ type Server struct {
 	agents        map[string]*agentConn                // agentID -> connection
 	pendingReqs   map[string]chan CommandResultPayload // requestID -> response channel
 	validateToken func(token string, agentID string) bool
+	shutdown      chan struct{}
+	shutdownOnce  sync.Once
 }
 
 type agentConn struct {
-	conn    *websocket.Conn
-	agent   ConnectedAgent
-	writeMu sync.Mutex
-	done    chan struct{}
+	conn     *websocket.Conn
+	agent    ConnectedAgent
+	writeMu  sync.Mutex
+	done     chan struct{}
+	doneOnce sync.Once
+}
+
+func (ac *agentConn) signalDone() {
+	ac.doneOnce.Do(func() {
+		defer func() {
+			// Some call sites/tests may have already closed done directly.
+			_ = recover()
+		}()
+		close(ac.done)
+	})
 }
 
 // NewServer creates a new agent execution server
@@ -48,11 +64,26 @@ func NewServer(validateToken func(token string, agentID string) bool) *Server {
 		agents:        make(map[string]*agentConn),
 		pendingReqs:   make(map[string]chan CommandResultPayload),
 		validateToken: validateToken,
+		shutdown:      make(chan struct{}),
+	}
+}
+
+func (s *Server) isShuttingDown() bool {
+	select {
+	case <-s.shutdown:
+		return true
+	default:
+		return false
 	}
 }
 
 // HandleWebSocket handles incoming WebSocket connections from agents
 func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
+	if s.isShuttingDown() {
+		http.Error(w, "agent execution server is shutting down", http.StatusServiceUnavailable)
+		return
+	}
+
 	// CRITICAL: Clear http.Server deadlines BEFORE WebSocket upgrade.
 	// The http.Server.ReadTimeout sets a deadline on the underlying connection when
 	// the request starts. We must clear it before the upgrade or the connection will
@@ -69,6 +100,11 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to upgrade WebSocket connection")
+		return
+	}
+
+	if s.isShuttingDown() {
+		conn.Close()
 		return
 	}
 
@@ -164,7 +200,7 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	// Close existing connection if any
 	if existing, ok := s.agents[reg.AgentID]; ok {
-		close(existing.done)
+		existing.signalDone()
 		existing.conn.Close()
 	}
 	s.agents[reg.AgentID] = ac
@@ -205,6 +241,7 @@ func (s *Server) readLoop(ac *agentConn) {
 			delete(s.agents, ac.agent.AgentID)
 		}
 		s.mu.Unlock()
+		ac.signalDone()
 		ac.conn.Close()
 		log.Info().Str("agent_id", ac.agent.AgentID).Msg("Agent disconnected")
 	}()
@@ -324,8 +361,33 @@ func (s *Server) sendMessage(conn *websocket.Conn, msg Message) error {
 	return conn.WriteMessage(websocket.TextMessage, msgBytes)
 }
 
+// Shutdown gracefully stops the server by closing all active agent connections.
+// The method is idempotent.
+func (s *Server) Shutdown() {
+	s.shutdownOnce.Do(func() {
+		close(s.shutdown)
+
+		s.mu.Lock()
+		agents := make([]*agentConn, 0, len(s.agents))
+		for _, ac := range s.agents {
+			agents = append(agents, ac)
+		}
+		s.agents = make(map[string]*agentConn)
+		s.mu.Unlock()
+
+		for _, ac := range agents {
+			ac.signalDone()
+			_ = ac.conn.Close()
+		}
+	})
+}
+
 // ExecuteCommand sends a command to an agent and waits for the result
 func (s *Server) ExecuteCommand(ctx context.Context, agentID string, cmd ExecuteCommandPayload) (*CommandResultPayload, error) {
+	if s.isShuttingDown() {
+		return nil, errServerShuttingDown
+	}
+
 	s.mu.RLock()
 	ac, ok := s.agents[agentID]
 	s.mu.RUnlock()
@@ -375,11 +437,17 @@ func (s *Server) ExecuteCommand(ctx context.Context, agentID string, cmd Execute
 		return nil, fmt.Errorf("command timed out after %v", timeout)
 	case <-ctx.Done():
 		return nil, ctx.Err()
+	case <-s.shutdown:
+		return nil, errServerShuttingDown
 	}
 }
 
 // ReadFile reads a file from an agent
 func (s *Server) ReadFile(ctx context.Context, agentID string, req ReadFilePayload) (*CommandResultPayload, error) {
+	if s.isShuttingDown() {
+		return nil, errServerShuttingDown
+	}
+
 	s.mu.RLock()
 	ac, ok := s.agents[agentID]
 	s.mu.RUnlock()
@@ -425,6 +493,8 @@ func (s *Server) ReadFile(ctx context.Context, agentID string, req ReadFilePaylo
 		return nil, fmt.Errorf("read_file timed out after %v", timeout)
 	case <-ctx.Done():
 		return nil, ctx.Err()
+	case <-s.shutdown:
+		return nil, errServerShuttingDown
 	}
 }
 
