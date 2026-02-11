@@ -138,6 +138,37 @@ func TestUnameCommandDefault(t *testing.T) {
 	}
 }
 
+func TestNormalizeAgentName(t *testing.T) {
+	t.Run("valid", func(t *testing.T) {
+		got, err := normalizeAgentName("pulse-agent_1.2")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != "pulse-agent_1.2" {
+			t.Fatalf("unexpected normalized name: %q", got)
+		}
+	})
+
+	t.Run("invalid", func(t *testing.T) {
+		cases := []string{"", "  ", "../pulse-agent", "pulse/agent", "pulse\\agent", "pulse agent", "pulse@agent"}
+		for _, tc := range cases {
+			if _, err := normalizeAgentName(tc); err == nil {
+				t.Fatalf("expected invalid agent name for %q", tc)
+			}
+		}
+	})
+}
+
+func TestPerformUpdateWithExecPathInvalidAgentName(t *testing.T) {
+	u := newUpdaterForTest("http://localhost")
+	u.cfg.AgentName = "../pulse-agent"
+
+	_, execPath := writeTempExec(t)
+	if err := u.performUpdateWithExecPath(context.Background(), execPath); err == nil {
+		t.Fatalf("expected invalid agent name error")
+	}
+}
+
 func TestVerifyBinaryMagicOverrides(t *testing.T) {
 	origOS := runtimeGOOS
 	t.Cleanup(func() { runtimeGOOS = origOS })

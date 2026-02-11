@@ -306,6 +306,26 @@ func unraidPersistentPath(agentName string) string {
 	return fmt.Sprintf("/boot/config/plugins/%s/%s", agentName, agentName)
 }
 
+func normalizeAgentName(agentName string) (string, error) {
+	name := strings.TrimSpace(agentName)
+	if name == "" {
+		return "", fmt.Errorf("agent name is required")
+	}
+	if strings.Contains(name, "..") {
+		return "", fmt.Errorf("agent name must not contain path traversal")
+	}
+	for _, r := range name {
+		if (r >= 'a' && r <= 'z') ||
+			(r >= 'A' && r <= 'Z') ||
+			(r >= '0' && r <= '9') ||
+			r == '-' || r == '_' || r == '.' {
+			continue
+		}
+		return "", fmt.Errorf("agent name contains invalid character %q", r)
+	}
+	return name, nil
+}
+
 // performUpdate downloads and installs the new agent binary.
 func (u *Updater) performUpdate(ctx context.Context) error {
 	execPath, err := osExecutableFn()
@@ -316,9 +336,13 @@ func (u *Updater) performUpdate(ctx context.Context) error {
 }
 
 func (u *Updater) performUpdateWithExecPath(ctx context.Context, execPath string) error {
+	agentName, err := normalizeAgentName(u.cfg.AgentName)
+	if err != nil {
+		return fmt.Errorf("invalid agent name: %w", err)
+	}
 
 	// Build download URL
-	downloadBase := fmt.Sprintf("%s/download/%s", strings.TrimRight(u.cfg.PulseURL, "/"), u.cfg.AgentName)
+	downloadBase := fmt.Sprintf("%s/download/%s", strings.TrimRight(u.cfg.PulseURL, "/"), agentName)
 	archParam := determineArch()
 
 	// Try architecture-specific binary first, then fall back to default
@@ -378,7 +402,7 @@ func (u *Updater) performUpdateWithExecPath(ctx context.Context, execPath string
 	// Create temporary file in the same directory as the target binary
 	// to ensure atomic rename works (os.Rename fails across filesystems)
 	targetDir := filepath.Dir(realExecPath)
-	tmpFile, err := createTempFn(targetDir, u.cfg.AgentName+"-*.tmp")
+	tmpFile, err := createTempFn(targetDir, agentName+"-*.tmp")
 	if err != nil {
 		return fmt.Errorf("failed to create temp file: %w", err)
 	}
@@ -446,7 +470,7 @@ func (u *Updater) performUpdateWithExecPath(ctx context.Context, execPath string
 	// On Unraid, also update the persistent copy on the flash drive
 	// This ensures the update survives reboots
 	if isUnraid() {
-		persistPath := unraidPersistentPathFn(u.cfg.AgentName)
+		persistPath := unraidPersistentPathFn(agentName)
 		if _, err := os.Stat(persistPath); err == nil {
 			// Persistent path exists, update it
 			u.logger.Debug().Str("path", persistPath).Msg("Updating Unraid persistent binary")
