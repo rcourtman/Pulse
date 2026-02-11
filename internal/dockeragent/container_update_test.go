@@ -423,6 +423,19 @@ func TestHandleUpdateContainerCommand(t *testing.T) {
 		}
 	})
 
+	t.Run("container id unmarshalable payload", func(t *testing.T) {
+		cmd := agentsdocker.Command{
+			ID:   "cmd2d",
+			Type: agentsdocker.CommandTypeUpdateContainer,
+			Payload: map[string]any{
+				"containerId": make(chan int),
+			},
+		}
+		if err := agent.handleUpdateContainerCommand(context.Background(), TargetConfig{URL: server.URL}, cmd); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
 	t.Run("ack error stops early", func(t *testing.T) {
 		badTarget := TargetConfig{URL: "http://example.com/\x7f"}
 		agent.hostID = "host1"
