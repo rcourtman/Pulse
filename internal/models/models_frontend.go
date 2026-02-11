@@ -581,11 +581,11 @@ type StateFrontend struct {
 	Backups                      Backups                            `json:"backups"`
 	ReplicationJobs              []ReplicationJobFrontend           `json:"replicationJobs"`
 	ActiveAlerts                 []Alert                            `json:"activeAlerts"`                 // Active alerts
-	Metrics                      map[string]any                     `json:"metrics"`                      // Empty object for now
+	Metrics                      map[string]json.RawMessage         `json:"metrics"`                      // Empty object for now
 	PVEBackups                   PVEBackups                         `json:"pveBackups"`                   // Keep as is
-	Performance                  map[string]any                     `json:"performance"`                  // Empty object for now
+	Performance                  map[string]json.RawMessage         `json:"performance"`                  // Empty object for now
 	ConnectionHealth             map[string]bool                    `json:"connectionHealth"`             // Keep as is
-	Stats                        map[string]any                     `json:"stats"`                        // Empty object for now
+	Stats                        map[string]json.RawMessage         `json:"stats"`                        // Empty object for now
 	LastUpdate                   int64                              `json:"lastUpdate"`                   // Unix timestamp
 	TemperatureMonitoringEnabled bool                               `json:"temperatureMonitoringEnabled"` // Global temperature monitoring setting
 	// Unified resources - the new way to access all monitored entities
