@@ -94,7 +94,7 @@ type SSOProviderResponse struct {
 	SAMLIDPEntityID string `json:"samlIdpEntityId,omitempty"`
 	SAMLSPEntityID  string `json:"samlSpEntityId,omitempty"`
 	SAMLMetadataURL string `json:"samlMetadataUrl,omitempty"`
-	SAMLACSUrl      string `json:"samlAcsUrl,omitempty"`
+	SAMLACSURL      string `json:"samlAcsUrl,omitempty"`
 
 	// Common restrictions
 	AllowedGroups  []string `json:"allowedGroups,omitempty"`
@@ -508,7 +508,7 @@ func providerToResponse(p *config.SSOProvider, publicURL string) SSOProviderResp
 			resp.SAMLSPEntityID = baseURL + "/saml/" + p.ID
 		}
 		resp.SAMLMetadataURL = baseURL + "/api/saml/" + p.ID + "/metadata"
-		resp.SAMLACSUrl = baseURL + "/api/saml/" + p.ID + "/acs"
+		resp.SAMLACSURL = baseURL + "/api/saml/" + p.ID + "/acs"
 	}
 
 	return resp
@@ -562,7 +562,7 @@ type SSOTestDetails struct {
 	// OIDC-specific
 	TokenEndpoint    string   `json:"tokenEndpoint,omitempty"`
 	UserinfoEndpoint string   `json:"userinfoEndpoint,omitempty"`
-	JwksURI          string   `json:"jwksUri,omitempty"`
+	JWKSURI          string   `json:"jwksUri,omitempty"`
 	SupportedScopes  []string `json:"supportedScopes,omitempty"`
 }
 
@@ -814,7 +814,7 @@ func (r *Router) testOIDCConnection(ctx context.Context, cfg *OIDCTestConfig) SS
 		AuthorizationEndpoint string   `json:"authorization_endpoint"`
 		TokenEndpoint         string   `json:"token_endpoint"`
 		UserinfoEndpoint      string   `json:"userinfo_endpoint"`
-		JwksURI               string   `json:"jwks_uri"`
+		JWKSURI               string   `json:"jwks_uri"`
 		ScopesSupported       []string `json:"scopes_supported"`
 	}
 
@@ -839,7 +839,7 @@ func (r *Router) testOIDCConnection(ctx context.Context, cfg *OIDCTestConfig) SS
 		EntityID:         discovery.Issuer,
 		TokenEndpoint:    discovery.TokenEndpoint,
 		UserinfoEndpoint: discovery.UserinfoEndpoint,
-		JwksURI:          discovery.JwksURI,
+		JWKSURI:          discovery.JWKSURI,
 		SupportedScopes:  discovery.ScopesSupported,
 	}
 
