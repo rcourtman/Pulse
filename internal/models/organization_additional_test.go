@@ -46,3 +46,51 @@ func TestOrganizationRoleNormalization(t *testing.T) {
 		t.Fatalf("expected unknown role to be invalid")
 	}
 }
+
+func TestNormalizeOrgStatus(t *testing.T) {
+	testCases := []struct {
+		name   string
+		input  OrgStatus
+		output OrgStatus
+	}{
+		{
+			name:   "empty defaults to active",
+			input:  "",
+			output: OrgStatusActive,
+		},
+		{
+			name:   "whitespace defaults to active",
+			input:  "   ",
+			output: OrgStatusActive,
+		},
+		{
+			name:   "active case-insensitive",
+			input:  "ACTIVE",
+			output: OrgStatusActive,
+		},
+		{
+			name:   "suspended case-insensitive",
+			input:  "SUSPENDED",
+			output: OrgStatusSuspended,
+		},
+		{
+			name:   "pending deletion case-insensitive",
+			input:  "Pending_Deletion",
+			output: OrgStatusPendingDeletion,
+		},
+		{
+			name:   "unknown trimmed and lowered",
+			input:  "  CuStOm  ",
+			output: "custom",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := NormalizeOrgStatus(tc.input)
+			if got != tc.output {
+				t.Fatalf("NormalizeOrgStatus(%q) = %q, want %q", tc.input, got, tc.output)
+			}
+		})
+	}
+}
