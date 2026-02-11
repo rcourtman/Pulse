@@ -128,7 +128,7 @@ func (r *TenantRegistry) initSchema() error {
 	// enforcement is off by default; this keeps the change backwards-compatible.)
 	hasAccountID, err := r.tenantsHasColumn("account_id")
 	if err != nil {
-		return err
+		return fmt.Errorf("check tenants schema for account_id: %w", err)
 	}
 	if !hasAccountID {
 		if _, err := r.db.Exec(`ALTER TABLE tenants ADD COLUMN account_id TEXT NOT NULL DEFAULT ''`); err != nil {

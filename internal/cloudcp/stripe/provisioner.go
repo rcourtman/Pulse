@@ -77,7 +77,7 @@ func (p *Provisioner) writeHandoffKey(secretsDir string) error {
 func (p *Provisioner) writeCloudHandoffKey(tenantDataDir string) error {
 	key, err := cloudauth.GenerateHandoffKey()
 	if err != nil {
-		return err
+		return fmt.Errorf("generate cloud handoff key: %w", err)
 	}
 	path := filepath.Join(tenantDataDir, cloudauth.HandoffKeyFile)
 	if err := os.WriteFile(path, key, 0o600); err != nil {
@@ -313,19 +313,25 @@ func (p *Provisioner) HandleCheckout(ctx context.Context, session CheckoutSessio
 			changed = true
 		}
 		if changed {
-			_ = p.registry.UpdateStripeAccount(sa)
+			if updateErr := p.registry.UpdateStripeAccount(sa); updateErr != nil {
+				log.Warn().
+					Err(updateErr).
+					Str("customer_id", customerID).
+					Str("account_id", sa.AccountID).
+					Msg("Failed to backfill Stripe account metadata")
+			}
 		}
 	}
 
 	tenantDataDir, secretsDir, err := p.ensureTenantDirs(tenantID)
 	if err != nil {
-		return err
+		return fmt.Errorf("prepare tenant directories for %s: %w", tenantID, err)
 	}
 	if err := p.writeHandoffKey(secretsDir); err != nil {
-		return err
+		return fmt.Errorf("write handoff key for tenant %s: %w", tenantID, err)
 	}
 	if err := p.writeCloudHandoffKey(tenantDataDir); err != nil {
-		return err
+		return fmt.Errorf("write cloud handoff key for tenant %s: %w", tenantID, err)
 	}
 
 	state := &entitlements.BillingState{
@@ -338,7 +344,7 @@ func (p *Provisioner) HandleCheckout(ctx context.Context, session CheckoutSessio
 		StripeSubscriptionID: strings.TrimSpace(session.Subscription),
 	}
 	if err := p.writeBillingState(tenantDataDir, state); err != nil {
-		return err
+		return fmt.Errorf("write initial billing state for tenant %s: %w", tenantID, err)
 	}
 
 	// Insert registry record
@@ -448,13 +454,13 @@ func (p *Provisioner) ProvisionWorkspace(ctx context.Context, accountID, display
 
 	tenantDataDir, secretsDir, err := p.ensureTenantDirs(tenantID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("prepare tenant directories for %s: %w", tenantID, err)
 	}
 	if err := p.writeHandoffKey(secretsDir); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("write handoff key for tenant %s: %w", tenantID, err)
 	}
 	if err := p.writeCloudHandoffKey(tenantDataDir); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("write cloud handoff key for tenant %s: %w", tenantID, err)
 	}
 
 	planVersion := "msp_hosted_v1"
@@ -466,7 +472,7 @@ func (p *Provisioner) ProvisionWorkspace(ctx context.Context, accountID, display
 		SubscriptionState: entitlements.SubStateActive,
 	}
 	if err := p.writeBillingState(tenantDataDir, state); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("write initial billing state for tenant %s: %w", tenantID, err)
 	}
 
 	tenant = &registry.Tenant{
@@ -542,7 +548,7 @@ func (p *Provisioner) HandleSubscriptionUpdated(ctx context.Context, sub Subscri
 		StripePriceID:        priceID,
 	}
 	if err := p.writeBillingState(tenantDataDir, state); err != nil {
-		return err
+		return fmt.Errorf("write billing state for tenant %s: %w", tenant.ID, err)
 	}
 
 	// Update registry
@@ -595,7 +601,7 @@ func (p *Provisioner) HandleSubscriptionDeleted(ctx context.Context, sub Subscri
 		StripeSubscriptionID: strings.TrimSpace(sub.ID),
 	}
 	if err := p.writeBillingState(tenantDataDir, state); err != nil {
-		return err
+		return fmt.Errorf("write canceled billing state for tenant %s: %w", tenant.ID, err)
 	}
 
 	// Update registry
@@ -637,7 +643,10 @@ func (p *Provisioner) HandleMSPSubscriptionUpdated(ctx context.Context, sub Subs
 		return nil
 	}
 	if account.Kind != registry.AccountKindMSP {
-		return p.HandleSubscriptionUpdated(ctx, sub)
+		if err := p.HandleSubscriptionUpdated(ctx, sub); err != nil {
+			return fmt.Errorf("handle non-msp subscription update: %w", err)
+		}
+		return nil
 	}
 
 	subState := MapSubscriptionStatus(sub.Status)
@@ -682,7 +691,7 @@ func (p *Provisioner) HandleMSPSubscriptionUpdated(ctx context.Context, sub Subs
 			StripePriceID:        priceID,
 		}
 		if err := p.writeBillingState(tenantDataDir, state); err != nil {
-			return err
+			return fmt.Errorf("write billing state for tenant %s: %w", tenant.ID, err)
 		}
 
 		tenant.PlanVersion = planVersion
@@ -734,7 +743,10 @@ func (p *Provisioner) HandleMSPSubscriptionDeleted(ctx context.Context, sub Subs
 		return nil
 	}
 	if account.Kind != registry.AccountKindMSP {
-		return p.HandleSubscriptionDeleted(ctx, sub)
+		if err := p.HandleSubscriptionDeleted(ctx, sub); err != nil {
+			return fmt.Errorf("handle non-msp subscription deletion: %w", err)
+		}
+		return nil
 	}
 
 	// Persist account-level Stripe state.
@@ -764,7 +776,7 @@ func (p *Provisioner) HandleMSPSubscriptionDeleted(ctx context.Context, sub Subs
 			StripeSubscriptionID: strings.TrimSpace(sub.ID),
 		}
 		if err := p.writeBillingState(tenantDataDir, state); err != nil {
-			return err
+			return fmt.Errorf("write canceled billing state for tenant %s: %w", tenant.ID, err)
 		}
 
 		tenant.State = registry.TenantStateCanceled
