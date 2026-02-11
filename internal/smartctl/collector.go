@@ -299,11 +299,27 @@ func collectDeviceSMART(ctx context.Context, device string) (*DiskSMART, error) 
 		result.WWN = formatWWN(smartData.WWN.NAA, smartData.WWN.OUI, smartData.WWN.ID)
 	}
 
-	// Get temperature (different location for NVMe vs SATA)
+	// Get temperature (different location for NVMe vs SATA).
+	// Try top-level fields first, then fall back to ATA attributes 194/190.
 	if smartData.Temperature.Current > 0 {
 		result.Temperature = smartData.Temperature.Current
 	} else if smartData.NVMeSmartHealthInformationLog.Temperature > 0 {
 		result.Temperature = smartData.NVMeSmartHealthInformationLog.Temperature
+	} else {
+		// Fallback: extract from ATA SMART attributes 194 (Temperature_Celsius)
+		// or 190 (Airflow_Temperature_Cel). Some drives don't populate the
+		// top-level temperature field.
+		for _, attr := range smartData.ATASmartAttributes.Table {
+			if attr.ID == 194 || attr.ID == 190 {
+				// Temperature is typically in the raw value's lower byte.
+				// raw.string format: "34" or "34 (Min/Max 22/45)" etc.
+				temp := int(parseRawValue(attr.Raw.String, attr.Raw.Value))
+				if temp > 0 && temp < 150 { // sanity: valid operating range
+					result.Temperature = temp
+					break
+				}
+			}
+		}
 	}
 
 	// Get health status
