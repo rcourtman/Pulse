@@ -3,12 +3,47 @@ package infradiscovery
 import (
 	"context"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/knowledge"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
+
+type blockingAIAnalyzer struct {
+	started  chan struct{}
+	returned chan struct{}
+}
+
+func (a *blockingAIAnalyzer) AnalyzeForDiscovery(ctx context.Context, prompt string) (string, error) {
+	select {
+	case a.started <- struct{}{}:
+	default:
+	}
+
+	<-ctx.Done()
+
+	select {
+	case a.returned <- struct{}{}:
+	default:
+	}
+
+	return "", ctx.Err()
+}
+
+type countingAIAnalyzer struct {
+	callCount int32
+}
+
+func (a *countingAIAnalyzer) AnalyzeForDiscovery(ctx context.Context, prompt string) (string, error) {
+	atomic.AddInt32(&a.callCount, 1)
+	return `{"service_type": "nginx", "service_name": "Nginx", "category": "web", "cli_command": "", "confidence": 0.9, "reasoning": "Web server"}`, nil
+}
+
+func (a *countingAIAnalyzer) Calls() int32 {
+	return atomic.LoadInt32(&a.callCount)
+}
 
 func waitFor(t *testing.T, timeout time.Duration, check func() bool) {
 	t.Helper()
@@ -150,4 +185,111 @@ func TestGetDiscoveriesReturnsCopy(t *testing.T) {
 	if second[0].Name == "changed" {
 		t.Fatalf("expected discoveries to be immutable copy, got %v", second[0].Name)
 	}
+}
+
+func TestStopCancelsInFlightDiscovery(t *testing.T) {
+	provider := &mockStateProvider{
+		state: models.StateSnapshot{
+			DockerHosts: []models.DockerHost{
+				{
+					AgentID:  "agent-1",
+					Hostname: "host1",
+					Containers: []models.DockerContainer{
+						{ID: "1", Name: "web", Image: "nginx:latest"},
+					},
+				},
+			},
+		},
+	}
+
+	analyzer := &blockingAIAnalyzer{
+		started:  make(chan struct{}, 1),
+		returned: make(chan struct{}, 1),
+	}
+
+	service := NewService(provider, nil, Config{
+		Interval:    time.Hour,
+		CacheExpiry: time.Hour,
+	})
+	service.SetAIAnalyzer(analyzer)
+	service.Start(context.Background())
+
+	select {
+	case <-analyzer.started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for discovery analysis to start")
+	}
+
+	stopDone := make(chan struct{})
+	go func() {
+		service.Stop()
+		close(stopDone)
+	}()
+
+	select {
+	case <-stopDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("service.Stop did not complete after canceling in-flight discovery")
+	}
+
+	select {
+	case <-analyzer.returned:
+	case <-time.After(2 * time.Second):
+		t.Fatal("analyzer did not return after stop cancellation")
+	}
+
+	status := service.GetStatus()
+	if running, ok := status["running"].(bool); !ok || running {
+		t.Fatalf("expected running status false after stop, got %v", status["running"])
+	}
+}
+
+func TestForceRefreshSkippedAfterStop(t *testing.T) {
+	provider := &mockStateProvider{
+		state: models.StateSnapshot{
+			DockerHosts: []models.DockerHost{
+				{
+					AgentID:  "agent-1",
+					Hostname: "host1",
+					Containers: []models.DockerContainer{
+						{ID: "1", Name: "web", Image: "nginx:latest"},
+					},
+				},
+			},
+		},
+	}
+	analyzer := &countingAIAnalyzer{}
+
+	service := NewService(provider, nil, DefaultConfig())
+	service.SetAIAnalyzer(analyzer)
+	service.Stop()
+	service.ForceRefresh(context.Background())
+
+	time.Sleep(100 * time.Millisecond)
+
+	if calls := analyzer.Calls(); calls != 0 {
+		t.Fatalf("expected force refresh to be skipped after stop, analyzer called %d times", calls)
+	}
+	if !service.GetLastRun().IsZero() {
+		t.Fatalf("expected last run to remain zero after skipped force refresh, got %v", service.GetLastRun())
+	}
+}
+
+func TestContextCancellationUpdatesRunningStatus(t *testing.T) {
+	provider := &mockStateProvider{state: models.StateSnapshot{}}
+	service := NewService(provider, nil, Config{
+		Interval:    time.Hour,
+		CacheExpiry: time.Hour,
+	})
+	service.SetAIAnalyzer(&mockAIAnalyzer{})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	service.Start(ctx)
+	cancel()
+
+	waitFor(t, 2*time.Second, func() bool {
+		status := service.GetStatus()
+		running, _ := status["running"].(bool)
+		return !running
+	})
 }
