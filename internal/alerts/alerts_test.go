@@ -16311,6 +16311,36 @@ func TestLoadActiveAlerts(t *testing.T) {
 		}
 	})
 
+	t.Run("oversized file returns error", func(t *testing.T) {
+		m := newTestManager(t)
+		m.ClearActiveAlerts()
+
+		alertsDir := filepath.Join(utils.GetDataDir(), "alerts")
+		if err := os.MkdirAll(alertsDir, 0o755); err != nil {
+			t.Fatalf("failed to create alerts dir: %v", err)
+		}
+
+		alertsFile := filepath.Join(alertsDir, "active-alerts.json")
+		f, err := os.Create(alertsFile)
+		if err != nil {
+			t.Fatalf("failed to create oversized alerts file: %v", err)
+		}
+		if err := f.Close(); err != nil {
+			t.Fatalf("failed to close oversized alerts file: %v", err)
+		}
+		if err := os.Truncate(alertsFile, maxActiveAlertsFileSizeBytes+1); err != nil {
+			t.Fatalf("failed to expand oversized alerts file: %v", err)
+		}
+
+		err = m.LoadActiveAlerts()
+		if err == nil {
+			t.Fatal("expected error for oversized active alerts file")
+		}
+		if !strings.Contains(err.Error(), "exceeds max size") {
+			t.Fatalf("expected max-size error, got: %v", err)
+		}
+	})
+
 	t.Run("skips duplicate alerts", func(t *testing.T) {
 		m := newTestManager(t)
 		m.ClearActiveAlerts()

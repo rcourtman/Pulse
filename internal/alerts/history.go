@@ -169,14 +169,14 @@ func (hm *HistoryManager) GetAllHistory(limit int) []Alert {
 // loadHistory loads history from disk
 func (hm *HistoryManager) loadHistory() error {
 	// Try loading from main file first
-	data, err := os.ReadFile(hm.historyFile)
+	data, err := readLimitedRegularFile(hm.historyFile, maxAlertHistoryFileSizeBytes)
 	if err != nil {
 		if !os.IsNotExist(err) {
 			log.Warn().Err(err).Str("file", hm.historyFile).Msg("Failed to read history file")
 		}
 
 		// Try backup file
-		data, err = os.ReadFile(hm.backupFile)
+		data, err = readLimitedRegularFile(hm.backupFile, maxAlertHistoryFileSizeBytes)
 		if err != nil {
 			if os.IsNotExist(err) {
 				// Both files don't exist - this is normal on first startup

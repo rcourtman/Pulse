@@ -2,6 +2,7 @@ package alerts
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -9265,9 +9266,9 @@ func (m *Manager) LoadActiveAlerts() error {
 	defer m.mu.Unlock()
 
 	alertsFile := filepath.Join(m.getAlertsDir(), "active-alerts.json")
-	data, err := os.ReadFile(alertsFile)
+	data, err := readLimitedRegularFile(alertsFile, maxActiveAlertsFileSizeBytes)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			log.Info().Msg("No active alerts file found, starting fresh")
 			return nil
 		}

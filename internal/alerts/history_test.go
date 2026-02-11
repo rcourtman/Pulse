@@ -460,6 +460,38 @@ func TestLoadHistory_FromBackupFile(t *testing.T) {
 	}
 }
 
+func TestLoadHistory_OversizedMainFallsBackToBackup(t *testing.T) {
+	hm := newTestHistoryManager(t)
+
+	main, err := os.Create(hm.historyFile)
+	if err != nil {
+		t.Fatalf("Failed to create oversized main file: %v", err)
+	}
+	if err := main.Close(); err != nil {
+		t.Fatalf("Failed to close oversized main file: %v", err)
+	}
+	if err := os.Truncate(hm.historyFile, maxAlertHistoryFileSizeBytes+1); err != nil {
+		t.Fatalf("Failed to expand oversized main file: %v", err)
+	}
+
+	recentTime := time.Now().Add(-1 * time.Hour).Format(time.RFC3339)
+	backupContent := `[{"alert":{"id":"backup-ok","type":"memory"},"timestamp":"` + recentTime + `"}]`
+	if err := os.WriteFile(hm.backupFile, []byte(backupContent), 0o644); err != nil {
+		t.Fatalf("Failed to create backup file: %v", err)
+	}
+
+	if err := hm.loadHistory(); err != nil {
+		t.Fatalf("loadHistory should fall back to backup when main is oversized, got: %v", err)
+	}
+
+	if len(hm.history) != 1 {
+		t.Fatalf("history length = %d, want 1", len(hm.history))
+	}
+	if hm.history[0].Alert.ID != "backup-ok" {
+		t.Fatalf("alert ID = %s, want backup-ok", hm.history[0].Alert.ID)
+	}
+}
+
 func TestLoadHistory_InvalidJSON(t *testing.T) {
 	// t.Parallel()
 
