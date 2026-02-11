@@ -115,7 +115,11 @@ func MigrateToMultiTenant(dataDir string) error {
 		migratedFiles = append(migratedFiles, filename)
 
 		// Create symlink for backward compatibility
-		relPath, _ := filepath.Rel(dataDir, dstPath)
+		relPath, relErr := filepath.Rel(dataDir, dstPath)
+		if relErr != nil {
+			log.Warn().Err(relErr).Str("file", filename).Str("target", dstPath).Msg("Failed to derive relative symlink target, using absolute path")
+			relPath = dstPath
+		}
 		if err := os.Symlink(relPath, srcPath); err != nil {
 			log.Warn().Err(err).Str("file", filename).Msg("Failed to create symlink for backward compatibility")
 		} else {
@@ -143,16 +147,19 @@ func MigrateToMultiTenant(dataDir string) error {
 func copyFile(src, dst string) error {
 	data, err := os.ReadFile(src)
 	if err != nil {
-		return err
+		return fmt.Errorf("read source file %s: %w", src, err)
 	}
 
 	// Get original file permissions
 	info, err := os.Stat(src)
 	if err != nil {
-		return err
+		return fmt.Errorf("stat source file %s: %w", src, err)
 	}
 
-	return os.WriteFile(dst, data, info.Mode())
+	if err := os.WriteFile(dst, data, info.Mode()); err != nil {
+		return fmt.Errorf("write destination file %s: %w", dst, err)
+	}
+	return nil
 }
 
 // IsMigrationNeeded checks if multi-tenant migration is needed.
@@ -190,5 +197,8 @@ func RunMigrationIfNeeded(dataDir string) error {
 	if !IsMigrationNeeded(dataDir) {
 		return nil
 	}
-	return MigrateToMultiTenant(dataDir)
+	if err := MigrateToMultiTenant(dataDir); err != nil {
+		return fmt.Errorf("run multi-tenant migration: %w", err)
+	}
+	return nil
 }

@@ -81,7 +81,7 @@ func (mtp *MultiTenantPersistence) GetPersistence(orgID string) (*ConfigPersiste
 
 	// Ensure the directory exists
 	if err := cp.EnsureConfigDir(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("ensure config directory for org %s: %w", orgID, err)
 	}
 
 	mtp.tenants[orgID] = cp

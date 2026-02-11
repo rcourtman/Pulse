@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -197,7 +198,10 @@ func (c *ConfigPersistence) SaveOrganization(org *models.Organization) error {
 
 // EnsureConfigDir ensures the configuration directory exists
 func (c *ConfigPersistence) EnsureConfigDir() error {
-	return c.fs.MkdirAll(c.configDir, 0700)
+	if err := c.fs.MkdirAll(c.configDir, 0700); err != nil {
+		return fmt.Errorf("ensure config directory %s: %w", c.configDir, err)
+	}
+	return nil
 }
 
 func (c *ConfigPersistence) beginTransaction(tx *importTransaction) {
@@ -222,16 +226,22 @@ func (c *ConfigPersistence) writeConfigFileLocked(path string, data []byte, perm
 	tx := c.tx
 
 	if tx != nil {
-		return tx.StageFile(path, data, perm)
+		if err := tx.StageFile(path, data, perm); err != nil {
+			return fmt.Errorf("stage config file %s: %w", path, err)
+		}
+		return nil
 	}
 
 	tmp := path + ".tmp"
 	if err := c.fs.WriteFile(tmp, data, perm); err != nil {
-		return err
+		return fmt.Errorf("write temp config file %s: %w", tmp, err)
 	}
 	if err := c.fs.Rename(tmp, path); err != nil {
-		_ = c.fs.Remove(tmp)
-		return err
+		renameErr := fmt.Errorf("rename temp config file %s to %s: %w", tmp, path, err)
+		if removeErr := c.fs.Remove(tmp); removeErr != nil && !os.IsNotExist(removeErr) {
+			return errors.Join(renameErr, fmt.Errorf("cleanup temp config file %s: %w", tmp, removeErr))
+		}
+		return renameErr
 	}
 	return nil
 }
@@ -244,22 +254,25 @@ func saveJSON[T any](c *ConfigPersistence, filePath string, data T, encrypt bool
 
 	jsonData, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal config data for %s: %w", filePath, err)
 	}
 
 	if encrypt && c.crypto != nil {
 		encrypted, err := c.crypto.Encrypt(jsonData)
 		if err != nil {
-			return err
+			return fmt.Errorf("encrypt config data for %s: %w", filePath, err)
 		}
 		jsonData = encrypted
 	}
 
 	if err := c.EnsureConfigDir(); err != nil {
-		return err
+		return fmt.Errorf("prepare config directory for %s: %w", filePath, err)
 	}
 
-	return c.writeConfigFileLocked(filePath, jsonData, 0600)
+	if err := c.writeConfigFileLocked(filePath, jsonData, 0600); err != nil {
+		return fmt.Errorf("persist config file %s: %w", filePath, err)
+	}
+	return nil
 }
 
 // loadSlice is a generic helper that reads a JSON file, optionally decrypts,
@@ -274,7 +287,7 @@ func loadSlice[T any](c *ConfigPersistence, filePath string, decrypt bool) ([]T,
 		if os.IsNotExist(err) {
 			return []T{}, nil
 		}
-		return nil, err
+		return nil, fmt.Errorf("read config file %s: %w", filePath, err)
 	}
 
 	if len(data) == 0 {
@@ -291,7 +304,7 @@ func loadSlice[T any](c *ConfigPersistence, filePath string, decrypt bool) ([]T,
 
 	var result []T
 	if err := json.Unmarshal(data, &result); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("decode config file %s: %w", filePath, err)
 	}
 
 	return result, nil
@@ -305,18 +318,21 @@ func loadJSON[T any](c *ConfigPersistence, filePath string, decrypt bool, target
 
 	data, err := c.fs.ReadFile(filePath)
 	if err != nil {
-		return err
+		return fmt.Errorf("read config file %s: %w", filePath, err)
 	}
 
 	if decrypt && c.crypto != nil {
 		decrypted, err := c.crypto.Decrypt(data)
 		if err != nil {
-			return err
+			return fmt.Errorf("decrypt config file %s: %w", filePath, err)
 		}
 		data = decrypted
 	}
 
-	return json.Unmarshal(data, target)
+	if err := json.Unmarshal(data, target); err != nil {
+		return fmt.Errorf("decode config file %s: %w", filePath, err)
+	}
+	return nil
 }
 
 // LoadAPITokens loads API token metadata from disk.
@@ -329,7 +345,7 @@ func (c *ConfigPersistence) LoadAPITokens() ([]APITokenRecord, error) {
 		if os.IsNotExist(err) {
 			return []APITokenRecord{}, nil
 		}
-		return nil, err
+		return nil, fmt.Errorf("read api tokens file %s: %w", c.apiTokensFile, err)
 	}
 
 	if len(data) == 0 {
@@ -338,7 +354,7 @@ func (c *ConfigPersistence) LoadAPITokens() ([]APITokenRecord, error) {
 
 	var tokens []APITokenRecord
 	if err := json.Unmarshal(data, &tokens); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("decode api tokens file %s: %w", c.apiTokensFile, err)
 	}
 
 	for i := range tokens {
@@ -374,7 +390,7 @@ func (c *ConfigPersistence) SaveAPITokens(tokens []APITokenRecord) error {
 	defer c.mu.Unlock()
 
 	if err := c.EnsureConfigDir(); err != nil {
-		return err
+		return fmt.Errorf("prepare config directory for api tokens: %w", err)
 	}
 
 	// Backup previous state (best effort).
@@ -393,10 +409,13 @@ func (c *ConfigPersistence) SaveAPITokens(tokens []APITokenRecord) error {
 
 	data, err := json.Marshal(sanitized)
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal api token records: %w", err)
 	}
 
-	return c.writeConfigFileLocked(c.apiTokensFile, data, 0600)
+	if err := c.writeConfigFileLocked(c.apiTokensFile, data, 0600); err != nil {
+		return fmt.Errorf("persist api tokens file %s: %w", c.apiTokensFile, err)
+	}
+	return nil
 }
 
 // SaveAlertConfig saves alert configuration to file
