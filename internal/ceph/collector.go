@@ -343,11 +343,11 @@ func parseDF(data []byte) ([]Pool, float64, error) {
 			BytesUsed:      p.Stats.BytesUsed,
 			BytesAvailable: p.Stats.MaxAvail,
 			Objects:        p.Stats.Objects,
-			PercentUsed:    p.Stats.PercentUsed * 100, // Convert from 0-1 to 0-100
+			PercentUsed:    normalizePercentUsed(p.Stats.PercentUsed),
 		})
 	}
 
-	return pools, raw.Stats.PercentUsed * 100, nil
+	return pools, normalizePercentUsed(raw.Stats.PercentUsed), nil
 }
 
 func boolToInt(b bool) int {
@@ -355,4 +355,12 @@ func boolToInt(b bool) int {
 		return 1
 	}
 	return 0
+}
+
+// normalizePercentUsed accepts Ceph values reported either as ratio (0-1) or percent (0-100).
+func normalizePercentUsed(value float64) float64 {
+	if value >= 0 && value <= 1 {
+		return value * 100
+	}
+	return value
 }
