@@ -716,6 +716,55 @@ func TestRetryGuestAgentCall(t *testing.T) {
 			t.Fatalf("expected 1 call with maxRetries=0, got %d", callCount)
 		}
 	})
+
+	t.Run("negative retries are normalized to zero", func(t *testing.T) {
+		t.Parallel()
+
+		m := &Monitor{}
+		callCount := 0
+		fn := func(ctx context.Context) (interface{}, error) {
+			callCount++
+			return nil, errors.New("timeout error")
+		}
+
+		ctx := context.Background()
+		result, err := m.retryGuestAgentCall(ctx, 50*time.Millisecond, -3, fn)
+
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if result != nil {
+			t.Fatalf("expected nil result, got %v", result)
+		}
+		if callCount != 1 {
+			t.Fatalf("expected 1 call with negative retries normalized to 0, got %d", callCount)
+		}
+	})
+
+	t.Run("non-positive timeout is normalized to a usable default", func(t *testing.T) {
+		t.Parallel()
+
+		m := &Monitor{}
+		fn := func(ctx context.Context) (interface{}, error) {
+			deadline, ok := ctx.Deadline()
+			if !ok {
+				t.Fatal("expected deadline on retry context")
+			}
+			if time.Until(deadline) <= 0 {
+				t.Fatal("expected retry context deadline to be in the future")
+			}
+			return "ok", nil
+		}
+
+		ctx := context.Background()
+		result, err := m.retryGuestAgentCall(ctx, 0, 0, fn)
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+		if result != "ok" {
+			t.Fatalf("expected result 'ok', got %v", result)
+		}
+	})
 }
 
 func TestAcquireGuestMetadataSlot(t *testing.T) {

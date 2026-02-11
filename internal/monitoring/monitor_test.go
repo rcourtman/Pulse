@@ -168,6 +168,96 @@ func TestParseIntEnv(t *testing.T) {
 	})
 }
 
+func TestParsePositiveDurationEnv(t *testing.T) {
+	const testKey = "TEST_POSITIVE_DURATION_ENV"
+	defaultVal := 30 * time.Second
+
+	t.Run("empty env var returns default", func(t *testing.T) {
+		t.Setenv(testKey, "")
+		result := parsePositiveDurationEnv(testKey, defaultVal)
+		if result != defaultVal {
+			t.Errorf("expected %v, got %v", defaultVal, result)
+		}
+	})
+
+	t.Run("valid duration returns parsed value", func(t *testing.T) {
+		t.Setenv(testKey, "45s")
+		result := parsePositiveDurationEnv(testKey, defaultVal)
+		if result != 45*time.Second {
+			t.Errorf("expected %v, got %v", 45*time.Second, result)
+		}
+	})
+
+	t.Run("invalid duration returns default", func(t *testing.T) {
+		t.Setenv(testKey, "invalid")
+		result := parsePositiveDurationEnv(testKey, defaultVal)
+		if result != defaultVal {
+			t.Errorf("expected default %v, got %v", defaultVal, result)
+		}
+	})
+
+	t.Run("zero duration returns default", func(t *testing.T) {
+		t.Setenv(testKey, "0s")
+		result := parsePositiveDurationEnv(testKey, defaultVal)
+		if result != defaultVal {
+			t.Errorf("expected default %v, got %v", defaultVal, result)
+		}
+	})
+
+	t.Run("negative duration returns default", func(t *testing.T) {
+		t.Setenv(testKey, "-5s")
+		result := parsePositiveDurationEnv(testKey, defaultVal)
+		if result != defaultVal {
+			t.Errorf("expected default %v, got %v", defaultVal, result)
+		}
+	})
+}
+
+func TestParseNonNegativeIntEnv(t *testing.T) {
+	const testKey = "TEST_NON_NEGATIVE_INT_ENV"
+	defaultVal := 2
+
+	t.Run("empty env var returns default", func(t *testing.T) {
+		t.Setenv(testKey, "")
+		result := parseNonNegativeIntEnv(testKey, defaultVal)
+		if result != defaultVal {
+			t.Errorf("expected %d, got %d", defaultVal, result)
+		}
+	})
+
+	t.Run("valid positive integer returns parsed value", func(t *testing.T) {
+		t.Setenv(testKey, "5")
+		result := parseNonNegativeIntEnv(testKey, defaultVal)
+		if result != 5 {
+			t.Errorf("expected 5, got %d", result)
+		}
+	})
+
+	t.Run("zero returns parsed value", func(t *testing.T) {
+		t.Setenv(testKey, "0")
+		result := parseNonNegativeIntEnv(testKey, defaultVal)
+		if result != 0 {
+			t.Errorf("expected 0, got %d", result)
+		}
+	})
+
+	t.Run("invalid integer returns default", func(t *testing.T) {
+		t.Setenv(testKey, "invalid")
+		result := parseNonNegativeIntEnv(testKey, defaultVal)
+		if result != defaultVal {
+			t.Errorf("expected default %d, got %d", defaultVal, result)
+		}
+	})
+
+	t.Run("negative integer returns default", func(t *testing.T) {
+		t.Setenv(testKey, "-1")
+		result := parseNonNegativeIntEnv(testKey, defaultVal)
+		if result != defaultVal {
+			t.Errorf("expected default %d, got %d", defaultVal, result)
+		}
+	})
+}
+
 func TestGetInstanceConfig(t *testing.T) {
 	t.Run("nil Monitor returns nil", func(t *testing.T) {
 		var m *Monitor

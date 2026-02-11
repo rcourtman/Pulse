@@ -80,6 +80,37 @@ func parseDurationEnv(key string, defaultVal time.Duration) time.Duration {
 	return parsed
 }
 
+// parsePositiveDurationEnv parses a duration from an environment variable and
+// enforces a strictly positive value, otherwise returning defaultVal.
+func parsePositiveDurationEnv(key string, defaultVal time.Duration) time.Duration {
+	val := strings.TrimSpace(os.Getenv(key))
+	if val == "" {
+		return defaultVal
+	}
+
+	parsed, err := time.ParseDuration(val)
+	if err != nil {
+		log.Warn().
+			Str("key", key).
+			Str("value", val).
+			Err(err).
+			Dur("default", defaultVal).
+			Msg("Failed to parse duration from environment variable, using default")
+		return defaultVal
+	}
+
+	if parsed <= 0 {
+		log.Warn().
+			Str("key", key).
+			Str("value", val).
+			Dur("default", defaultVal).
+			Msg("Environment duration must be greater than zero, using default")
+		return defaultVal
+	}
+
+	return parsed
+}
+
 // parseIntEnv parses an integer from an environment variable, returning defaultVal if not set or invalid
 func parseIntEnv(key string, defaultVal int) int {
 	val := os.Getenv(key)
@@ -96,6 +127,37 @@ func parseIntEnv(key string, defaultVal int) int {
 			Msg("Failed to parse integer from environment variable, using default")
 		return defaultVal
 	}
+	return parsed
+}
+
+// parseNonNegativeIntEnv parses an integer from an environment variable and
+// enforces a non-negative value, otherwise returning defaultVal.
+func parseNonNegativeIntEnv(key string, defaultVal int) int {
+	val := strings.TrimSpace(os.Getenv(key))
+	if val == "" {
+		return defaultVal
+	}
+
+	parsed, err := strconv.Atoi(val)
+	if err != nil {
+		log.Warn().
+			Str("key", key).
+			Str("value", val).
+			Err(err).
+			Int("default", defaultVal).
+			Msg("Failed to parse integer from environment variable, using default")
+		return defaultVal
+	}
+
+	if parsed < 0 {
+		log.Warn().
+			Str("key", key).
+			Str("value", val).
+			Int("default", defaultVal).
+			Msg("Environment integer must be non-negative, using default")
+		return defaultVal
+	}
+
 	return parsed
 }
 
