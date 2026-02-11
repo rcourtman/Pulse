@@ -48,7 +48,7 @@ func GetAPIToken(ctx context.Context) APITokenInfo {
 }
 
 // GetAPITokenContextKey returns the context key used for API tokens (for testing purposes)
-func GetAPITokenContextKey() any {
+func GetAPITokenContextKey() contextKey {
 	return contextKeyAPIToken
 }
 
