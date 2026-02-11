@@ -16,6 +16,7 @@ import (
 func resetKnownHostsFns() {
 	mkdirAllFn = defaultMkdirAllFn
 	statFn = defaultStatFn
+	chmodFn = defaultChmodFn
 	openFileFn = defaultOpenFileFn
 	openFn = defaultOpenFn
 	appendOpenFileFn = defaultAppendOpenFileFn
@@ -456,6 +457,39 @@ func TestEnsureKnownHostsFileCreateError(t *testing.T) {
 	m := &manager{path: filepath.Join(t.TempDir(), "known_hosts")}
 	if err := m.ensureKnownHostsFile(); err == nil {
 		t.Fatal("expected create error")
+	}
+}
+
+func TestEnsureKnownHostsFileChmodDirError(t *testing.T) {
+	t.Cleanup(resetKnownHostsFns)
+	chmodFn = func(path string, mode os.FileMode) error {
+		return errors.New("chmod dir failed")
+	}
+
+	m := &manager{path: filepath.Join(t.TempDir(), "known_hosts")}
+	if err := m.ensureKnownHostsFile(); err == nil {
+		t.Fatal("expected chmod dir error")
+	}
+}
+
+func TestEnsureKnownHostsFileChmodFileError(t *testing.T) {
+	t.Cleanup(resetKnownHostsFns)
+	dir := t.TempDir()
+	path := filepath.Join(dir, "known_hosts")
+	if err := os.WriteFile(path, []byte("example.com ssh-ed25519 AAAA\n"), 0644); err != nil {
+		t.Fatalf("failed to write known_hosts: %v", err)
+	}
+
+	chmodFn = func(target string, mode os.FileMode) error {
+		if target == path {
+			return errors.New("chmod file failed")
+		}
+		return nil
+	}
+
+	m := &manager{path: path}
+	if err := m.ensureKnownHostsFile(); err == nil {
+		t.Fatal("expected chmod file error")
 	}
 }
 
