@@ -3,7 +3,6 @@ package relay
 import (
 	"context"
 	"crypto/ecdh"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -646,9 +645,4 @@ func (e *licenseError) Error() string {
 func isLicenseError(err error) bool {
 	_, ok := err.(*licenseError)
 	return ok
-}
-
-// marshalStatus returns the client status as JSON bytes.
-func (c *Client) marshalStatus() ([]byte, error) {
-	return json.Marshal(c.Status())
 }
