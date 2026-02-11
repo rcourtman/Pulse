@@ -57,6 +57,31 @@ func TestNormalizeTargetsInvalid(t *testing.T) {
 	if _, err := normalizeTargets([]TargetConfig{{URL: "https://pulse.example.com", Token: ""}}); err == nil {
 		t.Fatalf("expected error for missing token")
 	}
+	if _, err := normalizeTargets([]TargetConfig{{URL: "pulse.example.com", Token: "token"}}); err == nil {
+		t.Fatalf("expected error for missing scheme")
+	}
+	if _, err := normalizeTargets([]TargetConfig{{URL: "ftp://pulse.example.com", Token: "token"}}); err == nil {
+		t.Fatalf("expected error for unsupported scheme")
+	}
+	if _, err := normalizeTargets([]TargetConfig{{URL: "https://pulse.example.com:70000", Token: "token"}}); err == nil {
+		t.Fatalf("expected error for out-of-range port")
+	}
+	if _, err := normalizeTargets([]TargetConfig{{URL: "https://pulse.example.com/path?env=prod", Token: "token"}}); err == nil {
+		t.Fatalf("expected error for URL query parameters")
+	}
+	if _, err := normalizeTargets([]TargetConfig{{URL: "https://user:pass@pulse.example.com", Token: "token"}}); err == nil {
+		t.Fatalf("expected error for URL userinfo")
+	}
+}
+
+func TestNormalizeTargetURL(t *testing.T) {
+	normalized, err := normalizeTargetURL(" HTTPS://Pulse.EXAMPLE.com:443/api/ ")
+	if err != nil {
+		t.Fatalf("normalizeTargetURL returned error: %v", err)
+	}
+	if normalized != "https://pulse.example.com:443/api" {
+		t.Fatalf("unexpected normalized URL %q", normalized)
+	}
 }
 
 func TestNormalizeContainerStates(t *testing.T) {
