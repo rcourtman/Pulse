@@ -420,118 +420,6 @@ func (e *PulseToolExecutor) verifyGuestAction(ctx context.Context, agentID, cmdT
 	return map[string]interface{}{"confirmed": confirmed, "method": "status", "command": statusCmd, "expected": expect, "observed": observed, "raw": out}
 }
 
-func (e *PulseToolExecutor) executeControlDocker(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
-	containerName, _ := args["container"].(string)
-	hostName, _ := args["host"].(string)
-	action, _ := args["action"].(string)
-
-	if containerName == "" {
-		return NewErrorResult(fmt.Errorf("container name is required")), nil
-	}
-	if action == "" {
-		return NewErrorResult(fmt.Errorf("action is required")), nil
-	}
-
-	validActions := map[string]bool{"start": true, "stop": true, "restart": true}
-	if !validActions[action] {
-		return NewErrorResult(fmt.Errorf("invalid action: %s. Use start, stop, or restart", action)), nil
-	}
-
-	// Validate resource is in resolved context
-	// With PULSE_STRICT_RESOLUTION=true, this blocks execution on undiscovered resources
-	validation := e.validateResolvedResource(containerName, action, true)
-	if validation.IsBlocked() {
-		// Hard validation failure - return consistent error envelope
-		return NewToolResponseResult(validation.StrictError.ToToolResponse()), nil
-	}
-	if validation.ErrorMsg != "" {
-		// Soft validation - log warning but allow operation
-		log.Warn().
-			Str("container", containerName).
-			Str("action", action).
-			Str("host", hostName).
-			Str("validation_error", validation.ErrorMsg).
-			Msg("[ControlDocker] Container not in resolved context - may indicate model hallucination")
-	}
-
-	// Note: Control level read_only check is now centralized in registry.Execute()
-
-	// Check if this is a pre-approved execution (agentic loop re-executing after user approval)
-	preApproved := isPreApproved(args)
-
-	container, dockerHost, err := e.resolveDockerContainer(containerName, hostName)
-	if err != nil {
-		return NewTextResult(fmt.Sprintf("Could not find Docker container '%s': %v", containerName, err)), nil
-	}
-
-	command := fmt.Sprintf("docker %s %s", action, container.Name)
-
-	// Get the agent hostname for approval records (may differ from docker host display name)
-	agentHostname := e.getAgentHostnameForDockerHost(dockerHost)
-
-	// Skip approval checks if pre-approved
-	if !preApproved && e.policy != nil {
-		decision := e.policy.Evaluate(command)
-		if decision == agentexec.PolicyBlock {
-			return NewTextResult(formatPolicyBlocked(command, "This command is blocked by security policy")), nil
-		}
-		if decision == agentexec.PolicyRequireApproval && !e.isAutonomous {
-			approvalID := createApprovalRecord(command, "docker", container.Name, agentHostname, fmt.Sprintf("%s Docker container %s", action, container.Name))
-			return NewTextResult(formatDockerApprovalNeeded(container.Name, dockerHost.Hostname, action, command, approvalID)), nil
-		}
-	}
-
-	// Check control level - this must be outside policy check since policy may be nil (skip if pre-approved)
-	if !preApproved && e.controlLevel == ControlLevelControlled {
-		approvalID := createApprovalRecord(command, "docker", container.Name, agentHostname, fmt.Sprintf("%s Docker container %s", action, container.Name))
-		return NewTextResult(formatDockerApprovalNeeded(container.Name, dockerHost.Hostname, action, command, approvalID)), nil
-	}
-
-	if e.agentServer == nil {
-		return NewErrorResult(fmt.Errorf("no agent server available")), nil
-	}
-
-	// Resolve the Docker host to the correct agent and routing info (with full provenance)
-	routing := e.resolveDockerHostRoutingFull(dockerHost)
-	if routing.AgentID == "" {
-		if routing.TargetType == "container" || routing.TargetType == "vm" {
-			return NewTextResult(fmt.Sprintf("Docker host '%s' is a %s but no agent is available on its Proxmox host. Install Pulse Unified Agent on the Proxmox node.", dockerHost.Hostname, routing.TargetType)), nil
-		}
-		return NewTextResult(fmt.Sprintf("No agent available on Docker host '%s'. Install Pulse Unified Agent on the host to enable control.", dockerHost.Hostname)), nil
-	}
-
-	log.Debug().
-		Str("docker_host", dockerHost.Hostname).
-		Str("agent_id", routing.AgentID).
-		Str("agent_host", routing.AgentHostname).
-		Str("resolved_kind", routing.ResolvedKind).
-		Str("resolved_node", routing.ResolvedNode).
-		Str("transport", routing.Transport).
-		Str("target_type", routing.TargetType).
-		Str("target_id", routing.TargetID).
-		Msg("[pulse_control docker] Routing docker command execution")
-
-	result, err := e.agentServer.ExecuteCommand(ctx, routing.AgentID, agentexec.ExecuteCommandPayload{
-		Command:    command,
-		TargetType: routing.TargetType,
-		TargetID:   routing.TargetID,
-	})
-	if err != nil {
-		return NewErrorResult(err), nil
-	}
-
-	output := result.Stdout
-	if result.Stderr != "" {
-		output += "\n" + result.Stderr
-	}
-
-	if result.ExitCode == 0 {
-		return NewTextResult(fmt.Sprintf("✓ Successfully executed 'docker %s' on container '%s' (host: %s). The action is complete.\n%s", action, container.Name, dockerHost.Hostname, output)), nil
-	}
-
-	return NewTextResult(fmt.Sprintf("Command failed (exit code %d):\n%s", result.ExitCode, output)), nil
-}
-
 // Helper methods for control tools
 
 // CommandRoutingResult contains full routing information for command execution.
@@ -1015,12 +903,6 @@ func (e *PulseToolExecutor) resolveDockerHostRoutingFull(dockerHost *models.Dock
 		}
 	}
 	return result
-}
-
-// resolveDockerHostRouting delegates to resolveDockerHostRoutingFull for backwards compatibility.
-func (e *PulseToolExecutor) resolveDockerHostRouting(dockerHost *models.DockerHost) (agentID string, targetType string, targetID string) {
-	r := e.resolveDockerHostRoutingFull(dockerHost)
-	return r.AgentID, r.TargetType, r.TargetID
 }
 
 // createApprovalRecord creates an approval record in the store and returns the approval ID.

@@ -681,24 +681,6 @@ func buildExecutionProvenance(targetHost string, routing CommandRoutingResult) m
 	}
 }
 
-// findAgentByHostname finds an agent ID by hostname
-func (e *PulseToolExecutor) findAgentByHostname(hostname string) string {
-	if e.agentServer == nil {
-		return ""
-	}
-
-	agents := e.agentServer.GetConnectedAgents()
-	hostnameLower := strings.ToLower(hostname)
-
-	for _, agent := range agents {
-		// Match by hostname (case-insensitive) or by agentID (case-sensitive)
-		if strings.ToLower(agent.Hostname) == hostnameLower || agent.AgentID == hostname {
-			return agent.AgentID
-		}
-	}
-	return ""
-}
-
 // shellEscape escapes a string for safe use in shell commands
 func shellEscape(s string) string {
 	// Use single quotes and escape any existing single quotes

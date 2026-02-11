@@ -1556,29 +1556,6 @@ const (
 	defaultMaxListDockerContainersPerHost     = 10
 )
 
-// buildResourceID creates a canonical resource ID.
-// Prefers kind:provider_uid when UID is available, falls back to kind:name.
-func buildResourceID(kind, name, providerUID string) string {
-	if providerUID != "" {
-		return kind + ":" + providerUID
-	}
-	return kind + ":" + name
-}
-
-// buildDisplayPath creates a human-readable location path.
-// e.g., "docker:jellyfin @ lxc:media-server @ node:delly"
-func buildDisplayPath(locationChain []string) string {
-	if len(locationChain) == 0 {
-		return ""
-	}
-	// Reverse for display (innermost first)
-	reversed := make([]string, len(locationChain))
-	for i, loc := range locationChain {
-		reversed[len(locationChain)-1-i] = loc
-	}
-	return strings.Join(reversed, " @ ")
-}
-
 // registerResolvedResource adds a discovered resource to the resolved context if available.
 // This is called by query tools when they find resources, enabling action tools to validate
 // that commands are targeting legitimate, discovered resources.

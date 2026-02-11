@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
-	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
 )
 
@@ -208,9 +207,4 @@ func (a *discoveryStateAdapter) GetState() servicediscovery.StateSnapshot {
 		Hosts:       hosts,
 		Nodes:       nodes,
 	}
-}
-
-// StateProvider interface expected by the adapter (mirrors models.StateSnapshot fields)
-type discoveryStateProviderInterface interface {
-	GetState() models.StateSnapshot
 }
