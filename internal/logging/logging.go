@@ -3,6 +3,7 @@ package logging
 import (
 	"compress/gzip"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -224,7 +225,10 @@ func (w *rollingFileWriter) Write(p []byte) (int, error) {
 	if n > 0 {
 		w.currentSize += int64(n)
 	}
-	return n, err
+	if err != nil {
+		return n, fmt.Errorf("write log file %s: %w", w.path, err)
+	}
+	return n, nil
 }
 
 func (w *rollingFileWriter) openOrCreateLocked() error {
@@ -241,6 +245,7 @@ func (w *rollingFileWriter) openOrCreateLocked() error {
 	info, err := statFileFn(file)
 	if err != nil {
 		w.currentSize = 0
+		fmt.Fprintf(os.Stderr, "logging: stat %s failed; continuing with size=0: %v\n", w.path, err)
 		return nil
 	}
 	w.currentSize = info.Size()
@@ -249,7 +254,7 @@ func (w *rollingFileWriter) openOrCreateLocked() error {
 
 func (w *rollingFileWriter) rotateLocked() error {
 	if err := w.closeLocked(); err != nil {
-		return err
+		return fmt.Errorf("close log file %s before rotation: %w", w.path, err)
 	}
 
 	if _, err := statFn(w.path); err == nil {
@@ -259,10 +264,15 @@ func (w *rollingFileWriter) rotateLocked() error {
 		} else if w.compress {
 			go compressFn(rotated)
 		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		fmt.Fprintf(os.Stderr, "log rotation: stat %s failed: %v\n", w.path, err)
 	}
 
 	w.cleanupOldFiles()
-	return w.openOrCreateLocked()
+	if err := w.openOrCreateLocked(); err != nil {
+		return fmt.Errorf("reopen log file %s after rotation: %w", w.path, err)
+	}
+	return nil
 }
 
 func (w *rollingFileWriter) closeLocked() error {
@@ -272,7 +282,10 @@ func (w *rollingFileWriter) closeLocked() error {
 	err := closeFileFn(w.file)
 	w.file = nil
 	w.currentSize = 0
-	return err
+	if err != nil {
+		return fmt.Errorf("close log file %s: %w", w.path, err)
+	}
+	return nil
 }
 
 func (w *rollingFileWriter) cleanupOldFiles() {
@@ -287,6 +300,7 @@ func (w *rollingFileWriter) cleanupOldFiles() {
 
 	entries, err := readDirFn(dir)
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "logging: read rotated log directory %s failed: %v\n", dir, err)
 		return
 	}
 
@@ -297,10 +311,14 @@ func (w *rollingFileWriter) cleanupOldFiles() {
 		}
 		info, err := entry.Info()
 		if err != nil {
+			fmt.Fprintf(os.Stderr, "logging: read metadata for rotated log %s failed: %v\n", filepath.Join(dir, name), err)
 			continue
 		}
 		if info.ModTime().Before(cutoff) {
-			_ = removeFn(filepath.Join(dir, name))
+			fullPath := filepath.Join(dir, name)
+			if err := removeFn(fullPath); err != nil {
+				fmt.Fprintf(os.Stderr, "logging: remove old rotated log %s failed: %v\n", fullPath, err)
+			}
 		}
 	}
 }
@@ -308,26 +326,45 @@ func (w *rollingFileWriter) cleanupOldFiles() {
 func compressAndRemove(path string) {
 	in, err := openFn(path)
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "logging: open rotated log %s for compression failed: %v\n", path, err)
 		return
 	}
-	defer in.Close()
+	defer func() {
+		if err := in.Close(); err != nil {
+			fmt.Fprintf(os.Stderr, "logging: close rotated log reader %s failed: %v\n", path, err)
+		}
+	}()
 
 	outPath := path + ".gz"
 	out, err := openFileFn(outPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "logging: open gzip output %s failed: %v\n", outPath, err)
 		return
 	}
 
 	gw := gzipNewWriterFn(out)
 	if _, err = copyFn(gw, in); err != nil {
-		gw.Close()
-		out.Close()
+		if closeErr := gw.Close(); closeErr != nil {
+			fmt.Fprintf(os.Stderr, "logging: close gzip writer %s after copy failure failed: %v\n", outPath, closeErr)
+		}
+		if closeErr := out.Close(); closeErr != nil {
+			fmt.Fprintf(os.Stderr, "logging: close gzip output %s after copy failure failed: %v\n", outPath, closeErr)
+		}
+		fmt.Fprintf(os.Stderr, "logging: compress rotated log %s failed: %v\n", path, err)
 		return
 	}
 	if err := gw.Close(); err != nil {
-		out.Close()
+		if closeErr := out.Close(); closeErr != nil {
+			fmt.Fprintf(os.Stderr, "logging: close gzip output %s after gzip close failure failed: %v\n", outPath, closeErr)
+		}
+		fmt.Fprintf(os.Stderr, "logging: finalize gzip stream %s failed: %v\n", outPath, err)
 		return
 	}
-	out.Close()
-	_ = removeFn(path)
+	if err := out.Close(); err != nil {
+		fmt.Fprintf(os.Stderr, "logging: close gzip output %s failed: %v\n", outPath, err)
+		return
+	}
+	if err := removeFn(path); err != nil {
+		fmt.Fprintf(os.Stderr, "logging: remove uncompressed rotated log %s failed: %v\n", path, err)
+	}
 }
