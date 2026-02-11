@@ -49,6 +49,7 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 	// Admin API (key-authenticated)
 	tenantsHandler := admin.HandleListTenants(deps.Registry)
 	mux.Handle("/admin/tenants", admin.AdminKeyMiddleware(deps.Config.AdminKey, tenantsHandler))
+	mux.Handle("/admin/magic-link", admin.AdminKeyMiddleware(deps.Config.AdminKey, cpauth.HandleAdminGenerateMagicLink(deps.MagicLinks, deps.Config.BaseURL)))
 
 	// Account membership (admin-key authenticated for now; session auth in M-4)
 	listMembers := account.HandleListMembers(deps.Registry)

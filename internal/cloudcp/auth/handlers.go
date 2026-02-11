@@ -83,6 +83,52 @@ func HandleMagicLinkVerify(svc *Service, reg *registry.TenantRegistry, tenantsDi
 	}
 }
 
+// HandleAdminGenerateMagicLink returns an admin-only handler that generates a magic
+// link for a given email + tenant_id. The caller is responsible for wrapping this
+// with AdminKeyMiddleware.
+func HandleAdminGenerateMagicLink(svc *Service, baseURL string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		var req struct {
+			Email    string `json:"email"`
+			TenantID string `json:"tenant_id"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, "bad_request", "Invalid JSON body")
+			return
+		}
+		if req.Email == "" || req.TenantID == "" {
+			writeError(w, http.StatusBadRequest, "bad_request", "email and tenant_id are required")
+			return
+		}
+
+		token, err := svc.GenerateToken(req.Email, req.TenantID)
+		if err != nil {
+			log.Error().Err(err).Str("email", req.Email).Str("tenant_id", req.TenantID).Msg("Failed to generate magic link")
+			writeError(w, http.StatusInternalServerError, "generate_error", "Failed to generate magic link")
+			return
+		}
+
+		magicURL := BuildVerifyURL(baseURL, token)
+
+		log.Info().
+			Str("email", req.Email).
+			Str("tenant_id", req.TenantID).
+			Msg("Admin generated magic link")
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"url":       magicURL,
+			"email":     req.Email,
+			"tenant_id": req.TenantID,
+		})
+	}
+}
+
 func writeError(w http.ResponseWriter, status int, code, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
