@@ -107,8 +107,22 @@ func (s *Store) saveToDisk(sessions []*InvestigationSession) error {
 		return err
 	}
 
+	if err := os.MkdirAll(s.dataDir, 0700); err != nil {
+		return err
+	}
+
 	filePath := filepath.Join(s.dataDir, "investigations.json")
-	return os.WriteFile(filePath, data, 0644)
+	tempPath := filePath + ".tmp"
+
+	if err := os.WriteFile(tempPath, data, 0600); err != nil {
+		return err
+	}
+	if err := os.Rename(tempPath, filePath); err != nil {
+		_ = os.Remove(tempPath)
+		return err
+	}
+
+	return nil
 }
 
 // ForceSave immediately saves to disk

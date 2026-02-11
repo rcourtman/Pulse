@@ -1,6 +1,7 @@
 package adapters
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -126,6 +127,13 @@ func TestKnowledgeStore_SaveLoad(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	store.saveToDisk()
+	info, err := os.Stat(filepath.Join(dir, "knowledge_store.json"))
+	if err != nil {
+		t.Fatalf("stat failed: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0600 {
+		t.Fatalf("expected mode 0600, got %o", got)
+	}
 
 	loaded := NewKnowledgeStore(dir)
 	if err := loaded.loadFromDisk(); err != nil {

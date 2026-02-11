@@ -729,7 +729,7 @@ func (s *IncidentStore) saveToDisk() error {
 	if s.dataDir == "" || s.filePath == "" {
 		return nil
 	}
-	if err := os.MkdirAll(s.dataDir, 0755); err != nil {
+	if err := os.MkdirAll(s.dataDir, 0700); err != nil {
 		return err
 	}
 
@@ -746,7 +746,7 @@ func (s *IncidentStore) saveToDisk() error {
 	}
 
 	tmpFile := s.filePath + ".tmp"
-	if err := os.WriteFile(tmpFile, data, 0644); err != nil {
+	if err := os.WriteFile(tmpFile, data, 0600); err != nil {
 		return err
 	}
 	if err := os.Rename(tmpFile, s.filePath); err != nil {

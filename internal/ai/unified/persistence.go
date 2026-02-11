@@ -31,7 +31,7 @@ func (p *FilePersistence) SaveFindings(findings map[string]*UnifiedFinding) erro
 	defer p.mu.Unlock()
 
 	// Ensure directory exists
-	if err := os.MkdirAll(p.dataDir, 0755); err != nil {
+	if err := os.MkdirAll(p.dataDir, 0700); err != nil {
 		return err
 	}
 
@@ -50,7 +50,7 @@ func (p *FilePersistence) SaveFindings(findings map[string]*UnifiedFinding) erro
 	tempPath := filePath + ".tmp"
 
 	// Write to temp file first
-	if err := os.WriteFile(tempPath, data, 0644); err != nil {
+	if err := os.WriteFile(tempPath, data, 0600); err != nil {
 		return err
 	}
 
@@ -129,7 +129,7 @@ func (p *VersionedPersistence) SaveFindings(findings map[string]*UnifiedFinding)
 	defer p.mu.Unlock()
 
 	// Ensure directory exists
-	if err := os.MkdirAll(p.dataDir, 0755); err != nil {
+	if err := os.MkdirAll(p.dataDir, 0700); err != nil {
 		return err
 	}
 
@@ -150,7 +150,7 @@ func (p *VersionedPersistence) SaveFindings(findings map[string]*UnifiedFinding)
 	filePath := filepath.Join(p.dataDir, p.filename)
 	tempPath := filePath + ".tmp"
 
-	if err := os.WriteFile(tempPath, data, 0644); err != nil {
+	if err := os.WriteFile(tempPath, data, 0600); err != nil {
 		return err
 	}
 

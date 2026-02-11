@@ -398,10 +398,14 @@ func (s *KnowledgeStore) saveToDisk() {
 		return
 	}
 
+	if err := os.MkdirAll(s.dataDir, 0700); err != nil {
+		return
+	}
+
 	path := filepath.Join(s.dataDir, "knowledge_store.json")
 	// Use atomic write (temp file + rename) to prevent corruption from concurrent saves.
 	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0644); err != nil {
+	if err := os.WriteFile(tmp, data, 0600); err != nil {
 		return
 	}
 	_ = os.Rename(tmp, path)
