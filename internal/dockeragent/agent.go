@@ -99,6 +99,9 @@ type Agent struct {
 	reportBuffer        *buffer.Queue[agentsdocker.Report]
 	registryChecker     *RegistryChecker // For checking container image updates
 	collectMu           sync.Mutex       // serializes collect/report cycles across goroutines
+	backgroundMu        sync.Mutex       // guards background task in-progress flags
+	updateCheckRunning  bool
+	cleanupTaskRunning  bool
 }
 
 // ErrStopRequested indicates the agent should terminate gracefully after acknowledging a stop command.
@@ -1003,6 +1006,38 @@ func newHTTPClient(insecure bool) *http.Client {
 
 func (a *Agent) Close() error {
 	return a.docker.Close()
+}
+
+func (a *Agent) tryStartUpdateCheck() bool {
+	a.backgroundMu.Lock()
+	defer a.backgroundMu.Unlock()
+	if a.updateCheckRunning {
+		return false
+	}
+	a.updateCheckRunning = true
+	return true
+}
+
+func (a *Agent) finishUpdateCheck() {
+	a.backgroundMu.Lock()
+	a.updateCheckRunning = false
+	a.backgroundMu.Unlock()
+}
+
+func (a *Agent) tryStartCleanupTask() bool {
+	a.backgroundMu.Lock()
+	defer a.backgroundMu.Unlock()
+	if a.cleanupTaskRunning {
+		return false
+	}
+	a.cleanupTaskRunning = true
+	return true
+}
+
+func (a *Agent) finishCleanupTask() {
+	a.backgroundMu.Lock()
+	a.cleanupTaskRunning = false
+	a.backgroundMu.Unlock()
 }
 
 func readMachineID() (string, error) {
