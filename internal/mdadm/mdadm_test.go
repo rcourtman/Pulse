@@ -3,16 +3,14 @@ package mdadm
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 )
 
-func withRunCommandOutput(t *testing.T, fn func(ctx context.Context, name string, args ...string) ([]byte, error)) {
-	t.Helper()
-	orig := runCommandOutput
-	runCommandOutput = fn
-	t.Cleanup(func() { runCommandOutput = orig })
+func failingRunner(ctx context.Context, name string, args ...string) ([]byte, error) {
+	return nil, errors.New("unexpected command execution")
 }
 
 func TestParseDetail(t *testing.T) {
@@ -487,7 +485,7 @@ Consistency Policy : resync
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := parseDetail(tt.device, tt.output)
+			got, err := parseDetailWithRunner(tt.device, tt.output, failingRunner)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("parseDetail() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -552,21 +550,21 @@ Consistency Policy : resync
 
 func TestIsMdadmAvailable(t *testing.T) {
 	t.Run("available", func(t *testing.T) {
-		withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		available := isMdadmAvailableWithRunner(context.Background(), func(ctx context.Context, name string, args ...string) ([]byte, error) {
 			return []byte("mdadm"), nil
 		})
 
-		if !isMdadmAvailable(context.Background()) {
+		if !available {
 			t.Fatal("expected mdadm available")
 		}
 	})
 
 	t.Run("missing", func(t *testing.T) {
-		withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		available := isMdadmAvailableWithRunner(context.Background(), func(ctx context.Context, name string, args ...string) ([]byte, error) {
 			return nil, errors.New("missing")
 		})
 
-		if isMdadmAvailable(context.Background()) {
+		if available {
 			t.Fatal("expected mdadm unavailable")
 		}
 	})
@@ -577,11 +575,9 @@ func TestListArrayDevices(t *testing.T) {
 md0 : active raid1 sdb1[1] sda1[0]
 md1 : active raid6 sdc1[2] sdb1[1] sda1[0]
 unused devices: <none>`
-	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	devices, err := listArrayDevicesWithRunner(context.Background(), func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		return []byte(mdstat), nil
 	})
-
-	devices, err := listArrayDevices(context.Background())
 	if err != nil {
 		t.Fatalf("listArrayDevices error: %v", err)
 	}
@@ -591,31 +587,29 @@ unused devices: <none>`
 }
 
 func TestListArrayDevicesError(t *testing.T) {
-	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	_, err := listArrayDevicesWithRunner(context.Background(), func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		return nil, errors.New("read failed")
 	})
 
-	if _, err := listArrayDevices(context.Background()); err == nil {
+	if err == nil {
 		t.Fatal("expected error")
 	}
 }
 
 func TestCollectArrayDetailError(t *testing.T) {
-	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	_, err := collectArrayDetailWithRunner(context.Background(), "/dev/md0", func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		return nil, errors.New("detail failed")
 	})
 
-	if _, err := collectArrayDetail(context.Background(), "/dev/md0"); err == nil {
+	if err == nil {
 		t.Fatal("expected error")
 	}
 }
 
 func TestCollectArraysNotAvailable(t *testing.T) {
-	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	arrays, err := collectArrays(context.Background(), func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		return nil, errors.New("missing")
 	})
-
-	arrays, err := CollectArrays(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -625,27 +619,25 @@ func TestCollectArraysNotAvailable(t *testing.T) {
 }
 
 func TestCollectArraysListError(t *testing.T) {
-	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	_, err := collectArrays(context.Background(), func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		if name == "mdadm" {
 			return []byte("mdadm"), nil
 		}
 		return nil, errors.New("read failed")
 	})
 
-	if _, err := CollectArrays(context.Background()); err == nil {
+	if err == nil {
 		t.Fatal("expected error")
 	}
 }
 
 func TestCollectArraysNoDevices(t *testing.T) {
-	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	arrays, err := collectArrays(context.Background(), func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		if name == "mdadm" {
 			return []byte("mdadm"), nil
 		}
 		return []byte("unused devices: <none>"), nil
 	})
-
-	arrays, err := CollectArrays(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -655,7 +647,7 @@ func TestCollectArraysNoDevices(t *testing.T) {
 }
 
 func TestCollectArraysSkipsDetailError(t *testing.T) {
-	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	arrays, err := collectArrays(context.Background(), func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		switch name {
 		case "mdadm":
 			if len(args) > 0 && args[0] == "--version" {
@@ -668,8 +660,6 @@ func TestCollectArraysSkipsDetailError(t *testing.T) {
 			return nil, errors.New("unexpected")
 		}
 	})
-
-	arrays, err := CollectArrays(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -691,7 +681,7 @@ func TestCollectArraysSuccess(t *testing.T) {
     Number   Major   Minor   RaidDevice State
        0       8        1        0      active sync   /dev/sda1`
 
-	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	arrays, err := collectArrays(context.Background(), func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		switch name {
 		case "mdadm":
 			if len(args) > 0 && args[0] == "--version" {
@@ -704,8 +694,6 @@ func TestCollectArraysSuccess(t *testing.T) {
 			return nil, errors.New("unexpected")
 		}
 	})
-
-	arrays, err := CollectArrays(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -718,31 +706,31 @@ func TestGetRebuildSpeed(t *testing.T) {
 	mdstat := `md0 : active raid1 sda1[0] sdb1[1]
       [>....................]  recovery = 12.6% (37043392/293039104) finish=127.5min speed=33440K/sec
 `
-	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	speed := getRebuildSpeedWithRunner("/dev/md0", func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		return []byte(mdstat), nil
 	})
 
-	if speed := getRebuildSpeed("/dev/md0"); speed != "33440K/sec" {
+	if speed != "33440K/sec" {
 		t.Fatalf("unexpected speed: %s", speed)
 	}
 }
 
 func TestGetRebuildSpeedNoMatch(t *testing.T) {
-	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	speed := getRebuildSpeedWithRunner("/dev/md0", func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		return []byte("md0 : active raid1 sda1[0]"), nil
 	})
 
-	if speed := getRebuildSpeed("/dev/md0"); speed != "" {
+	if speed != "" {
 		t.Fatalf("expected empty speed, got %s", speed)
 	}
 }
 
 func TestGetRebuildSpeedError(t *testing.T) {
-	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	speed := getRebuildSpeedWithRunner("/dev/md0", func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		return nil, errors.New("read failed")
 	})
 
-	if speed := getRebuildSpeed("/dev/md0"); speed != "" {
+	if speed != "" {
 		t.Fatalf("expected empty speed, got %s", speed)
 	}
 }
@@ -759,11 +747,9 @@ func TestParseDetailSetsRebuildSpeed(t *testing.T) {
 	mdstat := `md0 : active raid1 sda1[0]
       [>....................]  recovery = 12.6% (37043392/293039104) finish=127.5min speed=1234K/sec
 `
-	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	array, err := parseDetailWithRunner("/dev/md0", output, func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		return []byte(mdstat), nil
 	})
-
-	array, err := parseDetail("/dev/md0", output)
 	if err != nil {
 		t.Fatalf("parseDetail error: %v", err)
 	}
@@ -777,11 +763,68 @@ func TestGetRebuildSpeedSectionExit(t *testing.T) {
       [>....................]  recovery = 12.6% (37043392/293039104) finish=127.5min
 md1 : active raid1 sdb1[0]
 `
-	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	speed := getRebuildSpeedWithRunner("/dev/md0", func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		return []byte(mdstat), nil
 	})
 
-	if speed := getRebuildSpeed("/dev/md0"); speed != "" {
+	if speed != "" {
 		t.Fatalf("expected empty speed, got %s", speed)
+	}
+}
+
+func TestCollectArraysConcurrentCalls(t *testing.T) {
+	runner := func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		switch name {
+		case "mdadm":
+			if len(args) > 0 && args[0] == "--version" {
+				return []byte("mdadm"), nil
+			}
+			return []byte(`/dev/md0:
+        Raid Level : raid1
+             State : clean
+     Total Devices : 2
+    Active Devices : 2
+   Working Devices : 2
+    Failed Devices : 0
+     Spare Devices : 0
+
+    Number   Major   Minor   RaidDevice State
+       0       8        1        0      active sync   /dev/sda1`), nil
+		case "cat":
+			return []byte("md0 : active raid1 sda1[0]"), nil
+		default:
+			return nil, errors.New("unexpected command")
+		}
+	}
+
+	const workers = 8
+	const iterations = 25
+
+	var wg sync.WaitGroup
+	errCh := make(chan error, workers*iterations)
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < iterations; j++ {
+				arrays, err := collectArrays(context.Background(), runner)
+				if err != nil {
+					errCh <- err
+					return
+				}
+				if len(arrays) != 1 || arrays[0].Device != "/dev/md0" {
+					errCh <- errors.New("unexpected array result")
+					return
+				}
+			}
+		}()
+	}
+	wg.Wait()
+	close(errCh)
+
+	for err := range errCh {
+		if err != nil {
+			t.Fatalf("concurrent collect failed: %v", err)
+		}
 	}
 }

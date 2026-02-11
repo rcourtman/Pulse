@@ -12,27 +12,29 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 )
 
+type commandRunner func(ctx context.Context, name string, args ...string) ([]byte, error)
+
 // Pre-compiled regexes for performance (avoid recompilation on each call)
 var (
-	mdDeviceRe       = regexp.MustCompile(`^(md\d+)\s*:`)
-	slotRe           = regexp.MustCompile(`^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(.+?)\s+(/dev/.+)$`)
-	speedRe          = regexp.MustCompile(`speed=(\S+)`)
-	runCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
-		cmd := exec.CommandContext(ctx, name, args...)
-		return cmd.Output()
-	}
+	mdDeviceRe = regexp.MustCompile(`^(md\d+)\s*:`)
+	slotRe     = regexp.MustCompile(`^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(.+?)\s+(/dev/.+)$`)
+	speedRe    = regexp.MustCompile(`speed=(\S+)`)
 )
 
 // CollectArrays discovers and collects status for all mdadm RAID arrays on the system.
 // Returns an empty slice if mdadm is not available or no arrays are found.
 func CollectArrays(ctx context.Context) ([]host.RAIDArray, error) {
+	return collectArrays(ctx, defaultRunCommandOutput)
+}
+
+func collectArrays(ctx context.Context, run commandRunner) ([]host.RAIDArray, error) {
 	// Check if mdadm is available
-	if !isMdadmAvailable(ctx) {
+	if !isMdadmAvailableWithRunner(ctx, run) {
 		return nil, nil
 	}
 
 	// Get list of arrays from /proc/mdstat
-	devices, err := listArrayDevices(ctx)
+	devices, err := listArrayDevicesWithRunner(ctx, run)
 	if err != nil {
 		return nil, fmt.Errorf("list array devices: %w", err)
 	}
@@ -44,7 +46,7 @@ func CollectArrays(ctx context.Context) ([]host.RAIDArray, error) {
 	// Collect detailed info for each array
 	var arrays []host.RAIDArray
 	for _, device := range devices {
-		array, err := collectArrayDetail(ctx, device)
+		array, err := collectArrayDetailWithRunner(ctx, device, run)
 		if err != nil {
 			// Log but don't fail - continue with other arrays
 			continue
@@ -57,19 +59,27 @@ func CollectArrays(ctx context.Context) ([]host.RAIDArray, error) {
 
 // isMdadmAvailable checks if mdadm binary is accessible
 func isMdadmAvailable(ctx context.Context) bool {
+	return isMdadmAvailableWithRunner(ctx, defaultRunCommandOutput)
+}
+
+func isMdadmAvailableWithRunner(ctx context.Context, run commandRunner) bool {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 
-	_, err := runCommandOutput(ctx, "mdadm", "--version")
+	_, err := run(ctx, "mdadm", "--version")
 	return err == nil
 }
 
 // listArrayDevices scans /proc/mdstat to find all md devices
 func listArrayDevices(ctx context.Context) ([]string, error) {
+	return listArrayDevicesWithRunner(ctx, defaultRunCommandOutput)
+}
+
+func listArrayDevicesWithRunner(ctx context.Context, run commandRunner) ([]string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 
-	output, err := runCommandOutput(ctx, "cat", "/proc/mdstat")
+	output, err := run(ctx, "cat", "/proc/mdstat")
 	if err != nil {
 		return nil, fmt.Errorf("read /proc/mdstat: %w", err)
 	}
@@ -89,19 +99,27 @@ func listArrayDevices(ctx context.Context) ([]string, error) {
 
 // collectArrayDetail runs mdadm --detail on a specific device and parses the output
 func collectArrayDetail(ctx context.Context, device string) (host.RAIDArray, error) {
+	return collectArrayDetailWithRunner(ctx, device, defaultRunCommandOutput)
+}
+
+func collectArrayDetailWithRunner(ctx context.Context, device string, run commandRunner) (host.RAIDArray, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	output, err := runCommandOutput(ctx, "mdadm", "--detail", device)
+	output, err := run(ctx, "mdadm", "--detail", device)
 	if err != nil {
 		return host.RAIDArray{}, fmt.Errorf("mdadm --detail %s: %w", device, err)
 	}
 
-	return parseDetail(device, string(output))
+	return parseDetailWithRunner(device, string(output), run)
 }
 
 // parseDetail parses the output of mdadm --detail
 func parseDetail(device, output string) (host.RAIDArray, error) {
+	return parseDetailWithRunner(device, output, defaultRunCommandOutput)
+}
+
+func parseDetailWithRunner(device, output string, run commandRunner) (host.RAIDArray, error) {
 	array := host.RAIDArray{
 		Device:  device,
 		Devices: []host.RAIDDevice{},
@@ -205,7 +223,7 @@ func parseDetail(device, output string) (host.RAIDArray, error) {
 
 	// Check for rebuild/resync info in /proc/mdstat for speed information
 	if array.RebuildPercent > 0 {
-		speed := getRebuildSpeed(device)
+		speed := getRebuildSpeedWithRunner(device, run)
 		if speed != "" {
 			array.RebuildSpeed = speed
 		}
@@ -216,13 +234,17 @@ func parseDetail(device, output string) (host.RAIDArray, error) {
 
 // getRebuildSpeed extracts rebuild speed from /proc/mdstat
 func getRebuildSpeed(device string) string {
+	return getRebuildSpeedWithRunner(device, defaultRunCommandOutput)
+}
+
+func getRebuildSpeedWithRunner(device string, run commandRunner) string {
 	// Remove /dev/ prefix for /proc/mdstat lookup
 	deviceName := strings.TrimPrefix(device, "/dev/")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	output, err := runCommandOutput(ctx, "cat", "/proc/mdstat")
+	output, err := run(ctx, "cat", "/proc/mdstat")
 	if err != nil {
 		return ""
 	}
@@ -257,4 +279,9 @@ func getRebuildSpeed(device string) string {
 	}
 
 	return ""
+}
+
+func defaultRunCommandOutput(ctx context.Context, name string, args ...string) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, name, args...)
+	return cmd.Output()
 }
