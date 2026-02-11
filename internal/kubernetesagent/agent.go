@@ -16,6 +16,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/IGLOU-EU/go-wildcard/v2"
@@ -91,6 +92,8 @@ const (
 	maxKubeAPIRetries           = 3
 	initialRetryBackoff         = 300 * time.Millisecond
 	maxRetryBackoff             = 3 * time.Second
+	maxSummaryMetricNodes       = 200
+	summaryMetricsWorkers       = 8
 	reportUserAgent             = "pulse-kubernetes-agent/"
 )
 
@@ -456,6 +459,27 @@ type podSummaryUsage struct {
 	EphemeralStorageCapacityBytes int64
 }
 
+func summaryNodeNames(nodes []agentsk8s.Node, max int) ([]string, int) {
+	names := make([]string, 0, len(nodes))
+	seen := make(map[string]struct{}, len(nodes))
+	for _, node := range nodes {
+		nodeName := strings.TrimSpace(node.Name)
+		if nodeName == "" {
+			continue
+		}
+		if _, ok := seen[nodeName]; ok {
+			continue
+		}
+		seen[nodeName] = struct{}{}
+		names = append(names, nodeName)
+	}
+	total := len(names)
+	if max > 0 && len(names) > max {
+		names = names[:max]
+	}
+	return names, total
+}
+
 func (a *Agent) collectPodSummaryMetrics(ctx context.Context, nodes []agentsk8s.Node) (map[string]podSummaryUsage, error) {
 	if a == nil || a.kubeClient == nil {
 		return nil, nil
@@ -468,28 +492,48 @@ func (a *Agent) collectPodSummaryMetrics(ctx context.Context, nodes []agentsk8s.
 
 	restClient := discovery.RESTClient()
 	result := make(map[string]podSummaryUsage)
+	nodeNames, totalNodeNames := summaryNodeNames(nodes, maxSummaryMetricNodes)
+	if totalNodeNames > len(nodeNames) {
+		a.logger.Debug().
+			Int("total_nodes", totalNodeNames).
+			Int("queried_nodes", len(nodeNames)).
+			Msg("Limiting pod summary metrics collection to avoid overloading large clusters")
+	}
+
+	workerCount := summaryMetricsWorkers
+	if workerCount > len(nodeNames) {
+		workerCount = len(nodeNames)
+	}
+	if workerCount == 0 {
+		return result, nil
+	}
+
+	jobs := make(chan string)
+	var wg sync.WaitGroup
+	var lock sync.Mutex
 	var failed int
 	var succeeded int
 
-	for _, node := range nodes {
-		nodeName := strings.TrimSpace(node.Name)
-		if nodeName == "" {
-			continue
-		}
-
+	collectNode := func(nodeName string) {
 		path := "/api/v1/nodes/" + url.PathEscape(nodeName) + "/proxy/stats/summary"
 		raw, err := a.doRawPathWithRetry(ctx, restClient, fmt.Sprintf("fetch pod summary metrics from node %q", nodeName), path)
 		if err != nil {
+			lock.Lock()
 			failed++
-			continue
+			lock.Unlock()
+			return
 		}
-		succeeded++
 
 		parsed, parseErr := parsePodSummaryMetricsPayload(raw)
 		if parseErr != nil {
+			lock.Lock()
 			failed++
-			continue
+			lock.Unlock()
+			return
 		}
+
+		lock.Lock()
+		succeeded++
 		for key, usage := range parsed {
 			existing := result[key]
 			if usage.NetworkRxBytes > existing.NetworkRxBytes {
@@ -506,7 +550,32 @@ func (a *Agent) collectPodSummaryMetrics(ctx context.Context, nodes []agentsk8s.
 			}
 			result[key] = existing
 		}
+		lock.Unlock()
 	}
+
+	for i := 0; i < workerCount; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for nodeName := range jobs {
+				if ctx.Err() != nil {
+					return
+				}
+				collectNode(nodeName)
+			}
+		}()
+	}
+
+dispatchLoop:
+	for _, nodeName := range nodeNames {
+		select {
+		case <-ctx.Done():
+			break dispatchLoop
+		case jobs <- nodeName:
+		}
+	}
+	close(jobs)
+	wg.Wait()
 
 	if succeeded == 0 && failed > 0 {
 		return nil, fmt.Errorf("no node summary metrics endpoints available")
