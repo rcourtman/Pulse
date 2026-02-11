@@ -13,9 +13,8 @@ import (
 )
 
 const (
-	issuer        = "pulse-cloud-control-plane"
-	defaultTTL    = 60 * time.Second
-	handoffKeyLen = 32
+	issuer     = "pulse-cloud-control-plane"
+	defaultTTL = 60 * time.Second
 )
 
 // HandoffClaims are the logical claims that the control plane wants to assert
@@ -37,16 +36,6 @@ type jwtHandoffClaims struct {
 	Email     string              `json:"email"`
 	Role      registry.MemberRole `json:"role"`
 	jwt.RegisteredClaims
-}
-
-// GenerateHandoffKey returns 32 cryptographically random bytes suitable for HS256 signing.
-// Intended for writing to /data/tenants/<tenant_id>/secrets/handoff.key (0600).
-func GenerateHandoffKey() ([]byte, error) {
-	key := make([]byte, handoffKeyLen)
-	if _, err := io.ReadFull(rand.Reader, key); err != nil {
-		return nil, fmt.Errorf("generate handoff key: %w", err)
-	}
-	return key, nil
 }
 
 // MintHandoffToken mints a short-lived HS256 JWT signed with the per-tenant handoff.key.
