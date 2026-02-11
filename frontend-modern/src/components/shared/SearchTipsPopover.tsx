@@ -1,4 +1,4 @@
-import { Component, Show, createEffect, createSignal, onCleanup } from 'solid-js';
+import { Component, Show, For, createEffect, createSignal, onCleanup } from 'solid-js';
 
 interface SearchTip {
   code: string;
@@ -152,16 +152,18 @@ export const SearchTipsPopover: Component<SearchTipsPopoverProps> = (props) => {
               </p>
             </Show>
             <div class="space-y-2">
-              {props.tips.map((tip) => (
-                <div class="flex items-start gap-2">
-                  <code class="rounded bg-gray-100 px-2 py-0.5 font-mono text-[11px] text-gray-700 dark:bg-gray-700 dark:text-gray-100">
-                    {tip.code}
-                  </code>
-                  <span class="text-[12px] leading-snug text-gray-500 dark:text-gray-400">
-                    {tip.description}
-                  </span>
-                </div>
-              ))}
+              <For each={props.tips}>
+                {(tip) => (
+                  <div class="flex items-start gap-2">
+                    <code class="rounded bg-gray-100 px-2 py-0.5 font-mono text-[11px] text-gray-700 dark:bg-gray-700 dark:text-gray-100">
+                      {tip.code}
+                    </code>
+                    <span class="text-[12px] leading-snug text-gray-500 dark:text-gray-400">
+                      {tip.description}
+                    </span>
+                  </div>
+                )}
+              </For>
             </div>
             <Show when={props.footerText || props.footerHighlight}>
               <div class="mt-3 rounded-md bg-blue-50 px-3 py-2 text-[11px] text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
