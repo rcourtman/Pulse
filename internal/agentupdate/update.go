@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
@@ -82,6 +83,9 @@ type Updater struct {
 	cfg    Config
 	client *http.Client
 	logger zerolog.Logger
+
+	checkMu         sync.Mutex
+	checkInProgress bool
 
 	performUpdateFn func(context.Context) error
 	initialDelay    time.Duration
@@ -165,6 +169,12 @@ func (u *Updater) RunLoop(ctx context.Context) {
 
 // CheckAndUpdate checks for a new version and performs the update if available.
 func (u *Updater) CheckAndUpdate(ctx context.Context) {
+	if !u.startCheck() {
+		u.logger.Debug().Msg("Skipping update check - another check is already in progress")
+		return
+	}
+	defer u.finishCheck()
+
 	if u.cfg.Disabled {
 		return
 	}
@@ -221,6 +231,24 @@ func (u *Updater) CheckAndUpdate(ctx context.Context) {
 	}
 
 	u.logger.Info().Msg("Agent updated successfully, restarting...")
+}
+
+func (u *Updater) startCheck() bool {
+	u.checkMu.Lock()
+	defer u.checkMu.Unlock()
+
+	if u.checkInProgress {
+		return false
+	}
+
+	u.checkInProgress = true
+	return true
+}
+
+func (u *Updater) finishCheck() {
+	u.checkMu.Lock()
+	u.checkInProgress = false
+	u.checkMu.Unlock()
 }
 
 // getServerVersion fetches the current version from the Pulse server.

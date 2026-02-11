@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -133,4 +134,56 @@ func TestUpdater_CheckAndUpdate_VersionComparePaths(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestUpdater_CheckAndUpdate_SkipsOverlappingCalls(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]string{"version": "1.2.3"})
+	}))
+	defer srv.Close()
+
+	u := New(Config{
+		PulseURL:       srv.URL,
+		AgentName:      "pulse-agent",
+		CurrentVersion: "1.0.0",
+		CheckInterval:  time.Minute,
+	})
+
+	enteredUpdate := make(chan struct{})
+	releaseUpdate := make(chan struct{})
+	finishedSecond := make(chan struct{})
+	var updateCalls atomic.Int32
+
+	u.performUpdateFn = func(ctx context.Context) error {
+		if updateCalls.Add(1) == 1 {
+			close(enteredUpdate)
+			<-releaseUpdate
+		}
+		return nil
+	}
+
+	go u.CheckAndUpdate(context.Background())
+
+	select {
+	case <-enteredUpdate:
+	case <-time.After(time.Second):
+		t.Fatal("first update call did not start")
+	}
+
+	go func() {
+		u.CheckAndUpdate(context.Background())
+		close(finishedSecond)
+	}()
+
+	select {
+	case <-finishedSecond:
+	case <-time.After(time.Second):
+		t.Fatal("overlapping check did not return")
+	}
+
+	if got := updateCalls.Load(); got != 1 {
+		t.Fatalf("performUpdate called %d times, want 1", got)
+	}
+
+	close(releaseUpdate)
 }
