@@ -29,6 +29,20 @@ func (errorAnalyzer) AnalyzeForDiscovery(ctx context.Context, prompt string) (st
 	return "", context.Canceled
 }
 
+type blockingStateProvider struct {
+	started chan struct{}
+	release chan struct{}
+	once    sync.Once
+}
+
+func (p *blockingStateProvider) GetState() StateSnapshot {
+	p.once.Do(func() {
+		close(p.started)
+	})
+	<-p.release
+	return StateSnapshot{}
+}
+
 func TestFilterSensitiveLabels(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -734,6 +748,61 @@ func TestService_FingerprintLoop_StopAndCancel(t *testing.T) {
 
 	runLoop(false)
 	runLoop(true)
+}
+
+func TestService_StartDuringStopDoesNotStartNewLoop(t *testing.T) {
+	provider := &blockingStateProvider{
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore error: %v", err)
+	}
+	store.crypto = nil
+
+	service := NewService(store, nil, provider, DefaultConfig())
+	service.initialDelay = time.Millisecond
+	service.interval = time.Hour
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	service.Start(ctx)
+	defer service.Stop()
+
+	select {
+	case <-provider.started:
+	case <-time.After(100 * time.Millisecond):
+		t.Fatalf("discovery loop did not start")
+	}
+
+	stopDone := make(chan struct{})
+	go func() {
+		service.Stop()
+		close(stopDone)
+	}()
+
+	select {
+	case <-stopDone:
+		t.Fatalf("stop returned before discovery loop completed")
+	case <-time.After(20 * time.Millisecond):
+	}
+
+	service.Start(ctx)
+
+	close(provider.release)
+
+	select {
+	case <-stopDone:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatalf("stop did not complete")
+	}
+
+	if service.IsRunning() {
+		t.Fatalf("expected service not running after stop")
+	}
 }
 
 func TestService_DiscoverDockerContainersSkips(t *testing.T) {

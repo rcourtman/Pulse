@@ -226,7 +226,9 @@ type Service struct {
 
 	mu              sync.RWMutex
 	running         bool
+	stopping        bool
 	stopCh          chan struct{}
+	loopDone        chan struct{}
 	intervalCh      chan time.Duration // Channel for live interval updates
 	interval        time.Duration
 	initialDelay    time.Duration
@@ -322,28 +324,55 @@ func (s *Service) SetAIAnalyzer(analyzer AIAnalyzer) {
 // Start begins the background discovery service.
 func (s *Service) Start(ctx context.Context) {
 	s.mu.Lock()
-	if s.running {
+	if s.running || s.stopping {
 		s.mu.Unlock()
 		return
 	}
 	s.running = true
-	s.stopCh = make(chan struct{})
+	runStopCh := make(chan struct{})
+	runDone := make(chan struct{})
+	s.stopCh = runStopCh
+	s.loopDone = runDone
 	s.mu.Unlock()
 
 	log.Info().
 		Dur("interval", s.interval).
 		Msg("Starting infrastructure discovery service")
 
-	go s.discoveryLoop(ctx)
+	go s.runDiscoveryLoop(ctx, runStopCh, runDone)
 }
 
 // Stop stops the background discovery service.
 func (s *Service) Stop() {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.running {
-		close(s.stopCh)
-		s.running = false
+	if !s.running {
+		done := s.loopDone
+		s.mu.Unlock()
+		if done != nil {
+			<-done
+		}
+		return
+	}
+
+	if s.stopping {
+		done := s.loopDone
+		s.mu.Unlock()
+		if done != nil {
+			<-done
+		}
+		return
+	}
+
+	s.stopping = true
+	stopCh := s.stopCh
+	done := s.loopDone
+	s.mu.Unlock()
+
+	if stopCh != nil {
+		close(stopCh)
+	}
+	if done != nil {
+		<-done
 	}
 }
 
@@ -433,6 +462,18 @@ func (s *Service) IsRunning() bool {
 // discoveryLoop runs periodic fingerprint collection and automatic refreshes.
 // Fingerprints detect changes cheaply; changed/stale/new resources are then refreshed.
 func (s *Service) discoveryLoop(ctx context.Context) {
+	s.mu.RLock()
+	stopCh := s.stopCh
+	s.mu.RUnlock()
+	s.runDiscoveryLoop(ctx, stopCh, nil)
+}
+
+func (s *Service) runDiscoveryLoop(ctx context.Context, stopCh <-chan struct{}, done chan struct{}) {
+	if done != nil {
+		defer close(done)
+	}
+	defer s.finishDiscoveryLoop(stopCh)
+
 	delay := s.initialDelay
 	if delay <= 0 {
 		delay = 30 * time.Second
@@ -441,7 +482,7 @@ func (s *Service) discoveryLoop(ctx context.Context) {
 	// Run initial fingerprint collection after a short delay
 	select {
 	case <-time.After(delay):
-	case <-s.stopCh:
+	case <-stopCh:
 		return
 	case <-ctx.Done():
 		return
@@ -467,7 +508,7 @@ func (s *Service) discoveryLoop(ctx context.Context) {
 			ticker.Stop()
 			ticker = time.NewTicker(newInterval)
 			log.Info().Dur("interval", newInterval).Msg("Fingerprint collection interval reset")
-		case <-s.stopCh:
+		case <-stopCh:
 			log.Info().Msg("Stopping discovery service")
 			return
 		case <-ctx.Done():
@@ -475,6 +516,19 @@ func (s *Service) discoveryLoop(ctx context.Context) {
 			return
 		}
 	}
+}
+
+func (s *Service) finishDiscoveryLoop(stopCh <-chan struct{}) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	// Only clear lifecycle state if this is still the active run.
+	if s.stopCh != nil && s.stopCh != stopCh {
+		return
+	}
+	s.running = false
+	s.stopping = false
+	s.stopCh = nil
+	s.loopDone = nil
 }
 
 func (s *Service) runAutomaticDiscoveryRefresh(ctx context.Context) {
