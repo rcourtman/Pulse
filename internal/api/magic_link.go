@@ -22,7 +22,6 @@ var (
 	ErrMagicLinkInvalidToken = errors.New("magic link token is invalid")
 	ErrMagicLinkExpired      = errors.New("magic link token is expired")
 	ErrMagicLinkUsed         = errors.New("magic link token already used")
-	ErrMagicLinkRateLimited  = errors.New("magic link requests rate limited")
 )
 
 const (

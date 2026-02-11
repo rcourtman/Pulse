@@ -877,37 +877,6 @@ func TestFailedLogin_Fields(t *testing.T) {
 	}
 }
 
-func TestAuditEvent_Fields(t *testing.T) {
-	ae := AuditEvent{
-		Timestamp: fixedTimeForTest(),
-		Event:     "login_attempt",
-		User:      "admin",
-		IP:        "192.168.1.100",
-		Path:      "/api/auth/login",
-		Success:   true,
-		Details:   "successful login",
-	}
-
-	if ae.Event != "login_attempt" {
-		t.Errorf("Event = %q, want login_attempt", ae.Event)
-	}
-	if ae.User != "admin" {
-		t.Errorf("User = %q, want admin", ae.User)
-	}
-	if ae.IP != "192.168.1.100" {
-		t.Errorf("IP = %q, want 192.168.1.100", ae.IP)
-	}
-	if ae.Path != "/api/auth/login" {
-		t.Errorf("Path = %q, want /api/auth/login", ae.Path)
-	}
-	if !ae.Success {
-		t.Error("Success should be true")
-	}
-	if ae.Details != "successful login" {
-		t.Errorf("Details = %q, want 'successful login'", ae.Details)
-	}
-}
-
 func TestSecurityHeadersWithConfig_EmbeddingDisabled(t *testing.T) {
 	handler := SecurityHeadersWithConfig(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

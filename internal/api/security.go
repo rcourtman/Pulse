@@ -469,17 +469,6 @@ func SecurityHeadersWithConfig(next http.Handler, allowEmbedding bool, allowedOr
 	})
 }
 
-// Audit Logging
-type AuditEvent struct {
-	Timestamp time.Time `json:"timestamp"`
-	Event     string    `json:"event"`
-	User      string    `json:"user,omitempty"`
-	IP        string    `json:"ip"`
-	Path      string    `json:"path,omitempty"`
-	Success   bool      `json:"success"`
-	Details   string    `json:"details,omitempty"`
-}
-
 // LogAuditEvent logs security-relevant events using the audit package.
 // This function delegates to the configured audit.Logger, allowing enterprise
 // versions to provide persistent storage and signing.

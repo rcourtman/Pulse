@@ -16,9 +16,8 @@ import (
 type OrganizationContextKey string
 
 const (
-	OrgIDContextKey    OrganizationContextKey = "org_id"
-	OrgContextKey      OrganizationContextKey = "org_object"
-	APITokenContextKey OrganizationContextKey = "api_token_record"
+	OrgIDContextKey OrganizationContextKey = "org_id"
+	OrgContextKey   OrganizationContextKey = "org_object"
 )
 
 // TenantMiddleware extracts the organization ID from the request and
