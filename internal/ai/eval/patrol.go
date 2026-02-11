@@ -331,7 +331,10 @@ func (r *Runner) waitForPatrolIdle(ctx context.Context) error {
 		var status struct {
 			Running bool `json:"running"`
 		}
-		json.NewDecoder(resp.Body).Decode(&status)
+		if err := json.NewDecoder(resp.Body).Decode(&status); err != nil {
+			resp.Body.Close()
+			return fmt.Errorf("decode patrol status: %w", err)
+		}
 		resp.Body.Close()
 
 		if !status.Running {
