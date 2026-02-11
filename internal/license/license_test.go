@@ -485,6 +485,13 @@ func TestServiceCurrent(t *testing.T) {
 		t.Errorf("Expected email 'test@example.com', got %q", lic.Claims.Email)
 	}
 
+	// Mutating the returned value should not mutate internal service state.
+	lic.Claims.Email = "tampered@example.com"
+	lic.Claims.Features = []string{"tampered"}
+	if current := service.Current(); current == nil || current.Claims.Email != "test@example.com" {
+		t.Fatalf("Current() leaked mutable internal state: got %#v", current)
+	}
+
 	// Clear and verify Current() returns nil again
 	service.Clear()
 	if service.Current() != nil {
@@ -1398,6 +1405,54 @@ func TestServiceSubscriptionState_NoStateMachine(t *testing.T) {
 
 		if got := svc.SubscriptionState(); got != string(SubStateGrace) {
 			t.Fatalf("SubscriptionState() = %q, want %q", got, SubStateGrace)
+		}
+	})
+
+	t.Run("suspended claim => suspended and paid features revoked", func(t *testing.T) {
+		svc := setupTestServiceWithTier(t, TierPro)
+		svc.mu.Lock()
+		svc.license.Claims.SubState = SubStateSuspended
+		svc.mu.Unlock()
+
+		if got := svc.SubscriptionState(); got != string(SubStateSuspended) {
+			t.Fatalf("SubscriptionState() = %q, want %q", got, SubStateSuspended)
+		}
+		if svc.IsValid() {
+			t.Fatal("IsValid() = true, want false for suspended subscription")
+		}
+		if got := svc.HasFeature(FeatureAIAutoFix); got {
+			t.Fatalf("HasFeature(%q)=%v, want false for suspended subscription", FeatureAIAutoFix, got)
+		}
+		if got := svc.HasFeature(FeatureAIPatrol); !got {
+			t.Fatalf("HasFeature(%q)=%v, want true (free-tier fallback)", FeatureAIPatrol, got)
+		}
+		state, _ := svc.GetLicenseState()
+		if state != LicenseStateExpired {
+			t.Fatalf("GetLicenseState()=%q, want %q", state, LicenseStateExpired)
+		}
+		status := svc.Status()
+		if status.Valid {
+			t.Fatal("Status().Valid = true, want false for suspended subscription")
+		}
+		if !reflect.DeepEqual(status.Features, TierFeatures[TierFree]) {
+			t.Fatalf("Status().Features=%v, want free-tier fallback %v", status.Features, TierFeatures[TierFree])
+		}
+	})
+
+	t.Run("canceled claim => canceled and paid features revoked", func(t *testing.T) {
+		svc := setupTestServiceWithTier(t, TierPro)
+		svc.mu.Lock()
+		svc.license.Claims.SubState = SubStateCanceled
+		svc.mu.Unlock()
+
+		if got := svc.SubscriptionState(); got != string(SubStateCanceled) {
+			t.Fatalf("SubscriptionState() = %q, want %q", got, SubStateCanceled)
+		}
+		if svc.IsValid() {
+			t.Fatal("IsValid() = true, want false for canceled subscription")
+		}
+		if got := svc.HasFeature(FeatureAIAutoFix); got {
+			t.Fatalf("HasFeature(%q)=%v, want false for canceled subscription", FeatureAIAutoFix, got)
 		}
 	})
 }
