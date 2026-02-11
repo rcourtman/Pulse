@@ -1,7 +1,6 @@
 package metrics
 
 import (
-	"strings"
 	"testing"
 	"time"
 )
@@ -187,50 +186,6 @@ func TestComputeSummary(t *testing.T) {
 	}
 	if summary.Duration != time.Second {
 		t.Fatalf("unexpected duration: %s", summary.Duration)
-	}
-}
-
-func TestFormatForContextIncludesSummaryAndData(t *testing.T) {
-	recorder := NewIncidentRecorder(IncidentRecorderConfig{})
-	now := time.Now()
-	end := now.Add(2 * time.Second)
-	window := &IncidentWindow{
-		ID:         "window-1",
-		ResourceID: "res-1",
-		Status:     IncidentWindowStatusComplete,
-		StartTime:  now,
-		EndTime:    &end,
-		DataPoints: []IncidentDataPoint{
-			{Timestamp: now, Metrics: map[string]float64{"cpu": 1.25}},
-		},
-		Summary: &IncidentSummary{
-			Duration:   2 * time.Second,
-			DataPoints: 1,
-			Peaks:      map[string]float64{"cpu": 1.25},
-			Changes:    map[string]float64{"cpu": 0.5},
-		},
-	}
-	recorder.completedWindows = []*IncidentWindow{window}
-
-	formatted := recorder.FormatForContext("", "window-1")
-	if formatted == "" {
-		t.Fatalf("expected formatted context")
-	}
-	required := []string{
-		"Incident Recording Data",
-		"Summary",
-		"Duration: 2s",
-		"Data points: 1",
-		"Peak values",
-		"cpu: 1.25",
-		"Changes during incident",
-		"cpu: +0.50",
-		"Recent Data Points",
-	}
-	for _, snippet := range required {
-		if !strings.Contains(formatted, snippet) {
-			t.Fatalf("expected formatted output to include %q", snippet)
-		}
 	}
 }
 

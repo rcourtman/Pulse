@@ -98,30 +98,3 @@ func TestGetWindowsForResource(t *testing.T) {
 		t.Fatalf("expected most recent completed window, got %+v", limited)
 	}
 }
-
-func TestGetRecentWindows(t *testing.T) {
-	recorder := NewIncidentRecorder(IncidentRecorderConfig{})
-	recorder.activeWindows["active"] = &IncidentWindow{ID: "active", ResourceID: "res-1"}
-	recorder.completedWindows = []*IncidentWindow{
-		{ID: "old", ResourceID: "res-2"},
-		{ID: "new", ResourceID: "res-3"},
-	}
-
-	recent := recorder.GetRecentWindows(2)
-	if len(recent) != 2 {
-		t.Fatalf("expected 2 windows, got %d", len(recent))
-	}
-
-	var sawActive, sawNew bool
-	for _, window := range recent {
-		if window.ID == "active" {
-			sawActive = true
-		}
-		if window.ID == "new" {
-			sawNew = true
-		}
-	}
-	if !sawActive || !sawNew {
-		t.Fatalf("expected active and newest completed windows, got %+v", recent)
-	}
-}

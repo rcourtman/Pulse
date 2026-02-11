@@ -521,87 +521,6 @@ func (r *IncidentRecorder) GetWindowsForResource(resourceID string, limit int) [
 	return result
 }
 
-// GetRecentWindows returns recent incident windows across all resources
-func (r *IncidentRecorder) GetRecentWindows(limit int) []*IncidentWindow {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	var result []*IncidentWindow
-
-	// Add active windows
-	for _, window := range r.activeWindows {
-		result = append(result, copyWindow(window))
-	}
-
-	// Add completed windows (most recent first)
-	start := len(r.completedWindows) - 1
-	for i := start; i >= 0 && len(result) < limit; i-- {
-		result = append(result, copyWindow(r.completedWindows[i]))
-	}
-
-	return result
-}
-
-// FormatForContext formats incident data for AI prompt injection
-func (r *IncidentRecorder) FormatForContext(resourceID string, windowID string) string {
-	var window *IncidentWindow
-
-	if windowID != "" {
-		window = r.GetWindow(windowID)
-	} else if resourceID != "" {
-		windows := r.GetWindowsForResource(resourceID, 1)
-		if len(windows) > 0 {
-			window = windows[0]
-		}
-	}
-
-	if window == nil {
-		return ""
-	}
-
-	result := "\n## Incident Recording Data\n"
-	result += "High-frequency metrics captured during incident:\n\n"
-
-	if window.Summary != nil {
-		result += "### Summary\n"
-		result += "- Duration: " + window.Summary.Duration.String() + "\n"
-		result += "- Data points: " + intToString(window.Summary.DataPoints) + "\n"
-
-		if len(window.Summary.Peaks) > 0 {
-			result += "\nPeak values:\n"
-			for metric, value := range window.Summary.Peaks {
-				result += "- " + metric + ": " + floatToString(value) + "\n"
-			}
-		}
-
-		if len(window.Summary.Changes) > 0 {
-			result += "\nChanges during incident:\n"
-			for metric, change := range window.Summary.Changes {
-				result += "- " + metric + ": " + signedFloatToString(change) + "\n"
-			}
-		}
-	}
-
-	// Include recent data points (last 10)
-	if len(window.DataPoints) > 0 {
-		result += "\n### Recent Data Points\n"
-		start := len(window.DataPoints) - 10
-		if start < 0 {
-			start = 0
-		}
-		for i := start; i < len(window.DataPoints); i++ {
-			dp := window.DataPoints[i]
-			result += dp.Timestamp.Format("15:04:05") + ": "
-			for metric, value := range dp.Metrics {
-				result += metric + "=" + floatToString(value) + " "
-			}
-			result += "\n"
-		}
-	}
-
-	return result
-}
-
 // saveToDisk persists completed windows
 func (r *IncidentRecorder) saveToDisk() error {
 	if r.filePath == "" {
@@ -715,28 +634,4 @@ func intToString(n int) string {
 		result = "-" + result
 	}
 	return result
-}
-
-func floatToString(f float64) string {
-	// Simple formatting - 2 decimal places
-	intPart := int(f)
-	fracPart := int((f - float64(intPart)) * 100)
-	if fracPart < 0 {
-		fracPart = -fracPart
-	}
-	return intToString(intPart) + "." + padLeft(intToString(fracPart), 2, '0')
-}
-
-func signedFloatToString(f float64) string {
-	if f >= 0 {
-		return "+" + floatToString(f)
-	}
-	return floatToString(f)
-}
-
-func padLeft(s string, length int, pad rune) string {
-	for len(s) < length {
-		s = string(pad) + s
-	}
-	return s
 }
