@@ -246,17 +246,17 @@ func (c *CryptoManager) Encrypt(plaintext []byte) ([]byte, error) {
 
 	block, err := newCipher(c.key)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("crypto.Encrypt: create AES cipher: %w", err)
 	}
 
 	gcm, err := newGCM(block)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("crypto.Encrypt: create GCM: %w", err)
 	}
 
 	nonce := make([]byte, gcm.NonceSize())
 	if _, err := io.ReadFull(randReader, nonce); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("crypto.Encrypt: generate nonce: %w", err)
 	}
 
 	ciphertext := gcm.Seal(nonce, nonce, plaintext, nil)
@@ -267,12 +267,12 @@ func (c *CryptoManager) Encrypt(plaintext []byte) ([]byte, error) {
 func (c *CryptoManager) Decrypt(ciphertext []byte) ([]byte, error) {
 	block, err := newCipher(c.key)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("crypto.Decrypt: create AES cipher: %w", err)
 	}
 
 	gcm, err := newGCM(block)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("crypto.Decrypt: create GCM: %w", err)
 	}
 
 	nonceSize := gcm.NonceSize()
@@ -283,7 +283,7 @@ func (c *CryptoManager) Decrypt(ciphertext []byte) ([]byte, error) {
 	nonce, ciphertext := ciphertext[:nonceSize], ciphertext[nonceSize:]
 	plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("crypto.Decrypt: open ciphertext: %w", err)
 	}
 
 	return plaintext, nil
@@ -293,7 +293,7 @@ func (c *CryptoManager) Decrypt(ciphertext []byte) ([]byte, error) {
 func (c *CryptoManager) EncryptString(plaintext string) (string, error) {
 	encrypted, err := c.Encrypt([]byte(plaintext))
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("crypto.EncryptString: encrypt bytes: %w", err)
 	}
 	return base64.StdEncoding.EncodeToString(encrypted), nil
 }
@@ -302,12 +302,12 @@ func (c *CryptoManager) EncryptString(plaintext string) (string, error) {
 func (c *CryptoManager) DecryptString(ciphertext string) (string, error) {
 	data, err := base64.StdEncoding.DecodeString(ciphertext)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("crypto.DecryptString: decode base64: %w", err)
 	}
 
 	decrypted, err := c.Decrypt(data)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("crypto.DecryptString: decrypt bytes: %w", err)
 	}
 
 	return string(decrypted), nil
