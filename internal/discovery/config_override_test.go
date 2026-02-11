@@ -476,6 +476,17 @@ func TestApplyConfigToProfileNoProfileWarnings(t *testing.T) {
 	}
 }
 
+func TestApplyConfigToProfileNilProfile(t *testing.T) {
+	cfg := config.DiscoveryConfig{
+		EnvironmentOverride: "native",
+		SubnetAllowlist:     []string{"10.0.0.0/24"},
+		SubnetBlocklist:     []string{"10.0.1.0/24"},
+		IPBlocklist:         []string{"10.0.0.8"},
+	}
+
+	ApplyConfigToProfile(nil, cfg)
+}
+
 func TestApplyConfigToProfileBlocksSubnets(t *testing.T) {
 	subnet := mustCIDR(t, "10.0.0.0/24")
 	profile := &envdetect.EnvironmentProfile{
