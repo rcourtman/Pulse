@@ -1,6 +1,9 @@
 package metrics
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -196,10 +199,18 @@ func TestCopyWindowDeepCopy(t *testing.T) {
 		ID:      "window-1",
 		EndTime: &end,
 		DataPoints: []IncidentDataPoint{
-			{Timestamp: now, Metrics: map[string]float64{"cpu": 1}},
+			{
+				Timestamp: now,
+				Metrics:   map[string]float64{"cpu": 1},
+				Metadata:  map[string]interface{}{"host": "node-1"},
+			},
 		},
 		Summary: &IncidentSummary{
-			Peaks: map[string]float64{"cpu": 1},
+			Peaks:     map[string]float64{"cpu": 1},
+			Lows:      map[string]float64{"cpu": 1},
+			Averages:  map[string]float64{"cpu": 1},
+			Changes:   map[string]float64{"cpu": 0},
+			Anomalies: []string{"initial"},
 		},
 	}
 
@@ -212,13 +223,25 @@ func TestCopyWindowDeepCopy(t *testing.T) {
 	}
 
 	window.DataPoints[0].Metrics["cpu"] = 9
+	window.DataPoints[0].Metadata["host"] = "mutated"
+	window.Summary.Peaks["cpu"] = 9
+	window.Summary.Anomalies[0] = "mutated"
 	*window.EndTime = end.Add(5 * time.Second)
 
 	if clone.DataPoints[0].Metrics["cpu"] != 1 {
 		t.Fatalf("expected data points to be copied")
 	}
+	if clone.DataPoints[0].Metadata["host"] != "node-1" {
+		t.Fatalf("expected metadata to be copied")
+	}
 	if clone.EndTime.Equal(*window.EndTime) {
 		t.Fatalf("expected end time to be copied")
+	}
+	if clone.Summary.Peaks["cpu"] != 1 {
+		t.Fatalf("expected summary maps to be copied")
+	}
+	if clone.Summary.Anomalies[0] != "initial" {
+		t.Fatalf("expected summary anomalies to be copied")
 	}
 }
 
@@ -247,5 +270,117 @@ func TestSaveAndLoad(t *testing.T) {
 	}
 	if window.Status != IncidentWindowStatusComplete {
 		t.Fatalf("expected status to persist, got %s", window.Status)
+	}
+}
+
+func TestSaveToDiskSecuresPermissions(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.Chmod(dir, 0o755); err != nil {
+		t.Fatalf("chmod dir failed: %v", err)
+	}
+
+	recorder := NewIncidentRecorder(IncidentRecorderConfig{DataDir: dir})
+	recorder.completedWindows = []*IncidentWindow{{ID: "window-1", EndTime: ptrTime(time.Now())}}
+
+	if err := recorder.saveToDisk(); err != nil {
+		t.Fatalf("save failed: %v", err)
+	}
+
+	dirInfo, err := os.Stat(dir)
+	if err != nil {
+		t.Fatalf("stat dir failed: %v", err)
+	}
+	if got := dirInfo.Mode().Perm(); got != 0o700 {
+		t.Fatalf("expected dir permissions 0700, got %o", got)
+	}
+
+	fileInfo, err := os.Stat(filepath.Join(dir, "incident_windows.json"))
+	if err != nil {
+		t.Fatalf("stat file failed: %v", err)
+	}
+	if got := fileInfo.Mode().Perm(); got != 0o600 {
+		t.Fatalf("expected file permissions 0600, got %o", got)
+	}
+}
+
+func TestLoadFromDiskRejectsSymlink(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "target.json")
+	if err := os.WriteFile(target, []byte("{}"), 0o600); err != nil {
+		t.Fatalf("write target failed: %v", err)
+	}
+	link := filepath.Join(dir, "incident_windows.json")
+	requireSymlinkOrSkip(t, target, link)
+
+	recorder := &IncidentRecorder{
+		config:   DefaultIncidentRecorderConfig(),
+		dataDir:  dir,
+		filePath: link,
+	}
+	err := recorder.loadFromDisk()
+	if err == nil {
+		t.Fatal("expected symlink path to be rejected")
+	}
+	if !strings.Contains(err.Error(), "symlink") {
+		t.Fatalf("expected symlink error, got: %v", err)
+	}
+}
+
+func TestLoadFromDiskRejectsOversizedFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "incident_windows.json")
+	tooLarge := make([]byte, maxIncidentWindowsFileSize+1)
+	if err := os.WriteFile(path, tooLarge, 0o600); err != nil {
+		t.Fatalf("write oversized file failed: %v", err)
+	}
+
+	recorder := &IncidentRecorder{
+		config:   DefaultIncidentRecorderConfig(),
+		dataDir:  dir,
+		filePath: path,
+	}
+	err := recorder.loadFromDisk()
+	if err == nil {
+		t.Fatal("expected oversized file to be rejected")
+	}
+	if !strings.Contains(err.Error(), "exceeds size limit") {
+		t.Fatalf("expected size-limit error, got: %v", err)
+	}
+}
+
+func TestSaveToDiskRejectsSymlinkDestination(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "target.json")
+	if err := os.WriteFile(target, []byte("secret"), 0o600); err != nil {
+		t.Fatalf("write target failed: %v", err)
+	}
+	link := filepath.Join(dir, "incident_windows.json")
+	requireSymlinkOrSkip(t, target, link)
+
+	recorder := &IncidentRecorder{
+		config:   DefaultIncidentRecorderConfig(),
+		dataDir:  dir,
+		filePath: link,
+		completedWindows: []*IncidentWindow{
+			{ID: "window-1", EndTime: ptrTime(time.Now())},
+		},
+	}
+	err := recorder.saveToDisk()
+	if err == nil {
+		t.Fatal("expected symlink destination to be rejected")
+	}
+	if !strings.Contains(err.Error(), "symlink") {
+		t.Fatalf("expected symlink error, got: %v", err)
+	}
+}
+
+func ptrTime(v time.Time) *time.Time {
+	return &v
+}
+
+func requireSymlinkOrSkip(t *testing.T, target, link string) {
+	t.Helper()
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlink not supported in this environment: %v", err)
 	}
 }
