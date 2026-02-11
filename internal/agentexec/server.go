@@ -21,7 +21,10 @@ var upgrader = websocket.Upgrader{
 }
 
 var (
-	jsonMarshal     = json.Marshal
+	jsonMarshal      = json.Marshal
+	writeTextMessage = func(conn *websocket.Conn, data []byte) error {
+		return conn.WriteMessage(websocket.TextMessage, data)
+	}
 	pingInterval    = 5 * time.Second
 	pingWriteWait   = 5 * time.Second
 	readFileTimeout = 30 * time.Second
@@ -321,7 +324,7 @@ func (s *Server) sendMessage(conn *websocket.Conn, msg Message) error {
 	if err != nil {
 		return err
 	}
-	return conn.WriteMessage(websocket.TextMessage, msgBytes)
+	return writeTextMessage(conn, msgBytes)
 }
 
 // ExecuteCommand sends a command to an agent and waits for the result
