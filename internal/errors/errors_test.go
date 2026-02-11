@@ -41,6 +41,16 @@ func TestMonitorError_Error(t *testing.T) {
 			},
 			expected: "sync failed: base error",
 		},
+		{
+			name: "sanitizes control characters in context and message",
+			err: &MonitorError{
+				Op:       "poll\nnodes",
+				Instance: "pve1\r\nprod",
+				Node:     "node\t1",
+				Err:      fmt.Errorf("request failed\r\nheader injection"),
+			},
+			expected: "poll nodes failed on pve1 prod/node 1: request failed header injection",
+		},
 	}
 
 	for _, tc := range tests {
@@ -156,6 +166,18 @@ func TestNewMonitorError(t *testing.T) {
 	}
 }
 
+func TestNewMonitorError_SanitizesContext(t *testing.T) {
+	baseErr := fmt.Errorf("test error")
+	err := NewMonitorError(ErrorTypeConnection, "poll\nnodes", "inst\tone", baseErr)
+
+	if err.Op != "poll nodes" {
+		t.Errorf("Op = %q, want %q", err.Op, "poll nodes")
+	}
+	if err.Instance != "inst one" {
+		t.Errorf("Instance = %q, want %q", err.Instance, "inst one")
+	}
+}
+
 func TestMonitorError_WithNode(t *testing.T) {
 	err := NewMonitorError(ErrorTypeConnection, "poll", "instance1", nil)
 	result := err.WithNode("node1")
@@ -166,6 +188,15 @@ func TestMonitorError_WithNode(t *testing.T) {
 	// Should return same instance for chaining
 	if result != err {
 		t.Error("WithNode() should return same instance")
+	}
+}
+
+func TestMonitorError_WithNode_SanitizesInput(t *testing.T) {
+	err := NewMonitorError(ErrorTypeConnection, "poll", "instance1", nil)
+	err.WithNode("node\t1\r\nprod")
+
+	if err.Node != "node 1 prod" {
+		t.Errorf("Node = %q, want %q", err.Node, "node 1 prod")
 	}
 }
 
@@ -464,6 +495,21 @@ func TestIsAuthError(t *testing.T) {
 		{
 			name:     "regular error",
 			err:      fmt.Errorf("some other error"),
+			expected: false,
+		},
+		{
+			name:     "status substring without boundary is not auth",
+			err:      fmt.Errorf("HTTP 1403 response"),
+			expected: false,
+		},
+		{
+			name:     "uppercase unauthorized is detected",
+			err:      fmt.Errorf("UNAUTHORIZED request"),
+			expected: true,
+		},
+		{
+			name:     "status code adjacent to token text is not auth",
+			err:      fmt.Errorf("status403"),
 			expected: false,
 		},
 		{
