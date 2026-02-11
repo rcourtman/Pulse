@@ -122,7 +122,9 @@ func (s *Store) Save(d *ResourceDiscovery) error {
 	}
 
 	if err := os.Rename(tmpPath, filePath); err != nil {
-		_ = os.Remove(tmpPath)
+		if cleanupErr := os.Remove(tmpPath); cleanupErr != nil && !os.IsNotExist(cleanupErr) {
+			log.Warn().Err(cleanupErr).Str("tmp_path", tmpPath).Msg("Failed to remove temp discovery file after rename failure")
+		}
 		return fmt.Errorf("failed to finalize discovery file: %w", err)
 	}
 
@@ -263,7 +265,7 @@ func (s *Store) List() ([]*ResourceDiscovery, error) {
 func (s *Store) ListByType(resourceType ResourceType) ([]*ResourceDiscovery, error) {
 	all, err := s.List()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list discoveries for type %s: %w", resourceType, err)
 	}
 
 	var filtered []*ResourceDiscovery
@@ -279,7 +281,7 @@ func (s *Store) ListByType(resourceType ResourceType) ([]*ResourceDiscovery, err
 func (s *Store) ListByHost(hostID string) ([]*ResourceDiscovery, error) {
 	all, err := s.List()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list discoveries for host %s: %w", hostID, err)
 	}
 
 	var filtered []*ResourceDiscovery
@@ -295,7 +297,7 @@ func (s *Store) ListByHost(hostID string) ([]*ResourceDiscovery, error) {
 func (s *Store) UpdateNotes(id string, notes string, secrets map[string]string) error {
 	discovery, err := s.Get(id)
 	if err != nil {
-		return err
+		return fmt.Errorf("get discovery %s for note update: %w", id, err)
 	}
 	if discovery == nil {
 		return fmt.Errorf("discovery not found: %s", id)
@@ -306,7 +308,10 @@ func (s *Store) UpdateNotes(id string, notes string, secrets map[string]string) 
 		discovery.UserSecrets = secrets
 	}
 
-	return s.Save(discovery)
+	if err := s.Save(discovery); err != nil {
+		return fmt.Errorf("save updated discovery %s notes: %w", id, err)
+	}
+	return nil
 }
 
 // GetMultiple retrieves multiple discoveries by ID.
@@ -344,6 +349,9 @@ func (s *Store) Exists(id string) bool {
 
 	filePath := s.getFilePath(id)
 	_, err := os.Stat(filePath)
+	if err != nil && !os.IsNotExist(err) {
+		log.Warn().Err(err).Str("id", id).Str("file", filePath).Msg("Failed to stat discovery file")
+	}
 	return err == nil
 }
 
@@ -437,7 +445,9 @@ func (s *Store) SaveFingerprint(fp *ContainerFingerprint) error {
 	}
 
 	if err := os.Rename(tmpPath, filePath); err != nil {
-		_ = os.Remove(tmpPath)
+		if cleanupErr := os.Remove(tmpPath); cleanupErr != nil && !os.IsNotExist(cleanupErr) {
+			log.Warn().Err(cleanupErr).Str("tmp_path", tmpPath).Msg("Failed to remove temp fingerprint file after rename failure")
+		}
 		return fmt.Errorf("failed to finalize fingerprint file: %w", err)
 	}
 
@@ -484,6 +494,7 @@ func (s *Store) GetChangedResources() ([]string, error) {
 		// so use it directly as the discovery ID
 		discovery, err := s.Get(resourceID)
 		if err != nil {
+			log.Warn().Err(err).Str("resource_id", resourceID).Msg("Failed to load discovery while checking fingerprint changes")
 			continue
 		}
 
@@ -506,7 +517,7 @@ func (s *Store) GetChangedResources() ([]string, error) {
 func (s *Store) GetStaleResources(maxAge time.Duration) ([]string, error) {
 	discoveries, err := s.List()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list discoveries for stale scan: %w", err)
 	}
 
 	var stale []string
