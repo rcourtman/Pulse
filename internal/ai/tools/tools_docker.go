@@ -12,6 +12,19 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+const (
+	// dockerUpdateQueueMaxAttempts bounds retries for queuing update-related commands.
+	dockerUpdateQueueMaxAttempts = 3
+
+	// dockerUpdateQueueRetryBaseDelay is the initial exponential-backoff delay for retryable queue errors.
+	dockerUpdateQueueRetryBaseDelay = 25 * time.Millisecond
+
+	// dockerUpdateQueueRetryMaxDelay caps exponential backoff for queue retries.
+	dockerUpdateQueueRetryMaxDelay = 250 * time.Millisecond
+)
+
+var dockerUpdateQueueSleepFn = sleepWithContext
+
 // registerDockerTools registers the pulse_docker tool
 func (e *PulseToolExecutor) registerDockerTools() {
 	e.registry.Register(RegisteredTool{
@@ -260,6 +273,102 @@ func (e *PulseToolExecutor) verifyDockerContainerState(ctx context.Context, rout
 	}
 }
 
+func sleepWithContext(ctx context.Context, duration time.Duration) error {
+	if ctx == nil {
+		time.Sleep(duration)
+		return nil
+	}
+
+	timer := time.NewTimer(duration)
+	defer timer.Stop()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
+func dockerUpdateQueueRetryDelay(attempt int) time.Duration {
+	if attempt <= 0 {
+		return dockerUpdateQueueRetryBaseDelay
+	}
+
+	delay := dockerUpdateQueueRetryBaseDelay * time.Duration(1<<(attempt-1))
+	if delay > dockerUpdateQueueRetryMaxDelay {
+		return dockerUpdateQueueRetryMaxDelay
+	}
+	return delay
+}
+
+func isTransientUpdateQueueError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	if isTransientError(err) {
+		return true
+	}
+
+	msg := strings.ToLower(err.Error())
+	transientPatterns := []string{
+		"temporary failure",
+		"queue full",
+		"resource busy",
+		"database is locked",
+		"deadlock",
+		"unexpected eof",
+		"eof",
+		"try again",
+	}
+
+	for _, pattern := range transientPatterns {
+		if strings.Contains(msg, pattern) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (e *PulseToolExecutor) queueDockerUpdateCommandWithRetry(ctx context.Context, operation string, run func() (DockerCommandStatus, error)) (DockerCommandStatus, error) {
+	var lastErr error
+
+	for attempt := 1; attempt <= dockerUpdateQueueMaxAttempts; attempt++ {
+		status, err := run()
+		if err == nil {
+			return status, nil
+		}
+
+		lastErr = err
+		if !isTransientUpdateQueueError(err) {
+			return DockerCommandStatus{}, err
+		}
+		if attempt == dockerUpdateQueueMaxAttempts {
+			break
+		}
+
+		backoff := dockerUpdateQueueRetryDelay(attempt)
+		log.Warn().
+			Err(err).
+			Str("operation", operation).
+			Int("attempt", attempt).
+			Dur("retry_in", backoff).
+			Msg("[pulse_docker] transient update queue failure, retrying")
+
+		if sleepErr := dockerUpdateQueueSleepFn(ctx, backoff); sleepErr != nil {
+			return DockerCommandStatus{}, fmt.Errorf("%s canceled while waiting to retry: %w", operation, sleepErr)
+		}
+	}
+
+	if lastErr == nil {
+		return DockerCommandStatus{}, fmt.Errorf("%s failed without an error", operation)
+	}
+
+	return DockerCommandStatus{}, fmt.Errorf("%s failed after %d attempts: %w", operation, dockerUpdateQueueMaxAttempts, lastErr)
+}
+
 func (e *PulseToolExecutor) executeListDockerUpdates(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
 	if e.updatesProvider == nil {
 		return NewTextResult("Docker update information not available. Ensure updates provider is configured."), nil
@@ -286,7 +395,7 @@ func (e *PulseToolExecutor) executeListDockerUpdates(_ context.Context, args map
 	return NewJSONResult(response), nil
 }
 
-func (e *PulseToolExecutor) executeCheckDockerUpdates(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
+func (e *PulseToolExecutor) executeCheckDockerUpdates(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
 	if e.updatesProvider == nil {
 		return NewTextResult("Docker update checking not available. Ensure updates provider is configured."), nil
 	}
@@ -305,7 +414,9 @@ func (e *PulseToolExecutor) executeCheckDockerUpdates(_ context.Context, args ma
 	hostName := e.getDockerHostName(hostID)
 
 	// Trigger the update check
-	cmdStatus, err := e.updatesProvider.TriggerUpdateCheck(hostID)
+	cmdStatus, err := e.queueDockerUpdateCommandWithRetry(ctx, "trigger update check", func() (DockerCommandStatus, error) {
+		return e.updatesProvider.TriggerUpdateCheck(hostID)
+	})
 	if err != nil {
 		return NewTextResult(fmt.Sprintf("Failed to trigger update check: %v", err)), nil
 	}
@@ -359,7 +470,9 @@ func (e *PulseToolExecutor) executeUpdateDockerContainer(ctx context.Context, ar
 	}
 
 	// Autonomous mode - execute directly
-	cmdStatus, err := e.updatesProvider.UpdateContainer(dockerHost.ID, container.ID, containerName)
+	cmdStatus, err := e.queueDockerUpdateCommandWithRetry(ctx, "queue container update", func() (DockerCommandStatus, error) {
+		return e.updatesProvider.UpdateContainer(dockerHost.ID, container.ID, containerName)
+	})
 	if err != nil {
 		return NewTextResult(fmt.Sprintf("Failed to queue update command: %v", err)), nil
 	}
