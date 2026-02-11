@@ -3818,6 +3818,12 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				isPublic = true
 			}
 
+			// SAML login flow endpoints must be public (login, ACS callback, metadata, logout, SLO).
+			// These have dynamic provider IDs in the path so use prefix matching.
+			if strings.HasPrefix(normalizedPath, "/api/saml/") {
+				isPublic = true
+			}
+
 			// Dev mode bypass for admin endpoints (disabled by default)
 			if adminBypassEnabled() {
 				log.Debug().
