@@ -34,7 +34,7 @@ func (m *Monitor) describeInstancesForScheduler() []InstanceDescriptor {
 				if snap, ok := m.stalenessTracker.snapshot(InstanceTypePVE, name); ok {
 					desc.LastSuccess = snap.LastSuccess
 					desc.LastFailure = snap.LastError
-					desc.Metadata = map[string]any{"changeHash": snap.ChangeHash}
+					desc.Metadata = TaskMetadata{ChangeHash: snap.ChangeHash}
 				}
 			}
 			descriptors = append(descriptors, desc)
@@ -62,7 +62,7 @@ func (m *Monitor) describeInstancesForScheduler() []InstanceDescriptor {
 				if snap, ok := m.stalenessTracker.snapshot(InstanceTypePBS, name); ok {
 					desc.LastSuccess = snap.LastSuccess
 					desc.LastFailure = snap.LastError
-					desc.Metadata = map[string]any{"changeHash": snap.ChangeHash}
+					desc.Metadata = TaskMetadata{ChangeHash: snap.ChangeHash}
 				}
 			}
 			descriptors = append(descriptors, desc)
@@ -90,7 +90,7 @@ func (m *Monitor) describeInstancesForScheduler() []InstanceDescriptor {
 				if snap, ok := m.stalenessTracker.snapshot(InstanceTypePMG, name); ok {
 					desc.LastSuccess = snap.LastSuccess
 					desc.LastFailure = snap.LastError
-					desc.Metadata = map[string]any{"changeHash": snap.ChangeHash}
+					desc.Metadata = TaskMetadata{ChangeHash: snap.ChangeHash}
 				}
 			}
 			descriptors = append(descriptors, desc)
