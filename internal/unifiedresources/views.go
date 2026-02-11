@@ -143,7 +143,7 @@ func (v VMView) Tags() []string {
 	if v.r == nil {
 		return nil
 	}
-	return v.r.Tags
+	return cloneStringSlice(v.r.Tags)
 }
 
 func (v VMView) LastSeen() time.Time {
@@ -234,7 +234,7 @@ func (v VMView) IPAddresses() []string {
 	if v.r == nil {
 		return nil
 	}
-	return v.r.Identity.IPAddresses
+	return cloneStringSlice(v.r.Identity.IPAddresses)
 }
 
 // ContainerView wraps an LXC container resource (ResourceTypeLXC).
@@ -319,7 +319,7 @@ func (v ContainerView) Tags() []string {
 	if v.r == nil {
 		return nil
 	}
-	return v.r.Tags
+	return cloneStringSlice(v.r.Tags)
 }
 
 func (v ContainerView) LastSeen() time.Time {
@@ -410,7 +410,7 @@ func (v ContainerView) IPAddresses() []string {
 	if v.r == nil {
 		return nil
 	}
-	return v.r.Identity.IPAddresses
+	return cloneStringSlice(v.r.Identity.IPAddresses)
 }
 
 // NodeView wraps a host-type resource with Proxmox data.
@@ -508,7 +508,7 @@ func (v NodeView) LoadAverage() []float64 {
 	if v.r == nil || v.r.Proxmox == nil {
 		return nil
 	}
-	return v.r.Proxmox.LoadAverage
+	return cloneFloat64Slice(v.r.Proxmox.LoadAverage)
 }
 
 func (v NodeView) PendingUpdates() int {
@@ -571,7 +571,7 @@ func (v NodeView) Tags() []string {
 	if v.r == nil {
 		return nil
 	}
-	return v.r.Tags
+	return cloneStringSlice(v.r.Tags)
 }
 
 func (v NodeView) LastSeen() time.Time {
@@ -687,14 +687,14 @@ func (v HostView) NetworkInterfaces() []NetworkInterface {
 	if v.r == nil || v.r.Agent == nil {
 		return nil
 	}
-	return v.r.Agent.NetworkInterfaces
+	return cloneNetworkInterfaces(v.r.Agent.NetworkInterfaces)
 }
 
 func (v HostView) Disks() []DiskInfo {
 	if v.r == nil || v.r.Agent == nil {
 		return nil
 	}
-	return v.r.Agent.Disks
+	return cloneDiskInfos(v.r.Agent.Disks)
 }
 
 func (v HostView) LinkedNodeID() string {
@@ -729,7 +729,7 @@ func (v HostView) Tags() []string {
 	if v.r == nil {
 		return nil
 	}
-	return v.r.Tags
+	return cloneStringSlice(v.r.Tags)
 }
 
 func (v HostView) LastSeen() time.Time {
@@ -778,28 +778,28 @@ func (v HostView) Sensors() *HostSensorMeta {
 	if v.r == nil || v.r.Agent == nil {
 		return nil
 	}
-	return v.r.Agent.Sensors
+	return cloneHostSensorMeta(v.r.Agent.Sensors)
 }
 
 func (v HostView) RAID() []HostRAIDMeta {
 	if v.r == nil || v.r.Agent == nil {
 		return nil
 	}
-	return v.r.Agent.RAID
+	return cloneHostRAIDMetaSlice(v.r.Agent.RAID)
 }
 
 func (v HostView) DiskIO() []HostDiskIOMeta {
 	if v.r == nil || v.r.Agent == nil {
 		return nil
 	}
-	return v.r.Agent.DiskIO
+	return cloneHostDiskIOMetaSlice(v.r.Agent.DiskIO)
 }
 
 func (v HostView) Ceph() *HostCephMeta {
 	if v.r == nil || v.r.Agent == nil {
 		return nil
 	}
-	return v.r.Agent.Ceph
+	return cloneHostCephMeta(v.r.Agent.Ceph)
 }
 
 // DockerHostView wraps a host-type resource with Docker data.
@@ -903,21 +903,21 @@ func (v DockerHostView) Swarm() *DockerSwarmInfo {
 	if v.r == nil || v.r.Docker == nil {
 		return nil
 	}
-	return v.r.Docker.Swarm
+	return cloneDockerSwarmInfo(v.r.Docker.Swarm)
 }
 
 func (v DockerHostView) NetworkInterfaces() []NetworkInterface {
 	if v.r == nil || v.r.Docker == nil {
 		return nil
 	}
-	return v.r.Docker.NetworkInterfaces
+	return cloneNetworkInterfaces(v.r.Docker.NetworkInterfaces)
 }
 
 func (v DockerHostView) Disks() []DiskInfo {
 	if v.r == nil || v.r.Docker == nil {
 		return nil
 	}
-	return v.r.Docker.Disks
+	return cloneDiskInfos(v.r.Docker.Disks)
 }
 
 func (v DockerHostView) Status() ResourceStatus {
@@ -931,7 +931,7 @@ func (v DockerHostView) Tags() []string {
 	if v.r == nil {
 		return nil
 	}
-	return v.r.Tags
+	return cloneStringSlice(v.r.Tags)
 }
 
 func (v DockerHostView) LastSeen() time.Time {
@@ -1024,7 +1024,7 @@ func (v StoragePoolView) ContentTypes() []string {
 	if v.r == nil || v.r.Storage == nil {
 		return nil
 	}
-	return v.r.Storage.ContentTypes
+	return cloneStringSlice(v.r.Storage.ContentTypes)
 }
 
 func (v StoragePoolView) Shared() bool {
@@ -1101,7 +1101,7 @@ func (v StoragePoolView) Tags() []string {
 	if v.r == nil {
 		return nil
 	}
-	return v.r.Tags
+	return cloneStringSlice(v.r.Tags)
 }
 
 func (v StoragePoolView) LastSeen() time.Time {
@@ -1187,7 +1187,7 @@ func (v PBSInstanceView) Datastores() []PBSDatastoreMeta {
 	if v.r == nil || v.r.PBS == nil {
 		return nil
 	}
-	return v.r.PBS.Datastores
+	return clonePBSDatastoreMetaSlice(v.r.PBS.Datastores)
 }
 
 func (v PBSInstanceView) BackupJobCount() int {
@@ -1257,7 +1257,7 @@ func (v PBSInstanceView) Tags() []string {
 	if v.r == nil {
 		return nil
 	}
-	return v.r.Tags
+	return cloneStringSlice(v.r.Tags)
 }
 
 func (v PBSInstanceView) LastSeen() time.Time {
@@ -1413,7 +1413,7 @@ func (v PMGInstanceView) Tags() []string {
 	if v.r == nil {
 		return nil
 	}
-	return v.r.Tags
+	return cloneStringSlice(v.r.Tags)
 }
 
 func (v PMGInstanceView) LastSeen() time.Time {
@@ -1434,28 +1434,28 @@ func (v PMGInstanceView) Nodes() []PMGNodeMeta {
 	if v.r == nil || v.r.PMG == nil {
 		return nil
 	}
-	return v.r.PMG.Nodes
+	return clonePMGNodeMetaSlice(v.r.PMG.Nodes)
 }
 
 func (v PMGInstanceView) MailStats() *PMGMailStatsMeta {
 	if v.r == nil || v.r.PMG == nil {
 		return nil
 	}
-	return v.r.PMG.MailStats
+	return clonePMGMailStatsMeta(v.r.PMG.MailStats)
 }
 
 func (v PMGInstanceView) Quarantine() *PMGQuarantineMeta {
 	if v.r == nil || v.r.PMG == nil {
 		return nil
 	}
-	return v.r.PMG.Quarantine
+	return clonePMGQuarantineMeta(v.r.PMG.Quarantine)
 }
 
 func (v PMGInstanceView) SpamDistribution() []PMGSpamBucketMeta {
 	if v.r == nil || v.r.PMG == nil {
 		return nil
 	}
-	return v.r.PMG.SpamDistribution
+	return clonePMGSpamBucketMetaSlice(v.r.PMG.SpamDistribution)
 }
 
 // K8sClusterView wraps a Kubernetes cluster resource.
@@ -1548,7 +1548,7 @@ func (v K8sClusterView) MetricCapabilities() *K8sMetricCapabilities {
 	if v.r == nil || v.r.Kubernetes == nil {
 		return nil
 	}
-	return v.r.Kubernetes.MetricCapabilities
+	return cloneKubernetesMetricCapabilities(v.r.Kubernetes.MetricCapabilities)
 }
 
 func (v K8sClusterView) CPUPercent() float64 {
@@ -1569,7 +1569,7 @@ func (v K8sClusterView) Tags() []string {
 	if v.r == nil {
 		return nil
 	}
-	return v.r.Tags
+	return cloneStringSlice(v.r.Tags)
 }
 
 func (v K8sClusterView) LastSeen() time.Time {
@@ -1667,7 +1667,7 @@ func (v WorkloadView) Tags() []string {
 	if v.r == nil {
 		return nil
 	}
-	return v.r.Tags
+	return cloneStringSlice(v.r.Tags)
 }
 
 func (v WorkloadView) LastSeen() time.Time {
@@ -1736,7 +1736,7 @@ func (v InfrastructureView) Tags() []string {
 	if v.r == nil {
 		return nil
 	}
-	return v.r.Tags
+	return cloneStringSlice(v.r.Tags)
 }
 
 func (v InfrastructureView) LastSeen() time.Time {
@@ -1826,7 +1826,7 @@ func (v K8sNodeView) Roles() []string {
 	if v.r == nil || v.r.Kubernetes == nil {
 		return nil
 	}
-	return v.r.Kubernetes.Roles
+	return cloneStringSlice(v.r.Kubernetes.Roles)
 }
 
 func (v K8sNodeView) KubeletVersion() string {
@@ -1924,7 +1924,7 @@ func (v K8sNodeView) Tags() []string {
 	if v.r == nil {
 		return nil
 	}
-	return v.r.Tags
+	return cloneStringSlice(v.r.Tags)
 }
 
 func (v K8sNodeView) LastSeen() time.Time {
@@ -2029,7 +2029,7 @@ func (v PodView) Labels() map[string]string {
 	if v.r == nil || v.r.Kubernetes == nil {
 		return nil
 	}
-	return v.r.Kubernetes.Labels
+	return cloneStringMap(v.r.Kubernetes.Labels)
 }
 
 func (v PodView) CPUPercent() float64 {
@@ -2050,7 +2050,7 @@ func (v PodView) Tags() []string {
 	if v.r == nil {
 		return nil
 	}
-	return v.r.Tags
+	return cloneStringSlice(v.r.Tags)
 }
 
 func (v PodView) LastSeen() time.Time {
@@ -2150,14 +2150,14 @@ func (v K8sDeploymentView) Labels() map[string]string {
 	if v.r == nil || v.r.Kubernetes == nil {
 		return nil
 	}
-	return v.r.Kubernetes.Labels
+	return cloneStringMap(v.r.Kubernetes.Labels)
 }
 
 func (v K8sDeploymentView) Tags() []string {
 	if v.r == nil {
 		return nil
 	}
-	return v.r.Tags
+	return cloneStringSlice(v.r.Tags)
 }
 
 func (v K8sDeploymentView) LastSeen() time.Time {
@@ -2285,35 +2285,35 @@ func (v DockerContainerView) Ports() []DockerPortMeta {
 	if v.r == nil || v.r.Docker == nil {
 		return nil
 	}
-	return v.r.Docker.Ports
+	return cloneDockerPortMetaSlice(v.r.Docker.Ports)
 }
 
 func (v DockerContainerView) Labels() map[string]string {
 	if v.r == nil || v.r.Docker == nil {
 		return nil
 	}
-	return v.r.Docker.Labels
+	return cloneStringMap(v.r.Docker.Labels)
 }
 
 func (v DockerContainerView) Networks() []DockerNetworkMeta {
 	if v.r == nil || v.r.Docker == nil {
 		return nil
 	}
-	return v.r.Docker.Networks
+	return cloneDockerNetworkMetaSlice(v.r.Docker.Networks)
 }
 
 func (v DockerContainerView) Mounts() []DockerMountMeta {
 	if v.r == nil || v.r.Docker == nil {
 		return nil
 	}
-	return v.r.Docker.Mounts
+	return cloneDockerMountMetaSlice(v.r.Docker.Mounts)
 }
 
 func (v DockerContainerView) UpdateStatus() *DockerUpdateStatusMeta {
 	if v.r == nil || v.r.Docker == nil {
 		return nil
 	}
-	return v.r.Docker.UpdateStatus
+	return cloneDockerUpdateStatusMeta(v.r.Docker.UpdateStatus)
 }
 
 func (v DockerContainerView) ParentID() string {
@@ -2327,7 +2327,7 @@ func (v DockerContainerView) Tags() []string {
 	if v.r == nil {
 		return nil
 	}
-	return v.r.Tags
+	return cloneStringSlice(v.r.Tags)
 }
 
 func (v DockerContainerView) LastSeen() time.Time {

@@ -159,10 +159,12 @@ func (rr *ResourceRegistry) IngestSnapshot(snapshot models.StateSnapshot) {
 		}
 	}
 
+	rr.mu.Lock()
 	rr.applyManualLinks()
 	rr.buildChildCounts()
-	rr.MarkStale(time.Now().UTC(), nil)
+	rr.markStaleLocked(time.Now().UTC(), nil)
 	rr.viewsDirty = true
+	rr.mu.Unlock()
 }
 
 // IngestRecords ingests normalized records for a single source.
@@ -181,8 +183,10 @@ func (rr *ResourceRegistry) IngestRecords(source DataSource, records []IngestRec
 		rr.ingest(source, record.SourceID, resource, record.Identity)
 	}
 
+	rr.mu.Lock()
 	rr.buildChildCounts()
 	rr.viewsDirty = true
+	rr.mu.Unlock()
 }
 
 // List returns all resources.
@@ -191,7 +195,7 @@ func (rr *ResourceRegistry) List() []Resource {
 	defer rr.mu.RUnlock()
 	out := make([]Resource, 0, len(rr.resources))
 	for _, r := range rr.resources {
-		out = append(out, *r)
+		out = append(out, cloneResource(r))
 	}
 	return out
 }
@@ -208,7 +212,7 @@ func (rr *ResourceRegistry) ListByType(t ResourceType) []Resource {
 		if r.Type != t {
 			continue
 		}
-		out = append(out, *r)
+		out = append(out, cloneResource(r))
 	}
 	sort.Slice(out, func(i, j int) bool {
 		return out[i].ID < out[j].ID
@@ -221,7 +225,11 @@ func (rr *ResourceRegistry) Get(id string) (*Resource, bool) {
 	rr.mu.RLock()
 	defer rr.mu.RUnlock()
 	r, ok := rr.resources[id]
-	return r, ok
+	if !ok || r == nil {
+		return nil, false
+	}
+	clone := cloneResource(r)
+	return &clone, true
 }
 
 // SourceTargets returns the source-specific IDs that map to the provided resource ID.
@@ -256,7 +264,7 @@ func (rr *ResourceRegistry) GetChildren(parentID string) []Resource {
 	var out []Resource
 	for _, r := range rr.resources {
 		if r.ParentID != nil && *r.ParentID == parentID {
-			out = append(out, *r)
+			out = append(out, cloneResource(r))
 		}
 	}
 	return out
@@ -287,7 +295,10 @@ func (rr *ResourceRegistry) Stats() ResourceStats {
 func (rr *ResourceRegistry) MarkStale(now time.Time, thresholds map[DataSource]time.Duration) {
 	rr.mu.Lock()
 	defer rr.mu.Unlock()
+	rr.markStaleLocked(now, thresholds)
+}
 
+func (rr *ResourceRegistry) markStaleLocked(now time.Time, thresholds map[DataSource]time.Duration) {
 	if thresholds == nil {
 		thresholds = defaultStaleThresholds
 	}
@@ -1079,55 +1090,56 @@ func (rr *ResourceRegistry) rebuildViews() {
 	rr.cachedInfra = nil
 
 	for _, r := range rr.resources {
+		viewResource := cloneResourcePtr(r)
 		switch r.Type {
 		case ResourceTypeVM:
-			v := NewVMView(r)
+			v := NewVMView(viewResource)
 			rr.cachedVMs = append(rr.cachedVMs, &v)
-			w := NewWorkloadView(r)
+			w := NewWorkloadView(viewResource)
 			rr.cachedWorkload = append(rr.cachedWorkload, &w)
 		case ResourceTypeLXC:
-			v := NewContainerView(r)
+			v := NewContainerView(viewResource)
 			rr.cachedLXC = append(rr.cachedLXC, &v)
-			w := NewWorkloadView(r)
+			w := NewWorkloadView(viewResource)
 			rr.cachedWorkload = append(rr.cachedWorkload, &w)
 		case ResourceTypeContainer:
-			v := NewDockerContainerView(r)
+			v := NewDockerContainerView(viewResource)
 			rr.cachedDockerContainers = append(rr.cachedDockerContainers, &v)
 		case ResourceTypeHost:
-			inf := NewInfrastructureView(r)
+			inf := NewInfrastructureView(viewResource)
 			rr.cachedInfra = append(rr.cachedInfra, &inf)
 			if r.Proxmox != nil {
-				v := NewNodeView(r)
+				v := NewNodeView(viewResource)
 				rr.cachedNodes = append(rr.cachedNodes, &v)
 			}
 			if r.Agent != nil {
-				v := NewHostView(r)
+				v := NewHostView(viewResource)
 				rr.cachedHosts = append(rr.cachedHosts, &v)
 			}
 			if r.Docker != nil {
-				v := NewDockerHostView(r)
+				v := NewDockerHostView(viewResource)
 				rr.cachedDocker = append(rr.cachedDocker, &v)
 			}
 		case ResourceTypeStorage:
-			v := NewStoragePoolView(r)
+			v := NewStoragePoolView(viewResource)
 			rr.cachedStorage = append(rr.cachedStorage, &v)
 		case ResourceTypePBS:
-			v := NewPBSInstanceView(r)
+			v := NewPBSInstanceView(viewResource)
 			rr.cachedPBS = append(rr.cachedPBS, &v)
 		case ResourceTypePMG:
-			v := NewPMGInstanceView(r)
+			v := NewPMGInstanceView(viewResource)
 			rr.cachedPMG = append(rr.cachedPMG, &v)
 		case ResourceTypeK8sCluster:
-			v := NewK8sClusterView(r)
+			v := NewK8sClusterView(viewResource)
 			rr.cachedK8s = append(rr.cachedK8s, &v)
 		case ResourceTypeK8sNode:
-			v := NewK8sNodeView(r)
+			v := NewK8sNodeView(viewResource)
 			rr.cachedK8sNodes = append(rr.cachedK8sNodes, &v)
 		case ResourceTypePod:
-			v := NewPodView(r)
+			v := NewPodView(viewResource)
 			rr.cachedPods = append(rr.cachedPods, &v)
 		case ResourceTypeK8sDeployment:
-			v := NewK8sDeploymentView(r)
+			v := NewK8sDeploymentView(viewResource)
 			rr.cachedK8sDeployments = append(rr.cachedK8sDeployments, &v)
 		}
 	}
