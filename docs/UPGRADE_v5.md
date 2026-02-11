@@ -23,7 +23,7 @@ curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install.s
   sudo bash -s -- --version vX.Y.Z
 ```
 
-This installer updates the **Pulse server**. Agent updates use the `/install.sh` command generated in **Settings → Agents → Installation commands**.
+This installer updates the **Pulse server**. Agent updates use the `/install.sh` command generated in **Settings → Unified Agents → Installation commands**.
 
 ### Docker
 

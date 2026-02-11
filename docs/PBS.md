@@ -56,9 +56,9 @@ The agent will:
 Use this when you can run a command on the PBS host but do not want to install the agent.
 
 From Pulse's Settings page:
-1. Go to **Settings → Proxmox**
+1. Go to **Settings → Unified Agents**
 2. Click **Add Node**
-3. Select **API Only** tab
+3. Open **Advanced** and select **API Only**
 4. Enter your PBS server's URL
 5. Click copy to get the setup command
 6. Run the command on your PBS server
@@ -71,6 +71,8 @@ curl -sSL "http://<pulse-ip>:7655/api/setup-script?type=pbs&host=https://<pbs-ip
 The script creates a `pulse-monitor@pbs` user, generates a scoped API token, and registers the server with Pulse.
 
 > **Note**: API-only mode does not include temperature monitoring or AI command execution. Use **Agent Install** for full functionality.
+
+> **Tip**: The installer now auto-detects Proxmox mode (`pve` or `pbs`) when possible, but keeping `--proxmox-type pbs` explicit is recommended for predictable PBS onboarding.
 
 ### Method 3: Manual Token Creation
 

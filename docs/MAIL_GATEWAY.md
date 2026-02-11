@@ -13,7 +13,7 @@ Pulse 5.0 adds support for monitoring Proxmox Mail Gateway instances alongside y
 
 ### Via Settings UI
 
-1. Navigate to **Settings → Proxmox**
+1. Navigate to **Settings → Infrastructure**
 2. Click **Add Node**
 3. Select **Proxmox Mail Gateway** as the type
 4. Enter connection details:
@@ -27,7 +27,7 @@ Pulse 5.0 adds support for monitoring Proxmox Mail Gateway instances alongside y
 Pulse can automatically discover PMG instances on your network:
 
 1. Enable discovery in **Settings → System → Network**
-2. Go to **Settings → Proxmox**
+2. Go to **Settings → Infrastructure**
 3. PMG instances on port 8006 are detected and shown in the Proxmox discovery panels
 4. Click a discovered PMG server to add it
 

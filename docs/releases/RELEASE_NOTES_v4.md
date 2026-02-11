@@ -85,7 +85,7 @@ curl -vk https://node.example:8443/health \
 
 ### What's Changed (v4.26.1)
 #### New
-- Standalone host agents now ship with guided Linux, macOS, and Windows installers that stream registration status back to Pulse, generate scoped commands from **Settings → Agents**, and feed host metrics into alerts alongside Proxmox and Docker.
+- Standalone host agents now ship with guided Linux, macOS, and Windows installers that stream registration status back to Pulse, generate scoped commands from **Settings → Unified Agents**, and feed host metrics into alerts alongside Proxmox and Docker.
 - Alert thresholds gained host-level overrides, connectivity toggles, and snapshot size guardrails so you can tune offline behaviour per host while keeping a global policy for other resources.
 - API tokens now support fine-grained scopes with a redesigned manager that previews command templates, highlights unused credentials, and makes revocation a single click.
 - Proxmox replication jobs surface in a dedicated **Proxmox → Replication** view with API plumbing to track task health and bubble failures into the monitoring pipeline.

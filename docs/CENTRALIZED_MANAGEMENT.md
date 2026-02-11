@@ -2,7 +2,7 @@
 
 Pro and Cloud support centralized management of agent configurations, allowing administrators to define "Configuration Profiles" and assign them to specific agents. This enables bulk updates and consistent configuration across your fleet without manually editing configuration files on each host.
 
-Profiles are managed in the UI: **Settings → Agents → Agent Profiles**.
+Profiles are managed in the UI: **Settings → Unified Agents → Agent Profiles**.
 
 ## Concepts
 
@@ -34,7 +34,7 @@ The following settings can be controlled remotely via profiles:
 Notes:
 - `interval` accepts a duration string. If you send a JSON number, it is interpreted as seconds.
 - Docker auto-detection can still enable Docker monitoring if the agent is not explicitly configured. To force-disable Docker, set `PULSE_ENABLE_DOCKER=false` or install with `--enable-docker=false` on the host.
-- `commandsEnabled` (AI command execution) is controlled separately per agent in **Settings → Agents → Unified Agents** and is applied live on report. It is not part of profile settings.
+- `commandsEnabled` (AI command execution) is controlled separately per agent in **Settings → Unified Agents** and is applied live on report. It is not part of profile settings.
 
 ## API Usage
 

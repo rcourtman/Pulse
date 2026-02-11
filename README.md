@@ -72,7 +72,7 @@ Run this one-liner on your Proxmox host to create a lightweight LXC container:
 curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | bash
 ```
 
-Note: this installs the Pulse **server**. Agent installs use the command generated in **Settings → Agents → Installation commands** (served from `/install.sh` on your Pulse server).
+Note: this installs the Pulse **server**. Agent installs use the command generated in **Settings → Unified Agents → Installation commands** (served from `/install.sh` on your Pulse server).
 
 ### Option 2: Docker
 ```bash

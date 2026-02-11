@@ -33,7 +33,7 @@ Pulse can also collect temperatures by SSHing into each host and running `sensor
 ### Setup
 
 1. Generate the node setup command from the UI:
-   **Settings -> Proxmox -> Add Node**
+   **Settings -> Infrastructure -> Add Node**
 2. Run the command on each Proxmox host. The setup script can:
    - Create the required API user and permissions
    - Add a restricted SSH key entry for temperature collection

@@ -63,7 +63,7 @@ Because local login credentials are stored in `.env` (not part of exports), you 
 3.  **Update Agents**:
     *   **Unified Agent**: Update the `--token` flag in your service definition.
     *   **Containerized agent**: Update `PULSE_TOKEN` in the agent container environment.
-    *   *Tip: Use **Settings → Agents → Installation commands** to generate updated install commands.*
+    *   *Tip: Use **Settings → Unified Agents → Installation commands** to generate updated install commands.*
 4.  **Pro/Cloud**: Re-activate your license key after migration (license files are not included in exports).
 
 ## 🔒 Security

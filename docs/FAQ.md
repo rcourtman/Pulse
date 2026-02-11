@@ -9,7 +9,7 @@ If you run Proxmox VE, use the official LXC installer (recommended):
 curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | bash
 ```
 
-Note: this installs the Pulse **server**. Agent installs use the command from **Settings → Agents → Installation commands** (served from `/install.sh` on your Pulse server).
+Note: this installs the Pulse **server**. Agent installs use the command from **Settings → Unified Agents → Installation commands** (served from `/install.sh` on your Pulse server).
 
 If you prefer Docker:
 
@@ -20,12 +20,12 @@ docker run -d --name pulse -p 7655:7655 -v pulse_data:/data rcourtman/pulse:late
 See [INSTALL.md](INSTALL.md) for all options (Docker Compose, Kubernetes, systemd).
 
 ### How do I add a node?
-Go to **Settings → Proxmox**.
+Go to **Settings → Unified Agents**.
 
 - **Recommended (Agent setup)**: select **Agent Install** and run the generated install command on the Proxmox host.
-- **Manual**: use **Username & Password**, or select the **Manual** tab and enter API token credentials.
+- **Manual/API-only**: open **Advanced** in the add-node modal and use **API Only** or **Manual**.
 
-If you want Pulse to find servers automatically, enable discovery in **Settings → System → Network** and then return to **Settings → Proxmox** to review discovered servers.
+If you want Pulse to find servers automatically, enable discovery in **Settings → System → Network** and then review discovered servers in **Settings → Infrastructure**.
 
 ### How do I change the port?
 - **Systemd**: `sudo systemctl edit pulse`, add `Environment="FRONTEND_PORT=8080"`, restart.
@@ -94,7 +94,7 @@ Yes. Pulse supports OIDC in **Settings → Security → Single Sign-On** and Pro
 
 ### No data showing?
 - Check Proxmox API is reachable (port 8006).
-- Verify credentials in **Settings → Proxmox**.
+- Verify credentials in **Settings → Infrastructure**.
 - Check logs: `journalctl -u pulse -f` or `docker logs -f pulse`.
 
 ### Connection refused?

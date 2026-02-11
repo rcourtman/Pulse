@@ -1,13 +1,16 @@
 # Pulse Unified Agent
 
 The unified agent (`pulse-agent`) combines host, Docker, and Kubernetes monitoring into a single binary. It replaces the separate `pulse-host-agent` and `pulse-docker-agent` for simpler deployment and management.
+Install it on each host you want Pulse to monitor. This is the primary monitoring path for infrastructure onboarding.
 
 > Note: For temperature monitoring, use `pulse-agent --enable-proxmox` (recommended) or SSH-based collection. The legacy sensor proxy has been removed. See `docs/TEMPERATURE_MONITORING.md`.
 
 ## Quick Start
 
 Generate an installation command in the UI:
-**Settings → Agents → Installation commands**
+**Settings → Unified Agents → Installation commands**
+
+Choose a target profile in that screen when you want explicit install flags for Docker, Kubernetes, Proxmox VE, or Proxmox Backup Server.
 
 ### Linux (systemd)
 ```bash
@@ -112,6 +115,18 @@ curl -fsSL http://<pulse-ip>:7655/install.sh | \
   bash -s -- --url http://<pulse-ip>:7655 --token <token>
 ```
 
+### Proxmox VE Node (explicit profile)
+```bash
+curl -fsSL http://<pulse-ip>:7655/install.sh | \
+  bash -s -- --url http://<pulse-ip>:7655 --token <token> --enable-proxmox --proxmox-type pve
+```
+
+### Proxmox Backup Server Node (explicit profile)
+```bash
+curl -fsSL http://<pulse-ip>:7655/install.sh | \
+  bash -s -- --url http://<pulse-ip>:7655 --token <token> --enable-proxmox --proxmox-type pbs
+```
+
 ### Force Enable Docker (if auto-detection fails)
 ```bash
 curl -fsSL http://<pulse-ip>:7655/install.sh | \
@@ -208,7 +223,7 @@ Behavior:
 - The agent fetches remote config on startup from `/api/agents/host/{agent_id}/config`.
 - Profile settings override local flags/env for supported keys.
 - Profile changes take effect on the next agent restart.
-- Command execution (`commandsEnabled`) is controlled per agent in **Settings → Agents → Unified Agents** and can change live.
+- Command execution (`commandsEnabled`) is controlled per agent in **Settings → Unified Agents** and can change live.
 - Remote config responses can be signed with `PULSE_AGENT_CONFIG_SIGNING_KEY` (base64 Ed25519 private key).
 - To require signed payloads, set `PULSE_AGENT_CONFIG_SIGNATURE_REQUIRED=true` on Pulse and agents.
 - If you use a custom signing key, set `PULSE_AGENT_CONFIG_PUBLIC_KEYS` on agents to trust the matching public key.
