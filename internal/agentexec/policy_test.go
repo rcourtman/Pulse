@@ -19,10 +19,13 @@ func TestDefaultPolicyEvaluate(t *testing.T) {
 	}{
 		{"blocked", "rm -rf /", PolicyBlock},
 		{"blocked sudo", "sudo rm -rf /", PolicyBlock},
+		{"blocked sudo with flags", "sudo -u root rm -rf /", PolicyBlock},
 		{"auto approve", "df -h", PolicyAllow},
 		{"require approval", "systemctl restart nginx", PolicyRequireApproval},
 		{"unknown defaults to approval", "echo hello", PolicyRequireApproval},
 		{"sudo with flags remains conservative", "sudo -u root df -h", PolicyRequireApproval},
+		{"compound command requires approval", "df -h && echo ok", PolicyRequireApproval},
+		{"find delete requires approval", "find /var -type f -delete", PolicyRequireApproval},
 
 		// Proxmox VM control - should require approval, not be blocked
 		{"qm reboot requires approval", "qm reboot 201", PolicyRequireApproval},
@@ -50,6 +53,9 @@ func TestPolicyHelpers(t *testing.T) {
 	p := DefaultPolicy()
 	if !p.IsBlocked("rm -rf /") {
 		t.Fatalf("expected rm -rf / to be blocked")
+	}
+	if !p.IsBlocked("sudo -u root rm -rf /") {
+		t.Fatalf("expected sudo -u root rm -rf / to be blocked")
 	}
 	if !p.NeedsApproval("echo hello") {
 		t.Fatalf("expected echo hello to require approval by default")

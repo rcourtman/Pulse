@@ -141,6 +141,9 @@ func DefaultPolicy() *CommandPolicy {
 			// Temp file cleanup (safe with approval)
 			`^rm\s+(-rf?|-fr?)\s+/var/tmp/`,
 			`^rm\s+(-rf?|-fr?)\s+/tmp/`,
+
+			// Find commands that can execute actions or delete files
+			`^find\s+.+\s-(exec|execdir|ok|okdir|delete)\b`,
 		},
 
 		Blocked: []string{
@@ -233,32 +236,46 @@ const (
 func (p *CommandPolicy) Evaluate(command string) PolicyDecision {
 	command = strings.TrimSpace(command)
 	command = strings.ToLower(command)
+
+	policyCommand := command
+	blockedCandidates := []string{command}
+
 	// Normalize simple sudo prefix so policy applies consistently.
-	// For complex sudo invocations (sudo flags), keep the command as-is (conservative).
+	// For sudo invocations with flags, keep policyCommand conservative, but still
+	// inspect the extracted underlying command against blocked patterns.
 	if strings.HasPrefix(command, "sudo ") {
-		parts := strings.Fields(command)
-		if len(parts) >= 2 && !strings.HasPrefix(parts[1], "-") {
-			command = strings.Join(parts[1:], " ")
+		if sudoCommand, hasFlags, ok := extractSudoCommand(command); ok {
+			blockedCandidates = append(blockedCandidates, sudoCommand)
+			if !hasFlags {
+				policyCommand = sudoCommand
+			}
 		}
 	}
 
 	// Check blocked first (highest priority)
-	for _, re := range p.blockedRe {
-		if re.MatchString(command) {
-			return PolicyBlock
+	for _, candidate := range blockedCandidates {
+		for _, re := range p.blockedRe {
+			if re.MatchString(candidate) {
+				return PolicyBlock
+			}
 		}
+	}
+
+	// Compound shell commands are never auto-approved.
+	if containsShellControlOperators(policyCommand) {
+		return PolicyRequireApproval
 	}
 
 	// Check require approval
 	for _, re := range p.requireApprovalRe {
-		if re.MatchString(command) {
+		if re.MatchString(policyCommand) {
 			return PolicyRequireApproval
 		}
 	}
 
 	// Check auto-approve
 	for _, re := range p.autoApproveRe {
-		if re.MatchString(command) {
+		if re.MatchString(policyCommand) {
 			return PolicyAllow
 		}
 	}
@@ -280,4 +297,98 @@ func (p *CommandPolicy) NeedsApproval(command string) bool {
 // IsAutoApproved returns true if a command can run without approval
 func (p *CommandPolicy) IsAutoApproved(command string) bool {
 	return p.Evaluate(command) == PolicyAllow
+}
+
+func containsShellControlOperators(command string) bool {
+	if strings.Contains(command, "\n") || strings.Contains(command, "\r") {
+		return true
+	}
+
+	for _, marker := range []string{";", "&&", "||", "|", "`", "$(", ">", "<"} {
+		if strings.Contains(command, marker) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func extractSudoCommand(command string) (string, bool, bool) {
+	parts := strings.Fields(command)
+	if len(parts) < 2 || parts[0] != "sudo" {
+		return "", false, false
+	}
+
+	i := 1
+	hasFlags := false
+	expectValue := false
+
+	for i < len(parts) {
+		token := parts[i]
+		if expectValue {
+			expectValue = false
+			i++
+			continue
+		}
+
+		if token == "--" {
+			hasFlags = true
+			i++
+			break
+		}
+
+		if strings.HasPrefix(token, "--") {
+			hasFlags = true
+			if !strings.Contains(token, "=") && sudoLongOptionNeedsValue(token) {
+				expectValue = true
+			}
+			i++
+			continue
+		}
+
+		if strings.HasPrefix(token, "-") && token != "-" {
+			hasFlags = true
+			if sudoShortOptionNeedsValue(token) {
+				expectValue = true
+			}
+			i++
+			continue
+		}
+
+		break
+	}
+
+	if i >= len(parts) {
+		return "", hasFlags, false
+	}
+
+	return strings.Join(parts[i:], " "), hasFlags, true
+}
+
+func sudoLongOptionNeedsValue(token string) bool {
+	switch token {
+	case "--user", "--group", "--host", "--prompt", "--chdir", "--close-from", "--command-timeout", "--role", "--type":
+		return true
+	default:
+		return false
+	}
+}
+
+func sudoShortOptionNeedsValue(token string) bool {
+	switch token {
+	case "-u", "-g", "-h", "-p", "-C", "-T", "-r", "-t", "-R", "-D":
+		return true
+	}
+
+	if len(token) <= 2 || !strings.HasPrefix(token, "-") || strings.HasPrefix(token, "--") {
+		return false
+	}
+
+	switch token[1] {
+	case 'u', 'g', 'h', 'p', 'C', 'T', 'r', 't', 'R', 'D':
+		// Attached value form (e.g. -uroot) already carries its value.
+		return false
+	default:
+		return false
+	}
 }
