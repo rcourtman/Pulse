@@ -51,14 +51,20 @@ func Collect(ctx context.Context, diskExclude []string) (Snapshot, error) {
 
 	if cpuCount, err := cpuCounts(collectCtx, true); err == nil {
 		snapshot.CPUCount = cpuCount
+	} else {
+		log.Debug().Err(err).Msg("hostmetrics: failed to collect cpu count")
 	}
 
 	if cpuUsage, err := collectCPUUsage(collectCtx); err == nil {
 		snapshot.CPUUsagePercent = cpuUsage
+	} else {
+		log.Debug().Err(err).Msg("hostmetrics: failed to collect cpu usage")
 	}
 
 	if loadAvg, err := loadAvg(collectCtx); err == nil && loadAvg != nil {
 		snapshot.LoadAverage = []float64{loadAvg.Load1, loadAvg.Load5, loadAvg.Load15}
+	} else if err != nil {
+		log.Debug().Err(err).Msg("hostmetrics: failed to collect load average")
 	}
 
 	memStats, err := virtualMemory(collectCtx)
@@ -223,11 +229,13 @@ func collectDisks(ctx context.Context, diskExclude []string) []agentshost.Disk {
 func collectNetwork(ctx context.Context) []agentshost.NetworkInterface {
 	ifaces, err := netInterfaces(ctx)
 	if err != nil {
+		log.Debug().Err(err).Msg("network: failed to list interfaces")
 		return nil
 	}
 
 	ioCounters, err := netIOCounters(ctx, true)
 	if err != nil {
+		log.Debug().Err(err).Msg("network: failed to get interface io counters")
 		ioCounters = nil
 	}
 	ioMap := make(map[string]gonet.IOCountersStat, len(ioCounters))
@@ -268,6 +276,7 @@ func collectNetwork(ctx context.Context) []agentshost.NetworkInterface {
 	}
 
 	sort.Slice(interfaces, func(i, j int) bool { return interfaces[i].Name < interfaces[j].Name })
+	log.Debug().Int("count", len(interfaces)).Msg("network: collected interfaces")
 	return interfaces
 }
 
@@ -286,6 +295,7 @@ func isLoopback(flags []string) bool {
 func collectDiskIO(ctx context.Context, diskExclude []string) []agentshost.DiskIO {
 	counters, err := diskIOCounters(ctx)
 	if err != nil {
+		log.Debug().Err(err).Msg("diskio: failed to read disk io counters")
 		return nil
 	}
 
@@ -321,6 +331,7 @@ func collectDiskIO(ctx context.Context, diskExclude []string) []agentshost.DiskI
 	}
 
 	sort.Slice(devices, func(i, j int) bool { return devices[i].Device < devices[j].Device })
+	log.Debug().Int("count", len(devices)).Msg("diskio: collected devices")
 	return devices
 }
 
