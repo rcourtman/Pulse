@@ -3,12 +3,14 @@ package logging
 import (
 	"compress/gzip"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/google/uuid"
@@ -22,6 +24,9 @@ type ctxKey string
 
 const (
 	requestIDKey ctxKey = "logging_request_id"
+
+	logDirPerm  = 0o700
+	logFilePerm = 0o600
 )
 
 // Config controls logger initialization.
@@ -48,15 +53,18 @@ var (
 	nowFn           = time.Now
 	isTerminalFn    = term.IsTerminal
 	mkdirAllFn      = os.MkdirAll
+	chmodFn         = os.Chmod
 	openFileFn      = os.OpenFile
 	openFn          = os.Open
 	statFn          = os.Stat
+	lstatFn         = os.Lstat
 	readDirFn       = os.ReadDir
 	renameFn        = os.Rename
 	removeFn        = os.Remove
 	copyFn          = io.Copy
 	gzipNewWriterFn = gzip.NewWriter
 	statFileFn      = func(file *os.File) (os.FileInfo, error) { return file.Stat() }
+	chmodFileFn     = func(file *os.File, mode os.FileMode) error { return file.Chmod(mode) }
 	closeFileFn     = func(file *os.File) error { return file.Close() }
 	compressFn      = compressAndRemove
 )
@@ -182,10 +190,14 @@ func newRollingFileWriter(cfg Config) (io.Writer, error) {
 	if path == "" {
 		return nil, nil
 	}
+	path = filepath.Clean(path)
 
 	dir := filepath.Dir(path)
-	if err := mkdirAllFn(dir, 0o755); err != nil {
+	if err := ensureOwnerOnlyDir(dir); err != nil {
 		return nil, fmt.Errorf("create log directory: %w", err)
+	}
+	if err := validateExistingRegularFile(path); err != nil {
+		return nil, fmt.Errorf("validate log file path: %w", err)
 	}
 
 	writer := &rollingFileWriter{
@@ -231,10 +243,17 @@ func (w *rollingFileWriter) openOrCreateLocked() error {
 	if w.file != nil {
 		return nil
 	}
+	if err := validateExistingRegularFile(w.path); err != nil {
+		return fmt.Errorf("validate log file path: %w", err)
+	}
 
-	file, err := openFileFn(w.path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	file, err := openFileFn(w.path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, logFilePerm)
 	if err != nil {
 		return fmt.Errorf("open log file: %w", err)
+	}
+	if err := chmodFileFn(file, logFilePerm); err != nil {
+		_ = closeFileFn(file)
+		return fmt.Errorf("secure log file permissions: %w", err)
 	}
 	w.file = file
 
@@ -306,6 +325,9 @@ func (w *rollingFileWriter) cleanupOldFiles() {
 }
 
 func compressAndRemove(path string) {
+	if err := validateExistingRegularFile(path); err != nil {
+		return
+	}
 	in, err := openFn(path)
 	if err != nil {
 		return
@@ -313,6 +335,11 @@ func compressAndRemove(path string) {
 	defer in.Close()
 
 	outPath := path + ".gz"
+	if err := validateExistingRegularFile(outPath); err != nil {
+		if !isMissingPathError(err) {
+			return
+		}
+	}
 	out, err := openFileFn(outPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
 		return
@@ -330,4 +357,39 @@ func compressAndRemove(path string) {
 	}
 	out.Close()
 	_ = removeFn(path)
+}
+
+func ensureOwnerOnlyDir(dir string) error {
+	if err := mkdirAllFn(dir, logDirPerm); err != nil {
+		return err
+	}
+	info, err := lstatFn(dir)
+	if err != nil {
+		return err
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("refusing symlink directory path %q", dir)
+	}
+	return chmodFn(dir, logDirPerm)
+}
+
+func validateExistingRegularFile(path string) error {
+	info, err := lstatFn(path)
+	if err != nil {
+		if isMissingPathError(err) {
+			return nil
+		}
+		return err
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("refusing symlink file path %q", path)
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("non-regular file path %q", path)
+	}
+	return nil
+}
+
+func isMissingPathError(err error) bool {
+	return errors.Is(err, os.ErrNotExist) || errors.Is(err, syscall.ENOTDIR)
 }
