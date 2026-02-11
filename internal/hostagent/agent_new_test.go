@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/rs/zerolog"
@@ -126,6 +127,111 @@ func TestNew_DefaultPulseURL(t *testing.T) {
 	}
 	if agent.trimmedPulseURL != "http://localhost:7655" {
 		t.Fatalf("trimmedPulseURL = %q, want %q", agent.trimmedPulseURL, "http://localhost:7655")
+	}
+}
+
+func TestNew_RejectsInvalidPulseURL(t *testing.T) {
+	mc := &mockCollector{
+		hostInfoFn: func(context.Context) (*gohost.InfoStat, error) {
+			return &gohost.InfoStat{Hostname: "host", HostID: "hid", KernelArch: runtime.GOARCH}, nil
+		},
+	}
+
+	tests := []struct {
+		name     string
+		pulseURL string
+	}{
+		{name: "missing scheme", pulseURL: "pulse.example.com"},
+		{name: "unsupported scheme", pulseURL: "ftp://pulse.example.com"},
+		{name: "query params", pulseURL: "https://pulse.example.com?env=prod"},
+		{name: "userinfo", pulseURL: "https://user:pass@pulse.example.com"},
+		{name: "invalid port", pulseURL: "https://pulse.example.com:70000"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := New(Config{
+				PulseURL:  tc.pulseURL,
+				APIToken:  "token",
+				LogLevel:  zerolog.InfoLevel,
+				Collector: mc,
+			})
+			if err == nil || !strings.Contains(err.Error(), "invalid pulse URL") {
+				t.Fatalf("expected invalid pulse URL error, got %v", err)
+			}
+		})
+	}
+}
+
+func TestNew_NormalizesAndValidatesProxmoxType(t *testing.T) {
+	mc := &mockCollector{
+		hostInfoFn: func(context.Context) (*gohost.InfoStat, error) {
+			return &gohost.InfoStat{Hostname: "host", HostID: "hid", KernelArch: runtime.GOARCH}, nil
+		},
+	}
+
+	agent, err := New(Config{
+		APIToken:    "token",
+		ProxmoxType: "  Auto ",
+		LogLevel:    zerolog.InfoLevel,
+		Collector:   mc,
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if agent.cfg.ProxmoxType != "" {
+		t.Fatalf("cfg.ProxmoxType = %q, want empty auto value", agent.cfg.ProxmoxType)
+	}
+
+	_, err = New(Config{
+		APIToken:    "token",
+		ProxmoxType: "invalid",
+		LogLevel:    zerolog.InfoLevel,
+		Collector:   mc,
+	})
+	if err == nil || !strings.Contains(err.Error(), "invalid proxmox type") {
+		t.Fatalf("expected proxmox type validation error, got %v", err)
+	}
+}
+
+func TestNew_NormalizesAndValidatesReportIP(t *testing.T) {
+	mc := &mockCollector{
+		hostInfoFn: func(context.Context) (*gohost.InfoStat, error) {
+			return &gohost.InfoStat{Hostname: "host", HostID: "hid", KernelArch: runtime.GOARCH}, nil
+		},
+	}
+
+	agent, err := New(Config{
+		APIToken:  "token",
+		ReportIP:  " 2001:0DB8::0001 ",
+		LogLevel:  zerolog.InfoLevel,
+		Collector: mc,
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if got := agent.cfg.ReportIP; got != "2001:db8::1" {
+		t.Fatalf("cfg.ReportIP = %q, want %q", got, "2001:db8::1")
+	}
+
+	_, err = New(Config{
+		APIToken:  "token",
+		ReportIP:  "not-an-ip",
+		LogLevel:  zerolog.InfoLevel,
+		Collector: mc,
+	})
+	if err == nil || !strings.Contains(err.Error(), "invalid report IP") {
+		t.Fatalf("expected report IP validation error, got %v", err)
+	}
+
+	_, err = New(Config{
+		APIToken:  "token",
+		ReportIP:  "0.0.0.0",
+		LogLevel:  zerolog.InfoLevel,
+		Collector: mc,
+	})
+	if err == nil || !strings.Contains(err.Error(), "unspecified addresses are not allowed") {
+		t.Fatalf("expected unspecified report IP validation error, got %v", err)
 	}
 }
 

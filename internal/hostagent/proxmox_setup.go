@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -138,6 +139,21 @@ func NewProxmoxSetup(logger zerolog.Logger, httpClient *http.Client, collector S
 // 2. Creates the monitoring user and API token
 // 3. Registers the node with Pulse via auto-register
 func (p *ProxmoxSetup) Run(ctx context.Context) (*ProxmoxSetupResult, error) {
+	if strings.TrimSpace(p.apiToken) == "" {
+		return nil, errors.New("api token is required")
+	}
+
+	pulseURL, err := normalizePulseURL(p.pulseURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid pulse URL: %w", err)
+	}
+	p.pulseURL = pulseURL
+
+	ptype, err := normalizeProxmoxType(p.proxmoxType)
+	if err != nil {
+		return nil, err
+	}
+
 	// Check if already registered (idempotency)
 	if p.isAlreadyRegistered() {
 		p.logger.Info().Msg("Proxmox node already registered, skipping setup")
@@ -145,7 +161,6 @@ func (p *ProxmoxSetup) Run(ctx context.Context) (*ProxmoxSetupResult, error) {
 	}
 
 	// Detect Proxmox type
-	ptype := p.proxmoxType
 	if ptype == "" {
 		detected := p.detectProxmoxType()
 		if detected == "" {
@@ -191,11 +206,26 @@ func (p *ProxmoxSetup) Run(ctx context.Context) (*ProxmoxSetupResult, error) {
 // supported configuration). Each type gets its own registration and state tracking.
 // Returns results for all types that were processed (skipping already-registered ones).
 func (p *ProxmoxSetup) RunAll(ctx context.Context) ([]*ProxmoxSetupResult, error) {
+	if strings.TrimSpace(p.apiToken) == "" {
+		return nil, errors.New("api token is required")
+	}
+
+	pulseURL, err := normalizePulseURL(p.pulseURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid pulse URL: %w", err)
+	}
+	p.pulseURL = pulseURL
+
+	forcedType, err := normalizeProxmoxType(p.proxmoxType)
+	if err != nil {
+		return nil, err
+	}
+
 	var results []*ProxmoxSetupResult
 
 	// If a specific type is forced, only run that
-	if p.proxmoxType != "" {
-		result, err := p.runForType(ctx, p.proxmoxType)
+	if forcedType != "" {
+		result, err := p.runForType(ctx, forcedType)
 		if err != nil {
 			return nil, err
 		}
@@ -230,6 +260,12 @@ func (p *ProxmoxSetup) RunAll(ctx context.Context) ([]*ProxmoxSetupResult, error
 
 // runForType executes setup for a specific Proxmox type.
 func (p *ProxmoxSetup) runForType(ctx context.Context, ptype string) (*ProxmoxSetupResult, error) {
+	normalizedType, err := normalizeProxmoxType(ptype)
+	if err != nil || normalizedType == "" {
+		return nil, fmt.Errorf("invalid proxmox type %q: must be pve or pbs", ptype)
+	}
+	ptype = normalizedType
+
 	// Check if this type is already registered
 	if p.isTypeRegistered(ptype) {
 		p.logger.Info().Str("type", ptype).Msg("Proxmox type already registered, skipping")
@@ -431,14 +467,14 @@ func (p *ProxmoxSetup) getHostURL(ptype string) string {
 	// connections when auto-detection picks the wrong one (e.g., Issue #1061).
 	if p.reportIP != "" {
 		p.logger.Info().Str("ip", p.reportIP).Msg("Using user-specified ReportIP for Proxmox registration")
-		return fmt.Sprintf("https://%s:%s", p.reportIP, port)
+		return formatHTTPSURL(p.reportIP, port)
 	}
 
 	// Priority 2: Try to determine which local IP is used to connect to Pulse
 	// This ensures we pick an IP that can actually communicate with the Pulse server
 	if reachableIP := p.getIPThatReachesPulse(); reachableIP != "" {
 		p.logger.Debug().Str("ip", reachableIP).Msg("Using IP that can reach Pulse server")
-		return fmt.Sprintf("https://%s:%s", reachableIP, port)
+		return formatHTTPSURL(reachableIP, port)
 	}
 
 	// Fallback: Get all IPs and select the best one based on heuristics
@@ -450,7 +486,7 @@ func (p *ProxmoxSetup) getHostURL(ptype string) string {
 
 			bestIP := selectBestIP(ips, hostnameIP)
 			if bestIP != "" {
-				return fmt.Sprintf("https://%s:%s", bestIP, port)
+				return formatHTTPSURL(bestIP, port)
 			}
 		}
 	}
@@ -460,7 +496,7 @@ func (p *ProxmoxSetup) getHostURL(ptype string) string {
 	if hostname == "" {
 		hostname = "localhost"
 	}
-	return fmt.Sprintf("https://%s:%s", hostname, port)
+	return formatHTTPSURL(hostname, port)
 }
 
 // getIPThatReachesPulse determines which local IP is used to connect to the Pulse server.
@@ -477,24 +513,29 @@ func (p *ProxmoxSetup) getIPThatReachesPulse() string {
 		return ""
 	}
 
-	host := u.Host
-	if !strings.Contains(host, ":") {
-		// If port is missing, try to infer it from scheme
-		if u.Scheme == "https" {
-			host += ":443"
-		} else if u.Scheme == "http" {
-			host += ":80"
-		} else {
-			// Pulse default if scheme is missing or weird
-			host += ":7655"
+	host := u.Hostname()
+	if host == "" {
+		return ""
+	}
+
+	port := u.Port()
+	if port == "" {
+		switch u.Scheme {
+		case "https":
+			port = "443"
+		case "http":
+			port = "80"
+		default:
+			port = "7655"
 		}
 	}
+	target := net.JoinHostPort(host, port)
 
 	// Create a UDP "connection" to determine local address (doesn't actually send data)
 	// We use a short timeout as this is just a routing table lookup.
-	conn, err := p.collector.DialTimeout("udp", host, 500*time.Millisecond)
+	conn, err := p.collector.DialTimeout("udp", target, 500*time.Millisecond)
 	if err != nil {
-		p.logger.Debug().Err(err).Str("target", host).Msg("Could not determine local IP for Pulse connection (routing check failed)")
+		p.logger.Debug().Err(err).Str("target", target).Msg("Could not determine local IP for Pulse connection (routing check failed)")
 		return ""
 	}
 	defer conn.Close()
@@ -511,6 +552,13 @@ func (p *ProxmoxSetup) getIPThatReachesPulse() string {
 		return ip
 	}
 	return ""
+}
+
+func formatHTTPSURL(host, port string) string {
+	return (&url.URL{
+		Scheme: "https",
+		Host:   net.JoinHostPort(host, port),
+	}).String()
 }
 
 // getIPForHostname resolves the system hostname to an IP address.

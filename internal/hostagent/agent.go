@@ -9,8 +9,11 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/netip"
+	"net/url"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -110,8 +113,22 @@ func New(cfg Config) (*Agent, error) {
 	if strings.TrimSpace(pulseURL) == "" {
 		pulseURL = "http://localhost:7655"
 	}
-	pulseURL = strings.TrimRight(pulseURL, "/")
+	var err error
+	pulseURL, err = normalizePulseURL(pulseURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid pulse URL: %w", err)
+	}
 	cfg.PulseURL = pulseURL
+
+	cfg.ProxmoxType, err = normalizeProxmoxType(cfg.ProxmoxType)
+	if err != nil {
+		return nil, err
+	}
+
+	cfg.ReportIP, err = normalizeReportIP(cfg.ReportIP)
+	if err != nil {
+		return nil, err
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -227,7 +244,7 @@ func New(cfg Config) (*Agent, error) {
 		agentID:         agentID,
 		agentVersion:    agentVersion,
 		updatedFrom:     updatedFrom,
-		reportIP:        strings.TrimSpace(cfg.ReportIP),
+		reportIP:        cfg.ReportIP,
 		interval:        cfg.Interval,
 		trimmedPulseURL: pulseURL,
 		reportBuffer:    buffer.New[agentshost.Report](bufferCapacity),
@@ -243,6 +260,88 @@ func New(cfg Config) (*Agent, error) {
 	}
 
 	return agent, nil
+}
+
+func normalizePulseURL(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return "", err
+	}
+
+	if parsed.Scheme == "" || parsed.Host == "" {
+		return "", errors.New("must include http:// or https:// with a valid host")
+	}
+
+	scheme := strings.ToLower(parsed.Scheme)
+	if scheme != "http" && scheme != "https" {
+		return "", fmt.Errorf("unsupported scheme %q", parsed.Scheme)
+	}
+
+	if parsed.User != nil {
+		return "", errors.New("userinfo is not supported")
+	}
+
+	if parsed.RawQuery != "" {
+		return "", errors.New("query parameters are not supported")
+	}
+
+	if parsed.Fragment != "" {
+		return "", errors.New("fragments are not supported")
+	}
+
+	if parsed.Hostname() == "" {
+		return "", errors.New("host is required")
+	}
+
+	if port := parsed.Port(); port != "" {
+		portNum, err := strconv.Atoi(port)
+		if err != nil || portNum < 1 || portNum > 65535 {
+			return "", fmt.Errorf("invalid port %q: must be between 1 and 65535", port)
+		}
+	}
+
+	parsed.Scheme = scheme
+	parsed.Host = strings.ToLower(parsed.Host)
+	parsed.Path = strings.TrimRight(parsed.Path, "/")
+	parsed.RawPath = ""
+
+	normalized := strings.TrimRight(parsed.String(), "/")
+	if normalized == "" {
+		return "", errors.New("URL is empty after normalization")
+	}
+
+	return normalized, nil
+}
+
+func normalizeProxmoxType(raw string) (string, error) {
+	value := strings.TrimSpace(strings.ToLower(raw))
+	switch value {
+	case "", "auto":
+		return "", nil
+	case "pve", "pbs":
+		return value, nil
+	default:
+		return "", fmt.Errorf("invalid proxmox type %q: must be pve, pbs, or auto", raw)
+	}
+}
+
+func normalizeReportIP(raw string) (string, error) {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return "", nil
+	}
+
+	addr, err := netip.ParseAddr(value)
+	if err != nil {
+		return "", fmt.Errorf("invalid report IP %q: must be a valid IPv4 or IPv6 address", raw)
+	}
+	if addr.IsUnspecified() {
+		return "", fmt.Errorf("invalid report IP %q: unspecified addresses are not allowed", raw)
+	}
+
+	return addr.String(), nil
 }
 
 // Run executes the agent until the context is cancelled.

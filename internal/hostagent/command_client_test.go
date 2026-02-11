@@ -84,6 +84,11 @@ func TestCommandClientBuildWebSocketURL(t *testing.T) {
 			want:     "ws://example.invalid/api/agent/ws",
 		},
 		{
+			name:     "preserves path prefix",
+			pulseURL: "https://example.invalid/pulse/",
+			want:     "wss://example.invalid/pulse/api/agent/ws",
+		},
+		{
 			name:     "ws preserved",
 			pulseURL: "ws://example.invalid",
 			want:     "ws://example.invalid/api/agent/ws",
@@ -96,6 +101,16 @@ func TestCommandClientBuildWebSocketURL(t *testing.T) {
 		{
 			name:     "invalid url returns error",
 			pulseURL: "http://[::1",
+			wantErr:  true,
+		},
+		{
+			name:     "unsupported scheme returns error",
+			pulseURL: "ftp://example.invalid",
+			wantErr:  true,
+		},
+		{
+			name:     "missing host returns error",
+			pulseURL: "/relative/path",
 			wantErr:  true,
 		},
 	}
