@@ -74,13 +74,31 @@ func (r *Reaper) Run(ctx context.Context) error {
 }
 
 func (r *Reaper) scan() []ReapResult {
-	if r == nil || r.lister == nil || r.now == nil {
+	if r == nil {
+		return nil
+	}
+	if r.lister == nil {
+		log.Error().
+			Bool("live_mode", r.liveMode).
+			Dur("scan_interval", r.scanInterval).
+			Msg("Hosted reaper scan skipped because lister is nil")
+		return nil
+	}
+	if r.now == nil {
+		log.Error().
+			Bool("live_mode", r.liveMode).
+			Dur("scan_interval", r.scanInterval).
+			Msg("Hosted reaper scan skipped because clock is nil")
 		return nil
 	}
 
 	orgs, err := r.lister.ListOrganizations()
 	if err != nil {
-		log.Error().Err(err).Msg("Hosted reaper failed to list organizations")
+		log.Error().
+			Err(err).
+			Bool("live_mode", r.liveMode).
+			Dur("scan_interval", r.scanInterval).
+			Msg("Hosted reaper failed to list organizations")
 		return nil
 	}
 
@@ -107,11 +125,16 @@ func (r *Reaper) scan() []ReapResult {
 		}
 
 		expiredFor := now.Sub(expiry)
-		log.Info().
+		orgLog := log.With().
 			Str("org_id", org.ID).
 			Time("deletion_requested_at", *org.DeletionRequestedAt).
+			Time("deletion_expires_at", expiry).
 			Int("retention_days", org.RetentionDays).
 			Dur("expired_for", expiredFor).
+			Bool("live_mode", r.liveMode).
+			Logger()
+		orgLog.Info().
+			Str("action", "scan_match").
 			Msg("Hosted reaper found expired pending-deletion organization")
 
 		result := ReapResult{
@@ -126,16 +149,16 @@ func (r *Reaper) scan() []ReapResult {
 
 			if r.deleter == nil {
 				result.Error = errors.New("org deleter is nil")
-				log.Error().
-					Str("org_id", org.ID).
+				orgLog.Error().
+					Str("action", result.Action).
 					Msg("Hosted reaper is in live mode but deleter is nil")
 			} else {
 				if r.OnBeforeDelete != nil {
 					if err := r.OnBeforeDelete(org.ID); err != nil {
 						result.Error = err
-						log.Error().
+						orgLog.Error().
 							Err(err).
-							Str("org_id", org.ID).
+							Str("action", result.Action).
 							Msg("Hosted reaper OnBeforeDelete hook failed")
 						results = append(results, result)
 						continue
@@ -143,19 +166,21 @@ func (r *Reaper) scan() []ReapResult {
 				}
 				result.Error = r.deleter.DeleteOrganization(org.ID)
 				if result.Error != nil {
-					log.Error().
+					orgLog.Error().
 						Err(result.Error).
-						Str("org_id", org.ID).
+						Str("action", result.Action).
 						Msg("Hosted reaper failed to delete expired organization")
 				} else {
-					log.Info().
-						Str("org_id", org.ID).
+					orgLog.Info().
+						Str("action", result.Action).
 						Msg("Hosted reaper deleted expired organization")
 				}
 			}
 		} else {
 			result.Action = "dry_run"
-			log.Info().Str("org_id", org.ID).Msg("DRY RUN: would delete org")
+			orgLog.Info().
+				Str("action", result.Action).
+				Msg("Hosted reaper dry-run would delete expired organization")
 		}
 
 		results = append(results, result)
