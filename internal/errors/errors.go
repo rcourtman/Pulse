@@ -43,6 +43,9 @@ type MonitorError struct {
 }
 
 func (e *MonitorError) Error() string {
+	if e == nil {
+		return "<nil>"
+	}
 	if e.Node != "" {
 		return fmt.Sprintf("%s failed on %s/%s: %v", e.Op, e.Instance, e.Node, e.Err)
 	}
@@ -53,12 +56,15 @@ func (e *MonitorError) Error() string {
 }
 
 func (e *MonitorError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
 	return e.Err
 }
 
 // Is implements errors.Is interface
 func (e *MonitorError) Is(target error) bool {
-	if target == nil {
+	if e == nil || target == nil {
 		return false
 	}
 
@@ -92,12 +98,18 @@ func NewMonitorError(errorType ErrorType, op, instance string, err error) *Monit
 
 // WithNode adds node information to the error
 func (e *MonitorError) WithNode(node string) *MonitorError {
+	if e == nil {
+		return nil
+	}
 	e.Node = node
 	return e
 }
 
 // WithStatusCode adds HTTP status code to the error
 func (e *MonitorError) WithStatusCode(code int) *MonitorError {
+	if e == nil {
+		return nil
+	}
 	e.StatusCode = code
 	// Update retryable based on status code
 	if code >= 500 || code == 429 || code == 408 {
@@ -140,6 +152,9 @@ func WrapAPIError(op, instance string, err error, statusCode int) error {
 func IsRetryableError(err error) bool {
 	var monErr *MonitorError
 	if errors.As(err, &monErr) {
+		if monErr == nil {
+			return false
+		}
 		return monErr.Retryable
 	}
 
@@ -155,13 +170,15 @@ func IsAuthError(err error) bool {
 
 	var monErr *MonitorError
 	if errors.As(err, &monErr) {
-		// Check type
-		if monErr.Type == ErrorTypeAuth {
-			return true
-		}
-		// Check status code for 401/403
-		if monErr.StatusCode == 401 || monErr.StatusCode == 403 {
-			return true
+		if monErr != nil {
+			// Check type
+			if monErr.Type == ErrorTypeAuth {
+				return true
+			}
+			// Check status code for 401/403
+			if monErr.StatusCode == 401 || monErr.StatusCode == 403 {
+				return true
+			}
 		}
 	}
 
