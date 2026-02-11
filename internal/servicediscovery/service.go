@@ -211,12 +211,6 @@ type AIAnalyzer interface {
 	AnalyzeForDiscovery(ctx context.Context, prompt string) (string, error)
 }
 
-// WSMessage represents a WebSocket message for broadcasting.
-type WSMessage struct {
-	Type string      `json:"type"`
-	Data interface{} `json:"data"`
-}
-
 // WSBroadcaster provides WebSocket broadcasting capabilities.
 type WSBroadcaster interface {
 	BroadcastDiscoveryProgress(progress *DiscoveryProgress)

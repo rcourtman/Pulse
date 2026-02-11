@@ -242,8 +242,3 @@ func GenerateK8sPodFingerprint(clusterID string, pod *KubernetesPod) *ContainerF
 
 	return fp
 }
-
-// GenerateFingerprint is an alias for GenerateDockerFingerprint for backwards compatibility.
-func GenerateFingerprint(hostID string, container *DockerContainer) *ContainerFingerprint {
-	return GenerateDockerFingerprint(hostID, container)
-}

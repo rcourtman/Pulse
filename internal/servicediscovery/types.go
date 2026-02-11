@@ -26,11 +26,8 @@ type FactCategory string
 
 const (
 	FactCategoryVersion    FactCategory = "version"
-	FactCategoryConfig     FactCategory = "config"
 	FactCategoryService    FactCategory = "service"
-	FactCategoryPort       FactCategory = "port"
 	FactCategoryHardware   FactCategory = "hardware"
-	FactCategoryNetwork    FactCategory = "network"
 	FactCategoryStorage    FactCategory = "storage"
 	FactCategoryDependency FactCategory = "dependency"
 	FactCategorySecurity   FactCategory = "security"
@@ -40,21 +37,19 @@ const (
 type ServiceCategory string
 
 const (
-	CategoryDatabase     ServiceCategory = "database"
-	CategoryWebServer    ServiceCategory = "web_server"
-	CategoryCache        ServiceCategory = "cache"
-	CategoryMessageQueue ServiceCategory = "message_queue"
-	CategoryMonitoring   ServiceCategory = "monitoring"
-	CategoryBackup       ServiceCategory = "backup"
-	CategoryNVR          ServiceCategory = "nvr"
-	CategoryStorage      ServiceCategory = "storage"
-	CategoryContainer    ServiceCategory = "container"
-	CategoryVirtualizer  ServiceCategory = "virtualizer"
-	CategoryNetwork      ServiceCategory = "network"
-	CategorySecurity     ServiceCategory = "security"
-	CategoryMedia        ServiceCategory = "media"
-	CategoryHomeAuto     ServiceCategory = "home_automation"
-	CategoryUnknown      ServiceCategory = "unknown"
+	CategoryDatabase    ServiceCategory = "database"
+	CategoryWebServer   ServiceCategory = "web_server"
+	CategoryCache       ServiceCategory = "cache"
+	CategoryMonitoring  ServiceCategory = "monitoring"
+	CategoryBackup      ServiceCategory = "backup"
+	CategoryNVR         ServiceCategory = "nvr"
+	CategoryStorage     ServiceCategory = "storage"
+	CategoryVirtualizer ServiceCategory = "virtualizer"
+	CategoryNetwork     ServiceCategory = "network"
+	CategorySecurity    ServiceCategory = "security"
+	CategoryMedia       ServiceCategory = "media"
+	CategoryHomeAuto    ServiceCategory = "home_automation"
+	CategoryUnknown     ServiceCategory = "unknown"
 )
 
 // ResourceDiscovery is the main data model for discovered resource information.
@@ -176,11 +171,8 @@ type DiscoveryRequest struct {
 type DiscoveryStatus string
 
 const (
-	DiscoveryStatusPending    DiscoveryStatus = "pending"
-	DiscoveryStatusRunning    DiscoveryStatus = "running"
-	DiscoveryStatusCompleted  DiscoveryStatus = "completed"
-	DiscoveryStatusFailed     DiscoveryStatus = "failed"
-	DiscoveryStatusNotStarted DiscoveryStatus = "not_started"
+	DiscoveryStatusRunning   DiscoveryStatus = "running"
+	DiscoveryStatusCompleted DiscoveryStatus = "completed"
 )
 
 // DiscoveryProgress represents the progress of an ongoing discovery.

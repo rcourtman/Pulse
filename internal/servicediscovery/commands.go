@@ -43,12 +43,6 @@ type DiscoveryCommand struct {
 	Optional    bool     `json:"optional"`    // If true, don't fail if command fails
 }
 
-// CommandSet represents a set of commands for a resource type.
-type CommandSet struct {
-	ResourceType ResourceType
-	Commands     []DiscoveryCommand
-}
-
 // GetCommandsForResource returns the commands to run for a given resource type.
 func GetCommandsForResource(resourceType ResourceType) []DiscoveryCommand {
 	switch resourceType {
@@ -550,14 +544,4 @@ func GetCommandCategories(resourceType ResourceType) []string {
 	}
 
 	return categories
-}
-
-// GetCommandSummary returns a human-readable list of commands for a resource type.
-func GetCommandSummary(resourceType ResourceType) []string {
-	commands := GetCommandsForResource(resourceType)
-	summaries := make([]string, 0, len(commands))
-	for _, cmd := range commands {
-		summaries = append(summaries, cmd.Command)
-	}
-	return summaries
 }
