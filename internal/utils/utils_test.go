@@ -367,6 +367,18 @@ func TestCompareVersions(t *testing.T) {
 		{"v4.36.2+build123", "v4.36.2", 0},              // With v prefix
 		{"4.36.3", "4.36.2+git.14.g469307d6.dirty", 1},  // Newer beats dirty
 		{"4.36.2+git.14.g469307d6.dirty", "4.36.3", -1}, // Dirty older than newer
+
+		// Semver prerelease ordering
+		{"4.22.0", "4.22.0-rc.3", 1},         // Stable > prerelease
+		{"4.22.0-rc.3", "4.22.0", -1},        // Prerelease < stable
+		{"4.22.0-rc.10", "4.22.0-rc.3", 1},   // Numeric prerelease comparison
+		{"4.22.0-rc.2", "4.22.0-rc.10", -1},  // Numeric prerelease comparison reverse
+		{"4.22.0-rc.1", "4.22.0-rc.1.1", -1}, // Shorter prerelease is lower precedence
+		{"4.22.0-rc.1.1", "4.22.0-rc.1", 1},  // Longer prerelease is higher when shared prefix equal
+		{"4.22.0-1", "4.22.0-alpha", -1},     // Numeric identifier < non-numeric
+		{"4.22.0-alpha", "4.22.0-1", 1},      // Non-numeric identifier > numeric
+		{"4.22.0-alpha.1", "4.22.0-alpha.2", -1},
+		{"4.22.0-beta", "4.22.0-alpha", 1},
 	}
 
 	for _, tc := range tests {

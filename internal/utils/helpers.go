@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/google/uuid"
@@ -74,33 +75,163 @@ func CompareVersions(a, b string) int {
 	a = NormalizeVersion(a)
 	b = NormalizeVersion(b)
 
-	// Split into parts
-	partsA := strings.Split(a, ".")
-	partsB := strings.Split(b, ".")
+	verA := parseComparableVersion(a)
+	verB := parseComparableVersion(b)
 
-	// Compare each part numerically
-	maxLen := len(partsA)
-	if len(partsB) > maxLen {
-		maxLen = len(partsB)
+	if verA.major != verB.major {
+		if verA.major > verB.major {
+			return 1
+		}
+		return -1
+	}
+	if verA.minor != verB.minor {
+		if verA.minor > verB.minor {
+			return 1
+		}
+		return -1
+	}
+	if verA.patch != verB.patch {
+		if verA.patch > verB.patch {
+			return 1
+		}
+		return -1
+	}
+
+	return comparePrerelease(verA.prerelease, verB.prerelease)
+}
+
+type comparableVersion struct {
+	major      int
+	minor      int
+	patch      int
+	prerelease []string
+}
+
+func parseComparableVersion(version string) comparableVersion {
+	core := version
+	prerelease := ""
+	if idx := strings.Index(core, "-"); idx != -1 {
+		prerelease = core[idx+1:]
+		core = core[:idx]
+	}
+
+	parts := strings.Split(core, ".")
+	getPart := func(index int) int {
+		if index >= len(parts) {
+			return 0
+		}
+		return parseVersionNumber(parts[index])
+	}
+
+	parsed := comparableVersion{
+		major: getPart(0),
+		minor: getPart(1),
+		patch: getPart(2),
+	}
+
+	if prerelease == "" {
+		return parsed
+	}
+	for _, identifier := range strings.Split(prerelease, ".") {
+		identifier = strings.TrimSpace(identifier)
+		if identifier == "" {
+			continue
+		}
+		parsed.prerelease = append(parsed.prerelease, identifier)
+	}
+
+	return parsed
+}
+
+func parseVersionNumber(part string) int {
+	part = strings.TrimSpace(part)
+	if part == "" {
+		return 0
+	}
+
+	digitsEnd := 0
+	for digitsEnd < len(part) && part[digitsEnd] >= '0' && part[digitsEnd] <= '9' {
+		digitsEnd++
+	}
+	if digitsEnd == 0 {
+		return 0
+	}
+
+	value, err := strconv.Atoi(part[:digitsEnd])
+	if err != nil {
+		return 0
+	}
+	return value
+}
+
+func comparePrerelease(a, b []string) int {
+	// Stable versions (no prerelease) are always newer than prereleases.
+	if len(a) == 0 && len(b) == 0 {
+		return 0
+	}
+	if len(a) == 0 {
+		return 1
+	}
+	if len(b) == 0 {
+		return -1
+	}
+
+	maxLen := len(a)
+	if len(b) > maxLen {
+		maxLen = len(b)
 	}
 
 	for i := 0; i < maxLen; i++ {
-		var numA, numB int
-
-		if i < len(partsA) {
-			fmt.Sscanf(partsA[i], "%d", &numA)
+		if i >= len(a) {
+			return -1
 		}
-		if i < len(partsB) {
-			fmt.Sscanf(partsB[i], "%d", &numB)
-		}
-
-		if numA > numB {
+		if i >= len(b) {
 			return 1
 		}
-		if numA < numB {
+
+		aPart := a[i]
+		bPart := b[i]
+		aNum, aIsNum := parseNumericIdentifier(aPart)
+		bNum, bIsNum := parseNumericIdentifier(bPart)
+
+		switch {
+		case aIsNum && bIsNum:
+			if aNum > bNum {
+				return 1
+			}
+			if aNum < bNum {
+				return -1
+			}
+		case aIsNum && !bIsNum:
 			return -1
+		case !aIsNum && bIsNum:
+			return 1
+		default:
+			if aPart > bPart {
+				return 1
+			}
+			if aPart < bPart {
+				return -1
+			}
 		}
 	}
 
 	return 0
+}
+
+func parseNumericIdentifier(identifier string) (int, bool) {
+	if identifier == "" {
+		return 0, false
+	}
+	for _, ch := range identifier {
+		if ch < '0' || ch > '9' {
+			return 0, false
+		}
+	}
+
+	value, err := strconv.Atoi(identifier)
+	if err != nil {
+		return 0, false
+	}
+	return value, true
 }
