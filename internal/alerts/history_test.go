@@ -460,6 +460,32 @@ func TestLoadHistory_FromBackupFile(t *testing.T) {
 	}
 }
 
+func TestLoadHistory_CorruptMainFallsBackToBackup(t *testing.T) {
+	hm := newTestHistoryManager(t)
+
+	if err := os.WriteFile(hm.historyFile, []byte("not valid json{"), 0644); err != nil {
+		t.Fatalf("Failed to create corrupt main history file: %v", err)
+	}
+
+	recentTime := time.Now().Add(-24 * time.Hour).Format(time.RFC3339)
+	content := `[{"alert":{"id":"backup-fallback","type":"memory"},"timestamp":"` + recentTime + `"}]`
+	if err := os.WriteFile(hm.backupFile, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to create backup history file: %v", err)
+	}
+
+	if err := hm.loadHistory(); err != nil {
+		t.Fatalf("loadHistory should fallback to backup file, got error: %v", err)
+	}
+
+	if len(hm.history) != 1 {
+		t.Fatalf("history length = %d, want 1", len(hm.history))
+	}
+
+	if hm.history[0].Alert.ID != "backup-fallback" {
+		t.Errorf("alert ID = %s, want backup-fallback", hm.history[0].Alert.ID)
+	}
+}
+
 func TestLoadHistory_InvalidJSON(t *testing.T) {
 	// t.Parallel()
 
