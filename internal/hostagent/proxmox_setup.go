@@ -21,7 +21,7 @@ type ProxmoxSetup struct {
 	httpClient         *http.Client
 	pulseURL           string
 	apiToken           string
-	proxmoxType        string // "pve", "pbs", or "" for auto-detect
+	proxmoxType        proxmoxProductType // pve, pbs, or unknown for auto-detect
 	hostname           string
 	reportIP           string
 	insecureSkipVerify bool
@@ -35,6 +35,27 @@ type ProxmoxSetupResult struct {
 	TokenValue  string // The secret token value
 	NodeHost    string // The host URL for auto-registration
 	Registered  bool   // Whether the node was successfully registered with Pulse
+}
+
+type proxmoxProductType string
+
+const (
+	proxmoxProductUnknown proxmoxProductType = ""
+	proxmoxProductPVE     proxmoxProductType = "pve"
+	proxmoxProductPBS     proxmoxProductType = "pbs"
+)
+
+type autoRegisterSource string
+
+const autoRegisterSourceAgent autoRegisterSource = "agent"
+
+type autoRegisterRequest struct {
+	Type       proxmoxProductType `json:"type"`
+	Host       string             `json:"host"`
+	ServerName string             `json:"serverName"`
+	TokenID    string             `json:"tokenId"`
+	TokenValue string             `json:"tokenValue"`
+	Source     autoRegisterSource `json:"source"`
 }
 
 const (
@@ -118,15 +139,44 @@ var (
 	stateFilePBS = "/var/lib/pulse-agent/proxmox-pbs-registered"
 )
 
+func parseProxmoxProductType(rawType string) proxmoxProductType {
+	switch strings.ToLower(strings.TrimSpace(rawType)) {
+	case string(proxmoxProductPVE):
+		return proxmoxProductPVE
+	case string(proxmoxProductPBS):
+		return proxmoxProductPBS
+	default:
+		return proxmoxProductUnknown
+	}
+}
+
+func proxmoxProductTypesToStrings(types []proxmoxProductType) []string {
+	if len(types) == 0 {
+		return nil
+	}
+
+	result := make([]string, 0, len(types))
+	for _, t := range types {
+		result = append(result, string(t))
+	}
+
+	return result
+}
+
 // NewProxmoxSetup creates a new ProxmoxSetup instance.
 func NewProxmoxSetup(logger zerolog.Logger, httpClient *http.Client, collector SystemCollector, pulseURL, apiToken, proxmoxType, hostname, reportIP string, insecure bool) *ProxmoxSetup {
+	parsedType := parseProxmoxProductType(proxmoxType)
+	if strings.TrimSpace(proxmoxType) != "" && parsedType == proxmoxProductUnknown {
+		logger.Warn().Str("proxmoxType", proxmoxType).Msg("Invalid Proxmox type override, falling back to auto-detect")
+	}
+
 	return &ProxmoxSetup{
 		logger:             logger,
 		httpClient:         httpClient,
 		collector:          collector,
 		pulseURL:           strings.TrimRight(pulseURL, "/"),
 		apiToken:           apiToken,
-		proxmoxType:        proxmoxType,
+		proxmoxType:        parsedType,
 		hostname:           hostname,
 		reportIP:           reportIP,
 		insecureSkipVerify: insecure,
@@ -146,13 +196,13 @@ func (p *ProxmoxSetup) Run(ctx context.Context) (*ProxmoxSetupResult, error) {
 
 	// Detect Proxmox type
 	ptype := p.proxmoxType
-	if ptype == "" {
+	if ptype == proxmoxProductUnknown {
 		detected := p.detectProxmoxType()
-		if detected == "" {
+		if detected == proxmoxProductUnknown {
 			return nil, fmt.Errorf("this system does not appear to be a Proxmox VE or PBS node")
 		}
 		ptype = detected
-		p.logger.Info().Str("type", ptype).Msg("Auto-detected Proxmox type")
+		p.logger.Info().Str("type", string(ptype)).Msg("Auto-detected Proxmox type")
 	}
 
 	// Create monitoring user and token
@@ -178,7 +228,7 @@ func (p *ProxmoxSetup) Run(ctx context.Context) (*ProxmoxSetupResult, error) {
 	}
 
 	return &ProxmoxSetupResult{
-		ProxmoxType: ptype,
+		ProxmoxType: string(ptype),
 		TokenID:     tokenID,
 		TokenValue:  tokenValue,
 		NodeHost:    hostURL,
@@ -194,7 +244,7 @@ func (p *ProxmoxSetup) RunAll(ctx context.Context) ([]*ProxmoxSetupResult, error
 	var results []*ProxmoxSetupResult
 
 	// If a specific type is forced, only run that
-	if p.proxmoxType != "" {
+	if p.proxmoxType != proxmoxProductUnknown {
 		result, err := p.runForType(ctx, p.proxmoxType)
 		if err != nil {
 			return nil, err
@@ -211,13 +261,13 @@ func (p *ProxmoxSetup) RunAll(ctx context.Context) ([]*ProxmoxSetupResult, error
 		return nil, fmt.Errorf("this system does not appear to be a Proxmox VE or PBS node")
 	}
 
-	p.logger.Info().Strs("types", types).Msg("Auto-detected Proxmox products")
+	p.logger.Info().Strs("types", proxmoxProductTypesToStrings(types)).Msg("Auto-detected Proxmox products")
 
 	// Register each type
 	for _, ptype := range types {
 		result, err := p.runForType(ctx, ptype)
 		if err != nil {
-			p.logger.Error().Err(err).Str("type", ptype).Msg("Failed to setup Proxmox type")
+			p.logger.Error().Err(err).Str("type", string(ptype)).Msg("Failed to setup Proxmox type")
 			continue // Don't fail completely, try other types
 		}
 		if result != nil {
@@ -229,14 +279,18 @@ func (p *ProxmoxSetup) RunAll(ctx context.Context) ([]*ProxmoxSetupResult, error
 }
 
 // runForType executes setup for a specific Proxmox type.
-func (p *ProxmoxSetup) runForType(ctx context.Context, ptype string) (*ProxmoxSetupResult, error) {
+func (p *ProxmoxSetup) runForType(ctx context.Context, ptype proxmoxProductType) (*ProxmoxSetupResult, error) {
+	if ptype == proxmoxProductUnknown {
+		return nil, fmt.Errorf("unsupported Proxmox type")
+	}
+
 	// Check if this type is already registered
 	if p.isTypeRegistered(ptype) {
-		p.logger.Info().Str("type", ptype).Msg("Proxmox type already registered, skipping")
+		p.logger.Info().Str("type", string(ptype)).Msg("Proxmox type already registered, skipping")
 		return nil, nil
 	}
 
-	p.logger.Info().Str("type", ptype).Msg("Setting up Proxmox type")
+	p.logger.Info().Str("type", string(ptype)).Msg("Setting up Proxmox type")
 
 	// Create monitoring user and token
 	tokenID, tokenValue, err := p.setupToken(ctx, ptype)
@@ -244,7 +298,7 @@ func (p *ProxmoxSetup) runForType(ctx context.Context, ptype string) (*ProxmoxSe
 		return nil, fmt.Errorf("failed to create %s API token: %w", ptype, err)
 	}
 
-	p.logger.Info().Str("type", ptype).Str("token_id", tokenID).Msg("Created Proxmox API token")
+	p.logger.Info().Str("type", string(ptype)).Str("token_id", tokenID).Msg("Created Proxmox API token")
 
 	// Get the host URL for registration
 	hostURL := p.getHostURL(ptype)
@@ -252,15 +306,15 @@ func (p *ProxmoxSetup) runForType(ctx context.Context, ptype string) (*ProxmoxSe
 	// Register with Pulse
 	registered := false
 	if err := p.registerWithPulse(ctx, ptype, hostURL, tokenID, tokenValue); err != nil {
-		p.logger.Warn().Err(err).Str("type", ptype).Msg("Failed to register with Pulse (node may already exist)")
+		p.logger.Warn().Err(err).Str("type", string(ptype)).Msg("Failed to register with Pulse (node may already exist)")
 	} else {
 		registered = true
 		p.markTypeAsRegistered(ptype)
-		p.logger.Info().Str("type", ptype).Str("host", hostURL).Msg("Successfully registered Proxmox node with Pulse")
+		p.logger.Info().Str("type", string(ptype)).Str("host", hostURL).Msg("Successfully registered Proxmox node with Pulse")
 	}
 
 	return &ProxmoxSetupResult{
-		ProxmoxType: ptype,
+		ProxmoxType: string(ptype),
 		TokenID:     tokenID,
 		TokenValue:  tokenValue,
 		NodeHost:    hostURL,
@@ -271,12 +325,12 @@ func (p *ProxmoxSetup) runForType(ctx context.Context, ptype string) (*ProxmoxSe
 // detectProxmoxType checks for pvesh (PVE) or proxmox-backup-manager (PBS).
 // For backward compatibility, returns the first detected type.
 // Use detectProxmoxTypes() to get all detected types.
-func (p *ProxmoxSetup) detectProxmoxType() string {
+func (p *ProxmoxSetup) detectProxmoxType() proxmoxProductType {
 	types := p.detectProxmoxTypes()
 	if len(types) > 0 {
 		return types[0]
 	}
-	return ""
+	return proxmoxProductUnknown
 }
 
 // detectProxmoxTypes checks for ALL Proxmox products on this system.
@@ -285,30 +339,34 @@ func (p *ProxmoxSetup) detectProxmoxType() string {
 // detectProxmoxTypes checks for ALL Proxmox products on this system.
 // Returns a slice of detected types (e.g., ["pve", "pbs"] if both are installed).
 // This is common when PBS is installed directly on a PVE host.
-func (p *ProxmoxSetup) detectProxmoxTypes() []string {
-	var types []string
+func (p *ProxmoxSetup) detectProxmoxTypes() []proxmoxProductType {
+	var types []proxmoxProductType
 
 	// Check for PVE
 	if _, err := p.collector.LookPath("pvesh"); err == nil {
-		types = append(types, "pve")
+		types = append(types, proxmoxProductPVE)
 	}
 
 	// Check for PBS
 	if _, err := p.collector.LookPath("proxmox-backup-manager"); err == nil {
-		types = append(types, "pbs")
+		types = append(types, proxmoxProductPBS)
 	}
 
 	return types
 }
 
 // setupToken creates the monitoring user and API token.
-func (p *ProxmoxSetup) setupToken(ctx context.Context, ptype string) (string, string, error) {
+func (p *ProxmoxSetup) setupToken(ctx context.Context, ptype proxmoxProductType) (string, string, error) {
 	tokenName := fmt.Sprintf("pulse-%d", time.Now().Unix())
 
-	if ptype == "pve" {
+	switch ptype {
+	case proxmoxProductPVE:
 		return p.setupPVEToken(ctx, tokenName)
+	case proxmoxProductPBS:
+		return p.setupPBSToken(ctx, tokenName)
+	default:
+		return "", "", fmt.Errorf("unsupported Proxmox type %q", ptype)
 	}
-	return p.setupPBSToken(ctx, tokenName)
 }
 
 // setupPVEToken creates a PVE monitoring user and token.
@@ -420,9 +478,9 @@ func (p *ProxmoxSetup) parsePBSTokenValue(output string) string {
 
 // getHostURL constructs the host URL for this Proxmox node.
 // Uses the local IP that can reach Pulse, falling back to intelligent IP selection.
-func (p *ProxmoxSetup) getHostURL(ptype string) string {
+func (p *ProxmoxSetup) getHostURL(ptype proxmoxProductType) string {
 	port := "8006"
-	if ptype == "pbs" {
+	if ptype == proxmoxProductPBS {
 		port = "8007"
 	}
 
@@ -640,14 +698,14 @@ func scoreIPv4(ip string) int {
 }
 
 // registerWithPulse calls the auto-register endpoint to add the node.
-func (p *ProxmoxSetup) registerWithPulse(ctx context.Context, ptype, hostURL, tokenID, tokenValue string) error {
-	payload := map[string]interface{}{
-		"type":       ptype,
-		"host":       hostURL,
-		"serverName": p.hostname,
-		"tokenId":    tokenID,
-		"tokenValue": tokenValue,
-		"source":     "agent", // Indicates this was registered via agent
+func (p *ProxmoxSetup) registerWithPulse(ctx context.Context, ptype proxmoxProductType, hostURL, tokenID, tokenValue string) error {
+	payload := autoRegisterRequest{
+		Type:       ptype,
+		Host:       hostURL,
+		ServerName: p.hostname,
+		TokenID:    tokenID,
+		TokenValue: tokenValue,
+		Source:     autoRegisterSourceAgent,
 	}
 
 	body, err := json.Marshal(payload)
@@ -684,7 +742,7 @@ func (p *ProxmoxSetup) isAlreadyRegistered() bool {
 }
 
 // isTypeRegistered checks if a specific Proxmox type has been registered.
-func (p *ProxmoxSetup) isTypeRegistered(ptype string) bool {
+func (p *ProxmoxSetup) isTypeRegistered(ptype proxmoxProductType) bool {
 	// Check per-type state file first (new behavior)
 	stateFile := p.stateFileForType(ptype)
 	if _, err := p.collector.Stat(stateFile); err == nil {
@@ -707,22 +765,22 @@ func (p *ProxmoxSetup) isTypeRegistered(ptype string) bool {
 
 		// The old code registered the "first" type it found
 		// If PVE is installed, it was always detected first
-		if ptype == "pve" {
+		if ptype == proxmoxProductPVE {
 			for _, t := range types {
-				if t == "pve" {
+				if t == proxmoxProductPVE {
 					return true
 				}
 			}
 		}
 		// If PBS-only host (no PVE), PBS was what was registered
-		if ptype == "pbs" {
+		if ptype == proxmoxProductPBS {
 			hasPVE := false
 			hasPBS := false
 			for _, t := range types {
-				if t == "pve" {
+				if t == proxmoxProductPVE {
 					hasPVE = true
 				}
-				if t == "pbs" {
+				if t == proxmoxProductPBS {
 					hasPBS = true
 				}
 			}
@@ -736,11 +794,11 @@ func (p *ProxmoxSetup) isTypeRegistered(ptype string) bool {
 }
 
 // stateFileForType returns the state file path for a specific Proxmox type.
-func (p *ProxmoxSetup) stateFileForType(ptype string) string {
+func (p *ProxmoxSetup) stateFileForType(ptype proxmoxProductType) string {
 	switch ptype {
-	case "pve":
+	case proxmoxProductPVE:
 		return stateFilePVE
-	case "pbs":
+	case proxmoxProductPBS:
 		return stateFilePBS
 	default:
 		return stateFilePath
@@ -760,7 +818,7 @@ func (p *ProxmoxSetup) markAsRegistered() {
 }
 
 // markTypeAsRegistered creates a state file for a specific Proxmox type.
-func (p *ProxmoxSetup) markTypeAsRegistered(ptype string) {
+func (p *ProxmoxSetup) markTypeAsRegistered(ptype proxmoxProductType) {
 	if err := p.collector.MkdirAll(stateFileDir, 0755); err != nil {
 		p.logger.Warn().Err(err).Msg("Failed to create state directory")
 		return
@@ -768,6 +826,6 @@ func (p *ProxmoxSetup) markTypeAsRegistered(ptype string) {
 
 	stateFile := p.stateFileForType(ptype)
 	if err := p.collector.WriteFile(stateFile, []byte(time.Now().Format(time.RFC3339)), 0644); err != nil {
-		p.logger.Warn().Err(err).Str("type", ptype).Msg("Failed to write type state file")
+		p.logger.Warn().Err(err).Str("type", string(ptype)).Msg("Failed to write type state file")
 	}
 }
