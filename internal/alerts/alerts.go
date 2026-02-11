@@ -2,6 +2,7 @@ package alerts
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -25,6 +26,8 @@ const (
 	AlertLevelWarning  AlertLevel = "warning"
 	AlertLevelCritical AlertLevel = "critical"
 )
+
+var ErrAlertNotFound = errors.New("alert not found")
 
 // ActivationState represents the alert notification activation state
 type ActivationState string
@@ -6656,7 +6659,7 @@ func (m *Manager) AcknowledgeAlert(alertID, user string) error {
 	alert, exists := m.activeAlerts[alertID]
 	if !exists {
 		m.mu.Unlock()
-		return fmt.Errorf("alert not found: %s", alertID)
+		return fmt.Errorf("%w: %s", ErrAlertNotFound, alertID)
 	}
 
 	alert.Acknowledged = true
@@ -6692,7 +6695,7 @@ func (m *Manager) UnacknowledgeAlert(alertID string) error {
 	alert, exists := m.activeAlerts[alertID]
 	if !exists {
 		m.mu.Unlock()
-		return fmt.Errorf("alert not found: %s", alertID)
+		return fmt.Errorf("%w: %s", ErrAlertNotFound, alertID)
 	}
 
 	alert.Acknowledged = false
@@ -9197,24 +9200,35 @@ func (m *Manager) SaveActiveAlerts() error {
 		return fmt.Errorf("failed to create temp file: %w", err)
 	}
 	tmpName := tmpFile.Name()
+	cleanupTemp := true
 
 	// Ensure cleanup of temp file in case of failure
-	defer os.Remove(tmpName)
+	defer func() {
+		if !cleanupTemp {
+			return
+		}
+		if err := os.Remove(tmpName); err != nil && !os.IsNotExist(err) {
+			log.Warn().Err(err).Str("file", tmpName).Msg("Failed to remove temp active alerts file")
+		}
+	}()
 
 	if _, err := tmpFile.Write(data); err != nil {
+		writeErr := fmt.Errorf("failed to write active alerts temp file %s: %w", tmpName, err)
 		if closeErr := tmpFile.Close(); closeErr != nil {
-			log.Warn().Err(closeErr).Str("file", tmpName).Msg("Failed to close temp file after write error")
+			closeErr = fmt.Errorf("failed to close temp file %s after write failure: %w", tmpName, closeErr)
+			return fmt.Errorf("failed to persist active alerts: %w", errors.Join(writeErr, closeErr))
 		}
-		return fmt.Errorf("failed to write active alerts: %w", err)
+		return writeErr
 	}
 	if err := tmpFile.Close(); err != nil {
-		return fmt.Errorf("failed to close temp file: %w", err)
+		return fmt.Errorf("failed to close active alerts temp file %s: %w", tmpName, err)
 	}
 
 	finalFile := filepath.Join(alertsDir, "active-alerts.json")
 	if err := os.Rename(tmpName, finalFile); err != nil {
-		return fmt.Errorf("failed to rename active alerts file: %w", err)
+		return fmt.Errorf("failed to rename active alerts file from %s to %s: %w", tmpName, finalFile, err)
 	}
+	cleanupTemp = false
 
 	log.Debug().Int("count", len(alerts)).Msg("Saved active alerts to disk")
 	return nil

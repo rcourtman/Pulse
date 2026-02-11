@@ -167,14 +167,16 @@ func (hm *HistoryManager) GetAllHistory(limit int) []Alert {
 // loadHistory loads history from disk
 func (hm *HistoryManager) loadHistory() error {
 	// Try loading from main file first
-	data, err := os.ReadFile(hm.historyFile)
+	sourceFile := hm.historyFile
+	data, err := os.ReadFile(sourceFile)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			log.Warn().Err(err).Str("file", hm.historyFile).Msg("Failed to read history file")
+			log.Warn().Err(err).Str("file", sourceFile).Msg("Failed to read history file")
 		}
 
 		// Try backup file
-		data, err = os.ReadFile(hm.backupFile)
+		sourceFile = hm.backupFile
+		data, err = os.ReadFile(sourceFile)
 		if err != nil {
 			if os.IsNotExist(err) {
 				// Both files don't exist - this is normal on first startup
@@ -186,14 +188,14 @@ func (hm *HistoryManager) loadHistory() error {
 				log.Warn().Err(err).Str("file", hm.backupFile).Msg("Permission denied reading backup history file - check file ownership")
 				return nil // Continue without history rather than failing
 			}
-			return fmt.Errorf("failed to load backup history: %w", err)
+			return fmt.Errorf("historyManager.loadHistory: read backup history file %s: %w", hm.backupFile, err)
 		}
 		log.Info().Msg("Loaded alert history from backup file")
 	}
 
 	var history []HistoryEntry
 	if err := json.Unmarshal(data, &history); err != nil {
-		return fmt.Errorf("failed to unmarshal history: %w", err)
+		return fmt.Errorf("historyManager.loadHistory: unmarshal history from %s: %w", sourceFile, err)
 	}
 
 	hm.history = history
@@ -212,6 +214,10 @@ func (hm *HistoryManager) saveHistory() error {
 
 // saveHistoryWithRetry saves history with exponential backoff retry
 func (hm *HistoryManager) saveHistoryWithRetry(maxRetries int) error {
+	if maxRetries < 1 {
+		return fmt.Errorf("historyManager.saveHistoryWithRetry: maxRetries must be at least 1, got %d", maxRetries)
+	}
+
 	// Serialize all disk writes to prevent concurrent saves from overwriting each other
 	hm.saveMu.Lock()
 	defer hm.saveMu.Unlock()
@@ -223,7 +229,7 @@ func (hm *HistoryManager) saveHistoryWithRetry(maxRetries int) error {
 
 	data, err := json.Marshal(snapshot)
 	if err != nil {
-		return fmt.Errorf("failed to marshal history: %w", err)
+		return fmt.Errorf("historyManager.saveHistoryWithRetry: marshal history snapshot: %w", err)
 	}
 
 	historyFile := hm.historyFile
@@ -234,7 +240,11 @@ func (hm *HistoryManager) saveHistoryWithRetry(maxRetries int) error {
 	backupCreated := false
 	if _, err := os.Stat(historyFile); err == nil {
 		if err := os.Rename(historyFile, backupFile); err != nil {
-			log.Warn().Err(err).Msg("Failed to create backup file")
+			log.Warn().
+				Err(err).
+				Str("source", historyFile).
+				Str("backup", backupFile).
+				Msg("Failed to create backup file")
 		} else {
 			backupCreated = true
 		}
@@ -244,9 +254,9 @@ func (hm *HistoryManager) saveHistoryWithRetry(maxRetries int) error {
 	for attempt := 1; attempt <= maxRetries; attempt++ {
 		// Write new file
 		if err := os.WriteFile(historyFile, data, 0644); err != nil {
-			lastErr = err
+			lastErr = fmt.Errorf("write history file %s (attempt %d/%d): %w", historyFile, attempt, maxRetries, err)
 			log.Warn().
-				Err(err).
+				Err(lastErr).
 				Int("attempt", attempt).
 				Int("maxRetries", maxRetries).
 				Msg("Failed to write history file, will retry")
@@ -269,16 +279,21 @@ func (hm *HistoryManager) saveHistoryWithRetry(maxRetries int) error {
 		return nil
 	}
 
+	if lastErr == nil {
+		lastErr = fmt.Errorf("historyManager.saveHistoryWithRetry: no write attempts executed for %s", historyFile)
+	}
+
 	// All retries failed - restore backup if we have one
 	if backupCreated {
 		if restoreErr := os.Rename(backupFile, historyFile); restoreErr != nil {
+			restoreErr = fmt.Errorf("restore backup file %s to %s: %w", backupFile, historyFile, restoreErr)
 			log.Error().Err(restoreErr).Msg("Failed to restore backup after all write attempts failed")
-		} else {
-			log.Info().Msg("Restored backup after history save failure")
+			return fmt.Errorf("historyManager.saveHistoryWithRetry: failed to write history file after %d attempts: %w", maxRetries, errors.Join(lastErr, restoreErr))
 		}
+		log.Info().Msg("Restored backup after history save failure")
 	}
 
-	return fmt.Errorf("failed to write history file after %d attempts: %w", maxRetries, lastErr)
+	return fmt.Errorf("historyManager.saveHistoryWithRetry: failed to write history file after %d attempts: %w", maxRetries, lastErr)
 }
 
 // startPeriodicSave starts the periodic save routine
