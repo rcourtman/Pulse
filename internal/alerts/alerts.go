@@ -35,39 +35,8 @@ const (
 	ActivationSnoozed ActivationState = "snoozed"
 )
 
-// Default thresholds and configuration values
+// Cleanup intervals
 const (
-	// Default threshold values
-	DefaultCPUTrigger     = 80.0
-	DefaultCPUClear       = 75.0
-	DefaultMemoryTrigger  = 85.0
-	DefaultMemoryClear    = 80.0
-	DefaultDiskTrigger    = 90.0
-	DefaultDiskClear      = 85.0
-	DefaultStorageTrigger = 85.0
-	DefaultStorageClear   = 80.0
-	DefaultTempTrigger    = 80.0
-	DefaultTempClear      = 75.0
-
-	// Time thresholds
-	DefaultDelaySeconds      = 5
-	DefaultSuppressionWindow = 5 // minutes
-
-	// Alert management
-	DefaultMinimumDelta      = 2.0 // minimum % change to trigger new alert
-	DefaultHysteresisMargin  = 5.0 // % margin between trigger and clear
-	DefaultObservationWindow = 24  // hours
-
-	// Flapping detection
-	DefaultFlappingWindow    = 300 // seconds (5 minutes)
-	DefaultFlappingThreshold = 5   // state changes to trigger flapping
-	DefaultFlappingCooldown  = 15  // minutes
-
-	// Confirmation counts for transient state detection
-	RequiredOfflineConfirmations = 3
-	RequiredStateConfirmations   = 2
-
-	// Cleanup intervals
 	StaleTrackingThreshold = 24 * time.Hour
 	RateLimitCleanupWindow = 1 * time.Hour
 )
