@@ -6,15 +6,19 @@ import (
 )
 
 const (
-	EventPaywallViewed           = "paywall_viewed"
-	EventTrialStarted            = "trial_started"
-	EventLicenseActivated        = "license_activated"
-	EventLicenseActivationFailed = "license_activation_failed"
-	EventUpgradeClicked          = "upgrade_clicked"
-	EventCheckoutStarted         = "checkout_started"
-	EventCheckoutCompleted       = "checkout_completed"
-	EventLimitWarningShown       = "limit_warning_shown"
-	EventLimitBlocked            = "limit_blocked"
+	EventPaywallViewed               = "paywall_viewed"
+	EventTrialStarted                = "trial_started"
+	EventLicenseActivated            = "license_activated"
+	EventLicenseActivationFailed     = "license_activation_failed"
+	EventUpgradeClicked              = "upgrade_clicked"
+	EventCheckoutStarted             = "checkout_started"
+	EventCheckoutCompleted           = "checkout_completed"
+	EventLimitWarningShown           = "limit_warning_shown"
+	EventLimitBlocked                = "limit_blocked"
+	EventAgentInstallTokenGenerated  = "agent_install_token_generated"
+	EventAgentInstallCommandCopied   = "agent_install_command_copied"
+	EventAgentInstallProfileSelected = "agent_install_profile_selected"
+	EventAgentFirstConnected         = "agent_first_connected"
 )
 
 // ConversionEvent is the canonical conversion instrumentation envelope.
@@ -81,7 +85,11 @@ func isKnownType(eventType string) bool {
 		EventCheckoutStarted,
 		EventCheckoutCompleted,
 		EventLimitWarningShown,
-		EventLimitBlocked:
+		EventLimitBlocked,
+		EventAgentInstallTokenGenerated,
+		EventAgentInstallCommandCopied,
+		EventAgentInstallProfileSelected,
+		EventAgentFirstConnected:
 		return true
 	default:
 		return false

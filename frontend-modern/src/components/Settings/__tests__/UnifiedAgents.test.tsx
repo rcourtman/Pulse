@@ -29,6 +29,9 @@ const clipboardSpy = vi.fn();
 const fetchMock = vi.fn();
 const listProfilesMock = vi.fn();
 const listAssignmentsMock = vi.fn();
+const trackAgentInstallTokenGeneratedMock = vi.fn();
+const trackAgentInstallCommandCopiedMock = vi.fn();
+const trackAgentInstallProfileSelectedMock = vi.fn();
 
 vi.mock('@/App', () => ({
   useWebSocket: () => mockWsStore,
@@ -106,6 +109,15 @@ vi.mock('@/stores/notifications', () => ({
     error: (...args: unknown[]) => notificationErrorMock(...args),
     info: (...args: unknown[]) => notificationInfoMock(...args),
   },
+}));
+
+vi.mock('@/utils/conversionEvents', () => ({
+  trackAgentInstallTokenGenerated: (...args: unknown[]) =>
+    trackAgentInstallTokenGeneratedMock(...args),
+  trackAgentInstallCommandCopied: (...args: unknown[]) =>
+    trackAgentInstallCommandCopiedMock(...args),
+  trackAgentInstallProfileSelected: (...args: unknown[]) =>
+    trackAgentInstallProfileSelectedMock(...args),
 }));
 
 const createHost = (overrides?: Partial<Host>): Host => ({
@@ -217,6 +229,9 @@ beforeEach(() => {
   notificationInfoMock.mockReset();
   listProfilesMock.mockReset();
   listAssignmentsMock.mockReset();
+  trackAgentInstallTokenGeneratedMock.mockReset();
+  trackAgentInstallCommandCopiedMock.mockReset();
+  trackAgentInstallProfileSelectedMock.mockReset();
   clipboardSpy.mockReset().mockResolvedValue(undefined);
   fetchMock.mockReset();
   fetchMock.mockResolvedValue(
@@ -272,6 +287,10 @@ describe('UnifiedAgents token generation', () => {
     await waitFor(
       () => expect(screen.getByText(/Token.*created/i)).toBeInTheDocument(),
       { interval: 0 },
+    );
+    expect(trackAgentInstallTokenGeneratedMock).toHaveBeenCalledWith(
+      'settings_unified_agents',
+      'manual',
     );
     expect(notificationSuccessMock).toHaveBeenCalledWith(
       'Token generated with Host config + reporting, Docker, and Kubernetes permissions.',
@@ -576,9 +595,46 @@ describe('UnifiedAgents platform commands', () => {
     const profileSelect = screen.getByLabelText('Target profile (optional)');
     fireEvent.change(profileSelect, { target: { value: 'proxmox-pbs' } });
 
+    expect(trackAgentInstallProfileSelectedMock).toHaveBeenCalledWith(
+      'settings_unified_agents',
+      'proxmox-pbs',
+    );
     await waitFor(() => {
       const commandBlocks = screen.getAllByText(/--proxmox-type pbs/i);
       expect(commandBlocks.length).toBeGreaterThan(0);
     });
+  });
+
+  it('tracks install command copies', async () => {
+    createTokenMock.mockResolvedValue({
+      token: 'test-token',
+      record: {
+        id: 'token-record',
+        name: 'Test Token',
+        prefix: 'abc',
+        suffix: '123',
+        createdAt: new Date().toISOString(),
+      },
+    });
+
+    setupComponent();
+
+    const generateButton = screen.getByRole('button', { name: /Generate token/i });
+    fireEvent.click(generateButton);
+
+    await waitFor(() => expect(createTokenMock).toHaveBeenCalled(), { interval: 0 });
+    const copyButton = screen.getAllByRole('button', { name: /Copy command/i })[0];
+    fireEvent.click(copyButton);
+
+    await waitFor(() => expect(clipboardSpy).toHaveBeenCalled(), { interval: 0 });
+    await waitFor(() => expect(trackAgentInstallCommandCopiedMock).toHaveBeenCalled(), {
+      interval: 0,
+    });
+    const [surface, capability] = trackAgentInstallCommandCopiedMock.mock.calls[0] as [
+      string,
+      string,
+    ];
+    expect(surface).toBe('settings_unified_agents');
+    expect(capability).toContain(':auto:');
   });
 });

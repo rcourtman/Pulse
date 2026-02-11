@@ -9,7 +9,13 @@ import type { State } from '@/types/api';
 import { SecurityAPI } from '@/api/security';
 import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
 import { showSuccess, showError } from '@/utils/toast';
-import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/conversionEvents';
+import {
+    trackAgentFirstConnected,
+    trackAgentInstallCommandCopied,
+    trackAgentInstallTokenGenerated,
+    trackPaywallViewed,
+    trackUpgradeClicked,
+} from '@/utils/conversionEvents';
 import { loadLicenseStatus, entitlements, getUpgradeActionUrlOrFallback } from '@/stores/license';
 import type { WizardState } from '../SetupWizard';
 
@@ -29,6 +35,7 @@ interface ConnectedAgent {
 }
 
 const RELAY_SETTINGS_PATH = '/settings/system-relay';
+const SETUP_WIZARD_TELEMETRY_SURFACE = 'setup_wizard_complete';
 
 export const CompleteStep: Component<CompleteStepProps> = (props) => {
     const navigate = useNavigate();
@@ -40,6 +47,7 @@ export const CompleteStep: Component<CompleteStepProps> = (props) => {
     const [trialStarting, setTrialStarting] = createSignal(false);
     const [trialStarted, setTrialStarted] = createSignal(false);
     const [relayPaywallTracked, setRelayPaywallTracked] = createSignal(false);
+    let firstConnectionTracked = false;
 
     // Only track Relay paywall exposure once it is actually shown.
     createEffect(() => {
@@ -56,7 +64,6 @@ export const CompleteStep: Component<CompleteStepProps> = (props) => {
 
         const checkForAgents = async () => {
             try {
-
                 const state = await apiFetchJSON<State>('/api/state', {
                     headers: {
                         'X-API-Token': props.state.apiToken,
@@ -67,6 +74,10 @@ export const CompleteStep: Component<CompleteStepProps> = (props) => {
 
                 // Check if we have new connections
                 const totalAgents = nodes.length + hosts.length;
+                if (!firstConnectionTracked && totalAgents > 0) {
+                    trackAgentFirstConnected(SETUP_WIZARD_TELEMETRY_SURFACE, 'first_agent');
+                    firstConnectionTracked = true;
+                }
 
                 if (totalAgents > previousCount || totalAgents !== connectedAgents().length) {
                     // Group agents by hostname to avoid duplicates
@@ -117,7 +128,7 @@ export const CompleteStep: Component<CompleteStepProps> = (props) => {
 
                     // Generate new token if agents increased
                     if (previousCount > 0 && totalAgents > previousCount) {
-                        generateNewToken();
+                        void generateNewToken('agent_added');
                     }
 
                     previousCount = totalAgents;
@@ -142,7 +153,7 @@ export const CompleteStep: Component<CompleteStepProps> = (props) => {
 
     // Platform selection removed - installer now auto-detects Docker, Kubernetes, Proxmox
 
-    const generateNewToken = async () => {
+    const generateNewToken = async (reason: 'rotation' | 'agent_added' | 'manual' = 'rotation') => {
         if (generatingToken()) return;
 
         setGeneratingToken(true);
@@ -151,6 +162,7 @@ export const CompleteStep: Component<CompleteStepProps> = (props) => {
             const result = await SecurityAPI.createToken(`agent-install-${Date.now()}`);
             if (result.token) {
                 setCurrentInstallToken(result.token);
+                trackAgentInstallTokenGenerated(SETUP_WIZARD_TELEMETRY_SURFACE, reason);
             }
         } catch (error) {
             logger.error('Failed to generate new token:', error);
@@ -174,10 +186,11 @@ export const CompleteStep: Component<CompleteStepProps> = (props) => {
         if (success) {
             setCopied('install');
             setTimeout(() => setCopied(null), 2000);
+            trackAgentInstallCommandCopied(SETUP_WIZARD_TELEMETRY_SURFACE, 'linux_install');
 
             // Auto-generate a new token for the next host
             // This ensures each copy gets a unique token without user intervention
-            generateNewToken();
+            void generateNewToken('rotation');
         }
     };
 
@@ -384,7 +397,9 @@ Keep these credentials secure!
                         Install Command
                     </h3>
                     <button
-                        onClick={generateNewToken}
+                        onClick={() => {
+                            void generateNewToken('manual');
+                        }}
                         disabled={generatingToken()}
                         class="text-xs bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 hover:text-blue-200 px-2 py-1 rounded flex items-center gap-1 disabled:opacity-50"
                         title="Generate a new token for the next host"

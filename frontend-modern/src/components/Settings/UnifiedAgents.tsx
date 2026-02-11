@@ -20,9 +20,15 @@ import { HOST_AGENT_SCOPE, HOST_AGENT_CONFIG_READ_SCOPE, DOCKER_REPORT_SCOPE, KU
 import { copyToClipboard } from '@/utils/clipboard';
 import { getPulseBaseUrl } from '@/utils/url';
 import { logger } from '@/utils/logger';
+import {
+    trackAgentInstallCommandCopied,
+    trackAgentInstallProfileSelected,
+    trackAgentInstallTokenGenerated,
+} from '@/utils/conversionEvents';
 import type { Resource } from '@/types/resource';
 
 const TOKEN_PLACEHOLDER = '<api-token>';
+const UNIFIED_AGENT_TELEMETRY_SURFACE = 'settings_unified_agents';
 
 const buildDefaultTokenName = () => {
     const now = new Date();
@@ -30,6 +36,12 @@ const buildDefaultTokenName = () => {
     const stamp = iso.replace('T', ' ').replace(/:/g, '-');
     return `Agent ${stamp}`;
 };
+
+const normalizeTelemetryPart = (value: string) =>
+    value
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '');
 
 type AgentPlatform = 'linux' | 'macos' | 'freebsd' | 'windows';
 type UnifiedAgentType = 'host' | 'docker' | 'kubernetes';
@@ -322,6 +334,7 @@ export const UnifiedAgents: Component = () => {
             setLatestRecord(record);
             setTokenName('');
             setConfirmedNoToken(false);
+            trackAgentInstallTokenGenerated(UNIFIED_AGENT_TELEMETRY_SURFACE, 'manual');
             notificationStore.success('Token generated with Host config + reporting, Docker, and Kubernetes permissions.', 4000);
         } catch (err) {
             logger.error('Failed to generate agent token', err);
@@ -373,6 +386,10 @@ export const UnifiedAgents: Component = () => {
     const getSelectedInstallProfile = () =>
         INSTALL_PROFILE_OPTIONS.find((option) => option.value === installProfile()) ?? INSTALL_PROFILE_OPTIONS[0];
     const getInstallProfileFlags = () => getSelectedInstallProfile().flags;
+    const handleInstallProfileChange = (profile: InstallProfile) => {
+        setInstallProfile(profile);
+        trackAgentInstallProfileSelected(UNIFIED_AGENT_TELEMETRY_SURFACE, profile);
+    };
 
     const getUninstallCommand = () => {
         const url = customAgentUrl() || agentUrl();
@@ -1099,7 +1116,7 @@ export const UnifiedAgents: Component = () => {
                                     <select
                                         id="install-profile-select"
                                         value={installProfile()}
-                                        onChange={(event) => setInstallProfile(event.currentTarget.value as InstallProfile)}
+                                        onChange={(event) => handleInstallProfileChange(event.currentTarget.value as InstallProfile)}
                                         class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-800"
                                     >
                                         <For each={INSTALL_PROFILE_OPTIONS}>
@@ -1153,6 +1170,10 @@ export const UnifiedAgents: Component = () => {
                                                             }
                                                             return cmd;
                                                         };
+                                                        const commandTelemetryCapability = () => {
+                                                            const label = normalizeTelemetryPart(snippet.label) || 'install';
+                                                            return `${section.platform}:${installProfile()}:${label}`;
+                                                        };
 
                                                         return (
                                                             <div class="space-y-2">
@@ -1165,6 +1186,10 @@ export const UnifiedAgents: Component = () => {
                                                                         onClick={async () => {
                                                                             const success = await copyToClipboard(copyCommand());
                                                                             if (success) {
+                                                                                trackAgentInstallCommandCopied(
+                                                                                    UNIFIED_AGENT_TELEMETRY_SURFACE,
+                                                                                    commandTelemetryCapability(),
+                                                                                );
                                                                                 notificationStore.success('Copied to clipboard');
                                                                             } else {
                                                                                 notificationStore.error('Failed to copy');

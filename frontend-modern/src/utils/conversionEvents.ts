@@ -19,6 +19,10 @@ export const CONVERSION_EVENTS = {
   UPGRADE_CLICKED: 'upgrade_clicked',
   LIMIT_WARNING_SHOWN: 'limit_warning_shown',
   LIMIT_BLOCKED: 'limit_blocked',
+  AGENT_INSTALL_TOKEN_GENERATED: 'agent_install_token_generated',
+  AGENT_INSTALL_COMMAND_COPIED: 'agent_install_command_copied',
+  AGENT_INSTALL_PROFILE_SELECTED: 'agent_install_profile_selected',
+  AGENT_FIRST_CONNECTED: 'agent_first_connected',
 } as const;
 
 const ONE_MINUTE_MS = 60_000;
@@ -83,6 +87,38 @@ export function trackPaywallViewed(capability: string, surface: string): void {
 export function trackUpgradeClicked(surface: string, capability?: string): void {
   trackConversionEvent({
     type: CONVERSION_EVENTS.UPGRADE_CLICKED,
+    surface,
+    capability,
+  });
+}
+
+export function trackAgentInstallTokenGenerated(surface: string, capability?: string): void {
+  trackConversionEvent({
+    type: CONVERSION_EVENTS.AGENT_INSTALL_TOKEN_GENERATED,
+    surface,
+    capability,
+  });
+}
+
+export function trackAgentInstallCommandCopied(surface: string, capability?: string): void {
+  trackConversionEvent({
+    type: CONVERSION_EVENTS.AGENT_INSTALL_COMMAND_COPIED,
+    surface,
+    capability,
+  });
+}
+
+export function trackAgentInstallProfileSelected(surface: string, profile: string): void {
+  trackConversionEvent({
+    type: CONVERSION_EVENTS.AGENT_INSTALL_PROFILE_SELECTED,
+    surface,
+    capability: profile,
+  });
+}
+
+export function trackAgentFirstConnected(surface: string, capability?: string): void {
+  trackConversionEvent({
+    type: CONVERSION_EVENTS.AGENT_FIRST_CONNECTED,
     surface,
     capability,
   });
