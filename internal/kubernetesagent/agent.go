@@ -7,8 +7,10 @@ import (
 	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -22,6 +24,7 @@ import (
 	"github.com/rs/zerolog"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	k8sresource "k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -79,10 +82,16 @@ type Agent struct {
 }
 
 const (
-	defaultInterval = 30 * time.Second
-	defaultMaxPods  = 200
-	requestTimeout  = 20 * time.Second
-	reportUserAgent = "pulse-kubernetes-agent/"
+	defaultInterval             = 30 * time.Second
+	defaultMaxPods              = 200
+	defaultMaxDeployments       = 1000
+	requestTimeout              = 20 * time.Second
+	collectReportTimeout        = 45 * time.Second
+	listPageSize          int64 = 250
+	maxKubeAPIRetries           = 3
+	initialRetryBackoff         = 300 * time.Millisecond
+	maxRetryBackoff             = 3 * time.Second
+	reportUserAgent             = "pulse-kubernetes-agent/"
 )
 
 func New(cfg Config) (*Agent, error) {
@@ -118,6 +127,9 @@ func New(cfg Config) (*Agent, error) {
 	restCfg, contextName, err := buildRESTConfig(cfg.KubeconfigPath, cfg.KubeContext)
 	if err != nil {
 		return nil, err
+	}
+	if restCfg.Timeout <= 0 {
+		restCfg.Timeout = requestTimeout
 	}
 
 	kubeClient, err := kubernetes.NewForConfig(restCfg)
@@ -336,7 +348,7 @@ func (a *Agent) namespaceAllowed(ns string) bool {
 }
 
 func (a *Agent) collectReport(ctx context.Context) (agentsk8s.Report, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	ctx, cancel := context.WithTimeout(ctx, collectReportTimeout)
 	defer cancel()
 
 	nodes, err := a.collectNodes(ctx)
@@ -394,8 +406,8 @@ func (a *Agent) collectUsageMetrics(ctx context.Context, nodes []agentsk8s.Node)
 
 	restClient := discovery.RESTClient()
 
-	nodeRaw, nodeErr := restClient.Get().AbsPath("/apis/metrics.k8s.io/v1beta1/nodes").DoRaw(ctx)
-	podRaw, podErr := restClient.Get().AbsPath("/apis/metrics.k8s.io/v1beta1/pods").DoRaw(ctx)
+	nodeRaw, nodeErr := a.doRawPathWithRetry(ctx, restClient, "fetch node usage metrics", "/apis/metrics.k8s.io/v1beta1/nodes")
+	podRaw, podErr := a.doRawPathWithRetry(ctx, restClient, "fetch pod usage metrics", "/apis/metrics.k8s.io/v1beta1/pods")
 
 	if nodeErr != nil && podErr != nil {
 		return nil, nil, fmt.Errorf("metrics.k8s.io unavailable (nodes: %w; pods: %v)", nodeErr, podErr)
@@ -466,7 +478,7 @@ func (a *Agent) collectPodSummaryMetrics(ctx context.Context, nodes []agentsk8s.
 		}
 
 		path := "/api/v1/nodes/" + url.PathEscape(nodeName) + "/proxy/stats/summary"
-		raw, err := restClient.Get().AbsPath(path).DoRaw(ctx)
+		raw, err := a.doRawPathWithRetry(ctx, restClient, fmt.Sprintf("fetch pod summary metrics from node %q", nodeName), path)
 		if err != nil {
 			failed++
 			continue
@@ -746,28 +758,37 @@ func applyPodUsage(pods []agentsk8s.Pod, usage map[string]agentsk8s.PodUsage) {
 }
 
 func (a *Agent) collectNodes(ctx context.Context) ([]agentsk8s.Node, error) {
-	list, err := a.kubeClient.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("list nodes: %w", err)
-	}
+	opts := metav1.ListOptions{Limit: listPageSize}
+	nodes := make([]agentsk8s.Node, 0, int(listPageSize))
 
-	nodes := make([]agentsk8s.Node, 0, len(list.Items))
-	for _, node := range list.Items {
-		ready := isNodeReady(node)
-		nodes = append(nodes, agentsk8s.Node{
-			UID:                     string(node.UID),
-			Name:                    node.Name,
-			Ready:                   ready,
-			Unschedulable:           node.Spec.Unschedulable,
-			KubeletVersion:          node.Status.NodeInfo.KubeletVersion,
-			ContainerRuntimeVersion: node.Status.NodeInfo.ContainerRuntimeVersion,
-			OSImage:                 node.Status.NodeInfo.OSImage,
-			KernelVersion:           node.Status.NodeInfo.KernelVersion,
-			Architecture:            node.Status.NodeInfo.Architecture,
-			Capacity:                toNodeResources(node.Status.Capacity),
-			Allocatable:             toNodeResources(node.Status.Allocatable),
-			Roles:                   rolesFromNodeLabels(node.Labels),
-		})
+	for {
+		list, err := a.listNodesPage(ctx, opts)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, node := range list.Items {
+			ready := isNodeReady(node)
+			nodes = append(nodes, agentsk8s.Node{
+				UID:                     string(node.UID),
+				Name:                    node.Name,
+				Ready:                   ready,
+				Unschedulable:           node.Spec.Unschedulable,
+				KubeletVersion:          node.Status.NodeInfo.KubeletVersion,
+				ContainerRuntimeVersion: node.Status.NodeInfo.ContainerRuntimeVersion,
+				OSImage:                 node.Status.NodeInfo.OSImage,
+				KernelVersion:           node.Status.NodeInfo.KernelVersion,
+				Architecture:            node.Status.NodeInfo.Architecture,
+				Capacity:                toNodeResources(node.Status.Capacity),
+				Allocatable:             toNodeResources(node.Status.Allocatable),
+				Roles:                   rolesFromNodeLabels(node.Labels),
+			})
+		}
+
+		if list.Continue == "" {
+			break
+		}
+		opts.Continue = list.Continue
 	}
 
 	sort.Slice(nodes, func(i, j int) bool { return nodes[i].Name < nodes[j].Name })
@@ -820,6 +841,326 @@ func dedupeStrings(values []string) []string {
 	return out
 }
 
+func (a *Agent) effectiveMaxPods() int {
+	if a.cfg.MaxPods > 0 {
+		return a.cfg.MaxPods
+	}
+	return defaultMaxPods
+}
+
+func (a *Agent) effectiveMaxDeployments() int {
+	return defaultMaxDeployments
+}
+
+func explicitNamespaces(patterns []string) ([]string, bool) {
+	if len(patterns) == 0 {
+		return nil, false
+	}
+
+	namespaces := make([]string, 0, len(patterns))
+	for _, pattern := range patterns {
+		pattern = strings.TrimSpace(pattern)
+		if pattern == "" {
+			continue
+		}
+		if strings.ContainsAny(pattern, "*?[]") {
+			return nil, false
+		}
+		namespaces = append(namespaces, pattern)
+	}
+
+	namespaces = dedupeStrings(namespaces)
+	if len(namespaces) == 0 {
+		return nil, false
+	}
+	sort.Strings(namespaces)
+	return namespaces, true
+}
+
+func comparePodKey(left, right agentsk8s.Pod) int {
+	if left.Namespace < right.Namespace {
+		return -1
+	}
+	if left.Namespace > right.Namespace {
+		return 1
+	}
+	if left.Name < right.Name {
+		return -1
+	}
+	if left.Name > right.Name {
+		return 1
+	}
+	return 0
+}
+
+func insertPodSortedBounded(items []agentsk8s.Pod, pod agentsk8s.Pod, max int) []agentsk8s.Pod {
+	if max <= 0 {
+		return items
+	}
+
+	idx := sort.Search(len(items), func(i int) bool {
+		return comparePodKey(items[i], pod) >= 0
+	})
+
+	if len(items) >= max && idx >= max {
+		return items
+	}
+
+	if len(items) < max {
+		items = append(items, agentsk8s.Pod{})
+		copy(items[idx+1:], items[idx:])
+		items[idx] = pod
+		return items
+	}
+
+	copy(items[idx+1:], items[idx:max-1])
+	items[idx] = pod
+	return items
+}
+
+func compareDeploymentKey(left, right agentsk8s.Deployment) int {
+	if left.Namespace < right.Namespace {
+		return -1
+	}
+	if left.Namespace > right.Namespace {
+		return 1
+	}
+	if left.Name < right.Name {
+		return -1
+	}
+	if left.Name > right.Name {
+		return 1
+	}
+	return 0
+}
+
+func insertDeploymentSortedBounded(items []agentsk8s.Deployment, deployment agentsk8s.Deployment, max int) []agentsk8s.Deployment {
+	if max <= 0 {
+		return items
+	}
+
+	idx := sort.Search(len(items), func(i int) bool {
+		return compareDeploymentKey(items[i], deployment) >= 0
+	})
+
+	if len(items) >= max && idx >= max {
+		return items
+	}
+
+	if len(items) < max {
+		items = append(items, agentsk8s.Deployment{})
+		copy(items[idx+1:], items[idx:])
+		items[idx] = deployment
+		return items
+	}
+
+	copy(items[idx+1:], items[idx:max-1])
+	items[idx] = deployment
+	return items
+}
+
+func isRetryableKubernetesError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.Canceled) {
+		return false
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	if apierrors.IsTimeout(err) || apierrors.IsServerTimeout(err) || apierrors.IsTooManyRequests(err) || apierrors.IsServiceUnavailable(err) || apierrors.IsInternalError(err) {
+		return true
+	}
+
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return true
+	}
+
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "connection refused") ||
+		strings.Contains(msg, "connection reset") ||
+		strings.Contains(msg, "tls handshake timeout") ||
+		strings.Contains(msg, "i/o timeout") ||
+		strings.Contains(msg, "unexpected eof") ||
+		strings.Contains(msg, "server closed idle connection")
+}
+
+func retryAfterForError(err error) (time.Duration, bool) {
+	var statusErr *apierrors.StatusError
+	if !errors.As(err, &statusErr) {
+		return 0, false
+	}
+
+	details := statusErr.Status().Details
+	if details == nil || details.RetryAfterSeconds <= 0 {
+		return 0, false
+	}
+	delay := time.Duration(details.RetryAfterSeconds) * time.Second
+	if delay > maxRetryBackoff {
+		delay = maxRetryBackoff
+	}
+	return delay, true
+}
+
+func waitForRetry(ctx context.Context, delay time.Duration) error {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
+func wrapKubernetesError(action string, err error) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || apierrors.IsTimeout(err) || apierrors.IsServerTimeout(err) {
+		return fmt.Errorf("%s: kubernetes API timeout or unreachable control plane: %w", action, err)
+	}
+	if apierrors.IsUnauthorized(err) {
+		return fmt.Errorf("%s: kubernetes authentication failed (unauthorized); verify kubeconfig credentials or service account token: %w", action, err)
+	}
+	if apierrors.IsForbidden(err) {
+		return fmt.Errorf("%s: kubernetes access forbidden (RBAC); verify Role/ClusterRole permissions for this agent: %w", action, err)
+	}
+	if apierrors.IsTooManyRequests(err) {
+		return fmt.Errorf("%s: kubernetes API rate limited (429); reduce scope or increase collection interval: %w", action, err)
+	}
+	if apierrors.IsServiceUnavailable(err) {
+		return fmt.Errorf("%s: kubernetes API server unavailable: %w", action, err)
+	}
+	return fmt.Errorf("%s: %w", action, err)
+}
+
+func (a *Agent) runKubernetesCallWithRetry(ctx context.Context, action string, fn func(context.Context) error) error {
+	backoff := initialRetryBackoff
+	var lastErr error
+
+	for attempt := 1; attempt <= maxKubeAPIRetries; attempt++ {
+		if ctx.Err() != nil {
+			return wrapKubernetesError(action, ctx.Err())
+		}
+
+		callCtx, cancel := context.WithTimeout(ctx, requestTimeout)
+		err := fn(callCtx)
+		cancel()
+		if err == nil {
+			return nil
+		}
+		lastErr = err
+
+		if attempt == maxKubeAPIRetries || !isRetryableKubernetesError(err) {
+			return wrapKubernetesError(action, err)
+		}
+
+		delay, ok := retryAfterForError(err)
+		if !ok {
+			delay = backoff
+		}
+		if delay > maxRetryBackoff {
+			delay = maxRetryBackoff
+		}
+
+		a.logger.Debug().
+			Int("attempt", attempt).
+			Dur("backoff", delay).
+			Err(err).
+			Str("action", action).
+			Msg("Kubernetes API call failed; retrying")
+
+		if waitErr := waitForRetry(ctx, delay); waitErr != nil {
+			return wrapKubernetesError(action, waitErr)
+		}
+
+		backoff *= 2
+		if backoff > maxRetryBackoff {
+			backoff = maxRetryBackoff
+		}
+	}
+
+	return wrapKubernetesError(action, lastErr)
+}
+
+func (a *Agent) listNodesPage(ctx context.Context, listOpts metav1.ListOptions) (*corev1.NodeList, error) {
+	if listOpts.Limit <= 0 {
+		listOpts.Limit = listPageSize
+	}
+
+	var list *corev1.NodeList
+	err := a.runKubernetesCallWithRetry(ctx, "list nodes", func(callCtx context.Context) error {
+		var err error
+		list, err = a.kubeClient.CoreV1().Nodes().List(callCtx, listOpts)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
+func (a *Agent) listPodsPage(ctx context.Context, namespace string, listOpts metav1.ListOptions) (*corev1.PodList, error) {
+	if listOpts.Limit <= 0 {
+		listOpts.Limit = listPageSize
+	}
+
+	action := "list pods"
+	if namespace != metav1.NamespaceAll {
+		action = fmt.Sprintf("list pods in namespace %q", namespace)
+	}
+
+	var list *corev1.PodList
+	err := a.runKubernetesCallWithRetry(ctx, action, func(callCtx context.Context) error {
+		var err error
+		list, err = a.kubeClient.CoreV1().Pods(namespace).List(callCtx, listOpts)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
+func (a *Agent) listDeploymentsPage(ctx context.Context, namespace string, listOpts metav1.ListOptions) (*appsv1.DeploymentList, error) {
+	if listOpts.Limit <= 0 {
+		listOpts.Limit = listPageSize
+	}
+
+	action := "list deployments"
+	if namespace != metav1.NamespaceAll {
+		action = fmt.Sprintf("list deployments in namespace %q", namespace)
+	}
+
+	var list *appsv1.DeploymentList
+	err := a.runKubernetesCallWithRetry(ctx, action, func(callCtx context.Context) error {
+		var err error
+		list, err = a.kubeClient.AppsV1().Deployments(namespace).List(callCtx, listOpts)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
+func (a *Agent) doRawPathWithRetry(ctx context.Context, restClient rest.Interface, action, path string) ([]byte, error) {
+	var payload []byte
+	err := a.runKubernetesCallWithRetry(ctx, action, func(callCtx context.Context) error {
+		var err error
+		payload, err = restClient.Get().AbsPath(path).DoRaw(callCtx)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	return payload, nil
+}
+
 func toNodeResources(list corev1.ResourceList) agentsk8s.NodeResources {
 	cpu := list[corev1.ResourceCPU]
 	mem := list[corev1.ResourceMemory]
@@ -835,79 +1176,89 @@ func toNodeResources(list corev1.ResourceList) agentsk8s.NodeResources {
 func (a *Agent) collectPods(ctx context.Context) ([]agentsk8s.Pod, error) {
 	// Default: focus on non-succeeded pods to reduce payload size.
 	selector := fields.OneTermNotEqualSelector("status.phase", string(corev1.PodSucceeded))
-	listOpts := metav1.ListOptions{FieldSelector: selector.String()}
-
-	podList, err := a.kubeClient.CoreV1().Pods(metav1.NamespaceAll).List(ctx, listOpts)
-	if err != nil {
-		return nil, fmt.Errorf("list pods: %w", err)
+	maxPods := a.effectiveMaxPods()
+	listOpts := metav1.ListOptions{
+		FieldSelector: selector.String(),
+		Limit:         listPageSize,
 	}
 
-	items := make([]agentsk8s.Pod, 0)
-	for _, pod := range podList.Items {
-		if !a.namespaceAllowed(pod.Namespace) {
-			continue
-		}
-		if !a.cfg.IncludeAllPods && !isProblemPod(pod) {
-			continue
-		}
-
-		labelsCopy := make(map[string]string, len(pod.Labels))
-		for k, v := range pod.Labels {
-			labelsCopy[k] = v
-		}
-
-		containers := make([]agentsk8s.PodContainer, 0, len(pod.Status.ContainerStatuses))
-		restarts := 0
-		for _, cs := range pod.Status.ContainerStatuses {
-			restarts += int(cs.RestartCount)
-			state, reason, message := summarizeContainerState(cs)
-			containers = append(containers, agentsk8s.PodContainer{
-				Name:         cs.Name,
-				Image:        cs.Image,
-				Ready:        cs.Ready,
-				RestartCount: cs.RestartCount,
-				State:        state,
-				Reason:       reason,
-				Message:      message,
-			})
-		}
-
-		ownerKind, ownerName := ownerRef(pod.OwnerReferences)
-		createdAt := pod.CreationTimestamp.Time
-		var startTime *time.Time
-		if pod.Status.StartTime != nil {
-			t := pod.Status.StartTime.Time
-			startTime = &t
-		}
-
-		items = append(items, agentsk8s.Pod{
-			UID:        string(pod.UID),
-			Name:       pod.Name,
-			Namespace:  pod.Namespace,
-			NodeName:   pod.Spec.NodeName,
-			Phase:      string(pod.Status.Phase),
-			Reason:     pod.Status.Reason,
-			Message:    pod.Status.Message,
-			QoSClass:   string(pod.Status.QOSClass),
-			CreatedAt:  createdAt,
-			StartTime:  startTime,
-			Restarts:   restarts,
-			Labels:     labelsCopy,
-			OwnerKind:  ownerKind,
-			OwnerName:  ownerName,
-			Containers: containers,
-		})
+	namespaces, explicit := explicitNamespaces(a.includeNamespaces)
+	if !explicit {
+		namespaces = []string{metav1.NamespaceAll}
 	}
 
-	sort.Slice(items, func(i, j int) bool {
-		if items[i].Namespace == items[j].Namespace {
-			return items[i].Name < items[j].Name
-		}
-		return items[i].Namespace < items[j].Namespace
-	})
+	items := make([]agentsk8s.Pod, 0, maxPods)
+	for _, namespace := range namespaces {
+		opts := listOpts
+		opts.Continue = ""
 
-	if len(items) > a.cfg.MaxPods {
-		items = items[:a.cfg.MaxPods]
+		for {
+			podList, err := a.listPodsPage(ctx, namespace, opts)
+			if err != nil {
+				return nil, err
+			}
+
+			for _, pod := range podList.Items {
+				if !a.namespaceAllowed(pod.Namespace) {
+					continue
+				}
+				if !a.cfg.IncludeAllPods && !isProblemPod(pod) {
+					continue
+				}
+
+				labelsCopy := make(map[string]string, len(pod.Labels))
+				for k, v := range pod.Labels {
+					labelsCopy[k] = v
+				}
+
+				containers := make([]agentsk8s.PodContainer, 0, len(pod.Status.ContainerStatuses))
+				restarts := 0
+				for _, cs := range pod.Status.ContainerStatuses {
+					restarts += int(cs.RestartCount)
+					state, reason, message := summarizeContainerState(cs)
+					containers = append(containers, agentsk8s.PodContainer{
+						Name:         cs.Name,
+						Image:        cs.Image,
+						Ready:        cs.Ready,
+						RestartCount: cs.RestartCount,
+						State:        state,
+						Reason:       reason,
+						Message:      message,
+					})
+				}
+
+				ownerKind, ownerName := ownerRef(pod.OwnerReferences)
+				createdAt := pod.CreationTimestamp.Time
+				var startTime *time.Time
+				if pod.Status.StartTime != nil {
+					t := pod.Status.StartTime.Time
+					startTime = &t
+				}
+
+				items = insertPodSortedBounded(items, agentsk8s.Pod{
+					UID:        string(pod.UID),
+					Name:       pod.Name,
+					Namespace:  pod.Namespace,
+					NodeName:   pod.Spec.NodeName,
+					Phase:      string(pod.Status.Phase),
+					Reason:     pod.Status.Reason,
+					Message:    pod.Status.Message,
+					QoSClass:   string(pod.Status.QOSClass),
+					CreatedAt:  createdAt,
+					StartTime:  startTime,
+					Restarts:   restarts,
+					Labels:     labelsCopy,
+					OwnerKind:  ownerKind,
+					OwnerName:  ownerName,
+					Containers: containers,
+				}, maxPods)
+			}
+
+			if podList.Continue == "" {
+				break
+			}
+			opts.Continue = podList.Continue
+		}
 	}
 
 	return items, nil
@@ -969,43 +1320,56 @@ func ownerRef(refs []metav1.OwnerReference) (string, string) {
 }
 
 func (a *Agent) collectDeployments(ctx context.Context) ([]agentsk8s.Deployment, error) {
-	depList, err := a.kubeClient.AppsV1().Deployments(metav1.NamespaceAll).List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("list deployments: %w", err)
+	maxDeployments := a.effectiveMaxDeployments()
+	listOpts := metav1.ListOptions{Limit: listPageSize}
+
+	namespaces, explicit := explicitNamespaces(a.includeNamespaces)
+	if !explicit {
+		namespaces = []string{metav1.NamespaceAll}
 	}
 
-	items := make([]agentsk8s.Deployment, 0)
-	for _, dep := range depList.Items {
-		if !a.namespaceAllowed(dep.Namespace) {
-			continue
-		}
-		if !a.cfg.IncludeAllDeployments && !isProblemDeployment(dep) {
-			continue
-		}
+	items := make([]agentsk8s.Deployment, 0, maxDeployments)
+	for _, namespace := range namespaces {
+		opts := listOpts
+		opts.Continue = ""
 
-		labelsCopy := make(map[string]string, len(dep.Labels))
-		for k, v := range dep.Labels {
-			labelsCopy[k] = v
-		}
+		for {
+			depList, err := a.listDeploymentsPage(ctx, namespace, opts)
+			if err != nil {
+				return nil, err
+			}
 
-		items = append(items, agentsk8s.Deployment{
-			UID:               string(dep.UID),
-			Name:              dep.Name,
-			Namespace:         dep.Namespace,
-			DesiredReplicas:   desiredReplicas(dep),
-			UpdatedReplicas:   dep.Status.UpdatedReplicas,
-			ReadyReplicas:     dep.Status.ReadyReplicas,
-			AvailableReplicas: dep.Status.AvailableReplicas,
-			Labels:            labelsCopy,
-		})
+			for _, dep := range depList.Items {
+				if !a.namespaceAllowed(dep.Namespace) {
+					continue
+				}
+				if !a.cfg.IncludeAllDeployments && !isProblemDeployment(dep) {
+					continue
+				}
+
+				labelsCopy := make(map[string]string, len(dep.Labels))
+				for k, v := range dep.Labels {
+					labelsCopy[k] = v
+				}
+
+				items = insertDeploymentSortedBounded(items, agentsk8s.Deployment{
+					UID:               string(dep.UID),
+					Name:              dep.Name,
+					Namespace:         dep.Namespace,
+					DesiredReplicas:   desiredReplicas(dep),
+					UpdatedReplicas:   dep.Status.UpdatedReplicas,
+					ReadyReplicas:     dep.Status.ReadyReplicas,
+					AvailableReplicas: dep.Status.AvailableReplicas,
+					Labels:            labelsCopy,
+				}, maxDeployments)
+			}
+
+			if depList.Continue == "" {
+				break
+			}
+			opts.Continue = depList.Continue
+		}
 	}
-
-	sort.Slice(items, func(i, j int) bool {
-		if items[i].Namespace == items[j].Namespace {
-			return items[i].Name < items[j].Name
-		}
-		return items[i].Namespace < items[j].Namespace
-	})
 
 	return items, nil
 }
