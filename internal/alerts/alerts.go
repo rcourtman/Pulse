@@ -1334,8 +1334,8 @@ func normalizeBackupDefaults(config *AlertConfig) {
 	}
 }
 
-func backupIgnoreVMID(vmid string, ignoreList []string) bool {
-	if vmid == "" || len(ignoreList) == 0 {
+func backupIgnoreVMID(vmID string, ignoreList []string) bool {
+	if vmID == "" || len(ignoreList) == 0 {
 		return false
 	}
 	for _, entry := range ignoreList {
@@ -1345,12 +1345,12 @@ func backupIgnoreVMID(vmid string, ignoreList []string) bool {
 		}
 		if strings.HasSuffix(value, "*") {
 			prefix := strings.TrimSuffix(value, "*")
-			if prefix != "" && strings.HasPrefix(vmid, prefix) {
+			if prefix != "" && strings.HasPrefix(vmID, prefix) {
 				return true
 			}
 			continue
 		}
-		if vmid == value {
+		if vmID == value {
 			return true
 		}
 	}
@@ -5108,13 +5108,13 @@ func (m *Manager) CheckStorage(storage models.Storage) {
 // BuildGuestKey constructs a unique key for a guest from instance, node, and VMID.
 // Uses the canonical format: instance:node:vmid
 // This matches the format used by makeGuestID in the monitoring package.
-func BuildGuestKey(instance, node string, vmid int) string {
+func BuildGuestKey(instance, node string, vmID int) string {
 	instance = strings.TrimSpace(instance)
 	node = strings.TrimSpace(node)
 	if instance == "" {
 		instance = node
 	}
-	return fmt.Sprintf("%s:%s:%d", instance, node, vmid)
+	return fmt.Sprintf("%s:%s:%d", instance, node, vmID)
 }
 
 // CheckSnapshotsForInstance evaluates guest snapshots for age-based alerts.
@@ -5434,7 +5434,7 @@ func (m *Manager) CheckBackups(
 
 	type backupRecord struct {
 		key          string
-		vmid         string
+		vmID         string
 		lookup       GuestLookup
 		fallbackName string
 		instance     string
@@ -5471,9 +5471,9 @@ func (m *Manager) CheckBackups(
 		}
 
 		key := BuildGuestKey(backup.Instance, backup.Node, backup.VMID)
-		vmid := ""
+		vmID := ""
 		if backup.VMID > 0 {
-			vmid = strconv.Itoa(backup.VMID)
+			vmID = strconv.Itoa(backup.VMID)
 		}
 		info := guestsByKey[key]
 		displayName := info.Name
@@ -5483,7 +5483,7 @@ func (m *Manager) CheckBackups(
 
 		updateRecord(key, backupRecord{
 			key:          key,
-			vmid:         vmid,
+			vmID:         vmID,
 			lookup:       info,
 			fallbackName: displayName,
 			instance:     backup.Instance,
@@ -5504,7 +5504,7 @@ func (m *Manager) CheckBackups(
 			continue
 		}
 
-		vmid := backup.VMID
+		vmID := backup.VMID
 		guests, exists := guestsByVMID[backup.VMID]
 		var info GuestLookup
 		var key string
@@ -5549,7 +5549,7 @@ func (m *Manager) CheckBackups(
 
 		updateRecord(key, backupRecord{
 			key:          key,
-			vmid:         vmid,
+			vmID:         vmID,
 			lookup:       info,
 			fallbackName: displayName,
 			instance:     instance,
@@ -5641,10 +5641,10 @@ func (m *Manager) CheckBackups(
 		currentBackupCfg.AlertOrphaned = backupCfg.AlertOrphaned
 		currentBackupCfg.IgnoreVMIDs = backupCfg.IgnoreVMIDs
 
-		if backupIgnoreVMID(record.vmid, currentBackupCfg.IgnoreVMIDs) {
+		if backupIgnoreVMID(record.vmID, currentBackupCfg.IgnoreVMIDs) {
 			continue
 		}
-		if record.vmid != "" && record.lookup.ResourceID == "" {
+		if record.vmID != "" && record.lookup.ResourceID == "" {
 			if currentBackupCfg.AlertOrphaned != nil && !*currentBackupCfg.AlertOrphaned {
 				continue
 			}

@@ -335,18 +335,18 @@ func (m *Manager) getGuestThresholds(guest interface{}, guestID string) Threshol
 // Returns the override and true if found, or zero value and false otherwise.
 func (m *Manager) tryLegacyOverrideMigration(guest interface{}, guestID string) (ThresholdConfig, bool) {
 	var node string
-	var vmid int
+	var vmID int
 	var instance string
 
 	// Extract node, vmid, and instance from the guest object
 	switch g := guest.(type) {
 	case models.VM:
 		node = g.Node
-		vmid = g.VMID
+		vmID = g.VMID
 		instance = g.Instance
 	case models.Container:
 		node = g.Node
-		vmid = g.VMID
+		vmID = g.VMID
 		instance = g.Instance
 	default:
 		// Not a VM or container, no legacy migration possible
@@ -355,7 +355,7 @@ func (m *Manager) tryLegacyOverrideMigration(guest interface{}, guestID string) 
 
 	// Try legacy format: instance-node-VMID
 	if instance != node {
-		legacyID := fmt.Sprintf("%s-%s-%d", instance, node, vmid)
+		legacyID := fmt.Sprintf("%s-%s-%d", instance, node, vmID)
 		if legacyOverride, legacyExists := m.config.Overrides[legacyID]; legacyExists {
 			log.Info().
 				Str("legacyID", legacyID).
@@ -372,7 +372,7 @@ func (m *Manager) tryLegacyOverrideMigration(guest interface{}, guestID string) 
 
 	// Try standalone format: node-VMID
 	if instance == node {
-		legacyID := fmt.Sprintf("%s-%d", node, vmid)
+		legacyID := fmt.Sprintf("%s-%d", node, vmID)
 		if legacyOverride, legacyExists := m.config.Overrides[legacyID]; legacyExists {
 			log.Info().
 				Str("legacyID", legacyID).
