@@ -60,14 +60,43 @@ type DeepScanner struct {
 	progressCallback ProgressCallback
 }
 
+const (
+	defaultDeepScannerMaxParallel = 3
+	defaultDeepScannerTimeout     = 30 * time.Second
+)
+
 // NewDeepScanner creates a new deep scanner.
 func NewDeepScanner(executor CommandExecutor) *DeepScanner {
 	return &DeepScanner{
 		executor:    executor,
 		progress:    make(map[string]*DiscoveryProgress),
-		maxParallel: 3, // Run up to 3 commands in parallel per resource
-		timeout:     30 * time.Second,
+		maxParallel: defaultDeepScannerMaxParallel, // Run up to 3 commands in parallel per resource
+		timeout:     defaultDeepScannerTimeout,
 	}
+}
+
+func (s *DeepScanner) runtimeSettings() (int, time.Duration) {
+	s.mu.RLock()
+	maxParallel := s.maxParallel
+	timeout := s.timeout
+	s.mu.RUnlock()
+
+	if maxParallel <= 0 {
+		log.Warn().
+			Int("max_parallel", maxParallel).
+			Int("default", defaultDeepScannerMaxParallel).
+			Msg("Invalid deep scanner max parallelism; using default")
+		maxParallel = defaultDeepScannerMaxParallel
+	}
+	if timeout <= 0 {
+		log.Warn().
+			Dur("timeout", timeout).
+			Dur("default", defaultDeepScannerTimeout).
+			Msg("Invalid deep scanner timeout; using default")
+		timeout = defaultDeepScannerTimeout
+	}
+
+	return maxParallel, timeout
 }
 
 // SetProgressCallback sets a callback function that will be called when discovery progress changes.
@@ -112,6 +141,7 @@ type ScanResult struct {
 func (s *DeepScanner) Scan(ctx context.Context, req DiscoveryRequest) (*ScanResult, error) {
 	resourceID := MakeResourceID(req.ResourceType, req.HostID, req.ResourceID)
 	startTime := time.Now()
+	maxParallel, timeout := s.runtimeSettings()
 
 	// Initialize progress
 	s.mu.Lock()
@@ -173,7 +203,7 @@ func (s *DeepScanner) Scan(ctx context.Context, req DiscoveryRequest) (*ScanResu
 	}
 
 	// Run commands with limited parallelism
-	semaphore := make(chan struct{}, s.maxParallel)
+	semaphore := make(chan struct{}, maxParallel)
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 
@@ -209,7 +239,7 @@ func (s *DeepScanner) Scan(ctx context.Context, req DiscoveryRequest) (*ScanResu
 			}
 
 			// Execute the command
-			cmdCtx, cancel := context.WithTimeout(ctx, s.timeout)
+			cmdCtx, cancel := context.WithTimeout(ctx, timeout)
 			defer cancel()
 
 			cmdResult, err := s.executor.ExecuteCommand(cmdCtx, agentID, ExecuteCommandPayload{

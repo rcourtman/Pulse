@@ -393,3 +393,31 @@ func TestDeepScanner_ScanCanceledContext(t *testing.T) {
 		t.Fatalf("Scan error: %v", err)
 	}
 }
+
+func TestDeepScanner_NormalizesInvalidRuntimeSettings(t *testing.T) {
+	exec := &stubExecutor{
+		agents: []ConnectedAgent{{AgentID: "host1", Hostname: "host1"}},
+	}
+	scanner := NewDeepScanner(exec)
+	scanner.maxParallel = 0
+	scanner.timeout = -1 * time.Second
+
+	result, err := scanner.Scan(context.Background(), DiscoveryRequest{
+		ResourceType: ResourceTypeDockerVM,
+		ResourceID:   "101:web",
+		HostID:       "host1",
+		Hostname:     "host1",
+	})
+	if err != nil {
+		t.Fatalf("Scan error: %v", err)
+	}
+	if len(result.CommandOutputs) == 0 && len(result.Errors) == 0 {
+		t.Fatalf("expected scan to run with normalized settings")
+	}
+
+	exec.mu.Lock()
+	defer exec.mu.Unlock()
+	if len(exec.payloads) == 0 {
+		t.Fatalf("expected commands to be executed with normalized settings")
+	}
+}

@@ -43,7 +43,13 @@ var marshalDiscovery = json.Marshal
 
 // NewStore creates a new discovery store with automatic encryption.
 func NewStore(dataDir string) (*Store, error) {
-	discoveryDir := filepath.Join(dataDir, "discovery")
+	trimmedDataDir := strings.TrimSpace(dataDir)
+	if trimmedDataDir == "" {
+		return nil, fmt.Errorf("discovery data directory is required")
+	}
+	normalizedDataDir := filepath.Clean(trimmedDataDir)
+
+	discoveryDir := filepath.Join(normalizedDataDir, "discovery")
 	if err := os.MkdirAll(discoveryDir, 0700); err != nil {
 		return nil, fmt.Errorf("failed to create discovery directory: %w", err)
 	}
@@ -55,7 +61,7 @@ func NewStore(dataDir string) (*Store, error) {
 	}
 
 	// Initialize crypto manager for encryption (uses same key as other Pulse secrets)
-	cryptoMgr, err := newCryptoManagerAt(dataDir)
+	cryptoMgr, err := newCryptoManagerAt(normalizedDataDir)
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to initialize crypto for discovery store, data will be unencrypted")
 	}

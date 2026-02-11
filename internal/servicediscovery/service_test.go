@@ -507,6 +507,41 @@ func TestService_DefaultsAndSetAnalyzer(t *testing.T) {
 	}
 }
 
+func TestService_NormalizesInvalidConfigDurations(t *testing.T) {
+	service := NewService(nil, nil, nil, Config{
+		Interval:        -1 * time.Second,
+		CacheExpiry:     -1 * time.Minute,
+		DeepScanTimeout: 0,
+		MaxDiscoveryAge: 2 * time.Hour,
+	})
+
+	if service.interval != defaultDiscoveryInterval {
+		t.Fatalf("interval = %v, want %v", service.interval, defaultDiscoveryInterval)
+	}
+	if service.cacheExpiry != defaultDiscoveryCacheExpiry {
+		t.Fatalf("cache expiry = %v, want %v", service.cacheExpiry, defaultDiscoveryCacheExpiry)
+	}
+	if service.deepScanTimeout != defaultDiscoveryScanTimeout {
+		t.Fatalf("deep scan timeout = %v, want %v", service.deepScanTimeout, defaultDiscoveryScanTimeout)
+	}
+	if service.maxDiscoveryAge != minDiscoveryMaxAge {
+		t.Fatalf("max discovery age = %v, want %v", service.maxDiscoveryAge, minDiscoveryMaxAge)
+	}
+}
+
+func TestService_SetIntervalNormalizesNonPositiveValues(t *testing.T) {
+	service := NewService(nil, nil, nil, DefaultConfig())
+	service.SetInterval(0)
+	if service.interval != defaultDiscoveryInterval {
+		t.Fatalf("interval = %v, want %v", service.interval, defaultDiscoveryInterval)
+	}
+
+	service.SetInterval(-1 * time.Second)
+	if service.interval != defaultDiscoveryInterval {
+		t.Fatalf("interval = %v, want %v", service.interval, defaultDiscoveryInterval)
+	}
+}
+
 func TestService_FingerprintCollectionAndDiscoveryWrappers(t *testing.T) {
 	store, err := NewStore(t.TempDir())
 	if err != nil {
