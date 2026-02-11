@@ -1009,24 +1009,31 @@ func formatPolicyBlocked(command, reason string) string {
 	return "POLICY_BLOCKED: " + string(b)
 }
 
-func formatTargetHostRequired(agents []agentexec.ConnectedAgent) string {
-	hostnames := make([]string, 0, len(agents))
+func collectAgentHostnames(agents []agentexec.ConnectedAgent, max int) (all []string, truncated []string) {
+	all = make([]string, 0, len(agents))
 	for _, agent := range agents {
 		name := strings.TrimSpace(agent.Hostname)
 		if name == "" {
 			name = strings.TrimSpace(agent.AgentID)
 		}
 		if name != "" {
-			hostnames = append(hostnames, name)
+			all = append(all, name)
 		}
 	}
+
+	truncated = all
+	if max >= 0 && len(all) > max {
+		truncated = all[:max]
+	}
+
+	return all, truncated
+}
+
+func formatTargetHostRequired(agents []agentexec.ConnectedAgent) string {
+	const maxItems = 6
+	hostnames, list := collectAgentHostnames(agents, maxItems)
 	if len(hostnames) == 0 {
 		return "Multiple agents are connected. Please specify target_host."
-	}
-	maxItems := 6
-	list := hostnames
-	if len(hostnames) > maxItems {
-		list = hostnames[:maxItems]
 	}
 	message := fmt.Sprintf("Multiple agents are connected. Please specify target_host. Available: %s", strings.Join(list, ", "))
 	if len(hostnames) > maxItems {
@@ -1037,23 +1044,10 @@ func formatTargetHostRequired(agents []agentexec.ConnectedAgent) string {
 
 // formatAvailableAgentHosts returns a hint listing connected agent hostnames.
 func formatAvailableAgentHosts(agents []agentexec.ConnectedAgent) string {
-	hostnames := make([]string, 0, len(agents))
-	for _, agent := range agents {
-		name := strings.TrimSpace(agent.Hostname)
-		if name == "" {
-			name = strings.TrimSpace(agent.AgentID)
-		}
-		if name != "" {
-			hostnames = append(hostnames, name)
-		}
-	}
+	const maxItems = 6
+	hostnames, list := collectAgentHostnames(agents, maxItems)
 	if len(hostnames) == 0 {
 		return "No agents are currently connected."
-	}
-	maxItems := 6
-	list := hostnames
-	if len(hostnames) > maxItems {
-		list = hostnames[:maxItems]
 	}
 	msg := fmt.Sprintf("Available targets: %s", strings.Join(list, ", "))
 	if len(hostnames) > maxItems {
