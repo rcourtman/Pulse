@@ -21,6 +21,8 @@ var commandRunner = func(ctx context.Context, name string, args ...string) ([]by
 	return stdout.Bytes(), stderr.Bytes(), err
 }
 
+var lookPath = exec.LookPath
+
 // ClusterStatus represents the complete Ceph cluster status as collected by the agent.
 type ClusterStatus struct {
 	FSID        string        `json:"fsid"`
@@ -123,7 +125,8 @@ type ServiceInfo struct {
 
 // IsAvailable checks if the ceph CLI is available on the system.
 func IsAvailable(ctx context.Context) bool {
-	_, _, err := commandRunner(ctx, "which", "ceph")
+	_ = ctx
+	_, err := lookPath("ceph")
 	return err == nil
 }
 
@@ -165,11 +168,16 @@ func Collect(ctx context.Context) (*ClusterStatus, error) {
 
 // runCephCommand executes a ceph command and returns the output.
 func runCephCommand(ctx context.Context, args ...string) ([]byte, error) {
+	cephPath, err := lookPath("ceph")
+	if err != nil {
+		return nil, fmt.Errorf("ceph binary not found: %w", err)
+	}
+
 	// Use a reasonable timeout for each command
 	cmdCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	stdout, stderr, err := commandRunner(cmdCtx, "ceph", args...)
+	stdout, stderr, err := commandRunner(cmdCtx, cephPath, args...)
 	if err != nil {
 		return nil, fmt.Errorf("ceph %s failed: %w (stderr: %s)",
 			strings.Join(args, " "), err, string(stderr))
