@@ -210,6 +210,14 @@ func (s *OIDCService) contextWithHTTPClient(ctx context.Context) context.Context
 	return oidc.ClientContext(ctx, s.httpClient)
 }
 
+// Stop releases background resources owned by the service.
+func (s *OIDCService) Stop() {
+	if s == nil || s.stateStore == nil {
+		return
+	}
+	s.stateStore.Stop()
+}
+
 // OIDCRefreshResult contains the result of a token refresh operation
 type OIDCRefreshResult struct {
 	AccessToken  string
@@ -320,6 +328,7 @@ type oidcStateStore struct {
 	mu          sync.RWMutex
 	entries     map[string]*oidcStateEntry
 	stopCleanup chan struct{}
+	stopOnce    sync.Once
 }
 
 type oidcStateEntry struct {
@@ -369,7 +378,9 @@ func (s *oidcStateStore) cleanup() {
 
 // Stop stops the cleanup routine
 func (s *oidcStateStore) Stop() {
-	close(s.stopCleanup)
+	s.stopOnce.Do(func() {
+		close(s.stopCleanup)
+	})
 }
 
 func (s *oidcStateStore) Put(state string, entry *oidcStateEntry) {

@@ -331,7 +331,11 @@ func (r *Router) getOIDCService(ctx context.Context, redirectURL string) (*OIDCS
 		return nil, err
 	}
 
+	previous := r.oidcService
 	r.oidcService = service
+	if previous != nil {
+		previous.Stop()
+	}
 	return service, nil
 }
 
