@@ -397,10 +397,6 @@ func (a *Agent) collectUsageMetrics(ctx context.Context, nodes []agentsk8s.Node)
 	nodeRaw, nodeErr := restClient.Get().AbsPath("/apis/metrics.k8s.io/v1beta1/nodes").DoRaw(ctx)
 	podRaw, podErr := restClient.Get().AbsPath("/apis/metrics.k8s.io/v1beta1/pods").DoRaw(ctx)
 
-	if nodeErr != nil && podErr != nil {
-		return nil, nil, fmt.Errorf("metrics.k8s.io unavailable (nodes: %w; pods: %v)", nodeErr, podErr)
-	}
-
 	nodeUsage := map[string]agentsk8s.NodeUsage{}
 	if nodeErr == nil {
 		parsed, err := parseNodeMetricsPayload(nodeRaw)
