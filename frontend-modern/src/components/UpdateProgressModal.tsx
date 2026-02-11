@@ -17,15 +17,31 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
   const [hasError, setHasError] = createSignal(false);
   const [isRestarting, setIsRestarting] = createSignal(false);
   const [wsDisconnected, setWsDisconnected] = createSignal(false);
+  const [healthCheckAttempts, setHealthCheckAttempts] = createSignal(0);
   let pollInterval: number | undefined;
   let healthCheckTimer: number | undefined;
-  let healthCheckAttempts = 0;
   let eventSource: EventSource | undefined;
+
+  const resetModalState = () => {
+    setStatus(null);
+    setIsComplete(false);
+    setHasError(false);
+    setIsRestarting(false);
+    setWsDisconnected(false);
+    setHealthCheckAttempts(0);
+  };
 
   const clearHealthCheckTimer = () => {
     if (healthCheckTimer !== undefined) {
       clearTimeout(healthCheckTimer);
       healthCheckTimer = undefined;
+    }
+  };
+
+  const clearPollInterval = () => {
+    if (pollInterval !== undefined) {
+      clearInterval(pollInterval);
+      pollInterval = undefined;
     }
   };
 
@@ -118,7 +134,7 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
 
   const startPolling = () => {
     // Don't start polling if already polling
-    if (pollInterval) {
+    if (pollInterval !== undefined) {
       return;
     }
 
@@ -135,9 +151,7 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
       // Check if restarting
       if (currentStatus.status === 'restarting') {
         setIsRestarting(true);
-        if (pollInterval) {
-          clearInterval(pollInterval);
-        }
+        clearPollInterval();
         // Start health check polling
         startHealthCheckPolling();
         return;
@@ -151,9 +165,7 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
       ) {
         // If completed successfully, verify backend health and reload to get new version
         if (currentStatus.status === 'completed' && !currentStatus.error) {
-          if (pollInterval) {
-            clearInterval(pollInterval);
-          }
+          clearPollInterval();
           // Verify backend is healthy and reload
           try {
             const healthCheck = await apiFetch('/api/health', { cache: 'no-store' });
@@ -175,9 +187,7 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
         if (currentStatus.status === 'error' || currentStatus.error) {
           setHasError(true);
         }
-        if (pollInterval) {
-          clearInterval(pollInterval);
-        }
+        clearPollInterval();
       }
     } catch (error) {
       logger.error('Failed to poll update status', error);
@@ -197,9 +207,7 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
           });
         }
         setIsRestarting(true);
-        if (pollInterval) {
-          clearInterval(pollInterval);
-        }
+        clearPollInterval();
         startHealthCheckPolling();
       }
     }
@@ -207,7 +215,7 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
 
   const startHealthCheckPolling = () => {
     clearHealthCheckTimer();
-    healthCheckAttempts = 0;
+    setHealthCheckAttempts(0);
 
     const checkHealth = async () => {
       let isHealthy = false;
@@ -228,9 +236,9 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
         return;
       }
 
-      const attempt = Math.min(healthCheckAttempts, 3);
+      const attempt = Math.min(healthCheckAttempts(), 3);
       const nextDelay = Math.min(2000 * Math.pow(2, attempt), 15000);
-      healthCheckAttempts++;
+      setHealthCheckAttempts((current) => current + 1);
       clearHealthCheckTimer();
       healthCheckTimer = window.setTimeout(checkHealth, nextDelay);
     };
@@ -272,24 +280,20 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
   // Start/stop SSE or polling based on modal visibility
   createEffect(() => {
     if (props.isOpen) {
+      resetModalState();
       // Try SSE first, will fall back to polling if it fails
       setupSSE();
     } else {
       // Stop everything when modal closes
       closeSSE();
-      if (pollInterval) {
-        clearInterval(pollInterval);
-        pollInterval = undefined;
-      }
+      clearPollInterval();
       clearHealthCheckTimer();
     }
   });
 
   onCleanup(() => {
     closeSSE();
-    if (pollInterval) {
-      clearInterval(pollInterval);
-    }
+    clearPollInterval();
     clearHealthCheckTimer();
   });
 
@@ -423,7 +427,7 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
                           <span>Waiting for Pulse to complete restart. This page will reload automatically.</span>
                         </Show>
                       </div>
-                      <Show when={wsDisconnected() && healthCheckAttempts > 5}>
+                      <Show when={wsDisconnected() && healthCheckAttempts() > 5}>
                         <button
                           onClick={() => window.location.reload()}
                           class="mt-2 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded transition-colors"
