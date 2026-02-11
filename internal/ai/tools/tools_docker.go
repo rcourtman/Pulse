@@ -243,10 +243,17 @@ func (e *PulseToolExecutor) verifyDockerContainerState(ctx context.Context, rout
 		}
 
 		// Allow a brief settle window for restart/start/stop to propagate.
+		waitTimer := time.NewTimer(500 * time.Millisecond)
 		select {
 		case <-ctx.Done():
+			if !waitTimer.Stop() {
+				select {
+				case <-waitTimer.C:
+				default:
+				}
+			}
 			return map[string]interface{}{"confirmed": false, "method": "docker_inspect", "command": inspectCmd, "note": "context canceled", "raw": lastOut, "exit_code": lastExit}
-		case <-time.After(500 * time.Millisecond):
+		case <-waitTimer.C:
 		}
 	}
 

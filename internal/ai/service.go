@@ -249,12 +249,22 @@ func (s *Service) acquireExecutionSlot(ctx context.Context, useCase string) (fun
 		slots = s.limits.chatSlots
 	}
 
+	timer := time.NewTimer(5 * time.Second)
+	defer func() {
+		if !timer.Stop() {
+			select {
+			case <-timer.C:
+			default:
+			}
+		}
+	}()
+
 	select {
 	case slots <- struct{}{}:
 		return func() { <-slots }, nil
 	case <-ctx.Done():
 		return nil, ctx.Err()
-	case <-time.After(5 * time.Second):
+	case <-timer.C:
 		return nil, fmt.Errorf("Pulse Assistant is busy - too many concurrent requests")
 	}
 }

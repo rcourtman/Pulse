@@ -106,8 +106,9 @@ func (p *PatrolService) patrolLoop(ctx context.Context) {
 
 	// Run initial patrol shortly after startup, but only if one hasn't run recently
 	initialDelay := initialPatrolStartDelay
+	initialDelayTimer := time.NewTimer(initialDelay)
 	select {
-	case <-time.After(initialDelay):
+	case <-initialDelayTimer.C:
 		// Check if a patrol ran recently (within last hour) to avoid wasting tokens on restarts
 		runHistory := p.GetRunHistory(1)
 
@@ -127,8 +128,20 @@ func (p *PatrolService) patrolLoop(ctx context.Context) {
 			p.runPatrolWithTrigger(ctx, TriggerReasonStartup, nil)
 		}
 	case <-p.stopCh:
+		if !initialDelayTimer.Stop() {
+			select {
+			case <-initialDelayTimer.C:
+			default:
+			}
+		}
 		return
 	case <-ctx.Done():
+		if !initialDelayTimer.Stop() {
+			select {
+			case <-initialDelayTimer.C:
+			default:
+			}
+		}
 		return
 	}
 

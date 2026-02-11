@@ -587,10 +587,17 @@ func (e *Engine) Execute(ctx context.Context, executionID string) error {
 
 		// Wait if specified
 		if step.WaitAfter > 0 {
+			waitTimer := time.NewTimer(step.WaitAfter)
 			select {
 			case <-ctx.Done():
+				if !waitTimer.Stop() {
+					select {
+					case <-waitTimer.C:
+					default:
+					}
+				}
 				lastError = ctx.Err()
-			case <-time.After(step.WaitAfter):
+			case <-waitTimer.C:
 			}
 		}
 

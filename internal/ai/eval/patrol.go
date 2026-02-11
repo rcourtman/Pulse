@@ -345,10 +345,17 @@ func (r *Runner) waitForPatrolIdle(ctx context.Context) error {
 			fmt.Printf("  Patrol is running, waiting...\n")
 		}
 
+		waitTimer := time.NewTimer(3 * time.Second)
 		select {
 		case <-ctx.Done():
+			if !waitTimer.Stop() {
+				select {
+				case <-waitTimer.C:
+				default:
+				}
+			}
 			return fmt.Errorf("timeout waiting for patrol idle")
-		case <-time.After(3 * time.Second):
+		case <-waitTimer.C:
 		}
 	}
 }
@@ -359,10 +366,17 @@ func (r *Runner) waitForPatrolComplete(ctx context.Context) (bool, error) {
 	// First, wait briefly for patrol to actually start (Running=true)
 	sawRunning := false
 	for i := 0; i < 10; i++ {
+		waitTimer := time.NewTimer(1 * time.Second)
 		select {
 		case <-ctx.Done():
+			if !waitTimer.Stop() {
+				select {
+				case <-waitTimer.C:
+				default:
+				}
+			}
 			return false, fmt.Errorf("timeout waiting for patrol to start")
-		case <-time.After(1 * time.Second):
+		case <-waitTimer.C:
 		}
 
 		running, healthy, err := r.getPatrolStatus(ctx)
@@ -395,10 +409,17 @@ func (r *Runner) waitForPatrolComplete(ctx context.Context) (bool, error) {
 
 	// Now poll until Running=false (patrol completed)
 	for {
+		waitTimer := time.NewTimer(3 * time.Second)
 		select {
 		case <-ctx.Done():
+			if !waitTimer.Stop() {
+				select {
+				case <-waitTimer.C:
+				default:
+				}
+			}
 			return false, fmt.Errorf("timeout waiting for patrol to complete")
-		case <-time.After(3 * time.Second):
+		case <-waitTimer.C:
 		}
 
 		running, healthy, err := r.getPatrolStatus(ctx)
