@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 )
 
 const (
@@ -23,7 +24,103 @@ const (
 	// This file is stored in the config directory (e.g., /data/) and survives
 	// Docker container recreation, unlike /etc/machine-id.
 	PersistentKeyFileName = ".license-key"
+
+	privateDirPerm           = 0o700
+	privateFilePerm          = 0o600
+	maxPersistentKeyFileSize = 4096
+	maxLicenseFileSize       = 1 << 20 // 1 MiB
 )
+
+var (
+	errUnsafePersistencePath = errors.New("unsafe license persistence path")
+	errInvalidPersistentKey  = errors.New("invalid persistent license key")
+)
+
+func isMissingPathError(err error) bool {
+	return errors.Is(err, os.ErrNotExist) || errors.Is(err, syscall.ENOTDIR)
+}
+
+func ensureOwnerOnlyDir(dir string) error {
+	if err := os.MkdirAll(dir, privateDirPerm); err != nil {
+		return err
+	}
+	return os.Chmod(dir, privateDirPerm)
+}
+
+func validateRegularFile(path string, info os.FileInfo) error {
+	if info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("%w: refusing symlink path %q", errUnsafePersistencePath, path)
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("%w: non-regular path %q", errUnsafePersistencePath, path)
+	}
+	return nil
+}
+
+func readBoundedRegularFile(path string, maxSize int64) ([]byte, error) {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateRegularFile(path, info); err != nil {
+		return nil, err
+	}
+	if maxSize > 0 && info.Size() > maxSize {
+		return nil, fmt.Errorf("%w: file %q exceeds size limit (%d bytes)", errUnsafePersistencePath, path, info.Size())
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	if maxSize > 0 && int64(len(data)) > maxSize {
+		return nil, fmt.Errorf("%w: file %q exceeded size limit while reading", errUnsafePersistencePath, path)
+	}
+	return data, nil
+}
+
+func writeOwnerOnlyFileAtomic(path string, data []byte) error {
+	if err := ensureOwnerOnlyDir(filepath.Dir(path)); err != nil {
+		return err
+	}
+
+	if info, err := os.Lstat(path); err == nil {
+		if err := validateRegularFile(path, info); err != nil {
+			return err
+		}
+	} else if !isMissingPathError(err) {
+		return err
+	}
+
+	tmpFile, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".*.tmp")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmpFile.Name()
+	cleanup := true
+	defer func() {
+		if cleanup {
+			_ = os.Remove(tmpPath)
+		}
+	}()
+
+	if err := tmpFile.Chmod(privateFilePerm); err != nil {
+		_ = tmpFile.Close()
+		return err
+	}
+	if _, err := tmpFile.Write(data); err != nil {
+		_ = tmpFile.Close()
+		return err
+	}
+	if err := tmpFile.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		return err
+	}
+	cleanup = false
+	return os.Chmod(path, privateFilePerm)
+}
 
 // Persistence handles encrypted storage of license keys.
 type Persistence struct {
@@ -36,8 +133,16 @@ type Persistence struct {
 // It tries to use a persistent key stored in configDir first, then falls back
 // to machine-id for backwards compatibility with existing installations.
 func NewPersistence(configDir string) (*Persistence, error) {
+	configDir = filepath.Clean(strings.TrimSpace(configDir))
+	if configDir == "" || configDir == "." {
+		return nil, errors.New("config directory is required")
+	}
+
 	// Try to load persistent key from config directory first
-	persistentKey, _ := loadPersistentKey(configDir)
+	persistentKey, err := loadPersistentKey(configDir)
+	if err != nil && !isMissingPathError(err) {
+		return nil, fmt.Errorf("failed to load persistent key: %w", err)
+	}
 
 	// Get machine-id as fallback for backwards compatibility
 	machineID, err := getMachineID()
@@ -61,11 +166,15 @@ func NewPersistence(configDir string) (*Persistence, error) {
 // loadPersistentKey attempts to load the persistent encryption key from disk.
 func loadPersistentKey(configDir string) (string, error) {
 	keyPath := filepath.Join(configDir, PersistentKeyFileName)
-	data, err := os.ReadFile(keyPath)
+	data, err := readBoundedRegularFile(keyPath, maxPersistentKeyFileSize)
 	if err != nil {
 		return "", err
 	}
-	return strings.TrimSpace(string(data)), nil
+	key := strings.TrimSpace(string(data))
+	if key == "" {
+		return "", fmt.Errorf("%w: persistent key file is empty", errInvalidPersistentKey)
+	}
+	return key, os.Chmod(keyPath, privateFilePerm)
 }
 
 // ensurePersistentKey creates a persistent encryption key if one doesn't exist.
@@ -73,9 +182,24 @@ func loadPersistentKey(configDir string) (string, error) {
 func (p *Persistence) ensurePersistentKey() (string, error) {
 	keyPath := filepath.Join(p.configDir, PersistentKeyFileName)
 
+	if err := ensureOwnerOnlyDir(p.configDir); err != nil {
+		return "", fmt.Errorf("failed to secure config directory: %w", err)
+	}
+
 	// Check if key already exists
-	if data, err := os.ReadFile(keyPath); err == nil {
-		return strings.TrimSpace(string(data)), nil
+	data, err := readBoundedRegularFile(keyPath, maxPersistentKeyFileSize)
+	if err == nil {
+		key := strings.TrimSpace(string(data))
+		if key == "" {
+			return "", fmt.Errorf("%w: persistent key file is empty", errInvalidPersistentKey)
+		}
+		if err := os.Chmod(keyPath, privateFilePerm); err != nil {
+			return "", fmt.Errorf("failed to secure persistent key file: %w", err)
+		}
+		return key, nil
+	}
+	if err != nil && !isMissingPathError(err) {
+		return "", fmt.Errorf("failed to load persistent key: %w", err)
 	}
 
 	// Generate a new random key (32 bytes = 64 hex chars)
@@ -85,13 +209,8 @@ func (p *Persistence) ensurePersistentKey() (string, error) {
 	}
 	key := hex.EncodeToString(keyBytes)
 
-	// Ensure config directory exists
-	if err := os.MkdirAll(p.configDir, 0700); err != nil {
-		return "", fmt.Errorf("failed to create config directory: %w", err)
-	}
-
 	// Save the key
-	if err := os.WriteFile(keyPath, []byte(key), 0600); err != nil {
+	if err := writeOwnerOnlyFileAtomic(keyPath, []byte(key)); err != nil {
 		return "", fmt.Errorf("failed to write encryption key: %w", err)
 	}
 
@@ -119,7 +238,10 @@ func (p *Persistence) SaveWithGracePeriod(licenseKey string, gracePeriodEnd *int
 	// This creates .license-key in the config directory if it doesn't exist,
 	// ensuring Docker users don't lose their license on container recreation.
 	newKey, err := p.ensurePersistentKey()
-	if err == nil && newKey != "" {
+	if err != nil {
+		return fmt.Errorf("failed to ensure persistent encryption key: %w", err)
+	}
+	if newKey != "" {
 		p.encryptionKey = newKey
 	}
 
@@ -138,15 +260,14 @@ func (p *Persistence) SaveWithGracePeriod(licenseKey string, gracePeriodEnd *int
 		return fmt.Errorf("failed to encrypt license: %w", err)
 	}
 
-	// Ensure config directory exists
-	if err := os.MkdirAll(p.configDir, 0700); err != nil {
-		return fmt.Errorf("failed to create config directory: %w", err)
+	if err := ensureOwnerOnlyDir(p.configDir); err != nil {
+		return fmt.Errorf("failed to secure config directory: %w", err)
 	}
 
 	licensePath := filepath.Join(p.configDir, LicenseFileName)
 	encoded := base64.StdEncoding.EncodeToString(encrypted)
 
-	if err := os.WriteFile(licensePath, []byte(encoded), 0600); err != nil {
+	if err := writeOwnerOnlyFileAtomic(licensePath, []byte(encoded)); err != nil {
 		return fmt.Errorf("failed to write license file: %w", err)
 	}
 
@@ -168,15 +289,15 @@ func (p *Persistence) Load() (string, error) {
 func (p *Persistence) LoadWithMetadata() (PersistedLicense, error) {
 	licensePath := filepath.Join(p.configDir, LicenseFileName)
 
-	encoded, err := os.ReadFile(licensePath)
+	encoded, err := readBoundedRegularFile(licensePath, maxLicenseFileSize)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if isMissingPathError(err) {
 			return PersistedLicense{}, nil // No license saved
 		}
 		return PersistedLicense{}, fmt.Errorf("failed to read license file: %w", err)
 	}
 
-	encrypted, err := base64.StdEncoding.DecodeString(string(encoded))
+	encrypted, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(encoded)))
 	if err != nil {
 		return PersistedLicense{}, fmt.Errorf("failed to decode license file: %w", err)
 	}
@@ -218,8 +339,14 @@ func (p *Persistence) Delete() error {
 // Exists checks if a saved license exists.
 func (p *Persistence) Exists() bool {
 	licensePath := filepath.Join(p.configDir, LicenseFileName)
-	_, err := os.Stat(licensePath)
-	return err == nil
+	info, err := os.Lstat(licensePath)
+	if err != nil {
+		return false
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return false
+	}
+	return info.Mode().IsRegular()
 }
 
 // encrypt uses AES-GCM to encrypt data.
@@ -299,7 +426,10 @@ func getMachineID() (string, error) {
 	for _, path := range paths {
 		data, err := os.ReadFile(path)
 		if err == nil && len(data) > 0 {
-			return string(data), nil
+			trimmed := strings.TrimSpace(string(data))
+			if trimmed != "" {
+				return trimmed, nil
+			}
 		}
 	}
 

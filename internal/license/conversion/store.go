@@ -2,6 +2,7 @@ package conversion
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -10,6 +11,11 @@ import (
 	"time"
 
 	_ "modernc.org/sqlite"
+)
+
+const (
+	privateDirPerm  = 0o700
+	privateFilePerm = 0o600
 )
 
 type ConversionStore struct {
@@ -37,15 +43,59 @@ type FunnelSummary struct {
 	} `json:"period"`
 }
 
+func ensureOwnerOnlyDir(dir string) error {
+	if err := os.MkdirAll(dir, privateDirPerm); err != nil {
+		return err
+	}
+	return os.Chmod(dir, privateDirPerm)
+}
+
+func rejectSymlinkOrNonRegular(path string) error {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return err
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("unsafe sqlite path %q: symlink is not allowed", path)
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("unsafe sqlite path %q: non-regular file is not allowed", path)
+	}
+	return nil
+}
+
+func hardenSQLiteFile(path string) error {
+	if err := rejectSymlinkOrNonRegular(path); err != nil {
+		return err
+	}
+	return os.Chmod(path, privateFilePerm)
+}
+
+func hardenSQLiteArtifacts(dbPath string) error {
+	artifacts := []string{dbPath, dbPath + "-wal", dbPath + "-shm"}
+	for _, path := range artifacts {
+		if err := hardenSQLiteFile(path); err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				continue
+			}
+			return err
+		}
+	}
+	return nil
+}
+
 func NewConversionStore(dbPath string) (*ConversionStore, error) {
-	dbPath = strings.TrimSpace(dbPath)
+	dbPath = filepath.Clean(strings.TrimSpace(dbPath))
 	if dbPath == "" {
 		return nil, fmt.Errorf("conversion db path is required")
 	}
 
 	dir := filepath.Dir(dbPath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := ensureOwnerOnlyDir(dir); err != nil {
 		return nil, fmt.Errorf("failed to create conversion db directory: %w", err)
+	}
+	if err := rejectSymlinkOrNonRegular(dbPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, err
 	}
 
 	dsn := dbPath + "?" + url.Values{
@@ -68,6 +118,10 @@ func NewConversionStore(dbPath string) (*ConversionStore, error) {
 	if err := store.initSchema(); err != nil {
 		_ = db.Close()
 		return nil, err
+	}
+	if err := hardenSQLiteArtifacts(dbPath); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("failed to secure conversion db files: %w", err)
 	}
 	return store, nil
 }
