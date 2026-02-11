@@ -252,6 +252,19 @@ detect_proxmox() {
     return 1
 }
 
+detect_proxmox_type() {
+    if [[ -d "/etc/proxmox-backup" ]] || command -v proxmox-backup-manager &>/dev/null; then
+        echo "pbs"
+        return 0
+    fi
+    if [[ -d "/etc/pve" ]] || command -v pveversion &>/dev/null; then
+        echo "pve"
+        return 0
+    fi
+    echo ""
+    return 1
+}
+
 # Build exec args string for use in service files
 # Returns via EXEC_ARGS variable
 build_exec_args() {
@@ -339,6 +352,10 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+if [[ -n "$PROXMOX_TYPE" && "$PROXMOX_TYPE" != "pve" && "$PROXMOX_TYPE" != "pbs" ]]; then
+    fail "Invalid --proxmox-type value: ${PROXMOX_TYPE} (expected 'pve' or 'pbs')"
+fi
+
 # --- Check Root ---
 if [[ $EUID -ne 0 ]]; then
    echo "This script must be run as root. Please use sudo." 
@@ -386,12 +403,23 @@ if [[ "$PROXMOX_EXPLICIT" != "true" ]]; then
     fi
 fi
 
+if [[ "$ENABLE_PROXMOX" == "true" && -z "$PROXMOX_TYPE" ]]; then
+    auto_type="$(detect_proxmox_type || true)"
+    if [[ -n "$auto_type" ]]; then
+        PROXMOX_TYPE="$auto_type"
+        log_info "Proxmox mode detected: ${PROXMOX_TYPE}"
+    fi
+fi
+
 # Summary of what will be monitored
 log_info "Monitoring configuration:"
 log_info "  Host metrics: $ENABLE_HOST"
 log_info "  Docker/Podman: $ENABLE_DOCKER"
 log_info "  Kubernetes: $ENABLE_KUBERNETES"
 log_info "  Proxmox: $ENABLE_PROXMOX"
+if [[ "$ENABLE_PROXMOX" == "true" && -n "$PROXMOX_TYPE" ]]; then
+    log_info "  Proxmox type: $PROXMOX_TYPE"
+fi
 
 # --- Uninstall Logic ---
 if [[ "$UNINSTALL" == "true" ]]; then

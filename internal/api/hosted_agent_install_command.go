@@ -2,13 +2,13 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rs/zerolog/log"
 )
 
@@ -48,58 +48,42 @@ func (r *Router) handleHostedTenantAgentInstallCommand(w http.ResponseWriter, re
 		return
 	}
 
-	payload.Type = strings.ToLower(strings.TrimSpace(payload.Type))
-	if payload.Type != "pve" && payload.Type != "pbs" {
-		http.Error(w, "Type must be 'pve' or 'pbs'", http.StatusBadRequest)
-		return
-	}
-
-	rawToken, err := internalauth.GenerateAPIToken()
+	installType, err := normalizeProxmoxInstallType(payload.Type)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to generate hosted tenant agent API token")
-		http.Error(w, "Failed to generate API token", http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	tokenName := fmt.Sprintf("cloud-tenant-agent-%s-%s-%d", orgID, payload.Type, time.Now().UTC().Unix())
-	scopes := []string{
-		config.ScopeHostReport,
-		config.ScopeHostConfigRead,
-		config.ScopeHostManage,
-		config.ScopeAgentExec,
-	}
-
-	record, err := config.NewAPITokenRecord(rawToken, tokenName, scopes)
+	tokenName := fmt.Sprintf("cloud-tenant-agent-%s-%s-%d", orgID, installType, time.Now().UTC().Unix())
+	rawToken, record, err := issueAndPersistAgentInstallToken(r.config, r.persistence, issueAgentInstallTokenOptions{
+		TokenName: tokenName,
+		OrgID:     orgID,
+		Metadata: map[string]string{
+			"install_type": installType,
+			"issued_via":   "hosted_agent_install_command",
+		},
+	})
 	if err != nil {
-		log.Error().Err(err).Str("token_name", tokenName).Msg("Failed to construct hosted tenant agent token record")
-		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
-		return
-	}
-	// Enforce tenant scoping even when callers omit X-Pulse-Org-ID (cloud agent UX).
-	record.OrgID = orgID
-	if record.Metadata == nil {
-		record.Metadata = map[string]string{}
-	}
-	record.Metadata["install_type"] = payload.Type
-	record.Metadata["issued_via"] = "hosted_agent_install_command"
-
-	// Persist to the global token store. Multi-tenant auth relies on org binding.
-	config.Mu.Lock()
-	r.config.APITokens = append(r.config.APITokens, *record)
-	r.config.SortAPITokens()
-	if r.persistence != nil {
-		if err := r.persistence.SaveAPITokens(r.config.APITokens); err != nil {
-			// Roll back in-memory addition on persistence failure.
-			r.config.APITokens = r.config.APITokens[:len(r.config.APITokens)-1]
-			config.Mu.Unlock()
+		switch {
+		case errors.Is(err, errAgentInstallTokenGeneration):
+			log.Error().Err(err).Msg("Failed to generate hosted tenant agent API token")
+			http.Error(w, "Failed to generate API token", http.StatusInternalServerError)
+		case errors.Is(err, errAgentInstallTokenRecord):
+			log.Error().Err(err).Str("token_name", tokenName).Msg("Failed to construct hosted tenant agent token record")
+			http.Error(w, "Failed to generate token", http.StatusInternalServerError)
+		case errors.Is(err, errAgentInstallTokenPersist):
 			log.Error().Err(err).Msg("Failed to persist hosted tenant agent token")
 			http.Error(w, "Failed to save token to disk: "+err.Error(), http.StatusInternalServerError)
-			return
+		default:
+			log.Error().Err(err).Msg("Failed to create hosted tenant agent token")
+			http.Error(w, "Failed to generate API token", http.StatusInternalServerError)
 		}
+		return
 	}
 
 	// If the tenant monitor is already initialized, ensure it sees the new token immediately.
 	// If not initialized, future GetMonitor() calls will deep-copy the updated base config.
+	config.Mu.Lock()
 	if r.mtMonitor != nil {
 		if m, ok := r.mtMonitor.PeekMonitor(orgID); ok && m != nil && m.GetConfig() != nil {
 			m.GetConfig().APITokens = append(m.GetConfig().APITokens, *record)
@@ -109,12 +93,12 @@ func (r *Router) handleHostedTenantAgentInstallCommand(w http.ResponseWriter, re
 	config.Mu.Unlock()
 
 	baseURL := strings.TrimRight(r.resolvePublicURL(req), "/")
-	command := fmt.Sprintf(`curl -fsSL %s/install.sh | bash -s -- \
-  --url %s \
-  --token %s \
-  --enable-proxmox \
-  --proxmox-type %s`,
-		baseURL, baseURL, rawToken, payload.Type)
+	command := buildProxmoxAgentInstallCommand(agentInstallCommandOptions{
+		BaseURL:            baseURL,
+		Token:              rawToken,
+		InstallType:        installType,
+		IncludeInstallType: true,
+	})
 
 	writeJSON(w, http.StatusOK, hostedTenantAgentInstallCommandResponse{
 		OrgID:   orgID,

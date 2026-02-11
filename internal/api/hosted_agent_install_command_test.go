@@ -75,6 +75,8 @@ func TestHostedTenantAgentInstallCommand_GeneratesOrgBoundTokenAndCommand(t *tes
 		if tok.OrgID == orgID && tok.Name != "" && tok.Hash != "" {
 			// Validate raw token matches this record.
 			if _, ok := (&config.Config{APITokens: []config.APITokenRecord{tok}}).ValidateAPIToken(resp.Token); ok {
+				require.Equal(t, "pbs", tok.Metadata["install_type"])
+				require.Equal(t, "hosted_agent_install_command", tok.Metadata["issued_via"])
 				found = true
 				break
 			}

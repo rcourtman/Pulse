@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -2203,82 +2204,52 @@ func (h *ConfigHandlers) handleAgentInstallCommand(w http.ResponseWriter, r *htt
 		return
 	}
 
-	// Validate type
-	if req.Type != "pve" && req.Type != "pbs" {
-		http.Error(w, "Type must be 'pve' or 'pbs'", http.StatusBadRequest)
-		return
-	}
-
-	// Generate a new API token with host report and host manage scopes
-	rawToken, err := internalauth.GenerateAPIToken()
+	installType, err := normalizeProxmoxInstallType(req.Type)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to generate API token for agent install")
-		http.Error(w, "Failed to generate API token", http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	tokenName := fmt.Sprintf("proxmox-agent-%s-%d", req.Type, time.Now().Unix())
-	scopes := []string{
-		config.ScopeHostReport,
-		config.ScopeHostConfigRead,
-		config.ScopeHostManage,
-		config.ScopeAgentExec,
-	}
+	cfg := h.getConfig(r.Context())
+	persistence := h.getPersistence(r.Context())
 
-	record, err := config.NewAPITokenRecord(rawToken, tokenName, scopes)
+	tokenName := fmt.Sprintf("proxmox-agent-%s-%d", installType, time.Now().Unix())
+	rawToken, _, err := issueAndPersistAgentInstallToken(cfg, persistence, issueAgentInstallTokenOptions{
+		TokenName: tokenName,
+		Metadata: map[string]string{
+			"install_type": installType,
+			"issued_via":   "config_agent_install_command",
+		},
+	})
 	if err != nil {
-		log.Error().Err(err).Str("token_name", tokenName).Msg("Failed to construct API token record")
-		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
-		return
-	}
-
-	// Persist the token
-	config.Mu.Lock()
-	h.getConfig(r.Context()).APITokens = append(h.getConfig(r.Context()).APITokens, *record)
-	h.getConfig(r.Context()).SortAPITokens()
-
-	if h.getPersistence(r.Context()) != nil {
-		if err := h.getPersistence(r.Context()).SaveAPITokens(h.getConfig(r.Context()).APITokens); err != nil {
-			// Rollback the in-memory addition
-			h.getConfig(r.Context()).APITokens = h.getConfig(r.Context()).APITokens[:len(h.getConfig(r.Context()).APITokens)-1]
-			config.Mu.Unlock()
+		switch {
+		case errors.Is(err, errAgentInstallTokenGeneration):
+			log.Error().Err(err).Msg("Failed to generate API token for agent install")
+			http.Error(w, "Failed to generate API token", http.StatusInternalServerError)
+		case errors.Is(err, errAgentInstallTokenRecord):
+			log.Error().Err(err).Str("token_name", tokenName).Msg("Failed to construct API token record")
+			http.Error(w, "Failed to generate token", http.StatusInternalServerError)
+		case errors.Is(err, errAgentInstallTokenPersist):
 			log.Error().Err(err).Msg("Failed to persist API tokens after creation")
 			http.Error(w, "Failed to save token to disk: "+err.Error(), http.StatusInternalServerError)
-			return
+		default:
+			log.Error().Err(err).Msg("Failed to create API token for agent install")
+			http.Error(w, "Failed to generate API token", http.StatusInternalServerError)
 		}
-	}
-	config.Mu.Unlock()
-
-	// Derive Pulse URL from the request
-	host := r.Host
-	if parsedHost, parsedPort, err := net.SplitHostPort(host); err == nil {
-		if (parsedHost == "127.0.0.1" || parsedHost == "localhost") && parsedPort == strconv.Itoa(h.getConfig(r.Context()).FrontendPort) {
-			// Prefer a user-configured public URL when we're running on loopback
-			if publicURL := strings.TrimSpace(h.getConfig(r.Context()).PublicURL); publicURL != "" {
-				if parsedURL, err := url.Parse(publicURL); err == nil && parsedURL.Host != "" {
-					host = parsedURL.Host
-				}
-			}
-		}
+		return
 	}
 
-	// Detect protocol - check both TLS and proxy headers
-	scheme := "http"
-	if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
-		scheme = "https"
-	}
-	pulseURL := fmt.Sprintf("%s://%s", scheme, host)
-
-	// Generate the install command
-	command := fmt.Sprintf(`curl -fsSL %s/install.sh | bash -s -- \
-  --url %s \
-  --token %s \
-  --enable-proxmox`,
-		pulseURL, pulseURL, rawToken)
+	baseURL := resolveConfigAgentInstallBaseURL(r, cfg)
+	command := buildProxmoxAgentInstallCommand(agentInstallCommandOptions{
+		BaseURL:            baseURL,
+		Token:              rawToken,
+		InstallType:        installType,
+		IncludeInstallType: true,
+	})
 
 	log.Info().
 		Str("token_name", tokenName).
-		Str("type", req.Type).
+		Str("type", installType).
 		Msg("Generated agent install command with API token")
 
 	w.Header().Set("Content-Type", "application/json")
