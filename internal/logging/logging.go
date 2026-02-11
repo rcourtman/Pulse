@@ -254,10 +254,10 @@ func (w *rollingFileWriter) rotateLocked() error {
 
 	if _, err := statFn(w.path); err == nil {
 		rotated := fmt.Sprintf("%s.%s", w.path, nowFn().Format("20060102-150405"))
-		if err := renameFn(w.path, rotated); err == nil {
-			if w.compress {
-				go compressFn(rotated)
-			}
+		if err := renameFn(w.path, rotated); err != nil {
+			fmt.Fprintf(os.Stderr, "log rotation: rename %s -> %s failed: %v\n", w.path, rotated, err)
+		} else if w.compress {
+			go compressFn(rotated)
 		}
 	}
 
