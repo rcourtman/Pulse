@@ -133,10 +133,20 @@ func (u *Updater) RunLoop(ctx context.Context) {
 	}
 
 	// Initial check after a short delay (5s to quickly update outdated agents)
+	initialDelayTimer := time.NewTimer(u.initialDelay)
+	defer func() {
+		if !initialDelayTimer.Stop() {
+			select {
+			case <-initialDelayTimer.C:
+			default:
+			}
+		}
+	}()
+
 	select {
 	case <-ctx.Done():
 		return
-	case <-time.After(u.initialDelay):
+	case <-initialDelayTimer.C:
 		u.CheckAndUpdate(ctx)
 	}
 
