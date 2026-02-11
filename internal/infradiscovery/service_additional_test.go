@@ -10,6 +10,17 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
+type contextCheckingAnalyzer struct {
+	called bool
+	sawNil bool
+}
+
+func (a *contextCheckingAnalyzer) AnalyzeForDiscovery(ctx context.Context, prompt string) (string, error) {
+	a.called = true
+	a.sawNil = ctx == nil
+	return `{"service_type":"postgres","service_name":"PostgreSQL","category":"database","cli_command":"docker exec {container} psql -U postgres","confidence":0.95,"reasoning":"postgres image"}`, nil
+}
+
 func waitFor(t *testing.T, timeout time.Duration, check func() bool) {
 	t.Helper()
 	deadline := time.Now().Add(timeout)
@@ -20,6 +31,64 @@ func waitFor(t *testing.T, timeout time.Duration, check func() bool) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	t.Fatal("condition not met before timeout")
+}
+
+func TestNewServiceNormalizesInvalidConfig(t *testing.T) {
+	service := NewService(&mockStateProvider{}, nil, Config{
+		Interval:    -1 * time.Second,
+		CacheExpiry: 0,
+	})
+
+	if service.interval != defaultDiscoveryInterval {
+		t.Fatalf("interval = %v, want %v", service.interval, defaultDiscoveryInterval)
+	}
+	if service.cacheExpiry != defaultCacheExpiry {
+		t.Fatalf("cacheExpiry = %v, want %v", service.cacheExpiry, defaultCacheExpiry)
+	}
+}
+
+func TestNewServiceNilStateProviderUsesEmptyState(t *testing.T) {
+	service := NewService(nil, nil, DefaultConfig())
+	service.SetAIAnalyzer(&mockAIAnalyzer{})
+
+	apps := service.RunDiscovery(context.Background())
+	if len(apps) != 0 {
+		t.Fatalf("expected 0 apps from empty state provider, got %d", len(apps))
+	}
+	if service.GetLastRun().IsZero() {
+		t.Fatal("expected lastRun to be updated for empty-state discovery run")
+	}
+}
+
+func TestRunDiscoveryNormalizesNilContext(t *testing.T) {
+	provider := &mockStateProvider{
+		state: models.StateSnapshot{
+			DockerHosts: []models.DockerHost{
+				{
+					AgentID:  "agent-1",
+					Hostname: "host1",
+					Containers: []models.DockerContainer{
+						{ID: "1", Name: "db", Image: "postgres:14"},
+					},
+				},
+			},
+		},
+	}
+	analyzer := &contextCheckingAnalyzer{}
+
+	service := NewService(provider, nil, DefaultConfig())
+	service.SetAIAnalyzer(analyzer)
+
+	apps := service.RunDiscovery(nil)
+	if !analyzer.called {
+		t.Fatal("expected analyzer to be called")
+	}
+	if analyzer.sawNil {
+		t.Fatal("expected RunDiscovery to pass non-nil context to analyzer")
+	}
+	if len(apps) != 1 {
+		t.Fatalf("expected 1 discovered app, got %d", len(apps))
+	}
 }
 
 func TestStartStopUpdatesStatus(t *testing.T) {

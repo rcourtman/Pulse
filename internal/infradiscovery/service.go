@@ -106,21 +106,57 @@ type Config struct {
 	CacheExpiry time.Duration // How long to cache analysis results (default: 1 hour)
 }
 
+const (
+	defaultDiscoveryInterval = 5 * time.Minute
+	defaultCacheExpiry       = 1 * time.Hour
+)
+
+type emptyStateProvider struct{}
+
+func (emptyStateProvider) GetState() models.StateSnapshot {
+	return models.StateSnapshot{}
+}
+
 // DefaultConfig returns the default discovery configuration.
 func DefaultConfig() Config {
 	return Config{
-		Interval:    5 * time.Minute,
-		CacheExpiry: 1 * time.Hour,
+		Interval:    defaultDiscoveryInterval,
+		CacheExpiry: defaultCacheExpiry,
 	}
+}
+
+func normalizeConfig(cfg Config) Config {
+	if cfg.Interval <= 0 {
+		log.Warn().
+			Dur("configured_interval", cfg.Interval).
+			Dur("default_interval", defaultDiscoveryInterval).
+			Msg("Invalid infrastructure discovery interval; using default")
+		cfg.Interval = defaultDiscoveryInterval
+	}
+	if cfg.CacheExpiry <= 0 {
+		log.Warn().
+			Dur("configured_cache_expiry", cfg.CacheExpiry).
+			Dur("default_cache_expiry", defaultCacheExpiry).
+			Msg("Invalid infrastructure discovery cache expiry; using default")
+		cfg.CacheExpiry = defaultCacheExpiry
+	}
+	return cfg
+}
+
+func normalizeContext(ctx context.Context) context.Context {
+	if ctx == nil {
+		return context.Background()
+	}
+	return ctx
 }
 
 // NewService creates a new infrastructure discovery service.
 func NewService(stateProvider StateProvider, knowledgeStore *knowledge.Store, cfg Config) *Service {
-	if cfg.Interval == 0 {
-		cfg.Interval = 5 * time.Minute
-	}
-	if cfg.CacheExpiry == 0 {
-		cfg.CacheExpiry = 1 * time.Hour
+	cfg = normalizeConfig(cfg)
+
+	if stateProvider == nil {
+		log.Warn().Msg("Infrastructure discovery state provider not configured; using empty state provider")
+		stateProvider = emptyStateProvider{}
 	}
 
 	return &Service{
@@ -144,6 +180,8 @@ func (s *Service) SetAIAnalyzer(analyzer AIAnalyzer) {
 
 // Start begins the background discovery service.
 func (s *Service) Start(ctx context.Context) {
+	ctx = normalizeContext(ctx)
+
 	s.mu.Lock()
 	if s.running {
 		s.mu.Unlock()
@@ -214,7 +252,14 @@ func (s *Service) discoveryLoop(ctx context.Context) {
 
 // RunDiscovery performs a discovery scan using AI analysis.
 func (s *Service) RunDiscovery(ctx context.Context) []DiscoveredApp {
+	ctx = normalizeContext(ctx)
 	start := time.Now()
+
+	if s.stateProvider == nil {
+		log.Error().Msg("State provider is not configured; skipping discovery")
+		return nil
+	}
+
 	state := s.stateProvider.GetState()
 
 	s.mu.RLock()
@@ -564,6 +609,7 @@ func (s *Service) GetLastRun() time.Time {
 
 // ForceRefresh triggers an immediate discovery scan.
 func (s *Service) ForceRefresh(ctx context.Context) {
+	ctx = normalizeContext(ctx)
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
