@@ -258,7 +258,7 @@ func TestReadLoopCommandResultBranches(t *testing.T) {
 
 	s.mu.Lock()
 	s.agents["a1"] = ac
-	s.pendingReqs["req-full"] = make(chan CommandResultPayload)
+	s.pendingReqs[pendingRequestKey("a1", "req-full")] = make(chan CommandResultPayload)
 	s.mu.Unlock()
 
 	done := make(chan struct{})
@@ -281,8 +281,48 @@ func TestReadLoopCommandResultBranches(t *testing.T) {
 	}
 
 	s.mu.Lock()
-	delete(s.pendingReqs, "req-full")
+	delete(s.pendingReqs, pendingRequestKey("a1", "req-full"))
 	s.mu.Unlock()
+}
+
+func TestReadLoopCommandResultWrongAgentIsolation(t *testing.T) {
+	s := NewServer(nil)
+	serverConn, clientConn, cleanup := newConnPair(t)
+	defer cleanup()
+
+	ac := &agentConn{
+		conn:  serverConn,
+		agent: ConnectedAgent{AgentID: "a1"},
+		done:  make(chan struct{}),
+	}
+
+	foreignCh := make(chan CommandResultPayload, 1)
+
+	s.mu.Lock()
+	s.agents["a1"] = ac
+	s.pendingReqs[pendingRequestKey("a2", "req-shared")] = foreignCh
+	s.mu.Unlock()
+
+	done := make(chan struct{})
+	go func() {
+		s.readLoop(ac)
+		close(done)
+	}()
+
+	_ = clientConn.WriteMessage(websocket.TextMessage, []byte(`{"type":"command_result","payload":{"request_id":"req-shared","success":true}}`))
+	clientConn.Close()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatalf("readLoop did not exit")
+	}
+
+	select {
+	case <-foreignCh:
+		t.Fatalf("expected result not to be delivered across agents")
+	default:
+	}
 }
 
 func TestPingLoopSuccessAndStop(t *testing.T) {
@@ -421,7 +461,7 @@ func TestExecuteCommandDefaultTimeout(t *testing.T) {
 	go func() {
 		for {
 			s.mu.RLock()
-			ch := s.pendingReqs["r-default"]
+			ch := s.pendingReqs[pendingRequestKey("a1", "r-default")]
 			s.mu.RUnlock()
 			if ch != nil {
 				ch <- CommandResultPayload{RequestID: "r-default", Success: true}

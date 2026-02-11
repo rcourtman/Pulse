@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -31,7 +32,7 @@ var (
 type Server struct {
 	mu            sync.RWMutex
 	agents        map[string]*agentConn                // agentID -> connection
-	pendingReqs   map[string]chan CommandResultPayload // requestID -> response channel
+	pendingReqs   map[string]chan CommandResultPayload // scoped request key -> response channel
 	validateToken func(token string, agentID string) bool
 }
 
@@ -49,6 +50,10 @@ func NewServer(validateToken func(token string, agentID string) bool) *Server {
 		pendingReqs:   make(map[string]chan CommandResultPayload),
 		validateToken: validateToken,
 	}
+}
+
+func pendingRequestKey(agentID, requestID string) string {
+	return agentID + "\x00" + requestID
 }
 
 // HandleWebSocket handles incoming WebSocket connections from agents
@@ -111,6 +116,19 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	var reg AgentRegisterPayload
 	if err := json.Unmarshal(payloadBytes, &reg); err != nil {
 		log.Error().Err(err).Msg("Failed to parse registration payload")
+		conn.Close()
+		return
+	}
+	reg.AgentID = strings.TrimSpace(reg.AgentID)
+	if reg.AgentID == "" {
+		log.Warn().Msg("Agent registration rejected: missing agent_id")
+		if err := s.sendMessage(conn, Message{
+			Type:      MsgTypeRegistered,
+			Timestamp: time.Now(),
+			Payload:   RegisteredPayload{Success: false, Message: "Invalid agent_id"},
+		}); err != nil {
+			log.Warn().Err(err).Msg("Failed to send rejection to agent with missing agent_id")
+		}
 		conn.Close()
 		return
 	}
@@ -246,7 +264,11 @@ func (s *Server) readLoop(ac *agentConn) {
 			ac.writeMu.Unlock()
 
 		case MsgTypeCommandResult:
-			payloadBytes, _ := json.Marshal(msg.Payload)
+			payloadBytes, err := json.Marshal(msg.Payload)
+			if err != nil {
+				log.Error().Err(err).Str("agent_id", ac.agent.AgentID).Msg("Failed to marshal command result payload")
+				continue
+			}
 			var result CommandResultPayload
 			if err := json.Unmarshal(payloadBytes, &result); err != nil {
 				log.Error().Err(err).Msg("Failed to parse command result")
@@ -254,17 +276,23 @@ func (s *Server) readLoop(ac *agentConn) {
 			}
 
 			s.mu.RLock()
-			ch, ok := s.pendingReqs[result.RequestID]
+			ch, ok := s.pendingReqs[pendingRequestKey(ac.agent.AgentID, result.RequestID)]
 			s.mu.RUnlock()
 
 			if ok {
 				select {
 				case ch <- result:
 				default:
-					log.Warn().Str("request_id", result.RequestID).Msg("Result channel full, dropping")
+					log.Warn().
+						Str("agent_id", ac.agent.AgentID).
+						Str("request_id", result.RequestID).
+						Msg("Result channel full, dropping")
 				}
 			} else {
-				log.Warn().Str("request_id", result.RequestID).Msg("No pending request for result")
+				log.Warn().
+					Str("agent_id", ac.agent.AgentID).
+					Str("request_id", result.RequestID).
+					Msg("No pending request for result")
 			}
 		}
 	}
@@ -326,6 +354,15 @@ func (s *Server) sendMessage(conn *websocket.Conn, msg Message) error {
 
 // ExecuteCommand sends a command to an agent and waits for the result
 func (s *Server) ExecuteCommand(ctx context.Context, agentID string, cmd ExecuteCommandPayload) (*CommandResultPayload, error) {
+	agentID = strings.TrimSpace(agentID)
+	if agentID == "" {
+		return nil, fmt.Errorf("agent id is required")
+	}
+	cmd.RequestID = strings.TrimSpace(cmd.RequestID)
+	if cmd.RequestID == "" {
+		return nil, fmt.Errorf("request id is required")
+	}
+
 	s.mu.RLock()
 	ac, ok := s.agents[agentID]
 	s.mu.RUnlock()
@@ -336,13 +373,14 @@ func (s *Server) ExecuteCommand(ctx context.Context, agentID string, cmd Execute
 
 	// Create response channel
 	respCh := make(chan CommandResultPayload, 1)
+	reqKey := pendingRequestKey(agentID, cmd.RequestID)
 	s.mu.Lock()
-	s.pendingReqs[cmd.RequestID] = respCh
+	s.pendingReqs[reqKey] = respCh
 	s.mu.Unlock()
 
 	defer func() {
 		s.mu.Lock()
-		delete(s.pendingReqs, cmd.RequestID)
+		delete(s.pendingReqs, reqKey)
 		s.mu.Unlock()
 	}()
 
@@ -380,6 +418,15 @@ func (s *Server) ExecuteCommand(ctx context.Context, agentID string, cmd Execute
 
 // ReadFile reads a file from an agent
 func (s *Server) ReadFile(ctx context.Context, agentID string, req ReadFilePayload) (*CommandResultPayload, error) {
+	agentID = strings.TrimSpace(agentID)
+	if agentID == "" {
+		return nil, fmt.Errorf("agent id is required")
+	}
+	req.RequestID = strings.TrimSpace(req.RequestID)
+	if req.RequestID == "" {
+		return nil, fmt.Errorf("request id is required")
+	}
+
 	s.mu.RLock()
 	ac, ok := s.agents[agentID]
 	s.mu.RUnlock()
@@ -390,13 +437,14 @@ func (s *Server) ReadFile(ctx context.Context, agentID string, req ReadFilePaylo
 
 	// Create response channel
 	respCh := make(chan CommandResultPayload, 1)
+	reqKey := pendingRequestKey(agentID, req.RequestID)
 	s.mu.Lock()
-	s.pendingReqs[req.RequestID] = respCh
+	s.pendingReqs[reqKey] = respCh
 	s.mu.Unlock()
 
 	defer func() {
 		s.mu.Lock()
-		delete(s.pendingReqs, req.RequestID)
+		delete(s.pendingReqs, reqKey)
 		s.mu.Unlock()
 	}()
 

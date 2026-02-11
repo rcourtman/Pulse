@@ -22,6 +22,26 @@ func TestReadFileAgentNotConnected(t *testing.T) {
 	}
 }
 
+func TestExecuteCommandValidation(t *testing.T) {
+	s := NewServer(nil)
+	if _, err := s.ExecuteCommand(context.Background(), "", ExecuteCommandPayload{RequestID: "r1"}); err == nil {
+		t.Fatalf("expected empty agent id error")
+	}
+	if _, err := s.ExecuteCommand(context.Background(), "a1", ExecuteCommandPayload{}); err == nil {
+		t.Fatalf("expected empty request id error")
+	}
+}
+
+func TestReadFileValidation(t *testing.T) {
+	s := NewServer(nil)
+	if _, err := s.ReadFile(context.Background(), "", ReadFilePayload{RequestID: "r1"}); err == nil {
+		t.Fatalf("expected empty agent id error")
+	}
+	if _, err := s.ReadFile(context.Background(), "a1", ReadFilePayload{}); err == nil {
+		t.Fatalf("expected empty request id error")
+	}
+}
+
 func TestConnectedAgentLookups(t *testing.T) {
 	s := NewServer(nil)
 	now := time.Now().Add(-1 * time.Minute)
