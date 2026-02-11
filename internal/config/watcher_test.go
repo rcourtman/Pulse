@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -131,9 +132,9 @@ func TestConfigWatcher_ReloadMockConfig(t *testing.T) {
 	}
 
 	// Hook
-	callbackCalled := false
+	var callbackCalled atomic.Bool
 	cw.SetMockReloadCallback(func() {
-		callbackCalled = true
+		callbackCalled.Store(true)
 	})
 
 	// Create mock.env
@@ -148,7 +149,7 @@ func TestConfigWatcher_ReloadMockConfig(t *testing.T) {
 	assert.Equal(t, "true", val)
 
 	// Wait for callback (it's called in a goroutine)
-	require.Eventually(t, func() bool { return callbackCalled }, 1*time.Second, 10*time.Millisecond)
+	require.Eventually(t, func() bool { return callbackCalled.Load() }, 1*time.Second, 10*time.Millisecond)
 
 	// Cleanup
 	os.Unsetenv("PULSE_MOCK_TEST")
@@ -172,9 +173,9 @@ func TestConfigWatcher_ReloadAPITokens(t *testing.T) {
 		apiTokensPath: apiTokensPath,
 	}
 
-	callbackCalled := false
+	var callbackCalled atomic.Bool
 	cw.SetAPITokenReloadCallback(func() {
-		callbackCalled = true
+		callbackCalled.Store(true)
 	})
 
 	// Create API tokens file via persistence to ensure format matches
@@ -203,7 +204,7 @@ func TestConfigWatcher_ReloadAPITokens(t *testing.T) {
 	Mu.Unlock()
 
 	// Wait for callback
-	require.Eventually(t, func() bool { return callbackCalled }, 1*time.Second, 10*time.Millisecond)
+	require.Eventually(t, func() bool { return callbackCalled.Load() }, 1*time.Second, 10*time.Millisecond)
 }
 
 func TestConfigWatcher_CalculateFileHash_Error(t *testing.T) {
@@ -280,11 +281,11 @@ func TestConfigWatcher_PollForChanges(t *testing.T) {
 	cw.pollInterval = 10 * time.Millisecond
 
 	// Hook up callbacks
-	mockCalled := false
-	tokenCalled := false
+	var mockCalled atomic.Bool
+	var tokenCalled atomic.Bool
 
-	cw.SetMockReloadCallback(func() { mockCalled = true })
-	cw.SetAPITokenReloadCallback(func() { tokenCalled = true })
+	cw.SetMockReloadCallback(func() { mockCalled.Store(true) })
+	cw.SetAPITokenReloadCallback(func() { tokenCalled.Store(true) })
 
 	// Mock global persistence for API token reloads
 	p := NewConfigPersistence(tempDir)
@@ -313,7 +314,7 @@ func TestConfigWatcher_PollForChanges(t *testing.T) {
 	future = future.Add(2 * time.Second)
 	require.NoError(t, os.Chtimes(mockEnvPath, future, future))
 
-	require.Eventually(t, func() bool { return mockCalled }, 1*time.Second, 10*time.Millisecond)
+	require.Eventually(t, func() bool { return mockCalled.Load() }, 1*time.Second, 10*time.Millisecond)
 	assert.Equal(t, "2", os.Getenv("PULSE_MOCK_TEST"))
 
 	// 3. Update api_tokens.json
@@ -328,7 +329,7 @@ func TestConfigWatcher_PollForChanges(t *testing.T) {
 	// Waiting for polling to pick up change in file modification
 	// persistence.SaveAPITokens writes to the file.
 
-	require.Eventually(t, func() bool { return tokenCalled }, 1*time.Second, 10*time.Millisecond)
+	require.Eventually(t, func() bool { return tokenCalled.Load() }, 1*time.Second, 10*time.Millisecond)
 
 	Mu.RLock()
 	defer Mu.RUnlock()
