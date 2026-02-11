@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/email"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/cloudauth"
 	"github.com/rs/zerolog/log"
@@ -86,7 +87,9 @@ func HandleMagicLinkVerify(svc *Service, reg *registry.TenantRegistry, tenantsDi
 // HandleAdminGenerateMagicLink returns an admin-only handler that generates a magic
 // link for a given email + tenant_id. The caller is responsible for wrapping this
 // with AdminKeyMiddleware.
-func HandleAdminGenerateMagicLink(svc *Service, baseURL string) http.HandlerFunc {
+//
+// If send_email is true in the request, the magic link is also emailed to the user.
+func HandleAdminGenerateMagicLink(svc *Service, baseURL string, emailSender email.Sender, emailFrom string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -94,8 +97,9 @@ func HandleAdminGenerateMagicLink(svc *Service, baseURL string) http.HandlerFunc
 		}
 
 		var req struct {
-			Email    string `json:"email"`
-			TenantID string `json:"tenant_id"`
+			Email     string `json:"email"`
+			TenantID  string `json:"tenant_id"`
+			SendEmail bool   `json:"send_email"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			writeError(w, http.StatusBadRequest, "bad_request", "Invalid JSON body")
@@ -114,17 +118,37 @@ func HandleAdminGenerateMagicLink(svc *Service, baseURL string) http.HandlerFunc
 		}
 
 		magicURL := BuildVerifyURL(baseURL, token)
+		emailSent := false
+
+		if req.SendEmail && emailSender != nil && emailFrom != "" {
+			html, text, renderErr := email.RenderMagicLinkEmail(email.MagicLinkData{MagicLinkURL: magicURL})
+			if renderErr != nil {
+				log.Error().Err(renderErr).Msg("Failed to render magic link email")
+			} else if sendErr := emailSender.Send(r.Context(), email.Message{
+				From:    emailFrom,
+				To:      req.Email,
+				Subject: "Sign in to Pulse",
+				HTML:    html,
+				Text:    text,
+			}); sendErr != nil {
+				log.Error().Err(sendErr).Str("to", req.Email).Msg("Failed to send magic link email")
+			} else {
+				emailSent = true
+			}
+		}
 
 		log.Info().
 			Str("email", req.Email).
 			Str("tenant_id", req.TenantID).
+			Bool("email_sent", emailSent).
 			Msg("Admin generated magic link")
 
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]string{
-			"url":       magicURL,
-			"email":     req.Email,
-			"tenant_id": req.TenantID,
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"url":        magicURL,
+			"email":      req.Email,
+			"tenant_id":  req.TenantID,
+			"email_sent": emailSent,
 		})
 	}
 }

@@ -74,9 +74,9 @@ func Run(ctx context.Context, version string) error {
 
 	// Initialize email sender
 	var emailSender email.Sender
-	if cfg.PostmarkServerToken != "" {
-		emailSender = email.NewPostmarkSender(cfg.PostmarkServerToken)
-		log.Info().Msg("Email sender configured (Postmark)")
+	if cfg.ResendAPIKey != "" {
+		emailSender = email.NewResendSender(cfg.ResendAPIKey)
+		log.Info().Msg("Email sender configured (Resend)")
 	} else {
 		emailSender = email.NewLogSender(func(to, subject, body string) {
 			const maxBody = 4096
@@ -90,7 +90,7 @@ func Run(ctx context.Context, version string) error {
 				Str("body", bodyForLog).
 				Msg("Email (log-only, no email provider configured)")
 		})
-		log.Info().Msg("Email sender: log-only (set POSTMARK_SERVER_TOKEN to enable)")
+		log.Info().Msg("Email sender: log-only (set RESEND_API_KEY to enable)")
 	}
 
 	// Build HTTP routes

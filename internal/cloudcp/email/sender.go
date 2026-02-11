@@ -24,70 +24,62 @@ type Message struct {
 	Text    string
 }
 
-// PostmarkSender sends emails via the Postmark HTTP API.
-type PostmarkSender struct {
-	serverToken string
-	httpClient  *http.Client
+// ResendSender sends emails via the Resend HTTP API.
+type ResendSender struct {
+	apiKey     string
+	httpClient *http.Client
 }
 
-// NewPostmarkSender creates a Postmark email sender.
-func NewPostmarkSender(serverToken string) *PostmarkSender {
-	return &PostmarkSender{
-		serverToken: serverToken,
+// NewResendSender creates a Resend email sender.
+func NewResendSender(apiKey string) *ResendSender {
+	return &ResendSender{
+		apiKey: apiKey,
 		httpClient: &http.Client{
 			Timeout: 10 * time.Second,
 		},
 	}
 }
 
-type postmarkRequest struct {
-	From     string `json:"From"`
-	To       string `json:"To"`
-	Subject  string `json:"Subject"`
-	HtmlBody string `json:"HtmlBody,omitempty"`
-	TextBody string `json:"TextBody,omitempty"`
+type resendRequest struct {
+	From    string `json:"from"`
+	To      string `json:"to"`
+	Subject string `json:"subject"`
+	HTML    string `json:"html,omitempty"`
+	Text    string `json:"text,omitempty"`
 }
 
-type postmarkResponse struct {
-	ErrorCode int    `json:"ErrorCode"`
-	Message   string `json:"Message"`
-}
-
-// Send sends an email via the Postmark API.
-func (p *PostmarkSender) Send(ctx context.Context, msg Message) error {
-	payload := postmarkRequest{
-		From:     msg.From,
-		To:       msg.To,
-		Subject:  msg.Subject,
-		HtmlBody: msg.HTML,
-		TextBody: msg.Text,
+// Send sends an email via the Resend API.
+func (r *ResendSender) Send(ctx context.Context, msg Message) error {
+	payload := resendRequest{
+		From:    msg.From,
+		To:      msg.To,
+		Subject: msg.Subject,
+		HTML:    msg.HTML,
+		Text:    msg.Text,
 	}
 
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return fmt.Errorf("marshal postmark request: %w", err)
+		return fmt.Errorf("marshal resend request: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://api.postmarkapp.com/email", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://api.resend.com/emails", bytes.NewReader(body))
 	if err != nil {
-		return fmt.Errorf("create postmark request: %w", err)
+		return fmt.Errorf("create resend request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("X-Postmark-Server-Token", p.serverToken)
+	req.Header.Set("Authorization", "Bearer "+r.apiKey)
 
-	resp, err := p.httpClient.Do(req)
+	resp, err := r.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("postmark request failed: %w", err)
+		return fmt.Errorf("resend request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 
 	if resp.StatusCode != http.StatusOK {
-		var pmResp postmarkResponse
-		_ = json.Unmarshal(respBody, &pmResp)
-		return fmt.Errorf("postmark error (HTTP %d): code=%d message=%s", resp.StatusCode, pmResp.ErrorCode, pmResp.Message)
+		return fmt.Errorf("resend error (HTTP %d): %s", resp.StatusCode, string(respBody))
 	}
 
 	return nil

@@ -35,13 +35,13 @@ func TestLogSender_Send(t *testing.T) {
 	}
 }
 
-func TestPostmarkSender_New(t *testing.T) {
-	sender := NewPostmarkSender("test-token")
+func TestResendSender_New(t *testing.T) {
+	sender := NewResendSender("re_test_key")
 	if sender == nil {
 		t.Fatal("expected non-nil sender")
 	}
-	if sender.serverToken != "test-token" {
-		t.Errorf("expected token=test-token, got %s", sender.serverToken)
+	if sender.apiKey != "re_test_key" {
+		t.Errorf("expected apiKey=re_test_key, got %s", sender.apiKey)
 	}
 }
 
