@@ -863,56 +863,40 @@ func (a *Agent) disableSelf(ctx context.Context) error {
 }
 
 func disableSystemdService(ctx context.Context, service string) error {
-	if _, err := exec.LookPath("systemctl"); err != nil {
-		// Not a systemd environment; nothing to do.
-		return nil
-	}
-
-	cmd := exec.CommandContext(ctx, "systemctl", "disable", service)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			exitCode := exitErr.ExitCode()
-			trimmedOutput := strings.TrimSpace(string(output))
-			lowerOutput := strings.ToLower(trimmedOutput)
-			if exitCode == 5 || strings.Contains(lowerOutput, "could not be found") || strings.Contains(lowerOutput, "not-found") {
-				return nil
-			}
-			if strings.Contains(lowerOutput, "access denied") || strings.Contains(lowerOutput, "permission denied") {
-				return fmt.Errorf("systemctl disable %s: access denied. Run 'sudo systemctl disable --now %s' or rerun the installer with sudo so it can install the polkit rule (systemctl output: %s)", service, service, trimmedOutput)
-			}
-		}
-		return fmt.Errorf("systemctl disable %s: %w (%s)", service, err, strings.TrimSpace(string(output)))
-	}
-
-	return nil
+	return runSystemctlCommand(ctx, "disable", service)
 }
 
 func stopSystemdService(ctx context.Context, service string) error {
+	// Stop the service to terminate the current running instance.
+	// This prevents systemd from restarting the service (services stopped via
+	// systemctl stop are not restarted even with Restart=always).
+	return runSystemctlCommand(ctx, "stop", service)
+}
+
+func runSystemctlCommand(ctx context.Context, action, service string) error {
 	if _, err := exec.LookPath("systemctl"); err != nil {
 		// Not a systemd environment; nothing to do.
 		return nil
 	}
 
-	// Stop the service to terminate the current running instance.
-	// This prevents systemd from restarting the service (services stopped via
-	// systemctl stop are not restarted even with Restart=always).
-	cmd := exec.CommandContext(ctx, "systemctl", "stop", service)
+	cmd := exec.CommandContext(ctx, "systemctl", action, service)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			exitCode := exitErr.ExitCode()
 			trimmedOutput := strings.TrimSpace(string(output))
 			lowerOutput := strings.ToLower(trimmedOutput)
-			// Ignore "not found" errors since the service might already be stopped
 			if exitCode == 5 || strings.Contains(lowerOutput, "could not be found") || strings.Contains(lowerOutput, "not-found") {
 				return nil
 			}
 			if strings.Contains(lowerOutput, "access denied") || strings.Contains(lowerOutput, "permission denied") {
-				return fmt.Errorf("systemctl stop %s: access denied. Run 'sudo systemctl stop %s' or rerun the installer with sudo so it can install the polkit rule (systemctl output: %s)", service, service, trimmedOutput)
+				if action == "disable" {
+					return fmt.Errorf("systemctl disable %s: access denied. Run 'sudo systemctl disable --now %s' or rerun the installer with sudo so it can install the polkit rule (systemctl output: %s)", service, service, trimmedOutput)
+				}
+				return fmt.Errorf("systemctl %s %s: access denied. Run 'sudo systemctl %s %s' or rerun the installer with sudo so it can install the polkit rule (systemctl output: %s)", action, service, action, service, trimmedOutput)
 			}
 		}
-		return fmt.Errorf("systemctl stop %s: %w (%s)", service, err, strings.TrimSpace(string(output)))
+		return fmt.Errorf("systemctl %s %s: %w (%s)", action, service, err, strings.TrimSpace(string(output)))
 	}
 
 	return nil
