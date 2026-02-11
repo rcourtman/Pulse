@@ -12,7 +12,12 @@ type Queue[T any] struct {
 }
 
 // New creates a new Queue with the specified capacity.
+// Capacity must be greater than zero.
 func New[T any](capacity int) *Queue[T] {
+	if capacity <= 0 {
+		panic("buffer queue capacity must be > 0")
+	}
+
 	return &Queue[T]{
 		data:     make([]T, 0, capacity),
 		capacity: capacity,

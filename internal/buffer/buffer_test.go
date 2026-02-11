@@ -15,6 +15,32 @@ func TestNew(t *testing.T) {
 	}
 }
 
+func TestNewPanicsOnNonPositiveCapacity(t *testing.T) {
+	testCases := []struct {
+		name     string
+		capacity int
+	}{
+		{name: "zero capacity", capacity: 0},
+		{name: "negative capacity", capacity: -1},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			defer func() {
+				r := recover()
+				if r == nil {
+					t.Fatalf("expected panic for capacity=%d", tc.capacity)
+				}
+				if r != "buffer queue capacity must be > 0" {
+					t.Fatalf("unexpected panic message: %v", r)
+				}
+			}()
+
+			_ = New[int](tc.capacity)
+		})
+	}
+}
+
 func TestPushPop(t *testing.T) {
 	q := New[int](3)
 
