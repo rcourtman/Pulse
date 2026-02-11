@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
@@ -22,10 +23,10 @@ func TestDiscoveryStateAdapter(t *testing.T) {
 	// Setup mock data
 	mockState := models.StateSnapshot{
 		VMs: []models.VM{
-			{VMID: 100, Name: "vm-1", Node: "pve1", Status: "running", Instance: "pve1"},
+			{VMID: 100, Name: "vm-1", Node: "pve1", Status: "running", Instance: "pve1", IPAddresses: []string{"10.0.0.10"}},
 		},
 		Containers: []models.Container{
-			{VMID: 200, Name: "lxc-1", Node: "pve1", Status: "running", Instance: "pve1"},
+			{VMID: 200, Name: "lxc-1", Node: "pve1", Status: "running", Instance: "pve1", IPAddresses: []string{"10.0.0.20"}},
 		},
 		DockerHosts: []models.DockerHost{
 			{
@@ -38,13 +39,14 @@ func TestDiscoveryStateAdapter(t *testing.T) {
 						Image:  "nginx:latest",
 						Status: "up",
 						Ports:  []models.DockerContainerPort{{PublicPort: 80, PrivatePort: 80, Protocol: "tcp"}},
+						Labels: map[string]string{"app": "nginx"},
 						Mounts: []models.DockerContainerMount{{Source: "/src", Destination: "/dest"}},
 					},
 				},
 			},
 		},
 		Hosts: []models.Host{
-			{ID: "host-agent-1", Hostname: "server1", Platform: "linux"},
+			{ID: "host-agent-1", Hostname: "server1", Platform: "linux", Tags: []string{"edge"}},
 		},
 		Nodes: []models.Node{
 			{ID: "node-1", Name: "pve1", LinkedHostAgentID: "host-agent-1"},
@@ -71,6 +73,9 @@ func TestDiscoveryStateAdapter(t *testing.T) {
 	} else {
 		if result.Containers[0].Name != "lxc-1" {
 			t.Errorf("Expected Container name 'lxc-1', got %s", result.Containers[0].Name)
+		}
+		if len(result.Containers[0].IPAddresses) != 1 || result.Containers[0].IPAddresses[0] != "10.0.0.20" {
+			t.Errorf("Expected container IPAddresses copied, got %+v", result.Containers[0].IPAddresses)
 		}
 	}
 
@@ -129,6 +134,22 @@ func TestDiscoveryStateAdapter(t *testing.T) {
 			t.Errorf("Expected Node[1].LinkedHostAgentID to be empty, got %s", result.Nodes[1].LinkedHostAgentID)
 		}
 	}
+
+	// Verify nested slices/maps are deep-copied so discovery state isn't mutated by callers.
+	result.VMs[0].IPAddresses[0] = "10.0.0.99"
+	if provider.state.VMs[0].IPAddresses[0] != "10.0.0.10" {
+		t.Errorf("Expected provider VM IP to remain unchanged, got %q", provider.state.VMs[0].IPAddresses[0])
+	}
+
+	result.DockerHosts[0].Containers[0].Labels["app"] = "mutated"
+	if provider.state.DockerHosts[0].Containers[0].Labels["app"] != "nginx" {
+		t.Errorf("Expected provider docker labels to remain unchanged, got %q", provider.state.DockerHosts[0].Containers[0].Labels["app"])
+	}
+
+	result.Hosts[0].Tags[0] = "mutated"
+	if provider.state.Hosts[0].Tags[0] != "edge" {
+		t.Errorf("Expected provider host tags to remain unchanged, got %q", provider.state.Hosts[0].Tags[0])
+	}
 }
 
 func TestDiscoveryStateAdapter_NilProvider(t *testing.T) {
@@ -157,6 +178,9 @@ func TestDiscoveryCommandAdapter_NilServer(t *testing.T) {
 	if res.Error != "agent server not available" {
 		t.Errorf("Unexpected error message: %s", res.Error)
 	}
+	if res.RequestID == "" {
+		t.Error("Expected adapter to provide a non-empty request ID")
+	}
 
 	// Test GetConnectedAgents
 	agents := adapter.GetConnectedAgents()
@@ -168,4 +192,59 @@ func TestDiscoveryCommandAdapter_NilServer(t *testing.T) {
 	if adapter.IsAgentConnected("agent-1") {
 		t.Error("Expected IsAgentConnected to return false for nil server")
 	}
+}
+
+func TestNormalizeDiscoveryExecuteCommandPayload(t *testing.T) {
+	t.Run("fills empty request id and default timeout", func(t *testing.T) {
+		normalized := normalizeDiscoveryExecuteCommandPayload(context.Background(), servicediscovery.ExecuteCommandPayload{
+			RequestID: "   ",
+			Command:   "echo ok",
+		})
+		if normalized.RequestID == "" {
+			t.Fatal("expected generated request ID")
+		}
+		if normalized.Timeout != defaultDiscoveryCommandTimeoutSeconds {
+			t.Fatalf("expected default timeout %d, got %d", defaultDiscoveryCommandTimeoutSeconds, normalized.Timeout)
+		}
+	})
+
+	t.Run("caps timeout to context deadline", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+
+		normalized := normalizeDiscoveryExecuteCommandPayload(ctx, servicediscovery.ExecuteCommandPayload{
+			RequestID: "req-1",
+			Command:   "echo ok",
+			Timeout:   120,
+		})
+
+		if normalized.Timeout < minDiscoveryCommandTimeoutSeconds || normalized.Timeout > 2 {
+			t.Fatalf("expected timeout capped to context deadline, got %d", normalized.Timeout)
+		}
+	})
+
+	t.Run("preserves shorter explicit timeout", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		normalized := normalizeDiscoveryExecuteCommandPayload(ctx, servicediscovery.ExecuteCommandPayload{
+			RequestID: "req-2",
+			Command:   "echo ok",
+			Timeout:   3,
+		})
+		if normalized.Timeout != 3 {
+			t.Fatalf("expected timeout 3, got %d", normalized.Timeout)
+		}
+	})
+
+	t.Run("nil context still normalizes safely", func(t *testing.T) {
+		normalized := normalizeDiscoveryExecuteCommandPayload(nonNilContext(nil), servicediscovery.ExecuteCommandPayload{
+			RequestID: "req-3",
+			Command:   "echo ok",
+			Timeout:   0,
+		})
+		if normalized.Timeout != defaultDiscoveryCommandTimeoutSeconds {
+			t.Fatalf("expected default timeout %d, got %d", defaultDiscoveryCommandTimeoutSeconds, normalized.Timeout)
+		}
+	})
 }
