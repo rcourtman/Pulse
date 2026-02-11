@@ -37,29 +37,25 @@ func (s *State) GetSnapshot() StateSnapshot {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	pbsBackups := append([]PBSBackup{}, s.PBSBackups...)
-	pmgBackups := append([]PMGBackup{}, s.PMGBackups...)
-	pveBackups := PVEBackups{
-		BackupTasks:    append([]BackupTask{}, s.PVEBackups.BackupTasks...),
-		StorageBackups: append([]StorageBackup{}, s.PVEBackups.StorageBackups...),
-		GuestSnapshots: append([]GuestSnapshot{}, s.PVEBackups.GuestSnapshots...),
-	}
+	pbsBackups := clonePBSBackups(s.PBSBackups)
+	pmgBackups := clonePMGBackups(s.PMGBackups)
+	pveBackups := clonePVEBackups(s.PVEBackups)
 
 	// Create a snapshot without mutex
 	snapshot := StateSnapshot{
-		Nodes:                     append([]Node{}, s.Nodes...),
-		VMs:                       append([]VM{}, s.VMs...),
-		Containers:                append([]Container{}, s.Containers...),
-		DockerHosts:               append([]DockerHost{}, s.DockerHosts...),
-		RemovedDockerHosts:        append([]RemovedDockerHost{}, s.RemovedDockerHosts...),
-		KubernetesClusters:        append([]KubernetesCluster{}, s.KubernetesClusters...),
-		RemovedKubernetesClusters: append([]RemovedKubernetesCluster{}, s.RemovedKubernetesClusters...),
-		Hosts:                     append([]Host{}, s.Hosts...),
-		Storage:                   append([]Storage{}, s.Storage...),
-		CephClusters:              append([]CephCluster{}, s.CephClusters...),
-		PhysicalDisks:             append([]PhysicalDisk{}, s.PhysicalDisks...),
-		PBSInstances:              append([]PBSInstance{}, s.PBSInstances...),
-		PMGInstances:              append([]PMGInstance{}, s.PMGInstances...),
+		Nodes:                     cloneNodes(s.Nodes),
+		VMs:                       cloneVMs(s.VMs),
+		Containers:                cloneContainers(s.Containers),
+		DockerHosts:               cloneDockerHosts(s.DockerHosts),
+		RemovedDockerHosts:        append([]RemovedDockerHost(nil), s.RemovedDockerHosts...),
+		KubernetesClusters:        cloneKubernetesClusters(s.KubernetesClusters),
+		RemovedKubernetesClusters: append([]RemovedKubernetesCluster(nil), s.RemovedKubernetesClusters...),
+		Hosts:                     cloneHosts(s.Hosts),
+		Storage:                   cloneStorages(s.Storage),
+		CephClusters:              cloneCephClusters(s.CephClusters),
+		PhysicalDisks:             clonePhysicalDisks(s.PhysicalDisks),
+		PBSInstances:              clonePBSInstances(s.PBSInstances),
+		PMGInstances:              clonePMGInstances(s.PMGInstances),
 		PBSBackups:                pbsBackups,
 		PMGBackups:                pmgBackups,
 		Backups: Backups{
@@ -67,14 +63,14 @@ func (s *State) GetSnapshot() StateSnapshot {
 			PBS: pbsBackups,
 			PMG: pmgBackups,
 		},
-		ReplicationJobs:              append([]ReplicationJob{}, s.ReplicationJobs...),
-		Metrics:                      append([]Metric{}, s.Metrics...),
+		ReplicationJobs:              cloneReplicationJobs(s.ReplicationJobs),
+		Metrics:                      cloneMetrics(s.Metrics),
 		PVEBackups:                   pveBackups,
-		Performance:                  s.Performance,
+		Performance:                  clonePerformance(s.Performance),
 		ConnectionHealth:             make(map[string]bool),
 		Stats:                        s.Stats,
-		ActiveAlerts:                 append([]Alert{}, s.ActiveAlerts...),
-		RecentlyResolved:             append([]ResolvedAlert{}, s.RecentlyResolved...),
+		ActiveAlerts:                 cloneAlerts(s.ActiveAlerts),
+		RecentlyResolved:             cloneResolvedAlerts(s.RecentlyResolved),
 		LastUpdate:                   s.LastUpdate,
 		TemperatureMonitoringEnabled: s.TemperatureMonitoringEnabled,
 	}

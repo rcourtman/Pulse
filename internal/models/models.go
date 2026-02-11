@@ -1317,9 +1317,9 @@ func NewState() *State {
 // syncBackupsLocked updates the aggregated backups structure.
 func (s *State) syncBackupsLocked() {
 	s.Backups = Backups{
-		PVE: s.PVEBackups,
-		PBS: append([]PBSBackup(nil), s.PBSBackups...),
-		PMG: append([]PMGBackup(nil), s.PMGBackups...),
+		PVE: clonePVEBackups(s.PVEBackups),
+		PBS: clonePBSBackups(s.PBSBackups),
+		PMG: clonePMGBackups(s.PMGBackups),
 	}
 }
 
@@ -1327,14 +1327,14 @@ func (s *State) syncBackupsLocked() {
 func (s *State) UpdateActiveAlerts(alerts []Alert) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.ActiveAlerts = alerts
+	s.ActiveAlerts = cloneAlerts(alerts)
 }
 
 // UpdateRecentlyResolved updates the recently resolved alerts in the state
 func (s *State) UpdateRecentlyResolved(resolved []ResolvedAlert) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.RecentlyResolved = resolved
+	s.RecentlyResolved = cloneResolvedAlerts(resolved)
 }
 
 // UpdateNodes updates the nodes in the state
@@ -1342,12 +1342,14 @@ func (s *State) UpdateNodes(nodes []Node) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	stateNodes := cloneNodes(nodes)
+
 	// Sort nodes by name to ensure consistent ordering
-	sort.Slice(nodes, func(i, j int) bool {
-		return nodes[i].Name < nodes[j].Name
+	sort.Slice(stateNodes, func(i, j int) bool {
+		return stateNodes[i].Name < stateNodes[j].Name
 	})
 
-	s.Nodes = nodes
+	s.Nodes = stateNodes
 	s.LastUpdate = time.Now()
 }
 
@@ -1479,6 +1481,7 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 	// multiple times in the same poll cycle with different IDs.
 	dedupedNodes := make(map[string]Node)
 	for _, node := range nodes {
+		node = cloneNode(node)
 		key := nodeLogicalKey(node)
 		if key == "" {
 			key = "id:" + normalizeNodeIdentityPart(node.ID)
@@ -1598,7 +1601,7 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 func (s *State) UpdateVMs(vms []VM) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.VMs = vms
+	s.VMs = cloneVMs(vms)
 	s.LastUpdate = time.Now()
 }
 
@@ -1625,6 +1628,7 @@ func (s *State) UpdateVMsForInstance(instanceName string, vms []VM) {
 
 	// Add or update VMs from this instance, preserving LastBackup from existing data
 	for _, vm := range vms {
+		vm = cloneVM(vm)
 		if existing, ok := existingByVMID[vm.VMID]; ok && vm.LastBackup.IsZero() {
 			vm.LastBackup = existing.LastBackup
 		}
@@ -1650,7 +1654,7 @@ func (s *State) UpdateVMsForInstance(instanceName string, vms []VM) {
 func (s *State) UpdateContainers(containers []Container) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.Containers = containers
+	s.Containers = cloneContainers(containers)
 	s.LastUpdate = time.Now()
 }
 
@@ -1867,6 +1871,7 @@ func (s *State) UpdateContainersForInstance(instanceName string, containers []Co
 
 	// Add or update containers from this instance, preserving LastBackup from existing data
 	for _, container := range containers {
+		container = cloneContainer(container)
 		if existing, ok := existingByVMID[container.VMID]; ok && container.LastBackup.IsZero() {
 			container.LastBackup = existing.LastBackup
 		}
@@ -1893,6 +1898,8 @@ func (s *State) UpsertDockerHost(host DockerHost) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	host = cloneDockerHost(host)
+
 	updated := false
 	for i, existing := range s.DockerHosts {
 		if existing.ID == host.ID {
@@ -1905,7 +1912,7 @@ func (s *State) UpsertDockerHost(host DockerHost) {
 			host.PendingUninstall = existing.PendingUninstall
 			// Preserve Command if it exists
 			if existing.Command != nil {
-				host.Command = existing.Command
+				host.Command = cloneDockerHostCommandStatus(existing.Command)
 			}
 			s.DockerHosts[i] = host
 			updated = true
@@ -1934,7 +1941,7 @@ func (s *State) RemoveDockerHost(hostID string) (DockerHost, bool) {
 			// Remove the host while preserving slice order
 			s.DockerHosts = append(s.DockerHosts[:i], s.DockerHosts[i+1:]...)
 			s.LastUpdate = time.Now()
-			return host, true
+			return cloneDockerHost(host), true
 		}
 	}
 
@@ -1985,7 +1992,7 @@ func (s *State) SetDockerHostHidden(hostID string, hidden bool) (DockerHost, boo
 			host.Hidden = hidden
 			s.DockerHosts[i] = host
 			s.LastUpdate = time.Now()
-			return host, true
+			return cloneDockerHost(host), true
 		}
 	}
 
@@ -2002,7 +2009,7 @@ func (s *State) SetDockerHostPendingUninstall(hostID string, pending bool) (Dock
 			host.PendingUninstall = pending
 			s.DockerHosts[i] = host
 			s.LastUpdate = time.Now()
-			return host, true
+			return cloneDockerHost(host), true
 		}
 	}
 
@@ -2014,12 +2021,14 @@ func (s *State) SetDockerHostCommand(hostID string, command *DockerHostCommandSt
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	command = cloneDockerHostCommandStatus(command)
+
 	for i, host := range s.DockerHosts {
 		if host.ID == hostID {
 			host.Command = command
 			s.DockerHosts[i] = host
 			s.LastUpdate = time.Now()
-			return host, true
+			return cloneDockerHost(host), true
 		}
 	}
 
@@ -2036,7 +2045,7 @@ func (s *State) SetDockerHostCustomDisplayName(hostID string, customName string)
 			host.CustomDisplayName = customName
 			s.DockerHosts[i] = host
 			s.LastUpdate = time.Now()
-			return host, true
+			return cloneDockerHost(host), true
 		}
 	}
 
@@ -2080,7 +2089,7 @@ func (s *State) RemoveStaleDockerHosts(cutoff time.Time) []DockerHost {
 		s.LastUpdate = time.Now()
 	}
 
-	return removed
+	return cloneDockerHosts(removed)
 }
 
 // GetDockerHosts returns a copy of docker hosts.
@@ -2088,9 +2097,7 @@ func (s *State) GetDockerHosts() []DockerHost {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	hosts := make([]DockerHost, len(s.DockerHosts))
-	copy(hosts, s.DockerHosts)
-	return hosts
+	return cloneDockerHosts(s.DockerHosts)
 }
 
 // AddRemovedDockerHost records a removed docker host entry.
@@ -2144,6 +2151,8 @@ func (s *State) UpsertKubernetesCluster(cluster KubernetesCluster) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	cluster = cloneKubernetesCluster(cluster)
+
 	updated := false
 	for i, existing := range s.KubernetesClusters {
 		if existing.ID == cluster.ID {
@@ -2186,7 +2195,7 @@ func (s *State) RemoveKubernetesCluster(clusterID string) (KubernetesCluster, bo
 		if cluster.ID == clusterID {
 			s.KubernetesClusters = append(s.KubernetesClusters[:i], s.KubernetesClusters[i+1:]...)
 			s.LastUpdate = time.Now()
-			return cluster, true
+			return cloneKubernetesCluster(cluster), true
 		}
 	}
 
@@ -2223,7 +2232,7 @@ func (s *State) SetKubernetesClusterHidden(clusterID string, hidden bool) (Kuber
 			cluster.Hidden = hidden
 			s.KubernetesClusters[i] = cluster
 			s.LastUpdate = time.Now()
-			return cluster, true
+			return cloneKubernetesCluster(cluster), true
 		}
 	}
 	return KubernetesCluster{}, false
@@ -2239,7 +2248,7 @@ func (s *State) SetKubernetesClusterPendingUninstall(clusterID string, pending b
 			cluster.PendingUninstall = pending
 			s.KubernetesClusters[i] = cluster
 			s.LastUpdate = time.Now()
-			return cluster, true
+			return cloneKubernetesCluster(cluster), true
 		}
 	}
 	return KubernetesCluster{}, false
@@ -2255,7 +2264,7 @@ func (s *State) SetKubernetesClusterCustomDisplayName(clusterID string, customNa
 			cluster.CustomDisplayName = customName
 			s.KubernetesClusters[i] = cluster
 			s.LastUpdate = time.Now()
-			return cluster, true
+			return cloneKubernetesCluster(cluster), true
 		}
 	}
 
@@ -2267,9 +2276,7 @@ func (s *State) GetKubernetesClusters() []KubernetesCluster {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	clusters := make([]KubernetesCluster, len(s.KubernetesClusters))
-	copy(clusters, s.KubernetesClusters)
-	return clusters
+	return cloneKubernetesClusters(s.KubernetesClusters)
 }
 
 // AddRemovedKubernetesCluster records a removed kubernetes cluster entry.
@@ -2323,6 +2330,8 @@ func (s *State) UpsertHost(host Host) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	host = cloneHost(host)
+
 	updated := false
 	for i, existing := range s.Hosts {
 		if existing.ID == host.ID {
@@ -2348,9 +2357,7 @@ func (s *State) GetHosts() []Host {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	hosts := make([]Host, len(s.Hosts))
-	copy(hosts, s.Hosts)
-	return hosts
+	return cloneHosts(s.Hosts)
 }
 
 // RemoveHost removes a host by ID and returns the removed entry.
@@ -2362,7 +2369,7 @@ func (s *State) RemoveHost(hostID string) (Host, bool) {
 		if host.ID == hostID {
 			s.Hosts = append(s.Hosts[:i], s.Hosts[i+1:]...)
 			s.LastUpdate = time.Now()
-			return host, true
+			return cloneHost(host), true
 		}
 	}
 
@@ -2598,7 +2605,7 @@ func (s *State) SetHostCommandsEnabled(hostID string, enabled bool) bool {
 func (s *State) UpdateStorage(storage []Storage) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.Storage = storage
+	s.Storage = cloneStorages(storage)
 	s.LastUpdate = time.Now()
 }
 
@@ -2617,7 +2624,7 @@ func (s *State) UpdatePhysicalDisks(instanceName string, disks []PhysicalDisk) {
 
 	// Add or update disks from this instance
 	for _, disk := range disks {
-		diskMap[disk.ID] = disk
+		diskMap[disk.ID] = clonePhysicalDisk(disk)
 	}
 
 	// Convert map back to slice
@@ -2653,7 +2660,7 @@ func (s *State) UpdateStorageForInstance(instanceName string, storage []Storage)
 
 	// Add or update storage from this instance
 	for _, st := range storage {
-		storageMap[st.ID] = st
+		storageMap[st.ID] = cloneStorage(st)
 	}
 
 	// Convert map back to slice
@@ -2689,7 +2696,7 @@ func (s *State) UpdateCephClustersForInstance(instanceName string, clusters []Ce
 
 	// Add updated clusters (if any) for this instance
 	if len(clusters) > 0 {
-		filtered = append(filtered, clusters...)
+		filtered = append(filtered, cloneCephClusters(clusters)...)
 	}
 
 	// Sort for stable ordering in UI
@@ -2711,7 +2718,7 @@ func (s *State) UpdateCephClustersForInstance(instanceName string, clusters []Ce
 func (s *State) UpdatePBSInstances(instances []PBSInstance) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.PBSInstances = instances
+	s.PBSInstances = clonePBSInstances(instances)
 	s.LastUpdate = time.Now()
 }
 
@@ -2722,6 +2729,8 @@ func (s *State) UpdatePBSInstance(instance PBSInstance) {
 
 	// Find and update existing instance or append new one
 	found := false
+	instance = clonePBSInstance(instance)
+
 	for i, existing := range s.PBSInstances {
 		if existing.ID == instance.ID {
 			s.PBSInstances[i] = instance
@@ -2742,7 +2751,7 @@ func (s *State) UpdatePMGInstances(instances []PMGInstance) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.PMGInstances = instances
+	s.PMGInstances = clonePMGInstances(instances)
 	s.LastUpdate = time.Now()
 }
 
@@ -2750,6 +2759,8 @@ func (s *State) UpdatePMGInstances(instances []PMGInstance) {
 func (s *State) UpdatePMGInstance(instance PMGInstance) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	instance = clonePMGInstance(instance)
 
 	updated := false
 	for i := range s.PMGInstances {
@@ -2873,6 +2884,7 @@ func (s *State) UpdateReplicationJobsForInstance(instanceName string, jobs []Rep
 
 	now := time.Now()
 	for _, job := range jobs {
+		job = cloneReplicationJob(job)
 		if job.Instance == "" {
 			job.Instance = instanceName
 		}
@@ -2971,7 +2983,7 @@ func (s *State) UpdatePBSBackups(instanceName string, backups []PBSBackup) {
 
 	// Add new backups from this instance
 	for _, backup := range backups {
-		backupMap[backup.ID] = backup
+		backupMap[backup.ID] = clonePBSBackup(backup)
 	}
 
 	// Convert map back to slice
@@ -3002,7 +3014,7 @@ func (s *State) UpdatePMGBackups(instanceName string, backups []PMGBackup) {
 		}
 	}
 	if len(backups) > 0 {
-		combined = append(combined, backups...)
+		combined = append(combined, clonePMGBackups(backups)...)
 	}
 
 	if len(combined) > 1 {
@@ -3021,9 +3033,7 @@ func (s *State) GetContainers() []Container {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	containers := make([]Container, len(s.Containers))
-	copy(containers, s.Containers)
-	return containers
+	return cloneContainers(s.Containers)
 }
 
 // UpdateContainerDockerStatus updates the Docker detection status for a specific container.
