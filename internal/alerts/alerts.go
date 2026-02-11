@@ -468,6 +468,7 @@ func SetMetricHooks(fired func(*Alert), resolved func(*Alert), suppressed func(s
 
 type Manager struct {
 	mu               sync.RWMutex
+	callbackMu       sync.RWMutex
 	config           AlertConfig
 	activeAlerts     map[string]*Alert
 	historyManager   *HistoryManager
@@ -521,6 +522,7 @@ type Manager struct {
 
 	// Cached timezone for quiet hours
 	quietHoursLoc *time.Location
+	stopOnce      sync.Once
 }
 
 type ackRecord struct {
@@ -749,8 +751,8 @@ func (m *Manager) addRecentlyResolvedWithPrimaryLock(alertID string, resolved *R
 
 // SetAlertCallback sets the callback for new alerts
 func (m *Manager) SetAlertCallback(cb func(alert *Alert)) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.callbackMu.Lock()
+	defer m.callbackMu.Unlock()
 	m.onAlert = cb
 }
 
@@ -759,43 +761,86 @@ func (m *Manager) SetAlertCallback(cb func(alert *Alert)) {
 // activation state, quiet hours, and other notification suppression checks.
 // This allows AI to analyze alerts even when the user hasn't finished setup.
 func (m *Manager) SetAlertForAICallback(cb func(alert *Alert)) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.callbackMu.Lock()
+	defer m.callbackMu.Unlock()
 	m.onAlertForAI = cb
 	log.Info().Msg("Alert-for-AI callback registered (bypasses notification suppression)")
 }
 
 // SetResolvedCallback sets the callback for resolved alerts
 func (m *Manager) SetResolvedCallback(cb func(alertID string)) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.callbackMu.Lock()
+	defer m.callbackMu.Unlock()
 	m.onResolved = cb
 }
 
 // SetAcknowledgedCallback sets the callback for acknowledged alerts.
 func (m *Manager) SetAcknowledgedCallback(cb func(alert *Alert, user string)) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.callbackMu.Lock()
+	defer m.callbackMu.Unlock()
 	m.onAcknowledged = cb
 }
 
 // SetUnacknowledgedCallback sets the callback for unacknowledged alerts.
 func (m *Manager) SetUnacknowledgedCallback(cb func(alert *Alert, user string)) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.callbackMu.Lock()
+	defer m.callbackMu.Unlock()
 	m.onUnacknowledged = cb
 }
 
 // SetEscalateCallback sets the callback for escalated alerts
 func (m *Manager) SetEscalateCallback(cb func(alert *Alert, level int)) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.callbackMu.Lock()
+	defer m.callbackMu.Unlock()
 	m.onEscalate = cb
+}
+
+func (m *Manager) getAlertCallback() func(alert *Alert) {
+	m.callbackMu.RLock()
+	cb := m.onAlert
+	m.callbackMu.RUnlock()
+	return cb
+}
+
+func (m *Manager) getAlertForAICallback() func(alert *Alert) {
+	m.callbackMu.RLock()
+	cb := m.onAlertForAI
+	m.callbackMu.RUnlock()
+	return cb
+}
+
+func (m *Manager) getResolvedCallback() func(alertID string) {
+	m.callbackMu.RLock()
+	cb := m.onResolved
+	m.callbackMu.RUnlock()
+	return cb
+}
+
+func (m *Manager) getAcknowledgedCallback() func(alert *Alert, user string) {
+	m.callbackMu.RLock()
+	cb := m.onAcknowledged
+	m.callbackMu.RUnlock()
+	return cb
+}
+
+func (m *Manager) getUnacknowledgedCallback() func(alert *Alert, user string) {
+	m.callbackMu.RLock()
+	cb := m.onUnacknowledged
+	m.callbackMu.RUnlock()
+	return cb
+}
+
+func (m *Manager) getEscalateCallback() func(alert *Alert, level int) {
+	m.callbackMu.RLock()
+	cb := m.onEscalate
+	m.callbackMu.RUnlock()
+	return cb
 }
 
 // safeCallResolvedCallback invokes onResolved with panic recovery
 func (m *Manager) safeCallResolvedCallback(alertID string, async bool) {
-	if m.onResolved == nil {
+	callback := m.getResolvedCallback()
+	if callback == nil {
 		return
 	}
 
@@ -808,7 +853,7 @@ func (m *Manager) safeCallResolvedCallback(alertID string, async bool) {
 					Msg("Panic in onResolved callback")
 			}
 		}()
-		m.onResolved(alertID)
+		callback(alertID)
 	}
 
 	if async {
@@ -820,7 +865,8 @@ func (m *Manager) safeCallResolvedCallback(alertID string, async bool) {
 
 // safeCallAcknowledgedCallback invokes onAcknowledged with panic recovery and alert cloning.
 func (m *Manager) safeCallAcknowledgedCallback(alert *Alert, user string) {
-	if m.onAcknowledged == nil || alert == nil {
+	callback := m.getAcknowledgedCallback()
+	if callback == nil || alert == nil {
 		return
 	}
 
@@ -834,13 +880,14 @@ func (m *Manager) safeCallAcknowledgedCallback(alert *Alert, user string) {
 					Msg("Panic in onAcknowledged callback")
 			}
 		}()
-		m.onAcknowledged(a, u)
+		callback(a, u)
 	}(alertCopy, user)
 }
 
 // safeCallUnacknowledgedCallback invokes onUnacknowledged with panic recovery and alert cloning.
 func (m *Manager) safeCallUnacknowledgedCallback(alert *Alert, user string) {
-	if m.onUnacknowledged == nil || alert == nil {
+	callback := m.getUnacknowledgedCallback()
+	if callback == nil || alert == nil {
 		return
 	}
 
@@ -854,13 +901,14 @@ func (m *Manager) safeCallUnacknowledgedCallback(alert *Alert, user string) {
 					Msg("Panic in onUnacknowledged callback")
 			}
 		}()
-		m.onUnacknowledged(a, u)
+		callback(a, u)
 	}(alertCopy, user)
 }
 
 // safeCallEscalateCallback invokes onEscalate with panic recovery and alert cloning
 func (m *Manager) safeCallEscalateCallback(alert *Alert, level int) {
-	if m.onEscalate == nil {
+	callback := m.getEscalateCallback()
+	if callback == nil {
 		return
 	}
 
@@ -876,7 +924,7 @@ func (m *Manager) safeCallEscalateCallback(alert *Alert, level int) {
 					Msg("Panic in onEscalate callback")
 			}
 		}()
-		m.onEscalate(a, lvl)
+		callback(a, lvl)
 	}(alertCopy, level)
 }
 
@@ -938,7 +986,8 @@ func (m *Manager) checkFlappingLocked(alertID string) bool {
 }
 
 func (m *Manager) dispatchAlert(alert *Alert, async bool) bool {
-	if m.onAlert == nil || alert == nil {
+	callback := m.getAlertCallback()
+	if callback == nil || alert == nil {
 		return false
 	}
 
@@ -1004,7 +1053,7 @@ func (m *Manager) dispatchAlert(alert *Alert, async bool) bool {
 						Msg("Panic in onAlert callback")
 				}
 			}()
-			m.onAlert(a)
+			callback(a)
 		}(alertCopy)
 	} else {
 		// Synchronous calls also need panic recovery to prevent service crash
@@ -1018,7 +1067,7 @@ func (m *Manager) dispatchAlert(alert *Alert, async bool) bool {
 						Msg("Panic in onAlert callback (synchronous)")
 				}
 			}()
-			m.onAlert(alertCopy)
+			callback(alertCopy)
 		}()
 	}
 	return true
@@ -4305,7 +4354,7 @@ func (m *Manager) HandleDockerHostOffline(host models.DockerHost) {
 	m.historyManager.AddAlert(*alert)
 
 	// Trigger AI analysis callback unconditionally
-	if m.onAlertForAI != nil {
+	if alertForAICallback := m.getAlertForAICallback(); alertForAICallback != nil {
 		alertCopy := alert.Clone()
 		go func(a *Alert) {
 			defer func() {
@@ -4313,7 +4362,7 @@ func (m *Manager) HandleDockerHostOffline(host models.DockerHost) {
 					log.Error().Interface("panic", r).Str("alertID", a.ID).Msg("Panic in AI alert callback")
 				}
 			}()
-			m.onAlertForAI(a)
+			alertForAICallback(a)
 		}(alertCopy)
 	}
 
@@ -5368,7 +5417,7 @@ func (m *Manager) CheckSnapshotsForInstance(instanceName string, snapshots []mod
 			continue
 		}
 
-		if m.onAlert != nil {
+		if m.getAlertCallback() != nil {
 			nowCopy := now
 			alert.LastNotified = &nowCopy
 			if m.dispatchAlert(alert, true) {
@@ -5793,7 +5842,7 @@ func (m *Manager) CheckBackups(
 			continue
 		}
 
-		if m.onAlert != nil {
+		if m.getAlertCallback() != nil {
 			notified := now
 			alert.LastNotified = &notified
 			if m.dispatchAlert(alert, true) {
@@ -6383,7 +6432,7 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 				Msg("Alert triggered")
 
 			// Trigger AI analysis callback unconditionally (bypasses notification suppression)
-			if m.onAlertForAI != nil {
+			if alertForAICallback := m.getAlertForAICallback(); alertForAICallback != nil {
 				alertCopy := alert.Clone()
 				go func(a *Alert) {
 					defer func() {
@@ -6391,7 +6440,7 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 							log.Error().Interface("panic", r).Str("alertID", a.ID).Msg("Panic in AI alert callback")
 						}
 					}()
-					m.onAlertForAI(a)
+					alertForAICallback(a)
 				}(alertCopy)
 			}
 
@@ -6406,7 +6455,7 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 			}
 
 			// Notify callback (may be suppressed by quiet hours)
-			if m.onAlert != nil {
+			if m.getAlertCallback() != nil {
 				now := time.Now()
 				alert.LastNotified = &now
 				if m.dispatchAlert(alert, true) {
@@ -6472,7 +6521,7 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 			}
 
 			// Send re-notification if appropriate (may be suppressed by quiet hours)
-			if shouldRenotify && m.onAlert != nil {
+			if shouldRenotify && m.getAlertCallback() != nil {
 				now := time.Now()
 				existingAlert.LastNotified = &now
 				// Dispatch asynchronously so callback I/O cannot block alert evaluation.
@@ -6540,8 +6589,8 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 					Bool("wasAcknowledged", existingAlert.Acknowledged).
 					Msg("Alert resolved with hysteresis")
 
-				if m.onResolved != nil {
-					go m.onResolved(alertID)
+				if resolvedCallback := m.getResolvedCallback(); resolvedCallback != nil {
+					go resolvedCallback(alertID)
 				}
 			}
 		}
@@ -9155,17 +9204,33 @@ func (m *Manager) checkEscalations() {
 
 // Stop stops the alert manager and saves history
 func (m *Manager) Stop() {
-	close(m.escalationStop)
-	close(m.cleanupStop)
-	m.historyManager.Stop()
+	m.stopOnce.Do(func() {
+		closeSignalChannel(m.escalationStop)
+		closeSignalChannel(m.cleanupStop)
+		if m.historyManager != nil {
+			m.historyManager.Stop()
+		}
 
-	// Give background goroutines time to exit cleanly
-	time.Sleep(100 * time.Millisecond)
+		// Give background goroutines time to exit cleanly
+		time.Sleep(100 * time.Millisecond)
 
-	// Save active alerts before stopping
-	if err := m.SaveActiveAlerts(); err != nil {
-		log.Error().Err(err).Msg("Failed to save active alerts on stop")
+		// Save active alerts before stopping
+		if err := m.SaveActiveAlerts(); err != nil {
+			log.Error().Err(err).Msg("Failed to save active alerts on stop")
+		}
+	})
+}
+
+func closeSignalChannel(ch chan struct{}) {
+	if ch == nil {
+		return
 	}
+	defer func() {
+		if recover() != nil {
+			// Channel was already closed by another shutdown path.
+		}
+	}()
+	close(ch)
 }
 
 // SaveActiveAlerts persists active alerts to disk

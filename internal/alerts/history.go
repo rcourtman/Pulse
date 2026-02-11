@@ -44,6 +44,7 @@ type HistoryManager struct {
 	stopChan     chan struct{}
 	saveTicker   *time.Ticker
 	callbacks    []AlertCallback // Called when alerts are added
+	stopOnce     sync.Once
 }
 
 // NewHistoryManager creates a new history manager
@@ -97,7 +98,7 @@ func (hm *HistoryManager) AddAlert(alert Alert) {
 	}
 
 	hm.history = append(hm.history, entry)
-	callbacks := hm.callbacks
+	callbacks := append([]AlertCallback(nil), hm.callbacks...)
 	hm.mu.Unlock()
 
 	log.Debug().Str("alertID", alert.ID).Msg("Added alert to history")
@@ -398,15 +399,17 @@ func (hm *HistoryManager) ClearAllHistory() error {
 
 // Stop stops the history manager
 func (hm *HistoryManager) Stop() {
-	close(hm.stopChan)
-	if hm.saveTicker != nil {
-		hm.saveTicker.Stop()
-	}
+	hm.stopOnce.Do(func() {
+		closeSignalChannel(hm.stopChan)
+		if hm.saveTicker != nil {
+			hm.saveTicker.Stop()
+		}
 
-	// Save one final time
-	if err := hm.saveHistory(); err != nil {
-		log.Error().Err(err).Msg("Failed to save alert history on shutdown")
-	}
+		// Save one final time
+		if err := hm.saveHistory(); err != nil {
+			log.Error().Err(err).Msg("Failed to save alert history on shutdown")
+		}
+	})
 }
 
 // GetStats returns statistics about the alert history
