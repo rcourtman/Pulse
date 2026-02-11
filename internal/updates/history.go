@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -105,7 +106,7 @@ func NewUpdateHistory(dataDir string) (*UpdateHistory, error) {
 
 	// Ensure directory exists
 	if err := os.MkdirAll(dataDir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create data directory: %w", err)
+		return nil, fmt.Errorf("create update history data directory %q: %w", dataDir, err)
 	}
 
 	logPath := filepath.Join(dataDir, "update-history.jsonl")
@@ -177,7 +178,7 @@ func (h *UpdateHistory) UpdateEntry(ctx context.Context, eventID string, updateF
 
 	// Apply update
 	if err := updateFn(entry); err != nil {
-		return err
+		return fmt.Errorf("apply update function for history entry %q: %w", eventID, err)
 	}
 
 	// Rewrite the entire file (JSONL doesn't support in-place updates)
@@ -255,16 +256,25 @@ func (h *UpdateHistory) GetLatestSuccessful() (*UpdateHistoryEntry, error) {
 }
 
 // loadCache loads entries from the JSONL file into memory
-func (h *UpdateHistory) loadCache() error {
+func (h *UpdateHistory) loadCache() (err error) {
 	file, err := os.Open(h.logPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// File doesn't exist yet, that's OK
 			return nil
 		}
-		return err
+		return fmt.Errorf("open update history file %q: %w", h.logPath, err)
 	}
-	defer file.Close()
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil {
+			wrappedCloseErr := fmt.Errorf("close update history file %q: %w", h.logPath, closeErr)
+			if err != nil {
+				err = errors.Join(err, wrappedCloseErr)
+				return
+			}
+			err = wrappedCloseErr
+		}
+	}()
 
 	scanner := bufio.NewScanner(file)
 	entries := make([]UpdateHistoryEntry, 0)
@@ -284,8 +294,8 @@ func (h *UpdateHistory) loadCache() error {
 		entries = append(entries, entry)
 	}
 
-	if err := scanner.Err(); err != nil {
-		return err
+	if scanErr := scanner.Err(); scanErr != nil {
+		return fmt.Errorf("scan update history file %q: %w", h.logPath, scanErr)
 	}
 
 	// Keep only the most recent entries
@@ -301,60 +311,93 @@ func (h *UpdateHistory) loadCache() error {
 }
 
 // appendToFile appends an entry to the JSONL file
-func (h *UpdateHistory) appendToFile(entry UpdateHistoryEntry) error {
+func (h *UpdateHistory) appendToFile(entry UpdateHistoryEntry) (err error) {
 	file, err := os.OpenFile(h.logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		return err
+		return fmt.Errorf("open update history file %q for append: %w", h.logPath, err)
 	}
-	defer file.Close()
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil {
+			wrappedCloseErr := fmt.Errorf("close update history file %q after append: %w", h.logPath, closeErr)
+			if err != nil {
+				err = errors.Join(err, wrappedCloseErr)
+				return
+			}
+			err = wrappedCloseErr
+		}
+	}()
 
 	data, err := json.Marshal(entry)
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal history entry %q: %w", entry.EventID, err)
 	}
 
 	if _, err := file.Write(append(data, '\n')); err != nil {
-		return err
+		return fmt.Errorf("append history entry %q to %q: %w", entry.EventID, h.logPath, err)
 	}
 
 	// Sync to disk
-	return file.Sync()
+	if err := file.Sync(); err != nil {
+		return fmt.Errorf("sync update history file %q: %w", h.logPath, err)
+	}
+	return nil
 }
 
 // rewriteFile rewrites the entire history file from cache
-func (h *UpdateHistory) rewriteFile() error {
+func (h *UpdateHistory) rewriteFile() (err error) {
 	// Write to temp file first
 	tempPath := h.logPath + ".tmp"
 	file, err := os.Create(tempPath)
 	if err != nil {
-		return err
+		return fmt.Errorf("create temp history file %q: %w", tempPath, err)
 	}
+	defer func() {
+		if file == nil {
+			return
+		}
+		if closeErr := file.Close(); closeErr != nil {
+			wrappedCloseErr := fmt.Errorf("close temp history file %q: %w", tempPath, closeErr)
+			if err != nil {
+				err = errors.Join(err, wrappedCloseErr)
+				return
+			}
+			err = wrappedCloseErr
+		}
+	}()
+	defer func() {
+		if err == nil {
+			return
+		}
+		if removeErr := os.Remove(tempPath); removeErr != nil && !os.IsNotExist(removeErr) {
+			err = errors.Join(err, fmt.Errorf("remove temp history file %q: %w", tempPath, removeErr))
+		}
+	}()
 
 	for _, entry := range h.cache {
 		data, err := json.Marshal(entry)
 		if err != nil {
-			file.Close()
-			os.Remove(tempPath)
-			return err
+			return fmt.Errorf("marshal history entry %q: %w", entry.EventID, err)
 		}
 
 		if _, err := file.Write(append(data, '\n')); err != nil {
-			file.Close()
-			os.Remove(tempPath)
-			return err
+			return fmt.Errorf("write history entry %q to temp file %q: %w", entry.EventID, tempPath, err)
 		}
 	}
 
 	if err := file.Sync(); err != nil {
-		file.Close()
-		os.Remove(tempPath)
-		return err
+		return fmt.Errorf("sync temp history file %q: %w", tempPath, err)
 	}
 
-	file.Close()
+	if closeErr := file.Close(); closeErr != nil {
+		return fmt.Errorf("close temp history file %q: %w", tempPath, closeErr)
+	}
+	file = nil
 
 	// Atomic rename
-	return os.Rename(tempPath, h.logPath)
+	if err := os.Rename(tempPath, h.logPath); err != nil {
+		return fmt.Errorf("replace history file %q with %q: %w", h.logPath, tempPath, err)
+	}
+	return nil
 }
 
 // addToCache adds an entry to the in-memory cache
