@@ -2,12 +2,14 @@ package investigation
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 )
 
 // Store manages investigation sessions with persistence
@@ -44,12 +46,12 @@ func (s *Store) LoadFromDisk() error {
 		if os.IsNotExist(err) {
 			return nil // No file yet, that's ok
 		}
-		return err
+		return fmt.Errorf("read investigation store file %q: %w", filePath, err)
 	}
 
 	var sessions []*InvestigationSession
 	if err := json.Unmarshal(data, &sessions); err != nil {
-		return err
+		return fmt.Errorf("decode investigation store file %q: %w", filePath, err)
 	}
 
 	s.mu.Lock()
@@ -91,7 +93,9 @@ func (s *Store) scheduleSaveLocked() {
 		s.mu.Unlock()
 
 		if dataDir != "" {
-			s.saveToDisk(sessions)
+			if err := s.saveToDisk(sessions); err != nil {
+				log.Warn().Err(err).Str("data_dir", dataDir).Msg("Failed to persist investigation sessions")
+			}
 		}
 	})
 }
@@ -101,14 +105,20 @@ func (s *Store) saveToDisk(sessions []*InvestigationSession) error {
 	if s.dataDir == "" {
 		return nil
 	}
+	if err := os.MkdirAll(s.dataDir, 0755); err != nil {
+		return fmt.Errorf("create investigation data directory %q: %w", s.dataDir, err)
+	}
 
 	data, err := json.MarshalIndent(sessions, "", "  ")
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal investigation sessions: %w", err)
 	}
 
 	filePath := filepath.Join(s.dataDir, "investigations.json")
-	return os.WriteFile(filePath, data, 0644)
+	if err := os.WriteFile(filePath, data, 0644); err != nil {
+		return fmt.Errorf("write investigation store file %q: %w", filePath, err)
+	}
+	return nil
 }
 
 // ForceSave immediately saves to disk
@@ -125,7 +135,10 @@ func (s *Store) ForceSave() error {
 	}
 	s.mu.Unlock()
 
-	return s.saveToDisk(sessions)
+	if err := s.saveToDisk(sessions); err != nil {
+		return fmt.Errorf("force-save investigation store: %w", err)
+	}
+	return nil
 }
 
 // Create creates a new investigation session
