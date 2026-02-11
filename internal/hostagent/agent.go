@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentupdate"
@@ -59,24 +60,27 @@ type Agent struct {
 	logger     zerolog.Logger
 	httpClient *http.Client
 
-	hostInfo        *gohost.InfoStat
-	hostname        string
-	displayName     string
-	platform        string
-	osName          string
-	osVersion       string
-	kernelVersion   string
-	architecture    string
-	machineID       string
-	agentID         string
-	agentVersion    string
-	updatedFrom     string // Previous version if recently auto-updated (reported once)
-	reportIP        string // User-specified IP to report (for multi-NIC systems)
-	interval        time.Duration
-	trimmedPulseURL string
-	reportBuffer    *buffer.Queue[agentshost.Report]
-	commandClient   *CommandClient
-	collector       SystemCollector
+	hostInfo               *gohost.InfoStat
+	hostname               string
+	displayName            string
+	platform               string
+	osName                 string
+	osVersion              string
+	kernelVersion          string
+	architecture           string
+	machineID              string
+	agentID                string
+	agentVersion           string
+	updatedFrom            string // Previous version if recently auto-updated (reported once)
+	reportIP               string // User-specified IP to report (for multi-NIC systems)
+	interval               time.Duration
+	trimmedPulseURL        string
+	reportBuffer           *buffer.Queue[agentshost.Report]
+	commandClient          *CommandClient
+	commandClientMu        sync.Mutex
+	commandClientRunCancel context.CancelFunc
+	commandClientParentCtx context.Context
+	collector              SystemCollector
 }
 
 const defaultInterval = 30 * time.Second
@@ -251,18 +255,25 @@ func (a *Agent) Run(ctx context.Context) error {
 		return a.runOnce(ctx)
 	}
 
+	a.commandClientMu.Lock()
+	a.commandClientParentCtx = ctx
+	commandClient := a.commandClient
+	a.commandClientMu.Unlock()
+	defer func() {
+		a.commandClientMu.Lock()
+		a.commandClientParentCtx = nil
+		a.commandClientMu.Unlock()
+		a.stopCommandClient(true)
+	}()
+
 	// Proxmox setup (if enabled)
 	if a.cfg.EnableProxmox {
 		a.runProxmoxSetup(ctx)
 	}
 
 	// Start command client in background for AI command execution
-	if a.commandClient != nil {
-		go func() {
-			if err := a.commandClient.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
-				a.logger.Error().Err(err).Msg("Command client stopped with error")
-			}
-		}()
+	if commandClient != nil {
+		a.startCommandClient(commandClient)
 	}
 
 	ticker := time.NewTicker(a.interval)
@@ -283,6 +294,52 @@ func (a *Agent) Run(ctx context.Context) error {
 				}
 				a.logger.Error().Err(err).Msg("failed to send report")
 			}
+		}
+	}
+}
+
+func (a *Agent) startCommandClient(client *CommandClient) {
+	if client == nil {
+		return
+	}
+
+	a.commandClientMu.Lock()
+	if a.commandClientRunCancel != nil {
+		a.commandClientMu.Unlock()
+		return
+	}
+
+	parentCtx := a.commandClientParentCtx
+	if parentCtx == nil {
+		parentCtx = context.Background()
+	}
+	runCtx, cancel := context.WithCancel(parentCtx)
+	a.commandClientRunCancel = cancel
+	a.commandClientMu.Unlock()
+
+	go func() {
+		if err := client.Run(runCtx); err != nil && !errors.Is(err, context.Canceled) {
+			a.logger.Error().Err(err).Msg("Command client stopped with error")
+		}
+	}()
+}
+
+func (a *Agent) stopCommandClient(clearClient bool) {
+	a.commandClientMu.Lock()
+	client := a.commandClient
+	cancel := a.commandClientRunCancel
+	a.commandClientRunCancel = nil
+	if clearClient {
+		a.commandClient = nil
+	}
+	a.commandClientMu.Unlock()
+
+	if cancel != nil {
+		cancel()
+	}
+	if client != nil {
+		if err := client.Close(); err != nil {
+			a.logger.Debug().Err(err).Msg("Error closing command client connection")
 		}
 	}
 }
@@ -460,28 +517,33 @@ func (a *Agent) sendReport(ctx context.Context, report agentshost.Report) error 
 // applyRemoteConfig applies server-side configuration overrides.
 // Currently handles enabling/disabling the command execution feature dynamically.
 func (a *Agent) applyRemoteConfig(commandsEnabled bool) {
-	// Check if state would change
-	currentlyEnabled := a.commandClient != nil
+	var (
+		clientToStart *CommandClient
+		shouldStop    bool
+	)
 
-	if commandsEnabled && !currentlyEnabled {
-		// Server enabled commands, but we don't have a command client
-		// Start the command client
+	a.commandClientMu.Lock()
+	currentlyEnabled := a.commandClient != nil
+	switch {
+	case commandsEnabled && !currentlyEnabled:
+		clientToStart = NewCommandClient(a.cfg, a.agentID, a.hostname, a.platform, a.agentVersion)
+		a.commandClient = clientToStart
+	case !commandsEnabled && currentlyEnabled:
+		shouldStop = true
+	}
+	a.commandClientMu.Unlock()
+
+	if clientToStart != nil {
+		// Server enabled commands, but we don't have a command client.
 		a.logger.Info().Msg("Server enabled command execution - starting command client")
-		client := NewCommandClient(a.cfg, a.agentID, a.hostname, a.platform, a.agentVersion)
-		a.commandClient = client
-		go func() {
-			if err := client.Run(context.Background()); err != nil && !errors.Is(err, context.Canceled) {
-				a.logger.Error().Err(err).Msg("Command client stopped with error")
-			}
-		}()
-	} else if !commandsEnabled && currentlyEnabled {
-		// Server disabled commands, but we have a command client running
+		a.startCommandClient(clientToStart)
+		return
+	}
+
+	if shouldStop {
+		// Server disabled commands, but we have a command client running.
 		a.logger.Info().Msg("Server disabled command execution - stopping command client")
-		// Properly close the WebSocket connection to stop the client
-		if err := a.commandClient.Close(); err != nil {
-			a.logger.Debug().Err(err).Msg("Error closing command client connection")
-		}
-		a.commandClient = nil
+		a.stopCommandClient(true)
 	}
 }
 
