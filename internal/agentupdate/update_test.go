@@ -391,6 +391,22 @@ func TestNew_CustomCheckInterval(t *testing.T) {
 	}
 }
 
+func TestNew_NegativeCheckIntervalUsesDefault(t *testing.T) {
+	cfg := Config{
+		PulseURL:       "https://pulse.example.com",
+		APIToken:       "test-token",
+		AgentName:      "pulse-agent",
+		CurrentVersion: "1.0.0",
+		CheckInterval:  -30 * time.Second,
+	}
+
+	updater := New(cfg)
+
+	if updater.cfg.CheckInterval != 1*time.Hour {
+		t.Errorf("CheckInterval = %v, want 1h default", updater.cfg.CheckInterval)
+	}
+}
+
 func TestNew_WithLogger(t *testing.T) {
 	logger := zerolog.Nop()
 	cfg := Config{
