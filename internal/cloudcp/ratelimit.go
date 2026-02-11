@@ -8,6 +8,11 @@ import (
 	"time"
 )
 
+const (
+	defaultCPRateLimit  = 120
+	defaultCPRateWindow = time.Minute
+)
+
 // CPRateLimiter provides simple IP-based rate limiting for control plane endpoints.
 type CPRateLimiter struct {
 	mu       sync.Mutex
@@ -18,6 +23,12 @@ type CPRateLimiter struct {
 
 // NewCPRateLimiter creates a rate limiter with the given limit per window.
 func NewCPRateLimiter(limit int, window time.Duration) *CPRateLimiter {
+	if limit <= 0 {
+		limit = defaultCPRateLimit
+	}
+	if window <= 0 {
+		window = defaultCPRateWindow
+	}
 	return &CPRateLimiter{
 		attempts: make(map[string][]time.Time),
 		limit:    limit,

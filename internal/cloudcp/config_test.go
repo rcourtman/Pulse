@@ -1,9 +1,16 @@
 package cloudcp
 
 import (
-	"os"
+	"strings"
 	"testing"
 )
+
+func setRequiredCPEnv(t *testing.T) {
+	t.Helper()
+	t.Setenv("CP_ADMIN_KEY", "test-key")
+	t.Setenv("CP_BASE_URL", "https://cloud.example.com")
+	t.Setenv("STRIPE_WEBHOOK_SECRET", "whsec_test")
+}
 
 func TestLoadConfig_MissingRequired(t *testing.T) {
 	// Clear relevant env vars
@@ -21,9 +28,7 @@ func TestLoadConfig_MissingRequired(t *testing.T) {
 }
 
 func TestLoadConfig_AllRequired(t *testing.T) {
-	t.Setenv("CP_ADMIN_KEY", "test-key")
-	t.Setenv("CP_BASE_URL", "https://cloud.example.com")
-	t.Setenv("STRIPE_WEBHOOK_SECRET", "whsec_test")
+	setRequiredCPEnv(t)
 
 	// Clear optional vars to use defaults
 	for _, key := range []string{
@@ -32,7 +37,7 @@ func TestLoadConfig_AllRequired(t *testing.T) {
 		"CP_TENANT_MEMORY_LIMIT", "CP_TENANT_CPU_SHARES",
 		"STRIPE_API_KEY",
 	} {
-		os.Unsetenv(key)
+		t.Setenv(key, "")
 	}
 
 	cfg, err := LoadConfig()
@@ -77,6 +82,73 @@ func TestLoadConfig_CustomValues(t *testing.T) {
 	}
 	if cfg.BindAddress != "127.0.0.1" {
 		t.Errorf("BindAddress = %q", cfg.BindAddress)
+	}
+}
+
+func TestLoadConfig_InvalidPortParse(t *testing.T) {
+	setRequiredCPEnv(t)
+	t.Setenv("CP_PORT", "not-a-number")
+
+	_, err := LoadConfig()
+	if err == nil {
+		t.Fatal("expected error for invalid CP_PORT")
+	}
+	if !strings.Contains(err.Error(), "CP_PORT must be a valid integer") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestLoadConfig_InvalidPortRange(t *testing.T) {
+	setRequiredCPEnv(t)
+	t.Setenv("CP_PORT", "0")
+
+	_, err := LoadConfig()
+	if err == nil {
+		t.Fatal("expected error for invalid CP_PORT range")
+	}
+	if !strings.Contains(err.Error(), "CP_PORT must be between 1 and 65535") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestLoadConfig_InvalidTenantLimits(t *testing.T) {
+	t.Run("memory limit", func(t *testing.T) {
+		setRequiredCPEnv(t)
+		t.Setenv("CP_TENANT_MEMORY_LIMIT", "0")
+
+		_, err := LoadConfig()
+		if err == nil {
+			t.Fatal("expected error for invalid CP_TENANT_MEMORY_LIMIT")
+		}
+		if !strings.Contains(err.Error(), "CP_TENANT_MEMORY_LIMIT must be greater than 0") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("cpu shares", func(t *testing.T) {
+		setRequiredCPEnv(t)
+		t.Setenv("CP_TENANT_CPU_SHARES", "-10")
+
+		_, err := LoadConfig()
+		if err == nil {
+			t.Fatal("expected error for invalid CP_TENANT_CPU_SHARES")
+		}
+		if !strings.Contains(err.Error(), "CP_TENANT_CPU_SHARES must be greater than 0") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+}
+
+func TestLoadConfig_InvalidBaseURL(t *testing.T) {
+	setRequiredCPEnv(t)
+	t.Setenv("CP_BASE_URL", "cloud.example.com")
+
+	_, err := LoadConfig()
+	if err == nil {
+		t.Fatal("expected error for invalid CP_BASE_URL")
+	}
+	if !strings.Contains(err.Error(), "CP_BASE_URL must use http or https scheme") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
