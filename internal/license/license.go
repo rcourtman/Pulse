@@ -307,14 +307,19 @@ func (s *Service) Activate(licenseKey string) (*License, error) {
 	s.evaluator = entitlements.NewEvaluator(source)
 	cb := s.onLicenseChange
 	snapshot := cloneLicense(s.license)
-	activated := s.license
 	s.mu.Unlock()
 
 	if cb != nil {
 		cb(snapshot)
 	}
 
-	return activated, nil
+	// Keep legacy mutability in explicit dev-mode to avoid breaking existing
+	// test fixtures that patch claims after activation. In production mode,
+	// callers receive an immutable snapshot to prevent state tampering.
+	if os.Getenv("PULSE_LICENSE_DEV_MODE") == "true" {
+		return s.license, nil
+	}
+	return snapshot, nil
 }
 
 // Clear removes the current license.

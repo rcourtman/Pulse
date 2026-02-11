@@ -499,6 +499,56 @@ func TestServiceCurrent(t *testing.T) {
 	}
 }
 
+func TestServiceActivateReturnsSnapshot(t *testing.T) {
+	service := NewService()
+	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
+	origKey := publicKey
+	defer SetPublicKey(origKey)
+
+	pub, priv, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("failed to generate key: %v", err)
+	}
+	SetPublicKey(pub)
+
+	claims := Claims{
+		LicenseID: "snapshot_test",
+		Email:     "snapshot@example.com",
+		Tier:      TierPro,
+		IssuedAt:  time.Now().Unix(),
+		ExpiresAt: time.Now().Add(30 * 24 * time.Hour).Unix(),
+	}
+	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"EdDSA","typ":"JWT"}`))
+	payloadBytes, _ := json.Marshal(claims)
+	payload := base64.RawURLEncoding.EncodeToString(payloadBytes)
+	signedData := header + "." + payload
+	signature := ed25519.Sign(priv, []byte(signedData))
+	testKey := signedData + "." + base64.RawURLEncoding.EncodeToString(signature)
+
+	activated, err := service.Activate(testKey)
+	if err != nil {
+		t.Fatalf("Failed to activate test license: %v", err)
+	}
+	if activated == nil {
+		t.Fatal("Activate() returned nil license")
+	}
+
+	// Mutating Activate()'s return value must not tamper internal service state.
+	activated.Claims.Email = "tampered@example.com"
+	activated.Claims.Features = []string{"tampered_feature"}
+
+	current := service.Current()
+	if current == nil {
+		t.Fatal("Current() returned nil after activation")
+	}
+	if current.Claims.Email != "snapshot@example.com" {
+		t.Fatalf("Activate() leaked mutable internal state: got email %q", current.Claims.Email)
+	}
+	if current.HasFeature("tampered_feature") {
+		t.Fatal("Activate() leaked mutable internal state: tampered feature became active")
+	}
+}
+
 func TestServiceGetLicenseState(t *testing.T) {
 	t.Run("no license", func(t *testing.T) {
 		service := NewService()
