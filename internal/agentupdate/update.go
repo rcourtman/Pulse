@@ -12,7 +12,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -168,6 +170,10 @@ func (u *Updater) CheckAndUpdate(ctx context.Context) {
 		u.logger.Debug().Msg("Skipping update check - no Pulse URL configured")
 		return
 	}
+	if err := u.validatePulseURL(); err != nil {
+		u.logger.Warn().Err(err).Msg("Skipping update check - insecure or invalid Pulse URL")
+		return
+	}
 
 	u.logger.Debug().Msg("Checking for agent updates")
 
@@ -215,6 +221,10 @@ func (u *Updater) CheckAndUpdate(ctx context.Context) {
 
 // getServerVersion fetches the current version from the Pulse server.
 func (u *Updater) getServerVersion(ctx context.Context) (string, error) {
+	if err := u.validatePulseURL(); err != nil {
+		return "", fmt.Errorf("invalid Pulse URL: %w", err)
+	}
+
 	url := fmt.Sprintf("%s/api/agent/version", strings.TrimRight(u.cfg.PulseURL, "/"))
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -326,6 +336,48 @@ func normalizeAgentName(agentName string) (string, error) {
 	return name, nil
 }
 
+func isLoopbackHost(host string) bool {
+	if host == "" {
+		return false
+	}
+
+	normalized := strings.ToLower(strings.Trim(host, "[]"))
+	if normalized == "localhost" || strings.HasSuffix(normalized, ".localhost") {
+		return true
+	}
+
+	ip := net.ParseIP(normalized)
+	return ip != nil && ip.IsLoopback()
+}
+
+func (u *Updater) validatePulseURL() error {
+	pulseURL := strings.TrimSpace(u.cfg.PulseURL)
+	if pulseURL == "" {
+		return fmt.Errorf("Pulse URL is empty")
+	}
+
+	parsed, err := url.Parse(pulseURL)
+	if err != nil {
+		return fmt.Errorf("failed to parse Pulse URL: %w", err)
+	}
+	if parsed.Scheme == "" || parsed.Host == "" {
+		return fmt.Errorf("Pulse URL must include scheme and host")
+	}
+
+	scheme := strings.ToLower(parsed.Scheme)
+	switch scheme {
+	case "https":
+		return nil
+	case "http":
+		if u.cfg.InsecureSkipVerify || isLoopbackHost(parsed.Hostname()) {
+			return nil
+		}
+		return fmt.Errorf("HTTP Pulse URL is only allowed for localhost/loopback or when insecure mode is enabled")
+	default:
+		return fmt.Errorf("unsupported Pulse URL scheme %q", parsed.Scheme)
+	}
+}
+
 // performUpdate downloads and installs the new agent binary.
 func (u *Updater) performUpdate(ctx context.Context) error {
 	execPath, err := osExecutableFn()
@@ -339,6 +391,9 @@ func (u *Updater) performUpdateWithExecPath(ctx context.Context, execPath string
 	agentName, err := normalizeAgentName(u.cfg.AgentName)
 	if err != nil {
 		return fmt.Errorf("invalid agent name: %w", err)
+	}
+	if err := u.validatePulseURL(); err != nil {
+		return fmt.Errorf("invalid Pulse URL: %w", err)
 	}
 
 	// Build download URL
