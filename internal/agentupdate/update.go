@@ -207,6 +207,14 @@ func (u *Updater) CheckAndUpdate(ctx context.Context) {
 
 	if err := u.performUpdateFn(ctx); err != nil {
 		u.logger.Error().Err(err).Msg("Failed to self-update agent")
+		// If the binary was replaced but exec failed, the old process is still
+		// running with a stale binary. Exit so systemd restarts us with the
+		// new binary. The "failed to restart" error comes from restartProcess()
+		// which is called AFTER the binary is atomically replaced on disk.
+		if strings.Contains(err.Error(), "failed to restart") {
+			u.logger.Error().Msg("Binary replaced but exec failed - exiting so service manager restarts with new binary")
+			os.Exit(1)
+		}
 		return
 	}
 
