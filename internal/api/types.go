@@ -33,7 +33,7 @@ type VersionResponse struct {
 	UpdateAvailable bool   `json:"updateAvailable"`
 	LatestVersion   string `json:"latestVersion,omitempty"`
 	Containerized   bool   `json:"containerized"`
-	ContainerId     string `json:"containerId,omitempty"`
+	ContainerID     string `json:"containerId,omitempty"`
 }
 
 // StateResponse represents the full state response

@@ -3929,7 +3929,7 @@ func (r *Router) handleVersion(w http.ResponseWriter, req *http.Request) {
 		// Try to get container ID from hostname (LXC containers often use CTID as hostname)
 		if hostname, err := os.Hostname(); err == nil {
 			// For LXC, try to extract numeric ID from hostname or use full hostname
-			response.ContainerId = hostname
+			response.ContainerID = hostname
 		}
 
 		// Add container type to deployment type if not already set
