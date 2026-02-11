@@ -83,7 +83,7 @@ func (c *Client) Fetch(ctx context.Context) (map[string]interface{}, *bool, erro
 	signatureRequired := isConfigSignatureRequired()
 	hostID := c.cfg.AgentID
 	if resolved, err := c.resolveHostID(ctx); err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("resolve host ID: %w", err)
 	} else if resolved != "" {
 		hostID = resolved
 	}
@@ -102,7 +102,11 @@ func (c *Client) Fetch(ctx context.Context) (map[string]interface{}, *bool, erro
 	if err != nil {
 		return nil, nil, fmt.Errorf("do request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			c.cfg.Logger.Warn().Err(closeErr).Msg("Failed to close config response body")
+		}
+	}()
 
 	if resp.StatusCode >= 300 {
 		return nil, nil, fmt.Errorf("server responded with status %s", resp.Status)
@@ -168,7 +172,11 @@ func (c *Client) resolveHostID(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("host lookup request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			c.cfg.Logger.Warn().Err(closeErr).Msg("Failed to close host lookup response body")
+		}
+	}()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return "", nil
