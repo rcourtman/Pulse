@@ -53,3 +53,17 @@ func TestCollectLocalFallbackToPiTemp(t *testing.T) {
 		t.Fatalf("unexpected fallback output: %s", out)
 	}
 }
+
+func TestCollectLocalNilContext(t *testing.T) {
+	dir := t.TempDir()
+	writeScript(t, dir, "sensors", "#!/bin/sh\necho '{\"chip\":{\"temp\":{\"temp1_input\":42}}}'\n")
+	t.Setenv("PATH", dir+":"+os.Getenv("PATH"))
+
+	out, err := CollectLocal(nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out != "{\"chip\":{\"temp\":{\"temp1_input\":42}}}" {
+		t.Fatalf("unexpected output: %s", out)
+	}
+}
