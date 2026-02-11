@@ -6346,11 +6346,11 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		if len(parts) != 3 {
 			return "", "", 0, false
 		}
-		vmid, err := strconv.Atoi(parts[2])
+		vmID, err := strconv.Atoi(parts[2])
 		if err != nil {
 			return "", "", 0, false
 		}
-		return parts[0], parts[1], vmid, true
+		return parts[0], parts[1], vmID, true
 	}
 
 	findVM := func(id string) *models.VM {
@@ -6359,10 +6359,10 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 				return &state.VMs[i]
 			}
 		}
-		if instance, node, vmid, ok := parseGuestID(id); ok {
+		if instance, node, vmID, ok := parseGuestID(id); ok {
 			for i := range state.VMs {
 				vm := &state.VMs[i]
-				if vm.VMID == vmid && vm.Node == node && vm.Instance == instance {
+				if vm.VMID == vmID && vm.Node == node && vm.Instance == instance {
 					return vm
 				}
 			}
@@ -6376,10 +6376,10 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 				return &state.Containers[i]
 			}
 		}
-		if instance, node, vmid, ok := parseGuestID(id); ok {
+		if instance, node, vmID, ok := parseGuestID(id); ok {
 			for i := range state.Containers {
 				ct := &state.Containers[i]
-				if ct.VMID == vmid && ct.Node == node && ct.Instance == instance {
+				if ct.VMID == vmID && ct.Node == node && ct.Instance == instance {
 					return ct
 				}
 			}
@@ -7519,10 +7519,10 @@ func (r *Router) handleDownloadAgent(w http.ResponseWriter, req *http.Request) {
 			log.Error().Err(err).Str("path", candidate).Msg("Failed to open docker agent binary for download")
 			continue
 		}
+		defer file.Close()
 
 		w.Header().Set("X-Checksum-Sha256", checksum)
 		http.ServeContent(w, req, filepath.Base(candidate), info.ModTime(), file)
-		file.Close()
 		return
 	}
 

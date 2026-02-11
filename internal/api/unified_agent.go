@@ -169,10 +169,10 @@ func (r *Router) handleDownloadUnifiedAgent(w http.ResponseWriter, req *http.Req
 			log.Error().Err(err).Str("path", candidate).Msg("Failed to open unified agent binary for download")
 			continue
 		}
+		defer file.Close()
 
 		w.Header().Set("X-Checksum-Sha256", checksum)
 		http.ServeContent(w, req, filepath.Base(candidate), info.ModTime(), file)
-		file.Close()
 		return
 	}
 
