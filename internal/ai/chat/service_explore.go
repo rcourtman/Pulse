@@ -43,28 +43,72 @@ func (s *Service) shouldRunExplore(autonomousMode bool) bool {
 	return isExploreEnabled()
 }
 
-func (s *Service) chooseExploreModel(overrideModel, selectedModel string) string {
-	if strings.TrimSpace(overrideModel) != "" {
-		return strings.TrimSpace(overrideModel)
+func isProviderModelString(model string) bool {
+	parts := strings.SplitN(strings.TrimSpace(model), ":", 2)
+	return len(parts) == 2 && parts[0] != "" && parts[1] != ""
+}
+
+func appendUniqueModel(list []string, seen map[string]struct{}, model string) []string {
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return list
 	}
+	if _, ok := seen[model]; ok {
+		return list
+	}
+	seen[model] = struct{}{}
+	return append(list, model)
+}
+
+func (s *Service) exploreModelCandidates(overrideModel string) []string {
+	seen := make(map[string]struct{}, 4)
+	candidates := make([]string, 0, 4)
+	candidates = appendUniqueModel(candidates, seen, overrideModel)
 
 	s.mu.RLock()
 	cfg := s.cfg
 	s.mu.RUnlock()
 	if cfg == nil {
-		return selectedModel
+		return candidates
 	}
 
-	m := strings.TrimSpace(cfg.GetDiscoveryModel())
-	if m == "" {
-		return selectedModel
-	}
+	// BYOK rule: only use explicitly configured model fields.
+	candidates = appendUniqueModel(candidates, seen, cfg.DiscoveryModel)
+	candidates = appendUniqueModel(candidates, seen, cfg.ChatModel)
+	candidates = appendUniqueModel(candidates, seen, cfg.Model)
+	return candidates
+}
 
-	// Provider creation requires provider:model format.
-	if !strings.Contains(m, ":") {
-		return selectedModel
+func (s *Service) resolveExploreProvider(
+	overrideModel string,
+	selectedModel string,
+	defaultProvider providers.StreamingProvider,
+) (providers.StreamingProvider, string) {
+	candidates := s.exploreModelCandidates(overrideModel)
+	for _, candidate := range candidates {
+		if !isProviderModelString(candidate) {
+			log.Warn().
+				Str("model", candidate).
+				Msg("[ChatService] Explore model candidate is invalid; expected provider:model")
+			continue
+		}
+
+		// Reuse already-constructed provider when possible.
+		if candidate == selectedModel && defaultProvider != nil {
+			return defaultProvider, candidate
+		}
+
+		p, err := s.createProviderForModel(candidate)
+		if err != nil {
+			log.Warn().
+				Str("model", candidate).
+				Err(err).
+				Msg("[ChatService] Explore model unavailable; trying next explicit model")
+			continue
+		}
+		return p, candidate
 	}
-	return m
+	return nil, ""
 }
 
 func (s *Service) filterToolsForExplorePrompt(ctx context.Context, prompt string) []providers.Tool {
@@ -141,32 +185,13 @@ func (s *Service) runExplorePrepass(
 	ka *KnowledgeAccumulator,
 	defaultProvider providers.StreamingProvider,
 ) string {
-	// If we don't have a concrete model for the main request, skip pre-pass.
-	// This keeps compatibility with tests and edge paths that stub the service
-	// without a configured chat model.
-	if strings.TrimSpace(selectedModel) == "" {
-		return ""
-	}
-
 	exploreTools := s.filterToolsForExplorePrompt(ctx, prompt)
 	if len(exploreTools) == 0 {
 		return ""
 	}
 
-	exploreModel := s.chooseExploreModel(overrideModel, selectedModel)
-	provider := defaultProvider
-	if exploreModel != "" && exploreModel != selectedModel {
-		p, err := s.createProviderForModel(exploreModel)
-		if err != nil {
-			log.Warn().
-				Str("explore_model", exploreModel).
-				Err(err).
-				Msg("[ChatService] Failed to create explore model provider; falling back to chat provider")
-		} else {
-			provider = p
-		}
-	}
-	if provider == nil {
+	provider, exploreModel := s.resolveExploreProvider(overrideModel, selectedModel, defaultProvider)
+	if provider == nil || exploreModel == "" {
 		return ""
 	}
 
@@ -179,9 +204,6 @@ func (s *Service) runExplorePrepass(
 		exploreLoop.SetBudgetChecker(s.budgetChecker)
 	}
 
-	if exploreModel == "" {
-		exploreModel = selectedModel
-	}
 	parts := strings.SplitN(exploreModel, ":", 2)
 	if len(parts) == 2 {
 		exploreLoop.SetProviderInfo(parts[0], parts[1])

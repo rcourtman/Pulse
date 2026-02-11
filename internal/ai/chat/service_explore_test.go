@@ -217,3 +217,76 @@ func TestService_ExecuteStream_ExplorePrepassDisabledByEnv(t *testing.T) {
 		t.Fatal("did not expect explore summary injection when explore is disabled")
 	}
 }
+
+func TestService_ExecuteStream_ExplorePrepassSkipsWithoutExplicitModel(t *testing.T) {
+	t.Setenv(exploreEnabledEnvVar, "true")
+
+	tmpDir := t.TempDir()
+	store, err := NewSessionStore(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to create session store: %v", err)
+	}
+
+	exploreCalls := 0
+	mainCalls := 0
+	mainSawExploreSummary := false
+	mainProvider := &stubServiceProvider{
+		streamFn: func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+			mainCalls++
+			for i := len(req.Messages) - 1; i >= 0; i-- {
+				msg := req.Messages[i]
+				if msg.Role != "user" || msg.ToolResult != nil {
+					continue
+				}
+				if strings.Contains(msg.Content, "Explore findings (read-only pre-pass):") {
+					mainSawExploreSummary = true
+				}
+				break
+			}
+			callback(providers.StreamEvent{
+				Type: "content",
+				Data: providers.ContentEvent{Text: "Main response"},
+			})
+			callback(providers.StreamEvent{
+				Type: "done",
+				Data: providers.DoneEvent{InputTokens: 1, OutputTokens: 1},
+			})
+			return nil
+		},
+	}
+
+	svc := NewService(Config{
+		AIConfig: &config.AIConfig{
+			ControlLevel: config.ControlLevelControlled,
+			OpenAIAPIKey: "sk-test",
+			// No explicit Model/ChatModel/DiscoveryModel -> Explore must skip.
+		},
+		StateProvider: &mockStateProvider{},
+		AgentServer:   &mockAgentServer{},
+	})
+	svc.sessions = store
+	svc.provider = mainProvider
+	svc.started = true
+	svc.providerFactory = func(modelStr string) (providers.StreamingProvider, error) {
+		exploreCalls++
+		return nil, fmt.Errorf("explore should not attempt provider creation without explicit model: %s", modelStr)
+	}
+
+	err = svc.ExecuteStream(context.Background(), ExecuteRequest{
+		SessionID: "explore-no-explicit-model-session",
+		Prompt:    "check vm 101",
+	}, func(StreamEvent) {})
+	if err != nil {
+		t.Fatalf("ExecuteStream failed: %v", err)
+	}
+
+	if exploreCalls != 0 {
+		t.Fatalf("expected no explore provider calls, got %d", exploreCalls)
+	}
+	if mainCalls != 1 {
+		t.Fatalf("expected main loop to run once, got %d", mainCalls)
+	}
+	if mainSawExploreSummary {
+		t.Fatal("did not expect explore summary injection when no explicit explore model is available")
+	}
+}
