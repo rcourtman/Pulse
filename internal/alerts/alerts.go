@@ -4119,13 +4119,46 @@ func (m *Manager) evaluateDockerService(host models.DockerHost, service models.D
 
 	m.mu.Lock()
 	if existing, exists := m.activeAlerts[alertID]; exists && existing != nil {
-		alert.StartTime = existing.StartTime
+		escalatedToCritical := existing.Level != AlertLevelCritical && alert.Level == AlertLevelCritical
+		m.preserveAlertState(alertID, alert)
+		m.activeAlerts[alertID] = alert
+		m.recentAlerts[alertID] = alert
+
+		if escalatedToCritical {
+			m.historyManager.AddAlert(*alert)
+			if m.checkRateLimit(alertID) {
+				m.dispatchAlert(alert, true)
+				log.Warn().
+					Str("service", serviceName).
+					Str("host", host.DisplayName).
+					Float64("percentMissing", percentMissing).
+					Str("fromLevel", string(existing.Level)).
+					Str("toLevel", string(alert.Level)).
+					Msg("Docker service alert escalated")
+			} else {
+				log.Debug().
+					Str("alertID", alertID).
+					Int("maxPerHour", m.config.Schedule.MaxAlertsHour).
+					Msg("Docker service escalation notification suppressed due to rate limit")
+			}
+		}
+		m.mu.Unlock()
+		return
 	}
+
 	m.preserveAlertState(alertID, alert)
 	m.activeAlerts[alertID] = alert
 	m.recentAlerts[alertID] = alert
 	m.historyManager.AddAlert(*alert)
-	m.dispatchAlert(alert, severity == AlertLevelCritical)
+	if !m.checkRateLimit(alertID) {
+		m.mu.Unlock()
+		log.Debug().
+			Str("alertID", alertID).
+			Int("maxPerHour", m.config.Schedule.MaxAlertsHour).
+			Msg("Docker service alert notification suppressed due to rate limit")
+		return
+	}
+	m.dispatchAlert(alert, true)
 	m.mu.Unlock()
 
 	log.Warn().
@@ -6385,7 +6418,8 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 			if shouldRenotify && m.onAlert != nil {
 				now := time.Now()
 				existingAlert.LastNotified = &now
-				if m.dispatchAlert(existingAlert, false) {
+				// Dispatch asynchronously so callback I/O cannot block alert evaluation.
+				if m.dispatchAlert(existingAlert, true) {
 					log.Info().
 						Str("alertID", alertID).
 						Str("level", string(existingAlert.Level)).
@@ -6640,6 +6674,12 @@ func (m *Manager) preserveAlertState(alertID string, updated *Alert) {
 	if exists && existing != nil {
 		// Preserve the original start time so duration calculations are correct
 		updated.StartTime = existing.StartTime
+		if existing.LastNotified != nil {
+			t := *existing.LastNotified
+			updated.LastNotified = &t
+		} else {
+			updated.LastNotified = nil
+		}
 		updated.Acknowledged = existing.Acknowledged
 		updated.AckUser = existing.AckUser
 		if existing.AckTime != nil {
@@ -8995,6 +9035,12 @@ func (m *Manager) escalationChecker() {
 func (m *Manager) checkEscalations() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	// Respect global alert and activation controls before escalating.
+	// Escalations should never bypass a user disabling alerts.
+	if !m.config.Enabled || m.config.ActivationState != ActivationActive {
+		return
+	}
 
 	if !m.config.Schedule.Escalation.Enabled {
 		return

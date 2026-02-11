@@ -138,6 +138,33 @@ func (s *stubPVEClient) GetNodePendingUpdates(ctx context.Context, node string) 
 
 func floatPtr(v float64) *float64 { return &v }
 
+func newTestPVEMonitor(instanceName string) *Monitor {
+	return &Monitor{
+		config: &config.Config{
+			PVEInstances: []config.PVEInstance{{
+				Name: instanceName,
+				Host: "https://pve",
+			}},
+		},
+		state:                models.NewState(),
+		alertManager:         alerts.NewManager(),
+		notificationMgr:      notifications.NewNotificationManager(""),
+		metricsHistory:       NewMetricsHistory(32, time.Hour),
+		nodeSnapshots:        make(map[string]NodeMemorySnapshot),
+		guestSnapshots:       make(map[string]GuestMemorySnapshot),
+		nodeRRDMemCache:      make(map[string]rrdMemCacheEntry),
+		lastClusterCheck:     make(map[string]time.Time),
+		lastPhysicalDiskPoll: make(map[string]time.Time),
+		failureCounts:        make(map[string]int),
+		lastOutcome:          make(map[string]taskOutcome),
+		pollStatusMap:        make(map[string]*pollStatus),
+		dlqInsightMap:        make(map[string]*dlqInsight),
+		authFailures:         make(map[string]int),
+		lastAuthAttempt:      make(map[string]time.Time),
+		nodeLastOnline:       make(map[string]time.Time),
+	}
+}
+
 func TestPollPVEInstanceUsesRRDMemUsedFallback(t *testing.T) {
 	t.Setenv("PULSE_DATA_DIR", t.TempDir())
 
@@ -173,30 +200,7 @@ func TestPollPVEInstanceUsesRRDMemUsedFallback(t *testing.T) {
 		},
 	}
 
-	mon := &Monitor{
-		config: &config.Config{
-			PVEInstances: []config.PVEInstance{{
-				Name: "test",
-				Host: "https://pve",
-			}},
-		},
-		state:                models.NewState(),
-		alertManager:         alerts.NewManager(),
-		notificationMgr:      notifications.NewNotificationManager(""),
-		metricsHistory:       NewMetricsHistory(32, time.Hour),
-		nodeSnapshots:        make(map[string]NodeMemorySnapshot),
-		guestSnapshots:       make(map[string]GuestMemorySnapshot),
-		nodeRRDMemCache:      make(map[string]rrdMemCacheEntry),
-		lastClusterCheck:     make(map[string]time.Time),
-		lastPhysicalDiskPoll: make(map[string]time.Time),
-		failureCounts:        make(map[string]int),
-		lastOutcome:          make(map[string]taskOutcome),
-		pollStatusMap:        make(map[string]*pollStatus),
-		dlqInsightMap:        make(map[string]*dlqInsight),
-		authFailures:         make(map[string]int),
-		lastAuthAttempt:      make(map[string]time.Time),
-		nodeLastOnline:       make(map[string]time.Time),
-	}
+	mon := newTestPVEMonitor("test")
 	defer mon.alertManager.Stop()
 	defer mon.notificationMgr.Stop()
 
@@ -231,5 +235,110 @@ func TestPollPVEInstanceUsesRRDMemUsedFallback(t *testing.T) {
 	}
 	if snap.Raw.RRDUsed != actualUsed {
 		t.Fatalf("expected snapshot RRD used %d, got %d", actualUsed, snap.Raw.RRDUsed)
+	}
+}
+
+func TestPollPVEInstancePreservesRecentNodesWhenGetNodesReturnsEmpty(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+
+	client := &stubPVEClient{
+		nodes: []proxmox.Node{
+			{
+				Node:    "node1",
+				Status:  "online",
+				CPU:     0.10,
+				MaxCPU:  8,
+				Mem:     4 * 1024 * 1024 * 1024,
+				MaxMem:  8 * 1024 * 1024 * 1024,
+				Uptime:  7200,
+				MaxDisk: 100 * 1024 * 1024 * 1024,
+				Disk:    40 * 1024 * 1024 * 1024,
+			},
+		},
+		nodeStatus: &proxmox.NodeStatus{
+			Memory: &proxmox.MemoryStatus{
+				Total: 8 * 1024 * 1024 * 1024,
+				Used:  4 * 1024 * 1024 * 1024,
+				Free:  4 * 1024 * 1024 * 1024,
+			},
+		},
+	}
+
+	mon := newTestPVEMonitor("test")
+	defer mon.alertManager.Stop()
+	defer mon.notificationMgr.Stop()
+
+	mon.pollPVEInstance(context.Background(), "test", client)
+
+	// Simulate transient API gap: node list temporarily empty.
+	client.nodes = nil
+	mon.pollPVEInstance(context.Background(), "test", client)
+
+	snapshot := mon.state.GetSnapshot()
+	if len(snapshot.Nodes) != 1 {
+		t.Fatalf("expected one node in state, got %d", len(snapshot.Nodes))
+	}
+
+	node := snapshot.Nodes[0]
+	if node.Status == "offline" {
+		t.Fatalf("expected recent node to remain non-offline during grace window, got %q", node.Status)
+	}
+}
+
+func TestPollPVEInstanceMarksStaleNodesOfflineWhenGetNodesReturnsEmpty(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+
+	client := &stubPVEClient{
+		nodes: []proxmox.Node{
+			{
+				Node:    "node1",
+				Status:  "online",
+				CPU:     0.10,
+				MaxCPU:  8,
+				Mem:     4 * 1024 * 1024 * 1024,
+				MaxMem:  8 * 1024 * 1024 * 1024,
+				Uptime:  7200,
+				MaxDisk: 100 * 1024 * 1024 * 1024,
+				Disk:    40 * 1024 * 1024 * 1024,
+			},
+		},
+		nodeStatus: &proxmox.NodeStatus{
+			Memory: &proxmox.MemoryStatus{
+				Total: 8 * 1024 * 1024 * 1024,
+				Used:  4 * 1024 * 1024 * 1024,
+				Free:  4 * 1024 * 1024 * 1024,
+			},
+		},
+	}
+
+	mon := newTestPVEMonitor("test")
+	defer mon.alertManager.Stop()
+	defer mon.notificationMgr.Stop()
+
+	mon.pollPVEInstance(context.Background(), "test", client)
+
+	first := mon.state.GetSnapshot()
+	if len(first.Nodes) != 1 {
+		t.Fatalf("expected one node after first poll, got %d", len(first.Nodes))
+	}
+
+	staleNode := first.Nodes[0]
+	staleNode.LastSeen = time.Now().Add(-nodeOfflineGracePeriod - 2*time.Second)
+	mon.state.UpdateNodesForInstance("test", []models.Node{staleNode})
+
+	client.nodes = nil
+	mon.pollPVEInstance(context.Background(), "test", client)
+
+	second := mon.state.GetSnapshot()
+	if len(second.Nodes) != 1 {
+		t.Fatalf("expected one node after fallback poll, got %d", len(second.Nodes))
+	}
+
+	node := second.Nodes[0]
+	if node.Status != "offline" {
+		t.Fatalf("expected stale node to be marked offline, got %q", node.Status)
+	}
+	if node.ConnectionHealth != "error" {
+		t.Fatalf("expected stale node connection health error, got %q", node.ConnectionHealth)
 	}
 }

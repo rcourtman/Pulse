@@ -2,6 +2,7 @@ package license
 
 import (
 	"crypto/ed25519"
+	"crypto/sha256"
 	"encoding/base64"
 	"os"
 	"strings"
@@ -13,6 +14,14 @@ import (
 // This should be set at build time via -ldflags or populated with the actual key.
 // Example: go build -ldflags "-X github.com/rcourtman/pulse-go-rewrite/internal/license.EmbeddedPublicKey=BASE64_KEY"
 var EmbeddedPublicKey string = ""
+
+func publicKeyFingerprint(key ed25519.PublicKey) string {
+	if len(key) == 0 {
+		return ""
+	}
+	sum := sha256.Sum256(key)
+	return "SHA256:" + base64.StdEncoding.EncodeToString(sum[:])
+}
 
 // InitPublicKey initializes the public key for license validation.
 // Priority:
@@ -30,7 +39,10 @@ func InitPublicKey() {
 			// Fall through to try embedded key instead of returning
 		} else {
 			SetPublicKey(key)
-			log.Info().Msg("License public key loaded from environment")
+			log.Info().
+				Str("source", "environment").
+				Str("fingerprint", publicKeyFingerprint(key)).
+				Msg("License public key loaded")
 			return
 		}
 	}
@@ -42,7 +54,10 @@ func InitPublicKey() {
 			log.Error().Err(err).Msg("Failed to decode embedded public key")
 		} else {
 			SetPublicKey(key)
-			log.Info().Msg("License public key loaded from embedded key")
+			log.Info().
+				Str("source", "embedded").
+				Str("fingerprint", publicKeyFingerprint(key)).
+				Msg("License public key loaded")
 			return
 		}
 	}
