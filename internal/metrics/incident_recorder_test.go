@@ -213,12 +213,16 @@ func TestCopyWindowDeepCopy(t *testing.T) {
 
 	window.DataPoints[0].Metrics["cpu"] = 9
 	*window.EndTime = end.Add(5 * time.Second)
+	window.Summary.Peaks["cpu"] = 9
 
 	if clone.DataPoints[0].Metrics["cpu"] != 1 {
 		t.Fatalf("expected data points to be copied")
 	}
 	if clone.EndTime.Equal(*window.EndTime) {
 		t.Fatalf("expected end time to be copied")
+	}
+	if clone.Summary.Peaks["cpu"] != 1 {
+		t.Fatalf("expected summary maps to be copied")
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -106,8 +107,15 @@ type IncidentRecorder struct {
 	filePath string
 
 	// Control
-	stopCh  chan struct{}
-	running bool
+	stopCh   chan struct{}
+	loopDone chan struct{}
+	running  bool
+
+	// Async save coordination
+	saveMu         sync.Mutex
+	saveCond       *sync.Cond
+	saveInProgress bool
+	saveRequested  bool
 }
 
 // NewIncidentRecorder creates a new incident recorder
@@ -138,7 +146,9 @@ func NewIncidentRecorder(cfg IncidentRecorderConfig) *IncidentRecorder {
 		preIncidentBuffer: make(map[string][]IncidentDataPoint),
 		dataDir:           cfg.DataDir,
 		stopCh:            make(chan struct{}),
+		loopDone:          make(chan struct{}),
 	}
+	recorder.saveCond = sync.NewCond(&recorder.saveMu)
 
 	if cfg.DataDir != "" {
 		recorder.filePath = filepath.Join(cfg.DataDir, "incident_windows.json")
@@ -164,11 +174,14 @@ func (r *IncidentRecorder) Start() {
 		r.mu.Unlock()
 		return
 	}
+	stopCh := make(chan struct{})
+	loopDone := make(chan struct{})
 	r.running = true
-	r.stopCh = make(chan struct{})
+	r.stopCh = stopCh
+	r.loopDone = loopDone
 	r.mu.Unlock()
 
-	go r.recordingLoop()
+	go r.recordingLoop(stopCh, loopDone)
 	log.Info().Msg("Incident recorder started")
 }
 
@@ -180,24 +193,35 @@ func (r *IncidentRecorder) Stop() {
 		return
 	}
 	r.running = false
-	close(r.stopCh)
+	stopCh := r.stopCh
+	loopDone := r.loopDone
+	r.stopCh = nil
+	r.loopDone = nil
 	r.mu.Unlock()
 
-	// Save to disk
-	if err := r.saveToDisk(); err != nil {
-		log.Warn().Err(err).Msg("Failed to save incident windows on stop")
+	if stopCh != nil {
+		close(stopCh)
 	}
+	if loopDone != nil {
+		<-loopDone
+	}
+
+	// Flush any pending async saves and persist final state.
+	r.requestAsyncSave()
+	r.waitForPendingSaves()
 	log.Info().Msg("Incident recorder stopped")
 }
 
 // recordingLoop runs in the background to maintain pre-incident buffers and active windows
-func (r *IncidentRecorder) recordingLoop() {
+func (r *IncidentRecorder) recordingLoop(stopCh <-chan struct{}, done chan<- struct{}) {
+	defer close(done)
+
 	ticker := time.NewTicker(r.config.SampleInterval)
 	defer ticker.Stop()
 
 	for {
 		select {
-		case <-r.stopCh:
+		case <-stopCh:
 			return
 		case <-ticker.C:
 			r.recordSample()
@@ -247,7 +271,7 @@ func (r *IncidentRecorder) recordSample() {
 
 		window.DataPoints = append(window.DataPoints, IncidentDataPoint{
 			Timestamp: now,
-			Metrics:   metrics,
+			Metrics:   copyMetrics(metrics),
 		})
 	}
 
@@ -266,7 +290,7 @@ func (r *IncidentRecorder) recordSample() {
 		buffer := r.preIncidentBuffer[resourceID]
 		buffer = append(buffer, IncidentDataPoint{
 			Timestamp: now,
-			Metrics:   metrics,
+			Metrics:   copyMetrics(metrics),
 		})
 
 		// Keep only last PreIncidentWindow duration
@@ -326,7 +350,7 @@ func (r *IncidentRecorder) StartRecording(resourceID, resourceName, resourceType
 
 	// Copy pre-incident buffer if available
 	if preBuffer, ok := r.preIncidentBuffer[resourceID]; ok {
-		window.DataPoints = append(window.DataPoints, preBuffer...)
+		window.DataPoints = append(window.DataPoints, copyDataPoints(preBuffer)...)
 	}
 
 	r.activeWindows[windowID] = window
@@ -378,12 +402,7 @@ func (r *IncidentRecorder) completeWindow(window *IncidentWindow) {
 		Int("data_points", len(window.DataPoints)).
 		Msg("Completed incident recording")
 
-	// Save asynchronously
-	go func() {
-		if err := r.saveToDisk(); err != nil {
-			log.Warn().Err(err).Msg("Failed to save incident windows")
-		}
-	}()
+	r.requestAsyncSave()
 }
 
 // computeSummary computes statistics for a window
@@ -527,13 +546,11 @@ func (r *IncidentRecorder) saveToDisk() error {
 		return nil
 	}
 
-	r.mu.RLock()
 	data := struct {
 		CompletedWindows []*IncidentWindow `json:"completed_windows"`
 	}{
-		CompletedWindows: r.completedWindows,
+		CompletedWindows: r.snapshotCompletedWindows(),
 	}
-	r.mu.RUnlock()
 
 	jsonData, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
@@ -550,6 +567,64 @@ func (r *IncidentRecorder) saveToDisk() error {
 	}
 
 	return os.Rename(tmpPath, r.filePath)
+}
+
+func (r *IncidentRecorder) snapshotCompletedWindows() []*IncidentWindow {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	snapshot := make([]*IncidentWindow, len(r.completedWindows))
+	for i, window := range r.completedWindows {
+		snapshot[i] = copyWindow(window)
+	}
+	return snapshot
+}
+
+func (r *IncidentRecorder) requestAsyncSave() {
+	if r.filePath == "" {
+		return
+	}
+
+	r.saveMu.Lock()
+	r.saveRequested = true
+	if r.saveInProgress {
+		r.saveMu.Unlock()
+		return
+	}
+	r.saveInProgress = true
+	r.saveMu.Unlock()
+
+	go r.saveLoop()
+}
+
+func (r *IncidentRecorder) saveLoop() {
+	for {
+		r.saveMu.Lock()
+		if !r.saveRequested {
+			r.saveInProgress = false
+			r.saveCond.Broadcast()
+			r.saveMu.Unlock()
+			return
+		}
+		r.saveRequested = false
+		r.saveMu.Unlock()
+
+		if err := r.saveToDisk(); err != nil {
+			log.Warn().Err(err).Msg("Failed to save incident windows")
+		}
+	}
+}
+
+func (r *IncidentRecorder) waitForPendingSaves() {
+	if r.filePath == "" {
+		return
+	}
+
+	r.saveMu.Lock()
+	for r.saveInProgress || r.saveRequested {
+		r.saveCond.Wait()
+	}
+	r.saveMu.Unlock()
 }
 
 // loadFromDisk loads completed windows
@@ -592,19 +667,17 @@ func copyWindow(w *IncidentWindow) *IncidentWindow {
 		copy.EndTime = &t
 	}
 	if w.DataPoints != nil {
-		copy.DataPoints = make([]IncidentDataPoint, len(w.DataPoints))
-		for i, dp := range w.DataPoints {
-			copy.DataPoints[i] = dp
-			if dp.Metrics != nil {
-				copy.DataPoints[i].Metrics = make(map[string]float64)
-				for k, v := range dp.Metrics {
-					copy.DataPoints[i].Metrics[k] = v
-				}
-			}
-		}
+		copy.DataPoints = copyDataPoints(w.DataPoints)
 	}
 	if w.Summary != nil {
 		s := *w.Summary
+		s.Peaks = copyMetrics(w.Summary.Peaks)
+		s.Lows = copyMetrics(w.Summary.Lows)
+		s.Averages = copyMetrics(w.Summary.Averages)
+		s.Changes = copyMetrics(w.Summary.Changes)
+		if w.Summary.Anomalies != nil {
+			s.Anomalies = append([]string(nil), w.Summary.Anomalies...)
+		}
 		copy.Summary = &s
 	}
 	return &copy
@@ -613,8 +686,35 @@ func copyWindow(w *IncidentWindow) *IncidentWindow {
 var windowCounter int64
 
 func generateWindowID(resourceID string) string {
-	windowCounter++
-	return "iw-" + resourceID + "-" + time.Now().Format("20060102150405") + "-" + intToString(int(windowCounter%1000))
+	counter := atomic.AddInt64(&windowCounter, 1)
+	return "iw-" + resourceID + "-" + time.Now().Format("20060102150405") + "-" + intToString(int(counter))
+}
+
+func copyDataPoints(points []IncidentDataPoint) []IncidentDataPoint {
+	copied := make([]IncidentDataPoint, len(points))
+	for i, dp := range points {
+		copied[i] = dp
+		copied[i].Metrics = copyMetrics(dp.Metrics)
+		if dp.Metadata != nil {
+			copied[i].Metadata = make(map[string]interface{}, len(dp.Metadata))
+			for k, v := range dp.Metadata {
+				copied[i].Metadata[k] = v
+			}
+		}
+	}
+	return copied
+}
+
+func copyMetrics(metrics map[string]float64) map[string]float64 {
+	if metrics == nil {
+		return nil
+	}
+
+	copied := make(map[string]float64, len(metrics))
+	for k, v := range metrics {
+		copied[k] = v
+	}
+	return copied
 }
 
 func intToString(n int) string {
