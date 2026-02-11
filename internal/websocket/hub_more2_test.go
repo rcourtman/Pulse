@@ -108,6 +108,21 @@ func TestStopClosesChannel(t *testing.T) {
 	}
 }
 
+func TestStopIsIdempotent(t *testing.T) {
+	hub := NewHub(nil)
+	hub.Stop()
+	hub.Stop()
+
+	select {
+	case _, ok := <-hub.stopChan:
+		if ok {
+			t.Fatal("expected stopChan to remain closed")
+		}
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("expected closed stopChan")
+	}
+}
+
 func TestHandleWebSocketPingPong(t *testing.T) {
 	hub := NewHub(nil)
 	go hub.Run()
@@ -146,4 +161,31 @@ func TestHandleWebSocketPingPong(t *testing.T) {
 	}
 
 	t.Fatal("expected pong response")
+}
+
+func TestHandleWebSocketNegotiatesCompression(t *testing.T) {
+	hub := NewHub(nil)
+	go hub.Run()
+	t.Cleanup(hub.Stop)
+
+	server := httptest.NewServer(http.HandlerFunc(hub.HandleWebSocket))
+	defer server.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
+	dialer := websocket.Dialer{
+		EnableCompression: true,
+	}
+
+	conn, resp, err := dialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("dial websocket: %v", err)
+	}
+	defer conn.Close()
+
+	if resp == nil {
+		t.Fatal("expected handshake response")
+	}
+	if !strings.Contains(strings.ToLower(resp.Header.Get("Sec-WebSocket-Extensions")), "permessage-deflate") {
+		t.Fatalf("expected permessage-deflate extension, got %q", resp.Header.Get("Sec-WebSocket-Extensions"))
+	}
 }
