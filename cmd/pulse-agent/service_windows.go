@@ -141,6 +141,7 @@ func (ws *windowsService) Execute(args []string, r <-chan svc.ChangeRequest, cha
 	go func() {
 		doneChan <- g.Wait()
 	}()
+	doneReceived := false
 
 	// Service control loop
 loop:
@@ -162,6 +163,7 @@ loop:
 				ws.logger.Warn().Uint32("command", uint32(c.Cmd)).Msg("Unexpected service control command")
 			}
 		case err := <-doneChan:
+			doneReceived = true
 			if err != nil && err != context.Canceled {
 				ws.logger.Error().Err(err).Msg("Agent error")
 				if ws.eventLog != nil {
@@ -175,19 +177,34 @@ loop:
 	}
 
 	// Wait for agents to stop gracefully (with timeout)
-	shutdownTimeout := time.NewTimer(10 * time.Second)
-	defer shutdownTimeout.Stop()
-
-	select {
-	case <-doneChan:
+	if doneReceived {
 		ws.logger.Info().Msg("Agents stopped gracefully")
 		if ws.eventLog != nil {
 			ws.eventLog.Info(1, "Pulse Agent stopped gracefully")
 		}
-	case <-shutdownTimeout.C:
-		ws.logger.Warn().Msg("Agent shutdown timeout, forcing stop")
-		if ws.eventLog != nil {
-			ws.eventLog.Warning(1, "Pulse Agent shutdown timeout")
+	} else {
+		shutdownTimeout := time.NewTimer(10 * time.Second)
+		defer shutdownTimeout.Stop()
+
+		select {
+		case err := <-doneChan:
+			if err != nil && err != context.Canceled {
+				ws.logger.Error().Err(err).Msg("Agent error during shutdown")
+				if ws.eventLog != nil {
+					ws.eventLog.Error(1, fmt.Sprintf("Pulse Agent shutdown error: %v", err))
+				}
+				changes <- svc.Status{State: svc.Stopped}
+				return true, 1
+			}
+			ws.logger.Info().Msg("Agents stopped gracefully")
+			if ws.eventLog != nil {
+				ws.eventLog.Info(1, "Pulse Agent stopped gracefully")
+			}
+		case <-shutdownTimeout.C:
+			ws.logger.Warn().Msg("Agent shutdown timeout, forcing stop")
+			if ws.eventLog != nil {
+				ws.eventLog.Warning(1, "Pulse Agent shutdown timeout")
+			}
 		}
 	}
 
