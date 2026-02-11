@@ -121,14 +121,19 @@ func EnsureHostAgentBinaries(version string) map[string]HostAgentBinary {
 		missingPlatforms = append(missingPlatforms, key)
 	}
 	sort.Strings(missingPlatforms)
+	normalizedVersion := normalizeVersionTag(version)
 
 	log.Warn().
+		Str("version", normalizedVersion).
+		Str("target_dir", binDirs[0]).
+		Strs("search_paths", binDirs).
 		Strs("missing_platforms", missingPlatforms).
 		Msg("Host agent binaries missing - attempting to download bundle from GitHub release")
 
 	if err := downloadAndInstallHostAgentBinariesFn(version, binDirs[0]); err != nil {
 		log.Error().
 			Err(err).
+			Str("version", normalizedVersion).
 			Str("target_dir", binDirs[0]).
 			Strs("missing_platforms", missingPlatforms).
 			Msg("Failed to automatically install host agent binaries; download endpoints will return 404s")
@@ -142,12 +147,17 @@ func EnsureHostAgentBinaries(version string) map[string]HostAgentBinary {
 		}
 		sort.Strings(stillMissing)
 		log.Warn().
+			Str("version", normalizedVersion).
+			Str("target_dir", binDirs[0]).
 			Strs("missing_platforms", stillMissing).
 			Msg("Host agent binaries still missing after automatic restoration attempt")
 		return remaining
 	}
 
-	log.Info().Msg("Host agent binaries restored from GitHub release bundle")
+	log.Info().
+		Str("version", normalizedVersion).
+		Str("target_dir", binDirs[0]).
+		Msg("Host agent binaries restored from GitHub release bundle")
 	return nil
 }
 
@@ -163,6 +173,13 @@ func DownloadAndInstallHostAgentBinaries(version string, targetDir string) error
 	}
 
 	url := downloadURLForVersion(normalizedVersion)
+	startedAt := time.Now()
+	log.Info().
+		Str("version", normalizedVersion).
+		Str("target_dir", targetDir).
+		Str("download_url", url).
+		Msg("Downloading host agent bundle")
+
 	tempFile, err := createTempFn("", "pulse-host-agent-*.tar.gz")
 	if err != nil {
 		return fmt.Errorf("failed to create temporary archive file: %w", err)
@@ -196,6 +213,12 @@ func DownloadAndInstallHostAgentBinaries(version string, targetDir string) error
 	if err := extractHostAgentBinaries(tempFile.Name(), targetDir); err != nil {
 		return fmt.Errorf("agentbinaries.DownloadAndInstallHostAgentBinaries: %w", err)
 	}
+
+	log.Info().
+		Str("version", normalizedVersion).
+		Str("target_dir", targetDir).
+		Dur("duration", time.Since(startedAt)).
+		Msg("Host agent bundle installed")
 
 	return nil
 }
