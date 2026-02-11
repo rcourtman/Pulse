@@ -28,6 +28,42 @@ func TestGenerateMockDataIncludesDockerHosts(t *testing.T) {
 	}
 }
 
+func TestComputeGuestCountsHandlesZeroBaselines(t *testing.T) {
+	cfg := MockConfig{
+		VMsPerNode:  0,
+		LXCsPerNode: 0,
+	}
+
+	roles := []string{"vm-heavy", "container-heavy", "light", "mixed"}
+	for _, role := range roles {
+		vmCount, lxcCount := computeGuestCounts(cfg, role)
+		if vmCount < 0 || lxcCount < 0 {
+			t.Fatalf("expected non-negative counts for role %q, got vm=%d lxc=%d", role, vmCount, lxcCount)
+		}
+	}
+}
+
+func TestGenerateMockDataWithZeroGuestBaselinesDoesNotPanic(t *testing.T) {
+	cfg := DefaultConfig
+	cfg.NodeCount = 4
+	cfg.VMsPerNode = 0
+	cfg.LXCsPerNode = 0
+	cfg.DockerHostCount = 0
+	cfg.GenericHostCount = 0
+	cfg.K8sClusterCount = 0
+
+	for i := 0; i < 20; i++ {
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					t.Fatalf("GenerateMockData panicked on iteration %d: %v", i, r)
+				}
+			}()
+			_ = GenerateMockData(cfg)
+		}()
+	}
+}
+
 func TestGenerateMockDataIncludesSwarmServices(t *testing.T) {
 	cfg := DefaultConfig
 	cfg.DockerHostCount = 4
