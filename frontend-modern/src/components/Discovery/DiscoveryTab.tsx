@@ -704,7 +704,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                                         <p class="font-medium text-amber-800 dark:text-amber-200">Commands not enabled</p>
                                         <p class="text-amber-700 dark:text-amber-300 mt-0.5">
                                             Discovery requires command execution. Enable "Pulse Commands" in{' '}
-                                            <a href="/settings/workloads" class="underline hover:no-underline">Settings → Unified Agents</a>.
+                                            <a href="/settings" class="underline hover:no-underline">Settings → Unified Agents</a>.
                                         </p>
                                     </div>
                                 </div>

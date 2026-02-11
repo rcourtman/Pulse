@@ -921,7 +921,7 @@ const Settings: Component<SettingsProps> = (props) => {
                         onClick={() => navigate('/settings/workloads')}
                         class="mt-2 text-sm font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200 underline"
                       >
-                        Install agent →
+                        Open Unified Agents →
                       </button>
                     </div>
                   </div>

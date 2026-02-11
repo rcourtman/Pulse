@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  DEFAULT_SETTINGS_TAB,
   deriveAgentFromPath,
   deriveTabFromPath,
   deriveTabFromQuery,
@@ -44,6 +45,10 @@ const hasFeatures =
     features.includes(feature);
 
 describe('settingsRouting', () => {
+  it('uses Unified Agents as the default /settings landing tab', () => {
+    expect(DEFAULT_SETTINGS_TAB).toBe('agents');
+  });
+
   it('returns canonical paths for every tab id', () => {
     for (const [tab, path] of Object.entries(canonicalTabPaths)) {
       expect(settingsTabPath(tab as SettingsTab)).toBe(path);

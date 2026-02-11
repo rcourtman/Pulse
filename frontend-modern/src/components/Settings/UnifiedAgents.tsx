@@ -35,6 +35,7 @@ type AgentPlatform = 'linux' | 'macos' | 'freebsd' | 'windows';
 type UnifiedAgentType = 'host' | 'docker' | 'kubernetes';
 type UnifiedAgentStatus = 'active' | 'removed';
 type ScopeCategory = 'default' | 'profile' | 'ai-managed' | 'na';
+type InstallProfile = 'auto' | 'docker' | 'kubernetes' | 'proxmox-pve' | 'proxmox-pbs' | 'truenas';
 
 type UnifiedAgentRow = {
     rowKey: string;
@@ -64,6 +65,45 @@ type UnifiedAgentRow = {
         tokenName?: string;
     };
 };
+
+const INSTALL_PROFILE_OPTIONS: { value: InstallProfile; label: string; description: string; flags: string[] }[] = [
+    {
+        value: 'auto',
+        label: 'Auto-detect (recommended)',
+        description: 'Let the installer detect Docker, Kubernetes, Proxmox, and host features automatically.',
+        flags: [],
+    },
+    {
+        value: 'docker',
+        label: 'Docker / Podman host',
+        description: 'Force container runtime monitoring even when detection is restricted.',
+        flags: ['--enable-docker'],
+    },
+    {
+        value: 'kubernetes',
+        label: 'Kubernetes node',
+        description: 'Force Kubernetes monitoring on cluster nodes.',
+        flags: ['--enable-kubernetes'],
+    },
+    {
+        value: 'proxmox-pve',
+        label: 'Proxmox VE node',
+        description: 'Force Proxmox integration and register as a PVE node.',
+        flags: ['--enable-proxmox', '--proxmox-type pve'],
+    },
+    {
+        value: 'proxmox-pbs',
+        label: 'Proxmox Backup node',
+        description: 'Force Proxmox integration and register as a PBS node.',
+        flags: ['--enable-proxmox', '--proxmox-type pbs'],
+    },
+    {
+        value: 'truenas',
+        label: 'TrueNAS SCALE host',
+        description: 'Use default auto-detection; installer applies TrueNAS-safe service handling automatically.',
+        flags: [],
+    },
+];
 
 // Generate platform-specific commands with the appropriate Pulse URL
 // Uses agentUrl from API (PULSE_PUBLIC_URL) if configured, otherwise falls back to window.location
@@ -171,6 +211,7 @@ export const UnifiedAgents: Component = () => {
     const [lookupLoading, setLookupLoading] = createSignal(false);
     const [insecureMode, setInsecureMode] = createSignal(false); // For self-signed certificates (issue #806)
     const [enableCommands, setEnableCommands] = createSignal(false); // Enable Pulse command execution (issue #903)
+    const [installProfile, setInstallProfile] = createSignal<InstallProfile>('auto');
     const [customAgentUrl, setCustomAgentUrl] = createSignal('');
     const [profiles, setProfiles] = createSignal<AgentProfile[]>([]);
     const [assignments, setAssignments] = createSignal<AgentProfileAssignment[]>([]);
@@ -329,6 +370,9 @@ export const UnifiedAgents: Component = () => {
     const getInsecureFlag = () => insecureMode() ? ' --insecure' : '';
     const getEnableCommandsFlag = () => enableCommands() ? ' --enable-commands' : '';
     const getCurlInsecureFlag = () => insecureMode() ? '-k' : '';
+    const getSelectedInstallProfile = () =>
+        INSTALL_PROFILE_OPTIONS.find((option) => option.value === installProfile()) ?? INSTALL_PROFILE_OPTIONS[0];
+    const getInstallProfileFlags = () => getSelectedInstallProfile().flags;
 
     const getUninstallCommand = () => {
         const url = customAgentUrl() || agentUrl();
@@ -862,10 +906,17 @@ export const UnifiedAgents: Component = () => {
         <div class="space-y-6">
             <SettingsPanel
                 title="Unified Agents"
-                description="Install and configure host, Docker, and Kubernetes agents."
+                description="Primary install path for monitoring hosts, Docker, Kubernetes, Proxmox, and related infrastructure."
                 icon={<Server class="w-5 h-5" strokeWidth={2} />}
                 bodyClass="space-y-5"
             >
+
+                <div class="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 dark:border-blue-700 dark:bg-blue-900/20 dark:text-blue-100">
+                    <p class="font-semibold">Unified Agent is the default monitoring gateway.</p>
+                    <p class="mt-1 text-xs text-blue-800 dark:text-blue-200">
+                        Install it on each host you want Pulse to monitor. The installer auto-detects available platforms on that machine and enables the right integrations.
+                    </p>
+                </div>
 
                 <div class="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-100">
                     <div class="flex items-start gap-3">
@@ -1041,6 +1092,31 @@ export const UnifiedAgents: Component = () => {
                                 <div class="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-100">
                                     <span class="font-medium">Config signing (optional)</span> — Require signed remote config payloads with <code>PULSE_AGENT_CONFIG_SIGNATURE_REQUIRED=true</code>. Provide keys via <code>PULSE_AGENT_CONFIG_SIGNING_KEY</code> (Pulse) and <code>PULSE_AGENT_CONFIG_PUBLIC_KEYS</code> (agents).
                                 </div>
+                                <div class="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 dark:border-gray-700 dark:bg-gray-800/50">
+                                    <label for="install-profile-select" class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                                        Target profile (optional)
+                                    </label>
+                                    <select
+                                        id="install-profile-select"
+                                        value={installProfile()}
+                                        onChange={(event) => setInstallProfile(event.currentTarget.value as InstallProfile)}
+                                        class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-800"
+                                    >
+                                        <For each={INSTALL_PROFILE_OPTIONS}>
+                                            {(option) => (
+                                                <option value={option.value}>{option.label}</option>
+                                            )}
+                                        </For>
+                                    </select>
+                                    <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                                        {getSelectedInstallProfile().description}
+                                    </p>
+                                    <Show when={getInstallProfileFlags().length > 0}>
+                                        <p class="mt-1.5 text-xs text-gray-600 dark:text-gray-300">
+                                            Adds flags to shell-based install commands: <code>{getInstallProfileFlags().join(' ')}</code>
+                                        </p>
+                                    </Show>
+                                </div>
                             </div>
 
                             <div class="space-y-4">
@@ -1062,12 +1138,18 @@ export const UnifiedAgents: Component = () => {
                                                             }
                                                             // For bash scripts (not PowerShell), append insecure flag
                                                             const isBashScript = !cmd.includes('$env:') && !cmd.includes('irm');
-                                                            if (insecureMode() && isBashScript) {
-                                                                cmd += getInsecureFlag();
-                                                            }
-                                                            // Add --enable-commands flag if enabled (issue #903)
-                                                            if (enableCommands() && isBashScript) {
-                                                                cmd += getEnableCommandsFlag();
+                                                            if (isBashScript) {
+                                                                const profileFlags = getInstallProfileFlags();
+                                                                if (profileFlags.length > 0) {
+                                                                    cmd += ` ${profileFlags.join(' ')}`;
+                                                                }
+                                                                if (insecureMode()) {
+                                                                    cmd += getInsecureFlag();
+                                                                }
+                                                                // Add --enable-commands flag if enabled (issue #903)
+                                                                if (enableCommands()) {
+                                                                    cmd += getEnableCommandsFlag();
+                                                                }
                                                             }
                                                             return cmd;
                                                         };
@@ -1199,6 +1281,7 @@ export const UnifiedAgents: Component = () => {
                                             <li><code class="bg-gray-200 dark:bg-gray-700 px-1 rounded">--enable-docker</code> — Force enable Docker/Podman monitoring</li>
                                             <li><code class="bg-gray-200 dark:bg-gray-700 px-1 rounded">--enable-kubernetes</code> — Force enable Kubernetes monitoring</li>
                                             <li><code class="bg-gray-200 dark:bg-gray-700 px-1 rounded">--enable-proxmox</code> — Force enable Proxmox integration (creates API token)</li>
+                                            <li><code class="bg-gray-200 dark:bg-gray-700 px-1 rounded">--proxmox-type pve|pbs</code> — Set Proxmox node mode explicitly</li>
                                             <li><code class="bg-gray-200 dark:bg-gray-700 px-1 rounded">--disable-docker</code> — Skip Docker even if detected</li>
                                         </ul>
                                     </div>

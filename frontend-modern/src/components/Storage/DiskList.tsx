@@ -261,7 +261,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
                   Physical disk monitoring requirements:
                 </p>
                 <ol class="text-xs text-blue-800 dark:text-blue-200 space-y-1.5 ml-4 list-decimal">
-                  <li>Enable "Monitor physical disk health (SMART)" in Settings → Proxmox Nodes (Advanced)</li>
+                  <li>Enable "Monitor physical disk health (SMART)" in Settings → Infrastructure (Proxmox node advanced settings)</li>
                   <li>Enable SMART monitoring in Proxmox VE at Datacenter → Node → System → Advanced → "Monitor physical disk health"</li>
                   <li>Wait 5 minutes for Proxmox to collect SMART data</li>
                 </ol>

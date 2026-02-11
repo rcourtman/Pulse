@@ -550,4 +550,35 @@ describe('UnifiedAgents platform commands', () => {
     const copyButtons = screen.getAllByRole('button', { name: /Copy command/i });
     expect(copyButtons.length).toBeGreaterThan(0);
   });
+
+  it('applies Proxmox PBS target profile flags to shell install commands', async () => {
+    createTokenMock.mockResolvedValue({
+      token: 'test-token',
+      record: {
+        id: 'token-record',
+        name: 'Test Token',
+        prefix: 'abc',
+        suffix: '123',
+        createdAt: new Date().toISOString(),
+      },
+    });
+
+    setupComponent();
+
+    const generateButton = screen.getByRole('button', { name: /Generate token/i });
+    fireEvent.click(generateButton);
+
+    await waitFor(() => expect(createTokenMock).toHaveBeenCalled(), { interval: 0 });
+    await waitFor(() => {
+      expect(screen.getByLabelText('Target profile (optional)')).toBeInTheDocument();
+    });
+
+    const profileSelect = screen.getByLabelText('Target profile (optional)');
+    fireEvent.change(profileSelect, { target: { value: 'proxmox-pbs' } });
+
+    await waitFor(() => {
+      const commandBlocks = screen.getAllByText(/--proxmox-type pbs/i);
+      expect(commandBlocks.length).toBeGreaterThan(0);
+    });
+  });
 });

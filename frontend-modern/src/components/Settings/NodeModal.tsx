@@ -92,6 +92,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
   const [agentInstallCommand, setAgentInstallCommand] = createSignal('');
   const [loadingAgentCommand, setLoadingAgentCommand] = createSignal(false);
   const [agentCommandError, setAgentCommandError] = createSignal<string | null>(null);
+  const isAdvancedSetupMode = () => formData().setupMode === 'auto' || formData().setupMode === 'manual';
   const showTemperatureMonitoringSection = () =>
     typeof props.temperatureMonitoringEnabled === 'boolean';
   const temperatureMonitoringEnabledValue = () => props.temperatureMonitoringEnabled ?? true;
@@ -694,25 +695,44 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => updateField('setupMode', 'auto')}
-                                  class={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md border border-transparent transition-colors ${formData().setupMode === 'auto'
+                                  onClick={() => {
+                                    if (formData().setupMode === 'agent') {
+                                      updateField('setupMode', 'auto');
+                                    }
+                                  }}
+                                  class={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md border border-transparent transition-colors ${isAdvancedSetupMode()
                                     ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-300 border-gray-300 dark:border-gray-600 shadow-sm'
                                     : 'text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60'
                                     }`}
                                 >
-                                  API Only
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => updateField('setupMode', 'manual')}
-                                  class={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md border border-transparent transition-colors ${formData().setupMode === 'manual'
-                                    ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-300 border-gray-300 dark:border-gray-600 shadow-sm'
-                                    : 'text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60'
-                                    }`}
-                                >
-                                  Manual
+                                  Advanced
                                 </button>
                               </div>
+
+                              <Show when={isAdvancedSetupMode()}>
+                                <div class="mt-1 flex gap-2 flex-wrap pl-0.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => updateField('setupMode', 'auto')}
+                                    class={`inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-md border border-transparent transition-colors ${formData().setupMode === 'auto'
+                                      ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-300 border-gray-300 dark:border-gray-600 shadow-sm'
+                                      : 'text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60'
+                                      }`}
+                                  >
+                                    API Only
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => updateField('setupMode', 'manual')}
+                                    class={`inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-md border border-transparent transition-colors ${formData().setupMode === 'manual'
+                                      ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-300 border-gray-300 dark:border-gray-600 shadow-sm'
+                                      : 'text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60'
+                                      }`}
+                                  >
+                                    Manual
+                                  </button>
+                                </div>
+                              </Show>
 
                               {/* Agent Install Tab (Recommended) */}
                               <Show when={formData().setupMode === 'agent'}>
@@ -1278,25 +1298,44 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => updateField('setupMode', 'auto')}
-                                  class={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md border border-transparent transition-colors ${formData().setupMode === 'auto'
+                                  onClick={() => {
+                                    if (formData().setupMode === 'agent') {
+                                      updateField('setupMode', 'auto');
+                                    }
+                                  }}
+                                  class={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md border border-transparent transition-colors ${isAdvancedSetupMode()
                                     ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-300 border-gray-300 dark:border-gray-600 shadow-sm'
                                     : 'text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60'
                                     }`}
                                 >
-                                  API Only
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => updateField('setupMode', 'manual')}
-                                  class={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md border border-transparent transition-colors ${formData().setupMode === 'manual'
-                                    ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-300 border-gray-300 dark:border-gray-600 shadow-sm'
-                                    : 'text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60'
-                                    }`}
-                                >
-                                  Manual Setup
+                                  Advanced
                                 </button>
                               </div>
+
+                              <Show when={isAdvancedSetupMode()}>
+                                <div class="mt-1 flex gap-2 flex-wrap pl-0.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => updateField('setupMode', 'auto')}
+                                    class={`inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-md border border-transparent transition-colors ${formData().setupMode === 'auto'
+                                      ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-300 border-gray-300 dark:border-gray-600 shadow-sm'
+                                      : 'text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60'
+                                      }`}
+                                  >
+                                    API Only
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => updateField('setupMode', 'manual')}
+                                    class={`inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-md border border-transparent transition-colors ${formData().setupMode === 'manual'
+                                      ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-300 border-gray-300 dark:border-gray-600 shadow-sm'
+                                      : 'text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60'
+                                      }`}
+                                  >
+                                    Manual Setup
+                                  </button>
+                                </div>
+                              </Show>
 
                               {/* Agent Install Tab for PBS */}
                               <Show when={formData().setupMode === 'agent'}>

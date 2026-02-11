@@ -28,6 +28,9 @@ export type SettingsTab =
 
 export type AgentKey = 'pve' | 'pbs' | 'pmg';
 
+// Default landing tab for /settings when no deep-link tab is provided.
+export const DEFAULT_SETTINGS_TAB: SettingsTab = 'agents';
+
 const normalizeSettingsPath = (path: string): string => {
   const trimmed = (path || '').trim();
   if (!trimmed) return '/settings';

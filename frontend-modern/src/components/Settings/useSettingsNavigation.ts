@@ -1,5 +1,6 @@
 import { createEffect, createSignal, on } from 'solid-js';
 import {
+  DEFAULT_SETTINGS_TAB,
   deriveAgentFromPath,
   deriveTabFromPath,
   deriveTabFromQuery,
@@ -72,7 +73,7 @@ export function useSettingsNavigation({ navigate, location }: UseSettingsNavigat
       ([path, search]) => {
         if (path === '/settings' || path === '/settings/') {
           const queryTab = deriveTabFromQuery(search);
-          const resolvedTab = queryTab ?? 'proxmox';
+          const resolvedTab = queryTab ?? DEFAULT_SETTINGS_TAB;
 
           if (queryTab) {
             const target = settingsTabPath(resolvedTab);

@@ -1,4 +1,4 @@
-import { Component, createSignal, createEffect, onCleanup, onMount, Show, For } from 'solid-js';
+import { Component, createSignal, createEffect, onCleanup, Show, For } from 'solid-js';
 // Note: For is still used for connectedAgents list
 import { useNavigate } from '@solidjs/router';
 import { copyToClipboard } from '@/utils/clipboard';
@@ -39,10 +39,14 @@ export const CompleteStep: Component<CompleteStepProps> = (props) => {
     const [generatingToken, setGeneratingToken] = createSignal(false);
     const [trialStarting, setTrialStarting] = createSignal(false);
     const [trialStarted, setTrialStarted] = createSignal(false);
+    const [relayPaywallTracked, setRelayPaywallTracked] = createSignal(false);
 
-    // Track paywall view for conversion analytics.
-    onMount(() => {
-        trackPaywallViewed('relay', 'setup_wizard');
+    // Only track Relay paywall exposure once it is actually shown.
+    createEffect(() => {
+        if (connectedAgents().length > 0 && !relayPaywallTracked()) {
+            trackPaywallViewed('relay', 'setup_wizard');
+            setRelayPaywallTracked(true);
+        }
     });
 
     // Poll for agent connections since WebSocket isn't available during setup
@@ -274,7 +278,7 @@ Keep these credentials secure!
                     Security Configured
                 </h1>
                 <p class="text-sm text-green-200/80">
-                    Install Pulse Agents on hosts you want to monitor
+                    Install the Unified Agent on each host you want to monitor
                 </p>
             </div>
 
@@ -318,10 +322,10 @@ Keep these credentials secure!
                 </h3>
 
                 <p class="text-white/70 text-xs mb-3">
-                    The installer automatically detects what's running on each host:
+                    This is the primary onboarding path. The installer auto-detects platform integrations on each host:
                 </p>
 
-                <div class="grid grid-cols-3 gap-2 mb-3">
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
                     <div class="bg-white/5 border border-white/10 rounded-lg p-2 text-center">
                         <div class="h-6 flex items-center justify-center mb-1">
                             <span class="text-lg">🐳</span>
@@ -342,6 +346,13 @@ Keep these credentials secure!
                         </div>
                         <div class="text-white font-medium text-xs">Proxmox</div>
                         <p class="text-[9px] text-white/40">VM & container API</p>
+                    </div>
+                    <div class="bg-white/5 border border-white/10 rounded-lg p-2 text-center">
+                        <div class="h-6 flex items-center justify-center mb-1">
+                            <span class="text-sm text-cyan-300 font-semibold">NAS</span>
+                        </div>
+                        <div class="text-white font-medium text-xs">TrueNAS</div>
+                        <p class="text-[9px] text-white/40">SCALE-aware service install</p>
                     </div>
                 </div>
 
@@ -392,7 +403,7 @@ Keep these credentials secure!
                     </button>
                 </div>
                 <p class="text-white/70 text-xs mb-2">
-                    Copy and run on each host. <span class="text-green-300">A new token is generated automatically after each copy.</span>
+                    Copy and run on each host you want monitored. <span class="text-green-300">A new token is generated automatically after each copy.</span>
                 </p>
 
                 <div class="bg-black/40 rounded-lg p-2.5 font-mono text-[10px] mb-2 relative group">
@@ -499,58 +510,6 @@ Keep these credentials secure!
                 </Show>
             </div>
 
-            {/* Mobile Access — Relay hero CTA */}
-            <div class="bg-gradient-to-r from-blue-500/20 to-purple-500/20 backdrop-blur-xl rounded-xl border border-blue-400/30 p-4 text-left mb-4">
-                <div class="flex items-start gap-3">
-                    <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-500 text-white shadow-lg shadow-blue-500/30 shrink-0">
-                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                        </svg>
-                    </div>
-                    <div class="flex-1 min-w-0">
-                        <h3 class="text-sm font-semibold text-white mb-1">Monitor from Anywhere</h3>
-                        <p class="text-xs text-white/70 mb-3">
-                            Get push notifications and manage your infrastructure from your phone with Pulse Relay.
-                        </p>
-                        <Show
-                            when={!trialStarted() && entitlements()?.subscription_state !== 'trial'}
-                            fallback={
-                                <button
-                                    type="button"
-                                    onClick={handleSetupRelay}
-                                    class="inline-flex items-center gap-1.5 rounded-lg bg-blue-500 hover:bg-blue-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm transition-all"
-                                >
-                                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                                    </svg>
-                                    Set Up Relay
-                                </button>
-                            }
-                        >
-                            <button
-                                type="button"
-                                onClick={() => void handleStartTrial()}
-                                disabled={trialStarting()}
-                                class="inline-flex items-center gap-1.5 rounded-lg bg-blue-500 hover:bg-blue-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm transition-all disabled:opacity-50"
-                            >
-                                {trialStarting() ? (
-                                    <>
-                                        <svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
-                                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-                                        </svg>
-                                        Starting trial...
-                                    </>
-                                ) : (
-                                    'Start Free Trial & Set Up Mobile'
-                                )}
-                            </button>
-                        </Show>
-                        <p class="mt-2 text-[10px] text-white/40">14-day Pro trial &middot; No credit card required</p>
-                    </div>
-                </div>
-            </div>
-
             {/* Launch button */}
             <button
                 onClick={props.onComplete}
@@ -562,6 +521,60 @@ Keep these credentials secure!
             <p class="mt-2 text-[10px] text-white/40">
                 You can add more agents anytime from Settings
             </p>
+
+            {/* Optional upsell after core agent onboarding is complete */}
+            <Show when={connectedAgents().length > 0}>
+                <div class="bg-gradient-to-r from-blue-500/20 to-purple-500/20 backdrop-blur-xl rounded-xl border border-blue-400/30 p-4 text-left mt-4">
+                    <div class="flex items-start gap-3">
+                        <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-500 text-white shadow-lg shadow-blue-500/30 shrink-0">
+                            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                            </svg>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <h3 class="text-sm font-semibold text-white mb-1">Monitor from Anywhere</h3>
+                            <p class="text-xs text-white/70 mb-3">
+                                Get push notifications and manage your infrastructure from your phone with Pulse Relay.
+                            </p>
+                            <Show
+                                when={!trialStarted() && entitlements()?.subscription_state !== 'trial'}
+                                fallback={
+                                    <button
+                                        type="button"
+                                        onClick={handleSetupRelay}
+                                        class="inline-flex items-center gap-1.5 rounded-lg bg-blue-500 hover:bg-blue-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm transition-all"
+                                    >
+                                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                                        </svg>
+                                        Set Up Relay
+                                    </button>
+                                }
+                            >
+                                <button
+                                    type="button"
+                                    onClick={() => void handleStartTrial()}
+                                    disabled={trialStarting()}
+                                    class="inline-flex items-center gap-1.5 rounded-lg bg-blue-500 hover:bg-blue-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm transition-all disabled:opacity-50"
+                                >
+                                    {trialStarting() ? (
+                                        <>
+                                            <svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                                            </svg>
+                                            Starting trial...
+                                        </>
+                                    ) : (
+                                        'Start Free Trial & Set Up Mobile'
+                                    )}
+                                </button>
+                            </Show>
+                            <p class="mt-2 text-[10px] text-white/40">14-day Pro trial &middot; No credit card required</p>
+                        </div>
+                    </div>
+                </div>
+            </Show>
         </div>
     );
 };
