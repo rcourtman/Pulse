@@ -9202,7 +9202,9 @@ func (m *Manager) SaveActiveAlerts() error {
 	defer os.Remove(tmpName)
 
 	if _, err := tmpFile.Write(data); err != nil {
-		tmpFile.Close()
+		if closeErr := tmpFile.Close(); closeErr != nil {
+			log.Warn().Err(closeErr).Str("file", tmpName).Msg("Failed to close temp file after write error")
+		}
 		return fmt.Errorf("failed to write active alerts: %w", err)
 	}
 	if err := tmpFile.Close(); err != nil {

@@ -2,6 +2,7 @@ package alerts
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -260,7 +261,9 @@ func (hm *HistoryManager) saveHistoryWithRetry(maxRetries int) error {
 
 		// Success - remove backup file now that we've successfully written
 		if backupCreated {
-			_ = os.Remove(backupFile)
+			if err := os.Remove(backupFile); err != nil && !os.IsNotExist(err) {
+				log.Warn().Err(err).Str("file", backupFile).Msg("Failed to remove backup file after successful save")
+			}
 		}
 		log.Debug().Int("entries", len(snapshot)).Msg("Saved alert history")
 		return nil
@@ -378,8 +381,16 @@ func (hm *HistoryManager) ClearAllHistory() error {
 	hm.history = make([]HistoryEntry, 0)
 
 	// Remove the history files
-	_ = os.Remove(hm.historyFile)
-	_ = os.Remove(hm.backupFile)
+	var removeErrs []error
+	if err := os.Remove(hm.historyFile); err != nil && !os.IsNotExist(err) {
+		removeErrs = append(removeErrs, fmt.Errorf("remove history file %s: %w", hm.historyFile, err))
+	}
+	if err := os.Remove(hm.backupFile); err != nil && !os.IsNotExist(err) {
+		removeErrs = append(removeErrs, fmt.Errorf("remove backup file %s: %w", hm.backupFile, err))
+	}
+	if len(removeErrs) > 0 {
+		return fmt.Errorf("clear alert history files: %w", errors.Join(removeErrs...))
+	}
 
 	log.Info().Msg("Cleared all alert history")
 	return nil
