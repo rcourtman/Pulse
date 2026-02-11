@@ -1519,7 +1519,7 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 		}
 
 		// Update WebSocket with escalation
-		wsHub.BroadcastAlertToTenant(m.GetOrgID(), alert)
+		m.broadcastEscalatedAlert(wsHub, alert)
 	})
 
 	// Create separate tickers for polling and broadcasting using the configured cadence
@@ -2475,6 +2475,14 @@ func (m *Monitor) broadcastState(hub *websocket.Hub, frontendState interface{}) 
 		// Legacy broadcast to all clients
 		hub.BroadcastState(frontendState)
 	}
+}
+
+func (m *Monitor) broadcastEscalatedAlert(hub *websocket.Hub, alert *alerts.Alert) {
+	if hub == nil || alert == nil {
+		return
+	}
+
+	hub.BroadcastAlertToTenant(m.GetOrgID(), alert)
 }
 
 // SetMockMode switches between mock data and real infrastructure data at runtime.
