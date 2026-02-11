@@ -64,7 +64,7 @@ func (n *NotificationManager) createSecureWebhookClient(timeout time.Duration) *
 			// Extract hostname and port
 			host, port, err := net.SplitHostPort(addr)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("parse webhook address %q: %w", addr, err)
 			}
 
 			// Validate IP if it's already an IP
@@ -80,7 +80,7 @@ func (n *NotificationManager) createSecureWebhookClient(timeout time.Duration) *
 			// Resolve hostname
 			ips, err := net.LookupIP(host)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("resolve webhook host %q: %w", host, err)
 			}
 
 			// Find first permitted IP
@@ -1281,7 +1281,7 @@ func (n *NotificationManager) sendAppriseViaCLI(cfg AppriseConfig, title, body s
 				Str("output", string(output)).
 				Msg("Apprise CLI output (error)")
 		}
-		return err
+		return fmt.Errorf("execute apprise CLI %q: %w", cfg.CLIPath, err)
 	}
 
 	if len(output) > 0 {
@@ -3048,7 +3048,10 @@ func (n *NotificationManager) ProcessQueuedNotification(notif *QueuedNotificatio
 		n.mu.Unlock()
 	}
 
-	return err
+	if err != nil {
+		return fmt.Errorf("process queued %s notification %q (%s): %w", baseType, notif.ID, event, err)
+	}
+	return nil
 }
 
 // cleanupOldNotificationRecords periodically cleans up old entries from lastNotified map
