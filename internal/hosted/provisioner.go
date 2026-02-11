@@ -36,6 +36,10 @@ type AuthManager interface {
 	UpdateUserRoles(userID string, roles []string) error
 }
 
+type orgRollbackDeleter interface {
+	DeleteOrganization(orgID string) error
+}
+
 type Provisioner struct {
 	persistence  OrgPersistence
 	authProvider AuthProvider
@@ -200,26 +204,68 @@ func (p *Provisioner) cleanupOrgDirectory(orgID, dataDir string) {
 		Str("data_dir", dataDir).
 		Msg("Hosted tenant provisioning failed; attempting rollback cleanup")
 
-	if dataDir == "" {
+	if !isValidOrganizationID(orgID) || orgID == "default" {
 		log.Warn().
 			Str("org_id", orgID).
-			Msg("Skipping rollback cleanup because data directory is empty")
+			Msg("Skipping rollback cleanup because organization ID is invalid for deletion")
 		return
 	}
 
-	if err := os.RemoveAll(dataDir); err != nil {
+	if deleter, ok := p.persistence.(orgRollbackDeleter); ok && deleter != nil {
+		if err := deleter.DeleteOrganization(orgID); err != nil && !errors.Is(err, os.ErrNotExist) {
+			log.Error().
+				Err(err).
+				Str("org_id", orgID).
+				Msg("Rollback cleanup failed via organization deleter")
+			return
+		}
+		log.Info().
+			Str("org_id", orgID).
+			Msg("Rollback cleanup completed via organization deleter")
+		return
+	}
+
+	if !isSafeTenantDataDir(dataDir, orgID) {
+		log.Warn().
+			Str("org_id", orgID).
+			Str("data_dir", dataDir).
+			Msg("Skipping rollback cleanup because data directory does not match expected tenant path")
+		return
+	}
+
+	cleanDataDir := filepath.Clean(dataDir)
+	if err := os.RemoveAll(cleanDataDir); err != nil {
 		log.Error().
 			Err(err).
 			Str("org_id", orgID).
-			Str("data_dir", dataDir).
+			Str("data_dir", cleanDataDir).
 			Msg("Rollback cleanup failed")
 		return
 	}
 
 	log.Info().
 		Str("org_id", orgID).
-		Str("data_dir", dataDir).
+		Str("data_dir", cleanDataDir).
 		Msg("Rollback cleanup completed")
+}
+
+func isSafeTenantDataDir(dataDir, orgID string) bool {
+	if dataDir == "" || !isValidOrganizationID(orgID) || orgID == "default" {
+		return false
+	}
+
+	cleanDataDir := filepath.Clean(dataDir)
+	if cleanDataDir == "." || cleanDataDir == string(os.PathSeparator) {
+		return false
+	}
+	if filepath.Base(cleanDataDir) != orgID {
+		return false
+	}
+	if filepath.Base(filepath.Dir(cleanDataDir)) != "orgs" {
+		return false
+	}
+
+	return true
 }
 
 func validateProvisionRequest(req ProvisionRequest) error {

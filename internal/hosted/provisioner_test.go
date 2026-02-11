@@ -250,3 +250,41 @@ func TestProvisionTenantPartialFailureRollback(t *testing.T) {
 		t.Fatalf("expected org dir to be removed, stat error: %v", statErr)
 	}
 }
+
+func TestCleanupOrgDirectorySkipsUnsafePath(t *testing.T) {
+	baseDir := t.TempDir()
+	p := &Provisioner{}
+
+	unsafeDir := filepath.Join(baseDir, "not-orgs", "unsafe-org")
+	if err := os.MkdirAll(unsafeDir, 0700); err != nil {
+		t.Fatalf("MkdirAll returned error: %v", err)
+	}
+
+	p.cleanupOrgDirectory("unsafe-org", unsafeDir)
+
+	if _, err := os.Stat(unsafeDir); err != nil {
+		t.Fatalf("expected unsafe directory to be preserved, stat error: %v", err)
+	}
+}
+
+func TestCleanupOrgDirectoryUsesOrganizationDeleter(t *testing.T) {
+	baseDir := t.TempDir()
+	persistence := config.NewMultiTenantPersistence(baseDir)
+	orgID := "rollback-delete-org"
+
+	if _, err := persistence.GetPersistence(orgID); err != nil {
+		t.Fatalf("GetPersistence returned error: %v", err)
+	}
+
+	orgDir := filepath.Join(baseDir, "orgs", orgID)
+	if _, err := os.Stat(orgDir); err != nil {
+		t.Fatalf("expected org directory to exist before cleanup, stat error: %v", err)
+	}
+
+	p := &Provisioner{persistence: persistence}
+	p.cleanupOrgDirectory(orgID, filepath.Join(baseDir, "wrong", "path"))
+
+	if _, err := os.Stat(orgDir); !os.IsNotExist(err) {
+		t.Fatalf("expected org directory to be removed by organization deleter, stat error: %v", err)
+	}
+}
