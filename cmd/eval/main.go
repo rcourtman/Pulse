@@ -22,6 +22,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -509,19 +510,36 @@ func fetchAutoModels(baseURL, user, pass string) ([]string, []autoSelectionDetai
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("models request failed: %w", err)
 	}
-	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, readErr := io.ReadAll(resp.Body)
+		closeErr := resp.Body.Close()
+		if readErr != nil {
+			readBodyErr := fmt.Errorf("failed to read models error response body: %w", readErr)
+			if closeErr != nil {
+				return nil, nil, nil, errors.Join(readBodyErr, fmt.Errorf("failed to close models response body: %w", closeErr))
+			}
+			return nil, nil, nil, readBodyErr
+		}
+		if closeErr != nil {
+			return nil, nil, nil, fmt.Errorf("failed to close models response body: %w", closeErr)
+		}
 		return nil, nil, nil, fmt.Errorf("models request returned %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 
 	var payload apiModelsResponse
 	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to decode models response: %w", err)
+		decodeErr := fmt.Errorf("failed to decode models response: %w", err)
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			return nil, nil, nil, errors.Join(decodeErr, fmt.Errorf("failed to close models response body: %w", closeErr))
+		}
+		return nil, nil, nil, decodeErr
+	}
+	if closeErr := resp.Body.Close(); closeErr != nil {
+		return nil, nil, nil, fmt.Errorf("failed to close models response body: %w", closeErr)
 	}
 	if payload.Error != "" {
-		return nil, nil, nil, fmt.Errorf("%s", payload.Error)
+		return nil, nil, nil, fmt.Errorf("models API returned error: %s", payload.Error)
 	}
 
 	providerFilter := parseProviderFilterWithDefault(os.Getenv("EVAL_MODEL_PROVIDERS"))
