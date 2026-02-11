@@ -24,6 +24,14 @@ type WebhookHandler struct {
 	provisioner *Provisioner
 }
 
+type webhookErrorResponse struct {
+	Error string `json:"error"`
+}
+
+type webhookReceivedResponse struct {
+	Received bool `json:"received"`
+}
+
 // NewWebhookHandler creates a Stripe webhook HTTP handler.
 func NewWebhookHandler(secret string, provisioner *Provisioner) *WebhookHandler {
 	return &WebhookHandler{
@@ -49,9 +57,7 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if strings.TrimSpace(h.secret) == "" {
 		status = http.StatusServiceUnavailable
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{
-			"error": "webhook secret not configured",
-		})
+		writeJSON(w, http.StatusServiceUnavailable, webhookErrorResponse{Error: "webhook secret not configured"})
 		return
 	}
 
@@ -59,18 +65,14 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	payload, err := io.ReadAll(r.Body)
 	if err != nil {
 		status = http.StatusBadRequest
-		writeJSON(w, http.StatusBadRequest, map[string]string{
-			"error": "failed to read request body",
-		})
+		writeJSON(w, http.StatusBadRequest, webhookErrorResponse{Error: "failed to read request body"})
 		return
 	}
 
 	sigHeader := r.Header.Get("Stripe-Signature")
 	if strings.TrimSpace(sigHeader) == "" {
 		status = http.StatusBadRequest
-		writeJSON(w, http.StatusBadRequest, map[string]string{
-			"error": "missing Stripe signature",
-		})
+		writeJSON(w, http.StatusBadRequest, webhookErrorResponse{Error: "missing Stripe signature"})
 		return
 	}
 
@@ -79,9 +81,7 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		status = http.StatusBadRequest
-		writeJSON(w, http.StatusBadRequest, map[string]string{
-			"error": "invalid Stripe signature",
-		})
+		writeJSON(w, http.StatusBadRequest, webhookErrorResponse{Error: "invalid Stripe signature"})
 		return
 	}
 	eventType = string(event.Type)
@@ -92,16 +92,12 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			Str("type", string(event.Type)).
 			Msg("Stripe webhook processing failed")
 		status = http.StatusInternalServerError
-		writeJSON(w, http.StatusInternalServerError, map[string]string{
-			"error": "processing failed",
-		})
+		writeJSON(w, http.StatusInternalServerError, webhookErrorResponse{Error: "processing failed"})
 		return
 	}
 
 	status = http.StatusOK
-	writeJSON(w, http.StatusOK, map[string]any{
-		"received": true,
-	})
+	writeJSON(w, http.StatusOK, webhookReceivedResponse{Received: true})
 }
 
 func (h *WebhookHandler) handleEvent(r *http.Request, event *stripelib.Event) error {
@@ -216,7 +212,7 @@ func (s *Subscription) FirstPriceID() string {
 	return ""
 }
 
-func writeJSON(w http.ResponseWriter, status int, v any) {
+func writeJSON[T any](w http.ResponseWriter, status int, v T) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)

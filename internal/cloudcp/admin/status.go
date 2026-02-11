@@ -8,6 +8,14 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
 )
 
+type statusResponse struct {
+	Version      string                       `json:"version"`
+	TotalTenants int                          `json:"total_tenants"`
+	Healthy      int                          `json:"healthy"`
+	Unhealthy    int                          `json:"unhealthy"`
+	ByState      map[registry.TenantState]int `json:"by_state"`
+}
+
 // HandleHealthz returns 200 "ok" unconditionally (liveness probe).
 func HandleHealthz(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
@@ -55,12 +63,12 @@ func HandleStatus(reg *registry.TenantRegistry, version string) http.HandlerFunc
 			return
 		}
 
-		resp := map[string]any{
-			"version":       version,
-			"total_tenants": total,
-			"healthy":       healthy,
-			"unhealthy":     unhealthy,
-			"by_state":      counts,
+		resp := statusResponse{
+			Version:      version,
+			TotalTenants: total,
+			Healthy:      healthy,
+			Unhealthy:    unhealthy,
+			ByState:      counts,
 		}
 
 		w.Header().Set("Content-Type", "application/json")

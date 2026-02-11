@@ -69,15 +69,15 @@ func TestHandleStatus(t *testing.T) {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
 
-	var resp map[string]any
+	var resp statusResponse
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if resp["version"] != "test-version" {
-		t.Errorf("version = %v, want test-version", resp["version"])
+	if resp.Version != "test-version" {
+		t.Errorf("version = %v, want test-version", resp.Version)
 	}
-	if resp["total_tenants"] != float64(1) {
-		t.Errorf("total_tenants = %v, want 1", resp["total_tenants"])
+	if resp.TotalTenants != 1 {
+		t.Errorf("total_tenants = %v, want 1", resp.TotalTenants)
 	}
 }
 
