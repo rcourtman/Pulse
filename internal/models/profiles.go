@@ -72,8 +72,21 @@ type ProfileChangeLog struct {
 // MergedConfig returns the effective configuration by merging parent configs.
 // Parent configs are applied first, then overridden by child configs.
 func (p *AgentProfile) MergedConfig(profiles []AgentProfile) AgentConfigMap {
+	return p.mergedConfig(profiles, map[string]struct{}{})
+}
+
+func (p *AgentProfile) mergedConfig(profiles []AgentProfile, visited map[string]struct{}) AgentConfigMap {
 	if p.ParentID == "" {
 		return p.Config
+	}
+
+	if p.ID != "" {
+		if _, seen := visited[p.ID]; seen {
+			// Cycle in inheritance chain; stop walking parents and use local config.
+			return p.Config
+		}
+		visited[p.ID] = struct{}{}
+		defer delete(visited, p.ID)
 	}
 
 	// Find parent profile
@@ -90,7 +103,7 @@ func (p *AgentProfile) MergedConfig(profiles []AgentProfile) AgentConfigMap {
 	}
 
 	// Get parent's merged config (recursive)
-	parentConfig := parent.MergedConfig(profiles)
+	parentConfig := parent.mergedConfig(profiles, visited)
 
 	// Merge: start with parent config, override with current
 	merged := make(AgentConfigMap)
