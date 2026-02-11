@@ -316,9 +316,12 @@ func (s *MagicLinkService) SendMagicLink(email, orgID, token, baseURL string) er
 	}
 	magicURL, err := s.BuildMagicLinkURL(baseURL, token)
 	if err != nil {
-		return err
+		return fmt.Errorf("build magic link URL: %w", err)
 	}
-	return s.emailer.SendMagicLink(email, magicURL)
+	if err := s.emailer.SendMagicLink(email, magicURL); err != nil {
+		return fmt.Errorf("send magic link email: %w", err)
+	}
+	return nil
 }
 
 func signHMACSHA256(key []byte, payload string) []byte {
