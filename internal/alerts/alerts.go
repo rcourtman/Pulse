@@ -1312,6 +1312,16 @@ func normalizeBackupDefaults(config *AlertConfig) {
 	if config.BackupDefaults.CriticalDays > 0 && config.BackupDefaults.WarningDays > config.BackupDefaults.CriticalDays {
 		config.BackupDefaults.WarningDays = config.BackupDefaults.CriticalDays
 	}
+	// Default indicator thresholds for dashboard (separate from alert thresholds).
+	if config.BackupDefaults.FreshHours <= 0 {
+		config.BackupDefaults.FreshHours = 24
+	}
+	if config.BackupDefaults.StaleHours <= 0 {
+		config.BackupDefaults.StaleHours = 72
+	}
+	if config.BackupDefaults.StaleHours < config.BackupDefaults.FreshHours {
+		config.BackupDefaults.StaleHours = config.BackupDefaults.FreshHours
+	}
 	if config.BackupDefaults.AlertOrphaned == nil {
 		alertOrphaned := true
 		config.BackupDefaults.AlertOrphaned = &alertOrphaned
@@ -1437,6 +1447,15 @@ func normalizeGeneralSettings(config *AlertConfig) {
 	}
 	if config.ObservationWindowHours <= 0 {
 		config.ObservationWindowHours = 24
+	}
+	if config.FlappingWindowSeconds <= 0 {
+		config.FlappingWindowSeconds = 300
+	}
+	if config.FlappingThreshold <= 0 {
+		config.FlappingThreshold = 5
+	}
+	if config.FlappingCooldownMinutes <= 0 {
+		config.FlappingCooldownMinutes = 15
 	}
 }
 
