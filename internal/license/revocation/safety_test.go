@@ -1,6 +1,9 @@
 package revocation
 
 import (
+	"bytes"
+	"log"
+	"strings"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/license"
@@ -114,6 +117,39 @@ func TestSafeEvaluatorCheckLimit_Panic(t *testing.T) {
 
 	if got := safe.CheckLimit("max_nodes", 999); got != license.LimitAllowed {
 		t.Fatalf("expected %q, got %q", license.LimitAllowed, got)
+	}
+}
+
+func TestSafeEvaluatorCheckLimit_PanicLogContext(t *testing.T) {
+	inner := entitlements.NewEvaluator(panicSource{
+		panicLimits: true,
+	})
+	safe := NewSafeEvaluator(inner)
+
+	var buf bytes.Buffer
+	origWriter := log.Writer()
+	origFlags := log.Flags()
+	log.SetOutput(&buf)
+	log.SetFlags(0)
+	defer func() {
+		log.SetOutput(origWriter)
+		log.SetFlags(origFlags)
+	}()
+
+	_ = safe.CheckLimit("max_nodes", 999)
+
+	got := buf.String()
+	if !strings.Contains(got, "operation=check_limit") {
+		t.Fatalf("panic log missing operation context: %q", got)
+	}
+	if !strings.Contains(got, "key=\"max_nodes\"") {
+		t.Fatalf("panic log missing key context: %q", got)
+	}
+	if !strings.Contains(got, "observed=999") {
+		t.Fatalf("panic log missing observed context: %q", got)
+	}
+	if !strings.Contains(got, "fallback_policy=limit_allowed") {
+		t.Fatalf("panic log missing fallback policy context: %q", got)
 	}
 }
 
