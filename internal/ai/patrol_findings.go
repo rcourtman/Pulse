@@ -292,7 +292,9 @@ func (p *PatrolService) generateRemediationPlanFromInvestigation(findingID strin
 		}
 		plan.RiskLevel = remediation.RiskMedium
 		plan.Warnings = append(plan.Warnings, fmt.Sprintf("Failed to store command steps for automated remediation: %v", err))
-		_ = engine.CreatePlan(plan)
+		if createErr := engine.CreatePlan(plan); createErr != nil {
+			log.Warn().Err(createErr).Str("findingID", finding.ID).Msg("Failed to create fallback remediation plan")
+		}
 	}
 }
 
@@ -1520,22 +1522,22 @@ func isValidJSON(s string) bool {
 }
 
 func verifyBackupFresh(state models.StateSnapshot, guestID string) (bool, error) {
-	vmid := strings.TrimSpace(guestID)
-	if vmid == "" {
+	vmID := strings.TrimSpace(guestID)
+	if vmID == "" {
 		return false, fmt.Errorf("%w: missing guest id", investigation.ErrVerificationUnknown)
 	}
 
 	now := time.Now()
 	var last time.Time
 	for _, vm := range state.VMs {
-		if fmt.Sprintf("%d", vm.VMID) == vmid || vm.ID == vmid || vm.Name == vmid {
+		if fmt.Sprintf("%d", vm.VMID) == vmID || vm.ID == vmID || vm.Name == vmID {
 			last = vm.LastBackup
 			break
 		}
 	}
 	if last.IsZero() {
 		for _, ct := range state.Containers {
-			if fmt.Sprintf("%d", ct.VMID) == vmid || ct.ID == vmid || ct.Name == vmid {
+			if fmt.Sprintf("%d", ct.VMID) == vmID || ct.ID == vmID || ct.Name == vmID {
 				last = ct.LastBackup
 				break
 			}
@@ -1543,7 +1545,7 @@ func verifyBackupFresh(state models.StateSnapshot, guestID string) (bool, error)
 	}
 	if last.IsZero() {
 		// If the guest cannot be found, verification can't be concluded deterministically.
-		return false, fmt.Errorf("%w: guest not found for backup verification (%s)", investigation.ErrVerificationUnknown, vmid)
+		return false, fmt.Errorf("%w: guest not found for backup verification (%s)", investigation.ErrVerificationUnknown, vmID)
 	}
 
 	if now.Sub(last) <= 48*time.Hour {
@@ -1625,15 +1627,15 @@ func (p *PatrolService) verifyGuestReachability(ctx context.Context, state model
 		return false, fmt.Errorf("%w: guest prober not configured", investigation.ErrVerificationUnknown)
 	}
 
-	vmid := strings.TrimSpace(guestID)
-	if vmid == "" {
+	vmID := strings.TrimSpace(guestID)
+	if vmID == "" {
 		return false, fmt.Errorf("%w: missing guest id", investigation.ErrVerificationUnknown)
 	}
 
 	var node string
 	var ip string
 	for _, vm := range state.VMs {
-		if vm.ID == vmid || vm.Name == vmid || fmt.Sprintf("%d", vm.VMID) == vmid {
+		if vm.ID == vmID || vm.Name == vmID || fmt.Sprintf("%d", vm.VMID) == vmID {
 			node = vm.Node
 			if len(vm.IPAddresses) > 0 {
 				ip = vm.IPAddresses[0]
@@ -1643,7 +1645,7 @@ func (p *PatrolService) verifyGuestReachability(ctx context.Context, state model
 	}
 	if node == "" {
 		for _, ct := range state.Containers {
-			if ct.ID == vmid || ct.Name == vmid || fmt.Sprintf("%d", ct.VMID) == vmid {
+			if ct.ID == vmID || ct.Name == vmID || fmt.Sprintf("%d", ct.VMID) == vmID {
 				node = ct.Node
 				if len(ct.IPAddresses) > 0 {
 					ip = ct.IPAddresses[0]
@@ -1653,7 +1655,7 @@ func (p *PatrolService) verifyGuestReachability(ctx context.Context, state model
 		}
 	}
 	if node == "" || ip == "" {
-		return false, fmt.Errorf("%w: missing node/ip for guest reachability verification (guest=%s)", investigation.ErrVerificationUnknown, vmid)
+		return false, fmt.Errorf("%w: missing node/ip for guest reachability verification (guest=%s)", investigation.ErrVerificationUnknown, vmID)
 	}
 
 	agentID, ok := prober.GetAgentForHost(node)

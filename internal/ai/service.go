@@ -946,8 +946,8 @@ type GuestInfo struct {
 // lookupNodeForVMID looks up which node owns a given VMID using the state provider
 // Returns the node name and guest name if found, empty strings otherwise
 // If targetInstance is provided, only matches guests from that instance (for multi-cluster setups)
-func (s *Service) lookupNodeForVMID(vmid int) (node string, guestName string, guestType string) {
-	guests := s.lookupGuestsByVMID(vmid, "")
+func (s *Service) lookupNodeForVMID(vmID int) (node string, guestName string, guestType string) {
+	guests := s.lookupGuestsByVMID(vmID, "")
 	if len(guests) == 1 {
 		return guests[0].Node, guests[0].Name, guests[0].Type
 	}
@@ -955,7 +955,7 @@ func (s *Service) lookupNodeForVMID(vmid int) (node string, guestName string, gu
 		// Multiple matches - VMID collision across instances
 		// Log warning and return first match (caller should use lookupGuestsByVMID with instance filter)
 		log.Warn().
-			Int("vmid", vmid).
+			Int("vmid", vmID).
 			Int("matches", len(guests)).
 			Msg("VMID collision detected - multiple guests with same VMID across instances")
 		return guests[0].Node, guests[0].Name, guests[0].Type
@@ -965,7 +965,7 @@ func (s *Service) lookupNodeForVMID(vmid int) (node string, guestName string, gu
 
 // lookupGuestsByVMID finds all guests with the given VMID
 // If targetInstance is non-empty, only returns guests from that instance
-func (s *Service) lookupGuestsByVMID(vmid int, targetInstance string) []GuestInfo {
+func (s *Service) lookupGuestsByVMID(vmID int, targetInstance string) []GuestInfo {
 	s.mu.RLock()
 	sp := s.stateProvider
 	s.mu.RUnlock()
@@ -979,7 +979,7 @@ func (s *Service) lookupGuestsByVMID(vmid int, targetInstance string) []GuestInf
 
 	// Check containers
 	for _, ct := range state.Containers {
-		if ct.VMID == vmid {
+		if ct.VMID == vmID {
 			if targetInstance == "" || ct.Instance == targetInstance {
 				results = append(results, GuestInfo{
 					Node:     ct.Node,
@@ -993,7 +993,7 @@ func (s *Service) lookupGuestsByVMID(vmid int, targetInstance string) []GuestInf
 
 	// Check VMs
 	for _, vm := range state.VMs {
-		if vm.VMID == vmid {
+		if vm.VMID == vmID {
 			if targetInstance == "" || vm.Instance == targetInstance {
 				results = append(results, GuestInfo{
 					Node:     vm.Node,
@@ -1011,7 +1011,7 @@ func (s *Service) lookupGuestsByVMID(vmid int, targetInstance string) []GuestInf
 // extractVMIDFromCommand parses pct/qm/vzdump commands to extract the VMID being targeted
 // Returns the VMID, whether it requires node-specific routing, and whether found
 // Some commands (like vzdump) can run from any cluster node, others (like pct exec) must run on the owning node
-func extractVMIDFromCommand(command string) (vmid int, requiresOwnerNode bool, found bool) {
+func extractVMIDFromCommand(command string) (vmID int, requiresOwnerNode bool, found bool) {
 	// Commands that MUST run on the node that owns the guest
 	// These interact directly with the container/VM runtime
 	nodeSpecificPatterns := []string{
@@ -3293,8 +3293,8 @@ func (s *Service) executeOnAgent(ctx context.Context, req ExecuteRequest, comman
 	targetID := req.TargetID
 	if req.TargetType == "container" || req.TargetType == "vm" {
 		// Look for vmid in context first
-		if vmid, ok := req.Context["vmid"]; ok {
-			switch v := vmid.(type) {
+		if vmID, ok := req.Context["vmid"]; ok {
+			switch v := vmID.(type) {
 			case float64:
 				targetID = fmt.Sprintf("%.0f", v)
 			case int:
@@ -3780,7 +3780,7 @@ func (s *Service) TestConnection(ctx context.Context) error {
 		} else {
 			provider, err = providers.NewFromConfig(cfg)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to create fallback AI provider: %w", err)
 			}
 		}
 	}
@@ -3924,7 +3924,7 @@ func providerDisplayName(provider string) string {
 // Reload reloads the AI configuration (call after settings change)
 func (s *Service) Reload() error {
 	if err := s.LoadConfig(); err != nil {
-		return err
+		return fmt.Errorf("Reload: %w", err)
 	}
 
 	// Also reload the chat service so patrol picks up model/provider changes
