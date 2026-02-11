@@ -65,10 +65,17 @@ func setEnabled(enable bool, fromInit bool) {
 }
 
 func setEnvFlag(enable bool) {
+	value := "false"
 	if enable {
-		_ = os.Setenv("PULSE_MOCK_MODE", "true")
-	} else {
-		_ = os.Setenv("PULSE_MOCK_MODE", "false")
+		value = "true"
+	}
+
+	if err := os.Setenv("PULSE_MOCK_MODE", value); err != nil {
+		log.Warn().
+			Err(err).
+			Str("env_var", "PULSE_MOCK_MODE").
+			Str("value", value).
+			Msg("Failed to synchronize mock mode environment flag")
 	}
 }
 
