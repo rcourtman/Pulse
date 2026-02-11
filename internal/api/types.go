@@ -11,11 +11,12 @@ import (
 
 // HealthResponse represents the health check response
 type HealthResponse struct {
-	Status                      string  `json:"status"`
-	Timestamp                   int64   `json:"timestamp"`
-	Uptime                      float64 `json:"uptime"`
-	ProxyInstallScriptAvailable bool    `json:"proxyInstallScriptAvailable,omitempty"`
-	DevModeSSH                  bool    `json:"devModeSSH,omitempty"` // DEV/TEST ONLY: SSH keys allowed in containers
+	Status                      string          `json:"status"`
+	Timestamp                   int64           `json:"timestamp"`
+	Uptime                      float64         `json:"uptime"`
+	ProxyInstallScriptAvailable bool            `json:"proxyInstallScriptAvailable,omitempty"`
+	DevModeSSH                  bool            `json:"devModeSSH,omitempty"` // DEV/TEST ONLY: SSH keys allowed in containers
+	Dependencies                map[string]bool `json:"dependencies,omitempty"`
 }
 
 // VersionResponse represents version information

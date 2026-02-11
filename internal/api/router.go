@@ -3150,14 +3150,39 @@ func (r *Router) handleHealth(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	response := HealthResponse{
-		Status:                      "healthy",
-		Timestamp:                   time.Now().Unix(),
-		Uptime:                      time.Since(r.monitor.GetStartTime()).Seconds(),
-		ProxyInstallScriptAvailable: true,
-		DevModeSSH:                  os.Getenv("PULSE_DEV_ALLOW_CONTAINER_SSH") == "true",
+	monitorHealthy := r.monitor != nil
+	schedulerHealthy := false
+	if monitorHealthy {
+		schedulerHealthy = r.monitor.SchedulerHealth().DeadLetter.Count == 0
 	}
 
+	statusCode := http.StatusOK
+	status := "healthy"
+	if !monitorHealthy || !schedulerHealthy {
+		statusCode = http.StatusServiceUnavailable
+		status = "unhealthy"
+	}
+
+	uptimeSeconds := 0.0
+	if monitorHealthy {
+		uptimeSeconds = time.Since(r.monitor.GetStartTime()).Seconds()
+	}
+
+	response := HealthResponse{
+		Status:                      status,
+		Timestamp:                   time.Now().Unix(),
+		Uptime:                      uptimeSeconds,
+		ProxyInstallScriptAvailable: true,
+		DevModeSSH:                  os.Getenv("PULSE_DEV_ALLOW_CONTAINER_SSH") == "true",
+		Dependencies: map[string]bool{
+			"monitor":   monitorHealthy,
+			"scheduler": schedulerHealthy,
+			"websocket": r.wsHub != nil,
+		},
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
 	if err := utils.WriteJSONResponse(w, response); err != nil {
 		log.Error().Err(err).Msg("Failed to write health response")
 	}
