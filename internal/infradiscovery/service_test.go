@@ -377,3 +377,133 @@ func TestLowConfidenceFiltering(t *testing.T) {
 		t.Errorf("RunDiscovery() returned %d apps, want 0 (low confidence should be filtered)", len(apps))
 	}
 }
+
+func TestParseAIResponse_NormalizesUnsafeFields(t *testing.T) {
+	service := &Service{}
+
+	response := `{
+		"service_type": "Postgres Admin",
+		"service_name": "PostgreSQL\u0000\nCluster",
+		"category": "Data Base",
+		"cli_command": "docker exec {container} psql; rm -rf /",
+		"confidence": 4.2,
+		"reasoning": "line1\nline2"
+	}`
+
+	got := service.parseAIResponse(response)
+	if got == nil {
+		t.Fatal("parseAIResponse() = nil, want non-nil")
+	}
+
+	if got.ServiceType != "unknown" {
+		t.Fatalf("ServiceType = %q, want unknown", got.ServiceType)
+	}
+	if got.ServiceName != "PostgreSQL Cluster" {
+		t.Fatalf("ServiceName = %q, want sanitized value", got.ServiceName)
+	}
+	if got.Category != "unknown" {
+		t.Fatalf("Category = %q, want unknown", got.Category)
+	}
+	if got.CLICommand != "" {
+		t.Fatalf("CLICommand = %q, want empty for unsafe command", got.CLICommand)
+	}
+	if got.Confidence != 1 {
+		t.Fatalf("Confidence = %v, want 1", got.Confidence)
+	}
+	if got.Reasoning != "line1 line2" {
+		t.Fatalf("Reasoning = %q, want normalized single-line text", got.Reasoning)
+	}
+}
+
+func TestParseAIResponse_RejectsOversizedPayload(t *testing.T) {
+	service := &Service{}
+	tooLarge := strings.Repeat("a", maxAIResponseLength+1)
+	if got := service.parseAIResponse(tooLarge); got != nil {
+		t.Fatalf("parseAIResponse() = %v, want nil for oversized payload", got)
+	}
+}
+
+func TestRunDiscovery_ShellQuotesUnsafeContainerNameInCLI(t *testing.T) {
+	provider := &mockStateProvider{
+		state: models.StateSnapshot{
+			DockerHosts: []models.DockerHost{
+				{
+					AgentID:  "agent-1",
+					Hostname: "docker-host",
+					Containers: []models.DockerContainer{
+						{ID: "1", Name: "db;rm -rf /", Image: "postgres:14"},
+					},
+				},
+			},
+		},
+	}
+
+	analyzer := &mockAIAnalyzer{
+		responses: map[string]string{
+			"postgres:14": `{"service_type": "postgres", "service_name": "PostgreSQL", "category": "database", "cli_command": "docker exec {container} psql -U postgres", "confidence": 0.95, "reasoning": "PostgreSQL database"}`,
+		},
+	}
+
+	service := NewService(provider, nil, DefaultConfig())
+	service.SetAIAnalyzer(analyzer)
+
+	apps := service.RunDiscovery(context.Background())
+	if len(apps) != 1 {
+		t.Fatalf("RunDiscovery() returned %d apps, want 1", len(apps))
+	}
+	if apps[0].CLIAccess != "docker exec 'db;rm -rf /' psql -U postgres" {
+		t.Fatalf("CLIAccess = %q, expected shell-quoted unsafe container name", apps[0].CLIAccess)
+	}
+}
+
+func TestBuildContainerInfo_SanitizesAndBoundsMetadata(t *testing.T) {
+	service := &Service{}
+	container := models.DockerContainer{
+		Name:   "web\nnode",
+		Image:  "nginx:latest",
+		Status: "running\r\nok",
+		Ports: []models.DockerContainerPort{
+			{PublicPort: 8080, PrivatePort: 80, Protocol: "TCP"},
+			{PublicPort: 1234, PrivatePort: 0, Protocol: "udp"},
+			{PublicPort: 65536, PrivatePort: 70000, Protocol: "icmp"},
+		},
+		Labels: map[string]string{
+			"app\nname": "nginx\tfrontend",
+			"\n":        "drop-me",
+		},
+		Mounts: []models.DockerContainerMount{
+			{Destination: "/var/log/nginx\n"},
+			{Destination: ""},
+		},
+		Networks: []models.DockerContainerNetworkLink{
+			{Name: "front\tend"},
+			{Name: ""},
+		},
+	}
+
+	info := service.buildContainerInfo(container)
+	if info.Name != "web node" {
+		t.Fatalf("Name = %q, want sanitized value", info.Name)
+	}
+	if info.Status != "running ok" {
+		t.Fatalf("Status = %q, want sanitized value", info.Status)
+	}
+	if len(info.Ports) != 1 {
+		t.Fatalf("Ports len = %d, want 1 valid port", len(info.Ports))
+	}
+	if info.Ports[0].Protocol != "tcp" {
+		t.Fatalf("Protocol = %q, want tcp", info.Ports[0].Protocol)
+	}
+	if info.Labels["app name"] != "nginx frontend" {
+		t.Fatalf("Labels[app name] = %q, want sanitized label", info.Labels["app name"])
+	}
+	if _, exists := info.Labels[""]; exists {
+		t.Fatal("expected empty/invalid label key to be dropped")
+	}
+	if len(info.Mounts) != 1 || info.Mounts[0] != "/var/log/nginx" {
+		t.Fatalf("Mounts = %#v, want sanitized mount destination", info.Mounts)
+	}
+	if len(info.Networks) != 1 || info.Networks[0] != "front end" {
+		t.Fatalf("Networks = %#v, want sanitized network name", info.Networks)
+	}
+}

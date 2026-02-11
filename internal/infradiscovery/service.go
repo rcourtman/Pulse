@@ -8,9 +8,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/knowledge"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -99,6 +102,27 @@ type Service struct {
 	cacheExpiry     time.Duration
 	lastCacheUpdate time.Time
 }
+
+const (
+	maxPromptFieldLength     = 256
+	maxPromptLabelCount      = 64
+	maxPromptMountCount      = 64
+	maxPromptNetworkCount    = 32
+	maxPromptPortCount       = 64
+	maxAIResponseLength      = 64 * 1024
+	maxServiceTypeLength     = 64
+	maxServiceNameLength     = 128
+	maxCategoryLength        = 64
+	maxCLICommandLength      = 256
+	maxReasoningLength       = 1024
+	maxAIParseLogFieldLength = 512
+	maxAppFieldLength        = 256
+)
+
+var (
+	identifierPattern    = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,63}$`)
+	safeShellNamePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]*$`)
+)
 
 // Config holds discovery service configuration.
 type Config struct {
@@ -343,31 +367,43 @@ func (s *Service) analyzeContainer(ctx context.Context, analyzer AIAnalyzer, c m
 	// Build CLI access string
 	cliAccess := result.CLICommand
 	if cliAccess != "" {
+		safeContainerName := shellQuoteIfNeeded(sanitizeText(c.Name, maxAppFieldLength))
 		// Replace placeholder with actual container name
-		cliAccess = strings.ReplaceAll(cliAccess, "{container}", c.Name)
-		cliAccess = strings.ReplaceAll(cliAccess, "${container}", c.Name)
+		cliAccess = strings.ReplaceAll(cliAccess, "{container}", safeContainerName)
+		cliAccess = strings.ReplaceAll(cliAccess, "${container}", safeContainerName)
+	}
+
+	hostID := sanitizeText(host.AgentID, maxAppFieldLength)
+	hostname := sanitizeText(host.Hostname, maxAppFieldLength)
+	containerID := sanitizeText(c.ID, maxAppFieldLength)
+	containerName := sanitizeText(c.Name, maxAppFieldLength)
+	if hostname == "" {
+		hostname = "unknown-host"
+	}
+	if containerName == "" {
+		containerName = "unknown-container"
 	}
 
 	// Extract ports
 	var ports []int
 	for _, p := range c.Ports {
-		if p.PublicPort > 0 {
+		if p.PublicPort > 0 && p.PublicPort <= 65535 {
 			ports = append(ports, int(p.PublicPort))
-		} else if p.PrivatePort > 0 {
+		} else if p.PrivatePort > 0 && p.PrivatePort <= 65535 {
 			ports = append(ports, int(p.PrivatePort))
 		}
 	}
 
 	return &DiscoveredApp{
-		ID:            fmt.Sprintf("docker:%s:%s", host.Hostname, c.Name),
+		ID:            fmt.Sprintf("docker:%s:%s", hostname, containerName),
 		Type:          result.ServiceType,
 		Name:          result.ServiceName,
 		Category:      result.Category,
 		RunsIn:        "docker",
-		HostID:        host.AgentID,
-		Hostname:      host.Hostname,
-		ContainerID:   c.ID,
-		ContainerName: c.Name,
+		HostID:        hostID,
+		Hostname:      hostname,
+		ContainerID:   containerID,
+		ContainerName: containerName,
 		Ports:         ports,
 		CLIAccess:     cliAccess,
 		Confidence:    result.Confidence,
@@ -379,33 +415,66 @@ func (s *Service) analyzeContainer(ctx context.Context, analyzer AIAnalyzer, c m
 // buildContainerInfo extracts relevant information from a container for AI analysis.
 func (s *Service) buildContainerInfo(c models.DockerContainer) ContainerInfo {
 	info := ContainerInfo{
-		Name:   c.Name,
-		Image:  c.Image,
-		Status: c.Status,
+		Name:   sanitizeText(c.Name, maxPromptFieldLength),
+		Image:  sanitizeText(c.Image, maxPromptFieldLength),
+		Status: sanitizeText(c.Status, maxPromptFieldLength),
 	}
 
 	// Extract ports
 	for _, p := range c.Ports {
+		if len(info.Ports) >= maxPromptPortCount {
+			break
+		}
+		if p.PrivatePort <= 0 || p.PrivatePort > 65535 {
+			continue
+		}
+		hostPort := 0
+		if p.PublicPort > 0 && p.PublicPort <= 65535 {
+			hostPort = int(p.PublicPort)
+		}
 		info.Ports = append(info.Ports, PortInfo{
-			HostPort:      int(p.PublicPort),
+			HostPort:      hostPort,
 			ContainerPort: int(p.PrivatePort),
-			Protocol:      p.Protocol,
+			Protocol:      sanitizeProtocol(p.Protocol),
 		})
 	}
 
 	// Extract labels
 	if len(c.Labels) > 0 {
-		info.Labels = c.Labels
+		info.Labels = make(map[string]string)
+		for key, value := range c.Labels {
+			if len(info.Labels) >= maxPromptLabelCount {
+				break
+			}
+			safeKey := sanitizeText(key, maxPromptFieldLength)
+			if safeKey == "" {
+				continue
+			}
+			info.Labels[safeKey] = sanitizeText(value, maxPromptFieldLength)
+		}
+		if len(info.Labels) == 0 {
+			info.Labels = nil
+		}
 	}
 
 	// Extract mount destinations
 	for _, m := range c.Mounts {
-		info.Mounts = append(info.Mounts, m.Destination)
+		if len(info.Mounts) >= maxPromptMountCount {
+			break
+		}
+		if destination := sanitizeText(m.Destination, maxPromptFieldLength); destination != "" {
+			info.Mounts = append(info.Mounts, destination)
+		}
 	}
 
 	// Extract network names
 	for _, n := range c.Networks {
-		info.Networks = append(info.Networks, n.Name)
+		if len(info.Networks) >= maxPromptNetworkCount {
+			break
+		}
+		if networkName := sanitizeText(n.Name, maxPromptFieldLength); networkName != "" {
+			info.Networks = append(info.Networks, networkName)
+		}
 	}
 
 	return info
@@ -462,6 +531,15 @@ Respond with ONLY the JSON, no other text.`, string(infoJSON))
 func (s *Service) parseAIResponse(response string) *DiscoveryResult {
 	// Try to extract JSON from the response
 	response = strings.TrimSpace(response)
+	if response == "" {
+		return nil
+	}
+	if len(response) > maxAIResponseLength {
+		log.Debug().
+			Int("response_length", len(response)).
+			Msg("AI response exceeded maximum allowed length")
+		return nil
+	}
 
 	// Handle markdown code blocks
 	if strings.HasPrefix(response, "```") {
@@ -491,10 +569,12 @@ func (s *Service) parseAIResponse(response string) *DiscoveryResult {
 	if err := json.Unmarshal([]byte(response), &result); err != nil {
 		log.Debug().
 			Err(err).
-			Str("response", response).
+			Str("response", sanitizeText(response, maxAIParseLogFieldLength)).
 			Msg("Failed to parse AI response as JSON")
 		return nil
 	}
+
+	result = normalizeDiscoveryResult(result)
 
 	return &result
 }
@@ -602,4 +682,129 @@ func (s *Service) GetStatus() map[string]interface{} {
 		"cache_size":      cacheSize,
 		"ai_analyzer_set": s.aiAnalyzer != nil,
 	}
+}
+
+func normalizeDiscoveryResult(result DiscoveryResult) DiscoveryResult {
+	result.ServiceType = normalizeIdentifier(result.ServiceType, maxServiceTypeLength)
+	if result.ServiceType == "" {
+		result.ServiceType = "unknown"
+	}
+
+	result.ServiceName = sanitizeText(result.ServiceName, maxServiceNameLength)
+	if result.ServiceName == "" {
+		result.ServiceName = "Unknown"
+	}
+
+	result.Category = normalizeIdentifier(result.Category, maxCategoryLength)
+	if result.Category == "" {
+		result.Category = "unknown"
+	}
+
+	result.CLICommand = sanitizeCLICommand(result.CLICommand)
+	result.Reasoning = sanitizeText(result.Reasoning, maxReasoningLength)
+	result.Confidence = clampConfidence(result.Confidence)
+
+	return result
+}
+
+func normalizeIdentifier(input string, maxLen int) string {
+	input = strings.ToLower(sanitizeText(input, maxLen))
+	if input == "" {
+		return ""
+	}
+	if !identifierPattern.MatchString(input) {
+		return ""
+	}
+	return input
+}
+
+func sanitizeCLICommand(input string) string {
+	command := sanitizeText(input, maxCLICommandLength)
+	if command == "" {
+		return ""
+	}
+	commandLower := strings.ToLower(command)
+	if !strings.HasPrefix(commandLower, "docker exec ") && !strings.HasPrefix(commandLower, "docker container exec ") {
+		return ""
+	}
+	if strings.Contains(command, ";") ||
+		strings.Contains(command, "&&") ||
+		strings.Contains(command, "||") ||
+		strings.Contains(command, "`") ||
+		strings.Contains(command, "$(") {
+		return ""
+	}
+	if !strings.Contains(command, "{container}") && !strings.Contains(command, "${container}") {
+		return ""
+	}
+	return command
+}
+
+func sanitizeProtocol(input string) string {
+	protocol := strings.ToLower(sanitizeText(input, 16))
+	switch protocol {
+	case "", "tcp", "udp", "sctp":
+		return protocol
+	default:
+		return ""
+	}
+}
+
+func sanitizeText(input string, maxLen int) string {
+	if input == "" || maxLen <= 0 {
+		return ""
+	}
+
+	var b strings.Builder
+	b.Grow(len(input))
+
+	pendingSpace := false
+	for _, r := range input {
+		if unicode.IsControl(r) || unicode.IsSpace(r) {
+			pendingSpace = true
+			continue
+		}
+		if pendingSpace && b.Len() > 0 {
+			b.WriteByte(' ')
+		}
+		b.WriteRune(r)
+		pendingSpace = false
+	}
+
+	return truncateText(strings.TrimSpace(b.String()), maxLen)
+}
+
+func truncateText(input string, maxLen int) string {
+	if maxLen <= 0 || input == "" {
+		return ""
+	}
+	runes := []rune(input)
+	if len(runes) <= maxLen {
+		return input
+	}
+	return string(runes[:maxLen])
+}
+
+func clampConfidence(confidence float64) float64 {
+	if math.IsNaN(confidence) || math.IsInf(confidence, 0) {
+		return 0
+	}
+	if confidence < 0 {
+		return 0
+	}
+	if confidence > 1 {
+		return 1
+	}
+	return confidence
+}
+
+func shellQuoteIfNeeded(input string) string {
+	if input == "" {
+		return ""
+	}
+	if safeShellNamePattern.MatchString(input) {
+		return input
+	}
+	escaped := strings.ReplaceAll(input, `'`, `'"'"'`)
+	return "'" + escaped + "'"
 }
