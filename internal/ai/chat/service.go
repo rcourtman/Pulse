@@ -439,15 +439,8 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		s.injectRecentContextIfNeeded(req.Prompt, session.ID, messages, sessions)
 	}
 
-	// Run agentic loop
-	filteredTools := s.filterToolsForPrompt(ctx, req.Prompt, autonomousMode)
-	log.Debug().
-		Str("session_id", session.ID).
-		Int("tools_count", len(filteredTools)).
-		Msg("[ChatService] Filtered tools, starting agentic loop")
-
-	// Set session-scoped resolved context on executor for resource validation
-	// This ensures tools can only operate on resources discovered in this session
+	// Set session-scoped resolved context on executor for resource validation.
+	// This ensures tools can only operate on resources discovered in this session.
 	if executor != nil {
 		resolvedCtx := sessions.GetResolvedContext(session.ID)
 		executor.SetResolvedContext(resolvedCtx)
@@ -457,15 +450,9 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 			Msg("[ChatService] Set resolved context on executor")
 	}
 
-	// Set session-scoped FSM on agentic loop for workflow enforcement
-	// This ensures structural guarantees: discover before write, verify after write
+	// Shared session state for pre-pass + main loop.
 	sessionFSM := sessions.GetSessionFSM(session.ID)
-	loop.SetSessionFSM(sessionFSM)
-
-	// Set session-scoped knowledge accumulator for fact extraction across turns.
-	// For user chat, this persists across messages so facts accumulate during a conversation.
 	ka := sessions.GetKnowledgeAccumulator(session.ID)
-	loop.SetKnowledgeAccumulator(ka)
 
 	// If the prefetcher resolved mentions, advance FSM past RESOLVING.
 	// The prefetched context already contains the resource details (type, VMID, node, host)
@@ -476,6 +463,45 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 			Str("session_id", session.ID).
 			Msg("[ChatService] Advanced FSM to READING — prefetched mentions count as resolution")
 	}
+
+	// Explore pre-pass (interactive chat only): run a short read-only scout step
+	// and inject its findings into the main loop context.
+	if s.shouldRunExplore(autonomousMode) {
+		exploreSummary := s.runExplorePrepass(
+			ctx,
+			session.ID,
+			req.Prompt,
+			overrideModel,
+			selectedModel,
+			messages,
+			executor,
+			sessionFSM,
+			ka,
+			loop.provider,
+		)
+		if exploreSummary != "" {
+			injectExploreSummaryIntoLatestUserMessage(messages, exploreSummary)
+			log.Info().
+				Str("session_id", session.ID).
+				Int("summary_len", len(exploreSummary)).
+				Msg("[ChatService] Explore pre-pass completed")
+		}
+	}
+
+	// Run agentic loop
+	filteredTools := s.filterToolsForPrompt(ctx, req.Prompt, autonomousMode)
+	log.Debug().
+		Str("session_id", session.ID).
+		Int("tools_count", len(filteredTools)).
+		Msg("[ChatService] Filtered tools, starting agentic loop")
+
+	// Set session-scoped FSM on agentic loop for workflow enforcement
+	// This ensures structural guarantees: discover before write, verify after write
+	loop.SetSessionFSM(sessionFSM)
+
+	// Set session-scoped knowledge accumulator for fact extraction across turns.
+	// For user chat, this persists across messages so facts accumulate during a conversation.
+	loop.SetKnowledgeAccumulator(ka)
 
 	log.Debug().
 		Str("session_id", session.ID).
