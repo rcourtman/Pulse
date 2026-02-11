@@ -132,7 +132,11 @@ func (p *HTTPProxy) HandleRequest(payload []byte, apiToken string) ([]byte, erro
 		p.logger.Warn().Err(err).Str("request_id", req.ID).Msg("Local API request failed")
 		return p.errorResponse(req.ID, http.StatusBadGateway, "local API request failed"), nil
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			p.logger.Warn().Err(err).Str("request_id", req.ID).Msg("Failed to close local API response body")
+		}
+	}()
 
 	// Read response body with size limit
 	limitedReader := io.LimitReader(resp.Body, maxProxyBodySize+1)
@@ -228,7 +232,11 @@ func (p *HTTPProxy) HandleStreamRequest(ctx context.Context, payload []byte, api
 		sendFrame(p.errorResponse(req.ID, http.StatusBadGateway, "local API request failed"))
 		return nil
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			p.logger.Warn().Err(err).Str("request_id", req.ID).Msg("Failed to close streamed local API response body")
+		}
+	}()
 
 	// Check if this is an SSE response
 	ct := resp.Header.Get("Content-Type")

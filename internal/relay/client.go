@@ -229,7 +229,9 @@ func (c *Client) connectAndHandle(ctx context.Context) error {
 		c.conn = nil
 		c.connected = false
 		c.mu.Unlock()
-		conn.Close()
+		if err := conn.Close(); err != nil {
+			c.logger.Debug().Err(err).Msg("Relay websocket close failed")
+		}
 	}()
 
 	// Register with relay server
@@ -397,8 +399,10 @@ func (c *Client) writePump(ctx context.Context, conn *websocket.Conn, sendCh <-c
 		case <-ctx.Done():
 			// Send close message
 			conn.SetWriteDeadline(time.Now().Add(wsWriteWait))
-			conn.WriteMessage(websocket.CloseMessage,
-				websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+			if err := conn.WriteMessage(websocket.CloseMessage,
+				websocket.FormatCloseMessage(websocket.CloseNormalClosure, "")); err != nil {
+				c.logger.Debug().Err(err).Msg("WS close frame write failed")
+			}
 			return
 
 		case data := <-sendCh:
