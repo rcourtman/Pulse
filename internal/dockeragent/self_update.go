@@ -12,9 +12,23 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 )
+
+const (
+	// selfUpdateRequestMaxAttempts bounds retries for transient update HTTP failures.
+	selfUpdateRequestMaxAttempts = 3
+
+	// selfUpdateRetryBaseDelay is the initial retry backoff delay.
+	selfUpdateRetryBaseDelay = 25 * time.Millisecond
+
+	// selfUpdateRetryMaxDelay caps retry backoff growth.
+	selfUpdateRetryMaxDelay = 250 * time.Millisecond
+)
+
+var selfUpdateRetrySleepFn = selfUpdateSleepWithContext
 
 // checkForUpdates checks if a newer version is available and performs self-update if needed
 func (a *Agent) checkForUpdates(ctx context.Context) {
@@ -46,19 +60,7 @@ func (a *Agent) checkForUpdates(ctx context.Context) {
 
 	// Get current version from server
 	url := fmt.Sprintf("%s/api/agent/version", target.URL)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		a.logger.Warn().Err(err).Msg("Failed to create version check request")
-		return
-	}
-
-	if target.Token != "" {
-		req.Header.Set("X-API-Token", target.Token)
-		req.Header.Set("Authorization", "Bearer "+target.Token)
-	}
-
-	client := a.httpClientFor(target)
-	resp, err := client.Do(req)
+	resp, err := a.doSelfUpdateGetWithRetry(ctx, target, url, "version check")
 	if err != nil {
 		a.logger.Warn().Err(err).Msg("Failed to check for updates")
 		return
@@ -85,11 +87,19 @@ func (a *Agent) checkForUpdates(ctx context.Context) {
 		return
 	}
 
-	// Compare versions - normalize by stripping "v" prefix for comparison.
-	// Server returns version without prefix (e.g., "4.33.1"), but agent's
-	// Version may include it (e.g., "v4.33.1") depending on build.
-	if utils.NormalizeVersion(versionResp.Version) == utils.NormalizeVersion(Version) {
+	// Compare versions with semver ordering to prevent accidental downgrades.
+	currentNorm := utils.NormalizeVersion(Version)
+	serverNorm := utils.NormalizeVersion(versionResp.Version)
+	cmp := utils.CompareVersions(serverNorm, currentNorm)
+	if cmp == 0 {
 		a.logger.Debug().Str("version", Version).Msg("Agent is up to date")
+		return
+	}
+	if cmp < 0 {
+		a.logger.Debug().
+			Str("currentVersion", currentNorm).
+			Str("serverVersion", serverNorm).
+			Msg("Server has older version, skipping downgrade")
 		return
 	}
 
@@ -167,6 +177,126 @@ func determineSelfUpdateArch() string {
 	}
 }
 
+func selfUpdateSleepWithContext(ctx context.Context, d time.Duration) error {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
+func selfUpdateRetryBackoffDelay(attempt int) time.Duration {
+	if attempt <= 0 {
+		return selfUpdateRetryBaseDelay
+	}
+
+	delay := selfUpdateRetryBaseDelay * time.Duration(1<<(attempt-1))
+	if delay > selfUpdateRetryMaxDelay {
+		return selfUpdateRetryMaxDelay
+	}
+	return delay
+}
+
+func isRetryableSelfUpdateStatus(code int) bool {
+	switch code {
+	case http.StatusRequestTimeout,
+		http.StatusTooManyRequests,
+		http.StatusInternalServerError,
+		http.StatusBadGateway,
+		http.StatusServiceUnavailable,
+		http.StatusGatewayTimeout:
+		return true
+	default:
+		return false
+	}
+}
+
+func newAuthedSelfUpdateGetRequest(ctx context.Context, target TargetConfig, requestURL string) (*http.Request, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if target.Token != "" {
+		req.Header.Set("X-API-Token", target.Token)
+		req.Header.Set("Authorization", "Bearer "+target.Token)
+	}
+
+	return req, nil
+}
+
+func (a *Agent) doSelfUpdateGetWithRetry(ctx context.Context, target TargetConfig, requestURL, operation string) (*http.Response, error) {
+	client := a.httpClientFor(target)
+	var lastErr error
+
+	for attempt := 1; attempt <= selfUpdateRequestMaxAttempts; attempt++ {
+		req, err := newAuthedSelfUpdateGetRequest(ctx, target, requestURL)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create %s request: %w", operation, err)
+		}
+
+		resp, err := client.Do(req)
+		if err != nil {
+			lastErr = fmt.Errorf("%s request failed: %w", operation, err)
+			if attempt == selfUpdateRequestMaxAttempts || ctx.Err() != nil {
+				break
+			}
+
+			delay := selfUpdateRetryBackoffDelay(attempt)
+			a.logger.Warn().
+				Err(err).
+				Str("operation", operation).
+				Str("url", requestURL).
+				Int("attempt", attempt).
+				Int("maxAttempts", selfUpdateRequestMaxAttempts).
+				Dur("retryIn", delay).
+				Msg("Transient self-update request failure, retrying")
+			if err := selfUpdateRetrySleepFn(ctx, delay); err != nil {
+				return nil, fmt.Errorf("%s request canceled while waiting to retry: %w", operation, err)
+			}
+			continue
+		}
+
+		if resp.StatusCode == http.StatusOK {
+			return resp, nil
+		}
+
+		lastErr = fmt.Errorf("%s failed with status: %s", operation, resp.Status)
+		if !isRetryableSelfUpdateStatus(resp.StatusCode) {
+			resp.Body.Close()
+			return nil, lastErr
+		}
+
+		resp.Body.Close()
+		if attempt == selfUpdateRequestMaxAttempts || ctx.Err() != nil {
+			break
+		}
+
+		delay := selfUpdateRetryBackoffDelay(attempt)
+		a.logger.Warn().
+			Str("operation", operation).
+			Str("url", requestURL).
+			Int("statusCode", resp.StatusCode).
+			Int("attempt", attempt).
+			Int("maxAttempts", selfUpdateRequestMaxAttempts).
+			Dur("retryIn", delay).
+			Msg("Transient self-update response status, retrying")
+		if err := selfUpdateRetrySleepFn(ctx, delay); err != nil {
+			return nil, fmt.Errorf("%s request canceled while waiting to retry: %w", operation, err)
+		}
+	}
+
+	if lastErr == nil {
+		lastErr = fmt.Errorf("%s request failed", operation)
+	}
+
+	return nil, lastErr
+}
+
 // selfUpdate downloads the new agent binary and replaces the current one
 func (a *Agent) selfUpdate(ctx context.Context) error {
 	target := a.primaryTarget()
@@ -210,31 +340,13 @@ func (a *Agent) selfUpdate(ctx context.Context) error {
 	}
 	candidates = append(candidates, downloadCandidate{url: downloadBase})
 
-	client := a.httpClientFor(target)
 	var resp *http.Response
 	lastErr := errors.New("failed to download new binary")
 
 	for _, candidate := range candidates {
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, candidate.url, nil)
+		response, err := a.doSelfUpdateGetWithRetry(ctx, target, candidate.url, "binary download")
 		if err != nil {
-			lastErr = fmt.Errorf("failed to create download request: %w", err)
-			continue
-		}
-
-		if target.Token != "" {
-			req.Header.Set("X-API-Token", target.Token)
-			req.Header.Set("Authorization", "Bearer "+target.Token)
-		}
-
-		response, err := client.Do(req)
-		if err != nil {
-			lastErr = fmt.Errorf("failed to download new binary: %w", err)
-			continue
-		}
-
-		if response.StatusCode != http.StatusOK {
-			lastErr = fmt.Errorf("download failed with status: %s", response.Status)
-			response.Body.Close()
+			lastErr = err
 			continue
 		}
 
