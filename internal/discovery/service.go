@@ -375,11 +375,18 @@ func (s *Service) performScan() {
 		newScanner, err = BuildScanner(cfg)
 	}
 	if err != nil {
-		log.Warn().Err(err).Msg("Environment detection failed during discovery; falling back to default scanner configuration")
+		log.Warn().
+			Err(err).
+			Str("subnet", s.subnet).
+			Int("subnet_blocklist_entries", blocklistLength).
+			Msg("Environment detection failed during discovery; falling back to default scanner configuration")
 		newScanner = newScannerFn()
 	}
 	if newScanner == nil {
-		log.Warn().Msg("Discovery scanner factory returned nil; using default scanner configuration")
+		log.Warn().
+			Str("subnet", s.subnet).
+			Int("subnet_blocklist_entries", blocklistLength).
+			Msg("Discovery scanner factory returned nil; using default scanner configuration")
 		newScanner = newScannerFn()
 	}
 	s.mu.Lock()
@@ -424,11 +431,12 @@ func (s *Service) performScan() {
 	if err != nil {
 		// Even if scan timed out, we might have partial results
 		if result == nil || (len(result.Servers) == 0 && !errors.Is(err, context.DeadlineExceeded)) {
-			log.Error().Err(err).Msg("Background discovery scan failed")
+			log.Error().Err(err).Str("subnet", s.subnet).Msg("Background discovery scan failed")
 			return
 		}
 		log.Warn().
 			Err(err).
+			Str("subnet", s.subnet).
 			Int("servers_found", len(result.Servers)).
 			Msg("Discovery scan incomplete but found some servers")
 	}
@@ -449,8 +457,10 @@ func (s *Service) performScan() {
 		}
 
 		log.Info().
+			Str("subnet", s.subnet).
 			Int("servers", len(result.Servers)).
 			Int("errors", len(result.Errors)).
+			Int("structured_errors", len(result.StructuredErrors)).
 			Msg("Background discovery scan completed")
 
 		// Send final update via WebSocket with all servers
