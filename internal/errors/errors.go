@@ -15,7 +15,6 @@ var (
 	ErrTimeout          = errors.New("timeout")
 	ErrInvalidInput     = errors.New("invalid input")
 	ErrConnectionFailed = errors.New("connection failed")
-	ErrInternalError    = errors.New("internal error")
 )
 
 // ErrorType represents the category of error
@@ -130,11 +129,6 @@ func isRetryable(errorType ErrorType, err error) bool {
 // WrapConnectionError wraps a connection error with context
 func WrapConnectionError(op, instance string, err error) error {
 	return NewMonitorError(ErrorTypeConnection, op, instance, err)
-}
-
-// WrapAuthError wraps an authentication error with context
-func WrapAuthError(op, instance string, err error) error {
-	return NewMonitorError(ErrorTypeAuth, op, instance, err)
 }
 
 // WrapAPIError wraps an API error with context

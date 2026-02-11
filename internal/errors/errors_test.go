@@ -325,20 +325,6 @@ func TestWrapConnectionError(t *testing.T) {
 	}
 }
 
-func TestWrapAuthError(t *testing.T) {
-	baseErr := fmt.Errorf("invalid credentials")
-	err := WrapAuthError("login", "pve1", baseErr)
-
-	var monErr *MonitorError
-	if !errors.As(err, &monErr) {
-		t.Fatal("WrapAuthError() did not return MonitorError")
-	}
-
-	if monErr.Type != ErrorTypeAuth {
-		t.Errorf("Type = %v, want %v", monErr.Type, ErrorTypeAuth)
-	}
-}
-
 func TestWrapAPIError(t *testing.T) {
 	baseErr := fmt.Errorf("server error")
 	err := WrapAPIError("request", "pve1", baseErr, 500)
@@ -525,7 +511,6 @@ func TestBaseErrors(t *testing.T) {
 		ErrTimeout,
 		ErrInvalidInput,
 		ErrConnectionFailed,
-		ErrInternalError,
 	}
 
 	for _, err := range baseErrors {
