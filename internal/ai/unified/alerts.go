@@ -603,14 +603,14 @@ func (s *UnifiedStore) EnhanceWithAI(findingID string, context string, confidenc
 // LinkRemediation links a remediation plan to a finding
 func (s *UnifiedStore) LinkRemediation(findingID, remediationID string) bool {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	finding, ok := s.findings[findingID]
 	if !ok {
+		s.mu.Unlock()
 		return false
 	}
 
 	finding.RemediationID = remediationID
+	s.mu.Unlock()
 	s.scheduleSave()
 	return true
 }
@@ -936,11 +936,14 @@ func (s *UnifiedStore) FormatForContext() string {
 
 // scheduleSave schedules a debounced save operation
 func (s *UnifiedStore) scheduleSave() {
+	s.mu.Lock()
 	if s.persistence == nil {
+		s.mu.Unlock()
 		return
 	}
 
 	if s.savePending {
+		s.mu.Unlock()
 		return
 	}
 
@@ -962,6 +965,7 @@ func (s *UnifiedStore) scheduleSave() {
 			}
 		}
 	})
+	s.mu.Unlock()
 }
 
 // ForceSave immediately saves findings

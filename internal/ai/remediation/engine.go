@@ -849,9 +849,8 @@ func (e *Engine) saveToDisk() error {
 		Executions:    e.executions,
 		ApprovalRules: e.approvalRules,
 	}
-	e.mu.RUnlock()
-
 	jsonData, err := json.MarshalIndent(data, "", "  ")
+	e.mu.RUnlock()
 	if err != nil {
 		return err
 	}

@@ -361,9 +361,8 @@ func (d *Detector) saveToDisk() error {
 		Events:   d.events,
 		Patterns: d.patterns,
 	}
-	d.mu.RUnlock()
-
 	jsonData, err := json.MarshalIndent(data, "", "  ")
+	d.mu.RUnlock()
 	if err != nil {
 		return err
 	}
