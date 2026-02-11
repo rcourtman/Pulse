@@ -120,12 +120,20 @@ func resolveSymlink(path string) (string, error) {
 }
 
 // verifyELFMagic checks that the file is a valid ELF binary
-func verifyELFMagic(path string) error {
+func verifyELFMagic(path string) (retErr error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return fmt.Errorf("open file for ELF verification: %w", err)
 	}
-	defer f.Close()
+	defer func() {
+		if closeErr := f.Close(); closeErr != nil {
+			if retErr != nil {
+				retErr = errors.Join(retErr, fmt.Errorf("close file after ELF verification: %w", closeErr))
+			} else {
+				retErr = fmt.Errorf("close file after ELF verification: %w", closeErr)
+			}
+		}
+	}()
 
 	magic := make([]byte, 4)
 	if _, err := io.ReadFull(f, magic); err != nil {
@@ -234,7 +242,12 @@ func (a *Agent) selfUpdate(ctx context.Context) error {
 
 		if response.StatusCode != http.StatusOK {
 			lastErr = fmt.Errorf("download failed with status: %s", response.Status)
-			response.Body.Close()
+			if closeErr := response.Body.Close(); closeErr != nil {
+				a.logger.Warn().
+					Err(closeErr).
+					Str("url", candidate.url).
+					Msg("Self-update: failed to close non-success download response body")
+			}
 			continue
 		}
 
@@ -252,7 +265,11 @@ func (a *Agent) selfUpdate(ctx context.Context) error {
 	if resp == nil {
 		return lastErr
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			a.logger.Warn().Err(closeErr).Msg("Self-update: failed to close download response body")
+		}
+	}()
 
 	checksumHeader := strings.TrimSpace(resp.Header.Get("X-Checksum-Sha256"))
 
@@ -272,11 +289,15 @@ func (a *Agent) selfUpdate(ctx context.Context) error {
 	limitedReader := io.LimitReader(resp.Body, maxBinarySize+1)
 	written, err := io.Copy(tmpFile, io.TeeReader(limitedReader, hasher))
 	if err != nil {
-		_ = tmpFile.Close()
+		if closeErr := closeFileFn(tmpFile); closeErr != nil {
+			a.logger.Warn().Err(closeErr).Msg("Self-update: failed to close temp file after write failure")
+		}
 		return fmt.Errorf("failed to write downloaded binary: %w", err)
 	}
 	if written > maxBinarySize {
-		_ = tmpFile.Close()
+		if closeErr := closeFileFn(tmpFile); closeErr != nil {
+			a.logger.Warn().Err(closeErr).Msg("Self-update: failed to close oversized temp file")
+		}
 		return fmt.Errorf("downloaded binary exceeds maximum size (%d bytes)", maxBinarySize)
 	}
 	if err := closeFileFn(tmpFile); err != nil {
@@ -346,12 +367,20 @@ func (a *Agent) selfUpdate(ctx context.Context) error {
 	// Move new binary to current location
 	if err := osRenameFn(tmpPath, realExecPath); err != nil {
 		// Restore backup on failure
-		_ = osRenameFn(backupPath, realExecPath)
+		restoreErr := osRenameFn(backupPath, realExecPath)
+		if restoreErr != nil {
+			return errors.Join(
+				fmt.Errorf("failed to replace binary: %w", err),
+				fmt.Errorf("failed to restore backup binary: %w", restoreErr),
+			)
+		}
 		return fmt.Errorf("failed to replace binary: %w", err)
 	}
 
 	// Remove backup on success
-	_ = osRemoveFn(backupPath)
+	if err := osRemoveFn(backupPath); err != nil {
+		a.logger.Warn().Err(err).Str("path", backupPath).Msg("Self-update: failed to remove backup binary after successful replacement")
+	}
 
 	// On Unraid, also update the persistent copy on the flash drive
 	if isUnraid() {
@@ -364,7 +393,9 @@ func (a *Agent) selfUpdate(ctx context.Context) error {
 					a.logger.Warn().Err(err).Msg("Failed to write Unraid persistent binary")
 				} else if err := osRenameFn(tmpPersist, persistPath); err != nil {
 					a.logger.Warn().Err(err).Msg("Failed to rename Unraid persistent binary")
-					_ = osRemoveFn(tmpPersist)
+					if removeErr := osRemoveFn(tmpPersist); removeErr != nil {
+						a.logger.Warn().Err(removeErr).Str("path", tmpPersist).Msg("Failed to remove temporary Unraid persistent binary")
+					}
 				} else {
 					a.logger.Info().Str("path", persistPath).Msg("Updated Unraid persistent binary")
 				}

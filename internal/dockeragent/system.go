@@ -7,12 +7,20 @@ import (
 	"strings"
 )
 
-func readProcUptime() (float64, error) {
+func readProcUptime() (value float64, retErr error) {
 	f, err := openProcUptime()
 	if err != nil {
 		return 0, err
 	}
-	defer f.Close()
+	defer func() {
+		if closeErr := f.Close(); closeErr != nil {
+			if retErr != nil {
+				retErr = errors.Join(retErr, closeErr)
+			} else {
+				retErr = closeErr
+			}
+		}
+	}()
 
 	scanner := bufio.NewScanner(f)
 	if !scanner.Scan() {
@@ -27,7 +35,7 @@ func readProcUptime() (float64, error) {
 		return 0, errors.New("invalid /proc/uptime contents")
 	}
 
-	value, err := strconv.ParseFloat(fields[0], 64)
+	value, err = strconv.ParseFloat(fields[0], 64)
 	if err != nil {
 		return 0, err
 	}

@@ -263,7 +263,11 @@ func (a *Agent) collectContainer(ctx context.Context, summary containertypes.Sum
 		if err != nil {
 			return agentsdocker.Container{}, fmt.Errorf("stats: %w", err)
 		}
-		defer statsResp.Body.Close()
+		defer func() {
+			if closeErr := statsResp.Body.Close(); closeErr != nil {
+				a.logger.Warn().Err(closeErr).Str("container", summary.ID).Msg("Failed to close container stats response body")
+			}
+		}()
 
 		var stats containertypes.StatsResponse
 		if err := json.NewDecoder(statsResp.Body).Decode(&stats); err != nil {
