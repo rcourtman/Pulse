@@ -137,6 +137,10 @@ func NewStore(config StoreConfig) (*Store, error) {
 		return nil, fmt.Errorf("failed to initialize schema: %w", err)
 	}
 
+	// Migrate existing databases to incremental auto-vacuum. This is a one-time
+	// operation that restructures the file so deleted pages can be reclaimed.
+	store.migrateAutoVacuum()
+
 	// Clean up stale data from previous runs before starting the background worker.
 	// This prevents accumulation if Pulse was restarted before hourly retention ran.
 	store.runRetention()
@@ -194,6 +198,35 @@ func (s *Store) initSchema() error {
 
 	log.Debug().Msg("Metrics schema initialized")
 	return nil
+}
+
+// migrateAutoVacuum ensures the database uses incremental auto-vacuum.
+// SQLite cannot switch from NONE to INCREMENTAL without a full VACUUM to
+// restructure the file, so we detect and convert on first run after upgrade.
+func (s *Store) migrateAutoVacuum() {
+	var mode int
+	if err := s.db.QueryRow("PRAGMA auto_vacuum").Scan(&mode); err != nil {
+		log.Debug().Err(err).Msg("Failed to check auto_vacuum mode")
+		return
+	}
+	if mode == 2 { // already INCREMENTAL
+		return
+	}
+
+	log.Info().Int("current_mode", mode).Msg("Converting metrics database to incremental auto-vacuum (one-time migration)")
+	start := time.Now()
+
+	// Set the desired mode then VACUUM to restructure the file.
+	if _, err := s.db.Exec("PRAGMA auto_vacuum = INCREMENTAL"); err != nil {
+		log.Warn().Err(err).Msg("Failed to set auto_vacuum mode")
+		return
+	}
+	if _, err := s.db.Exec("VACUUM"); err != nil {
+		log.Warn().Err(err).Msg("Auto-vacuum migration VACUUM failed (will retry next restart)")
+		return
+	}
+
+	log.Info().Dur("duration", time.Since(start)).Msg("Metrics database auto-vacuum migration complete")
 }
 
 // Write adds a metric to the write buffer with the 'raw' tier by default
