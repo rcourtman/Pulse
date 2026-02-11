@@ -88,6 +88,41 @@ func TestRun_StopsOnContextCancel(t *testing.T) {
 	}
 }
 
+type closeTrackingRoundTripper struct {
+	closed bool
+}
+
+func (c *closeTrackingRoundTripper) RoundTrip(*http.Request) (*http.Response, error) {
+	return nil, context.Canceled
+}
+
+func (c *closeTrackingRoundTripper) CloseIdleConnections() {
+	c.closed = true
+}
+
+func TestRun_ClosesIdleHTTPConnectionsOnShutdown(t *testing.T) {
+	transport := &closeTrackingRoundTripper{}
+	logger := zerolog.New(io.Discard)
+	agent := &Agent{
+		cfg:          Config{APIToken: "token"},
+		logger:       logger,
+		httpClient:   &http.Client{Transport: transport},
+		interval:     10 * time.Millisecond,
+		kubeClient:   fake.NewSimpleClientset(),
+		reportBuffer: buffer.New[agentsk8s.Report](1),
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	if err := agent.Run(ctx); err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	if !transport.closed {
+		t.Fatal("expected Run to close idle HTTP connections")
+	}
+}
+
 func TestSendReport_ErrorWithBody(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
