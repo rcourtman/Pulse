@@ -29,6 +29,7 @@ type Service struct {
 	history        []historyEntry
 	historyLimit   int
 	scannerFactory scannerFactory
+	stopOnce       sync.Once
 }
 
 // DiscoveryCache stores the latest discovery results
@@ -200,7 +201,9 @@ func (s *Service) Start(ctx context.Context) {
 
 // Stop stops the background discovery service
 func (s *Service) Stop() {
-	close(s.stopChan)
+	s.stopOnce.Do(func() {
+		close(s.stopChan)
+	})
 }
 
 // scanLoop runs periodic scans
@@ -349,7 +352,11 @@ func (s *Service) performScan() {
 
 	// Create a context with timeout for the scan
 	// Scanning multiple subnets takes longer, allow 2 minutes
-	scanCtx, cancel := context.WithTimeout(s.ctx, 2*time.Minute)
+	scanParentCtx := s.ctx
+	if scanParentCtx == nil {
+		scanParentCtx = context.Background()
+	}
+	scanCtx, cancel := context.WithTimeout(scanParentCtx, 2*time.Minute)
 	defer cancel()
 
 	cfg := config.NormalizeDiscoveryConfig(config.DefaultDiscoveryConfig())

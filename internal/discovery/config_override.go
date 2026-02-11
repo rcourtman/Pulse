@@ -19,7 +19,7 @@ func BuildScanner(cfg config.DiscoveryConfig) (*pkgdiscovery.Scanner, error) {
 
 	profile, err := detectEnvironmentFn()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("discovery.BuildScanner: detect environment: %w", err)
 	}
 
 	ApplyConfigToProfile(profile, cfg)

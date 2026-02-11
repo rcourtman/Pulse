@@ -497,6 +497,19 @@ func TestStartAndStop(t *testing.T) {
 	service.Stop()
 }
 
+func TestStop_Idempotent(t *testing.T) {
+	service := NewService(nil, time.Minute, "auto", nil)
+	service.Stop()
+
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("expected second Stop() call not to panic, got %v", r)
+		}
+	}()
+
+	service.Stop()
+}
+
 func TestStartPanicRecovery(t *testing.T) {
 	service := NewService(nil, time.Minute, "auto", nil)
 	service.scannerFactory = func(config.DiscoveryConfig) (discoveryScanner, error) {
@@ -511,6 +524,23 @@ func TestStartPanicRecovery(t *testing.T) {
 	// Wait a bit for the goroutine to run and recover
 	time.Sleep(100 * time.Millisecond)
 	service.Stop()
+}
+
+func TestPerformScan_NoContextUsesBackground(t *testing.T) {
+	service := NewService(nil, time.Minute, "auto", nil)
+	scanner := &fakeScanner{
+		result: &pkgdiscovery.DiscoveryResult{},
+	}
+	service.scannerFactory = func(config.DiscoveryConfig) (discoveryScanner, error) {
+		return scanner, nil
+	}
+
+	service.performScan()
+
+	history := service.GetHistory(1)
+	if len(history) == 0 {
+		t.Fatal("expected history entry after scan")
+	}
 }
 
 func TestPerformScan_StatusFailure(t *testing.T) {

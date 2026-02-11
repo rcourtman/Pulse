@@ -3,6 +3,7 @@ package discovery
 import (
 	"errors"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
@@ -311,12 +312,20 @@ func TestBuildScanner(t *testing.T) {
 func TestBuildScannerError(t *testing.T) {
 	t.Cleanup(resetDetectEnvironment)
 
+	detectErr := errors.New("detect failed")
 	detectEnvironmentFn = func() (*envdetect.EnvironmentProfile, error) {
-		return nil, errors.New("detect failed")
+		return nil, detectErr
 	}
 
-	if _, err := BuildScanner(config.DefaultDiscoveryConfig()); err == nil {
+	_, err := BuildScanner(config.DefaultDiscoveryConfig())
+	if err == nil {
 		t.Fatalf("expected error")
+	}
+	if !errors.Is(err, detectErr) {
+		t.Fatalf("expected wrapped detect error, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "discovery.BuildScanner: detect environment") {
+		t.Fatalf("expected BuildScanner context in error, got: %v", err)
 	}
 }
 
