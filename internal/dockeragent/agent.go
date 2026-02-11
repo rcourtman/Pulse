@@ -98,6 +98,7 @@ type Agent struct {
 	preCPUStatsFailures int
 	reportBuffer        *buffer.Queue[agentsdocker.Report]
 	registryChecker     *RegistryChecker // For checking container image updates
+	collectMu           sync.Mutex       // serializes collect/report cycles across goroutines
 }
 
 // ErrStopRequested indicates the agent should terminate gracefully after acknowledging a stop command.
@@ -619,6 +620,9 @@ func stopTimer(timer *time.Timer) {
 }
 
 func (a *Agent) collectOnce(ctx context.Context) error {
+	a.collectMu.Lock()
+	defer a.collectMu.Unlock()
+
 	report, err := a.buildReport(ctx)
 	if err != nil {
 		return fmt.Errorf("build docker report: %w", err)
@@ -805,9 +809,10 @@ func (a *Agent) handleCheckUpdatesCommand(ctx context.Context, target TargetConf
 	}
 
 	// Trigger an immediate collection cycle to report updates
+	sleep := sleepFn
 	go func() {
 		// Small delay to ensure the ack response completes
-		sleepFn(1 * time.Second)
+		sleep(1 * time.Second)
 		a.collectOnce(ctx)
 	}()
 
@@ -834,9 +839,10 @@ func (a *Agent) handleStopCommand(ctx context.Context, target TargetConfig, comm
 	// After sending the acknowledgement, stop the systemd service to prevent restart.
 	// This is done after the ack to ensure the acknowledgement is sent before the
 	// process is terminated by systemctl stop.
+	sleep := sleepFn
 	go func() {
 		// Small delay to ensure the ack response completes
-		sleepFn(1 * time.Second)
+		sleep(1 * time.Second)
 		stopServiceCtx := context.Background()
 		if err := stopSystemdService(stopServiceCtx, "pulse-docker-agent"); err != nil {
 			a.logger.Warn().Err(err).Msg("Failed to stop systemd service, agent will exit normally")
