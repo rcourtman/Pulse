@@ -184,7 +184,7 @@ func TestClientFetchHostLookupAndErrors(t *testing.T) {
 }
 
 func TestClientNewDefaultsAndHostLookupNotFound(t *testing.T) {
-	client := New(Config{InsecureSkipVerify: true})
+	client := New(Config{PulseURL: "  ", InsecureSkipVerify: true})
 	if client.cfg.PulseURL != "http://localhost:7655" {
 		t.Fatalf("unexpected default PulseURL: %s", client.cfg.PulseURL)
 	}
@@ -242,8 +242,8 @@ func TestClientFetchInvalidURL(t *testing.T) {
 		APIToken: "t",
 		AgentID:  "agent-1",
 	})
-	if _, _, err := client.Fetch(context.Background()); err == nil || !strings.Contains(err.Error(), "create request") {
-		t.Fatalf("expected create request error, got %v", err)
+	if _, _, err := client.Fetch(context.Background()); err == nil || !strings.Contains(err.Error(), "invalid remote config client configuration") {
+		t.Fatalf("expected invalid configuration error, got %v", err)
 	}
 }
 
@@ -253,8 +253,8 @@ func TestClientResolveHostIDRequestErrors(t *testing.T) {
 		APIToken: "t",
 		Hostname: "host",
 	})
-	if _, err := client.resolveHostID(context.Background()); err == nil || !strings.Contains(err.Error(), "create host lookup request") {
-		t.Fatalf("expected request error, got %v", err)
+	if _, err := client.resolveHostID(context.Background()); err == nil || !strings.Contains(err.Error(), "invalid remote config client configuration") {
+		t.Fatalf("expected invalid configuration error, got %v", err)
 	}
 
 	client = New(Config{
@@ -265,5 +265,104 @@ func TestClientResolveHostIDRequestErrors(t *testing.T) {
 	client.httpClient = &http.Client{Transport: errorRoundTripper{}}
 	if _, err := client.resolveHostID(context.Background()); err == nil || !strings.Contains(err.Error(), "host lookup request") {
 		t.Fatalf("expected transport error, got %v", err)
+	}
+}
+
+func TestClientFetchConfigValidation(t *testing.T) {
+	tests := []struct {
+		name     string
+		cfg      Config
+		wantText string
+	}{
+		{
+			name: "invalid pulse URL scheme",
+			cfg: Config{
+				PulseURL: "ftp://example.com",
+				APIToken: "token",
+				AgentID:  "agent-1",
+			},
+			wantText: "invalid remote config client configuration",
+		},
+		{
+			name: "missing API token",
+			cfg: Config{
+				PulseURL: "https://example.com",
+				APIToken: "   ",
+				AgentID:  "agent-1",
+			},
+			wantText: "API token is required",
+		},
+		{
+			name: "missing agent ID",
+			cfg: Config{
+				PulseURL: "https://example.com",
+				APIToken: "token",
+				AgentID:  " ",
+			},
+			wantText: "agent ID is required",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := New(tt.cfg)
+			_, _, err := client.Fetch(context.Background())
+			if err == nil || !strings.Contains(err.Error(), tt.wantText) {
+				t.Fatalf("expected error containing %q, got %v", tt.wantText, err)
+			}
+		})
+	}
+}
+
+func TestClientResolveHostIDEscapesHostnameQuery(t *testing.T) {
+	const hostname = " host with spaces/and?chars "
+	var gotRawQuery string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotRawQuery = r.URL.RawQuery
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"success":true,"host":{"id":"host-123"}}`))
+	}))
+	defer ts.Close()
+
+	client := New(Config{
+		PulseURL: ts.URL,
+		APIToken: "token",
+		Hostname: hostname,
+	})
+	got, err := client.resolveHostID(context.Background())
+	if err != nil {
+		t.Fatalf("resolveHostID error: %v", err)
+	}
+	if got != "host-123" {
+		t.Fatalf("expected host-123, got %q", got)
+	}
+	if gotRawQuery != "hostname=host+with+spaces%2Fand%3Fchars" {
+		t.Fatalf("unexpected hostname query encoding: %q", gotRawQuery)
+	}
+}
+
+func TestClientFetchEscapesAgentIDPath(t *testing.T) {
+	var gotEscapedPath string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotEscapedPath = r.URL.EscapedPath()
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"success":true,"hostId":"agent/1","config":{"settings":{"mode":"ok"}}}`))
+	}))
+	defer ts.Close()
+
+	client := New(Config{
+		PulseURL: ts.URL,
+		APIToken: "token",
+		AgentID:  "agent/1",
+	})
+	settings, _, err := client.Fetch(context.Background())
+	if err != nil {
+		t.Fatalf("Fetch error: %v", err)
+	}
+	if settings["mode"] != "ok" {
+		t.Fatalf("unexpected settings: %#v", settings)
+	}
+	if gotEscapedPath != "/api/agents/host/agent%2F1/config" {
+		t.Fatalf("unexpected escaped path: %q", gotEscapedPath)
 	}
 }
