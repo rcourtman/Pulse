@@ -28,6 +28,15 @@ type HistoryEntry struct {
 	Timestamp time.Time `json:"timestamp"`
 }
 
+// HistoryStats represents typed alert history statistics.
+type HistoryStats struct {
+	TotalEntries int
+	OldestEntry  time.Time
+	NewestEntry  time.Time
+	DataDir      string
+	FileSize     int64
+}
+
 // AlertCallback is called when an alert is added to history
 // This enables external systems to track alerts (e.g., pattern detection)
 type AlertCallback func(alert Alert)
@@ -410,7 +419,19 @@ func (hm *HistoryManager) Stop() {
 }
 
 // GetStats returns statistics about the alert history
-func (hm *HistoryManager) GetStats() map[string]interface{} {
+func (hm *HistoryManager) GetStats() map[string]any {
+	stats := hm.Stats()
+	return map[string]any{
+		"totalEntries": stats.TotalEntries,
+		"oldestEntry":  stats.OldestEntry,
+		"newestEntry":  stats.NewestEntry,
+		"dataDir":      stats.DataDir,
+		"fileSize":     stats.FileSize,
+	}
+}
+
+// Stats returns typed statistics about the alert history.
+func (hm *HistoryManager) Stats() HistoryStats {
 	hm.mu.RLock()
 	defer hm.mu.RUnlock()
 
@@ -422,12 +443,12 @@ func (hm *HistoryManager) GetStats() map[string]interface{} {
 		newest = hm.history[len(hm.history)-1].Timestamp
 	}
 
-	return map[string]interface{}{
-		"totalEntries": len(hm.history),
-		"oldestEntry":  oldest,
-		"newestEntry":  newest,
-		"dataDir":      hm.dataDir,
-		"fileSize":     hm.getFileSize(),
+	return HistoryStats{
+		TotalEntries: len(hm.history),
+		OldestEntry:  oldest,
+		NewestEntry:  newest,
+		DataDir:      hm.dataDir,
+		FileSize:     hm.getFileSize(),
 	}
 }
 

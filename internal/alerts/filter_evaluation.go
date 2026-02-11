@@ -1,6 +1,7 @@
 package alerts
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -9,15 +10,12 @@ import (
 )
 
 // evaluateFilterCondition evaluates a single filter condition against a guest
-func (m *Manager) evaluateFilterCondition(guest interface{}, condition FilterCondition) bool {
-	switch g := guest.(type) {
-	case models.VM:
-		return m.evaluateVMCondition(g, condition)
-	case models.Container:
-		return m.evaluateContainerCondition(g, condition)
-	default:
+func (m *Manager) evaluateFilterCondition(guest any, condition FilterCondition) bool {
+	snapshot, ok := extractGuestSnapshot(guest)
+	if !ok {
 		return false
 	}
+	return evaluateGuestCondition(snapshot.metrics(), condition)
 }
 
 // guestMetrics holds common metrics for filter evaluation
@@ -36,39 +34,12 @@ type guestMetrics struct {
 }
 
 // extractGuestMetrics extracts common metrics from a VM or Container
-func extractGuestMetrics(guest interface{}) (guestMetrics, bool) {
-	switch g := guest.(type) {
-	case models.VM:
-		return guestMetrics{
-			CPU:        g.CPU * 100,
-			MemUsage:   g.Memory.Usage,
-			DiskUsage:  g.Disk.Usage,
-			DiskRead:   g.DiskRead,
-			DiskWrite:  g.DiskWrite,
-			NetworkIn:  g.NetworkIn,
-			NetworkOut: g.NetworkOut,
-			Name:       g.Name,
-			Node:       g.Node,
-			ID:         g.ID,
-			Status:     g.Status,
-		}, true
-	case models.Container:
-		return guestMetrics{
-			CPU:        g.CPU * 100,
-			MemUsage:   g.Memory.Usage,
-			DiskUsage:  g.Disk.Usage,
-			DiskRead:   g.DiskRead,
-			DiskWrite:  g.DiskWrite,
-			NetworkIn:  g.NetworkIn,
-			NetworkOut: g.NetworkOut,
-			Name:       g.Name,
-			Node:       g.Node,
-			ID:         g.ID,
-			Status:     g.Status,
-		}, true
-	default:
+func extractGuestMetrics(guest any) (guestMetrics, bool) {
+	snapshot, ok := extractGuestSnapshot(guest)
+	if !ok {
 		return guestMetrics{}, false
 	}
+	return snapshot.metrics(), true
 }
 
 // evaluateGuestCondition evaluates a filter condition against guest metrics
@@ -122,14 +93,9 @@ func evaluateGuestCondition(metrics guestMetrics, condition FilterCondition) boo
 
 // evaluateNumericCondition evaluates a numeric comparison
 func evaluateNumericCondition(value float64, condition FilterCondition) bool {
-	condValue, ok := condition.Value.(float64)
+	condValue, ok := numericConditionValue(condition.Value)
 	if !ok {
-		// Try to convert from int
-		if intVal, ok := condition.Value.(int); ok {
-			condValue = float64(intVal)
-		} else {
-			return false
-		}
+		return false
 	}
 
 	switch condition.Operator {
@@ -147,20 +113,55 @@ func evaluateNumericCondition(value float64, condition FilterCondition) bool {
 	return false
 }
 
+func numericConditionValue(raw any) (float64, bool) {
+	switch value := raw.(type) {
+	case float64:
+		return value, true
+	case float32:
+		return float64(value), true
+	case int:
+		return float64(value), true
+	case int8:
+		return float64(value), true
+	case int16:
+		return float64(value), true
+	case int32:
+		return float64(value), true
+	case int64:
+		return float64(value), true
+	case uint:
+		return float64(value), true
+	case uint8:
+		return float64(value), true
+	case uint16:
+		return float64(value), true
+	case uint32:
+		return float64(value), true
+	case uint64:
+		return float64(value), true
+	case json.Number:
+		parsed, err := value.Float64()
+		if err != nil {
+			return 0, false
+		}
+		return parsed, true
+	default:
+		return 0, false
+	}
+}
+
 // evaluateVMCondition evaluates a filter condition against a VM
 func (m *Manager) evaluateVMCondition(vm models.VM, condition FilterCondition) bool {
-	metrics, _ := extractGuestMetrics(vm)
-	return evaluateGuestCondition(metrics, condition)
+	return evaluateGuestCondition(guestSnapshotFromVM(vm).metrics(), condition)
 }
 
 // evaluateContainerCondition evaluates a filter condition against a Container
 func (m *Manager) evaluateContainerCondition(ct models.Container, condition FilterCondition) bool {
-	metrics, _ := extractGuestMetrics(ct)
-	return evaluateGuestCondition(metrics, condition)
+	return evaluateGuestCondition(guestSnapshotFromContainer(ct).metrics(), condition)
 }
 
 // evaluateFilterStack evaluates a filter stack against a guest
-func (m *Manager) evaluateFilterStack(guest interface{}, stack FilterStack) bool {
+func (m *Manager) evaluateFilterStack(guest any, stack FilterStack) bool {
 	if len(stack.Filters) == 0 {
 		return true
 	}
@@ -190,7 +191,7 @@ func (m *Manager) evaluateFilterStack(guest interface{}, stack FilterStack) bool
 
 // getGuestThresholds returns the appropriate thresholds for a guest
 // Priority: Guest-specific overrides > Custom rules (by priority) > Global defaults
-func (m *Manager) getGuestThresholds(guest interface{}, guestID string) ThresholdConfig {
+func (m *Manager) getGuestThresholds(guest any, guestID string) ThresholdConfig {
 	// Start with defaults
 	thresholds := m.config.GuestDefaults
 
@@ -333,25 +334,15 @@ func (m *Manager) getGuestThresholds(guest interface{}, guestID string) Threshol
 
 // tryLegacyOverrideMigration attempts to find and migrate legacy override formats.
 // Returns the override and true if found, or zero value and false otherwise.
-func (m *Manager) tryLegacyOverrideMigration(guest interface{}, guestID string) (ThresholdConfig, bool) {
-	var node string
-	var vmID int
-	var instance string
-
-	// Extract node, vmid, and instance from the guest object
-	switch g := guest.(type) {
-	case models.VM:
-		node = g.Node
-		vmID = g.VMID
-		instance = g.Instance
-	case models.Container:
-		node = g.Node
-		vmID = g.VMID
-		instance = g.Instance
-	default:
+func (m *Manager) tryLegacyOverrideMigration(guest any, guestID string) (ThresholdConfig, bool) {
+	snapshot, ok := extractGuestSnapshot(guest)
+	if !ok {
 		// Not a VM or container, no legacy migration possible
 		return ThresholdConfig{}, false
 	}
+	node := snapshot.Node
+	vmID := snapshot.VMID
+	instance := snapshot.Instance
 
 	// Try legacy format: instance-node-VMID
 	if instance != node {
