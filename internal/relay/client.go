@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand/v2"
+	"strings"
 	"sync"
 	"time"
 
@@ -65,6 +66,8 @@ type Client struct {
 	deps   ClientDeps
 	proxy  *HTTPProxy
 	logger zerolog.Logger
+	// startupErr captures invalid static config/dependency inputs.
+	startupErr error
 
 	// Connection state (protected by mu)
 	mu           sync.RWMutex
@@ -83,13 +86,22 @@ type Client struct {
 
 // NewClient creates a new relay client.
 func NewClient(cfg Config, deps ClientDeps, logger zerolog.Logger) *Client {
+	cfg, deps, warnings, startupErr := normalizeClientInputs(cfg, deps)
+	for _, warning := range warnings {
+		logger.Warn().Str("warning", warning).Msg("Normalized relay client configuration")
+	}
+	if startupErr != nil {
+		logger.Error().Err(startupErr).Msg("Invalid relay client configuration")
+	}
+
 	return &Client{
-		config:   cfg,
-		deps:     deps,
-		proxy:    NewHTTPProxy(deps.LocalAddr, logger),
-		logger:   logger,
-		channels: make(map[uint32]*channelState),
-		done:     make(chan struct{}),
+		config:     cfg,
+		deps:       deps,
+		proxy:      NewHTTPProxy(deps.LocalAddr, logger),
+		logger:     logger,
+		startupErr: startupErr,
+		channels:   make(map[uint32]*channelState),
+		done:       make(chan struct{}),
 	}
 }
 
@@ -97,6 +109,14 @@ func NewClient(cfg Config, deps ClientDeps, logger zerolog.Logger) *Client {
 func (c *Client) Run(ctx context.Context) error {
 	ctx, c.cancel = context.WithCancel(ctx)
 	defer close(c.done)
+
+	if c.startupErr != nil {
+		c.mu.Lock()
+		c.lastError = c.startupErr.Error()
+		c.connected = false
+		c.mu.Unlock()
+		return c.startupErr
+	}
 
 	consecutiveFailures := 0
 
@@ -262,7 +282,7 @@ func (c *Client) connectAndHandle(ctx context.Context) error {
 }
 
 func (c *Client) register(conn *websocket.Conn) error {
-	token := c.deps.LicenseTokenFunc()
+	token := strings.TrimSpace(c.deps.LicenseTokenFunc())
 	if token == "" {
 		return fmt.Errorf("no license token available")
 	}
@@ -425,8 +445,10 @@ func (c *Client) handleChannelOpen(frame Frame, sendCh chan<- []byte) {
 		return
 	}
 
+	payload.AuthToken = strings.TrimSpace(payload.AuthToken)
+
 	// Validate the auth token
-	if !c.deps.TokenValidator(payload.AuthToken) {
+	if payload.AuthToken == "" || !c.deps.TokenValidator(payload.AuthToken) {
 		c.logger.Warn().Uint32("channel", payload.ChannelID).Msg("Rejecting channel: invalid auth token")
 		closeFrame, err := NewControlFrame(FrameChannelClose, payload.ChannelID, ChannelClosePayload{
 			ChannelID: payload.ChannelID,
