@@ -614,11 +614,63 @@ func TestPerformUpdateDownloadErrorAndHeaders(t *testing.T) {
 	}
 }
 
+func TestPerformUpdateDownloadRetriesTransientError(t *testing.T) {
+	_, execPath := writeTempExec(t)
+	u := newUpdaterForTest("http://example")
+	u.cfg.APIToken = "token"
+
+	data := testBinary()
+	check := checksum(data)
+
+	origRestart := restartProcessFn
+	origRetrySleep := retrySleepFn
+	t.Cleanup(func() {
+		restartProcessFn = origRestart
+		retrySleepFn = origRetrySleep
+	})
+	restartProcessFn = func(string) error { return nil }
+	retrySleepFn = func(context.Context, time.Duration) error { return nil }
+
+	var calls int32
+	var sawToken bool
+	u.client = &http.Client{
+		Transport: roundTripperFunc(func(r *http.Request) (*http.Response, error) {
+			if r.Header.Get("X-API-Token") == "token" && strings.HasPrefix(r.Header.Get("Authorization"), "Bearer ") {
+				sawToken = true
+			}
+
+			if atomic.AddInt32(&calls, 1) < 3 {
+				return nil, errors.New("transient download error")
+			}
+
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Status:     "200 OK",
+				Body:       io.NopCloser(bytes.NewReader(data)),
+				Header:     http.Header{"X-Checksum-Sha256": []string{check}},
+			}, nil
+		}),
+	}
+
+	if err := u.performUpdateWithExecPath(context.Background(), execPath); err != nil {
+		t.Fatalf("expected retry recovery success, got %v", err)
+	}
+	if got := atomic.LoadInt32(&calls); got != 3 {
+		t.Fatalf("expected 3 attempts, got %d", got)
+	}
+	if !sawToken {
+		t.Fatalf("expected auth headers to be set")
+	}
+}
+
 func TestPerformUpdateStatusFallbackAndSuccess(t *testing.T) {
 	data := testBinary()
 	check := checksum(data)
 
+	var calls int32
+
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&calls, 1)
 		if strings.Contains(r.URL.RawQuery, "arch=") {
 			w.WriteHeader(http.StatusNotFound)
 			return
@@ -647,6 +699,9 @@ func TestPerformUpdateStatusFallbackAndSuccess(t *testing.T) {
 	}
 	if !bytes.HasPrefix(updated, testBinary()[:4]) {
 		t.Fatalf("expected updated binary content")
+	}
+	if got := atomic.LoadInt32(&calls); got != 2 {
+		t.Fatalf("expected arch fallback with no 404 retries (2 calls), got %d", got)
 	}
 }
 

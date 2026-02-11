@@ -30,6 +30,15 @@ const (
 
 	// downloadTimeout is the maximum time allowed for downloading a binary
 	downloadTimeout = 5 * time.Minute
+
+	// updateRequestMaxAttempts is the number of attempts for transient update HTTP failures.
+	updateRequestMaxAttempts = 3
+
+	// updateRetryBaseDelay is the initial retry backoff delay for update HTTP failures.
+	updateRetryBaseDelay = 25 * time.Millisecond
+
+	// updateRetryMaxDelay caps exponential backoff for update HTTP retries.
+	updateRetryMaxDelay = 250 * time.Millisecond
 )
 
 var (
@@ -48,6 +57,7 @@ var (
 	closeFileFn                  = func(f *os.File) error { return f.Close() }
 	readFileFn                   = os.ReadFile
 	writeFileFn                  = os.WriteFile
+	retrySleepFn                 = sleepWithContext
 )
 
 // Config holds the configuration for the updater.
@@ -217,25 +227,11 @@ func (u *Updater) CheckAndUpdate(ctx context.Context) {
 func (u *Updater) getServerVersion(ctx context.Context) (string, error) {
 	url := fmt.Sprintf("%s/api/agent/version", strings.TrimRight(u.cfg.PulseURL, "/"))
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	resp, err := u.getWithRetry(ctx, url, "version check")
 	if err != nil {
-		return "", fmt.Errorf("failed to create request: %w", err)
-	}
-
-	if u.cfg.APIToken != "" {
-		req.Header.Set("X-API-Token", u.cfg.APIToken)
-		req.Header.Set("Authorization", "Bearer "+u.cfg.APIToken)
-	}
-
-	resp, err := u.client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("request failed: %w", err)
+		return "", err
 	}
 	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("server returned status %d", resp.StatusCode)
-	}
 
 	var versionResp struct {
 		Version string `json:"version"`
@@ -246,6 +242,125 @@ func (u *Updater) getServerVersion(ctx context.Context) (string, error) {
 	}
 
 	return versionResp.Version, nil
+}
+
+func sleepWithContext(ctx context.Context, d time.Duration) error {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
+func retryBackoffDelay(attempt int) time.Duration {
+	if attempt <= 0 {
+		return updateRetryBaseDelay
+	}
+
+	delay := updateRetryBaseDelay * time.Duration(1<<(attempt-1))
+	if delay > updateRetryMaxDelay {
+		return updateRetryMaxDelay
+	}
+	return delay
+}
+
+func isRetryableHTTPStatus(code int) bool {
+	switch code {
+	case http.StatusRequestTimeout,
+		http.StatusTooManyRequests,
+		http.StatusInternalServerError,
+		http.StatusBadGateway,
+		http.StatusServiceUnavailable,
+		http.StatusGatewayTimeout:
+		return true
+	default:
+		return false
+	}
+}
+
+func (u *Updater) newAuthedGetRequest(ctx context.Context, requestURL string) (*http.Request, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if u.cfg.APIToken != "" {
+		req.Header.Set("X-API-Token", u.cfg.APIToken)
+		req.Header.Set("Authorization", "Bearer "+u.cfg.APIToken)
+	}
+
+	return req, nil
+}
+
+func (u *Updater) getWithRetry(ctx context.Context, requestURL, operation string) (*http.Response, error) {
+	var lastErr error
+
+	for attempt := 1; attempt <= updateRequestMaxAttempts; attempt++ {
+		req, err := u.newAuthedGetRequest(ctx, requestURL)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create %s request: %w", operation, err)
+		}
+
+		resp, err := u.client.Do(req)
+		if err != nil {
+			lastErr = fmt.Errorf("%s request failed: %w", operation, err)
+			if attempt == updateRequestMaxAttempts || ctx.Err() != nil {
+				break
+			}
+
+			delay := retryBackoffDelay(attempt)
+			u.logger.Warn().
+				Err(err).
+				Str("operation", operation).
+				Str("url", requestURL).
+				Int("attempt", attempt).
+				Int("maxAttempts", updateRequestMaxAttempts).
+				Dur("retryIn", delay).
+				Msg("Transient update request failure, retrying")
+			if err := retrySleepFn(ctx, delay); err != nil {
+				return nil, fmt.Errorf("%s request canceled while waiting to retry: %w", operation, err)
+			}
+			continue
+		}
+
+		if resp.StatusCode == http.StatusOK {
+			return resp, nil
+		}
+
+		lastErr = fmt.Errorf("%s failed with status: %s", operation, resp.Status)
+		if !isRetryableHTTPStatus(resp.StatusCode) {
+			resp.Body.Close()
+			return nil, lastErr
+		}
+
+		resp.Body.Close()
+		if attempt == updateRequestMaxAttempts || ctx.Err() != nil {
+			break
+		}
+
+		delay := retryBackoffDelay(attempt)
+		u.logger.Warn().
+			Str("operation", operation).
+			Str("url", requestURL).
+			Int("statusCode", resp.StatusCode).
+			Int("attempt", attempt).
+			Int("maxAttempts", updateRequestMaxAttempts).
+			Dur("retryIn", delay).
+			Msg("Transient update response status, retrying")
+		if err := retrySleepFn(ctx, delay); err != nil {
+			return nil, fmt.Errorf("%s request canceled while waiting to retry: %w", operation, err)
+		}
+	}
+
+	if lastErr == nil {
+		lastErr = fmt.Errorf("%s request failed", operation)
+	}
+
+	return nil, lastErr
 }
 
 // isUnraid checks if we're running on Unraid by looking for /etc/unraid-version
@@ -332,26 +447,9 @@ func (u *Updater) performUpdateWithExecPath(ctx context.Context, execPath string
 	lastErr := errors.New("failed to download binary")
 
 	for _, url := range candidates {
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		response, err := u.getWithRetry(ctx, url, "binary download")
 		if err != nil {
-			lastErr = fmt.Errorf("failed to create download request: %w", err)
-			continue
-		}
-
-		if u.cfg.APIToken != "" {
-			req.Header.Set("X-API-Token", u.cfg.APIToken)
-			req.Header.Set("Authorization", "Bearer "+u.cfg.APIToken)
-		}
-
-		response, err := u.client.Do(req)
-		if err != nil {
-			lastErr = fmt.Errorf("failed to download binary: %w", err)
-			continue
-		}
-
-		if response.StatusCode != http.StatusOK {
-			lastErr = fmt.Errorf("download failed with status: %s", response.Status)
-			response.Body.Close()
+			lastErr = err
 			continue
 		}
 
