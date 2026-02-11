@@ -278,19 +278,6 @@ func TestGetCachedResultWithData(t *testing.T) {
 	}
 }
 
-func TestIsScanning(t *testing.T) {
-	service := NewService(nil, time.Minute, "auto", func() config.DiscoveryConfig {
-		return config.DefaultDiscoveryConfig()
-	})
-	service.mu.Lock()
-	service.isScanning = true
-	service.mu.Unlock()
-
-	if !service.IsScanning() {
-		t.Fatalf("expected scanning to be true")
-	}
-}
-
 func TestSetInterval(t *testing.T) {
 	service := NewService(nil, time.Minute, "auto", func() config.DiscoveryConfig {
 		return config.DefaultDiscoveryConfig()

@@ -481,13 +481,6 @@ func (s *Service) GetCachedResult() (*pkgdiscovery.DiscoveryResult, time.Time) {
 	return s.cache.result, s.cache.updated
 }
 
-// IsScanning returns whether a scan is currently in progress
-func (s *Service) IsScanning() bool {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.isScanning
-}
-
 // ForceRefresh triggers an immediate scan
 func (s *Service) ForceRefresh() {
 	// Check if scan is already in progress to prevent goroutine leak
