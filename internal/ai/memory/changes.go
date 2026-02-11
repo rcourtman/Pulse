@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -64,6 +65,11 @@ type ChangeDetector struct {
 
 	// Persistence
 	dataDir string
+
+	// saveStateMu guards asynchronous save scheduling state.
+	saveStateMu   sync.Mutex
+	saveRunning   bool
+	saveRequested bool
 }
 
 // ChangeDetectorConfig configures the change detector
@@ -158,15 +164,45 @@ func (d *ChangeDetector) DetectChanges(currentSnapshots []ResourceSnapshot) []Ch
 		d.changes = append(d.changes, newChanges...)
 		d.trimChanges()
 
-		// Persist asynchronously
-		go func() {
-			if err := d.saveToDisk(); err != nil {
-				log.Warn().Err(err).Msg("Failed to save change history")
-			}
-		}()
+		d.requestAsyncSave()
 	}
 
 	return newChanges
+}
+
+func (d *ChangeDetector) requestAsyncSave() {
+	if d.dataDir == "" {
+		return
+	}
+
+	d.saveStateMu.Lock()
+	d.saveRequested = true
+	if d.saveRunning {
+		d.saveStateMu.Unlock()
+		return
+	}
+	d.saveRunning = true
+	d.saveStateMu.Unlock()
+
+	go d.runSaveLoop()
+}
+
+func (d *ChangeDetector) runSaveLoop() {
+	for {
+		d.saveStateMu.Lock()
+		shouldSave := d.saveRequested
+		d.saveRequested = false
+		if !shouldSave {
+			d.saveRunning = false
+			d.saveStateMu.Unlock()
+			return
+		}
+		d.saveStateMu.Unlock()
+
+		if err := d.saveToDisk(); err != nil {
+			log.Warn().Err(err).Msg("Failed to save change history")
+		}
+	}
 }
 
 // detectResourceChanges checks for changes between two snapshots of the same resource
@@ -375,11 +411,11 @@ func (d *ChangeDetector) loadFromDisk() error {
 
 // Helper functions
 
-var changeCounter int64
+var changeCounter atomic.Uint64
 
 func generateChangeID() string {
-	changeCounter++
-	return time.Now().Format("20060102150405") + "-" + intToString(int(changeCounter%1000))
+	count := changeCounter.Add(1)
+	return time.Now().Format("20060102150405") + "-" + intToString(int(count%1000))
 }
 
 func formatDuration(d time.Duration) string {
