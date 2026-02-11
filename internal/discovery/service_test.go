@@ -47,6 +47,31 @@ func (c *countingScanner) DiscoverServersWithCallbacks(ctx context.Context, subn
 	return c.result, c.err
 }
 
+type blockingScanner struct {
+	started chan struct{}
+	done    chan error
+}
+
+func (b *blockingScanner) DiscoverServersWithCallbacks(ctx context.Context, subnet string, serverCallback pkgdiscovery.ServerCallback, progressCallback pkgdiscovery.ProgressCallback) (*pkgdiscovery.DiscoveryResult, error) {
+	if b.started != nil {
+		select {
+		case b.started <- struct{}{}:
+		default:
+		}
+	}
+
+	<-ctx.Done()
+
+	if b.done != nil {
+		select {
+		case b.done <- ctx.Err():
+		default:
+		}
+	}
+
+	return nil, ctx.Err()
+}
+
 func TestPerformScanRecordsHistoryAndMetrics(t *testing.T) {
 	service := NewService(nil, time.Minute, "192.168.1.0/24", func() config.DiscoveryConfig {
 		cfg := config.DefaultDiscoveryConfig()
@@ -356,6 +381,29 @@ func TestForceRefreshSkippedWhenScanning(t *testing.T) {
 	}
 }
 
+func TestForceRefreshSkippedAfterStop(t *testing.T) {
+	scanner := &countingScanner{
+		result: &pkgdiscovery.DiscoveryResult{},
+		calls:  make(chan struct{}, 1),
+	}
+	service := NewService(nil, time.Minute, "auto", func() config.DiscoveryConfig {
+		return config.DefaultDiscoveryConfig()
+	})
+	service.ctx = context.Background()
+	service.scannerFactory = func(config.DiscoveryConfig) (discoveryScanner, error) {
+		return scanner, nil
+	}
+
+	service.Stop()
+	service.ForceRefresh()
+
+	select {
+	case <-scanner.calls:
+		t.Fatalf("expected ForceRefresh to be skipped after Stop")
+	case <-time.After(100 * time.Millisecond):
+	}
+}
+
 func TestSetSubnetTriggersScan(t *testing.T) {
 	scanner := &countingScanner{
 		result: &pkgdiscovery.DiscoveryResult{},
@@ -495,6 +543,40 @@ func TestStartAndStop(t *testing.T) {
 	}
 
 	service.Stop()
+}
+
+func TestStopCancelsInFlightScan(t *testing.T) {
+	scanner := &blockingScanner{
+		started: make(chan struct{}, 1),
+		done:    make(chan error, 1),
+	}
+	service := NewService(nil, time.Hour, "auto", func() config.DiscoveryConfig {
+		return config.DefaultDiscoveryConfig()
+	})
+	service.scannerFactory = func(config.DiscoveryConfig) (discoveryScanner, error) {
+		return scanner, nil
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	service.Start(ctx)
+
+	select {
+	case <-scanner.started:
+	case <-time.After(2 * time.Second):
+		t.Fatalf("expected scan to start")
+	}
+
+	service.Stop()
+
+	select {
+	case err := <-scanner.done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("expected scan to stop with context cancellation, got %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatalf("expected in-flight scan to be canceled by Stop")
+	}
 }
 
 func TestStop_Idempotent(t *testing.T) {

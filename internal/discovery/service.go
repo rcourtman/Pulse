@@ -29,6 +29,7 @@ type Service struct {
 	history        []historyEntry
 	historyLimit   int
 	scannerFactory scannerFactory
+	stopCancel     context.CancelFunc
 	stopOnce       sync.Once
 }
 
@@ -165,7 +166,16 @@ func NewService(wsHub *websocket.Hub, interval time.Duration, subnet string, cfg
 
 // Start begins the background discovery service
 func (s *Service) Start(ctx context.Context) {
-	s.ctx = ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	serviceCtx, cancel := context.WithCancel(ctx)
+
+	s.mu.Lock()
+	s.ctx = serviceCtx
+	s.stopCancel = cancel
+	s.mu.Unlock()
+
 	log.Info().
 		Dur("interval", s.interval).
 		Str("subnet", s.subnet).
@@ -202,8 +212,24 @@ func (s *Service) Start(ctx context.Context) {
 // Stop stops the background discovery service
 func (s *Service) Stop() {
 	s.stopOnce.Do(func() {
+		s.mu.Lock()
+		cancel := s.stopCancel
+		s.stopCancel = nil
+		s.mu.Unlock()
+		if cancel != nil {
+			cancel()
+		}
 		close(s.stopChan)
 	})
+}
+
+func (s *Service) isStopped() bool {
+	select {
+	case <-s.stopChan:
+		return true
+	default:
+		return false
+	}
 }
 
 // scanLoop runs periodic scans
@@ -261,6 +287,11 @@ func (s *Service) GetHistory(limit int) []historyEntry {
 
 // performScan executes a network scan
 func (s *Service) performScan() {
+	if s.isStopped() {
+		log.Debug().Msg("Discovery service stopped, skipping scan")
+		return
+	}
+
 	startTime := time.Now()
 	var scanErr error
 	var blocklistLength int
@@ -352,7 +383,9 @@ func (s *Service) performScan() {
 
 	// Create a context with timeout for the scan
 	// Scanning multiple subnets takes longer, allow 2 minutes
+	s.mu.RLock()
 	scanParentCtx := s.ctx
+	s.mu.RUnlock()
 	if scanParentCtx == nil {
 		scanParentCtx = context.Background()
 	}
@@ -490,6 +523,11 @@ func (s *Service) GetCachedResult() (*pkgdiscovery.DiscoveryResult, time.Time) {
 
 // ForceRefresh triggers an immediate scan
 func (s *Service) ForceRefresh() {
+	if s.isStopped() {
+		log.Debug().Msg("Discovery service stopped, skipping ForceRefresh")
+		return
+	}
+
 	// Check if scan is already in progress to prevent goroutine leak
 	s.mu.RLock()
 	if s.isScanning {
@@ -529,6 +567,11 @@ func (s *Service) SetSubnet(subnet string) {
 	s.mu.Unlock()
 
 	log.Info().Str("subnet", subnet).Msg("Updated discovery subnet")
+
+	if s.isStopped() {
+		log.Debug().Msg("Discovery service stopped, skipping subnet-triggered scan")
+		return
+	}
 
 	// Trigger immediate rescan with new subnet if not already scanning
 	if !alreadyScanning {
