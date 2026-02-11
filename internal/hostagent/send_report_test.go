@@ -3,12 +3,15 @@ package hostagent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"sync"
 	"testing"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/buffer"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
+	"github.com/rs/zerolog"
 )
 
 func TestAgentSendReport_SetsHeadersAndPostsJSON(t *testing.T) {
@@ -115,5 +118,41 @@ func TestAgentSendReport_Non2xxReturnsError(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatalf("expected error for non-2xx response")
+	}
+
+	var statusErr *reportHTTPStatusError
+	if !errors.As(err, &statusErr) {
+		t.Fatalf("expected reportHTTPStatusError, got %T", err)
+	}
+	if statusErr.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("status code = %d, want %d", statusErr.StatusCode, http.StatusInternalServerError)
+	}
+	if statusErr.Endpoint != hostReportEndpoint {
+		t.Fatalf("endpoint = %q, want %q", statusErr.Endpoint, hostReportEndpoint)
+	}
+}
+
+func TestAgentProcess_ForbiddenResponseDoesNotBuffer(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	}))
+	defer server.Close()
+
+	agent := &Agent{
+		cfg:             Config{APIToken: "test-token"},
+		logger:          zerolog.Nop(),
+		httpClient:      server.Client(),
+		trimmedPulseURL: server.URL,
+		reportBuffer:    buffer.New[agentshost.Report](8),
+		collector:       &mockCollector{},
+	}
+
+	if err := agent.process(context.Background()); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+	if !agent.reportBuffer.IsEmpty() {
+		t.Fatalf("buffer should stay empty for forbidden response, len=%d", agent.reportBuffer.Len())
 	}
 }
