@@ -3,12 +3,36 @@ package infradiscovery
 import (
 	"context"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/knowledge"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
+
+type blockingAIAnalyzer struct {
+	response  string
+	startedCh chan struct{}
+	releaseCh chan struct{}
+	callCount int32
+}
+
+func (b *blockingAIAnalyzer) AnalyzeForDiscovery(ctx context.Context, prompt string) (string, error) {
+	atomic.AddInt32(&b.callCount, 1)
+	select {
+	case b.startedCh <- struct{}{}:
+	default:
+	}
+
+	select {
+	case <-b.releaseCh:
+	case <-ctx.Done():
+		return "", ctx.Err()
+	}
+
+	return b.response, nil
+}
 
 func waitFor(t *testing.T, timeout time.Duration, check func() bool) {
 	t.Helper()
@@ -183,5 +207,82 @@ func TestGetDiscoveriesReturnsCopy(t *testing.T) {
 	}
 	if second[0].Name == "changed" {
 		t.Fatalf("expected discoveries to be immutable copy, got %v", second[0].Name)
+	}
+}
+
+func TestRunDiscoverySkipsOverlappingRuns(t *testing.T) {
+	provider := &mockStateProvider{
+		state: models.StateSnapshot{
+			DockerHosts: []models.DockerHost{
+				{
+					AgentID:  "agent-1",
+					Hostname: "host1",
+					Containers: []models.DockerContainer{
+						{ID: "1", Name: "db", Image: "postgres:14"},
+					},
+				},
+			},
+		},
+	}
+
+	analyzer := &blockingAIAnalyzer{
+		response:  `{"service_type": "postgres", "service_name": "PostgreSQL", "category": "database", "cli_command": "", "confidence": 0.95, "reasoning": "PostgreSQL"}`,
+		startedCh: make(chan struct{}, 1),
+		releaseCh: make(chan struct{}),
+	}
+
+	service := NewService(provider, nil, DefaultConfig())
+	service.SetAIAnalyzer(analyzer)
+
+	firstDone := make(chan []DiscoveredApp, 1)
+	go func() {
+		firstDone <- service.RunDiscovery(context.Background())
+	}()
+
+	select {
+	case <-analyzer.startedCh:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for first discovery run to start")
+	}
+
+	skipped := service.RunDiscovery(context.Background())
+	if skipped != nil {
+		t.Fatalf("expected overlapping discovery run to be skipped with nil result, got %v", skipped)
+	}
+	if got := atomic.LoadInt32(&analyzer.callCount); got != 1 {
+		t.Fatalf("expected analyzer to run once while overlap is skipped, got %d calls", got)
+	}
+
+	close(analyzer.releaseCh)
+
+	select {
+	case first := <-firstDone:
+		if len(first) != 1 {
+			t.Fatalf("expected first run to discover 1 app, got %d", len(first))
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for first discovery run to finish")
+	}
+}
+
+func TestBuildContainerInfoCopiesLabels(t *testing.T) {
+	service := &Service{}
+	labels := map[string]string{"app": "database"}
+	container := models.DockerContainer{
+		Name:   "db",
+		Image:  "postgres:14",
+		Labels: labels,
+	}
+
+	info := service.buildContainerInfo(container)
+
+	labels["app"] = "changed"
+	if info.Labels["app"] != "database" {
+		t.Fatalf("expected copied labels to remain unchanged, got %q", info.Labels["app"])
+	}
+
+	info.Labels["role"] = "primary"
+	if _, exists := labels["role"]; exists {
+		t.Fatal("expected label map copy, but original map was modified")
 	}
 }

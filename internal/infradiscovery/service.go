@@ -90,6 +90,8 @@ type Service struct {
 	interval       time.Duration
 	stopCh         chan struct{}
 	running        bool
+	discoveryMu    sync.Mutex
+	discoveryRun   bool
 	discoveries    []DiscoveredApp
 
 	// Cache to avoid re-analyzing the same containers
@@ -216,6 +218,12 @@ func (s *Service) discoveryLoop(ctx context.Context, stopCh <-chan struct{}) {
 
 // RunDiscovery performs a discovery scan using AI analysis.
 func (s *Service) RunDiscovery(ctx context.Context) []DiscoveredApp {
+	if !s.tryStartDiscovery() {
+		log.Debug().Msg("Infrastructure discovery already running, skipping overlapping run")
+		return nil
+	}
+	defer s.finishDiscovery()
+
 	start := time.Now()
 	state := s.stateProvider.GetState()
 
@@ -397,7 +405,10 @@ func (s *Service) buildContainerInfo(c models.DockerContainer) ContainerInfo {
 
 	// Extract labels
 	if len(c.Labels) > 0 {
-		info.Labels = c.Labels
+		info.Labels = make(map[string]string, len(c.Labels))
+		for key, value := range c.Labels {
+			info.Labels[key] = value
+		}
 	}
 
 	// Extract mount destinations
@@ -546,6 +557,22 @@ func (s *Service) saveDiscoveries(apps []DiscoveredApp) {
 				Msg("Failed to save infrastructure discovery to knowledge store")
 		}
 	}
+}
+
+func (s *Service) tryStartDiscovery() bool {
+	s.discoveryMu.Lock()
+	defer s.discoveryMu.Unlock()
+	if s.discoveryRun {
+		return false
+	}
+	s.discoveryRun = true
+	return true
+}
+
+func (s *Service) finishDiscovery() {
+	s.discoveryMu.Lock()
+	s.discoveryRun = false
+	s.discoveryMu.Unlock()
 }
 
 // GetDiscoveries returns the cached list of discovered applications.
