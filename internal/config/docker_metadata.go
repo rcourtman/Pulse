@@ -70,7 +70,7 @@ func (s *DockerMetadataStore) Load() error {
 
 	log.Debug().Str("path", filePath).Msg("Loading Docker metadata from disk")
 
-	data, err := s.fs.ReadFile(filePath)
+	data, err := readLimitedRegularFileFS(s.fs, filePath, maxDockerMetadataFileSizeBytes)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// File doesn't exist yet, not an error

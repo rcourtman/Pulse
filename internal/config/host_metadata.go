@@ -57,7 +57,7 @@ func (s *HostMetadataStore) Load() error {
 	log.Debug().Str("path", filePath).Msg("Loading host metadata from disk")
 
 	// Use configured FS
-	data, err := s.fs.ReadFile(filePath)
+	data, err := readLimitedRegularFileFS(s.fs, filePath, maxHostMetadataFileSizeBytes)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// File doesn't exist yet, not an error

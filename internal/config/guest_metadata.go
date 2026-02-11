@@ -58,7 +58,7 @@ func (s *GuestMetadataStore) Load() error {
 
 	log.Debug().Str("path", filePath).Msg("Loading guest metadata from disk")
 
-	data, err := s.fs.ReadFile(filePath)
+	data, err := readLimitedRegularFileFS(s.fs, filePath, maxGuestMetadataFileSizeBytes)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// File doesn't exist yet, not an error
