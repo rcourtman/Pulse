@@ -286,31 +286,78 @@ func (a *Agent) Run(ctx context.Context) error {
 	}
 }
 
+func (a *Agent) bufferedReportCount() int {
+	if a == nil || a.reportBuffer == nil {
+		return 0
+	}
+	return a.reportBuffer.Len()
+}
+
 func (a *Agent) runOnce(ctx context.Context) {
 	a.flushReports(ctx)
 
 	report, err := a.collectReport(ctx)
 	if err != nil {
-		a.logger.Warn().Err(err).Msg("Failed to collect Kubernetes report")
+		a.logger.Warn().
+			Err(err).
+			Str("phase", "collect_report").
+			Str("cluster_id", a.clusterID).
+			Int("buffer_depth", a.bufferedReportCount()).
+			Msg("Failed to collect Kubernetes report")
 		return
 	}
 
 	if err := a.sendReport(ctx, report); err != nil {
-		a.logger.Warn().Err(err).Msg("Failed to send Kubernetes report, buffering")
+		a.logger.Warn().
+			Err(err).
+			Str("phase", "send_report").
+			Str("cluster_id", a.clusterID).
+			Str("agent_id", a.agentID).
+			Int("report_nodes", len(report.Nodes)).
+			Int("report_pods", len(report.Pods)).
+			Int("report_deployments", len(report.Deployments)).
+			Int("buffer_depth_before", a.bufferedReportCount()).
+			Msg("Failed to send Kubernetes report, buffering")
 		a.reportBuffer.Push(report)
+		a.logger.Debug().
+			Str("phase", "buffer_report").
+			Str("cluster_id", a.clusterID).
+			Int("buffer_depth_after", a.bufferedReportCount()).
+			Msg("Buffered Kubernetes report for retry")
 	}
 }
 
 func (a *Agent) flushReports(ctx context.Context) {
+	flushed := 0
 	for {
 		report, ok := a.reportBuffer.Peek()
 		if !ok {
+			if flushed > 0 {
+				a.logger.Debug().
+					Str("phase", "flush_buffered_reports").
+					Str("cluster_id", a.clusterID).
+					Str("agent_id", a.agentID).
+					Int("flushed_reports", flushed).
+					Int("buffer_depth_remaining", a.bufferedReportCount()).
+					Msg("Flushed buffered Kubernetes reports")
+			}
 			return
 		}
 		if err := a.sendReport(ctx, report); err != nil {
+			a.logger.Warn().
+				Err(err).
+				Str("phase", "flush_buffered_report").
+				Str("cluster_id", a.clusterID).
+				Str("agent_id", a.agentID).
+				Int("report_nodes", len(report.Nodes)).
+				Int("report_pods", len(report.Pods)).
+				Int("report_deployments", len(report.Deployments)).
+				Int("buffer_depth", a.bufferedReportCount()).
+				Msg("Failed to flush buffered Kubernetes report")
 			return
 		}
 		_, _ = a.reportBuffer.Pop()
+		flushed++
 	}
 }
 
@@ -405,7 +452,10 @@ func (a *Agent) collectUsageMetrics(ctx context.Context, nodes []agentsk8s.Node)
 	if nodeErr == nil {
 		parsed, err := parseNodeMetricsPayload(nodeRaw)
 		if err != nil {
-			a.logger.Debug().Err(err).Msg("Failed to parse Kubernetes node metrics payload")
+			a.logger.Debug().
+				Err(err).
+				Int("payload_bytes", len(nodeRaw)).
+				Msg("Failed to parse Kubernetes node metrics payload")
 		} else {
 			nodeUsage = parsed
 		}
@@ -415,7 +465,10 @@ func (a *Agent) collectUsageMetrics(ctx context.Context, nodes []agentsk8s.Node)
 	if podErr == nil {
 		parsed, err := parsePodMetricsPayload(podRaw)
 		if err != nil {
-			a.logger.Debug().Err(err).Msg("Failed to parse Kubernetes pod metrics payload")
+			a.logger.Debug().
+				Err(err).
+				Int("payload_bytes", len(podRaw)).
+				Msg("Failed to parse Kubernetes pod metrics payload")
 		} else {
 			podUsage = parsed
 		}
@@ -423,7 +476,10 @@ func (a *Agent) collectUsageMetrics(ctx context.Context, nodes []agentsk8s.Node)
 
 	summaryUsage, summaryErr := a.collectPodSummaryMetrics(ctx, nodes)
 	if summaryErr != nil {
-		a.logger.Debug().Err(summaryErr).Msg("Failed to collect Kubernetes pod summary metrics")
+		a.logger.Debug().
+			Err(summaryErr).
+			Int("node_count", len(nodes)).
+			Msg("Failed to collect Kubernetes pod summary metrics")
 	}
 	mergePodSummaryUsage(podUsage, summaryUsage)
 
@@ -469,6 +525,11 @@ func (a *Agent) collectPodSummaryMetrics(ctx context.Context, nodes []agentsk8s.
 		raw, err := restClient.Get().AbsPath(path).DoRaw(ctx)
 		if err != nil {
 			failed++
+			a.logger.Debug().
+				Err(err).
+				Str("node", nodeName).
+				Str("path", path).
+				Msg("Failed to fetch Kubernetes pod summary metrics")
 			continue
 		}
 		succeeded++
@@ -476,6 +537,11 @@ func (a *Agent) collectPodSummaryMetrics(ctx context.Context, nodes []agentsk8s.
 		parsed, parseErr := parsePodSummaryMetricsPayload(raw)
 		if parseErr != nil {
 			failed++
+			a.logger.Debug().
+				Err(parseErr).
+				Str("node", nodeName).
+				Int("payload_bytes", len(raw)).
+				Msg("Failed to parse Kubernetes pod summary metrics payload")
 			continue
 		}
 		for key, usage := range parsed {
@@ -498,6 +564,14 @@ func (a *Agent) collectPodSummaryMetrics(ctx context.Context, nodes []agentsk8s.
 
 	if succeeded == 0 && failed > 0 {
 		return nil, fmt.Errorf("no node summary metrics endpoints available")
+	}
+	if succeeded > 0 && failed > 0 {
+		a.logger.Debug().
+			Int("nodes_attempted", len(nodes)).
+			Int("summary_success_nodes", succeeded).
+			Int("summary_failed_nodes", failed).
+			Int("pods_with_summary_usage", len(result)).
+			Msg("Collected Kubernetes pod summary metrics with partial availability")
 	}
 	return result, nil
 }
@@ -1034,7 +1108,7 @@ func (a *Agent) sendReport(ctx context.Context, report agentsk8s.Report) error {
 	url := fmt.Sprintf("%s/api/agents/kubernetes/report", a.pulseURL)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(payload))
 	if err != nil {
-		return fmt.Errorf("create request: %w", err)
+		return fmt.Errorf("create request for %s: %w", url, err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -1044,7 +1118,7 @@ func (a *Agent) sendReport(ctx context.Context, report agentsk8s.Report) error {
 
 	resp, err := a.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("send request: %w", err)
+		return fmt.Errorf("send request to %s: %w", url, err)
 	}
 	defer resp.Body.Close()
 
@@ -1052,9 +1126,9 @@ func (a *Agent) sendReport(ctx context.Context, report agentsk8s.Report) error {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4*1024))
 		msg := strings.TrimSpace(string(body))
 		if msg != "" {
-			return fmt.Errorf("pulse responded with status %s: %s", resp.Status, msg)
+			return fmt.Errorf("pulse responded with status %s for %s: %s", resp.Status, url, msg)
 		}
-		return fmt.Errorf("pulse responded with status %s", resp.Status)
+		return fmt.Errorf("pulse responded with status %s for %s", resp.Status, url)
 	}
 
 	return nil
