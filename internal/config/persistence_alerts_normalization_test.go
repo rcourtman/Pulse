@@ -86,6 +86,35 @@ func TestLoadAlertConfig_Normalization(t *testing.T) {
 			},
 		},
 		{
+			name: "Schedule missing defaults notifyOnResolve to true",
+			input: map[string]interface{}{
+				"enabled": true,
+			},
+			verify: func(t *testing.T, cfg *alerts.AlertConfig) {
+				assert.True(t, cfg.Schedule.NotifyOnResolve)
+			},
+		},
+		{
+			name: "Schedule present without notifyOnResolve defaults to true",
+			input: map[string]interface{}{
+				"schedule": map[string]interface{}{},
+			},
+			verify: func(t *testing.T, cfg *alerts.AlertConfig) {
+				assert.True(t, cfg.Schedule.NotifyOnResolve)
+			},
+		},
+		{
+			name: "Schedule explicit notifyOnResolve false is preserved",
+			input: map[string]interface{}{
+				"schedule": map[string]interface{}{
+					"notifyOnResolve": false,
+				},
+			},
+			verify: func(t *testing.T, cfg *alerts.AlertConfig) {
+				assert.False(t, cfg.Schedule.NotifyOnResolve)
+			},
+		},
+		{
 			name: "NodeDefaults Temperature nil",
 			input: map[string]interface{}{
 				"nodeDefaults": map[string]interface{}{},

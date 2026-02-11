@@ -1828,6 +1828,9 @@ func getOutboundIP() string {
 	}
 	defer conn.Close()
 
-	localAddr := conn.LocalAddr().(*net.UDPAddr)
+	localAddr, ok := conn.LocalAddr().(*net.UDPAddr)
+	if !ok || localAddr == nil || localAddr.IP == nil {
+		return ""
+	}
 	return localAddr.IP.String()
 }
