@@ -444,6 +444,11 @@ type podSummaryUsage struct {
 	EphemeralStorageCapacityBytes int64
 }
 
+type resourceUsage struct {
+	CPU    string `json:"cpu"`
+	Memory string `json:"memory"`
+}
+
 func (a *Agent) collectPodSummaryMetrics(ctx context.Context, nodes []agentsk8s.Node) (map[string]podSummaryUsage, error) {
 	if a == nil || a.kubeClient == nil {
 		return nil, nil
@@ -508,7 +513,7 @@ func parseNodeMetricsPayload(raw []byte) (map[string]agentsk8s.NodeUsage, error)
 			Metadata struct {
 				Name string `json:"name"`
 			} `json:"metadata"`
-			Usage map[string]string `json:"usage"`
+			Usage resourceUsage `json:"usage"`
 		} `json:"items"`
 	}
 
@@ -523,8 +528,8 @@ func parseNodeMetricsPayload(raw []byte) (map[string]agentsk8s.NodeUsage, error)
 			continue
 		}
 
-		cpuMilli := parseCPUMilli(item.Usage["cpu"])
-		memBytes := parseBytes(item.Usage["memory"])
+		cpuMilli := parseCPUMilli(item.Usage.CPU)
+		memBytes := parseBytes(item.Usage.Memory)
 		if cpuMilli <= 0 && memBytes <= 0 {
 			continue
 		}
@@ -545,7 +550,7 @@ func parsePodMetricsPayload(raw []byte) (map[string]agentsk8s.PodUsage, error) {
 				Namespace string `json:"namespace"`
 			} `json:"metadata"`
 			Containers []struct {
-				Usage map[string]string `json:"usage"`
+				Usage resourceUsage `json:"usage"`
 			} `json:"containers"`
 		} `json:"items"`
 	}
@@ -564,8 +569,8 @@ func parsePodMetricsPayload(raw []byte) (map[string]agentsk8s.PodUsage, error) {
 		var cpuMilli int64
 		var memBytes int64
 		for _, container := range item.Containers {
-			cpuMilli += parseCPUMilli(container.Usage["cpu"])
-			memBytes += parseBytes(container.Usage["memory"])
+			cpuMilli += parseCPUMilli(container.Usage.CPU)
+			memBytes += parseBytes(container.Usage.Memory)
 		}
 		if cpuMilli <= 0 && memBytes <= 0 {
 			continue

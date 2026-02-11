@@ -47,6 +47,81 @@ func TestParsePodSummaryMetricsPayload(t *testing.T) {
 	}
 }
 
+func TestParseNodeMetricsPayload(t *testing.T) {
+	raw := []byte(`{
+		"items": [
+			{
+				"metadata": {"name": "node-a"},
+				"usage": {"cpu": "1800m", "memory": "1536Mi"}
+			},
+			{
+				"metadata": {"name": "node-empty"},
+				"usage": {}
+			}
+		]
+	}`)
+
+	usage, err := parseNodeMetricsPayload(raw)
+	if err != nil {
+		t.Fatalf("parseNodeMetricsPayload: %v", err)
+	}
+
+	nodeUsage, ok := usage["node-a"]
+	if !ok {
+		t.Fatalf("expected usage for node-a")
+	}
+	if nodeUsage.CPUMilliCores != 1800 {
+		t.Fatalf("CPUMilliCores = %d, want 1800", nodeUsage.CPUMilliCores)
+	}
+	if nodeUsage.MemoryBytes <= 0 {
+		t.Fatalf("MemoryBytes = %d, expected positive value", nodeUsage.MemoryBytes)
+	}
+
+	if _, ok := usage["node-empty"]; ok {
+		t.Fatalf("expected node-empty to be omitted when cpu/memory usage is empty")
+	}
+}
+
+func TestParsePodMetricsPayload(t *testing.T) {
+	raw := []byte(`{
+		"items": [
+			{
+				"metadata": {"name": "api-0", "namespace": "default"},
+				"containers": [
+					{"usage": {"cpu": "250m", "memory": "512Mi"}},
+					{"usage": {"cpu": "300m", "memory": "256Mi"}}
+				]
+			},
+			{
+				"metadata": {"name": "skip", "namespace": "default"},
+				"containers": [
+					{"usage": {}}
+				]
+			}
+		]
+	}`)
+
+	usage, err := parsePodMetricsPayload(raw)
+	if err != nil {
+		t.Fatalf("parsePodMetricsPayload: %v", err)
+	}
+
+	apiUsage, ok := usage["default/api-0"]
+	if !ok {
+		t.Fatalf("expected usage for default/api-0")
+	}
+	if apiUsage.CPUMilliCores != 550 {
+		t.Fatalf("CPUMilliCores = %d, want 550", apiUsage.CPUMilliCores)
+	}
+	if apiUsage.MemoryBytes <= 0 {
+		t.Fatalf("MemoryBytes = %d, expected positive value", apiUsage.MemoryBytes)
+	}
+
+	if _, ok := usage["default/skip"]; ok {
+		t.Fatalf("expected default/skip to be omitted when usage is empty")
+	}
+}
+
 func TestMergePodSummaryUsage(t *testing.T) {
 	podUsage := map[string]agentsk8s.PodUsage{
 		"default/api-0": {
