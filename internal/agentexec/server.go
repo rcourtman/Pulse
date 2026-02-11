@@ -429,11 +429,13 @@ func (s *Server) ExecuteCommand(ctx context.Context, agentID string, cmd Execute
 	if timeout <= 0 {
 		timeout = 60 * time.Second
 	}
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
 
 	select {
 	case result := <-respCh:
 		return &result, nil
-	case <-time.After(timeout):
+	case <-timer.C:
 		return nil, fmt.Errorf("command timed out after %v", timeout)
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -486,10 +488,13 @@ func (s *Server) ReadFile(ctx context.Context, agentID string, req ReadFilePaylo
 
 	// Wait for result
 	timeout := readFileTimeout
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+
 	select {
 	case result := <-respCh:
 		return &result, nil
-	case <-time.After(timeout):
+	case <-timer.C:
 		return nil, fmt.Errorf("read_file timed out after %v", timeout)
 	case <-ctx.Done():
 		return nil, ctx.Err()
