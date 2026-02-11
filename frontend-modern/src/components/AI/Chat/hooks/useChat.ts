@@ -151,6 +151,26 @@ export function useChat(options: UseChatOptions = {}) {
             };
           }
 
+          case 'explore_status': {
+            const data = (event.data || {}) as {
+              phase?: string;
+              message?: string;
+              model?: string;
+              outcome?: string;
+            };
+            const message = typeof data.message === 'string' ? data.message.trim() : '';
+            if (!message) return msg;
+            return addStreamEvent(msg, {
+              type: 'explore_status',
+              exploreStatus: {
+                phase: data.phase || 'unknown',
+                message,
+                model: data.model,
+                outcome: data.outcome,
+              },
+            });
+          }
+
           case 'tool_start': {
             const data = (event.data || {}) as { id?: string; name?: string; input?: string; raw_input?: string };
 

@@ -35,6 +35,7 @@ func main() {
 	defs := []reflect.Type{
 		reflect.TypeOf(chat.ContentData{}),
 		reflect.TypeOf(chat.ThinkingData{}),
+		reflect.TypeOf(chat.ExploreStatusData{}),
 		reflect.TypeOf(chat.ToolStartData{}),
 		reflect.TypeOf(chat.ToolEndData{}),
 		reflect.TypeOf(chat.ApprovalNeededData{}),
@@ -67,6 +68,7 @@ func main() {
 	buf.WriteString("export type AIChatStreamEvent =\n")
 	buf.WriteString("  | { type: 'content'; data: ContentData }\n")
 	buf.WriteString("  | { type: 'thinking'; data: ThinkingData }\n")
+	buf.WriteString("  | { type: 'explore_status'; data: ExploreStatusData }\n")
 	buf.WriteString("  | { type: 'tool_start'; data: ToolStartData }\n")
 	buf.WriteString("  | { type: 'tool_end'; data: ToolEndData }\n")
 	buf.WriteString("  | { type: 'approval_needed'; data: ApprovalNeededData }\n")

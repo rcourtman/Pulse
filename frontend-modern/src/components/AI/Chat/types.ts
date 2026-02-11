@@ -45,12 +45,20 @@ export interface PendingQuestion {
   isAnswering?: boolean;
 }
 
+export interface ExploreStatus {
+  phase: string;
+  message: string;
+  model?: string;
+  outcome?: string;
+}
+
 // Unified event for chronological display
-export type StreamEventType = 'thinking' | 'tool' | 'content' | 'pending_tool' | 'approval' | 'question';
+export type StreamEventType = 'thinking' | 'explore_status' | 'tool' | 'content' | 'pending_tool' | 'approval' | 'question';
 
 export interface StreamDisplayEvent {
   type: StreamEventType;
   thinking?: string;
+  exploreStatus?: ExploreStatus;
   tool?: ToolExecution;
   pendingTool?: PendingTool;
   content?: string;

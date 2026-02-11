@@ -201,12 +201,17 @@ func injectExploreSummaryIntoLatestUserMessage(messages []Message, summary, mode
 	messages[lastIdx].Content = block + "\n\n---\n" + messages[lastIdx].Content
 }
 
-func emitExploreTrace(callback StreamCallback, text string) {
-	if callback == nil || strings.TrimSpace(text) == "" {
+func emitExploreStatus(callback StreamCallback, phase, message, model, outcome string) {
+	if callback == nil || strings.TrimSpace(message) == "" {
 		return
 	}
-	jsonData, _ := json.Marshal(ThinkingData{Text: text})
-	callback(StreamEvent{Type: "thinking", Data: jsonData})
+	jsonData, _ := json.Marshal(ExploreStatusData{
+		Phase:   phase,
+		Message: message,
+		Model:   model,
+		Outcome: outcome,
+	})
+	callback(StreamEvent{Type: "explore_status", Data: jsonData})
 }
 
 func (s *Service) runExplorePrepass(
@@ -234,17 +239,19 @@ func (s *Service) runExplorePrepass(
 	exploreTools := s.filterToolsForExplorePrompt(ctx, prompt)
 	if len(exploreTools) == 0 {
 		result.Outcome = exploreOutcomeSkippedTools
+		emitExploreStatus(callback, "skipped", "Explore pre-pass skipped: no read-only tools available.", "", result.Outcome)
 		return result
 	}
 
 	provider, exploreModel := s.resolveExploreProvider(overrideModel, selectedModel, defaultProvider)
 	if provider == nil || exploreModel == "" {
 		result.Outcome = exploreOutcomeSkippedModel
+		emitExploreStatus(callback, "skipped", "Explore pre-pass skipped: no explicit model configured.", "", result.Outcome)
 		return result
 	}
 	result.Model = exploreModel
 
-	emitExploreTrace(callback, "[Explore] Running read-only context pass...\n")
+	emitExploreStatus(callback, "started", "Explore pre-pass running (read-only context).", exploreModel, "")
 	exploreLoop := NewAgenticLoop(provider, executor, s.buildExploreSystemPrompt())
 	exploreLoop.SetAutonomousMode(false)
 	// Isolate pre-pass state from the main loop to avoid cross-contamination
@@ -275,12 +282,12 @@ func (s *Service) runExplorePrepass(
 			Msg("[ChatService] Explore pre-pass failed; continuing with main loop")
 		result.Outcome = exploreOutcomeFailed
 		result.Err = err
-		emitExploreTrace(callback, "[Explore] Read-only context pass failed; continuing with main analysis.\n")
+		emitExploreStatus(callback, "failed", "Explore pre-pass failed; continuing with main analysis.", exploreModel, result.Outcome)
 		return result
 	}
 
 	result.Outcome = exploreOutcomeSuccess
 	result.Summary = truncateExploreSummary(latestAssistantContent(resultMessages))
-	emitExploreTrace(callback, "[Explore] Read-only context pass completed.\n")
+	emitExploreStatus(callback, "completed", "Explore pre-pass completed.", exploreModel, result.Outcome)
 	return result
 }

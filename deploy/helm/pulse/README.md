@@ -16,6 +16,23 @@ Helm chart for deploying the Pulse hub and optional Docker monitoring agent.
 
 * <https://github.com/rcourtman/Pulse>
 
+## Explore Monitoring
+
+Enable Explore recording rules and alerts with:
+
+```yaml
+monitoring:
+  prometheusRule:
+    enabled: true
+```
+
+This creates recording rules for:
+- `pulse_ai_explore_failure_rate`
+- `pulse_ai_explore_p95_duration_seconds`
+- `pulse_ai_explore_skipped_no_model_total`
+
+and optional alerts for sustained failure rate, latency, and missing model configuration.
+
 ## Values
 
 | Key | Type | Default | Description |

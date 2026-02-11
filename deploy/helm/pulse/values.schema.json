@@ -238,6 +238,113 @@
               "description": "Metrics endpoint path on the main HTTP service (metrics listener is separate)"
             }
           }
+        },
+        "prometheusRule": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Create PrometheusRule for Explore recording rules and alerts"
+            },
+            "labels": {
+              "type": "object",
+              "description": "Additional labels for PrometheusRule"
+            },
+            "annotations": {
+              "type": "object",
+              "description": "Additional annotations for PrometheusRule"
+            },
+            "failureRate": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Enable high Explore failure-rate alert"
+                },
+                "window": {
+                  "type": "string",
+                  "pattern": "^[0-9]+[smhd]$",
+                  "description": "PromQL range window for failure-rate calculations"
+                },
+                "threshold": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1,
+                  "description": "Failure rate threshold (0-1)"
+                },
+                "minRuns": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "description": "Minimum Explore runs in the window before alerting"
+                },
+                "for": {
+                  "type": "string",
+                  "pattern": "^[0-9]+[smhd]$",
+                  "description": "Required alert duration before firing"
+                },
+                "severity": {
+                  "type": "string",
+                  "description": "Severity label for the alert"
+                }
+              }
+            },
+            "p95Duration": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Enable high Explore p95 latency alert"
+                },
+                "window": {
+                  "type": "string",
+                  "pattern": "^[0-9]+[smhd]$",
+                  "description": "PromQL range window for latency calculations"
+                },
+                "thresholdSeconds": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "p95 latency threshold in seconds"
+                },
+                "for": {
+                  "type": "string",
+                  "pattern": "^[0-9]+[smhd]$",
+                  "description": "Required alert duration before firing"
+                },
+                "severity": {
+                  "type": "string",
+                  "description": "Severity label for the alert"
+                }
+              }
+            },
+            "skippedNoModel": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Enable alert when Explore skips due to missing explicit model"
+                },
+                "window": {
+                  "type": "string",
+                  "pattern": "^[0-9]+[smhd]$",
+                  "description": "PromQL range window for skipped-no-model counts"
+                },
+                "threshold": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "Skipped-no-model threshold over the window"
+                },
+                "for": {
+                  "type": "string",
+                  "pattern": "^[0-9]+[smhd]$",
+                  "description": "Required alert duration before firing"
+                },
+                "severity": {
+                  "type": "string",
+                  "description": "Severity label for the alert"
+                }
+              }
+            }
+          }
         }
       }
     }

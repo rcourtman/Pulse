@@ -173,3 +173,26 @@ monitoring:
     labels: {}
     relabelings: []
     metricRelabelings: []
+  prometheusRule:
+    enabled: false
+    labels: {}
+    annotations: {}
+    failureRate:
+      enabled: true
+      window: 10m
+      threshold: 0.25
+      minRuns: 20
+      for: 10m
+      severity: warning
+    p95Duration:
+      enabled: true
+      window: 10m
+      thresholdSeconds: 8
+      for: 15m
+      severity: warning
+    skippedNoModel:
+      enabled: true
+      window: 30m
+      threshold: 5
+      for: 15m
+      severity: warning

@@ -92,6 +92,14 @@ type ThinkingData struct {
 	Text string `json:"text"`
 }
 
+// ExploreStatusData is the data for "explore_status" events
+type ExploreStatusData struct {
+	Phase   string `json:"phase"`             // started | completed | failed | skipped
+	Message string `json:"message"`           // Human-readable status text for the UI
+	Model   string `json:"model,omitempty"`   // provider:model used for explore
+	Outcome string `json:"outcome,omitempty"` // success | failed | skipped_no_model | skipped_no_tools
+}
+
 // ToolStartData is the data for "tool_start" events
 type ToolStartData struct {
 	ID       string `json:"id"`
