@@ -144,6 +144,24 @@ func TestVerifyBinaryMagicOverrides(t *testing.T) {
 
 	tmpDir := t.TempDir()
 
+	runtimeGOOS = "linux"
+	elfPath := filepath.Join(tmpDir, "elf")
+	elfData := []byte{0x7f, 'E', 'L', 'F', 0x00}
+	if err := os.WriteFile(elfPath, elfData, 0644); err != nil {
+		t.Fatalf("write elf: %v", err)
+	}
+	if err := verifyBinaryMagic(elfPath); err != nil {
+		t.Fatalf("expected ELF to validate, got %v", err)
+	}
+
+	badELFPath := filepath.Join(tmpDir, "bad-elf")
+	if err := os.WriteFile(badELFPath, []byte{0x00, 0x00, 0x00, 0x00}, 0644); err != nil {
+		t.Fatalf("write bad elf: %v", err)
+	}
+	if err := verifyBinaryMagic(badELFPath); err == nil {
+		t.Fatalf("expected ELF error")
+	}
+
 	runtimeGOOS = "darwin"
 	machoPath := filepath.Join(tmpDir, "macho")
 	machoData := []byte{0xcf, 0xfa, 0xed, 0xfe, 0x00}
