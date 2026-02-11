@@ -62,8 +62,10 @@ func NewHistoryManager(dataDir string) *HistoryManager {
 	}
 
 	// Ensure data directory exists
-	if err := os.MkdirAll(dataDir, 0755); err != nil {
+	if err := os.MkdirAll(dataDir, alertsDirPerm); err != nil {
 		log.Error().Err(err).Str("dir", dataDir).Msg("Failed to create data directory")
+	} else if err := os.Chmod(dataDir, alertsDirPerm); err != nil {
+		log.Warn().Err(err).Str("dir", dataDir).Msg("Failed to harden history directory permissions")
 	}
 
 	// Load existing history
@@ -243,7 +245,7 @@ func (hm *HistoryManager) saveHistoryWithRetry(maxRetries int) error {
 	var lastErr error
 	for attempt := 1; attempt <= maxRetries; attempt++ {
 		// Write new file
-		if err := os.WriteFile(historyFile, data, 0644); err != nil {
+		if err := os.WriteFile(historyFile, data, alertsFilePerm); err != nil {
 			lastErr = err
 			log.Warn().
 				Err(err).
@@ -252,6 +254,20 @@ func (hm *HistoryManager) saveHistoryWithRetry(maxRetries int) error {
 				Msg("Failed to write history file, will retry")
 
 			// Exponential backoff: 100ms, 200ms, 400ms
+			if attempt < maxRetries {
+				backoff := time.Duration(100*(1<<uint(attempt-1))) * time.Millisecond
+				time.Sleep(backoff)
+			}
+			continue
+		}
+		if err := os.Chmod(historyFile, alertsFilePerm); err != nil {
+			lastErr = err
+			log.Warn().
+				Err(err).
+				Int("attempt", attempt).
+				Int("maxRetries", maxRetries).
+				Msg("Failed to harden history file permissions, will retry")
+
 			if attempt < maxRetries {
 				backoff := time.Duration(100*(1<<uint(attempt-1))) * time.Millisecond
 				time.Sleep(backoff)

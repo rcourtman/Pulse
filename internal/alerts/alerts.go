@@ -39,6 +39,8 @@ const (
 const (
 	StaleTrackingThreshold = 24 * time.Hour
 	RateLimitCleanupWindow = 1 * time.Hour
+	alertsDirPerm          = 0o700
+	alertsFilePerm         = 0o600
 )
 
 func normalizePoweredOffSeverity(level AlertLevel) AlertLevel {
@@ -468,6 +470,7 @@ func SetMetricHooks(fired func(*Alert), resolved func(*Alert), suppressed func(s
 
 type Manager struct {
 	mu               sync.RWMutex
+	alertsDir        string
 	config           AlertConfig
 	activeAlerts     map[string]*Alert
 	historyManager   *HistoryManager
@@ -546,9 +549,14 @@ func NewManager() *Manager {
 // NewManagerWithDataDir creates a new alert manager with a custom data directory.
 // This enables tenant-scoped alert persistence in multi-tenant deployments.
 func NewManagerWithDataDir(dataDir string) *Manager {
+	if strings.TrimSpace(dataDir) == "" {
+		dataDir = utils.GetDataDir()
+	}
+
 	alertsDir := filepath.Join(dataDir, "alerts")
 	alertOrphaned := true
 	m := &Manager{
+		alertsDir:                       alertsDir,
 		activeAlerts:                    make(map[string]*Alert),
 		historyManager:                  NewHistoryManager(alertsDir),
 		escalationStop:                  make(chan struct{}),
@@ -9174,9 +9182,12 @@ func (m *Manager) SaveActiveAlerts() error {
 	defer m.mu.RUnlock()
 
 	// Create directory if it doesn't exist
-	alertsDir := filepath.Join(utils.GetDataDir(), "alerts")
-	if err := os.MkdirAll(alertsDir, 0755); err != nil {
+	alertsDir := m.getAlertsDir()
+	if err := os.MkdirAll(alertsDir, alertsDirPerm); err != nil {
 		return fmt.Errorf("failed to create alerts directory: %w", err)
+	}
+	if err := os.Chmod(alertsDir, alertsDirPerm); err != nil {
+		return fmt.Errorf("failed to set alerts directory permissions: %w", err)
 	}
 
 	// Convert map to slice for JSON encoding
@@ -9207,6 +9218,12 @@ func (m *Manager) SaveActiveAlerts() error {
 		}
 		return fmt.Errorf("failed to write active alerts: %w", err)
 	}
+	if err := tmpFile.Chmod(alertsFilePerm); err != nil {
+		if closeErr := tmpFile.Close(); closeErr != nil {
+			log.Warn().Err(closeErr).Str("file", tmpName).Msg("Failed to close temp file after chmod error")
+		}
+		return fmt.Errorf("failed to set active alerts temp file permissions: %w", err)
+	}
 	if err := tmpFile.Close(); err != nil {
 		return fmt.Errorf("failed to close temp file: %w", err)
 	}
@@ -9214,6 +9231,9 @@ func (m *Manager) SaveActiveAlerts() error {
 	finalFile := filepath.Join(alertsDir, "active-alerts.json")
 	if err := os.Rename(tmpName, finalFile); err != nil {
 		return fmt.Errorf("failed to rename active alerts file: %w", err)
+	}
+	if err := os.Chmod(finalFile, alertsFilePerm); err != nil {
+		return fmt.Errorf("failed to set active alerts file permissions: %w", err)
 	}
 
 	log.Debug().Int("count", len(alerts)).Msg("Saved active alerts to disk")
@@ -9244,7 +9264,7 @@ func (m *Manager) LoadActiveAlerts() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	alertsFile := filepath.Join(utils.GetDataDir(), "alerts", "active-alerts.json")
+	alertsFile := filepath.Join(m.getAlertsDir(), "active-alerts.json")
 	data, err := os.ReadFile(alertsFile)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -9257,6 +9277,9 @@ func (m *Manager) LoadActiveAlerts() error {
 	var alerts []*Alert
 	if err := json.Unmarshal(data, &alerts); err != nil {
 		return fmt.Errorf("failed to unmarshal active alerts: %w", err)
+	}
+	if err := os.Chmod(alertsFile, alertsFilePerm); err != nil && !os.IsNotExist(err) {
+		log.Warn().Err(err).Str("file", alertsFile).Msg("Failed to harden active alerts file permissions")
 	}
 
 	// Restore alerts to the map with deduplication
@@ -9392,6 +9415,15 @@ func (m *Manager) LoadActiveAlerts() error {
 		Int("duplicates", duplicateCount).
 		Msg("Restored active alerts from disk")
 	return nil
+}
+
+func (m *Manager) getAlertsDir() string {
+	if strings.TrimSpace(m.alertsDir) != "" {
+		return m.alertsDir
+	}
+
+	// Fallback for tests that construct Manager directly.
+	return filepath.Join(utils.GetDataDir(), "alerts")
 }
 
 // CleanupAlertsForNodes removes alerts for nodes that no longer exist

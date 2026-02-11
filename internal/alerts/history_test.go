@@ -723,6 +723,51 @@ func TestNewHistoryManager_DefaultDir(t *testing.T) {
 	}
 }
 
+func TestNewHistoryManager_HardensDirectoryPermissions(t *testing.T) {
+	tempDir := t.TempDir()
+	if err := os.Chmod(tempDir, 0o755); err != nil {
+		t.Fatalf("failed to set initial permissions: %v", err)
+	}
+
+	hm := NewHistoryManager(tempDir)
+	defer hm.Stop()
+
+	info, err := os.Stat(tempDir)
+	if err != nil {
+		t.Fatalf("failed to stat data dir: %v", err)
+	}
+	if info.Mode().Perm() != alertsDirPerm {
+		t.Fatalf("data dir permissions = %o, want %o", info.Mode().Perm(), alertsDirPerm)
+	}
+}
+
+func TestSaveHistory_HardensFilePermissions(t *testing.T) {
+	hm := newTestHistoryManager(t)
+	hm.history = []HistoryEntry{
+		{
+			Alert: Alert{
+				ID:        "perm-test",
+				Type:      "cpu",
+				StartTime: time.Now().Add(-1 * time.Minute),
+				LastSeen:  time.Now(),
+			},
+			Timestamp: time.Now(),
+		},
+	}
+
+	if err := hm.saveHistory(); err != nil {
+		t.Fatalf("saveHistory failed: %v", err)
+	}
+
+	info, err := os.Stat(hm.historyFile)
+	if err != nil {
+		t.Fatalf("failed to stat history file: %v", err)
+	}
+	if info.Mode().Perm() != alertsFilePerm {
+		t.Fatalf("history file permissions = %o, want %o", info.Mode().Perm(), alertsFilePerm)
+	}
+}
+
 func TestLoadHistory_PermissionError(t *testing.T) {
 	// t.Parallel()
 
