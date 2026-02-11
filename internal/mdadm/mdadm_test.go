@@ -3,6 +3,7 @@ package mdadm
 import (
 	"context"
 	"errors"
+	"os"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
@@ -13,6 +14,41 @@ func withRunCommandOutput(t *testing.T, fn func(ctx context.Context, name string
 	orig := runCommandOutput
 	runCommandOutput = fn
 	t.Cleanup(func() { runCommandOutput = orig })
+}
+
+func withResolveMdadmBinary(t *testing.T, fn func() (string, error)) {
+	t.Helper()
+	orig := resolveMdadmBinary
+	resolveMdadmBinary = fn
+	t.Cleanup(func() { resolveMdadmBinary = orig })
+}
+
+func withReadFile(t *testing.T, fn func(name string) ([]byte, error)) {
+	t.Helper()
+	orig := readFile
+	readFile = fn
+	t.Cleanup(func() { readFile = orig })
+}
+
+func withMdadmLookPath(t *testing.T, fn func(file string) (string, error)) {
+	t.Helper()
+	orig := mdadmLookPath
+	mdadmLookPath = fn
+	t.Cleanup(func() { mdadmLookPath = orig })
+}
+
+func withMdadmStat(t *testing.T, fn func(name string) (os.FileInfo, error)) {
+	t.Helper()
+	orig := mdadmStat
+	mdadmStat = fn
+	t.Cleanup(func() { mdadmStat = orig })
+}
+
+func withCommonMdadmPaths(t *testing.T, paths []string) {
+	t.Helper()
+	orig := commonMdadmPaths
+	commonMdadmPaths = paths
+	t.Cleanup(func() { commonMdadmPaths = orig })
 }
 
 func TestParseDetail(t *testing.T) {
@@ -552,6 +588,7 @@ Consistency Policy : resync
 
 func TestIsMdadmAvailable(t *testing.T) {
 	t.Run("available", func(t *testing.T) {
+		withResolveMdadmBinary(t, func() (string, error) { return "mdadm", nil })
 		withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
 			return []byte("mdadm"), nil
 		})
@@ -562,10 +599,18 @@ func TestIsMdadmAvailable(t *testing.T) {
 	})
 
 	t.Run("missing", func(t *testing.T) {
+		withResolveMdadmBinary(t, func() (string, error) { return "mdadm", nil })
 		withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
 			return nil, errors.New("missing")
 		})
 
+		if isMdadmAvailable(context.Background()) {
+			t.Fatal("expected mdadm unavailable")
+		}
+	})
+
+	t.Run("binary path resolution failed", func(t *testing.T) {
+		withResolveMdadmBinary(t, func() (string, error) { return "", errors.New("missing binary") })
 		if isMdadmAvailable(context.Background()) {
 			t.Fatal("expected mdadm unavailable")
 		}
@@ -577,7 +622,7 @@ func TestListArrayDevices(t *testing.T) {
 md0 : active raid1 sdb1[1] sda1[0]
 md1 : active raid6 sdc1[2] sdb1[1] sda1[0]
 unused devices: <none>`
-	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	withReadFile(t, func(name string) ([]byte, error) {
 		return []byte(mdstat), nil
 	})
 
@@ -591,7 +636,7 @@ unused devices: <none>`
 }
 
 func TestListArrayDevicesError(t *testing.T) {
-	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	withReadFile(t, func(name string) ([]byte, error) {
 		return nil, errors.New("read failed")
 	})
 
@@ -601,6 +646,7 @@ func TestListArrayDevicesError(t *testing.T) {
 }
 
 func TestCollectArrayDetailError(t *testing.T) {
+	withResolveMdadmBinary(t, func() (string, error) { return "mdadm", nil })
 	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		return nil, errors.New("detail failed")
 	})
@@ -610,7 +656,20 @@ func TestCollectArrayDetailError(t *testing.T) {
 	}
 }
 
+func TestCollectArrayDetailInvalidDevicePath(t *testing.T) {
+	withResolveMdadmBinary(t, func() (string, error) { return "mdadm", nil })
+	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		t.Fatal("runCommandOutput should not be called for invalid device path")
+		return nil, nil
+	})
+
+	if _, err := collectArrayDetail(context.Background(), "--detail"); err == nil {
+		t.Fatal("expected invalid device path error")
+	}
+}
+
 func TestCollectArraysNotAvailable(t *testing.T) {
+	withResolveMdadmBinary(t, func() (string, error) { return "mdadm", nil })
 	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		return nil, errors.New("missing")
 	})
@@ -625,10 +684,11 @@ func TestCollectArraysNotAvailable(t *testing.T) {
 }
 
 func TestCollectArraysListError(t *testing.T) {
+	withResolveMdadmBinary(t, func() (string, error) { return "mdadm", nil })
 	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
-		if name == "mdadm" {
-			return []byte("mdadm"), nil
-		}
+		return []byte("mdadm"), nil
+	})
+	withReadFile(t, func(name string) ([]byte, error) {
 		return nil, errors.New("read failed")
 	})
 
@@ -638,10 +698,11 @@ func TestCollectArraysListError(t *testing.T) {
 }
 
 func TestCollectArraysNoDevices(t *testing.T) {
+	withResolveMdadmBinary(t, func() (string, error) { return "mdadm", nil })
 	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
-		if name == "mdadm" {
-			return []byte("mdadm"), nil
-		}
+		return []byte("mdadm"), nil
+	})
+	withReadFile(t, func(name string) ([]byte, error) {
 		return []byte("unused devices: <none>"), nil
 	})
 
@@ -655,18 +716,15 @@ func TestCollectArraysNoDevices(t *testing.T) {
 }
 
 func TestCollectArraysSkipsDetailError(t *testing.T) {
+	withResolveMdadmBinary(t, func() (string, error) { return "mdadm", nil })
 	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
-		switch name {
-		case "mdadm":
-			if len(args) > 0 && args[0] == "--version" {
-				return []byte("mdadm"), nil
-			}
-			return nil, errors.New("detail failed")
-		case "cat":
-			return []byte("md0 : active raid1 sda1[0]"), nil
-		default:
-			return nil, errors.New("unexpected")
+		if len(args) > 0 && args[0] == "--version" {
+			return []byte("mdadm"), nil
 		}
+		return nil, errors.New("detail failed")
+	})
+	withReadFile(t, func(name string) ([]byte, error) {
+		return []byte("md0 : active raid1 sda1[0]"), nil
 	})
 
 	arrays, err := CollectArrays(context.Background())
@@ -691,18 +749,15 @@ func TestCollectArraysSuccess(t *testing.T) {
     Number   Major   Minor   RaidDevice State
        0       8        1        0      active sync   /dev/sda1`
 
+	withResolveMdadmBinary(t, func() (string, error) { return "mdadm", nil })
 	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
-		switch name {
-		case "mdadm":
-			if len(args) > 0 && args[0] == "--version" {
-				return []byte("mdadm"), nil
-			}
-			return []byte(detail), nil
-		case "cat":
-			return []byte("md0 : active raid1 sda1[0]"), nil
-		default:
-			return nil, errors.New("unexpected")
+		if len(args) > 0 && args[0] == "--version" {
+			return []byte("mdadm"), nil
 		}
+		return []byte(detail), nil
+	})
+	withReadFile(t, func(name string) ([]byte, error) {
+		return []byte("md0 : active raid1 sda1[0]"), nil
 	})
 
 	arrays, err := CollectArrays(context.Background())
@@ -718,7 +773,7 @@ func TestGetRebuildSpeed(t *testing.T) {
 	mdstat := `md0 : active raid1 sda1[0] sdb1[1]
       [>....................]  recovery = 12.6% (37043392/293039104) finish=127.5min speed=33440K/sec
 `
-	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	withReadFile(t, func(name string) ([]byte, error) {
 		return []byte(mdstat), nil
 	})
 
@@ -728,7 +783,7 @@ func TestGetRebuildSpeed(t *testing.T) {
 }
 
 func TestGetRebuildSpeedNoMatch(t *testing.T) {
-	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	withReadFile(t, func(name string) ([]byte, error) {
 		return []byte("md0 : active raid1 sda1[0]"), nil
 	})
 
@@ -738,7 +793,7 @@ func TestGetRebuildSpeedNoMatch(t *testing.T) {
 }
 
 func TestGetRebuildSpeedError(t *testing.T) {
-	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	withReadFile(t, func(name string) ([]byte, error) {
 		return nil, errors.New("read failed")
 	})
 
@@ -759,7 +814,7 @@ func TestParseDetailSetsRebuildSpeed(t *testing.T) {
 	mdstat := `md0 : active raid1 sda1[0]
       [>....................]  recovery = 12.6% (37043392/293039104) finish=127.5min speed=1234K/sec
 `
-	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	withReadFile(t, func(name string) ([]byte, error) {
 		return []byte(mdstat), nil
 	})
 
@@ -777,11 +832,56 @@ func TestGetRebuildSpeedSectionExit(t *testing.T) {
       [>....................]  recovery = 12.6% (37043392/293039104) finish=127.5min
 md1 : active raid1 sdb1[0]
 `
-	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	withReadFile(t, func(name string) ([]byte, error) {
 		return []byte(mdstat), nil
 	})
 
 	if speed := getRebuildSpeed("/dev/md0"); speed != "" {
 		t.Fatalf("expected empty speed, got %s", speed)
+	}
+}
+
+func TestReadProcMDStatTooLarge(t *testing.T) {
+	withReadFile(t, func(name string) ([]byte, error) {
+		return make([]byte, maxMDStatBytes+1), nil
+	})
+
+	if _, err := readProcMDStat(); err == nil {
+		t.Fatal("expected too-large mdstat error")
+	}
+}
+
+func TestResolveMdadmPathRejectsRelativeLookPath(t *testing.T) {
+	withCommonMdadmPaths(t, nil)
+	withMdadmLookPath(t, func(file string) (string, error) {
+		return "mdadm", nil
+	})
+	withMdadmStat(t, func(name string) (os.FileInfo, error) {
+		return nil, nil
+	})
+
+	if _, err := resolveMdadmPath(); err == nil {
+		t.Fatal("expected relative path rejection")
+	}
+}
+
+func TestResolveMdadmPathPrefersCommonAbsolutePath(t *testing.T) {
+	withCommonMdadmPaths(t, []string{"/preferred/mdadm", "/unused/mdadm"})
+	withMdadmStat(t, func(name string) (os.FileInfo, error) {
+		if name == "/preferred/mdadm" {
+			return nil, nil
+		}
+		return nil, errors.New("missing")
+	})
+	withMdadmLookPath(t, func(file string) (string, error) {
+		return "/path/from/lookpath/mdadm", nil
+	})
+
+	path, err := resolveMdadmPath()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if path != "/preferred/mdadm" {
+		t.Fatalf("expected preferred path, got %q", path)
 	}
 }
