@@ -29,17 +29,16 @@ func TestHandleGetInfraUpdates(t *testing.T) {
 			t.Errorf("Expected status 200, got %d", rr.Code)
 		}
 
-		var response map[string]interface{}
+		var response infraUpdatesResponse
 		if err := json.NewDecoder(rr.Body).Decode(&response); err != nil {
 			t.Fatalf("Failed to decode response: %v", err)
 		}
 
-		// Verify structure
-		if _, ok := response["updates"]; !ok {
-			t.Error("Expected 'updates' field in response")
+		if response.Total != 0 {
+			t.Errorf("Expected total to be 0, got %d", response.Total)
 		}
-		if _, ok := response["total"]; !ok {
-			t.Error("Expected 'total' field in response")
+		if len(response.Updates) != 0 {
+			t.Errorf("Expected 0 updates, got %d", len(response.Updates))
 		}
 	})
 
@@ -69,12 +68,12 @@ func TestHandleGetInfraUpdatesSummary(t *testing.T) {
 			t.Errorf("Expected status 200, got %d", rr.Code)
 		}
 
-		var response map[string]interface{}
+		var response infraUpdatesSummaryResponse
 		if err := json.NewDecoder(rr.Body).Decode(&response); err != nil {
 			t.Fatalf("Failed to decode response: %v", err)
 		}
 
-		if response["totalUpdates"].(float64) != 0 {
+		if response.TotalUpdates != 0 {
 			t.Error("Expected totalUpdates to be 0")
 		}
 	})
@@ -104,15 +103,15 @@ func TestHandleGetInfraUpdatesForHost(t *testing.T) {
 			t.Errorf("Expected status 200, got %d", rr.Code)
 		}
 
-		var response map[string]interface{}
+		var response infraUpdatesForHostResponse
 		if err := json.NewDecoder(rr.Body).Decode(&response); err != nil {
 			t.Fatalf("Failed to decode response: %v", err)
 		}
 
-		if response["hostId"] != "nonexistent" {
+		if response.HostID != "nonexistent" {
 			t.Error("Expected hostId in response")
 		}
-		if response["total"].(float64) != 0 {
+		if response.Total != 0 {
 			t.Error("Expected total to be 0")
 		}
 	})
@@ -303,10 +302,7 @@ func TestUpdateDetectionHandlers_WithMonitorState(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected status %d, got %d", http.StatusOK, rr.Code)
 	}
-	var summaryResp struct {
-		Summaries    map[string]map[string]any `json:"summaries"`
-		TotalUpdates int                       `json:"totalUpdates"`
-	}
+	var summaryResp infraUpdatesSummaryResponse
 	if err := json.NewDecoder(rr.Body).Decode(&summaryResp); err != nil {
 		t.Fatalf("decode summary response: %v", err)
 	}
@@ -318,6 +314,12 @@ func TestUpdateDetectionHandlers_WithMonitorState(t *testing.T) {
 	}
 	if _, ok := summaryResp.Summaries["host-2"]; !ok {
 		t.Fatalf("expected summary for host-2")
+	}
+	if summaryResp.Summaries["host-1"].TotalCount != 2 {
+		t.Fatalf("expected host-1 total count 2, got %d", summaryResp.Summaries["host-1"].TotalCount)
+	}
+	if summaryResp.Summaries["host-2"].TotalCount != 1 {
+		t.Fatalf("expected host-2 total count 1, got %d", summaryResp.Summaries["host-2"].TotalCount)
 	}
 
 	req = httptest.NewRequest(http.MethodGet, "/api/infra-updates/docker:host-1/c1", nil)
