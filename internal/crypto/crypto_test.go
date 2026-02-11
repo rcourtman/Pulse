@@ -748,3 +748,47 @@ func TestEncryptRefusesWhenKeyPathIsSymlink(t *testing.T) {
 		t.Fatal("expected Encrypt to fail when key path is a symlink")
 	}
 }
+
+func TestEncryptRefusesWhenKeyFileMaterialChanges(t *testing.T) {
+	tmpDir := t.TempDir()
+	cm, err := NewCryptoManagerAt(tmpDir)
+	if err != nil {
+		t.Fatalf("NewCryptoManagerAt() error: %v", err)
+	}
+
+	replacement := make([]byte, encryptionKeyLength)
+	for i := range replacement {
+		replacement[i] = byte((i + 1) % 256)
+	}
+	if err := os.WriteFile(
+		filepath.Join(tmpDir, encryptionKeyFileName),
+		[]byte(base64.StdEncoding.EncodeToString(replacement)),
+		encryptionKeyFilePerm,
+	); err != nil {
+		t.Fatalf("overwrite key file: %v", err)
+	}
+
+	if _, err := cm.Encrypt([]byte("new data")); err == nil {
+		t.Fatal("expected Encrypt to fail when key file contents change")
+	}
+}
+
+func TestEncryptRefusesWhenKeyFileMaterialIsInvalid(t *testing.T) {
+	tmpDir := t.TempDir()
+	cm, err := NewCryptoManagerAt(tmpDir)
+	if err != nil {
+		t.Fatalf("NewCryptoManagerAt() error: %v", err)
+	}
+
+	if err := os.WriteFile(
+		filepath.Join(tmpDir, encryptionKeyFileName),
+		[]byte("not-base64"),
+		encryptionKeyFilePerm,
+	); err != nil {
+		t.Fatalf("overwrite key file: %v", err)
+	}
+
+	if _, err := cm.Encrypt([]byte("new data")); err == nil {
+		t.Fatal("expected Encrypt to fail when key file contents are invalid")
+	}
+}

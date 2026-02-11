@@ -330,7 +330,7 @@ func (c *CryptoManager) Encrypt(plaintext []byte) ([]byte, error) {
 	// CRITICAL: Verify the key file still exists on disk before encrypting
 	// This prevents creating orphaned encrypted data that can never be decrypted
 	if c.keyPath != "" {
-		info, err := os.Lstat(c.keyPath)
+		diskKey, err := loadKeyFromFile(c.keyPath)
 		if os.IsNotExist(err) {
 			log.Error().
 				Str("keyPath", c.keyPath).
@@ -338,10 +338,10 @@ func (c *CryptoManager) Encrypt(plaintext []byte) ([]byte, error) {
 			return nil, fmt.Errorf("encryption key file deleted - cannot encrypt (would create orphaned data)")
 		}
 		if err != nil {
-			return nil, fmt.Errorf("encryption key file check failed: %w", err)
+			return nil, fmt.Errorf("encryption key file validation failed: %w", err)
 		}
-		if err := validateEncryptionKeyFile(c.keyPath, info); err != nil {
-			return nil, fmt.Errorf("encryption key path safety check failed: %w", err)
+		if !bytes.Equal(diskKey, c.key) {
+			return nil, fmt.Errorf("encryption key file changed on disk - refusing to encrypt with stale in-memory key")
 		}
 	}
 
