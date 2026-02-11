@@ -355,6 +355,7 @@ func (e *PulseToolExecutor) executeReadTail(ctx context.Context, args map[string
 // executeReadLogs reads logs from docker or journalctl
 func (e *PulseToolExecutor) executeReadLogs(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
 	source, _ := args["source"].(string)
+	source = strings.ToLower(strings.TrimSpace(source))
 	targetHost, _ := args["target_host"].(string)
 	container, _ := args["container"].(string)
 	unit, _ := args["unit"].(string)
@@ -376,10 +377,32 @@ func (e *PulseToolExecutor) executeReadLogs(ctx context.Context, args map[string
 
 	var command string
 
+	// If source is omitted, infer from provided identifiers:
+	// - container -> docker logs
+	// - otherwise -> journal logs
+	if source == "" {
+		if container != "" {
+			source = "docker"
+		} else {
+			source = "journal"
+		}
+	}
+
 	switch source {
 	case "docker":
 		if container == "" {
-			return NewErrorResult(fmt.Errorf("container is required for docker logs")), nil
+			// Graceful fallback: list active docker containers/status when no specific
+			// container was provided. This keeps read-only workflows moving instead of
+			// trapping the model in repeated argument errors.
+			command = "docker ps --format '{{.Names}}\t{{.Status}}' | head -20"
+			if grepPattern != "" {
+				command += fmt.Sprintf(" | grep -i %s", shellEscape(grepPattern))
+			}
+			return e.executeReadExec(ctx, map[string]interface{}{
+				"action":      "exec",
+				"command":     command,
+				"target_host": targetHost,
+			})
 		}
 		if !isValidContainerName(container) {
 			return NewErrorResult(fmt.Errorf("invalid container name")), nil
@@ -391,7 +414,11 @@ func (e *PulseToolExecutor) executeReadLogs(ctx context.Context, args map[string
 
 	case "journal":
 		if unit == "" {
-			return NewErrorResult(fmt.Errorf("unit is required for journal logs (e.g. unit=\"pvestatd\"). To search across all journal entries, use action=\"exec\" with a journalctl command instead")), nil
+			command = fmt.Sprintf("journalctl -n %d --no-pager", lines)
+			if since != "" {
+				command = fmt.Sprintf("journalctl --since %s -n %d --no-pager", shellEscape(since), lines)
+			}
+			break
 		}
 		command = fmt.Sprintf("journalctl -u %s -n %d --no-pager", shellEscape(unit), lines)
 		if since != "" {
@@ -399,7 +426,10 @@ func (e *PulseToolExecutor) executeReadLogs(ctx context.Context, args map[string
 		}
 
 	default:
-		return NewErrorResult(fmt.Errorf("source must be 'docker' or 'journal'")), nil
+		// Unknown source - prefer a safe fallback over hard failure to avoid
+		// repeated tool loops caused by minor argument mistakes.
+		log.Warn().Str("source", source).Msg("pulse_read logs: unknown source, using journal fallback")
+		command = fmt.Sprintf("journalctl -n %d --no-pager", lines)
 	}
 
 	// Add grep filter if provided

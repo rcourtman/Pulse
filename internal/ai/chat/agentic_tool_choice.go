@@ -245,6 +245,35 @@ func hasWriteIntent(messages []providers.Message) bool {
 		return false
 	}
 
+	// If the user explicitly forbids modifications, treat as read-only even if
+	// write verbs appear in the negated phrase (e.g. "do not restart/stop/edit").
+	readOnlyGuardPhrases := []string{
+		"do not restart",
+		"don't restart",
+		"do not stop",
+		"don't stop",
+		"do not shutdown",
+		"don't shutdown",
+		"do not shut down",
+		"don't shut down",
+		"do not edit",
+		"don't edit",
+		"do not modify",
+		"don't modify",
+		"do not change",
+		"don't change",
+		"read-only",
+		"read only",
+		"without changing anything",
+		"without modifying anything",
+		"no changes",
+	}
+	for _, phrase := range readOnlyGuardPhrases {
+		if strings.Contains(lastUserContent, phrase) {
+			return false
+		}
+	}
+
 	// Explicit write/control action verbs
 	writePatterns := []string{
 		"stop ", "start ", "restart ", "reboot ", "shutdown ", "shut down",

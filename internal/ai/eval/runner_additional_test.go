@@ -357,7 +357,14 @@ func TestRunner_ExecuteStep_RetryFlow(t *testing.T) {
 	assert.True(t, result.Success)
 	// Should have retries recorded
 	assert.True(t, result.Retries > 0)
-	assert.Contains(t, result.RetryNotes, "rate_limit")
+	foundRateLimit := false
+	for _, note := range result.RetryNotes {
+		if strings.HasPrefix(note, "rate_limit") {
+			foundRateLimit = true
+			break
+		}
+	}
+	assert.True(t, foundRateLimit, "expected retry note with rate_limit prefix, got: %v", result.RetryNotes)
 }
 
 func TestRunner_WriteReport(t *testing.T) {

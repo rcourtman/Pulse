@@ -162,6 +162,7 @@ type Step struct {
 	Name             string
 	Prompt           string
 	Mentions         []StepMention // optional structured mentions
+	AutonomousMode   *bool         // optional per-step autonomous override
 	Assertions       []Assertion
 	ApprovalDecision ApprovalDecision
 	ApprovalReason   string
@@ -280,7 +281,14 @@ func (r *Runner) executeStepWithRetry(step Step, sessionID string, retries int) 
 			return result
 		}
 		if reason != "" {
-			retryNotes = append(retryNotes, reason)
+			note := reason
+			if result.Error != nil {
+				msg := strings.TrimSpace(result.Error.Error())
+				if msg != "" {
+					note = fmt.Sprintf("%s: %s", reason, truncate(msg, 140))
+				}
+			}
+			retryNotes = append(retryNotes, note)
 		}
 		if reason == "rate_limit" && r.config.RateLimitCooldown > 0 {
 			if r.config.Verbose {
@@ -322,6 +330,9 @@ func (r *Runner) executeStepOnceWithClient(step Step, sessionID string, client *
 	}
 	if len(step.Mentions) > 0 {
 		reqBody["mentions"] = step.Mentions
+	}
+	if step.AutonomousMode != nil {
+		reqBody["autonomous_mode"] = *step.AutonomousMode
 	}
 
 	bodyBytes, _ := json.Marshal(reqBody)

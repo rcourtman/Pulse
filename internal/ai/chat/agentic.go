@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -22,6 +23,61 @@ import (
 type parallelToolResult struct {
 	Result tools.CallToolResult
 	Err    error
+}
+
+func isRetryableProviderStreamError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(strings.TrimSpace(err.Error()))
+	if msg == "" {
+		return false
+	}
+
+	retryable := []string{
+		"timeout",
+		"timed out",
+		"context deadline exceeded",
+		"connection reset",
+		"connection refused",
+		"connection aborted",
+		"broken pipe",
+		"eof",
+		"unexpected eof",
+		"network is unreachable",
+		"no such host",
+		"dial tcp",
+		"temporarily unavailable",
+		"http2: client connection lost",
+		"stream error",
+		"upstream",
+		"502",
+		"503",
+		"504",
+	}
+
+	for _, token := range retryable {
+		if strings.Contains(msg, token) {
+			return true
+		}
+	}
+	return false
+}
+
+func (a *AgenticLoop) executeToolSafely(ctx context.Context, name string, input map[string]interface{}) (result tools.CallToolResult, err error) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			panicErr := fmt.Errorf("tool panic in %s: %v", name, recovered)
+			log.Error().
+				Str("tool", name).
+				Interface("panic", recovered).
+				Bytes("stack", debug.Stack()).
+				Msg("[AgenticLoop] Recovered tool panic")
+			result = tools.NewErrorResult(panicErr)
+			err = panicErr
+		}
+	}()
+	return a.executor.ExecuteTool(ctx, name, input)
 }
 
 // AgenticLoop handles the tool-calling loop with streaming
@@ -140,9 +196,11 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 	// Wrap-up nudge: after this many cumulative tool calls, hint the model to start wrapping up.
 	const wrapUpNudgeAfterCalls = 12
 	const wrapUpEscalateAfterCalls = 18
+	const maxConsecutiveToolOnlyTurns = 4
 	totalToolCalls := 0
 	wrapUpNudgeFired := false
 	wrapUpEscalateFired := false
+	consecutiveToolOnlyTurns := 0
 
 	for turn < maxTurns {
 		// === CONTEXT COMPACTION: Compact old tool results to prevent context blowout ===
@@ -265,77 +323,134 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			Int("system_prompt_len", len(systemPrompt)).
 			Msg("[AgenticLoop] Calling provider.ChatStream")
 
-		err := a.provider.ChatStream(ctx, req, func(event providers.StreamEvent) {
-			switch event.Type {
-			case "content":
-				if data, ok := event.Data.(providers.ContentEvent); ok {
-					// Check for DeepSeek DSML marker - if detected, stop streaming this chunk
-					// The DSML format indicates the model is outputting internal function call
-					// formatting instead of using the proper tool calling API
-					if containsDeepSeekMarker(data.Text) {
-						// Don't append or stream this content
-						return
+		const maxProviderAttempts = 2
+		err := error(nil)
+		for attempt := 1; attempt <= maxProviderAttempts; attempt++ {
+			attemptSawDone := false
+			attemptEmittedVisibleEvents := false
+			var attemptErrorMessages []string
+
+			err = a.provider.ChatStream(ctx, req, func(event providers.StreamEvent) {
+				switch event.Type {
+				case "content":
+					if data, ok := event.Data.(providers.ContentEvent); ok {
+						attemptEmittedVisibleEvents = true
+						// Check for DeepSeek DSML marker - if detected, stop streaming this chunk
+						// The DSML format indicates the model is outputting internal function call
+						// formatting instead of using the proper tool calling API
+						if containsDeepSeekMarker(data.Text) {
+							// Don't append or stream this content
+							return
+						}
+						// Also check if the accumulated content already has the marker
+						// (in case it arrived in a previous chunk)
+						if containsDeepSeekMarker(contentBuilder.String()) {
+							return
+						}
+						contentBuilder.WriteString(data.Text)
+						// Forward to callback - send ContentData struct
+						jsonData, _ := json.Marshal(ContentData{Text: data.Text})
+						callback(StreamEvent{Type: "content", Data: jsonData})
 					}
-					// Also check if the accumulated content already has the marker
-					// (in case it arrived in a previous chunk)
-					if containsDeepSeekMarker(contentBuilder.String()) {
-						return
+
+				case "thinking":
+					if data, ok := event.Data.(providers.ThinkingEvent); ok {
+						attemptEmittedVisibleEvents = true
+						thinkingBuilder.WriteString(data.Text)
+						// Forward to callback - send ThinkingData struct
+						jsonData, _ := json.Marshal(ThinkingData{Text: data.Text})
+						callback(StreamEvent{Type: "thinking", Data: jsonData})
 					}
-					contentBuilder.WriteString(data.Text)
-					// Forward to callback - send ContentData struct
-					jsonData, _ := json.Marshal(ContentData{Text: data.Text})
-					callback(StreamEvent{Type: "content", Data: jsonData})
-				}
 
-			case "thinking":
-				if data, ok := event.Data.(providers.ThinkingEvent); ok {
-					thinkingBuilder.WriteString(data.Text)
-					// Forward to callback - send ThinkingData struct
-					jsonData, _ := json.Marshal(ThinkingData{Text: data.Text})
-					callback(StreamEvent{Type: "thinking", Data: jsonData})
-				}
-
-			case "tool_start":
-				if data, ok := event.Data.(providers.ToolStartEvent); ok {
-					// pulse_question is rendered as a dedicated "question" card; suppress tool UI events.
-					if data.Name == pulseQuestionToolName {
-						return
+				case "tool_start":
+					if data, ok := event.Data.(providers.ToolStartEvent); ok {
+						attemptEmittedVisibleEvents = true
+						// pulse_question is rendered as a dedicated "question" card; suppress tool UI events.
+						if data.Name == pulseQuestionToolName {
+							return
+						}
+						// Format input for frontend display
+						// For control tools, show a human-readable summary instead of raw JSON to avoid "hallucination" look
+						inputStr, rawInput := formatToolInputForFrontend(data.Name, data.Input, false)
+						jsonData, _ := json.Marshal(ToolStartData{
+							ID:       data.ID,
+							Name:     data.Name,
+							Input:    inputStr,
+							RawInput: rawInput,
+						})
+						callback(StreamEvent{Type: "tool_start", Data: jsonData})
 					}
-					// Format input for frontend display
-					// For control tools, show a human-readable summary instead of raw JSON to avoid "hallucination" look
-					inputStr, rawInput := formatToolInputForFrontend(data.Name, data.Input, false)
-					jsonData, _ := json.Marshal(ToolStartData{
-						ID:       data.ID,
-						Name:     data.Name,
-						Input:    inputStr,
-						RawInput: rawInput,
-					})
-					callback(StreamEvent{Type: "tool_start", Data: jsonData})
-				}
 
-			case "done":
-				if data, ok := event.Data.(providers.DoneEvent); ok {
-					toolCalls = data.ToolCalls
-					a.totalInputTokens += data.InputTokens
-					a.totalOutputTokens += data.OutputTokens
-					log.Info().
-						Int("turn", turn).
-						Int("input_tokens_this_turn", data.InputTokens).
-						Int("output_tokens_this_turn", data.OutputTokens).
-						Int("total_input_tokens", a.totalInputTokens).
-						Int("total_output_tokens", a.totalOutputTokens).
-						Int("tool_calls", len(data.ToolCalls)).
-						Str("session_id", sessionID).
-						Msg("[AgenticLoop] Turn completed")
-				}
+				case "done":
+					if data, ok := event.Data.(providers.DoneEvent); ok {
+						attemptSawDone = true
+						toolCalls = data.ToolCalls
+						a.totalInputTokens += data.InputTokens
+						a.totalOutputTokens += data.OutputTokens
+						log.Info().
+							Int("turn", turn).
+							Int("input_tokens_this_turn", data.InputTokens).
+							Int("output_tokens_this_turn", data.OutputTokens).
+							Int("total_input_tokens", a.totalInputTokens).
+							Int("total_output_tokens", a.totalOutputTokens).
+							Int("tool_calls", len(data.ToolCalls)).
+							Str("session_id", sessionID).
+							Msg("[AgenticLoop] Turn completed")
+					}
 
-			case "error":
-				if data, ok := event.Data.(providers.ErrorEvent); ok {
-					jsonData, _ := json.Marshal(ErrorData{Message: data.Message})
-					callback(StreamEvent{Type: "error", Data: jsonData})
+				case "error":
+					if data, ok := event.Data.(providers.ErrorEvent); ok {
+						if msg := strings.TrimSpace(data.Message); msg != "" {
+							attemptErrorMessages = append(attemptErrorMessages, msg)
+						}
+					}
 				}
+			})
+
+			effectiveErr := err
+			if effectiveErr == nil && len(attemptErrorMessages) > 0 {
+				effectiveErr = fmt.Errorf("stream error: %s", attemptErrorMessages[0])
 			}
-		})
+			if effectiveErr == nil {
+				break
+			}
+			if attemptSawDone {
+				// Some providers can return a transport error after already emitting
+				// a terminal done event. The turn is complete; keep the response.
+				log.Warn().
+					Int("attempt", attempt).
+					Err(effectiveErr).
+					Str("session_id", sessionID).
+					Msg("[AgenticLoop] Provider returned error after done event; ignoring")
+				err = nil
+				break
+			}
+			if attempt < maxProviderAttempts && !attemptEmittedVisibleEvents && isRetryableProviderStreamError(effectiveErr) && ctx.Err() == nil {
+				backoff := time.Duration(200*attempt) * time.Millisecond
+				log.Warn().
+					Int("attempt", attempt).
+					Err(effectiveErr).
+					Dur("backoff", backoff).
+					Str("session_id", sessionID).
+					Msg("[AgenticLoop] Provider stream failed before events; retrying turn")
+				select {
+				case <-time.After(backoff):
+				case <-ctx.Done():
+					err = ctx.Err()
+					break
+				}
+				continue
+			}
+
+			if len(attemptErrorMessages) > 0 {
+				// Defer emitting error events until retries are exhausted so transient
+				// provider blips don't leak to the client stream.
+				jsonData, _ := json.Marshal(ErrorData{Message: attemptErrorMessages[0]})
+				callback(StreamEvent{Type: "error", Data: jsonData})
+			}
+			err = effectiveErr
+			break
+		}
 
 		log.Debug().
 			Str("session_id", sessionID).
@@ -413,6 +528,14 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			})
 		}
 		providerMessages = append(providerMessages, providerAssistant)
+
+		// Track turns where the model emitted tool calls but no user-facing text.
+		// In chat mode this can otherwise spiral into long tool-only chains.
+		if len(toolCalls) > 0 && strings.TrimSpace(assistantMsg.Content) == "" {
+			consecutiveToolOnlyTurns++
+		} else {
+			consecutiveToolOnlyTurns = 0
+		}
 
 		// If no tool calls, we're done - but first check FSM and phantom execution
 		if len(toolCalls) == 0 {
@@ -949,13 +1072,13 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 					defer wg.Done()
 					sem <- struct{}{}
 					defer func() { <-sem }()
-					r, e := a.executor.ExecuteTool(ctx, tc.Name, tc.Input)
+					r, e := a.executeToolSafely(ctx, tc.Name, tc.Input)
 					execResults[idx] = parallelToolResult{Result: r, Err: e}
 				}(j, pe.tc)
 			}
 			wg.Wait()
 		} else if len(pendingExec) == 1 {
-			r, e := a.executor.ExecuteTool(ctx, pendingExec[0].tc.Name, pendingExec[0].tc.Input)
+			r, e := a.executeToolSafely(ctx, pendingExec[0].tc.Name, pendingExec[0].tc.Input)
 			execResults[0] = parallelToolResult{Result: r, Err: e}
 		}
 
@@ -1057,7 +1180,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 					modifiedInput["command"] = suggestedRewrite
 					modifiedInput["_auto_recovery_attempt"] = true // Prevent infinite loops
 
-					retryResult, retryErr := a.executor.ExecuteTool(ctx, tc.Name, modifiedInput)
+					retryResult, retryErr := a.executeToolSafely(ctx, tc.Name, modifiedInput)
 					if retryErr != nil {
 						log.Warn().
 							Err(retryErr).
@@ -1148,7 +1271,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 									inputWithApproval[k] = v
 								}
 								inputWithApproval["_approval_id"] = approvalData.ApprovalID
-								result, err = a.executor.ExecuteTool(ctx, tc.Name, inputWithApproval)
+								result, err = a.executeToolSafely(ctx, tc.Name, inputWithApproval)
 								if err != nil {
 									resultText = fmt.Sprintf("Error after approval: %v", err)
 									isError = true
@@ -1274,6 +1397,20 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				Int("turn", turn).
 				Str("session_id", sessionID).
 				Msg("[AgenticLoop] Tool calls blocked this turn — will force text-only next turn")
+		}
+
+		// Guardrail: in interactive chat mode, force wrap-up after repeated
+		// tool-only turns to avoid long no-answer chains.
+		a.mu.Lock()
+		autonomousMode := a.autonomousMode
+		a.mu.Unlock()
+		if !autonomousMode && !singleToolRequested && consecutiveToolOnlyTurns >= maxConsecutiveToolOnlyTurns {
+			toolBlockedLastTurn = true
+			log.Warn().
+				Int("consecutive_tool_only_turns", consecutiveToolOnlyTurns).
+				Int("turn", turn).
+				Str("session_id", sessionID).
+				Msg("[AgenticLoop] Consecutive tool-only turns exceeded threshold — forcing text-only response")
 		}
 
 		if singleToolEnforced && len(toolCalls) > 0 {

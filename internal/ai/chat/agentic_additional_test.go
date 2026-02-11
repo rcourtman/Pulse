@@ -3,6 +3,7 @@ package chat
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
@@ -149,12 +150,206 @@ func TestEnsureFinalTextResponse(t *testing.T) {
 	result2 := loop.ensureFinalTextResponse(
 		context.Background(),
 		"session-2",
-		[]Message{{Role: "assistant", Content: ""}},
+		[]Message{
+			{Role: "assistant", Content: ""},
+			{Role: "user", ToolResult: &ToolResult{ToolUseID: "pulse_query_0", Content: "{\"nodes\":1}", IsError: false}},
+		},
 		[]providers.Message{{Role: "assistant", Content: ""}},
 		func(event StreamEvent) {},
 	)
-	if len(result2) != 1 {
-		t.Fatalf("expected no summary message when provider errors")
+	if len(result2) != 3 {
+		t.Fatalf("expected fallback summary message when provider errors")
+	}
+	if !strings.Contains(result2[len(result2)-1].Content, "automatic summary") {
+		t.Fatalf("expected deterministic fallback summary, got %q", result2[len(result2)-1].Content)
+	}
+
+	provider.chatStream = func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+		callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{InputTokens: 1, OutputTokens: 1}})
+		return nil
+	}
+	result3 := loop.ensureFinalTextResponse(
+		context.Background(),
+		"session-3",
+		[]Message{
+			{Role: "assistant", Content: ""},
+			{Role: "user", ToolResult: &ToolResult{ToolUseID: "pulse_metrics_1", Content: "cpu ok", IsError: false}},
+		},
+		[]providers.Message{{Role: "assistant", Content: ""}},
+		func(event StreamEvent) {},
+	)
+	if len(result3) != 3 {
+		t.Fatalf("expected fallback summary when provider returns empty content")
+	}
+	if !strings.Contains(result3[len(result3)-1].Content, "Latest successful result snippet") {
+		t.Fatalf("expected fallback summary to include tool snippet")
+	}
+}
+
+func TestBuildAutomaticFallbackSummary(t *testing.T) {
+	summary := buildAutomaticFallbackSummary([]Message{
+		{Role: "user", ToolResult: &ToolResult{ToolUseID: "pulse_query_0", Content: "nodes ok", IsError: false}},
+		{Role: "user", ToolResult: &ToolResult{ToolUseID: "pulse_query_1", Content: "containers ok", IsError: false}},
+		{Role: "user", ToolResult: &ToolResult{ToolUseID: "pulse_read_0", Content: "read failed", IsError: true}},
+	})
+	if !strings.Contains(summary, "2 successful check(s)") {
+		t.Fatalf("unexpected fallback summary: %q", summary)
+	}
+	if !strings.Contains(summary, "pulse_query") {
+		t.Fatalf("expected tool name in fallback summary")
+	}
+}
+
+func TestExecuteToolSafely_RecoversPanic(t *testing.T) {
+	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+	exec.RegisterTool(tools.RegisteredTool{
+		Definition: tools.Tool{
+			Name: "panic_tool",
+			InputSchema: tools.InputSchema{
+				Type:       "object",
+				Properties: map[string]tools.PropertySchema{},
+			},
+		},
+		Handler: func(_ context.Context, _ *tools.PulseToolExecutor, _ map[string]interface{}) (tools.CallToolResult, error) {
+			panic("boom")
+		},
+	})
+
+	loop := &AgenticLoop{executor: exec}
+	result, err := loop.executeToolSafely(context.Background(), "panic_tool", map[string]interface{}{})
+	if err == nil {
+		t.Fatalf("expected panic recovery error")
+	}
+	if !result.IsError {
+		t.Fatalf("expected error result after panic recovery")
+	}
+	if len(result.Content) == 0 || !strings.Contains(result.Content[0].Text, "tool panic in panic_tool") {
+		t.Fatalf("unexpected panic recovery result: %+v", result)
+	}
+}
+
+func TestAgenticLoop_RetriesProviderStreamBeforeEvents(t *testing.T) {
+	provider := &stubStreamingProvider{}
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+	loop := NewAgenticLoop(provider, executor, "prompt")
+
+	callCount := 0
+	provider.chatStream = func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+		callCount++
+		if callCount == 1 {
+			return errors.New("connection reset by peer")
+		}
+		callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "hello"}})
+		callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{}})
+		return nil
+	}
+
+	results, err := loop.Execute(context.Background(), "retry-before-events", []Message{{Role: "user", Content: "hi"}}, func(event StreamEvent) {})
+	if err != nil {
+		t.Fatalf("expected retry to recover stream failure, got error: %v", err)
+	}
+	if callCount != 2 {
+		t.Fatalf("expected 2 provider attempts, got %d", callCount)
+	}
+	if len(results) != 1 || results[0].Content != "hello" {
+		t.Fatalf("unexpected results: %+v", results)
+	}
+}
+
+func TestAgenticLoop_DoesNotRetryAfterPartialEvents(t *testing.T) {
+	provider := &stubStreamingProvider{}
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+	loop := NewAgenticLoop(provider, executor, "prompt")
+
+	callCount := 0
+	provider.chatStream = func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+		callCount++
+		callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "partial"}})
+		return errors.New("connection reset by peer")
+	}
+
+	_, err := loop.Execute(context.Background(), "no-retry-partial", []Message{{Role: "user", Content: "hi"}}, func(event StreamEvent) {})
+	if err == nil {
+		t.Fatalf("expected provider error when stream fails after partial output")
+	}
+	if callCount != 1 {
+		t.Fatalf("expected no retry after partial output, got %d attempts", callCount)
+	}
+}
+
+func TestAgenticLoop_IgnoresErrorAfterDoneEvent(t *testing.T) {
+	provider := &stubStreamingProvider{}
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+	loop := NewAgenticLoop(provider, executor, "prompt")
+
+	callCount := 0
+	provider.chatStream = func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+		callCount++
+		callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "complete"}})
+		callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{}})
+		return errors.New("EOF")
+	}
+
+	results, err := loop.Execute(context.Background(), "ignore-after-done", []Message{{Role: "user", Content: "hi"}}, func(event StreamEvent) {})
+	if err != nil {
+		t.Fatalf("expected post-done error to be ignored, got: %v", err)
+	}
+	if callCount != 1 {
+		t.Fatalf("expected single provider attempt, got %d", callCount)
+	}
+	if len(results) != 1 || results[0].Content != "complete" {
+		t.Fatalf("unexpected results: %+v", results)
+	}
+}
+
+func TestAgenticLoop_RetriesOnErrorEventBeforeVisibleOutput(t *testing.T) {
+	provider := &stubStreamingProvider{}
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+	loop := NewAgenticLoop(provider, executor, "prompt")
+
+	callCount := 0
+	provider.chatStream = func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+		callCount++
+		if callCount == 1 {
+			callback(providers.StreamEvent{Type: "error", Data: providers.ErrorEvent{Message: "connection reset by peer"}})
+			return nil
+		}
+		callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "recovered"}})
+		callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{}})
+		return nil
+	}
+
+	results, err := loop.Execute(context.Background(), "retry-error-event", []Message{{Role: "user", Content: "hi"}}, func(event StreamEvent) {})
+	if err != nil {
+		t.Fatalf("expected recovery after transient error event, got: %v", err)
+	}
+	if callCount != 2 {
+		t.Fatalf("expected 2 provider attempts, got %d", callCount)
+	}
+	if len(results) != 1 || results[0].Content != "recovered" {
+		t.Fatalf("unexpected results: %+v", results)
+	}
+}
+
+func TestAgenticLoop_DoesNotRetryErrorEventAfterVisibleOutput(t *testing.T) {
+	provider := &stubStreamingProvider{}
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+	loop := NewAgenticLoop(provider, executor, "prompt")
+
+	callCount := 0
+	provider.chatStream = func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+		callCount++
+		callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "partial"}})
+		callback(providers.StreamEvent{Type: "error", Data: providers.ErrorEvent{Message: "connection reset by peer"}})
+		return nil
+	}
+
+	_, err := loop.Execute(context.Background(), "no-retry-error-after-content", []Message{{Role: "user", Content: "hi"}}, func(event StreamEvent) {})
+	if err == nil {
+		t.Fatalf("expected error when stream emits error after visible output")
+	}
+	if callCount != 1 {
+		t.Fatalf("expected no retry after visible output, got %d attempts", callCount)
 	}
 }
 
