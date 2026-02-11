@@ -22,6 +22,24 @@ func TestNewStore_Defaults(t *testing.T) {
 	}
 }
 
+func TestNewStore_NonPositiveConfigUsesDefaults(t *testing.T) {
+	store := NewStore(StoreConfig{
+		LearningWindow: -1 * time.Hour,
+		MinSamples:     -10,
+		UpdateInterval: -1 * time.Minute,
+	})
+
+	if store.learningWindow != 7*24*time.Hour {
+		t.Fatalf("learningWindow = %v, want %v", store.learningWindow, 7*24*time.Hour)
+	}
+	if store.minSamples != 50 {
+		t.Fatalf("minSamples = %d, want 50", store.minSamples)
+	}
+	if store.updateInterval != 1*time.Hour {
+		t.Fatalf("updateInterval = %v, want %v", store.updateInterval, 1*time.Hour)
+	}
+}
+
 func TestDefaultConfig(t *testing.T) {
 	cfg := DefaultConfig()
 

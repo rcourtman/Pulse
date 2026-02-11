@@ -99,13 +99,13 @@ func DefaultConfig() StoreConfig {
 
 // NewStore creates a new baseline store
 func NewStore(cfg StoreConfig) *Store {
-	if cfg.LearningWindow == 0 {
+	if cfg.LearningWindow <= 0 {
 		cfg.LearningWindow = 7 * 24 * time.Hour
 	}
-	if cfg.MinSamples == 0 {
+	if cfg.MinSamples <= 0 {
 		cfg.MinSamples = 50
 	}
-	if cfg.UpdateInterval == 0 {
+	if cfg.UpdateInterval <= 0 {
 		cfg.UpdateInterval = 1 * time.Hour
 	}
 
