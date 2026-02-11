@@ -34,7 +34,6 @@ var (
 	ErrSignatureInvalid   = errors.New("license signature invalid")
 	ErrFeatureNotIncluded = errors.New("feature not included in license")
 	ErrNoPublicKey        = errors.New("no public key configured for validation")
-	ErrNoLicense          = errors.New("no license activated")
 )
 
 // SubscriptionState represents the subscription lifecycle state.

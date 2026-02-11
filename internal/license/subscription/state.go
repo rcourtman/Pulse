@@ -6,10 +6,9 @@ import "github.com/rcourtman/pulse-go-rewrite/internal/license"
 type OperationClass string
 
 const (
-	OpFull     OperationClass = "full"      // All operations allowed
-	OpReadOnly OperationClass = "read_only" // Read operations only, no new resource creation
-	OpDegraded OperationClass = "degraded"  // Existing resources work, new ones blocked
-	OpLocked   OperationClass = "locked"    // All operations blocked, contact support
+	OpFull     OperationClass = "full"     // All operations allowed
+	OpDegraded OperationClass = "degraded" // Existing resources work, new ones blocked
+	OpLocked   OperationClass = "locked"   // All operations blocked, contact support
 )
 
 // StateBehavior describes what is allowed in a specific subscription state.

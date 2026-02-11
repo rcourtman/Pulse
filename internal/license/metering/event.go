@@ -6,11 +6,8 @@ import "time"
 type EventType string
 
 const (
-	EventAgentSeen        EventType = "agent_seen"
-	EventOrgCreated       EventType = "org_created"
-	EventRelayBytes       EventType = "relay_bytes"
-	EventNotificationSent EventType = "notification_sent"
-	EventTenantSwitch     EventType = "tenant_switch"
+	EventAgentSeen  EventType = "agent_seen"
+	EventRelayBytes EventType = "relay_bytes"
 )
 
 // Event represents a single metering event.
