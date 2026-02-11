@@ -6,6 +6,8 @@ import { logger } from '@/utils/logger';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 
 const CHECK_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours
+const TRANSIENT_RETRY_MAX_ATTEMPTS = 3;
+const TRANSIENT_RETRY_BASE_DELAY_MS = import.meta.env.MODE === 'test' ? 0 : 400;
 
 interface UpdateState {
   lastCheck: number;
@@ -43,6 +45,47 @@ const [isChecking, setIsChecking] = createSignal(false);
 const [isDismissed, setIsDismissed] = createSignal(false);
 const [lastError, setLastError] = createSignal<string | null>(null);
 
+const sleep = (ms: number): Promise<void> =>
+  new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+
+const isTransientUpdateCheckError = (error: unknown): boolean => {
+  const message = (error instanceof Error ? error.message : String(error)).toLowerCase();
+  if (!message) {
+    return false;
+  }
+
+  if (message.includes('failed to fetch') || message.includes('networkerror') || message.includes('timeout')) {
+    return true;
+  }
+
+  return /\bstatus (408|429|5\d\d)\b/.test(message);
+};
+
+const withTransientRetry = async <T>(label: string, operation: () => Promise<T>): Promise<T> => {
+  let attempt = 1;
+  for (;;) {
+    try {
+      return await operation();
+    } catch (error) {
+      const shouldRetry =
+        isTransientUpdateCheckError(error) && attempt < TRANSIENT_RETRY_MAX_ATTEMPTS;
+      if (!shouldRetry) {
+        throw error;
+      }
+      const delay = TRANSIENT_RETRY_BASE_DELAY_MS * 2 ** (attempt - 1);
+      logger.warn(`Transient update ${label} failure, retrying`, {
+        attempt,
+        maxAttempts: TRANSIENT_RETRY_MAX_ATTEMPTS,
+        delayMs: delay,
+      });
+      await sleep(delay);
+      attempt += 1;
+    }
+  }
+};
+
 // Check for updates
 const checkForUpdates = async (force = false): Promise<void> => {
   // Don't check if already checking
@@ -57,7 +100,7 @@ const checkForUpdates = async (force = false): Promise<void> => {
     if (state.updateInfo) {
       // First check if version matches (in case user updated)
       try {
-        const currentVersion = await UpdatesAPI.getVersion();
+        const currentVersion = await withTransientRetry('version check', () => UpdatesAPI.getVersion());
         if (state.updateInfo.currentVersion !== currentVersion.version) {
           // Version changed, invalidate cache and check again
           state.updateInfo = undefined;
@@ -70,11 +113,10 @@ const checkForUpdates = async (force = false): Promise<void> => {
           setVersionInfo(currentVersion);
           setUpdateInfo(state.updateInfo);
           setUpdateAvailable(state.updateInfo.available);
+          setLastError(null);
 
           // Check if this version was dismissed
-          if (state.dismissedVersion === state.updateInfo.latestVersion) {
-            setIsDismissed(true);
-          }
+          setIsDismissed(state.dismissedVersion === state.updateInfo.latestVersion);
           return;
         }
       } catch (e) {
@@ -91,7 +133,7 @@ const checkForUpdates = async (force = false): Promise<void> => {
 
   try {
     // First get version info to check deployment type
-    const version = await UpdatesAPI.getVersion();
+    const version = await withTransientRetry('version check', () => UpdatesAPI.getVersion());
     setVersionInfo(version);
 
     // Clear cache if version has changed (user updated)
@@ -106,6 +148,7 @@ const checkForUpdates = async (force = false): Promise<void> => {
     if (version.isDevelopment || version.isSourceBuild) {
       setUpdateAvailable(false);
       setUpdateInfo(null);
+      setIsDismissed(false);
       return;
     }
     // For Docker, we still check for available updates so users know a new version exists.
@@ -116,11 +159,13 @@ const checkForUpdates = async (force = false): Promise<void> => {
       version.version.includes('-dirty') || /v\d+\.\d+\.\d+.*-g[0-9a-f]+/.test(version.version);
     if (isDirtyBuild && !force) {
       setUpdateAvailable(false);
+      setUpdateInfo(null);
+      setIsDismissed(false);
       return;
     }
 
     // Get the saved update channel from system settings
-    const info = await UpdatesAPI.checkForUpdates();
+    const info = await withTransientRetry('check request', () => UpdatesAPI.checkForUpdates());
 
     setUpdateInfo(info);
     setUpdateAvailable(info.available);
@@ -141,7 +186,16 @@ const checkForUpdates = async (force = false): Promise<void> => {
   } catch (error) {
     logger.error('Failed to check for updates:', error);
     setLastError(error instanceof Error ? error.message : 'Failed to check for updates');
-    setUpdateAvailable(false);
+    const fallbackInfo = state.updateInfo ?? updateInfo();
+    if (fallbackInfo) {
+      logger.warn('Using cached update info after update check failure');
+      setUpdateInfo(fallbackInfo);
+      setUpdateAvailable(fallbackInfo.available);
+      setIsDismissed(state.dismissedVersion === fallbackInfo.latestVersion);
+    } else {
+      setUpdateAvailable(false);
+      setIsDismissed(false);
+    }
   } finally {
     setIsChecking(false);
   }
