@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
-	"time"
 )
 
 func TestGuestMetadataStore_Get(t *testing.T) {
@@ -507,9 +506,6 @@ func TestGuestMetadataStore_GetWithLegacyMigration_ClusteredLegacy(t *testing.T)
 		t.Errorf("ID = %q, want %q", result.ID, "pve1:node1:100")
 	}
 
-	// Wait for async save
-	time.Sleep(100 * time.Millisecond)
-
 	// Old ID should be removed
 	if store.metadata["pve1-node1-100"] != nil {
 		t.Error("Legacy ID should be removed after migration")
@@ -518,6 +514,22 @@ func TestGuestMetadataStore_GetWithLegacyMigration_ClusteredLegacy(t *testing.T)
 	// New ID should exist
 	if store.metadata["pve1:node1:100"] == nil {
 		t.Error("New ID should exist after migration")
+	}
+
+	// Migration should be persisted before returning.
+	data, err := os.ReadFile(filepath.Join(tmpDir, "guest_metadata.json"))
+	if err != nil {
+		t.Fatalf("failed to read guest metadata file after migration: %v", err)
+	}
+	var persisted map[string]*GuestMetadata
+	if err := json.Unmarshal(data, &persisted); err != nil {
+		t.Fatalf("failed to decode guest metadata file after migration: %v", err)
+	}
+	if persisted["pve1-node1-100"] != nil {
+		t.Error("Persisted metadata should not include legacy ID after migration")
+	}
+	if persisted["pve1:node1:100"] == nil {
+		t.Error("Persisted metadata should include migrated ID")
 	}
 }
 
@@ -544,9 +556,6 @@ func TestGuestMetadataStore_GetWithLegacyMigration_StandaloneLegacy(t *testing.T
 	if result.ID != "node1:node1:100" {
 		t.Errorf("ID = %q, want %q", result.ID, "node1:node1:100")
 	}
-
-	// Wait for async save
-	time.Sleep(100 * time.Millisecond)
 
 	// Old ID should be removed
 	if store.metadata["node1-100"] != nil {
@@ -588,8 +597,6 @@ func TestGuestMetadataStore_GetWithLegacyMigration_ClusteredMatchesNodeFormat(t 
 		t.Errorf("ID = %q, want %q", result.ID, "pve1:node1:100")
 	}
 
-	// Wait for async save to complete before test cleanup
-	time.Sleep(100 * time.Millisecond)
 }
 
 func TestGuestMetadataStore_GetWithLegacyMigration_ConcurrentMigration(t *testing.T) {
@@ -612,9 +619,6 @@ func TestGuestMetadataStore_GetWithLegacyMigration_ConcurrentMigration(t *testin
 		}()
 	}
 	wg.Wait()
-
-	// Wait for any async saves
-	time.Sleep(200 * time.Millisecond)
 
 	// New ID should exist
 	if store.metadata["pve1:node1:100"] == nil {
