@@ -222,7 +222,9 @@ func (s *Service) RunDiscovery(ctx context.Context) []DiscoveredApp {
 	s.mu.RUnlock()
 
 	if analyzer == nil {
-		log.Debug().Msg("AI analyzer not set, skipping discovery")
+		log.Debug().
+			Int("docker_hosts", len(state.DockerHosts)).
+			Msg("AI analyzer not set, skipping discovery")
 		return nil
 	}
 
@@ -244,7 +246,9 @@ func (s *Service) RunDiscovery(ctx context.Context) []DiscoveredApp {
 	}
 
 	if len(allContainers) == 0 {
-		log.Debug().Msg("No Docker containers found for discovery")
+		log.Debug().
+			Int("docker_hosts", len(state.DockerHosts)).
+			Msg("No Docker containers found for discovery")
 		s.mu.Lock()
 		s.lastRun = time.Now()
 		s.mu.Unlock()
@@ -290,7 +294,10 @@ func (s *Service) analyzeContainer(ctx context.Context, analyzer AIAnalyzer, c m
 	if found && cacheValid {
 		result = cached
 		log.Debug().
+			Str("host", host.Hostname).
+			Str("host_id", host.AgentID).
 			Str("container", c.Name).
+			Str("container_id", c.ID).
 			Str("image", c.Image).
 			Msg("Using cached analysis result")
 	} else {
@@ -305,7 +312,10 @@ func (s *Service) analyzeContainer(ctx context.Context, analyzer AIAnalyzer, c m
 		if err != nil {
 			log.Warn().
 				Err(err).
+				Str("host", host.Hostname).
+				Str("host_id", host.AgentID).
 				Str("container", c.Name).
+				Str("container_id", c.ID).
 				Str("image", c.Image).
 				Msg("AI analysis failed for container")
 			return nil
@@ -315,7 +325,11 @@ func (s *Service) analyzeContainer(ctx context.Context, analyzer AIAnalyzer, c m
 		result = s.parseAIResponse(response)
 		if result == nil {
 			log.Warn().
+				Str("host", host.Hostname).
+				Str("host_id", host.AgentID).
 				Str("container", c.Name).
+				Str("container_id", c.ID).
+				Str("image", c.Image).
 				Str("response", response).
 				Msg("Failed to parse AI response")
 			return nil
@@ -328,7 +342,10 @@ func (s *Service) analyzeContainer(ctx context.Context, analyzer AIAnalyzer, c m
 		s.cacheMu.Unlock()
 
 		log.Debug().
+			Str("host", host.Hostname).
+			Str("host_id", host.AgentID).
 			Str("container", c.Name).
+			Str("container_id", c.ID).
 			Str("image", c.Image).
 			Str("service_type", result.ServiceType).
 			Float64("confidence", result.Confidence).
@@ -337,6 +354,15 @@ func (s *Service) analyzeContainer(ctx context.Context, analyzer AIAnalyzer, c m
 
 	// Skip unknown/low-confidence results
 	if result.ServiceType == "unknown" || result.Confidence < 0.5 {
+		log.Debug().
+			Str("host", host.Hostname).
+			Str("host_id", host.AgentID).
+			Str("container", c.Name).
+			Str("container_id", c.ID).
+			Str("image", c.Image).
+			Str("service_type", result.ServiceType).
+			Float64("confidence", result.Confidence).
+			Msg("Skipping low-confidence or unknown AI discovery result")
 		return nil
 	}
 
