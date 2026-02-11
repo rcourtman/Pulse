@@ -10,6 +10,7 @@ import X from 'lucide-solid/icons/x';
 import ShieldAlert from 'lucide-solid/icons/shield-alert';
 import { showTooltip, hideTooltip } from '@/components/shared/Tooltip';
 import Toggle from '@/components/shared/Toggle';
+import { apiFetchJSON } from '@/utils/apiClient';
 import {
     createLocalStorageBooleanSignal,
     createLocalStorageNumberSignal,
@@ -129,11 +130,7 @@ export default function AuditLogPanel() {
             if (successFilter() === 'success') params.set('success', 'true');
             if (successFilter() === 'failed') params.set('success', 'false');
 
-            const response = await fetch(`/api/audit?${params.toString()}`);
-            if (!response.ok) {
-                throw new Error(`Failed to fetch audit events: ${response.statusText}`);
-            }
-            const data: AuditResponse = await response.json();
+            const data = await apiFetchJSON<AuditResponse>(`/api/audit?${params.toString()}`);
             setEvents(data.events || []);
             setIsPersistent(data.persistentLogging);
             setTotalEvents(data.total ?? 0);
@@ -171,11 +168,9 @@ export default function AuditLogPanel() {
             if (!isMounted()) {
                 controller.abort();
             }
-            const response = await fetch(`/api/audit/${event.id}/verify`, { signal: controller.signal });
-            if (!response.ok) {
-                throw new Error(`Failed to verify signature: ${response.statusText}`);
-            }
-            const data: VerifyResponse = await response.json();
+            const data = await apiFetchJSON<VerifyResponse>(`/api/audit/${event.id}/verify`, {
+                signal: controller.signal,
+            });
             let status: VerificationState['status'] = 'unavailable';
             if (!data.available) {
                 status = 'unavailable';
