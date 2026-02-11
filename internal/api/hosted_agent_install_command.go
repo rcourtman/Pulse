@@ -22,7 +22,7 @@ type hostedTenantAgentInstallCommandResponse struct {
 // tenant-scoped agent install command by minting an org-bound API token.
 func (r *Router) handleHostedTenantAgentInstallCommand(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed", nil)
 		return
 	}
 	if !r.hostedMode {
@@ -32,7 +32,7 @@ func (r *Router) handleHostedTenantAgentInstallCommand(w http.ResponseWriter, re
 
 	orgID := strings.TrimSpace(req.PathValue("id"))
 	if orgID == "" {
-		http.Error(w, "Organization ID required", http.StatusBadRequest)
+		writeErrorResponse(w, http.StatusBadRequest, "missing_org_id", "Organization ID required", nil)
 		return
 	}
 	if r.multiTenant == nil || !r.multiTenant.OrgExists(orgID) {
@@ -44,20 +44,20 @@ func (r *Router) handleHostedTenantAgentInstallCommand(w http.ResponseWriter, re
 		Type string `json:"type"` // "pve" or "pbs"
 	}
 	if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid request body", map[string]string{"error": err.Error()})
 		return
 	}
 
 	payload.Type = strings.ToLower(strings.TrimSpace(payload.Type))
 	if payload.Type != "pve" && payload.Type != "pbs" {
-		http.Error(w, "Type must be 'pve' or 'pbs'", http.StatusBadRequest)
+		writeErrorResponse(w, http.StatusBadRequest, "validation_error", "Type must be 'pve' or 'pbs'", nil)
 		return
 	}
 
 	rawToken, err := internalauth.GenerateAPIToken()
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to generate hosted tenant agent API token")
-		http.Error(w, "Failed to generate API token", http.StatusInternalServerError)
+		writeErrorResponse(w, http.StatusInternalServerError, "token_generation_failed", "Failed to generate API token", nil)
 		return
 	}
 
@@ -72,7 +72,7 @@ func (r *Router) handleHostedTenantAgentInstallCommand(w http.ResponseWriter, re
 	record, err := config.NewAPITokenRecord(rawToken, tokenName, scopes)
 	if err != nil {
 		log.Error().Err(err).Str("token_name", tokenName).Msg("Failed to construct hosted tenant agent token record")
-		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
+		writeErrorResponse(w, http.StatusInternalServerError, "token_generation_failed", "Failed to generate token", nil)
 		return
 	}
 	// Enforce tenant scoping even when callers omit X-Pulse-Org-ID (cloud agent UX).
@@ -93,7 +93,7 @@ func (r *Router) handleHostedTenantAgentInstallCommand(w http.ResponseWriter, re
 			r.config.APITokens = r.config.APITokens[:len(r.config.APITokens)-1]
 			config.Mu.Unlock()
 			log.Error().Err(err).Msg("Failed to persist hosted tenant agent token")
-			http.Error(w, "Failed to save token to disk: "+err.Error(), http.StatusInternalServerError)
+			writeErrorResponse(w, http.StatusInternalServerError, "token_persist_failed", "Failed to save token to disk", map[string]string{"error": err.Error()})
 			return
 		}
 	}
