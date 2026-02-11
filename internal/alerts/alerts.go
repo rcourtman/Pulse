@@ -468,6 +468,7 @@ func SetMetricHooks(fired func(*Alert), resolved func(*Alert), suppressed func(s
 
 type Manager struct {
 	mu               sync.RWMutex
+	dataDir          string
 	config           AlertConfig
 	activeAlerts     map[string]*Alert
 	historyManager   *HistoryManager
@@ -546,9 +547,14 @@ func NewManager() *Manager {
 // NewManagerWithDataDir creates a new alert manager with a custom data directory.
 // This enables tenant-scoped alert persistence in multi-tenant deployments.
 func NewManagerWithDataDir(dataDir string) *Manager {
+	if strings.TrimSpace(dataDir) == "" {
+		dataDir = utils.GetDataDir()
+	}
+
 	alertsDir := filepath.Join(dataDir, "alerts")
 	alertOrphaned := true
 	m := &Manager{
+		dataDir:                         dataDir,
 		activeAlerts:                    make(map[string]*Alert),
 		historyManager:                  NewHistoryManager(alertsDir),
 		escalationStop:                  make(chan struct{}),
@@ -9174,7 +9180,7 @@ func (m *Manager) SaveActiveAlerts() error {
 	defer m.mu.RUnlock()
 
 	// Create directory if it doesn't exist
-	alertsDir := filepath.Join(utils.GetDataDir(), "alerts")
+	alertsDir := filepath.Join(m.dataDir, "alerts")
 	if err := os.MkdirAll(alertsDir, 0755); err != nil {
 		return fmt.Errorf("failed to create alerts directory: %w", err)
 	}
@@ -9244,7 +9250,7 @@ func (m *Manager) LoadActiveAlerts() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	alertsFile := filepath.Join(utils.GetDataDir(), "alerts", "active-alerts.json")
+	alertsFile := filepath.Join(m.dataDir, "alerts", "active-alerts.json")
 	data, err := os.ReadFile(alertsFile)
 	if err != nil {
 		if os.IsNotExist(err) {

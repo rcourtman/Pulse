@@ -16355,6 +16355,60 @@ func TestLoadActiveAlerts(t *testing.T) {
 	})
 }
 
+func TestActiveAlertPersistenceUsesManagerDataDir(t *testing.T) {
+	managerDir := t.TempDir()
+	otherDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", otherDir)
+
+	m := NewManagerWithDataDir(managerDir)
+	t.Cleanup(func() {
+		m.Stop()
+	})
+
+	startTime := time.Now().Add(-5 * time.Minute)
+	m.mu.Lock()
+	m.activeAlerts["scoped-alert"] = &Alert{
+		ID:           "scoped-alert",
+		Type:         "cpu",
+		Level:        AlertLevelWarning,
+		ResourceID:   "scoped-resource",
+		ResourceName: "scoped-vm",
+		StartTime:    startTime,
+		LastSeen:     time.Now(),
+	}
+	m.mu.Unlock()
+
+	if err := m.SaveActiveAlerts(); err != nil {
+		t.Fatalf("SaveActiveAlerts failed: %v", err)
+	}
+
+	managerAlertsFile := filepath.Join(managerDir, "alerts", "active-alerts.json")
+	if _, err := os.Stat(managerAlertsFile); err != nil {
+		t.Fatalf("expected manager-scoped alerts file %s: %v", managerAlertsFile, err)
+	}
+
+	otherAlertsFile := filepath.Join(otherDir, "alerts", "active-alerts.json")
+	if _, err := os.Stat(otherAlertsFile); !os.IsNotExist(err) {
+		t.Fatalf("expected no active alerts in env dir %s, got err=%v", otherAlertsFile, err)
+	}
+
+	m.mu.Lock()
+	m.activeAlerts = make(map[string]*Alert)
+	m.mu.Unlock()
+
+	if err := m.LoadActiveAlerts(); err != nil {
+		t.Fatalf("LoadActiveAlerts failed: %v", err)
+	}
+
+	m.mu.RLock()
+	_, exists := m.activeAlerts["scoped-alert"]
+	m.mu.RUnlock()
+
+	if !exists {
+		t.Fatal("expected scoped-alert to be restored from manager-scoped data dir")
+	}
+}
+
 func TestNamespaceMatchesInstance(t *testing.T) {
 	tests := []struct {
 		name      string
