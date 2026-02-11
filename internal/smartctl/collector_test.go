@@ -159,13 +159,15 @@ func TestSmartctlJSONParsing(t *testing.T) {
 	}
 	data.Device.Name = "/dev/sda"
 	data.Device.Protocol = "ATA"
-	data.SmartStatus.Passed = true
+	data.SmartStatus = &struct {
+		Passed bool `json:"passed"`
+	}{Passed: true}
 	data.Temperature.Current = 35
 
 	if data.ModelName != "Samsung SSD 870 EVO 1TB" {
 		t.Errorf("unexpected ModelName: %s", data.ModelName)
 	}
-	if data.SmartStatus.Passed != true {
+	if data.SmartStatus == nil || data.SmartStatus.Passed != true {
 		t.Errorf("expected Passed to be true")
 	}
 	if data.Temperature.Current != 35 {
