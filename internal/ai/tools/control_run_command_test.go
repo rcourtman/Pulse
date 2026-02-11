@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
@@ -18,6 +19,12 @@ func mustParseJSONMap(t *testing.T, text string) map[string]interface{} {
 	var out map[string]interface{}
 	require.NoError(t, json.Unmarshal([]byte(text), &out))
 	return out
+}
+
+func mustParseApprovalPayload(t *testing.T, text string) map[string]interface{} {
+	t.Helper()
+	require.True(t, strings.HasPrefix(text, "APPROVAL_REQUIRED: "))
+	return mustParseJSONMap(t, strings.TrimPrefix(text, "APPROVAL_REQUIRED: "))
 }
 
 func TestPulseToolExecutor_ExecuteRunCommand(t *testing.T) {
@@ -61,12 +68,110 @@ func TestPulseToolExecutor_ExecuteRunCommand(t *testing.T) {
 
 	t.Run("ControlledRequiresApproval", func(t *testing.T) {
 		approval.SetStore(nil)
-		exec := NewPulseToolExecutor(ExecutorConfig{ControlLevel: ControlLevelControlled})
+		agentSrv := &mockAgentServer{agents: []agentexec.ConnectedAgent{
+			{AgentID: "agent-1", Hostname: "tower"},
+		}}
+		exec := NewPulseToolExecutor(ExecutorConfig{
+			AgentServer:  agentSrv,
+			ControlLevel: ControlLevelControlled,
+		})
 		result, err := exec.executeRunCommand(ctx, map[string]interface{}{
-			"command": "ls",
+			"command":     "ls",
+			"target_host": "tower",
 		})
 		assert.NoError(t, err)
 		assert.Contains(t, result.Content[0].Text, "APPROVAL_REQUIRED")
+	})
+
+	t.Run("ControlledApprovalUsesResolvedRoutingTarget", func(t *testing.T) {
+		store, err := approval.NewStore(approval.StoreConfig{
+			DataDir:            t.TempDir(),
+			DisablePersistence: true,
+		})
+		require.NoError(t, err)
+		approval.SetStore(store)
+		defer approval.SetStore(nil)
+
+		agentSrv := &mockAgentServer{agents: []agentexec.ConnectedAgent{
+			{AgentID: "agent-1", Hostname: "tower"},
+		}}
+		exec := NewPulseToolExecutor(ExecutorConfig{
+			AgentServer:  agentSrv,
+			ControlLevel: ControlLevelControlled,
+		})
+		// Session context target must not influence command approval binding.
+		exec.SetContext("host", "session-target", false)
+
+		result, err := exec.executeRunCommand(ctx, map[string]interface{}{
+			"command":     "uptime",
+			"target_host": "tower",
+		})
+		require.NoError(t, err)
+
+		payload := mustParseApprovalPayload(t, result.Content[0].Text)
+		approvalID, _ := payload["approval_id"].(string)
+		require.NotEmpty(t, approvalID)
+
+		req, found := store.GetApproval(approvalID)
+		require.True(t, found)
+		assert.Equal(t, "host", req.TargetType)
+		assert.Equal(t, "agent-1", req.TargetID)
+		assert.Equal(t, "tower", req.TargetName)
+	})
+
+	t.Run("ControlledConsumesApprovedCommandWithResolvedRoutingTarget", func(t *testing.T) {
+		store, err := approval.NewStore(approval.StoreConfig{
+			DataDir:            t.TempDir(),
+			DisablePersistence: true,
+		})
+		require.NoError(t, err)
+		approval.SetStore(store)
+		defer approval.SetStore(nil)
+
+		req := &approval.ApprovalRequest{
+			ID:         "approval-1",
+			Command:    "uptime",
+			TargetType: "host",
+			TargetID:   "agent-1",
+		}
+		require.NoError(t, store.CreateApproval(req))
+		_, err = store.Approve("approval-1", "tester")
+		require.NoError(t, err)
+
+		agentSrv := &mockAgentServer{agents: []agentexec.ConnectedAgent{
+			{AgentID: "agent-1", Hostname: "tower"},
+		}}
+		agentSrv.On("GetConnectedAgents").Return([]agentexec.ConnectedAgent{
+			{AgentID: "agent-1", Hostname: "tower"},
+		}).Maybe()
+		agentSrv.On("ExecuteCommand", mock.Anything, "agent-1", mock.MatchedBy(func(payload agentexec.ExecuteCommandPayload) bool {
+			return payload.Command == "uptime" && payload.TargetType == "host" && payload.TargetID == ""
+		})).Return(&agentexec.CommandResultPayload{
+			Stdout:   "ok",
+			ExitCode: 0,
+		}, nil).Once()
+
+		exec := NewPulseToolExecutor(ExecutorConfig{
+			AgentServer:  agentSrv,
+			ControlLevel: ControlLevelControlled,
+		})
+		exec.SetContext("host", "different-session-target", false)
+
+		result, err := exec.executeRunCommand(ctx, map[string]interface{}{
+			"command":      "uptime",
+			"target_host":  "tower",
+			"_approval_id": "approval-1",
+		})
+		require.NoError(t, err)
+
+		resp := mustParseJSONMap(t, result.Content[0].Text)
+		assert.Equal(t, true, resp["success"])
+		assert.Equal(t, float64(0), resp["exit_code"])
+		agentSrv.AssertExpectations(t)
+
+		consumed, found := store.GetApproval("approval-1")
+		require.True(t, found)
+		assert.True(t, consumed.Consumed)
 	})
 
 	t.Run("ExecuteSuccess", func(t *testing.T) {
