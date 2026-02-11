@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/rs/zerolog"
@@ -102,5 +103,93 @@ func TestNew_WithKubeconfig(t *testing.T) {
 	}
 	if agent.agentID == "" || agent.clusterID == "" {
 		t.Fatalf("expected non-empty agent and cluster IDs")
+	}
+}
+
+func TestNormalizePulseURL(t *testing.T) {
+	tests := []struct {
+		name      string
+		raw       string
+		want      string
+		wantError string
+	}{
+		{
+			name: "normalizes scheme host and trailing slash",
+			raw:  "HTTPS://Pulse.Example.com:7655/base/",
+			want: "https://pulse.example.com:7655/base",
+		},
+		{
+			name: "keeps localhost",
+			raw:  "http://localhost:7655/",
+			want: "http://localhost:7655",
+		},
+		{
+			name:      "missing scheme",
+			raw:       "pulse.example.com",
+			wantError: "must include http:// or https://",
+		},
+		{
+			name:      "unsupported scheme",
+			raw:       "ftp://pulse.example.com",
+			wantError: "unsupported scheme",
+		},
+		{
+			name:      "invalid port range",
+			raw:       "https://pulse.example.com:70000",
+			wantError: "invalid port",
+		},
+		{
+			name:      "userinfo disallowed",
+			raw:       "https://user:pass@pulse.example.com",
+			wantError: "userinfo is not supported",
+		},
+		{
+			name:      "query disallowed",
+			raw:       "https://pulse.example.com?x=1",
+			wantError: "query parameters are not supported",
+		},
+		{
+			name:      "fragment disallowed",
+			raw:       "https://pulse.example.com#frag",
+			wantError: "fragments are not supported",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := normalizePulseURL(tt.raw)
+			if tt.wantError != "" {
+				if err == nil {
+					t.Fatalf("normalizePulseURL(%q) expected error", tt.raw)
+				}
+				if !strings.Contains(err.Error(), tt.wantError) {
+					t.Fatalf("normalizePulseURL(%q) error = %q, want substring %q", tt.raw, err.Error(), tt.wantError)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("normalizePulseURL(%q) error = %v", tt.raw, err)
+			}
+			if got != tt.want {
+				t.Fatalf("normalizePulseURL(%q) = %q, want %q", tt.raw, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestNew_InvalidPulseURLFailsFast(t *testing.T) {
+	_, err := New(Config{
+		PulseURL: "ftp://pulse.local",
+		APIToken: "token",
+		LogLevel: zerolog.Disabled,
+	})
+	if err == nil {
+		t.Fatal("expected New to fail for invalid pulse URL")
+	}
+	if !strings.Contains(err.Error(), "invalid pulse URL") {
+		t.Fatalf("error = %q, want invalid pulse URL context", err.Error())
+	}
+	if !strings.Contains(err.Error(), "unsupported scheme") {
+		t.Fatalf("error = %q, want unsupported scheme detail", err.Error())
 	}
 }

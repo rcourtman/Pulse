@@ -7,12 +7,14 @@ import (
 	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -114,6 +116,11 @@ func New(cfg Config) (*Agent, error) {
 	if pulseURL == "" {
 		pulseURL = "http://localhost:7655"
 	}
+	pulseURL, err := normalizePulseURL(pulseURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid pulse URL: %w", err)
+	}
+	cfg.PulseURL = pulseURL
 
 	restCfg, contextName, err := buildRESTConfig(cfg.KubeconfigPath, cfg.KubeContext)
 	if err != nil {
@@ -254,6 +261,59 @@ func computeClusterID(server, context, name string) string {
 	payload := strings.TrimSpace(server) + "|" + strings.TrimSpace(context) + "|" + strings.TrimSpace(name)
 	sum := sha256.Sum256([]byte(payload))
 	return hex.EncodeToString(sum[:])
+}
+
+func normalizePulseURL(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return "", err
+	}
+
+	if parsed.Scheme == "" || parsed.Host == "" {
+		return "", errors.New("must include http:// or https:// with a valid host")
+	}
+
+	scheme := strings.ToLower(parsed.Scheme)
+	if scheme != "http" && scheme != "https" {
+		return "", fmt.Errorf("unsupported scheme %q", parsed.Scheme)
+	}
+
+	if parsed.User != nil {
+		return "", errors.New("userinfo is not supported")
+	}
+
+	if parsed.RawQuery != "" {
+		return "", errors.New("query parameters are not supported")
+	}
+
+	if parsed.Fragment != "" {
+		return "", errors.New("fragments are not supported")
+	}
+
+	if parsed.Hostname() == "" {
+		return "", errors.New("host is required")
+	}
+
+	if port := parsed.Port(); port != "" {
+		portNum, err := strconv.Atoi(port)
+		if err != nil || portNum < 1 || portNum > 65535 {
+			return "", fmt.Errorf("invalid port %q: must be between 1 and 65535", port)
+		}
+	}
+
+	parsed.Scheme = scheme
+	parsed.Host = strings.ToLower(parsed.Host)
+	parsed.Path = strings.TrimRight(parsed.Path, "/")
+	parsed.RawPath = ""
+
+	normalized := strings.TrimRight(parsed.String(), "/")
+	if normalized == "" {
+		return "", errors.New("URL is empty after normalization")
+	}
+
+	return normalized, nil
 }
 
 func (a *Agent) discoverClusterMetadata(ctx context.Context) error {
