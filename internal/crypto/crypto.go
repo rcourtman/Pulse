@@ -1,15 +1,18 @@
 package crypto
 
 import (
+	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"syscall"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog/log"
@@ -25,6 +28,117 @@ var randReader = rand.Reader
 var newCipher = aes.NewCipher
 
 var newGCM = cipher.NewGCM
+
+const (
+	encryptionKeyFileName    = ".encryption.key"
+	encryptionKeyLength      = 32 // AES-256 key length in bytes
+	encryptionKeyFilePerm    = 0o600
+	encryptionKeyDirPerm     = 0o700
+	maxEncryptionKeyFileSize = 4096
+)
+
+var errInvalidKeyMaterial = errors.New("invalid encryption key material")
+var errUnsafeKeyPath = errors.New("unsafe encryption key path")
+
+func ensureOwnerOnlyDir(dir string) error {
+	if err := os.MkdirAll(dir, encryptionKeyDirPerm); err != nil {
+		return err
+	}
+	return os.Chmod(dir, encryptionKeyDirPerm)
+}
+
+func decodeEncryptionKey(data []byte) ([]byte, error) {
+	trimmed := bytes.TrimSpace(data)
+	decoded := make([]byte, base64.StdEncoding.DecodedLen(len(trimmed)))
+	n, err := base64.StdEncoding.Decode(decoded, trimmed)
+	if err != nil {
+		return nil, fmt.Errorf("%w: decode base64: %v", errInvalidKeyMaterial, err)
+	}
+	if n != encryptionKeyLength {
+		return nil, fmt.Errorf("%w: decoded %d bytes, expected %d", errInvalidKeyMaterial, n, encryptionKeyLength)
+	}
+	return decoded[:n], nil
+}
+
+func validateEncryptionKeyFile(path string, info os.FileInfo) error {
+	if info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("%w: refusing symlink key path %q", errUnsafeKeyPath, path)
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("%w: non-regular key path %q", errInvalidKeyMaterial, path)
+	}
+	if info.Size() > maxEncryptionKeyFileSize {
+		return fmt.Errorf("%w: key file %q is too large (%d bytes)", errUnsafeKeyPath, path, info.Size())
+	}
+	return nil
+}
+
+func loadKeyFromFile(path string) ([]byte, error) {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateEncryptionKeyFile(path, info); err != nil {
+		return nil, err
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > maxEncryptionKeyFileSize {
+		return nil, fmt.Errorf("%w: key file %q exceeded size limit while reading", errUnsafeKeyPath, path)
+	}
+	return decodeEncryptionKey(data)
+}
+
+func isMissingPathError(err error) bool {
+	return errors.Is(err, os.ErrNotExist) || errors.Is(err, syscall.ENOTDIR)
+}
+
+func writeKeyFile(path string, key []byte) error {
+	if len(key) != encryptionKeyLength {
+		return fmt.Errorf("refusing to write invalid key length %d", len(key))
+	}
+
+	dir := filepath.Dir(path)
+	if err := ensureOwnerOnlyDir(dir); err != nil {
+		return err
+	}
+
+	tmpFile, err := os.CreateTemp(dir, ".encryption.key.*.tmp")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmpFile.Name()
+	cleanup := true
+	defer func() {
+		if cleanup {
+			_ = os.Remove(tmpPath)
+		}
+	}()
+
+	if err := tmpFile.Chmod(encryptionKeyFilePerm); err != nil {
+		_ = tmpFile.Close()
+		return err
+	}
+
+	encoded := base64.StdEncoding.EncodeToString(key)
+	if _, err := tmpFile.WriteString(encoded); err != nil {
+		_ = tmpFile.Close()
+		return err
+	}
+	if err := tmpFile.Close(); err != nil {
+		return err
+	}
+
+	if err := os.Rename(tmpPath, path); err != nil {
+		return err
+	}
+	cleanup = false
+
+	return os.Chmod(path, encryptionKeyFilePerm)
+}
 
 // CryptoManager handles encryption/decryption of sensitive data
 type CryptoManager struct {
@@ -58,7 +172,7 @@ func NewCryptoManagerAt(dataDir string) (*CryptoManager, error) {
 	if dataDir == "" {
 		dataDir = defaultDataDirFn()
 	}
-	keyPath := filepath.Join(dataDir, ".encryption.key")
+	keyPath := filepath.Join(dataDir, encryptionKeyFileName)
 
 	key, err := getOrCreateKeyAt(dataDir)
 	if err != nil {
@@ -77,7 +191,7 @@ func getOrCreateKeyAt(dataDir string) ([]byte, error) {
 		dataDir = defaultDataDirFn()
 	}
 
-	keyPath := filepath.Join(dataDir, ".encryption.key")
+	keyPath := filepath.Join(dataDir, encryptionKeyFileName)
 	oldKeyPath := legacyKeyPath
 	// Test/ops hook: allow overriding the legacy key location to avoid touching /etc/pulse in unit tests.
 	// This is only used during migration checks and has no effect unless explicitly set.
@@ -91,27 +205,27 @@ func getOrCreateKeyAt(dataDir string) ([]byte, error) {
 		Str("keyPath", keyPath).
 		Msg("Looking for encryption key")
 
-	// Try to read existing key from new location
-	if data, err := os.ReadFile(keyPath); err == nil {
-		// Use DecodedLen to allocate sufficient space, then slice to actual length
-		// This prevents panics if the file contains more data than expected
-		decoded := make([]byte, base64.StdEncoding.DecodedLen(len(data)))
-		n, err := base64.StdEncoding.Decode(decoded, data)
-		if err == nil {
-			if n == 32 {
-				log.Debug().Msg("Found and loaded existing encryption key")
-				return decoded[:n], nil
-			}
-			log.Warn().
-				Int("decodedBytes", n).
-				Msg("Encryption key has invalid length (expected 32 bytes)")
-		} else {
-			log.Warn().
-				Err(err).
-				Msg("Failed to decode encryption key")
+	// Try to read existing key from new location.
+	if key, err := loadKeyFromFile(keyPath); err == nil {
+		if err := ensureOwnerOnlyDir(filepath.Dir(keyPath)); err != nil {
+			return nil, fmt.Errorf("failed to harden encryption key directory: %w", err)
 		}
-	} else {
+		if err := os.Chmod(keyPath, encryptionKeyFilePerm); err != nil {
+			return nil, fmt.Errorf("failed to harden encryption key file: %w", err)
+		}
+		log.Debug().Msg("Found and loaded existing encryption key")
+		return key, nil
+	} else if isMissingPathError(err) {
 		log.Debug().Err(err).Str("path", keyPath).Msg("Could not read encryption key file")
+	} else if errors.Is(err, errInvalidKeyMaterial) {
+		log.Warn().
+			Err(err).
+			Str("path", keyPath).
+			Msg("Found invalid encryption key file contents, generating a replacement key")
+	} else if errors.Is(err, errUnsafeKeyPath) {
+		return nil, fmt.Errorf("unsafe encryption key path %q: %w", keyPath, err)
+	} else {
+		return nil, fmt.Errorf("failed to read encryption key file %q: %w", keyPath, err)
 	}
 
 	// Check for key in old location and migrate if found (only if paths differ)
@@ -124,51 +238,34 @@ func getOrCreateKeyAt(dataDir string) ([]byte, error) {
 			Str("oldKeyPath", oldKeyPath).
 			Msg("ENCRYPTION KEY MIGRATION: Checking if old key exists for migration (this code path CAN delete the key!)")
 
-		if data, err := os.ReadFile(oldKeyPath); err == nil {
-			decoded := make([]byte, base64.StdEncoding.DecodedLen(len(data)))
-			n, err := base64.StdEncoding.Decode(decoded, data)
-			if err == nil && n == 32 {
-				key := decoded[:n]
-				// Migrate key to new location
-				if err := os.MkdirAll(filepath.Dir(keyPath), 0700); err != nil {
-					// Migration failed, but we can still use the old key
-					log.Warn().Err(err).Msg("Failed to create directory for key migration, using old location")
-					return key, nil
-				}
-				if err := os.WriteFile(keyPath, data, 0600); err != nil {
-					// Migration failed, but we can still use the old key
-					log.Warn().Err(err).Msg("Failed to migrate encryption key, using old location")
-					return key, nil
-				}
-				log.Info().
-					Str("from", oldKeyPath).
-					Str("to", keyPath).
-					Msg("Successfully migrated encryption key to data directory")
-
-				// CRITICAL: This is the ONLY place in the codebase that deletes the encryption key!
-				// BUG FIX: Disabling key deletion to prevent key loss.
-				// Keeping both copies is safe - the old key at /etc/pulse will just be unused.
-				log.Info().
-					Str("oldKeyPath", oldKeyPath).
-					Str("newKeyPath", keyPath).
-					Str("dataDir", dataDir).
-					Msg("Key migration complete - PRESERVING old key at original location for safety")
-
-				// DISABLED: Key deletion was causing mysterious key loss bugs.
-				// The old key is now preserved. This is safe because:
-				// 1. We just successfully wrote the key to the new location
-				// 2. Future reads will use the new location (checked first)
-				// 3. Keeping the backup prevents data loss if something goes wrong
-				//
-				// if err := os.Remove(oldKeyPath); err != nil {
-				// 	log.Debug().Err(err).Msg("Could not remove old encryption key (may lack permissions)")
-				// } else {
-				// 	log.Error().
-				// 		Str("deletedPath", oldKeyPath).
-				// 		Msg("CRITICAL: ENCRYPTION KEY HAS BEEN DELETED")
-				// }
-				return key, nil
+		oldKey, err := loadKeyFromFile(oldKeyPath)
+		switch {
+		case err == nil:
+			if err := writeKeyFile(keyPath, oldKey); err != nil {
+				// Migration failed, but we can still use the old key.
+				log.Warn().Err(err).Msg("Failed to migrate encryption key, using old location")
+				return oldKey, nil
 			}
+			log.Info().
+				Str("from", oldKeyPath).
+				Str("to", keyPath).
+				Msg("Successfully migrated encryption key to data directory")
+
+			// Keep the legacy copy as a safety backup.
+			log.Info().
+				Str("oldKeyPath", oldKeyPath).
+				Str("newKeyPath", keyPath).
+				Str("dataDir", dataDir).
+				Msg("Key migration complete - PRESERVING old key at original location for safety")
+			return oldKey, nil
+		case isMissingPathError(err):
+			// No key to migrate.
+		case errors.Is(err, errInvalidKeyMaterial):
+			log.Warn().Err(err).Str("path", oldKeyPath).Msg("Legacy key file contents are invalid, skipping migration")
+		case errors.Is(err, errUnsafeKeyPath):
+			log.Warn().Err(err).Str("path", oldKeyPath).Msg("Legacy key path is unsafe, skipping migration")
+		default:
+			log.Warn().Err(err).Str("path", oldKeyPath).Msg("Failed to read legacy key path, skipping migration")
 		}
 	} else {
 		log.Debug().
@@ -209,19 +306,12 @@ func getOrCreateKeyAt(dataDir string) ([]byte, error) {
 	}
 
 	// Generate new key (only if no encrypted data exists)
-	key := make([]byte, 32) // AES-256
+	key := make([]byte, encryptionKeyLength) // AES-256
 	if _, err := io.ReadFull(randReader, key); err != nil {
 		return nil, fmt.Errorf("failed to generate key: %w", err)
 	}
 
-	// Ensure directory exists
-	if err := os.MkdirAll(filepath.Dir(keyPath), 0700); err != nil {
-		return nil, fmt.Errorf("failed to create directory: %w", err)
-	}
-
-	// Save key with restricted permissions
-	encoded := base64.StdEncoding.EncodeToString(key)
-	if err := os.WriteFile(keyPath, []byte(encoded), 0600); err != nil {
+	if err := writeKeyFile(keyPath, key); err != nil {
 		return nil, fmt.Errorf("failed to save key: %w", err)
 	}
 
@@ -233,14 +323,25 @@ func getOrCreateKeyAt(dataDir string) ([]byte, error) {
 // SAFETY: Verifies the encryption key file still exists on disk before encrypting.
 // This prevents orphaned encrypted data if the key was deleted while Pulse was running.
 func (c *CryptoManager) Encrypt(plaintext []byte) ([]byte, error) {
+	if c == nil {
+		return nil, fmt.Errorf("crypto manager not initialized")
+	}
+
 	// CRITICAL: Verify the key file still exists on disk before encrypting
 	// This prevents creating orphaned encrypted data that can never be decrypted
 	if c.keyPath != "" {
-		if _, err := os.Stat(c.keyPath); os.IsNotExist(err) {
+		info, err := os.Lstat(c.keyPath)
+		if os.IsNotExist(err) {
 			log.Error().
 				Str("keyPath", c.keyPath).
 				Msg("CRITICAL: Encryption key file has been deleted - refusing to encrypt to prevent orphaned data")
 			return nil, fmt.Errorf("encryption key file deleted - cannot encrypt (would create orphaned data)")
+		}
+		if err != nil {
+			return nil, fmt.Errorf("encryption key file check failed: %w", err)
+		}
+		if err := validateEncryptionKeyFile(c.keyPath, info); err != nil {
+			return nil, fmt.Errorf("encryption key path safety check failed: %w", err)
 		}
 	}
 
@@ -265,6 +366,10 @@ func (c *CryptoManager) Encrypt(plaintext []byte) ([]byte, error) {
 
 // Decrypt decrypts data using AES-GCM
 func (c *CryptoManager) Decrypt(ciphertext []byte) ([]byte, error) {
+	if c == nil {
+		return nil, fmt.Errorf("crypto manager not initialized")
+	}
+
 	block, err := newCipher(c.key)
 	if err != nil {
 		return nil, fmt.Errorf("crypto.Decrypt: create AES cipher: %w", err)
