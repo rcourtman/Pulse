@@ -1,4 +1,3 @@
-// Remove apiRequest import - use fetch directly
 import { apiFetchJSON } from '@/utils/apiClient';
 
 export interface UpdateInfo {
@@ -41,16 +40,43 @@ export interface UpdatePlan {
   downloadUrl?: string;
 }
 
+const normalizeOptionalParam = (value?: string): string | undefined => {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+};
+
+const requireNonEmpty = (value: string, fieldName: string): string => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    throw new Error(`${fieldName} is required`);
+  }
+  return trimmed;
+};
+
+const withQueryParams = (path: string, params: Record<string, string | undefined>): string => {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined) {
+      query.set(key, value);
+    }
+  }
+  const queryString = query.toString();
+  return queryString ? `${path}?${queryString}` : path;
+};
+
 export class UpdatesAPI {
   static async checkForUpdates(channel?: string): Promise<UpdateInfo> {
-    const url = channel ? `/api/updates/check?channel=${channel}` : '/api/updates/check';
+    const url = withQueryParams('/api/updates/check', {
+      channel: normalizeOptionalParam(channel),
+    });
     return apiFetchJSON(url);
   }
 
   static async applyUpdate(downloadUrl: string): Promise<{ status: string; message: string }> {
+    const normalizedDownloadUrl = requireNonEmpty(downloadUrl, 'Download URL');
     return apiFetchJSON('/api/updates/apply', {
       method: 'POST',
-      body: JSON.stringify({ downloadUrl }),
+      body: JSON.stringify({ downloadUrl: normalizedDownloadUrl }),
     });
   }
 
@@ -63,9 +89,10 @@ export class UpdatesAPI {
   }
 
   static async getUpdatePlan(version: string, channel?: string): Promise<UpdatePlan> {
-    const url = channel
-      ? `/api/updates/plan?version=${version}&channel=${channel}`
-      : `/api/updates/plan?version=${version}`;
+    const url = withQueryParams('/api/updates/plan', {
+      version: requireNonEmpty(version, 'Version'),
+      channel: normalizeOptionalParam(channel),
+    });
     return apiFetchJSON(url);
   }
 }
