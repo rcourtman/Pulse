@@ -2,6 +2,7 @@ package chat
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -274,6 +275,43 @@ func TestAgenticLoop_DoesNotRetryAfterPartialEvents(t *testing.T) {
 	}
 	if callCount != 1 {
 		t.Fatalf("expected no retry after partial output, got %d attempts", callCount)
+	}
+}
+
+func TestAgenticLoop_EmitsFallbackErrorEventOnTransportFailure(t *testing.T) {
+	provider := &stubStreamingProvider{}
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+	loop := NewAgenticLoop(provider, executor, "prompt")
+
+	provider.chatStream = func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+		callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "partial"}})
+		return errors.New("connection reset by peer")
+	}
+
+	var events []StreamEvent
+	_, err := loop.Execute(context.Background(), "emit-fallback-error", []Message{{Role: "user", Content: "hi"}}, func(event StreamEvent) {
+		events = append(events, event)
+	})
+	if err == nil {
+		t.Fatalf("expected provider error when stream fails after partial output")
+	}
+
+	var foundError bool
+	for _, event := range events {
+		if event.Type != "error" {
+			continue
+		}
+		foundError = true
+		var data ErrorData
+		if decodeErr := json.Unmarshal(event.Data, &data); decodeErr != nil {
+			t.Fatalf("failed to decode error event payload: %v", decodeErr)
+		}
+		if strings.TrimSpace(data.Message) == "" {
+			t.Fatalf("expected non-empty fallback error message")
+		}
+	}
+	if !foundError {
+		t.Fatalf("expected fallback error event to be emitted")
 	}
 }
 
