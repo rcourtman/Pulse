@@ -258,7 +258,7 @@ func isUnraid() bool {
 func verifyBinaryMagic(path string) error {
 	f, err := os.Open(path)
 	if err != nil {
-		return err
+		return fmt.Errorf("verifyBinaryMagic: open %s: %w", path, err)
 	}
 	defer f.Close()
 

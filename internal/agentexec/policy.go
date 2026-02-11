@@ -3,6 +3,8 @@ package agentexec
 import (
 	"regexp"
 	"strings"
+
+	"github.com/rs/zerolog/log"
 )
 
 // CommandPolicy defines what commands are allowed, blocked, or require approval
@@ -209,9 +211,11 @@ func compilePatterns(patterns []string) []*regexp.Regexp {
 	result := make([]*regexp.Regexp, 0, len(patterns))
 	for _, pattern := range patterns {
 		re, err := regexp.Compile(pattern)
-		if err == nil {
-			result = append(result, re)
+		if err != nil {
+			log.Warn().Err(err).Str("pattern", pattern).Msg("Skipping invalid command policy regex")
+			continue
 		}
+		result = append(result, re)
 	}
 	return result
 }

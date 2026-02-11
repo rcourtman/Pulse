@@ -118,11 +118,13 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	// Validate token
 	if s.validateToken != nil && !s.validateToken(reg.Token, reg.AgentID) {
 		log.Warn().Str("agent_id", reg.AgentID).Msg("Agent registration rejected: invalid token")
-		s.sendMessage(conn, Message{
+		if err := s.sendMessage(conn, Message{
 			Type:      MsgTypeRegistered,
 			Timestamp: time.Now(),
 			Payload:   RegisteredPayload{Success: false, Message: "Invalid token"},
-		})
+		}); err != nil {
+			log.Warn().Err(err).Str("agent_id", reg.AgentID).Msg("Failed to send rejection to agent")
+		}
 		conn.Close()
 		return
 	}
@@ -178,11 +180,13 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	// Send registration success (with write lock since agent is now in the map
 	// and other goroutines could try to send commands via ExecuteCommand)
 	ac.writeMu.Lock()
-	s.sendMessage(conn, Message{
+	if err := s.sendMessage(conn, Message{
 		Type:      MsgTypeRegistered,
 		Timestamp: time.Now(),
 		Payload:   RegisteredPayload{Success: true, Message: "Registered"},
-	})
+	}); err != nil {
+		log.Warn().Err(err).Str("agent_id", reg.AgentID).Msg("Failed to send registration ack")
+	}
 	ac.writeMu.Unlock()
 
 	// Start server-side ping loop to keep connection alive
@@ -233,10 +237,12 @@ func (s *Server) readLoop(ac *agentConn) {
 		switch msg.Type {
 		case MsgTypeAgentPing:
 			ac.writeMu.Lock()
-			s.sendMessage(ac.conn, Message{
+			if err := s.sendMessage(ac.conn, Message{
 				Type:      MsgTypePong,
 				Timestamp: time.Now(),
-			})
+			}); err != nil {
+				log.Debug().Err(err).Str("agent_id", ac.agent.AgentID).Msg("Failed to send pong")
+			}
 			ac.writeMu.Unlock()
 
 		case MsgTypeCommandResult:
