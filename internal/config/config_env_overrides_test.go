@@ -175,3 +175,57 @@ func TestLoad_EnvOverrides_DockerUpdateActionsAliases(t *testing.T) {
 		})
 	}
 }
+
+func TestLoad_EnvOverrides_InvalidFrontendPortIgnored(t *testing.T) {
+	t.Run("invalid FRONTEND_PORT", func(t *testing.T) {
+		t.Setenv("PULSE_DATA_DIR", t.TempDir())
+		t.Setenv("FRONTEND_PORT", "-1")
+
+		cfg, err := Load()
+		require.NoError(t, err)
+		assert.Equal(t, 7655, cfg.FrontendPort)
+	})
+
+	t.Run("invalid legacy PORT", func(t *testing.T) {
+		t.Setenv("PULSE_DATA_DIR", t.TempDir())
+		t.Setenv("PORT", "70000")
+
+		cfg, err := Load()
+		require.NoError(t, err)
+		assert.Equal(t, 7655, cfg.FrontendPort)
+	})
+}
+
+func TestLoad_EnvOverrides_AdaptivePollingNonPositiveIgnored(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+	t.Setenv("ADAPTIVE_POLLING_BASE_INTERVAL", "0s")
+	t.Setenv("ADAPTIVE_POLLING_MIN_INTERVAL", "-10s")
+	t.Setenv("ADAPTIVE_POLLING_MAX_INTERVAL", "0s")
+
+	cfg, err := Load()
+	require.NoError(t, err)
+
+	assert.Equal(t, 10*time.Second, cfg.AdaptivePollingBaseInterval)
+	assert.Equal(t, 5*time.Second, cfg.AdaptivePollingMinInterval)
+	assert.Equal(t, 5*time.Minute, cfg.AdaptivePollingMaxInterval)
+}
+
+func TestLoad_EnvOverrides_ConnectionTimeoutParsing(t *testing.T) {
+	t.Run("duration value", func(t *testing.T) {
+		t.Setenv("PULSE_DATA_DIR", t.TempDir())
+		t.Setenv("CONNECTION_TIMEOUT", "5m")
+
+		cfg, err := Load()
+		require.NoError(t, err)
+		assert.Equal(t, 5*time.Minute, cfg.ConnectionTimeout)
+	})
+
+	t.Run("non-positive numeric ignored", func(t *testing.T) {
+		t.Setenv("PULSE_DATA_DIR", t.TempDir())
+		t.Setenv("CONNECTION_TIMEOUT", "0")
+
+		cfg, err := Load()
+		require.NoError(t, err)
+		assert.Equal(t, 60*time.Second, cfg.ConnectionTimeout)
+	})
+}
