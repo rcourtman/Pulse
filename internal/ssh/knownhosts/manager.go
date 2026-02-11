@@ -243,29 +243,34 @@ func (m *manager) ensureKnownHostsFile() error {
 	if _, err := statFn(m.path); err == nil {
 		return nil
 	} else if !os.IsNotExist(err) {
-		return err
+		return fmt.Errorf("knownhosts: stat %s: %w", m.path, err)
 	}
 
 	f, err := openFileFn(m.path, os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
 		return fmt.Errorf("knownhosts: create %s: %w", m.path, err)
 	}
-	return f.Close()
+	if err := f.Close(); err != nil {
+		return fmt.Errorf("knownhosts: close %s: %w", m.path, err)
+	}
+	return nil
 }
 
-func appendHostKey(path string, entries [][]byte) error {
+func appendHostKey(path string, entries [][]byte) (retErr error) {
 	f, err := appendOpenFileFn(path)
 	if err != nil {
 		return fmt.Errorf("knownhosts: open %s: %w", path, err)
 	}
-	defer f.Close()
+	defer func() {
+		retErr = joinCloseError(retErr, fmt.Sprintf("knownhosts: close %s", path), f.Close())
+	}()
 
 	for _, entry := range entries {
 		if len(entry) == 0 {
 			continue
 		}
 		if _, err := f.Write(append(entry, '\n')); err != nil {
-			return fmt.Errorf("knownhosts: write entry: %w", err)
+			return fmt.Errorf("knownhosts: write entry to %s: %w", path, err)
 		}
 	}
 	return nil
@@ -308,15 +313,17 @@ func normalizeHostEntry(host string, entry []byte) ([]byte, string, error) {
 	return []byte(fmt.Sprintf("%s %s %s", host, keyType, keyData)), keyType, nil
 }
 
-func findHostKeyLine(path, host, keyType string) (string, error) {
+func findHostKeyLine(path, host, keyType string) (line string, retErr error) {
 	f, err := openFn(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return "", nil
 		}
-		return "", err
+		return "", fmt.Errorf("knownhosts: open %s: %w", path, err)
 	}
-	defer f.Close()
+	defer func() {
+		retErr = joinCloseError(retErr, fmt.Sprintf("knownhosts: close %s", path), f.Close())
+	}()
 
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
@@ -335,9 +342,22 @@ func findHostKeyLine(path, host, keyType string) (string, error) {
 		return strings.TrimSpace(line), nil
 	}
 	if err := scanner.Err(); err != nil {
-		return "", err
+		return "", fmt.Errorf("knownhosts: scan %s: %w", path, err)
 	}
 	return "", nil
+}
+
+func joinCloseError(err error, op string, closeErr error) error {
+	if closeErr == nil {
+		return err
+	}
+
+	wrappedCloseErr := fmt.Errorf("%s: %w", op, closeErr)
+	if err == nil {
+		return wrappedCloseErr
+	}
+
+	return errors.Join(err, wrappedCloseErr)
 }
 
 func hostLineMatches(host, line string) bool {
