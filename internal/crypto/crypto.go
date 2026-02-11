@@ -104,10 +104,12 @@ func getOrCreateKeyAt(dataDir string) ([]byte, error) {
 			}
 			log.Warn().
 				Int("decodedBytes", n).
+				Str("keyPath", keyPath).
 				Msg("Encryption key has invalid length (expected 32 bytes)")
 		} else {
 			log.Warn().
 				Err(err).
+				Str("keyPath", keyPath).
 				Msg("Failed to decode encryption key")
 		}
 	} else {
@@ -132,12 +134,20 @@ func getOrCreateKeyAt(dataDir string) ([]byte, error) {
 				// Migrate key to new location
 				if err := os.MkdirAll(filepath.Dir(keyPath), 0700); err != nil {
 					// Migration failed, but we can still use the old key
-					log.Warn().Err(err).Msg("Failed to create directory for key migration, using old location")
+					log.Warn().
+						Err(err).
+						Str("from", oldKeyPath).
+						Str("to", keyPath).
+						Msg("Failed to create directory for key migration, using old location")
 					return key, nil
 				}
 				if err := os.WriteFile(keyPath, data, 0600); err != nil {
 					// Migration failed, but we can still use the old key
-					log.Warn().Err(err).Msg("Failed to migrate encryption key, using old location")
+					log.Warn().
+						Err(err).
+						Str("from", oldKeyPath).
+						Str("to", keyPath).
+						Msg("Failed to migrate encryption key, using old location")
 					return key, nil
 				}
 				log.Info().
@@ -225,7 +235,7 @@ func getOrCreateKeyAt(dataDir string) ([]byte, error) {
 		return nil, fmt.Errorf("failed to save key: %w", err)
 	}
 
-	log.Info().Msg("Generated new encryption key")
+	log.Info().Str("keyPath", keyPath).Msg("Generated new encryption key")
 	return key, nil
 }
 
