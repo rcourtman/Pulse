@@ -451,6 +451,87 @@ func TestClient_SessionTokenReuse(t *testing.T) {
 	<-errCh
 }
 
+func TestClient_CancelUnblocksIdleConnection(t *testing.T) {
+	logger := zerolog.New(zerolog.NewTestWriter(t))
+
+	holdConn := make(chan struct{})
+	connected := make(chan struct{})
+
+	relayServer := mockRelayServer(t, func(conn *websocket.Conn) {
+		// Read REGISTER
+		_, msg, err := conn.ReadMessage()
+		if err != nil {
+			return
+		}
+		frame, err := DecodeFrame(msg)
+		if err != nil || frame.Type != FrameRegister {
+			return
+		}
+
+		// Send REGISTER_ACK and then keep the socket open without reading
+		ack, _ := NewControlFrame(FrameRegisterAck, 0, RegisterAckPayload{
+			InstanceID:   "inst_idle",
+			SessionToken: "sess_idle",
+			ExpiresAt:    time.Now().Add(time.Hour).Unix(),
+		})
+		ackBytes, _ := EncodeFrame(ack)
+		if err := conn.WriteMessage(websocket.BinaryMessage, ackBytes); err != nil {
+			return
+		}
+		close(connected)
+
+		<-holdConn
+	})
+	defer relayServer.Close()
+
+	cfg := Config{
+		Enabled:   true,
+		ServerURL: wsURL(relayServer),
+	}
+
+	deps := ClientDeps{
+		LicenseTokenFunc: func() string { return "test-jwt" },
+		TokenValidator:   func(token string) bool { return true },
+		LocalAddr:        "127.0.0.1:9999",
+		ServerVersion:    "1.0.0",
+		IdentityPubKey:   "test-pub-key",
+	}
+
+	client := NewClient(cfg, deps, logger)
+	ctx, cancel := context.WithCancel(context.Background())
+	errCh := make(chan error, 1)
+	go func() { errCh <- client.Run(ctx) }()
+
+	select {
+	case <-connected:
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for REGISTER_ACK")
+	}
+
+	// Wait until the client reports connected before cancelling.
+	waitDeadline := time.After(2 * time.Second)
+	for {
+		if client.Status().Connected {
+			break
+		}
+		select {
+		case <-waitDeadline:
+			t.Fatal("client did not reach connected state")
+		case <-time.After(25 * time.Millisecond):
+		}
+	}
+
+	cancel()
+
+	select {
+	case <-errCh:
+	case <-time.After(2 * time.Second):
+		t.Fatal("client.Run did not return after cancel on idle connection")
+	}
+
+	close(holdConn)
+}
+
 // testIdentityKeyPair generates an Ed25519 keypair for testing and returns
 // the base64 private key and public key.
 func testIdentityKeyPair(t *testing.T) (privB64, pubB64 string) {
