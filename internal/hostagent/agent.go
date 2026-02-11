@@ -76,6 +76,9 @@ type Agent struct {
 	trimmedPulseURL string
 	reportBuffer    *buffer.Queue[agentshost.Report]
 	commandClient   *CommandClient
+	runCtx          context.Context
+	commandCancel   context.CancelFunc
+	commandDone     chan struct{}
 	collector       SystemCollector
 }
 
@@ -251,6 +254,12 @@ func (a *Agent) Run(ctx context.Context) error {
 		return a.runOnce(ctx)
 	}
 
+	a.runCtx = ctx
+	defer func() {
+		a.stopCommandClient()
+		a.runCtx = nil
+	}()
+
 	// Proxmox setup (if enabled)
 	if a.cfg.EnableProxmox {
 		a.runProxmoxSetup(ctx)
@@ -258,11 +267,7 @@ func (a *Agent) Run(ctx context.Context) error {
 
 	// Start command client in background for AI command execution
 	if a.commandClient != nil {
-		go func() {
-			if err := a.commandClient.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
-				a.logger.Error().Err(err).Msg("Command client stopped with error")
-			}
-		}()
+		a.startCommandClient()
 	}
 
 	ticker := time.NewTicker(a.interval)
@@ -469,19 +474,54 @@ func (a *Agent) applyRemoteConfig(commandsEnabled bool) {
 		a.logger.Info().Msg("Server enabled command execution - starting command client")
 		client := NewCommandClient(a.cfg, a.agentID, a.hostname, a.platform, a.agentVersion)
 		a.commandClient = client
-		go func() {
-			if err := client.Run(context.Background()); err != nil && !errors.Is(err, context.Canceled) {
-				a.logger.Error().Err(err).Msg("Command client stopped with error")
-			}
-		}()
+		a.startCommandClient()
 	} else if !commandsEnabled && currentlyEnabled {
 		// Server disabled commands, but we have a command client running
 		a.logger.Info().Msg("Server disabled command execution - stopping command client")
-		// Properly close the WebSocket connection to stop the client
+		a.stopCommandClient()
+		a.commandClient = nil
+	}
+}
+
+func (a *Agent) startCommandClient() {
+	if a.commandClient == nil || a.runCtx == nil || a.commandCancel != nil {
+		return
+	}
+
+	clientCtx, cancel := context.WithCancel(a.runCtx)
+	a.commandCancel = cancel
+
+	done := make(chan struct{})
+	a.commandDone = done
+	client := a.commandClient
+
+	go func() {
+		defer close(done)
+		if err := client.Run(clientCtx); err != nil && !errors.Is(err, context.Canceled) {
+			a.logger.Error().Err(err).Msg("Command client stopped with error")
+		}
+	}()
+}
+
+func (a *Agent) stopCommandClient() {
+	if a.commandCancel != nil {
+		a.commandCancel()
+		a.commandCancel = nil
+	}
+
+	if a.commandClient != nil {
 		if err := a.commandClient.Close(); err != nil {
 			a.logger.Debug().Err(err).Msg("Error closing command client connection")
 		}
-		a.commandClient = nil
+	}
+
+	if a.commandDone != nil {
+		select {
+		case <-a.commandDone:
+		case <-time.After(2 * time.Second):
+			a.logger.Warn().Msg("Timed out waiting for command client shutdown")
+		}
+		a.commandDone = nil
 	}
 }
 

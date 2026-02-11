@@ -129,3 +129,75 @@ func TestCommandClient_connectAndHandle_ExecutesCommandAndReturnsResult(t *testi
 		t.Fatalf("timed out waiting for connectAndHandle to return")
 	}
 }
+
+func TestCommandClient_connectAndHandle_StopsOnContextCancel(t *testing.T) {
+	upgrader := websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }}
+
+	registered := make(chan struct{})
+	serverDone := make(chan struct{})
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			t.Errorf("upgrade: %v", err)
+			return
+		}
+		defer conn.Close()
+
+		conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+		var regMsg wsMessage
+		if err := conn.ReadJSON(&regMsg); err != nil {
+			t.Errorf("read registration: %v", err)
+			return
+		}
+
+		registeredBytes, _ := json.Marshal(registeredPayload{Success: true, Message: "Registered"})
+		conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
+		if err := conn.WriteJSON(wsMessage{Type: msgTypeRegistered, Timestamp: time.Now(), Payload: registeredBytes}); err != nil {
+			t.Errorf("write registered: %v", err)
+			return
+		}
+
+		close(registered)
+		<-serverDone
+	}))
+	defer server.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	client := &CommandClient{
+		pulseURL: strings.TrimRight(server.URL, "/"),
+		apiToken: "token",
+		agentID:  "agent-1",
+		hostname: "host-1",
+		platform: "linux",
+		version:  "1.2.3",
+		logger:   zerolog.Nop(),
+		done:     make(chan struct{}),
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- client.connectAndHandle(ctx)
+	}()
+
+	select {
+	case <-registered:
+	case <-time.After(5 * time.Second):
+		t.Fatalf("timed out waiting for registration")
+	}
+
+	cancel()
+
+	select {
+	case err := <-errCh:
+		if err == nil {
+			t.Fatalf("expected connectAndHandle to return non-nil error after cancellation")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatalf("connectAndHandle did not return promptly after cancellation")
+	}
+
+	close(serverDone)
+}

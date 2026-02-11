@@ -148,10 +148,17 @@ func (c *CommandClient) Run(ctx context.Context) error {
 				c.logger.Debug().Err(err).Msg("WebSocket connection interrupted, reconnecting in 10s")
 			}
 
+			timer := time.NewTimer(reconnectDelay)
 			select {
 			case <-ctx.Done():
+				if !timer.Stop() {
+					select {
+					case <-timer.C:
+					default:
+					}
+				}
 				return ctx.Err()
-			case <-time.After(reconnectDelay):
+			case <-timer.C:
 			}
 		} else {
 			// Connection closed cleanly (shouldn't happen in normal operation)
@@ -194,6 +201,16 @@ func (c *CommandClient) connectAndHandle(ctx context.Context) error {
 		c.connMu.Unlock()
 		conn.Close()
 	}()
+
+	cancelCloseDone := make(chan struct{})
+	go func() {
+		select {
+		case <-ctx.Done():
+			_ = conn.Close()
+		case <-cancelCloseDone:
+		}
+	}()
+	defer close(cancelCloseDone)
 
 	// Send registration
 	if err := c.sendRegistration(conn); err != nil {
