@@ -96,6 +96,34 @@ func TestHandleSSHConfig_WrongMethod(t *testing.T) {
 	assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
 }
 
+func TestHandleSSHConfig_HardensExistingPermissions(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+
+	sshDir := filepath.Join(tempHome, ".ssh")
+	require.NoError(t, os.MkdirAll(sshDir, 0o755))
+	configPath := filepath.Join(sshDir, "config")
+	require.NoError(t, os.WriteFile(configPath, []byte("Host old\n\tHostname old.example\n"), 0o644))
+	require.NoError(t, os.Chmod(sshDir, 0o755))
+	require.NoError(t, os.Chmod(configPath, 0o644))
+
+	handler := &SystemSettingsHandler{}
+	validConfig := "Host bastion\n\tHostname 1.2.3.4\n\tUser pulse\n"
+	req := httptest.NewRequest(http.MethodPost, "/api/config/ssh", strings.NewReader(validConfig))
+	w := httptest.NewRecorder()
+
+	handler.HandleSSHConfig(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+
+	sshDirInfo, err := os.Stat(sshDir)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o700), sshDirInfo.Mode().Perm())
+
+	configInfo, err := os.Stat(configPath)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o600), configInfo.Mode().Perm())
+}
+
 func TestSetMonitor(t *testing.T) {
 	handler := &SystemSettingsHandler{}
 	monitor := &mockMonitor{} // mockMonitor is defined in system_settings_handlers_test.go (same package)
