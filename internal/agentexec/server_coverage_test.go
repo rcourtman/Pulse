@@ -3,7 +3,6 @@ package agentexec
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -103,13 +102,7 @@ func TestHandleWebSocket_RegistrationMessageJSONError(t *testing.T) {
 	}
 }
 
-func TestHandleWebSocket_RegistrationPayloadMarshalError(t *testing.T) {
-	orig := jsonMarshal
-	t.Cleanup(func() { jsonMarshal = orig })
-	jsonMarshal = func(any) ([]byte, error) {
-		return nil, errors.New("boom")
-	}
-
+func TestHandleWebSocket_RegistrationPayloadMissing(t *testing.T) {
 	s := NewServer(nil)
 	ts := newWSServer(t, s)
 	defer ts.Close()
@@ -120,19 +113,11 @@ func TestHandleWebSocket_RegistrationPayloadMarshalError(t *testing.T) {
 	}
 	defer conn.Close()
 
-	wsWriteMessage(t, conn, Message{
-		Type:      MsgTypeAgentRegister,
-		Timestamp: time.Now(),
-		Payload: AgentRegisterPayload{
-			AgentID:  "a1",
-			Hostname: "host1",
-			Token:    "any",
-		},
-	})
+	wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentRegister, "", nil))
 
 	conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
 	if _, _, err := conn.ReadMessage(); err == nil {
-		t.Fatalf("expected server to close on marshal error")
+		t.Fatalf("expected server to close on missing payload")
 	}
 }
 
@@ -168,15 +153,11 @@ func TestHandleWebSocket_PongHandler(t *testing.T) {
 	}
 	defer conn.Close()
 
-	wsWriteMessage(t, conn, Message{
-		Type:      MsgTypeAgentRegister,
-		Timestamp: time.Now(),
-		Payload: AgentRegisterPayload{
-			AgentID:  "a1",
-			Hostname: "host1",
-			Token:    "any",
-		},
-	})
+	wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{
+		AgentID:  "a1",
+		Hostname: "host1",
+		Token:    "any",
+	}))
 	_ = wsReadRegisteredPayload(t, conn)
 
 	if err := conn.WriteControl(websocket.PongMessage, []byte("pong"), time.Now().Add(time.Second)); err != nil {
@@ -350,7 +331,7 @@ func TestPingLoopFailuresClose(t *testing.T) {
 
 func TestSendMessageMarshalError(t *testing.T) {
 	s := NewServer(nil)
-	if err := s.sendMessage(nil, Message{Payload: make(chan int)}); err == nil {
+	if err := s.sendMessage(nil, Message{Payload: json.RawMessage("{")}); err == nil {
 		t.Fatalf("expected marshal error")
 	}
 }
@@ -448,15 +429,11 @@ func TestReadFileRoundTrip(t *testing.T) {
 	}
 	defer conn.Close()
 
-	wsWriteMessage(t, conn, Message{
-		Type:      MsgTypeAgentRegister,
-		Timestamp: time.Now(),
-		Payload: AgentRegisterPayload{
-			AgentID:  "a1",
-			Hostname: "host1",
-			Token:    "any",
-		},
-	})
+	wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{
+		AgentID:  "a1",
+		Hostname: "host1",
+		Token:    "any",
+	}))
 	_ = wsReadRegisteredPayload(t, conn)
 
 	agentDone := make(chan error, 1)
@@ -475,16 +452,12 @@ func TestReadFileRoundTrip(t *testing.T) {
 				agentDone <- err
 				return
 			}
-			agentDone <- conn.WriteJSON(Message{
-				Type:      MsgTypeCommandResult,
-				Timestamp: time.Now(),
-				Payload: CommandResultPayload{
-					RequestID: payload.RequestID,
-					Success:   true,
-					Stdout:    "data",
-					ExitCode:  0,
-				},
-			})
+			agentDone <- conn.WriteJSON(mustNewMessage(t, MsgTypeCommandResult, "", CommandResultPayload{
+				RequestID: payload.RequestID,
+				Success:   true,
+				Stdout:    "data",
+				ExitCode:  0,
+			}))
 			return
 		}
 	}()

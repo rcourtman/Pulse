@@ -21,7 +21,6 @@ var upgrader = websocket.Upgrader{
 }
 
 var (
-	jsonMarshal     = json.Marshal
 	pingInterval    = 5 * time.Second
 	pingWriteWait   = 5 * time.Second
 	readFileTimeout = 30 * time.Second
@@ -100,16 +99,8 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Parse registration payload
-	payloadBytes, err := jsonMarshal(msg.Payload)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to marshal registration payload")
-		conn.Close()
-		return
-	}
-
 	var reg AgentRegisterPayload
-	if err := json.Unmarshal(payloadBytes, &reg); err != nil {
+	if err := msg.DecodePayload(&reg); err != nil {
 		log.Error().Err(err).Msg("Failed to parse registration payload")
 		conn.Close()
 		return
@@ -118,11 +109,13 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	// Validate token
 	if s.validateToken != nil && !s.validateToken(reg.Token, reg.AgentID) {
 		log.Warn().Str("agent_id", reg.AgentID).Msg("Agent registration rejected: invalid token")
-		if err := s.sendMessage(conn, Message{
-			Type:      MsgTypeRegistered,
-			Timestamp: time.Now(),
-			Payload:   RegisteredPayload{Success: false, Message: "Invalid token"},
-		}); err != nil {
+		rejectedMsg, err := NewMessage(MsgTypeRegistered, "", RegisteredPayload{Success: false, Message: "Invalid token"})
+		if err != nil {
+			log.Warn().Err(err).Str("agent_id", reg.AgentID).Msg("Failed to encode rejection message")
+			conn.Close()
+			return
+		}
+		if err := s.sendMessage(conn, rejectedMsg); err != nil {
 			log.Warn().Err(err).Str("agent_id", reg.AgentID).Msg("Failed to send rejection to agent")
 		}
 		conn.Close()
@@ -179,12 +172,14 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	// Send registration success (with write lock since agent is now in the map
 	// and other goroutines could try to send commands via ExecuteCommand)
+	registeredMsg, err := NewMessage(MsgTypeRegistered, "", RegisteredPayload{Success: true, Message: "Registered"})
+	if err != nil {
+		log.Warn().Err(err).Str("agent_id", reg.AgentID).Msg("Failed to encode registration ack")
+		conn.Close()
+		return
+	}
 	ac.writeMu.Lock()
-	if err := s.sendMessage(conn, Message{
-		Type:      MsgTypeRegistered,
-		Timestamp: time.Now(),
-		Payload:   RegisteredPayload{Success: true, Message: "Registered"},
-	}); err != nil {
+	if err := s.sendMessage(conn, registeredMsg); err != nil {
 		log.Warn().Err(err).Str("agent_id", reg.AgentID).Msg("Failed to send registration ack")
 	}
 	ac.writeMu.Unlock()
@@ -236,19 +231,20 @@ func (s *Server) readLoop(ac *agentConn) {
 
 		switch msg.Type {
 		case MsgTypeAgentPing:
+			pongMsg, err := NewMessage(MsgTypePong, "", nil)
+			if err != nil {
+				log.Debug().Err(err).Str("agent_id", ac.agent.AgentID).Msg("Failed to encode pong message")
+				continue
+			}
 			ac.writeMu.Lock()
-			if err := s.sendMessage(ac.conn, Message{
-				Type:      MsgTypePong,
-				Timestamp: time.Now(),
-			}); err != nil {
+			if err := s.sendMessage(ac.conn, pongMsg); err != nil {
 				log.Debug().Err(err).Str("agent_id", ac.agent.AgentID).Msg("Failed to send pong")
 			}
 			ac.writeMu.Unlock()
 
 		case MsgTypeCommandResult:
-			payloadBytes, _ := json.Marshal(msg.Payload)
 			var result CommandResultPayload
-			if err := json.Unmarshal(payloadBytes, &result); err != nil {
+			if err := msg.DecodePayload(&result); err != nil {
 				log.Error().Err(err).Msg("Failed to parse command result")
 				continue
 			}
@@ -347,15 +343,13 @@ func (s *Server) ExecuteCommand(ctx context.Context, agentID string, cmd Execute
 	}()
 
 	// Send command
-	msg := Message{
-		Type:      MsgTypeExecuteCmd,
-		ID:        cmd.RequestID,
-		Timestamp: time.Now(),
-		Payload:   cmd,
+	msg, err := NewMessage(MsgTypeExecuteCmd, cmd.RequestID, cmd)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode command request: %w", err)
 	}
 
 	ac.writeMu.Lock()
-	err := s.sendMessage(ac.conn, msg)
+	err = s.sendMessage(ac.conn, msg)
 	ac.writeMu.Unlock()
 
 	if err != nil {
@@ -401,15 +395,13 @@ func (s *Server) ReadFile(ctx context.Context, agentID string, req ReadFilePaylo
 	}()
 
 	// Send request
-	msg := Message{
-		Type:      MsgTypeReadFile,
-		ID:        req.RequestID,
-		Timestamp: time.Now(),
-		Payload:   req,
+	msg, err := NewMessage(MsgTypeReadFile, req.RequestID, req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode read_file request: %w", err)
 	}
 
 	ac.writeMu.Lock()
-	err := s.sendMessage(ac.conn, msg)
+	err = s.sendMessage(ac.conn, msg)
 	ac.writeMu.Unlock()
 
 	if err != nil {

@@ -593,16 +593,16 @@ func registerAgent(t *testing.T, url, agentID, hostname string) *websocket.Conn 
 		t.Fatalf("failed to dial websocket: %v", err)
 	}
 
-	msg := agentexec.Message{
-		Type:      agentexec.MsgTypeAgentRegister,
-		Timestamp: time.Now(),
-		Payload: agentexec.AgentRegisterPayload{
-			AgentID:  agentID,
-			Hostname: hostname,
-			Version:  "1.0.0",
-			Platform: "linux",
-			Token:    "ok",
-		},
+	msg, err := agentexec.NewMessage(agentexec.MsgTypeAgentRegister, "", agentexec.AgentRegisterPayload{
+		AgentID:  agentID,
+		Hostname: hostname,
+		Version:  "1.0.0",
+		Platform: "linux",
+		Token:    "ok",
+	})
+	if err != nil {
+		conn.Close()
+		t.Fatalf("failed to build registration message: %v", err)
 	}
 	if err := conn.WriteJSON(msg); err != nil {
 		conn.Close()
@@ -620,9 +620,8 @@ func registerAgent(t *testing.T, url, agentID, hostname string) *websocket.Conn 
 		conn.Close()
 		t.Fatalf("failed to decode registration response: %v", err)
 	}
-	payloadBytes, _ := json.Marshal(resp.Payload)
 	var reg agentexec.RegisteredPayload
-	if err := json.Unmarshal(payloadBytes, &reg); err != nil {
+	if err := resp.DecodePayload(&reg); err != nil {
 		conn.Close()
 		t.Fatalf("failed to decode registration payload: %v", err)
 	}

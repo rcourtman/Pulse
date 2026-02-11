@@ -1,6 +1,8 @@
 package agentexec
 
 import (
+	"encoding/json"
+	"errors"
 	"time"
 )
 
@@ -22,10 +24,46 @@ const (
 
 // Message is the envelope for all WebSocket messages
 type Message struct {
-	Type      MessageType `json:"type"`
-	ID        string      `json:"id,omitempty"` // Unique message ID for request/response correlation
-	Timestamp time.Time   `json:"timestamp"`
-	Payload   interface{} `json:"payload,omitempty"`
+	Type      MessageType     `json:"type"`
+	ID        string          `json:"id,omitempty"` // Unique message ID for request/response correlation
+	Timestamp time.Time       `json:"timestamp"`
+	Payload   json.RawMessage `json:"payload,omitempty"`
+}
+
+// NewMessage creates a message envelope with a safely marshaled payload.
+func NewMessage(messageType MessageType, id string, payload any) (Message, error) {
+	msg := Message{
+		Type:      messageType,
+		ID:        id,
+		Timestamp: time.Now(),
+	}
+	if err := msg.SetPayload(payload); err != nil {
+		return Message{}, err
+	}
+	return msg, nil
+}
+
+// SetPayload marshals and sets the payload for this message.
+func (m *Message) SetPayload(payload any) error {
+	if payload == nil {
+		m.Payload = nil
+		return nil
+	}
+
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	m.Payload = encoded
+	return nil
+}
+
+// DecodePayload unmarshals the message payload into target.
+func (m Message) DecodePayload(target any) error {
+	if len(m.Payload) == 0 {
+		return errors.New("message payload is empty")
+	}
+	return json.Unmarshal(m.Payload, target)
 }
 
 // AgentRegisterPayload is sent by agent on connection

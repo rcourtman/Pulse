@@ -38,6 +38,15 @@ func wsWriteMessage(t *testing.T, conn *websocket.Conn, msg Message) {
 	}
 }
 
+func mustNewMessage(t *testing.T, msgType MessageType, id string, payload any) Message {
+	t.Helper()
+	msg, err := NewMessage(msgType, id, payload)
+	if err != nil {
+		t.Fatalf("NewMessage: %v", err)
+	}
+	return msg
+}
+
 func wsReadRawMessage(t *testing.T, conn *websocket.Conn) wsRawMessage {
 	t.Helper()
 	msg, err := wsReadRawMessageWithTimeout(conn, 2*time.Second)
@@ -98,18 +107,14 @@ func TestHandleWebSocket_RegistrationSuccessAndDisconnectRemovesAgent(t *testing
 		t.Fatalf("Dial: %v", err)
 	}
 
-	wsWriteMessage(t, conn, Message{
-		Type:      MsgTypeAgentRegister,
-		Timestamp: time.Now(),
-		Payload: AgentRegisterPayload{
-			AgentID:  "a1",
-			Hostname: "host1",
-			Version:  "1.2.3",
-			Platform: "linux",
-			Tags:     []string{"tag1"},
-			Token:    "ok",
-		},
-	})
+	wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{
+		AgentID:  "a1",
+		Hostname: "host1",
+		Version:  "1.2.3",
+		Platform: "linux",
+		Tags:     []string{"tag1"},
+		Token:    "ok",
+	}))
 
 	reg := wsReadRegisteredPayload(t, conn)
 	if !reg.Success {
@@ -136,17 +141,13 @@ func TestHandleWebSocket_InvalidTokenRejected(t *testing.T) {
 	}
 	defer conn.Close()
 
-	wsWriteMessage(t, conn, Message{
-		Type:      MsgTypeAgentRegister,
-		Timestamp: time.Now(),
-		Payload: AgentRegisterPayload{
-			AgentID:  "a1",
-			Hostname: "host1",
-			Version:  "1.2.3",
-			Platform: "linux",
-			Token:    "bad",
-		},
-	})
+	wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{
+		AgentID:  "a1",
+		Hostname: "host1",
+		Version:  "1.2.3",
+		Platform: "linux",
+		Token:    "bad",
+	}))
 
 	reg := wsReadRegisteredPayload(t, conn)
 	if reg.Success {
@@ -173,10 +174,7 @@ func TestHandleWebSocket_FirstMessageMustBeRegister(t *testing.T) {
 	}
 	defer conn.Close()
 
-	wsWriteMessage(t, conn, Message{
-		Type:      MsgTypeAgentPing,
-		Timestamp: time.Now(),
-	})
+	wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentPing, "", nil))
 
 	conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
 	_, _, err = conn.ReadMessage()
@@ -196,23 +194,16 @@ func TestHandleWebSocket_AgentPingRespondsWithPong(t *testing.T) {
 	}
 	defer conn.Close()
 
-	wsWriteMessage(t, conn, Message{
-		Type:      MsgTypeAgentRegister,
-		Timestamp: time.Now(),
-		Payload: AgentRegisterPayload{
-			AgentID:  "a1",
-			Hostname: "host1",
-			Version:  "1.2.3",
-			Platform: "linux",
-			Token:    "any",
-		},
-	})
+	wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{
+		AgentID:  "a1",
+		Hostname: "host1",
+		Version:  "1.2.3",
+		Platform: "linux",
+		Token:    "any",
+	}))
 	_ = wsReadRegisteredPayload(t, conn)
 
-	wsWriteMessage(t, conn, Message{
-		Type:      MsgTypeAgentPing,
-		Timestamp: time.Now(),
-	})
+	wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentPing, "", nil))
 
 	msg := wsReadRawMessage(t, conn)
 	if msg.Type != MsgTypePong {
@@ -231,17 +222,13 @@ func TestExecuteCommand_RoundTripViaWebSocket(t *testing.T) {
 	}
 	defer conn.Close()
 
-	wsWriteMessage(t, conn, Message{
-		Type:      MsgTypeAgentRegister,
-		Timestamp: time.Now(),
-		Payload: AgentRegisterPayload{
-			AgentID:  "a1",
-			Hostname: "host1",
-			Version:  "1.2.3",
-			Platform: "linux",
-			Token:    "any",
-		},
-	})
+	wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{
+		AgentID:  "a1",
+		Hostname: "host1",
+		Version:  "1.2.3",
+		Platform: "linux",
+		Token:    "any",
+	}))
 	_ = wsReadRegisteredPayload(t, conn)
 
 	agentDone := make(chan struct{})
@@ -267,17 +254,13 @@ func TestExecuteCommand_RoundTripViaWebSocket(t *testing.T) {
 				return
 			}
 			conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
-			if err := conn.WriteJSON(Message{
-				Type:      MsgTypeCommandResult,
-				Timestamp: time.Now(),
-				Payload: CommandResultPayload{
-					RequestID: payload.RequestID,
-					Success:   true,
-					Stdout:    "ok",
-					ExitCode:  0,
-					Duration:  1,
-				},
-			}); err != nil {
+			if err := conn.WriteJSON(mustNewMessage(t, MsgTypeCommandResult, "", CommandResultPayload{
+				RequestID: payload.RequestID,
+				Success:   true,
+				Stdout:    "ok",
+				ExitCode:  0,
+				Duration:  1,
+			})); err != nil {
 				agentErr <- err
 				return
 			}
@@ -328,32 +311,24 @@ func TestHandleWebSocket_ReconnectSameAgentIDClosesOldConnection(t *testing.T) {
 
 	c1 := dial()
 	defer c1.Close()
-	wsWriteMessage(t, c1, Message{
-		Type:      MsgTypeAgentRegister,
-		Timestamp: time.Now(),
-		Payload: AgentRegisterPayload{
-			AgentID:  "a1",
-			Hostname: "host1",
-			Version:  "1.2.3",
-			Platform: "linux",
-			Token:    "any",
-		},
-	})
+	wsWriteMessage(t, c1, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{
+		AgentID:  "a1",
+		Hostname: "host1",
+		Version:  "1.2.3",
+		Platform: "linux",
+		Token:    "any",
+	}))
 	_ = wsReadRegisteredPayload(t, c1)
 
 	c2 := dial()
 	defer c2.Close()
-	wsWriteMessage(t, c2, Message{
-		Type:      MsgTypeAgentRegister,
-		Timestamp: time.Now(),
-		Payload: AgentRegisterPayload{
-			AgentID:  "a1",
-			Hostname: "host1",
-			Version:  "1.2.3",
-			Platform: "linux",
-			Token:    "any",
-		},
-	})
+	wsWriteMessage(t, c2, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{
+		AgentID:  "a1",
+		Hostname: "host1",
+		Version:  "1.2.3",
+		Platform: "linux",
+		Token:    "any",
+	}))
 	_ = wsReadRegisteredPayload(t, c2)
 
 	c1.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
