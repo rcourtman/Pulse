@@ -2,6 +2,7 @@ package notifications
 
 import (
 	"bufio"
+	"crypto/tls"
 	"fmt"
 	"net"
 	"net/textproto"
@@ -358,6 +359,40 @@ func TestTestConnection_TLSRouting(t *testing.T) {
 				t.Error("TLS connection should not produce TCP dial error")
 			}
 		})
+	}
+}
+
+func TestTestConnection_TLSUsesDialerTimeout(t *testing.T) {
+	config := EmailProviderConfig{
+		EmailConfig: EmailConfig{
+			SMTPHost: "smtp.example.com",
+			SMTPPort: 465,
+			TLS:      true,
+		},
+	}
+
+	manager := NewEnhancedEmailManager(config)
+
+	origTLSDial := smtpTLSDialWithDialer
+	t.Cleanup(func() { smtpTLSDialWithDialer = origTLSDial })
+
+	var gotTimeout time.Duration
+	smtpTLSDialWithDialer = func(dialer *net.Dialer, network, addr string, cfg *tls.Config) (*tls.Conn, error) {
+		if dialer != nil {
+			gotTimeout = dialer.Timeout
+		}
+		return nil, fmt.Errorf("tls dial intercepted")
+	}
+
+	err := manager.TestConnection()
+	if err == nil {
+		t.Fatal("expected connection error")
+	}
+	if !strings.Contains(err.Error(), "tls dial intercepted") {
+		t.Fatalf("expected intercepted TLS dial error, got %v", err)
+	}
+	if gotTimeout != 10*time.Second {
+		t.Fatalf("expected TLS dial timeout of 10s, got %s", gotTimeout)
 	}
 }
 

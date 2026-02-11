@@ -421,7 +421,10 @@ func (e *EnhancedEmailManager) TestConnection() error {
 			ServerName:         e.config.SMTPHost,
 			InsecureSkipVerify: e.config.SkipTLSVerify,
 		}
-		conn, err = tls.Dial("tcp", addr, tlsConfig)
+		dialer := &net.Dialer{
+			Timeout: 10 * time.Second,
+		}
+		conn, err = smtpTLSDialWithDialer(dialer, "tcp", addr, tlsConfig)
 	} else {
 		conn, err = net.DialTimeout("tcp", addr, 10*time.Second)
 	}
@@ -430,6 +433,11 @@ func (e *EnhancedEmailManager) TestConnection() error {
 		return fmt.Errorf("connection failed: %w", err)
 	}
 	defer conn.Close()
+
+	// Bound handshake/auth commands so TestConnection cannot hang indefinitely.
+	if err := conn.SetDeadline(time.Now().Add(30 * time.Second)); err != nil {
+		return fmt.Errorf("failed to set connection deadline: %w", err)
+	}
 
 	client, err := smtp.NewClient(conn, e.config.SMTPHost)
 	if err != nil {
