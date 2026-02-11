@@ -507,14 +507,35 @@ export function useChat(options: UseChatOptions = {}) {
           return {
             ...msg,
             pendingApprovals: (msg.pendingApprovals || []).filter((a) => a.toolId !== toolId),
+            streamEvents: (msg.streamEvents || []).filter(
+              (event) => !(event.type === 'approval' && event.approval?.toolId === toolId)
+            ),
           };
         }
+
+        const shouldUpdateExecuting = typeof update.isExecuting === 'boolean';
+
         // Update the approval in place
         return {
           ...msg,
           pendingApprovals: (msg.pendingApprovals || []).map((a) =>
             a.toolId === toolId ? { ...a, ...update } : a
           ),
+          streamEvents: (msg.streamEvents || []).map((event) => {
+            if (event.type !== 'approval' || event.approval?.toolId !== toolId) {
+              return event;
+            }
+            if (!shouldUpdateExecuting) {
+              return event;
+            }
+            return {
+              ...event,
+              approval: {
+                ...event.approval,
+                isExecuting: update.isExecuting,
+              },
+            };
+          }),
         };
       })
     );
@@ -547,14 +568,35 @@ export function useChat(options: UseChatOptions = {}) {
           return {
             ...msg,
             pendingQuestions: (msg.pendingQuestions || []).filter((q) => q.questionId !== questionId),
+            streamEvents: (msg.streamEvents || []).filter(
+              (event) => !(event.type === 'question' && event.question?.questionId === questionId)
+            ),
           };
         }
+
+        const shouldUpdateAnswering = typeof update.isAnswering === 'boolean';
+
         // Update the question in place
         return {
           ...msg,
           pendingQuestions: (msg.pendingQuestions || []).map((q) =>
             q.questionId === questionId ? { ...q, ...update } : q
           ),
+          streamEvents: (msg.streamEvents || []).map((event) => {
+            if (event.type !== 'question' || event.question?.questionId !== questionId) {
+              return event;
+            }
+            if (!shouldUpdateAnswering) {
+              return event;
+            }
+            return {
+              ...event,
+              question: {
+                ...event.question,
+                isAnswering: update.isAnswering,
+              },
+            };
+          }),
         };
       })
     );
