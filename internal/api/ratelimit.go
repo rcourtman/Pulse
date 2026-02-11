@@ -4,6 +4,13 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/rs/zerolog/log"
+)
+
+const (
+	defaultRateLimiterLimit  = 60
+	defaultRateLimiterWindow = time.Minute
 )
 
 type RateLimiter struct {
@@ -17,6 +24,21 @@ type RateLimiter struct {
 // NewRateLimiter creates a rate limiter that allows limit requests per window duration.
 // It starts a background goroutine to periodically clean up old entries.
 func NewRateLimiter(limit int, window time.Duration) *RateLimiter {
+	if limit <= 0 {
+		log.Warn().
+			Int("configured_limit", limit).
+			Int("default_limit", defaultRateLimiterLimit).
+			Msg("Invalid rate limiter limit; using default")
+		limit = defaultRateLimiterLimit
+	}
+	if window <= 0 {
+		log.Warn().
+			Dur("configured_window", window).
+			Dur("default_window", defaultRateLimiterWindow).
+			Msg("Invalid rate limiter window; using default")
+		window = defaultRateLimiterWindow
+	}
+
 	rl := &RateLimiter{
 		attempts:    make(map[string][]time.Time),
 		limit:       limit,
