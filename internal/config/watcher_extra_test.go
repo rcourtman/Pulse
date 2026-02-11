@@ -101,6 +101,40 @@ func TestConfigWatcher_WatchForChanges_ErrorHandling(t *testing.T) {
 	cw.handleEvents(events, errors)
 }
 
+func TestConfigWatcher_HandleEvents_StopDuringDebounce(t *testing.T) {
+	origEnv := debounceEnvWrite
+	debounceEnvWrite = 5 * time.Second
+	t.Cleanup(func() {
+		debounceEnvWrite = origEnv
+	})
+
+	cw := &ConfigWatcher{
+		config:   &Config{},
+		envPath:  "/tmp/.env",
+		stopChan: make(chan struct{}),
+	}
+
+	events := make(chan fsnotify.Event, 1)
+	errors := make(chan error)
+	done := make(chan struct{})
+
+	go func() {
+		cw.handleEvents(events, errors)
+		close(done)
+	}()
+
+	events <- fsnotify.Event{Name: "/tmp/.env", Op: fsnotify.Write}
+	time.Sleep(25 * time.Millisecond)
+	close(cw.stopChan)
+
+	select {
+	case <-done:
+		// Expected: shutdown interrupts debounce wait.
+	case <-time.After(250 * time.Millisecond):
+		t.Fatal("handleEvents did not exit quickly after stop during debounce")
+	}
+}
+
 func TestConfigWatcher_CalculateFileHash_NotFound(t *testing.T) {
 	cw := &ConfigWatcher{}
 	hash, err := cw.calculateFileHash("/path/to/nothing")

@@ -230,7 +230,9 @@ func (cw *ConfigWatcher) handleEvents(events <-chan fsnotify.Event, errors <-cha
 			// Check if the event is for our .env file
 			if filepath.Base(event.Name) == ".env" || event.Name == cw.envPath {
 				// Debounce - wait a bit for write to complete
-				time.Sleep(debounceEnvWrite)
+				if !cw.waitForDuration(debounceEnvWrite) {
+					return
+				}
 
 				if event.Op&(fsnotify.Write|fsnotify.Create) != 0 {
 					// Check if content actually changed to prevent restart loops on touch
@@ -251,7 +253,9 @@ func (cw *ConfigWatcher) handleEvents(events <-chan fsnotify.Event, errors <-cha
 			if cw.apiTokensPath != "" && (filepath.Base(event.Name) == filepath.Base(cw.apiTokensPath) || event.Name == cw.apiTokensPath) {
 				// Debounce - wait longer for atomic file operations to complete
 				// (write to .tmp, rename to final file)
-				time.Sleep(debounceAPITokensWrite)
+				if !cw.waitForDuration(debounceAPITokensWrite) {
+					return
+				}
 
 				if event.Op&(fsnotify.Write|fsnotify.Create) != 0 {
 					log.Info().Str("event", event.Op.String()).Msg("Detected API token file change")
@@ -262,7 +266,9 @@ func (cw *ConfigWatcher) handleEvents(events <-chan fsnotify.Event, errors <-cha
 			// Check if the event is for mock.env (only if mock.env watching is enabled)
 			if cw.mockEnvPath != "" && (filepath.Base(event.Name) == "mock.env" || event.Name == cw.mockEnvPath) {
 				// Debounce - wait a bit for write to complete
-				time.Sleep(debounceMockWrite)
+				if !cw.waitForDuration(debounceMockWrite) {
+					return
+				}
 
 				if event.Op&(fsnotify.Write|fsnotify.Create) != 0 {
 					log.Info().Str("event", event.Op.String()).Msg("Detected mock.env file change")
@@ -279,6 +285,28 @@ func (cw *ConfigWatcher) handleEvents(events <-chan fsnotify.Event, errors <-cha
 		case <-cw.stopChan:
 			return
 		}
+	}
+}
+
+// waitForDuration blocks for d unless shutdown is requested first.
+func (cw *ConfigWatcher) waitForDuration(d time.Duration) bool {
+	if d <= 0 {
+		select {
+		case <-cw.stopChan:
+			return false
+		default:
+			return true
+		}
+	}
+
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+
+	select {
+	case <-timer.C:
+		return true
+	case <-cw.stopChan:
+		return false
 	}
 }
 
@@ -529,7 +557,9 @@ func (cw *ConfigWatcher) reloadAPITokens() {
 				Int("maxRetries", maxRetries).
 				Dur("retryDelay", retryDelay).
 				Msg("Failed to reload API tokens, retrying...")
-			time.Sleep(retryDelay)
+			if !cw.waitForDuration(retryDelay) {
+				return
+			}
 			retryDelay *= 2 // Exponential backoff
 		}
 	}
