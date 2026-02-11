@@ -257,7 +257,10 @@ func (r *TenantRegistry) Update(t *Tenant) error {
 	if err != nil {
 		return fmt.Errorf("update tenant: %w", err)
 	}
-	affected, _ := res.RowsAffected()
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("get rows affected: %w", err)
+	}
 	if affected == 0 {
 		return fmt.Errorf("tenant %q not found", t.ID)
 	}
@@ -448,7 +451,10 @@ func (r *TenantRegistry) UpdateAccount(a *Account) error {
 	if err != nil {
 		return fmt.Errorf("update account: %w", err)
 	}
-	affected, _ := res.RowsAffected()
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("get rows affected: %w", err)
+	}
 	if affected == 0 {
 		return fmt.Errorf("account %q not found", a.ID)
 	}
@@ -513,7 +519,10 @@ func (r *TenantRegistry) UpdateUserLastLogin(id string) error {
 	if err != nil {
 		return fmt.Errorf("update user last login: %w", err)
 	}
-	affected, _ := res.RowsAffected()
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("get rows affected: %w", err)
+	}
 	if affected == 0 {
 		return fmt.Errorf("user %q not found", id)
 	}
@@ -595,7 +604,10 @@ func (r *TenantRegistry) UpdateMembershipRole(accountID, userID string, role Mem
 	if err != nil {
 		return fmt.Errorf("update membership role: %w", err)
 	}
-	affected, _ := res.RowsAffected()
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("get rows affected: %w", err)
+	}
 	if affected == 0 {
 		return fmt.Errorf("membership (%q, %q) not found", accountID, userID)
 	}
@@ -608,7 +620,10 @@ func (r *TenantRegistry) DeleteMembership(accountID, userID string) error {
 	if err != nil {
 		return fmt.Errorf("delete membership: %w", err)
 	}
-	affected, _ := res.RowsAffected()
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("get rows affected: %w", err)
+	}
 	if affected == 0 {
 		return fmt.Errorf("membership (%q, %q) not found", accountID, userID)
 	}
@@ -721,7 +736,10 @@ func (r *TenantRegistry) UpdateStripeAccount(sa *StripeAccount) error {
 	if err != nil {
 		return fmt.Errorf("update stripe account: %w", err)
 	}
-	affected, _ := res.RowsAffected()
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("get rows affected: %w", err)
+	}
 	if affected == 0 {
 		return fmt.Errorf("stripe account %q not found", sa.AccountID)
 	}
@@ -750,7 +768,10 @@ func (r *TenantRegistry) RecordStripeEvent(eventID, eventType string) (alreadyPr
 	if err != nil {
 		return false, fmt.Errorf("record stripe event: %w", err)
 	}
-	affected, _ := res.RowsAffected()
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("get rows affected: %w", err)
+	}
 	if affected == 0 {
 		return true, nil
 	}
@@ -777,7 +798,10 @@ func (r *TenantRegistry) MarkStripeEventProcessed(eventID string, processingErro
 	if err != nil {
 		return fmt.Errorf("mark stripe event processed: %w", err)
 	}
-	affected, _ := res.RowsAffected()
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("get rows affected: %w", err)
+	}
 	if affected == 0 {
 		return fmt.Errorf("stripe event %q not found", eventID)
 	}
