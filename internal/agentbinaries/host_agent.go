@@ -55,8 +55,9 @@ var requiredHostAgentBinaries = []HostAgentBinary{
 var downloadMu sync.Mutex
 
 var (
-	httpClient            = &http.Client{Timeout: 2 * time.Minute}
-	downloadURLForVersion = func(version string) string {
+	maxHostAgentBinarySize = int64(256 * 1024 * 1024)
+	httpClient             = &http.Client{Timeout: 2 * time.Minute}
+	downloadURLForVersion  = func(version string) string {
 		return fmt.Sprintf("https://github.com/rcourtman/Pulse/releases/download/%[1]s/pulse-%[1]s.tar.gz", version)
 	}
 	checksumURLForVersion = func(version string) string {
@@ -302,6 +303,16 @@ func findMissingHostAgentBinaries(binDirs []string) map[string]HostAgentBinary {
 	return missing
 }
 
+func requiredHostAgentFilenameSet() map[string]struct{} {
+	names := make(map[string]struct{})
+	for _, binary := range requiredHostAgentBinaries {
+		for _, name := range binary.Filenames {
+			names[name] = struct{}{}
+		}
+	}
+	return names
+}
+
 func hostAgentBinaryExists(binDirs, filenames []string) bool {
 	for _, dir := range binDirs {
 		for _, name := range filenames {
@@ -337,6 +348,7 @@ func extractHostAgentBinaries(archivePath, targetDir string) error {
 	defer gzReader.Close()
 
 	tr := tar.NewReader(gzReader)
+	allowedNames := requiredHostAgentFilenameSet()
 	type pendingLink struct {
 		path   string
 		target string
@@ -356,12 +368,19 @@ func extractHostAgentBinaries(archivePath, targetDir string) error {
 			continue
 		}
 
-		if !strings.HasPrefix(header.Name, "bin/") {
+		entryName := path.Clean(header.Name)
+		if path.IsAbs(entryName) {
+			continue
+		}
+		if !strings.HasPrefix(entryName, "bin/") {
+			continue
+		}
+		if path.Dir(entryName) != "bin" {
 			continue
 		}
 
-		base := path.Base(header.Name)
-		if !strings.HasPrefix(base, "pulse-host-agent-") {
+		base := path.Base(entryName)
+		if _, ok := allowedNames[base]; !ok {
 			continue
 		}
 
@@ -369,6 +388,12 @@ func extractHostAgentBinaries(archivePath, targetDir string) error {
 
 		switch header.Typeflag {
 		case tar.TypeReg:
+			if header.Size < 0 {
+				return fmt.Errorf("host agent entry %q has invalid size %d", base, header.Size)
+			}
+			if header.Size > maxHostAgentBinarySize {
+				return fmt.Errorf("host agent entry %q exceeds max size %d bytes", base, maxHostAgentBinarySize)
+			}
 			if err := writeHostAgentFile(destPath, tr, header.FileInfo().Mode()); err != nil {
 				return fmt.Errorf("agentbinaries.extractHostAgentBinaries: %w", err)
 			}
@@ -381,7 +406,7 @@ func extractHostAgentBinaries(archivePath, targetDir string) error {
 	}
 
 	for _, link := range symlinks {
-		linkTarget, err := normalizeHostAgentSymlinkTarget(link.target)
+		linkTarget, err := normalizeHostAgentSymlinkTarget(link.target, allowedNames)
 		if err != nil {
 			return fmt.Errorf("invalid host agent symlink target %q: %w", link.target, err)
 		}
@@ -406,7 +431,7 @@ func extractHostAgentBinaries(archivePath, targetDir string) error {
 	return nil
 }
 
-func normalizeHostAgentSymlinkTarget(target string) (string, error) {
+func normalizeHostAgentSymlinkTarget(target string, allowedNames map[string]struct{}) (string, error) {
 	clean := strings.TrimSpace(target)
 	if clean == "" {
 		return "", fmt.Errorf("target is empty")
@@ -421,8 +446,8 @@ func normalizeHostAgentSymlinkTarget(target string) (string, error) {
 	if strings.Contains(clean, `\`) {
 		return "", fmt.Errorf("target must not contain path separators")
 	}
-	if !strings.HasPrefix(clean, "pulse-host-agent-") {
-		return "", fmt.Errorf("target must reference a host agent binary")
+	if _, ok := allowedNames[clean]; !ok {
+		return "", fmt.Errorf("target must reference an expected host agent binary")
 	}
 	return clean, nil
 }
@@ -477,10 +502,6 @@ func copyHostAgentFile(source, destination string) error {
 	return nil
 }
 
-func normalizeExecutableMode(mode os.FileMode) os.FileMode {
-	perms := mode.Perm()
-	if perms&0o111 == 0 {
-		perms |= 0o755
-	}
-	return perms
+func normalizeExecutableMode(_ os.FileMode) os.FileMode {
+	return 0o755
 }

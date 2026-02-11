@@ -80,6 +80,7 @@ func buildTarGz(t *testing.T, entries []tarEntry) []byte {
 
 func saveHostAgentHooks() func() {
 	origRequired := requiredHostAgentBinaries
+	origMaxBinarySize := maxHostAgentBinarySize
 	origDownloadFn := downloadAndInstallHostAgentBinariesFn
 	origFindMissing := findMissingHostAgentBinariesFn
 	origURL := downloadURLForVersion
@@ -97,6 +98,7 @@ func saveHostAgentHooks() func() {
 
 	return func() {
 		requiredHostAgentBinaries = origRequired
+		maxHostAgentBinarySize = origMaxBinarySize
 		downloadAndInstallHostAgentBinariesFn = origDownloadFn
 		findMissingHostAgentBinariesFn = origFindMissing
 		downloadURLForVersion = origURL
@@ -407,7 +409,7 @@ func TestDownloadAndInstallHostAgentBinariesSuccess(t *testing.T) {
 		{name: "bin/", typeflag: tar.TypeDir, mode: 0o755},
 		{name: "bin/not-agent.txt", body: []byte("skip"), mode: 0o644},
 		{name: "bin/pulse-host-agent-linux-amd64", body: []byte("binary"), mode: 0o644},
-		{name: "bin/pulse-host-agent-linux-amd64.exe", typeflag: tar.TypeSymlink, linkname: "pulse-host-agent-linux-amd64"},
+		{name: "bin/pulse-host-agent-windows-amd64.exe", typeflag: tar.TypeSymlink, linkname: "pulse-host-agent-linux-amd64"},
 	})
 	checksum := sha256.Sum256(payload)
 	checksumLine := fmt.Sprintf("%x  bundle.tar.gz\n", checksum)
@@ -435,7 +437,7 @@ func TestDownloadAndInstallHostAgentBinariesSuccess(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(tmpDir, "pulse-host-agent-linux-amd64")); err != nil {
 		t.Fatalf("expected binary installed: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(tmpDir, "pulse-host-agent-linux-amd64.exe")); err != nil {
+	if _, err := os.Stat(filepath.Join(tmpDir, "pulse-host-agent-windows-amd64.exe")); err != nil {
 		t.Fatalf("expected symlink fallback copy: %v", err)
 	}
 }
@@ -483,6 +485,29 @@ func TestExtractHostAgentBinariesErrors(t *testing.T) {
 	})
 }
 
+func TestExtractHostAgentBinariesEntryTooLarge(t *testing.T) {
+	restore := saveHostAgentHooks()
+	t.Cleanup(restore)
+
+	maxHostAgentBinarySize = 1
+
+	payload := buildTarGz(t, []tarEntry{
+		{name: "bin/pulse-host-agent-linux-amd64", body: []byte("ab"), mode: 0o755},
+	})
+	archive := filepath.Join(t.TempDir(), "bundle.tar.gz")
+	if err := os.WriteFile(archive, payload, 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	err := extractHostAgentBinaries(archive, t.TempDir())
+	if err == nil {
+		t.Fatalf("expected max-size validation error")
+	}
+	if !strings.Contains(err.Error(), "exceeds max size") {
+		t.Fatalf("expected max-size error, got %v", err)
+	}
+}
+
 func TestExtractHostAgentBinariesRemoveError(t *testing.T) {
 	restore := saveHostAgentHooks()
 	t.Cleanup(restore)
@@ -490,7 +515,7 @@ func TestExtractHostAgentBinariesRemoveError(t *testing.T) {
 	tmpDir := t.TempDir()
 	payload := buildTarGz(t, []tarEntry{
 		{name: "bin/pulse-host-agent-linux-amd64", body: []byte("binary"), mode: 0o644},
-		{name: "bin/pulse-host-agent-linux-amd64.exe", typeflag: tar.TypeSymlink, linkname: "pulse-host-agent-linux-amd64"},
+		{name: "bin/pulse-host-agent-windows-amd64.exe", typeflag: tar.TypeSymlink, linkname: "pulse-host-agent-linux-amd64"},
 	})
 
 	archive := filepath.Join(t.TempDir(), "bundle.tar.gz")
@@ -511,7 +536,7 @@ func TestExtractHostAgentBinariesSymlinkCopyError(t *testing.T) {
 	tmpDir := t.TempDir()
 	payload := buildTarGz(t, []tarEntry{
 		{name: "bin/pulse-host-agent-linux-amd64", body: []byte("binary"), mode: 0o644},
-		{name: "bin/pulse-host-agent-linux-amd64.exe", typeflag: tar.TypeSymlink, linkname: "pulse-host-agent-linux-amd64"},
+		{name: "bin/pulse-host-agent-windows-amd64.exe", typeflag: tar.TypeSymlink, linkname: "pulse-host-agent-linux-amd64"},
 	})
 	archive := filepath.Join(t.TempDir(), "bundle.tar.gz")
 	if err := os.WriteFile(archive, payload, 0o644); err != nil {
@@ -535,7 +560,7 @@ func TestExtractHostAgentBinariesInvalidSymlinkTarget(t *testing.T) {
 	tmpDir := t.TempDir()
 	payload := buildTarGz(t, []tarEntry{
 		{name: "bin/pulse-host-agent-linux-amd64", body: []byte("binary"), mode: 0o644},
-		{name: "bin/pulse-host-agent-linux-amd64.exe", typeflag: tar.TypeSymlink, linkname: "../outside"},
+		{name: "bin/pulse-host-agent-windows-amd64.exe", typeflag: tar.TypeSymlink, linkname: "../outside"},
 	})
 
 	archive := filepath.Join(t.TempDir(), "bundle.tar.gz")
@@ -551,7 +576,7 @@ func TestExtractHostAgentBinariesInvalidSymlinkTarget(t *testing.T) {
 func TestExtractHostAgentBinariesMissingSymlinkTarget(t *testing.T) {
 	tmpDir := t.TempDir()
 	payload := buildTarGz(t, []tarEntry{
-		{name: "bin/pulse-host-agent-linux-amd64.exe", typeflag: tar.TypeSymlink, linkname: "pulse-host-agent-linux-amd64"},
+		{name: "bin/pulse-host-agent-windows-amd64.exe", typeflag: tar.TypeSymlink, linkname: "pulse-host-agent-linux-amd64"},
 	})
 
 	archive := filepath.Join(t.TempDir(), "bundle.tar.gz")
