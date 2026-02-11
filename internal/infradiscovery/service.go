@@ -106,6 +106,28 @@ type Config struct {
 	CacheExpiry time.Duration // How long to cache analysis results (default: 1 hour)
 }
 
+// ServiceStatus is a typed snapshot of the discovery service runtime state.
+type ServiceStatus struct {
+	Running        bool
+	LastRun        time.Time
+	Interval       time.Duration
+	DiscoveredApps int
+	CacheSize      int
+	AIAnalyzerSet  bool
+}
+
+// ToMap provides backward compatibility for existing callers expecting map status data.
+func (s ServiceStatus) ToMap() map[string]interface{} {
+	return map[string]interface{}{
+		"running":         s.Running,
+		"last_run":        s.LastRun,
+		"interval":        s.Interval.String(),
+		"discovered_apps": s.DiscoveredApps,
+		"cache_size":      s.CacheSize,
+		"ai_analyzer_set": s.AIAnalyzerSet,
+	}
+}
+
 // DefaultConfig returns the default discovery configuration.
 func DefaultConfig() Config {
 	return Config{
@@ -585,8 +607,8 @@ func (s *Service) ClearCache() {
 	s.lastCacheUpdate = time.Time{}
 }
 
-// GetStatus returns the current service status.
-func (s *Service) GetStatus() map[string]interface{} {
+// GetStatusSnapshot returns a typed status snapshot for the discovery service.
+func (s *Service) GetStatusSnapshot() ServiceStatus {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -594,12 +616,17 @@ func (s *Service) GetStatus() map[string]interface{} {
 	cacheSize := len(s.analysisCache)
 	s.cacheMu.RUnlock()
 
-	return map[string]interface{}{
-		"running":         s.running,
-		"last_run":        s.lastRun,
-		"interval":        s.interval.String(),
-		"discovered_apps": len(s.discoveries),
-		"cache_size":      cacheSize,
-		"ai_analyzer_set": s.aiAnalyzer != nil,
+	return ServiceStatus{
+		Running:        s.running,
+		LastRun:        s.lastRun,
+		Interval:       s.interval,
+		DiscoveredApps: len(s.discoveries),
+		CacheSize:      cacheSize,
+		AIAnalyzerSet:  s.aiAnalyzer != nil,
 	}
+}
+
+// GetStatus returns the current service status.
+func (s *Service) GetStatus() map[string]interface{} {
+	return s.GetStatusSnapshot().ToMap()
 }
