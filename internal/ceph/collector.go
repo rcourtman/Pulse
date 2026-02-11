@@ -6,18 +6,54 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os/exec"
 	"strings"
 	"time"
 )
 
+const (
+	cephCommandTimeout       = 10 * time.Second
+	maxCephCommandOutputSize = 4 << 20 // 4 MiB
+)
+
+var errCephCommandOutputTooLarge = errors.New("ceph command output exceeded limit")
+
+type limitedBuffer struct {
+	buf      bytes.Buffer
+	maxBytes int
+	exceeded bool
+}
+
+func (b *limitedBuffer) Write(p []byte) (int, error) {
+	remaining := b.maxBytes - b.buf.Len()
+	if remaining <= 0 {
+		b.exceeded = true
+		return 0, errCephCommandOutputTooLarge
+	}
+	if len(p) > remaining {
+		b.exceeded = true
+		written, _ := b.buf.Write(p[:remaining])
+		return written, errCephCommandOutputTooLarge
+	}
+	return b.buf.Write(p)
+}
+
+func (b *limitedBuffer) Bytes() []byte {
+	return b.buf.Bytes()
+}
+
 var commandRunner = func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
-	var stdout, stderr bytes.Buffer
+	stdout := limitedBuffer{maxBytes: maxCephCommandOutputSize}
+	stderr := limitedBuffer{maxBytes: maxCephCommandOutputSize}
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	err := cmd.Run()
+	if stdout.exceeded || stderr.exceeded {
+		return stdout.Bytes(), stderr.Bytes(), errCephCommandOutputTooLarge
+	}
 	return stdout.Bytes(), stderr.Bytes(), err
 }
 
@@ -174,11 +210,15 @@ func runCephCommand(ctx context.Context, args ...string) ([]byte, error) {
 	}
 
 	// Use a reasonable timeout for each command
-	cmdCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	cmdCtx, cancel := context.WithTimeout(ctx, cephCommandTimeout)
 	defer cancel()
 
 	stdout, stderr, err := commandRunner(cmdCtx, cephPath, args...)
 	if err != nil {
+		if errors.Is(err, errCephCommandOutputTooLarge) {
+			return nil, fmt.Errorf("ceph %s output exceeded %d bytes",
+				strings.Join(args, " "), maxCephCommandOutputSize)
+		}
 		return nil, fmt.Errorf("ceph %s failed: %w (stderr: %s)",
 			strings.Join(args, " "), err, string(stderr))
 	}

@@ -36,6 +36,19 @@ func TestCommandRunner_Default(t *testing.T) {
 	}
 }
 
+func TestCommandRunner_DefaultOutputLimit(t *testing.T) {
+	stdout, stderr, err := commandRunner(context.Background(), "sh", "-c", "head -c 5000000 /dev/zero")
+	if !errors.Is(err, errCephCommandOutputTooLarge) {
+		t.Fatalf("expected output limit error, got: %v", err)
+	}
+	if len(stdout) != maxCephCommandOutputSize {
+		t.Fatalf("expected stdout capped at %d bytes, got %d", maxCephCommandOutputSize, len(stdout))
+	}
+	if len(stderr) != 0 {
+		t.Fatalf("unexpected stderr: %q", string(stderr))
+	}
+}
+
 func TestParseStatus(t *testing.T) {
 	data := []byte(`{
 	  "fsid":"fsid-123",
@@ -175,6 +188,30 @@ func TestRunCephCommandError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "stderr: bad") {
 		t.Fatalf("expected stderr in error: %v", err)
+	}
+}
+
+func TestRunCephCommandOutputTooLarge(t *testing.T) {
+	withLookPath(t, func(file string) (string, error) {
+		if file != "ceph" {
+			t.Fatalf("unexpected lookup: %s", file)
+		}
+		return fakeCephBinary, nil
+	})
+
+	withCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
+		return make([]byte, maxCephCommandOutputSize), nil, errCephCommandOutputTooLarge
+	})
+
+	_, err := runCephCommand(context.Background(), "status", "--format", "json")
+	if err == nil {
+		t.Fatalf("expected error")
+	}
+	if !strings.Contains(err.Error(), "output exceeded") {
+		t.Fatalf("expected output limit error, got: %v", err)
+	}
+	if strings.Contains(err.Error(), "stderr:") {
+		t.Fatalf("unexpected stderr in output limit error: %v", err)
 	}
 }
 
