@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -52,6 +53,41 @@ func TestNewIncidentRecorderDefaults(t *testing.T) {
 	}
 	if recorder.config.RetentionDuration != 24*time.Hour {
 		t.Fatalf("expected default retention, got %s", recorder.config.RetentionDuration)
+	}
+}
+
+func TestNewIncidentRecorderTrimsDataDir(t *testing.T) {
+	dir := t.TempDir()
+
+	recorder := NewIncidentRecorder(IncidentRecorderConfig{
+		DataDir: "  " + dir + "  ",
+	})
+
+	if recorder.config.DataDir != dir {
+		t.Fatalf("expected trimmed data dir %q, got %q", dir, recorder.config.DataDir)
+	}
+	if recorder.dataDir != dir {
+		t.Fatalf("expected recorder data dir %q, got %q", dir, recorder.dataDir)
+	}
+	wantPath := filepath.Join(dir, "incident_windows.json")
+	if recorder.filePath != wantPath {
+		t.Fatalf("expected file path %q, got %q", wantPath, recorder.filePath)
+	}
+}
+
+func TestNewIncidentRecorderWhitespaceOnlyDataDirDisablesPersistence(t *testing.T) {
+	recorder := NewIncidentRecorder(IncidentRecorderConfig{
+		DataDir: "   ",
+	})
+
+	if recorder.config.DataDir != "" {
+		t.Fatalf("expected empty config data dir, got %q", recorder.config.DataDir)
+	}
+	if recorder.dataDir != "" {
+		t.Fatalf("expected empty recorder data dir, got %q", recorder.dataDir)
+	}
+	if recorder.filePath != "" {
+		t.Fatalf("expected empty file path, got %q", recorder.filePath)
 	}
 }
 
