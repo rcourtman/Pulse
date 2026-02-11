@@ -246,8 +246,8 @@ func TestSummarizeZFSPoolsFallback(t *testing.T) {
 
 func TestFindZpool(t *testing.T) {
 	// This test verifies that findZpool correctly:
-	// 1. Uses exec.LookPath first (if zpool is in PATH)
-	// 2. Falls back to common absolute paths
+	// 1. Prefers common absolute paths
+	// 2. Falls back to PATH lookup for non-standard installs
 
 	// We can't easily mock os.Stat, so we just verify the function
 	// returns a path (if zpool is installed) or an error (if not)
@@ -270,6 +270,60 @@ func TestFindZpool(t *testing.T) {
 	// Verify the returned path exists
 	if _, statErr := os.Stat(path); statErr != nil {
 		t.Errorf("findZpool() returned path %q but os.Stat failed: %v", path, statErr)
+	}
+}
+
+func TestFindZpoolPrefersCommonPaths(t *testing.T) {
+	origCommon := commonZpoolPaths
+	origLookPath := zpoolLookPath
+	origStat := zpoolStat
+	t.Cleanup(func() {
+		commonZpoolPaths = origCommon
+		zpoolLookPath = origLookPath
+		zpoolStat = origStat
+	})
+
+	commonZpoolPaths = []string{"/trusted/zpool", "/secondary/zpool"}
+	zpoolLookPath = func(file string) (string, error) {
+		return "/tmp/attacker/zpool", nil
+	}
+	zpoolStat = func(name string) (os.FileInfo, error) {
+		if name == "/trusted/zpool" {
+			return nil, nil
+		}
+		return nil, os.ErrNotExist
+	}
+
+	path, err := findZpool()
+	if err != nil {
+		t.Fatalf("findZpool() returned error: %v", err)
+	}
+	if path != "/trusted/zpool" {
+		t.Fatalf("findZpool() = %q, want /trusted/zpool", path)
+	}
+}
+
+func TestFindZpoolRejectsRelativePathLookup(t *testing.T) {
+	origCommon := commonZpoolPaths
+	origLookPath := zpoolLookPath
+	origStat := zpoolStat
+	t.Cleanup(func() {
+		commonZpoolPaths = origCommon
+		zpoolLookPath = origLookPath
+		zpoolStat = origStat
+	})
+
+	commonZpoolPaths = []string{"/missing/zpool"}
+	zpoolLookPath = func(file string) (string, error) {
+		return "bin/zpool", nil
+	}
+	zpoolStat = func(name string) (os.FileInfo, error) {
+		return nil, os.ErrNotExist
+	}
+
+	path, err := findZpool()
+	if err == nil {
+		t.Fatalf("findZpool() expected error for relative path, got path %q", path)
 	}
 }
 
@@ -434,6 +488,15 @@ func TestParseZpoolList(t *testing.T) {
 			},
 		},
 		{
+			name: "skip line with unsafe pool name",
+			input: "-unsafe\t1000\t500\t500\n" +
+				"safe\t1000\t500\t500\n",
+			wantPools: []string{"safe"},
+			wantStats: map[string]zpoolStats{
+				"safe": {Size: 1000, Alloc: 500, Free: 500},
+			},
+		},
+		{
 			name: "blank lines interspersed",
 			input: "\npool1\t1000\t500\t500\n\n" +
 				"pool2\t2000\t1000\t1000\n\n",
@@ -530,6 +593,15 @@ func TestUniqueZFSPools(t *testing.T) {
 				{Pool: "tank", Dataset: "tank", Mountpoint: "/tank"},
 			},
 			want: []string{"tank"},
+		},
+		{
+			name: "skip unsafe pool names",
+			datasets: []zfsDatasetUsage{
+				{Pool: "-unsafe", Dataset: "unsafe/root", Mountpoint: "/unsafe"},
+				{Pool: "bad name", Dataset: "bad/root", Mountpoint: "/bad"},
+				{Pool: "safe_pool", Dataset: "safe_pool/root", Mountpoint: "/safe"},
+			},
+			want: []string{"safe_pool"},
 		},
 		{
 			name: "all empty pool names",
@@ -742,6 +814,56 @@ func TestZfsPoolFromDeviceExtended(t *testing.T) {
 				t.Errorf("zfsPoolFromDevice(%q) = %q, want %q", tt.device, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestNormalizeZFSPoolName(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+		ok    bool
+	}{
+		{name: "trimmed valid", input: " tank ", want: "tank", ok: true},
+		{name: "empty invalid", input: "   ", ok: false},
+		{name: "leading dash invalid", input: "-tank", ok: false},
+		{name: "contains slash invalid", input: "tank/root", ok: false},
+		{name: "contains spaces invalid", input: "tank root", ok: false},
+		{name: "allowed punctuation", input: "pool_1-2.3:4", want: "pool_1-2.3:4", ok: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := normalizeZFSPoolName(tt.input)
+			if ok != tt.ok {
+				t.Fatalf("normalizeZFSPoolName(%q) ok=%v, want %v", tt.input, ok, tt.ok)
+			}
+			if got != tt.want {
+				t.Fatalf("normalizeZFSPoolName(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestFilterValidZFSPoolNames(t *testing.T) {
+	input := []string{" tank ", "tank", "-unsafe", "bad name", "safe_pool"}
+	got := filterValidZFSPoolNames(input)
+	want := []string{"tank", "safe_pool"}
+	if !stringSliceEqual(got, want) {
+		t.Fatalf("filterValidZFSPoolNames() = %v, want %v", got, want)
+	}
+}
+
+func TestFetchZpoolStatsRejectsUnsafePoolNames(t *testing.T) {
+	stats, err := fetchZpoolStats(context.Background(), []string{"-unsafe", "bad name", "   "})
+	if err == nil {
+		t.Fatal("fetchZpoolStats() expected error for invalid pool list, got nil")
+	}
+	if !containsSubstr(err.Error(), "no valid zfs pool names") {
+		t.Fatalf("fetchZpoolStats() error = %q, want no valid zfs pool names", err.Error())
+	}
+	if stats != nil {
+		t.Fatalf("fetchZpoolStats() stats = %v, want nil", stats)
 	}
 }
 
