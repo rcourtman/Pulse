@@ -16,6 +16,7 @@ import (
 	"time"
 
 	containertypes "github.com/docker/docker/api/types/container"
+	systemtypes "github.com/docker/docker/api/types/system"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 	"github.com/rs/zerolog"
 )
@@ -460,6 +461,105 @@ func TestHandleCommand(t *testing.T) {
 
 		if err := agent.handleCommand(context.Background(), TargetConfig{URL: server.URL, Token: "token"}, cmd); err != nil {
 			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("check updates command", func(t *testing.T) {
+		swap(t, &sleepFn, func(time.Duration) {})
+
+		collectAttempted := make(chan struct{}, 1)
+		ackPath := make(chan string, 1)
+		registryChecker := NewRegistryChecker(zerolog.Nop())
+		registryChecker.MarkChecked()
+		registryChecker.cacheDigest("cached-key", "sha256:cached")
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ackPath <- r.URL.Path
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer server.Close()
+
+		agent := &Agent{
+			logger:          zerolog.Nop(),
+			hostID:          "host1",
+			registryChecker: registryChecker,
+			httpClients: map[bool]*http.Client{
+				false: server.Client(),
+			},
+			docker: &fakeDockerClient{
+				infoFunc: func(context.Context) (systemtypes.Info, error) {
+					select {
+					case collectAttempted <- struct{}{}:
+					default:
+					}
+					return systemtypes.Info{}, errors.New("info failed")
+				},
+			},
+		}
+
+		cmd := agentsdocker.Command{
+			ID:   "cmd3",
+			Type: agentsdocker.CommandTypeCheckUpdates,
+		}
+
+		if err := agent.handleCommand(context.Background(), TargetConfig{URL: server.URL, Token: "token"}, cmd); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		select {
+		case gotPath := <-ackPath:
+			if !strings.HasSuffix(gotPath, "/commands/cmd3/ack") {
+				t.Fatalf("unexpected ack path: %s", gotPath)
+			}
+		case <-time.After(500 * time.Millisecond):
+			t.Fatal("expected check-updates acknowledgement request")
+		}
+
+		registryChecker.mu.RLock()
+		lastFullCheck := registryChecker.lastFullCheck
+		registryChecker.mu.RUnlock()
+		if !lastFullCheck.IsZero() {
+			t.Fatalf("expected ForceCheck to reset lastFullCheck, got %s", lastFullCheck)
+		}
+
+		registryChecker.cache.mu.RLock()
+		cacheLen := len(registryChecker.cache.entries)
+		registryChecker.cache.mu.RUnlock()
+		if cacheLen != 0 {
+			t.Fatalf("expected ForceCheck to clear cache, found %d entries", cacheLen)
+		}
+
+		select {
+		case <-collectAttempted:
+		case <-time.After(500 * time.Millisecond):
+			t.Fatal("expected check-updates command to trigger immediate collection")
+		}
+	})
+
+	t.Run("check updates command ack error", func(t *testing.T) {
+		registryChecker := NewRegistryChecker(zerolog.Nop())
+		registryChecker.MarkChecked()
+		registryChecker.cacheDigest("cached-key", "sha256:cached")
+
+		agent := &Agent{
+			logger:          zerolog.Nop(),
+			hostID:          "host1",
+			registryChecker: registryChecker,
+		}
+
+		err := agent.handleCheckUpdatesCommand(context.Background(), TargetConfig{URL: "http://example.com/\x7f", Token: "token"}, agentsdocker.Command{
+			ID:   "cmd4",
+			Type: agentsdocker.CommandTypeCheckUpdates,
+		})
+		if err == nil || !strings.Contains(err.Error(), "send check updates acknowledgement") {
+			t.Fatalf("expected check-updates ack error, got %v", err)
+		}
+
+		registryChecker.mu.RLock()
+		lastFullCheck := registryChecker.lastFullCheck
+		registryChecker.mu.RUnlock()
+		if !lastFullCheck.IsZero() {
+			t.Fatalf("expected ForceCheck to reset lastFullCheck, got %s", lastFullCheck)
 		}
 	})
 }

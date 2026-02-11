@@ -148,6 +148,28 @@ func TestRegistryChecker_GetCached_ExpiredEntry(t *testing.T) {
 	}
 }
 
+func TestRegistryChecker_ForceCheck(t *testing.T) {
+	checker := NewRegistryChecker(zerolog.Nop())
+	checker.MarkChecked()
+	checker.cacheDigest("test-key", "sha256:test")
+
+	checker.ForceCheck()
+
+	checker.mu.RLock()
+	lastFullCheck := checker.lastFullCheck
+	checker.mu.RUnlock()
+	if !lastFullCheck.IsZero() {
+		t.Fatalf("expected ForceCheck to reset lastFullCheck, got %s", lastFullCheck)
+	}
+
+	checker.cache.mu.RLock()
+	cacheLen := len(checker.cache.entries)
+	checker.cache.mu.RUnlock()
+	if cacheLen != 0 {
+		t.Fatalf("expected ForceCheck to clear cache, found %d entries", cacheLen)
+	}
+}
+
 func TestRegistryChecker_FetchDigest_StatusErrors(t *testing.T) {
 	tests := []struct {
 		name    string
