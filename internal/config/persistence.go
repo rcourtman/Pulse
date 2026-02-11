@@ -1342,7 +1342,28 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 				PMGInstances: []PMGInstance{},
 			}, nil
 		}
-		return nil, err
+		return nil, fmt.Errorf("read nodes config: %w", err)
+	}
+
+	persistEmptyRecoveryConfig := func(config *NodesConfig) {
+		emptyData, marshalErr := json.Marshal(config)
+		if marshalErr != nil {
+			log.Error().Err(marshalErr).Msg("Failed to marshal empty recovery nodes config")
+			return
+		}
+
+		if c.crypto != nil {
+			encryptedData, encryptErr := c.crypto.Encrypt(emptyData)
+			if encryptErr != nil {
+				log.Error().Err(encryptErr).Msg("Failed to encrypt empty recovery nodes config")
+				return
+			}
+			emptyData = encryptedData
+		}
+
+		if writeErr := c.fs.WriteFile(c.nodesFile, emptyData, 0600); writeErr != nil {
+			log.Error().Err(writeErr).Str("file", c.nodesFile).Msg("Failed to persist empty recovery nodes config")
+		}
 	}
 
 	// Decrypt if crypto manager is available
@@ -1386,15 +1407,15 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 
 					// Move corrupted file with timestamp for forensics
 					corruptedFile := fmt.Sprintf("%s.corrupted-%s", c.nodesFile, time.Now().Format("20060102-150405"))
-					c.fs.Rename(c.nodesFile, corruptedFile)
+					if renameErr := c.fs.Rename(c.nodesFile, corruptedFile); renameErr != nil {
+						log.Warn().Err(renameErr).Msg("Failed to rename corrupted nodes config during recovery")
+					} else {
+						log.Warn().Str("corruptedFile", corruptedFile).Msg("Moved corrupted nodes config")
+					}
 
 					// Create empty but valid config so system can start
 					emptyConfig := NodesConfig{PVEInstances: []PVEInstance{}, PBSInstances: []PBSInstance{}, PMGInstances: []PMGInstance{}}
-					emptyData, _ := json.Marshal(emptyConfig)
-					if c.crypto != nil {
-						emptyData, _ = c.crypto.Encrypt(emptyData)
-					}
-					c.fs.WriteFile(c.nodesFile, emptyData, 0600)
+					persistEmptyRecoveryConfig(&emptyConfig)
 
 					return &emptyConfig, nil
 				}
@@ -1408,15 +1429,15 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 
 				// Move corrupted file with timestamp for forensics
 				corruptedFile := fmt.Sprintf("%s.corrupted-%s", c.nodesFile, time.Now().Format("20060102-150405"))
-				c.fs.Rename(c.nodesFile, corruptedFile)
+				if renameErr := c.fs.Rename(c.nodesFile, corruptedFile); renameErr != nil {
+					log.Warn().Err(renameErr).Msg("Failed to rename corrupted nodes config during recovery")
+				} else {
+					log.Warn().Str("corruptedFile", corruptedFile).Msg("Moved corrupted nodes config")
+				}
 
 				// Create empty but valid config so system can start
 				emptyConfig := NodesConfig{PVEInstances: []PVEInstance{}, PBSInstances: []PBSInstance{}, PMGInstances: []PMGInstance{}}
-				emptyData, _ := json.Marshal(emptyConfig)
-				if c.crypto != nil {
-					emptyData, _ = c.crypto.Encrypt(emptyData)
-				}
-				c.fs.WriteFile(c.nodesFile, emptyData, 0600)
+				persistEmptyRecoveryConfig(&emptyConfig)
 
 				return &emptyConfig, nil
 			}
@@ -1427,7 +1448,7 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 
 	var config NodesConfig
 	if err := json.Unmarshal(data, &config); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse nodes config: %w", err)
 	}
 
 	if config.PVEInstances == nil {

@@ -15,6 +15,7 @@ import (
 	"sync"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/license/entitlements"
+	"github.com/rs/zerolog/log"
 )
 
 // Ensure FileBillingStore satisfies the hosted entitlement BillingStore interface.
@@ -67,7 +68,12 @@ func (s *FileBillingStore) GetBillingState(orgID string) (*entitlements.BillingS
 		if state.Integrity == "" {
 			// Migration: pre-upgrade state without integrity. Compute and persist.
 			state.Integrity = billingIntegrity(&state, hmacKey)
-			_ = s.SaveBillingState(orgID, &state) // best-effort persist
+			if saveErr := s.SaveBillingState(orgID, &state); saveErr != nil {
+				log.Warn().
+					Err(saveErr).
+					Str("org_id", orgID).
+					Msg("Failed to persist billing integrity migration")
+			}
 		} else if !verifyBillingIntegrity(&state, hmacKey) {
 			// Tampered state — treat as nonexistent (free tier).
 			return nil, nil
@@ -90,7 +96,7 @@ func (s *FileBillingStore) SaveBillingState(orgID string, state *entitlements.Bi
 
 	billingPath, err := s.billingStatePath(orgID)
 	if err != nil {
-		return err
+		return fmt.Errorf("resolve billing state path for org %q: %w", orgID, err)
 	}
 
 	data, err := json.Marshal(state)
@@ -110,7 +116,13 @@ func (s *FileBillingStore) SaveBillingState(orgID string, state *entitlements.Bi
 		return fmt.Errorf("write temp billing state for org %q: %w", orgID, err)
 	}
 	if err := os.Rename(tmpPath, billingPath); err != nil {
-		_ = os.Remove(tmpPath)
+		if removeErr := os.Remove(tmpPath); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
+			log.Warn().
+				Err(removeErr).
+				Str("tmp_path", tmpPath).
+				Str("org_id", orgID).
+				Msg("Failed to remove temporary billing state file after failed rename")
+		}
 		return fmt.Errorf("commit billing state for org %q: %w", orgID, err)
 	}
 
