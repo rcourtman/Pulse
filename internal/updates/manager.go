@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -64,6 +65,9 @@ var (
 	errGitHubRateLimited = errors.New("GitHub API rate limit exceeded")
 	stageDelayOnce       sync.Once
 	stageDelayValue      time.Duration
+	updateHTTPAttempts   = 3
+	updateHTTPBackoff    = 300 * time.Millisecond
+	updateHTTPMaxBackoff = 2 * time.Second
 )
 
 // Manager handles update operations
@@ -603,18 +607,11 @@ func (m *Manager) getLatestReleaseForChannel(ctx context.Context, channel string
 		baseURL = "https://api.github.com"
 	}
 	url := baseURL + "/repos/rcourtman/Pulse/releases"
-
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	// Add headers
-	req.Header.Set("Accept", "application/vnd.github.v3+json")
-	req.Header.Set("User-Agent", "Pulse-Update-Checker")
-
 	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := m.getWithRetry(ctx, client, url, map[string]string{
+		"Accept":     "application/vnd.github.v3+json",
+		"User-Agent": "Pulse-Update-Checker",
+	}, "fetch GitHub releases")
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch releases: %w", err)
 	}
@@ -794,15 +791,10 @@ func (m *Manager) resolveChannel(requested string, currentInfo *VersionInfo) str
 func (m *Manager) getLatestReleaseFromFeed(ctx context.Context, channel string) (*ReleaseInfo, error) {
 	feedURL := "https://github.com/rcourtman/Pulse/releases.atom"
 
-	req, err := http.NewRequestWithContext(ctx, "GET", feedURL, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create feed request: %w", err)
-	}
-
-	req.Header.Set("User-Agent", "Pulse-Update-Checker")
-
 	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := m.getWithRetry(ctx, client, feedURL, map[string]string{
+		"User-Agent": "Pulse-Update-Checker",
+	}, "fetch GitHub release feed")
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch feed: %w", err)
 	}
@@ -930,38 +922,204 @@ func inferVersionFromDownloadURL(downloadURL string) string {
 	return ""
 }
 
+func isRetryableUpdateStatusCode(statusCode int) bool {
+	return statusCode == http.StatusRequestTimeout ||
+		statusCode == http.StatusTooManyRequests ||
+		statusCode >= http.StatusInternalServerError
+}
+
+func isRetryableUpdateRequestError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
+
+	var netErr net.Error
+	if errors.As(err, &netErr) {
+		return true
+	}
+	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+		return true
+	}
+
+	msg := strings.ToLower(err.Error())
+	retryableFragments := []string{
+		"connection reset",
+		"connection refused",
+		"connection aborted",
+		"broken pipe",
+		"temporary failure",
+		"timeout",
+		"tls handshake timeout",
+		"http2: server sent goaway",
+	}
+	for _, fragment := range retryableFragments {
+		if strings.Contains(msg, fragment) {
+			return true
+		}
+	}
+	return false
+}
+
+func retryDelayForAttempt(attempt int) time.Duration {
+	if attempt <= 0 {
+		return updateHTTPBackoff
+	}
+
+	delay := updateHTTPBackoff
+	for i := 1; i < attempt; i++ {
+		delay *= 2
+		if delay >= updateHTTPMaxBackoff {
+			return updateHTTPMaxBackoff
+		}
+	}
+	if delay > updateHTTPMaxBackoff {
+		return updateHTTPMaxBackoff
+	}
+	return delay
+}
+
+func sleepWithContext(ctx context.Context, delay time.Duration) error {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
+func (m *Manager) getWithRetry(ctx context.Context, client *http.Client, url string, headers map[string]string, operation string) (*http.Response, error) {
+	if client == nil {
+		client = &http.Client{Timeout: 30 * time.Second}
+	}
+
+	if updateHTTPAttempts < 1 {
+		updateHTTPAttempts = 1
+	}
+
+	for attempt := 1; attempt <= updateHTTPAttempts; attempt++ {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		if err != nil {
+			return nil, err
+		}
+		for key, value := range headers {
+			req.Header.Set(key, value)
+		}
+
+		resp, err := client.Do(req)
+		if err != nil {
+			if !isRetryableUpdateRequestError(err) || attempt == updateHTTPAttempts {
+				return nil, err
+			}
+			delay := retryDelayForAttempt(attempt)
+			log.Warn().
+				Err(err).
+				Int("attempt", attempt).
+				Int("maxAttempts", updateHTTPAttempts).
+				Dur("retryIn", delay).
+				Str("operation", operation).
+				Str("url", url).
+				Msg("Transient update request error; retrying")
+			if err := sleepWithContext(ctx, delay); err != nil {
+				return nil, err
+			}
+			continue
+		}
+
+		if isRetryableUpdateStatusCode(resp.StatusCode) && attempt < updateHTTPAttempts {
+			_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
+			resp.Body.Close()
+
+			delay := retryDelayForAttempt(attempt)
+			log.Warn().
+				Int("statusCode", resp.StatusCode).
+				Int("attempt", attempt).
+				Int("maxAttempts", updateHTTPAttempts).
+				Dur("retryIn", delay).
+				Str("operation", operation).
+				Str("url", url).
+				Msg("Transient update HTTP status; retrying")
+
+			if err := sleepWithContext(ctx, delay); err != nil {
+				return nil, err
+			}
+			continue
+		}
+
+		return resp, nil
+	}
+
+	return nil, fmt.Errorf("%s failed after retries", operation)
+}
+
 // downloadFile downloads a file from URL to dest
 func (m *Manager) downloadFile(ctx context.Context, url, dest string) (int64, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
-	if err != nil {
-		return 0, err
-	}
-
 	client := &http.Client{Timeout: 5 * time.Minute}
-	resp, err := client.Do(req)
-	if err != nil {
-		return 0, err
-	}
-	defer resp.Body.Close()
+	tempDest := dest + ".partial"
 
-	if resp.StatusCode != http.StatusOK {
-		return 0, fmt.Errorf("download failed with status %d", resp.StatusCode)
+	if updateHTTPAttempts < 1 {
+		updateHTTPAttempts = 1
 	}
 
-	out, err := os.Create(dest)
-	if err != nil {
-		return 0, err
-	}
-	defer out.Close()
+	for attempt := 1; attempt <= updateHTTPAttempts; attempt++ {
+		resp, err := m.getWithRetry(ctx, client, url, nil, "download update tarball")
+		if err != nil {
+			return 0, err
+		}
 
-	// Copy with progress updates
-	written, err := io.Copy(out, resp.Body)
-	if err != nil {
-		return 0, err
+		if resp.StatusCode != http.StatusOK {
+			statusErr := fmt.Errorf("download failed with status %d", resp.StatusCode)
+			resp.Body.Close()
+			return 0, statusErr
+		}
+
+		out, err := os.Create(tempDest)
+		if err != nil {
+			resp.Body.Close()
+			return 0, err
+		}
+
+		written, copyErr := io.Copy(out, resp.Body)
+		closeErr := out.Close()
+		resp.Body.Close()
+		if copyErr == nil {
+			copyErr = closeErr
+		}
+		if copyErr != nil {
+			_ = os.Remove(tempDest)
+			if !isRetryableUpdateRequestError(copyErr) || attempt == updateHTTPAttempts {
+				return 0, copyErr
+			}
+
+			delay := retryDelayForAttempt(attempt)
+			log.Warn().
+				Err(copyErr).
+				Int("attempt", attempt).
+				Int("maxAttempts", updateHTTPAttempts).
+				Dur("retryIn", delay).
+				Str("url", url).
+				Msg("Transient error while writing downloaded update; retrying")
+			if err := sleepWithContext(ctx, delay); err != nil {
+				return 0, err
+			}
+			continue
+		}
+
+		if err := os.Rename(tempDest, dest); err != nil {
+			_ = os.Remove(tempDest)
+			return 0, err
+		}
+
+		log.Info().Int64("bytes", written).Str("file", dest).Msg("Downloaded file")
+		return written, nil
 	}
 
-	log.Info().Int64("bytes", written).Str("file", dest).Msg("Downloaded file")
-	return written, nil
+	return 0, fmt.Errorf("download failed after retries")
 }
 
 // verifyChecksum downloads and verifies the SHA256 checksum of a file
@@ -976,30 +1134,28 @@ func (m *Manager) verifyChecksum(ctx context.Context, tarballURL, tarballPath st
 	var checksumContent string
 	var checksumErr error
 
+	client := &http.Client{Timeout: 30 * time.Second}
+
 	// Try each checksum filename
 	for _, name := range checksumNames {
 		checksumURL := baseURL + name
 
-		req, err := http.NewRequestWithContext(ctx, "GET", checksumURL, nil)
+		resp, err := m.getWithRetry(ctx, client, checksumURL, nil, "download checksum manifest")
 		if err != nil {
 			continue
 		}
-
-		client := &http.Client{Timeout: 30 * time.Second}
-		resp, err := client.Do(req)
-		if err != nil {
-			continue
-		}
-		defer resp.Body.Close()
 
 		if resp.StatusCode == http.StatusOK {
 			body, err := io.ReadAll(resp.Body)
+			resp.Body.Close()
 			if err == nil {
 				checksumContent = string(body)
 				log.Info().Str("file", name).Msg("Found checksum file")
 				break
 			}
+			continue
 		}
+		resp.Body.Close()
 	}
 
 	if checksumContent == "" {
