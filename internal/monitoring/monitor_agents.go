@@ -225,7 +225,7 @@ func (m *Monitor) LinkHostAgent(hostID, nodeID string) error {
 	}
 
 	if err := m.state.LinkHostAgentToNode(hostID, nodeID); err != nil {
-		return err
+		return fmt.Errorf("link host agent %q to node %q: %w", hostID, nodeID, err)
 	}
 
 	log.Info().

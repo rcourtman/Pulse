@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -89,7 +90,7 @@ func (rm *ReloadableMonitor) doReload() error {
 	// Load fresh configuration
 	cfg, err := config.Load()
 	if err != nil {
-		return err
+		return fmt.Errorf("reloadable monitor reload config: %w", err)
 	}
 
 	// Polling interval changes and other settings require a full reload
@@ -138,8 +139,12 @@ func (rm *ReloadableMonitor) GetMonitor() *Monitor {
 	if rm.mtMonitor == nil {
 		return nil
 	}
-	m, _ := rm.mtMonitor.GetMonitor("default")
-	return m
+	monitor, err := rm.mtMonitor.GetMonitor("default")
+	if err != nil {
+		log.Debug().Err(err).Msg("Default monitor unavailable")
+		return nil
+	}
+	return monitor
 }
 
 // GetConfig returns the current configuration used by the monitor.
@@ -157,8 +162,15 @@ func (rm *ReloadableMonitor) GetState(orgID string) interface{} {
 	if orgID == "" {
 		orgID = "default"
 	}
-	monitor, err := rm.GetMultiTenantMonitor().GetMonitor(orgID)
+	mtMonitor := rm.GetMultiTenantMonitor()
+	if mtMonitor == nil {
+		log.Debug().Str("orgID", orgID).Msg("GetState requested with no active multi-tenant monitor")
+		return nil
+	}
+
+	monitor, err := mtMonitor.GetMonitor(orgID)
 	if err != nil {
+		log.Debug().Err(err).Str("orgID", orgID).Msg("GetState monitor unavailable")
 		return nil
 	}
 	return monitor.GetState()
