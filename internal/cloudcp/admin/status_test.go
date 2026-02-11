@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
@@ -50,6 +51,21 @@ func TestHandleReadyz(t *testing.T) {
 	}
 }
 
+func TestHandleReadyzNilRegistry(t *testing.T) {
+	handler := HandleReadyz(nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+	rec := httptest.NewRecorder()
+	handler(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusServiceUnavailable)
+	}
+	if rec.Body.String() != "not ready" {
+		t.Errorf("body = %q, want %q", rec.Body.String(), "not ready")
+	}
+}
+
 func TestHandleStatus(t *testing.T) {
 	reg := newTestRegistry(t)
 
@@ -78,6 +94,20 @@ func TestHandleStatus(t *testing.T) {
 	}
 	if resp["total_tenants"] != float64(1) {
 		t.Errorf("total_tenants = %v, want 1", resp["total_tenants"])
+	}
+}
+
+func TestHandleStatusNilRegistry(t *testing.T) {
+	handler := HandleStatus(nil, "test-version")
+	req := httptest.NewRequest(http.MethodGet, "/status", nil)
+	rec := httptest.NewRecorder()
+	handler(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusServiceUnavailable)
+	}
+	if !strings.Contains(rec.Body.String(), "service unavailable") {
+		t.Fatalf("body = %q, want contains %q", rec.Body.String(), "service unavailable")
 	}
 }
 
