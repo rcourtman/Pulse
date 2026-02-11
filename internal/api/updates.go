@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -13,6 +14,8 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	"github.com/rs/zerolog/log"
 )
+
+const applyUpdateStartAckTimeout = 250 * time.Millisecond
 
 // UpdateHandlers handles update-related API requests
 type UpdateHandlers struct {
@@ -94,41 +97,90 @@ func (h *UpdateHandlers) HandleApplyUpdate(w http.ResponseWriter, r *http.Reques
 
 	// Limit request body to 8KB to prevent memory exhaustion
 	r.Body = http.MaxBytesReader(w, r.Body, 8*1024)
+	defer r.Body.Close()
 
 	var req struct {
 		DownloadURL string `json:"downloadUrl"`
 	}
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeStrictJSONBody(r.Body, &req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
+	req.DownloadURL = strings.TrimSpace(req.DownloadURL)
 
 	if req.DownloadURL == "" {
 		http.Error(w, "Download URL is required", http.StatusBadRequest)
 		return
 	}
 
-	// Start update in background with a new context (not request context which gets cancelled)
+	channel := r.URL.Query().Get("channel")
+	applyReq := updates.ApplyUpdateRequest{
+		DownloadURL:  req.DownloadURL,
+		Channel:      channel,
+		InitiatedBy:  updates.InitiatedByUser,
+		InitiatedVia: updates.InitiatedViaUI,
+	}
+	result := make(chan error, 1)
+
+	// Start update in background with a new context (not request context which gets canceled)
 	go func() {
-		ctx := context.Background()
-		applyReq := updates.ApplyUpdateRequest{
-			DownloadURL:  req.DownloadURL,
-			Channel:      r.URL.Query().Get("channel"),
-			InitiatedBy:  updates.InitiatedByUser,
-			InitiatedVia: updates.InitiatedViaUI,
-		}
-		if err := h.manager.ApplyUpdate(ctx, applyReq); err != nil {
-			log.Error().Err(err).Msg("Failed to apply update")
-		}
+		result <- h.manager.ApplyUpdate(context.Background(), applyReq)
 	}()
+
+	select {
+	case err := <-result:
+		if err != nil {
+			statusCode, msg := classifyApplyUpdateStartError(err)
+			if statusCode >= http.StatusInternalServerError {
+				log.Error().Err(err).Str("download_url", req.DownloadURL).Str("channel", channel).Msg("Failed to start update")
+			} else {
+				log.Warn().Err(err).Str("download_url", req.DownloadURL).Str("channel", channel).Msg("Update request rejected")
+			}
+			http.Error(w, msg, statusCode)
+			return
+		}
+	case <-time.After(applyUpdateStartAckTimeout):
+	}
 
 	// Return success immediately
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
+	if err := json.NewEncoder(w).Encode(map[string]string{
 		"status":  "started",
 		"message": "Update process started",
-	})
+	}); err != nil {
+		log.Error().Err(err).Msg("Failed to encode update start response")
+	}
+}
+
+func decodeStrictJSONBody(body io.Reader, dst any) error {
+	decoder := json.NewDecoder(body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(dst); err != nil {
+		return err
+	}
+
+	var extra any
+	if err := decoder.Decode(&extra); err != io.EOF {
+		return fmt.Errorf("request body must contain a single JSON object")
+	}
+
+	return nil
+}
+
+func classifyApplyUpdateStartError(err error) (int, string) {
+	errMsg := strings.ToLower(strings.TrimSpace(err.Error()))
+	switch {
+	case strings.Contains(errMsg, "already in progress"):
+		return http.StatusConflict, "Update already in progress"
+	case strings.Contains(errMsg, "download url is required"), strings.Contains(errMsg, "invalid download url"):
+		return http.StatusBadRequest, "Invalid download URL"
+	case strings.Contains(errMsg, "cannot be applied in docker environment"),
+		strings.Contains(errMsg, "manual migration required"):
+		return http.StatusConflict, err.Error()
+	default:
+		return http.StatusInternalServerError, "Failed to start update"
+	}
 }
 
 // HandleUpdateStatus handles update status requests with rate limiting
