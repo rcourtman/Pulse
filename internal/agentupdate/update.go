@@ -30,11 +30,30 @@ const (
 
 	// downloadTimeout is the maximum time allowed for downloading a binary
 	downloadTimeout = 5 * time.Minute
+
+	developmentVersion = "dev"
+
+	apiTokenHeader       = "X-API-Token"
+	authorizationHeader  = "Authorization"
+	bearerTokenPrefix    = "Bearer "
+	checksumSHA256Header = "X-Checksum-Sha256"
 )
+
+type goOS string
+
+const (
+	goOSLinux   goOS = "linux"
+	goOSDarwin  goOS = "darwin"
+	goOSWindows goOS = "windows"
+)
+
+type serverVersionResponse struct {
+	Version string `json:"version"`
+}
 
 var (
 	maxBinarySizeBytes     int64 = maxBinarySize
-	runtimeGOOS                  = runtime.GOOS
+	runtimeGOOS                  = goOS(runtime.GOOS)
 	runtimeGOARCH                = runtime.GOARCH
 	unameCommand                 = func() ([]byte, error) { return exec.Command("uname", "-m").Output() }
 	unraidVersionPath            = "/etc/unraid-version"
@@ -127,7 +146,7 @@ func (u *Updater) RunLoop(ctx context.Context) {
 		return
 	}
 
-	if u.cfg.CurrentVersion == "dev" {
+	if u.cfg.CurrentVersion == developmentVersion {
 		u.logger.Debug().Msg("Auto-update disabled in development mode")
 		return
 	}
@@ -159,7 +178,7 @@ func (u *Updater) CheckAndUpdate(ctx context.Context) {
 		return
 	}
 
-	if u.cfg.CurrentVersion == "dev" {
+	if u.cfg.CurrentVersion == developmentVersion {
 		u.logger.Debug().Msg("Skipping update check - running in development mode")
 		return
 	}
@@ -177,7 +196,7 @@ func (u *Updater) CheckAndUpdate(ctx context.Context) {
 		return
 	}
 
-	if serverVersion == "dev" {
+	if serverVersion == developmentVersion {
 		u.logger.Debug().Msg("Skipping update - server is in development mode")
 		return
 	}
@@ -223,8 +242,8 @@ func (u *Updater) getServerVersion(ctx context.Context) (string, error) {
 	}
 
 	if u.cfg.APIToken != "" {
-		req.Header.Set("X-API-Token", u.cfg.APIToken)
-		req.Header.Set("Authorization", "Bearer "+u.cfg.APIToken)
+		req.Header.Set(apiTokenHeader, u.cfg.APIToken)
+		req.Header.Set(authorizationHeader, bearerTokenPrefix+u.cfg.APIToken)
 	}
 
 	resp, err := u.client.Do(req)
@@ -237,10 +256,7 @@ func (u *Updater) getServerVersion(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("server returned status %d", resp.StatusCode)
 	}
 
-	var versionResp struct {
-		Version string `json:"version"`
-	}
-
+	var versionResp serverVersionResponse
 	if err := json.NewDecoder(resp.Body).Decode(&versionResp); err != nil {
 		return "", fmt.Errorf("failed to decode response: %w", err)
 	}
@@ -268,14 +284,14 @@ func verifyBinaryMagic(path string) error {
 	}
 
 	switch runtimeGOOS {
-	case "linux":
+	case goOSLinux:
 		// ELF magic: 0x7f 'E' 'L' 'F'
 		if magic[0] == 0x7f && magic[1] == 'E' && magic[2] == 'L' && magic[3] == 'F' {
 			return nil
 		}
 		return errors.New("not a valid ELF binary")
 
-	case "darwin":
+	case goOSDarwin:
 		// Mach-O magic bytes (little-endian):
 		// - 0xfeedface (32-bit)
 		// - 0xfeedfacf (64-bit)
@@ -288,7 +304,7 @@ func verifyBinaryMagic(path string) error {
 		}
 		return errors.New("not a valid Mach-O binary")
 
-	case "windows":
+	case goOSWindows:
 		// PE magic: 'M' 'Z'
 		if magic[0] == 'M' && magic[1] == 'Z' {
 			return nil
@@ -339,8 +355,8 @@ func (u *Updater) performUpdateWithExecPath(ctx context.Context, execPath string
 		}
 
 		if u.cfg.APIToken != "" {
-			req.Header.Set("X-API-Token", u.cfg.APIToken)
-			req.Header.Set("Authorization", "Bearer "+u.cfg.APIToken)
+			req.Header.Set(apiTokenHeader, u.cfg.APIToken)
+			req.Header.Set(authorizationHeader, bearerTokenPrefix+u.cfg.APIToken)
 		}
 
 		response, err := u.client.Do(req)
@@ -366,7 +382,7 @@ func (u *Updater) performUpdateWithExecPath(ctx context.Context, execPath string
 	defer resp.Body.Close()
 
 	// Verify checksum if provided
-	checksumHeader := strings.TrimSpace(resp.Header.Get("X-Checksum-Sha256"))
+	checksumHeader := strings.TrimSpace(resp.Header.Get(checksumSHA256Header))
 
 	// Resolve symlinks to get the real path for atomic rename
 	realExecPath, err := evalSymlinksFn(execPath)
@@ -409,7 +425,7 @@ func (u *Updater) performUpdateWithExecPath(ctx context.Context, execPath string
 	// Verify checksum (mandatory for security)
 	downloadChecksum := hex.EncodeToString(hasher.Sum(nil))
 	if checksumHeader == "" {
-		return fmt.Errorf("server did not provide checksum header (X-Checksum-Sha256); refusing update for security")
+		return fmt.Errorf("server did not provide checksum header (%s); refusing update for security", checksumSHA256Header)
 	}
 
 	expected := strings.ToLower(strings.TrimSpace(checksumHeader))
@@ -502,7 +518,7 @@ func GetUpdatedFromVersion() string {
 
 // determineArch returns the architecture string for download URLs (e.g., "linux-amd64", "darwin-arm64").
 func determineArch() string {
-	os := runtimeGOOS
+	goos := runtimeGOOS
 	arch := runtimeGOARCH
 
 	// Normalize architecture
@@ -514,9 +530,9 @@ func determineArch() string {
 	}
 
 	// For known OS/arch combinations, return directly
-	switch os {
-	case "linux", "darwin", "windows":
-		return fmt.Sprintf("%s-%s", os, arch)
+	switch goos {
+	case goOSLinux, goOSDarwin, goOSWindows:
+		return fmt.Sprintf("%s-%s", goos, arch)
 	}
 
 	// Fall back to uname for edge cases on unknown OS
