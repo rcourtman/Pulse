@@ -385,8 +385,116 @@ func TestNewRollingFileWriter_DefaultMaxSize(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected rollingFileWriter, got %#v", writer)
 	}
-	if w.maxBytes != 100*1024*1024 {
+	if w.maxBytes != int64(defaultMaxSizeMB)*bytesPerMB {
 		t.Fatalf("expected default max bytes, got %d", w.maxBytes)
+	}
+	_ = w.closeLocked()
+}
+
+func TestNewRollingFileWriter_NegativeMaxSizeUsesDefault(t *testing.T) {
+	t.Cleanup(resetLoggingState)
+
+	dir := t.TempDir()
+	writer, err := newRollingFileWriter(Config{
+		FilePath:  filepath.Join(dir, "app.log"),
+		MaxSizeMB: -1,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	w, ok := writer.(*rollingFileWriter)
+	if !ok {
+		t.Fatalf("expected rollingFileWriter, got %#v", writer)
+	}
+	if w.maxBytes != int64(defaultMaxSizeMB)*bytesPerMB {
+		t.Fatalf("expected default max bytes, got %d", w.maxBytes)
+	}
+	_ = w.closeLocked()
+}
+
+func TestNewRollingFileWriter_MaxSizeOverflowUsesDefault(t *testing.T) {
+	t.Cleanup(resetLoggingState)
+
+	dir := t.TempDir()
+	writer, err := newRollingFileWriter(Config{
+		FilePath:  filepath.Join(dir, "app.log"),
+		MaxSizeMB: int(maxSafeSizeMB + 1),
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	w, ok := writer.(*rollingFileWriter)
+	if !ok {
+		t.Fatalf("expected rollingFileWriter, got %#v", writer)
+	}
+	if w.maxBytes != int64(defaultMaxSizeMB)*bytesPerMB {
+		t.Fatalf("expected default max bytes, got %d", w.maxBytes)
+	}
+	_ = w.closeLocked()
+}
+
+func TestNewRollingFileWriter_NegativeMaxAgeUsesDefault(t *testing.T) {
+	t.Cleanup(resetLoggingState)
+
+	dir := t.TempDir()
+	writer, err := newRollingFileWriter(Config{
+		FilePath:   filepath.Join(dir, "app.log"),
+		MaxSizeMB:  1,
+		MaxAgeDays: -1,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	w, ok := writer.(*rollingFileWriter)
+	if !ok {
+		t.Fatalf("expected rollingFileWriter, got %#v", writer)
+	}
+	if w.maxAge != time.Duration(defaultMaxAgeDays)*24*time.Hour {
+		t.Fatalf("expected default max age, got %s", w.maxAge)
+	}
+	_ = w.closeLocked()
+}
+
+func TestNewRollingFileWriter_ZeroMaxAgeDisablesCleanup(t *testing.T) {
+	t.Cleanup(resetLoggingState)
+
+	dir := t.TempDir()
+	writer, err := newRollingFileWriter(Config{
+		FilePath:   filepath.Join(dir, "app.log"),
+		MaxSizeMB:  1,
+		MaxAgeDays: 0,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	w, ok := writer.(*rollingFileWriter)
+	if !ok {
+		t.Fatalf("expected rollingFileWriter, got %#v", writer)
+	}
+	if w.maxAge != 0 {
+		t.Fatalf("expected max age 0, got %s", w.maxAge)
+	}
+	_ = w.closeLocked()
+}
+
+func TestNewRollingFileWriter_MaxAgeOverflowClamps(t *testing.T) {
+	t.Cleanup(resetLoggingState)
+
+	dir := t.TempDir()
+	writer, err := newRollingFileWriter(Config{
+		FilePath:   filepath.Join(dir, "app.log"),
+		MaxSizeMB:  1,
+		MaxAgeDays: maxDurationDays + 1,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	w, ok := writer.(*rollingFileWriter)
+	if !ok {
+		t.Fatalf("expected rollingFileWriter, got %#v", writer)
+	}
+	if w.maxAge != time.Duration(maxDurationDays)*24*time.Hour {
+		t.Fatalf("expected clamped max age, got %s", w.maxAge)
 	}
 	_ = w.closeLocked()
 }

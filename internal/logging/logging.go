@@ -22,6 +22,12 @@ type ctxKey string
 
 const (
 	requestIDKey ctxKey = "logging_request_id"
+
+	bytesPerMB        int64 = 1024 * 1024
+	defaultMaxSizeMB        = 100
+	defaultMaxAgeDays       = 30
+	maxDurationDays         = int((1<<63 - 1) / int64(24*time.Hour))
+	maxSafeSizeMB     int64 = (1<<63 - 1) / bytesPerMB
 )
 
 // Config controls logger initialization.
@@ -190,13 +196,9 @@ func newRollingFileWriter(cfg Config) (io.Writer, error) {
 
 	writer := &rollingFileWriter{
 		path:     path,
-		maxBytes: int64(cfg.MaxSizeMB) * 1024 * 1024,
-		maxAge:   time.Duration(cfg.MaxAgeDays) * 24 * time.Hour,
+		maxBytes: normalizeMaxBytes(cfg.MaxSizeMB),
+		maxAge:   normalizeMaxAge(cfg.MaxAgeDays),
 		compress: cfg.Compress,
-	}
-
-	if writer.maxBytes <= 0 {
-		writer.maxBytes = 100 * 1024 * 1024 // default 100MB
 	}
 
 	if err := writer.openOrCreateLocked(); err != nil {
@@ -204,6 +206,33 @@ func newRollingFileWriter(cfg Config) (io.Writer, error) {
 	}
 	writer.cleanupOldFiles()
 	return writer, nil
+}
+
+func normalizeMaxBytes(sizeMB int) int64 {
+	if sizeMB <= 0 {
+		fmt.Fprintf(os.Stderr, "logging: invalid max size %dMB; using default %dMB\n", sizeMB, defaultMaxSizeMB)
+		return int64(defaultMaxSizeMB) * bytesPerMB
+	}
+	if int64(sizeMB) > maxSafeSizeMB {
+		fmt.Fprintf(os.Stderr, "logging: max size %dMB exceeds supported limit; using default %dMB\n", sizeMB, defaultMaxSizeMB)
+		return int64(defaultMaxSizeMB) * bytesPerMB
+	}
+	return int64(sizeMB) * bytesPerMB
+}
+
+func normalizeMaxAge(days int) time.Duration {
+	switch {
+	case days < 0:
+		fmt.Fprintf(os.Stderr, "logging: invalid max age %dd; using default %dd\n", days, defaultMaxAgeDays)
+		days = defaultMaxAgeDays
+	case days == 0:
+		return 0
+	}
+	if days > maxDurationDays {
+		fmt.Fprintf(os.Stderr, "logging: max age %dd exceeds supported limit; clamping to %dd\n", days, maxDurationDays)
+		days = maxDurationDays
+	}
+	return time.Duration(days) * 24 * time.Hour
 }
 
 func (w *rollingFileWriter) Write(p []byte) (int, error) {
