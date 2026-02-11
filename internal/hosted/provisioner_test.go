@@ -43,6 +43,30 @@ func (m *mockAuthManager) UpdateUserRoles(userID string, roles []string) error {
 	return m.updateErr
 }
 
+type mockOrgPersistence struct {
+	base    *config.MultiTenantPersistence
+	saveErr error
+}
+
+func (m *mockOrgPersistence) GetPersistence(orgID string) (*config.ConfigPersistence, error) {
+	return m.base.GetPersistence(orgID)
+}
+
+func (m *mockOrgPersistence) SaveOrganization(org *models.Organization) error {
+	if m.saveErr != nil {
+		return m.saveErr
+	}
+	return m.base.SaveOrganization(org)
+}
+
+func (m *mockOrgPersistence) LoadOrganization(orgID string) (*models.Organization, error) {
+	return m.base.LoadOrganization(orgID)
+}
+
+func (m *mockOrgPersistence) ListOrganizations() ([]*models.Organization, error) {
+	return m.base.ListOrganizations()
+}
+
 func TestProvisionTenantSuccess(t *testing.T) {
 	baseDir := t.TempDir()
 	persistence := config.NewMultiTenantPersistence(baseDir)
@@ -248,5 +272,44 @@ func TestProvisionTenantPartialFailureRollback(t *testing.T) {
 	_, statErr := os.Stat(orgDir)
 	if !os.IsNotExist(statErr) {
 		t.Fatalf("expected org dir to be removed, stat error: %v", statErr)
+	}
+}
+
+func TestProvisionTenantSaveOrganizationFailureRollback(t *testing.T) {
+	baseDir := t.TempDir()
+	basePersistence := config.NewMultiTenantPersistence(baseDir)
+	persistence := &mockOrgPersistence{
+		base:    basePersistence,
+		saveErr: errors.New("save failed"),
+	}
+	authProvider := &mockAuthProvider{manager: &mockAuthManager{}}
+	provisioner := NewProvisioner(persistence, authProvider)
+	provisioner.newOrgID = func() string { return "save-fail-org" }
+
+	_, err := provisioner.ProvisionTenant(context.Background(), ProvisionRequest{
+		Email:    "owner@example.com",
+		Password: "securepass123",
+		OrgName:  "Save Failure Org",
+	})
+	if err == nil {
+		t.Fatal("expected provisioning error, got nil")
+	}
+
+	var systemErr *SystemError
+	if !errors.As(err, &systemErr) {
+		t.Fatalf("expected SystemError, got %T (%v)", err, err)
+	}
+	if systemErr.Op != "save_organization" {
+		t.Fatalf("expected save_organization op, got %q", systemErr.Op)
+	}
+
+	orgDir := filepath.Join(baseDir, "orgs", "save-fail-org")
+	_, statErr := os.Stat(orgDir)
+	if !os.IsNotExist(statErr) {
+		t.Fatalf("expected org dir to be removed, stat error: %v", statErr)
+	}
+
+	if authProvider.calls != 0 {
+		t.Fatalf("expected GetManager to not be called after save failure, got %d", authProvider.calls)
 	}
 }

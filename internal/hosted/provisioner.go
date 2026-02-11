@@ -166,6 +166,7 @@ func (p *Provisioner) ProvisionTenant(ctx context.Context, req ProvisionRequest)
 		},
 	}
 	if err := p.persistence.SaveOrganization(org); err != nil {
+		p.cleanupOrgDirectory(orgID, tenantPersistence.DataDir())
 		return nil, &SystemError{Op: "save_organization", Err: err}
 	}
 	if err := contextErr(ctx); err != nil {
