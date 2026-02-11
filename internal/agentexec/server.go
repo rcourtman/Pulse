@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -31,6 +32,19 @@ var (
 )
 
 const maxWebSocketMessageBytes int64 = 1 << 20 // 1 MiB
+
+const (
+	maxAgentIDLength                      = 128
+	maxRequestIDLength                    = 128
+	maxExecuteCommandLength               = 32 * 1024
+	maxTargetIDLength                     = 256
+	maxExecuteCommandTimeoutSeconds       = 3600
+	defaultReadFileMaxBytes         int64 = 1 << 20  // 1 MiB
+	maxReadFileMaxBytes             int64 = 10 << 20 // 10 MiB
+	maxReadFilePathLength                 = 4096
+)
+
+var safeTargetIDPattern = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
 
 // Server manages WebSocket connections from agents
 type Server struct {
@@ -58,6 +72,108 @@ func NewServer(validateToken func(token string, agentID string) bool) *Server {
 
 func pendingRequestKey(agentID, requestID string) string {
 	return agentID + "\x00" + requestID
+}
+
+func validateRequestID(requestID string) error {
+	if requestID == "" {
+		return fmt.Errorf("request id is required")
+	}
+	if len(requestID) > maxRequestIDLength {
+		return fmt.Errorf("request id exceeds %d characters", maxRequestIDLength)
+	}
+	return nil
+}
+
+func normalizeTarget(targetType, targetID string) (string, string, error) {
+	normalizedType := strings.ToLower(strings.TrimSpace(targetType))
+	if normalizedType == "" {
+		normalizedType = "host"
+	}
+
+	normalizedTargetID := strings.TrimSpace(targetID)
+	switch normalizedType {
+	case "host":
+		// Host-level execution ignores target ID.
+		return normalizedType, "", nil
+	case "container", "vm":
+		if normalizedTargetID == "" {
+			return "", "", fmt.Errorf("target id is required for target type %q", normalizedType)
+		}
+		if len(normalizedTargetID) > maxTargetIDLength {
+			return "", "", fmt.Errorf("target id exceeds %d characters", maxTargetIDLength)
+		}
+		if !safeTargetIDPattern.MatchString(normalizedTargetID) {
+			return "", "", fmt.Errorf("target id contains invalid characters")
+		}
+		return normalizedType, normalizedTargetID, nil
+	default:
+		return "", "", fmt.Errorf("invalid target type %q", targetType)
+	}
+}
+
+func validateExecuteCommandPayload(cmd *ExecuteCommandPayload) error {
+	if cmd == nil {
+		return fmt.Errorf("command payload is required")
+	}
+
+	if strings.TrimSpace(cmd.Command) == "" {
+		return fmt.Errorf("command is required")
+	}
+	if len(cmd.Command) > maxExecuteCommandLength {
+		return fmt.Errorf("command exceeds %d characters", maxExecuteCommandLength)
+	}
+
+	targetType, targetID, err := normalizeTarget(cmd.TargetType, cmd.TargetID)
+	if err != nil {
+		return err
+	}
+	cmd.TargetType = targetType
+	cmd.TargetID = targetID
+
+	if cmd.Timeout < 0 {
+		return fmt.Errorf("timeout cannot be negative")
+	}
+	if cmd.Timeout > maxExecuteCommandTimeoutSeconds {
+		return fmt.Errorf("timeout cannot exceed %d seconds", maxExecuteCommandTimeoutSeconds)
+	}
+
+	return nil
+}
+
+func validateReadFilePayload(req *ReadFilePayload) error {
+	if req == nil {
+		return fmt.Errorf("read file payload is required")
+	}
+
+	req.Path = strings.TrimSpace(req.Path)
+	if req.Path == "" {
+		return fmt.Errorf("path is required")
+	}
+	if len(req.Path) > maxReadFilePathLength {
+		return fmt.Errorf("path exceeds %d characters", maxReadFilePathLength)
+	}
+	if strings.ContainsAny(req.Path, "\x00\r\n") {
+		return fmt.Errorf("path contains invalid control characters")
+	}
+
+	targetType, targetID, err := normalizeTarget(req.TargetType, req.TargetID)
+	if err != nil {
+		return err
+	}
+	req.TargetType = targetType
+	req.TargetID = targetID
+
+	if req.MaxBytes < 0 {
+		return fmt.Errorf("max bytes cannot be negative")
+	}
+	if req.MaxBytes == 0 {
+		req.MaxBytes = defaultReadFileMaxBytes
+	}
+	if req.MaxBytes > maxReadFileMaxBytes {
+		return fmt.Errorf("max bytes cannot exceed %d", maxReadFileMaxBytes)
+	}
+
+	return nil
 }
 
 func isAllowedWebSocketOrigin(r *http.Request) bool {
@@ -167,6 +283,20 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 			Payload:   RegisteredPayload{Success: false, Message: "Invalid agent_id"},
 		}); err != nil {
 			log.Warn().Err(err).Msg("Failed to send rejection to agent with missing agent_id")
+		}
+		conn.Close()
+		return
+	}
+	if len(reg.AgentID) > maxAgentIDLength {
+		log.Warn().
+			Int("agent_id_length", len(reg.AgentID)).
+			Msg("Agent registration rejected: agent_id exceeds maximum length")
+		if err := s.sendMessage(conn, Message{
+			Type:      MsgTypeRegistered,
+			Timestamp: time.Now(),
+			Payload:   RegisteredPayload{Success: false, Message: "Invalid agent_id"},
+		}); err != nil {
+			log.Warn().Err(err).Msg("Failed to send rejection to agent with oversized agent_id")
 		}
 		conn.Close()
 		return
@@ -313,6 +443,18 @@ func (s *Server) readLoop(ac *agentConn) {
 				log.Error().Err(err).Msg("Failed to parse command result")
 				continue
 			}
+			result.RequestID = strings.TrimSpace(result.RequestID)
+			if result.RequestID == "" {
+				log.Warn().Str("agent_id", ac.agent.AgentID).Msg("Dropping command result with empty request_id")
+				continue
+			}
+			if len(result.RequestID) > maxRequestIDLength {
+				log.Warn().
+					Str("agent_id", ac.agent.AgentID).
+					Int("request_id_length", len(result.RequestID)).
+					Msg("Dropping command result with oversized request_id")
+				continue
+			}
 
 			s.mu.RLock()
 			ch, ok := s.pendingReqs[pendingRequestKey(ac.agent.AgentID, result.RequestID)]
@@ -398,8 +540,11 @@ func (s *Server) ExecuteCommand(ctx context.Context, agentID string, cmd Execute
 		return nil, fmt.Errorf("agent id is required")
 	}
 	cmd.RequestID = strings.TrimSpace(cmd.RequestID)
-	if cmd.RequestID == "" {
-		return nil, fmt.Errorf("request id is required")
+	if err := validateRequestID(cmd.RequestID); err != nil {
+		return nil, err
+	}
+	if err := validateExecuteCommandPayload(&cmd); err != nil {
+		return nil, err
 	}
 
 	s.mu.RLock()
@@ -444,11 +589,13 @@ func (s *Server) ExecuteCommand(ctx context.Context, agentID string, cmd Execute
 	if timeout <= 0 {
 		timeout = 60 * time.Second
 	}
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
 
 	select {
 	case result := <-respCh:
 		return &result, nil
-	case <-time.After(timeout):
+	case <-timer.C:
 		return nil, fmt.Errorf("command timed out after %v", timeout)
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -462,8 +609,11 @@ func (s *Server) ReadFile(ctx context.Context, agentID string, req ReadFilePaylo
 		return nil, fmt.Errorf("agent id is required")
 	}
 	req.RequestID = strings.TrimSpace(req.RequestID)
-	if req.RequestID == "" {
-		return nil, fmt.Errorf("request id is required")
+	if err := validateRequestID(req.RequestID); err != nil {
+		return nil, err
+	}
+	if err := validateReadFilePayload(&req); err != nil {
+		return nil, err
 	}
 
 	s.mu.RLock()
@@ -505,10 +655,16 @@ func (s *Server) ReadFile(ctx context.Context, agentID string, req ReadFilePaylo
 
 	// Wait for result
 	timeout := readFileTimeout
+	if timeout <= 0 {
+		timeout = 30 * time.Second
+	}
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+
 	select {
 	case result := <-respCh:
 		return &result, nil
-	case <-time.After(timeout):
+	case <-timer.C:
 		return nil, fmt.Errorf("read_file timed out after %v", timeout)
 	case <-ctx.Done():
 		return nil, ctx.Err()
