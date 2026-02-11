@@ -62,7 +62,7 @@ func NewCryptoManagerAt(dataDir string) (*CryptoManager, error) {
 
 	key, err := getOrCreateKeyAt(dataDir)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get encryption key: %w", err)
+		return nil, fmt.Errorf("crypto.NewCryptoManagerAt: get or create encryption key at %q: %w", keyPath, err)
 	}
 
 	return &CryptoManager{
@@ -91,6 +91,8 @@ func getOrCreateKeyAt(dataDir string) ([]byte, error) {
 		Str("keyPath", keyPath).
 		Msg("Looking for encryption key")
 
+	var keyReadErr error
+
 	// Try to read existing key from new location
 	if data, err := os.ReadFile(keyPath); err == nil {
 		// Use DecodedLen to allocate sufficient space, then slice to actual length
@@ -111,7 +113,12 @@ func getOrCreateKeyAt(dataDir string) ([]byte, error) {
 				Msg("Failed to decode encryption key")
 		}
 	} else {
-		log.Debug().Err(err).Str("path", keyPath).Msg("Could not read encryption key file")
+		if os.IsNotExist(err) {
+			log.Debug().Err(err).Str("path", keyPath).Msg("Could not read encryption key file")
+		} else {
+			keyReadErr = fmt.Errorf("crypto.getOrCreateKeyAt: read encryption key file %q: %w", keyPath, err)
+			log.Warn().Err(keyReadErr).Str("path", keyPath).Msg("Failed to read encryption key file")
+		}
 	}
 
 	// Check for key in old location and migrate if found (only if paths differ)
@@ -169,6 +176,11 @@ func getOrCreateKeyAt(dataDir string) ([]byte, error) {
 				// }
 				return key, nil
 			}
+		} else if !os.IsNotExist(err) {
+			log.Warn().
+				Err(err).
+				Str("path", oldKeyPath).
+				Msg("Failed to read legacy encryption key during migration check")
 		}
 	} else {
 		log.Debug().
@@ -176,6 +188,12 @@ func getOrCreateKeyAt(dataDir string) ([]byte, error) {
 			Str("keyPath", keyPath).
 			Bool("sameAsOldPath", dataDir == oldKeyDir).
 			Msg("Skipping key migration check (dataDir is /etc/pulse or paths match)")
+	}
+
+	if keyReadErr != nil {
+		// Avoid generating a replacement key when an existing key path is unreadable;
+		// callers should resolve filesystem issues first to prevent accidental key drift.
+		return nil, keyReadErr
 	}
 
 	// Before generating a new key, check if encrypted data exists OR if there are any backup/corrupted files
@@ -188,19 +206,28 @@ func getOrCreateKeyAt(dataDir string) ([]byte, error) {
 		"oidc.enc*",
 	}
 
-	hasEncryptedData := false
 	var foundFiles []string
 	for _, pattern := range checkPatterns {
-		matches, _ := filepath.Glob(filepath.Join(dataDir, pattern))
+		globPattern := filepath.Join(dataDir, pattern)
+		matches, err := filepath.Glob(globPattern)
+		if err != nil {
+			return nil, fmt.Errorf("crypto.getOrCreateKeyAt: glob encrypted-data pattern %q: %w", globPattern, err)
+		}
 		for _, file := range matches {
-			if info, err := os.Stat(file); err == nil && info.Size() > 0 {
-				hasEncryptedData = true
+			info, err := os.Stat(file)
+			if err != nil {
+				if os.IsNotExist(err) {
+					continue
+				}
+				return nil, fmt.Errorf("crypto.getOrCreateKeyAt: stat encrypted-data candidate %q: %w", file, err)
+			}
+			if info.Size() > 0 {
 				foundFiles = append(foundFiles, filepath.Base(file))
 			}
 		}
 	}
 
-	if hasEncryptedData {
+	if len(foundFiles) > 0 {
 		log.Error().
 			Strs("foundFiles", foundFiles).
 			Str("dataDir", dataDir).
@@ -211,18 +238,18 @@ func getOrCreateKeyAt(dataDir string) ([]byte, error) {
 	// Generate new key (only if no encrypted data exists)
 	key := make([]byte, 32) // AES-256
 	if _, err := io.ReadFull(randReader, key); err != nil {
-		return nil, fmt.Errorf("failed to generate key: %w", err)
+		return nil, fmt.Errorf("crypto.getOrCreateKeyAt: generate key bytes: %w", err)
 	}
 
 	// Ensure directory exists
 	if err := os.MkdirAll(filepath.Dir(keyPath), 0700); err != nil {
-		return nil, fmt.Errorf("failed to create directory: %w", err)
+		return nil, fmt.Errorf("crypto.getOrCreateKeyAt: create key directory %q: %w", filepath.Dir(keyPath), err)
 	}
 
 	// Save key with restricted permissions
 	encoded := base64.StdEncoding.EncodeToString(key)
 	if err := os.WriteFile(keyPath, []byte(encoded), 0600); err != nil {
-		return nil, fmt.Errorf("failed to save key: %w", err)
+		return nil, fmt.Errorf("crypto.getOrCreateKeyAt: save key file %q: %w", keyPath, err)
 	}
 
 	log.Info().Msg("Generated new encryption key")
@@ -236,11 +263,14 @@ func (c *CryptoManager) Encrypt(plaintext []byte) ([]byte, error) {
 	// CRITICAL: Verify the key file still exists on disk before encrypting
 	// This prevents creating orphaned encrypted data that can never be decrypted
 	if c.keyPath != "" {
-		if _, err := os.Stat(c.keyPath); os.IsNotExist(err) {
-			log.Error().
-				Str("keyPath", c.keyPath).
-				Msg("CRITICAL: Encryption key file has been deleted - refusing to encrypt to prevent orphaned data")
-			return nil, fmt.Errorf("encryption key file deleted - cannot encrypt (would create orphaned data)")
+		if _, err := os.Stat(c.keyPath); err != nil {
+			if os.IsNotExist(err) {
+				log.Error().
+					Str("keyPath", c.keyPath).
+					Msg("CRITICAL: Encryption key file has been deleted - refusing to encrypt to prevent orphaned data")
+				return nil, fmt.Errorf("encryption key file deleted - cannot encrypt (would create orphaned data)")
+			}
+			return nil, fmt.Errorf("crypto.Encrypt: verify key file %q exists: %w", c.keyPath, err)
 		}
 	}
 
