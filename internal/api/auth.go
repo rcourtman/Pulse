@@ -40,10 +40,8 @@ func InitSessionStore(dataPath string) {
 
 // GetSessionStore returns the global session store instance
 func GetSessionStore() *SessionStore {
-	if sessionStore == nil {
-		// Initialize with default path if not already initialized
-		InitSessionStore("/etc/pulse")
-	}
+	// Always route through sync.Once to avoid unsynchronized reads on sessionStore.
+	InitSessionStore("/etc/pulse")
 	return sessionStore
 }
 

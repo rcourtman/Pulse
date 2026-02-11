@@ -74,6 +74,7 @@ type SetupCode struct {
 
 // ConfigHandlers handles configuration-related API endpoints
 type ConfigHandlers struct {
+	stateMu       sync.RWMutex
 	mtPersistence *config.MultiTenantPersistence
 	mtMonitor     *monitoring.MultiTenantMonitor
 	// Legacy fields - to be removed or used as fallback
@@ -140,17 +141,30 @@ func NewConfigHandlers(mtp *config.MultiTenantPersistence, mtm *monitoring.Multi
 
 // SetMultiTenantMonitor updates the monitor reference used by the config handlers.
 func (h *ConfigHandlers) SetMultiTenantMonitor(mtm *monitoring.MultiTenantMonitor) {
-	h.mtMonitor = mtm
+	var legacyMonitor *monitoring.Monitor
+	var legacyConfig *config.Config
 	if mtm != nil {
 		if m, err := mtm.GetMonitor("default"); err == nil {
-			h.legacyMonitor = m
-			h.legacyConfig = m.GetConfig()
+			legacyMonitor = m
+			if m != nil {
+				legacyConfig = m.GetConfig()
+			}
 		}
+	}
+
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
+	h.mtMonitor = mtm
+	if legacyMonitor != nil {
+		h.legacyMonitor = legacyMonitor
+		h.legacyConfig = legacyConfig
 	}
 }
 
 // SetMonitor updates the monitor reference used by the config handlers (legacy support).
 func (h *ConfigHandlers) SetMonitor(m *monitoring.Monitor) {
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
 	h.legacyMonitor = m
 	if m != nil {
 		h.legacyConfig = m.GetConfig()
@@ -162,11 +176,22 @@ func (h *ConfigHandlers) SetConfig(cfg *config.Config) {
 	if cfg == nil {
 		return
 	}
+
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
 	h.legacyConfig = cfg
 }
 
 // getContextState helper to retrieve tenant-specific state
 func (h *ConfigHandlers) getContextState(ctx context.Context) (*config.Config, *config.ConfigPersistence, *monitoring.Monitor) {
+	h.stateMu.RLock()
+	mtMonitor := h.mtMonitor
+	mtPersistence := h.mtPersistence
+	legacyConfig := h.legacyConfig
+	legacyPersistence := h.legacyPersistence
+	legacyMonitor := h.legacyMonitor
+	h.stateMu.RUnlock()
+
 	orgID := "default"
 	if ctx != nil {
 		if id := GetOrgID(ctx); id != "" {
@@ -175,12 +200,12 @@ func (h *ConfigHandlers) getContextState(ctx context.Context) (*config.Config, *
 	}
 
 	// Try to get from multi-tenant managers first
-	if h.mtMonitor != nil {
-		if m, err := h.mtMonitor.GetMonitor(orgID); err == nil && m != nil {
+	if mtMonitor != nil {
+		if m, err := mtMonitor.GetMonitor(orgID); err == nil && m != nil {
 			cfg := m.GetConfig()
 			var p *config.ConfigPersistence
-			if h.mtPersistence != nil {
-				p, _ = h.mtPersistence.GetPersistence(orgID)
+			if mtPersistence != nil {
+				p, _ = mtPersistence.GetPersistence(orgID)
 			}
 			return cfg, p, m
 		} else if err != nil {
@@ -189,7 +214,7 @@ func (h *ConfigHandlers) getContextState(ctx context.Context) (*config.Config, *
 	}
 
 	// Fallback to legacy (should mostly happen for "default" or initialization)
-	return h.legacyConfig, h.legacyPersistence, h.legacyMonitor
+	return legacyConfig, legacyPersistence, legacyMonitor
 }
 
 func (h *ConfigHandlers) getConfig(ctx context.Context) *config.Config {

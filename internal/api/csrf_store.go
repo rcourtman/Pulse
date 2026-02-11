@@ -78,9 +78,8 @@ func InitCSRFStore(dataPath string) {
 
 // GetCSRFStore returns the global CSRF token store
 func GetCSRFStore() *CSRFTokenStore {
-	if csrfStore == nil {
-		InitCSRFStore("/etc/pulse")
-	}
+	// Always route through sync.Once to avoid unsynchronized reads on csrfStore.
+	InitCSRFStore("/etc/pulse")
 	return csrfStore
 }
 

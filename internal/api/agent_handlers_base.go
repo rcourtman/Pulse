@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"sync"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
@@ -10,6 +11,7 @@ import (
 // baseAgentHandlers provides the shared monitor-management and broadcast logic
 // for Docker, Kubernetes, and Host agent handler types.
 type baseAgentHandlers struct {
+	stateMu       sync.RWMutex
 	mtMonitor     *monitoring.MultiTenantMonitor
 	legacyMonitor *monitoring.Monitor
 	wsHub         *websocket.Hub
@@ -28,30 +30,44 @@ func newBaseAgentHandlers(mtm *monitoring.MultiTenantMonitor, m *monitoring.Moni
 
 // SetMonitor updates the single-tenant monitor reference.
 func (b *baseAgentHandlers) SetMonitor(m *monitoring.Monitor) {
+	b.stateMu.Lock()
+	defer b.stateMu.Unlock()
 	b.legacyMonitor = m
 }
 
 // SetMultiTenantMonitor updates the multi-tenant monitor manager and
 // refreshes the legacy monitor from the "default" organization.
 func (b *baseAgentHandlers) SetMultiTenantMonitor(mtm *monitoring.MultiTenantMonitor) {
-	b.mtMonitor = mtm
+	var legacy *monitoring.Monitor
 	if mtm != nil {
 		if m, err := mtm.GetMonitor("default"); err == nil {
-			b.legacyMonitor = m
+			legacy = m
 		}
+	}
+
+	b.stateMu.Lock()
+	defer b.stateMu.Unlock()
+	b.mtMonitor = mtm
+	if legacy != nil {
+		b.legacyMonitor = legacy
 	}
 }
 
 // getMonitor returns the monitor for the organization in the request context,
 // falling back to the legacy single-tenant monitor.
 func (b *baseAgentHandlers) getMonitor(ctx context.Context) *monitoring.Monitor {
+	b.stateMu.RLock()
+	mtMonitor := b.mtMonitor
+	legacyMonitor := b.legacyMonitor
+	b.stateMu.RUnlock()
+
 	orgID := GetOrgID(ctx)
-	if b.mtMonitor != nil {
-		if m, err := b.mtMonitor.GetMonitor(orgID); err == nil && m != nil {
+	if mtMonitor != nil {
+		if m, err := mtMonitor.GetMonitor(orgID); err == nil && m != nil {
 			return m
 		}
 	}
-	return b.legacyMonitor
+	return legacyMonitor
 }
 
 // broadcastState pushes monitor state to tenant-scoped WebSocket clients when
@@ -61,7 +77,12 @@ func (b *baseAgentHandlers) broadcastState(ctx context.Context) {
 		return
 	}
 
-	state := b.getMonitor(ctx).GetState().ToFrontend()
+	monitor := b.getMonitor(ctx)
+	if monitor == nil {
+		return
+	}
+
+	state := monitor.GetState().ToFrontend()
 	orgID := GetOrgID(ctx)
 	if orgID != "" {
 		go b.wsHub.BroadcastStateToTenant(orgID, state)
