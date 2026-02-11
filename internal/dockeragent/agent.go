@@ -581,7 +581,12 @@ func (a *Agent) Run(ctx context.Context) error {
 		if errors.Is(err, ErrStopRequested) {
 			return nil
 		}
-		a.logger.Error().Err(err).Msg("Failed to send initial report")
+		a.logger.Error().
+			Err(err).
+			Str("phase", "startup").
+			Int("targets", len(a.targets)).
+			Int("buffered_reports", a.bufferedReports()).
+			Msg("Failed to send docker report")
 	}
 
 	for {
@@ -594,7 +599,12 @@ func (a *Agent) Run(ctx context.Context) error {
 				if errors.Is(err, ErrStopRequested) {
 					return nil
 				}
-				a.logger.Error().Err(err).Msg("Failed to send docker report")
+				a.logger.Error().
+					Err(err).
+					Str("phase", "periodic").
+					Int("targets", len(a.targets)).
+					Int("buffered_reports", a.bufferedReports()).
+					Msg("Failed to send docker report")
 			}
 		case <-updateTimer.C:
 			go a.checkForUpdates(ctx)
@@ -628,7 +638,11 @@ func (a *Agent) collectOnce(ctx context.Context) error {
 		if errors.Is(err, ErrStopRequested) {
 			return nil
 		}
-		a.logger.Warn().Err(err).Msg("Failed to send docker report, buffering")
+		a.logger.Warn().
+			Err(err).
+			Int("buffered_reports", a.bufferedReports()).
+			Int("targets", len(a.targets)).
+			Msg("Failed to send docker report, buffering")
 		a.reportBuffer.Push(report)
 		return nil
 	}
@@ -650,7 +664,10 @@ func (a *Agent) flushBuffer(ctx context.Context) {
 			if errors.Is(err, ErrStopRequested) {
 				return
 			}
-			a.logger.Warn().Err(err).Msg("Failed to flush buffered docker report, stopping flush")
+			a.logger.Warn().
+				Err(err).
+				Int("remaining_reports", a.bufferedReports()).
+				Msg("Failed to flush buffered docker report, stopping flush")
 			return
 		}
 		a.reportBuffer.Pop()
@@ -660,6 +677,13 @@ func (a *Agent) flushBuffer(ctx context.Context) {
 			return
 		}
 	}
+}
+
+func (a *Agent) bufferedReports() int {
+	if a.reportBuffer == nil {
+		return 0
+	}
+	return a.reportBuffer.Len()
 }
 
 func (a *Agent) sendReport(ctx context.Context, report agentsdocker.Report) error {
@@ -787,13 +811,20 @@ func (a *Agent) handleCommand(ctx context.Context, target TargetConfig, command 
 	case agentsdocker.CommandTypeCheckUpdates:
 		return a.handleCheckUpdatesCommand(ctx, target, command)
 	default:
-		a.logger.Warn().Str("command", command.Type).Msg("Received unsupported control command")
+		a.logger.Warn().
+			Str("target", target.URL).
+			Str("command", command.Type).
+			Str("commandID", command.ID).
+			Msg("Received unsupported control command")
 		return nil
 	}
 }
 
 func (a *Agent) handleCheckUpdatesCommand(ctx context.Context, target TargetConfig, command agentsdocker.Command) error {
-	a.logger.Info().Str("commandID", command.ID).Msg("Received check updates command from Pulse")
+	a.logger.Info().
+		Str("commandID", command.ID).
+		Str("target", target.URL).
+		Msg("Received check updates command from Pulse")
 
 	if a.registryChecker != nil {
 		a.registryChecker.ForceCheck()
@@ -815,12 +846,23 @@ func (a *Agent) handleCheckUpdatesCommand(ctx context.Context, target TargetConf
 }
 
 func (a *Agent) handleStopCommand(ctx context.Context, target TargetConfig, command agentsdocker.Command) error {
-	a.logger.Info().Str("commandID", command.ID).Msg("Received stop command from Pulse")
+	a.logger.Info().
+		Str("commandID", command.ID).
+		Str("target", target.URL).
+		Msg("Received stop command from Pulse")
 
 	if err := a.disableSelf(ctx); err != nil {
-		a.logger.Error().Err(err).Msg("Failed to disable pulse-docker-agent service")
+		a.logger.Error().
+			Err(err).
+			Str("target", target.URL).
+			Str("commandID", command.ID).
+			Msg("Failed to disable pulse-docker-agent service")
 		if ackErr := a.sendCommandAck(ctx, target, command.ID, agentsdocker.CommandStatusFailed, err.Error()); ackErr != nil {
-			a.logger.Error().Err(ackErr).Msg("Failed to send failure acknowledgement to Pulse")
+			a.logger.Error().
+				Err(ackErr).
+				Str("target", target.URL).
+				Str("commandID", command.ID).
+				Msg("Failed to send failure acknowledgement to Pulse")
 		}
 		return nil
 	}
@@ -853,7 +895,7 @@ func (a *Agent) disableSelf(ctx context.Context) error {
 
 	// Remove Unraid startup script if present to prevent restart on reboot.
 	if err := removeFileIfExists(unraidStartupScriptPath); err != nil {
-		a.logger.Warn().Err(err).Msg("Failed to remove Unraid startup script")
+		a.logger.Warn().Err(err).Str("path", unraidStartupScriptPath).Msg("Failed to remove Unraid startup script")
 	}
 
 	// Best-effort log cleanup (ignore errors).

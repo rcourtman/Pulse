@@ -48,7 +48,11 @@ func (a *Agent) checkForUpdates(ctx context.Context) {
 	url := fmt.Sprintf("%s/api/agent/version", target.URL)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		a.logger.Warn().Err(err).Msg("Failed to create version check request")
+		a.logger.Warn().
+			Err(err).
+			Str("target", target.URL).
+			Str("url", url).
+			Msg("Failed to create version check request")
 		return
 	}
 
@@ -60,13 +64,21 @@ func (a *Agent) checkForUpdates(ctx context.Context) {
 	client := a.httpClientFor(target)
 	resp, err := client.Do(req)
 	if err != nil {
-		a.logger.Warn().Err(err).Msg("Failed to check for updates")
+		a.logger.Warn().
+			Err(err).
+			Str("target", target.URL).
+			Str("url", url).
+			Msg("Failed to check for updates")
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		a.logger.Warn().Int("status", resp.StatusCode).Msg("Version endpoint returned non-200 status")
+		a.logger.Warn().
+			Int("status", resp.StatusCode).
+			Str("target", target.URL).
+			Str("url", url).
+			Msg("Version endpoint returned non-200 status")
 		return
 	}
 
@@ -75,7 +87,11 @@ func (a *Agent) checkForUpdates(ctx context.Context) {
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&versionResp); err != nil {
-		a.logger.Warn().Err(err).Msg("Failed to decode version response")
+		a.logger.Warn().
+			Err(err).
+			Str("target", target.URL).
+			Str("url", url).
+			Msg("Failed to decode version response")
 		return
 	}
 
@@ -96,11 +112,17 @@ func (a *Agent) checkForUpdates(ctx context.Context) {
 	a.logger.Info().
 		Str("currentVersion", Version).
 		Str("availableVersion", versionResp.Version).
+		Str("target", target.URL).
 		Msg("New agent version available, performing self-update")
 
 	// Perform self-update
 	if err := selfUpdateFunc(a, ctx); err != nil {
-		a.logger.Error().Err(err).Msg("Failed to self-update agent")
+		a.logger.Error().
+			Err(err).
+			Str("target", target.URL).
+			Str("currentVersion", Version).
+			Str("availableVersion", versionResp.Version).
+			Msg("Failed to self-update agent")
 		return
 	}
 
