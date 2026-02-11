@@ -1560,8 +1560,9 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 			polledNodes[result.node] = true // Mark this node as successfully polled
 			for _, storage := range result.storage {
 				if storage.Shared {
-					// For shared storage, aggregate by storage name so we can retain the reporting nodes
-					key := storage.Name
+					// For shared storage, aggregate by instance+name so we retain the
+					// reporting nodes but never merge across different Proxmox instances.
+					key := storage.Instance + "/" + storage.Name
 					nodeIdentifier := fmt.Sprintf("%s-%s", storage.Instance, storage.Node)
 
 					if entry, exists := sharedStorageMap[key]; exists {
