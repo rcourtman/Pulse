@@ -134,6 +134,30 @@ func TestTrustedConfigPublicKeysErrors(t *testing.T) {
 	}
 }
 
+func TestTrustedConfigPublicKeysUsesInjectedDefaultWhenEnvUnset(t *testing.T) {
+	pub, _, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+	raw, err := x509.MarshalPKIXPublicKey(pub)
+	if err != nil {
+		t.Fatalf("MarshalPKIXPublicKey: %v", err)
+	}
+	injected := string(pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: raw}))
+
+	original := trustedConfigPublicKeysPEM
+	trustedConfigPublicKeysPEM = injected
+	t.Cleanup(func() {
+		trustedConfigPublicKeysPEM = original
+	})
+
+	t.Setenv("PULSE_AGENT_CONFIG_PUBLIC_KEYS", "")
+	keys, err := trustedConfigPublicKeys()
+	if err != nil || len(keys) != 1 {
+		t.Fatalf("expected injected default key, got %d err=%v", len(keys), err)
+	}
+}
+
 func TestVerifyConfigPayloadSignatureFailure(t *testing.T) {
 	pub, _, err := ed25519.GenerateKey(nil)
 	if err != nil {
