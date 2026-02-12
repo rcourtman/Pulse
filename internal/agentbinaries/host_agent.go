@@ -114,6 +114,15 @@ func closeCloserWithContext(target *error, closer io.Closer, context string) {
 	}
 }
 
+func removeFileWithContext(target *error, filePath string, context string) {
+	if strings.TrimSpace(filePath) == "" {
+		return
+	}
+	if err := removeFn(filePath); err != nil && !os.IsNotExist(err) {
+		appendError(target, fmt.Errorf("%s: %w", context, err))
+	}
+}
+
 // HostAgentSearchPaths returns the directories to search for host agent binaries.
 func HostAgentSearchPaths() []string {
 	primary := strings.TrimSpace(os.Getenv("PULSE_BIN_DIR"))
@@ -205,7 +214,7 @@ func DownloadAndInstallHostAgentBinaries(version string, targetDir string) (retE
 	if err != nil {
 		return fmt.Errorf("failed to create temporary archive file: %w", err)
 	}
-	defer removeFn(tempFile.Name())
+	defer removeFileWithContext(&retErr, tempFile.Name(), "failed to remove temporary archive file")
 
 	resp, err := httpClient.Get(url)
 	if err != nil {
@@ -441,7 +450,7 @@ func extractHostAgentBinaries(archivePath, targetDir string) (retErr error) {
 	return nil
 }
 
-func writeHostAgentFile(destination string, reader io.Reader, mode os.FileMode) error {
+func writeHostAgentFile(destination string, reader io.Reader, mode os.FileMode) (retErr error) {
 	if err := mkdirAllFn(filepath.Dir(destination), 0o755); err != nil {
 		return fmt.Errorf("failed to create directory for %s: %w", destination, err)
 	}
@@ -450,7 +459,7 @@ func writeHostAgentFile(destination string, reader io.Reader, mode os.FileMode) 
 	if err != nil {
 		return fmt.Errorf("failed to create temporary file for %s: %w", destination, err)
 	}
-	defer removeFn(tmpFile.Name())
+	defer removeFileWithContext(&retErr, tmpFile.Name(), fmt.Sprintf("failed to remove temporary file for %s", destination))
 
 	if _, err := copyFn(tmpFile, reader); err != nil {
 		if closeErr := closeFileFn(tmpFile); closeErr != nil {
