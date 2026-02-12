@@ -348,10 +348,10 @@ func TestProvisionTenantContextCanceledAfterTenantInitCleansUp(t *testing.T) {
 func TestProvisionTenantAuthManagerFailuresCleanup(t *testing.T) {
 	authManagerErr := errors.New("manager unavailable")
 	testCases := []struct {
-		name        string
+		name         string
 		authProvider *mockAuthProvider
-		expectError error
-		expectMsg   string
+		expectError  error
+		expectMsg    string
 	}{
 		{
 			name:         "provider error",
