@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -778,7 +777,10 @@ func (a *Agent) sendReportToTarget(ctx context.Context, target TargetConfig, pay
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 300 {
-		bodyBytes, _ := io.ReadAll(resp.Body)
+		bodyBytes, readErr := readBodyWithLimit(resp.Body, maxPulseResponseBodyBytes)
+		if readErr != nil {
+			return fmt.Errorf("target %s: read error response: %w", target.URL, readErr)
+		}
 		if hostRemoved := detectHostRemovedError(bodyBytes); hostRemoved != "" {
 			a.logger.Warn().
 				Str("hostID", a.hostID).
@@ -802,7 +804,7 @@ func (a *Agent) sendReportToTarget(ctx context.Context, target TargetConfig, pay
 		return fmt.Errorf("target %s: pulse responded %s: %s", target.URL, resp.Status, errMsg)
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := readBodyWithLimit(resp.Body, maxPulseResponseBodyBytes)
 	if err != nil {
 		return fmt.Errorf("target %s: read response: %w", target.URL, err)
 	}
@@ -999,7 +1001,10 @@ func (a *Agent) sendCommandAck(ctx context.Context, target TargetConfig, command
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 300 {
-		bodyBytes, _ := io.ReadAll(resp.Body)
+		bodyBytes, err := readBodyWithLimit(resp.Body, maxPulseResponseBodyBytes)
+		if err != nil {
+			return fmt.Errorf("read acknowledgement error response: %w", err)
+		}
 		return fmt.Errorf("pulse responded %s: %s", resp.Status, strings.TrimSpace(string(bodyBytes)))
 	}
 

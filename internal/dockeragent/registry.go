@@ -5,7 +5,6 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"regexp"
 	"strings"
@@ -355,7 +354,7 @@ func (r *RegistryChecker) resolveManifestList(ctx context.Context, registry, rep
 		return "", fmt.Errorf("fetch manifest list failed: %d", resp.StatusCode)
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := readBodyWithLimit(resp.Body, maxRegistryManifestBodyBytes)
 	if err != nil {
 		return "", fmt.Errorf("read list body: %w", err)
 	}
@@ -440,7 +439,7 @@ func (r *RegistryChecker) fetchAuthToken(ctx context.Context, tokenURL string) (
 		return "", fmt.Errorf("token request failed: %d", resp.StatusCode)
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := readBodyWithLimit(resp.Body, maxRegistryTokenBodyBytes)
 	if err != nil {
 		return "", err
 	}

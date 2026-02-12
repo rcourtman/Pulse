@@ -215,6 +215,33 @@ func TestCheckForUpdates(t *testing.T) {
 		agent.checkForUpdates(context.Background())
 	})
 
+	t.Run("version response too large", func(t *testing.T) {
+		swap(t, &Version, "1.0.0")
+		called := false
+		swap(t, &selfUpdateFunc, func(*Agent, context.Context) error {
+			called = true
+			return nil
+		})
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(strings.Repeat("x", maxVersionResponseBodyBytes+1)))
+		}))
+		defer server.Close()
+
+		agent := &Agent{
+			logger:  zerolog.Nop(),
+			targets: []TargetConfig{{URL: server.URL, Token: "token"}},
+			httpClients: map[bool]*http.Client{
+				false: server.Client(),
+			},
+		}
+		agent.checkForUpdates(context.Background())
+		if called {
+			t.Fatal("did not expect selfUpdate to be called")
+		}
+	})
+
 	t.Run("server dev version", func(t *testing.T) {
 		swap(t, &Version, "1.0.0")
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

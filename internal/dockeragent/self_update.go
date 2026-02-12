@@ -74,7 +74,13 @@ func (a *Agent) checkForUpdates(ctx context.Context) {
 		Version string `json:"version"`
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&versionResp); err != nil {
+	body, err := readBodyWithLimit(resp.Body, maxVersionResponseBodyBytes)
+	if err != nil {
+		a.logger.Warn().Err(err).Msg("Version response too large")
+		return
+	}
+
+	if err := json.Unmarshal(body, &versionResp); err != nil {
 		a.logger.Warn().Err(err).Msg("Failed to decode version response")
 		return
 	}
