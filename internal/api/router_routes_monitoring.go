@@ -156,8 +156,8 @@ func (r *Router) registerMonitoringResourceRoutes(
 		infraUpdateHandlers.HandleGetInfraUpdateForResource(w, req, resourceID)
 	})))
 	r.mux.HandleFunc("/api/discover", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.configHandlers.HandleDiscoverServers)))
-	// Alert routes - require monitoring:read scope to view alerts
-	r.mux.HandleFunc("/api/alerts/", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.alertHandlers.HandleAlerts)))
+	// Alert routes enforce read/write scopes inside HandleAlerts per endpoint method.
+	r.mux.HandleFunc("/api/alerts/", RequireAuth(r.config, r.alertHandlers.HandleAlerts))
 
 	// Notification routes
 	r.mux.HandleFunc("/api/notifications/", RequireAdmin(r.config, r.notificationHandlers.HandleNotifications))
