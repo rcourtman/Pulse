@@ -376,6 +376,7 @@ type Hub struct {
 	// Per-tenant coalescing
 	tenantCoalescePending map[string]*Message
 	tenantCoalesceTimers  map[string]*time.Timer
+	stopOnce              sync.Once
 }
 
 // Message represents a WebSocket message
@@ -623,7 +624,31 @@ func (h *Hub) Run() {
 
 // Stop gracefully shuts down the hub
 func (h *Hub) Stop() {
-	close(h.stopChan)
+	h.stopOnce.Do(func() {
+		close(h.stopChan)
+	})
+}
+
+func (h *Hub) isStopping() bool {
+	select {
+	case <-h.stopChan:
+		return true
+	default:
+		return false
+	}
+}
+
+func (h *Hub) tryRegisterClient(client *Client) bool {
+	if h.isStopping() {
+		return false
+	}
+
+	select {
+	case h.register <- client:
+		return true
+	case <-h.stopChan:
+		return false
+	}
 }
 
 // HandleWebSocket handles WebSocket upgrade requests
@@ -721,7 +746,11 @@ func (h *Hub) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	log.Info().Str("client", clientID).Str("org_id", orgID).Msg("WebSocket client created")
 
-	client.hub.register <- client
+	if !client.hub.tryRegisterClient(client) {
+		log.Info().Str("client", clientID).Str("org_id", orgID).Msg("WebSocket hub stopping; rejecting new client")
+		conn.Close()
+		return
+	}
 
 	// Start goroutines for reading and writing
 	go client.writePump()
@@ -872,6 +901,11 @@ func (h *Hub) runBroadcastSequencer() {
 
 // BroadcastState broadcasts state update to all clients via sequencer
 func (h *Hub) BroadcastState(state interface{}) {
+	if h.isStopping() {
+		log.Debug().Msg("Skipping state broadcast while hub is stopping")
+		return
+	}
+
 	// Debug log to track docker hosts
 	dockerHostsCount := -1
 	// Use reflection to get dockerHosts field from any struct type
@@ -900,6 +934,11 @@ func (h *Hub) BroadcastState(state interface{}) {
 
 // BroadcastStateToTenant broadcasts state update only to clients of a specific tenant.
 func (h *Hub) BroadcastStateToTenant(orgID string, state interface{}) {
+	if h.isStopping() {
+		log.Debug().Str("org_id", orgID).Msg("Skipping tenant state broadcast while hub is stopping")
+		return
+	}
+
 	log.Debug().Str("org_id", orgID).Msg("Broadcasting state to tenant")
 	stateData := h.prepareStateForBroadcast(state)
 
@@ -1014,6 +1053,10 @@ func (h *Hub) BroadcastAlertToTenant(orgID string, alert interface{}) {
 		Type: "alert",
 		Data: cloneAlertData(alert),
 	}
+	if h.isStopping() {
+		log.Debug().Str("org_id", orgID).Msg("Skipping tenant alert broadcast while hub is stopping")
+		return
+	}
 
 	select {
 	case h.tenantBroadcast <- TenantBroadcast{OrgID: orgID, Message: msg}:
@@ -1034,6 +1077,10 @@ func (h *Hub) BroadcastAlertResolvedToTenant(orgID string, alertID string) {
 	msg := Message{
 		Type: "alertResolved",
 		Data: map[string]string{"alertId": alertID},
+	}
+	if h.isStopping() {
+		log.Debug().Str("org_id", orgID).Msg("Skipping tenant alert resolved broadcast while hub is stopping")
+		return
 	}
 
 	select {
@@ -1061,6 +1108,11 @@ func (h *Hub) Broadcast(data interface{}) {
 
 // BroadcastMessage sends a message to all clients
 func (h *Hub) BroadcastMessage(msg Message) {
+	if h.isStopping() {
+		log.Debug().Str("type", msg.Type).Msg("Skipping websocket broadcast while hub is stopping")
+		return
+	}
+
 	// Sanitize the message data to handle NaN values
 	msg.Data = sanitizeData(msg.Data)
 
@@ -1095,7 +1147,10 @@ func (h *Hub) sendPing() {
 func (c *Client) readPump() {
 	defer func() {
 		log.Info().Str("client", c.id).Msg("ReadPump exiting")
-		c.hub.unregister <- c
+		select {
+		case c.hub.unregister <- c:
+		case <-c.hub.stopChan:
+		}
 		c.conn.Close()
 	}()
 
