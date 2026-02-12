@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os/exec"
 	"strings"
 	"testing"
@@ -97,6 +98,25 @@ func TestDefaultRunCommandOutput(t *testing.T) {
 	}
 }
 
+func TestDefaultRunCommandOutputRejectsOversizedOutput(t *testing.T) {
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skip("sh not available")
+	}
+
+	origRun := runCommandOutput
+	t.Cleanup(func() { runCommandOutput = origRun })
+	runCommandOutput = origRun
+
+	cmd := fmt.Sprintf("head -c %d /dev/zero", maxCommandOutputBytes+1)
+	_, err := runCommandOutput(context.Background(), "sh", "-c", cmd)
+	if err == nil {
+		t.Fatal("expected oversized output error")
+	}
+	if !errors.Is(err, errCommandOutputTooLarge) {
+		t.Fatalf("expected oversized output error, got %v", err)
+	}
+}
+
 func TestCollectLocalNoDevices(t *testing.T) {
 	origRun := runCommandOutput
 	t.Cleanup(func() { runCommandOutput = origRun })
@@ -185,6 +205,24 @@ func TestCollectDeviceSMARTLookPathError(t *testing.T) {
 
 	if _, err := collectDeviceSMART(context.Background(), "/dev/sda"); err == nil {
 		t.Fatalf("expected lookpath error")
+	}
+}
+
+func TestCollectDeviceSMARTOversizedOutput(t *testing.T) {
+	origRun := runCommandOutput
+	origLook := execLookPath
+	t.Cleanup(func() {
+		runCommandOutput = origRun
+		execLookPath = origLook
+	})
+
+	execLookPath = func(string) (string, error) { return "smartctl", nil }
+	runCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		return nil, fmt.Errorf("%w (%d bytes)", errCommandOutputTooLarge, maxCommandOutputBytes)
+	}
+
+	if _, err := collectDeviceSMART(context.Background(), "/dev/sda"); !errors.Is(err, errCommandOutputTooLarge) {
+		t.Fatalf("expected oversized output error, got %v", err)
 	}
 }
 

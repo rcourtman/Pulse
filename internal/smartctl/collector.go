@@ -4,6 +4,9 @@ package smartctl
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -14,10 +17,13 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+const maxCommandOutputBytes = 4 << 20 // 4 MiB
+
 var (
-	execLookPath     = exec.LookPath
-	runCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
-		return exec.CommandContext(ctx, name, args...).Output()
+	errCommandOutputTooLarge = errors.New("command output exceeds size limit")
+	execLookPath             = exec.LookPath
+	runCommandOutput         = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		return runCommandOutputLimited(ctx, maxCommandOutputBytes, name, args...)
 	}
 	timeNow     = time.Now
 	runtimeGOOS = runtime.GOOS
@@ -410,4 +416,65 @@ func formatWWN(naa, oui, id uint64) string {
 	return strconv.FormatUint(naa, 16) + "-" +
 		strconv.FormatUint(oui, 16) + "-" +
 		strconv.FormatUint(id, 16)
+}
+
+func runCommandOutputLimited(ctx context.Context, maxBytes int, name string, args ...string) ([]byte, error) {
+	if maxBytes <= 0 {
+		return nil, fmt.Errorf("max bytes must be positive")
+	}
+
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.Stderr = io.Discard
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, err
+	}
+
+	if err := cmd.Start(); err != nil {
+		return nil, err
+	}
+
+	output := make([]byte, 0, 4096)
+	buf := make([]byte, 32*1024)
+	exceeded := false
+
+	for {
+		n, readErr := stdout.Read(buf)
+		if n > 0 {
+			remaining := maxBytes - len(output)
+			if remaining > 0 {
+				if n <= remaining {
+					output = append(output, buf[:n]...)
+				} else {
+					output = append(output, buf[:remaining]...)
+					exceeded = true
+				}
+			} else {
+				exceeded = true
+			}
+
+			if exceeded && cmd.Process != nil {
+				_ = cmd.Process.Kill()
+			}
+		}
+
+		if readErr == io.EOF {
+			break
+		}
+		if readErr != nil {
+			_ = cmd.Wait()
+			return output, readErr
+		}
+	}
+
+	waitErr := cmd.Wait()
+	if exceeded {
+		return nil, fmt.Errorf("%w (%d bytes)", errCommandOutputTooLarge, maxBytes)
+	}
+	if waitErr != nil {
+		return output, waitErr
+	}
+
+	return output, nil
 }
