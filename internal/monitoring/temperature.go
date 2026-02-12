@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -20,6 +21,10 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+const maxTemperatureCommandOutputSize = 1 << 20 // 1 MiB
+
+var errTemperatureCommandOutputTooLarge = errors.New("temperature command output exceeded limit")
+
 // CommandRunner abstracts command execution for testing
 type CommandRunner interface {
 	Run(ctx context.Context, name string, args ...string) ([]byte, error)
@@ -27,9 +32,50 @@ type CommandRunner interface {
 
 type defaultCommandRunner struct{}
 
+type limitedTemperatureBuffer struct {
+	buf      bytes.Buffer
+	maxBytes int
+	exceeded bool
+}
+
+func (b *limitedTemperatureBuffer) Write(p []byte) (int, error) {
+	remaining := b.maxBytes - b.buf.Len()
+	if remaining <= 0 {
+		b.exceeded = true
+		return 0, errTemperatureCommandOutputTooLarge
+	}
+	if len(p) > remaining {
+		b.exceeded = true
+		written, _ := b.buf.Write(p[:remaining])
+		return written, errTemperatureCommandOutputTooLarge
+	}
+	return b.buf.Write(p)
+}
+
+func (b *limitedTemperatureBuffer) Bytes() []byte {
+	return b.buf.Bytes()
+}
+
 func (r *defaultCommandRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
-	return cmd.Output()
+	stdout := limitedTemperatureBuffer{maxBytes: maxTemperatureCommandOutputSize}
+	stderr := limitedTemperatureBuffer{maxBytes: maxTemperatureCommandOutputSize}
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+	if stdout.exceeded || stderr.exceeded {
+		return nil, errTemperatureCommandOutputTooLarge
+	}
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			// Preserve bounded stderr details for upstream error wrapping.
+			exitErr.Stderr = append([]byte(nil), stderr.Bytes()...)
+		}
+		return stdout.Bytes(), err
+	}
+
+	return stdout.Bytes(), nil
 }
 
 // TemperatureCollector handles SSH-based temperature collection from Proxmox nodes
@@ -201,6 +247,9 @@ func (tc *TemperatureCollector) runSSHCommand(ctx context.Context, host, command
 
 	output, err := tc.runner.Run(ctx, "ssh", sshArgs...)
 	if err != nil {
+		if errors.Is(err, errTemperatureCommandOutputTooLarge) {
+			return "", fmt.Errorf("ssh command output exceeded %d bytes", maxTemperatureCommandOutputSize)
+		}
 		// On error, try to get stderr for debugging
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			return "", fmt.Errorf("ssh command failed: %w (stderr: %s)", err, string(exitErr.Stderr))

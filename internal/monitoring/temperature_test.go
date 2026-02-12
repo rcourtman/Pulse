@@ -3,9 +3,11 @@ package monitoring
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -162,4 +164,44 @@ func TestTemperatureCollector_HelperMethods(t *testing.T) {
 	// but since we are in `monitoring`, we can access if same package.
 	// But usually tests are `monitoring_test` package.
 	// I will assume same package for now based on file declaration.
+}
+
+func TestDefaultCommandRunner_RejectsOversizedStdout(t *testing.T) {
+	runner := &defaultCommandRunner{}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	cmd := fmt.Sprintf("head -c %d /dev/zero", maxTemperatureCommandOutputSize+1)
+	_, err := runner.Run(ctx, "sh", "-c", cmd)
+	require.Error(t, err)
+	require.ErrorIs(t, err, errTemperatureCommandOutputTooLarge)
+}
+
+func TestDefaultCommandRunner_RejectsOversizedStderr(t *testing.T) {
+	runner := &defaultCommandRunner{}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	cmd := fmt.Sprintf("head -c %d /dev/zero 1>&2; exit 1", maxTemperatureCommandOutputSize+1)
+	_, err := runner.Run(ctx, "sh", "-c", cmd)
+	require.Error(t, err)
+	require.ErrorIs(t, err, errTemperatureCommandOutputTooLarge)
+}
+
+func TestTemperatureCollector_RunSSHCommand_OversizedOutput(t *testing.T) {
+	tmpKey := t.TempDir() + "/id_rsa"
+	require.NoError(t, os.WriteFile(tmpKey, []byte("dummy key"), 0600))
+
+	tc := NewTemperatureCollectorWithPort("root", tmpKey, 22)
+	tc.hostKeys = nil
+	tc.runner = &mockCommandRunner{
+		outputs: make(map[string]string),
+		errs: map[string]error{
+			"sensors -j": errTemperatureCommandOutputTooLarge,
+		},
+	}
+
+	_, err := tc.runSSHCommand(context.Background(), "node1", "sensors -j 2>/dev/null || true")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "ssh command output exceeded")
 }
