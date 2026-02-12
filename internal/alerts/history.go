@@ -63,12 +63,12 @@ func NewHistoryManager(dataDir string) *HistoryManager {
 
 	// Ensure data directory exists
 	if err := os.MkdirAll(dataDir, 0755); err != nil {
-		log.Error().Err(err).Str("dir", dataDir).Msg("Failed to create data directory")
+		log.Error().Err(err).Str("dir", dataDir).Msg("failed to create data directory")
 	}
 
 	// Load existing history
 	if err := hm.loadHistory(); err != nil {
-		log.Error().Err(err).Msg("Failed to load alert history")
+		log.Error().Err(err).Msg("failed to load alert history")
 	}
 
 	// Start periodic save routine
@@ -100,7 +100,7 @@ func (hm *HistoryManager) AddAlert(alert Alert) {
 	callbacks := hm.callbacks
 	hm.mu.Unlock()
 
-	log.Debug().Str("alertID", alert.ID).Msg("Added alert to history")
+	log.Debug().Str("alertID", alert.ID).Msg("added alert to history")
 
 	// Call callbacks outside the lock
 	for _, cb := range callbacks {
@@ -170,7 +170,7 @@ func (hm *HistoryManager) loadHistory() error {
 	data, err := os.ReadFile(hm.historyFile)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			log.Warn().Err(err).Str("file", hm.historyFile).Msg("Failed to read history file")
+			log.Warn().Err(err).Str("file", hm.historyFile).Msg("failed to read history file")
 		}
 
 		// Try backup file
@@ -178,17 +178,17 @@ func (hm *HistoryManager) loadHistory() error {
 		if err != nil {
 			if os.IsNotExist(err) {
 				// Both files don't exist - this is normal on first startup
-				log.Debug().Msg("No alert history files found, starting fresh")
+				log.Debug().Msg("no alert history files found, starting fresh")
 				return nil
 			}
 			// Check if it's a permission error
 			if os.IsPermission(err) {
-				log.Warn().Err(err).Str("file", hm.backupFile).Msg("Permission denied reading backup history file - check file ownership")
+				log.Warn().Err(err).Str("file", hm.backupFile).Msg("permission denied reading backup history file - check file ownership")
 				return nil // Continue without history rather than failing
 			}
 			return fmt.Errorf("failed to load backup history: %w", err)
 		}
-		log.Info().Msg("Loaded alert history from backup file")
+		log.Info().Msg("loaded alert history from backup file")
 	}
 
 	var history []HistoryEntry
@@ -197,7 +197,7 @@ func (hm *HistoryManager) loadHistory() error {
 	}
 
 	hm.history = history
-	log.Info().Int("count", len(history)).Msg("Loaded alert history")
+	log.Info().Int("count", len(history)).Msg("loaded alert history")
 
 	// Clean old entries immediately
 	hm.cleanOldEntries()
@@ -234,7 +234,7 @@ func (hm *HistoryManager) saveHistoryWithRetry(maxRetries int) error {
 	backupCreated := false
 	if _, err := os.Stat(historyFile); err == nil {
 		if err := os.Rename(historyFile, backupFile); err != nil {
-			log.Warn().Err(err).Msg("Failed to create backup file")
+			log.Warn().Err(err).Msg("failed to create backup file")
 		} else {
 			backupCreated = true
 		}
@@ -249,7 +249,7 @@ func (hm *HistoryManager) saveHistoryWithRetry(maxRetries int) error {
 				Err(err).
 				Int("attempt", attempt).
 				Int("maxRetries", maxRetries).
-				Msg("Failed to write history file, will retry")
+				Msg("failed to write history file, will retry")
 
 			// Exponential backoff: 100ms, 200ms, 400ms
 			if attempt < maxRetries {
@@ -262,19 +262,19 @@ func (hm *HistoryManager) saveHistoryWithRetry(maxRetries int) error {
 		// Success - remove backup file now that we've successfully written
 		if backupCreated {
 			if err := os.Remove(backupFile); err != nil && !os.IsNotExist(err) {
-				log.Warn().Err(err).Str("file", backupFile).Msg("Failed to remove backup file after successful save")
+				log.Warn().Err(err).Str("file", backupFile).Msg("failed to remove backup file after successful save")
 			}
 		}
-		log.Debug().Int("entries", len(snapshot)).Msg("Saved alert history")
+		log.Debug().Int("entries", len(snapshot)).Msg("saved alert history")
 		return nil
 	}
 
 	// All retries failed - restore backup if we have one
 	if backupCreated {
 		if restoreErr := os.Rename(backupFile, historyFile); restoreErr != nil {
-			log.Error().Err(restoreErr).Msg("Failed to restore backup after all write attempts failed")
+			log.Error().Err(restoreErr).Msg("failed to restore backup after all write attempts failed")
 		} else {
-			log.Info().Msg("Restored backup after history save failure")
+			log.Info().Msg("restored backup after history save failure")
 		}
 	}
 
@@ -290,7 +290,7 @@ func (hm *HistoryManager) startPeriodicSave() {
 			select {
 			case <-hm.saveTicker.C:
 				if err := hm.saveHistory(); err != nil {
-					log.Error().Err(err).Msg("Failed to save alert history")
+					log.Error().Err(err).Msg("failed to save alert history")
 				}
 			case <-hm.stopChan:
 				return
@@ -346,7 +346,7 @@ func (hm *HistoryManager) cleanOldEntries() {
 		log.Info().
 			Int("removed", removed).
 			Int("remaining", len(newHistory)).
-			Msg("Cleaned old alert history entries")
+			Msg("cleaned old alert history entries")
 	}
 }
 
@@ -368,7 +368,7 @@ func (hm *HistoryManager) RemoveAlert(alertID string) {
 
 	if removed {
 		hm.history = newHistory
-		log.Debug().Str("alertID", alertID).Msg("Removed alert from history")
+		log.Debug().Str("alertID", alertID).Msg("removed alert from history")
 	}
 }
 
@@ -392,7 +392,7 @@ func (hm *HistoryManager) ClearAllHistory() error {
 		return fmt.Errorf("clear alert history files: %w", errors.Join(removeErrs...))
 	}
 
-	log.Info().Msg("Cleared all alert history")
+	log.Info().Msg("cleared all alert history")
 	return nil
 }
 
@@ -405,7 +405,7 @@ func (hm *HistoryManager) Stop() {
 
 	// Save one final time
 	if err := hm.saveHistory(); err != nil {
-		log.Error().Err(err).Msg("Failed to save alert history on shutdown")
+		log.Error().Err(err).Msg("failed to save alert history on shutdown")
 	}
 }
 
