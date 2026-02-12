@@ -661,6 +661,7 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
                             <a
                                 href={getUpgradeActionUrlOrFallback('long_term_metrics')}
                                 target="_blank"
+                                rel="noopener noreferrer"
                                 onClick={() => trackUpgradeClicked('history_chart', 'long_term_metrics')}
                                 class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-md shadow-sm transition-colors"
                             >

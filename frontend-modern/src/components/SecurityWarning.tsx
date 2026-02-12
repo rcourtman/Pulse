@@ -217,6 +217,7 @@ export const SecurityWarning: Component = () => {
                   <a
                     href="https://github.com/rcourtman/Pulse/blob/main/docs/SECURITY.md"
                     target="_blank"
+                    rel="noopener noreferrer"
                     class="text-sm text-gray-600 dark:text-gray-400 hover:underline"
                   >
                     Learn More
