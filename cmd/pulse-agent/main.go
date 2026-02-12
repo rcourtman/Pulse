@@ -111,7 +111,10 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 	cfg.Logger = &logger
 
 	if cfg.InsecureSkipVerify {
-		logger.Warn().Msg("TLS verification disabled for agent connections (self-signed cert mode)")
+		logger.Warn().
+			Str("component", "startup").
+			Str("action", "tls_skip_verify_enabled").
+			Msg("TLS verification disabled for agent connections (self-signed cert mode)")
 	}
 
 	// 2a. Handle Self-Test
@@ -140,7 +143,11 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 				cfg.AgentID = lookupHostname
 			}
 		} else {
-			logger.Warn().Err(err).Msg("Failed to fetch host info for Agent ID generation")
+			logger.Warn().
+				Err(err).
+				Str("component", "startup").
+				Str("action", "agent_id_host_info_failed").
+				Msg("Failed to fetch host info for Agent ID generation")
 		}
 	}
 	if lookupHostname == "" {
@@ -172,12 +179,23 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 
 		if err != nil {
 			// Just log warning and proceed with local config
-			logger.Warn().Err(err).Msg("Failed to fetch remote config - using local (or previously cached) defaults")
+			logger.Warn().
+				Err(err).
+				Str("component", "remote_config").
+				Str("action", "fetch_failed").
+				Msg("Failed to fetch remote config - using local (or previously cached) defaults")
 		} else {
-			logger.Info().Msg("Successfully fetched remote configuration")
+			logger.Info().
+				Str("component", "remote_config").
+				Str("action", "fetch_succeeded").
+				Msg("Successfully fetched remote configuration")
 			if commandsEnabled != nil {
 				cfg.EnableCommands = *commandsEnabled
-				logger.Info().Bool("enabled", cfg.EnableCommands).Msg("Applied remote command execution setting")
+				logger.Info().
+					Str("component", "remote_config").
+					Str("action", "apply_enable_commands").
+					Bool("enabled", cfg.EnableCommands).
+					Msg("Applied remote command execution setting")
 			}
 			if len(settings) > 0 {
 				applyRemoteSettings(&cfg, settings, &logger)
@@ -312,7 +330,11 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 		dockerAgent, err = newDockerAgent(dockerCfg)
 		if err != nil {
 			// Docker isn't available yet - start retry loop in background
-			logger.Warn().Err(err).Msg("Docker not available, will retry with exponential backoff")
+			logger.Warn().
+				Err(err).
+				Str("component", "docker_agent").
+				Str("action", "initialization_failed_retry_scheduled").
+				Msg("Docker not available, will retry with exponential backoff")
 
 			g.Go(func() error {
 				agent := initDockerWithRetry(ctx, dockerCfg, &logger)
@@ -355,7 +377,11 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 
 		agent, err := newKubeAgent(kubeCfg)
 		if err != nil {
-			logger.Warn().Err(err).Msg("Kubernetes not available, will retry with exponential backoff")
+			logger.Warn().
+				Err(err).
+				Str("component", "kubernetes_agent").
+				Str("action", "initialization_failed_retry_scheduled").
+				Msg("Kubernetes not available, will retry with exponential backoff")
 
 			g.Go(func() error {
 				retried := initKubernetesWithRetry(ctx, kubeCfg, &logger)
@@ -397,7 +423,11 @@ func cleanupDockerAgent(agent RunnableCloser, logger *zerolog.Logger) {
 		return
 	}
 	if err := agent.Close(); err != nil {
-		logger.Warn().Err(err).Msg("Failed to close docker agent")
+		logger.Warn().
+			Err(err).
+			Str("component", "docker_agent").
+			Str("action", "shutdown_failed").
+			Msg("Failed to close docker agent")
 	}
 }
 
@@ -440,14 +470,28 @@ func startHealthServer(ctx context.Context, addr string, ready *atomic.Bool, log
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		if err := srv.Shutdown(shutdownCtx); err != nil && err != http.ErrServerClosed {
-			logger.Warn().Err(err).Msg("Failed to shut down health server")
+			logger.Warn().
+				Err(err).
+				Str("component", "health_server").
+				Str("action", "shutdown_failed").
+				Str("addr", addr).
+				Msg("Failed to shut down health server")
 		}
 	}()
 
 	go func() {
-		logger.Info().Str("addr", addr).Msg("Health/metrics server listening")
+		logger.Info().
+			Str("component", "health_server").
+			Str("action", "listening").
+			Str("addr", addr).
+			Msg("Health/metrics server listening")
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logger.Warn().Err(err).Msg("Health server stopped unexpectedly")
+			logger.Warn().
+				Err(err).
+				Str("component", "health_server").
+				Str("action", "stopped_unexpectedly").
+				Str("addr", addr).
+				Msg("Health server stopped unexpectedly")
 		}
 	}()
 }
@@ -838,6 +882,8 @@ func initDockerWithRetry(ctx context.Context, cfg dockeragent.Config, logger *ze
 		agent, err := newDockerAgent(cfg)
 		if err == nil {
 			logger.Info().
+				Str("component", "docker_agent").
+				Str("action", "retry_connect_succeeded").
 				Int("attempts", attempt+1).
 				Msg("Successfully connected to Docker after retry")
 			return agent
@@ -846,13 +892,18 @@ func initDockerWithRetry(ctx context.Context, cfg dockeragent.Config, logger *ze
 		attempt++
 		logger.Warn().
 			Err(err).
+			Str("component", "docker_agent").
+			Str("action", "retry_connect_failed").
 			Int("attempt", attempt).
 			Str("next_retry", delay.String()).
 			Msg("Docker not available, will retry")
 
 		select {
 		case <-ctx.Done():
-			logger.Info().Msg("Docker retry cancelled, context done")
+			logger.Info().
+				Str("component", "docker_agent").
+				Str("action", "retry_cancelled").
+				Msg("Docker retry cancelled, context done")
 			return nil
 		case <-time.After(delay):
 		}
@@ -878,6 +929,8 @@ func initKubernetesWithRetry(ctx context.Context, cfg kubernetesagent.Config, lo
 		agent, err := newKubeAgent(cfg)
 		if err == nil {
 			logger.Info().
+				Str("component", "kubernetes_agent").
+				Str("action", "retry_connect_succeeded").
 				Int("attempts", attempt+1).
 				Msg("Successfully connected to Kubernetes after retry")
 			return agent
@@ -886,13 +939,18 @@ func initKubernetesWithRetry(ctx context.Context, cfg kubernetesagent.Config, lo
 		attempt++
 		logger.Warn().
 			Err(err).
+			Str("component", "kubernetes_agent").
+			Str("action", "retry_connect_failed").
 			Int("attempt", attempt).
 			Str("next_retry", delay.String()).
 			Msg("Kubernetes still not available, will retry")
 
 		select {
 		case <-ctx.Done():
-			logger.Info().Msg("Kubernetes retry cancelled, context done")
+			logger.Info().
+				Str("component", "kubernetes_agent").
+				Str("action", "retry_cancelled").
+				Msg("Kubernetes retry cancelled, context done")
 			return nil
 		case <-time.After(delay):
 		}
