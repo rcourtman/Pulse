@@ -35,14 +35,14 @@ func InitPublicKey() {
 	if envKey := os.Getenv("PULSE_LICENSE_PUBLIC_KEY"); envKey != "" {
 		key, err := decodePublicKey(envKey)
 		if err != nil {
-			log.Error().Err(err).Msg("Failed to decode PULSE_LICENSE_PUBLIC_KEY, trying embedded key")
+			log.Error().Err(err).Msg("failed to decode PULSE_LICENSE_PUBLIC_KEY, trying embedded key")
 			// Fall through to try embedded key instead of returning
 		} else {
 			SetPublicKey(key)
 			log.Info().
 				Str("source", "environment").
 				Str("fingerprint", publicKeyFingerprint(key)).
-				Msg("License public key loaded")
+				Msg("license public key loaded")
 			return
 		}
 	}
@@ -51,22 +51,22 @@ func InitPublicKey() {
 	if EmbeddedPublicKey != "" {
 		key, err := decodePublicKey(EmbeddedPublicKey)
 		if err != nil {
-			log.Error().Err(err).Msg("Failed to decode embedded public key")
+			log.Error().Err(err).Msg("failed to decode embedded public key")
 		} else {
 			SetPublicKey(key)
 			log.Info().
 				Str("source", "embedded").
 				Str("fingerprint", publicKeyFingerprint(key)).
-				Msg("License public key loaded")
+				Msg("license public key loaded")
 			return
 		}
 	}
 
 	// No key available
 	if os.Getenv("PULSE_LICENSE_DEV_MODE") == "true" {
-		log.Warn().Msg("License validation running in DEV MODE - signatures not verified")
+		log.Warn().Msg("license validation running in DEV MODE - signatures not verified")
 	} else {
-		log.Warn().Msg("No license public key configured - license activation will fail")
+		log.Warn().Msg("no license public key configured - license activation will fail")
 	}
 }
 
