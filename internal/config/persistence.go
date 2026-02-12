@@ -399,40 +399,48 @@ func (c *ConfigPersistence) SaveAPITokens(tokens []APITokenRecord) error {
 	return c.writeConfigFileLocked(c.apiTokensFile, data, 0600)
 }
 
-// SaveAlertConfig saves alert configuration to file
-func (c *ConfigPersistence) SaveAlertConfig(config alerts.AlertConfig) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	// Ensure critical defaults are set before saving
-	// Storage: Allow Trigger=0 to disable storage alerting
-	if config.StorageDefault.Trigger < 0 {
-		config.StorageDefault.Trigger = 85
-		config.StorageDefault.Clear = 80
-	} else if config.StorageDefault.Trigger == 0 {
-		config.StorageDefault.Clear = 0
-	} else if config.StorageDefault.Clear <= 0 {
-		config.StorageDefault.Clear = config.StorageDefault.Trigger - 5
-		if config.StorageDefault.Clear < 0 {
-			config.StorageDefault.Clear = 0
+// normalizeHysteresisThreshold ensures a hysteresis threshold pointer has valid
+// trigger/clear values. If the pointer is nil or trigger is negative, it is set
+// to the given defaults. Trigger==0 means "disabled" (clear forced to 0).
+// Otherwise a non-positive clear is derived from trigger-5 with defaultClear as floor.
+func normalizeHysteresisThreshold(t **alerts.HysteresisThreshold, defaultTrigger, defaultClear float64) {
+	if *t == nil || (*t).Trigger < 0 {
+		*t = &alerts.HysteresisThreshold{Trigger: defaultTrigger, Clear: defaultClear}
+	} else if (*t).Trigger == 0 {
+		(*t).Clear = 0
+	} else if (*t).Clear <= 0 {
+		(*t).Clear = (*t).Trigger - 5
+		if (*t).Clear <= 0 {
+			(*t).Clear = defaultClear
 		}
 	}
+}
+
+// normalizeStorageDefault normalizes a non-pointer HysteresisThreshold used for
+// storage defaults. Same logic as normalizeHysteresisThreshold but operates on
+// a value (not pointer) and uses 0 as the clear floor.
+func normalizeStorageDefault(t *alerts.HysteresisThreshold) {
+	if t.Trigger < 0 {
+		t.Trigger = 85
+		t.Clear = 80
+	} else if t.Trigger == 0 {
+		t.Clear = 0
+	} else if t.Clear <= 0 {
+		t.Clear = t.Trigger - 5
+		if t.Clear < 0 {
+			t.Clear = 0
+		}
+	}
+}
+
+// normalizeAlertDefaults applies shared normalization logic to an AlertConfig.
+// Called by both SaveAlertConfig and LoadAlertConfig to avoid duplicating the
+// same validation and defaulting code.
+func normalizeAlertDefaults(config *alerts.AlertConfig) {
+	// Storage threshold
+	normalizeStorageDefault(&config.StorageDefault)
+
 	if config.MinimumDelta <= 0 {
-		margin := config.HysteresisMargin
-		if margin <= 0 {
-			margin = 5.0
-		}
-		for id, override := range config.Overrides {
-			if override.Usage != nil {
-				if override.Usage.Clear <= 0 {
-					override.Usage.Clear = override.Usage.Trigger - margin
-					if override.Usage.Clear < 0 {
-						override.Usage.Clear = 0
-					}
-				}
-				config.Overrides[id] = override
-			}
-		}
 		config.MinimumDelta = 2.0
 	}
 	if config.SuppressionWindow <= 0 {
@@ -442,41 +450,12 @@ func (c *ConfigPersistence) SaveAlertConfig(config alerts.AlertConfig) error {
 		config.HysteresisMargin = 5.0
 	}
 
-	// Host Defaults: Allow Trigger=0 to disable specific alerts
-	if config.HostDefaults.CPU == nil || config.HostDefaults.CPU.Trigger < 0 {
-		config.HostDefaults.CPU = &alerts.HysteresisThreshold{Trigger: 80, Clear: 75}
-	} else if config.HostDefaults.CPU.Trigger == 0 {
-		// Trigger=0 means disabled, set Clear=0 too
-		config.HostDefaults.CPU.Clear = 0
-	} else if config.HostDefaults.CPU.Clear <= 0 {
-		config.HostDefaults.CPU.Clear = config.HostDefaults.CPU.Trigger - 5
-		if config.HostDefaults.CPU.Clear <= 0 {
-			config.HostDefaults.CPU.Clear = 75
-		}
-	}
-	if config.HostDefaults.Memory == nil || config.HostDefaults.Memory.Trigger < 0 {
-		config.HostDefaults.Memory = &alerts.HysteresisThreshold{Trigger: 85, Clear: 80}
-	} else if config.HostDefaults.Memory.Trigger == 0 {
-		// Trigger=0 means disabled, set Clear=0 too
-		config.HostDefaults.Memory.Clear = 0
-	} else if config.HostDefaults.Memory.Clear <= 0 {
-		config.HostDefaults.Memory.Clear = config.HostDefaults.Memory.Trigger - 5
-		if config.HostDefaults.Memory.Clear <= 0 {
-			config.HostDefaults.Memory.Clear = 80
-		}
-	}
-	if config.HostDefaults.Disk == nil || config.HostDefaults.Disk.Trigger < 0 {
-		config.HostDefaults.Disk = &alerts.HysteresisThreshold{Trigger: 90, Clear: 85}
-	} else if config.HostDefaults.Disk.Trigger == 0 {
-		// Trigger=0 means disabled, set Clear=0 too
-		config.HostDefaults.Disk.Clear = 0
-	} else if config.HostDefaults.Disk.Clear <= 0 {
-		config.HostDefaults.Disk.Clear = config.HostDefaults.Disk.Trigger - 5
-		if config.HostDefaults.Disk.Clear <= 0 {
-			config.HostDefaults.Disk.Clear = 85
-		}
-	}
+	// Host defaults
+	normalizeHysteresisThreshold(&config.HostDefaults.CPU, 80, 75)
+	normalizeHysteresisThreshold(&config.HostDefaults.Memory, 85, 80)
+	normalizeHysteresisThreshold(&config.HostDefaults.Disk, 90, 85)
 
+	// Time thresholds
 	config.MetricTimeThresholds = alerts.NormalizeMetricTimeThresholds(config.MetricTimeThresholds)
 	if config.TimeThreshold <= 0 {
 		config.TimeThreshold = 5
@@ -496,6 +475,8 @@ func (c *ConfigPersistence) SaveAlertConfig(config alerts.AlertConfig) error {
 	if delay, ok := config.TimeThresholds["all"]; ok && delay <= 0 {
 		config.TimeThresholds["all"] = config.TimeThreshold
 	}
+
+	// Snapshot defaults
 	if config.SnapshotDefaults.WarningDays < 0 {
 		config.SnapshotDefaults.WarningDays = 0
 	}
@@ -505,14 +486,11 @@ func (c *ConfigPersistence) SaveAlertConfig(config alerts.AlertConfig) error {
 	if config.SnapshotDefaults.CriticalDays > 0 && config.SnapshotDefaults.WarningDays > config.SnapshotDefaults.CriticalDays {
 		config.SnapshotDefaults.WarningDays = config.SnapshotDefaults.CriticalDays
 	}
-	if config.SnapshotDefaults.CriticalDays == 0 && config.SnapshotDefaults.WarningDays > 0 {
-		config.SnapshotDefaults.CriticalDays = config.SnapshotDefaults.WarningDays
+	if config.SnapshotDefaults.CriticalSizeGiB < 0 {
+		config.SnapshotDefaults.CriticalSizeGiB = 0
 	}
 	if config.SnapshotDefaults.WarningSizeGiB < 0 {
 		config.SnapshotDefaults.WarningSizeGiB = 0
-	}
-	if config.SnapshotDefaults.CriticalSizeGiB < 0 {
-		config.SnapshotDefaults.CriticalSizeGiB = 0
 	}
 	if config.SnapshotDefaults.CriticalSizeGiB > 0 && config.SnapshotDefaults.WarningSizeGiB > config.SnapshotDefaults.CriticalSizeGiB {
 		config.SnapshotDefaults.WarningSizeGiB = config.SnapshotDefaults.CriticalSizeGiB
@@ -520,6 +498,8 @@ func (c *ConfigPersistence) SaveAlertConfig(config alerts.AlertConfig) error {
 	if config.SnapshotDefaults.CriticalSizeGiB == 0 && config.SnapshotDefaults.WarningSizeGiB > 0 {
 		config.SnapshotDefaults.CriticalSizeGiB = config.SnapshotDefaults.WarningSizeGiB
 	}
+
+	// Backup defaults
 	if config.BackupDefaults.WarningDays < 0 {
 		config.BackupDefaults.WarningDays = 0
 	}
@@ -533,6 +513,8 @@ func (c *ConfigPersistence) SaveAlertConfig(config alerts.AlertConfig) error {
 		alertOrphaned := true
 		config.BackupDefaults.AlertOrphaned = &alertOrphaned
 	}
+
+	// Deduplicate IgnoreVMIDs
 	if len(config.BackupDefaults.IgnoreVMIDs) > 0 {
 		seen := make(map[string]struct{}, len(config.BackupDefaults.IgnoreVMIDs))
 		normalized := make([]string, 0, len(config.BackupDefaults.IgnoreVMIDs))
@@ -549,7 +531,35 @@ func (c *ConfigPersistence) SaveAlertConfig(config alerts.AlertConfig) error {
 		}
 		config.BackupDefaults.IgnoreVMIDs = normalized
 	}
+
 	config.DockerIgnoredContainerPrefixes = alerts.NormalizeDockerIgnoredPrefixes(config.DockerIgnoredContainerPrefixes)
+}
+
+// SaveAlertConfig saves alert configuration to file
+func (c *ConfigPersistence) SaveAlertConfig(config alerts.AlertConfig) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// Save-specific: normalize override clear values before shared defaults run
+	if config.MinimumDelta <= 0 {
+		margin := config.HysteresisMargin
+		if margin <= 0 {
+			margin = 5.0
+		}
+		for id, override := range config.Overrides {
+			if override.Usage != nil {
+				if override.Usage.Clear <= 0 {
+					override.Usage.Clear = override.Usage.Trigger - margin
+					if override.Usage.Clear < 0 {
+						override.Usage.Clear = 0
+					}
+				}
+				config.Overrides[id] = override
+			}
+		}
+	}
+
+	normalizeAlertDefaults(&config)
 
 	data, err := json.Marshal(config)
 	if err != nil {
@@ -642,175 +652,41 @@ func (c *ConfigPersistence) LoadAlertConfig() (*alerts.AlertConfig, error) {
 	if string(data) == "{}" {
 		config.Enabled = true
 	}
-	// Storage: Allow Trigger=0 to disable storage alerting
-	if config.StorageDefault.Trigger < 0 {
-		config.StorageDefault.Trigger = 85
-		config.StorageDefault.Clear = 80
-	} else if config.StorageDefault.Trigger == 0 {
-		config.StorageDefault.Clear = 0
-	} else if config.StorageDefault.Clear <= 0 {
-		config.StorageDefault.Clear = config.StorageDefault.Trigger - 5
-		if config.StorageDefault.Clear < 0 {
-			config.StorageDefault.Clear = 0
-		}
-	}
-	if config.MinimumDelta <= 0 {
-		config.MinimumDelta = 2.0
-	}
-	if config.SuppressionWindow <= 0 {
-		config.SuppressionWindow = 5
-	}
-	if config.HysteresisMargin <= 0 {
-		config.HysteresisMargin = 5.0
-	}
-	// NotifyOnResolve defaults to true (send recovery notifications).
+
+	// Load-specific: NotifyOnResolve defaults to true (send recovery notifications).
 	// Since bool zero-value is false, we check raw JSON to distinguish
 	// "missing field" (old configs) from "explicitly set to false".
 	if !config.Schedule.NotifyOnResolve {
-		// Use a temporary map to check if the field exists in the JSON
 		var raw map[string]interface{}
-		// Ignore error here as we've already unmarshaled successfully above
 		if json.Unmarshal(data, &raw) == nil {
-			// Check if "schedule" exists and has "notifyOnResolve"
 			if schedule, ok := raw["schedule"].(map[string]interface{}); ok {
 				if _, exists := schedule["notifyOnResolve"]; !exists {
 					config.Schedule.NotifyOnResolve = true
 				}
 			} else {
-				// "schedule" block missing entirely -> default to true
 				config.Schedule.NotifyOnResolve = true
 			}
 		}
 	}
-	// NodeDefaults.Temperature: Allow Trigger=0 to disable temperature alerting
-	if config.NodeDefaults.Temperature == nil || config.NodeDefaults.Temperature.Trigger < 0 {
-		config.NodeDefaults.Temperature = &alerts.HysteresisThreshold{Trigger: 80, Clear: 75}
-	} else if config.NodeDefaults.Temperature.Trigger == 0 {
-		config.NodeDefaults.Temperature.Clear = 0
-	} else if config.NodeDefaults.Temperature.Clear <= 0 {
-		config.NodeDefaults.Temperature.Clear = config.NodeDefaults.Temperature.Trigger - 5
-		if config.NodeDefaults.Temperature.Clear <= 0 {
-			config.NodeDefaults.Temperature.Clear = 75
-		}
-	}
-	// Host Defaults: Allow Trigger=0 to disable specific alerts
-	if config.HostDefaults.CPU == nil || config.HostDefaults.CPU.Trigger < 0 {
-		config.HostDefaults.CPU = &alerts.HysteresisThreshold{Trigger: 80, Clear: 75}
-	} else if config.HostDefaults.CPU.Trigger == 0 {
-		// Trigger=0 means disabled, set Clear=0 too
-		config.HostDefaults.CPU.Clear = 0
-	} else if config.HostDefaults.CPU.Clear <= 0 {
-		config.HostDefaults.CPU.Clear = config.HostDefaults.CPU.Trigger - 5
-		if config.HostDefaults.CPU.Clear <= 0 {
-			config.HostDefaults.CPU.Clear = 75
-		}
-	}
-	if config.HostDefaults.Memory == nil || config.HostDefaults.Memory.Trigger < 0 {
-		config.HostDefaults.Memory = &alerts.HysteresisThreshold{Trigger: 85, Clear: 80}
-	} else if config.HostDefaults.Memory.Trigger == 0 {
-		// Trigger=0 means disabled, set Clear=0 too
-		config.HostDefaults.Memory.Clear = 0
-	} else if config.HostDefaults.Memory.Clear <= 0 {
-		config.HostDefaults.Memory.Clear = config.HostDefaults.Memory.Trigger - 5
-		if config.HostDefaults.Memory.Clear <= 0 {
-			config.HostDefaults.Memory.Clear = 80
-		}
-	}
-	if config.HostDefaults.Disk == nil || config.HostDefaults.Disk.Trigger < 0 {
-		config.HostDefaults.Disk = &alerts.HysteresisThreshold{Trigger: 90, Clear: 85}
-	} else if config.HostDefaults.Disk.Trigger == 0 {
-		// Trigger=0 means disabled, set Clear=0 too
-		config.HostDefaults.Disk.Clear = 0
-	} else if config.HostDefaults.Disk.Clear <= 0 {
-		config.HostDefaults.Disk.Clear = config.HostDefaults.Disk.Trigger - 5
-		if config.HostDefaults.Disk.Clear <= 0 {
-			config.HostDefaults.Disk.Clear = 85
-		}
-	}
-	if config.TimeThreshold <= 0 {
-		config.TimeThreshold = 5
-	}
-	if config.TimeThresholds == nil {
-		config.TimeThresholds = make(map[string]int)
-	}
-	ensureDelay := func(key string) {
-		if delay, ok := config.TimeThresholds[key]; !ok || delay <= 0 {
-			config.TimeThresholds[key] = config.TimeThreshold
-		}
-	}
-	ensureDelay("guest")
-	ensureDelay("node")
-	ensureDelay("storage")
-	ensureDelay("pbs")
-	if delay, ok := config.TimeThresholds["all"]; ok && delay <= 0 {
-		config.TimeThresholds["all"] = config.TimeThreshold
-	}
-	if config.SnapshotDefaults.WarningDays < 0 {
-		config.SnapshotDefaults.WarningDays = 0
-	}
-	if config.SnapshotDefaults.CriticalDays < 0 {
-		config.SnapshotDefaults.CriticalDays = 0
-	}
-	if config.SnapshotDefaults.CriticalDays > 0 && config.SnapshotDefaults.WarningDays > config.SnapshotDefaults.CriticalDays {
-		config.SnapshotDefaults.WarningDays = config.SnapshotDefaults.CriticalDays
-	}
-	if config.SnapshotDefaults.WarningSizeGiB < 0 {
-		config.SnapshotDefaults.WarningSizeGiB = 0
-	}
-	if config.SnapshotDefaults.CriticalSizeGiB < 0 {
-		config.SnapshotDefaults.CriticalSizeGiB = 0
-	}
-	if config.SnapshotDefaults.CriticalSizeGiB > 0 && config.SnapshotDefaults.WarningSizeGiB > config.SnapshotDefaults.CriticalSizeGiB {
-		config.SnapshotDefaults.WarningSizeGiB = config.SnapshotDefaults.CriticalSizeGiB
-	}
-	if config.SnapshotDefaults.CriticalSizeGiB == 0 && config.SnapshotDefaults.WarningSizeGiB > 0 {
-		config.SnapshotDefaults.CriticalSizeGiB = config.SnapshotDefaults.WarningSizeGiB
-	}
-	if config.BackupDefaults.WarningDays < 0 {
-		config.BackupDefaults.WarningDays = 0
-	}
-	if config.BackupDefaults.CriticalDays < 0 {
-		config.BackupDefaults.CriticalDays = 0
-	}
-	if config.BackupDefaults.CriticalDays > 0 && config.BackupDefaults.WarningDays > config.BackupDefaults.CriticalDays {
-		config.BackupDefaults.WarningDays = config.BackupDefaults.CriticalDays
-	}
-	// Default indicator thresholds for dashboard (separate from alert thresholds)
+
+	// Load-specific: NodeDefaults.Temperature normalization
+	normalizeHysteresisThreshold(&config.NodeDefaults.Temperature, 80, 75)
+
+	// Shared normalization (storage, host defaults, time thresholds, snapshots, backups, etc.)
+	normalizeAlertDefaults(&config)
+
+	// Load-specific: Default indicator thresholds for dashboard
 	if config.BackupDefaults.FreshHours <= 0 {
 		config.BackupDefaults.FreshHours = 24
 	}
 	if config.BackupDefaults.StaleHours <= 0 {
 		config.BackupDefaults.StaleHours = 72
 	}
-	// Ensure stale threshold is at least as large as fresh threshold
 	if config.BackupDefaults.StaleHours < config.BackupDefaults.FreshHours {
 		config.BackupDefaults.StaleHours = config.BackupDefaults.FreshHours
 	}
-	if config.BackupDefaults.AlertOrphaned == nil {
-		alertOrphaned := true
-		config.BackupDefaults.AlertOrphaned = &alertOrphaned
-	}
-	if len(config.BackupDefaults.IgnoreVMIDs) > 0 {
-		seen := make(map[string]struct{}, len(config.BackupDefaults.IgnoreVMIDs))
-		normalized := make([]string, 0, len(config.BackupDefaults.IgnoreVMIDs))
-		for _, entry := range config.BackupDefaults.IgnoreVMIDs {
-			value := strings.TrimSpace(entry)
-			if value == "" {
-				continue
-			}
-			if _, exists := seen[value]; exists {
-				continue
-			}
-			seen[value] = struct{}{}
-			normalized = append(normalized, value)
-		}
-		config.BackupDefaults.IgnoreVMIDs = normalized
-	}
-	config.MetricTimeThresholds = alerts.NormalizeMetricTimeThresholds(config.MetricTimeThresholds)
-	config.DockerIgnoredContainerPrefixes = alerts.NormalizeDockerIgnoredPrefixes(config.DockerIgnoredContainerPrefixes)
 
-	// Migration: Set I/O metrics to Off (0) if they have the old default values
-	// This helps existing users avoid noisy I/O alerts
+	// Load-specific migration: Set I/O metrics to Off (0) if they have old default values
 	if config.GuestDefaults.DiskRead != nil && config.GuestDefaults.DiskRead.Trigger == 150 {
 		config.GuestDefaults.DiskRead = &alerts.HysteresisThreshold{Trigger: 0, Clear: 0}
 	}
