@@ -163,6 +163,21 @@ func NewService(wsHub *websocket.Hub, interval time.Duration, subnet string, cfg
 	}
 }
 
+// goRecover launches fn in a goroutine with panic recovery logging.
+func goRecover(label string, fn func()) {
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Error().
+					Interface("panic", r).
+					Stack().
+					Msgf("Recovered from panic in %s", label)
+			}
+		}()
+		fn()
+	}()
+}
+
 // Start begins the background discovery service
 func (s *Service) Start(ctx context.Context) {
 	s.ctx = ctx
@@ -172,31 +187,10 @@ func (s *Service) Start(ctx context.Context) {
 		Msg("Starting background discovery service")
 
 	// Do initial scan immediately
-	// Initial scan with panic recovery
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				log.Error().
-					Interface("panic", r).
-					Stack().
-					Msg("Recovered from panic in initial discovery scan")
-			}
-		}()
-		s.performScan()
-	}()
+	goRecover("initial discovery scan", s.performScan)
 
-	// Start background scanning loop with panic recovery
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				log.Error().
-					Interface("panic", r).
-					Stack().
-					Msg("Recovered from panic in discovery scan loop")
-			}
-		}()
-		s.scanLoop()
-	}()
+	// Start background scanning loop
+	goRecover("discovery scan loop", s.scanLoop)
 }
 
 // Stop stops the background discovery service
@@ -499,17 +493,7 @@ func (s *Service) ForceRefresh() {
 	}
 	s.mu.RUnlock()
 
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				log.Error().
-					Interface("panic", r).
-					Stack().
-					Msg("Recovered from panic in ForceRefresh scan")
-			}
-		}()
-		s.performScan()
-	}()
+	goRecover("ForceRefresh scan", s.performScan)
 }
 
 // SetInterval updates the scan interval
@@ -532,17 +516,7 @@ func (s *Service) SetSubnet(subnet string) {
 
 	// Trigger immediate rescan with new subnet if not already scanning
 	if !alreadyScanning {
-		go func() {
-			defer func() {
-				if r := recover(); r != nil {
-					log.Error().
-						Interface("panic", r).
-						Stack().
-						Msg("Recovered from panic in SetSubnet scan")
-				}
-			}()
-			s.performScan()
-		}()
+		goRecover("SetSubnet scan", s.performScan)
 	} else {
 		log.Debug().Msg("Scan already in progress, new subnet will be used in next scan")
 	}
