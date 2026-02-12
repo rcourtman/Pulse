@@ -2949,6 +2949,10 @@ func (s *Service) AnalyzeForDiscovery(ctx context.Context, prompt string) (strin
 		return "", fmt.Errorf("AI is not enabled")
 	}
 
+	if err := s.enforceBudget("discovery"); err != nil {
+		return "", err
+	}
+
 	// Get the discovery model (defaults to main model from settings)
 	model := cfg.GetDiscoveryModel()
 
@@ -2994,6 +2998,9 @@ func (s *Service) AnalyzeForDiscovery(ctx context.Context, prompt string) (strin
 		for _, altProviderName := range cfg.GetConfiguredProviders() {
 			if altProviderName == primaryProvider {
 				continue // skip the one that just failed
+			}
+			if err := s.enforceBudget("discovery"); err != nil {
+				return "", err
 			}
 
 			altModel := config.DefaultModelForProvider(altProviderName)
