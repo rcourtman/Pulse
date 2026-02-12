@@ -99,16 +99,21 @@ export function AIIntelligence() {
 
   // Safety timer ref — hoisted so onStart can clear it when SSE connects
   let safetyTimerRef: ReturnType<typeof setTimeout> | undefined;
+  let findingScrollTimerRef: ReturnType<typeof setTimeout> | undefined;
+
+  const clearSafetyTimer = () => {
+    if (safetyTimerRef !== undefined) {
+      clearTimeout(safetyTimerRef);
+      safetyTimerRef = undefined;
+    }
+  };
 
   // Live patrol streaming
   const patrolStream = usePatrolStream({
     running: () => patrolEnabledLocal() && ((patrolStatus()?.running ?? false) || manualRunRequested()),
     onStart: () => {
       // SSE connected — clear the safety timeout
-      if (safetyTimerRef !== undefined) {
-        clearTimeout(safetyTimerRef);
-        safetyTimerRef = undefined;
-      }
+      clearSafetyTimer();
     },
     onComplete: () => {
       setManualRunRequested(false);
@@ -259,10 +264,7 @@ export function AIIntelligence() {
     setPatrolEnabledLocal(newValue);
     if (!newValue) {
       setManualRunRequested(false);
-      if (safetyTimerRef !== undefined) {
-        clearTimeout(safetyTimerRef);
-        safetyTimerRef = undefined;
-      }
+      clearSafetyTimer();
     }
     try {
       const data = await apiFetchJSON<AISettings>('/api/settings/ai/update', {
@@ -312,10 +314,7 @@ export function AIIntelligence() {
       setManualRunRequested(false);
       notificationStore.error('Failed to start patrol run');
       // Clear safety timer on API error
-      if (safetyTimerRef !== undefined) {
-        clearTimeout(safetyTimerRef);
-        safetyTimerRef = undefined;
-      }
+      clearSafetyTimer();
     } finally {
       setIsTriggeringPatrol(false);
     }
@@ -609,7 +608,14 @@ export function AIIntelligence() {
     document.addEventListener('visibilitychange', handleVisibility);
     onCleanup(() => document.removeEventListener('visibilitychange', handleVisibility));
   });
-  onCleanup(() => stopPolling());
+  onCleanup(() => {
+    stopPolling();
+    clearSafetyTimer();
+    if (findingScrollTimerRef !== undefined) {
+      clearTimeout(findingScrollTimerRef);
+      findingScrollTimerRef = undefined;
+    }
+  });
 
   async function loadAllData() {
     setIsRefreshing(true);
@@ -1049,9 +1055,13 @@ export function AIIntelligence() {
               setActiveTab('findings');
               setFindingsFilterOverride('approvals');
               // Allow SolidJS to re-render with new filter before scrolling
-              setTimeout(() => {
+              if (findingScrollTimerRef !== undefined) {
+                clearTimeout(findingScrollTimerRef);
+              }
+              findingScrollTimerRef = setTimeout(() => {
                 const el = document.getElementById(`finding-${findingId}`);
                 el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                findingScrollTimerRef = undefined;
               }, 100);
             }}
           />
