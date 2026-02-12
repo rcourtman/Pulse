@@ -2,11 +2,17 @@ package ai
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 
+	"github.com/gorilla/websocket"
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
-	// "github.com/rcourtman/pulse-go-rewrite/internal/agentexec" // Needed if I can instantiate Server
 )
 
 // MockStateProvider implements ai.StateProvider
@@ -167,5 +173,107 @@ func TestDiscoveryCommandAdapter_NilServer(t *testing.T) {
 	// Test IsAgentConnected
 	if adapter.IsAgentConnected("agent-1") {
 		t.Error("Expected IsAgentConnected to return false for nil server")
+	}
+}
+
+func TestDiscoveryCommandAdapter_ExecuteCommandNotConnected(t *testing.T) {
+	server := agentexec.NewServer(nil)
+	adapter := newDiscoveryCommandAdapter(server)
+
+	cmd := servicediscovery.ExecuteCommandPayload{
+		RequestID:  "req-2",
+		Command:    "hostname",
+		TargetType: "host",
+		Timeout:    1,
+	}
+
+	res, err := adapter.ExecuteCommand(context.Background(), "missing-agent", cmd)
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if res.Success {
+		t.Fatalf("expected command failure payload")
+	}
+	if res.RequestID != "req-2" {
+		t.Fatalf("request id = %q, want %q", res.RequestID, "req-2")
+	}
+	if !strings.Contains(res.Error, "agent missing-agent not connected") {
+		t.Fatalf("error = %q, expected missing-agent not connected", res.Error)
+	}
+}
+
+func TestDiscoveryCommandAdapter_ConnectedAgentsAndLookup(t *testing.T) {
+	server := agentexec.NewServer(nil)
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		server.HandleWebSocket(w, r)
+	}))
+	defer ts.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http")
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("dial websocket: %v", err)
+	}
+	defer conn.Close()
+
+	conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
+	if err := conn.WriteJSON(agentexec.Message{
+		Type:      agentexec.MsgTypeAgentRegister,
+		Timestamp: time.Now(),
+		Payload: agentexec.AgentRegisterPayload{
+			AgentID:  "agent-1",
+			Hostname: "host-1",
+			Version:  "v1.0.0",
+			Platform: "linux",
+			Tags:     []string{"edge"},
+			Token:    "ok",
+		},
+	}); err != nil {
+		t.Fatalf("write register message: %v", err)
+	}
+
+	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	_, data, err := conn.ReadMessage()
+	if err != nil {
+		t.Fatalf("read register ack: %v", err)
+	}
+
+	var ack struct {
+		Type    agentexec.MessageType `json:"type"`
+		Payload json.RawMessage       `json:"payload"`
+	}
+	if err := json.Unmarshal(data, &ack); err != nil {
+		t.Fatalf("unmarshal ack: %v", err)
+	}
+	if ack.Type != agentexec.MsgTypeRegistered {
+		t.Fatalf("ack type = %q, want %q", ack.Type, agentexec.MsgTypeRegistered)
+	}
+
+	adapter := newDiscoveryCommandAdapter(server)
+	agents := adapter.GetConnectedAgents()
+	if len(agents) != 1 {
+		t.Fatalf("connected agents = %d, want 1", len(agents))
+	}
+	if agents[0].AgentID != "agent-1" {
+		t.Fatalf("agent id = %q, want %q", agents[0].AgentID, "agent-1")
+	}
+	if agents[0].Hostname != "host-1" {
+		t.Fatalf("hostname = %q, want %q", agents[0].Hostname, "host-1")
+	}
+	if agents[0].Version != "v1.0.0" {
+		t.Fatalf("version = %q, want %q", agents[0].Version, "v1.0.0")
+	}
+	if agents[0].Platform != "linux" {
+		t.Fatalf("platform = %q, want %q", agents[0].Platform, "linux")
+	}
+	if len(agents[0].Tags) != 1 || agents[0].Tags[0] != "edge" {
+		t.Fatalf("tags = %#v, want [edge]", agents[0].Tags)
+	}
+
+	if !adapter.IsAgentConnected("agent-1") {
+		t.Fatalf("expected agent-1 to be connected")
+	}
+	if adapter.IsAgentConnected("missing") {
+		t.Fatalf("expected missing agent lookup to be false")
 	}
 }
