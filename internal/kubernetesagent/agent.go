@@ -723,8 +723,8 @@ func applyNodeUsage(nodes []agentsk8s.Node, usage map[string]agentsk8s.NodeUsage
 	}
 	for i := range nodes {
 		if nodeUsage, ok := usage[strings.TrimSpace(nodes[i].Name)]; ok {
-			u := nodeUsage
-			nodes[i].Usage = &u
+			nodeUsageCopy := nodeUsage
+			nodes[i].Usage = &nodeUsageCopy
 		}
 	}
 }
@@ -739,8 +739,8 @@ func applyPodUsage(pods []agentsk8s.Pod, usage map[string]agentsk8s.PodUsage) {
 			continue
 		}
 		if podUsage, ok := usage[key]; ok {
-			u := podUsage
-			pods[i].Usage = &u
+			podUsageCopy := podUsage
+			pods[i].Usage = &podUsageCopy
 		}
 	}
 }
@@ -1031,8 +1031,8 @@ func (a *Agent) sendReport(ctx context.Context, report agentsk8s.Report) error {
 		return fmt.Errorf("marshal report: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/api/agents/kubernetes/report", a.pulseURL)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(payload))
+	reportURL := fmt.Sprintf("%s/api/agents/kubernetes/report", a.pulseURL)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reportURL, bytes.NewReader(payload))
 	if err != nil {
 		return fmt.Errorf("create request: %w", err)
 	}
