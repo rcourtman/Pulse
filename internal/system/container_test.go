@@ -9,7 +9,7 @@ import (
 func resetSystemFns() {
 	envGetFn = os.Getenv
 	statFn = os.Stat
-	readFileFn = os.ReadFile
+	readFileFn = boundedReadFile
 	hostnameFn = os.Hostname
 }
 
@@ -141,6 +141,47 @@ func TestContainerMarkers(t *testing.T) {
 	}
 }
 
+func TestReadFileWithLimit(t *testing.T) {
+	t.Run("WithinLimit", func(t *testing.T) {
+		filePath := t.TempDir() + "/sample.txt"
+		if err := os.WriteFile(filePath, []byte("hello"), 0o644); err != nil {
+			t.Fatalf("write file: %v", err)
+		}
+
+		data, err := readFileWithLimit(filePath, 5)
+		if err != nil {
+			t.Fatalf("readFileWithLimit returned error: %v", err)
+		}
+		if string(data) != "hello" {
+			t.Fatalf("expected %q, got %q", "hello", string(data))
+		}
+	})
+
+	t.Run("ExceedsLimit", func(t *testing.T) {
+		filePath := t.TempDir() + "/sample.txt"
+		if err := os.WriteFile(filePath, []byte("hello"), 0o644); err != nil {
+			t.Fatalf("write file: %v", err)
+		}
+
+		data, err := readFileWithLimit(filePath, 4)
+		if !errors.Is(err, errFileTooLarge) {
+			t.Fatalf("expected errFileTooLarge, got err=%v data=%q", err, string(data))
+		}
+	})
+
+	t.Run("InvalidLimit", func(t *testing.T) {
+		filePath := t.TempDir() + "/sample.txt"
+		if err := os.WriteFile(filePath, []byte("hello"), 0o644); err != nil {
+			t.Fatalf("write file: %v", err)
+		}
+
+		_, err := readFileWithLimit(filePath, 0)
+		if !errors.Is(err, errInvalidReadMax) {
+			t.Fatalf("expected errInvalidReadMax, got %v", err)
+		}
+	})
+}
+
 func TestInContainer(t *testing.T) {
 	t.Run("Forced", func(t *testing.T) {
 		t.Cleanup(resetSystemFns)
@@ -255,6 +296,22 @@ func TestInContainer(t *testing.T) {
 
 		if InContainer() {
 			t.Fatal("expected non-container")
+		}
+	})
+
+	t.Run("OversizedProcFilesIgnored", func(t *testing.T) {
+		t.Cleanup(resetSystemFns)
+		envGetFn = func(string) string { return "" }
+		statFn = func(string) (os.FileInfo, error) { return nil, errors.New("missing") }
+		readFileFn = func(path string) ([]byte, error) {
+			if path == "/proc/1/environ" || path == "/proc/1/cgroup" {
+				return nil, errFileTooLarge
+			}
+			return nil, errors.New("missing")
+		}
+
+		if InContainer() {
+			t.Fatal("expected oversized proc files to be treated as non-container")
 		}
 	})
 }
