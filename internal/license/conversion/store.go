@@ -144,15 +144,16 @@ func (s *ConversionStore) Query(orgID string, from, to time.Time, eventType stri
 	if s == nil || s.db == nil {
 		return nil, fmt.Errorf("conversion store is not initialized")
 	}
+	orgID = strings.TrimSpace(orgID)
+	if orgID == "" {
+		return nil, fmt.Errorf("org_id is required")
+	}
 
 	where := make([]string, 0, 8)
 	args := make([]any, 0, 8)
 
-	orgID = strings.TrimSpace(orgID)
-	if orgID != "" {
-		where = append(where, "org_id = ?")
-		args = append(args, orgID)
-	}
+	where = append(where, "org_id = ?")
+	args = append(args, orgID)
 	eventType = strings.TrimSpace(eventType)
 	if eventType != "" {
 		where = append(where, "event_type = ?")
@@ -222,14 +223,15 @@ func (s *ConversionStore) FunnelSummary(orgID string, from, to time.Time) (*Funn
 	}
 
 	orgID = strings.TrimSpace(orgID)
-	where := []string{"created_at >= ?", "created_at < ?"}
+	if orgID == "" {
+		return nil, fmt.Errorf("org_id is required")
+	}
+
+	where := []string{"created_at >= ?", "created_at < ?", "org_id = ?"}
 	args := []any{
 		from.UTC().Truncate(time.Second).Format(time.RFC3339),
 		to.UTC().Truncate(time.Second).Format(time.RFC3339),
-	}
-	if orgID != "" {
-		where = append(where, "org_id = ?")
-		args = append(args, orgID)
+		orgID,
 	}
 
 	query := `

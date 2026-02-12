@@ -456,6 +456,7 @@ func TestConversionHandleConversionFunnelAggregatesPerOrg(t *testing.T) {
 	to := now.Add(1 * time.Hour)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/admin/conversion-funnel", nil)
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "org-a"))
 	q := req.URL.Query()
 	q.Set("org_id", "org-a")
 	q.Set("from", from.Format(time.RFC3339Nano))
@@ -485,6 +486,7 @@ func TestConversionHandleConversionFunnelAggregatesPerOrg(t *testing.T) {
 	}
 
 	reqAll := httptest.NewRequest(http.MethodGet, "/api/admin/conversion-funnel", nil)
+	reqAll = reqAll.WithContext(context.WithValue(reqAll.Context(), OrgIDContextKey, "org-a"))
 	qAll := reqAll.URL.Query()
 	qAll.Set("from", from.Format(time.RFC3339Nano))
 	qAll.Set("to", to.Format(time.RFC3339Nano))
@@ -498,8 +500,28 @@ func TestConversionHandleConversionFunnelAggregatesPerOrg(t *testing.T) {
 	if err := json.NewDecoder(recAll.Body).Decode(&summaryAll); err != nil {
 		t.Fatalf("failed decoding all-org response: %v", err)
 	}
-	if summaryAll.PaywallViewed != 2 {
-		t.Fatalf("all PaywallViewed = %d, want 2", summaryAll.PaywallViewed)
+	if summaryAll.PaywallViewed != 1 {
+		t.Fatalf("scoped PaywallViewed = %d, want 1", summaryAll.PaywallViewed)
+	}
+}
+
+func TestConversionHandleConversionFunnelRejectsCrossTenantOrgOverride(t *testing.T) {
+	tmp := t.TempDir()
+	store, err := conversion.NewConversionStore(filepath.Join(tmp, "conversion.db"))
+	if err != nil {
+		t.Fatalf("NewConversionStore() error = %v", err)
+	}
+	defer store.Close()
+
+	handlers := NewConversionHandlers(nil, nil, nil, store)
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/conversion-funnel?org_id=org-b", nil)
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "org-a"))
+	rec := httptest.NewRecorder()
+
+	handlers.HandleConversionFunnel(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusForbidden)
 	}
 }
 
