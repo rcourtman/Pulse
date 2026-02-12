@@ -14,6 +14,7 @@ import (
 
 var (
 	dataMu        sync.RWMutex
+	setEnabledMu  sync.Mutex
 	mockData      models.StateSnapshot
 	mockAlerts    []models.Alert
 	mockConfig    = DefaultConfig
@@ -44,6 +45,9 @@ func SetEnabled(enable bool) {
 }
 
 func setEnabled(enable bool, fromInit bool) {
+	setEnabledMu.Lock()
+	defer setEnabledMu.Unlock()
+
 	current := enabled.Load()
 	if current == enable {
 		// Still update env so other processes see the latest value when not invoked from init.
@@ -111,7 +115,12 @@ func disableMockMode() {
 		return
 	}
 	enabled.Store(false)
-	stopUpdateLoopLocked()
+	stopUpdateLoopSignalLocked()
+	dataMu.Unlock()
+
+	waitForUpdateLoopStop()
+
+	dataMu.Lock()
 	mockData = models.StateSnapshot{}
 	mockAlerts = nil
 	dataMu.Unlock()
@@ -142,6 +151,11 @@ func startUpdateLoopLocked() {
 }
 
 func stopUpdateLoopLocked() {
+	stopUpdateLoopSignalLocked()
+	waitForUpdateLoopStop()
+}
+
+func stopUpdateLoopSignalLocked() {
 	if ch := stopUpdatesCh; ch != nil {
 		close(ch)
 		stopUpdatesCh = nil
@@ -150,7 +164,9 @@ func stopUpdateLoopLocked() {
 		ticker.Stop()
 		updateTicker = nil
 	}
-	// Wait for the update goroutine to exit
+}
+
+func waitForUpdateLoopStop() {
 	updateLoopWg.Wait()
 }
 

@@ -23,7 +23,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/license"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license/conversion"
 	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
-	_ "github.com/rcourtman/pulse-go-rewrite/internal/mock" // Import for init() to run
+	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/audit"
@@ -442,6 +442,11 @@ shutdown:
 
 	// Stop AI chat service (kills sidecar process group)
 	router.StopAIChat(shutdownCtx)
+
+	// Ensure mock-mode background update ticker is stopped before process exit.
+	if mock.IsMockEnabled() {
+		mock.SetEnabled(false)
+	}
 
 	cancel()
 	reloadableMonitor.Stop()
