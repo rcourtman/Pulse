@@ -109,6 +109,7 @@ const (
 	maxPromptMountCount      = 64
 	maxPromptNetworkCount    = 32
 	maxPromptPortCount       = 64
+	maxAnalysisCacheEntries  = 1024
 	maxAIResponseLength      = 64 * 1024
 	maxServiceTypeLength     = 64
 	maxServiceNameLength     = 128
@@ -347,6 +348,13 @@ func (s *Service) analyzeContainer(ctx context.Context, analyzer AIAnalyzer, c m
 
 		// Cache the result
 		s.cacheMu.Lock()
+		if _, exists := s.analysisCache[c.Image]; !exists && len(s.analysisCache) >= maxAnalysisCacheEntries {
+			log.Warn().
+				Int("cache_entries", len(s.analysisCache)).
+				Int("cache_limit", maxAnalysisCacheEntries).
+				Msg("Discovery analysis cache reached size limit; clearing cache")
+			s.analysisCache = make(map[string]*DiscoveryResult)
+		}
 		s.analysisCache[c.Image] = result
 		s.lastCacheUpdate = time.Now()
 		s.cacheMu.Unlock()

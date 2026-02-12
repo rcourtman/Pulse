@@ -2,6 +2,7 @@ package infradiscovery
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -321,6 +322,35 @@ func TestCaching(t *testing.T) {
 
 	if analyzer.callCount != 1 {
 		t.Errorf("After cache clear: analyzer called %d times, want 1", analyzer.callCount)
+	}
+}
+
+func TestAnalyzeContainer_CapsAnalysisCacheSize(t *testing.T) {
+	service := NewService(&mockStateProvider{}, nil, DefaultConfig())
+	analyzer := &mockAIAnalyzer{}
+	host := models.DockerHost{AgentID: "agent-1", Hostname: "host1"}
+
+	lastImage := ""
+	for i := 0; i < maxAnalysisCacheEntries+5; i++ {
+		lastImage = fmt.Sprintf("image-%d", i)
+		container := models.DockerContainer{
+			ID:    fmt.Sprintf("%d", i),
+			Name:  fmt.Sprintf("container-%d", i),
+			Image: lastImage,
+		}
+		service.analyzeContainer(context.Background(), analyzer, container, host)
+	}
+
+	service.cacheMu.RLock()
+	cacheSize := len(service.analysisCache)
+	_, hasLastImage := service.analysisCache[lastImage]
+	service.cacheMu.RUnlock()
+
+	if cacheSize > maxAnalysisCacheEntries {
+		t.Fatalf("cache size = %d, want <= %d", cacheSize, maxAnalysisCacheEntries)
+	}
+	if !hasLastImage {
+		t.Fatalf("expected cache to contain latest image %q after eviction", lastImage)
 	}
 }
 
