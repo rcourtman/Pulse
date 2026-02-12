@@ -72,9 +72,20 @@ func NewConversionStore(dbPath string) (*ConversionStore, error) {
 	return store, nil
 }
 
-func (s *ConversionStore) initSchema() error {
+func (s *ConversionStore) ensureInitialized() error {
 	if s == nil || s.db == nil {
 		return fmt.Errorf("conversion store is not initialized")
+	}
+	return nil
+}
+
+func formatTimeForDB(t time.Time) string {
+	return t.UTC().Truncate(time.Second).Format(time.RFC3339)
+}
+
+func (s *ConversionStore) initSchema() error {
+	if err := s.ensureInitialized(); err != nil {
+		return err
 	}
 
 	schema := `
@@ -100,8 +111,8 @@ func (s *ConversionStore) initSchema() error {
 }
 
 func (s *ConversionStore) Record(event StoredConversionEvent) error {
-	if s == nil || s.db == nil {
-		return fmt.Errorf("conversion store is not initialized")
+	if err := s.ensureInitialized(); err != nil {
+		return err
 	}
 
 	orgID := strings.TrimSpace(event.OrgID)
@@ -121,8 +132,7 @@ func (s *ConversionStore) Record(event StoredConversionEvent) error {
 	if createdAt.IsZero() {
 		createdAt = time.Now().UTC()
 	}
-	createdAt = createdAt.UTC().Truncate(time.Second)
-	createdAtValue := createdAt.Format(time.RFC3339)
+	createdAtValue := formatTimeForDB(createdAt)
 
 	_, err := s.db.Exec(
 		`INSERT OR IGNORE INTO conversion_events (org_id, event_type, surface, capability, idempotency_key, created_at)
@@ -141,8 +151,8 @@ func (s *ConversionStore) Record(event StoredConversionEvent) error {
 }
 
 func (s *ConversionStore) Query(orgID string, from, to time.Time, eventType string) ([]StoredConversionEvent, error) {
-	if s == nil || s.db == nil {
-		return nil, fmt.Errorf("conversion store is not initialized")
+	if err := s.ensureInitialized(); err != nil {
+		return nil, err
 	}
 
 	where := make([]string, 0, 8)
@@ -160,11 +170,11 @@ func (s *ConversionStore) Query(orgID string, from, to time.Time, eventType stri
 	}
 	if !from.IsZero() {
 		where = append(where, "created_at >= ?")
-		args = append(args, from.UTC().Truncate(time.Second).Format(time.RFC3339))
+		args = append(args, formatTimeForDB(from))
 	}
 	if !to.IsZero() {
 		where = append(where, "created_at < ?")
-		args = append(args, to.UTC().Truncate(time.Second).Format(time.RFC3339))
+		args = append(args, formatTimeForDB(to))
 	}
 
 	query := `
@@ -214,8 +224,8 @@ func (s *ConversionStore) Query(orgID string, from, to time.Time, eventType stri
 }
 
 func (s *ConversionStore) FunnelSummary(orgID string, from, to time.Time) (*FunnelSummary, error) {
-	if s == nil || s.db == nil {
-		return nil, fmt.Errorf("conversion store is not initialized")
+	if err := s.ensureInitialized(); err != nil {
+		return nil, err
 	}
 	if from.IsZero() || to.IsZero() {
 		return nil, fmt.Errorf("from/to are required")
@@ -224,8 +234,8 @@ func (s *ConversionStore) FunnelSummary(orgID string, from, to time.Time) (*Funn
 	orgID = strings.TrimSpace(orgID)
 	where := []string{"created_at >= ?", "created_at < ?"}
 	args := []any{
-		from.UTC().Truncate(time.Second).Format(time.RFC3339),
-		to.UTC().Truncate(time.Second).Format(time.RFC3339),
+		formatTimeForDB(from),
+		formatTimeForDB(to),
 	}
 	if orgID != "" {
 		where = append(where, "org_id = ?")

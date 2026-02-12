@@ -66,29 +66,24 @@ func newConversionMetrics() *ConversionMetrics {
 	return m
 }
 
+func defaultLabel(value string) string {
+	if value == "" {
+		return "unknown"
+	}
+	return value
+}
+
 // RecordEvent records an accepted conversion event.
 func (m *ConversionMetrics) RecordEvent(eventType, surface string) {
-	if eventType == "" {
-		eventType = "unknown"
-	}
-	if surface == "" {
-		surface = "unknown"
-	}
-	m.eventsTotal.WithLabelValues(eventType, surface).Inc()
+	m.eventsTotal.WithLabelValues(defaultLabel(eventType), defaultLabel(surface)).Inc()
 }
 
 // RecordInvalid records a conversion event validation failure.
 func (m *ConversionMetrics) RecordInvalid(reason string) {
-	if reason == "" {
-		reason = "unknown"
-	}
-	m.invalidTotal.WithLabelValues(reason).Inc()
+	m.invalidTotal.WithLabelValues(defaultLabel(reason)).Inc()
 }
 
 // RecordSkipped records a conversion event skipped by runtime collection controls.
 func (m *ConversionMetrics) RecordSkipped(reason string) {
-	if reason == "" {
-		reason = "unknown"
-	}
-	m.skippedTotal.WithLabelValues(reason).Inc()
+	m.skippedTotal.WithLabelValues(defaultLabel(reason)).Inc()
 }
