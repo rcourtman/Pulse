@@ -186,8 +186,9 @@ export class AIAPI {
         }
 
         const readPromise = reader.read();
+        let timeoutId: ReturnType<typeof setTimeout> | undefined;
         const timeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error('Read timeout')), STREAM_TIMEOUT_MS);
+          timeoutId = setTimeout(() => reject(new Error('Read timeout')), STREAM_TIMEOUT_MS);
         });
 
         let result: ReadableStreamReadResult<Uint8Array>;
@@ -196,6 +197,10 @@ export class AIAPI {
         } catch (e) {
           if ((e as Error).message === 'Read timeout') break;
           throw e;
+        } finally {
+          if (timeoutId !== undefined) {
+            clearTimeout(timeoutId);
+          }
         }
 
         const { done, value } = result;
