@@ -1,4 +1,4 @@
-package mdadm
+package hostagent
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
+	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 )
 
 // Pre-compiled regexes for performance (avoid recompilation on each call)
@@ -17,15 +17,15 @@ var (
 	mdDeviceRe       = regexp.MustCompile(`^(md\d+)\s*:`)
 	slotRe           = regexp.MustCompile(`^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(.+?)\s+(/dev/.+)$`)
 	speedRe          = regexp.MustCompile(`speed=(\S+)`)
-	runCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	mdadmCommandRunner = func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		cmd := exec.CommandContext(ctx, name, args...)
 		return cmd.Output()
 	}
 )
 
-// CollectArrays discovers and collects status for all mdadm RAID arrays on the system.
+// CollectRAIDArrays discovers and collects status for all mdadm RAID arrays on the system.
 // Returns an empty slice if mdadm is not available or no arrays are found.
-func CollectArrays(ctx context.Context) ([]host.RAIDArray, error) {
+func CollectRAIDArrays(ctx context.Context) ([]agentshost.RAIDArray, error) {
 	// Check if mdadm is available
 	if !isMdadmAvailable(ctx) {
 		return nil, nil
@@ -42,7 +42,7 @@ func CollectArrays(ctx context.Context) ([]host.RAIDArray, error) {
 	}
 
 	// Collect detailed info for each array
-	var arrays []host.RAIDArray
+	var arrays []agentshost.RAIDArray
 	for _, device := range devices {
 		array, err := collectArrayDetail(ctx, device)
 		if err != nil {
@@ -60,7 +60,7 @@ func isMdadmAvailable(ctx context.Context) bool {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 
-	_, err := runCommandOutput(ctx, "mdadm", "--version")
+	_, err := mdadmCommandRunner(ctx, "mdadm", "--version")
 	return err == nil
 }
 
@@ -69,7 +69,7 @@ func listArrayDevices(ctx context.Context) ([]string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 
-	output, err := runCommandOutput(ctx, "cat", "/proc/mdstat")
+	output, err := mdadmCommandRunner(ctx, "cat", "/proc/mdstat")
 	if err != nil {
 		return nil, fmt.Errorf("read /proc/mdstat: %w", err)
 	}
@@ -88,23 +88,23 @@ func listArrayDevices(ctx context.Context) ([]string, error) {
 }
 
 // collectArrayDetail runs mdadm --detail on a specific device and parses the output
-func collectArrayDetail(ctx context.Context, device string) (host.RAIDArray, error) {
+func collectArrayDetail(ctx context.Context, device string) (agentshost.RAIDArray, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	output, err := runCommandOutput(ctx, "mdadm", "--detail", device)
+	output, err := mdadmCommandRunner(ctx, "mdadm", "--detail", device)
 	if err != nil {
-		return host.RAIDArray{}, fmt.Errorf("mdadm --detail %s: %w", device, err)
+		return agentshost.RAIDArray{}, fmt.Errorf("mdadm --detail %s: %w", device, err)
 	}
 
-	return parseDetail(device, string(output))
+	return parseMdadmDetail(device, string(output))
 }
 
-// parseDetail parses the output of mdadm --detail
-func parseDetail(device, output string) (host.RAIDArray, error) {
-	array := host.RAIDArray{
+// parseMdadmDetail parses the output of mdadm --detail
+func parseMdadmDetail(device, output string) (agentshost.RAIDArray, error) {
+	array := agentshost.RAIDArray{
 		Device:  device,
-		Devices: []host.RAIDDevice{},
+		Devices: []agentshost.RAIDDevice{},
 	}
 
 	lines := strings.Split(output, "\n")
@@ -132,7 +132,7 @@ func parseDetail(device, output string) (host.RAIDArray, error) {
 				state := strings.TrimSpace(matches[5])
 				devicePath := strings.TrimSpace(matches[6])
 
-				array.Devices = append(array.Devices, host.RAIDDevice{
+				array.Devices = append(array.Devices, agentshost.RAIDDevice{
 					Device: devicePath,
 					State:  state,
 					Slot:   slot,
@@ -150,7 +150,7 @@ func parseDetail(device, output string) (host.RAIDArray, error) {
 					}
 					devicePath := parts[len(parts)-1]
 
-					array.Devices = append(array.Devices, host.RAIDDevice{
+					array.Devices = append(array.Devices, agentshost.RAIDDevice{
 						Device: devicePath,
 						State:  state,
 						Slot:   -1,
@@ -222,7 +222,7 @@ func getRebuildSpeed(device string) string {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	output, err := runCommandOutput(ctx, "cat", "/proc/mdstat")
+	output, err := mdadmCommandRunner(ctx, "cat", "/proc/mdstat")
 	if err != nil {
 		return ""
 	}

@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/hostmetrics"
-	"github.com/rcourtman/pulse-go-rewrite/internal/mdadm"
 	"github.com/rcourtman/pulse-go-rewrite/internal/sensors"
 	"github.com/rcourtman/pulse-go-rewrite/internal/smartctl"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
@@ -73,7 +72,7 @@ func (c *defaultCollector) SensorsPower(ctx context.Context) (*sensors.PowerData
 }
 
 func (c *defaultCollector) RAIDArrays(ctx context.Context) ([]agentshost.RAIDArray, error) {
-	return mdadm.CollectArrays(ctx)
+	return CollectRAIDArrays(ctx)
 }
 
 func (c *defaultCollector) CephStatus(ctx context.Context) (*CephClusterStatus, error) {
