@@ -1,6 +1,8 @@
 package kubernetesagent
 
 import (
+	"bytes"
+	"strings"
 	"testing"
 
 	agentsk8s "github.com/rcourtman/pulse-go-rewrite/pkg/agents/kubernetes"
@@ -98,5 +100,25 @@ func TestHasPodUsage(t *testing.T) {
 	}
 	if !hasPodUsage(agentsk8s.PodUsage{NetworkRxBytes: 1}) {
 		t.Fatal("expected network-only usage to be true")
+	}
+}
+
+func TestReadBoundedBody(t *testing.T) {
+	body, err := readBoundedBody(strings.NewReader("hello"), 8)
+	if err != nil {
+		t.Fatalf("readBoundedBody: %v", err)
+	}
+	if string(body) != "hello" {
+		t.Fatalf("unexpected body %q", string(body))
+	}
+}
+
+func TestReadBoundedBody_RejectsOversizedPayload(t *testing.T) {
+	_, err := readBoundedBody(bytes.NewReader(bytes.Repeat([]byte("a"), 9)), 8)
+	if err == nil {
+		t.Fatal("expected oversized payload error")
+	}
+	if !strings.Contains(err.Error(), "exceeds") {
+		t.Fatalf("expected size limit error, got %v", err)
 	}
 }

@@ -80,10 +80,11 @@ type Agent struct {
 }
 
 const (
-	defaultInterval = 30 * time.Second
-	defaultMaxPods  = 200
-	requestTimeout  = 20 * time.Second
-	reportUserAgent = "pulse-kubernetes-agent/"
+	defaultInterval             = 30 * time.Second
+	defaultMaxPods              = 200
+	requestTimeout              = 20 * time.Second
+	maxMetricsResponseBodyBytes = int64(4 * 1024 * 1024)
+	reportUserAgent             = "pulse-kubernetes-agent/"
 )
 
 func New(cfg Config) (*Agent, error) {
@@ -448,8 +449,8 @@ func (a *Agent) collectUsageMetrics(ctx context.Context, nodes []agentsk8s.Node)
 
 	restClient := discovery.RESTClient()
 
-	nodeRaw, nodeErr := restClient.Get().AbsPath("/apis/metrics.k8s.io/v1beta1/nodes").DoRaw(ctx)
-	podRaw, podErr := restClient.Get().AbsPath("/apis/metrics.k8s.io/v1beta1/pods").DoRaw(ctx)
+	nodeRaw, nodeErr := readKubernetesResponseBody(ctx, restClient, "/apis/metrics.k8s.io/v1beta1/nodes", maxMetricsResponseBodyBytes)
+	podRaw, podErr := readKubernetesResponseBody(ctx, restClient, "/apis/metrics.k8s.io/v1beta1/pods", maxMetricsResponseBodyBytes)
 
 	if nodeErr != nil && podErr != nil {
 		return nil, nil, fmt.Errorf("metrics.k8s.io unavailable (nodes: %w; pods: %v)", nodeErr, podErr)
@@ -520,7 +521,7 @@ func (a *Agent) collectPodSummaryMetrics(ctx context.Context, nodes []agentsk8s.
 		}
 
 		path := "/api/v1/nodes/" + url.PathEscape(nodeName) + "/proxy/stats/summary"
-		raw, err := restClient.Get().AbsPath(path).DoRaw(ctx)
+		raw, err := readKubernetesResponseBody(ctx, restClient, path, maxMetricsResponseBodyBytes)
 		if err != nil {
 			failed++
 			continue
@@ -554,6 +555,35 @@ func (a *Agent) collectPodSummaryMetrics(ctx context.Context, nodes []agentsk8s.
 		return nil, fmt.Errorf("no node summary metrics endpoints available")
 	}
 	return result, nil
+}
+
+func readKubernetesResponseBody(ctx context.Context, restClient rest.Interface, path string, maxBytes int64) ([]byte, error) {
+	stream, err := restClient.Get().AbsPath(path).Stream(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer stream.Close()
+
+	body, err := readBoundedBody(stream, maxBytes)
+	if err != nil {
+		return nil, fmt.Errorf("read %s response: %w", path, err)
+	}
+	return body, nil
+}
+
+func readBoundedBody(reader io.Reader, maxBytes int64) ([]byte, error) {
+	if maxBytes <= 0 {
+		return nil, fmt.Errorf("invalid max bytes %d", maxBytes)
+	}
+
+	body, err := io.ReadAll(io.LimitReader(reader, maxBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(body)) > maxBytes {
+		return nil, fmt.Errorf("response body exceeds %d bytes", maxBytes)
+	}
+	return body, nil
 }
 
 func parseNodeMetricsPayload(raw []byte) (map[string]agentsk8s.NodeUsage, error) {
