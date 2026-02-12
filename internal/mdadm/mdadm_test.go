@@ -15,6 +15,13 @@ func withRunCommandOutput(t *testing.T, fn func(ctx context.Context, name string
 	t.Cleanup(func() { runCommandOutput = orig })
 }
 
+func withReadProcMDStat(t *testing.T, fn func() ([]byte, error)) {
+	t.Helper()
+	orig := readProcMDStat
+	readProcMDStat = fn
+	t.Cleanup(func() { readProcMDStat = orig })
+}
+
 func TestParseDetail(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -577,7 +584,7 @@ func TestListArrayDevices(t *testing.T) {
 md0 : active raid1 sdb1[1] sda1[0]
 md1 : active raid6 sdc1[2] sdb1[1] sda1[0]
 unused devices: <none>`
-	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	withReadProcMDStat(t, func() ([]byte, error) {
 		return []byte(mdstat), nil
 	})
 
@@ -591,7 +598,7 @@ unused devices: <none>`
 }
 
 func TestListArrayDevicesError(t *testing.T) {
-	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	withReadProcMDStat(t, func() ([]byte, error) {
 		return nil, errors.New("read failed")
 	})
 
@@ -626,9 +633,9 @@ func TestCollectArraysNotAvailable(t *testing.T) {
 
 func TestCollectArraysListError(t *testing.T) {
 	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
-		if name == "mdadm" {
-			return []byte("mdadm"), nil
-		}
+		return []byte("mdadm"), nil
+	})
+	withReadProcMDStat(t, func() ([]byte, error) {
 		return nil, errors.New("read failed")
 	})
 
@@ -639,9 +646,9 @@ func TestCollectArraysListError(t *testing.T) {
 
 func TestCollectArraysNoDevices(t *testing.T) {
 	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
-		if name == "mdadm" {
-			return []byte("mdadm"), nil
-		}
+		return []byte("mdadm"), nil
+	})
+	withReadProcMDStat(t, func() ([]byte, error) {
 		return []byte("unused devices: <none>"), nil
 	})
 
@@ -656,17 +663,13 @@ func TestCollectArraysNoDevices(t *testing.T) {
 
 func TestCollectArraysSkipsDetailError(t *testing.T) {
 	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
-		switch name {
-		case "mdadm":
-			if len(args) > 0 && args[0] == "--version" {
-				return []byte("mdadm"), nil
-			}
-			return nil, errors.New("detail failed")
-		case "cat":
-			return []byte("md0 : active raid1 sda1[0]"), nil
-		default:
-			return nil, errors.New("unexpected")
+		if len(args) > 0 && args[0] == "--version" {
+			return []byte("mdadm"), nil
 		}
+		return nil, errors.New("detail failed")
+	})
+	withReadProcMDStat(t, func() ([]byte, error) {
+		return []byte("md0 : active raid1 sda1[0]"), nil
 	})
 
 	arrays, err := CollectArrays(context.Background())
@@ -692,17 +695,13 @@ func TestCollectArraysSuccess(t *testing.T) {
        0       8        1        0      active sync   /dev/sda1`
 
 	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
-		switch name {
-		case "mdadm":
-			if len(args) > 0 && args[0] == "--version" {
-				return []byte("mdadm"), nil
-			}
-			return []byte(detail), nil
-		case "cat":
-			return []byte("md0 : active raid1 sda1[0]"), nil
-		default:
-			return nil, errors.New("unexpected")
+		if len(args) > 0 && args[0] == "--version" {
+			return []byte("mdadm"), nil
 		}
+		return []byte(detail), nil
+	})
+	withReadProcMDStat(t, func() ([]byte, error) {
+		return []byte("md0 : active raid1 sda1[0]"), nil
 	})
 
 	arrays, err := CollectArrays(context.Background())
@@ -718,7 +717,7 @@ func TestGetRebuildSpeed(t *testing.T) {
 	mdstat := `md0 : active raid1 sda1[0] sdb1[1]
       [>....................]  recovery = 12.6% (37043392/293039104) finish=127.5min speed=33440K/sec
 `
-	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	withReadProcMDStat(t, func() ([]byte, error) {
 		return []byte(mdstat), nil
 	})
 
@@ -728,7 +727,7 @@ func TestGetRebuildSpeed(t *testing.T) {
 }
 
 func TestGetRebuildSpeedNoMatch(t *testing.T) {
-	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	withReadProcMDStat(t, func() ([]byte, error) {
 		return []byte("md0 : active raid1 sda1[0]"), nil
 	})
 
@@ -738,7 +737,7 @@ func TestGetRebuildSpeedNoMatch(t *testing.T) {
 }
 
 func TestGetRebuildSpeedError(t *testing.T) {
-	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	withReadProcMDStat(t, func() ([]byte, error) {
 		return nil, errors.New("read failed")
 	})
 
@@ -759,7 +758,7 @@ func TestParseDetailSetsRebuildSpeed(t *testing.T) {
 	mdstat := `md0 : active raid1 sda1[0]
       [>....................]  recovery = 12.6% (37043392/293039104) finish=127.5min speed=1234K/sec
 `
-	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	withReadProcMDStat(t, func() ([]byte, error) {
 		return []byte(mdstat), nil
 	})
 
@@ -777,7 +776,7 @@ func TestGetRebuildSpeedSectionExit(t *testing.T) {
       [>....................]  recovery = 12.6% (37043392/293039104) finish=127.5min
 md1 : active raid1 sdb1[0]
 `
-	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	withReadProcMDStat(t, func() ([]byte, error) {
 		return []byte(mdstat), nil
 	})
 

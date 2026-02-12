@@ -3,6 +3,7 @@ package mdadm
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"regexp"
 	"strconv"
@@ -20,6 +21,9 @@ var (
 	runCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		cmd := exec.CommandContext(ctx, name, args...)
 		return cmd.Output()
+	}
+	readProcMDStat = func() ([]byte, error) {
+		return os.ReadFile("/proc/mdstat")
 	}
 )
 
@@ -65,11 +69,8 @@ func isMdadmAvailable(ctx context.Context) bool {
 }
 
 // listArrayDevices scans /proc/mdstat to find all md devices
-func listArrayDevices(ctx context.Context) ([]string, error) {
-	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
-	defer cancel()
-
-	output, err := runCommandOutput(ctx, "cat", "/proc/mdstat")
+func listArrayDevices(_ context.Context) ([]string, error) {
+	output, err := readProcMDStat()
 	if err != nil {
 		return nil, fmt.Errorf("read /proc/mdstat: %w", err)
 	}
@@ -219,10 +220,7 @@ func getRebuildSpeed(device string) string {
 	// Remove /dev/ prefix for /proc/mdstat lookup
 	deviceName := strings.TrimPrefix(device, "/dev/")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-
-	output, err := runCommandOutput(ctx, "cat", "/proc/mdstat")
+	output, err := readProcMDStat()
 	if err != nil {
 		return ""
 	}
