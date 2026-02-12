@@ -1,6 +1,7 @@
 package notifications
 
 import (
+	"database/sql"
 	"fmt"
 	"os"
 	"testing"
@@ -308,6 +309,15 @@ func TestCancelByAlertIDs_MatchingNotificationCancelled(t *testing.T) {
 	}
 	if stats["cancelled"] != 1 {
 		t.Errorf("Expected 1 cancelled notification, got %d (stats: %v)", stats["cancelled"], stats)
+	}
+
+	var completedAt sql.NullInt64
+	err = nq.db.QueryRow(`SELECT completed_at FROM notification_queue WHERE id = ?`, "notif-1").Scan(&completedAt)
+	if err != nil {
+		t.Fatalf("Failed to query completed_at: %v", err)
+	}
+	if !completedAt.Valid || completedAt.Int64 <= 0 {
+		t.Errorf("Expected completed_at to be set for cancelled notification, got %+v", completedAt)
 	}
 }
 
@@ -720,6 +730,54 @@ func TestPerformCleanup(t *testing.T) {
 		}
 		if count != 1 {
 			t.Error("recent completed notification should NOT have been cleaned up")
+		}
+	})
+
+	t.Run("cleanup removes old completed entries with audit rows", func(t *testing.T) {
+		tempDir := t.TempDir()
+		nq, err := NewNotificationQueue(tempDir)
+		if err != nil {
+			t.Fatalf("Failed to create notification queue: %v", err)
+		}
+		defer nq.Stop()
+
+		oldTime := time.Now().Add(-10 * 24 * time.Hour).Unix() // 10 days ago
+		recentAuditTime := time.Now().Add(-1 * time.Hour).Unix()
+
+		_, err = nq.db.Exec(`
+			INSERT INTO notification_queue
+			(id, type, status, config, alerts, attempts, max_attempts, created_at, completed_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			"old-sent-with-audit", "email", "sent", "{}", "[]", 1, 3, oldTime, oldTime)
+		if err != nil {
+			t.Fatalf("Failed to insert old notification: %v", err)
+		}
+
+		_, err = nq.db.Exec(`
+			INSERT INTO notification_audit (notification_id, type, status, timestamp)
+			VALUES (?, ?, ?, ?)`,
+			"old-sent-with-audit", "email", "sent", recentAuditTime)
+		if err != nil {
+			t.Fatalf("Failed to insert audit row: %v", err)
+		}
+
+		nq.performCleanup()
+
+		var count int
+		err = nq.db.QueryRow(`SELECT COUNT(*) FROM notification_queue WHERE id = ?`, "old-sent-with-audit").Scan(&count)
+		if err != nil {
+			t.Fatalf("Failed to query queue row: %v", err)
+		}
+		if count != 0 {
+			t.Error("old completed notification with audit row should have been cleaned up")
+		}
+
+		err = nq.db.QueryRow(`SELECT COUNT(*) FROM notification_audit WHERE notification_id = ?`, "old-sent-with-audit").Scan(&count)
+		if err != nil {
+			t.Fatalf("Failed to query audit rows: %v", err)
+		}
+		if count != 0 {
+			t.Error("audit rows for deleted notification should have been cleaned up")
 		}
 	})
 

@@ -148,6 +148,7 @@ func (nq *NotificationQueue) initSchema() error {
 	CREATE INDEX IF NOT EXISTS idx_status ON notification_queue(status);
 	CREATE INDEX IF NOT EXISTS idx_next_retry ON notification_queue(next_retry_at) WHERE status = 'pending';
 	CREATE INDEX IF NOT EXISTS idx_created_at ON notification_queue(created_at);
+	CREATE INDEX IF NOT EXISTS idx_status_completed_at ON notification_queue(status, completed_at);
 
 	CREATE TABLE IF NOT EXISTS notification_audit (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -673,39 +674,97 @@ func (nq *NotificationQueue) performCleanup() {
 	// Keep completed/failed for 7 days, DLQ for 30 days
 	completedCutoff := time.Now().Add(-7 * 24 * time.Hour).Unix()
 	dlqCutoff := time.Now().Add(-30 * 24 * time.Hour).Unix()
+	auditCutoff := time.Now().Add(-30 * 24 * time.Hour).Unix()
+
+	tx, err := nq.db.Begin()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to start cleanup transaction")
+		return
+	}
+
+	var queueCompletedDeleted int64
+	var queueDLQDeleted int64
+	var auditDeleted int64
+
+	// With foreign keys enabled, delete child audit rows before parent queue rows.
+	query := `DELETE FROM notification_audit WHERE notification_id IN (
+		SELECT id FROM notification_queue
+		WHERE status IN ('sent', 'failed', 'cancelled') AND completed_at < ?
+	)`
+	result, err := tx.Exec(query, completedCutoff)
+	if err != nil {
+		_ = tx.Rollback()
+		log.Error().Err(err).Msg("Failed to cleanup audit rows for completed notifications")
+		return
+	}
+	if rows, rowsErr := result.RowsAffected(); rowsErr == nil {
+		auditDeleted += rows
+	}
 
 	// Clean completed/sent/failed/cancelled
-	query := `DELETE FROM notification_queue WHERE status IN ('sent', 'failed', 'cancelled') AND completed_at < ?`
-	result, err := nq.db.Exec(query, completedCutoff)
+	query = `DELETE FROM notification_queue WHERE status IN ('sent', 'failed', 'cancelled') AND completed_at < ?`
+	result, err = tx.Exec(query, completedCutoff)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to cleanup old notifications")
-	} else {
-		if rows, _ := result.RowsAffected(); rows > 0 {
-			log.Info().Int64("count", rows).Msg("Cleaned up old completed notifications")
-		}
+		_ = tx.Rollback()
+		log.Error().Err(err).Msg("Failed to cleanup old completed notifications")
+		return
+	}
+	if rows, rowsErr := result.RowsAffected(); rowsErr == nil {
+		queueCompletedDeleted = rows
+	}
+
+	// Delete audit rows for expired DLQ entries before deleting DLQ queue rows.
+	query = `DELETE FROM notification_audit WHERE notification_id IN (
+		SELECT id FROM notification_queue
+		WHERE status = 'dlq' AND completed_at < ?
+	)`
+	result, err = tx.Exec(query, dlqCutoff)
+	if err != nil {
+		_ = tx.Rollback()
+		log.Error().Err(err).Msg("Failed to cleanup audit rows for old DLQ notifications")
+		return
+	}
+	if rows, rowsErr := result.RowsAffected(); rowsErr == nil {
+		auditDeleted += rows
 	}
 
 	// Clean old DLQ entries
 	query = `DELETE FROM notification_queue WHERE status = 'dlq' AND completed_at < ?`
-	result, err = nq.db.Exec(query, dlqCutoff)
+	result, err = tx.Exec(query, dlqCutoff)
 	if err != nil {
+		_ = tx.Rollback()
 		log.Error().Err(err).Msg("Failed to cleanup old DLQ entries")
-	} else {
-		if rows, _ := result.RowsAffected(); rows > 0 {
-			log.Info().Int64("count", rows).Msg("Cleaned up old DLQ entries")
-		}
+		return
+	}
+	if rows, rowsErr := result.RowsAffected(); rowsErr == nil {
+		queueDLQDeleted = rows
 	}
 
 	// Clean old audit logs (keep 30 days)
-	auditCutoff := time.Now().Add(-30 * 24 * time.Hour).Unix()
 	query = `DELETE FROM notification_audit WHERE timestamp < ?`
-	result, err = nq.db.Exec(query, auditCutoff)
+	result, err = tx.Exec(query, auditCutoff)
 	if err != nil {
+		_ = tx.Rollback()
 		log.Error().Err(err).Msg("Failed to cleanup old audit logs")
-	} else {
-		if rows, _ := result.RowsAffected(); rows > 0 {
-			log.Debug().Int64("count", rows).Msg("Cleaned up old audit logs")
-		}
+		return
+	}
+	if rows, rowsErr := result.RowsAffected(); rowsErr == nil {
+		auditDeleted += rows
+	}
+
+	if err := tx.Commit(); err != nil {
+		log.Error().Err(err).Msg("Failed to commit cleanup transaction")
+		return
+	}
+
+	if queueCompletedDeleted > 0 {
+		log.Info().Int64("count", queueCompletedDeleted).Msg("Cleaned up old completed notifications")
+	}
+	if queueDLQDeleted > 0 {
+		log.Info().Int64("count", queueDLQDeleted).Msg("Cleaned up old DLQ entries")
+	}
+	if auditDeleted > 0 {
+		log.Debug().Int64("count", auditDeleted).Msg("Cleaned up old audit logs")
 	}
 }
 
@@ -796,11 +855,11 @@ func (nq *NotificationQueue) CancelByAlertIDs(alertIDs []string) error {
 		now := time.Now().Unix()
 		updateQuery := `
 			UPDATE notification_queue
-			SET status = ?, last_attempt = ?, last_error = ?
+			SET status = ?, last_attempt = ?, last_error = ?, completed_at = ?
 			WHERE id = ?
 		`
 		for _, notifID := range toCancelIDs {
-			if _, err := nq.db.Exec(updateQuery, QueueStatusCancelled, now, "Alert resolved", notifID); err != nil {
+			if _, err := nq.db.Exec(updateQuery, QueueStatusCancelled, now, "Alert resolved", now, notifID); err != nil {
 				log.Error().Err(err).Str("notifID", notifID).Msg("Failed to mark notification as cancelled")
 			}
 		}
