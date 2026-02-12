@@ -872,7 +872,7 @@ export function AIIntelligence() {
                         </div>
                         <Show when={autoFixLocked()}>
                           <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
-                            <a class="text-indigo-600 dark:text-indigo-400 font-medium hover:underline" href={getUpgradeActionUrlOrFallback('ai_autofix')} target="_blank" rel="noreferrer" onClick={() => trackUpgradeClicked('ai_intelligence', 'ai_autofix')}>Upgrade to Pro</a>
+                            <a class="text-indigo-600 dark:text-indigo-400 font-medium hover:underline" href={getUpgradeActionUrlOrFallback('ai_autofix')} target="_blank" rel="noopener noreferrer" onClick={() => trackUpgradeClicked('ai_intelligence', 'ai_autofix')}>Upgrade to Pro</a>
                             {' '}to unlock auto-fix.
                             <Show when={canStartTrial()}>
                               {' '}
@@ -919,7 +919,7 @@ export function AIIntelligence() {
                         </div>
                         <Show when={alertAnalysisLocked()}>
                           <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
-                            <a class="text-indigo-600 dark:text-indigo-400 font-medium hover:underline" href={getUpgradeActionUrlOrFallback('ai_alerts')} target="_blank" rel="noreferrer" onClick={() => trackUpgradeClicked('ai_intelligence', 'ai_alerts')}>Upgrade to Pro</a>
+                            <a class="text-indigo-600 dark:text-indigo-400 font-medium hover:underline" href={getUpgradeActionUrlOrFallback('ai_alerts')} target="_blank" rel="noopener noreferrer" onClick={() => trackUpgradeClicked('ai_intelligence', 'ai_alerts')}>Upgrade to Pro</a>
                             {' '}to enable alert-triggered analysis.
                             <Show when={canStartTrial()}>
                               {' '}
