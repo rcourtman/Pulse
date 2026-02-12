@@ -114,7 +114,7 @@ type cpuSample struct {
 func New(cfg Config) (*Agent, error) {
 	targets, err := normalizeTargetsFn(cfg.Targets)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("dockeragent.New: normalize targets: %w", err)
 	}
 
 	if len(targets) == 0 {
@@ -130,7 +130,7 @@ func New(cfg Config) (*Agent, error) {
 			InsecureSkipVerify: cfg.InsecureSkipVerify,
 		}})
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("dockeragent.New: normalize fallback target: %w", err)
 		}
 	}
 
@@ -141,13 +141,13 @@ func New(cfg Config) (*Agent, error) {
 
 	stateFilters, err := normalizeContainerStates(cfg.ContainerStates)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("dockeragent.New: normalize container states: %w", err)
 	}
 	cfg.ContainerStates = stateFilters
 
 	scope, err := normalizeSwarmScope(cfg.SwarmScope)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("dockeragent.New: normalize swarm scope: %w", err)
 	}
 	cfg.SwarmScope = scope
 
@@ -172,12 +172,12 @@ func New(cfg Config) (*Agent, error) {
 
 	runtimePref, err := normalizeRuntime(cfg.Runtime)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("dockeragent.New: normalize runtime: %w", err)
 	}
 
 	dockerClient, info, runtimeKind, err := connectRuntimeFn(runtimePref, logger)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("dockeragent.New: connect runtime: %w", err)
 	}
 	cfg.Runtime = string(runtimeKind)
 
@@ -871,7 +871,9 @@ func (a *Agent) disableSelf(ctx context.Context) error {
 	}
 
 	// Best-effort log cleanup (ignore errors).
-	_ = removeFileIfExists(agentLogPath)
+	if err := removeFileIfExists(agentLogPath); err != nil {
+		a.logger.Warn().Err(err).Msg("Failed to remove agent log directory")
+	}
 
 	return nil
 }
