@@ -29,6 +29,46 @@ var execCommandContext = exec.CommandContext
 // Package var so tests can override to avoid long sleeps.
 var reconnectDelay = 10 * time.Second
 
+const (
+	maxCommandOutputSize = 1024 * 1024
+	outputTruncatedMsg   = "\n... (output truncated)"
+)
+
+type cappedBuffer struct {
+	maxBytes  int
+	buf       bytes.Buffer
+	truncated bool
+}
+
+func newCappedBuffer(maxBytes int) *cappedBuffer {
+	return &cappedBuffer{maxBytes: maxBytes}
+}
+
+func (b *cappedBuffer) Write(p []byte) (int, error) {
+	remaining := b.maxBytes - b.buf.Len()
+	if remaining <= 0 {
+		b.truncated = true
+		return len(p), nil
+	}
+
+	if len(p) <= remaining {
+		_, _ = b.buf.Write(p)
+		return len(p), nil
+	}
+
+	_, _ = b.buf.Write(p[:remaining])
+	b.truncated = true
+	return len(p), nil
+}
+
+func (b *cappedBuffer) String() string {
+	out := b.buf.String()
+	if b.truncated {
+		return out + outputTruncatedMsg
+	}
+	return out
+}
+
 // CommandClient handles WebSocket connection to Pulse for AI command execution
 type CommandClient struct {
 	pulseURL           string
@@ -479,9 +519,10 @@ func (c *CommandClient) executeCommand(ctx context.Context, payload executeComma
 		cmd.Env = append(os.Environ(), "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:"+os.Getenv("PATH"))
 	}
 
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	stdout := newCappedBuffer(maxCommandOutputSize)
+	stderr := newCappedBuffer(maxCommandOutputSize)
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
 
 	err := cmd.Run()
 
@@ -504,15 +545,6 @@ func (c *CommandClient) executeCommand(ctx context.Context, payload executeComma
 	} else {
 		result.ExitCode = 0
 		result.Success = true
-	}
-
-	// Truncate output if too large (1MB limit)
-	const maxOutputSize = 1024 * 1024
-	if len(result.Stdout) > maxOutputSize {
-		result.Stdout = result.Stdout[:maxOutputSize] + "\n... (output truncated)"
-	}
-	if len(result.Stderr) > maxOutputSize {
-		result.Stderr = result.Stderr[:maxOutputSize] + "\n... (output truncated)"
 	}
 
 	return result
