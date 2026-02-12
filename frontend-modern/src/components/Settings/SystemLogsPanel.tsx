@@ -17,25 +17,28 @@ export const SystemLogsPanel: Component = () => {
 
     let logContainer: HTMLDivElement | undefined;
     let eventSource: EventSource | null = null;
+    let disposed = false;
     const MAX_LOGS = 1000;
 
     const fetchLevel = async () => {
         try {
             const res = await apiFetchJSON('/api/logs/level') as { level?: string };
-            if (res.level) setLevel(res.level);
+            if (res.level && !disposed) setLevel(res.level);
         } catch (e) {
             logger.error('Failed to fetch log level', e);
         }
     };
 
     const connectStream = () => {
+        if (disposed) return;
+
         // Use relative path which works with the proxy setup
         const url = '/api/logs/stream';
 
         eventSource = new EventSource(url);
 
         eventSource.onmessage = (event) => {
-            if (isPaused()) return;
+            if (disposed || isPaused()) return;
 
             const cleanData = event.data;
 
@@ -54,20 +57,26 @@ export const SystemLogsPanel: Component = () => {
         };
 
         eventSource.onerror = () => {
+            if (disposed) return;
             // Browser handles reconnection, but let's log it
             logger.debug("SSE stream disconnected, reconnecting...");
         };
     };
 
-    onMount(async () => {
-        await fetchLevel();
-        connectStream();
-        setIsLoading(false);
+    onMount(() => {
+        void (async () => {
+            await fetchLevel();
+            if (disposed) return;
+            connectStream();
+            setIsLoading(false);
+        })();
     });
 
     onCleanup(() => {
+        disposed = true;
         if (eventSource) {
             eventSource.close();
+            eventSource = null;
         }
     });
 
