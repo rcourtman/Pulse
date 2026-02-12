@@ -184,7 +184,7 @@ func newRollingFileWriter(cfg Config) (io.Writer, error) {
 	}
 
 	dir := filepath.Dir(path)
-	if err := mkdirAllFn(dir, 0o755); err != nil {
+	if err := mkdirAllFn(dir, 0o700); err != nil {
 		return nil, fmt.Errorf("create log directory: %w", err)
 	}
 
