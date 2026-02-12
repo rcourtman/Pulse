@@ -178,76 +178,103 @@ func LoadMockConfig() MockConfig {
 	config := DefaultConfig
 
 	if val := os.Getenv("PULSE_MOCK_NODES"); val != "" {
-		if n, err := strconv.Atoi(val); err == nil && n > 0 {
+		if n, ok := parseIntEnv("PULSE_MOCK_NODES", val, config.NodeCount, 1); ok {
 			config.NodeCount = n
 		}
 	}
 
 	if val := os.Getenv("PULSE_MOCK_VMS_PER_NODE"); val != "" {
-		if n, err := strconv.Atoi(val); err == nil && n >= 0 {
+		if n, ok := parseIntEnv("PULSE_MOCK_VMS_PER_NODE", val, config.VMsPerNode, 0); ok {
 			config.VMsPerNode = n
 		}
 	}
 
 	if val := os.Getenv("PULSE_MOCK_LXCS_PER_NODE"); val != "" {
-		if n, err := strconv.Atoi(val); err == nil && n >= 0 {
+		if n, ok := parseIntEnv("PULSE_MOCK_LXCS_PER_NODE", val, config.LXCsPerNode, 0); ok {
 			config.LXCsPerNode = n
 		}
 	}
 
 	if val := os.Getenv("PULSE_MOCK_DOCKER_HOSTS"); val != "" {
-		if n, err := strconv.Atoi(val); err == nil && n >= 0 {
+		if n, ok := parseIntEnv("PULSE_MOCK_DOCKER_HOSTS", val, config.DockerHostCount, 0); ok {
 			config.DockerHostCount = n
 		}
 	}
 
 	if val := os.Getenv("PULSE_MOCK_DOCKER_CONTAINERS"); val != "" {
-		if n, err := strconv.Atoi(val); err == nil && n >= 0 {
+		if n, ok := parseIntEnv("PULSE_MOCK_DOCKER_CONTAINERS", val, config.DockerContainersPerHost, 0); ok {
 			config.DockerContainersPerHost = n
 		}
 	}
 
 	if val := os.Getenv("PULSE_MOCK_GENERIC_HOSTS"); val != "" {
-		if n, err := strconv.Atoi(val); err == nil && n >= 0 {
+		if n, ok := parseIntEnv("PULSE_MOCK_GENERIC_HOSTS", val, config.GenericHostCount, 0); ok {
 			config.GenericHostCount = n
 		}
 	}
 
 	if val := os.Getenv("PULSE_MOCK_K8S_CLUSTERS"); val != "" {
-		if n, err := strconv.Atoi(val); err == nil && n >= 0 {
+		if n, ok := parseIntEnv("PULSE_MOCK_K8S_CLUSTERS", val, config.K8sClusterCount, 0); ok {
 			config.K8sClusterCount = n
 		}
 	}
 
 	if val := os.Getenv("PULSE_MOCK_K8S_NODES"); val != "" {
-		if n, err := strconv.Atoi(val); err == nil && n >= 0 {
+		if n, ok := parseIntEnv("PULSE_MOCK_K8S_NODES", val, config.K8sNodesPerCluster, 0); ok {
 			config.K8sNodesPerCluster = n
 		}
 	}
 
 	if val := os.Getenv("PULSE_MOCK_K8S_PODS"); val != "" {
-		if n, err := strconv.Atoi(val); err == nil && n >= 0 {
+		if n, ok := parseIntEnv("PULSE_MOCK_K8S_PODS", val, config.K8sPodsPerCluster, 0); ok {
 			config.K8sPodsPerCluster = n
 		}
 	}
 
 	if val := os.Getenv("PULSE_MOCK_K8S_DEPLOYMENTS"); val != "" {
-		if n, err := strconv.Atoi(val); err == nil && n >= 0 {
+		if n, ok := parseIntEnv("PULSE_MOCK_K8S_DEPLOYMENTS", val, config.K8sDeploymentsPerCluster, 0); ok {
 			config.K8sDeploymentsPerCluster = n
 		}
 	}
 
 	if val := os.Getenv("PULSE_MOCK_RANDOM_METRICS"); val != "" {
+		if val != "true" && val != "false" {
+			log.Warn().
+				Str("env_var", "PULSE_MOCK_RANDOM_METRICS").
+				Str("env_value", val).
+				Bool("applied", false).
+				Msg("Invalid mock configuration boolean override; applying false")
+		}
 		config.RandomMetrics = val == "true"
 	}
 
 	if val := os.Getenv("PULSE_MOCK_STOPPED_PERCENT"); val != "" {
 		if f, err := strconv.ParseFloat(val, 64); err == nil {
 			config.StoppedPercent = f / 100.0
+		} else {
+			log.Warn().
+				Str("env_var", "PULSE_MOCK_STOPPED_PERCENT").
+				Str("env_value", val).
+				Float64("default", config.StoppedPercent).
+				Msg("Ignoring invalid mock configuration percent override")
 		}
 	}
 
 	return config
+}
+
+func parseIntEnv(key, value string, fallback int, min int) (int, bool) {
+	n, err := strconv.Atoi(value)
+	if err == nil && n >= min {
+		return n, true
+	}
+	log.Warn().
+		Str("env_var", key).
+		Str("env_value", value).
+		Int("default", fallback).
+		Int("minimum", min).
+		Msg("Ignoring invalid mock configuration integer override")
+	return 0, false
 }
 
 // SetMockConfig updates the mock configuration dynamically and regenerates data when enabled.
@@ -265,6 +292,7 @@ func SetMockConfig(cfg MockConfig) {
 		Int("nodes", cfg.NodeCount).
 		Int("vms_per_node", cfg.VMsPerNode).
 		Int("lxcs_per_node", cfg.LXCsPerNode).
+		Int("host_agents", cfg.GenericHostCount).
 		Int("docker_hosts", cfg.DockerHostCount).
 		Int("docker_containers_per_host", cfg.DockerContainersPerHost).
 		Int("k8s_clusters", cfg.K8sClusterCount).
