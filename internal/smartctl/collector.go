@@ -113,7 +113,7 @@ func CollectLocal(ctx context.Context, diskExclude []string) ([]DiskSMART, error
 	devices, err := listBlockDevices(ctx, diskExclude)
 	if err != nil {
 		log.Debug().Err(err).Msg("Failed to list block devices for SMART collection")
-		return nil, err
+		return nil, fmt.Errorf("list block devices for SMART collection: %w", err)
 	}
 
 	if len(devices) == 0 {
