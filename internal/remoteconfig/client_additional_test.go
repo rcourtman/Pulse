@@ -1,6 +1,7 @@
 package remoteconfig
 
 import (
+	"bytes"
 	"context"
 	"crypto/ed25519"
 	"encoding/base64"
@@ -10,6 +11,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/rs/zerolog"
 )
 
 func TestClientFetchWithSignature(t *testing.T) {
@@ -365,4 +368,101 @@ func TestClientFetchEscapesAgentIDPath(t *testing.T) {
 	if gotEscapedPath != "/api/agents/host/agent%2F1/config" {
 		t.Fatalf("unexpected escaped path: %q", gotEscapedPath)
 	}
+}
+
+func TestClientFetchLogsStructuredContextWhenSignatureMissing(t *testing.T) {
+	var logs bytes.Buffer
+	logger := zerolog.New(&logs)
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{
+			"success": true,
+			"hostId": "agent-1",
+			"config": {
+				"commandsEnabled": true,
+				"settings": {
+					"interval": "1m"
+				}
+			}
+		}`))
+	}))
+	defer ts.Close()
+
+	client := New(Config{
+		PulseURL: ts.URL,
+		APIToken: "token-123",
+		AgentID:  "agent-1",
+		Logger:   logger,
+	})
+
+	_, _, err := client.Fetch(context.Background())
+	if err != nil {
+		t.Fatalf("Fetch failed: %v", err)
+	}
+
+	entry := decodeLastLogEntry(t, &logs)
+	if entry["component"] != "remote_config_client" {
+		t.Fatalf("expected component remote_config_client, got %#v", entry["component"])
+	}
+	if entry["action"] != "missing_signature_skip_verification" {
+		t.Fatalf("expected action missing_signature_skip_verification, got %#v", entry["action"])
+	}
+	if entry["host_id"] != "agent-1" {
+		t.Fatalf("expected host_id agent-1, got %#v", entry["host_id"])
+	}
+}
+
+func TestClientResolveHostIDLogsStructuredContextOnStatusError(t *testing.T) {
+	var logs bytes.Buffer
+	logger := zerolog.New(&logs)
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer ts.Close()
+
+	client := New(Config{
+		PulseURL: ts.URL,
+		APIToken: "token",
+		Hostname: "known",
+		Logger:   logger,
+	})
+
+	if _, err := client.resolveHostID(context.Background()); err == nil {
+		t.Fatal("expected error for host lookup server failure")
+	}
+
+	entry := decodeLastLogEntry(t, &logs)
+	if entry["component"] != "remote_config_client" {
+		t.Fatalf("expected component remote_config_client, got %#v", entry["component"])
+	}
+	if entry["action"] != "host_lookup_non_success_status" {
+		t.Fatalf("expected action host_lookup_non_success_status, got %#v", entry["action"])
+	}
+	if entry["status_code"] != float64(http.StatusInternalServerError) {
+		t.Fatalf("expected status_code %d, got %#v", http.StatusInternalServerError, entry["status_code"])
+	}
+}
+
+func decodeLastLogEntry(t *testing.T, logs *bytes.Buffer) map[string]interface{} {
+	t.Helper()
+
+	raw := strings.TrimSpace(logs.String())
+	if raw == "" {
+		t.Fatal("expected structured log entry, got none")
+	}
+
+	lines := strings.Split(raw, "\n")
+	last := strings.TrimSpace(lines[len(lines)-1])
+	if last == "" {
+		t.Fatal("expected non-empty structured log line")
+	}
+
+	var entry map[string]interface{}
+	if err := json.Unmarshal([]byte(last), &entry); err != nil {
+		t.Fatalf("failed to decode structured log entry %q: %v", last, err)
+	}
+
+	return entry
 }
