@@ -111,7 +111,7 @@ func CollectLocal(ctx context.Context, diskExclude []string) ([]DiskSMART, error
 	// List block devices
 	devices, err := listBlockDevices(ctx, diskExclude)
 	if err != nil {
-		log.Debug().Err(err).Msg("Failed to list block devices for SMART collection")
+		log.Debug().Err(err).Msg("failed to list block devices for SMART collection")
 		return nil, err
 	}
 
@@ -123,7 +123,7 @@ func CollectLocal(ctx context.Context, diskExclude []string) ([]DiskSMART, error
 	for _, dev := range devices {
 		smart, err := collectDeviceSMART(ctx, dev)
 		if err != nil {
-			log.Debug().Err(err).Str("device", dev).Msg("Failed to collect SMART data for device")
+			log.Debug().Err(err).Str("device", dev).Msg("failed to collect SMART data for device")
 			continue
 		}
 		if smart != nil {
@@ -161,7 +161,7 @@ func listBlockDevicesLinux(ctx context.Context, diskExclude []string) ([]string,
 		if devType == "disk" {
 			devicePath := "/dev/" + name
 			if matchesDeviceExclude(name, devicePath, diskExclude) {
-				log.Debug().Str("device", devicePath).Msg("Skipping excluded device for SMART collection")
+				log.Debug().Str("device", devicePath).Msg("skipping excluded device for SMART collection")
 				continue
 			}
 			devices = append(devices, devicePath)
@@ -185,7 +185,7 @@ func listBlockDevicesFreeBSD(ctx context.Context, diskExclude []string) ([]strin
 		}
 		devicePath := "/dev/" + name
 		if matchesDeviceExclude(name, devicePath, diskExclude) {
-			log.Debug().Str("device", devicePath).Msg("Skipping excluded device for SMART collection")
+			log.Debug().Str("device", devicePath).Msg("skipping excluded device for SMART collection")
 			continue
 		}
 		devices = append(devices, devicePath)
@@ -321,7 +321,7 @@ func collectDeviceSMART(ctx context.Context, device string) (*DiskSMART, error) 
 		Str("model", result.Model).
 		Int("temperature", result.Temperature).
 		Str("health", result.Health).
-		Msg("Collected SMART data")
+		Msg("collected SMART data")
 
 	return result, nil
 }
