@@ -310,14 +310,22 @@ func shouldFallbackToForm(err error) bool {
 }
 
 func (c *Client) ensureAuth(ctx context.Context) error {
-	if c.config.Password == "" || c.auth.tokenName != "" {
+	if c.config.Password == "" {
 		return nil
 	}
 
 	c.mu.Lock()
-	defer c.mu.Unlock()
+	tokenAuthEnabled := c.auth.tokenName != ""
+	expiresAt := c.auth.expiresAt
+	c.mu.Unlock()
 
-	if time.Now().After(c.auth.expiresAt) {
+	if tokenAuthEnabled {
+		return nil
+	}
+
+	if time.Now().After(expiresAt) {
+		// Re-authentication must happen without holding c.mu because authenticate()
+		// updates auth state through handleAuthResponse(), which also acquires c.mu.
 		if err := c.authenticate(ctx); err != nil {
 			return fmt.Errorf("re-authentication failed: %w", err)
 		}

@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestNewClientAuthenticatesWithJSONPayload(t *testing.T) {
@@ -174,6 +175,67 @@ func TestClientAuthenticateFallsBackToForm(t *testing.T) {
 
 	if !formAuthReceived {
 		t.Fatal("expected form-based auth fallback to be received")
+	}
+}
+
+func TestEnsureAuthReauthDoesNotDeadlock(t *testing.T) {
+	t.Parallel()
+
+	var authCalls int
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api2/json/access/ticket":
+			authCalls++
+			w.Header().Set("Content-Type", "application/json")
+			if authCalls == 1 {
+				fmt.Fprint(w, `{"data":{"ticket":"ticket-initial","CSRFPreventionToken":"csrf-initial"}}`)
+				return
+			}
+			fmt.Fprint(w, `{"data":{"ticket":"ticket-refresh","CSRFPreventionToken":"csrf-refresh"}}`)
+		case "/api2/json/version":
+			if !strings.Contains(r.Header.Get("Cookie"), "PMGAuthCookie=ticket-refresh") {
+				t.Fatalf("expected refreshed auth cookie, got %s", r.Header.Get("Cookie"))
+			}
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, `{"data":{"version":"8.1.0"}}`)
+		default:
+			t.Fatalf("unexpected request path: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	client, err := NewClient(ClientConfig{
+		Host:      server.URL,
+		User:      "api@pmg",
+		Password:  "secret",
+		VerifySSL: false,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error creating client: %v", err)
+	}
+
+	client.mu.Lock()
+	client.auth.expiresAt = time.Now().Add(-time.Minute)
+	client.mu.Unlock()
+
+	done := make(chan error, 1)
+	go func() {
+		_, reqErr := client.GetVersion(context.Background())
+		done <- reqErr
+	}()
+
+	select {
+	case reqErr := <-done:
+		if reqErr != nil {
+			t.Fatalf("GetVersion failed: %v", reqErr)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("GetVersion timed out; possible ensureAuth deadlock during re-authentication")
+	}
+
+	if authCalls != 2 {
+		t.Fatalf("expected re-authentication call, got %d auth calls", authCalls)
 	}
 }
 
