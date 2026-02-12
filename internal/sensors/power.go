@@ -106,14 +106,7 @@ func collectRALP(ctx context.Context) (*PowerData, error) {
 			continue
 		}
 
-		// Handle counter wraparound (energy counters are typically 32-bit)
-		var deltaUJ uint64
-		if energy2 >= energy1 {
-			deltaUJ = energy2 - energy1
-		} else {
-			// Counter wrapped around
-			deltaUJ = (^uint64(0) - energy1) + energy2 + 1
-		}
+		deltaUJ := energyDelta(energy1, energy2)
 
 		// Convert microjoules to watts
 		watts := float64(deltaUJ) / 1e6 / duration
@@ -185,6 +178,16 @@ func readRAPLEnergy(packages []string) (map[string]uint64, error) {
 	return result, nil
 }
 
+// energyDelta calculates the delta between two energy counter readings,
+// handling counter wraparound (energy counters are typically 32-bit).
+func energyDelta(before, after uint64) uint64 {
+	if after >= before {
+		return after - before
+	}
+	// Counter wrapped around
+	return (^uint64(0) - before) + after + 1
+}
+
 // readUint64File reads a file containing a single uint64 value.
 func readUint64File(path string) (uint64, error) {
 	data, err := os.ReadFile(path)
@@ -245,13 +248,7 @@ func collectAMDEnergy(ctx context.Context) (*PowerData, error) {
 			continue
 		}
 
-		// Handle counter wraparound
-		var deltaUJ uint64
-		if energy2 >= energy1 {
-			deltaUJ = energy2 - energy1
-		} else {
-			deltaUJ = (^uint64(0) - energy1) + energy2 + 1
-		}
+		deltaUJ := energyDelta(energy1, energy2)
 
 		// Convert microjoules to watts
 		watts := float64(deltaUJ) / 1e6 / duration
