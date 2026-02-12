@@ -91,7 +91,7 @@ func (a *InstallShAdapter) Execute(ctx context.Context, request UpdateRequest, p
 	log.Info().
 		Str("url", a.installScriptURL).
 		Str("version", request.Version).
-		Msg("Downloading install script")
+		Msg("downloading install script")
 
 	installScript, err := a.downloadInstallScript(ctx)
 	if err != nil {
@@ -238,7 +238,7 @@ func (a *InstallShAdapter) Rollback(ctx context.Context, eventID string) error {
 		Str("backup", entry.BackupPath).
 		Str("current_version", entry.VersionTo).
 		Str("target_version", targetVersion).
-		Msg("Starting rollback")
+		Msg("starting rollback")
 
 	// Create rollback history entry
 	rollbackEventID, err := a.history.CreateEntry(ctx, UpdateHistoryEntry{
@@ -286,10 +286,10 @@ func (a *InstallShAdapter) executeRollback(ctx context.Context, entry *UpdateHis
 		return fmt.Errorf("failed to detect service name: %w", err)
 	}
 
-	log.Info().Str("service", serviceName).Msg("Detected Pulse service")
+	log.Info().Str("service", serviceName).Msg("detected Pulse service")
 
 	// Step 2: Download old binary
-	log.Info().Str("version", targetVersion).Msg("Downloading old binary")
+	log.Info().Str("version", targetVersion).Msg("downloading old binary")
 	binaryPath, err := a.downloadBinary(ctx, targetVersion)
 	if err != nil {
 		return fmt.Errorf("failed to download binary: %w", err)
@@ -297,7 +297,7 @@ func (a *InstallShAdapter) executeRollback(ctx context.Context, entry *UpdateHis
 	defer os.RemoveAll(filepath.Dir(binaryPath))
 
 	// Step 3: Stop service
-	log.Info().Msg("Stopping Pulse service")
+	log.Info().Msg("stopping Pulse service")
 	if err := a.stopService(ctx, serviceName); err != nil {
 		return fmt.Errorf("failed to stop service: %w", err)
 	}
@@ -305,13 +305,13 @@ func (a *InstallShAdapter) executeRollback(ctx context.Context, entry *UpdateHis
 	// Step 4: Backup current config (safety)
 	configDir := "/etc/pulse"
 	safetyBackup := fmt.Sprintf("%s.rollback-safety.%s", configDir, time.Now().Format("20060102-150405"))
-	log.Info().Str("backup", safetyBackup).Msg("Creating safety backup of current config")
+	log.Info().Str("backup", safetyBackup).Msg("creating safety backup of current config")
 	if err := exec.CommandContext(ctx, "cp", "-a", configDir, safetyBackup).Run(); err != nil {
-		log.Warn().Err(err).Msg("Failed to create safety backup")
+		log.Warn().Err(err).Msg("failed to create safety backup")
 	}
 
 	// Step 5: Restore config from backup
-	log.Info().Str("source", entry.BackupPath).Msg("Restoring configuration")
+	log.Info().Str("source", entry.BackupPath).Msg("restoring configuration")
 	if err := a.restoreConfig(ctx, entry.BackupPath, configDir); err != nil {
 		// Try to start service anyway
 		_ = a.startService(ctx, serviceName)
@@ -319,7 +319,7 @@ func (a *InstallShAdapter) executeRollback(ctx context.Context, entry *UpdateHis
 	}
 
 	// Step 6: Install old binary
-	log.Info().Str("version", targetVersion).Msg("Installing old binary")
+	log.Info().Str("version", targetVersion).Msg("installing old binary")
 	installDir := "/opt/pulse/bin/pulse"
 	if err := a.installBinary(ctx, binaryPath, installDir); err != nil {
 		// Try to start service anyway
@@ -328,18 +328,18 @@ func (a *InstallShAdapter) executeRollback(ctx context.Context, entry *UpdateHis
 	}
 
 	// Step 7: Start service
-	log.Info().Msg("Starting Pulse service")
+	log.Info().Msg("starting Pulse service")
 	if err := a.startService(ctx, serviceName); err != nil {
 		return fmt.Errorf("failed to start service: %w", err)
 	}
 
 	// Step 8: Health check
-	log.Info().Msg("Verifying service health")
+	log.Info().Msg("verifying service health")
 	if err := a.waitForHealth(ctx, 30*time.Second); err != nil {
 		return fmt.Errorf("service health check failed: %w", err)
 	}
 
-	log.Info().Str("version", targetVersion).Msg("Rollback completed successfully")
+	log.Info().Str("version", targetVersion).Msg("rollback completed successfully")
 	return nil
 }
 
