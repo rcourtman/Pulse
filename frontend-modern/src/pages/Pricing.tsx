@@ -4,6 +4,7 @@ import { trackPaywallViewed } from '@/utils/conversionEvents';
 import { getUpgradeActionUrlOrFallback, loadLicenseStatus, entitlements } from '@/stores/license';
 import { LicenseAPI } from '@/api/license';
 import { showToast } from '@/utils/toast';
+import { logger } from '@/utils/logger';
 
 type TierColumn = 'community' | 'pro' | 'cloud';
 
@@ -88,8 +89,9 @@ export default function Pricing() {
 
   onMount(() => {
     trackPaywallViewed('pricing', 'pricing_page');
-    void loadLicenseStatus().catch(() => {
+    void loadLicenseStatus().catch((error) => {
       // Best-effort; public page should still render.
+      logger.debug('[Pricing] Failed to load license status on mount', error);
     });
   });
 
@@ -121,11 +123,12 @@ export default function Pricing() {
       try {
         const body = (await res.json()) as { error?: string; message?: string };
         errText = body.error || body.message || errText;
-      } catch {
-        // ignore
+      } catch (error) {
+        logger.debug('[Pricing] Failed to parse trial start error payload', error);
       }
       setTrialMessage(errText);
-    } catch {
+    } catch (error) {
+      logger.warn('[Pricing] Trial start request failed', error);
       setTrialMessage('Failed to start trial.');
     } finally {
       setStartingTrial(false);
