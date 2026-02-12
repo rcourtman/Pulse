@@ -89,7 +89,7 @@ func getOrCreateKeyAt(dataDir string) ([]byte, error) {
 	log.Debug().
 		Str("dataDir", dataDir).
 		Str("keyPath", keyPath).
-		Msg("Looking for encryption key")
+		Msg("looking for encryption key")
 
 	// Try to read existing key from new location
 	if data, err := os.ReadFile(keyPath); err == nil {
@@ -99,30 +99,34 @@ func getOrCreateKeyAt(dataDir string) ([]byte, error) {
 		n, err := base64.StdEncoding.Decode(decoded, data)
 		if err == nil {
 			if n == 32 {
-				log.Debug().Msg("Found and loaded existing encryption key")
+				log.Debug().
+					Str("keyPath", keyPath).
+					Msg("loaded existing encryption key")
 				return decoded[:n], nil
 			}
 			log.Warn().
+				Str("keyPath", keyPath).
 				Int("decodedBytes", n).
-				Msg("Encryption key has invalid length (expected 32 bytes)")
+				Msg("encryption key has invalid length (expected 32 bytes)")
 		} else {
 			log.Warn().
 				Err(err).
-				Msg("Failed to decode encryption key")
+				Str("keyPath", keyPath).
+				Msg("failed to decode encryption key")
 		}
 	} else {
-		log.Debug().Err(err).Str("path", keyPath).Msg("Could not read encryption key file")
+		log.Debug().Err(err).Str("path", keyPath).Msg("could not read encryption key file")
 	}
 
 	// Check for key in old location and migrate if found (only if paths differ)
 	// CRITICAL: This code deletes the encryption key at oldKeyPath after migrating it.
 	// Adding extensive logging to diagnose recurring key deletion bug.
 	if dataDir != oldKeyDir && keyPath != oldKeyPath {
-		log.Warn().
+		log.Debug().
 			Str("dataDir", dataDir).
 			Str("keyPath", keyPath).
 			Str("oldKeyPath", oldKeyPath).
-			Msg("ENCRYPTION KEY MIGRATION: Checking if old key exists for migration (this code path CAN delete the key!)")
+			Msg("checking for legacy encryption key migration")
 
 		if data, err := os.ReadFile(oldKeyPath); err == nil {
 			decoded := make([]byte, base64.StdEncoding.DecodedLen(len(data)))
@@ -132,18 +136,25 @@ func getOrCreateKeyAt(dataDir string) ([]byte, error) {
 				// Migrate key to new location
 				if err := os.MkdirAll(filepath.Dir(keyPath), 0700); err != nil {
 					// Migration failed, but we can still use the old key
-					log.Warn().Err(err).Msg("Failed to create directory for key migration, using old location")
+					log.Warn().
+						Err(err).
+						Str("keyPath", keyPath).
+						Msg("failed to create directory for key migration, using legacy key location")
 					return key, nil
 				}
 				if err := os.WriteFile(keyPath, data, 0600); err != nil {
 					// Migration failed, but we can still use the old key
-					log.Warn().Err(err).Msg("Failed to migrate encryption key, using old location")
+					log.Warn().
+						Err(err).
+						Str("oldKeyPath", oldKeyPath).
+						Str("keyPath", keyPath).
+						Msg("failed to migrate encryption key, using legacy key location")
 					return key, nil
 				}
 				log.Info().
 					Str("from", oldKeyPath).
 					Str("to", keyPath).
-					Msg("Successfully migrated encryption key to data directory")
+					Msg("migrated encryption key to data directory")
 
 				// CRITICAL: This is the ONLY place in the codebase that deletes the encryption key!
 				// BUG FIX: Disabling key deletion to prevent key loss.
@@ -152,7 +163,7 @@ func getOrCreateKeyAt(dataDir string) ([]byte, error) {
 					Str("oldKeyPath", oldKeyPath).
 					Str("newKeyPath", keyPath).
 					Str("dataDir", dataDir).
-					Msg("Key migration complete - PRESERVING old key at original location for safety")
+					Msg("preserved legacy encryption key after migration")
 
 				// DISABLED: Key deletion was causing mysterious key loss bugs.
 				// The old key is now preserved. This is safe because:
@@ -175,7 +186,7 @@ func getOrCreateKeyAt(dataDir string) ([]byte, error) {
 			Str("dataDir", dataDir).
 			Str("keyPath", keyPath).
 			Bool("sameAsOldPath", dataDir == oldKeyDir).
-			Msg("Skipping key migration check (dataDir is /etc/pulse or paths match)")
+			Msg("skipping key migration check (legacy and current paths are equivalent)")
 	}
 
 	// Before generating a new key, check if encrypted data exists OR if there are any backup/corrupted files
@@ -204,7 +215,7 @@ func getOrCreateKeyAt(dataDir string) ([]byte, error) {
 		log.Error().
 			Strs("foundFiles", foundFiles).
 			Str("dataDir", dataDir).
-			Msg("CRITICAL: Encryption key not found but encrypted/backup/corrupted files exist")
+			Msg("encryption key not found but encrypted/backup/corrupted files exist")
 		return nil, fmt.Errorf("encryption key not found but encrypted data exists (%v) - cannot generate new key as it would orphan existing data. Please restore the encryption key from backup or delete ALL .enc* files to start fresh", foundFiles)
 	}
 
@@ -225,7 +236,9 @@ func getOrCreateKeyAt(dataDir string) ([]byte, error) {
 		return nil, fmt.Errorf("failed to save key: %w", err)
 	}
 
-	log.Info().Msg("Generated new encryption key")
+	log.Info().
+		Str("keyPath", keyPath).
+		Msg("generated new encryption key")
 	return key, nil
 }
 
@@ -239,7 +252,7 @@ func (c *CryptoManager) Encrypt(plaintext []byte) ([]byte, error) {
 		if _, err := os.Stat(c.keyPath); os.IsNotExist(err) {
 			log.Error().
 				Str("keyPath", c.keyPath).
-				Msg("CRITICAL: Encryption key file has been deleted - refusing to encrypt to prevent orphaned data")
+				Msg("encryption key file missing, refusing encryption to avoid orphaned data")
 			return nil, fmt.Errorf("encryption key file deleted - cannot encrypt (would create orphaned data)")
 		}
 	}
