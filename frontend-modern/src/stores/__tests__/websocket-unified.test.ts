@@ -182,4 +182,27 @@ describe('websocket store unified resource contract', () => {
       dispose();
     }
   });
+
+  it('does not create a delayed reconnect socket after store disposal', async () => {
+    const { dispose } = await createStoreHarness();
+    try {
+      await waitForOpenTick();
+      expect(MockWebSocket).toHaveBeenCalledTimes(1);
+
+      mockWsInstance?.onclose?.({ code: 1011, reason: 'test disconnect' } as CloseEvent);
+
+      vi.advanceTimersByTime(1000);
+      await Promise.resolve();
+
+      dispose();
+
+      vi.advanceTimersByTime(1000);
+      await Promise.resolve();
+
+      expect(MockWebSocket).toHaveBeenCalledTimes(1);
+    } finally {
+      // dispose is idempotent and keeps the test resilient if assertions fail.
+      dispose();
+    }
+  });
 });
