@@ -15,9 +15,11 @@ const pending = new Set<() => void>();
  */
 const flush = (): void => {
   rafId = null;
-  const count = pending.size;
+  const batch = Array.from(pending);
+  pending.clear();
+  const count = batch.length;
 
-  pending.forEach((draw) => {
+  batch.forEach((draw) => {
     try {
       draw();
     } catch (error) {
@@ -25,7 +27,10 @@ const flush = (): void => {
     }
   });
 
-  pending.clear();
+  // Callbacks queued while this frame is flushing should run on the next frame.
+  if (pending.size > 0 && rafId === null) {
+    rafId = requestAnimationFrame(flush);
+  }
 
   if (import.meta.env.DEV) {
     logger.debug('[CanvasRenderQueue] Flushed render queue', { count });
@@ -81,6 +86,9 @@ export function scheduleSparkline(draw: () => void): () => void {
 
   return () => {
     pending.delete(draw);
+    if (pending.size === 0 && rafId !== null) {
+      cancelAnimationFrame(rafId);
+      rafId = null;
+    }
   };
 }
-
