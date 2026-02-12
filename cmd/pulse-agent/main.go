@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"math"
 	"net/http"
 	"os"
 	"os/exec"
@@ -633,7 +634,19 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 
 	logLevel, err := parseLogLevel(*logLevelFlag)
 	if err != nil {
-		logLevel = zerolog.InfoLevel
+		return Config{}, fmt.Errorf("invalid log level %q: %w", strings.TrimSpace(*logLevelFlag), err)
+	}
+	interval := *intervalFlag
+	if interval <= 0 {
+		return Config{}, fmt.Errorf("interval must be greater than 0 (got %s)", interval)
+	}
+	kubeMaxPods := *kubeMaxPodsFlag
+	if kubeMaxPods <= 0 {
+		return Config{}, fmt.Errorf("kube-max-pods must be greater than 0 (got %d)", kubeMaxPods)
+	}
+	dockerRuntime, err := normalizeDockerRuntime(*dockerRuntimeFlag)
+	if err != nil {
+		return Config{}, err
 	}
 
 	tags := gatherTags(envTags, tagFlags)
@@ -654,7 +667,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	return Config{
 		PulseURL:                  pulseURL,
 		APIToken:                  token,
-		Interval:                  *intervalFlag,
+		Interval:                  interval,
 		HostnameOverride:          strings.TrimSpace(*hostnameFlag),
 		AgentID:                   strings.TrimSpace(*agentIDFlag),
 		Tags:                      tags,
@@ -668,7 +681,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 		ProxmoxType:               strings.TrimSpace(*proxmoxTypeFlag),
 		DisableAutoUpdate:         *disableAutoUpdateFlag,
 		DisableDockerUpdateChecks: *disableDockerUpdateChecksFlag,
-		DockerRuntime:             strings.TrimSpace(*dockerRuntimeFlag),
+		DockerRuntime:             dockerRuntime,
 		EnableCommands:            resolveEnableCommands(*enableCommandsFlag, *disableCommandsFlag, envEnableCommands, envDisableCommands),
 		HealthAddr:                strings.TrimSpace(*healthAddrFlag),
 		KubeconfigPath:            strings.TrimSpace(*kubeconfigFlag),
@@ -677,7 +690,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 		KubeExcludeNamespaces:     kubeExcludeNamespaces,
 		KubeIncludeAllPods:        *kubeIncludeAllPodsFlag,
 		KubeIncludeAllDeployments: *kubeIncludeAllDeploymentsFlag,
-		KubeMaxPods:               *kubeMaxPodsFlag,
+		KubeMaxPods:               kubeMaxPods,
 		DiskExclude:               diskExclude,
 		ReportIP:                  strings.TrimSpace(*reportIPFlag),
 		DisableCeph:               *disableCephFlag,
@@ -733,6 +746,18 @@ func defaultInt(value string, fallback int) int {
 		return fallback
 	}
 	return parsed
+}
+
+func normalizeDockerRuntime(value string) (string, error) {
+	runtime := strings.ToLower(strings.TrimSpace(value))
+	switch runtime {
+	case "", "auto", "default":
+		return "", nil
+	case "docker", "podman":
+		return runtime, nil
+	default:
+		return "", fmt.Errorf("invalid docker runtime %q: must be auto, docker, or podman", value)
+	}
 }
 
 func parseLogLevel(value string) (zerolog.Level, error) {
@@ -956,7 +981,12 @@ func applyRemoteSettings(cfg *Config, settings map[string]interface{}, logger *z
 			}
 		case "docker_runtime":
 			if s, ok := v.(string); ok {
-				cfg.DockerRuntime = strings.TrimSpace(strings.ToLower(s))
+				runtime, err := normalizeDockerRuntime(s)
+				if err != nil {
+					logger.Warn().Str("val", s).Msg("Remote config: ignoring invalid docker_runtime value")
+					continue
+				}
+				cfg.DockerRuntime = runtime
 				logger.Info().Str("val", s).Msg("Remote config: docker_runtime")
 			}
 		case "log_level":
@@ -972,13 +1002,19 @@ func applyRemoteSettings(cfg *Config, settings map[string]interface{}, logger *z
 			}
 		case "interval":
 			if s, ok := v.(string); ok {
-				if d, err := time.ParseDuration(s); err == nil {
+				if d, err := time.ParseDuration(s); err == nil && d > 0 {
 					cfg.Interval = d
 					logger.Info().Str("val", s).Msg("Remote config: interval")
+				} else {
+					logger.Warn().Str("val", s).Msg("Remote config: ignoring invalid interval value")
 				}
 			} else if f, ok := v.(float64); ok {
-				// JSON numbers are floats, assume seconds
-				cfg.Interval = time.Duration(f) * time.Second
+				if math.IsNaN(f) || math.IsInf(f, 0) || f <= 0 {
+					logger.Warn().Float64("val", f).Msg("Remote config: ignoring invalid interval value")
+					continue
+				}
+				// JSON numbers are floats, assume seconds.
+				cfg.Interval = time.Duration(f * float64(time.Second))
 				logger.Info().Float64("val", f).Msg("Remote config: interval (s)")
 			}
 		case "disable_auto_update":
