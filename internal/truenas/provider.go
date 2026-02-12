@@ -2,6 +2,7 @@ package truenas
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -17,6 +18,8 @@ const (
 )
 
 var featureTrueNASEnabled = parseBool(os.Getenv(FeatureTrueNAS))
+
+var errNilSnapshot = errors.New("truenas provider fetcher returned nil snapshot")
 
 // IsFeatureEnabled returns whether fixture-driven TrueNAS ingestion is enabled.
 func IsFeatureEnabled() bool {
@@ -104,6 +107,9 @@ func (p *Provider) Refresh(ctx context.Context) error {
 	snapshot, err := p.fetcher.Fetch(ctx)
 	if err != nil {
 		return err
+	}
+	if snapshot == nil {
+		return errNilSnapshot
 	}
 
 	p.mu.Lock()
