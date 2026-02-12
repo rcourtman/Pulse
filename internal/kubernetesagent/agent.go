@@ -17,7 +17,7 @@ import (
 	"time"
 
 	"github.com/IGLOU-EU/go-wildcard/v2"
-	"github.com/rcourtman/pulse-go-rewrite/internal/buffer"
+	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	agentsk8s "github.com/rcourtman/pulse-go-rewrite/pkg/agents/kubernetes"
 	"github.com/rs/zerolog"
 	appsv1 "k8s.io/api/apps/v1"
@@ -75,7 +75,7 @@ type Agent struct {
 	includeNamespaces []string
 	excludeNamespaces []string
 
-	reportBuffer *buffer.Queue[agentsk8s.Report]
+	reportBuffer *utils.Queue[agentsk8s.Report]
 }
 
 const (
@@ -175,7 +175,7 @@ func New(cfg Config) (*Agent, error) {
 		clusterContext:    clusterContext,
 		includeNamespaces: cfg.IncludeNamespaces,
 		excludeNamespaces: cfg.ExcludeNamespaces,
-		reportBuffer:      buffer.New[agentsk8s.Report](60),
+		reportBuffer:      utils.NewQueue[agentsk8s.Report](60),
 	}
 
 	if err := agent.discoverClusterMetadata(context.Background()); err != nil {

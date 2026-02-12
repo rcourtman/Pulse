@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/buffer"
+	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rs/zerolog"
 )
@@ -30,7 +30,7 @@ func TestAgent_flushBuffer_StopsOnFailureAndDoesNotDropReport(t *testing.T) {
 		logger:          zerolog.Nop(),
 		httpClient:      server.Client(),
 		trimmedPulseURL: server.URL,
-		reportBuffer:    buffer.New[agentshost.Report](10),
+		reportBuffer:    utils.NewQueue[agentshost.Report](10),
 	}
 
 	report1 := agentshost.Report{Agent: agentshost.AgentInfo{ID: "r1"}}
@@ -71,7 +71,7 @@ func TestAgent_flushBuffer_RetryAfterTransientFailure(t *testing.T) {
 		logger:          zerolog.Nop(),
 		httpClient:      server.Client(),
 		trimmedPulseURL: server.URL,
-		reportBuffer:    buffer.New[agentshost.Report](10),
+		reportBuffer:    utils.NewQueue[agentshost.Report](10),
 	}
 	a.reportBuffer.Push(agentshost.Report{Agent: agentshost.AgentInfo{ID: "r1"}})
 	a.reportBuffer.Push(agentshost.Report{Agent: agentshost.AgentInfo{ID: "r2"}})
