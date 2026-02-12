@@ -210,7 +210,7 @@ func (s *PatrolRunHistoryStore) SetPersistence(p PatrolHistoryPersistence) error
 				s.runs = s.runs[:s.maxRuns]
 			}
 			s.mu.Unlock()
-			log.Info().Int("count", len(runs)).Msg("Loaded patrol run history from disk")
+			log.Info().Int("count", len(runs)).Msg("loaded patrol run history from disk")
 		}
 	}
 	return nil
@@ -300,7 +300,7 @@ func (s *PatrolRunHistoryStore) scheduleSaveLocked() {
 		// Save outside lock
 		if persistence != nil {
 			if err := persistence.SavePatrolRunHistory(runs); err != nil {
-				log.Error().Err(err).Msg("Failed to save patrol run history")
+				log.Error().Err(err).Msg("failed to save patrol run history")
 				s.mu.Lock()
 				s.lastSaveError = err
 				onErr := s.onSaveError

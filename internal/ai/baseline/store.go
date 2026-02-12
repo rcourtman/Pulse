@@ -120,9 +120,9 @@ func NewStore(cfg StoreConfig) *Store {
 	// Try to load existing baselines from disk
 	if cfg.DataDir != "" {
 		if err := s.loadFromDisk(); err != nil {
-			log.Warn().Err(err).Msg("Failed to load baselines from disk, starting fresh")
+			log.Warn().Err(err).Msg("failed to load baselines from disk, starting fresh")
 		} else {
-			log.Info().Int("count", len(s.baselines)).Msg("Loaded baselines from disk")
+			log.Info().Int("count", len(s.baselines)).Msg("loaded baselines from disk")
 		}
 	}
 
@@ -136,7 +136,7 @@ func (s *Store) SetAnomalyCallback(callback AnomalyCallback) {
 	defer s.mu.Unlock()
 	s.onAnomaly = callback
 	if callback != nil {
-		log.Info().Msg("Baseline store: Anomaly callback configured")
+		log.Info().Msg("baseline store: Anomaly callback configured")
 	}
 }
 

@@ -127,7 +127,7 @@ func NewDetector(cfg DetectorConfig) *Detector {
 	// Load existing data
 	if cfg.DataDir != "" {
 		if err := d.loadFromDisk(); err != nil {
-			log.Warn().Err(err).Msg("Failed to load pattern history from disk")
+			log.Warn().Err(err).Msg("failed to load pattern history from disk")
 		} else if len(d.events) > 0 {
 			log.Info().Int("events", len(d.events)).Int("patterns", len(d.patterns)).
 				Msg("Loaded pattern history from disk")
@@ -164,7 +164,7 @@ func (d *Detector) RecordEvent(event HistoricalEvent) {
 	// Persist asynchronously
 	go func() {
 		if err := d.saveToDisk(); err != nil {
-			log.Warn().Err(err).Msg("Failed to save pattern history")
+			log.Warn().Err(err).Msg("failed to save pattern history")
 		}
 	}()
 }

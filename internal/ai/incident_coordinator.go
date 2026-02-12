@@ -94,7 +94,7 @@ func (c *IncidentCoordinator) Start() {
 		return
 	}
 	c.running = true
-	log.Info().Msg("Incident coordinator started")
+	log.Info().Msg("incident coordinator started")
 }
 
 // Stop stops the incident coordinator
@@ -114,7 +114,7 @@ func (c *IncidentCoordinator) Stop() {
 	}
 	c.activeIncidents = make(map[string]activeIncident)
 
-	log.Info().Msg("Incident coordinator stopped")
+	log.Info().Msg("incident coordinator stopped")
 }
 
 // OnAlertFired is called when an alert fires - starts incident recording

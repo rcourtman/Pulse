@@ -87,7 +87,7 @@ func (s *SessionStore) List() ([]Session, error) {
 
 		data, err := s.readSession(strings.TrimSuffix(entry.Name(), ".json"))
 		if err != nil {
-			log.Warn().Err(err).Str("file", entry.Name()).Msg("Failed to read session file")
+			log.Warn().Err(err).Str("file", entry.Name()).Msg("failed to read session file")
 			continue
 		}
 

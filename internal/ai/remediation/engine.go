@@ -186,7 +186,7 @@ func NewEngine(cfg EngineConfig) *Engine {
 	// Load from disk
 	if cfg.DataDir != "" {
 		if err := engine.loadFromDisk(); err != nil {
-			log.Warn().Err(err).Msg("Failed to load remediation data from disk")
+			log.Warn().Err(err).Msg("failed to load remediation data from disk")
 		}
 	}
 
@@ -822,7 +822,7 @@ func (e *Engine) FormatPlanForContext(plan *RemediationPlan) string {
 // saveIfDirty saves to disk if there are changes
 func (e *Engine) saveIfDirty() {
 	if err := e.saveToDisk(); err != nil {
-		log.Warn().Err(err).Msg("Failed to save remediation data")
+		log.Warn().Err(err).Msg("failed to save remediation data")
 	}
 }
 

@@ -365,7 +365,7 @@ func (c *AnthropicClient) Chat(ctx context.Context, req ChatRequest) (*ChatRespo
 				Msg("Server tool use detected (handled by Anthropic)")
 		case "web_search_tool_result":
 			// Results from web search - already incorporated into Claude's response
-			log.Debug().Msg("Web search results received")
+			log.Debug().Msg("web search results received")
 		}
 	}
 
@@ -380,7 +380,7 @@ func (c *AnthropicClient) Chat(ctx context.Context, req ChatRequest) (*ChatRespo
 			Int("cache_creation_tokens", anthropicResp.Usage.CacheCreationInputTokens).
 			Int("cache_read_tokens", anthropicResp.Usage.CacheReadInputTokens)
 	}
-	logEvent.Msg("Anthropic response parsed")
+	logEvent.Msg("anthropic response parsed")
 
 	return &ChatResponse{
 		Content:      textContent,
@@ -458,14 +458,14 @@ func (c *AnthropicClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 		})
 	}
 
-	log.Info().Int("total", len(models)).Int("notable", notableCount).Msg("Anthropic ListModels returned")
+	log.Info().Int("total", len(models)).Int("notable", notableCount).Msg("anthropic ListModels returned")
 
 	// Log model IDs for debugging
 	var modelIDs []string
 	for _, m := range models {
 		modelIDs = append(modelIDs, m.ID)
 	}
-	log.Debug().Strs("models", modelIDs).Msg("Anthropic models")
+	log.Debug().Strs("models", modelIDs).Msg("anthropic models")
 
 	return models, nil
 }
@@ -696,7 +696,7 @@ func (c *AnthropicClient) ChatStream(ctx context.Context, req ChatRequest, callb
 
 				var event anthropicStreamEvent
 				if err := json.Unmarshal([]byte(eventData), &event); err != nil {
-					log.Debug().Err(err).Str("data", eventData).Msg("Failed to parse stream event")
+					log.Debug().Err(err).Str("data", eventData).Msg("failed to parse stream event")
 					continue
 				}
 

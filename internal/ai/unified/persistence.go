@@ -85,7 +85,7 @@ func (p *FilePersistence) LoadFindings() (map[string]*UnifiedFinding, error) {
 
 	var findingsList []*UnifiedFinding
 	if err := json.Unmarshal(data, &findingsList); err != nil {
-		log.Error().Err(err).Msg("Failed to parse unified findings, starting fresh")
+		log.Error().Err(err).Msg("failed to parse unified findings, starting fresh")
 		return make(map[string]*UnifiedFinding), nil
 	}
 
@@ -190,7 +190,7 @@ func (p *VersionedPersistence) LoadFindings() (map[string]*UnifiedFinding, error
 	// Fall back to legacy format (list only)
 	var findingsList []*UnifiedFinding
 	if err := json.Unmarshal(data, &findingsList); err != nil {
-		log.Error().Err(err).Msg("Failed to parse unified findings")
+		log.Error().Err(err).Msg("failed to parse unified findings")
 		return make(map[string]*UnifiedFinding), nil
 	}
 

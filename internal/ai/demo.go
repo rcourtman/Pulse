@@ -54,7 +54,7 @@ func (p *PatrolService) InjectDemoFindings() {
 		return
 	}
 
-	log.Info().Msg("Demo mode: Injecting mock AI patrol findings")
+	log.Info().Msg("demo mode: Injecting mock AI patrol findings")
 
 	now := time.Now()
 
@@ -184,7 +184,7 @@ func (p *PatrolService) InjectDemoFindings() {
 	// Also add some demo patrol run history
 	p.injectDemoRunHistory()
 
-	log.Info().Int("findings_count", len(demoFindings)).Msg("Demo mode: Mock findings injected")
+	log.Info().Int("findings_count", len(demoFindings)).Msg("demo mode: Mock findings injected")
 }
 
 // injectDemoRunHistory adds realistic patrol run history for the demo

@@ -88,9 +88,9 @@ func NewChangeDetector(cfg ChangeDetectorConfig) *ChangeDetector {
 	// Load existing changes from disk
 	if cfg.DataDir != "" {
 		if err := d.loadFromDisk(); err != nil {
-			log.Warn().Err(err).Msg("Failed to load change history from disk")
+			log.Warn().Err(err).Msg("failed to load change history from disk")
 		} else if len(d.changes) > 0 {
-			log.Info().Int("count", len(d.changes)).Msg("Loaded change history from disk")
+			log.Info().Int("count", len(d.changes)).Msg("loaded change history from disk")
 		}
 	}
 
@@ -161,7 +161,7 @@ func (d *ChangeDetector) DetectChanges(currentSnapshots []ResourceSnapshot) []Ch
 		// Persist asynchronously
 		go func() {
 			if err := d.saveToDisk(); err != nil {
-				log.Warn().Err(err).Msg("Failed to save change history")
+				log.Warn().Err(err).Msg("failed to save change history")
 			}
 		}()
 	}

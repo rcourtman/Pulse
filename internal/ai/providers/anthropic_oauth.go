@@ -236,7 +236,7 @@ func CreateAPIKeyFromOAuth(ctx context.Context, accessToken string) (string, err
 		return "", fmt.Errorf("no API key returned from OAuth")
 	}
 
-	log.Info().Msg("Successfully created API key from OAuth token")
+	log.Info().Msg("successfully created API key from OAuth token")
 	return result.RawKey, nil
 }
 
@@ -556,14 +556,14 @@ func (c *AnthropicOAuthClient) Chat(ctx context.Context, req ChatRequest) (*Chat
 
 		// Check for token expiry error (401) - force refresh
 		if resp.StatusCode == 401 && c.refreshToken != "" {
-			log.Info().Msg("Got 401, forcing token refresh...")
+			log.Info().Msg("got 401, forcing token refresh...")
 			if err := c.forceRefreshToken(ctx); err == nil {
 				// Token refreshed, retry immediately without backoff
 				lastErr = fmt.Errorf("token expired, retried with refreshed token")
 				skipBackoff = true
 				continue
 			} else {
-				log.Error().Err(err).Msg("Failed to refresh token after 401")
+				log.Error().Err(err).Msg("failed to refresh token after 401")
 			}
 		}
 
@@ -618,7 +618,7 @@ func (c *AnthropicOAuthClient) Chat(ctx context.Context, req ChatRequest) (*Chat
 				Str("tool_name", c.Name).
 				Msg("Server tool use detected (handled by Anthropic)")
 		case "web_search_tool_result":
-			log.Debug().Msg("Web search results received")
+			log.Debug().Msg("web search results received")
 		}
 	}
 

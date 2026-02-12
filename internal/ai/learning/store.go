@@ -155,7 +155,7 @@ func NewLearningStore(cfg LearningStoreConfig) *LearningStore {
 	// Load existing data
 	if cfg.DataDir != "" {
 		if err := store.loadFromDisk(); err != nil {
-			log.Warn().Err(err).Msg("Failed to load learning data from disk")
+			log.Warn().Err(err).Msg("failed to load learning data from disk")
 		} else {
 			log.Info().
 				Int("feedback_records", len(store.feedbackRecords)).
@@ -563,7 +563,7 @@ func (s *LearningStore) saveIfDirty() {
 	s.mu.Unlock()
 
 	if err := s.saveToDisk(); err != nil {
-		log.Warn().Err(err).Msg("Failed to save learning data")
+		log.Warn().Err(err).Msg("failed to save learning data")
 		s.mu.Lock()
 		s.dirty = true // Mark dirty again for retry
 		s.mu.Unlock()

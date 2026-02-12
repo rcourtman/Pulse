@@ -67,7 +67,7 @@ func NewStore(dataDir string) (*Store, error) {
 	// Initialize crypto manager for encryption (uses same key as other Pulse secrets)
 	cryptoMgr, err := newCryptoManagerAt(dataDir)
 	if err != nil {
-		log.Warn().Err(err).Msg("Failed to initialize crypto for knowledge store, data will be unencrypted")
+		log.Warn().Err(err).Msg("failed to initialize crypto for knowledge store, data will be unencrypted")
 	}
 
 	return &Store{
@@ -128,7 +128,7 @@ func (s *Store) GetKnowledge(guestID string) (*GuestKnowledge, error) {
 			return nil, fmt.Errorf("failed to read knowledge file: %w", err)
 		}
 		// Legacy file found - will be encrypted on next save
-		log.Info().Str("guest_id", guestID).Msg("Found unencrypted knowledge file, will encrypt on next save")
+		log.Info().Str("guest_id", guestID).Msg("found unencrypted knowledge file, will encrypt on next save")
 	} else if err != nil {
 		return nil, fmt.Errorf("failed to read knowledge file: %w", err)
 	}
@@ -140,7 +140,7 @@ func (s *Store) GetKnowledge(guestID string) (*GuestKnowledge, error) {
 			// Try as plain JSON (migration case)
 			var knowledge GuestKnowledge
 			if jsonErr := json.Unmarshal(data, &knowledge); jsonErr == nil {
-				log.Info().Str("guest_id", guestID).Msg("Loaded unencrypted knowledge (will encrypt on next save)")
+				log.Info().Str("guest_id", guestID).Msg("loaded unencrypted knowledge (will encrypt on next save)")
 				s.cache[guestID] = &knowledge
 				return &knowledge, nil
 			}
@@ -184,7 +184,7 @@ func (s *Store) SaveNote(guestID, guestName, guestType, category, title, content
 				}
 			}
 			if err := json.Unmarshal(data, &knowledge); err != nil {
-				log.Warn().Err(err).Str("guest_id", guestID).Msg("Failed to parse existing knowledge, starting fresh")
+				log.Warn().Err(err).Str("guest_id", guestID).Msg("failed to parse existing knowledge, starting fresh")
 			}
 		}
 		s.cache[guestID] = knowledge
@@ -273,7 +273,7 @@ func (s *Store) GetNotesByCategory(guestID, category string) ([]Note, error) {
 func (s *Store) FormatForContext(guestID string) string {
 	knowledge, err := s.GetKnowledge(guestID)
 	if err != nil {
-		log.Warn().Err(err).Str("guest_id", guestID).Msg("Failed to load guest knowledge")
+		log.Warn().Err(err).Str("guest_id", guestID).Msg("failed to load guest knowledge")
 		return ""
 	}
 
@@ -344,7 +344,7 @@ func (s *Store) saveToFile(guestID string, knowledge *GuestKnowledge) error {
 		legacyPath := filepath.Join(s.dataDir, filepath.Base(guestID)+".json")
 		if _, err := os.Stat(legacyPath); err == nil {
 			os.Remove(legacyPath)
-			log.Info().Str("guest_id", guestID).Msg("Removed legacy unencrypted knowledge file")
+			log.Info().Str("guest_id", guestID).Msg("removed legacy unencrypted knowledge file")
 		}
 	}
 
