@@ -406,6 +406,12 @@ const (
 	LicenseStateGracePeriod LicenseState = "grace_period"
 )
 
+const (
+	maxLicenseKeyLength     = 16 << 10 // 16 KiB
+	maxLicenseSegmentLength = 8 << 10  // 8 KiB
+	maxLicensePayloadSize   = 8 << 10  // 8 KiB decoded JSON
+)
+
 // GetLicenseState returns the current license state and the license itself
 func (s *Service) GetLicenseState() (LicenseState, *License) {
 	s.mu.Lock()
@@ -613,11 +619,22 @@ func ValidateLicense(licenseKey string) (*License, error) {
 	if licenseKey == "" {
 		return nil, ErrInvalidLicense
 	}
+	if len(licenseKey) > maxLicenseKeyLength {
+		return nil, fmt.Errorf("%w: license key exceeds size limit", ErrMalformedLicense)
+	}
 
 	// Parse JWT (base64url.base64url.base64url)
 	parts := strings.Split(licenseKey, ".")
 	if len(parts) != 3 {
 		return nil, ErrMalformedLicense
+	}
+	for _, part := range parts {
+		if part == "" {
+			return nil, fmt.Errorf("%w: empty jwt segment", ErrMalformedLicense)
+		}
+		if len(part) > maxLicenseSegmentLength {
+			return nil, fmt.Errorf("%w: jwt segment exceeds size limit", ErrMalformedLicense)
+		}
 	}
 
 	// Decode header (not used currently, but validate it exists)
@@ -630,6 +647,9 @@ func ValidateLicense(licenseKey string) (*License, error) {
 	payloadBytes, err := base64.RawURLEncoding.DecodeString(parts[1])
 	if err != nil {
 		return nil, fmt.Errorf("%w: invalid payload encoding", ErrMalformedLicense)
+	}
+	if len(payloadBytes) > maxLicensePayloadSize {
+		return nil, fmt.Errorf("%w: payload exceeds size limit", ErrMalformedLicense)
 	}
 
 	// Decode signature

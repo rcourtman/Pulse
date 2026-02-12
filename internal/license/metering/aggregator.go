@@ -6,14 +6,19 @@ import (
 	"time"
 )
 
-// MaxCardinalityPerTenant is the maximum number of unique keys per tenant per event type.
-// Prevents attribute explosion attacks.
-const MaxCardinalityPerTenant = 1000
+const (
+	// MaxCardinalityPerTenant is the maximum number of unique keys per tenant per event type.
+	// Prevents attribute explosion attacks.
+	MaxCardinalityPerTenant = 1000
+	// MaxIdempotencyKeysPerWindow bounds memory used by deduplication state.
+	MaxIdempotencyKeysPerWindow = 10000
+)
 
 // Errors
 var (
-	ErrCardinalityExceeded = errors.New("cardinality limit exceeded for tenant")
-	ErrDuplicateEvent      = errors.New("duplicate event (idempotency key already seen)")
+	ErrCardinalityExceeded         = errors.New("cardinality limit exceeded for tenant")
+	ErrDuplicateEvent              = errors.New("duplicate event (idempotency key already seen)")
+	ErrIdempotencyKeyLimitExceeded = errors.New("idempotency key limit exceeded for window")
 )
 
 // bucketKey uniquely identifies an aggregation bucket.
@@ -66,6 +71,9 @@ func (w *WindowedAggregator) Record(event Event) error {
 
 	if event.IdempotencyKey != "" && w.seenIdempotencyKeys[event.IdempotencyKey] {
 		return ErrDuplicateEvent
+	}
+	if event.IdempotencyKey != "" && len(w.seenIdempotencyKeys) >= MaxIdempotencyKeysPerWindow {
+		return ErrIdempotencyKeyLimitExceeded
 	}
 
 	key := bucketKey{
