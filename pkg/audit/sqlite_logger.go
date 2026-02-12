@@ -31,6 +31,13 @@ type SQLiteLogger struct {
 	retentionDays   int
 	stopChan        chan struct{}
 	wg              sync.WaitGroup
+	closeOnce       sync.Once
+	closeErr        error
+}
+
+var retentionStartupCleanupDelay = 5 * time.Minute
+var retentionStartupCleanup = func(l *SQLiteLogger) {
+	l.cleanupOldEvents()
 }
 
 // NewSQLiteLogger creates a new SQLite-backed audit logger.
@@ -387,20 +394,24 @@ func (l *SQLiteLogger) VerifySignature(event Event) bool {
 
 // Close gracefully shuts down the logger.
 func (l *SQLiteLogger) Close() error {
-	close(l.stopChan)
+	l.closeOnce.Do(func() {
+		close(l.stopChan)
 
-	if l.webhookDelivery != nil {
-		l.webhookDelivery.Stop()
-	}
+		if l.webhookDelivery != nil {
+			l.webhookDelivery.Stop()
+		}
 
-	l.wg.Wait()
+		l.wg.Wait()
 
-	if err := l.db.Close(); err != nil {
-		return fmt.Errorf("failed to close audit database: %w", err)
-	}
+		if err := l.db.Close(); err != nil {
+			l.closeErr = fmt.Errorf("failed to close audit database: %w", err)
+			return
+		}
 
-	log.Info().Msg("SQLite audit logger closed")
-	return nil
+		log.Info().Msg("SQLite audit logger closed")
+	})
+
+	return l.closeErr
 }
 
 // loadWebhookURLs loads webhook URLs from the config table.
@@ -421,15 +432,26 @@ func (l *SQLiteLogger) retentionWorker() {
 	ticker := time.NewTicker(24 * time.Hour)
 	defer ticker.Stop()
 
-	// Also run once at startup after a short delay
-	time.AfterFunc(5*time.Minute, func() {
-		l.cleanupOldEvents()
-	})
+	// Also run once at startup after a short delay. Keep timer stoppable
+	// so Close() can cancel it and avoid cleanup callbacks after shutdown.
+	startupTimer := time.NewTimer(retentionStartupCleanupDelay)
+	startupTimerCh := startupTimer.C
+	defer func() {
+		if !startupTimer.Stop() {
+			select {
+			case <-startupTimerCh:
+			default:
+			}
+		}
+	}()
 
 	for {
 		select {
 		case <-l.stopChan:
 			return
+		case <-startupTimerCh:
+			retentionStartupCleanup(l)
+			startupTimerCh = nil
 		case <-ticker.C:
 			l.cleanupOldEvents()
 		}

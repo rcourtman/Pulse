@@ -33,6 +33,7 @@ type WebhookDelivery struct {
 	queue    chan Event
 	stopChan chan struct{}
 	wg       sync.WaitGroup
+	stopOnce sync.Once
 }
 
 // WebhookPayload is the JSON payload sent to webhooks.
@@ -72,9 +73,14 @@ func (w *WebhookDelivery) Start() {
 
 // Stop gracefully stops the delivery workers.
 func (w *WebhookDelivery) Stop() {
-	close(w.stopChan)
-	w.wg.Wait()
-	log.Debug().Msg("Audit webhook delivery stopped")
+	w.stopOnce.Do(func() {
+		close(w.stopChan)
+		w.wg.Wait()
+		if w.client != nil {
+			w.client.CloseIdleConnections()
+		}
+		log.Debug().Msg("Audit webhook delivery stopped")
+	})
 }
 
 // Enqueue adds an event to the delivery queue.
