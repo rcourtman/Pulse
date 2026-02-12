@@ -70,24 +70,33 @@ jobs:
       - name: Setup SSH
         run: |
           mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
           echo "${{ secrets.DEMO_SERVER_SSH_KEY }}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -H ${{ secrets.DEMO_SERVER_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
+          ssh-keyscan -H ${{ secrets.DEMO_SERVER_HOST }} >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
 
       - name: Deploy to server
         env:
           DEPLOY_HOST: ${{ secrets.DEMO_SERVER_HOST }}
           DEPLOY_USER: ${{ secrets.DEMO_SERVER_USER }}
         run: |
+          SSH_OPTS=(
+            -i ~/.ssh/id_ed25519
+            -o IdentitiesOnly=yes
+            -o StrictHostKeyChecking=yes
+            -o UserKnownHostsFile=~/.ssh/known_hosts
+          )
+
           # Clean up any stale files from previous runs
-          ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "rm -f /tmp/pulse-new; rm -rf /tmp/pulse-demo-test" || true
+          ssh "${SSH_OPTS[@]}" "${DEPLOY_USER}@${DEPLOY_HOST}" "rm -f /tmp/pulse-new; rm -rf /tmp/pulse-demo-test" || true
           
           # Upload new binary
-          scp -o StrictHostKeyChecking=no pulse ${DEPLOY_USER}@${DEPLOY_HOST}:/tmp/pulse-new
+          scp "${SSH_OPTS[@]}" pulse "${DEPLOY_USER}@${DEPLOY_HOST}:/tmp/pulse-new"
           
           # Health check: Run on test port 8082 and verify
           # We use a subshell to background the process and then kill it after the check
-          ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
+          ssh "${SSH_OPTS[@]}" "${DEPLOY_USER}@${DEPLOY_HOST}" "
             chmod +x /tmp/pulse-new &&
             PULSE_DATA_DIR=/tmp/pulse-demo-test \
             FRONTEND_PORT=8082 \
@@ -112,7 +121,7 @@ jobs:
           "
           
           # Swap and restart production service
-          ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} "
+          ssh "${SSH_OPTS[@]}" "${DEPLOY_USER}@${DEPLOY_HOST}" "
             sudo systemctl stop pulse &&
             sudo mv /tmp/pulse-new /opt/pulse/bin/pulse &&
             sudo systemctl start pulse
@@ -122,3 +131,7 @@ jobs:
         run: |
           sleep 5
           curl -f https://demo.pulserelay.pro/api/health
+
+      - name: Cleanup SSH material
+        if: always()
+        run: rm -f ~/.ssh/id_ed25519 ~/.ssh/known_hosts
