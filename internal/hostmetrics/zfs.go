@@ -283,6 +283,7 @@ func parseZpoolList(output []byte) (map[string]zpoolStats, error) {
 		return nil, err
 	}
 	if len(stats) == 0 {
+		log.Debug().Msg("zfs: zpool list returned no usable data")
 		return nil, fmt.Errorf("zpool list returned no usable data")
 	}
 	return stats, nil

@@ -63,6 +63,7 @@ func Collect(ctx context.Context, diskExclude []string) (Snapshot, error) {
 
 	memStats, err := virtualMemory(collectCtx)
 	if err != nil {
+		log.Error().Err(err).Msg("failed to collect memory stats")
 		return Snapshot{}, fmt.Errorf("memory stats: %w", err)
 	}
 
