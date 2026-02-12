@@ -57,8 +57,8 @@ func Collect(ctx context.Context, diskExclude []string) (Snapshot, error) {
 		snapshot.CPUUsagePercent = cpuUsage
 	}
 
-	if loadAvg, err := loadAvg(collectCtx); err == nil && loadAvg != nil {
-		snapshot.LoadAverage = []float64{loadAvg.Load1, loadAvg.Load5, loadAvg.Load15}
+	if loadStats, err := loadAvg(collectCtx); err == nil && loadStats != nil {
+		snapshot.LoadAverage = []float64{loadStats.Load1, loadStats.Load5, loadStats.Load15}
 	}
 
 	memStats, err := virtualMemory(collectCtx)
