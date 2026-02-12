@@ -197,6 +197,7 @@ func Run(ctx context.Context, version string) error {
 		wsHub.SetAllowedOrigins([]string{})
 	}
 	go wsHub.Run()
+	defer wsHub.Stop()
 
 	// Initialize reloadable monitoring system
 	reloadableMonitor, err := monitoring.NewReloadableMonitor(cfg, mtPersistence, wsHub)
@@ -400,6 +401,8 @@ func Run(ctx context.Context, version string) error {
 
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 	signal.Notify(reloadChan, syscall.SIGHUP)
+	defer signal.Stop(sigChan)
+	defer signal.Stop(reloadChan)
 
 	for {
 		select {
