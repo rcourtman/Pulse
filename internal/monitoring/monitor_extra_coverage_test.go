@@ -326,7 +326,7 @@ func TestMonitor_PollVMsAndContainersEfficient_Extra(t *testing.T) {
 			{Mountpoint: "/", TotalBytes: 100 * 1024 * 1024 * 1024, UsedBytes: 50 * 1024 * 1024 * 1024, Type: "ext4"},
 		},
 		netIfaces: []proxmox.VMNetworkInterface{
-			{Name: "eth0", IPAddresses: []proxmox.VMIpAddress{{Address: "192.168.1.100", Prefix: 24}}},
+			{Name: "eth0", IPAddresses: []proxmox.VMIPAddress{{Address: "192.168.1.100", Prefix: 24}}},
 		},
 	}
 

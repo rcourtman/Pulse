@@ -1477,7 +1477,7 @@ func parseUint64Flexible(value interface{}) (uint64, error) {
 	}
 }
 
-type VMIpAddress struct {
+type VMIPAddress struct {
 	Address string `json:"ip-address"`
 	Prefix  int    `json:"prefix"`
 }
@@ -1485,7 +1485,7 @@ type VMIpAddress struct {
 type VMNetworkInterface struct {
 	Name          string        `json:"name"`
 	HardwareAddr  string        `json:"hardware-address"`
-	IPAddresses   []VMIpAddress `json:"ip-addresses"`
+	IPAddresses   []VMIPAddress `json:"ip-addresses"`
 	Statistics    interface{}   `json:"statistics,omitempty"`
 	HasIp4Gateway bool          `json:"has-ipv4-synth-gateway,omitempty"`
 	HasIp6Gateway bool          `json:"has-ipv6-synth-gateway,omitempty"`

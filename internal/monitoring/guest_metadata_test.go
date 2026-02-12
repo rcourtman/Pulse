@@ -274,7 +274,7 @@ func TestProcessGuestNetworkInterfaces(t *testing.T) {
 				{
 					Name:         "eth0",
 					HardwareAddr: "00:11:22:33:44:55",
-					IPAddresses: []proxmox.VMIpAddress{
+					IPAddresses: []proxmox.VMIPAddress{
 						{Address: "192.168.1.10", Prefix: 24},
 					},
 				},
@@ -290,7 +290,7 @@ func TestProcessGuestNetworkInterfaces(t *testing.T) {
 				{
 					Name:         "lo",
 					HardwareAddr: "00:00:00:00:00:00",
-					IPAddresses: []proxmox.VMIpAddress{
+					IPAddresses: []proxmox.VMIPAddress{
 						{Address: "127.0.0.1", Prefix: 8},
 						{Address: "127.0.0.2", Prefix: 8},
 					},
@@ -305,7 +305,7 @@ func TestProcessGuestNetworkInterfaces(t *testing.T) {
 				{
 					Name:         "eth0",
 					HardwareAddr: "00:11:22:33:44:55",
-					IPAddresses: []proxmox.VMIpAddress{
+					IPAddresses: []proxmox.VMIPAddress{
 						{Address: "fe80::1", Prefix: 64},
 						{Address: "FE80::abcd", Prefix: 64},
 					},
@@ -320,7 +320,7 @@ func TestProcessGuestNetworkInterfaces(t *testing.T) {
 				{
 					Name:         "lo",
 					HardwareAddr: "00:00:00:00:00:00",
-					IPAddresses: []proxmox.VMIpAddress{
+					IPAddresses: []proxmox.VMIPAddress{
 						{Address: "::1", Prefix: 128},
 					},
 				},
@@ -334,7 +334,7 @@ func TestProcessGuestNetworkInterfaces(t *testing.T) {
 				{
 					Name:         "eth0",
 					HardwareAddr: "00:11:22:33:44:55",
-					IPAddresses: []proxmox.VMIpAddress{
+					IPAddresses: []proxmox.VMIPAddress{
 						{Address: "192.168.1.10", Prefix: 24},
 						{Address: "127.0.0.1", Prefix: 8},
 						{Address: "fe80::1", Prefix: 64},
@@ -353,7 +353,7 @@ func TestProcessGuestNetworkInterfaces(t *testing.T) {
 				{
 					Name:         "eth0",
 					HardwareAddr: "00:11:22:33:44:55",
-					IPAddresses: []proxmox.VMIpAddress{
+					IPAddresses: []proxmox.VMIPAddress{
 						{Address: "192.168.1.10", Prefix: 24},
 						{Address: "192.168.1.10", Prefix: 24},
 						{Address: "192.168.1.10", Prefix: 24},
@@ -371,14 +371,14 @@ func TestProcessGuestNetworkInterfaces(t *testing.T) {
 				{
 					Name:         "eth0",
 					HardwareAddr: "00:11:22:33:44:55",
-					IPAddresses: []proxmox.VMIpAddress{
+					IPAddresses: []proxmox.VMIPAddress{
 						{Address: "192.168.1.10", Prefix: 24},
 					},
 				},
 				{
 					Name:         "eth1",
 					HardwareAddr: "AA:BB:CC:DD:EE:FF",
-					IPAddresses: []proxmox.VMIpAddress{
+					IPAddresses: []proxmox.VMIPAddress{
 						{Address: "192.168.1.10", Prefix: 24}, // same IP on different interface
 					},
 				},
@@ -395,14 +395,14 @@ func TestProcessGuestNetworkInterfaces(t *testing.T) {
 				{
 					Name:         "eth1",
 					HardwareAddr: "AA:BB:CC:DD:EE:FF",
-					IPAddresses: []proxmox.VMIpAddress{
+					IPAddresses: []proxmox.VMIPAddress{
 						{Address: "10.0.0.5", Prefix: 8},
 					},
 				},
 				{
 					Name:         "eth0",
 					HardwareAddr: "00:11:22:33:44:55",
-					IPAddresses: []proxmox.VMIpAddress{
+					IPAddresses: []proxmox.VMIPAddress{
 						{Address: "192.168.1.10", Prefix: 24},
 					},
 				},
@@ -447,7 +447,7 @@ func TestProcessGuestNetworkInterfaces(t *testing.T) {
 				{
 					Name:         "  eth0  ",
 					HardwareAddr: "  00:11:22:33:44:55  ",
-					IPAddresses: []proxmox.VMIpAddress{
+					IPAddresses: []proxmox.VMIPAddress{
 						{Address: "192.168.1.10", Prefix: 24},
 					},
 				},
@@ -463,7 +463,7 @@ func TestProcessGuestNetworkInterfaces(t *testing.T) {
 				{
 					Name:         "eth0",
 					HardwareAddr: "00:11:22:33:44:55",
-					IPAddresses: []proxmox.VMIpAddress{
+					IPAddresses: []proxmox.VMIPAddress{
 						{Address: "  192.168.1.10  ", Prefix: 24},
 					},
 				},
@@ -479,7 +479,7 @@ func TestProcessGuestNetworkInterfaces(t *testing.T) {
 				{
 					Name:         "eth0",
 					HardwareAddr: "00:11:22:33:44:55",
-					IPAddresses: []proxmox.VMIpAddress{
+					IPAddresses: []proxmox.VMIPAddress{
 						{Address: "", Prefix: 0},
 						{Address: "   ", Prefix: 0},
 						{Address: "192.168.1.10", Prefix: 24},
