@@ -2,7 +2,7 @@ package account
 
 import (
 	"encoding/json"
-	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -315,15 +315,15 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) error {
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(dst); err != nil {
 		http.Error(w, "invalid JSON body", http.StatusBadRequest)
-		return err
+		return fmt.Errorf("decode request body: %w", err)
 	}
 	if err := dec.Decode(&struct{}{}); err != io.EOF {
 		if err == nil {
 			http.Error(w, "invalid JSON body", http.StatusBadRequest)
-			return errors.New("multiple JSON values")
+			return fmt.Errorf("decode request body: multiple JSON values")
 		}
 		http.Error(w, "invalid JSON body", http.StatusBadRequest)
-		return err
+		return fmt.Errorf("decode request body: %w", err)
 	}
 	return nil
 }

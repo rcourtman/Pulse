@@ -3,6 +3,7 @@ package account
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -130,7 +131,7 @@ func parseTenantState(s string) (registry.TenantState, bool) {
 func loadTenantForAccount(reg *registry.TenantRegistry, accountID, tenantID string) (*registry.Tenant, error) {
 	t, err := reg.Get(tenantID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("load tenant %q: %w", tenantID, err)
 	}
 	if t == nil {
 		return nil, nil
