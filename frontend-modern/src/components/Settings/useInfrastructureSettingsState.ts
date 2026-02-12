@@ -164,8 +164,18 @@ export function useInfrastructureSettingsState({
     });
   };
 
+  let pendingLoadNodesRetry: ReturnType<typeof setTimeout> | undefined;
+  let loadNodesRetryAttempts = 0;
+
+  const clearLoadNodesRetry = () => {
+    if (!pendingLoadNodesRetry) return;
+    clearTimeout(pendingLoadNodesRetry);
+    pendingLoadNodesRetry = undefined;
+  };
+
   const loadNodes = async () => {
     try {
+      clearLoadNodesRetry();
       const nodesList = await NodesAPI.getNodes();
       const nodeResources = byType('node');
       const nodesWithStatus = nodesList.map((node) => {
@@ -183,6 +193,7 @@ export function useInfrastructureSettingsState({
           temperature,
         };
       });
+      loadNodesRetryAttempts = 0;
       setNodes(nodesWithStatus);
     } catch (error) {
       logger.error('Failed to load nodes', error);
@@ -190,10 +201,16 @@ export function useInfrastructureSettingsState({
         error instanceof Error &&
         (error.message.includes('429') || error.message.includes('fetch'))
       ) {
-        logger.info('Retrying node load after delay');
-        setTimeout(() => {
+        if (pendingLoadNodesRetry) {
+          return;
+        }
+        const delayMs = Math.min(3000 * Math.pow(2, Math.min(loadNodesRetryAttempts, 2)), 12000);
+        loadNodesRetryAttempts++;
+        logger.info('Retrying node load after delay', { delayMs, attempt: loadNodesRetryAttempts });
+        pendingLoadNodesRetry = setTimeout(() => {
+          pendingLoadNodesRetry = undefined;
           void loadNodes();
-        }, 3000);
+        }, delayMs);
       }
     }
   };
@@ -859,6 +876,7 @@ export function useInfrastructureSettingsState({
       unsubscribeRefresh();
       unsubscribeDiscovery();
       unsubscribeDiscoveryStatus();
+      clearLoadNodesRetry();
       if (pollInterval) {
         clearInterval(pollInterval);
       }
