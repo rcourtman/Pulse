@@ -194,6 +194,42 @@ func TestSendWebhookWithRetry_429RetryAfter(t *testing.T) {
 	assert.Equal(t, 2, attempts)
 }
 
+func TestSendWebhookWithRetry_StopsOnNonRetryableErrorAfterRetryable(t *testing.T) {
+	nm := NewNotificationManager("http://pulse.local")
+	nm.UpdateAllowedPrivateCIDRs("127.0.0.1")
+
+	attempts := 0
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		switch attempts {
+		case 1:
+			// Keep test fast by making the retry delay zero.
+			w.Header().Set("Retry-After", "0")
+			w.WriteHeader(http.StatusTooManyRequests)
+		case 2:
+			w.WriteHeader(http.StatusBadRequest)
+		default:
+			w.WriteHeader(http.StatusOK)
+		}
+	}))
+	defer server.Close()
+
+	webhook := EnhancedWebhookConfig{
+		WebhookConfig: WebhookConfig{
+			Name: "Test Webhook",
+			URL:  server.URL,
+		},
+		RetryEnabled: true,
+		RetryCount:   5,
+	}
+
+	err := nm.sendWebhookWithRetry(webhook, []byte(`{"test":true}`))
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "status 400")
+	assert.Contains(t, err.Error(), "after 2 attempts")
+	assert.Equal(t, 2, attempts)
+}
+
 func TestSendEnhancedWebhook_TemplateRendering(t *testing.T) {
 	nm := NewNotificationManager("http://pulse.local")
 	nm.UpdateAllowedPrivateCIDRs("127.0.0.1")
