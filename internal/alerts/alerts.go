@@ -471,6 +471,7 @@ func SetMetricHooks(fired func(*Alert), resolved func(*Alert), suppressed func(s
 
 type Manager struct {
 	mu               sync.RWMutex
+	stopOnce         sync.Once
 	config           AlertConfig
 	activeAlerts     map[string]*Alert
 	historyManager   *HistoryManager
@@ -9158,17 +9159,19 @@ func (m *Manager) checkEscalations() {
 
 // Stop stops the alert manager and saves history
 func (m *Manager) Stop() {
-	close(m.escalationStop)
-	close(m.cleanupStop)
-	m.historyManager.Stop()
+	m.stopOnce.Do(func() {
+		close(m.escalationStop)
+		close(m.cleanupStop)
+		m.historyManager.Stop()
 
-	// Give background goroutines time to exit cleanly
-	time.Sleep(100 * time.Millisecond)
+		// Give background goroutines time to exit cleanly
+		time.Sleep(100 * time.Millisecond)
 
-	// Save active alerts before stopping
-	if err := m.SaveActiveAlerts(); err != nil {
-		log.Error().Err(err).Msg("Failed to save active alerts on stop")
-	}
+		// Save active alerts before stopping
+		if err := m.SaveActiveAlerts(); err != nil {
+			log.Error().Err(err).Msg("Failed to save active alerts on stop")
+		}
+	})
 }
 
 // SaveActiveAlerts persists active alerts to disk
