@@ -143,7 +143,10 @@ func NewIncidentRecorder(cfg IncidentRecorderConfig) *IncidentRecorder {
 	if cfg.DataDir != "" {
 		recorder.filePath = filepath.Join(cfg.DataDir, "incident_windows.json")
 		if err := recorder.loadFromDisk(); err != nil {
-			log.Warn().Err(err).Msg("Failed to load incident windows from disk")
+			log.Warn().
+				Str("file_path", recorder.filePath).
+				Err(err).
+				Msg("Failed to load incident windows from disk")
 		}
 	}
 
@@ -169,7 +172,12 @@ func (r *IncidentRecorder) Start() {
 	r.mu.Unlock()
 
 	go r.recordingLoop()
-	log.Info().Msg("Incident recorder started")
+	log.Info().
+		Dur("sample_interval", r.config.SampleInterval).
+		Dur("pre_incident_window", r.config.PreIncidentWindow).
+		Dur("post_incident_window", r.config.PostIncidentWindow).
+		Int("max_data_points_per_window", r.config.MaxDataPointsPerWindow).
+		Msg("Incident recorder started")
 }
 
 // Stop stops the incident recorder
@@ -185,7 +193,10 @@ func (r *IncidentRecorder) Stop() {
 
 	// Save to disk
 	if err := r.saveToDisk(); err != nil {
-		log.Warn().Err(err).Msg("Failed to save incident windows on stop")
+		log.Warn().
+			Str("file_path", r.filePath).
+			Err(err).
+			Msg("Failed to save incident windows on stop")
 	}
 	log.Info().Msg("Incident recorder stopped")
 }
@@ -231,6 +242,11 @@ func (r *IncidentRecorder) recordSample() {
 		// Check if we've exceeded max data points
 		if len(window.DataPoints) >= r.config.MaxDataPointsPerWindow {
 			window.Status = IncidentWindowStatusTruncated
+			log.Warn().
+				Str("window_id", window.ID).
+				Str("resource_id", window.ResourceID).
+				Int("max_data_points_per_window", r.config.MaxDataPointsPerWindow).
+				Msg("Truncating incident window after reaching max data points")
 			r.completeWindow(window)
 			continue
 		}
@@ -239,6 +255,7 @@ func (r *IncidentRecorder) recordSample() {
 		metrics, err := r.provider.GetCurrentMetrics(window.ResourceID)
 		if err != nil {
 			log.Debug().
+				Str("window_id", window.ID).
 				Str("resource_id", window.ResourceID).
 				Err(err).
 				Msg("Failed to get metrics for incident window")
@@ -259,6 +276,10 @@ func (r *IncidentRecorder) recordSample() {
 	for _, resourceID := range monitoredResources {
 		metrics, err := r.provider.GetCurrentMetrics(resourceID)
 		if err != nil {
+			log.Debug().
+				Str("resource_id", resourceID).
+				Err(err).
+				Msg("Failed to get metrics for pre-incident buffer")
 			continue
 		}
 
@@ -375,13 +396,19 @@ func (r *IncidentRecorder) completeWindow(window *IncidentWindow) {
 	log.Info().
 		Str("window_id", window.ID).
 		Str("resource_id", window.ResourceID).
+		Str("status", string(window.Status)).
 		Int("data_points", len(window.DataPoints)).
 		Msg("Completed incident recording")
 
 	// Save asynchronously
 	go func() {
 		if err := r.saveToDisk(); err != nil {
-			log.Warn().Err(err).Msg("Failed to save incident windows")
+			log.Warn().
+				Str("window_id", window.ID).
+				Str("resource_id", window.ResourceID).
+				Str("file_path", r.filePath).
+				Err(err).
+				Msg("Failed to save incident windows")
 		}
 	}()
 }

@@ -98,3 +98,36 @@ func TestGetWindowsForResource(t *testing.T) {
 		t.Fatalf("expected most recent completed window, got %+v", limited)
 	}
 }
+
+func TestRecordSampleSkipsPreIncidentBufferOnMetricsError(t *testing.T) {
+	recorder := NewIncidentRecorder(IncidentRecorderConfig{
+		PreIncidentWindow:      time.Minute,
+		PostIncidentWindow:     time.Minute,
+		MaxDataPointsPerWindow: 10,
+	})
+
+	provider := &stubMetricsProvider{
+		metricsByID: map[string]map[string]float64{
+			"res-ok": {"cpu": 1},
+		},
+		ids: []string{"res-ok", "res-missing"},
+	}
+	recorder.SetMetricsProvider(provider)
+
+	windowID := recorder.StartRecording("res-ok", "db", "host", "alert", "alert-1")
+	recorder.recordSample()
+
+	window := recorder.activeWindows[windowID]
+	if window == nil {
+		t.Fatalf("expected active window %s", windowID)
+	}
+	if len(window.DataPoints) != 1 {
+		t.Fatalf("expected active window sample to be captured, got %d", len(window.DataPoints))
+	}
+	if len(recorder.preIncidentBuffer["res-ok"]) == 0 {
+		t.Fatalf("expected pre-incident buffer for res-ok")
+	}
+	if _, ok := recorder.preIncidentBuffer["res-missing"]; ok {
+		t.Fatalf("expected no pre-incident buffer for res-missing when metrics collection fails")
+	}
+}
