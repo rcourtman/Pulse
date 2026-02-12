@@ -124,48 +124,48 @@ func TestAlertResolvedBroadcastTenantIsolation(t *testing.T) {
 	assertNoClientMessage(t, orgBClient, 200*time.Millisecond)
 }
 
-func TestAlertBroadcastFallbackToGlobal(t *testing.T) {
+func TestAlertBroadcastEmptyOrgTargetsDefaultTenantOnly(t *testing.T) {
 	hub := NewHub(nil)
 	go hub.Run()
 	t.Cleanup(hub.Stop)
 
+	defaultClient := registerTenantTestClient(t, hub, "client-default", "default")
 	orgAClient := registerTenantTestClient(t, hub, "client-a", "orgA")
 	orgBClient := registerTenantTestClient(t, hub, "client-b", "orgB")
+	drainClientMessages(defaultClient)
 	drainClientMessages(orgAClient)
 	drainClientMessages(orgBClient)
 
-	hub.BroadcastAlertToTenant("", map[string]string{"id": "alert-global"})
+	hub.BroadcastAlertToTenant("", map[string]string{"id": "alert-default"})
 
-	msgA := readClientMessage(t, orgAClient, 300*time.Millisecond)
-	msgB := readClientMessage(t, orgBClient, 300*time.Millisecond)
-	if msgA.Type != "alert" {
-		t.Fatalf("expected orgA alert type, got %q", msgA.Type)
+	msgDefault := readClientMessage(t, defaultClient, 300*time.Millisecond)
+	if msgDefault.Type != "alert" {
+		t.Fatalf("expected default tenant alert type, got %q", msgDefault.Type)
 	}
-	if msgB.Type != "alert" {
-		t.Fatalf("expected orgB alert type, got %q", msgB.Type)
-	}
+	assertNoClientMessage(t, orgAClient, 200*time.Millisecond)
+	assertNoClientMessage(t, orgBClient, 200*time.Millisecond)
 }
 
-func TestAlertResolvedFallbackToGlobal(t *testing.T) {
+func TestAlertResolvedEmptyOrgTargetsDefaultTenantOnly(t *testing.T) {
 	hub := NewHub(nil)
 	go hub.Run()
 	t.Cleanup(hub.Stop)
 
+	defaultClient := registerTenantTestClient(t, hub, "client-default", "default")
 	orgAClient := registerTenantTestClient(t, hub, "client-a", "orgA")
 	orgBClient := registerTenantTestClient(t, hub, "client-b", "orgB")
+	drainClientMessages(defaultClient)
 	drainClientMessages(orgAClient)
 	drainClientMessages(orgBClient)
 
-	hub.BroadcastAlertResolvedToTenant("", "alert-global")
+	hub.BroadcastAlertResolvedToTenant("", "alert-default")
 
-	msgA := readClientMessage(t, orgAClient, 300*time.Millisecond)
-	msgB := readClientMessage(t, orgBClient, 300*time.Millisecond)
-	if msgA.Type != "alertResolved" {
-		t.Fatalf("expected orgA alertResolved type, got %q", msgA.Type)
+	msgDefault := readClientMessage(t, defaultClient, 300*time.Millisecond)
+	if msgDefault.Type != "alertResolved" {
+		t.Fatalf("expected default tenant alertResolved type, got %q", msgDefault.Type)
 	}
-	if msgB.Type != "alertResolved" {
-		t.Fatalf("expected orgB alertResolved type, got %q", msgB.Type)
-	}
+	assertNoClientMessage(t, orgAClient, 200*time.Millisecond)
+	assertNoClientMessage(t, orgBClient, 200*time.Millisecond)
 }
 
 func TestAlertBroadcastUnknownTenantDoesNotLeak(t *testing.T) {
