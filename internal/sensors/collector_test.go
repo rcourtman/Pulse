@@ -38,11 +38,34 @@ func TestCollectLocalSensorsOutput(t *testing.T) {
 	}
 }
 
+func TestCollectLocalSensorsOutputWithNonZeroExit(t *testing.T) {
+	dir := t.TempDir()
+	writeScript(t, dir, "sensors", "#!/bin/sh\necho '{\"chip\":{\"temp\":{\"temp1_input\":42}}}'\nexit 1\n")
+	t.Setenv("PATH", dir+":"+os.Getenv("PATH"))
+
+	out, err := CollectLocal(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out != "{\"chip\":{\"temp\":{\"temp1_input\":42}}}" {
+		t.Fatalf("unexpected output: %s", out)
+	}
+}
+
 func TestCollectLocalFallbackToPiTemp(t *testing.T) {
 	dir := t.TempDir()
 	writeScript(t, dir, "sensors", "#!/bin/sh\necho '{}'\n")
-	writeScript(t, dir, "cat", "#!/bin/sh\necho '42000'\n")
 	t.Setenv("PATH", dir+":"+os.Getenv("PATH"))
+
+	thermalPath := filepath.Join(t.TempDir(), "thermal_zone0_temp")
+	if err := os.WriteFile(thermalPath, []byte("42000"), 0644); err != nil {
+		t.Fatalf("write thermal file: %v", err)
+	}
+	originalThermalPath := rpiThermalZoneTempPath
+	rpiThermalZoneTempPath = thermalPath
+	t.Cleanup(func() {
+		rpiThermalZoneTempPath = originalThermalPath
+	})
 
 	out, err := CollectLocal(context.Background())
 	if err != nil {
