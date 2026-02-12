@@ -17,6 +17,7 @@ import { ScrollableTable } from '@/components/shared/ScrollableTable';
 import { useWebSocket } from '@/App';
 import { useResources } from '@/hooks/useResources';
 import { notificationStore } from '@/stores/notifications';
+import { eventBus } from '@/stores/events';
 import { showTooltip, hideTooltip } from '@/components/shared/Tooltip';
 import { AlertsAPI } from '@/api/alerts';
 import { NotificationsAPI, Webhook } from '@/api/notifications';
@@ -1478,9 +1479,17 @@ export function Alerts() {
     }
   };
 
-  // Load existing alert configuration on mount (only once)
+  // Load existing alert configuration on mount and when org context changes.
   onMount(() => {
     void loadAlertConfiguration();
+
+    const unsubscribeOrgSwitched = eventBus.on('org_switched', () => {
+      void loadAlertConfiguration();
+    });
+
+    onCleanup(() => {
+      unsubscribeOrgSwitched();
+    });
   });
 
   // Reload email config when switching to destinations tab
@@ -4599,6 +4608,21 @@ function HistoryTab(props: {
   onMount(() => {
     fetchHistory(timeFilter());
 
+    const unsubscribeOrgSwitched = eventBus.on('org_switched', () => {
+      setAlertHistory([]);
+      setSelectedBarIndex(null);
+      setResourceIncidentPanel(null);
+      setResourceIncidents({});
+      setResourceIncidentLoading({});
+      setExpandedResourceIncidentIds(new Set<string>());
+      setIncidentTimelines({});
+      setIncidentLoading({});
+      setExpandedIncidents(new Set<string>());
+      setIncidentNoteDrafts({});
+      setIncidentNoteSaving(new Set<string>());
+      void fetchHistory(timeFilter());
+    });
+
     // Add keyboard event listeners
     const handleKeydown = (e: KeyboardEvent) => {
       // If already focused on an input, select, or textarea, don't interfere
@@ -4626,6 +4650,7 @@ function HistoryTab(props: {
     document.addEventListener('keydown', handleKeydown);
 
     onCleanup(() => {
+      unsubscribeOrgSwitched();
       document.removeEventListener('keydown', handleKeydown);
       // Prevent pending requests from updating state after unmount
       fetchRequestId++;
