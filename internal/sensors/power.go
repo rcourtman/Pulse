@@ -45,13 +45,29 @@ const sampleInterval = 100 * time.Millisecond
 // Returns nil if no power data is available.
 func CollectPower(ctx context.Context) (*PowerData, error) {
 	// Try Intel RAPL first (most common on Intel)
-	if data, err := collectRALP(ctx); err == nil && data.Available {
-		return data, nil
+	raplData, raplErr := collectRALP(ctx)
+	if raplErr == nil && raplData != nil && raplData.Available {
+		return raplData, nil
+	}
+	if raplErr != nil {
+		log.Debug().
+			Str("component", "sensors_power").
+			Str("action", "collect_rapl_failed").
+			Err(raplErr).
+			Msg("Failed to collect Intel RAPL power data")
 	}
 
 	// Try AMD energy driver (for AMD Ryzen/EPYC)
-	if data, err := collectAMDEnergy(ctx); err == nil && data.Available {
-		return data, nil
+	amdData, amdErr := collectAMDEnergy(ctx)
+	if amdErr == nil && amdData != nil && amdData.Available {
+		return amdData, nil
+	}
+	if amdErr != nil {
+		log.Debug().
+			Str("component", "sensors_power").
+			Str("action", "collect_amd_energy_failed").
+			Err(amdErr).
+			Msg("Failed to collect AMD energy power data")
 	}
 
 	// TODO: Add IPMI support for server BMCs
@@ -158,8 +174,22 @@ func readRAPLEnergy(packages []string) (map[string]uint64, error) {
 			namePath := filepath.Join(pkgPath, "name")
 			if domainName, err := readStringFile(namePath); err == nil {
 				name = domainName
+			} else {
+				log.Debug().
+					Str("component", "sensors_power").
+					Str("action", "read_rapl_domain_name_failed").
+					Str("name_path", namePath).
+					Err(err).
+					Msg("Failed to read RAPL domain name, using path fallback")
 			}
 			result[name] = energy
+		} else {
+			log.Debug().
+				Str("component", "sensors_power").
+				Str("action", "read_rapl_energy_failed").
+				Str("energy_path", energyPath).
+				Err(err).
+				Msg("Failed to read RAPL energy counter")
 		}
 
 		// Also read subdomain energy (core, uncore, dram)
@@ -172,8 +202,22 @@ func readRAPLEnergy(packages []string) (map[string]uint64, error) {
 				namePath := filepath.Join(subPath, "name")
 				if domainName, err := readStringFile(namePath); err == nil {
 					name = domainName
+				} else {
+					log.Debug().
+						Str("component", "sensors_power").
+						Str("action", "read_rapl_subdomain_name_failed").
+						Str("name_path", namePath).
+						Err(err).
+						Msg("Failed to read RAPL subdomain name, using path fallback")
 				}
 				result[name] = energy
+			} else {
+				log.Debug().
+					Str("component", "sensors_power").
+					Str("action", "read_rapl_subdomain_energy_failed").
+					Str("energy_path", energyPath).
+					Err(err).
+					Msg("Failed to read RAPL subdomain energy counter")
 			}
 		}
 	}
@@ -325,6 +369,12 @@ func readAMDEnergy(hwmonPath string) (map[string]uint64, error) {
 	for _, energyPath := range energyFiles {
 		energy, err := readUint64File(energyPath)
 		if err != nil {
+			log.Debug().
+				Str("component", "sensors_power").
+				Str("action", "read_amd_energy_failed").
+				Str("energy_path", energyPath).
+				Err(err).
+				Msg("Failed to read AMD energy counter")
 			continue
 		}
 
@@ -333,6 +383,13 @@ func readAMDEnergy(hwmonPath string) (map[string]uint64, error) {
 		labelPath := strings.Replace(energyPath, "_input", "_label", 1)
 		label, err := readStringFile(labelPath)
 		if err != nil {
+			log.Debug().
+				Str("component", "sensors_power").
+				Str("action", "read_amd_label_failed").
+				Str("label_path", labelPath).
+				Err(err).
+				Msg("Failed to read AMD energy label, using filename fallback")
+
 			// Use filename as fallback
 			label = filepath.Base(energyPath)
 		}
