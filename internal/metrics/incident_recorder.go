@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -658,18 +659,42 @@ func validateRegularFilePath(path string, info os.FileInfo) error {
 }
 
 func readBoundedRegularFile(path string, maxSize int64) ([]byte, error) {
-	info, err := os.Lstat(path)
+	initialInfo, err := os.Lstat(path)
 	if err != nil {
 		return nil, err
 	}
-	if err := validateRegularFilePath(path, info); err != nil {
+	if err := validateRegularFilePath(path, initialInfo); err != nil {
 		return nil, err
 	}
-	if maxSize > 0 && info.Size() > maxSize {
-		return nil, fmt.Errorf("%w: file %q exceeds size limit (%d bytes)", errUnsafeIncidentPersistencePath, path, info.Size())
+	if maxSize > 0 && initialInfo.Size() > maxSize {
+		return nil, fmt.Errorf("%w: file %q exceeds size limit (%d bytes)", errUnsafeIncidentPersistencePath, path, initialInfo.Size())
 	}
 
-	data, err := os.ReadFile(path)
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = file.Close()
+	}()
+
+	openInfo, err := file.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if err := validateRegularFilePath(path, openInfo); err != nil {
+		return nil, err
+	}
+	if !os.SameFile(initialInfo, openInfo) {
+		return nil, fmt.Errorf("%w: file %q changed during read", errUnsafeIncidentPersistencePath, path)
+	}
+
+	reader := io.Reader(file)
+	if maxSize > 0 {
+		reader = io.LimitReader(file, maxSize+1)
+	}
+
+	data, err := io.ReadAll(reader)
 	if err != nil {
 		return nil, err
 	}
