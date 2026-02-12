@@ -99,16 +99,28 @@ export function AIIntelligence() {
 
   // Safety timer ref — hoisted so onStart can clear it when SSE connects
   let safetyTimerRef: ReturnType<typeof setTimeout> | undefined;
+  let scrollToFindingTimerRef: ReturnType<typeof setTimeout> | undefined;
+
+  const clearSafetyTimer = () => {
+    if (safetyTimerRef !== undefined) {
+      clearTimeout(safetyTimerRef);
+      safetyTimerRef = undefined;
+    }
+  };
+
+  const clearScrollToFindingTimer = () => {
+    if (scrollToFindingTimerRef !== undefined) {
+      clearTimeout(scrollToFindingTimerRef);
+      scrollToFindingTimerRef = undefined;
+    }
+  };
 
   // Live patrol streaming
   const patrolStream = usePatrolStream({
     running: () => patrolEnabledLocal() && ((patrolStatus()?.running ?? false) || manualRunRequested()),
     onStart: () => {
       // SSE connected — clear the safety timeout
-      if (safetyTimerRef !== undefined) {
-        clearTimeout(safetyTimerRef);
-        safetyTimerRef = undefined;
-      }
+      clearSafetyTimer();
     },
     onComplete: () => {
       setManualRunRequested(false);
@@ -146,6 +158,8 @@ export function AIIntelligence() {
 
   onCleanup(() => {
     document.removeEventListener('mousedown', handleClickOutside);
+    clearSafetyTimer();
+    clearScrollToFindingTimer();
   });
 
   // AI settings state
@@ -259,10 +273,7 @@ export function AIIntelligence() {
     setPatrolEnabledLocal(newValue);
     if (!newValue) {
       setManualRunRequested(false);
-      if (safetyTimerRef !== undefined) {
-        clearTimeout(safetyTimerRef);
-        safetyTimerRef = undefined;
-      }
+      clearSafetyTimer();
     }
     try {
       const data = await apiFetchJSON<AISettings>('/api/settings/ai/update', {
@@ -296,7 +307,9 @@ export function AIIntelligence() {
 
     // Safety timeout: if SSE never connects within 15s, clear optimistic state.
     // Cleared early via onStart callback when the SSE connection opens.
+    clearSafetyTimer();
     safetyTimerRef = setTimeout(() => {
+      safetyTimerRef = undefined;
       if (manualRunRequested() && !patrolStream.isStreaming()) {
         setManualRunRequested(false);
         notificationStore.error('Patrol run did not start — connection timed out');
@@ -312,10 +325,7 @@ export function AIIntelligence() {
       setManualRunRequested(false);
       notificationStore.error('Failed to start patrol run');
       // Clear safety timer on API error
-      if (safetyTimerRef !== undefined) {
-        clearTimeout(safetyTimerRef);
-        safetyTimerRef = undefined;
-      }
+      clearSafetyTimer();
     } finally {
       setIsTriggeringPatrol(false);
     }
@@ -1049,7 +1059,9 @@ export function AIIntelligence() {
               setActiveTab('findings');
               setFindingsFilterOverride('approvals');
               // Allow SolidJS to re-render with new filter before scrolling
-              setTimeout(() => {
+              clearScrollToFindingTimer();
+              scrollToFindingTimerRef = setTimeout(() => {
+                scrollToFindingTimerRef = undefined;
                 const el = document.getElementById(`finding-${findingId}`);
                 el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
               }, 100);
