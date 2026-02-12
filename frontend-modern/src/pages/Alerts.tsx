@@ -2387,6 +2387,8 @@ function OverviewTab(props: {
     new Set(INCIDENT_EVENT_TYPES),
   );
   const [lastHashScrolled, setLastHashScrolled] = createSignal<string | null>(null);
+  let hashScrollRafId: number | undefined;
+  const pendingProcessingResetTimeouts = new Set<number>();
 
   const loadIncidentTimeline = async (alertId: string, startedAt?: string) => {
     setIncidentLoading((prev) => ({ ...prev, [alertId]: true }));
@@ -2492,11 +2494,40 @@ function OverviewTab(props: {
     setLastHashScrolled(hash);
   };
 
+  const scheduleProcessingReset = (alertId: string) => {
+    const timeoutId = window.setTimeout(() => {
+      pendingProcessingResetTimeouts.delete(timeoutId);
+      setProcessingAlerts((prev) => {
+        const next = new Set(prev);
+        next.delete(alertId);
+        return next;
+      });
+    }, 1500); // Allow server processing + WebSocket sync before re-enabling actions
+    pendingProcessingResetTimeouts.add(timeoutId);
+  };
+
   createEffect(() => {
     location.hash;
     filteredAlerts().length;
     props.showAcknowledged();
-    requestAnimationFrame(scrollToAlertHash);
+    if (hashScrollRafId !== undefined) {
+      cancelAnimationFrame(hashScrollRafId);
+    }
+    hashScrollRafId = requestAnimationFrame(() => {
+      hashScrollRafId = undefined;
+      scrollToAlertHash();
+    });
+  });
+
+  onCleanup(() => {
+    if (hashScrollRafId !== undefined) {
+      cancelAnimationFrame(hashScrollRafId);
+      hashScrollRafId = undefined;
+    }
+    pendingProcessingResetTimeouts.forEach((timeoutId) => {
+      window.clearTimeout(timeoutId);
+    });
+    pendingProcessingResetTimeouts.clear();
   });
 
   return (
@@ -2801,14 +2832,8 @@ function OverviewTab(props: {
                             );
                             // Don't update local state on error - let WebSocket keep the correct state
                           } finally {
-                            // Keep button disabled for longer to prevent race conditions with WebSocket updates
-                            setTimeout(() => {
-                              setProcessingAlerts((prev) => {
-                                const next = new Set(prev);
-                                next.delete(alert.id);
-                                return next;
-                              });
-                            }, 1500); // 1.5 seconds to allow server to process and WebSocket to sync
+                            // Keep button disabled briefly to prevent race conditions with WebSocket updates
+                            scheduleProcessingReset(alert.id);
                           }
                         }}
                       >

@@ -99,6 +99,7 @@ export function AIIntelligence() {
 
   // Safety timer ref — hoisted so onStart can clear it when SSE connects
   let safetyTimerRef: ReturnType<typeof setTimeout> | undefined;
+  let findingScrollTimerRef: ReturnType<typeof setTimeout> | undefined;
 
   // Live patrol streaming
   const patrolStream = usePatrolStream({
@@ -609,7 +610,17 @@ export function AIIntelligence() {
     document.addEventListener('visibilitychange', handleVisibility);
     onCleanup(() => document.removeEventListener('visibilitychange', handleVisibility));
   });
-  onCleanup(() => stopPolling());
+  onCleanup(() => {
+    stopPolling();
+    if (safetyTimerRef !== undefined) {
+      clearTimeout(safetyTimerRef);
+      safetyTimerRef = undefined;
+    }
+    if (findingScrollTimerRef !== undefined) {
+      clearTimeout(findingScrollTimerRef);
+      findingScrollTimerRef = undefined;
+    }
+  });
 
   async function loadAllData() {
     setIsRefreshing(true);
@@ -1049,9 +1060,13 @@ export function AIIntelligence() {
               setActiveTab('findings');
               setFindingsFilterOverride('approvals');
               // Allow SolidJS to re-render with new filter before scrolling
-              setTimeout(() => {
+              if (findingScrollTimerRef !== undefined) {
+                clearTimeout(findingScrollTimerRef);
+              }
+              findingScrollTimerRef = setTimeout(() => {
                 const el = document.getElementById(`finding-${findingId}`);
                 el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                findingScrollTimerRef = undefined;
               }, 100);
             }}
           />
