@@ -3004,7 +3004,7 @@ func generateDockerContainers(hostName string, hostIdx int, config MockConfig, p
 				}
 			}
 
-			userNS := []string{"keep-id", "host", "private"}[rand.Intn(3)]
+			userNamespace := []string{"keep-id", "host", "private"}[rand.Intn(3)]
 
 			podDefs[idx] = podDefinition{
 				Name:              fmt.Sprintf("%s-pod-%d", baseProject, idx+1),
@@ -3014,7 +3014,7 @@ func generateDockerContainers(hostName string, hostIdx int, config MockConfig, p
 				ComposeConfigHash: randomHexString(16),
 				AutoUpdatePolicy:  autoUpdatePolicy,
 				AutoUpdateRestart: autoUpdateRestart,
-				UserNamespace:     userNS,
+				UserNamespace:     userNamespace,
 			}
 		}
 	}
@@ -3037,7 +3037,7 @@ func generateDockerContainers(hostName string, hostIdx int, config MockConfig, p
 			}
 		}
 
-		id := fmt.Sprintf("%s-%s", hostName, randomHexString(12))
+		containerID := fmt.Sprintf("%s-%s", hostName, randomHexString(12))
 		running := rand.Float64() >= config.StoppedPercent
 		if running && rand.Float64() < 0.05 {
 			running = false // small chance of paused/exited container regardless of stopped percent
@@ -3102,7 +3102,7 @@ func generateDockerContainers(hostName string, hostIdx int, config MockConfig, p
 		labels := generateDockerLabels(containerName, hostName, podman && pod != nil, pod, isInfra)
 
 		container := models.DockerContainer{
-			ID:            id,
+			ID:            containerID,
 			Name:          containerName,
 			Image:         fmt.Sprintf("ghcr.io/mock/%s:%d.%d.%d", containerName, 1+rand.Intn(2), rand.Intn(10), rand.Intn(10)),
 			State:         state,
