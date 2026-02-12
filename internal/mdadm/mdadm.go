@@ -186,19 +186,8 @@ func parseDetail(device, output string) (host.RAIDArray, error) {
 				array.SpareDevices, _ = strconv.Atoi(value)
 			case "UUID":
 				array.UUID = value
-			case "Rebuild Status":
-				// Parse rebuild percentage
-				// Format: "50% complete"
-				if strings.Contains(value, "%") {
-					percentStr := strings.TrimSpace(strings.Split(value, "%")[0])
-					array.RebuildPercent, _ = strconv.ParseFloat(percentStr, 64)
-				}
-			case "Reshape Status":
-				// Handle reshape similarly to rebuild
-				if strings.Contains(value, "%") {
-					percentStr := strings.TrimSpace(strings.Split(value, "%")[0])
-					array.RebuildPercent, _ = strconv.ParseFloat(percentStr, 64)
-				}
+			case "Rebuild Status", "Reshape Status":
+				array.RebuildPercent = parsePercentValue(value)
 			}
 		}
 	}
@@ -212,6 +201,16 @@ func parseDetail(device, output string) (host.RAIDArray, error) {
 	}
 
 	return array, nil
+}
+
+// parsePercentValue parses a percentage string like "50% complete" and returns the numeric value.
+func parsePercentValue(value string) float64 {
+	if strings.Contains(value, "%") {
+		percentStr := strings.TrimSpace(strings.Split(value, "%")[0])
+		result, _ := strconv.ParseFloat(percentStr, 64)
+		return result
+	}
+	return 0
 }
 
 // getRebuildSpeed extracts rebuild speed from /proc/mdstat
