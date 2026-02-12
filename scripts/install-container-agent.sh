@@ -495,29 +495,38 @@ download_agent() {
   tmp=$(mktemp "${AGENT_PATH}.download.XXXXXX")
 
   local fetched="false"
+  local expected_checksum=""
   if command -v wget >/dev/null 2>&1; then
-    local wget_args=(-q -O "$tmp" "$download_url")
+    local wget_headers
+    wget_headers=$(mktemp "${AGENT_PATH}.headers.XXXXXX")
+    local wget_args=(--server-response -q -O "$tmp" "$download_url")
     if [[ "$PRIMARY_INSECURE" == "true" ]]; then
       wget_args=(--no-check-certificate "${wget_args[@]}")
     fi
-    if wget "${wget_args[@]}"; then
+    if wget "${wget_args[@]}" 2>"$wget_headers"; then
       fetched="true"
+      expected_checksum=$(awk 'BEGIN{IGNORECASE=1} /^[[:space:]]*x-checksum-sha256:/ {gsub(/\r/,"",$2); value=$2} END {print value}' "$wget_headers")
     else
       rm -f "$tmp"
     fi
+    rm -f "$wget_headers"
   fi
 
   if [[ "$fetched" != "true" ]]; then
     if command -v curl >/dev/null 2>&1; then
-      local curl_args=(-fL --progress-bar -o "$tmp" "$download_url")
+      local curl_headers
+      curl_headers=$(mktemp "${AGENT_PATH}.headers.XXXXXX")
+      local curl_args=(-fL --progress-bar -D "$curl_headers" -o "$tmp" "$download_url")
       if [[ "$PRIMARY_INSECURE" == "true" ]]; then
         curl_args=(-k "${curl_args[@]}")
       fi
       if curl "${curl_args[@]}"; then
         fetched="true"
+        expected_checksum=$(awk 'BEGIN{IGNORECASE=1} /^x-checksum-sha256:/ {gsub(/\r/,"",$2); value=$2} END {print value}' "$curl_headers")
       else
         rm -f "$tmp"
       fi
+      rm -f "$curl_headers"
     fi
   fi
 
@@ -527,53 +536,57 @@ download_agent() {
   fi
 
   # Checksum verification
-  local checksum_url="${download_url}.sha256"
-  local expected_checksum=""
-  
-  # Try to fetch checksum
-  if command -v curl >/dev/null 2>&1; then
+  if [[ -z "$expected_checksum" ]]; then
+    local checksum_url="$PRIMARY_URL/download/pulse-docker-agent.sha256"
+    if [[ -n "$DOWNLOAD_ARCH" ]]; then
+      checksum_url="$checksum_url?arch=$DOWNLOAD_ARCH"
+    fi
+
+    # Fallback for older releases that publish checksum files instead of headers.
+    if command -v curl >/dev/null 2>&1; then
       local curl_args=(-fsSL "$checksum_url")
       if [[ "$PRIMARY_INSECURE" == "true" ]]; then
-          curl_args=(-k "${curl_args[@]}")
+        curl_args=(-k "${curl_args[@]}")
       fi
       expected_checksum=$(curl "${curl_args[@]}" 2>/dev/null || true)
-  elif command -v wget >/dev/null 2>&1; then
+    elif command -v wget >/dev/null 2>&1; then
       local wget_args=(-qO- "$checksum_url")
       if [[ "$PRIMARY_INSECURE" == "true" ]]; then
-          wget_args=(--no-check-certificate "${wget_args[@]}")
+        wget_args=(--no-check-certificate "${wget_args[@]}")
       fi
       expected_checksum=$(wget "${wget_args[@]}" 2>/dev/null || true)
+    fi
   fi
 
   if [[ -n "$expected_checksum" ]]; then
-      log_info "Verifying checksum..."
-      local actual_checksum=""
-      if command -v sha256sum >/dev/null 2>&1; then
-          actual_checksum=$(sha256sum "$tmp" | awk '{print $1}')
-      elif command -v shasum >/dev/null 2>&1; then
-          actual_checksum=$(shasum -a 256 "$tmp" | awk '{print $1}')
-      fi
+    log_info "Verifying checksum..."
+    local actual_checksum=""
+    if command -v sha256sum >/dev/null 2>&1; then
+      actual_checksum=$(sha256sum "$tmp" | awk '{print $1}')
+    elif command -v shasum >/dev/null 2>&1; then
+      actual_checksum=$(shasum -a 256 "$tmp" | awk '{print $1}')
+    fi
 
-      if [[ -n "$actual_checksum" ]]; then
-          # Normalize checksums
-          local clean_expected
-          clean_expected=$(echo "$expected_checksum" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
-          local clean_actual
-          clean_actual=$(echo "$actual_checksum" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
+    if [[ -n "$actual_checksum" ]]; then
+      # Support both "hash" and "hash  filename" checksum formats.
+      local clean_expected
+      clean_expected=$(printf '%s\n' "$expected_checksum" | awk 'NF {print $1; exit}' | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
+      local clean_actual
+      clean_actual=$(printf '%s\n' "$actual_checksum" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
 
-          if [[ "$clean_expected" != "$clean_actual" ]]; then
-              rm -f "$tmp"
-              log_error "Checksum mismatch."
-              log_error "  Expected: '$clean_expected'"
-              log_error "  Actual:   '$clean_actual'"
-              exit 1
-          fi
-          log_success "Checksum verified"
-      else
-          log_warn "Unable to calculate local checksum (sha256sum/shasum not found). Skipping verification."
+      if [[ "$clean_expected" != "$clean_actual" ]]; then
+        rm -f "$tmp"
+        log_error "Checksum mismatch."
+        log_error "  Expected: '$clean_expected'"
+        log_error "  Actual:   '$clean_actual'"
+        exit 1
       fi
+      log_success "Checksum verified"
+    else
+      log_warn "Unable to calculate local checksum (sha256sum/shasum not found). Skipping verification."
+    fi
   else
-      log_info "No checksum file found at $checksum_url. Skipping verification."
+    log_warn "No checksum metadata returned by server. Skipping verification."
   fi
 
   mv "$tmp" "$AGENT_PATH"
