@@ -52,6 +52,19 @@ type HTTPProxy struct {
 	logger       zerolog.Logger
 }
 
+// Close releases idle HTTP connections owned by the proxy clients.
+func (p *HTTPProxy) Close() {
+	if p == nil {
+		return
+	}
+	if p.client != nil {
+		p.client.CloseIdleConnections()
+	}
+	if p.streamClient != nil {
+		p.streamClient.CloseIdleConnections()
+	}
+}
+
 // NewHTTPProxy creates a proxy that forwards requests to the given local address.
 func NewHTTPProxy(localAddr string, logger zerolog.Logger) *HTTPProxy {
 	return &HTTPProxy{

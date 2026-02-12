@@ -95,8 +95,17 @@ func NewClient(cfg Config, deps ClientDeps, logger zerolog.Logger) *Client {
 
 // Run starts the reconnect loop. Blocks until ctx is cancelled.
 func (c *Client) Run(ctx context.Context) error {
-	ctx, c.cancel = context.WithCancel(ctx)
-	defer close(c.done)
+	ctx, cancel := context.WithCancel(ctx)
+	c.mu.Lock()
+	c.cancel = cancel
+	c.mu.Unlock()
+	defer func() {
+		c.mu.Lock()
+		c.cancel = nil
+		c.mu.Unlock()
+		close(c.done)
+		c.proxy.Close()
+	}()
 
 	consecutiveFailures := 0
 
@@ -138,10 +147,17 @@ func (c *Client) Run(ctx context.Context) error {
 				c.logger.Warn().Msg("License error from relay server, pausing reconnect")
 			}
 
+			timer := time.NewTimer(delay)
 			select {
 			case <-ctx.Done():
+				if !timer.Stop() {
+					select {
+					case <-timer.C:
+					default:
+					}
+				}
 				return ctx.Err()
-			case <-time.After(delay):
+			case <-timer.C:
 			}
 		} else {
 			consecutiveFailures = 0
@@ -151,14 +167,25 @@ func (c *Client) Run(ctx context.Context) error {
 
 // Close stops the client and closes the connection.
 func (c *Client) Close() {
-	if c.cancel != nil {
-		c.cancel()
+	c.mu.RLock()
+	cancel := c.cancel
+	done := c.done
+	c.mu.RUnlock()
+
+	if cancel == nil {
+		return
 	}
+
+	cancel()
 	// Wait for Run to finish
+	timer := time.NewTimer(5 * time.Second)
+	defer timer.Stop()
 	select {
-	case <-c.done:
-	case <-time.After(5 * time.Second):
+	case <-done:
+	case <-timer.C:
 	}
+
+	c.proxy.Close()
 }
 
 // Status returns the current client status.
@@ -254,6 +281,10 @@ func (c *Client) connectAndHandle(ctx context.Context) error {
 	// would keep running against a stale sendCh until the whole client stops.
 	connCtx, connCancel := context.WithCancel(ctx)
 	defer connCancel()
+	go func() {
+		<-connCtx.Done()
+		_ = conn.Close()
+	}()
 
 	go c.writePump(connCtx, conn, sendCh)
 
