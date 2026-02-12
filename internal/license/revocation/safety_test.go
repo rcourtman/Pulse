@@ -44,6 +44,7 @@ func (s staticSource) TrialEndsAt() *int64 {
 type panicSource struct {
 	panicCapabilities bool
 	panicLimits       bool
+	panicMeters       bool
 }
 
 func (p panicSource) Capabilities() []string {
@@ -61,6 +62,9 @@ func (p panicSource) Limits() map[string]int64 {
 }
 
 func (p panicSource) MetersEnabled() []string {
+	if p.panicMeters {
+		panic("meters boom")
+	}
 	return nil
 }
 
@@ -115,6 +119,56 @@ func TestSafeEvaluatorCheckLimit_Panic(t *testing.T) {
 	if got := safe.CheckLimit("max_nodes", 999); got != license.LimitAllowed {
 		t.Fatalf("expected %q, got %q", license.LimitAllowed, got)
 	}
+}
+
+func TestSafeEvaluatorGetLimit_NormalAndPanic(t *testing.T) {
+	t.Run("normal", func(t *testing.T) {
+		inner := entitlements.NewEvaluator(staticSource{
+			limits: map[string]int64{"max_nodes": 42},
+		})
+		safe := NewSafeEvaluator(inner)
+
+		limit, ok := safe.GetLimit("max_nodes")
+		if !ok || limit != 42 {
+			t.Fatalf("expected (42, true), got (%d, %t)", limit, ok)
+		}
+	})
+
+	t.Run("panic fail-open", func(t *testing.T) {
+		inner := entitlements.NewEvaluator(panicSource{
+			panicLimits: true,
+		})
+		safe := NewSafeEvaluator(inner)
+
+		limit, ok := safe.GetLimit("max_nodes")
+		if ok || limit != 0 {
+			t.Fatalf("expected (0, false), got (%d, %t)", limit, ok)
+		}
+	})
+}
+
+func TestSafeEvaluatorMeterEnabled_NormalAndPanic(t *testing.T) {
+	t.Run("normal", func(t *testing.T) {
+		inner := entitlements.NewEvaluator(staticSource{
+			meters: []string{"active_agents"},
+		})
+		safe := NewSafeEvaluator(inner)
+
+		if !safe.MeterEnabled("active_agents") {
+			t.Fatal("expected active_agents meter to be enabled")
+		}
+	})
+
+	t.Run("panic returns false", func(t *testing.T) {
+		inner := entitlements.NewEvaluator(panicSource{
+			panicMeters: true,
+		})
+		safe := NewSafeEvaluator(inner)
+
+		if safe.MeterEnabled("active_agents") {
+			t.Fatal("expected false after panic")
+		}
+	})
 }
 
 func TestEnrollmentRateLimitDefaults(t *testing.T) {
