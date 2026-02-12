@@ -867,6 +867,39 @@ func TestFetchZpoolStatsRejectsUnsafePoolNames(t *testing.T) {
 	}
 }
 
+func TestFetchZpoolStatsRejectsOversizedCommandOutput(t *testing.T) {
+	origCommon := commonZpoolPaths
+	origStat := zpoolStat
+	origRunner := zpoolCommandRunner
+	t.Cleanup(func() {
+		commonZpoolPaths = origCommon
+		zpoolStat = origStat
+		zpoolCommandRunner = origRunner
+	})
+
+	commonZpoolPaths = []string{"/trusted/zpool"}
+	zpoolStat = func(name string) (os.FileInfo, error) {
+		if name == "/trusted/zpool" {
+			return nil, nil
+		}
+		return nil, os.ErrNotExist
+	}
+	zpoolCommandRunner = func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
+		return nil, nil, errZpoolCommandOutputTooLarge
+	}
+
+	stats, err := fetchZpoolStats(context.Background(), []string{"tank"})
+	if err == nil {
+		t.Fatal("fetchZpoolStats() expected oversized output error, got nil")
+	}
+	if !containsSubstr(err.Error(), "output exceeded") {
+		t.Fatalf("fetchZpoolStats() error = %q, want output exceeded", err.Error())
+	}
+	if stats != nil {
+		t.Fatalf("fetchZpoolStats() stats = %v, want nil", stats)
+	}
+}
+
 func TestCalculatePercent(t *testing.T) {
 	tests := []struct {
 		name  string

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -15,6 +16,10 @@ import (
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rs/zerolog/log"
 )
+
+const maxZpoolCommandOutputSize = 1 << 20 // 1 MiB
+
+var errZpoolCommandOutputTooLarge = errors.New("zpool command output exceeded limit")
 
 // zpoolStats represents capacity data reported by `zpool list`.
 type zpoolStats struct {
@@ -36,6 +41,31 @@ type zfsDatasetUsage struct {
 var queryZpoolStats = fetchZpoolStats
 var zpoolLookPath = exec.LookPath
 var zpoolStat = os.Stat
+var zpoolCommandRunner = runZpoolCommand
+
+type limitedBuffer struct {
+	buf      bytes.Buffer
+	maxBytes int
+	exceeded bool
+}
+
+func (b *limitedBuffer) Write(p []byte) (int, error) {
+	remaining := b.maxBytes - b.buf.Len()
+	if remaining <= 0 {
+		b.exceeded = true
+		return 0, errZpoolCommandOutputTooLarge
+	}
+	if len(p) > remaining {
+		b.exceeded = true
+		written, _ := b.buf.Write(p[:remaining])
+		return written, errZpoolCommandOutputTooLarge
+	}
+	return b.buf.Write(p)
+}
+
+func (b *limitedBuffer) Bytes() []byte {
+	return b.buf.Bytes()
+}
 
 func summarizeZFSPools(ctx context.Context, datasets []zfsDatasetUsage) []agentshost.Disk {
 	if len(datasets) == 0 {
@@ -248,16 +278,31 @@ func fetchZpoolStats(ctx context.Context, pools []string) (map[string]zpoolStats
 	args := []string{"list", "-Hp", "-o", "name,size,allocated,free"}
 	args = append(args, pools...)
 
-	cmd := exec.CommandContext(ctx, path, args...)
-	log.Debug().Str("cmd", cmd.String()).Msg("zfs: executing zpool list")
-	output, err := cmd.Output()
+	log.Debug().Str("path", path).Strs("args", args).Msg("zfs: executing zpool list")
+	output, stderr, err := zpoolCommandRunner(ctx, path, args...)
 	if err != nil {
-		log.Debug().Err(err).Str("cmd", cmd.String()).Msg("zfs: zpool list failed")
+		if errors.Is(err, errZpoolCommandOutputTooLarge) {
+			return nil, fmt.Errorf("zpool list output exceeded %d bytes", maxZpoolCommandOutputSize)
+		}
+		log.Debug().Err(err).Str("path", path).Strs("args", args).Int("stderrBytes", len(stderr)).Msg("zfs: zpool list failed")
 		return nil, err
 	}
 	log.Debug().Int("outputBytes", len(output)).Msg("zfs: zpool list succeeded")
 
 	return parseZpoolList(output)
+}
+
+func runZpoolCommand(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
+	cmd := exec.CommandContext(ctx, name, args...)
+	stdout := limitedBuffer{maxBytes: maxZpoolCommandOutputSize}
+	stderr := limitedBuffer{maxBytes: maxZpoolCommandOutputSize}
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	if stdout.exceeded || stderr.exceeded {
+		return stdout.Bytes(), stderr.Bytes(), errZpoolCommandOutputTooLarge
+	}
+	return stdout.Bytes(), stderr.Bytes(), err
 }
 
 func parseZpoolList(output []byte) (map[string]zpoolStats, error) {
