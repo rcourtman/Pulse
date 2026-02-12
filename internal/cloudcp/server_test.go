@@ -1,6 +1,12 @@
 package cloudcp
 
-import "testing"
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
 
 func TestBaseDomainFromURL(t *testing.T) {
 	tests := []struct {
@@ -20,5 +26,40 @@ func TestBaseDomainFromURL(t *testing.T) {
 				t.Fatalf("baseDomainFromURL(%q) = %q, want %q", tt.in, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestRun_LoadConfigError(t *testing.T) {
+	t.Setenv("CP_ADMIN_KEY", "")
+	t.Setenv("CP_BASE_URL", "")
+	t.Setenv("STRIPE_WEBHOOK_SECRET", "")
+
+	err := Run(context.Background(), "test-version")
+	if err == nil {
+		t.Fatal("Run() error = nil, want non-nil")
+	}
+	if !strings.Contains(err.Error(), "load config:") {
+		t.Fatalf("Run() error = %q, want load config prefix", err)
+	}
+}
+
+func TestRun_CreateTenantsDirError(t *testing.T) {
+	tempDir := t.TempDir()
+	filePath := filepath.Join(tempDir, "not-a-directory")
+	if err := os.WriteFile(filePath, []byte("x"), 0o600); err != nil {
+		t.Fatalf("WriteFile(%q): %v", filePath, err)
+	}
+
+	t.Setenv("CP_DATA_DIR", filePath)
+	t.Setenv("CP_ADMIN_KEY", "test-admin-key")
+	t.Setenv("CP_BASE_URL", "https://cloud.example.com")
+	t.Setenv("STRIPE_WEBHOOK_SECRET", "whsec_test")
+
+	err := Run(context.Background(), "test-version")
+	if err == nil {
+		t.Fatal("Run() error = nil, want non-nil")
+	}
+	if !strings.Contains(err.Error(), "create tenants dir:") {
+		t.Fatalf("Run() error = %q, want create tenants dir error", err)
 	}
 }
