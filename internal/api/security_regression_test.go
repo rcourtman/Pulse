@@ -430,6 +430,25 @@ func TestAIStatusRequiresAuthInAPIMode(t *testing.T) {
 	}
 }
 
+func TestAIStatusRequiresAIChatScope(t *testing.T) {
+	rawToken := "ai-status-scope-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/status", nil)
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for missing ai:chat scope, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), config.ScopeAIChat) {
+		t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeAIChat, rec.Body.String())
+	}
+}
+
 func TestWebSocketRequiresMonitoringReadScope(t *testing.T) {
 	rawToken := "ws-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeHostReport}, nil)
