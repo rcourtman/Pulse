@@ -3,6 +3,7 @@ package mock
 import (
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -184,77 +185,90 @@ func GetConfig() MockConfig {
 func LoadMockConfig() MockConfig {
 	config := DefaultConfig
 
-	if val := os.Getenv("PULSE_MOCK_NODES"); val != "" {
-		if n, err := strconv.Atoi(val); err == nil && n > 0 {
-			config.NodeCount = n
-		}
-	}
-
-	if val := os.Getenv("PULSE_MOCK_VMS_PER_NODE"); val != "" {
-		if n, err := strconv.Atoi(val); err == nil && n >= 0 {
-			config.VMsPerNode = n
-		}
-	}
-
-	if val := os.Getenv("PULSE_MOCK_LXCS_PER_NODE"); val != "" {
-		if n, err := strconv.Atoi(val); err == nil && n >= 0 {
-			config.LXCsPerNode = n
-		}
-	}
-
-	if val := os.Getenv("PULSE_MOCK_DOCKER_HOSTS"); val != "" {
-		if n, err := strconv.Atoi(val); err == nil && n >= 0 {
-			config.DockerHostCount = n
-		}
-	}
-
-	if val := os.Getenv("PULSE_MOCK_DOCKER_CONTAINERS"); val != "" {
-		if n, err := strconv.Atoi(val); err == nil && n >= 0 {
-			config.DockerContainersPerHost = n
-		}
-	}
-
-	if val := os.Getenv("PULSE_MOCK_GENERIC_HOSTS"); val != "" {
-		if n, err := strconv.Atoi(val); err == nil && n >= 0 {
-			config.GenericHostCount = n
-		}
-	}
-
-	if val := os.Getenv("PULSE_MOCK_K8S_CLUSTERS"); val != "" {
-		if n, err := strconv.Atoi(val); err == nil && n >= 0 {
-			config.K8sClusterCount = n
-		}
-	}
-
-	if val := os.Getenv("PULSE_MOCK_K8S_NODES"); val != "" {
-		if n, err := strconv.Atoi(val); err == nil && n >= 0 {
-			config.K8sNodesPerCluster = n
-		}
-	}
-
-	if val := os.Getenv("PULSE_MOCK_K8S_PODS"); val != "" {
-		if n, err := strconv.Atoi(val); err == nil && n >= 0 {
-			config.K8sPodsPerCluster = n
-		}
-	}
-
-	if val := os.Getenv("PULSE_MOCK_K8S_DEPLOYMENTS"); val != "" {
-		if n, err := strconv.Atoi(val); err == nil && n >= 0 {
-			config.K8sDeploymentsPerCluster = n
-		}
-	}
-
-	if val := os.Getenv("PULSE_MOCK_RANDOM_METRICS"); val != "" {
-		config.RandomMetrics = val == "true"
-	}
-
-	if val := os.Getenv("PULSE_MOCK_STOPPED_PERCENT"); val != "" {
-		if f, err := strconv.ParseFloat(val, 64); err == nil {
-			config.StoppedPercent = f / 100.0
-		}
-	}
+	config.NodeCount = parseIntEnv("PULSE_MOCK_NODES", config.NodeCount, 1)
+	config.VMsPerNode = parseIntEnv("PULSE_MOCK_VMS_PER_NODE", config.VMsPerNode, 0)
+	config.LXCsPerNode = parseIntEnv("PULSE_MOCK_LXCS_PER_NODE", config.LXCsPerNode, 0)
+	config.DockerHostCount = parseIntEnv("PULSE_MOCK_DOCKER_HOSTS", config.DockerHostCount, 0)
+	config.DockerContainersPerHost = parseIntEnv("PULSE_MOCK_DOCKER_CONTAINERS", config.DockerContainersPerHost, 0)
+	config.GenericHostCount = parseIntEnv("PULSE_MOCK_GENERIC_HOSTS", config.GenericHostCount, 0)
+	config.K8sClusterCount = parseIntEnv("PULSE_MOCK_K8S_CLUSTERS", config.K8sClusterCount, 0)
+	config.K8sNodesPerCluster = parseIntEnv("PULSE_MOCK_K8S_NODES", config.K8sNodesPerCluster, 0)
+	config.K8sPodsPerCluster = parseIntEnv("PULSE_MOCK_K8S_PODS", config.K8sPodsPerCluster, 0)
+	config.K8sDeploymentsPerCluster = parseIntEnv("PULSE_MOCK_K8S_DEPLOYMENTS", config.K8sDeploymentsPerCluster, 0)
+	config.RandomMetrics = parseBoolEnv("PULSE_MOCK_RANDOM_METRICS", config.RandomMetrics)
+	config.StoppedPercent = parsePercentEnv("PULSE_MOCK_STOPPED_PERCENT", config.StoppedPercent)
 
 	return config
+}
+
+func parseIntEnv(envName string, defaultValue int, minValue int) int {
+	val := strings.TrimSpace(os.Getenv(envName))
+	if val == "" {
+		return defaultValue
+	}
+
+	parsed, err := strconv.Atoi(val)
+	if err != nil {
+		log.Warn().
+			Err(err).
+			Str("env_var", envName).
+			Str("value", val).
+			Int("default", defaultValue).
+			Msg("Invalid mock configuration integer value; using default")
+		return defaultValue
+	}
+	if parsed < minValue {
+		log.Warn().
+			Str("env_var", envName).
+			Int("value", parsed).
+			Int("min", minValue).
+			Int("default", defaultValue).
+			Msg("Mock configuration integer below minimum; using default")
+		return defaultValue
+	}
+
+	return parsed
+}
+
+func parseBoolEnv(envName string, defaultValue bool) bool {
+	val := strings.TrimSpace(os.Getenv(envName))
+	if val == "" {
+		return defaultValue
+	}
+
+	switch strings.ToLower(val) {
+	case "true":
+		return true
+	case "false":
+		return false
+	default:
+		log.Warn().
+			Str("env_var", envName).
+			Str("value", val).
+			Bool("default", defaultValue).
+			Msg("Invalid mock configuration boolean value; using default")
+		return defaultValue
+	}
+}
+
+func parsePercentEnv(envName string, defaultValue float64) float64 {
+	val := strings.TrimSpace(os.Getenv(envName))
+	if val == "" {
+		return defaultValue
+	}
+
+	parsed, err := strconv.ParseFloat(val, 64)
+	if err != nil {
+		log.Warn().
+			Err(err).
+			Str("env_var", envName).
+			Str("value", val).
+			Float64("default", defaultValue).
+			Msg("Invalid mock configuration percentage value; using default")
+		return defaultValue
+	}
+
+	return parsed / 100.0
 }
 
 // SetMockConfig updates the mock configuration dynamically and regenerates data when enabled.
