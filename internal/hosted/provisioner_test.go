@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -185,10 +186,28 @@ func TestProvisionTenantValidationFailures(t *testing.T) {
 			expectedField: "email",
 		},
 		{
+			name: "email with control characters",
+			request: ProvisionRequest{
+				Email:    "owner@\nexample.com",
+				Password: "securepass123",
+				OrgName:  "Valid Org",
+			},
+			expectedField: "email",
+		},
+		{
 			name: "short password",
 			request: ProvisionRequest{
 				Email:    "owner@example.com",
 				Password: "short",
+				OrgName:  "Valid Org",
+			},
+			expectedField: "password",
+		},
+		{
+			name: "password exceeds maximum length",
+			request: ProvisionRequest{
+				Email:    "owner@example.com",
+				Password: strings.Repeat("a", maxHostedSignupPasswordLength+1),
 				OrgName:  "Valid Org",
 			},
 			expectedField: "password",

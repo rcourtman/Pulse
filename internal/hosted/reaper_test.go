@@ -116,6 +116,33 @@ func TestReaperSkipsDefaultOrg(t *testing.T) {
 	}
 }
 
+func TestReaperSkipsInvalidOrgID(t *testing.T) {
+	fixedTime := time.Date(2026, 2, 9, 12, 0, 0, 0, time.UTC)
+	requestedAt := fixedTime.Add(-40 * 24 * time.Hour)
+
+	lister := &mockOrgLister{
+		orgs: []*models.Organization{
+			{
+				ID:                  "bad/org-id",
+				Status:              models.OrgStatusPendingDeletion,
+				DeletionRequestedAt: &requestedAt,
+				RetentionDays:       30,
+			},
+		},
+	}
+	deleter := &mockOrgDeleter{}
+	r := NewReaper(lister, deleter, time.Hour, true)
+	r.now = func() time.Time { return fixedTime }
+
+	results := r.scan()
+	if len(results) != 0 {
+		t.Fatalf("expected 0 results for invalid org ID, got %d", len(results))
+	}
+	if deleter.calls != 0 {
+		t.Fatalf("expected no delete calls for invalid org ID, got %d", deleter.calls)
+	}
+}
+
 func TestReaperSkipsActiveOrg(t *testing.T) {
 	fixedTime := time.Date(2026, 2, 9, 12, 0, 0, 0, time.UTC)
 	requestedAt := fixedTime.Add(-40 * 24 * time.Hour)

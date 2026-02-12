@@ -19,6 +19,10 @@ import (
 const (
 	ProvisionStatusCreated  = "created"
 	ProvisionStatusExisting = "existing"
+
+	maxHostedOrganizationIDLength = 64
+	maxHostedSignupEmailLength    = 254
+	maxHostedSignupPasswordLength = 1024
 )
 
 type OrgPersistence interface {
@@ -275,6 +279,9 @@ func validateProvisionRequest(req ProvisionRequest) error {
 	if len(req.Password) < 8 {
 		return &ValidationError{Field: "password", Message: "password must be at least 8 characters"}
 	}
+	if len(req.Password) > maxHostedSignupPasswordLength {
+		return &ValidationError{Field: "password", Message: "password exceeds maximum length"}
+	}
 	if !isValidHostedOrgName(req.OrgName) {
 		return &ValidationError{Field: "org_name", Message: "invalid organization name"}
 	}
@@ -282,8 +289,13 @@ func validateProvisionRequest(req ProvisionRequest) error {
 }
 
 func isValidSignupEmail(email string) bool {
-	if email == "" || strings.Contains(email, " ") {
+	if email == "" || len(email) > maxHostedSignupEmailLength || strings.TrimSpace(email) != email {
 		return false
+	}
+	for _, r := range email {
+		if r < 0x20 || r == 0x7f {
+			return false
+		}
 	}
 	at := strings.Index(email, "@")
 	if at <= 0 || at >= len(email)-1 {
@@ -301,7 +313,7 @@ func isValidSignupEmail(email string) bool {
 }
 
 func isValidHostedOrgName(orgName string) bool {
-	if len(orgName) < 3 || len(orgName) > 64 {
+	if len(orgName) < 3 || len(orgName) > maxHostedOrganizationIDLength {
 		return false
 	}
 	return isValidOrganizationID(orgName)
@@ -311,10 +323,24 @@ func isValidOrganizationID(orgID string) bool {
 	if orgID == "" || orgID == "." || orgID == ".." {
 		return false
 	}
+	if len(orgID) > maxHostedOrganizationIDLength {
+		return false
+	}
+	if strings.TrimSpace(orgID) != orgID {
+		return false
+	}
+	if strings.ContainsAny(orgID, `/\`) {
+		return false
+	}
 	if filepath.Base(orgID) != orgID {
 		return false
 	}
-	return len(orgID) <= 64
+	for _, r := range orgID {
+		if r < 0x20 || r == 0x7f {
+			return false
+		}
+	}
+	return true
 }
 
 func contextErr(ctx context.Context) error {
