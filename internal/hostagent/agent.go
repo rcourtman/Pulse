@@ -269,7 +269,10 @@ func (a *Agent) Run(ctx context.Context) error {
 	defer ticker.Stop()
 
 	if err := a.process(ctx); err != nil && !errors.Is(err, context.Canceled) {
-		a.logger.Error().Err(err).Msg("initial report failed")
+		a.logger.Error().
+			Err(err).
+			Str("hostname", a.hostname).
+			Msg("Initial host report failed")
 	}
 
 	for {
@@ -281,7 +284,10 @@ func (a *Agent) Run(ctx context.Context) error {
 				if errors.Is(err, context.Canceled) {
 					return err
 				}
-				a.logger.Error().Err(err).Msg("failed to send report")
+				a.logger.Error().
+					Err(err).
+					Str("hostname", a.hostname).
+					Msg("Failed to process host report")
 			}
 		}
 	}
@@ -298,10 +304,15 @@ func (a *Agent) process(ctx context.Context) error {
 	}
 	if err := a.sendReport(ctx, report); err != nil {
 		if strings.Contains(err.Error(), "403 Forbidden") {
-			a.logger.Error().Msg("Failed to send host report (403 Forbidden). API token may lack 'Host agent reporting' scope. Set PULSE_ENABLE_HOST=false if host monitoring is not needed.")
+			a.logger.Error().
+				Str("hostname", a.hostname).
+				Msg("Failed to send host report: 403 Forbidden - API token may lack 'Host agent reporting' scope (set PULSE_ENABLE_HOST=false to disable)")
 			return nil
 		}
-		a.logger.Warn().Err(err).Msg("Failed to send report, buffering")
+		a.logger.Warn().
+			Err(err).
+			Str("hostname", a.hostname).
+			Msg("Failed to send report, buffering")
 		a.reportBuffer.Push(report)
 		return nil
 	}
