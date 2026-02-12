@@ -1,11 +1,15 @@
 package servicediscovery
 
 import (
+	"bytes"
 	"context"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 type stubExecutor struct {
@@ -392,4 +396,78 @@ func TestDeepScanner_ScanCanceledContext(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("Scan error: %v", err)
 	}
+}
+
+func TestDeepScanner_ScanLogsStructuredContextWhenExecutorMissing(t *testing.T) {
+	logOutput := captureDeepScannerLogs(t)
+
+	scanner := NewDeepScanner(nil)
+	if _, err := scanner.ScanHost(context.Background(), "host1", "host1"); err == nil {
+		t.Fatalf("expected error without executor")
+	}
+
+	for _, expected := range []string{
+		`"component":"service_discovery_scanner"`,
+		`"action":"scan_precondition_failed"`,
+		`"reason":"executor_missing"`,
+		`"resource_id":"host:host1:host1"`,
+		`"resource_type":"host"`,
+		`"host_id":"host1"`,
+		`"message":"Deep scan unavailable"`,
+	} {
+		if !strings.Contains(logOutput.String(), expected) {
+			t.Fatalf("expected log output to include %s, got %q", expected, logOutput.String())
+		}
+	}
+}
+
+func TestDeepScanner_ScanLogsStructuredContextOnCommandResultFailure(t *testing.T) {
+	exec := &stubExecutor{
+		agents: []ConnectedAgent{{AgentID: "host1", Hostname: "host1"}},
+	}
+	scanner := NewDeepScanner(exec)
+	scanner.maxParallel = 1
+
+	logOutput := captureDeepScannerLogs(t)
+	result, err := scanner.Scan(context.Background(), DiscoveryRequest{
+		ResourceType: ResourceTypeDockerVM,
+		ResourceID:   "101:web",
+		HostID:       "host1",
+		Hostname:     "host1",
+	})
+	if err != nil {
+		t.Fatalf("Scan error: %v", err)
+	}
+	if _, ok := result.Errors["docker_containers"]; !ok {
+		t.Fatalf("expected docker_containers error, got %#v", result.Errors)
+	}
+
+	for _, expected := range []string{
+		`"component":"service_discovery_scanner"`,
+		`"action":"command_result_failed"`,
+		`"command":"docker_containers"`,
+		`"optional":false`,
+		`"command_error":"boom"`,
+		`"resource_id":"docker_vm:host1:101:web"`,
+		`"resource_type":"docker_vm"`,
+		`"host_id":"host1"`,
+		`"message":"Deep scan command reported failure"`,
+	} {
+		if !strings.Contains(logOutput.String(), expected) {
+			t.Fatalf("expected log output to include %s, got %q", expected, logOutput.String())
+		}
+	}
+}
+
+func captureDeepScannerLogs(t *testing.T) *bytes.Buffer {
+	t.Helper()
+
+	var buf bytes.Buffer
+	origLogger := log.Logger
+	log.Logger = zerolog.New(&buf).Level(zerolog.DebugLevel).With().Timestamp().Logger()
+	t.Cleanup(func() {
+		log.Logger = origLogger
+	})
+
+	return &buf
 }
