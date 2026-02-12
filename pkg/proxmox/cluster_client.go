@@ -507,6 +507,7 @@ func (cc *ClusterClient) clearEndpointError(endpoint string) {
 	cc.mu.Lock()
 	defer cc.mu.Unlock()
 	delete(cc.lastError, endpoint)
+	delete(cc.rateLimitUntil, endpoint)
 	// Mark endpoint healthy since operation succeeded - this ensures degraded
 	// clusters recover once endpoints start responding again
 	cc.nodeHealth[endpoint] = true
