@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 )
 
 // Manager exposes operations for ensuring SSH host keys exist locally.
@@ -41,26 +42,30 @@ type manager struct {
 type keyscanFunc func(ctx context.Context, host string, port int, timeout time.Duration) ([]byte, error)
 
 const (
-	defaultKeyscanTimeout = 5 * time.Second
+	defaultKeyscanTimeout         = 5 * time.Second
+	maxKeyscanOutputSizeBytes     = 1 << 20 // 1 MiB per stream
+	maxKeyscanErrorPreviewBytes   = 2 << 10 // 2 KiB
+	maxKnownHostsManagedHostBytes = 255
+	maxSSHPort                    = 65535
 )
 
 var (
 	mkdirAllFn       = os.MkdirAll
-	statFn           = os.Stat
+	statFn           = os.Lstat
 	openFileFn       = os.OpenFile
 	openFn           = os.Open
 	appendOpenFileFn = func(path string) (io.WriteCloser, error) {
 		return openFileFn(path, os.O_APPEND|os.O_WRONLY, 0o600)
 	}
 	keyscanCmdRunner = func(ctx context.Context, args ...string) ([]byte, error) {
-		cmd := exec.CommandContext(ctx, "ssh-keyscan", args...)
-		return cmd.CombinedOutput()
+		return runCommandCombinedOutputLimited(ctx, maxKeyscanOutputSizeBytes, "ssh-keyscan", args...)
 	}
 
 	// ErrNoHostKeys is returned when ssh-keyscan yields no usable entries.
 	ErrNoHostKeys = errors.New("knownhosts: no host keys discovered")
 	// ErrHostKeyChanged signals that a host key already exists with a different fingerprint.
 	ErrHostKeyChanged = errors.New("knownhosts: host key changed")
+	errCommandOutputTooLarge = errors.New("knownhosts: command output exceeds size limit")
 )
 
 var (
@@ -135,11 +140,16 @@ func (m *manager) Ensure(ctx context.Context, host string) error {
 
 // EnsureWithPort implements Manager.EnsureWithPort.
 func (m *manager) EnsureWithPort(ctx context.Context, host string, port int) error {
-	if strings.TrimSpace(host) == "" {
-		return fmt.Errorf("knownhosts: missing host")
+	var err error
+	host, err = validateManagedHost(host)
+	if err != nil {
+		return err
 	}
 	if port <= 0 {
 		port = 22 // Default to standard SSH port
+	}
+	if port > maxSSHPort {
+		return fmt.Errorf("knownhosts: invalid port %d", port)
 	}
 
 	hostSpec := host
@@ -170,11 +180,16 @@ func (m *manager) EnsureWithPort(ctx context.Context, host string, port int) err
 
 // EnsureWithEntries installs the provided host key entries for host:port.
 func (m *manager) EnsureWithEntries(ctx context.Context, host string, port int, entries [][]byte) error {
-	if strings.TrimSpace(host) == "" {
-		return fmt.Errorf("knownhosts: missing host")
+	var err error
+	host, err = validateManagedHost(host)
+	if err != nil {
+		return err
 	}
 	if port <= 0 {
 		port = 22
+	}
+	if port > maxSSHPort {
+		return fmt.Errorf("knownhosts: invalid port %d", port)
 	}
 	if len(entries) == 0 {
 		return fmt.Errorf("knownhosts: no host key entries provided for %s", host)
@@ -240,7 +255,10 @@ func (m *manager) ensureKnownHostsFile() error {
 		return fmt.Errorf("knownhosts: mkdir %s: %w", dir, err)
 	}
 
-	if _, err := statFn(m.path); err == nil {
+	if info, err := statFn(m.path); err == nil {
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("knownhosts: %s is not a regular file", m.path)
+		}
 		return nil
 	} else if !os.IsNotExist(err) {
 		return err
@@ -392,12 +410,19 @@ func hostCandidates(part string) []string {
 }
 
 func defaultKeyscan(ctx context.Context, host string, port int, timeout time.Duration) ([]byte, error) {
+	if timeout <= 0 {
+		timeout = defaultKeyscanTimeout
+	}
+
 	seconds := int(timeout.Round(time.Second) / time.Second)
 	if seconds <= 0 {
 		seconds = int(defaultKeyscanTimeout / time.Second)
 	}
 	if port <= 0 {
 		port = 22
+	}
+	if port > maxSSHPort {
+		return nil, fmt.Errorf("invalid ssh port %d", port)
 	}
 
 	scanCtx, cancel := context.WithTimeout(ctx, timeout)
@@ -411,7 +436,83 @@ func defaultKeyscan(ctx context.Context, host string, port int, timeout time.Dur
 
 	output, err := keyscanCmdRunner(scanCtx, args...)
 	if err != nil {
-		return nil, fmt.Errorf("%w (output: %s)", err, strings.TrimSpace(string(output)))
+		return nil, fmt.Errorf("%w (output: %s)", err, previewCommandOutput(output, maxKeyscanErrorPreviewBytes))
 	}
+	return output, nil
+}
+
+func validateManagedHost(host string) (string, error) {
+	host = strings.TrimSpace(host)
+	if host == "" {
+		return "", fmt.Errorf("knownhosts: missing host")
+	}
+	if len(host) > maxKnownHostsManagedHostBytes {
+		return "", fmt.Errorf("knownhosts: host exceeds %d characters", maxKnownHostsManagedHostBytes)
+	}
+	if strings.HasPrefix(host, "-") {
+		return "", fmt.Errorf("knownhosts: invalid host %q", host)
+	}
+	for _, r := range host {
+		if unicode.IsControl(r) || unicode.IsSpace(r) {
+			return "", fmt.Errorf("knownhosts: invalid host %q", host)
+		}
+	}
+	return host, nil
+}
+
+func previewCommandOutput(output []byte, maxBytes int) string {
+	trimmed := strings.TrimSpace(string(output))
+	if maxBytes <= 0 || len(trimmed) <= maxBytes {
+		return trimmed
+	}
+	return trimmed[:maxBytes] + "...(truncated)"
+}
+
+type limitedOutputBuffer struct {
+	buf      bytes.Buffer
+	maxBytes int
+	exceeded bool
+}
+
+func (b *limitedOutputBuffer) Write(p []byte) (int, error) {
+	remaining := b.maxBytes - b.buf.Len()
+	if remaining <= 0 {
+		b.exceeded = true
+		return 0, errCommandOutputTooLarge
+	}
+
+	if len(p) > remaining {
+		b.exceeded = true
+		written, _ := b.buf.Write(p[:remaining])
+		return written, errCommandOutputTooLarge
+	}
+
+	return b.buf.Write(p)
+}
+
+func (b *limitedOutputBuffer) Bytes() []byte {
+	return b.buf.Bytes()
+}
+
+func runCommandCombinedOutputLimited(ctx context.Context, maxBytes int, name string, args ...string) ([]byte, error) {
+	if maxBytes <= 0 {
+		return nil, fmt.Errorf("max bytes must be positive")
+	}
+
+	cmd := exec.CommandContext(ctx, name, args...)
+	stdout := &limitedOutputBuffer{maxBytes: maxBytes}
+	stderr := &limitedOutputBuffer{maxBytes: maxBytes}
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
+
+	runErr := cmd.Run()
+	output := append(append([]byte(nil), stdout.Bytes()...), stderr.Bytes()...)
+	if stdout.exceeded || stderr.exceeded {
+		return output, fmt.Errorf("%w (%d bytes)", errCommandOutputTooLarge, maxBytes)
+	}
+	if runErr != nil {
+		return output, runErr
+	}
+
 	return output, nil
 }

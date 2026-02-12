@@ -709,6 +709,164 @@ func TestKeyscanCmdRunnerDefault(t *testing.T) {
 	}
 }
 
+func TestEnsureWithPortRejectsInvalidHost(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "known_hosts")
+
+	mgr, err := NewManager(path)
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
+
+	if err := mgr.EnsureWithPort(context.Background(), "-example.com", 22); err == nil {
+		t.Fatal("expected invalid host error")
+	}
+}
+
+func TestEnsureWithPortRejectsOversizedHost(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "known_hosts")
+
+	mgr, err := NewManager(path)
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
+
+	host := strings.Repeat("a", maxKnownHostsManagedHostBytes+1)
+	if err := mgr.EnsureWithPort(context.Background(), host, 22); err == nil {
+		t.Fatal("expected oversized host error")
+	}
+}
+
+func TestEnsureWithPortRejectsInvalidPort(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "known_hosts")
+
+	mgr, err := NewManager(path)
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
+
+	if err := mgr.EnsureWithPort(context.Background(), "example.com", maxSSHPort+1); err == nil {
+		t.Fatal("expected invalid port error")
+	}
+}
+
+func TestEnsureWithEntriesRejectsInvalidPort(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "known_hosts")
+
+	mgr, err := NewManager(path)
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
+
+	if err := mgr.EnsureWithEntries(context.Background(), "example.com", maxSSHPort+1, [][]byte{[]byte("example.com ssh-ed25519 AAAA")}); err == nil {
+		t.Fatal("expected invalid port error")
+	}
+}
+
+func TestEnsureKnownHostsFileRejectsSymlink(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink creation requires elevated privileges on some windows environments")
+	}
+
+	dir := t.TempDir()
+	target := filepath.Join(dir, "target")
+	if err := os.WriteFile(target, []byte("example.com ssh-ed25519 AAAA\n"), 0600); err != nil {
+		t.Fatalf("failed to write target file: %v", err)
+	}
+
+	link := filepath.Join(dir, "known_hosts")
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatalf("failed to create symlink: %v", err)
+	}
+
+	m := &manager{path: link}
+	err := m.ensureKnownHostsFile()
+	if err == nil {
+		t.Fatal("expected non-regular file error")
+	}
+	if !strings.Contains(err.Error(), "not a regular file") {
+		t.Fatalf("expected non-regular file error, got %v", err)
+	}
+}
+
+func TestDefaultKeyscanRejectsInvalidPort(t *testing.T) {
+	if _, err := defaultKeyscan(context.Background(), "example.com", maxSSHPort+1, time.Second); err == nil {
+		t.Fatal("expected invalid port error")
+	}
+}
+
+func TestDefaultKeyscanTruncatesErrorOutput(t *testing.T) {
+	t.Cleanup(resetKnownHostsFns)
+
+	longOutput := bytes.Repeat([]byte("x"), maxKeyscanErrorPreviewBytes+128)
+	keyscanCmdRunner = func(ctx context.Context, args ...string) ([]byte, error) {
+		return longOutput, errors.New("scan failed")
+	}
+
+	_, err := defaultKeyscan(context.Background(), "example.com", 22, time.Second)
+	if err == nil {
+		t.Fatal("expected keyscan error")
+	}
+	if !strings.Contains(err.Error(), "...(truncated)") {
+		t.Fatalf("expected truncated error output marker, got %v", err)
+	}
+}
+
+func TestRunCommandCombinedOutputLimitedRejectsOversizedOutput(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell helper uses sh")
+	}
+
+	output, err := runCommandCombinedOutputLimited(context.Background(), 8, "sh", "-c", "printf 123456789")
+	if !errors.Is(err, errCommandOutputTooLarge) {
+		t.Fatalf("expected errCommandOutputTooLarge, got %v", err)
+	}
+	if string(output) != "12345678" {
+		t.Fatalf("unexpected captured output: %q", string(output))
+	}
+}
+
+func TestValidateManagedHost(t *testing.T) {
+	tests := []struct {
+		name    string
+		host    string
+		wantErr bool
+	}{
+		{name: "valid hostname", host: "example.com"},
+		{name: "valid ipv4", host: "192.0.2.10"},
+		{name: "missing host", host: "", wantErr: true},
+		{name: "leading dash", host: "-example.com", wantErr: true},
+		{name: "contains whitespace", host: "bad host", wantErr: true},
+		{name: "contains control", host: "bad\nhost", wantErr: true},
+		{name: "oversized", host: strings.Repeat("a", maxKnownHostsManagedHostBytes+1), wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := validateManagedHost(tt.host)
+			if tt.wantErr && err == nil {
+				t.Fatal("expected validation error")
+			}
+			if !tt.wantErr && err != nil {
+				t.Fatalf("expected no error, got %v", err)
+			}
+		})
+	}
+}
+
+func TestPreviewCommandOutput(t *testing.T) {
+	if got := previewCommandOutput([]byte("hello"), 10); got != "hello" {
+		t.Fatalf("unexpected preview output: %q", got)
+	}
+
+	if got := previewCommandOutput([]byte("abcdef"), 3); got != "abc...(truncated)" {
+		t.Fatalf("unexpected truncated preview output: %q", got)
+	}
+}
+
 type errWriteCloser struct {
 	err error
 }
