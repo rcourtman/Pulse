@@ -1,9 +1,14 @@
 package metrics
 
 import (
+	"bytes"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 func TestStoreWriteBatchSync(t *testing.T) {
@@ -109,5 +114,58 @@ func TestStoreGetMetaIntInvalid(t *testing.T) {
 	val, ok := store.getMetaInt("bad_key")
 	if ok {
 		t.Fatalf("expected getMetaInt to fail for invalid int, got %d", val)
+	}
+}
+
+func TestStoreFlushLockedLogsStructuredContextWhenWriteChannelFull(t *testing.T) {
+	var buf bytes.Buffer
+	origLogger := log.Logger
+	log.Logger = zerolog.New(&buf).Level(zerolog.DebugLevel)
+	t.Cleanup(func() {
+		log.Logger = origLogger
+	})
+
+	store := &Store{
+		config: StoreConfig{WriteBufferSize: 4},
+		buffer: []bufferedMetric{
+			{
+				resourceType: "vm",
+				resourceID:   "vm-101",
+				metricType:   "cpu",
+				value:        42,
+				timestamp:    time.Unix(1000, 0),
+				tier:         TierRaw,
+			},
+		},
+		writeCh: make(chan []bufferedMetric, 1),
+	}
+
+	store.writeCh <- []bufferedMetric{{
+		resourceType: "vm",
+		resourceID:   "vm-102",
+		metricType:   "memory",
+		value:        12,
+		timestamp:    time.Unix(1000, 0),
+		tier:         TierRaw,
+	}}
+
+	store.flushLocked()
+
+	if len(store.buffer) != 0 {
+		t.Fatalf("expected flushLocked to clear in-memory buffer, got %d items", len(store.buffer))
+	}
+
+	logOutput := buf.String()
+	required := []string{
+		`"component":"metrics_store"`,
+		`"action":"drop_write_batch"`,
+		`"batch_size":1`,
+		`"write_queue_depth":1`,
+		`"write_queue_capacity":1`,
+	}
+	for _, token := range required {
+		if !strings.Contains(logOutput, token) {
+			t.Fatalf("expected log output to contain %s, got %s", token, logOutput)
+		}
 	}
 }

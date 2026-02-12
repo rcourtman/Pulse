@@ -251,7 +251,13 @@ func (s *Store) flushLocked() {
 	select {
 	case s.writeCh <- toWrite:
 	default:
-		log.Warn().Msg("Metrics write channel full, dropping batch")
+		log.Warn().
+			Str("component", "metrics_store").
+			Str("action", "drop_write_batch").
+			Int("batch_size", len(toWrite)).
+			Int("write_queue_depth", len(s.writeCh)).
+			Int("write_queue_capacity", cap(s.writeCh)).
+			Msg("Metrics write channel full, dropping batch")
 	}
 }
 
@@ -274,7 +280,11 @@ func (s *Store) writeBatch(metrics []bufferedMetric) {
 			time.Sleep(time.Duration(100*(i+1)) * time.Millisecond)
 			continue
 		}
-		log.Error().Err(err).Msg("Failed to begin metrics transaction")
+		log.Error().Err(err).
+			Str("component", "metrics_store").
+			Str("action", "begin_write_tx").
+			Int("batch_size", len(metrics)).
+			Msg("Failed to begin metrics transaction")
 		return
 	}
 
@@ -284,7 +294,11 @@ func (s *Store) writeBatch(metrics []bufferedMetric) {
 	`)
 	if err != nil {
 		tx.Rollback()
-		log.Error().Err(err).Msg("Failed to prepare metrics insert")
+		log.Error().Err(err).
+			Str("component", "metrics_store").
+			Str("action", "prepare_write_stmt").
+			Int("batch_size", len(metrics)).
+			Msg("Failed to prepare metrics insert")
 		return
 	}
 	defer stmt.Close()
@@ -293,14 +307,22 @@ func (s *Store) writeBatch(metrics []bufferedMetric) {
 		_, err := stmt.Exec(m.resourceType, m.resourceID, m.metricType, m.value, m.timestamp.Unix(), string(m.tier))
 		if err != nil {
 			log.Warn().Err(err).
-				Str("resource", m.resourceID).
-				Str("metric", m.metricType).
+				Str("component", "metrics_store").
+				Str("action", "insert_metric").
+				Str("resource_type", m.resourceType).
+				Str("resource_id", m.resourceID).
+				Str("metric_type", m.metricType).
+				Str("tier", string(m.tier)).
 				Msg("Failed to insert metric")
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		log.Error().Err(err).Msg("Failed to commit metrics batch")
+		log.Error().Err(err).
+			Str("component", "metrics_store").
+			Str("action", "commit_write_tx").
+			Int("batch_size", len(metrics)).
+			Msg("Failed to commit metrics batch")
 		return
 	}
 
