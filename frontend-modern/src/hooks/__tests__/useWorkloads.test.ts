@@ -54,6 +54,7 @@ describe('useWorkloads', () => {
   let apiFetchJSONMock: ReturnType<typeof vi.fn>;
   let useWorkloads: UseWorkloadsModule['useWorkloads'];
   let resetWorkloadsCacheForTests: UseWorkloadsModule['__resetWorkloadsCacheForTests'];
+  let eventBus: (typeof import('@/stores/events'))['eventBus'];
 
   beforeEach(async () => {
     vi.useFakeTimers();
@@ -66,12 +67,14 @@ describe('useWorkloads', () => {
 
     vi.doMock('@/utils/apiClient', () => ({
       apiFetchJSON: apiFetchJSONMock,
+      getOrgID: () => 'default',
     }));
 
     ({
       useWorkloads,
       __resetWorkloadsCacheForTests: resetWorkloadsCacheForTests,
     } = await import('@/hooks/useWorkloads'));
+    ({ eventBus } = await import('@/stores/events'));
 
     resetWorkloadsCacheForTests();
   });
@@ -187,6 +190,50 @@ describe('useWorkloads', () => {
 
     await advanceAndFlush(5_000);
     expect(apiFetchJSONMock).toHaveBeenCalledTimes(3);
+
+    dispose();
+  });
+
+  it('scopes shared cache by org and restores cached data when switching back', async () => {
+    let dispose = () => {};
+    let result: ReturnType<UseWorkloadsModule['useWorkloads']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      const [enabled] = createSignal(true);
+      result = useWorkloads(enabled);
+    });
+
+    await flushAsync();
+    await waitForWorkloadCount(() => result!.workloads().length);
+    expect(apiFetchJSONMock).toHaveBeenCalledTimes(1);
+    expect(result!.workloads()[0]?.id).toBe('cluster-a:pve1:101');
+
+    apiFetchJSONMock.mockResolvedValueOnce({
+      data: [
+        {
+          ...sampleResource,
+          id: 'cluster-b-pve2-202',
+          name: 'vm-202',
+          vmid: 202,
+          node: 'pve2',
+          instance: 'cluster-b',
+        },
+      ],
+      meta: { totalPages: 1 },
+    });
+
+    eventBus.emit('org_switched', 'tenant-b');
+    await flushAsync();
+    await waitForWorkloadCount(() => result!.workloads().length);
+
+    expect(apiFetchJSONMock).toHaveBeenCalledTimes(2);
+    expect(result!.workloads()[0]?.id).toBe('cluster-b:pve2:202');
+
+    eventBus.emit('org_switched', 'default');
+    await flushAsync();
+
+    expect(apiFetchJSONMock).toHaveBeenCalledTimes(2);
+    expect(result!.workloads()[0]?.id).toBe('cluster-a:pve1:101');
 
     dispose();
   });

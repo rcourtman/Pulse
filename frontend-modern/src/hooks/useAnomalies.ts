@@ -1,5 +1,6 @@
 import { createSignal, createEffect } from 'solid-js';
 import { AIAPI } from '@/api/ai';
+import { eventBus } from '@/stores/events';
 import type { AnomalyReport, AnomaliesResponse } from '@/types/aiIntelligence';
 
 // Store anomalies with their resource IDs as keys
@@ -62,6 +63,12 @@ function stopRefreshTimer(): void {
         clearInterval(refreshTimer);
         refreshTimer = null;
     }
+}
+
+function clearAnomalyState(): void {
+    setAnomalyStore(new Map());
+    setError(null);
+    setLastUpdate(null);
 }
 
 /**
@@ -178,3 +185,10 @@ if (import.meta.hot) {
         stopRefreshTimer();
     });
 }
+
+eventBus.on('org_switched', () => {
+    clearAnomalyState();
+    if (refreshTimer) {
+        void fetchAnomalies();
+    }
+});
