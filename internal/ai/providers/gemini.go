@@ -609,8 +609,10 @@ func (c *GeminiClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 
 // TestConnection validates the API key by listing models
 func (c *GeminiClient) TestConnection(ctx context.Context) error {
-	_, err := c.ListModels(ctx)
-	return err
+	if _, err := c.ListModels(ctx); err != nil {
+		return fmt.Errorf("gemini test connection failed: %w", err)
+	}
+	return nil
 }
 
 // SupportsThinking returns true if the model supports extended thinking
