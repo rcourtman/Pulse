@@ -76,15 +76,7 @@ func (b *LogBroadcaster) Subscribe() (string, chan string, []string) {
 	ch := make(chan string, 1000) // Large buffer to prevent blocking
 	b.subscribers[id] = ch
 
-	// Generate history snapshot
-	history := make([]string, 0, DefaultBufferSize)
-	b.buffer.Do(func(p interface{}) {
-		if p != nil {
-			history = append(history, p.(string))
-		}
-	})
-
-	return id, ch, history
+	return id, ch, b.buildHistory()
 }
 
 // Unsubscribe removes a subscriber.
@@ -103,6 +95,12 @@ func (b *LogBroadcaster) GetHistory() []string {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 
+	return b.buildHistory()
+}
+
+// buildHistory collects non-nil entries from the ring buffer into a slice.
+// Caller must hold b.mu (read or write).
+func (b *LogBroadcaster) buildHistory() []string {
 	history := make([]string, 0, DefaultBufferSize)
 	b.buffer.Do(func(p interface{}) {
 		if p != nil {
