@@ -1,5 +1,6 @@
 import { createSignal, onMount, Show } from 'solid-js';
 import { apiFetch } from '@/utils/apiClient';
+import { logger } from '@/utils/logger';
 
 export function DemoBanner() {
   const [isDemoMode, setIsDemoMode] = createSignal(false);
@@ -13,8 +14,9 @@ export function DemoBanner() {
       if (demoHeader === 'true') {
         setIsDemoMode(true);
       }
-    } catch (_err) {
-      // Ignore errors
+    } catch (error) {
+      // Non-fatal: banner remains hidden when demo detection cannot be verified.
+      logger.debug('[DemoBanner] Failed to check demo mode', error);
     }
   });
 

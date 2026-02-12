@@ -20,6 +20,7 @@ import { InvestigationSection, ApprovalSection } from '@/components/patrol';
 import { investigationStatusLabels, investigationOutcomeLabels, investigationOutcomeColors, type InvestigationStatus } from '@/api/patrol';
 import { AIAPI, type RemediationPlan } from '@/api/ai';
 import { formatRelativeTime } from '@/utils/format';
+import { logger } from '@/utils/logger';
 
 // Severity priority for sorting (lower number = higher priority)
 const severityOrder: Record<string, number> = {
@@ -167,7 +168,9 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     // Fetch remediation plan artifacts
     AIAPI.getRemediationPlans()
       .then((response: { plans: RemediationPlan[] }) => setRemediationPlans(response.plans))
-      .catch(() => { }); // Silently ignore errors
+      .catch((error) => {
+        logger.warn('[FindingsPanel] Failed to load remediation plans', error);
+      });
   });
 
   createEffect(() => {
