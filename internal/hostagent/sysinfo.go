@@ -8,7 +8,6 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/ceph"
 	"github.com/rcourtman/pulse-go-rewrite/internal/hostmetrics"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mdadm"
 	"github.com/rcourtman/pulse-go-rewrite/internal/sensors"
@@ -26,7 +25,7 @@ type SystemCollector interface {
 	SensorsParse(jsonStr string) (*sensors.TemperatureData, error)
 	SensorsPower(ctx context.Context) (*sensors.PowerData, error)
 	RAIDArrays(ctx context.Context) ([]agentshost.RAIDArray, error)
-	CephStatus(ctx context.Context) (*ceph.ClusterStatus, error)
+	CephStatus(ctx context.Context) (*CephClusterStatus, error)
 	SMARTLocal(ctx context.Context, exclude []string) ([]smartctl.DiskSMART, error)
 	Now() time.Time
 	GOOS() string
@@ -77,8 +76,8 @@ func (c *defaultCollector) RAIDArrays(ctx context.Context) ([]agentshost.RAIDArr
 	return mdadm.CollectArrays(ctx)
 }
 
-func (c *defaultCollector) CephStatus(ctx context.Context) (*ceph.ClusterStatus, error) {
-	return ceph.Collect(ctx)
+func (c *defaultCollector) CephStatus(ctx context.Context) (*CephClusterStatus, error) {
+	return CollectCeph(ctx)
 }
 
 func (c *defaultCollector) SMARTLocal(ctx context.Context, exclude []string) ([]smartctl.DiskSMART, error) {

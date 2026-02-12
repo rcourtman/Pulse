@@ -6,7 +6,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/ceph"
 	"github.com/rcourtman/pulse-go-rewrite/internal/hostmetrics"
 	"github.com/rcourtman/pulse-go-rewrite/internal/sensors"
 	"github.com/rcourtman/pulse-go-rewrite/internal/smartctl"
@@ -22,7 +21,7 @@ type mockCollector struct {
 	sensorsParseFn  func(jsonStr string) (*sensors.TemperatureData, error)
 	sensorsPowerFn  func(ctx context.Context) (*sensors.PowerData, error)
 	raidArraysFn    func(ctx context.Context) ([]agentshost.RAIDArray, error)
-	cephStatusFn    func(ctx context.Context) (*ceph.ClusterStatus, error)
+	cephStatusFn    func(ctx context.Context) (*CephClusterStatus, error)
 	smartLocalFn    func(ctx context.Context, exclude []string) ([]smartctl.DiskSMART, error)
 	nowFn           func() time.Time
 	goos            string
@@ -88,7 +87,7 @@ func (m *mockCollector) RAIDArrays(ctx context.Context) ([]agentshost.RAIDArray,
 	return nil, nil
 }
 
-func (m *mockCollector) CephStatus(ctx context.Context) (*ceph.ClusterStatus, error) {
+func (m *mockCollector) CephStatus(ctx context.Context) (*CephClusterStatus, error) {
 	if m.cephStatusFn != nil {
 		return m.cephStatusFn(ctx)
 	}
