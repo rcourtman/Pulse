@@ -203,10 +203,10 @@ func (s *Service) discoveryLoop(ctx context.Context) {
 		case <-ticker.C:
 			s.RunDiscovery(ctx)
 		case <-s.stopCh:
-			log.Info().Msg("Stopping infrastructure discovery service")
+			log.Info().Msg("stopping infrastructure discovery service")
 			return
 		case <-ctx.Done():
-			log.Info().Msg("Infrastructure discovery context cancelled")
+			log.Info().Msg("infrastructure discovery context cancelled")
 			return
 		}
 	}
@@ -222,7 +222,7 @@ func (s *Service) RunDiscovery(ctx context.Context) []DiscoveredApp {
 	s.mu.RUnlock()
 
 	if analyzer == nil {
-		log.Debug().Msg("AI analyzer not set, skipping discovery")
+		log.Debug().Msg("ai analyzer not set, skipping discovery")
 		return nil
 	}
 
@@ -244,7 +244,7 @@ func (s *Service) RunDiscovery(ctx context.Context) []DiscoveredApp {
 	}
 
 	if len(allContainers) == 0 {
-		log.Debug().Msg("No Docker containers found for discovery")
+		log.Debug().Msg("no Docker containers found for discovery")
 		s.mu.Lock()
 		s.lastRun = time.Now()
 		s.mu.Unlock()
