@@ -1769,6 +1769,9 @@ func (c *Config) Validate() error {
 	if c.FrontendPort <= 0 || c.FrontendPort > 65535 {
 		return fmt.Errorf("invalid frontend port: %d", c.FrontendPort)
 	}
+	if c.SSHPort != 0 && (c.SSHPort < 1 || c.SSHPort > 65535) {
+		return fmt.Errorf("invalid SSH port: %d (must be between 1 and 65535)", c.SSHPort)
+	}
 
 	// Validate monitoring settings
 	if c.PVEPollingInterval < 10*time.Second {
