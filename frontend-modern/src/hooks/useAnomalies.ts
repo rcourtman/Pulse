@@ -1,4 +1,4 @@
-import { createSignal, createEffect } from 'solid-js';
+import { createSignal, onCleanup } from 'solid-js';
 import { AIAPI } from '@/api/ai';
 import type { AnomalyReport, AnomaliesResponse } from '@/types/aiIntelligence';
 
@@ -15,6 +15,7 @@ const [lastUpdate, setLastUpdate] = createSignal<Date | null>(null);
 const REFRESH_INTERVAL = 30000;
 
 let refreshTimer: ReturnType<typeof setInterval> | null = null;
+let activeSubscribers = 0;
 
 // Fetch anomalies from the API
 async function fetchAnomalies(): Promise<void> {
@@ -50,7 +51,7 @@ function startRefreshTimer(): void {
     if (refreshTimer) return;
 
     // Initial fetch
-    fetchAnomalies();
+    void fetchAnomalies();
 
     // Set up interval for periodic refresh
     refreshTimer = setInterval(fetchAnomalies, REFRESH_INTERVAL);
@@ -64,6 +65,20 @@ function stopRefreshTimer(): void {
     }
 }
 
+function useAnomalySubscription(): void {
+    activeSubscribers += 1;
+    if (activeSubscribers === 1) {
+        startRefreshTimer();
+    }
+
+    onCleanup(() => {
+        activeSubscribers = Math.max(0, activeSubscribers - 1);
+        if (activeSubscribers === 0) {
+            stopRefreshTimer();
+        }
+    });
+}
+
 /**
  * Hook to get anomaly data for a specific resource and metric.
  * Returns the anomaly if present, or null if the metric is within baseline.
@@ -72,10 +87,7 @@ export function useAnomalyForMetric(
     resourceId: () => string | undefined,
     metric: () => 'cpu' | 'memory' | 'disk'
 ): () => AnomalyReport | null {
-    // Start fetching on first use
-    createEffect(() => {
-        startRefreshTimer();
-    });
+    useAnomalySubscription();
 
     return () => {
         const rid = resourceId();
@@ -95,10 +107,7 @@ export function useAnomalyForMetric(
 export function useAnomaliesForResource(
     resourceId: () => string | undefined
 ): () => AnomalyReport[] {
-    // Start fetching on first use
-    createEffect(() => {
-        startRefreshTimer();
-    });
+    useAnomalySubscription();
 
     return () => {
         const rid = resourceId();
@@ -123,10 +132,7 @@ export function useAllAnomalies(): {
     lastUpdate: () => Date | null;
     refresh: () => void;
 } {
-    // Start fetching on first use
-    createEffect(() => {
-        startRefreshTimer();
-    });
+    useAnomalySubscription();
 
     return {
         anomalies: () => {
@@ -158,9 +164,7 @@ export function useAllAnomalies(): {
  * Hook to check if a resource has any anomalies.
  */
 export function useHasAnomalies(resourceId: () => string | undefined): () => boolean {
-    createEffect(() => {
-        startRefreshTimer();
-    });
+    useAnomalySubscription();
 
     return () => {
         const rid = resourceId();
@@ -175,6 +179,7 @@ export function useHasAnomalies(resourceId: () => string | undefined): () => boo
 // Cleanup when the module is unloaded (for HMR)
 if (import.meta.hot) {
     import.meta.hot.dispose(() => {
+        activeSubscribers = 0;
         stopRefreshTimer();
     });
 }
