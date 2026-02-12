@@ -118,4 +118,36 @@ describe('AIAPI', () => {
       )
     ).rejects.toThrow('No response body');
   });
+
+  it('clears read timeout timers for investigateAlert stream reads', async () => {
+    const releaseLock = vi.fn();
+    const read = vi.fn().mockResolvedValue({ done: true, value: undefined });
+    apiFetchMock.mockResolvedValueOnce({
+      ok: true,
+      body: { getReader: () => ({ read, releaseLock }) },
+    } as any);
+
+    const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout');
+
+    await AIAPI.investigateAlert(
+      {
+        alert_id: 'a1',
+        resource_id: 'r1',
+        resource_name: 'res',
+        resource_type: 'vm',
+        alert_type: 'cpu',
+        level: 'warning',
+        value: 1,
+        threshold: 2,
+        message: 'msg',
+        duration: '1m',
+      },
+      () => undefined
+    );
+
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(clearTimeoutSpy).toHaveBeenCalledTimes(1);
+    expect(releaseLock).toHaveBeenCalledTimes(1);
+    clearTimeoutSpy.mockRestore();
+  });
 });
