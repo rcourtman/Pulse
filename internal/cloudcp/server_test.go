@@ -63,3 +63,24 @@ func TestRun_CreateTenantsDirError(t *testing.T) {
 		t.Fatalf("Run() error = %q, want create tenants dir error", err)
 	}
 }
+
+func TestRun_CreateControlPlaneDirError(t *testing.T) {
+	tempDir := t.TempDir()
+	filePath := filepath.Join(tempDir, "control-plane")
+	if err := os.WriteFile(filePath, []byte("x"), 0o600); err != nil {
+		t.Fatalf("WriteFile(%q): %v", filePath, err)
+	}
+
+	t.Setenv("CP_DATA_DIR", tempDir)
+	t.Setenv("CP_ADMIN_KEY", "test-admin-key")
+	t.Setenv("CP_BASE_URL", "https://cloud.example.com")
+	t.Setenv("STRIPE_WEBHOOK_SECRET", "whsec_test")
+
+	err := Run(context.Background(), "test-version")
+	if err == nil {
+		t.Fatal("Run() error = nil, want non-nil")
+	}
+	if !strings.Contains(err.Error(), "create control-plane dir:") {
+		t.Fatalf("Run() error = %q, want create control-plane dir error", err)
+	}
+}
