@@ -158,3 +158,11 @@ func TestWebhookDeliveryDeliverInvalidURL(t *testing.T) {
 		t.Fatalf("expected URL blocked error, got %v", err)
 	}
 }
+
+func TestWebhookDeliveryStopIdempotent(t *testing.T) {
+	delivery := NewWebhookDelivery([]string{})
+	delivery.Start()
+
+	delivery.Stop()
+	delivery.Stop()
+}

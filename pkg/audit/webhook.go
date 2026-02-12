@@ -32,6 +32,7 @@ type WebhookDelivery struct {
 	client   *http.Client
 	queue    chan Event
 	stopChan chan struct{}
+	stopOnce sync.Once
 	wg       sync.WaitGroup
 }
 
@@ -72,9 +73,11 @@ func (w *WebhookDelivery) Start() {
 
 // Stop gracefully stops the delivery workers.
 func (w *WebhookDelivery) Stop() {
-	close(w.stopChan)
-	w.wg.Wait()
-	log.Debug().Msg("Audit webhook delivery stopped")
+	w.stopOnce.Do(func() {
+		close(w.stopChan)
+		w.wg.Wait()
+		log.Debug().Msg("Audit webhook delivery stopped")
+	})
 }
 
 // Enqueue adds an event to the delivery queue.

@@ -31,6 +31,8 @@ type SQLiteLogger struct {
 	retentionDays   int
 	stopChan        chan struct{}
 	wg              sync.WaitGroup
+	closeOnce       sync.Once
+	closeErr        error
 }
 
 // NewSQLiteLogger creates a new SQLite-backed audit logger.
@@ -387,20 +389,24 @@ func (l *SQLiteLogger) VerifySignature(event Event) bool {
 
 // Close gracefully shuts down the logger.
 func (l *SQLiteLogger) Close() error {
-	close(l.stopChan)
+	l.closeOnce.Do(func() {
+		close(l.stopChan)
 
-	if l.webhookDelivery != nil {
-		l.webhookDelivery.Stop()
-	}
+		if l.webhookDelivery != nil {
+			l.webhookDelivery.Stop()
+		}
 
-	l.wg.Wait()
+		l.wg.Wait()
 
-	if err := l.db.Close(); err != nil {
-		return fmt.Errorf("failed to close audit database: %w", err)
-	}
+		if err := l.db.Close(); err != nil {
+			l.closeErr = fmt.Errorf("failed to close audit database: %w", err)
+			return
+		}
 
-	log.Info().Msg("SQLite audit logger closed")
-	return nil
+		log.Info().Msg("SQLite audit logger closed")
+	})
+
+	return l.closeErr
 }
 
 // loadWebhookURLs loads webhook URLs from the config table.
