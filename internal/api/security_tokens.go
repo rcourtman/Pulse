@@ -200,8 +200,8 @@ func (r *Router) handleDeleteAPIToken(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
-	id := strings.TrimPrefix(req.URL.Path, "/api/security/tokens/")
-	if id == "" {
+	tokenID := strings.TrimPrefix(req.URL.Path, "/api/security/tokens/")
+	if tokenID == "" {
 		http.Error(w, "Token ID required", http.StatusBadRequest)
 		return
 	}
@@ -209,7 +209,7 @@ func (r *Router) handleDeleteAPIToken(w http.ResponseWriter, req *http.Request) 
 	config.Mu.Lock()
 	defer config.Mu.Unlock()
 
-	removed := r.config.RemoveAPIToken(id)
+	removed := r.config.RemoveAPIToken(tokenID)
 	if removed == nil {
 		http.Error(w, "Token not found", http.StatusNotFound)
 		return
@@ -257,7 +257,7 @@ func (r *Router) handleRotateAPIToken(w http.ResponseWriter, req *http.Request) 
 		http.Error(w, "Token ID required", http.StatusBadRequest)
 		return
 	}
-	id := strings.TrimSpace(parts[0])
+	tokenID := strings.TrimSpace(parts[0])
 
 	config.Mu.Lock()
 	defer config.Mu.Unlock()
@@ -266,7 +266,7 @@ func (r *Router) handleRotateAPIToken(w http.ResponseWriter, req *http.Request) 
 	var oldRecord config.APITokenRecord
 	found := false
 	for idx := range r.config.APITokens {
-		if r.config.APITokens[idx].ID == id {
+		if r.config.APITokens[idx].ID == tokenID {
 			oldRecord = r.config.APITokens[idx] // copy for safety (slice may reallocate)
 			found = true
 			break
@@ -319,7 +319,7 @@ func (r *Router) handleRotateAPIToken(w http.ResponseWriter, req *http.Request) 
 
 	// Remove old, add new (rollback if persistence fails)
 	prevTokens := append([]config.APITokenRecord{}, r.config.APITokens...)
-	r.config.RemoveAPIToken(id)
+	r.config.RemoveAPIToken(tokenID)
 	r.config.APITokens = append(r.config.APITokens, *newRecord)
 	r.config.SortAPITokens()
 
@@ -336,7 +336,7 @@ func (r *Router) handleRotateAPIToken(w http.ResponseWriter, req *http.Request) 
 
 	log.Info().
 		Str("audit_event", "token_rotated").
-		Str("old_token_id", id).
+		Str("old_token_id", tokenID).
 		Str("new_token_id", newRecord.ID).
 		Str("token_name", newRecord.Name).
 		Str("client_ip", req.RemoteAddr).

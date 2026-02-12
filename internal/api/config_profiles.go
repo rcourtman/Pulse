@@ -109,10 +109,10 @@ func (h *ConfigProfileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		}
 	} else if strings.HasSuffix(path, "/versions") {
 		// GET /{id}/versions - Get version history for a profile
-		id := strings.TrimSuffix(path, "/versions")
-		id = strings.TrimPrefix(id, "/")
+		profileID := strings.TrimSuffix(path, "/versions")
+		profileID = strings.TrimPrefix(profileID, "/")
 		if r.Method == http.MethodGet {
-			h.GetProfileVersions(w, r, id)
+			h.GetProfileVersions(w, r, profileID)
 			return
 		}
 	} else if strings.Contains(path, "/rollback/") {
@@ -120,23 +120,23 @@ func (h *ConfigProfileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		parts := strings.Split(path, "/")
 		if len(parts) >= 3 && r.Method == http.MethodPost {
 			// parts: ["", "id", "rollback", "version"]
-			id := parts[1]
+			profileID := parts[1]
 			version := parts[len(parts)-1]
-			h.RollbackProfile(w, r, id, version)
+			h.RollbackProfile(w, r, profileID, version)
 			return
 		}
 	} else {
 		// ID parameters
 		// Expecting /{id}
-		id := strings.TrimPrefix(path, "/")
+		profileID := strings.TrimPrefix(path, "/")
 		if r.Method == http.MethodGet {
-			h.GetProfile(w, r, id)
+			h.GetProfile(w, r, profileID)
 			return
 		} else if r.Method == http.MethodPut {
-			h.UpdateProfile(w, r, id)
+			h.UpdateProfile(w, r, profileID)
 			return
 		} else if r.Method == http.MethodDelete {
-			h.DeleteProfile(w, r, id)
+			h.DeleteProfile(w, r, profileID)
 			return
 		}
 	}

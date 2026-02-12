@@ -26,8 +26,8 @@ func NewDockerMetadataHandler(mtPersistence *config.MultiTenantPersistence) *Doc
 func (h *DockerMetadataHandler) getStore(ctx context.Context) *config.DockerMetadataStore {
 	orgID := "default"
 	if ctx != nil {
-		if id := GetOrgID(ctx); id != "" {
-			orgID = id
+		if requestOrgID := GetOrgID(ctx); requestOrgID != "" {
+			orgID = requestOrgID
 		}
 	}
 	p, _ := h.mtPersistence.GetPersistence(orgID)

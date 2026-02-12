@@ -40,8 +40,8 @@ func (h *LogHandlers) HandleStreamLogs(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Connection", "keep-alive")
 
 	broadcaster := logging.GetBroadcaster()
-	id, ch, history := broadcaster.Subscribe()
-	defer broadcaster.Unsubscribe(id)
+	subscriptionID, ch, history := broadcaster.Subscribe()
+	defer broadcaster.Unsubscribe(subscriptionID)
 
 	// Send history first
 	for _, line := range history {

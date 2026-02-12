@@ -4810,11 +4810,11 @@ func (h *AISettingsHandler) HandleGetApproval(w http.ResponseWriter, r *http.Req
 	}
 
 	// Extract ID from path: /api/ai/approvals/{id}
-	id := strings.TrimPrefix(r.URL.Path, "/api/ai/approvals/")
-	id = strings.TrimSuffix(id, "/")
-	id = strings.Split(id, "/")[0] // Handle /approve or /deny suffixes
+	approvalID := strings.TrimPrefix(r.URL.Path, "/api/ai/approvals/")
+	approvalID = strings.TrimSuffix(approvalID, "/")
+	approvalID = strings.Split(approvalID, "/")[0] // Handle /approve or /deny suffixes
 
-	if id == "" {
+	if approvalID == "" {
 		writeErrorResponse(w, http.StatusBadRequest, "missing_id", "Approval ID is required", nil)
 		return
 	}
@@ -4825,7 +4825,7 @@ func (h *AISettingsHandler) HandleGetApproval(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	req, ok := store.GetApproval(id)
+	req, ok := store.GetApproval(approvalID)
 	if !ok {
 		writeErrorResponse(w, http.StatusNotFound, "not_found", "Approval request not found", nil)
 		return
@@ -4856,9 +4856,9 @@ func (h *AISettingsHandler) HandleApproveCommand(w http.ResponseWriter, r *http.
 	// Extract ID from path: /api/ai/approvals/{id}/approve
 	path := strings.TrimPrefix(r.URL.Path, "/api/ai/approvals/")
 	path = strings.TrimSuffix(path, "/approve")
-	id := strings.TrimSuffix(path, "/")
+	approvalID := strings.TrimSuffix(path, "/")
 
-	if id == "" {
+	if approvalID == "" {
 		writeErrorResponse(w, http.StatusBadRequest, "missing_id", "Approval ID is required", nil)
 		return
 	}
@@ -4874,7 +4874,7 @@ func (h *AISettingsHandler) HandleApproveCommand(w http.ResponseWriter, r *http.
 		username = "anonymous"
 	}
 
-	req, err := store.Approve(id, username)
+	req, err := store.Approve(approvalID, username)
 	if err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "approval_failed", err.Error(), nil)
 		return
@@ -5297,9 +5297,9 @@ func (h *AISettingsHandler) HandleDenyCommand(w http.ResponseWriter, r *http.Req
 	// Extract ID from path: /api/ai/approvals/{id}/deny
 	path := strings.TrimPrefix(r.URL.Path, "/api/ai/approvals/")
 	path = strings.TrimSuffix(path, "/deny")
-	id := strings.TrimSuffix(path, "/")
+	approvalID := strings.TrimSuffix(path, "/")
 
-	if id == "" {
+	if approvalID == "" {
 		writeErrorResponse(w, http.StatusBadRequest, "missing_id", "Approval ID is required", nil)
 		return
 	}
@@ -5323,7 +5323,7 @@ func (h *AISettingsHandler) HandleDenyCommand(w http.ResponseWriter, r *http.Req
 		username = "anonymous"
 	}
 
-	req, err := store.Deny(id, username, body.Reason)
+	req, err := store.Deny(approvalID, username, body.Reason)
 	if err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "denial_failed", err.Error(), nil)
 		return

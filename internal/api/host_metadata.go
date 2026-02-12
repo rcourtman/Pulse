@@ -26,8 +26,8 @@ func NewHostMetadataHandler(mtPersistence *config.MultiTenantPersistence) *HostM
 func (h *HostMetadataHandler) getStore(ctx context.Context) *config.HostMetadataStore {
 	orgID := "default"
 	if ctx != nil {
-		if id := GetOrgID(ctx); id != "" {
-			orgID = id
+		if requestOrgID := GetOrgID(ctx); requestOrgID != "" {
+			orgID = requestOrgID
 		}
 	}
 	p, _ := h.mtPersistence.GetPersistence(orgID)

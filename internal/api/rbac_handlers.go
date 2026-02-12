@@ -72,26 +72,26 @@ func (h *RBACHandlers) HandleRoles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id := strings.TrimPrefix(r.URL.Path, "/api/admin/roles")
-	id = strings.TrimPrefix(id, "/")
-	id = strings.TrimSuffix(id, "/")
+	roleID := strings.TrimPrefix(r.URL.Path, "/api/admin/roles")
+	roleID = strings.TrimPrefix(roleID, "/")
+	roleID = strings.TrimSuffix(roleID, "/")
 
 	// Validate role ID format if provided
-	if id != "" && !validRoleID.MatchString(id) {
+	if roleID != "" && !validRoleID.MatchString(roleID) {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_role_id", "Invalid role ID format", nil)
 		return
 	}
 
 	switch r.Method {
 	case http.MethodGet:
-		if id == "" {
+		if roleID == "" {
 			// List all roles
 			roles := manager.GetRoles()
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(roles)
 		} else {
 			// Get specific role
-			role, ok := manager.GetRole(id)
+			role, ok := manager.GetRole(roleID)
 			if !ok {
 				writeErrorResponse(w, http.StatusNotFound, "not_found", "Role not found", nil)
 				return
@@ -101,7 +101,7 @@ func (h *RBACHandlers) HandleRoles(w http.ResponseWriter, r *http.Request) {
 		}
 
 	case http.MethodPost:
-		if id != "" {
+		if roleID != "" {
 			writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "POST is for creating roles; do not include an ID in the path", nil)
 			return
 		}
@@ -142,8 +142,8 @@ func (h *RBACHandlers) HandleRoles(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if id != "" {
-			role.ID = id
+		if roleID != "" {
+			role.ID = roleID
 		}
 
 		// Validate role ID
@@ -164,18 +164,18 @@ func (h *RBACHandlers) HandleRoles(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(role)
 
 	case http.MethodDelete:
-		if id == "" {
+		if roleID == "" {
 			writeErrorResponse(w, http.StatusBadRequest, "missing_id", "Role ID is required", nil)
 			return
 		}
 
-		if err := manager.DeleteRole(id); err != nil {
-			LogAuditEventForTenant(GetOrgID(r.Context()), "role_delete_failed", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, false, fmt.Sprintf("Failed to delete role %s", id))
+		if err := manager.DeleteRole(roleID); err != nil {
+			LogAuditEventForTenant(GetOrgID(r.Context()), "role_delete_failed", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, false, fmt.Sprintf("Failed to delete role %s", roleID))
 			writeErrorResponse(w, http.StatusInternalServerError, "delete_failed", "Failed to delete role", nil)
 			return
 		}
 
-		LogAuditEventForTenant(GetOrgID(r.Context()), "role_deleted", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, true, "Deleted role "+id)
+		LogAuditEventForTenant(GetOrgID(r.Context()), "role_deleted", auth.GetUser(r.Context()), GetClientIP(r), r.URL.Path, true, "Deleted role "+roleID)
 		RecordRBACRoleMutation("delete")
 		w.WriteHeader(http.StatusNoContent)
 

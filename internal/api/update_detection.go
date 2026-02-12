@@ -96,8 +96,8 @@ func (h *UpdateDetectionHandlers) HandleGetInfraUpdateForResource(w http.Respons
 	// ResourceID format: docker:<hostId>/<containerId>
 	updates := h.collectDockerUpdates("")
 	for _, update := range updates {
-		id := "docker:" + update.HostID + "/" + update.ContainerID
-		if id == resourceID || update.ContainerID == resourceID {
+		dockerResourceID := "docker:" + update.HostID + "/" + update.ContainerID
+		if dockerResourceID == resourceID || update.ContainerID == resourceID {
 			if err := utils.WriteJSONResponse(w, update); err != nil {
 				log.Error().Err(err).Msg("Failed to serialize update response")
 			}
