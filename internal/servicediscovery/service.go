@@ -358,10 +358,10 @@ func (s *Service) SetInterval(interval time.Duration) {
 	if running {
 		select {
 		case s.intervalCh <- interval:
-			log.Info().Dur("interval", interval).Msg("Discovery interval updated (live)")
+			log.Info().Dur("interval", interval).Msg("discovery interval updated (live)")
 		default:
 			// Channel full, interval will be picked up eventually
-			log.Debug().Dur("interval", interval).Msg("Discovery interval updated (pending)")
+			log.Debug().Dur("interval", interval).Msg("discovery interval updated (pending)")
 		}
 	}
 }
@@ -407,7 +407,7 @@ func (s *Service) SetWSHub(hub WSBroadcaster) {
 		s.scanner.SetProgressCallback(s.broadcastProgress)
 	}
 
-	log.Info().Msg("WebSocket hub connected to discovery service")
+	log.Info().Msg("webSocket hub connected to discovery service")
 }
 
 // broadcastProgress broadcasts discovery progress to all WebSocket clients.
@@ -466,12 +466,12 @@ func (s *Service) discoveryLoop(ctx context.Context) {
 			// Interval changed - reset the ticker
 			ticker.Stop()
 			ticker = time.NewTicker(newInterval)
-			log.Info().Dur("interval", newInterval).Msg("Fingerprint collection interval reset")
+			log.Info().Dur("interval", newInterval).Msg("fingerprint collection interval reset")
 		case <-s.stopCh:
-			log.Info().Msg("Stopping discovery service")
+			log.Info().Msg("stopping discovery service")
 			return
 		case <-ctx.Done():
-			log.Info().Msg("Discovery context cancelled")
+			log.Info().Msg("discovery context cancelled")
 			return
 		}
 	}
@@ -487,18 +487,18 @@ func (s *Service) runAutomaticDiscoveryRefresh(ctx context.Context) {
 	maxDiscoveryAge := s.maxDiscoveryAge
 	s.mu.RUnlock()
 	if !analyzerConfigured {
-		log.Debug().Msg("Skipping automatic discovery refresh - AI analyzer not configured")
+		log.Debug().Msg("skipping automatic discovery refresh - AI analyzer not configured")
 		return
 	}
 
 	changedResources, err := s.store.GetChangedResources()
 	if err != nil {
-		log.Warn().Err(err).Msg("Failed to fetch changed resources for automatic discovery refresh")
+		log.Warn().Err(err).Msg("failed to fetch changed resources for automatic discovery refresh")
 		return
 	}
 	staleResources, err := s.store.GetStaleResources(maxDiscoveryAge)
 	if err != nil {
-		log.Warn().Err(err).Msg("Failed to fetch stale resources for automatic discovery refresh")
+		log.Warn().Err(err).Msg("failed to fetch stale resources for automatic discovery refresh")
 		return
 	}
 
@@ -576,7 +576,7 @@ func (s *Service) runAutomaticDiscoveryRefresh(ctx context.Context) {
 func (s *Service) collectFingerprints(ctx context.Context) {
 	defer func() {
 		if r := recover(); r != nil {
-			log.Error().Interface("panic", r).Stack().Msg("Recovered from panic in fingerprint collection")
+			log.Error().Interface("panic", r).Stack().Msg("recovered from panic in fingerprint collection")
 		}
 	}()
 
@@ -613,7 +613,7 @@ func (s *Service) collectFingerprints(ctx context.Context) {
 
 			// Save new fingerprint
 			if err := s.store.SaveFingerprint(newFP); err != nil {
-				log.Warn().Err(err).Str("container", container.Name).Msg("Failed to save Docker fingerprint")
+				log.Warn().Err(err).Str("container", container.Name).Msg("failed to save Docker fingerprint")
 				continue
 			}
 
@@ -665,7 +665,7 @@ func (s *Service) collectFingerprints(ctx context.Context) {
 
 		// Save new fingerprint
 		if err := s.store.SaveFingerprint(newFP); err != nil {
-			log.Warn().Err(err).Str("lxc", lxc.Name).Msg("Failed to save LXC fingerprint")
+			log.Warn().Err(err).Str("lxc", lxc.Name).Msg("failed to save LXC fingerprint")
 			continue
 		}
 
@@ -718,7 +718,7 @@ func (s *Service) collectFingerprints(ctx context.Context) {
 
 		// Save new fingerprint
 		if err := s.store.SaveFingerprint(newFP); err != nil {
-			log.Warn().Err(err).Str("vm", vm.Name).Msg("Failed to save VM fingerprint")
+			log.Warn().Err(err).Str("vm", vm.Name).Msg("failed to save VM fingerprint")
 			continue
 		}
 
@@ -772,7 +772,7 @@ func (s *Service) collectFingerprints(ctx context.Context) {
 
 			// Save new fingerprint
 			if err := s.store.SaveFingerprint(newFP); err != nil {
-				log.Warn().Err(err).Str("pod", pod.Name).Str("namespace", pod.Namespace).Msg("Failed to save K8s pod fingerprint")
+				log.Warn().Err(err).Str("pod", pod.Name).Str("namespace", pod.Namespace).Msg("failed to save K8s pod fingerprint")
 				continue
 			}
 
@@ -837,7 +837,7 @@ func (s *Service) cleanupOrphanedData(state StateSnapshot) {
 		totalResources += len(host.Containers)
 	}
 	if totalResources == 0 {
-		log.Debug().Msg("Skipping orphaned data cleanup - state is empty (may be an error)")
+		log.Debug().Msg("skipping orphaned data cleanup - state is empty (may be an error)")
 		return
 	}
 
@@ -892,7 +892,7 @@ func (s *Service) discoverDockerContainers(ctx context.Context, hosts []DockerHo
 	s.mu.RUnlock()
 
 	if analyzer == nil {
-		log.Debug().Msg("AI analyzer not set, skipping Docker discovery")
+		log.Debug().Msg("aI analyzer not set, skipping Docker discovery")
 		return
 	}
 
@@ -934,7 +934,7 @@ func (s *Service) discoverDockerContainers(ctx context.Context, hosts []DockerHo
 				discovery.SuggestedURL = SuggestWebURL(discovery, host.Hostname)
 
 				if err := s.store.Save(discovery); err != nil {
-					log.Warn().Err(err).Str("id", id).Msg("Failed to save discovery")
+					log.Warn().Err(err).Str("id", id).Msg("failed to save discovery")
 				}
 			}
 		}
@@ -965,7 +965,7 @@ func (s *Service) enhanceWithDeepScan(ctx context.Context, discovery *ResourceDi
 
 	scanResult, err := s.scanner.Scan(scanCtx, req)
 	if err != nil {
-		log.Debug().Err(err).Str("id", discovery.ID).Msg("Deep scan failed during background discovery")
+		log.Debug().Err(err).Str("id", discovery.ID).Msg("deep scan failed during background discovery")
 		return discovery
 	}
 
@@ -991,7 +991,7 @@ func (s *Service) enhanceWithDeepScan(ctx context.Context, discovery *ResourceDi
 	prompt := s.buildDeepAnalysisPrompt(analysisReq)
 	response, err := analyzer.AnalyzeForDiscovery(scanCtx, prompt)
 	if err != nil {
-		log.Debug().Err(err).Str("id", discovery.ID).Msg("Deep analysis failed during background discovery")
+		log.Debug().Err(err).Str("id", discovery.ID).Msg("deep analysis failed during background discovery")
 		return discovery
 	}
 
@@ -1082,13 +1082,13 @@ func (s *Service) analyzeDockerContainer(ctx context.Context, analyzer AIAnalyze
 
 		response, err := analyzer.AnalyzeForDiscovery(ctx, prompt)
 		if err != nil {
-			log.Warn().Err(err).Str("container", c.Name).Msg("AI analysis failed")
+			log.Warn().Err(err).Str("container", c.Name).Msg("aI analysis failed")
 			return nil
 		}
 
 		result = s.parseAIResponse(response)
 		if result == nil {
-			log.Warn().Str("container", c.Name).Msg("Failed to parse AI response")
+			log.Warn().Str("container", c.Name).Msg("failed to parse AI response")
 			return nil
 		}
 
@@ -1197,7 +1197,7 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 	// Return cached discovery if still valid
 	if !needsDiscovery && existing != nil {
 		s.upgradeCLIAccessIfNeeded(existing)
-		log.Debug().Str("id", resourceID).Msg("Discovery still valid, returning cached")
+		log.Debug().Str("id", resourceID).Msg("discovery still valid, returning cached")
 		return existing, nil
 	}
 
@@ -1206,7 +1206,7 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 	if inProg, ok := s.inProgress[resourceID]; ok {
 		// Discovery already in progress - wait for it
 		s.inProgressMu.Unlock()
-		log.Debug().Str("id", resourceID).Msg("Discovery already in progress, waiting for result")
+		log.Debug().Str("id", resourceID).Msg("discovery already in progress, waiting for result")
 
 		select {
 		case <-inProg.done:
@@ -1231,7 +1231,7 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 		s.inProgressMu.Unlock()
 	}()
 
-	log.Info().Str("id", resourceID).Str("reason", reason).Msg("Running discovery")
+	log.Info().Str("id", resourceID).Str("reason", reason).Msg("running discovery")
 
 	s.mu.RLock()
 	analyzer := s.aiAnalyzer
@@ -1514,7 +1514,7 @@ func (s *Service) cleanupAliasedDiscoveries(canonicalID string, aliasIDs []strin
 		}
 		seen[aliasID] = struct{}{}
 		if err := s.store.Delete(aliasID); err != nil {
-			log.Debug().Err(err).Str("id", aliasID).Msg("Failed to clean up aliased discovery")
+			log.Debug().Err(err).Str("id", aliasID).Msg("failed to clean up aliased discovery")
 		}
 	}
 }
@@ -2029,7 +2029,7 @@ Respond with ONLY valid JSON.`, strings.Join(sections, "\n\n"))
 
 // parseAIResponse parses the AI's JSON response.
 func (s *Service) parseAIResponse(response string) *AIAnalysisResponse {
-	log.Debug().Str("raw_response", response).Msg("Discovery raw response")
+	log.Debug().Str("raw_response", response).Msg("discovery raw response")
 	response = strings.TrimSpace(response)
 
 	// Handle markdown code blocks
@@ -2058,7 +2058,7 @@ func (s *Service) parseAIResponse(response string) *AIAnalysisResponse {
 
 	var result AIAnalysisResponse
 	if err := json.Unmarshal([]byte(response), &result); err != nil {
-		log.Debug().Err(err).Str("response", response).Msg("Failed to parse AI response")
+		log.Debug().Err(err).Str("response", response).Msg("failed to parse AI response")
 		return nil
 	}
 
@@ -2431,7 +2431,7 @@ func (s *Service) SetMaxDiscoveryAge(age time.Duration) {
 	}
 
 	s.maxDiscoveryAge = age
-	log.Info().Dur("max_discovery_age", age).Msg("Max discovery age updated")
+	log.Info().Dur("max_discovery_age", age).Msg("max discovery age updated")
 }
 
 // ClearCache clears the AI analysis cache.
@@ -2464,12 +2464,12 @@ func (s *Service) GetDiscoveriesForAIContext(ctx context.Context, resourceIDs []
 	for _, id := range resourceIDs {
 		resourceType, hostID, resourceID, err := ParseResourceID(id)
 		if err != nil {
-			log.Debug().Err(err).Str("id", id).Msg("Failed to parse resource ID for AI context")
+			log.Debug().Err(err).Str("id", id).Msg("failed to parse resource ID for AI context")
 			continue
 		}
 		discovery, err := s.GetDiscoveryForAIChat(ctx, resourceType, hostID, resourceID)
 		if err != nil {
-			log.Debug().Err(err).Str("id", id).Msg("Failed to get discovery for AI context")
+			log.Debug().Err(err).Str("id", id).Msg("failed to get discovery for AI context")
 			continue
 		}
 		if discovery != nil {

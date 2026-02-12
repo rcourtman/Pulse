@@ -57,7 +57,7 @@ func NewStore(dataDir string) (*Store, error) {
 	// Initialize crypto manager for encryption (uses same key as other Pulse secrets)
 	cryptoMgr, err := newCryptoManagerAt(dataDir)
 	if err != nil {
-		log.Warn().Err(err).Msg("Failed to initialize crypto for discovery store, data will be unencrypted")
+		log.Warn().Err(err).Msg("failed to initialize crypto for discovery store, data will be unencrypted")
 	}
 
 	store := &Store{
@@ -130,7 +130,7 @@ func (s *Store) Save(d *ResourceDiscovery) error {
 	s.cache[d.ID] = d
 	s.cacheTime[d.ID] = time.Now()
 
-	log.Debug().Str("id", d.ID).Str("service", d.ServiceType).Msg("Discovery saved")
+	log.Debug().Str("id", d.ID).Str("service", d.ServiceType).Msg("discovery saved")
 	return nil
 }
 
@@ -204,7 +204,7 @@ func (s *Store) Delete(id string) error {
 	delete(s.cache, id)
 	delete(s.cacheTime, id)
 
-	log.Debug().Str("id", id).Msg("Discovery deleted")
+	log.Debug().Str("id", id).Msg("discovery deleted")
 	return nil
 }
 
@@ -233,7 +233,7 @@ func (s *Store) List() ([]*ResourceDiscovery, error) {
 
 		data, err := os.ReadFile(filepath.Join(s.dataDir, entry.Name()))
 		if err != nil {
-			log.Warn().Err(err).Str("file", entry.Name()).Msg("Failed to read discovery file")
+			log.Warn().Err(err).Str("file", entry.Name()).Msg("failed to read discovery file")
 			continue
 		}
 
@@ -241,7 +241,7 @@ func (s *Store) List() ([]*ResourceDiscovery, error) {
 		if s.crypto != nil {
 			decrypted, err := s.crypto.Decrypt(data)
 			if err != nil {
-				log.Warn().Err(err).Str("file", entry.Name()).Msg("Failed to decrypt discovery")
+				log.Warn().Err(err).Str("file", entry.Name()).Msg("failed to decrypt discovery")
 				continue
 			}
 			data = decrypted
@@ -249,7 +249,7 @@ func (s *Store) List() ([]*ResourceDiscovery, error) {
 
 		var discovery ResourceDiscovery
 		if err := json.Unmarshal(data, &discovery); err != nil {
-			log.Warn().Err(err).Str("file", entry.Name()).Msg("Failed to unmarshal discovery")
+			log.Warn().Err(err).Str("file", entry.Name()).Msg("failed to unmarshal discovery")
 			continue
 		}
 
@@ -315,7 +315,7 @@ func (s *Store) GetMultiple(ids []string) ([]*ResourceDiscovery, error) {
 	for _, id := range ids {
 		d, err := s.Get(id)
 		if err != nil {
-			log.Warn().Err(err).Str("id", id).Msg("Failed to get discovery")
+			log.Warn().Err(err).Str("id", id).Msg("failed to get discovery")
 			continue
 		}
 		if d != nil {
@@ -383,7 +383,7 @@ func (s *Store) loadFingerprints() {
 	entries, err := os.ReadDir(s.fingerprintDir)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			log.Warn().Err(err).Msg("Failed to read fingerprint directory")
+			log.Warn().Err(err).Msg("failed to read fingerprint directory")
 		}
 		return
 	}
@@ -395,20 +395,20 @@ func (s *Store) loadFingerprints() {
 
 		data, err := os.ReadFile(filepath.Join(s.fingerprintDir, entry.Name()))
 		if err != nil {
-			log.Warn().Err(err).Str("file", entry.Name()).Msg("Failed to read fingerprint file")
+			log.Warn().Err(err).Str("file", entry.Name()).Msg("failed to read fingerprint file")
 			continue
 		}
 
 		var fp ContainerFingerprint
 		if err := json.Unmarshal(data, &fp); err != nil {
-			log.Warn().Err(err).Str("file", entry.Name()).Msg("Failed to unmarshal fingerprint")
+			log.Warn().Err(err).Str("file", entry.Name()).Msg("failed to unmarshal fingerprint")
 			continue
 		}
 
 		s.fingerprints[fp.ResourceID] = &fp
 	}
 
-	log.Debug().Int("count", len(s.fingerprints)).Msg("Loaded fingerprints from disk")
+	log.Debug().Int("count", len(s.fingerprints)).Msg("loaded fingerprints from disk")
 }
 
 // SaveFingerprint stores a container fingerprint.
@@ -557,9 +557,9 @@ func (s *Store) CleanupOrphanedFingerprints(currentResourceIDs map[string]bool) 
 			// Remove from disk
 			filePath := s.getFingerprintFilePath(fpID)
 			if err := os.Remove(filePath); err != nil && !os.IsNotExist(err) {
-				log.Warn().Err(err).Str("id", fpID).Msg("Failed to remove orphaned fingerprint file")
+				log.Warn().Err(err).Str("id", fpID).Msg("failed to remove orphaned fingerprint file")
 			} else {
-				log.Debug().Str("id", fpID).Msg("Removed orphaned fingerprint")
+				log.Debug().Str("id", fpID).Msg("removed orphaned fingerprint")
 			}
 			removed++
 		}
@@ -575,7 +575,7 @@ func (s *Store) CleanupOrphanedDiscoveries(currentResourceIDs map[string]bool) i
 	// List all discovery files
 	entries, err := os.ReadDir(s.dataDir)
 	if err != nil {
-		log.Warn().Err(err).Msg("Failed to read discovery directory for cleanup")
+		log.Warn().Err(err).Msg("failed to read discovery directory for cleanup")
 		return 0
 	}
 
@@ -593,9 +593,9 @@ func (s *Store) CleanupOrphanedDiscoveries(currentResourceIDs map[string]bool) i
 		if !currentResourceIDs[resourceID] {
 			filePath := filepath.Join(s.dataDir, entry.Name())
 			if err := os.Remove(filePath); err != nil {
-				log.Warn().Err(err).Str("file", entry.Name()).Msg("Failed to remove orphaned discovery file")
+				log.Warn().Err(err).Str("file", entry.Name()).Msg("failed to remove orphaned discovery file")
 			} else {
-				log.Debug().Str("id", resourceID).Msg("Removed orphaned discovery")
+				log.Debug().Str("id", resourceID).Msg("removed orphaned discovery")
 				removed++
 			}
 		}
