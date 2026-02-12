@@ -45,18 +45,20 @@ const sampleInterval = 100 * time.Millisecond
 // Returns nil if no power data is available.
 func CollectPower(ctx context.Context) (*PowerData, error) {
 	// Try Intel RAPL first (most common on Intel)
-	if data, err := collectRALP(ctx); err == nil && data.Available {
-		return data, nil
+	raplData, raplErr := collectRALP(ctx)
+	if raplErr == nil && raplData.Available {
+		return raplData, nil
 	}
 
 	// Try AMD energy driver (for AMD Ryzen/EPYC)
-	if data, err := collectAMDEnergy(ctx); err == nil && data.Available {
-		return data, nil
+	amdData, amdErr := collectAMDEnergy(ctx)
+	if amdErr == nil && amdData.Available {
+		return amdData, nil
 	}
 
 	// TODO: Add IPMI support for server BMCs
 
-	return nil, fmt.Errorf("no power monitoring available")
+	return nil, fmt.Errorf("no power monitoring available (rapl: %v, amd_energy: %v)", raplErr, amdErr)
 }
 
 // collectRALP reads power data from Intel RAPL sysfs interface.
@@ -92,7 +94,7 @@ func collectRALP(ctx context.Context) (*PowerData, error) {
 	// Wait for sample interval
 	select {
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return nil, fmt.Errorf("RAPL sampling canceled: %w", ctx.Err())
 	case <-time.After(sampleInterval):
 	}
 
@@ -158,12 +160,23 @@ func readRAPLEnergy(packages []string) (map[string]uint64, error) {
 	for _, pkgPath := range packages {
 		// Read the package energy
 		energyPath := filepath.Join(pkgPath, "energy_uj")
-		if energy, err := readUint64File(energyPath); err == nil {
+		energy, err := readUint64File(energyPath)
+		if err != nil {
+			log.Debug().
+				Str("path", energyPath).
+				Err(err).
+				Msg("Skipping RAPL package energy reading")
+		} else {
 			name := filepath.Base(pkgPath)
 			// Also read the domain name if available
 			namePath := filepath.Join(pkgPath, "name")
-			if domainName, err := readStringFile(namePath); err == nil {
+			if domainName, nameErr := readStringFile(namePath); nameErr == nil {
 				name = domainName
+			} else {
+				log.Debug().
+					Str("path", namePath).
+					Err(nameErr).
+					Msg("Using fallback RAPL package name")
 			}
 			result[name] = energy
 		}
@@ -175,15 +188,27 @@ func readRAPLEnergy(packages []string) (map[string]uint64, error) {
 		}
 		for _, subPath := range subdomains {
 			energyPath := filepath.Join(subPath, "energy_uj")
-			if energy, err := readUint64File(energyPath); err == nil {
-				name := filepath.Base(subPath)
-				// Read subdomain name
-				namePath := filepath.Join(subPath, "name")
-				if domainName, err := readStringFile(namePath); err == nil {
-					name = domainName
-				}
-				result[name] = energy
+			energy, err := readUint64File(energyPath)
+			if err != nil {
+				log.Debug().
+					Str("path", energyPath).
+					Err(err).
+					Msg("Skipping RAPL subdomain energy reading")
+				continue
 			}
+
+			name := filepath.Base(subPath)
+			// Read subdomain name
+			namePath := filepath.Join(subPath, "name")
+			if domainName, nameErr := readStringFile(namePath); nameErr == nil {
+				name = domainName
+			} else {
+				log.Debug().
+					Str("path", namePath).
+					Err(nameErr).
+					Msg("Using fallback RAPL subdomain name")
+			}
+			result[name] = energy
 		}
 	}
 
@@ -239,7 +264,7 @@ func collectAMDEnergy(ctx context.Context) (*PowerData, error) {
 	// Wait for sample interval
 	select {
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return nil, fmt.Errorf("AMD energy sampling canceled: %w", ctx.Err())
 	case <-time.After(sampleInterval):
 	}
 
@@ -313,6 +338,10 @@ func findAMDEnergyHwmon() (string, error) {
 
 		name, err := readStringFile(namePath)
 		if err != nil {
+			log.Debug().
+				Str("path", namePath).
+				Err(err).
+				Msg("Skipping hwmon device without readable name")
 			continue
 		}
 
@@ -341,6 +370,10 @@ func readAMDEnergy(hwmonPath string) (map[string]uint64, error) {
 	for _, energyPath := range energyFiles {
 		energy, err := readUint64File(energyPath)
 		if err != nil {
+			log.Debug().
+				Str("path", energyPath).
+				Err(err).
+				Msg("Skipping AMD energy reading")
 			continue
 		}
 
