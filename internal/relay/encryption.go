@@ -37,6 +37,7 @@ var (
 	ErrKeyExchangeTooShort = errors.New("key exchange payload too short")
 	ErrNonceReplay         = errors.New("nonce replay or out-of-order: expected higher nonce")
 	ErrIdentityKeyRequired = errors.New("identity private key required for key exchange signing")
+	ErrKeyExchangeSigCheck = errors.New("key exchange signature verification failed")
 )
 
 // channelCipher holds the encryption state for one channel direction.
@@ -219,7 +220,7 @@ func VerifyKeyExchangeSignature(ephemeralPub, signature []byte, identityPublicKe
 
 	pubKey := ed25519.PublicKey(pubBytes)
 	if !ed25519.Verify(pubKey, ephemeralPub, signature) {
-		return errors.New("key exchange signature verification failed")
+		return ErrKeyExchangeSigCheck
 	}
 	return nil
 }
