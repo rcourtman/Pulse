@@ -49,6 +49,35 @@ func baseWriterDebugString() string {
 	return fmt.Sprintf("%#v", baseWriter)
 }
 
+func captureStderr(t *testing.T, fn func()) string {
+	t.Helper()
+
+	originalStderr := os.Stderr
+	readPipe, writePipe, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("failed to create stderr pipe: %v", err)
+	}
+
+	os.Stderr = writePipe
+	defer func() {
+		os.Stderr = originalStderr
+		_ = readPipe.Close()
+		_ = writePipe.Close()
+	}()
+
+	fn()
+
+	if err := writePipe.Close(); err != nil {
+		t.Fatalf("failed to close write pipe: %v", err)
+	}
+	output, err := io.ReadAll(readPipe)
+	if err != nil {
+		t.Fatalf("failed to read stderr output: %v", err)
+	}
+
+	return string(output)
+}
+
 func TestInitJSONFormatSetsLevelAndComponent(t *testing.T) {
 	t.Cleanup(resetLoggingState)
 
@@ -266,16 +295,21 @@ func TestParseLevelDefaults(t *testing.T) {
 		input string
 		want  zerolog.Level
 	}{
+		{"", zerolog.InfoLevel},
 		{"debug", zerolog.DebugLevel},
 		{"DEBUG", zerolog.DebugLevel},
+		{"trace", zerolog.TraceLevel},
 		{"info", zerolog.InfoLevel},
 		{"INFO", zerolog.InfoLevel},
 		{"warn", zerolog.WarnLevel},
+		{"warning", zerolog.WarnLevel},
 		{"WARN", zerolog.WarnLevel},
 		{"error", zerolog.ErrorLevel},
 		{"ERROR", zerolog.ErrorLevel},
+		{"fatal", zerolog.FatalLevel},
+		{"panic", zerolog.PanicLevel},
+		{"disabled", zerolog.Disabled},
 		{"unknown", zerolog.InfoLevel},
-		{"", zerolog.InfoLevel},
 	}
 
 	for _, tc := range tests {
@@ -283,6 +317,20 @@ func TestParseLevelDefaults(t *testing.T) {
 		if got != tc.want {
 			t.Errorf("parseLevel(%q) = %v, want %v", tc.input, got, tc.want)
 		}
+	}
+}
+
+func TestParseLevelWarnsOnInvalidValue(t *testing.T) {
+	t.Cleanup(resetLoggingState)
+
+	stderr := captureStderr(t, func() {
+		if got := parseLevel(" VERBOSE "); got != zerolog.InfoLevel {
+			t.Fatalf("expected info fallback for invalid level, got %s", got)
+		}
+	})
+
+	if !strings.Contains(stderr, `logging: invalid level "verbose"; using "info"`) {
+		t.Fatalf("expected invalid level warning, got %q", stderr)
 	}
 }
 
@@ -321,6 +369,21 @@ func TestSelectWriterDefault(t *testing.T) {
 	w := selectWriter("unknown")
 	if w != os.Stderr {
 		t.Fatalf("expected default writer to be os.Stderr, got %#v", w)
+	}
+}
+
+func TestSelectWriterWarnsOnInvalidFormat(t *testing.T) {
+	t.Cleanup(resetLoggingState)
+
+	stderr := captureStderr(t, func() {
+		w := selectWriter("pretty")
+		if w != os.Stderr {
+			t.Fatalf("expected invalid format fallback to os.Stderr, got %#v", w)
+		}
+	})
+
+	if !strings.Contains(stderr, `logging: invalid format "pretty"; using "json"`) {
+		t.Fatalf("expected invalid format warning, got %q", stderr)
 	}
 }
 

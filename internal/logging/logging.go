@@ -130,14 +130,28 @@ func WithRequestID(ctx context.Context, id string) (context.Context, string) {
 }
 
 func parseLevel(level string) zerolog.Level {
-	switch strings.ToLower(strings.TrimSpace(level)) {
+	normalized := strings.ToLower(strings.TrimSpace(level))
+	switch normalized {
+	case "", "info":
+		return zerolog.InfoLevel
 	case "debug":
 		return zerolog.DebugLevel
+	case "trace":
+		return zerolog.TraceLevel
 	case "warn":
+		return zerolog.WarnLevel
+	case "warning":
 		return zerolog.WarnLevel
 	case "error":
 		return zerolog.ErrorLevel
+	case "fatal":
+		return zerolog.FatalLevel
+	case "panic":
+		return zerolog.PanicLevel
+	case "disabled":
+		return zerolog.Disabled
 	default:
+		fmt.Fprintf(os.Stderr, "logging: invalid level %q; using %q\n", normalized, "info")
 		return zerolog.InfoLevel
 	}
 }
@@ -155,6 +169,7 @@ func selectWriter(format string) io.Writer {
 		}
 		return os.Stderr
 	default:
+		fmt.Fprintf(os.Stderr, "logging: invalid format %q; using %q\n", format, "json")
 		return os.Stderr
 	}
 }
