@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -225,6 +226,70 @@ func TestClientHandlesHTTPAndDecodeErrors(t *testing.T) {
 			t.Fatalf("unexpected connection error: %v", err)
 		}
 	})
+}
+
+func TestClientRejectsOversizedJSONResponses(t *testing.T) {
+	oversizedBody := fmt.Sprintf(
+		`{"hostname":"%s","version":"v","buildtime":"b","uptime_seconds":1}`,
+		strings.Repeat("a", int(maxResponseBodyBytes)),
+	)
+	server := newMockServer(t, map[string]apiResponse{
+		"/api/v2.0/system/info": {body: oversizedBody},
+	}, nil)
+	t.Cleanup(server.Close)
+
+	client := mustClientForServer(t, server.URL, ClientConfig{APIKey: "key"})
+	_, err := client.GetSystemInfo(context.Background())
+	if err == nil {
+		t.Fatal("expected oversized response error")
+	}
+	if !strings.Contains(err.Error(), fmt.Sprintf("response body exceeds %d bytes", maxResponseBodyBytes)) {
+		t.Fatalf("expected response size limit error, got %v", err)
+	}
+}
+
+func TestNewClientRejectsUnsafeURLComponents(t *testing.T) {
+	tests := []struct {
+		name        string
+		host        string
+		errContains string
+	}{
+		{
+			name:        "credentials",
+			host:        "https://admin:secret@truenas.local",
+			errContains: "credentials are not supported",
+		},
+		{
+			name:        "non-root path",
+			host:        "https://truenas.local/api/v2.0",
+			errContains: "path is not supported",
+		},
+		{
+			name:        "query",
+			host:        "https://truenas.local?insecure=1",
+			errContains: "query is not supported",
+		},
+		{
+			name:        "fragment",
+			host:        "https://truenas.local#section",
+			errContains: "fragment is not supported",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := NewClient(ClientConfig{
+				Host:   tt.host,
+				APIKey: "key",
+			})
+			if err == nil {
+				t.Fatalf("expected error for host %q", tt.host)
+			}
+			if !strings.Contains(err.Error(), tt.errContains) {
+				t.Fatalf("expected error containing %q, got %v", tt.errContains, err)
+			}
+		})
+	}
 }
 
 func TestClientTLSFingerprintPinning(t *testing.T) {
