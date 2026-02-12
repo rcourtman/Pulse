@@ -377,11 +377,13 @@ func (d *DiscoveryConfig) UnmarshalJSON(data []byte) error {
 
 	var modernPayload modern
 	if err := json.Unmarshal(data, &modernPayload); err != nil {
-		return err
+		return fmt.Errorf("unmarshal discovery config (modern): %w", err)
 	}
 
 	var legacyPayload legacy
-	_ = json.Unmarshal(data, &legacyPayload)
+	if err := json.Unmarshal(data, &legacyPayload); err != nil {
+		return fmt.Errorf("unmarshal discovery config (legacy): %w", err)
+	}
 
 	cfg := DefaultDiscoveryConfig()
 
@@ -1680,7 +1682,11 @@ func SaveOIDCConfig(settings *OIDCConfig) error {
 		return fmt.Errorf("failed to clone oidc settings")
 	}
 
-	return globalPersistence.SaveOIDCConfig(*clone)
+	if err := globalPersistence.SaveOIDCConfig(*clone); err != nil {
+		return fmt.Errorf("save oidc config: %w", err)
+	}
+
+	return nil
 }
 
 // Validate checks if the configuration is valid
@@ -1752,7 +1758,7 @@ func (c *Config) Validate() error {
 	c.PBSInstances = validPBS
 
 	if err := c.OIDC.Validate(); err != nil {
-		return err
+		return fmt.Errorf("validate oidc config: %w", err)
 	}
 
 	return nil
