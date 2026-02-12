@@ -586,7 +586,7 @@ func (m *Monitor) fetchNodeStorageFallback(ctx context.Context, instanceCfg *con
 
 	directClient, err := proxmox.NewClient(cfg)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create fallback proxmox client for node %s: %w", nodeName, err)
 	}
 
 	return directClient.GetStorage(ctx, nodeName)
