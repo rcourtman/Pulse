@@ -81,6 +81,10 @@ export function scheduleSparkline(draw: () => void): () => void {
 
   return () => {
     pending.delete(draw);
+    // If no callbacks remain, cancel the queued frame to avoid an orphaned flush.
+    if (pending.size === 0 && rafId !== null) {
+      cancelAnimationFrame(rafId);
+      rafId = null;
+    }
   };
 }
-

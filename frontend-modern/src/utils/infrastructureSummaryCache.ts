@@ -324,8 +324,8 @@ export function __resetInfrastructureSummaryFetchesForTests(): void {
   inFlightFetches.clear();
 }
 
-// Invalidate infrastructure summary cache on org switch
-eventBus.on('org_switched', () => {
+// Invalidate infrastructure summary cache on org switch.
+const unsubscribeOrgSwitchCacheInvalidation = eventBus.on('org_switched', () => {
   if (typeof window === 'undefined') return;
   try {
     const keysToRemove: string[] = [];
@@ -338,3 +338,9 @@ eventBus.on('org_switched', () => {
     keysToRemove.forEach((key) => window.localStorage.removeItem(key));
   } catch { /* ignore storage errors */ }
 });
+
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    unsubscribeOrgSwitchCacheInvalidation();
+  });
+}
