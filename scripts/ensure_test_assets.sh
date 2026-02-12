@@ -1,6 +1,7 @@
 #!/bin/bash
 # scripts/ensure_test_assets.sh
 # Ensures that frontend assets exist for Go embed requirements during testing.
+set -euo pipefail
 
 ASSET_DIR="internal/api/frontend-modern/dist"
 INDEX_FILE="$ASSET_DIR/index.html"
