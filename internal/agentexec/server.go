@@ -53,6 +53,8 @@ func NewServer(validateToken func(token string, agentID string) bool) *Server {
 
 // HandleWebSocket handles incoming WebSocket connections from agents
 func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
+	remoteAddr := r.RemoteAddr
+
 	// CRITICAL: Clear http.Server deadlines BEFORE WebSocket upgrade.
 	// The http.Server.ReadTimeout sets a deadline on the underlying connection when
 	// the request starts. We must clear it before the upgrade or the connection will
@@ -68,7 +70,7 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to upgrade WebSocket connection")
+		log.Error().Err(err).Str("remote_addr", remoteAddr).Msg("Failed to upgrade WebSocket connection")
 		return
 	}
 
@@ -82,20 +84,20 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	conn.SetReadDeadline(time.Now().Add(30 * time.Second))
 	_, msgBytes, err := conn.ReadMessage()
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to read registration message")
+		log.Error().Err(err).Str("remote_addr", remoteAddr).Msg("Failed to read registration message")
 		conn.Close()
 		return
 	}
 
 	var msg Message
 	if err := json.Unmarshal(msgBytes, &msg); err != nil {
-		log.Error().Err(err).Msg("Failed to parse registration message")
+		log.Error().Err(err).Str("remote_addr", remoteAddr).Msg("Failed to parse registration message")
 		conn.Close()
 		return
 	}
 
 	if msg.Type != MsgTypeAgentRegister {
-		log.Error().Str("type", string(msg.Type)).Msg("First message must be agent_register")
+		log.Error().Str("type", string(msg.Type)).Str("remote_addr", remoteAddr).Msg("First message must be agent_register")
 		conn.Close()
 		return
 	}
@@ -103,14 +105,14 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	// Parse registration payload
 	payloadBytes, err := jsonMarshal(msg.Payload)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to marshal registration payload")
+		log.Error().Err(err).Str("remote_addr", remoteAddr).Msg("Failed to marshal registration payload")
 		conn.Close()
 		return
 	}
 
 	var reg AgentRegisterPayload
 	if err := json.Unmarshal(payloadBytes, &reg); err != nil {
-		log.Error().Err(err).Msg("Failed to parse registration payload")
+		log.Error().Err(err).Str("remote_addr", remoteAddr).Msg("Failed to parse registration payload")
 		conn.Close()
 		return
 	}
@@ -221,9 +223,10 @@ func (s *Server) readLoop(ac *agentConn) {
 
 		_, msgBytes, err := ac.conn.ReadMessage()
 		if err != nil {
-			log.Debug().Err(err).Str("agent_id", ac.agent.AgentID).Msg("Read loop exiting: read error")
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				log.Error().Err(err).Str("agent_id", ac.agent.AgentID).Msg("WebSocket read error")
+				log.Error().Err(err).Str("agent_id", ac.agent.AgentID).Msg("Unexpected WebSocket close error")
+			} else {
+				log.Debug().Err(err).Str("agent_id", ac.agent.AgentID).Msg("Read loop exiting: read error")
 			}
 			return
 		}
@@ -249,7 +252,7 @@ func (s *Server) readLoop(ac *agentConn) {
 			payloadBytes, _ := json.Marshal(msg.Payload)
 			var result CommandResultPayload
 			if err := json.Unmarshal(payloadBytes, &result); err != nil {
-				log.Error().Err(err).Msg("Failed to parse command result")
+				log.Error().Err(err).Str("agent_id", ac.agent.AgentID).Msg("Failed to parse command result")
 				continue
 			}
 
