@@ -125,17 +125,17 @@ func (c *Client) Run(ctx context.Context) error {
 				c.logger.Warn().Err(err).
 					Int("failures", consecutiveFailures).
 					Dur("retry_in", delay).
-					Msg("Relay connection failed repeatedly")
+					Msg("relay connection failed repeatedly")
 			} else {
 				c.logger.Debug().Err(err).
 					Dur("retry_in", delay).
-					Msg("Relay connection interrupted, reconnecting")
+					Msg("relay connection interrupted, reconnecting")
 			}
 
 			// If it's a license error, pause longer
 			if isLicenseError(err) {
 				delay = maxReconnectDelay
-				c.logger.Warn().Msg("License error from relay server, pausing reconnect")
+				c.logger.Warn().Msg("license error from relay server, pausing reconnect")
 			}
 
 			select {
@@ -208,7 +208,7 @@ func (c *Client) connectAndHandle(ctx context.Context) error {
 		HandshakeTimeout: wsHandshakeWait,
 	}
 
-	c.logger.Info().Str("url", c.config.ServerURL).Msg("Connecting to relay server")
+	c.logger.Info().Str("url", c.config.ServerURL).Msg("connecting to relay server")
 
 	conn, _, err := dialer.DialContext(ctx, c.config.ServerURL, nil)
 	if err != nil {
@@ -246,7 +246,7 @@ func (c *Client) connectAndHandle(ctx context.Context) error {
 	c.lastError = ""
 	c.mu.Unlock()
 
-	c.logger.Info().Str("instance_id", c.instanceID).Msg("Registered with relay server")
+	c.logger.Info().Str("instance_id", c.instanceID).Msg("registered with relay server")
 
 	// Per-connection context: cancelled when this connection ends (for any
 	// reason), which tears down the write pump and any in-flight stream
@@ -346,7 +346,7 @@ func (c *Client) readPump(ctx context.Context, conn *websocket.Conn, sendCh chan
 
 		frame, err := DecodeFrame(msg)
 		if err != nil {
-			c.logger.Warn().Err(err).Msg("Failed to decode frame, skipping")
+			c.logger.Warn().Err(err).Msg("failed to decode frame, skipping")
 			continue
 		}
 
@@ -369,21 +369,21 @@ func (c *Client) readPump(ctx context.Context, conn *websocket.Conn, sendCh chan
 		case FrameDrain:
 			var drain DrainPayload
 			if err := UnmarshalControlPayload(frame.Payload, &drain); err == nil {
-				c.logger.Info().Str("reason", drain.Reason).Msg("Relay server draining, will reconnect")
+				c.logger.Info().Str("reason", drain.Reason).Msg("relay server draining, will reconnect")
 			}
 			return nil // exit readPump, triggers reconnect
 
 		case FrameError:
 			var errPayload ErrorPayload
 			if err := UnmarshalControlPayload(frame.Payload, &errPayload); err == nil {
-				c.logger.Warn().Str("code", errPayload.Code).Str("message", errPayload.Message).Msg("Relay error")
+				c.logger.Warn().Str("code", errPayload.Code).Str("message", errPayload.Message).Msg("relay error")
 				if errPayload.Code == ErrCodeLicenseInvalid || errPayload.Code == ErrCodeLicenseExpired {
 					return &licenseError{code: errPayload.Code, message: errPayload.Message}
 				}
 			}
 
 		default:
-			c.logger.Debug().Str("type", FrameTypeName(frame.Type)).Msg("Ignoring unhandled frame type")
+			c.logger.Debug().Str("type", FrameTypeName(frame.Type)).Msg("ignoring unhandled frame type")
 		}
 	}
 }
@@ -404,7 +404,7 @@ func (c *Client) writePump(ctx context.Context, conn *websocket.Conn, sendCh <-c
 		case data := <-sendCh:
 			conn.SetWriteDeadline(time.Now().Add(wsWriteWait))
 			if err := conn.WriteMessage(websocket.BinaryMessage, data); err != nil {
-				c.logger.Debug().Err(err).Msg("Write failed")
+				c.logger.Debug().Err(err).Msg("write failed")
 				return
 			}
 
@@ -421,13 +421,13 @@ func (c *Client) writePump(ctx context.Context, conn *websocket.Conn, sendCh <-c
 func (c *Client) handleChannelOpen(frame Frame, sendCh chan<- []byte) {
 	var payload ChannelOpenPayload
 	if err := UnmarshalControlPayload(frame.Payload, &payload); err != nil {
-		c.logger.Warn().Err(err).Msg("Failed to unmarshal CHANNEL_OPEN")
+		c.logger.Warn().Err(err).Msg("failed to unmarshal CHANNEL_OPEN")
 		return
 	}
 
 	// Validate the auth token
 	if !c.deps.TokenValidator(payload.AuthToken) {
-		c.logger.Warn().Uint32("channel", payload.ChannelID).Msg("Rejecting channel: invalid auth token")
+		c.logger.Warn().Uint32("channel", payload.ChannelID).Msg("rejecting channel: invalid auth token")
 		closeFrame, err := NewControlFrame(FrameChannelClose, payload.ChannelID, ChannelClosePayload{
 			ChannelID: payload.ChannelID,
 			Reason:    "invalid auth token",
@@ -443,7 +443,7 @@ func (c *Client) handleChannelOpen(frame Frame, sendCh chan<- []byte) {
 	c.channels[payload.ChannelID] = &channelState{apiToken: payload.AuthToken}
 	c.mu.Unlock()
 
-	c.logger.Info().Uint32("channel", payload.ChannelID).Msg("Channel opened")
+	c.logger.Info().Uint32("channel", payload.ChannelID).Msg("channel opened")
 
 	// Echo CHANNEL_OPEN to acknowledge
 	ackFrame, err := NewControlFrame(FrameChannelOpen, payload.ChannelID, payload)
@@ -480,7 +480,7 @@ func (c *Client) handleData(connCtx context.Context, frame Frame, sendCh chan<- 
 		if enc != nil {
 			decrypted, err := enc.Decrypt(payload)
 			if err != nil {
-				c.logger.Warn().Err(err).Uint32("channel", channelID).Msg("Failed to decrypt DATA payload")
+				c.logger.Warn().Err(err).Uint32("channel", channelID).Msg("failed to decrypt DATA payload")
 				return
 			}
 			payload = decrypted
@@ -495,7 +495,7 @@ func (c *Client) handleData(connCtx context.Context, frame Frame, sendCh chan<- 
 			if enc != nil {
 				encrypted, err := enc.Encrypt(respPayload)
 				if err != nil {
-					c.logger.Warn().Err(err).Uint32("channel", channelID).Msg("Failed to encrypt DATA response")
+					c.logger.Warn().Err(err).Uint32("channel", channelID).Msg("failed to encrypt DATA response")
 					return
 				}
 				respPayload = encrypted
@@ -504,7 +504,7 @@ func (c *Client) handleData(connCtx context.Context, frame Frame, sendCh chan<- 
 			queueFrame(sendCh, respFrame, c.logger)
 		})
 		if err != nil && connCtx.Err() == nil {
-			c.logger.Warn().Err(err).Uint32("channel", channelID).Msg("Stream proxy error")
+			c.logger.Warn().Err(err).Uint32("channel", channelID).Msg("stream proxy error")
 		}
 	}()
 }
@@ -524,34 +524,34 @@ func (c *Client) handleKeyExchange(frame Frame, sendCh chan<- []byte) {
 	// Unmarshal the app's ephemeral public key
 	appPubBytes, _, err := UnmarshalKeyExchangePayload(frame.Payload)
 	if err != nil {
-		c.logger.Warn().Err(err).Uint32("channel", channelID).Msg("Failed to unmarshal KEY_EXCHANGE")
+		c.logger.Warn().Err(err).Uint32("channel", channelID).Msg("failed to unmarshal KEY_EXCHANGE")
 		return
 	}
 
 	appPubKey, err := ecdh.X25519().NewPublicKey(appPubBytes)
 	if err != nil {
-		c.logger.Warn().Err(err).Uint32("channel", channelID).Msg("Invalid X25519 public key in KEY_EXCHANGE")
+		c.logger.Warn().Err(err).Uint32("channel", channelID).Msg("invalid X25519 public key in KEY_EXCHANGE")
 		return
 	}
 
 	// Generate instance's ephemeral X25519 keypair
 	instancePriv, err := GenerateEphemeralKeyPair()
 	if err != nil {
-		c.logger.Error().Err(err).Uint32("channel", channelID).Msg("Failed to generate ephemeral keypair")
+		c.logger.Error().Err(err).Uint32("channel", channelID).Msg("failed to generate ephemeral keypair")
 		return
 	}
 
 	// Derive channel keys
 	encryption, err := DeriveChannelKeys(instancePriv, appPubKey, true)
 	if err != nil {
-		c.logger.Error().Err(err).Uint32("channel", channelID).Msg("Failed to derive channel keys")
+		c.logger.Error().Err(err).Uint32("channel", channelID).Msg("failed to derive channel keys")
 		return
 	}
 
 	// Sign instance's ephemeral public key with Ed25519 identity key.
 	// Fail closed: refuse key exchange if we can't sign (prevents unsigned/MITM-vulnerable channels).
 	if c.deps.IdentityPrivateKey == "" {
-		c.logger.Error().Uint32("channel", channelID).Msg("Rejecting KEY_EXCHANGE: identity private key not configured")
+		c.logger.Error().Uint32("channel", channelID).Msg("rejecting KEY_EXCHANGE: identity private key not configured")
 		c.closeAndRemoveChannel(channelID, "key exchange signing unavailable", sendCh)
 		return
 	}
@@ -559,7 +559,7 @@ func (c *Client) handleKeyExchange(frame Frame, sendCh chan<- []byte) {
 	instancePubBytes := instancePriv.PublicKey().Bytes()
 	sig, err := SignKeyExchange(instancePubBytes, c.deps.IdentityPrivateKey)
 	if err != nil {
-		c.logger.Error().Err(err).Uint32("channel", channelID).Msg("Failed to sign KEY_EXCHANGE")
+		c.logger.Error().Err(err).Uint32("channel", channelID).Msg("failed to sign KEY_EXCHANGE")
 		c.closeAndRemoveChannel(channelID, "key exchange signing failed", sendCh)
 		return
 	}
@@ -574,7 +574,7 @@ func (c *Client) handleKeyExchange(frame Frame, sendCh chan<- []byte) {
 	state.encryption = encryption
 	c.mu.Unlock()
 
-	c.logger.Info().Uint32("channel", channelID).Msg("Key exchange completed, channel encrypted")
+	c.logger.Info().Uint32("channel", channelID).Msg("key exchange completed, channel encrypted")
 }
 
 // closeAndRemoveChannel sends CHANNEL_CLOSE to the peer and removes the
@@ -604,21 +604,21 @@ func (c *Client) handleChannelClose(frame Frame) {
 	delete(c.channels, payload.ChannelID)
 	c.mu.Unlock()
 
-	c.logger.Info().Uint32("channel", payload.ChannelID).Str("reason", payload.Reason).Msg("Channel closed")
+	c.logger.Info().Uint32("channel", payload.ChannelID).Str("reason", payload.Reason).Msg("channel closed")
 }
 
 // queueFrame encodes and sends a frame to the send channel (non-blocking).
 func queueFrame(sendCh chan<- []byte, f Frame, logger zerolog.Logger) {
 	data, err := EncodeFrame(f)
 	if err != nil {
-		logger.Warn().Err(err).Msg("Failed to encode frame for send")
+		logger.Warn().Err(err).Msg("failed to encode frame for send")
 		return
 	}
 
 	select {
 	case sendCh <- data:
 	default:
-		logger.Warn().Msg("Send channel full, dropping frame")
+		logger.Warn().Msg("send channel full, dropping frame")
 	}
 }
 
