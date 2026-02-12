@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"log"
 	"net/http"
 	"sort"
 	"strconv"
@@ -16,6 +15,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
+	"github.com/rs/zerolog/log"
 )
 
 // ResourceHandlers provides HTTP handlers for the unified resource API.
@@ -450,6 +450,12 @@ func (h *ResourceHandlers) HandleReportMerge(w http.ResponseWriter, r *http.Requ
 			CreatedAt: time.Now().UTC(),
 		}
 		if err := store.AddExclusion(exclusion); err != nil {
+			log.Error().
+				Err(err).
+				Str("orgID", orgID).
+				Str("resourceID", path).
+				Str("candidateID", target.CandidateID).
+				Msg("Failed to add resource merge exclusion")
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -461,7 +467,13 @@ func (h *ResourceHandlers) HandleReportMerge(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	log.Printf("report-merge: resource=%s exclusions=%d user=%s sources=%v", path, exclusionsAdded, getUserID(r), payload.Sources)
+	log.Info().
+		Str("orgID", orgID).
+		Str("resourceID", path).
+		Int("exclusionsAdded", exclusionsAdded).
+		Str("userID", getUserID(r)).
+		Strs("sources", payload.Sources).
+		Msg("Reported resource merge issue")
 	h.invalidateCache(orgID)
 
 	w.Header().Set("Content-Type", "application/json")
