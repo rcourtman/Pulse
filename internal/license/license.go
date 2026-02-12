@@ -298,7 +298,7 @@ func (s *Service) Evaluator() *entitlements.Evaluator {
 func (s *Service) Activate(licenseKey string) (*License, error) {
 	license, err := ValidateLicense(licenseKey)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("validate license: %w", err)
 	}
 
 	s.mu.Lock()
