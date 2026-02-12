@@ -129,6 +129,27 @@ function getPulseOriginUrl(): URL | null {
   }
 }
 
+function getStoredSessionAuthToken(storage: Storage): string | null {
+  const stored = storage.getItem('pulse_auth');
+  if (!stored) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(stored) as unknown;
+    if (!parsed || typeof parsed !== 'object') {
+      return null;
+    }
+    const auth = parsed as { type?: unknown; value?: unknown };
+    if (auth.type !== 'token' || typeof auth.value !== 'string' || auth.value === '') {
+      return null;
+    }
+    return auth.value;
+  } catch {
+    return null;
+  }
+}
+
 export function getPulseHostname(): string {
   const origin = getPulseOriginUrl();
   return origin?.hostname || 'localhost';
@@ -155,12 +176,9 @@ export function getPulseWebSocketUrl(path = '/ws'): string {
   try {
     const storage = typeof window !== 'undefined' ? window.sessionStorage : null;
     if (storage) {
-      const stored = storage.getItem('pulse_auth');
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (parsed?.type === 'token' && parsed.value) {
-          url += `?token=${encodeURIComponent(parsed.value)}`;
-        }
+      const token = getStoredSessionAuthToken(storage);
+      if (token) {
+        url += `?token=${encodeURIComponent(token)}`;
       }
     }
   } catch {

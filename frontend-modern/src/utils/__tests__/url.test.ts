@@ -121,5 +121,14 @@ describe('url utils', () => {
             const wsUrl = getPulseWebSocketUrl('/ws');
             expect(wsUrl).toContain('token=secret');
         });
+
+        it('getPulseWebSocketUrl ignores malformed stored auth payload', () => {
+            vi.mocked(window.sessionStorage.getItem).mockImplementation((key) => {
+                if (key === 'pulse_auth') return JSON.stringify({ type: 'token', value: { bad: true } });
+                return null;
+            });
+            const wsUrl = getPulseWebSocketUrl('/ws');
+            expect(wsUrl).toBe('ws://localhost:3000/ws');
+        });
     });
 });
