@@ -1,6 +1,7 @@
 package notifications
 
 import (
+	"database/sql"
 	"fmt"
 	"os"
 	"testing"
@@ -94,6 +95,14 @@ func TestCalculateBackoff_NeverExceedsCap(t *testing.T) {
 		result := calculateBackoff(attempt)
 		if result > cap {
 			t.Errorf("calculateBackoff(%d) = %v, exceeds cap of %v", attempt, result, cap)
+		}
+	}
+}
+
+func TestCalculateBackoff_LargeAttemptStillCapped(t *testing.T) {
+	for _, attempt := range []int{60, 1000} {
+		if got := calculateBackoff(attempt); got != 60*time.Second {
+			t.Errorf("calculateBackoff(%d) = %v, want %v", attempt, got, 60*time.Second)
 		}
 	}
 }
@@ -353,6 +362,53 @@ func TestCancelByAlertIDs_MultipleAlertsPartialMatch(t *testing.T) {
 	}
 	if stats["cancelled"] != 1 {
 		t.Errorf("Expected 1 cancelled notification, got %d (stats: %v)", stats["cancelled"], stats)
+	}
+}
+
+func TestCancelByAlertIDs_SetsCompletedAtAndClearsNextRetry(t *testing.T) {
+	tempDir := t.TempDir()
+	nq, err := NewNotificationQueue(tempDir)
+	if err != nil {
+		t.Fatalf("Failed to create notification queue: %v", err)
+	}
+	defer nq.Stop()
+
+	futureRetry := time.Now().Add(1 * time.Hour)
+	notif := &QueuedNotification{
+		ID:          "notif-cancelled-metadata",
+		Type:        "email",
+		Status:      QueueStatusPending,
+		MaxAttempts: 3,
+		Config:      []byte(`{}`),
+		NextRetryAt: &futureRetry,
+		Alerts:      []*alerts.Alert{{ID: "alert-1"}},
+	}
+	if err := nq.Enqueue(notif); err != nil {
+		t.Fatalf("Failed to enqueue: %v", err)
+	}
+
+	if err := nq.CancelByAlertIDs([]string{"alert-1"}); err != nil {
+		t.Fatalf("CancelByAlertIDs returned error: %v", err)
+	}
+
+	var status string
+	var completedAt sql.NullInt64
+	var nextRetryAt sql.NullInt64
+	if err := nq.db.QueryRow(
+		`SELECT status, completed_at, next_retry_at FROM notification_queue WHERE id = ?`,
+		notif.ID,
+	).Scan(&status, &completedAt, &nextRetryAt); err != nil {
+		t.Fatalf("Failed to query cancelled notification row: %v", err)
+	}
+
+	if status != string(QueueStatusCancelled) {
+		t.Fatalf("status = %q, want %q", status, QueueStatusCancelled)
+	}
+	if !completedAt.Valid || completedAt.Int64 <= 0 {
+		t.Fatalf("completed_at should be set for cancelled notifications, got %v", completedAt)
+	}
+	if nextRetryAt.Valid {
+		t.Fatalf("next_retry_at should be NULL after cancellation, got %v", nextRetryAt)
 	}
 }
 
