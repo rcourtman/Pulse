@@ -512,7 +512,17 @@ func (s *Store) GetStaleResources(maxAge time.Duration) ([]string, error) {
 	var stale []string
 	now := time.Now()
 	for _, d := range discoveries {
-		if now.Sub(d.DiscoveredAt) > maxAge {
+		if d == nil {
+			continue
+		}
+
+		// Staleness should be based on the last successful discovery update.
+		// DiscoveredAt is intentionally preserved as first-seen time.
+		lastSeenAt := d.UpdatedAt
+		if lastSeenAt.IsZero() {
+			lastSeenAt = d.DiscoveredAt
+		}
+		if lastSeenAt.IsZero() || now.Sub(lastSeenAt) > maxAge {
 			stale = append(stale, d.ID)
 		}
 	}
@@ -585,10 +595,14 @@ func (s *Store) CleanupOrphanedDiscoveries(currentResourceIDs map[string]bool) i
 			continue
 		}
 
-		// Convert filename back to resource ID
-		// Filename format: type_host_id.enc (underscores replace colons and slashes)
-		baseName := strings.TrimSuffix(entry.Name(), ".enc")
-		resourceID := filenameToResourceID(baseName)
+		resourceID, err := s.readDiscoveryIDFromFile(entry.Name())
+		if err != nil {
+			log.Warn().
+				Err(err).
+				Str("file", entry.Name()).
+				Msg("Skipping orphan cleanup for discovery file with unreadable ID")
+			continue
+		}
 
 		if !currentResourceIDs[resourceID] {
 			filePath := filepath.Join(s.dataDir, entry.Name())
@@ -630,6 +644,35 @@ func filenameToResourceID(filename string) string {
 	return resourceType + ":" + host + ":" + resourceID
 }
 
+func (s *Store) readDiscoveryIDFromFile(filename string) (string, error) {
+	filePath := filepath.Join(s.dataDir, filename)
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read discovery file: %w", err)
+	}
+
+	// Discovery files may be encrypted when crypto is configured.
+	if s.crypto != nil {
+		decrypted, err := s.crypto.Decrypt(data)
+		if err != nil {
+			return "", fmt.Errorf("failed to decrypt discovery file: %w", err)
+		}
+		data = decrypted
+	}
+
+	var discovery struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(data, &discovery); err != nil {
+		return "", fmt.Errorf("failed to unmarshal discovery ID: %w", err)
+	}
+	if strings.TrimSpace(discovery.ID) == "" {
+		return "", fmt.Errorf("discovery ID is empty")
+	}
+
+	return discovery.ID, nil
+}
+
 // ListDiscoveryIDs returns all discovery IDs currently stored.
 func (s *Store) ListDiscoveryIDs() []string {
 	entries, err := os.ReadDir(s.dataDir)
@@ -642,8 +685,15 @@ func (s *Store) ListDiscoveryIDs() []string {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".enc") {
 			continue
 		}
-		baseName := strings.TrimSuffix(entry.Name(), ".enc")
-		ids = append(ids, filenameToResourceID(baseName))
+		id, err := s.readDiscoveryIDFromFile(entry.Name())
+		if err != nil {
+			log.Warn().
+				Err(err).
+				Str("file", entry.Name()).
+				Msg("Skipping discovery ID listing for unreadable discovery file")
+			continue
+		}
+		ids = append(ids, id)
 	}
 	return ids
 }

@@ -524,6 +524,72 @@ func TestStore_GetChangedResources(t *testing.T) {
 	}
 }
 
+func TestStore_GetStaleResourcesUsesLastUpdatedTimestamp(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore error: %v", err)
+	}
+	store.crypto = nil
+
+	id := MakeResourceID(ResourceTypeDocker, "host1", "web")
+	if err := store.Save(&ResourceDiscovery{
+		ID:           id,
+		ResourceType: ResourceTypeDocker,
+		ResourceID:   "web",
+		HostID:       "host1",
+	}); err != nil {
+		t.Fatalf("Save error: %v", err)
+	}
+
+	path := store.getFilePath(id)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile error: %v", err)
+	}
+
+	var saved ResourceDiscovery
+	if err := json.Unmarshal(data, &saved); err != nil {
+		t.Fatalf("Unmarshal error: %v", err)
+	}
+
+	// First discovery happened long ago, but the record was updated recently.
+	saved.DiscoveredAt = time.Now().Add(-48 * time.Hour)
+	saved.UpdatedAt = time.Now().Add(-10 * time.Minute)
+	data, err = json.Marshal(&saved)
+	if err != nil {
+		t.Fatalf("Marshal error: %v", err)
+	}
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		t.Fatalf("WriteFile error: %v", err)
+	}
+
+	stale, err := store.GetStaleResources(time.Hour)
+	if err != nil {
+		t.Fatalf("GetStaleResources error: %v", err)
+	}
+	if len(stale) != 0 {
+		t.Fatalf("expected no stale discoveries when UpdatedAt is recent, got %v", stale)
+	}
+
+	// Once last update is old, it should be considered stale.
+	saved.UpdatedAt = time.Now().Add(-48 * time.Hour)
+	data, err = json.Marshal(&saved)
+	if err != nil {
+		t.Fatalf("Marshal error: %v", err)
+	}
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		t.Fatalf("WriteFile error: %v", err)
+	}
+
+	stale, err = store.GetStaleResources(time.Hour)
+	if err != nil {
+		t.Fatalf("GetStaleResources error: %v", err)
+	}
+	if len(stale) != 1 || stale[0] != id {
+		t.Fatalf("expected stale discovery %q, got %v", id, stale)
+	}
+}
+
 func TestStore_DeleteError(t *testing.T) {
 	store, err := NewStore(t.TempDir())
 	if err != nil {
