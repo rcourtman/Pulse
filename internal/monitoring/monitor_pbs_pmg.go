@@ -100,14 +100,14 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 	case <-ctx.Done():
 		pollErr = ctx.Err()
 		if debugEnabled {
-			log.Debug().Str("instance", instanceName).Msg("Polling cancelled")
+			log.Debug().Str("instance", instanceName).Msg("polling cancelled")
 		}
 		return
 	default:
 	}
 
 	if debugEnabled {
-		log.Debug().Str("instance", instanceName).Msg("Polling PBS instance")
+		log.Debug().Str("instance", instanceName).Msg("polling PBS instance")
 	}
 
 	// Get instance config
@@ -159,7 +159,7 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 		}
 	} else {
 		if debugEnabled {
-			log.Debug().Err(versionErr).Str("instance", instanceName).Msg("Failed to get PBS version, trying fallback")
+			log.Debug().Err(versionErr).Str("instance", instanceName).Msg("failed to get PBS version, trying fallback")
 		}
 
 		// Use parent context for proper cancellation chain
@@ -180,7 +180,7 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 			pbsInst.Status = "offline"
 			pbsInst.ConnectionHealth = "error"
 			monErr := errors.WrapConnectionError("get_pbs_version", instanceName, versionErr)
-			log.Error().Err(monErr).Str("instance", instanceName).Msg("Failed to connect to PBS")
+			log.Error().Err(monErr).Str("instance", instanceName).Msg("failed to connect to PBS")
 			m.state.SetConnectionHealth("pbs-"+instanceName, false)
 
 			if errors.IsAuthError(versionErr) || errors.IsAuthError(datastoreErr) {
@@ -194,7 +194,7 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 	nodeStatus, err := client.GetNodeStatus(ctx)
 	if err != nil {
 		if debugEnabled {
-			log.Debug().Err(err).Str("instance", instanceName).Msg("Could not get PBS node status (may need Sys.Audit permission)")
+			log.Debug().Err(err).Str("instance", instanceName).Msg("could not get PBS node status (may need Sys.Audit permission)")
 		}
 	} else if nodeStatus != nil {
 		pbsInst.CPU = nodeStatus.CPU
@@ -218,7 +218,7 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 		datastores, err := client.GetDatastores(ctx)
 		if err != nil {
 			monErr := errors.WrapAPIError("get_datastores", instanceName, err, 0)
-			log.Error().Err(monErr).Str("instance", instanceName).Msg("Failed to get datastores")
+			log.Error().Err(monErr).Str("instance", instanceName).Msg("failed to get datastores")
 		} else {
 			log.Info().
 				Str("instance", instanceName).
@@ -486,7 +486,7 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 	}
 
 	if debugEnabled {
-		log.Debug().Str("instance", instanceName).Msg("Polling PMG instance")
+		log.Debug().Str("instance", instanceName).Msg("polling PMG instance")
 	}
 
 	var instanceCfg *config.PMGInstance
@@ -519,7 +519,7 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 	if err != nil {
 		monErr := errors.WrapConnectionError("pmg_get_version", instanceName, err)
 		pollErr = monErr
-		log.Error().Err(monErr).Str("instance", instanceName).Msg("Failed to connect to PMG instance")
+		log.Error().Err(monErr).Str("instance", instanceName).Msg("failed to connect to PMG instance")
 		m.state.SetConnectionHealth("pmg-"+instanceName, false)
 		m.state.UpdatePMGInstance(pmgInst)
 
@@ -545,7 +545,7 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 	cluster, err := client.GetClusterStatus(ctx, true)
 	if err != nil {
 		if debugEnabled {
-			log.Debug().Err(err).Str("instance", instanceName).Msg("Failed to retrieve PMG cluster status")
+			log.Debug().Err(err).Str("instance", instanceName).Msg("failed to retrieve PMG cluster status")
 		}
 	}
 
@@ -645,7 +645,7 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 	}
 
 	if stats, err := client.GetMailStatistics(ctx, ""); err != nil {
-		log.Warn().Err(err).Str("instance", instanceName).Msg("Failed to fetch PMG mail statistics")
+		log.Warn().Err(err).Str("instance", instanceName).Msg("failed to fetch PMG mail statistics")
 	} else if stats != nil {
 		pmgInst.MailStats = &models.PMGMailStats{
 			Timeframe:            "day",
@@ -671,7 +671,7 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 
 	if counts, err := client.GetMailCount(ctx, 86400); err != nil {
 		if debugEnabled {
-			log.Debug().Err(err).Str("instance", instanceName).Msg("Failed to fetch PMG mail count data")
+			log.Debug().Err(err).Str("instance", instanceName).Msg("failed to fetch PMG mail count data")
 		}
 	} else if len(counts) > 0 {
 		points := make([]models.PMGMailCountPoint, 0, len(counts))
@@ -701,7 +701,7 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 
 	if scores, err := client.GetSpamScores(ctx); err != nil {
 		if debugEnabled {
-			log.Debug().Err(err).Str("instance", instanceName).Msg("Failed to fetch PMG spam score distribution")
+			log.Debug().Err(err).Str("instance", instanceName).Msg("failed to fetch PMG spam score distribution")
 		}
 	} else if len(scores) > 0 {
 		buckets := make([]models.PMGSpamBucket, 0, len(scores))

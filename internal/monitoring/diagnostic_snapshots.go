@@ -163,7 +163,7 @@ func (m *Monitor) logNodeMemorySource(instance, node string, snapshot NodeMemory
 		evt = evt.Float64("usage", snapshot.Memory.Usage)
 	}
 
-	evt.Msg("Node memory source updated")
+	evt.Msg("node memory source updated")
 }
 
 func (m *Monitor) recordNodeSnapshot(instance, node string, snapshot NodeMemorySnapshot) {

@@ -12,7 +12,7 @@ import (
 )
 
 func (m *Monitor) initPVEClients(cfg *config.Config) {
-	log.Info().Int("count", len(cfg.PVEInstances)).Msg("Initializing PVE clients")
+	log.Info().Int("count", len(cfg.PVEInstances)).Msg("initializing PVE clients")
 	for _, pve := range cfg.PVEInstances {
 		log.Info().
 			Str("name", pve.Name).
@@ -76,7 +76,7 @@ func (m *Monitor) initPVEClients(cfg *config.Config) {
 }
 
 func (m *Monitor) initPBSClients(cfg *config.Config) {
-	log.Info().Int("count", len(cfg.PBSInstances)).Msg("Initializing PBS clients")
+	log.Info().Int("count", len(cfg.PBSInstances)).Msg("initializing PBS clients")
 	for _, pbsInst := range cfg.PBSInstances {
 		log.Info().
 			Str("name", pbsInst.Name).
@@ -110,7 +110,7 @@ func (m *Monitor) initPBSClients(cfg *config.Config) {
 }
 
 func (m *Monitor) initPMGClients(cfg *config.Config) {
-	log.Info().Int("count", len(cfg.PMGInstances)).Msg("Initializing PMG clients")
+	log.Info().Int("count", len(cfg.PMGInstances)).Msg("initializing PMG clients")
 	for _, pmgInst := range cfg.PMGInstances {
 		log.Info().
 			Str("name", pmgInst.Name).

@@ -25,7 +25,7 @@ func (m *Monitor) SetAlertTriggeredAICallback(callback func(*alerts.Alert)) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.alertTriggeredAICallback = callback
-	log.Info().Msg("Alert-triggered AI callback registered")
+	log.Info().Msg("alert-triggered AI callback registered")
 }
 
 // SetAlertResolvedAICallback sets an additional callback when alerts are resolved.
@@ -35,7 +35,7 @@ func (m *Monitor) SetAlertResolvedAICallback(callback func(*alerts.Alert)) {
 		return
 	}
 	m.alertResolvedAICallback = callback
-	log.Info().Msg("Alert-resolved AI callback registered")
+	log.Info().Msg("alert-resolved AI callback registered")
 }
 
 func (m *Monitor) handleAlertFired(alert *alerts.Alert) {
@@ -65,7 +65,7 @@ func (m *Monitor) handleAlertFired(alert *alerts.Alert) {
 		go func() {
 			defer func() {
 				if r := recover(); r != nil {
-					log.Error().Interface("panic", r).Msg("Panic in AI alert callback")
+					log.Error().Interface("panic", r).Msg("panic in AI alert callback")
 				}
 			}()
 			m.alertTriggeredAICallback(alert)
@@ -164,7 +164,7 @@ func (m *Monitor) checkMockAlerts() {
 
 	log.Info().Bool("mockEnabled", mock.IsMockEnabled()).Msg("checkMockAlerts called")
 	if !mock.IsMockEnabled() {
-		log.Info().Msg("Mock mode not enabled, skipping mock alert check")
+		log.Info().Msg("mock mode not enabled, skipping mock alert check")
 		return
 	}
 
@@ -244,7 +244,7 @@ func (m *Monitor) checkMockAlerts() {
 	}
 
 	// Check alerts for storage
-	log.Info().Int("storageCount", len(state.Storage)).Msg("Checking storage alerts")
+	log.Info().Int("storageCount", len(state.Storage)).Msg("checking storage alerts")
 	for _, storage := range state.Storage {
 		log.Debug().
 			Str("name", storage.Name).
@@ -254,13 +254,13 @@ func (m *Monitor) checkMockAlerts() {
 	}
 
 	// Check alerts for PBS instances
-	log.Info().Int("pbsCount", len(state.PBSInstances)).Msg("Checking PBS alerts")
+	log.Info().Int("pbsCount", len(state.PBSInstances)).Msg("checking PBS alerts")
 	for _, pbsInst := range state.PBSInstances {
 		m.alertManager.CheckPBS(pbsInst)
 	}
 
 	// Check alerts for PMG instances
-	log.Info().Int("pmgCount", len(state.PMGInstances)).Msg("Checking PMG alerts")
+	log.Info().Int("pmgCount", len(state.PMGInstances)).Msg("checking PMG alerts")
 	for _, pmgInst := range state.PMGInstances {
 		m.alertManager.CheckPMG(pmgInst)
 	}

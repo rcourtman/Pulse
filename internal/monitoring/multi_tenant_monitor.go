@@ -54,7 +54,7 @@ func (mtm *MultiTenantMonitor) GetMonitor(orgID string) (*Monitor, error) {
 	}
 
 	// Initialize new monitor for this tenant
-	log.Info().Str("org_id", orgID).Msg("Initializing tenant monitor")
+	log.Info().Str("org_id", orgID).Msg("initializing tenant monitor")
 
 	// 1. Load Tenant Config
 	// Deep copy the base config to ensure tenant isolation.
@@ -78,7 +78,7 @@ func (mtm *MultiTenantMonitor) GetMonitor(orgID string) (*Monitor, error) {
 	// Load tenant-specific nodes from <orgDir>/nodes.enc
 	nodesConfig, err := tenantPersistence.LoadNodesConfig()
 	if err != nil {
-		log.Warn().Err(err).Str("org_id", orgID).Msg("Failed to load tenant nodes config, starting with empty config")
+		log.Warn().Err(err).Str("org_id", orgID).Msg("failed to load tenant nodes config, starting with empty config")
 		// Not a fatal error - tenant may not have configured any nodes yet
 	} else if nodesConfig != nil {
 		tenantConfig.PVEInstances = nodesConfig.PVEInstances
@@ -127,7 +127,7 @@ func (mtm *MultiTenantMonitor) Stop() {
 	mtm.mu.Lock()
 	defer mtm.mu.Unlock()
 
-	log.Info().Msg("Stopping MultiTenantMonitor and all tenant instances")
+	log.Info().Msg("stopping MultiTenantMonitor and all tenant instances")
 	mtm.globalCancel()
 
 	for _, monitor := range mtm.monitors {
@@ -144,7 +144,7 @@ func (mtm *MultiTenantMonitor) RemoveTenant(orgID string) {
 	defer mtm.mu.Unlock()
 
 	if monitor, exists := mtm.monitors[orgID]; exists {
-		log.Info().Str("org_id", orgID).Msg("Stopping and removing tenant monitor")
+		log.Info().Str("org_id", orgID).Msg("stopping and removing tenant monitor")
 		monitor.Stop()
 		delete(mtm.monitors, orgID)
 	}

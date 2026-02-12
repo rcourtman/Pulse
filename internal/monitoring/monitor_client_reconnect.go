@@ -39,7 +39,7 @@ func (m *Monitor) retryFailedConnections(ctx context.Context) {
 		}
 
 		if time.Since(startTime) > maxRetryDuration {
-			log.Info().Msg("Connection retry period expired")
+			log.Info().Msg("connection retry period expired")
 			return
 		}
 
@@ -81,7 +81,7 @@ func (m *Monitor) retryFailedConnections(ctx context.Context) {
 
 		// If no missing clients, we're done
 		if len(missingPVE) == 0 && len(missingPBS) == 0 {
-			log.Info().Msg("All client connections established successfully")
+			log.Info().Msg("all client connections established successfully")
 			return
 		}
 

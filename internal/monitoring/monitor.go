@@ -1081,7 +1081,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 	if err != nil {
 		// Do not automatically delete the DB on error, as it causes data loss on transient errors (e.g. locks).
 		// If the DB is truly corrupted, the user should manually remove it.
-		log.Error().Err(err).Msg("Failed to initialize persistent metrics store - continuing without metrics persistence")
+		log.Error().Err(err).Msg("failed to initialize persistent metrics store - continuing without metrics persistence")
 	} else {
 		if mock.IsMockEnabled() {
 			ms.SetMaxOpenConns(10)
@@ -1205,13 +1205,13 @@ func New(cfg *config.Config) (*Monitor, error) {
 		)
 		m.notificationMgr.SetNotifyOnResolve(alertConfig.Schedule.NotifyOnResolve)
 	} else {
-		log.Warn().Err(err).Msg("Failed to load alert configuration")
+		log.Warn().Err(err).Msg("failed to load alert configuration")
 	}
 
 	if emailConfig, err := m.configPersist.LoadEmailConfig(); err == nil {
 		m.notificationMgr.SetEmailConfig(*emailConfig)
 	} else {
-		log.Warn().Err(err).Msg("Failed to load email configuration")
+		log.Warn().Err(err).Msg("failed to load email configuration")
 	}
 
 	if concurrency > 0 {
@@ -1221,12 +1221,12 @@ func New(cfg *config.Config) (*Monitor, error) {
 	if appriseConfig, err := m.configPersist.LoadAppriseConfig(); err == nil {
 		m.notificationMgr.SetAppriseConfig(*appriseConfig)
 	} else {
-		log.Warn().Err(err).Msg("Failed to load Apprise configuration")
+		log.Warn().Err(err).Msg("failed to load Apprise configuration")
 	}
 
 	// Migrate webhooks if needed (from unencrypted to encrypted)
 	if err := m.configPersist.MigrateWebhooksIfNeeded(); err != nil {
-		log.Warn().Err(err).Msg("Failed to migrate webhooks")
+		log.Warn().Err(err).Msg("failed to migrate webhooks")
 	}
 
 	if webhooks, err := m.configPersist.LoadWebhooks(); err == nil {
@@ -1234,14 +1234,14 @@ func New(cfg *config.Config) (*Monitor, error) {
 			m.notificationMgr.AddWebhook(webhook)
 		}
 	} else {
-		log.Warn().Err(err).Msg("Failed to load webhook configuration")
+		log.Warn().Err(err).Msg("failed to load webhook configuration")
 	}
 
 	// In mock mode we keep real polling enabled by default so production metrics
 	// continue to accumulate while the UI renders mock data.
 	mockEnabled := mock.IsMockEnabled()
 	if mockEnabled && !keepRealPollingInMockMode() {
-		log.Info().Msg("Mock mode enabled - real client initialization disabled by env override")
+		log.Info().Msg("mock mode enabled - real client initialization disabled by env override")
 	} else {
 		m.initPVEClients(cfg)
 		m.initPBSClients(cfg)
@@ -1430,7 +1430,7 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 
 	// Initialize and start discovery service if enabled
 	if mock.IsMockEnabled() {
-		log.Info().Msg("Mock mode enabled - skipping discovery service")
+		log.Info().Msg("mock mode enabled - skipping discovery service")
 		m.discoveryService = nil
 	} else if m.config.DiscoveryEnabled {
 		discoverySubnet := m.config.DiscoverySubnet
@@ -1452,12 +1452,12 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 		m.discoveryService = discovery.NewService(wsHub, 5*time.Minute, discoverySubnet, cfgProvider)
 		if m.discoveryService != nil {
 			m.discoveryService.Start(ctx)
-			log.Info().Msg("Discovery service initialized and started")
+			log.Info().Msg("discovery service initialized and started")
 		} else {
-			log.Error().Msg("Failed to initialize discovery service")
+			log.Error().Msg("failed to initialize discovery service")
 		}
 	} else {
-		log.Info().Msg("Discovery service disabled by configuration")
+		log.Info().Msg("discovery service disabled by configuration")
 		m.discoveryService = nil
 	}
 
@@ -1544,11 +1544,11 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 	// Do an immediate poll on start.
 	if mock.IsMockEnabled() {
 		if keepRealPolling {
-			log.Info().Msg("Mock mode enabled - running mock alerts and real metric polling")
+			log.Info().Msg("mock mode enabled - running mock alerts and real metric polling")
 			go m.checkMockAlerts()
 			go m.poll(ctx, wsHub)
 		} else {
-			log.Info().Msg("Mock mode enabled - skipping real node polling")
+			log.Info().Msg("mock mode enabled - skipping real node polling")
 			go m.checkMockAlerts()
 		}
 	} else {
@@ -1604,7 +1604,7 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 			m.broadcastState(wsHub, frontendState)
 
 		case <-ctx.Done():
-			log.Info().Msg("Monitoring loop stopped")
+			log.Info().Msg("monitoring loop stopped")
 			return
 		}
 	}
@@ -1619,14 +1619,14 @@ func (m *Monitor) poll(_ context.Context, wsHub *websocket.Hub) {
 	if currentCount > 2 {
 		atomic.AddInt32(&m.activePollCount, -1)
 		if logging.IsLevelEnabled(zerolog.DebugLevel) {
-			log.Debug().Int32("activePolls", currentCount-1).Msg("Too many concurrent polls, skipping")
+			log.Debug().Int32("activePolls", currentCount-1).Msg("too many concurrent polls, skipping")
 		}
 		return
 	}
 	defer atomic.AddInt32(&m.activePollCount, -1)
 
 	if logging.IsLevelEnabled(zerolog.DebugLevel) {
-		log.Debug().Msg("Starting polling cycle")
+		log.Debug().Msg("starting polling cycle")
 	}
 	startTime := time.Now()
 	now := startTime
@@ -1656,7 +1656,7 @@ func (m *Monitor) poll(_ context.Context, wsHub *websocket.Hub) {
 	m.mu.Unlock()
 
 	if logging.IsLevelEnabled(zerolog.DebugLevel) {
-		log.Debug().Dur("duration", time.Since(startTime)).Msg("Polling cycle completed")
+		log.Debug().Dur("duration", time.Since(startTime)).Msg("polling cycle completed")
 	}
 
 	// Broadcasting is now handled by the timer in Start()
@@ -1681,13 +1681,13 @@ func (m *Monitor) taskWorker(ctx context.Context, id int) {
 	defer recoverFromPanic(fmt.Sprintf("taskWorker-%d", id))
 
 	if logging.IsLevelEnabled(zerolog.DebugLevel) {
-		log.Debug().Int("worker", id).Msg("Task worker started")
+		log.Debug().Int("worker", id).Msg("task worker started")
 	}
 	for {
 		task, ok := m.taskQueue.WaitNext(ctx)
 		if !ok {
 			if logging.IsLevelEnabled(zerolog.DebugLevel) {
-				log.Debug().Int("worker", id).Msg("Task worker stopping")
+				log.Debug().Int("worker", id).Msg("task worker stopping")
 			}
 			return
 		}
@@ -2481,7 +2481,7 @@ func (m *Monitor) broadcastState(hub *websocket.Hub, frontendState interface{}) 
 func (m *Monitor) SetMockMode(enable bool) {
 	current := mock.IsMockEnabled()
 	if current == enable {
-		log.Info().Bool("mockMode", enable).Msg("Mock mode already in desired state")
+		log.Info().Bool("mockMode", enable).Msg("mock mode already in desired state")
 		return
 	}
 
@@ -2500,7 +2500,7 @@ func (m *Monitor) SetMockMode(enable bool) {
 		if ctx != nil {
 			m.startMockMetricsSampler(ctx)
 		}
-		log.Info().Msg("Switched monitor to mock mode")
+		log.Info().Msg("switched monitor to mock mode")
 	} else {
 		m.stopMockMetricsSampler()
 		mock.SetEnabled(false)
@@ -2509,7 +2509,7 @@ func (m *Monitor) SetMockMode(enable bool) {
 		m.resetStateLocked()
 		m.metricsHistory.Reset()
 		m.mu.Unlock()
-		log.Info().Msg("Switched monitor to real data mode")
+		log.Info().Msg("switched monitor to real data mode")
 	}
 
 	m.mu.RLock()
@@ -2564,7 +2564,7 @@ func (m *Monitor) StartDiscoveryService(ctx context.Context, wsHub *websocket.Hu
 	defer m.mu.Unlock()
 
 	if m.discoveryService != nil {
-		log.Debug().Msg("Discovery service already running")
+		log.Debug().Msg("discovery service already running")
 		return
 	}
 
@@ -2584,9 +2584,9 @@ func (m *Monitor) StartDiscoveryService(ctx context.Context, wsHub *websocket.Hu
 	m.discoveryService = discovery.NewService(wsHub, 5*time.Minute, subnet, cfgProvider)
 	if m.discoveryService != nil {
 		m.discoveryService.Start(ctx)
-		log.Info().Str("subnet", subnet).Msg("Discovery service started")
+		log.Info().Str("subnet", subnet).Msg("discovery service started")
 	} else {
-		log.Error().Msg("Failed to create discovery service")
+		log.Error().Msg("failed to create discovery service")
 	}
 }
 
@@ -2598,7 +2598,7 @@ func (m *Monitor) StopDiscoveryService() {
 	if m.discoveryService != nil {
 		m.discoveryService.Stop()
 		m.discoveryService = nil
-		log.Info().Msg("Discovery service stopped")
+		log.Info().Msg("discovery service stopped")
 	}
 }
 
@@ -2606,14 +2606,14 @@ func (m *Monitor) StopDiscoveryService() {
 func (m *Monitor) EnableTemperatureMonitoring() {
 	// Temperature collection is always enabled when tempCollector is initialized
 	// This method exists for interface compatibility
-	log.Info().Msg("Temperature monitoring enabled")
+	log.Info().Msg("temperature monitoring enabled")
 }
 
 // DisableTemperatureMonitoring disables temperature data collection
 func (m *Monitor) DisableTemperatureMonitoring() {
 	// Temperature collection is always enabled when tempCollector is initialized
 	// This method exists for interface compatibility
-	log.Info().Msg("Temperature monitoring disabled")
+	log.Info().Msg("temperature monitoring disabled")
 }
 
 // SetResourceStore sets the resource store for polling optimization.
@@ -2623,7 +2623,7 @@ func (m *Monitor) SetResourceStore(store ResourceStoreInterface) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.resourceStore = store
-	log.Info().Msg("Resource store set for polling optimization")
+	log.Info().Msg("resource store set for polling optimization")
 }
 
 // GetNotificationManager returns the notification manager
@@ -3414,7 +3414,7 @@ func monitorLastSeenUnix(value time.Time) int64 {
 // pollStorageBackupsWithNodes polls backups using a provided nodes list to avoid duplicate GetNodes calls
 // Stop gracefully stops the monitor
 func (m *Monitor) Stop() {
-	log.Info().Msg("Stopping monitor")
+	log.Info().Msg("stopping monitor")
 
 	// Stop the alert manager to save history
 	if m.alertManager != nil {
@@ -3429,13 +3429,13 @@ func (m *Monitor) Stop() {
 	// Close persistent metrics store (flushes buffered data)
 	if m.metricsStore != nil {
 		if err := m.metricsStore.Close(); err != nil {
-			log.Error().Err(err).Msg("Failed to close metrics store")
+			log.Error().Err(err).Msg("failed to close metrics store")
 		} else {
-			log.Info().Msg("Metrics store closed successfully")
+			log.Info().Msg("metrics store closed successfully")
 		}
 	}
 
-	log.Info().Msg("Monitor stopped")
+	log.Info().Msg("monitor stopped")
 }
 
 // recordAuthFailure records an authentication failure for a node

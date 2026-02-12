@@ -61,7 +61,7 @@ func NewTemperatureCollectorWithPort(sshUser, sshKeyPath string, sshPort int) *T
 	}
 	knownHostsPath := filepath.Join(homeDir, ".ssh", "known_hosts_sensors")
 	if manager, err := knownhosts.NewManager(knownHostsPath); err != nil {
-		log.Warn().Err(err).Str("path", knownHostsPath).Msg("Failed to initialize temperature known_hosts manager")
+		log.Warn().Err(err).Str("path", knownHostsPath).Msg("failed to initialize temperature known_hosts manager")
 	} else {
 		tc.hostKeys = manager
 	}
@@ -231,7 +231,7 @@ func (tc *TemperatureCollector) logMissingSSHKey(cause error) {
 		if cause != nil && !errors.Is(cause, os.ErrNotExist) {
 			event = event.Err(cause)
 		}
-		event.Msg("Temperature SSH key not available; skipping legacy SSH collection")
+		event.Msg("temperature SSH key not available; skipping legacy SSH collection")
 	}
 }
 
@@ -336,7 +336,7 @@ func (tc *TemperatureCollector) parseSensorsJSON(jsonStr string) (*models.Temper
 		if err := json.Unmarshal([]byte(jsonStr), &sensorsData); err != nil {
 			return nil, fmt.Errorf("failed to parse sensors JSON: %w", err)
 		}
-		log.Debug().Msg("Parsed legacy sensors format (no SMART data)")
+		log.Debug().Msg("parsed legacy sensors format (no SMART data)")
 	}
 
 	smartData := normalizeSMARTEntries(smartRaw)

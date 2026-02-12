@@ -76,7 +76,7 @@ func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName stri
 			containers, err := client.GetContainers(ctx, n.Node)
 			if err != nil {
 				monErr := errors.NewMonitorError(errors.ErrorTypeAPI, "get_containers", instanceName, err).WithNode(n.Node)
-				log.Error().Err(monErr).Str("node", n.Node).Msg("Failed to get containers")
+				log.Error().Err(monErr).Str("node", n.Node).Msg("failed to get containers")
 				resultChan <- nodeResult{node: n.Node, err: err}
 				return
 			}
