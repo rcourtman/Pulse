@@ -414,8 +414,8 @@ func (a *Agent) sendReport(ctx context.Context, report agentshost.Report) error 
 		return fmt.Errorf("marshal report: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/api/agents/host/report", a.trimmedPulseURL)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(payload))
+	reportURL := fmt.Sprintf("%s/api/agents/host/report", a.trimmedPulseURL)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reportURL, bytes.NewReader(payload))
 	if err != nil {
 		return fmt.Errorf("create request: %w", err)
 	}
