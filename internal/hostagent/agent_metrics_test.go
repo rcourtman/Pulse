@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/hostmetrics"
-	"github.com/rcourtman/pulse-go-rewrite/internal/smartctl"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	gohost "github.com/shirou/gopsutil/v4/host"
 )
@@ -186,8 +185,8 @@ func TestBuildReport(t *testing.T) {
 
 	// Test case 5: SMART collection
 	t.Run("SMART collection", func(t *testing.T) {
-		mc.smartLocalFn = func(_ context.Context, _ []string) ([]smartctl.DiskSMART, error) {
-			return []smartctl.DiskSMART{
+		mc.smartLocalFn = func(_ context.Context, _ []string) ([]DiskSMART, error) {
+			return []DiskSMART{
 				{
 					Device:      "/dev/sda",
 					Model:       "TestDisk",

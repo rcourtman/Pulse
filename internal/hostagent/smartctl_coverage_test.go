@@ -1,4 +1,4 @@
-package smartctl
+package hostagent
 
 import (
 	"context"
@@ -97,7 +97,7 @@ func TestDefaultRunCommandOutput(t *testing.T) {
 	}
 }
 
-func TestCollectLocalNoDevices(t *testing.T) {
+func TestCollectSMARTLocalNoDevices(t *testing.T) {
 	origRun := runCommandOutput
 	t.Cleanup(func() { runCommandOutput = origRun })
 
@@ -108,16 +108,16 @@ func TestCollectLocalNoDevices(t *testing.T) {
 		return nil, errors.New("unexpected command")
 	}
 
-	result, err := CollectLocal(context.Background(), nil)
+	result, err := CollectSMARTLocal(context.Background(), nil)
 	if err != nil {
-		t.Fatalf("CollectLocal error: %v", err)
+		t.Fatalf("CollectSMARTLocal error: %v", err)
 	}
 	if result != nil {
 		t.Fatalf("expected nil result for no devices")
 	}
 }
 
-func TestCollectLocalListDevicesError(t *testing.T) {
+func TestCollectSMARTLocalListDevicesError(t *testing.T) {
 	origRun := runCommandOutput
 	t.Cleanup(func() { runCommandOutput = origRun })
 
@@ -125,12 +125,12 @@ func TestCollectLocalListDevicesError(t *testing.T) {
 		return nil, errors.New("lsblk failed")
 	}
 
-	if _, err := CollectLocal(context.Background(), nil); err == nil {
+	if _, err := CollectSMARTLocal(context.Background(), nil); err == nil {
 		t.Fatalf("expected list error")
 	}
 }
 
-func TestCollectLocalSkipsErrors(t *testing.T) {
+func TestCollectSMARTLocalSkipsErrors(t *testing.T) {
 	origRun := runCommandOutput
 	origLook := execLookPath
 	origNow := timeNow
@@ -166,9 +166,9 @@ func TestCollectLocalSkipsErrors(t *testing.T) {
 		return nil, errors.New("unexpected command")
 	}
 
-	result, err := CollectLocal(context.Background(), nil)
+	result, err := CollectSMARTLocal(context.Background(), nil)
 	if err != nil {
-		t.Fatalf("CollectLocal error: %v", err)
+		t.Fatalf("CollectSMARTLocal error: %v", err)
 	}
 	if len(result) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(result))

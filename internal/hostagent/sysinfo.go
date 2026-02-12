@@ -10,7 +10,6 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/hostmetrics"
 	"github.com/rcourtman/pulse-go-rewrite/internal/sensors"
-	"github.com/rcourtman/pulse-go-rewrite/internal/smartctl"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	gohost "github.com/shirou/gopsutil/v4/host"
 )
@@ -25,7 +24,7 @@ type SystemCollector interface {
 	SensorsPower(ctx context.Context) (*sensors.PowerData, error)
 	RAIDArrays(ctx context.Context) ([]agentshost.RAIDArray, error)
 	CephStatus(ctx context.Context) (*CephClusterStatus, error)
-	SMARTLocal(ctx context.Context, exclude []string) ([]smartctl.DiskSMART, error)
+	SMARTLocal(ctx context.Context, exclude []string) ([]DiskSMART, error)
 	Now() time.Time
 	GOOS() string
 	ReadFile(name string) ([]byte, error)
@@ -79,8 +78,8 @@ func (c *defaultCollector) CephStatus(ctx context.Context) (*CephClusterStatus, 
 	return CollectCeph(ctx)
 }
 
-func (c *defaultCollector) SMARTLocal(ctx context.Context, exclude []string) ([]smartctl.DiskSMART, error) {
-	return smartctl.CollectLocal(ctx, exclude)
+func (c *defaultCollector) SMARTLocal(ctx context.Context, exclude []string) ([]DiskSMART, error) {
+	return CollectSMARTLocal(ctx, exclude)
 }
 
 func (c *defaultCollector) Now() time.Time {

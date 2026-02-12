@@ -1,5 +1,4 @@
-// Package smartctl provides S.M.A.R.T. data collection from local disks.
-package smartctl
+package hostagent
 
 import (
 	"context"
@@ -105,9 +104,9 @@ type smartctlJSON struct {
 	PowerMode string `json:"power_mode"`
 }
 
-// CollectLocal collects S.M.A.R.T. data from all local block devices.
+// CollectSMARTLocal collects S.M.A.R.T. data from all local block devices.
 // The diskExclude parameter specifies patterns for devices to skip (e.g., "sda", "/dev/nvme*", "*cache*").
-func CollectLocal(ctx context.Context, diskExclude []string) ([]DiskSMART, error) {
+func CollectSMARTLocal(ctx context.Context, diskExclude []string) ([]DiskSMART, error) {
 	// List block devices
 	devices, err := listBlockDevices(ctx, diskExclude)
 	if err != nil {
