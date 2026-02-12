@@ -57,12 +57,12 @@ func DerivePlanVersion(metadata map[string]string, priceID string) string {
 
 // IsSafeStripeID validates that a Stripe ID (cus_..., sub_...) is safe for
 // use as a lookup key. Keeps the check strict to avoid filesystem surprises.
-func IsSafeStripeID(id string) bool {
-	if len(id) < 5 || len(id) > 128 {
+func IsSafeStripeID(stripeID string) bool {
+	if len(stripeID) < 5 || len(stripeID) > 128 {
 		return false
 	}
-	for i := 0; i < len(id); i++ {
-		c := id[i]
+	for i := 0; i < len(stripeID); i++ {
+		c := stripeID[i]
 		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '-' {
 			continue
 		}

@@ -213,13 +213,13 @@ func (r *TenantRegistry) Create(t *Tenant) error {
 }
 
 // Get retrieves a tenant by ID.
-func (r *TenantRegistry) Get(id string) (*Tenant, error) {
+func (r *TenantRegistry) Get(tenantID string) (*Tenant, error) {
 	row := r.db.QueryRow(`SELECT
 		id, account_id, email, display_name, state,
 		stripe_customer_id, stripe_subscription_id, stripe_price_id,
 		plan_version, container_id, current_image_digest, desired_image_digest,
 		created_at, updated_at, last_health_check, health_check_ok
-		FROM tenants WHERE id = ?`, id)
+		FROM tenants WHERE id = ?`, tenantID)
 	return scanTenant(row)
 }
 
@@ -422,10 +422,10 @@ func (r *TenantRegistry) CreateAccount(a *Account) error {
 }
 
 // GetAccount retrieves an account by ID.
-func (r *TenantRegistry) GetAccount(id string) (*Account, error) {
+func (r *TenantRegistry) GetAccount(accountID string) (*Account, error) {
 	row := r.db.QueryRow(`SELECT
 		id, kind, display_name, created_at, updated_at
-		FROM accounts WHERE id = ?`, id)
+		FROM accounts WHERE id = ?`, accountID)
 	return scanAccount(row)
 }
 
@@ -497,10 +497,10 @@ func (r *TenantRegistry) CreateUser(u *User) error {
 }
 
 // GetUser retrieves a user by ID.
-func (r *TenantRegistry) GetUser(id string) (*User, error) {
+func (r *TenantRegistry) GetUser(userID string) (*User, error) {
 	row := r.db.QueryRow(`SELECT
 		id, email, created_at, last_login_at
-		FROM users WHERE id = ?`, id)
+		FROM users WHERE id = ?`, userID)
 	return scanUser(row)
 }
 
@@ -513,9 +513,9 @@ func (r *TenantRegistry) GetUserByEmail(email string) (*User, error) {
 }
 
 // UpdateUserLastLogin sets last_login_at for the given user ID to the current time.
-func (r *TenantRegistry) UpdateUserLastLogin(id string) error {
+func (r *TenantRegistry) UpdateUserLastLogin(userID string) error {
 	now := time.Now().UTC()
-	res, err := r.db.Exec(`UPDATE users SET last_login_at = ? WHERE id = ?`, now.Unix(), id)
+	res, err := r.db.Exec(`UPDATE users SET last_login_at = ? WHERE id = ?`, now.Unix(), userID)
 	if err != nil {
 		return fmt.Errorf("update user last login: %w", err)
 	}
@@ -524,7 +524,7 @@ func (r *TenantRegistry) UpdateUserLastLogin(id string) error {
 		return fmt.Errorf("get rows affected: %w", err)
 	}
 	if affected == 0 {
-		return fmt.Errorf("user %q not found", id)
+		return fmt.Errorf("user %q not found", userID)
 	}
 	return nil
 }
@@ -589,11 +589,11 @@ func (r *TenantRegistry) ListAccountsByUser(userID string) ([]string, error) {
 
 	var accountIDs []string
 	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
+		var accountID string
+		if err := rows.Scan(&accountID); err != nil {
 			return nil, fmt.Errorf("scan account id: %w", err)
 		}
-		accountIDs = append(accountIDs, id)
+		accountIDs = append(accountIDs, accountID)
 	}
 	return accountIDs, rows.Err()
 }
