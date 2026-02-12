@@ -174,6 +174,7 @@ type NotificationManager struct {
 	webhookHistory     []WebhookDelivery            // Keep last 100 webhook deliveries for debugging
 	webhookRateLimits  map[string]*webhookRateLimit // Track rate limits per webhook URL
 	webhookRateMu      sync.Mutex                   // Separate mutex for webhook rate limiting
+	webhookRateCleanup time.Time                    // Last cleanup time for webhook rate limit entries
 	appriseExec        appriseExecFunc
 	queue              *NotificationQueue // Persistent notification queue
 	webhookClient      *http.Client       // Shared HTTP client for webhooks
@@ -421,16 +422,17 @@ func NewNotificationManagerWithDataDir(publicURL string, dataDir string) *Notifi
 			TimeoutSeconds: 15,
 			APIKeyHeader:   "X-API-KEY",
 		},
-		groupWindow:       30 * time.Second,
-		pendingAlerts:     make([]*alerts.Alert, 0),
-		groupByNode:       true,
-		groupByGuest:      false,
-		webhookHistory:    make([]WebhookDelivery, 0, WebhookHistoryMaxSize),
-		webhookRateLimits: make(map[string]*webhookRateLimit),
-		publicURL:         cleanURL,
-		appriseExec:       defaultAppriseExec,
-		queue:             queue,
-		stopCleanup:       make(chan struct{}),
+		groupWindow:        30 * time.Second,
+		pendingAlerts:      make([]*alerts.Alert, 0),
+		groupByNode:        true,
+		groupByGuest:       false,
+		webhookHistory:     make([]WebhookDelivery, 0, WebhookHistoryMaxSize),
+		webhookRateLimits:  make(map[string]*webhookRateLimit),
+		webhookRateCleanup: time.Now(),
+		publicURL:          cleanURL,
+		appriseExec:        defaultAppriseExec,
+		queue:              queue,
+		stopCleanup:        make(chan struct{}),
 	}
 
 	// Create webhook client after NotificationManager is initialized
@@ -1946,6 +1948,7 @@ func (n *NotificationManager) checkWebhookRateLimit(webhookURL string) bool {
 	defer n.webhookRateMu.Unlock()
 
 	now := time.Now()
+	n.cleanupWebhookRateLimitsLocked(now)
 	limit, exists := n.webhookRateLimits[webhookURL]
 
 	if !exists {
@@ -1978,6 +1981,29 @@ func (n *NotificationManager) checkWebhookRateLimit(webhookURL string) bool {
 	// Increment counter and allow
 	limit.sentCount++
 	return true
+}
+
+func (n *NotificationManager) cleanupWebhookRateLimitsLocked(now time.Time) {
+	if now.Sub(n.webhookRateCleanup) < WebhookRateLimitWindow {
+		return
+	}
+
+	cutoff := now.Add(-WebhookRateLimitWindow)
+	cleaned := 0
+	for webhookURL, limit := range n.webhookRateLimits {
+		if limit.lastSent.Before(cutoff) {
+			delete(n.webhookRateLimits, webhookURL)
+			cleaned++
+		}
+	}
+	n.webhookRateCleanup = now
+
+	if cleaned > 0 {
+		log.Debug().
+			Int("cleaned", cleaned).
+			Int("remaining", len(n.webhookRateLimits)).
+			Msg("Cleaned up stale webhook rate limit entries")
+	}
 }
 
 // sendWebhookRequest sends the actual webhook request

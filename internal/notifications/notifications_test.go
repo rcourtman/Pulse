@@ -2302,6 +2302,41 @@ func TestCheckWebhookRateLimit(t *testing.T) {
 			t.Fatalf("expected url2 sentCount to be 1, got %d", count2)
 		}
 	})
+
+	t.Run("stale webhook rate limit entries are cleaned up", func(t *testing.T) {
+		nm := NewNotificationManager("")
+		staleURL := "https://example.com/stale"
+		freshURL := "https://example.com/fresh"
+
+		nm.webhookRateMu.Lock()
+		now := time.Now()
+		nm.webhookRateLimits[staleURL] = &webhookRateLimit{
+			lastSent:  now.Add(-WebhookRateLimitWindow - time.Second),
+			sentCount: WebhookRateLimitMax,
+		}
+		nm.webhookRateLimits[freshURL] = &webhookRateLimit{
+			lastSent:  now.Add(-WebhookRateLimitWindow + 2*time.Second),
+			sentCount: 1,
+		}
+		nm.webhookRateCleanup = now.Add(-WebhookRateLimitWindow - time.Second)
+		nm.webhookRateMu.Unlock()
+
+		if !nm.checkWebhookRateLimit("https://example.com/current") {
+			t.Fatalf("expected current webhook request to pass rate limit check")
+		}
+
+		nm.webhookRateMu.Lock()
+		_, staleExists := nm.webhookRateLimits[staleURL]
+		_, freshExists := nm.webhookRateLimits[freshURL]
+		nm.webhookRateMu.Unlock()
+
+		if staleExists {
+			t.Fatalf("expected stale webhook limiter entry to be cleaned up")
+		}
+		if !freshExists {
+			t.Fatalf("expected fresh webhook limiter entry to remain")
+		}
+	})
 }
 
 func TestGeneratePayloadFromTemplateWithService(t *testing.T) {
