@@ -56,6 +56,33 @@ func TestUpdateQueue_MarkRunning(t *testing.T) {
 	}
 }
 
+func TestUpdateQueue_GetCurrentJobReturnsDefensiveCopy(t *testing.T) {
+	queue := NewUpdateQueue()
+	job, accepted := queue.Enqueue("https://example.com/update.tar.gz")
+	if !accepted || job == nil {
+		t.Fatal("expected enqueue to succeed")
+	}
+
+	snapshot := queue.GetCurrentJob()
+	if snapshot == nil {
+		t.Fatal("expected current job snapshot")
+	}
+
+	snapshot.State = JobStateFailed
+	snapshot.DownloadURL = "tampered"
+
+	current := queue.GetCurrentJob()
+	if current == nil {
+		t.Fatal("expected current job")
+	}
+	if current.State != JobStateQueued {
+		t.Fatalf("expected queued state to remain unchanged, got %s", current.State)
+	}
+	if current.DownloadURL != "https://example.com/update.tar.gz" {
+		t.Fatalf("expected original download URL, got %q", current.DownloadURL)
+	}
+}
+
 func TestUpdateQueue_MarkCompleted(t *testing.T) {
 	queue := NewUpdateQueue()
 
@@ -191,6 +218,36 @@ func TestUpdateQueue_MaxHistory(t *testing.T) {
 	history := queue.GetHistory()
 	if len(history) > queue.maxHistory {
 		t.Errorf("History should be limited to %d jobs, got %d", queue.maxHistory, len(history))
+	}
+}
+
+func TestUpdateQueue_GetHistoryReturnsDefensiveCopies(t *testing.T) {
+	queue := NewUpdateQueue()
+
+	job, accepted := queue.Enqueue("https://example.com/update.tar.gz")
+	if !accepted || job == nil {
+		t.Fatal("expected enqueue to succeed")
+	}
+	queue.MarkRunning(job.ID)
+	queue.MarkCompleted(job.ID, nil)
+
+	history := queue.GetHistory()
+	if len(history) != 1 {
+		t.Fatalf("expected one history entry, got %d", len(history))
+	}
+
+	history[0].State = JobStateFailed
+	history[0].DownloadURL = "tampered"
+
+	historyAgain := queue.GetHistory()
+	if len(historyAgain) != 1 {
+		t.Fatalf("expected one history entry, got %d", len(historyAgain))
+	}
+	if historyAgain[0].State != JobStateCompleted {
+		t.Fatalf("expected completed state to remain unchanged, got %s", historyAgain[0].State)
+	}
+	if historyAgain[0].DownloadURL != "https://example.com/update.tar.gz" {
+		t.Fatalf("expected original download URL, got %q", historyAgain[0].DownloadURL)
 	}
 }
 
