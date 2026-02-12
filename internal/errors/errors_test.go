@@ -3,6 +3,7 @@ package errors
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -516,6 +517,16 @@ func TestIsAuthError(t *testing.T) {
 			name:     "MonitorError connection type not auth",
 			err:      NewMonitorError(ErrorTypeConnection, "connect", "instance", nil),
 			expected: false,
+		},
+		{
+			name:     "oversized error with auth marker beyond cap is not matched",
+			err:      fmt.Errorf("%sunauthorized", strings.Repeat("a", maxAuthMatchLength+16)),
+			expected: false,
+		},
+		{
+			name:     "oversized error with auth marker in prefix is matched",
+			err:      fmt.Errorf("forbidden%s", strings.Repeat("b", maxAuthMatchLength+16)),
+			expected: true,
 		},
 	}
 

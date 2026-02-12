@@ -34,6 +34,7 @@ const (
 const (
 	maxErrorContextLength = 128
 	maxErrorMessageLength = 512
+	maxAuthMatchLength    = 2048
 )
 
 // MonitorError is a structured error for monitoring operations
@@ -192,14 +193,27 @@ func IsAuthError(err error) bool {
 		return true
 	}
 
-	// Check error message for authentication indicators
-	errMsg := strings.ToLower(err.Error())
+	// Check error message for authentication indicators using a bounded prefix to
+	// avoid large memory amplification from oversized upstream error bodies.
+	errMsg := normalizeForAuthMatch(err.Error())
 	return strings.Contains(errMsg, "authentication error") ||
 		strings.Contains(errMsg, "authentication failed") ||
 		containsStandaloneCode(errMsg, "401") ||
 		containsStandaloneCode(errMsg, "403") ||
 		strings.Contains(errMsg, "unauthorized") ||
 		strings.Contains(errMsg, "forbidden")
+}
+
+func normalizeForAuthMatch(msg string) string {
+	if msg == "" {
+		return ""
+	}
+
+	if len(msg) > maxAuthMatchLength {
+		msg = msg[:maxAuthMatchLength]
+	}
+
+	return strings.ToLower(sanitizeErrorText(msg, maxAuthMatchLength))
 }
 
 func sanitizeErrorText(input string, maxLen int) string {
