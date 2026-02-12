@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/types"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
 func TestRateTrackerConcurrentAccess(t *testing.T) {
@@ -19,7 +19,7 @@ func TestRateTrackerConcurrentAccess(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		for i := 0; i < iterations; i++ {
-			metrics := types.IOMetrics{
+			metrics := models.IOMetrics{
 				DiskRead:   int64(i * 100),
 				DiskWrite:  int64(i * 80),
 				NetworkIn:  int64(i * 60),
@@ -34,7 +34,7 @@ func TestRateTrackerConcurrentAccess(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		for i := 0; i < iterations; i++ {
-			metrics := types.IOMetrics{
+			metrics := models.IOMetrics{
 				DiskRead:   int64(i * 50),
 				DiskWrite:  int64(i * 70),
 				NetworkIn:  int64(i * 30),

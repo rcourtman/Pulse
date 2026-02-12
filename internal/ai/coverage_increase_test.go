@@ -7,7 +7,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/baseline"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
-	"github.com/rcourtman/pulse-go-rewrite/internal/types"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
 func TestPatrolService_BroadcastFullChannel(t *testing.T) {
@@ -121,19 +121,19 @@ func TestGenerateRemediationSummary(t *testing.T) {
 
 // mockMetricsHistoryProvider implements MetricsHistoryProvider
 type mockMetricsHistoryProvider struct {
-	metrics map[string][]types.MetricPoint // resourceID:metrics -> points
+	metrics map[string][]models.MetricPoint // resourceID:metrics -> points
 }
 
-func (m *mockMetricsHistoryProvider) GetNodeMetrics(nodeID string, metricType string, duration time.Duration) []types.MetricPoint {
+func (m *mockMetricsHistoryProvider) GetNodeMetrics(nodeID string, metricType string, duration time.Duration) []models.MetricPoint {
 	return m.metrics[nodeID+":"+metricType]
 }
 
-func (m *mockMetricsHistoryProvider) GetGuestMetrics(guestID string, metricType string, duration time.Duration) []types.MetricPoint {
+func (m *mockMetricsHistoryProvider) GetGuestMetrics(guestID string, metricType string, duration time.Duration) []models.MetricPoint {
 	return m.metrics[guestID+":"+metricType]
 }
 
-func (m *mockMetricsHistoryProvider) GetAllGuestMetrics(guestID string, duration time.Duration) map[string][]types.MetricPoint {
-	result := make(map[string][]types.MetricPoint)
+func (m *mockMetricsHistoryProvider) GetAllGuestMetrics(guestID string, duration time.Duration) map[string][]models.MetricPoint {
+	result := make(map[string][]models.MetricPoint)
 	for k, v := range m.metrics {
 		if strings.HasPrefix(k, guestID+":") {
 			parts := strings.Split(k, ":")
@@ -145,7 +145,7 @@ func (m *mockMetricsHistoryProvider) GetAllGuestMetrics(guestID string, duration
 	return result
 }
 
-func (m *mockMetricsHistoryProvider) GetAllStorageMetrics(storageID string, duration time.Duration) map[string][]types.MetricPoint {
+func (m *mockMetricsHistoryProvider) GetAllStorageMetrics(storageID string, duration time.Duration) map[string][]models.MetricPoint {
 	return nil
 }
 
@@ -232,18 +232,18 @@ func TestService_BuildEnrichedResourceContext(t *testing.T) {
 
 	// Case 4: With Metrics History (Trends)
 	mockMH := &mockMetricsHistoryProvider{
-		metrics: make(map[string][]types.MetricPoint),
+		metrics: make(map[string][]models.MetricPoint),
 	}
 	// Add data showing increasing trend for CPU (>5% trend)
 	// Last 24h: 10% -> 20% = +10% over 1 day (+10%/day > 5%)
 	tsOld := now.Add(-24 * time.Hour)
-	mockMH.metrics["res1:cpu"] = []types.MetricPoint{
+	mockMH.metrics["res1:cpu"] = []models.MetricPoint{
 		{Value: 10, Timestamp: tsOld},
 		{Value: 15, Timestamp: tsOld.Add(12 * time.Hour)},
 		{Value: 20, Timestamp: now},
 	}
 	// Add data showing flat trend for memory
-	mockMH.metrics["res1:memory"] = []types.MetricPoint{
+	mockMH.metrics["res1:memory"] = []models.MetricPoint{
 		{Value: 50, Timestamp: tsOld},
 		{Value: 50, Timestamp: now},
 	}

@@ -8,27 +8,26 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/baseline"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/knowledge"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
-	"github.com/rcourtman/pulse-go-rewrite/internal/types"
 )
 
 type precomputeMetricsHistoryProvider struct {
-	metrics map[string][]types.MetricPoint
-	storage map[string][]types.MetricPoint
+	metrics map[string][]models.MetricPoint
+	storage map[string][]models.MetricPoint
 }
 
-func (p *precomputeMetricsHistoryProvider) GetNodeMetrics(nodeID string, metricType string, duration time.Duration) []types.MetricPoint {
+func (p *precomputeMetricsHistoryProvider) GetNodeMetrics(nodeID string, metricType string, duration time.Duration) []models.MetricPoint {
 	return p.metrics[nodeID+":"+metricType]
 }
 
-func (p *precomputeMetricsHistoryProvider) GetGuestMetrics(guestID string, metricType string, duration time.Duration) []types.MetricPoint {
+func (p *precomputeMetricsHistoryProvider) GetGuestMetrics(guestID string, metricType string, duration time.Duration) []models.MetricPoint {
 	return p.metrics[guestID+":"+metricType]
 }
 
-func (p *precomputeMetricsHistoryProvider) GetAllGuestMetrics(guestID string, duration time.Duration) map[string][]types.MetricPoint {
+func (p *precomputeMetricsHistoryProvider) GetAllGuestMetrics(guestID string, duration time.Duration) map[string][]models.MetricPoint {
 	return nil
 }
 
-func (p *precomputeMetricsHistoryProvider) GetAllStorageMetrics(storageID string, duration time.Duration) map[string][]types.MetricPoint {
+func (p *precomputeMetricsHistoryProvider) GetAllStorageMetrics(storageID string, duration time.Duration) map[string][]models.MetricPoint {
 	if p.storage == nil {
 		return nil
 	}
@@ -36,7 +35,7 @@ func (p *precomputeMetricsHistoryProvider) GetAllStorageMetrics(storageID string
 	if len(points) == 0 {
 		return nil
 	}
-	return map[string][]types.MetricPoint{"usage": points}
+	return map[string][]models.MetricPoint{"usage": points}
 }
 
 func TestSeedPrecomputeIntelligence_PopulatesSignals(t *testing.T) {
@@ -60,8 +59,8 @@ func TestSeedPrecomputeIntelligence_PopulatesSignals(t *testing.T) {
 	_ = bs.Learn("storage-1", "storage", "usage", baselinePoints)
 	ps.SetBaselineStore(bs)
 
-	series := func(start float64) []types.MetricPoint {
-		return []types.MetricPoint{
+	series := func(start float64) []models.MetricPoint {
+		return []models.MetricPoint{
 			{Value: start, Timestamp: now.Add(-5 * time.Hour)},
 			{Value: start + 2, Timestamp: now.Add(-4 * time.Hour)},
 			{Value: start + 4, Timestamp: now.Add(-3 * time.Hour)},
@@ -70,14 +69,14 @@ func TestSeedPrecomputeIntelligence_PopulatesSignals(t *testing.T) {
 		}
 	}
 	mh := &precomputeMetricsHistoryProvider{
-		metrics: map[string][]types.MetricPoint{
+		metrics: map[string][]models.MetricPoint{
 			"node-1:memory": series(70),
 			"vm-1:memory":   series(60),
 			"vm-1:disk":     series(50),
 			"ct-1:memory":   series(55),
 			"ct-1:disk":     series(45),
 		},
-		storage: map[string][]types.MetricPoint{
+		storage: map[string][]models.MetricPoint{
 			"storage-1:usage": series(65),
 		},
 	}

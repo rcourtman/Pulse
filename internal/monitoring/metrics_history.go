@@ -4,12 +4,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/types"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rs/zerolog/log"
 )
 
-// Use MetricPoint from types package
-type MetricPoint = types.MetricPoint
+// MetricPoint is an alias for models.MetricPoint
+type MetricPoint = models.MetricPoint
 
 // GuestMetrics holds historical metrics for a single guest
 type GuestMetrics struct {

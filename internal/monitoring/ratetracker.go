@@ -4,11 +4,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/types"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
-// Use IOMetrics from types package
-type IOMetrics = types.IOMetrics
+// IOMetrics is an alias for models.IOMetrics
+type IOMetrics = models.IOMetrics
 
 // rateWindowSize is the number of counter samples retained per guest.
 // Rate is computed from the oldest to the newest sample, giving an average
