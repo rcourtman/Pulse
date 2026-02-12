@@ -115,9 +115,7 @@ func (h *ConversionHandlers) HandleConversionFunnel(w http.ResponseWriter, r *ht
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(summary)
+	writeConversionJSONResponse(w, http.StatusOK, summary, "HandleConversionFunnel")
 }
 
 // HandleGetHealth returns conversion pipeline health status.
@@ -138,9 +136,7 @@ func (h *ConversionHandlers) HandleGetHealth(w http.ResponseWriter, r *http.Requ
 		status = h.health.CheckHealth()
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(status)
+	writeConversionJSONResponse(w, http.StatusOK, status, "HandleGetHealth")
 }
 
 type conversionStatsBucket struct {
@@ -187,14 +183,12 @@ func (h *ConversionHandlers) HandleGetStats(w http.ResponseWriter, r *http.Reque
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(conversionStatsResponse{
+	writeConversionJSONResponse(w, http.StatusOK, conversionStatsResponse{
 		WindowStart: windowStart.UnixMilli(),
 		WindowEnd:   windowEnd.UnixMilli(),
 		Buckets:     snapshot,
 		TotalEvents: totalEvents,
-	})
+	}, "HandleGetStats")
 }
 
 // HandleGetConfig returns runtime conversion collection controls.
@@ -212,9 +206,7 @@ func (h *ConversionHandlers) HandleGetConfig(w http.ResponseWriter, r *http.Requ
 		snapshot = h.config.GetConfig()
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(snapshot)
+	writeConversionJSONResponse(w, http.StatusOK, snapshot, "HandleGetConfig")
 }
 
 // HandleUpdateConfig updates runtime conversion collection controls.
@@ -244,9 +236,7 @@ func (h *ConversionHandlers) HandleUpdateConfig(w http.ResponseWriter, r *http.R
 		snapshot = cfg.GetConfig()
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(snapshot)
+	writeConversionJSONResponse(w, http.StatusOK, snapshot, "HandleUpdateConfig")
 }
 
 func conversionValidationReason(err error) string {
@@ -278,18 +268,25 @@ func conversionValidationReason(err error) string {
 }
 
 func writeConversionValidationError(w http.ResponseWriter, message string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusBadRequest)
-	_ = json.NewEncoder(w).Encode(map[string]string{
+	writeConversionJSONResponse(w, http.StatusBadRequest, map[string]string{
 		"error":   "validation_error",
 		"message": message,
-	})
+	}, "writeConversionValidationError")
 }
 
 func writeConversionAccepted(w http.ResponseWriter) {
+	writeConversionJSONResponse(w, http.StatusAccepted, map[string]bool{"accepted": true}, "writeConversionAccepted")
+}
+
+func writeConversionJSONResponse(w http.ResponseWriter, status int, payload interface{}, operation string) {
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusAccepted)
-	_ = json.NewEncoder(w).Encode(map[string]bool{"accepted": true})
+	w.WriteHeader(status)
+	if err := json.NewEncoder(w).Encode(payload); err != nil {
+		log.Warn().
+			Err(err).
+			Str("operation", operation).
+			Msg("Failed to encode conversion API response")
+	}
 }
 
 func parseOptionalTimeParam(raw string, defaultValue time.Time) (time.Time, error) {
