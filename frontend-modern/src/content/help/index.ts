@@ -35,32 +35,5 @@ export function getHelpContent(id: HelpContentId): HelpContent | undefined {
   return registry[id];
 }
 
-/**
- * Get all help content for a category
- * @param category - The category prefix (e.g., "alerts", "ai")
- * @returns Array of matching help content
- */
-export function getHelpContentByCategory(category: string): HelpContent[] {
-  const prefix = category.endsWith('.') ? category : `${category}.`;
-  return allContent.filter((item) => item.id.startsWith(prefix));
-}
-
-/**
- * Get all help content
- * @returns Array of all registered help content
- */
-export function getAllHelpContent(): HelpContent[] {
-  return [...allContent];
-}
-
-/**
- * Check if help content exists for an ID
- * @param id - The help content ID
- * @returns true if content exists
- */
-export function hasHelpContent(id: HelpContentId): boolean {
-  return id in registry;
-}
-
 // Re-export types
-export type { HelpContent, HelpContentId, HelpContentRegistry } from './types';
+export type { HelpContent, HelpContentId } from './types';
