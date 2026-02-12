@@ -13,12 +13,72 @@ interface UpdateState {
   updateInfo?: UpdateInfo;
 }
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null;
+
+const isFiniteNumber = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value);
+
+const normalizeUpdateInfo = (value: unknown): UpdateInfo | undefined => {
+  if (!isRecord(value)) return undefined;
+
+  const { available, currentVersion, latestVersion, releaseNotes, releaseDate, downloadUrl, isPrerelease, warning } = value;
+
+  if (
+    typeof available !== 'boolean' ||
+    typeof currentVersion !== 'string' ||
+    typeof latestVersion !== 'string' ||
+    typeof releaseNotes !== 'string' ||
+    typeof releaseDate !== 'string' ||
+    typeof downloadUrl !== 'string' ||
+    typeof isPrerelease !== 'boolean'
+  ) {
+    return undefined;
+  }
+
+  if (warning !== undefined && typeof warning !== 'string') {
+    return undefined;
+  }
+
+  return {
+    available,
+    currentVersion,
+    latestVersion,
+    releaseNotes,
+    releaseDate,
+    downloadUrl,
+    isPrerelease,
+    ...(warning !== undefined ? { warning } : {}),
+  };
+};
+
+const normalizeUpdateState = (value: unknown): UpdateState => {
+  if (!isRecord(value)) {
+    return { lastCheck: 0 };
+  }
+
+  const normalized: UpdateState = {
+    lastCheck: isFiniteNumber(value.lastCheck) && value.lastCheck >= 0 ? value.lastCheck : 0,
+  };
+
+  if (typeof value.dismissedVersion === 'string') {
+    normalized.dismissedVersion = value.dismissedVersion;
+  }
+
+  const normalizedUpdateInfo = normalizeUpdateInfo(value.updateInfo);
+  if (normalizedUpdateInfo) {
+    normalized.updateInfo = normalizedUpdateInfo;
+  }
+
+  return normalized;
+};
+
 // Load state from localStorage
 const loadState = (): UpdateState => {
   try {
     const stored = localStorage.getItem(STORAGE_KEYS.UPDATES);
     if (stored) {
-      return JSON.parse(stored);
+      return normalizeUpdateState(JSON.parse(stored));
     }
   } catch (e) {
     logger.error('Failed to load update state:', e);
@@ -82,7 +142,7 @@ const checkForUpdates = async (force = false): Promise<void> => {
         logger.error('Failed to verify version for cache:', e);
       }
     } else {
-      return;
+      // Cached payload is missing/corrupted; perform a fresh fetch.
     }
   }
 
