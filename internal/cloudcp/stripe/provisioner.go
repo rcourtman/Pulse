@@ -33,6 +33,13 @@ type Provisioner struct {
 	emailFrom   string
 }
 
+type provisioningCleanupState struct {
+	tenantID      string
+	tenantDataDir string
+	containerID   string
+	tenantCreated bool
+}
+
 // NewProvisioner creates a Provisioner.
 func NewProvisioner(reg *registry.TenantRegistry, tenantsDir string, dockerMgr *docker.Manager, magicLinks *cpauth.Service, baseURL string, emailSender cpemail.Sender, emailFrom string) *Provisioner {
 	return &Provisioner{
@@ -187,14 +194,53 @@ func (p *Provisioner) maybeStopAndRemoveContainer(ctx context.Context, container
 	return p.docker.StopAndRemove(ctx, containerID)
 }
 
+func (p *Provisioner) rollbackProvisioning(state provisioningCleanupState) {
+	if p == nil {
+		return
+	}
+
+	// Use a fresh context so cleanup still runs if the request context was canceled.
+	cleanupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := p.maybeStopAndRemoveContainer(cleanupCtx, state.containerID); err != nil {
+		log.Warn().
+			Err(err).
+			Str("tenant_id", state.tenantID).
+			Str("container_id", state.containerID).
+			Msg("Provisioning rollback: failed to remove container")
+	}
+
+	if state.tenantCreated && strings.TrimSpace(state.tenantID) != "" {
+		if err := p.registry.Delete(state.tenantID); err != nil {
+			log.Warn().
+				Err(err).
+				Str("tenant_id", state.tenantID).
+				Msg("Provisioning rollback: failed to delete tenant registry record")
+		}
+	}
+
+	if strings.TrimSpace(state.tenantDataDir) == "" {
+		return
+	}
+	if err := os.RemoveAll(state.tenantDataDir); err != nil {
+		log.Warn().
+			Err(err).
+			Str("tenant_id", state.tenantID).
+			Str("tenant_data_dir", state.tenantDataDir).
+			Msg("Provisioning rollback: failed to remove tenant data directory")
+	}
+}
+
 // HandleCheckout provisions a new tenant from a checkout.session.completed event.
 func (p *Provisioner) HandleCheckout(ctx context.Context, session CheckoutSession) (err error) {
 	cpmetrics.ProvisioningTotal.WithLabelValues("attempt").Inc()
+	cleanup := provisioningCleanupState{}
 	skippedExisting := false
 	defer func() {
 		outcome := "success"
 		if err != nil {
 			outcome = "error"
+			p.rollbackProvisioning(cleanup)
 		} else if skippedExisting {
 			outcome = "skipped_existing"
 		}
@@ -327,6 +373,7 @@ func (p *Provisioner) HandleCheckout(ctx context.Context, session CheckoutSessio
 	if err != nil {
 		return fmt.Errorf("prepare tenant directories for %s: %w", tenantID, err)
 	}
+	cleanup.tenantDataDir = tenantDataDir
 	if err := p.writeHandoffKey(secretsDir); err != nil {
 		return fmt.Errorf("write handoff key for tenant %s: %w", tenantID, err)
 	}
@@ -360,6 +407,8 @@ func (p *Provisioner) HandleCheckout(ctx context.Context, session CheckoutSessio
 	if err := p.registry.Create(tenant); err != nil {
 		return fmt.Errorf("create tenant record: %w", err)
 	}
+	cleanup.tenantID = tenantID
+	cleanup.tenantCreated = true
 
 	// Start container if Docker is available.
 	containerID, err := p.maybeStartContainer(ctx, tenantID, tenantDataDir)
@@ -367,6 +416,7 @@ func (p *Provisioner) HandleCheckout(ctx context.Context, session CheckoutSessio
 		return fmt.Errorf("start container: %w", err)
 	}
 	tenant.ContainerID = containerID
+	cleanup.containerID = containerID
 
 	// Poll health check before declaring the tenant active.
 	if containerID != "" && p.pollHealth(ctx, containerID) {
@@ -430,10 +480,12 @@ func planVersionFromMetadata(metadata map[string]string, fallback string) string
 // ProvisionWorkspace provisions a new workspace (tenant) under an account, without Stripe checkout.
 func (p *Provisioner) ProvisionWorkspace(ctx context.Context, accountID, displayName string) (tenant *registry.Tenant, err error) {
 	cpmetrics.ProvisioningTotal.WithLabelValues("attempt").Inc()
+	cleanup := provisioningCleanupState{}
 	defer func() {
 		outcome := "success"
 		if err != nil {
 			outcome = "error"
+			p.rollbackProvisioning(cleanup)
 		}
 		cpmetrics.ProvisioningTotal.WithLabelValues(outcome).Inc()
 	}()
@@ -456,6 +508,7 @@ func (p *Provisioner) ProvisionWorkspace(ctx context.Context, accountID, display
 	if err != nil {
 		return nil, fmt.Errorf("prepare tenant directories for %s: %w", tenantID, err)
 	}
+	cleanup.tenantDataDir = tenantDataDir
 	if err := p.writeHandoffKey(secretsDir); err != nil {
 		return nil, fmt.Errorf("write handoff key for tenant %s: %w", tenantID, err)
 	}
@@ -485,12 +538,15 @@ func (p *Provisioner) ProvisionWorkspace(ctx context.Context, accountID, display
 	if err := p.registry.Create(tenant); err != nil {
 		return nil, fmt.Errorf("create tenant record: %w", err)
 	}
+	cleanup.tenantID = tenantID
+	cleanup.tenantCreated = true
 
 	containerID, err := p.maybeStartContainer(ctx, tenantID, tenantDataDir)
 	if err != nil {
 		return nil, fmt.Errorf("start container: %w", err)
 	}
 	tenant.ContainerID = containerID
+	cleanup.containerID = containerID
 	tenant.State = registry.TenantStateActive
 	if err := p.registry.Update(tenant); err != nil {
 		return nil, fmt.Errorf("update tenant record: %w", err)
