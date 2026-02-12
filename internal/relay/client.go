@@ -107,13 +107,13 @@ func (c *Client) Run(ctx context.Context) error {
 		default:
 		}
 
-		err := c.connectAndHandle(ctx)
+		connected, err := c.connectAndHandle(ctx)
 		if err != nil {
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
 
-			consecutiveFailures++
+			consecutiveFailures = nextConsecutiveFailures(consecutiveFailures, connected)
 			c.mu.Lock()
 			c.lastError = err.Error()
 			c.connected = false
@@ -147,6 +147,16 @@ func (c *Client) Run(ctx context.Context) error {
 			consecutiveFailures = 0
 		}
 	}
+}
+
+// nextConsecutiveFailures advances the reconnect failure streak.
+// A session that successfully registers is treated as a recovery point, so
+// subsequent disconnects start a new streak at 1 instead of compounding old failures.
+func nextConsecutiveFailures(current int, connected bool) int {
+	if connected {
+		return 1
+	}
+	return current + 1
 }
 
 // Close stops the client and closes the connection.
@@ -203,7 +213,9 @@ func (c *Client) SendPushNotification(notification PushNotificationPayload) erro
 	}
 }
 
-func (c *Client) connectAndHandle(ctx context.Context) error {
+// connectAndHandle establishes a relay session and handles frames until disconnect.
+// The returned bool reports whether registration succeeded for this attempt.
+func (c *Client) connectAndHandle(ctx context.Context) (bool, error) {
 	dialer := websocket.Dialer{
 		HandshakeTimeout: wsHandshakeWait,
 	}
@@ -212,7 +224,7 @@ func (c *Client) connectAndHandle(ctx context.Context) error {
 
 	conn, _, err := dialer.DialContext(ctx, c.config.ServerURL, nil)
 	if err != nil {
-		return fmt.Errorf("dial relay: %w", err)
+		return false, fmt.Errorf("dial relay: %w", err)
 	}
 
 	// Per-connection send channel — no races because each writePump gets its own
@@ -234,7 +246,7 @@ func (c *Client) connectAndHandle(ctx context.Context) error {
 
 	// Register with relay server
 	if err := c.register(conn); err != nil {
-		return fmt.Errorf("register: %w", err)
+		return false, fmt.Errorf("register: %w", err)
 	}
 
 	// Expose sendCh only after successful registration so
@@ -258,7 +270,7 @@ func (c *Client) connectAndHandle(ctx context.Context) error {
 	go c.writePump(connCtx, conn, sendCh)
 
 	// Read pump (blocking) — passes connCtx so handleData streams inherit it
-	return c.readPump(connCtx, conn, sendCh)
+	return true, c.readPump(connCtx, conn, sendCh)
 }
 
 func (c *Client) register(conn *websocket.Conn) error {
