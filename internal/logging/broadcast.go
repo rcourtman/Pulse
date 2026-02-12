@@ -50,7 +50,7 @@ func (b *LogBroadcaster) Write(p []byte) (n int, err error) {
 	b.buffer = b.buffer.Next()
 
 	// 2. Broadcast to subscribers
-	for id, ch := range b.subscribers {
+	for subscriberID, ch := range b.subscribers {
 		select {
 		case ch <- msg:
 			// Sent successfully
@@ -59,7 +59,7 @@ func (b *LogBroadcaster) Write(p []byte) (n int, err error) {
 			// In a real production system we might drop the client,
 			// here we just skip this message for them to avoid blocking writer.
 			// Ideally we should warn or close their channel.
-			fmt.Printf("logging: subscriber %s blocked, dropping message\n", id)
+			fmt.Printf("logging: subscriber %s blocked, dropping message\n", subscriberID)
 		}
 	}
 
@@ -72,9 +72,9 @@ func (b *LogBroadcaster) Subscribe() (string, chan string, []string) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	id := uuid.NewString()
+	subscriberID := uuid.NewString()
 	ch := make(chan string, 1000) // Large buffer to prevent blocking
-	b.subscribers[id] = ch
+	b.subscribers[subscriberID] = ch
 
 	// Generate history snapshot
 	history := make([]string, 0, DefaultBufferSize)
@@ -84,17 +84,17 @@ func (b *LogBroadcaster) Subscribe() (string, chan string, []string) {
 		}
 	})
 
-	return id, ch, history
+	return subscriberID, ch, history
 }
 
 // Unsubscribe removes a subscriber.
-func (b *LogBroadcaster) Unsubscribe(id string) {
+func (b *LogBroadcaster) Unsubscribe(subscriberID string) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	if ch, ok := b.subscribers[id]; ok {
+	if ch, ok := b.subscribers[subscriberID]; ok {
 		close(ch)
-		delete(b.subscribers, id)
+		delete(b.subscribers, subscriberID)
 	}
 }
 
