@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -37,6 +38,31 @@ func TestManagerVerifyChecksum(t *testing.T) {
 
 	if err := manager.verifyChecksum(context.Background(), tarballURL, tarballPath); err != nil {
 		t.Fatalf("verifyChecksum error: %v", err)
+	}
+}
+
+func TestManagerVerifyChecksumRejectsOversizedChecksumFile(t *testing.T) {
+	tarballPath := filepath.Join(t.TempDir(), "pulse.tar.gz")
+	if err := os.WriteFile(tarballPath, []byte("payload"), 0600); err != nil {
+		t.Fatalf("write tarball: %v", err)
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "SHA256SUMS") {
+			w.Header().Set("Content-Length", strconv.FormatInt(maxChecksumFileBytes+1, 10))
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer server.Close()
+
+	manager := NewManager(nil)
+	tarballURL := server.URL + "/pulse.tar.gz"
+
+	err := manager.verifyChecksum(context.Background(), tarballURL, tarballPath)
+	if err == nil || !strings.Contains(err.Error(), "exceeds") {
+		t.Fatalf("expected oversized checksum error, got: %v", err)
 	}
 }
 
