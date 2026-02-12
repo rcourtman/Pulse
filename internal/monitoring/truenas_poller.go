@@ -3,7 +3,6 @@ package monitoring
 import (
 	"context"
 	"errors"
-	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -16,6 +15,7 @@ import (
 	internalerrors "github.com/rcourtman/pulse-go-rewrite/internal/errors"
 	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rs/zerolog/log"
 )
 
 const defaultTrueNASPollInterval = 60 * time.Second
@@ -122,7 +122,11 @@ func (p *TrueNASPoller) Stop() {
 	select {
 	case <-stopped:
 	case <-time.After(5 * time.Second):
-		log.Printf("[TrueNASPoller] Stop timed out waiting for shutdown")
+		log.Warn().
+			Str("component", "truenas_poller").
+			Str("action", "stop").
+			Dur("timeout", 5*time.Second).
+			Msg("TrueNAS poller stop timed out waiting for shutdown")
 	}
 }
 
@@ -131,13 +135,20 @@ func (p *TrueNASPoller) syncConnections() {
 		return
 	}
 	if p.persistence == nil {
-		log.Printf("[TrueNASPoller] Unable to sync connections: persistence is nil")
+		log.Warn().
+			Str("component", "truenas_poller").
+			Str("action", "sync_connections").
+			Msg("TrueNAS poller cannot sync connections because persistence is nil")
 		return
 	}
 
 	instances, err := p.persistence.LoadTrueNASConfig()
 	if err != nil {
-		log.Printf("[TrueNASPoller] Failed to load TrueNAS config: %v", err)
+		log.Warn().
+			Str("component", "truenas_poller").
+			Str("action", "load_truenas_config").
+			Err(err).
+			Msg("TrueNAS poller failed to load TrueNAS config")
 		return
 	}
 
@@ -169,7 +180,12 @@ func (p *TrueNASPoller) syncConnections() {
 			Fingerprint:        instance.Fingerprint,
 		})
 		if err != nil {
-			log.Printf("[TrueNASPoller] Failed to initialize client for connection %q: %v", id, err)
+			log.Warn().
+				Str("component", "truenas_poller").
+				Str("action", "initialize_client").
+				Str("connection_id", id).
+				Err(err).
+				Msg("TrueNAS poller failed to initialize client")
 			continue
 		}
 
@@ -189,7 +205,10 @@ func (p *TrueNASPoller) pollAll(ctx context.Context) {
 		return
 	}
 	if p.registry == nil {
-		log.Printf("[TrueNASPoller] Skipping poll: registry is nil")
+		log.Warn().
+			Str("component", "truenas_poller").
+			Str("action", "poll_all").
+			Msg("TrueNAS poller skipped poll because registry is nil")
 		return
 	}
 
@@ -223,7 +242,12 @@ func (p *TrueNASPoller) pollAll(ctx context.Context) {
 				StartTime:    start,
 				EndTime:      end,
 			})
-			log.Printf("[TrueNASPoller] Refresh failed for %s: %v", entry.id, err)
+			log.Warn().
+				Str("component", "truenas_poller").
+				Str("action", "refresh_connection").
+				Str("connection_id", entry.id).
+				Err(err).
+				Msg("TrueNAS poller refresh failed")
 			continue
 		}
 
