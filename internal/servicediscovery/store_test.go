@@ -418,6 +418,139 @@ func TestStore_SaveAndGetErrors(t *testing.T) {
 	}
 }
 
+func TestStore_SaveAndGet_ReturnsDefensiveCopies(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore error: %v", err)
+	}
+	store.crypto = nil
+
+	discovery := &ResourceDiscovery{
+		ID:           MakeResourceID(ResourceTypeDocker, "host1", "web"),
+		ResourceType: ResourceTypeDocker,
+		ResourceID:   "web",
+		HostID:       "host1",
+		ServiceName:  "Web",
+		Facts: []DiscoveryFact{
+			{Key: "service", Value: "nginx"},
+		},
+		ConfigPaths: []string{"/etc/nginx"},
+		UserSecrets: map[string]string{"token": "abc"},
+		RawCommandOutput: map[string]string{
+			"ps": "nginx",
+		},
+	}
+	if err := store.Save(discovery); err != nil {
+		t.Fatalf("Save error: %v", err)
+	}
+
+	// Mutate caller-owned value after Save; cache/state must remain unchanged.
+	discovery.ServiceName = "Mutated"
+	discovery.Facts[0].Value = "changed"
+	discovery.ConfigPaths[0] = "/tmp"
+	discovery.UserSecrets["token"] = "mutated"
+	discovery.RawCommandOutput["ps"] = "changed"
+
+	got1, err := store.Get(discovery.ID)
+	if err != nil {
+		t.Fatalf("Get error: %v", err)
+	}
+	if got1 == nil {
+		t.Fatalf("expected discovery, got nil")
+	}
+	if got1.ServiceName != "Web" {
+		t.Fatalf("expected cached service name to remain Web, got %q", got1.ServiceName)
+	}
+	if got1.Facts[0].Value != "nginx" {
+		t.Fatalf("expected cached fact value nginx, got %q", got1.Facts[0].Value)
+	}
+	if got1.ConfigPaths[0] != "/etc/nginx" {
+		t.Fatalf("expected cached config path /etc/nginx, got %q", got1.ConfigPaths[0])
+	}
+	if got1.UserSecrets["token"] != "abc" {
+		t.Fatalf("expected cached secret token abc, got %q", got1.UserSecrets["token"])
+	}
+	if got1.RawCommandOutput["ps"] != "nginx" {
+		t.Fatalf("expected cached raw output nginx, got %q", got1.RawCommandOutput["ps"])
+	}
+
+	// Mutate returned value from Get; internal cache must remain unchanged.
+	got1.ServiceName = "ChangedByCaller"
+	got1.Facts[0].Value = "bad"
+	got1.ConfigPaths[0] = "/bad"
+	got1.UserSecrets["token"] = "bad"
+	got1.RawCommandOutput["ps"] = "bad"
+
+	got2, err := store.Get(discovery.ID)
+	if err != nil {
+		t.Fatalf("second Get error: %v", err)
+	}
+	if got2.ServiceName != "Web" || got2.Facts[0].Value != "nginx" || got2.ConfigPaths[0] != "/etc/nginx" || got2.UserSecrets["token"] != "abc" || got2.RawCommandOutput["ps"] != "nginx" {
+		t.Fatalf("expected second Get to be isolated from caller mutations, got %#v", got2)
+	}
+}
+
+func TestStore_Fingerprints_ReturnDefensiveCopies(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore error: %v", err)
+	}
+	store.crypto = nil
+
+	fp := &ContainerFingerprint{
+		ResourceID: "docker:host1:web",
+		HostID:     "host1",
+		Hash:       "abc123",
+		Ports:      []string{"80/tcp"},
+		MountPaths: []string{"/config"},
+		EnvKeys:    []string{"FOO"},
+	}
+	if err := store.SaveFingerprint(fp); err != nil {
+		t.Fatalf("SaveFingerprint error: %v", err)
+	}
+
+	// Mutate caller-owned fingerprint after SaveFingerprint.
+	fp.Hash = "mutated"
+	fp.Ports[0] = "443/tcp"
+	fp.MountPaths[0] = "/tmp"
+	fp.EnvKeys[0] = "BAR"
+
+	got1, err := store.GetFingerprint("docker:host1:web")
+	if err != nil {
+		t.Fatalf("GetFingerprint error: %v", err)
+	}
+	if got1 == nil {
+		t.Fatalf("expected fingerprint, got nil")
+	}
+	if got1.Hash != "abc123" || got1.Ports[0] != "80/tcp" || got1.MountPaths[0] != "/config" || got1.EnvKeys[0] != "FOO" {
+		t.Fatalf("expected stored fingerprint to be isolated from caller mutations, got %#v", got1)
+	}
+
+	// Mutate returned fingerprint; store should still return original data.
+	got1.Hash = "changed-by-caller"
+	got1.Ports[0] = "9999/tcp"
+	got1.MountPaths[0] = "/bad"
+	got1.EnvKeys[0] = "BAD"
+
+	got2, err := store.GetFingerprint("docker:host1:web")
+	if err != nil {
+		t.Fatalf("second GetFingerprint error: %v", err)
+	}
+	if got2.Hash != "abc123" || got2.Ports[0] != "80/tcp" || got2.MountPaths[0] != "/config" || got2.EnvKeys[0] != "FOO" {
+		t.Fatalf("expected second GetFingerprint to be isolated from caller mutations, got %#v", got2)
+	}
+
+	all := store.GetAllFingerprints()
+	all["docker:host1:web"].Hash = "changed-from-map"
+	got3, err := store.GetFingerprint("docker:host1:web")
+	if err != nil {
+		t.Fatalf("third GetFingerprint error: %v", err)
+	}
+	if got3.Hash != "abc123" {
+		t.Fatalf("expected GetAllFingerprints map to be isolated copy, got hash %q", got3.Hash)
+	}
+}
+
 func TestStore_ListErrors(t *testing.T) {
 	store, err := NewStore(t.TempDir())
 	if err != nil {
