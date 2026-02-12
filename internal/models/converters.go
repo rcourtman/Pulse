@@ -32,7 +32,7 @@ func (n Node) ToFrontend() NodeFrontend {
 		KernelVersion:                n.KernelVersion,
 		PVEVersion:                   n.PVEVersion,
 		CPUInfo:                      n.CPUInfo,
-		LastSeen:                     n.LastSeen.Unix() * 1000,
+		LastSeen:                     timeToUnixMillis(n.LastSeen),
 		ConnectionHealth:             n.ConnectionHealth,
 		IsClusterMember:              n.IsClusterMember,
 		ClusterName:                  n.ClusterName,
@@ -83,7 +83,7 @@ func (v VM) ToFrontend() VMFrontend {
 		Uptime:           v.Uptime,
 		Template:         v.Template,
 		Lock:             v.Lock,
-		LastSeen:         v.LastSeen.Unix() * 1000,
+		LastSeen:         timeToUnixMillis(v.LastSeen),
 		DiskStatusReason: v.DiskStatusReason,
 	}
 
@@ -92,10 +92,7 @@ func (v VM) ToFrontend() VMFrontend {
 		vm.Tags = strings.Join(v.Tags, ",")
 	}
 
-	// Convert last backup time if not zero
-	if !v.LastBackup.IsZero() {
-		vm.LastBackup = v.LastBackup.Unix() * 1000
-	}
+	vm.LastBackup = timeToUnixMillis(v.LastBackup)
 
 	// Include full Memory object if it has data
 	if v.Memory.Total > 0 {
@@ -157,7 +154,7 @@ func (c Container) ToFrontend() ContainerFrontend {
 		Uptime:    c.Uptime,
 		Template:  c.Template,
 		Lock:      c.Lock,
-		LastSeen:  c.LastSeen.Unix() * 1000,
+		LastSeen:  timeToUnixMillis(c.LastSeen),
 	}
 
 	// OCI containers are classified separately from traditional LXC containers in the UI.
@@ -178,10 +175,7 @@ func (c Container) ToFrontend() ContainerFrontend {
 		ct.Tags = strings.Join(c.Tags, ",")
 	}
 
-	// Convert last backup time if not zero
-	if !c.LastBackup.IsZero() {
-		ct.LastBackup = c.LastBackup.Unix() * 1000
-	}
+	ct.LastBackup = timeToUnixMillis(c.LastBackup)
 
 	// Include full Memory object if it has data
 	if c.Memory.Total > 0 {
@@ -234,7 +228,7 @@ func (d DockerHost) ToFrontend() DockerHostFrontend {
 		UptimeSeconds:     d.UptimeSeconds,
 		CPUUsagePercent:   d.CPUUsage,
 		Status:            d.Status,
-		LastSeen:          d.LastSeen.Unix() * 1000,
+		LastSeen:          timeToUnixMillis(d.LastSeen),
 		IntervalSeconds:   d.IntervalSeconds,
 		AgentVersion:      d.AgentVersion,
 		Containers:        make([]DockerContainerFrontend, len(d.Containers)),
@@ -250,10 +244,7 @@ func (d DockerHost) ToFrontend() DockerHostFrontend {
 		h.TokenID = d.TokenID
 		h.TokenName = d.TokenName
 		h.TokenHint = d.TokenHint
-		if d.TokenLastUsedAt != nil && !d.TokenLastUsedAt.IsZero() {
-			ts := d.TokenLastUsedAt.Unix() * 1000
-			h.TokenLastUsedAt = &ts
-		}
+		h.TokenLastUsedAt = optionalTimeToUnixMillis(d.TokenLastUsedAt)
 	}
 
 	for i, ct := range d.Containers {
@@ -310,7 +301,7 @@ func (r RemovedDockerHost) ToFrontend() RemovedDockerHostFrontend {
 		ID:          r.ID,
 		Hostname:    r.Hostname,
 		DisplayName: r.DisplayName,
-		RemovedAt:   r.RemovedAt.Unix() * 1000,
+		RemovedAt:   timeToUnixMillis(r.RemovedAt),
 	}
 }
 
@@ -326,7 +317,7 @@ func (c KubernetesCluster) ToFrontend() KubernetesClusterFrontend {
 		Context:           c.Context,
 		Version:           c.Version,
 		Status:            c.Status,
-		LastSeen:          c.LastSeen.Unix() * 1000,
+		LastSeen:          timeToUnixMillis(c.LastSeen),
 		IntervalSeconds:   c.IntervalSeconds,
 		AgentVersion:      c.AgentVersion,
 		TokenID:           c.TokenID,
@@ -336,10 +327,7 @@ func (c KubernetesCluster) ToFrontend() KubernetesClusterFrontend {
 		PendingUninstall:  c.PendingUninstall,
 	}
 
-	if c.TokenLastUsedAt != nil {
-		ts := c.TokenLastUsedAt.Unix() * 1000
-		cluster.TokenLastUsedAt = &ts
-	}
+	cluster.TokenLastUsedAt = optionalTimeToUnixMillis(c.TokenLastUsedAt)
 
 	if len(c.Nodes) > 0 {
 		cluster.Nodes = make([]KubernetesNodeFrontend, len(c.Nodes))
@@ -389,12 +377,6 @@ func (c KubernetesCluster) ToFrontend() KubernetesClusterFrontend {
 				})
 			}
 
-			var startTime *int64
-			if p.StartTime != nil {
-				ts := p.StartTime.Unix() * 1000
-				startTime = &ts
-			}
-
 			cluster.Pods[i] = KubernetesPodFrontend{
 				UID:                           p.UID,
 				Name:                          p.Name,
@@ -405,7 +387,7 @@ func (c KubernetesCluster) ToFrontend() KubernetesClusterFrontend {
 				Message:                       p.Message,
 				QoSClass:                      p.QoSClass,
 				CreatedAt:                     timeToUnixMillis(p.CreatedAt),
-				StartTime:                     startTime,
+				StartTime:                     optionalTimeToUnixMillis(p.StartTime),
 				Restarts:                      p.Restarts,
 				UsageCPUMilliCores:            p.UsageCPUMilliCores,
 				UsageMemoryBytes:              p.UsageMemoryBytes,
@@ -464,13 +446,23 @@ func timeToUnixMillis(t time.Time) int64 {
 	return t.Unix() * 1000
 }
 
+// optionalTimeToUnixMillis converts a *time.Time to *int64 (Unix milliseconds).
+// Returns nil if the pointer is nil or the time is zero.
+func optionalTimeToUnixMillis(t *time.Time) *int64 {
+	if t == nil || t.IsZero() {
+		return nil
+	}
+	ms := t.Unix() * 1000
+	return &ms
+}
+
 // ToFrontend converts a RemovedKubernetesCluster to its frontend representation.
 func (r RemovedKubernetesCluster) ToFrontend() RemovedKubernetesClusterFrontend {
 	return RemovedKubernetesClusterFrontend{
 		ID:          r.ID,
 		Name:        r.Name,
 		DisplayName: r.DisplayName,
-		RemovedAt:   r.RemovedAt.Unix() * 1000,
+		RemovedAt:   timeToUnixMillis(r.RemovedAt),
 	}
 }
 
@@ -496,7 +488,7 @@ func (h Host) ToFrontend() HostFrontend {
 		TokenName:       h.TokenName,
 		TokenHint:       h.TokenHint,
 		Tags:            append([]string(nil), h.Tags...),
-		LastSeen:        h.LastSeen.Unix() * 1000,
+		LastSeen:        timeToUnixMillis(h.LastSeen),
 		CommandsEnabled: h.CommandsEnabled,
 		IsLegacy:        h.IsLegacy,
 		LinkedNodeID:    h.LinkedNodeID,
@@ -533,10 +525,7 @@ func (h Host) ToFrontend() HostFrontend {
 		host.Sensors = s
 	}
 
-	if h.TokenLastUsedAt != nil && !h.TokenLastUsedAt.IsZero() {
-		ts := h.TokenLastUsedAt.Unix() * 1000
-		host.TokenLastUsedAt = &ts
-	}
+	host.TokenLastUsedAt = optionalTimeToUnixMillis(h.TokenLastUsedAt)
 
 	return host
 }
