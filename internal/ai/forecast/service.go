@@ -212,7 +212,7 @@ func (s *Service) Forecast(resourceID, resourceName, metric string, horizon time
 	}
 
 	if len(data) < 2 {
-		return nil, fmt.Errorf("insufficient data points for forecast")
+		return nil, fmt.Errorf("insufficient data points for forecast of %s/%s: got %d points, need at least 2", resourceID, metric, len(data))
 	}
 
 	// Calculate trend

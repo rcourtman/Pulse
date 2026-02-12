@@ -479,7 +479,7 @@ func (e *Engine) ApprovePlan(planID, approvedBy string) (*RemediationExecution, 
 
 	// Check if expired
 	if plan.ExpiresAt != nil && time.Now().After(*plan.ExpiresAt) {
-		return nil, fmt.Errorf("plan has expired")
+		return nil, fmt.Errorf("plan %s has expired (expires_at: %v)", planID, plan.ExpiresAt)
 	}
 
 	// Create execution
@@ -680,7 +680,7 @@ func (e *Engine) Rollback(ctx context.Context, executionID string) error {
 	go e.saveIfDirty()
 
 	if len(rollbackErrors) > 0 {
-		return fmt.Errorf("rollback had errors")
+		return fmt.Errorf("rollback had errors: %v", rollbackErrors)
 	}
 	return nil
 }

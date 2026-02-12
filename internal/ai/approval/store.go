@@ -252,7 +252,7 @@ func (s *Store) Approve(id, username string) (*ApprovalRequest, error) {
 	if time.Now().After(req.ExpiresAt) {
 		req.Status = StatusExpired
 		s.saveAsync()
-		return nil, fmt.Errorf("approval request has expired")
+		return nil, fmt.Errorf("approval request %s has expired (expires_at: %v)", id, req.ExpiresAt)
 	}
 
 	now := time.Now()
@@ -319,13 +319,13 @@ func (s *Store) ConsumeApproval(id, command, targetType, targetID string) (*Appr
 	}
 
 	if req.Consumed {
-		return nil, fmt.Errorf("approval request has already been consumed")
+		return nil, fmt.Errorf("approval request %s has already been consumed", id)
 	}
 
 	if time.Now().After(req.ExpiresAt) {
 		req.Status = StatusExpired
 		s.saveAsync()
-		return nil, fmt.Errorf("approval request has expired")
+		return nil, fmt.Errorf("approval request %s has expired (expires_at: %v)", id, req.ExpiresAt)
 	}
 
 	// Verify command hash matches
