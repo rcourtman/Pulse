@@ -28,7 +28,7 @@ const updateInterval = 2 * time.Second
 func init() {
 	initialEnabled := os.Getenv("PULSE_MOCK_MODE") == "true"
 	if initialEnabled {
-		log.Info().Msg("Mock mode enabled at startup")
+		log.Info().Msg("mock mode enabled at startup")
 	}
 	setEnabled(initialEnabled, true)
 }
@@ -97,10 +97,10 @@ func enableMockMode(fromInit bool) {
 		Int("k8s_deployments_per_cluster", config.K8sDeploymentsPerCluster).
 		Bool("random_metrics", config.RandomMetrics).
 		Float64("stopped_percent", config.StoppedPercent).
-		Msg("Mock mode enabled")
+		Msg("mock mode enabled")
 
 	if !fromInit {
-		log.Info().Msg("Mock data generator started")
+		log.Info().Msg("mock data generator started")
 	}
 }
 
@@ -116,7 +116,7 @@ func disableMockMode() {
 	mockAlerts = nil
 	dataMu.Unlock()
 
-	log.Info().Msg("Mock mode disabled")
+	log.Info().Msg("mock mode disabled")
 }
 
 func startUpdateLoopLocked() {
@@ -273,7 +273,7 @@ func SetMockConfig(cfg MockConfig) {
 		Int("k8s_deployments_per_cluster", cfg.K8sDeploymentsPerCluster).
 		Bool("random_metrics", cfg.RandomMetrics).
 		Float64("stopped_percent", cfg.StoppedPercent).
-		Msg("Mock configuration updated")
+		Msg("mock configuration updated")
 }
 
 // GetMockState returns the current mock state snapshot.
