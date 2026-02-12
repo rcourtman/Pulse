@@ -6,20 +6,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
-func statusFromNode(status string) ResourceStatus {
-	switch strings.ToLower(strings.TrimSpace(status)) {
-	case "online", "running", "ok":
-		return StatusOnline
-	case "offline", "down", "stopped":
-		return StatusOffline
-	case "warning", "degraded":
-		return StatusWarning
-	default:
-		return StatusUnknown
-	}
-}
-
-func statusFromHost(status string) ResourceStatus {
+func statusFromString(status string) ResourceStatus {
 	switch strings.ToLower(strings.TrimSpace(status)) {
 	case "online", "running", "ok":
 		return StatusOnline
