@@ -13,6 +13,13 @@ import (
 
 var detectEnvironmentFn = envdetect.DetectEnvironment
 
+const (
+	maxDiscoveryCIDREntries        = 512
+	maxDiscoveryCIDRLength         = 64
+	maxDiscoveryIPBlocklistEntries = 4096
+	maxDiscoveryIPLength           = 64
+)
+
 // BuildScanner creates a discovery scanner configured using the supplied discovery config.
 func BuildScanner(cfg config.DiscoveryConfig) (*pkgdiscovery.Scanner, error) {
 	cfg = config.NormalizeDiscoveryConfig(cfg)
@@ -117,12 +124,32 @@ func ApplyConfigToProfile(profile *envdetect.EnvironmentProfile, cfg config.Disc
 	}
 
 	// Apply IP blocklist (individual IPs to skip, e.g. already-configured Proxmox hosts)
-	for _, ipStr := range cfg.IPBlocklist {
+	limit := len(cfg.IPBlocklist)
+	if limit > maxDiscoveryIPBlocklistEntries {
+		limit = maxDiscoveryIPBlocklistEntries
+		profile.Warnings = append(profile.Warnings, fmt.Sprintf("IP blocklist exceeds max entries (%d); extra entries ignored", maxDiscoveryIPBlocklistEntries))
+	}
+
+	seenIPs := make(map[string]struct{}, len(profile.IPBlocklist)+limit)
+	for _, existingIP := range profile.IPBlocklist {
+		seenIPs[existingIP.String()] = struct{}{}
+	}
+
+	for _, ipStr := range cfg.IPBlocklist[:limit] {
 		ipStr = strings.TrimSpace(ipStr)
 		if ipStr == "" {
 			continue
 		}
+		if len(ipStr) > maxDiscoveryIPLength {
+			profile.Warnings = append(profile.Warnings, fmt.Sprintf("IP blocklist entry exceeds max length (%d) and was ignored", maxDiscoveryIPLength))
+			continue
+		}
 		if ip := net.ParseIP(ipStr); ip != nil {
+			canonicalIP := ip.String()
+			if _, exists := seenIPs[canonicalIP]; exists {
+				continue
+			}
+			seenIPs[canonicalIP] = struct{}{}
 			profile.IPBlocklist = append(profile.IPBlocklist, ip)
 		} else {
 			profile.Warnings = append(profile.Warnings, fmt.Sprintf("Invalid IP in blocklist: %s", ipStr))
@@ -140,10 +167,24 @@ func isLikelyContainerPhase(name string) bool {
 }
 
 func parseCIDRs(values []string, warnings *[]string) []net.IPNet {
+	limit := len(values)
+	if limit > maxDiscoveryCIDREntries {
+		limit = maxDiscoveryCIDREntries
+		if warnings != nil {
+			*warnings = append(*warnings, fmt.Sprintf("CIDR list exceeds max entries (%d); extra entries ignored", maxDiscoveryCIDREntries))
+		}
+	}
+
 	var subnets []net.IPNet
-	for _, value := range values {
+	for _, value := range values[:limit] {
 		value = strings.TrimSpace(value)
 		if value == "" {
+			continue
+		}
+		if len(value) > maxDiscoveryCIDRLength {
+			if warnings != nil {
+				*warnings = append(*warnings, fmt.Sprintf("CIDR entry exceeds max length (%d) and was ignored", maxDiscoveryCIDRLength))
+			}
 			continue
 		}
 		_, ipNet, err := net.ParseCIDR(value)

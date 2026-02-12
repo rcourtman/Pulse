@@ -2,6 +2,7 @@ package discovery
 
 import (
 	"errors"
+	"fmt"
 	"net"
 	"strings"
 	"testing"
@@ -126,6 +127,40 @@ func TestParseCIDRs_NilWarnings(t *testing.T) {
 	result := parseCIDRs([]string{"192.168.1.0/24", "invalid"}, nil)
 	if len(result) != 1 {
 		t.Errorf("parseCIDRs() with nil warnings returned %d CIDRs, want 1", len(result))
+	}
+}
+
+func TestParseCIDRs_EnforcesEntryLimit(t *testing.T) {
+	values := make([]string, 0, maxDiscoveryCIDREntries+8)
+	for i := 0; i < maxDiscoveryCIDREntries+8; i++ {
+		values = append(values, fmt.Sprintf("10.%d.%d.0/24", i/256, i%256))
+	}
+
+	var warnings []string
+	result := parseCIDRs(values, &warnings)
+
+	if len(result) != maxDiscoveryCIDREntries {
+		t.Fatalf("expected %d CIDRs after limit enforcement, got %d", maxDiscoveryCIDREntries, len(result))
+	}
+	if len(warnings) == 0 || !strings.Contains(warnings[0], "exceeds max entries") {
+		t.Fatalf("expected entry-limit warning, got %#v", warnings)
+	}
+}
+
+func TestParseCIDRs_RejectsOverlongEntries(t *testing.T) {
+	values := []string{
+		strings.Repeat("1", maxDiscoveryCIDRLength+1),
+		"192.168.1.0/24",
+	}
+
+	var warnings []string
+	result := parseCIDRs(values, &warnings)
+
+	if len(result) != 1 {
+		t.Fatalf("expected only valid CIDR to be parsed, got %d entries", len(result))
+	}
+	if len(warnings) == 0 || !strings.Contains(warnings[0], "max length") {
+		t.Fatalf("expected max-length warning, got %#v", warnings)
 	}
 }
 
@@ -391,6 +426,55 @@ func TestApplyConfigToProfileSkipsEmptyIPBlocklistEntries(t *testing.T) {
 
 	if len(profile.IPBlocklist) != 1 {
 		t.Fatalf("expected 1 IP in blocklist, got %d", len(profile.IPBlocklist))
+	}
+}
+
+func TestApplyConfigToProfileIPBlocklistEntryLimit(t *testing.T) {
+	profile := &envdetect.EnvironmentProfile{
+		Type:   envdetect.Native,
+		Policy: envdetect.DefaultScanPolicy(),
+	}
+
+	blocklist := make([]string, 0, maxDiscoveryIPBlocklistEntries+12)
+	for i := 0; i < maxDiscoveryIPBlocklistEntries+12; i++ {
+		blocklist = append(blocklist, fmt.Sprintf("10.%d.%d.1", i/256, i%256))
+	}
+
+	cfg := config.DiscoveryConfig{
+		IPBlocklist: blocklist,
+	}
+
+	ApplyConfigToProfile(profile, cfg)
+
+	if len(profile.IPBlocklist) != maxDiscoveryIPBlocklistEntries {
+		t.Fatalf("expected %d IPs after limit enforcement, got %d", maxDiscoveryIPBlocklistEntries, len(profile.IPBlocklist))
+	}
+	if len(profile.Warnings) == 0 || !strings.Contains(profile.Warnings[0], "exceeds max entries") {
+		t.Fatalf("expected IP entry-limit warning, got %#v", profile.Warnings)
+	}
+}
+
+func TestApplyConfigToProfileRejectsOverlongAndDuplicateIPBlocklistEntries(t *testing.T) {
+	profile := &envdetect.EnvironmentProfile{
+		Type:   envdetect.Native,
+		Policy: envdetect.DefaultScanPolicy(),
+	}
+
+	cfg := config.DiscoveryConfig{
+		IPBlocklist: []string{
+			strings.Repeat("1", maxDiscoveryIPLength+1),
+			"192.168.1.10",
+			"192.168.1.10",
+		},
+	}
+
+	ApplyConfigToProfile(profile, cfg)
+
+	if len(profile.IPBlocklist) != 1 {
+		t.Fatalf("expected deduplicated valid IP blocklist entry, got %d", len(profile.IPBlocklist))
+	}
+	if len(profile.Warnings) == 0 || !strings.Contains(profile.Warnings[0], "max length") {
+		t.Fatalf("expected max-length warning, got %#v", profile.Warnings)
 	}
 }
 
