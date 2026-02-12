@@ -95,3 +95,118 @@ func TestResourceRegistry_ListByType_Empty(t *testing.T) {
 		t.Fatalf("expected empty result, got %d", len(got))
 	}
 }
+
+func TestResourceRegistry_BuildChildCounts_ReparentClearsOldParentCount(t *testing.T) {
+	rr := NewRegistry(nil)
+	now := time.Date(2026, 2, 12, 1, 0, 0, 0, time.UTC)
+
+	rr.IngestRecords(SourceProxmox, []IngestRecord{
+		{
+			SourceID: "node-a",
+			Resource: Resource{
+				Type:     ResourceTypeHost,
+				Name:     "node-a",
+				Status:   StatusOnline,
+				LastSeen: now,
+			},
+			Identity: ResourceIdentity{Hostnames: []string{"node-a"}},
+		},
+		{
+			SourceID: "node-b",
+			Resource: Resource{
+				Type:     ResourceTypeHost,
+				Name:     "node-b",
+				Status:   StatusOnline,
+				LastSeen: now,
+			},
+			Identity: ResourceIdentity{Hostnames: []string{"node-b"}},
+		},
+		{
+			SourceID:       "vm-100",
+			ParentSourceID: "node-a",
+			Resource: Resource{
+				Type:     ResourceTypeVM,
+				Name:     "vm-100",
+				Status:   StatusOnline,
+				LastSeen: now,
+			},
+			Identity: ResourceIdentity{Hostnames: []string{"vm-100"}},
+		},
+	})
+
+	parentAID := rr.sourceSpecificID(ResourceTypeHost, SourceProxmox, "node-a")
+	parentBID := rr.sourceSpecificID(ResourceTypeHost, SourceProxmox, "node-b")
+	vmID := rr.sourceSpecificID(ResourceTypeVM, SourceProxmox, "vm-100")
+
+	parentA, ok := rr.Get(parentAID)
+	if !ok {
+		t.Fatalf("expected parent A %q to exist", parentAID)
+	}
+	parentB, ok := rr.Get(parentBID)
+	if !ok {
+		t.Fatalf("expected parent B %q to exist", parentBID)
+	}
+	vm, ok := rr.Get(vmID)
+	if !ok {
+		t.Fatalf("expected vm %q to exist", vmID)
+	}
+	if parentA.ChildCount != 1 || parentB.ChildCount != 0 {
+		t.Fatalf("expected initial child counts parentA=1 parentB=0, got parentA=%d parentB=%d", parentA.ChildCount, parentB.ChildCount)
+	}
+	if vm.ParentName != "node-a" {
+		t.Fatalf("expected vm parent name %q, got %q", "node-a", vm.ParentName)
+	}
+
+	rr.IngestRecords(SourceProxmox, []IngestRecord{
+		{
+			SourceID: "node-a",
+			Resource: Resource{
+				Type:     ResourceTypeHost,
+				Name:     "node-a",
+				Status:   StatusOnline,
+				LastSeen: now.Add(30 * time.Second),
+			},
+			Identity: ResourceIdentity{Hostnames: []string{"node-a"}},
+		},
+		{
+			SourceID: "node-b",
+			Resource: Resource{
+				Type:     ResourceTypeHost,
+				Name:     "node-b",
+				Status:   StatusOnline,
+				LastSeen: now.Add(30 * time.Second),
+			},
+			Identity: ResourceIdentity{Hostnames: []string{"node-b"}},
+		},
+		{
+			SourceID:       "vm-100",
+			ParentSourceID: "node-b",
+			Resource: Resource{
+				Type:     ResourceTypeVM,
+				Name:     "vm-100",
+				Status:   StatusOnline,
+				LastSeen: now.Add(30 * time.Second),
+			},
+			Identity: ResourceIdentity{Hostnames: []string{"vm-100"}},
+		},
+	})
+
+	parentA, ok = rr.Get(parentAID)
+	if !ok {
+		t.Fatalf("expected parent A %q to exist after reparent", parentAID)
+	}
+	parentB, ok = rr.Get(parentBID)
+	if !ok {
+		t.Fatalf("expected parent B %q to exist after reparent", parentBID)
+	}
+	vm, ok = rr.Get(vmID)
+	if !ok {
+		t.Fatalf("expected vm %q to exist after reparent", vmID)
+	}
+	if parentA.ChildCount != 0 || parentB.ChildCount != 1 {
+		t.Fatalf("expected child counts parentA=0 parentB=1 after reparent, got parentA=%d parentB=%d", parentA.ChildCount, parentB.ChildCount)
+	}
+	if vm.ParentName != "node-b" {
+		t.Fatalf("expected vm parent name %q after reparent, got %q", "node-b", vm.ParentName)
+	}
+}

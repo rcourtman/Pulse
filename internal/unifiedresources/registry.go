@@ -686,6 +686,13 @@ func (rr *ResourceRegistry) updateSourceMappings(fromID, toID string) {
 }
 
 func (rr *ResourceRegistry) buildChildCounts() {
+	// ChildCount and ParentName are derived fields. Clear prior values before
+	// recomputing to prevent stale state after re-parenting or parent removal.
+	for _, r := range rr.resources {
+		r.ChildCount = 0
+		r.ParentName = ""
+	}
+
 	childCounts := make(map[string]int)
 	for _, r := range rr.resources {
 		if r.ParentID != nil {
