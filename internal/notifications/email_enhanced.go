@@ -65,6 +65,12 @@ func (a *plainAuth) Next(fromServer []byte, more bool) ([]byte, error) {
 	return nil, nil
 }
 
+func sanitizeEmailHeaderValue(value string) string {
+	clean := strings.ReplaceAll(value, "\r", " ")
+	clean = strings.ReplaceAll(clean, "\n", " ")
+	return strings.TrimSpace(clean)
+}
+
 // negotiateAuth queries the server for supported AUTH mechanisms after EHLO
 // and returns the best smtp.Auth to use. Prefers PLAIN, falls back to LOGIN.
 // Returns nil if auth is not configured.
@@ -200,12 +206,12 @@ func (e *EnhancedEmailManager) sendEmailOnce(subject, htmlBody, textBody string)
 	// Build message with enhanced headers
 	boundary := fmt.Sprintf("===============%d==", time.Now().UnixNano())
 
-	msg := fmt.Sprintf("From: %s\r\n", e.config.From)
-	msg += fmt.Sprintf("To: %s\r\n", strings.Join(e.config.To, ", "))
+	msg := fmt.Sprintf("From: %s\r\n", sanitizeEmailHeaderValue(e.config.From))
+	msg += fmt.Sprintf("To: %s\r\n", sanitizeEmailHeaderValue(strings.Join(e.config.To, ", ")))
 	if e.config.ReplyTo != "" {
-		msg += fmt.Sprintf("Reply-To: %s\r\n", e.config.ReplyTo)
+		msg += fmt.Sprintf("Reply-To: %s\r\n", sanitizeEmailHeaderValue(e.config.ReplyTo))
 	}
-	msg += fmt.Sprintf("Subject: %s\r\n", subject)
+	msg += fmt.Sprintf("Subject: %s\r\n", sanitizeEmailHeaderValue(subject))
 	msg += fmt.Sprintf("Date: %s\r\n", time.Now().Format(time.RFC1123Z))
 	msg += fmt.Sprintf("Message-ID: <%d@pulse-monitoring>\r\n", time.Now().UnixNano())
 	msg += "MIME-Version: 1.0\r\n"
