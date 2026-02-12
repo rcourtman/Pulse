@@ -8,6 +8,8 @@ const AUTH_STORAGE_KEY = STORAGE_KEYS.AUTH;
 const ORG_STORAGE_KEY = STORAGE_KEYS.ORG_ID;
 const ORG_HEADER_NAME = 'X-Pulse-Org-ID';
 const ORG_COOKIE_NAME = 'pulse_org_id';
+const DEFAULT_RATE_LIMIT_RETRY_MS = 2000;
+const MAX_RATE_LIMIT_RETRY_MS = 60_000;
 
 const getSessionStorage = (): Storage | undefined => {
   if (typeof window === 'undefined') {
@@ -200,6 +202,32 @@ class ApiClient {
       // Ignore storage errors
     }
     return null;
+  }
+
+  private parseRetryAfterMs(retryAfter: string | null): number {
+    if (!retryAfter) {
+      return DEFAULT_RATE_LIMIT_RETRY_MS;
+    }
+
+    const trimmed = retryAfter.trim();
+    if (trimmed === '') {
+      return DEFAULT_RATE_LIMIT_RETRY_MS;
+    }
+
+    const retryAfterSeconds = Number(trimmed);
+    if (Number.isFinite(retryAfterSeconds) && retryAfterSeconds >= 0) {
+      return Math.min(Math.round(retryAfterSeconds * 1000), MAX_RATE_LIMIT_RETRY_MS);
+    }
+
+    const retryAt = Date.parse(trimmed);
+    if (!Number.isNaN(retryAt)) {
+      const waitMs = retryAt - Date.now();
+      if (waitMs >= 0) {
+        return Math.min(waitMs, MAX_RATE_LIMIT_RETRY_MS);
+      }
+    }
+
+    return DEFAULT_RATE_LIMIT_RETRY_MS;
   }
 
   // Set API token
@@ -445,8 +473,7 @@ class ApiClient {
 
     // Handle rate limiting with automatic retry
     if (response.status === 429) {
-      const retryAfter = response.headers.get('Retry-After');
-      const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : 2000; // Default 2 seconds
+      const waitTime = this.parseRetryAfterMs(response.headers.get('Retry-After'));
 
       logger.warn(`Rate limit hit, retrying after ${waitTime}ms`);
 
