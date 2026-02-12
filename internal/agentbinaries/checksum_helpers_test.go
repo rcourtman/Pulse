@@ -85,6 +85,27 @@ func TestHashFileSHA256(t *testing.T) {
 			t.Fatalf("expected error from hashFileSHA256")
 		}
 	})
+
+	t.Run("read error", func(t *testing.T) {
+		restore := saveHostAgentHooks()
+		t.Cleanup(restore)
+
+		closedFile, err := os.CreateTemp(t.TempDir(), "closed-*")
+		if err != nil {
+			t.Fatalf("create temp file: %v", err)
+		}
+		if err := closedFile.Close(); err != nil {
+			t.Fatalf("close temp file: %v", err)
+		}
+
+		openFileFn = func(string) (*os.File, error) {
+			return closedFile, nil
+		}
+
+		if _, err := hashFileSHA256("bundle.tar.gz"); err == nil {
+			t.Fatalf("expected hashFileSHA256 read error")
+		}
+	})
 }
 
 func TestDownloadHostAgentChecksum(t *testing.T) {
