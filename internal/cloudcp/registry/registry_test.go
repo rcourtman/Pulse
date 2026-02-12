@@ -383,6 +383,28 @@ func TestMembershipCRUD(t *testing.T) {
 	}
 }
 
+func TestCreateMembership_RequiresExistingAccountAndUser(t *testing.T) {
+	reg := newTestRegistry(t)
+
+	accountID, err := GenerateAccountID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	userID, err := GenerateUserID()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = reg.CreateMembership(&AccountMembership{
+		AccountID: accountID,
+		UserID:    userID,
+		Role:      MemberRoleOwner,
+	})
+	if err == nil {
+		t.Fatal("expected CreateMembership to fail when account/user do not exist")
+	}
+}
+
 func TestList(t *testing.T) {
 	reg := newTestRegistry(t)
 
@@ -648,6 +670,20 @@ func TestStripeAccountCRUD(t *testing.T) {
 	}
 	if got3.UpdatedAt == 0 {
 		t.Error("UpdatedAt should be set")
+	}
+}
+
+func TestCreateStripeAccount_RequiresExistingAccount(t *testing.T) {
+	reg := newTestRegistry(t)
+
+	sa := &StripeAccount{
+		AccountID:         "a_missing123",
+		StripeCustomerID:  "cus_missing_123",
+		PlanVersion:       "msp_hosted_v1",
+		SubscriptionState: "trial",
+	}
+	if err := reg.CreateStripeAccount(sa); err == nil {
+		t.Fatal("expected CreateStripeAccount to fail when account does not exist")
 	}
 }
 
