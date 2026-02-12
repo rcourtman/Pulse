@@ -162,22 +162,22 @@ func DownloadAndInstallHostAgentBinaries(version string, targetDir string) error
 		return fmt.Errorf("failed to ensure bin directory %s: %w", targetDir, err)
 	}
 
-	url := downloadURLForVersion(normalizedVersion)
+	bundleURL := downloadURLForVersion(normalizedVersion)
 	tempFile, err := createTempFn("", "pulse-host-agent-*.tar.gz")
 	if err != nil {
 		return fmt.Errorf("failed to create temporary archive file: %w", err)
 	}
 	defer removeFn(tempFile.Name())
 
-	resp, err := httpClient.Get(url)
+	resp, err := httpClient.Get(bundleURL)
 	if err != nil {
-		return fmt.Errorf("failed to download host agent bundle from %s: %w", url, err)
+		return fmt.Errorf("failed to download host agent bundle from %s: %w", bundleURL, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
-		return fmt.Errorf("unexpected status %d downloading %s: %s", resp.StatusCode, url, strings.TrimSpace(string(body)))
+		return fmt.Errorf("unexpected status %d downloading %s: %s", resp.StatusCode, bundleURL, strings.TrimSpace(string(body)))
 	}
 
 	if _, err := io.Copy(tempFile, resp.Body); err != nil {
@@ -189,7 +189,7 @@ func DownloadAndInstallHostAgentBinaries(version string, targetDir string) error
 	}
 
 	checksumURL := checksumURLForVersion(normalizedVersion)
-	if err := verifyHostAgentBundleChecksum(tempFile.Name(), url, checksumURL); err != nil {
+	if err := verifyHostAgentBundleChecksum(tempFile.Name(), bundleURL, checksumURL); err != nil {
 		return fmt.Errorf("agentbinaries.DownloadAndInstallHostAgentBinaries: %w", err)
 	}
 
