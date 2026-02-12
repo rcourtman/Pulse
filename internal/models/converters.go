@@ -336,7 +336,7 @@ func (c KubernetesCluster) ToFrontend() KubernetesClusterFrontend {
 		PendingUninstall:  c.PendingUninstall,
 	}
 
-	if c.TokenLastUsedAt != nil {
+	if c.TokenLastUsedAt != nil && !c.TokenLastUsedAt.IsZero() {
 		ts := c.TokenLastUsedAt.Unix() * 1000
 		cluster.TokenLastUsedAt = &ts
 	}
