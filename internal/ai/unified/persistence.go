@@ -3,6 +3,8 @@ package unified
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -32,7 +34,7 @@ func (p *FilePersistence) SaveFindings(findings map[string]*UnifiedFinding) erro
 
 	// Ensure directory exists
 	if err := os.MkdirAll(p.dataDir, 0755); err != nil {
-		return err
+		return fmt.Errorf("unified.FilePersistence.SaveFindings: create data directory %q: %w", p.dataDir, err)
 	}
 
 	// Convert to list for cleaner JSON
@@ -43,7 +45,7 @@ func (p *FilePersistence) SaveFindings(findings map[string]*UnifiedFinding) erro
 
 	data, err := json.MarshalIndent(findingsList, "", "  ")
 	if err != nil {
-		return err
+		return fmt.Errorf("unified.FilePersistence.SaveFindings: marshal findings: %w", err)
 	}
 
 	filePath := filepath.Join(p.dataDir, p.filename)
@@ -51,13 +53,17 @@ func (p *FilePersistence) SaveFindings(findings map[string]*UnifiedFinding) erro
 
 	// Write to temp file first
 	if err := os.WriteFile(tempPath, data, 0644); err != nil {
-		return err
+		return fmt.Errorf("unified.FilePersistence.SaveFindings: write temp file %q: %w", tempPath, err)
 	}
 
 	// Atomic rename
 	if err := os.Rename(tempPath, filePath); err != nil {
-		os.Remove(tempPath)
-		return err
+		removeErr := os.Remove(tempPath)
+		renameErr := fmt.Errorf("unified.FilePersistence.SaveFindings: rename %q to %q: %w", tempPath, filePath, err)
+		if removeErr != nil && !os.IsNotExist(removeErr) {
+			return errors.Join(renameErr, fmt.Errorf("unified.FilePersistence.SaveFindings: remove temp file %q: %w", tempPath, removeErr))
+		}
+		return renameErr
 	}
 
 	log.Debug().
@@ -80,7 +86,7 @@ func (p *FilePersistence) LoadFindings() (map[string]*UnifiedFinding, error) {
 		if os.IsNotExist(err) {
 			return make(map[string]*UnifiedFinding), nil
 		}
-		return nil, err
+		return nil, fmt.Errorf("unified.FilePersistence.LoadFindings: read file %q: %w", filePath, err)
 	}
 
 	var findingsList []*UnifiedFinding
@@ -130,7 +136,7 @@ func (p *VersionedPersistence) SaveFindings(findings map[string]*UnifiedFinding)
 
 	// Ensure directory exists
 	if err := os.MkdirAll(p.dataDir, 0755); err != nil {
-		return err
+		return fmt.Errorf("unified.VersionedPersistence.SaveFindings: create data directory %q: %w", p.dataDir, err)
 	}
 
 	state := persistedState{
@@ -144,19 +150,23 @@ func (p *VersionedPersistence) SaveFindings(findings map[string]*UnifiedFinding)
 
 	data, err := json.MarshalIndent(state, "", "  ")
 	if err != nil {
-		return err
+		return fmt.Errorf("unified.VersionedPersistence.SaveFindings: marshal findings state: %w", err)
 	}
 
 	filePath := filepath.Join(p.dataDir, p.filename)
 	tempPath := filePath + ".tmp"
 
 	if err := os.WriteFile(tempPath, data, 0644); err != nil {
-		return err
+		return fmt.Errorf("unified.VersionedPersistence.SaveFindings: write temp file %q: %w", tempPath, err)
 	}
 
 	if err := os.Rename(tempPath, filePath); err != nil {
-		os.Remove(tempPath)
-		return err
+		removeErr := os.Remove(tempPath)
+		renameErr := fmt.Errorf("unified.VersionedPersistence.SaveFindings: rename %q to %q: %w", tempPath, filePath, err)
+		if removeErr != nil && !os.IsNotExist(removeErr) {
+			return errors.Join(renameErr, fmt.Errorf("unified.VersionedPersistence.SaveFindings: remove temp file %q: %w", tempPath, removeErr))
+		}
+		return renameErr
 	}
 
 	return nil
@@ -174,7 +184,7 @@ func (p *VersionedPersistence) LoadFindings() (map[string]*UnifiedFinding, error
 		if os.IsNotExist(err) {
 			return make(map[string]*UnifiedFinding), nil
 		}
-		return nil, err
+		return nil, fmt.Errorf("unified.VersionedPersistence.LoadFindings: read file %q: %w", filePath, err)
 	}
 
 	// Try versioned format first
