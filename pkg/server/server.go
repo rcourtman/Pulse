@@ -504,8 +504,23 @@ func PerformAutoImport() error {
 	configData := os.Getenv("PULSE_INIT_CONFIG_DATA")
 	configFile := os.Getenv("PULSE_INIT_CONFIG_FILE")
 	configPass := os.Getenv("PULSE_INIT_CONFIG_PASSPHRASE")
+	source := "none"
+	if configFile != "" {
+		source = "file"
+	} else if configData != "" {
+		source = "env_data"
+	}
+
+	logAudit := func(success bool, reason string) {
+		details := "source=" + source
+		if reason != "" {
+			details += " reason=" + reason
+		}
+		audit.Log("config_auto_import", "system", "", "/startup/auto-import", success, details)
+	}
 
 	if configPass == "" {
+		logAudit(false, "missing_passphrase")
 		return fmt.Errorf("PULSE_INIT_CONFIG_PASSPHRASE is required for auto-import")
 	}
 
@@ -514,20 +529,24 @@ func PerformAutoImport() error {
 	if configFile != "" {
 		data, err := os.ReadFile(configFile)
 		if err != nil {
+			logAudit(false, "read_config_file_failed")
 			return fmt.Errorf("failed to read config file: %w", err)
 		}
 		payload, err := NormalizeImportPayload(data)
 		if err != nil {
+			logAudit(false, "normalize_payload_failed")
 			return err
 		}
 		encryptedData = payload
 	} else if configData != "" {
 		payload, err := NormalizeImportPayload([]byte(configData))
 		if err != nil {
+			logAudit(false, "normalize_payload_failed")
 			return err
 		}
 		encryptedData = payload
 	} else {
+		logAudit(false, "missing_payload")
 		return fmt.Errorf("no config data provided")
 	}
 
@@ -538,9 +557,11 @@ func PerformAutoImport() error {
 
 	persistence := config.NewConfigPersistence(configPath)
 	if err := persistence.ImportConfig(encryptedData, configPass); err != nil {
+		logAudit(false, "import_failed")
 		return fmt.Errorf("failed to import configuration: %w", err)
 	}
 
+	logAudit(true, "")
 	log.Info().Msg("Configuration auto-imported successfully")
 	return nil
 }

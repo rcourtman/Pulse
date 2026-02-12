@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -36,6 +37,8 @@ func TestBusinessHooks(t *testing.T) {
 }
 
 func TestPerformAutoImport_Success(t *testing.T) {
+	capture := setCaptureAuditLogger(t)
+
 	// Setup temp directory
 	tmpDir := t.TempDir()
 	t.Setenv("PULSE_DATA_DIR", tmpDir)
@@ -57,6 +60,27 @@ func TestPerformAutoImport_Success(t *testing.T) {
 	// Run PerformAutoImport
 	if err := PerformAutoImport(); err != nil {
 		t.Fatalf("PerformAutoImport failed: %v", err)
+	}
+
+	if len(capture.events) != 1 {
+		t.Fatalf("expected 1 audit event, got %d", len(capture.events))
+	}
+
+	event := capture.events[0]
+	if event.EventType != "config_auto_import" {
+		t.Fatalf("unexpected event type: %s", event.EventType)
+	}
+	if !event.Success {
+		t.Fatal("expected success audit event")
+	}
+	if event.User != "system" {
+		t.Fatalf("unexpected audit user: %q", event.User)
+	}
+	if event.Path != "/startup/auto-import" {
+		t.Fatalf("unexpected audit path: %q", event.Path)
+	}
+	if !strings.Contains(event.Details, "source=env_data") {
+		t.Fatalf("expected source in details, got %q", event.Details)
 	}
 
 	// Verify persistence file created (nodes.enc is a good indicator)
