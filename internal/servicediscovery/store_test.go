@@ -544,3 +544,230 @@ func TestStore_DeleteError(t *testing.T) {
 		t.Fatalf("expected delete error for non-empty dir")
 	}
 }
+
+func TestStore_FingerprintAccessorsAndCleanup(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore error: %v", err)
+	}
+
+	scanTime := time.Now().UTC().Truncate(time.Second)
+	store.SetLastFingerprintScan(scanTime)
+	if !store.GetLastFingerprintScan().Equal(scanTime) {
+		t.Fatalf("unexpected last scan timestamp: got %v want %v", store.GetLastFingerprintScan(), scanTime)
+	}
+
+	fpKeep := &ContainerFingerprint{
+		ResourceID: "docker:host1:web",
+		HostID:     "host1",
+		Hash:       "hash-keep",
+	}
+	fpDrop := &ContainerFingerprint{
+		ResourceID: "lxc:node1:101",
+		HostID:     "node1",
+		Hash:       "hash-drop",
+	}
+	for _, fp := range []*ContainerFingerprint{fpKeep, fpDrop} {
+		if err := store.SaveFingerprint(fp); err != nil {
+			t.Fatalf("SaveFingerprint error: %v", err)
+		}
+	}
+
+	if count := store.GetFingerprintCount(); count != 2 {
+		t.Fatalf("expected 2 fingerprints, got %d", count)
+	}
+	got, err := store.GetFingerprint(fpKeep.ResourceID)
+	if err != nil {
+		t.Fatalf("GetFingerprint error: %v", err)
+	}
+	if got == nil || got.Hash != fpKeep.Hash {
+		t.Fatalf("unexpected fingerprint: %#v", got)
+	}
+
+	all := store.GetAllFingerprints()
+	if len(all) != 2 {
+		t.Fatalf("expected 2 fingerprints in copy, got %d", len(all))
+	}
+	delete(all, fpKeep.ResourceID)
+	if count := store.GetFingerprintCount(); count != 2 {
+		t.Fatalf("expected internal fingerprint map to be unchanged, got %d", count)
+	}
+
+	removed := store.CleanupOrphanedFingerprints(map[string]bool{fpKeep.ResourceID: true})
+	if removed != 1 {
+		t.Fatalf("expected 1 orphaned fingerprint removed, got %d", removed)
+	}
+	if count := store.GetFingerprintCount(); count != 1 {
+		t.Fatalf("expected 1 fingerprint after cleanup, got %d", count)
+	}
+	if _, err := os.Stat(store.getFingerprintFilePath(fpDrop.ResourceID)); !os.IsNotExist(err) {
+		t.Fatalf("expected dropped fingerprint file to be removed, stat err=%v", err)
+	}
+	if dropped, err := store.GetFingerprint(fpDrop.ResourceID); err != nil || dropped != nil {
+		t.Fatalf("expected dropped fingerprint to be missing, got %#v err=%v", dropped, err)
+	}
+}
+
+func TestFilenameToResourceID(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		filename string
+		want     string
+	}{
+		{
+			name:     "unparseable filename returns as is",
+			filename: "justonepart",
+			want:     "justonepart",
+		},
+		{
+			name:     "docker id round trip",
+			filename: "docker_host1_nginx",
+			want:     "docker:host1:nginx",
+		},
+		{
+			name:     "k8s namespace pod converted back to slash",
+			filename: "k8s_clusterA_namespace_pod",
+			want:     "k8s:clusterA:namespace/pod",
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := filenameToResourceID(tt.filename); got != tt.want {
+				t.Fatalf("filenameToResourceID(%q) = %q, want %q", tt.filename, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestStore_ListDiscoveryIDsAndCleanupOrphanedDiscoveries(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore error: %v", err)
+	}
+	store.crypto = nil
+
+	keep := &ResourceDiscovery{
+		ID:           MakeResourceID(ResourceTypeDocker, "host1", "web"),
+		ResourceType: ResourceTypeDocker,
+		ResourceID:   "web",
+		HostID:       "host1",
+	}
+	drop := &ResourceDiscovery{
+		ID:           MakeResourceID(ResourceTypeK8s, "cluster1", "namespace/pod-a"),
+		ResourceType: ResourceTypeK8s,
+		ResourceID:   "namespace/pod-a",
+		HostID:       "cluster1",
+	}
+	for _, d := range []*ResourceDiscovery{keep, drop} {
+		if err := store.Save(d); err != nil {
+			t.Fatalf("Save error: %v", err)
+		}
+	}
+
+	if err := os.WriteFile(filepath.Join(store.dataDir, "ignore.txt"), []byte("x"), 0600); err != nil {
+		t.Fatalf("WriteFile error: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(store.dataDir, "nested"), 0700); err != nil {
+		t.Fatalf("MkdirAll error: %v", err)
+	}
+
+	ids := store.ListDiscoveryIDs()
+	if len(ids) != 2 {
+		t.Fatalf("expected 2 discovery IDs, got %d (%v)", len(ids), ids)
+	}
+	if !containsString(ids, keep.ID) || !containsString(ids, drop.ID) {
+		t.Fatalf("expected discovery IDs to include %q and %q, got %v", keep.ID, drop.ID, ids)
+	}
+
+	removed := store.CleanupOrphanedDiscoveries(map[string]bool{keep.ID: true})
+	if removed != 1 {
+		t.Fatalf("expected 1 orphaned discovery removed, got %d", removed)
+	}
+
+	store.ClearCache()
+	if exists := store.Exists(drop.ID); exists {
+		t.Fatalf("expected dropped discovery to be removed")
+	}
+
+	remaining := store.ListDiscoveryIDs()
+	if len(remaining) != 1 || remaining[0] != keep.ID {
+		t.Fatalf("expected only kept discovery id %q, got %v", keep.ID, remaining)
+	}
+}
+
+func TestStore_ListDiscoveryIDsReadDirError(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore error: %v", err)
+	}
+
+	file := filepath.Join(t.TempDir(), "not-a-dir")
+	if err := os.WriteFile(file, []byte("x"), 0600); err != nil {
+		t.Fatalf("WriteFile error: %v", err)
+	}
+	store.dataDir = file
+
+	if ids := store.ListDiscoveryIDs(); ids != nil {
+		t.Fatalf("expected nil IDs when dataDir is unreadable, got %v", ids)
+	}
+}
+
+func TestStore_GetStaleResources(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore error: %v", err)
+	}
+	store.crypto = nil
+
+	old := &ResourceDiscovery{
+		ID:           MakeResourceID(ResourceTypeDocker, "host1", "old"),
+		ResourceType: ResourceTypeDocker,
+		ResourceID:   "old",
+		HostID:       "host1",
+		DiscoveredAt: time.Now().Add(-2 * time.Hour),
+	}
+	fresh := &ResourceDiscovery{
+		ID:           MakeResourceID(ResourceTypeDocker, "host1", "fresh"),
+		ResourceType: ResourceTypeDocker,
+		ResourceID:   "fresh",
+		HostID:       "host1",
+		DiscoveredAt: time.Now().Add(-5 * time.Minute),
+	}
+	for _, d := range []*ResourceDiscovery{old, fresh} {
+		if err := store.Save(d); err != nil {
+			t.Fatalf("Save error: %v", err)
+		}
+	}
+
+	stale, err := store.GetStaleResources(time.Hour)
+	if err != nil {
+		t.Fatalf("GetStaleResources error: %v", err)
+	}
+	if len(stale) != 1 || stale[0] != old.ID {
+		t.Fatalf("expected stale IDs [%q], got %v", old.ID, stale)
+	}
+
+	file := filepath.Join(t.TempDir(), "not-a-dir")
+	if err := os.WriteFile(file, []byte("x"), 0600); err != nil {
+		t.Fatalf("WriteFile error: %v", err)
+	}
+	store.dataDir = file
+
+	if _, err := store.GetStaleResources(time.Hour); err == nil {
+		t.Fatalf("expected GetStaleResources to return list error")
+	}
+}
+
+func containsString(items []string, target string) bool {
+	for _, item := range items {
+		if item == target {
+			return true
+		}
+	}
+	return false
+}
