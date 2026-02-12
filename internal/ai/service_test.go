@@ -326,9 +326,9 @@ func TestExtractVMIDFromCommand(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			vmid, owner, found := extractVMIDFromCommand(tt.command)
-			if vmid != tt.expectedVMID {
-				t.Errorf("Expected VMID %d, got %d", tt.expectedVMID, vmid)
+			vmID, owner, found := extractVMIDFromCommand(tt.command)
+			if vmID != tt.expectedVMID {
+				t.Errorf("Expected VMID %d, got %d", tt.expectedVMID, vmID)
 			}
 			if owner != tt.expectedOwner {
 				t.Errorf("Expected owner %v, got %v", tt.expectedOwner, owner)

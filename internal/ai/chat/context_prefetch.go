@@ -389,32 +389,32 @@ func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMen
 
 		switch resourceType {
 		case "vm":
-			vmid := ""
+			vmID := ""
 			node := sm.Node
 			if len(parts) >= 3 {
 				node = parts[1]
-				vmid = parts[2]
+				vmID = parts[2]
 			}
 			mentions = append(mentions, ResourceMention{
 				Name:         sm.Name,
 				ResourceType: "vm",
-				ResourceID:   vmid,
+				ResourceID:   vmID,
 				HostID:       node,
 				MatchedText:  sm.Name,
 				TargetHost:   loc.TargetHost,
 			})
 
 		case "lxc":
-			vmid := ""
+			vmID := ""
 			node := sm.Node
 			if len(parts) >= 3 {
 				node = parts[1]
-				vmid = parts[2]
+				vmID = parts[2]
 			}
 			mentions = append(mentions, ResourceMention{
 				Name:         sm.Name,
 				ResourceType: "lxc",
-				ResourceID:   vmid,
+				ResourceID:   vmID,
 				HostID:       node,
 				MatchedText:  sm.Name,
 				TargetHost:   loc.TargetHost,

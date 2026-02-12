@@ -378,7 +378,7 @@ type mockResource struct {
 	targetHost     string
 	agentID        string
 	adapter        string
-	vmid           int
+	vmID           int
 	node           string
 	allowedActions []string
 	providerUID    string
@@ -391,7 +391,7 @@ func (m *mockResource) GetResourceType() string     { return m.resourceType }
 func (m *mockResource) GetTargetHost() string       { return m.targetHost }
 func (m *mockResource) GetAgentID() string          { return m.agentID }
 func (m *mockResource) GetAdapter() string          { return m.adapter }
-func (m *mockResource) GetVMID() int                { return m.vmid }
+func (m *mockResource) GetVMID() int                { return m.vmID }
 func (m *mockResource) GetNode() string             { return m.node }
 func (m *mockResource) GetAllowedActions() []string { return m.allowedActions }
 func (m *mockResource) GetProviderUID() string      { return m.providerUID }
@@ -700,7 +700,7 @@ func TestRoutingValidation_HostIntendedOperationNotBlocked(t *testing.T) {
 				resourceID:   "lxc:141",
 				kind:         "lxc",
 				node:         "delly",
-				vmid:         141,
+				vmID:         141,
 				targetHost:   "homepage-docker",
 				providerUID:  "141",
 				resourceType: "lxc",
@@ -753,7 +753,7 @@ func TestRoutingValidation_ChildIntendedOperationBlocked(t *testing.T) {
 				resourceID:   "lxc:141",
 				kind:         "lxc",
 				node:         "delly",
-				vmid:         141,
+				vmID:         141,
 				targetHost:   "homepage-docker",
 				providerUID:  "141",
 				resourceType: "lxc",

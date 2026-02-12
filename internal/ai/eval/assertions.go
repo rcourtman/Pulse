@@ -1,6 +1,7 @@
 package eval
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 )
@@ -592,6 +593,216 @@ func AssertApprovalRequested() Assertion {
 			Name:    "approval_requested",
 			Passed:  false,
 			Message: "No approval requests were captured",
+		}
+	}
+}
+
+type exploreStatusEvent struct {
+	Phase   string `json:"phase"`
+	Message string `json:"message"`
+	Model   string `json:"model,omitempty"`
+	Outcome string `json:"outcome,omitempty"`
+}
+
+func parseExploreStatusEvents(rawEvents []SSEEvent) ([]exploreStatusEvent, error) {
+	events := make([]exploreStatusEvent, 0, len(rawEvents))
+	for _, raw := range rawEvents {
+		if raw.Type != "explore_status" {
+			continue
+		}
+		var data exploreStatusEvent
+		if err := json.Unmarshal(raw.Data, &data); err != nil {
+			return nil, fmt.Errorf("invalid explore_status payload: %w", err)
+		}
+		events = append(events, data)
+	}
+	return events, nil
+}
+
+// AssertExploreStatusSeen checks that at least one explore_status event is emitted.
+func AssertExploreStatusSeen() Assertion {
+	return func(result *StepResult) AssertionResult {
+		events, err := parseExploreStatusEvents(result.RawEvents)
+		if err != nil {
+			return AssertionResult{
+				Name:    "explore_status_seen",
+				Passed:  false,
+				Message: err.Error(),
+			}
+		}
+		if len(events) == 0 {
+			return AssertionResult{
+				Name:    "explore_status_seen",
+				Passed:  false,
+				Message: "No explore_status events captured",
+			}
+		}
+		return AssertionResult{
+			Name:    "explore_status_seen",
+			Passed:  true,
+			Message: fmt.Sprintf("%d explore_status event(s) captured", len(events)),
+		}
+	}
+}
+
+// AssertExploreLifecycleValid checks explore_status phase ordering and required fields.
+func AssertExploreLifecycleValid() Assertion {
+	return func(result *StepResult) AssertionResult {
+		events, err := parseExploreStatusEvents(result.RawEvents)
+		if err != nil {
+			return AssertionResult{
+				Name:    "explore_lifecycle_valid",
+				Passed:  false,
+				Message: err.Error(),
+			}
+		}
+		if len(events) == 0 {
+			return AssertionResult{
+				Name:    "explore_lifecycle_valid",
+				Passed:  false,
+				Message: "No explore_status events captured",
+			}
+		}
+
+		allowed := map[string]struct{}{
+			"started":   {},
+			"completed": {},
+			"failed":    {},
+			"skipped":   {},
+		}
+		terminal := map[string]struct{}{
+			"completed": {},
+			"failed":    {},
+			"skipped":   {},
+		}
+
+		first := events[0]
+		if first.Phase != "started" && first.Phase != "skipped" {
+			return AssertionResult{
+				Name:    "explore_lifecycle_valid",
+				Passed:  false,
+				Message: fmt.Sprintf("First explore phase must be started or skipped, got %q", first.Phase),
+			}
+		}
+
+		lastTerminalIdx := -1
+		lastTerminal := ""
+		for i, evt := range events {
+			if _, ok := allowed[evt.Phase]; !ok {
+				return AssertionResult{
+					Name:    "explore_lifecycle_valid",
+					Passed:  false,
+					Message: fmt.Sprintf("Unknown explore phase %q", evt.Phase),
+				}
+			}
+			if strings.TrimSpace(evt.Message) == "" {
+				return AssertionResult{
+					Name:    "explore_lifecycle_valid",
+					Passed:  false,
+					Message: fmt.Sprintf("Explore event at index %d has empty message", i),
+				}
+			}
+			if evt.Phase == "started" && strings.TrimSpace(evt.Model) == "" {
+				return AssertionResult{
+					Name:    "explore_lifecycle_valid",
+					Passed:  false,
+					Message: "Explore started event missing model",
+				}
+			}
+			if evt.Phase == "completed" || evt.Phase == "failed" || evt.Phase == "skipped" {
+				if strings.TrimSpace(evt.Outcome) == "" {
+					return AssertionResult{
+						Name:    "explore_lifecycle_valid",
+						Passed:  false,
+						Message: fmt.Sprintf("Explore %s event missing outcome", evt.Phase),
+					}
+				}
+			}
+			if evt.Phase == "skipped" && !strings.HasPrefix(evt.Outcome, "skipped_") {
+				return AssertionResult{
+					Name:    "explore_lifecycle_valid",
+					Passed:  false,
+					Message: fmt.Sprintf("Explore skipped outcome must start with skipped_, got %q", evt.Outcome),
+				}
+			}
+			if _, ok := terminal[evt.Phase]; ok {
+				lastTerminalIdx = i
+				lastTerminal = evt.Phase
+			}
+		}
+
+		if lastTerminalIdx == -1 {
+			return AssertionResult{
+				Name:    "explore_lifecycle_valid",
+				Passed:  false,
+				Message: "Explore lifecycle missing terminal phase (completed/failed/skipped)",
+			}
+		}
+
+		// If explore started, terminal must happen after start and must not be skipped.
+		if first.Phase == "started" {
+			if lastTerminalIdx == 0 {
+				return AssertionResult{
+					Name:    "explore_lifecycle_valid",
+					Passed:  false,
+					Message: "Explore started without a later terminal phase",
+				}
+			}
+			if lastTerminal == "skipped" {
+				return AssertionResult{
+					Name:    "explore_lifecycle_valid",
+					Passed:  false,
+					Message: "Explore cannot transition from started to skipped",
+				}
+			}
+		}
+
+		return AssertionResult{
+			Name:    "explore_lifecycle_valid",
+			Passed:  true,
+			Message: fmt.Sprintf("Explore lifecycle valid: first=%s terminal=%s events=%d", first.Phase, lastTerminal, len(events)),
+		}
+	}
+}
+
+// AssertExploreFallbackHasContent checks that failed/skipped explore still yields assistant content.
+func AssertExploreFallbackHasContent() Assertion {
+	return func(result *StepResult) AssertionResult {
+		events, err := parseExploreStatusEvents(result.RawEvents)
+		if err != nil {
+			return AssertionResult{
+				Name:    "explore_fallback_has_content",
+				Passed:  false,
+				Message: err.Error(),
+			}
+		}
+		if len(events) == 0 {
+			return AssertionResult{
+				Name:    "explore_fallback_has_content",
+				Passed:  false,
+				Message: "No explore_status events captured",
+			}
+		}
+
+		terminal := events[len(events)-1]
+		if terminal.Phase != "failed" && terminal.Phase != "skipped" {
+			return AssertionResult{
+				Name:    "explore_fallback_has_content",
+				Passed:  true,
+				Message: fmt.Sprintf("Explore terminal phase %q does not require fallback check", terminal.Phase),
+			}
+		}
+		if strings.TrimSpace(result.Content) == "" {
+			return AssertionResult{
+				Name:    "explore_fallback_has_content",
+				Passed:  false,
+				Message: fmt.Sprintf("Explore terminal=%s but assistant content is empty", terminal.Phase),
+			}
+		}
+		return AssertionResult{
+			Name:    "explore_fallback_has_content",
+			Passed:  true,
+			Message: fmt.Sprintf("Explore terminal=%s and assistant content is present", terminal.Phase),
 		}
 	}
 }

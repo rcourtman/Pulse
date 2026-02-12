@@ -87,22 +87,22 @@ func (s *Service) routeToAgent(req ExecuteRequest, command string, agents []agen
 	}
 
 	// Step 1: Try VMID-based routing (most authoritative for pct/qm commands)
-	if vmid, requiresOwnerNode, found := extractVMIDFromCommand(command); found && requiresOwnerNode {
+	if vmID, requiresOwnerNode, found := extractVMIDFromCommand(command); found && requiresOwnerNode {
 		targetInstance := ""
 		if inst, ok := req.Context["instance"].(string); ok {
 			targetInstance = inst
 		}
 
-		guests := s.lookupGuestsByVMID(vmid, targetInstance)
+		guests := s.lookupGuestsByVMID(vmID, targetInstance)
 
 		if len(guests) == 0 {
 			result.Warnings = append(result.Warnings,
-				fmt.Sprintf("VMID %d not found in Pulse state - routing based on context", vmid))
+				fmt.Sprintf("VMID %d not found in Pulse state - routing based on context", vmID))
 		} else if len(guests) == 1 {
 			result.TargetNode = strings.ToLower(guests[0].Node)
 			result.RoutingMethod = "vmid_lookup"
 			log.Info().
-				Int("vmid", vmid).
+				Int("vmid", vmID).
 				Str("node", guests[0].Node).
 				Str("guest_name", guests[0].Name).
 				Msg("Routed command via VMID state lookup")
@@ -114,7 +114,7 @@ func (s *Service) routeToAgent(req ExecuteRequest, command string, agents []agen
 						result.TargetNode = strings.ToLower(g.Node)
 						result.RoutingMethod = "vmid_lookup_with_instance"
 						log.Info().
-							Int("vmid", vmid).
+							Int("vmid", vmID).
 							Str("node", g.Node).
 							Str("instance", g.Instance).
 							Msg("Resolved VMID collision using instance")
@@ -129,10 +129,10 @@ func (s *Service) routeToAgent(req ExecuteRequest, command string, agents []agen
 					locations = append(locations, fmt.Sprintf("%s on %s (%s)", g.Name, g.Node, g.Instance))
 				}
 				return nil, &RoutingError{
-					TargetVMID:      vmid,
+					TargetVMID:      vmID,
 					AvailableAgents: agentHostnames,
 					Reason: fmt.Sprintf("VMID %d exists on multiple nodes: %s",
-						vmid, strings.Join(locations, ", ")),
+						vmID, strings.Join(locations, ", ")),
 					Suggestion: "Specify the instance/cluster in your query to disambiguate",
 				}
 			}
@@ -194,8 +194,8 @@ func (s *Service) routeToAgent(req ExecuteRequest, command string, agents []agen
 
 	// Step 3: Extract VMID from target ID and look up in state
 	if result.TargetNode == "" && req.TargetID != "" {
-		if vmid := extractVMIDFromTargetID(req.TargetID); vmid > 0 {
-			result.TargetVMID = strconv.Itoa(vmid)
+		if vmID := extractVMIDFromTargetID(req.TargetID); vmID > 0 {
+			result.TargetVMID = strconv.Itoa(vmID)
 
 			// Try instance from context
 			targetInstance := ""
@@ -203,12 +203,12 @@ func (s *Service) routeToAgent(req ExecuteRequest, command string, agents []agen
 				targetInstance = inst
 			}
 
-			guests := s.lookupGuestsByVMID(vmid, targetInstance)
+			guests := s.lookupGuestsByVMID(vmID, targetInstance)
 			if len(guests) == 1 {
 				result.TargetNode = strings.ToLower(guests[0].Node)
 				result.RoutingMethod = "target_id_vmid_lookup"
 				log.Debug().
-					Int("vmid", vmid).
+					Int("vmid", vmID).
 					Str("node", guests[0].Node).
 					Str("target_id", req.TargetID).
 					Msg("Resolved node from target ID VMID lookup")
@@ -302,15 +302,15 @@ func extractVMIDFromTargetID(targetID string) int {
 	}
 
 	// Try parsing the whole thing as a number first
-	if vmid, err := strconv.Atoi(targetID); err == nil && vmid > 0 {
-		return vmid
+	if vmID, err := strconv.Atoi(targetID); err == nil && vmID > 0 {
+		return vmID
 	}
 
 	// Split by hyphen and take the last numeric part
 	parts := strings.Split(targetID, "-")
 	for i := len(parts) - 1; i >= 0; i-- {
-		if vmid, err := strconv.Atoi(parts[i]); err == nil && vmid > 0 {
-			return vmid
+		if vmID, err := strconv.Atoi(parts[i]); err == nil && vmID > 0 {
+			return vmID
 		}
 	}
 

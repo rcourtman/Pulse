@@ -131,7 +131,7 @@ type BackupProvider interface {
 
 // GuestConfigProvider provides guest configuration data (VM/LXC).
 type GuestConfigProvider interface {
-	GetGuestConfig(guestType, instance, node string, vmid int) (map[string]interface{}, error)
+	GetGuestConfig(guestType, instance, node string, vmID int) (map[string]interface{}, error)
 }
 
 // DiskHealthProvider provides disk health information from host agents

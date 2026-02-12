@@ -60,7 +60,7 @@ func (a *AlertManagerMCPAdapter) GetActiveAlerts() []ActiveAlert {
 
 // GuestConfigSource provides guest configuration data with context.
 type GuestConfigSource interface {
-	GetGuestConfig(ctx context.Context, guestType, instance, node string, vmid int) (map[string]interface{}, error)
+	GetGuestConfig(ctx context.Context, guestType, instance, node string, vmID int) (map[string]interface{}, error)
 }
 
 // GuestConfigMCPAdapter adapts monitoring config access to MCP GuestConfigProvider interface.
@@ -81,13 +81,13 @@ func NewGuestConfigMCPAdapter(source GuestConfigSource) *GuestConfigMCPAdapter {
 }
 
 // GetGuestConfig implements mcp.GuestConfigProvider.
-func (a *GuestConfigMCPAdapter) GetGuestConfig(guestType, instance, node string, vmid int) (map[string]interface{}, error) {
+func (a *GuestConfigMCPAdapter) GetGuestConfig(guestType, instance, node string, vmID int) (map[string]interface{}, error) {
 	if a == nil || a.source == nil {
 		return nil, fmt.Errorf("guest config source not available")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), a.timeout)
 	defer cancel()
-	return a.source.GetGuestConfig(ctx, guestType, instance, node, vmid)
+	return a.source.GetGuestConfig(ctx, guestType, instance, node, vmID)
 }
 
 // BackupMCPAdapter adapts the monitor state to MCP BackupProvider interface

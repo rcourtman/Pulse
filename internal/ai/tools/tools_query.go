@@ -2769,7 +2769,7 @@ func (e *PulseToolExecutor) executeGetGuestConfig(_ context.Context, args map[st
 
 	var (
 		guestType string
-		vmid      int
+		vmID      int
 		name      string
 		node      string
 		instance  string
@@ -2779,19 +2779,19 @@ func (e *PulseToolExecutor) executeGetGuestConfig(_ context.Context, args map[st
 	if err != nil {
 		return NewErrorResult(err), nil
 	}
-	guestType, vmid, name, node, instance, err = resolveGuestFromReadState(rs, resourceType, resourceID)
+	guestType, vmID, name, node, instance, err = resolveGuestFromReadState(rs, resourceType, resourceID)
 	if err != nil {
 		return NewErrorResult(err), nil
 	}
 
-	rawConfig, err := e.guestConfigProvider.GetGuestConfig(guestType, instance, node, vmid)
+	rawConfig, err := e.guestConfigProvider.GetGuestConfig(guestType, instance, node, vmID)
 	if err != nil {
 		return NewErrorResult(err), nil
 	}
 
 	response := GuestConfigResponse{
 		GuestType: guestType,
-		VMID:      vmid,
+		VMID:      vmID,
 		Name:      name,
 		Node:      node,
 		Instance:  instance,
@@ -2817,7 +2817,7 @@ func (e *PulseToolExecutor) executeGetGuestConfig(_ context.Context, args map[st
 	return NewJSONResult(response), nil
 }
 
-func resolveGuestFromReadState(rs unifiedresources.ReadState, resourceType, resourceID string) (guestType string, vmid int, name, node, instance string, err error) {
+func resolveGuestFromReadState(rs unifiedresources.ReadState, resourceType, resourceID string) (guestType string, vmID int, name, node, instance string, err error) {
 	resourceType = strings.ToLower(strings.TrimSpace(resourceType))
 	resourceID = strings.TrimSpace(resourceID)
 	if resourceType == "" || resourceID == "" {

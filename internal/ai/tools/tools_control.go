@@ -382,7 +382,7 @@ func (e *PulseToolExecutor) executeControlGuest(ctx context.Context, args map[st
 	return NewJSONResultWithIsError(response, !success), nil
 }
 
-func (e *PulseToolExecutor) verifyGuestAction(ctx context.Context, agentID, cmdTool string, vmid int, action string) map[string]interface{} {
+func (e *PulseToolExecutor) verifyGuestAction(ctx context.Context, agentID, cmdTool string, vmID int, action string) map[string]interface{} {
 	expect := ""
 	switch action {
 	case "start", "restart":
@@ -393,7 +393,7 @@ func (e *PulseToolExecutor) verifyGuestAction(ctx context.Context, agentID, cmdT
 		expect = "deleted"
 	}
 
-	statusCmd := fmt.Sprintf("%s status %d", cmdTool, vmid)
+	statusCmd := fmt.Sprintf("%s status %d", cmdTool, vmID)
 	res, err := e.agentServer.ExecuteCommand(ctx, agentID, agentexec.ExecuteCommandPayload{
 		Command:    statusCmd,
 		TargetType: "host",
@@ -633,9 +633,9 @@ func (e *PulseToolExecutor) resolveGuest(guestID string) (*GuestInfo, error) {
 		return nil, err
 	}
 
-	vmid, convErr := strconv.Atoi(guestID)
+	vmID, convErr := strconv.Atoi(guestID)
 	for _, vm := range rs.VMs() {
-		if (convErr == nil && vm.VMID() == vmid) || vm.Name() == guestID || vm.ID() == guestID {
+		if (convErr == nil && vm.VMID() == vmID) || vm.Name() == guestID || vm.ID() == guestID {
 			return &GuestInfo{
 				VMID:     vm.VMID(),
 				Name:     vm.Name(),
@@ -648,7 +648,7 @@ func (e *PulseToolExecutor) resolveGuest(guestID string) (*GuestInfo, error) {
 	}
 
 	for _, ct := range rs.Containers() {
-		if (convErr == nil && ct.VMID() == vmid) || ct.Name() == guestID || ct.ID() == guestID {
+		if (convErr == nil && ct.VMID() == vmID) || ct.Name() == guestID || ct.ID() == guestID {
 			return &GuestInfo{
 				VMID:     ct.VMID(),
 				Name:     ct.Name(),
@@ -1056,12 +1056,12 @@ func formatAvailableAgentHosts(agents []agentexec.ConnectedAgent) string {
 	return msg
 }
 
-func formatControlApprovalNeeded(name string, vmid int, action, command, approvalID string) string {
+func formatControlApprovalNeeded(name string, vmID int, action, command, approvalID string) string {
 	payload := map[string]interface{}{
 		"type":           "approval_required",
 		"approval_id":    approvalID,
 		"guest_name":     name,
-		"guest_vmid":     vmid,
+		"guest_vmid":     vmID,
 		"action":         action,
 		"command":        command,
 		"how_to_approve": "Click the approval button in the chat to execute this action.",
