@@ -267,3 +267,11 @@ func TestClientResolveHostIDRequestErrors(t *testing.T) {
 		t.Fatalf("expected transport error, got %v", err)
 	}
 }
+
+func TestClientClose(t *testing.T) {
+	var nilClient *Client
+	nilClient.Close()
+
+	client := New(Config{})
+	client.Close()
+}

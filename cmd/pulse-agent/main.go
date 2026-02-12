@@ -164,6 +164,7 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 			InsecureSkipVerify: cfg.InsecureSkipVerify,
 			Logger:             logger,
 		})
+		defer rc.Close()
 
 		// Use a short timeout for config fetch so we don't block startup too long
 		rcCtx, rcCancel := context.WithTimeout(ctx, 10*time.Second)
