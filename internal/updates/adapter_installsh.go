@@ -514,9 +514,13 @@ func (a *InstallShAdapter) installBinary(ctx context.Context, sourcePath, target
 
 // waitForHealth waits for the service to become healthy
 func (a *InstallShAdapter) waitForHealth(ctx context.Context, timeout time.Duration) error {
-	deadline := time.Now().Add(timeout)
+	retryTicker := time.NewTicker(2 * time.Second)
+	defer retryTicker.Stop()
 
-	for time.Now().Before(deadline) {
+	timeoutTimer := time.NewTimer(timeout)
+	defer timeoutTimer.Stop()
+
+	for {
 		// Try to hit health endpoint
 		cmd := exec.CommandContext(ctx, "curl", "-fsS", "http://localhost:7655/api/health")
 		if err := cmd.Run(); err == nil {
@@ -527,11 +531,11 @@ func (a *InstallShAdapter) waitForHealth(ctx context.Context, timeout time.Durat
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(2 * time.Second):
+		case <-timeoutTimer.C:
+			return fmt.Errorf("service did not become healthy within %v", timeout)
+		case <-retryTicker.C:
 		}
 	}
-
-	return fmt.Errorf("service did not become healthy within %v", timeout)
 }
 
 // downloadInstallScript downloads the install.sh script

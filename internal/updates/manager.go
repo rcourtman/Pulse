@@ -72,12 +72,17 @@ type Manager struct {
 	history       *UpdateHistory
 	status        UpdateStatus
 	statusMu      sync.RWMutex
+	progressMu    sync.RWMutex
 	checkCache    map[string]*UpdateInfo // keyed by channel
 	cacheTime     map[string]time.Time   // keyed by channel
 	cacheDuration time.Duration
 	progressChan  chan UpdateStatus
 	queue         *UpdateQueue
 	sseBroadcast  *SSEBroadcaster
+	shutdownCh    chan struct{}
+	closeOnce     sync.Once
+	heartbeatWg   sync.WaitGroup
+	closed        bool
 }
 
 // ApplyUpdateRequest describes an update request initiated via the API/UI.
@@ -99,6 +104,7 @@ func NewManager(cfg *config.Config) *Manager {
 		progressChan:  make(chan UpdateStatus, 100),
 		queue:         NewUpdateQueue(),
 		sseBroadcast:  NewSSEBroadcaster(),
+		shutdownCh:    make(chan struct{}),
 		status: UpdateStatus{
 			Status:    "idle",
 			UpdatedAt: time.Now().Format(time.RFC3339),
@@ -109,6 +115,7 @@ func NewManager(cfg *config.Config) *Manager {
 	go m.cleanupOldTempDirs()
 
 	// Start heartbeat for SSE connections (every 30 seconds)
+	m.heartbeatWg.Add(1)
 	go m.sseHeartbeatLoop()
 
 	return m
@@ -126,10 +133,20 @@ func (m *Manager) GetProgressChannel() <-chan UpdateStatus {
 
 // Close closes the progress channel and cleans up resources
 func (m *Manager) Close() {
-	close(m.progressChan)
-	if m.sseBroadcast != nil {
-		m.sseBroadcast.Close()
-	}
+	m.closeOnce.Do(func() {
+		m.progressMu.Lock()
+		m.closed = true
+		close(m.progressChan)
+		m.progressMu.Unlock()
+
+		close(m.shutdownCh)
+
+		if m.sseBroadcast != nil {
+			m.sseBroadcast.Close()
+		}
+
+		m.heartbeatWg.Wait()
+	})
 }
 
 // GetSSEBroadcaster returns the SSE broadcaster
@@ -1438,10 +1455,14 @@ func (m *Manager) updateStatus(status string, progress int, message string, err 
 	m.statusMu.Unlock()
 
 	// Send to progress channel (non-blocking) for WebSocket compatibility
-	select {
-	case m.progressChan <- statusCopy:
-	default:
+	m.progressMu.RLock()
+	if !m.closed {
+		select {
+		case m.progressChan <- statusCopy:
+		default:
+		}
 	}
+	m.progressMu.RUnlock()
 
 	// Broadcast to SSE clients
 	if m.sseBroadcast != nil {
@@ -1455,12 +1476,19 @@ func (m *Manager) updateStatus(status string, progress int, message string, err 
 
 // sseHeartbeatLoop sends periodic heartbeats to SSE clients
 func (m *Manager) sseHeartbeatLoop() {
+	defer m.heartbeatWg.Done()
+
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		if m.sseBroadcast != nil {
-			m.sseBroadcast.SendHeartbeat()
+	for {
+		select {
+		case <-m.shutdownCh:
+			return
+		case <-ticker.C:
+			if m.sseBroadcast != nil {
+				m.sseBroadcast.SendHeartbeat()
+			}
 		}
 	}
 }

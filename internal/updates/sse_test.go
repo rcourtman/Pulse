@@ -219,3 +219,26 @@ func TestSSEBroadcaster_Close(t *testing.T) {
 		t.Error("Client Done channel should be closed")
 	}
 }
+
+func TestSSEBroadcaster_CloseIsIdempotentAndPostCloseSafe(t *testing.T) {
+	broadcaster := NewSSEBroadcaster()
+
+	broadcaster.Close()
+	broadcaster.Close()
+
+	// Post-close operations should be no-ops and must not panic.
+	broadcaster.Broadcast(UpdateStatus{
+		Status:    "idle",
+		Progress:  0,
+		Message:   "after close",
+		UpdatedAt: time.Now().Format(time.RFC3339),
+	})
+	broadcaster.SendHeartbeat()
+
+	if client := broadcaster.AddClient(httptest.NewRecorder(), "client-after-close"); client != nil {
+		t.Fatal("expected AddClient to return nil after broadcaster close")
+	}
+	if broadcaster.GetClientCount() != 0 {
+		t.Fatal("expected no connected clients after close")
+	}
+}
