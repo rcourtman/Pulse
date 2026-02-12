@@ -65,6 +65,7 @@ func Run(ctx context.Context, version string) error {
 		Level:     "info",
 		Component: "pulse",
 	})
+	defer logging.Shutdown()
 
 	// Check for auto-import on first startup
 	if ShouldAutoImport() {

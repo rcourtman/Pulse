@@ -26,6 +26,7 @@ func Run(ctx context.Context, version string) error {
 		Level:     "info",
 		Component: "control-plane",
 	})
+	defer logging.Shutdown()
 
 	log.Info().Str("version", version).Msg("Starting Pulse Cloud Control Plane")
 

@@ -98,6 +98,17 @@ func (b *LogBroadcaster) Unsubscribe(id string) {
 	}
 }
 
+// Shutdown closes all subscriber channels and clears the subscriber set.
+func (b *LogBroadcaster) Shutdown() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	for id, ch := range b.subscribers {
+		close(ch)
+		delete(b.subscribers, id)
+	}
+}
+
 // GetHistory returns the current in-memory log log history.
 func (b *LogBroadcaster) GetHistory() []string {
 	b.mu.RLock()

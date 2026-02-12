@@ -40,6 +40,7 @@ var (
 	baseLogger    zerolog.Logger
 	baseWriter    io.Writer = os.Stderr
 	baseComponent string
+	fileCloser    io.Closer
 
 	defaultTimeFmt = time.RFC3339
 )
@@ -76,6 +77,9 @@ func Init(cfg Config) zerolog.Logger {
 	mu.Lock()
 	defer mu.Unlock()
 
+	previousFileCloser := fileCloser
+	fileCloser = nil
+
 	zerolog.TimeFieldFormat = defaultTimeFmt
 	zerolog.SetGlobalLevel(parseLevel(cfg.Level))
 	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
@@ -90,6 +94,9 @@ func Init(cfg Config) zerolog.Logger {
 		fmt.Fprintf(os.Stderr, "logging: unable to configure file output: %v\n", err)
 	} else if fileWriter != nil {
 		writer = io.MultiWriter(writer, fileWriter)
+		if closer, ok := fileWriter.(io.Closer); ok {
+			fileCloser = closer
+		}
 	}
 	component := strings.TrimSpace(cfg.Component)
 
@@ -103,7 +110,28 @@ func Init(cfg Config) zerolog.Logger {
 	baseComponent = component
 	log.Logger = baseLogger
 
+	if previousFileCloser != nil {
+		if err := previousFileCloser.Close(); err != nil {
+			fmt.Fprintf(os.Stderr, "logging: unable to close previous log file writer: %v\n", err)
+		}
+	}
+
 	return baseLogger
+}
+
+// Shutdown closes logging resources that outlive a single request lifecycle.
+func Shutdown() {
+	mu.Lock()
+	defer mu.Unlock()
+
+	if fileCloser != nil {
+		if err := fileCloser.Close(); err != nil {
+			fmt.Fprintf(os.Stderr, "logging: unable to close log file writer: %v\n", err)
+		}
+		fileCloser = nil
+	}
+
+	GetBroadcaster().Shutdown()
 }
 
 // IsLevelEnabled reports whether the provided level is enabled for logging.
@@ -273,6 +301,13 @@ func (w *rollingFileWriter) closeLocked() error {
 	w.file = nil
 	w.currentSize = 0
 	return err
+}
+
+func (w *rollingFileWriter) Close() error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	return w.closeLocked()
 }
 
 func (w *rollingFileWriter) cleanupOldFiles() {
