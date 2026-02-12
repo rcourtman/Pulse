@@ -1,6 +1,9 @@
 package config
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestAIConfig_DiscoveryAndControl(t *testing.T) {
 	cfg := &AIConfig{}
@@ -138,4 +141,83 @@ func TestAIConfig_ProtectedGuestsAndValidation(t *testing.T) {
 	if !IsValidPatrolAutonomyLevel(PatrolAutonomyFull) {
 		t.Fatalf("expected patrol full to be valid")
 	}
+}
+
+func TestDefaultModelForProvider(t *testing.T) {
+	tests := []struct {
+		name     string
+		provider string
+		want     string
+	}{
+		{
+			name:     "anthropic",
+			provider: AIProviderAnthropic,
+			want:     FormatModelString(AIProviderAnthropic, DefaultAIModelAnthropic),
+		},
+		{
+			name:     "openai",
+			provider: AIProviderOpenAI,
+			want:     FormatModelString(AIProviderOpenAI, DefaultAIModelOpenAI),
+		},
+		{
+			name:     "deepseek",
+			provider: AIProviderDeepSeek,
+			want:     FormatModelString(AIProviderDeepSeek, DefaultAIModelDeepSeek),
+		},
+		{
+			name:     "gemini",
+			provider: AIProviderGemini,
+			want:     FormatModelString(AIProviderGemini, DefaultAIModelGemini),
+		},
+		{
+			name:     "ollama",
+			provider: AIProviderOllama,
+			want:     FormatModelString(AIProviderOllama, DefaultAIModelOllama),
+		},
+		{
+			name:     "unknown provider",
+			provider: "unknown",
+			want:     "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := DefaultModelForProvider(tt.provider); got != tt.want {
+				t.Fatalf("DefaultModelForProvider(%q) = %q, want %q", tt.provider, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestAIConfig_DiscoverySettings(t *testing.T) {
+	t.Run("enabled flag passthrough", func(t *testing.T) {
+		cfg := &AIConfig{DiscoveryEnabled: true}
+		if !cfg.IsDiscoveryEnabled() {
+			t.Fatalf("expected discovery to be enabled")
+		}
+		cfg.DiscoveryEnabled = false
+		if cfg.IsDiscoveryEnabled() {
+			t.Fatalf("expected discovery to be disabled")
+		}
+	})
+
+	t.Run("interval manual when hours are non-positive", func(t *testing.T) {
+		cfg := &AIConfig{DiscoveryIntervalHours: 0}
+		if got := cfg.GetDiscoveryInterval(); got != 0 {
+			t.Fatalf("expected manual interval (0), got %v", got)
+		}
+
+		cfg.DiscoveryIntervalHours = -2
+		if got := cfg.GetDiscoveryInterval(); got != 0 {
+			t.Fatalf("expected manual interval (0) for negative hours, got %v", got)
+		}
+	})
+
+	t.Run("interval converts hours to duration", func(t *testing.T) {
+		cfg := &AIConfig{DiscoveryIntervalHours: 6}
+		if got := cfg.GetDiscoveryInterval(); got != 6*time.Hour {
+			t.Fatalf("expected 6h interval, got %v", got)
+		}
+	})
 }
