@@ -432,7 +432,7 @@ func (c *GeminiClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 	}
 
 	// Build the URL with API key
-	url := fmt.Sprintf("%s/models/%s:generateContent?key=%s", c.baseURL, model, c.apiKey)
+	generateContentURL := fmt.Sprintf("%s/models/%s:generateContent?key=%s", c.baseURL, model, c.apiKey)
 
 	log.Debug().Str("model", model).Str("base_url", c.baseURL).Msg("Gemini Chat request")
 
@@ -457,7 +457,7 @@ func (c *GeminiClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 			}
 		}
 
-		httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
+		httpReq, err := http.NewRequestWithContext(ctx, "POST", generateContentURL, bytes.NewReader(body))
 		if err != nil {
 			return nil, fmt.Errorf("failed to create request: %w", err)
 		}
@@ -829,9 +829,9 @@ func (c *GeminiClient) ChatStream(ctx context.Context, req ChatRequest, callback
 		Msg("Gemini stream request body")
 
 	// Use streamGenerateContent endpoint for streaming
-	url := fmt.Sprintf("%s/models/%s:streamGenerateContent?key=%s&alt=sse", c.baseURL, model, c.apiKey)
+	streamGenerateContentURL := fmt.Sprintf("%s/models/%s:streamGenerateContent?key=%s&alt=sse", c.baseURL, model, c.apiKey)
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", streamGenerateContentURL, bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
@@ -972,9 +972,9 @@ func (c *GeminiClient) ChatStream(ctx context.Context, req ChatRequest, callback
 
 // ListModels fetches available models from the Gemini API
 func (c *GeminiClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
-	url := fmt.Sprintf("%s/models?key=%s", c.baseURL, c.apiKey)
+	modelsURL := fmt.Sprintf("%s/models?key=%s", c.baseURL, c.apiKey)
 
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", modelsURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}

@@ -2118,12 +2118,12 @@ func (s *Service) getToolInputDisplay(tc providers.ToolCall) string {
 		}
 		return cmd
 	case "fetch_url":
-		url, _ := tc.Input["url"].(string)
-		return url
+		fetchURL, _ := tc.Input["url"].(string)
+		return fetchURL
 	case "set_resource_url":
 		resourceType, _ := tc.Input["resource_type"].(string)
-		url, _ := tc.Input["url"].(string)
-		return fmt.Sprintf("Set %s URL: %s", resourceType, url)
+		resourceURL, _ := tc.Input["url"].(string)
+		return fmt.Sprintf("Set %s URL: %s", resourceType, resourceURL)
 	default:
 		return fmt.Sprintf("%v", tc.Input)
 	}
@@ -2752,8 +2752,8 @@ func (s *Service) executeTool(ctx context.Context, req ExecuteRequest, tc provid
 	case "set_resource_url":
 		resourceType, _ := tc.Input["resource_type"].(string)
 		resourceID, _ := tc.Input["resource_id"].(string)
-		url, _ := tc.Input["url"].(string)
-		execution.Input = fmt.Sprintf("%s %s -> %s", resourceType, resourceID, url)
+		resourceURL, _ := tc.Input["url"].(string)
+		execution.Input = fmt.Sprintf("%s %s -> %s", resourceType, resourceID, resourceURL)
 
 		if resourceType == "" {
 			execution.Output = "Error: resource_type is required (use 'guest', 'docker', or 'host')"
@@ -2770,18 +2770,18 @@ func (s *Service) executeTool(ctx context.Context, req ExecuteRequest, tc provid
 		}
 
 		// Allow empty URL to clear the setting
-		// if url == "" {
+		// if resourceURL == "" {
 		// 	execution.Output = "Error: url is required"
 		// 	return execution.Output, execution
 		// }
 
 		// Update the metadata
-		if err := s.SetResourceURL(resourceType, resourceID, url); err != nil {
+		if err := s.SetResourceURL(resourceType, resourceID, resourceURL); err != nil {
 			execution.Output = fmt.Sprintf("Error setting URL: %s", err)
 			return execution.Output, execution
 		}
 
-		execution.Output = fmt.Sprintf("Successfully set URL for %s '%s' to: %s\nThe URL is now visible in the Pulse dashboard as a clickable link.", resourceType, resourceID, url)
+		execution.Output = fmt.Sprintf("Successfully set URL for %s '%s' to: %s\nThe URL is now visible in the Pulse dashboard as a clickable link.", resourceType, resourceID, resourceURL)
 		execution.Success = true
 		return execution.Output, execution
 

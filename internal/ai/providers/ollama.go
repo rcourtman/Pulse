@@ -216,8 +216,8 @@ func (c *OllamaClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	url := c.baseURL + "/api/chat"
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
+	chatURL := c.baseURL + "/api/chat"
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", chatURL, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -381,8 +381,8 @@ func (c *OllamaClient) ChatStream(ctx context.Context, req ChatRequest, callback
 		return fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	url := c.baseURL + "/api/chat"
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
+	chatURL := c.baseURL + "/api/chat"
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", chatURL, bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
@@ -478,8 +478,8 @@ func (c *OllamaClient) ChatStream(ctx context.Context, req ChatRequest, callback
 
 // TestConnection validates connectivity by checking the Ollama version endpoint
 func (c *OllamaClient) TestConnection(ctx context.Context) error {
-	url := c.baseURL + "/api/version"
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	versionURL := c.baseURL + "/api/version"
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", versionURL, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
@@ -499,8 +499,8 @@ func (c *OllamaClient) TestConnection(ctx context.Context) error {
 
 // ListModels fetches available models from the local Ollama instance
 func (c *OllamaClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
-	url := c.baseURL + "/api/tags"
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	modelsURL := c.baseURL + "/api/tags"
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", modelsURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
