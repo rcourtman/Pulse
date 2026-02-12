@@ -177,6 +177,21 @@ export class AIAPI {
     // 5 minutes timeout - Opus models can take a long time
     const STREAM_TIMEOUT_MS = 300000;
     let lastEventTime = Date.now();
+    const readWithTimeout = async (): Promise<ReadableStreamReadResult<Uint8Array>> => {
+      let timeoutId: ReturnType<typeof setTimeout> | undefined;
+      try {
+        return await Promise.race([
+          reader.read(),
+          new Promise<never>((_, reject) => {
+            timeoutId = setTimeout(() => reject(new Error('Read timeout')), STREAM_TIMEOUT_MS);
+          }),
+        ]);
+      } finally {
+        if (timeoutId !== undefined) {
+          clearTimeout(timeoutId);
+        }
+      }
+    };
 
     try {
       for (; ;) {
@@ -185,14 +200,9 @@ export class AIAPI {
           break;
         }
 
-        const readPromise = reader.read();
-        const timeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error('Read timeout')), STREAM_TIMEOUT_MS);
-        });
-
         let result: ReadableStreamReadResult<Uint8Array>;
         try {
-          result = await Promise.race([readPromise, timeoutPromise]);
+          result = await readWithTimeout();
         } catch (e) {
           if ((e as Error).message === 'Read timeout') break;
           throw e;
