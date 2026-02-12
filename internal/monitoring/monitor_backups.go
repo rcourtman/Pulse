@@ -1388,7 +1388,7 @@ func convertPBSSnapshots(instanceName, datastore, namespace string, snapshots []
 	backups := make([]models.PBSBackup, 0, len(snapshots))
 	for _, snapshot := range snapshots {
 		backupTime := time.Unix(snapshot.BackupTime, 0)
-		id := fmt.Sprintf("pbs-%s-%s-%s-%s-%s-%d",
+		backupID := fmt.Sprintf("pbs-%s-%s-%s-%s-%s-%d",
 			instanceName, datastore, namespace,
 			snapshot.BackupType, snapshot.BackupID,
 			snapshot.BackupTime)
@@ -1425,7 +1425,7 @@ func convertPBSSnapshots(instanceName, datastore, namespace string, snapshots []
 		}
 
 		backups = append(backups, models.PBSBackup{
-			ID:         id,
+			ID:         backupID,
 			Instance:   instanceName,
 			Datastore:  datastore,
 			Namespace:  namespace,
