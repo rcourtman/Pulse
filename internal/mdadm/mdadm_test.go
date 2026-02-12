@@ -3,11 +3,17 @@ package mdadm
 import (
 	"context"
 	"errors"
+	"io"
 	"os"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 )
+
+type countingReadCloser struct {
+	remaining []byte
+	readBytes int
+}
 
 func withRunCommandOutput(t *testing.T, fn func(ctx context.Context, name string, args ...string) ([]byte, error)) {
 	t.Helper()
@@ -28,6 +34,13 @@ func withReadFile(t *testing.T, fn func(name string) ([]byte, error)) {
 	orig := readFile
 	readFile = fn
 	t.Cleanup(func() { readFile = orig })
+}
+
+func withOpenFileForRead(t *testing.T, fn func(name string) (io.ReadCloser, error)) {
+	t.Helper()
+	orig := openFileForRead
+	openFileForRead = fn
+	t.Cleanup(func() { openFileForRead = orig })
 }
 
 func withMdadmLookPath(t *testing.T, fn func(file string) (string, error)) {
@@ -849,6 +862,35 @@ func TestReadProcMDStatTooLarge(t *testing.T) {
 	if _, err := readProcMDStat(); err == nil {
 		t.Fatal("expected too-large mdstat error")
 	}
+}
+
+func TestReadProcMDStatBoundsReadSize(t *testing.T) {
+	readCloser := &countingReadCloser{remaining: make([]byte, maxMDStatBytes*2)}
+
+	withOpenFileForRead(t, func(name string) (io.ReadCloser, error) {
+		return readCloser, nil
+	})
+
+	if _, err := readProcMDStat(); err == nil {
+		t.Fatal("expected too-large mdstat error")
+	}
+	if readCloser.readBytes != maxMDStatBytes+1 {
+		t.Fatalf("expected capped read of %d bytes, got %d", maxMDStatBytes+1, readCloser.readBytes)
+	}
+}
+
+func (r *countingReadCloser) Read(p []byte) (int, error) {
+	if len(r.remaining) == 0 {
+		return 0, io.EOF
+	}
+	n := copy(p, r.remaining)
+	r.remaining = r.remaining[n:]
+	r.readBytes += n
+	return n, nil
+}
+
+func (r *countingReadCloser) Close() error {
+	return nil
 }
 
 func TestResolveMdadmPathRejectsRelativeLookPath(t *testing.T) {

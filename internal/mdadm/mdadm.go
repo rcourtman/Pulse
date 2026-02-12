@@ -3,6 +3,7 @@ package mdadm
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,13 +17,24 @@ import (
 
 // Pre-compiled regexes for performance (avoid recompilation on each call)
 var (
-	mdDeviceRe         = regexp.MustCompile(`^(md\d+)\s*:`)
-	mdArrayPathRe      = regexp.MustCompile(`^/dev/md\d+$`)
-	slotRe             = regexp.MustCompile(`^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(.+?)\s+(/dev/.+)$`)
-	speedRe            = regexp.MustCompile(`speed=(\S+)`)
-	mdadmLookPath      = exec.LookPath
-	mdadmStat          = os.Stat
-	readFile           = os.ReadFile
+	mdDeviceRe      = regexp.MustCompile(`^(md\d+)\s*:`)
+	mdArrayPathRe   = regexp.MustCompile(`^/dev/md\d+$`)
+	slotRe          = regexp.MustCompile(`^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(.+?)\s+(/dev/.+)$`)
+	speedRe         = regexp.MustCompile(`speed=(\S+)`)
+	mdadmLookPath   = exec.LookPath
+	mdadmStat       = os.Stat
+	openFileForRead = func(name string) (io.ReadCloser, error) { return os.Open(name) }
+	readFile        = func(name string) ([]byte, error) {
+		file, err := openFileForRead(name)
+		if err != nil {
+			return nil, err
+		}
+		defer file.Close()
+
+		// Enforce the size cap while reading to avoid allocating arbitrarily
+		// large buffers before validation.
+		return io.ReadAll(io.LimitReader(file, maxMDStatBytes+1))
+	}
 	resolveMdadmBinary = resolveMdadmPath
 	runCommandOutput   = func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		cmd := exec.CommandContext(ctx, name, args...)
