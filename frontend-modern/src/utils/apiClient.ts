@@ -8,6 +8,29 @@ const AUTH_STORAGE_KEY = STORAGE_KEYS.AUTH;
 const ORG_STORAGE_KEY = STORAGE_KEYS.ORG_ID;
 const ORG_HEADER_NAME = 'X-Pulse-Org-ID';
 const ORG_COOKIE_NAME = 'pulse_org_id';
+const DEFAULT_RATE_LIMIT_RETRY_MS = 2000;
+const MAX_RATE_LIMIT_RETRY_MS = 60000;
+
+const resolveRetryAfterMs = (retryAfter: string | null): number => {
+  if (!retryAfter) {
+    return DEFAULT_RATE_LIMIT_RETRY_MS;
+  }
+
+  const seconds = Number(retryAfter);
+  if (Number.isFinite(seconds) && seconds >= 0) {
+    return Math.min(seconds * 1000, MAX_RATE_LIMIT_RETRY_MS);
+  }
+
+  const retryAtMs = Date.parse(retryAfter);
+  if (!Number.isNaN(retryAtMs)) {
+    const deltaMs = retryAtMs - Date.now();
+    if (deltaMs > 0) {
+      return Math.min(deltaMs, MAX_RATE_LIMIT_RETRY_MS);
+    }
+  }
+
+  return DEFAULT_RATE_LIMIT_RETRY_MS;
+};
 
 const getSessionStorage = (): Storage | undefined => {
   if (typeof window === 'undefined') {
@@ -445,8 +468,7 @@ class ApiClient {
 
     // Handle rate limiting with automatic retry
     if (response.status === 429) {
-      const retryAfter = response.headers.get('Retry-After');
-      const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : 2000; // Default 2 seconds
+      const waitTime = resolveRetryAfterMs(response.headers.get('Retry-After'));
 
       logger.warn(`Rate limit hit, retrying after ${waitTime}ms`);
 

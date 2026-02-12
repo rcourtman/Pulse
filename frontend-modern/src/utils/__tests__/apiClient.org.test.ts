@@ -12,6 +12,7 @@ describe('apiClient org context', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     setOrgID(null);
   });
 
@@ -62,5 +63,24 @@ describe('apiClient org context', () => {
     const secondHeaders = secondOptions.headers as Record<string, string>;
     expect(secondHeaders['X-Pulse-Org-ID']).toBeUndefined();
     expect(getOrgID()).toBeNull();
+  });
+
+  it('honors HTTP-date Retry-After before retrying a 429 response', async () => {
+    vi.useFakeTimers();
+    const retryAfter = new Date(Date.now() + 5000).toUTCString();
+
+    mockFetch
+      .mockResolvedValueOnce(new Response('rate limited', { status: 429, headers: { 'Retry-After': retryAfter } }))
+      .mockResolvedValueOnce(new Response('{}', { status: 200 }));
+
+    const pending = apiFetch('/api/state');
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(2500);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(5000);
+    await pending;
+    expect(mockFetch).toHaveBeenCalledTimes(2);
   });
 });
