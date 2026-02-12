@@ -133,8 +133,18 @@ func getOrCreateKeyAt(dataDir string) ([]byte, error) {
 
 		if data, err := os.ReadFile(oldKeyPath); err == nil {
 			decoded := make([]byte, base64.StdEncoding.DecodedLen(len(data)))
-			n, err := base64.StdEncoding.Decode(decoded, data)
-			if err == nil && n == 32 {
+			n, decodeErr := base64.StdEncoding.Decode(decoded, data)
+			if decodeErr != nil {
+				log.Warn().
+					Err(decodeErr).
+					Str("path", oldKeyPath).
+					Msg("Failed to decode legacy encryption key during migration check")
+			} else if n != 32 {
+				log.Warn().
+					Int("decodedBytes", n).
+					Str("path", oldKeyPath).
+					Msg("Legacy encryption key has invalid length during migration check")
+			} else {
 				key := decoded[:n]
 				// Migrate key to new location
 				if err := os.MkdirAll(filepath.Dir(keyPath), 0700); err != nil {
@@ -307,7 +317,7 @@ func (c *CryptoManager) Decrypt(ciphertext []byte) ([]byte, error) {
 
 	nonceSize := gcm.NonceSize()
 	if len(ciphertext) < nonceSize {
-		return nil, fmt.Errorf("ciphertext too short")
+		return nil, fmt.Errorf("crypto.Decrypt: ciphertext too short: got %d bytes, need at least %d", len(ciphertext), nonceSize)
 	}
 
 	nonce, ciphertext := ciphertext[:nonceSize], ciphertext[nonceSize:]
