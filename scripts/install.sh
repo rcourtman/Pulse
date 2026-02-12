@@ -857,6 +857,14 @@ if [[ "$OS" == "darwin" ]]; then
         <string>--kubeconfig</string>
         <string>${KUBECONFIG_PATH}</string>"
     fi
+    if [[ "$KUBE_INCLUDE_ALL_PODS" == "true" ]]; then
+        PLIST_ARGS="${PLIST_ARGS}
+        <string>--kube-include-all-pods</string>"
+    fi
+    if [[ "$KUBE_INCLUDE_ALL_DEPLOYMENTS" == "true" ]]; then
+        PLIST_ARGS="${PLIST_ARGS}
+        <string>--kube-include-all-deployments</string>"
+    fi
     if [[ "$INSECURE" == "true" ]]; then
         PLIST_ARGS="${PLIST_ARGS}
         <string>--insecure</string>"
@@ -1493,6 +1501,8 @@ if command -v systemctl >/dev/null 2>&1; then
     if [[ -n "$PROXMOX_TYPE" ]]; then EXEC_ARGS="$EXEC_ARGS --proxmox-type ${PROXMOX_TYPE}"; fi
     if [[ "$INSECURE" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --insecure"; fi
     if [[ "$ENABLE_COMMANDS" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --enable-commands"; fi
+    if [[ "$KUBE_INCLUDE_ALL_PODS" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --kube-include-all-pods"; fi
+    if [[ "$KUBE_INCLUDE_ALL_DEPLOYMENTS" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --kube-include-all-deployments"; fi
     if [[ -n "$AGENT_ID" ]]; then EXEC_ARGS="$EXEC_ARGS --agent-id ${AGENT_ID}"; fi
     if [[ -n "$HOSTNAME_OVERRIDE" ]]; then EXEC_ARGS="$EXEC_ARGS --hostname ${HOSTNAME_OVERRIDE}"; fi
     # Add disk exclude patterns (use ${arr[@]+"${arr[@]}"} for bash 3.2 compatibility with set -u)
