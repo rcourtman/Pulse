@@ -16,6 +16,19 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+const maxResponseBodyBytes int64 = 8 << 20 // 8 MiB
+
+func readResponseBodyLimited(r io.Reader) ([]byte, error) {
+	body, err := io.ReadAll(io.LimitReader(r, maxResponseBodyBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(body)) > maxResponseBodyBytes {
+		return nil, fmt.Errorf("response body exceeds %d bytes", maxResponseBodyBytes)
+	}
+	return body, nil
+}
+
 // Client represents a Proxmox Backup Server API client
 type Client struct {
 	baseURL    string
@@ -200,7 +213,10 @@ func (c *Client) authenticateForm(ctx context.Context, username, password string
 
 func (c *Client) handleAuthResponse(resp *http.Response) error {
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, err := readResponseBodyLimited(resp.Body)
+		if err != nil {
+			return &authHTTPError{status: resp.StatusCode, body: err.Error()}
+		}
 		return &authHTTPError{status: resp.StatusCode, body: string(body)}
 	}
 
@@ -303,17 +319,20 @@ func (c *Client) request(ctx context.Context, method, path string, data url.Valu
 	// Check for errors
 	if resp.StatusCode >= 400 {
 		defer resp.Body.Close()
-		body, _ := io.ReadAll(resp.Body)
+		body, err := readResponseBodyLimited(resp.Body)
+		if err != nil {
+			return nil, err
+		}
 
 		// Create base error
-		err := fmt.Errorf("API error %d: %s", resp.StatusCode, string(body))
+		apiErr := fmt.Errorf("API error %d: %s", resp.StatusCode, string(body))
 
 		// Wrap with appropriate error type
 		if resp.StatusCode == 401 || resp.StatusCode == 403 {
-			return nil, fmt.Errorf("authentication error: %w", err)
+			return nil, fmt.Errorf("authentication error: %w", apiErr)
 		}
 
-		return nil, err
+		return nil, apiErr
 	}
 
 	return resp, nil
@@ -398,7 +417,7 @@ func (c *Client) CreateUserToken(ctx context.Context, userID, tokenName string) 
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := readResponseBodyLimited(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("read response: %w", err)
 	}
@@ -559,7 +578,7 @@ func (c *Client) GetNodeStatus(ctx context.Context) (*NodeStatus, error) {
 	defer statusResp.Body.Close()
 
 	// Read the response body to log it
-	body, err := io.ReadAll(statusResp.Body)
+	body, err := readResponseBodyLimited(statusResp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read status response: %w", err)
 	}
@@ -586,7 +605,7 @@ func (c *Client) GetDatastores(ctx context.Context) ([]Datastore, error) {
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := readResponseBodyLimited(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
@@ -626,7 +645,11 @@ func (c *Client) GetDatastores(ctx context.Context) ([]Datastore, error) {
 		var dedupFactor float64
 		if err == nil {
 			defer rrdResp.Body.Close()
-			rrdBody, _ := io.ReadAll(rrdResp.Body)
+			rrdBody, err := readResponseBodyLimited(rrdResp.Body)
+			if err != nil {
+				log.Warn().Err(err).Str("store", ds.Store).Msg("Skipping datastore RRD response that exceeds size limit")
+				rrdBody = nil
+			}
 
 			var rrdResult struct {
 				Data []struct {
@@ -655,7 +678,7 @@ func (c *Client) GetDatastores(ctx context.Context) ([]Datastore, error) {
 		}
 		defer statusResp.Body.Close()
 
-		statusBody, err := io.ReadAll(statusResp.Body)
+		statusBody, err := readResponseBodyLimited(statusResp.Body)
 		if err != nil {
 			log.Error().Str("store", ds.Store).Err(err).Msg("Failed to read datastore status response")
 			datastores = append(datastores, Datastore{
@@ -703,7 +726,11 @@ func (c *Client) GetDatastores(ctx context.Context) ([]Datastore, error) {
 			gcResp, err := c.get(ctx, fmt.Sprintf("/admin/datastore/%s/gc", ds.Store))
 			if err == nil {
 				defer gcResp.Body.Close()
-				gcBody, _ := io.ReadAll(gcResp.Body)
+				gcBody, err := readResponseBodyLimited(gcResp.Body)
+				if err != nil {
+					log.Warn().Err(err).Str("store", ds.Store).Msg("Skipping datastore GC response that exceeds size limit")
+					gcBody = nil
+				}
 				var gcResult struct {
 					Data struct {
 						IndexDataBytes float64 `json:"index-data-bytes"`
@@ -876,7 +903,10 @@ func (c *Client) ListBackupGroups(ctx context.Context, datastore string, namespa
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, err := readResponseBodyLimited(resp.Body)
+		if err != nil {
+			return nil, err
+		}
 		return nil, fmt.Errorf("unexpected status %d: %s", resp.StatusCode, string(body))
 	}
 
@@ -915,7 +945,10 @@ func (c *Client) ListBackupSnapshots(ctx context.Context, datastore string, name
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, err := readResponseBodyLimited(resp.Body)
+		if err != nil {
+			return nil, err
+		}
 		return nil, fmt.Errorf("unexpected status %d: %s", resp.StatusCode, string(body))
 	}
 
