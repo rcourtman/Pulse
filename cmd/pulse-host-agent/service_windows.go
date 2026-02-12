@@ -165,7 +165,9 @@ func runAsWindowsService(cfg Config, logger zerolog.Logger) error {
 	}
 	defer func() {
 		if elog != nil {
-			elog.Close()
+			if closeErr := elog.Close(); closeErr != nil {
+				logger.Warn().Err(closeErr).Msg("Failed to close Windows Event Log handle")
+			}
 		}
 	}()
 
