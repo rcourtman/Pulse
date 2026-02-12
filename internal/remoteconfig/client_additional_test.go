@@ -267,3 +267,90 @@ func TestClientResolveHostIDRequestErrors(t *testing.T) {
 		t.Fatalf("expected transport error, got %v", err)
 	}
 }
+
+func TestClientFetchConfigResponseTooLarge(t *testing.T) {
+	largeValue := strings.Repeat("a", int(maxConfigResponseBodyBytes))
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"success":true,"hostId":"agent-1","config":{"settings":{"blob":"` + largeValue + `"}}}`))
+	}))
+	defer ts.Close()
+
+	client := New(Config{PulseURL: ts.URL, APIToken: "t", AgentID: "agent-1"})
+	if _, _, err := client.Fetch(context.Background()); err == nil || !strings.Contains(err.Error(), "response body exceeds") {
+		t.Fatalf("expected oversized response error, got %v", err)
+	}
+}
+
+func TestClientResolveHostIDResponseTooLarge(t *testing.T) {
+	largeID := strings.Repeat("h", int(maxHostLookupResponseBodyBytes))
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"success":true,"host":{"id":"` + largeID + `"}}`))
+	}))
+	defer ts.Close()
+
+	client := New(Config{PulseURL: ts.URL, APIToken: "t", Hostname: "known"})
+	if _, err := client.resolveHostID(context.Background()); err == nil || !strings.Contains(err.Error(), "response body exceeds") {
+		t.Fatalf("expected oversized host lookup response error, got %v", err)
+	}
+}
+
+func TestClientFetchEscapesResolvedHostID(t *testing.T) {
+	lookupHit := false
+	configHit := false
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/agents/host/lookup":
+			lookupHit = true
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"success":true,"host":{"id":"agent/../id with spaces"}}`))
+		case "/api/agents/host/agent/../id with spaces/config":
+			if got := r.URL.EscapedPath(); got != "/api/agents/host/agent%2F..%2Fid%20with%20spaces/config" {
+				t.Fatalf("expected escaped path to preserve host ID escaping, got %q", got)
+			}
+			configHit = true
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"success":true,"hostId":"agent/../id with spaces","config":{"settings":{"mode":"ok"}}}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer ts.Close()
+
+	client := New(Config{PulseURL: ts.URL, APIToken: "t", AgentID: "fallback", Hostname: "known"})
+	settings, _, err := client.Fetch(context.Background())
+	if err != nil {
+		t.Fatalf("Fetch error: %v", err)
+	}
+	if !lookupHit || !configHit {
+		t.Fatalf("expected lookup and escaped config requests to be hit")
+	}
+	if settings["mode"] != "ok" {
+		t.Fatalf("unexpected settings: %#v", settings)
+	}
+}
+
+func TestClientResolveHostIDEscapesHostnameQuery(t *testing.T) {
+	const hostname = "known&admin=true"
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/agents/host/lookup" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		if got := r.URL.Query().Get("hostname"); got != hostname {
+			t.Fatalf("expected hostname %q, got %q", hostname, got)
+		}
+		if got := r.URL.Query().Get("admin"); got != "" {
+			t.Fatalf("expected no injected admin query, got %q", got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"success":false}`))
+	}))
+	defer ts.Close()
+
+	client := New(Config{PulseURL: ts.URL, APIToken: "t", Hostname: hostname})
+	if got, err := client.resolveHostID(context.Background()); err != nil || got != "" {
+		t.Fatalf("expected empty host ID, got %q err=%v", got, err)
+	}
+}

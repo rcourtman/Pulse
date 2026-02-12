@@ -5,12 +5,19 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog"
+)
+
+const (
+	maxConfigResponseBodyBytes     int64 = 1 * 1024 * 1024
+	maxHostLookupResponseBodyBytes int64 = 64 * 1024
 )
 
 // Config holds configuration for the remote config client.
@@ -88,8 +95,8 @@ func (c *Client) Fetch(ctx context.Context) (map[string]interface{}, *bool, erro
 		hostID = resolved
 	}
 
-	url := fmt.Sprintf("%s/api/agents/host/%s/config", c.cfg.PulseURL, hostID)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	requestURL := fmt.Sprintf("%s/api/agents/host/%s/config", c.cfg.PulseURL, url.PathEscape(hostID))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("create request: %w", err)
 	}
@@ -109,7 +116,7 @@ func (c *Client) Fetch(ctx context.Context) (map[string]interface{}, *bool, erro
 	}
 
 	var configResp Response
-	if err := json.NewDecoder(resp.Body).Decode(&configResp); err != nil {
+	if err := decodeJSONResponseWithLimit(resp.Body, maxConfigResponseBodyBytes, &configResp); err != nil {
 		return nil, nil, fmt.Errorf("decode response: %w", err)
 	}
 
@@ -154,8 +161,8 @@ func (c *Client) resolveHostID(ctx context.Context) (string, error) {
 		return "", nil
 	}
 
-	url := fmt.Sprintf("%s/api/agents/host/lookup?hostname=%s", c.cfg.PulseURL, hostname)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	requestURL := fmt.Sprintf("%s/api/agents/host/lookup?hostname=%s", c.cfg.PulseURL, url.QueryEscape(hostname))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
 	if err != nil {
 		return "", fmt.Errorf("create host lookup request: %w", err)
 	}
@@ -183,11 +190,22 @@ func (c *Client) resolveHostID(ctx context.Context) (string, error) {
 			ID string `json:"id"`
 		} `json:"host"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+	if err := decodeJSONResponseWithLimit(resp.Body, maxHostLookupResponseBodyBytes, &payload); err != nil {
 		return "", fmt.Errorf("decode host lookup response: %w", err)
 	}
 	if !payload.Success {
 		return "", nil
 	}
 	return strings.TrimSpace(payload.Host.ID), nil
+}
+
+func decodeJSONResponseWithLimit(body io.Reader, maxBytes int64, dst interface{}) error {
+	responseBody, err := io.ReadAll(io.LimitReader(body, maxBytes+1))
+	if err != nil {
+		return err
+	}
+	if int64(len(responseBody)) > maxBytes {
+		return fmt.Errorf("response body exceeds %d bytes", maxBytes)
+	}
+	return json.Unmarshal(responseBody, dst)
 }
