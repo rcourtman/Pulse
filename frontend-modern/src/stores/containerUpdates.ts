@@ -22,6 +22,33 @@ interface UpdateEntry {
 // Global store for container update states
 // Key format: "hostId:containerId"
 const [updateStates, setUpdateStates] = createSignal<Record<string, UpdateEntry>>({});
+const autoClearTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+function clearAutoClearTimer(key: string): void {
+    const timer = autoClearTimers.get(key);
+    if (!timer) return;
+    clearTimeout(timer);
+    autoClearTimers.delete(key);
+}
+
+function scheduleAutoClear(
+    hostId: string,
+    containerId: string,
+    expectedState: Extract<ContainerUpdateState, 'success' | 'error'>,
+    delayMs: number
+): void {
+    const key = `${hostId}:${containerId}`;
+    clearAutoClearTimer(key);
+
+    const timer = setTimeout(() => {
+        autoClearTimers.delete(key);
+        const current = updateStates()[key];
+        if (!current || current.state !== expectedState) return;
+        clearContainerUpdateState(hostId, containerId);
+    }, delayMs);
+
+    autoClearTimers.set(key, timer);
+}
 
 /**
  * Get the update state for a specific container
@@ -36,6 +63,7 @@ export function getContainerUpdateState(hostId: string, containerId: string): Up
  */
 export function markContainerUpdating(hostId: string, containerId: string, commandId?: string): void {
     const key = `${hostId}:${containerId}`;
+    clearAutoClearTimer(key);
     setUpdateStates(prev => ({
         ...prev,
         [key]: {
@@ -51,6 +79,7 @@ export function markContainerUpdating(hostId: string, containerId: string, comma
  */
 export function markContainerQueued(hostId: string, containerId: string, commandId?: string): void {
     const key = `${hostId}:${containerId}`;
+    clearAutoClearTimer(key);
     setUpdateStates(prev => ({
         ...prev,
         [key]: {
@@ -85,6 +114,7 @@ export function syncWithHostCommand(hostId: string, command: DockerHostCommand |
         markContainerUpdateError(hostId, containerId, command.failureReason || command.message);
     } else if (command.status === 'in_progress' || command.acknowledgedAt) {
         // Agent is actively working on the update - show the current step
+        clearAutoClearTimer(key);
         setUpdateStates(prev => ({
             ...prev,
             [key]: {
@@ -112,9 +142,7 @@ export function markContainerUpdateSuccess(hostId: string, containerId: string):
     }));
 
     // Auto-clear success state after 5 seconds
-    setTimeout(() => {
-        clearContainerUpdateState(hostId, containerId);
-    }, 5000);
+    scheduleAutoClear(hostId, containerId, 'success', 5000);
 }
 
 /**
@@ -132,9 +160,7 @@ export function markContainerUpdateError(hostId: string, containerId: string, me
     }));
 
     // Auto-clear error state after 10 seconds
-    setTimeout(() => {
-        clearContainerUpdateState(hostId, containerId);
-    }, 10000);
+    scheduleAutoClear(hostId, containerId, 'error', 10000);
 }
 
 /**
@@ -142,6 +168,7 @@ export function markContainerUpdateError(hostId: string, containerId: string, me
  */
 export function clearContainerUpdateState(hostId: string, containerId: string): void {
     const key = `${hostId}:${containerId}`;
+    clearAutoClearTimer(key);
     setUpdateStates(prev => {
         const next = { ...prev };
         delete next[key];
@@ -161,6 +188,8 @@ export function cleanupStaleUpdates(): void {
         for (const [key, entry] of Object.entries(prev)) {
             if (now - entry.startedAt < staleThreshold) {
                 next[key] = entry;
+            } else {
+                clearAutoClearTimer(key);
             }
         }
         return next;
@@ -181,4 +210,3 @@ export { updateStates };
 
 // Cleanup stale entries every minute
 setInterval(cleanupStaleUpdates, 60000);
-
