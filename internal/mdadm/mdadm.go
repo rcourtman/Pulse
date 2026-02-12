@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
+	"github.com/rs/zerolog/log"
 )
 
 // Pre-compiled regexes for performance (avoid recompilation on each call)
@@ -46,7 +47,7 @@ func CollectArrays(ctx context.Context) ([]host.RAIDArray, error) {
 	for _, device := range devices {
 		array, err := collectArrayDetail(ctx, device)
 		if err != nil {
-			// Log but don't fail - continue with other arrays
+			log.Warn().Err(err).Str("device", device).Msg("failed to collect RAID array details")
 			continue
 		}
 		arrays = append(arrays, array)
