@@ -21,6 +21,13 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+const (
+	// maxWebSocketInboundMessageSize bounds client->server websocket message size.
+	maxWebSocketInboundMessageSize = 64 * 1024
+	// maxWebSocketOrgIDLength keeps org IDs bounded to prevent oversized header/query abuse.
+	maxWebSocketOrgIDLength = 64
+)
+
 // extractPeerIP extracts just the IP part from a RemoteAddr (host:port format)
 func extractPeerIP(remoteAddr string) string {
 	host, _, err := net.SplitHostPort(remoteAddr)
@@ -85,6 +92,27 @@ func normalizeForwardedProto(proto string, fallback string) string {
 		}
 		return fallback
 	}
+}
+
+func isValidWebSocketOrgID(orgID string) bool {
+	if orgID == "" || orgID == "." || orgID == ".." {
+		return false
+	}
+	if len(orgID) > maxWebSocketOrgIDLength {
+		return false
+	}
+	if strings.TrimSpace(orgID) != orgID {
+		return false
+	}
+	if strings.ContainsAny(orgID, `/\`) {
+		return false
+	}
+	for _, r := range orgID {
+		if r < 0x20 || r == 0x7f {
+			return false
+		}
+	}
+	return true
 }
 
 // SetAllowedOrigins sets the allowed origins for CORS
@@ -648,6 +676,13 @@ func (h *Hub) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	if orgID == "" {
 		orgID = "default"
 	}
+	if !isValidWebSocketOrgID(orgID) {
+		log.Warn().
+			Int("org_id_len", len(orgID)).
+			Msg("WebSocket connection denied - invalid organization ID")
+		http.Error(w, "Invalid organization ID", http.StatusBadRequest)
+		return
+	}
 
 	// Multi-tenant feature flag and license check for non-default orgs
 	h.mu.RLock()
@@ -1102,6 +1137,7 @@ func (c *Client) readPump() {
 	if err := c.conn.SetReadDeadline(time.Now().Add(60 * time.Second)); err != nil {
 		log.Warn().Err(err).Str("client", c.id).Msg("Failed to set initial read deadline")
 	}
+	c.conn.SetReadLimit(maxWebSocketInboundMessageSize)
 	c.conn.SetPongHandler(func(string) error {
 		if err := c.conn.SetReadDeadline(time.Now().Add(60 * time.Second)); err != nil {
 			log.Warn().Err(err).Str("client", c.id).Msg("Failed to refresh read deadline on pong")

@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -93,5 +94,33 @@ func TestHandleWebSocket_OrgAuthorizationDenied(t *testing.T) {
 	}
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("expected status %d, got %d", http.StatusForbidden, rec.Code)
+	}
+}
+
+func TestHandleWebSocket_InvalidOrgIDRejected(t *testing.T) {
+	hub := NewHub(nil)
+
+	req := httptest.NewRequest(http.MethodGet, "http://example.com/ws", nil)
+	req.Header.Set("X-Pulse-Org-ID", "../tenant-a")
+	rec := httptest.NewRecorder()
+
+	hub.HandleWebSocket(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+}
+
+func TestHandleWebSocket_OversizedOrgIDRejected(t *testing.T) {
+	hub := NewHub(nil)
+
+	req := httptest.NewRequest(http.MethodGet, "http://example.com/ws", nil)
+	req.Header.Set("X-Pulse-Org-ID", strings.Repeat("a", maxWebSocketOrgIDLength+1))
+	rec := httptest.NewRecorder()
+
+	hub.HandleWebSocket(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
 	}
 }
