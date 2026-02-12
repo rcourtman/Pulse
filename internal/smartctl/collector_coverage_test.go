@@ -158,7 +158,7 @@ func TestCollectLocalSkipsErrors(t *testing.T) {
 				SerialNumber: "Serial",
 			}
 			payload.Device.Protocol = "ATA"
-			payload.SmartStatus.Passed = true
+			payload.SmartStatus = &smartStatusJSON{Passed: true}
 			payload.Temperature.Current = 30
 			out, _ := json.Marshal(payload)
 			return out, nil
@@ -301,8 +301,8 @@ func TestCollectDeviceSMARTNVMeTempFallback(t *testing.T) {
 	runCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		payload := smartctlJSON{}
 		payload.Device.Protocol = "NVMe"
-		payload.NVMeSmartHealthInformationLog.Temperature = 55
-		payload.SmartStatus.Passed = true
+		payload.NVMeSmartHealthInformationLog = &nvmeSmartHealthInformationLogJSON{Temperature: 55}
+		payload.SmartStatus = &smartStatusJSON{Passed: true}
 		out, _ := json.Marshal(payload)
 		return out, nil
 	}
@@ -331,7 +331,7 @@ func TestCollectDeviceSMARTWWN(t *testing.T) {
 		payload.WWN.OUI = 0xabc
 		payload.WWN.ID = 0x1234
 		payload.Device.Protocol = "SAS"
-		payload.SmartStatus.Passed = true
+		payload.SmartStatus = &smartStatusJSON{Passed: true}
 		out, _ := json.Marshal(payload)
 		return out, nil
 	}
@@ -342,5 +342,30 @@ func TestCollectDeviceSMARTWWN(t *testing.T) {
 	}
 	if result.WWN != "5-abc-1234" {
 		t.Fatalf("unexpected WWN: %q", result.WWN)
+	}
+}
+
+func TestCollectDeviceSMARTMissingSmartStatusIsUnknown(t *testing.T) {
+	origRun := runCommandOutput
+	origLook := execLookPath
+	t.Cleanup(func() {
+		runCommandOutput = origRun
+		execLookPath = origLook
+	})
+
+	execLookPath = func(string) (string, error) { return "smartctl", nil }
+	runCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		payload := smartctlJSON{}
+		payload.Device.Protocol = "ATA"
+		out, _ := json.Marshal(payload)
+		return out, nil
+	}
+
+	result, err := collectDeviceSMART(context.Background(), "/dev/sda")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result == nil || result.Health != "UNKNOWN" {
+		t.Fatalf("unexpected result: %#v", result)
 	}
 }

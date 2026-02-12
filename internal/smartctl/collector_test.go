@@ -159,13 +159,13 @@ func TestSmartctlJSONParsing(t *testing.T) {
 	}
 	data.Device.Name = "/dev/sda"
 	data.Device.Protocol = "ATA"
-	data.SmartStatus.Passed = true
+	data.SmartStatus = &smartStatusJSON{Passed: true}
 	data.Temperature.Current = 35
 
 	if data.ModelName != "Samsung SSD 870 EVO 1TB" {
 		t.Errorf("unexpected ModelName: %s", data.ModelName)
 	}
-	if data.SmartStatus.Passed != true {
+	if data.SmartStatus == nil || data.SmartStatus.Passed != true {
 		t.Errorf("expected Passed to be true")
 	}
 	if data.Temperature.Current != 35 {
@@ -184,7 +184,7 @@ func TestNVMeTemperatureFallback(t *testing.T) {
 			Protocol: "NVMe",
 		},
 	}
-	data.NVMeSmartHealthInformationLog.Temperature = 42
+	data.NVMeSmartHealthInformationLog = &nvmeSmartHealthInformationLogJSON{Temperature: 42}
 
 	// Verify the type detection
 	diskType := detectDiskType(data)
@@ -193,7 +193,7 @@ func TestNVMeTemperatureFallback(t *testing.T) {
 	}
 
 	// Verify NVMe temp location is populated
-	if data.NVMeSmartHealthInformationLog.Temperature != 42 {
+	if data.NVMeSmartHealthInformationLog == nil || data.NVMeSmartHealthInformationLog.Temperature != 42 {
 		t.Errorf("NVMe temperature not set correctly")
 	}
 }
@@ -270,12 +270,14 @@ func TestParseSMARTAttributes_SATA(t *testing.T) {
 
 func TestParseSMARTAttributes_NVMe(t *testing.T) {
 	data := &smartctlJSON{}
-	data.NVMeSmartHealthInformationLog.PowerOnHours = 5000
-	data.NVMeSmartHealthInformationLog.PowerCycles = 100
-	data.NVMeSmartHealthInformationLog.PercentageUsed = 5
-	data.NVMeSmartHealthInformationLog.AvailableSpare = 100
-	data.NVMeSmartHealthInformationLog.MediaErrors = 0
-	data.NVMeSmartHealthInformationLog.UnsafeShutdowns = 12
+	data.NVMeSmartHealthInformationLog = &nvmeSmartHealthInformationLogJSON{
+		PowerOnHours:    5000,
+		PowerCycles:     100,
+		PercentageUsed:  5,
+		AvailableSpare:  100,
+		MediaErrors:     0,
+		UnsafeShutdowns: 12,
+	}
 
 	attrs := parseSMARTAttributes(data, "nvme")
 	if attrs == nil {
@@ -351,6 +353,35 @@ func TestParseSMARTAttributes_Standby(t *testing.T) {
 	attrs = parseSMARTAttributes(data, "nvme")
 	if attrs != nil {
 		t.Errorf("expected nil attributes for empty NVMe data, got %+v", attrs)
+	}
+}
+
+func TestParseSMARTAttributes_NVMeZeroValuesWhenLogPresent(t *testing.T) {
+	data := &smartctlJSON{
+		NVMeSmartHealthInformationLog: &nvmeSmartHealthInformationLogJSON{},
+	}
+
+	attrs := parseSMARTAttributes(data, "nvme")
+	if attrs == nil {
+		t.Fatal("expected non-nil attributes when NVMe log is present")
+	}
+	if attrs.PowerOnHours == nil || *attrs.PowerOnHours != 0 {
+		t.Errorf("PowerOnHours: got %v, want 0", attrs.PowerOnHours)
+	}
+	if attrs.PowerCycles == nil || *attrs.PowerCycles != 0 {
+		t.Errorf("PowerCycles: got %v, want 0", attrs.PowerCycles)
+	}
+	if attrs.PercentageUsed == nil || *attrs.PercentageUsed != 0 {
+		t.Errorf("PercentageUsed: got %v, want 0", attrs.PercentageUsed)
+	}
+	if attrs.AvailableSpare == nil || *attrs.AvailableSpare != 0 {
+		t.Errorf("AvailableSpare: got %v, want 0", attrs.AvailableSpare)
+	}
+	if attrs.MediaErrors == nil || *attrs.MediaErrors != 0 {
+		t.Errorf("MediaErrors: got %v, want 0", attrs.MediaErrors)
+	}
+	if attrs.UnsafeShutdowns == nil || *attrs.UnsafeShutdowns != 0 {
+		t.Errorf("UnsafeShutdowns: got %v, want 0", attrs.UnsafeShutdowns)
 	}
 }
 
