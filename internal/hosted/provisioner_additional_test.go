@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -246,6 +248,158 @@ func TestProvisionTenantListOrganizationsAndPersistenceErrors(t *testing.T) {
 func TestProvisionerCleanupOrgDirectoryNoopForEmptyPath(t *testing.T) {
 	p := &Provisioner{}
 	p.cleanupOrgDirectory("org-empty", "")
+}
+
+func TestProvisionTenantGetPersistenceErrorWrapped(t *testing.T) {
+	getPersistenceErr := errors.New("persistence unavailable")
+	p := &Provisioner{
+		persistence: &stubOrgPersistence{
+			listOrganizationsFn: func() ([]*models.Organization, error) { return nil, nil },
+			getPersistenceFn:    func(orgID string) (*config.ConfigPersistence, error) { return nil, getPersistenceErr },
+		},
+		authProvider: &mockAuthProvider{manager: &mockAuthManager{}},
+		newOrgID:     func() string { return "org-get-persistence-error" },
+	}
+
+	_, err := p.ProvisionTenant(context.Background(), ProvisionRequest{
+		Email:    "owner@example.com",
+		Password: "securepass123",
+		OrgName:  "Valid Org",
+	})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+
+	var systemErr *SystemError
+	if !errors.As(err, &systemErr) {
+		t.Fatalf("expected SystemError, got %T (%v)", err, err)
+	}
+	if systemErr.Op != "initialize_tenant_directory" {
+		t.Fatalf("expected op initialize_tenant_directory, got %q", systemErr.Op)
+	}
+	if !errors.Is(err, getPersistenceErr) {
+		t.Fatalf("expected wrapped get persistence error %v, got %v", getPersistenceErr, err)
+	}
+}
+
+func TestProvisionTenantContextCanceledAfterTenantInitCleansUp(t *testing.T) {
+	baseDir := t.TempDir()
+	tenantPersistence := config.NewMultiTenantPersistence(baseDir)
+	authProvider := &mockAuthProvider{manager: &mockAuthManager{}}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	saveCalls := 0
+	p := &Provisioner{
+		persistence: &stubOrgPersistence{
+			listOrganizationsFn: func() ([]*models.Organization, error) {
+				// Include a nil org to exercise the skip path while scanning existing tenants.
+				return []*models.Organization{nil}, nil
+			},
+			getPersistenceFn: func(orgID string) (*config.ConfigPersistence, error) {
+				cp, err := tenantPersistence.GetPersistence(orgID)
+				if err != nil {
+					return nil, err
+				}
+				cancel()
+				return cp, nil
+			},
+			saveOrganizationFn: func(org *models.Organization) error {
+				saveCalls++
+				return nil
+			},
+		},
+		authProvider: authProvider,
+		newOrgID:     func() string { return "org-context-cancel" },
+	}
+
+	_, err := p.ProvisionTenant(ctx, ProvisionRequest{
+		Email:    " owner@example.com ",
+		Password: "securepass123",
+		OrgName:  " Valid Org ",
+	})
+	if err == nil {
+		t.Fatal("expected context error, got nil")
+	}
+
+	var systemErr *SystemError
+	if !errors.As(err, &systemErr) {
+		t.Fatalf("expected SystemError, got %T (%v)", err, err)
+	}
+	if systemErr.Op != "context" {
+		t.Fatalf("expected op context, got %q", systemErr.Op)
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context canceled error, got %v", err)
+	}
+	if saveCalls != 0 {
+		t.Fatalf("expected no SaveOrganization calls after cancellation, got %d", saveCalls)
+	}
+	if authProvider.calls != 0 {
+		t.Fatalf("expected auth provider not called after cancellation, got %d", authProvider.calls)
+	}
+
+	orgDir := filepath.Join(baseDir, "orgs", "org-context-cancel")
+	if _, statErr := os.Stat(orgDir); !os.IsNotExist(statErr) {
+		t.Fatalf("expected org dir to be removed on rollback, stat error: %v", statErr)
+	}
+}
+
+func TestProvisionTenantAuthManagerFailuresCleanup(t *testing.T) {
+	authManagerErr := errors.New("manager unavailable")
+	testCases := []struct {
+		name        string
+		authProvider *mockAuthProvider
+		expectError error
+		expectMsg   string
+	}{
+		{
+			name:         "provider error",
+			authProvider: &mockAuthProvider{err: authManagerErr},
+			expectError:  authManagerErr,
+		},
+		{
+			name:         "nil manager",
+			authProvider: &mockAuthProvider{},
+			expectMsg:    "auth manager is nil",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			baseDir := t.TempDir()
+			p := NewProvisioner(config.NewMultiTenantPersistence(baseDir), tc.authProvider)
+			p.newOrgID = func() string { return "org-auth-failure" }
+
+			_, err := p.ProvisionTenant(context.Background(), ProvisionRequest{
+				Email:    "owner@example.com",
+				Password: "securepass123",
+				OrgName:  "Valid Org",
+			})
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+
+			var systemErr *SystemError
+			if !errors.As(err, &systemErr) {
+				t.Fatalf("expected SystemError, got %T (%v)", err, err)
+			}
+			if systemErr.Op != "get_auth_manager" {
+				t.Fatalf("expected op get_auth_manager, got %q", systemErr.Op)
+			}
+			if tc.expectError != nil && !errors.Is(err, tc.expectError) {
+				t.Fatalf("expected wrapped error %v, got %v", tc.expectError, err)
+			}
+			if tc.expectMsg != "" && (systemErr.Err == nil || systemErr.Err.Error() != tc.expectMsg) {
+				t.Fatalf("expected message %q, got %v", tc.expectMsg, systemErr.Err)
+			}
+
+			orgDir := filepath.Join(baseDir, "orgs", "org-auth-failure")
+			if _, statErr := os.Stat(orgDir); !os.IsNotExist(statErr) {
+				t.Fatalf("expected org dir to be removed on rollback, stat error: %v", statErr)
+			}
+		})
+	}
 }
 
 func TestValidationHelpersAdditionalBranches(t *testing.T) {
