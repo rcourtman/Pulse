@@ -71,8 +71,8 @@ const makeSnapshots = (ids: string[]): WorkloadSummarySnapshot[] =>
     network: 1_000,
   }));
 
-const makeCacheKey = (range: string, nodeScope: string) =>
-  `pulse.workloadsSummaryCharts.${range}::${encodeURIComponent(nodeScope || '__all__')}`;
+const makeCacheKey = (range: string, nodeScope: string, orgScope = 'default') =>
+  `pulse.workloadsSummaryCharts.${encodeURIComponent(orgScope)}::${range}::${encodeURIComponent(nodeScope || '__all__')}`;
 
 describe('WorkloadsSummary performance behavior', () => {
   beforeEach(() => {
