@@ -190,11 +190,11 @@ func DownloadAndInstallHostAgentBinaries(version string, targetDir string) error
 
 	checksumURL := checksumURLForVersion(normalizedVersion)
 	if err := verifyHostAgentBundleChecksum(tempFile.Name(), url, checksumURL); err != nil {
-		return fmt.Errorf("agentbinaries.DownloadAndInstallHostAgentBinaries: %w", err)
+		return err
 	}
 
 	if err := extractHostAgentBinaries(tempFile.Name(), targetDir); err != nil {
-		return fmt.Errorf("agentbinaries.DownloadAndInstallHostAgentBinaries: %w", err)
+		return err
 	}
 
 	return nil
@@ -203,7 +203,7 @@ func DownloadAndInstallHostAgentBinaries(version string, targetDir string) error
 func verifyHostAgentBundleChecksum(bundlePath, bundleURL, checksumURL string) error {
 	checksum, filename, err := downloadHostAgentChecksum(checksumURL)
 	if err != nil {
-		return fmt.Errorf("agentbinaries.verifyHostAgentBundleChecksum: %w", err)
+		return err
 	}
 
 	expectedName := fileNameFromURL(bundleURL)
@@ -213,7 +213,7 @@ func verifyHostAgentBundleChecksum(bundlePath, bundleURL, checksumURL string) er
 
 	actual, err := hashFileSHA256(bundlePath)
 	if err != nil {
-		return fmt.Errorf("agentbinaries.verifyHostAgentBundleChecksum: %w", err)
+		return err
 	}
 
 	if !strings.EqualFold(actual, checksum) {
@@ -371,7 +371,7 @@ func extractHostAgentBinaries(archivePath, targetDir string) error {
 		switch header.Typeflag {
 		case tar.TypeReg:
 			if err := writeHostAgentFile(destPath, tr, header.FileInfo().Mode()); err != nil {
-				return fmt.Errorf("agentbinaries.extractHostAgentBinaries: %w", err)
+				return err
 			}
 		case tar.TypeSymlink:
 			symlinks = append(symlinks, pendingLink{
