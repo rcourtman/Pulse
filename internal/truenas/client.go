@@ -112,6 +112,16 @@ func (c *Client) TestConnection(ctx context.Context) error {
 	return nil
 }
 
+// Close releases idle HTTP transport connections held by the client.
+func (c *Client) Close() {
+	if c == nil || c.httpClient == nil || c.httpClient.Transport == nil {
+		return
+	}
+	if transport, ok := c.httpClient.Transport.(interface{ CloseIdleConnections() }); ok {
+		transport.CloseIdleConnections()
+	}
+}
+
 // GetSystemInfo returns high-level system metadata.
 func (c *Client) GetSystemInfo(ctx context.Context) (*SystemInfo, error) {
 	var response systemInfoResponse

@@ -33,6 +33,10 @@ type Fetcher interface {
 	Fetch(ctx context.Context) (*FixtureSnapshot, error)
 }
 
+type fetcherCloser interface {
+	Close()
+}
+
 // APIFetcher loads snapshots from the live TrueNAS API client.
 type APIFetcher struct {
 	Client *Client
@@ -44,6 +48,14 @@ func (f *APIFetcher) Fetch(ctx context.Context) (*FixtureSnapshot, error) {
 		return nil, fmt.Errorf("truenas api fetcher client is nil")
 	}
 	return f.Client.FetchSnapshot(ctx)
+}
+
+// Close releases idle resources held by the underlying API client.
+func (f *APIFetcher) Close() {
+	if f == nil || f.Client == nil {
+		return
+	}
+	f.Client.Close()
 }
 
 // FixtureFetcher loads snapshots from static fixture data.
@@ -110,6 +122,16 @@ func (p *Provider) Refresh(ctx context.Context) error {
 	p.lastSnapshot = copyFixtureSnapshot(snapshot)
 	p.mu.Unlock()
 	return nil
+}
+
+// Close releases resources held by the active fetcher, if supported.
+func (p *Provider) Close() {
+	if p == nil || p.fetcher == nil {
+		return
+	}
+	if closer, ok := p.fetcher.(fetcherCloser); ok {
+		closer.Close()
+	}
 }
 
 // Records returns unified records if the feature flag is enabled.
