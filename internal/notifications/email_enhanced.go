@@ -139,7 +139,7 @@ func (e *EnhancedEmailManager) SendEmailWithRetry(subject, htmlBody, textBody st
 			log.Debug().
 				Int("attempt", attempt).
 				Dur("delay", delay).
-				Msg("Retrying email send after delay")
+				Msg("retrying email send after delay")
 			time.Sleep(delay)
 		}
 
@@ -155,7 +155,7 @@ func (e *EnhancedEmailManager) SendEmailWithRetry(subject, htmlBody, textBody st
 			if attempt > 0 {
 				log.Info().
 					Int("attempt", attempt).
-					Msg("Email sent successfully after retry")
+					Msg("email sent successfully after retry")
 			}
 			return nil
 		}
@@ -165,7 +165,7 @@ func (e *EnhancedEmailManager) SendEmailWithRetry(subject, htmlBody, textBody st
 			Err(err).
 			Int("attempt", attempt).
 			Str("provider", e.config.Provider).
-			Msg("Email send attempt failed")
+			Msg("email send attempt failed")
 	}
 
 	return fmt.Errorf("email failed after %d attempts: %w", e.config.MaxRetries+1, lastErr)

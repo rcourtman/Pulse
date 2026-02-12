@@ -101,7 +101,7 @@ func (n *NotificationManager) createSecureWebhookClient(timeout time.Duration) *
 				log.Debug().
 					Str("host", host).
 					Str("selected_ip", permittedIP.String()).
-					Msg("DNS resolution pinned for webhook security")
+					Msg("dns resolution pinned for webhook security")
 			}
 
 			// Dial the permitted IP
@@ -395,9 +395,9 @@ func NewNotificationManager(publicURL string) *NotificationManager {
 func NewNotificationManagerWithDataDir(publicURL string, dataDir string) *NotificationManager {
 	cleanURL := strings.TrimRight(strings.TrimSpace(publicURL), "/")
 	if cleanURL != "" {
-		log.Info().Str("publicURL", cleanURL).Msg("NotificationManager initialized with public URL")
+		log.Info().Str("publicURL", cleanURL).Msg("notification manager initialized with public URL")
 	} else {
-		log.Info().Msg("NotificationManager initialized without public URL - webhook links may not work")
+		log.Info().Msg("notification manager initialized without public URL - webhook links may not work")
 	}
 
 	// Initialize persistent queue with tenant-specific data directory
@@ -462,7 +462,7 @@ func (n *NotificationManager) SetPublicURL(publicURL string) {
 	n.publicURL = trimmed
 	n.mu.Unlock()
 
-	log.Info().Str("publicURL", trimmed).Msg("NotificationManager public URL updated")
+	log.Info().Str("publicURL", trimmed).Msg("notification manager public URL updated")
 }
 
 // GetPublicURL returns the configured public URL for notifications.
@@ -518,7 +518,7 @@ func (n *NotificationManager) SetCooldown(minutes int) {
 		minutes = 0
 	}
 	n.cooldown = time.Duration(minutes) * time.Minute
-	log.Info().Int("minutes", minutes).Msg("Updated notification cooldown")
+	log.Info().Int("minutes", minutes).Msg("updated notification cooldown")
 }
 
 // SetNotifyOnResolve toggles whether resolved alerts send notifications.
@@ -529,7 +529,7 @@ func (n *NotificationManager) SetNotifyOnResolve(enabled bool) {
 	n.mu.Unlock()
 
 	if was != enabled {
-		log.Info().Bool("enabled", enabled).Msg("Updated resolved alert notifications")
+		log.Info().Bool("enabled", enabled).Msg("updated resolved alert notifications")
 	}
 }
 
@@ -548,7 +548,7 @@ func (n *NotificationManager) SetGroupingWindow(seconds int) {
 		seconds = 0
 	}
 	n.groupWindow = time.Duration(seconds) * time.Second
-	log.Info().Int("seconds", seconds).Msg("Updated notification grouping window")
+	log.Info().Int("seconds", seconds).Msg("updated notification grouping window")
 }
 
 // SetGroupingOptions updates grouping options
@@ -557,7 +557,7 @@ func (n *NotificationManager) SetGroupingOptions(byNode, byGuest bool) {
 	defer n.mu.Unlock()
 	n.groupByNode = byNode
 	n.groupByGuest = byGuest
-	log.Info().Bool("byNode", byNode).Bool("byGuest", byGuest).Msg("Updated notification grouping options")
+	log.Info().Bool("byNode", byNode).Bool("byGuest", byGuest).Msg("updated notification grouping options")
 }
 
 // AddWebhook adds a webhook configuration
@@ -633,10 +633,10 @@ func (n *NotificationManager) SendAlert(alert *alerts.Alert) {
 		Bool("enabled", n.enabled).
 		Int("webhooks", len(n.webhooks)).
 		Bool("emailEnabled", n.emailConfig.Enabled).
-		Msg("SendAlert called")
+		Msg("send alert called")
 
 	if !n.enabled {
-		log.Debug().Msg("Notifications disabled, skipping")
+		log.Debug().Msg("notifications disabled, skipping")
 		return
 	}
 
@@ -650,7 +650,7 @@ func (n *NotificationManager) SendAlert(alert *alerts.Alert) {
 			Dur("timeSince", time.Since(record.lastSent)).
 			Dur("cooldown", n.cooldown).
 			Dur("remainingCooldown", n.cooldown-time.Since(record.lastSent)).
-			Msg("Alert notification in cooldown for active alert - notification suppressed")
+			Msg("alert notification in cooldown for active alert - notification suppressed")
 		return
 	}
 
@@ -661,7 +661,7 @@ func (n *NotificationManager) SendAlert(alert *alerts.Alert) {
 		Float64("value", alert.Value).
 		Float64("threshold", alert.Threshold).
 		Bool("inCooldown", exists).
-		Msg("Alert passed cooldown check - adding to pending notifications")
+		Msg("alert passed cooldown check - adding to pending notifications")
 
 	// Add to pending alerts for grouping
 	n.pendingAlerts = append(n.pendingAlerts, alert)
@@ -674,7 +674,7 @@ func (n *NotificationManager) SendAlert(alert *alerts.Alert) {
 		log.Debug().
 			Int("pendingCount", len(n.pendingAlerts)).
 			Dur("groupWindow", n.groupWindow).
-			Msg("Started alert grouping timer")
+			Msg("started alert grouping timer")
 	}
 }
 
@@ -707,7 +707,7 @@ func (n *NotificationManager) SendResolvedAlert(resolved *alerts.ResolvedAlert) 
 	if !enabled {
 		log.Debug().
 			Str("alertID", alertCopy.ID).
-			Msg("Resolved notifications disabled, skipping")
+			Msg("resolved notifications disabled, skipping")
 		return
 	}
 
@@ -754,7 +754,7 @@ func (n *NotificationManager) CancelAlert(alertID string) {
 
 	if len(n.pendingAlerts) == 0 && n.groupTimer != nil {
 		if n.groupTimer.Stop() {
-			log.Debug().Str("alertID", alertID).Msg("Stopped grouping timer after alert cancellation")
+			log.Debug().Str("alertID", alertID).Msg("stopped grouping timer after alert cancellation")
 		}
 		n.groupTimer = nil
 	}
@@ -765,14 +765,14 @@ func (n *NotificationManager) CancelAlert(alertID string) {
 	// Cancel any queued notifications containing this alert
 	if n.queue != nil {
 		if err := n.queue.CancelByAlertIDs([]string{alertID}); err != nil {
-			log.Error().Err(err).Str("alertID", alertID).Msg("Failed to cancel queued notifications")
+			log.Error().Err(err).Str("alertID", alertID).Msg("failed to cancel queued notifications")
 		}
 	}
 
 	log.Debug().
 		Str("alertID", alertID).
 		Int("remaining", len(n.pendingAlerts)).
-		Msg("Removed resolved alert from pending notifications and cooldown map")
+		Msg("removed resolved alert from pending notifications and cooldown map")
 }
 
 // sendGroupedAlerts sends all pending alerts as a group
@@ -794,7 +794,7 @@ func (n *NotificationManager) sendGroupedAlerts() {
 
 	log.Info().
 		Int("alertCount", len(alertsToSend)).
-		Msg("Sending grouped alert notifications")
+		Msg("sending grouped alert notifications")
 
 	// Snapshot configuration while holding the lock to avoid races with concurrent updates
 	emailConfig := copyEmailConfig(n.emailConfig)
@@ -827,7 +827,7 @@ func (n *NotificationManager) enqueueNotifications(emailConfig EmailConfig, webh
 	if emailConfig.Enabled {
 		configJSON, err := json.Marshal(emailConfig)
 		if err != nil {
-			log.Error().Err(err).Msg("Failed to marshal email config for queue")
+			log.Error().Err(err).Msg("failed to marshal email config for queue")
 		} else {
 			notif := &QueuedNotification{
 				Type:        "email",
@@ -836,11 +836,11 @@ func (n *NotificationManager) enqueueNotifications(emailConfig EmailConfig, webh
 				MaxAttempts: 3,
 			}
 			if err := n.queue.Enqueue(notif); err != nil {
-				log.Error().Err(err).Msg("Failed to enqueue email notification - falling back to direct send")
+				log.Error().Err(err).Msg("failed to enqueue email notification - falling back to direct send")
 				anyFailed = true
 				spawnAsync(func() { _ = n.sendGroupedEmail(emailConfig, alertsToSend) })
 			} else {
-				log.Debug().Int("alertCount", len(alertsToSend)).Msg("Enqueued email notification")
+				log.Debug().Int("alertCount", len(alertsToSend)).Msg("enqueued email notification")
 			}
 		}
 	}
@@ -850,7 +850,7 @@ func (n *NotificationManager) enqueueNotifications(emailConfig EmailConfig, webh
 		if webhook.Enabled {
 			configJSON, err := json.Marshal(webhook)
 			if err != nil {
-				log.Error().Err(err).Str("webhookName", webhook.Name).Msg("Failed to marshal webhook config for queue")
+				log.Error().Err(err).Str("webhookName", webhook.Name).Msg("failed to marshal webhook config for queue")
 			} else {
 				notif := &QueuedNotification{
 					Type:        "webhook",
@@ -859,12 +859,12 @@ func (n *NotificationManager) enqueueNotifications(emailConfig EmailConfig, webh
 					MaxAttempts: 3,
 				}
 				if err := n.queue.Enqueue(notif); err != nil {
-					log.Error().Err(err).Str("webhookName", webhook.Name).Msg("Failed to enqueue webhook notification - falling back to direct send")
+					log.Error().Err(err).Str("webhookName", webhook.Name).Msg("failed to enqueue webhook notification - falling back to direct send")
 					anyFailed = true
 					webhookCopy := webhook
 					spawnAsync(func() { _ = n.sendGroupedWebhook(webhookCopy, alertsToSend) })
 				} else {
-					log.Debug().Str("webhookName", webhook.Name).Int("alertCount", len(alertsToSend)).Msg("Enqueued webhook notification")
+					log.Debug().Str("webhookName", webhook.Name).Int("alertCount", len(alertsToSend)).Msg("enqueued webhook notification")
 				}
 			}
 		}
@@ -874,7 +874,7 @@ func (n *NotificationManager) enqueueNotifications(emailConfig EmailConfig, webh
 	if appriseConfig.Enabled {
 		configJSON, err := json.Marshal(appriseConfig)
 		if err != nil {
-			log.Error().Err(err).Msg("Failed to marshal apprise config for queue")
+			log.Error().Err(err).Msg("failed to marshal apprise config for queue")
 		} else {
 			notif := &QueuedNotification{
 				Type:        "apprise",
@@ -883,11 +883,11 @@ func (n *NotificationManager) enqueueNotifications(emailConfig EmailConfig, webh
 				MaxAttempts: 3,
 			}
 			if err := n.queue.Enqueue(notif); err != nil {
-				log.Error().Err(err).Msg("Failed to enqueue apprise notification - falling back to direct send")
+				log.Error().Err(err).Msg("failed to enqueue apprise notification - falling back to direct send")
 				anyFailed = true
 				spawnAsync(func() { _ = n.sendGroupedApprise(appriseConfig, alertsToSend) })
 			} else {
-				log.Debug().Int("alertCount", len(alertsToSend)).Msg("Enqueued apprise notification")
+				log.Debug().Int("alertCount", len(alertsToSend)).Msg("enqueued apprise notification")
 			}
 		}
 	}
@@ -930,7 +930,7 @@ func (n *NotificationManager) enqueueResolvedNotifications(queue *NotificationQu
 				anyFailed = true
 				spawnAsync(func() { _ = n.sendResolvedEmail(emailConfig, alertsToSend, resolvedAt) })
 			} else {
-				log.Debug().Int("alertCount", len(alertsToSend)).Msg("Enqueued resolved email notification")
+				log.Debug().Int("alertCount", len(alertsToSend)).Msg("enqueued resolved email notification")
 			}
 		}
 	}
@@ -942,7 +942,7 @@ func (n *NotificationManager) enqueueResolvedNotifications(queue *NotificationQu
 		webhookCopy := webhook
 		configJSON, err := json.Marshal(webhookCopy)
 		if err != nil {
-			log.Error().Err(err).Str("webhookName", webhookCopy.Name).Msg("Failed to marshal webhook config for resolved queue")
+			log.Error().Err(err).Str("webhookName", webhookCopy.Name).Msg("failed to marshal webhook config for resolved queue")
 			continue
 		}
 		notif := &QueuedNotification{
@@ -957,14 +957,14 @@ func (n *NotificationManager) enqueueResolvedNotifications(queue *NotificationQu
 			webhookCopy2 := webhookCopy
 			spawnAsync(func() { _ = n.sendResolvedWebhook(webhookCopy2, alertsToSend, resolvedAt) })
 		} else {
-			log.Debug().Str("webhookName", webhookCopy.Name).Int("alertCount", len(alertsToSend)).Msg("Enqueued resolved webhook notification")
+			log.Debug().Str("webhookName", webhookCopy.Name).Int("alertCount", len(alertsToSend)).Msg("enqueued resolved webhook notification")
 		}
 	}
 
 	if appriseConfig.Enabled {
 		configJSON, err := json.Marshal(appriseConfig)
 		if err != nil {
-			log.Error().Err(err).Msg("Failed to marshal apprise config for resolved queue")
+			log.Error().Err(err).Msg("failed to marshal apprise config for resolved queue")
 		} else {
 			notif := &QueuedNotification{
 				Type:        "apprise" + queueTypeSuffixResolved,
@@ -973,17 +973,17 @@ func (n *NotificationManager) enqueueResolvedNotifications(queue *NotificationQu
 				MaxAttempts: 3,
 			}
 			if err := queue.Enqueue(notif); err != nil {
-				log.Error().Err(err).Msg("Failed to enqueue resolved Apprise notification - falling back to direct send")
+				log.Error().Err(err).Msg("failed to enqueue resolved Apprise notification - falling back to direct send")
 				anyFailed = true
 				spawnAsync(func() { _ = n.sendResolvedApprise(appriseConfig, alertsToSend, resolvedAt) })
 			} else {
-				log.Debug().Int("alertCount", len(alertsToSend)).Msg("Enqueued resolved Apprise notification")
+				log.Debug().Int("alertCount", len(alertsToSend)).Msg("enqueued resolved Apprise notification")
 			}
 		}
 	}
 
 	if anyFailed {
-		log.Debug().Msg("At least one resolved notification enqueue failed; direct sends were triggered")
+		log.Debug().Msg("at least one resolved notification enqueue failed; direct sends were triggered")
 	}
 }
 
@@ -997,12 +997,12 @@ func (n *NotificationManager) sendNotificationsDirect(emailConfig EmailConfig, w
 			Int("smtpPort", emailConfig.SMTPPort).
 			Strs("recipients", emailConfig.To).
 			Bool("hasAuth", emailConfig.Username != "" && emailConfig.Password != "").
-			Msg("Email notifications enabled - sending grouped email")
+			Msg("email notifications enabled - sending grouped email")
 		spawnAsync(func() { _ = n.sendGroupedEmail(emailConfig, alertsToSend) })
 	} else {
 		log.Debug().
 			Int("alertCount", len(alertsToSend)).
-			Msg("Email notifications disabled - skipping email delivery")
+			Msg("email notifications disabled - skipping email delivery")
 	}
 
 	for _, webhook := range webhooks {
@@ -1026,7 +1026,7 @@ func (n *NotificationManager) sendResolvedNotificationsDirect(emailConfig EmailC
 	if emailConfig.Enabled {
 		spawnAsync(func() {
 			if err := n.sendResolvedEmail(emailConfig, alertsToSend, resolvedAt); err != nil {
-				log.Error().Err(err).Msg("Failed to send resolved email notification")
+				log.Error().Err(err).Msg("failed to send resolved email notification")
 			}
 		})
 	}
@@ -1041,7 +1041,7 @@ func (n *NotificationManager) sendResolvedNotificationsDirect(emailConfig EmailC
 				log.Error().
 					Err(err).
 					Str("webhookName", webhookCopy.Name).
-					Msg("Failed to send resolved webhook notification")
+					Msg("failed to send resolved webhook notification")
 			}
 		})
 	}
@@ -1049,7 +1049,7 @@ func (n *NotificationManager) sendResolvedNotificationsDirect(emailConfig EmailC
 	if appriseConfig.Enabled {
 		spawnAsync(func() {
 			if err := n.sendResolvedApprise(appriseConfig, alertsToSend, resolvedAt); err != nil {
-				log.Error().Err(err).Msg("Failed to send resolved Apprise notification")
+				log.Error().Err(err).Msg("failed to send resolved Apprise notification")
 			}
 		})
 	}
@@ -1103,7 +1103,7 @@ func (n *NotificationManager) sendGroupedApprise(config AppriseConfig, alertList
 				Err(err).
 				Str("mode", string(cfg.Mode)).
 				Str("serverUrl", cfg.ServerURL).
-				Msg("Failed to send Apprise notification via API")
+				Msg("failed to send Apprise notification via API")
 			return fmt.Errorf("apprise HTTP send failed: %w", err)
 		}
 	default:
@@ -1113,7 +1113,7 @@ func (n *NotificationManager) sendGroupedApprise(config AppriseConfig, alertList
 				Str("mode", string(cfg.Mode)).
 				Str("cliPath", cfg.CLIPath).
 				Strs("targets", cfg.Targets).
-				Msg("Failed to send Apprise notification")
+				Msg("failed to send Apprise notification")
 			return fmt.Errorf("apprise CLI send failed: %w", err)
 		}
 	}
@@ -1279,7 +1279,7 @@ func (n *NotificationManager) sendAppriseViaCLI(cfg AppriseConfig, title, body s
 				Str("cliPath", cfg.CLIPath).
 				Strs("targets", cfg.Targets).
 				Str("output", string(output)).
-				Msg("Apprise CLI output (error)")
+				Msg("apprise CLI output (error)")
 		}
 		return err
 	}
@@ -1289,7 +1289,7 @@ func (n *NotificationManager) sendAppriseViaCLI(cfg AppriseConfig, title, body s
 			Str("cliPath", cfg.CLIPath).
 			Strs("targets", cfg.Targets).
 			Str("output", string(output)).
-			Msg("Apprise CLI output")
+			Msg("apprise CLI output")
 	}
 	return nil
 }
@@ -1310,7 +1310,7 @@ func (n *NotificationManager) sendAppriseViaHTTP(cfg AppriseConfig, title, body,
 		log.Error().
 			Err(err).
 			Str("serverURL", serverURL).
-			Msg("Apprise server URL validation failed - possible SSRF attempt")
+			Msg("apprise server URL validation failed - possible SSRF attempt")
 		return fmt.Errorf("apprise server URL validation failed: %w", err)
 	}
 
@@ -1387,7 +1387,7 @@ func (n *NotificationManager) sendAppriseViaHTTP(cfg AppriseConfig, title, body,
 			Str("mode", string(cfg.Mode)).
 			Str("serverUrl", cfg.ServerURL).
 			Str("response", string(respBody)).
-			Msg("Apprise API response")
+			Msg("apprise API response")
 	}
 
 	return nil
@@ -1415,7 +1415,7 @@ func (n *NotificationManager) sendResolvedApprise(config AppriseConfig, alertLis
 				Err(err).
 				Str("mode", string(cfg.Mode)).
 				Str("serverUrl", cfg.ServerURL).
-				Msg("Failed to send resolved Apprise notification via API")
+				Msg("failed to send resolved Apprise notification via API")
 			return fmt.Errorf("apprise HTTP send failed: %w", err)
 		}
 	default:
@@ -1425,7 +1425,7 @@ func (n *NotificationManager) sendResolvedApprise(config AppriseConfig, alertLis
 				Str("mode", string(cfg.Mode)).
 				Str("cliPath", cfg.CLIPath).
 				Strs("targets", cfg.Targets).
-				Msg("Failed to send resolved Apprise notification")
+				Msg("failed to send resolved Apprise notification")
 			return fmt.Errorf("apprise CLI send failed: %w", err)
 		}
 	}
@@ -1456,7 +1456,7 @@ func (n *NotificationManager) sendHTMLEmailWithError(subject, htmlBody, textBody
 		recipients = []string{config.From}
 		log.Info().
 			Str("from", config.From).
-			Msg("Using From address as recipient since To is empty")
+			Msg("using From address as recipient since To is empty")
 	}
 
 	// Use shared email manager for rate limiting, or create a new one if not available
@@ -1500,7 +1500,7 @@ func (n *NotificationManager) sendHTMLEmailWithError(subject, htmlBody, textBody
 		Strs("to", recipients).
 		Bool("hasAuth", config.Username != "" && config.Password != "").
 		Bool("startTLS", manager.config.StartTLS).
-		Msg("Attempting to send email via SMTP with enhanced support")
+		Msg("attempting to send email via SMTP with enhanced support")
 
 	err := manager.SendEmailWithRetry(subject, htmlBody, textBody)
 
@@ -1509,14 +1509,14 @@ func (n *NotificationManager) sendHTMLEmailWithError(subject, htmlBody, textBody
 			Err(err).
 			Str("smtp", fmt.Sprintf("%s:%d", config.SMTPHost, config.SMTPPort)).
 			Strs("recipients", recipients).
-			Msg("Failed to send email notification")
+			Msg("failed to send email notification")
 		return fmt.Errorf("failed to send email: %w", err)
 	}
 
 	log.Info().
 		Strs("recipients", recipients).
 		Int("recipientCount", len(recipients)).
-		Msg("Email notification sent successfully")
+		Msg("email notification sent successfully")
 	return nil
 }
 
@@ -1528,7 +1528,7 @@ func (n *NotificationManager) sendHTMLEmail(subject, htmlBody, textBody string, 
 		recipients = []string{config.From}
 		log.Info().
 			Str("from", config.From).
-			Msg("Using From address as recipient since To is empty")
+			Msg("using From address as recipient since To is empty")
 	}
 
 	// Create enhanced email configuration with proper STARTTLS support
@@ -1563,7 +1563,7 @@ func (n *NotificationManager) sendHTMLEmail(subject, htmlBody, textBody string, 
 		Strs("to", recipients).
 		Bool("hasAuth", config.Username != "" && config.Password != "").
 		Bool("startTLS", enhancedConfig.StartTLS).
-		Msg("Attempting to send email via SMTP with enhanced support")
+		Msg("attempting to send email via SMTP with enhanced support")
 
 	err := enhancedManager.SendEmailWithRetry(subject, htmlBody, textBody)
 
@@ -1572,12 +1572,12 @@ func (n *NotificationManager) sendHTMLEmail(subject, htmlBody, textBody string, 
 			Err(err).
 			Str("smtp", fmt.Sprintf("%s:%d", config.SMTPHost, config.SMTPPort)).
 			Strs("recipients", recipients).
-			Msg("Failed to send email notification")
+			Msg("failed to send email notification")
 	} else {
 		log.Info().
 			Strs("recipients", recipients).
 			Int("recipientCount", len(recipients)).
-			Msg("Email notification sent successfully")
+			Msg("email notification sent successfully")
 	}
 }
 
@@ -1623,7 +1623,7 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 				log.Error().
 					Err(renderErr).
 					Str("webhook", webhook.Name).
-					Msg("Failed to render webhook URL template for grouped notification")
+					Msg("failed to render webhook URL template for grouped notification")
 				return nil, false
 			}
 			webhook.URL = rendered
@@ -1638,7 +1638,7 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 					log.Error().
 						Err(chatErr).
 						Str("webhook", webhook.Name).
-						Msg("Failed to extract Telegram chat_id for grouped notification")
+						Msg("failed to extract Telegram chat_id for grouped notification")
 					return nil, false
 				}
 				if chatID != "" {
@@ -1646,7 +1646,7 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 					log.Debug().
 						Str("webhook", webhook.Name).
 						Str("chatID", chatID).
-						Msg("Extracted Telegram chat_id from rendered URL for grouped notification")
+						Msg("extracted Telegram chat_id from rendered URL for grouped notification")
 				}
 			case "pagerduty":
 				if dataPtr.CustomFields == nil {
@@ -1700,7 +1700,7 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 				Err(err).
 				Str("webhook", webhook.Name).
 				Int("alertCount", len(alertList)).
-				Msg("Failed to generate grouped payload from custom template")
+				Msg("failed to generate grouped payload from custom template")
 			return fmt.Errorf("failed to generate payload from custom template: %w", err)
 		}
 	} else if webhook.Service != "" && webhook.Service != "generic" && len(alertList) > 0 {
@@ -1757,7 +1757,7 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 					Err(err).
 					Str("webhook", webhook.Name).
 					Int("alertCount", len(alertList)).
-					Msg("Failed to generate payload for grouped alerts")
+					Msg("failed to generate payload for grouped alerts")
 				return fmt.Errorf("failed to generate payload for grouped alerts: %w", err)
 			}
 		} else {
@@ -1788,7 +1788,7 @@ func (n *NotificationManager) sendGroupedWebhook(webhook WebhookConfig, alertLis
 				Err(err).
 				Str("webhook", webhook.Name).
 				Int("alertCount", len(alertList)).
-				Msg("Failed to marshal grouped webhook payload")
+				Msg("failed to marshal grouped webhook payload")
 			return fmt.Errorf("failed to marshal grouped webhook payload: %w", err)
 		}
 	}
@@ -1842,7 +1842,7 @@ func (n *NotificationManager) sendResolvedWebhook(webhook WebhookConfig, alertLi
 			Err(err).
 			Str("webhook", webhook.Name).
 			Int("alertCount", len(alertList)).
-			Msg("Failed to marshal resolved webhook payload")
+			Msg("failed to marshal resolved webhook payload")
 		return fmt.Errorf("failed to marshal resolved webhook payload: %w", err)
 	}
 
@@ -1910,7 +1910,7 @@ func (n *NotificationManager) sendResolvedWebhookNtfy(webhook WebhookConfig, ale
 		log.Error().
 			Err(err).
 			Str("webhook", webhook.Name).
-			Msg("Failed to send resolved ntfy webhook")
+			Msg("failed to send resolved ntfy webhook")
 		return fmt.Errorf("failed to send ntfy webhook: %w", err)
 	}
 	defer resp.Body.Close()
@@ -1927,7 +1927,7 @@ func (n *NotificationManager) sendResolvedWebhookNtfy(webhook WebhookConfig, ale
 			Str("type", "resolved").
 			Int("status", resp.StatusCode).
 			Int("alertCount", len(alertList)).
-			Msg("Resolved ntfy webhook sent successfully")
+			Msg("resolved ntfy webhook sent successfully")
 		return nil
 	}
 
@@ -1936,7 +1936,7 @@ func (n *NotificationManager) sendResolvedWebhookNtfy(webhook WebhookConfig, ale
 		Str("service", "ntfy").
 		Int("status", resp.StatusCode).
 		Str("response", respBody.String()).
-		Msg("Resolved ntfy webhook returned non-success status")
+		Msg("resolved ntfy webhook returned non-success status")
 	return fmt.Errorf("ntfy webhook returned HTTP %d: %s", resp.StatusCode, respBody.String())
 }
 
@@ -1971,7 +1971,7 @@ func (n *NotificationManager) checkWebhookRateLimit(webhookURL string) bool {
 			Str("webhookURL", webhookURL).
 			Int("sentCount", limit.sentCount).
 			Dur("window", WebhookRateLimitWindow).
-			Msg("Webhook rate limit exceeded, dropping request")
+			Msg("webhook rate limit exceeded, dropping request")
 		return false
 	}
 
@@ -1988,7 +1988,7 @@ func (n *NotificationManager) sendWebhookRequest(webhook WebhookConfig, jsonData
 			Err(err).
 			Str("webhook", webhook.Name).
 			Str("url", webhook.URL).
-			Msg("Webhook URL validation failed at send time - possible DNS rebinding")
+			Msg("webhook URL validation failed at send time - possible DNS rebinding")
 		return fmt.Errorf("webhook URL validation failed: %w", err)
 	}
 
@@ -2019,7 +2019,7 @@ func (n *NotificationManager) sendWebhookRequest(webhook WebhookConfig, jsonData
 			log.Debug().
 				Str("original", webhook.URL).
 				Str("cleaned", webhookURL).
-				Msg("Stripped chat_id from Telegram webhook URL")
+				Msg("stripped chat_id from Telegram webhook URL")
 		}
 	}
 
@@ -2029,7 +2029,7 @@ func (n *NotificationManager) sendWebhookRequest(webhook WebhookConfig, jsonData
 			Err(err).
 			Str("webhook", webhook.Name).
 			Str("type", alertType).
-			Msg("Failed to create webhook request")
+			Msg("failed to create webhook request")
 		return fmt.Errorf("failed to create webhook request: %w", err)
 	}
 
@@ -2057,7 +2057,7 @@ func (n *NotificationManager) sendWebhookRequest(webhook WebhookConfig, jsonData
 		log.Debug().
 			Str("webhook", webhook.Name).
 			Str("service", webhook.Service).
-			Msg("Sending webhook")
+			Msg("sending webhook")
 	}
 
 	// Send request with shared secure client
@@ -2067,7 +2067,7 @@ func (n *NotificationManager) sendWebhookRequest(webhook WebhookConfig, jsonData
 			Err(err).
 			Str("webhook", webhook.Name).
 			Str("type", alertType).
-			Msg("Failed to send webhook")
+			Msg("failed to send webhook")
 		return fmt.Errorf("failed to send webhook: %w", err)
 	}
 	defer resp.Body.Close()
@@ -2081,7 +2081,7 @@ func (n *NotificationManager) sendWebhookRequest(webhook WebhookConfig, jsonData
 			Err(err).
 			Str("webhook", webhook.Name).
 			Str("type", alertType).
-			Msg("Failed to read webhook response body")
+			Msg("failed to read webhook response body")
 		return fmt.Errorf("failed to read webhook response: %w", err)
 	}
 
@@ -2091,7 +2091,7 @@ func (n *NotificationManager) sendWebhookRequest(webhook WebhookConfig, jsonData
 			Str("webhook", webhook.Name).
 			Int64("bytesRead", bytesRead).
 			Int("maxSize", WebhookMaxResponseSize).
-			Msg("Webhook response exceeded size limit, truncated")
+			Msg("webhook response exceeded size limit, truncated")
 	}
 
 	responseBody := respBody.String()
@@ -2103,14 +2103,14 @@ func (n *NotificationManager) sendWebhookRequest(webhook WebhookConfig, jsonData
 			Str("type", alertType).
 			Int("status", resp.StatusCode).
 			Int("payloadSize", len(jsonData)).
-			Msg("Webhook notification sent successfully")
+			Msg("webhook notification sent successfully")
 
 		// Log response body only in debug mode for successful requests
 		if len(responseBody) > 0 {
 			log.Debug().
 				Str("webhook", webhook.Name).
 				Str("response", responseBody).
-				Msg("Webhook response body")
+				Msg("webhook response body")
 		}
 		return nil
 	} else {
@@ -2120,7 +2120,7 @@ func (n *NotificationManager) sendWebhookRequest(webhook WebhookConfig, jsonData
 			Str("type", alertType).
 			Int("status", resp.StatusCode).
 			Str("response", responseBody).
-			Msg("Webhook returned non-success status")
+			Msg("webhook returned non-success status")
 		return fmt.Errorf("webhook returned HTTP %d: %s", resp.StatusCode, responseBody)
 	}
 }
@@ -2139,7 +2139,7 @@ func (n *NotificationManager) sendWebhook(webhook WebhookConfig, alert *alerts.A
 		log.Error().
 			Err(renderErr).
 			Str("webhook", webhook.Name).
-			Msg("Failed to render webhook URL template")
+			Msg("failed to render webhook URL template")
 		return
 	}
 	webhook.URL = renderedURL
@@ -2151,7 +2151,7 @@ func (n *NotificationManager) sendWebhook(webhook WebhookConfig, alert *alerts.A
 			log.Error().
 				Err(chatErr).
 				Str("webhook", webhook.Name).
-				Msg("Failed to extract Telegram chat_id - skipping webhook")
+				Msg("failed to extract Telegram chat_id - skipping webhook")
 			return
 		}
 		if chatID != "" {
@@ -2159,7 +2159,7 @@ func (n *NotificationManager) sendWebhook(webhook WebhookConfig, alert *alerts.A
 			log.Debug().
 				Str("webhook", webhook.Name).
 				Str("chatID", chatID).
-				Msg("Extracted Telegram chat_id from rendered URL")
+				Msg("extracted Telegram chat_id from rendered URL")
 		}
 	} else if webhook.Service == "pagerduty" {
 		if data.CustomFields == nil {
@@ -2187,7 +2187,7 @@ func (n *NotificationManager) sendWebhook(webhook WebhookConfig, alert *alerts.A
 				Err(err).
 				Str("webhook", webhook.Name).
 				Str("alertID", alert.ID).
-				Msg("Failed to generate webhook payload from custom template")
+				Msg("failed to generate webhook payload from custom template")
 			return
 		}
 	} else if webhook.Service != "" && webhook.Service != "generic" {
@@ -2219,7 +2219,7 @@ func (n *NotificationManager) sendWebhook(webhook WebhookConfig, alert *alerts.A
 					Str("webhook", webhook.Name).
 					Str("service", webhook.Service).
 					Str("alertID", alert.ID).
-					Msg("Failed to generate webhook payload")
+					Msg("failed to generate webhook payload")
 				return
 			}
 		} else {
@@ -2244,7 +2244,7 @@ func (n *NotificationManager) sendWebhook(webhook WebhookConfig, alert *alerts.A
 				Err(err).
 				Str("webhook", webhook.Name).
 				Str("alertID", alert.ID).
-				Msg("Failed to marshal webhook payload")
+				Msg("failed to marshal webhook payload")
 			return
 		}
 	}
@@ -2408,7 +2408,7 @@ func (n *NotificationManager) generatePayloadFromTemplateWithService(templateStr
 		log.Error().
 			Err(err).
 			Str("payload", buf.String()).
-			Msg("Generated webhook payload is invalid JSON")
+			Msg("generated webhook payload is invalid JSON")
 		return nil, fmt.Errorf("template produced invalid JSON: %w", err)
 	}
 
@@ -2539,7 +2539,7 @@ func (n *NotificationManager) ValidateWebhookURL(webhookURL string) error {
 		log.Debug().
 			Str("host", host).
 			Str("url", webhookURL).
-			Msg("Localhost webhook URL allowed via allowlist")
+			Msg("localhost webhook URL allowed via allowlist")
 	}
 
 	// Block link-local addresses
@@ -2562,7 +2562,7 @@ func (n *NotificationManager) ValidateWebhookURL(webhookURL string) error {
 				log.Debug().
 					Str("ip", ip.String()).
 					Str("url", webhookURL).
-					Msg("Webhook URL resolves to private IP in allowlist")
+					Msg("webhook URL resolves to private IP in allowlist")
 			} else {
 				return fmt.Errorf("webhook URL resolves to private IP %s - private networks are not allowed for security (configure allowlist in System Settings)", ip.String())
 			}
@@ -2586,7 +2586,7 @@ func (n *NotificationManager) ValidateWebhookURL(webhookURL string) error {
 	if u.Scheme == "https" && isNumericIP(host) {
 		log.Warn().
 			Str("url", webhookURL).
-			Msg("Webhook URL uses numeric IP with HTTPS - certificate validation may fail")
+			Msg("webhook URL uses numeric IP with HTTPS - certificate validation may fail")
 	}
 
 	return nil
@@ -2639,7 +2639,7 @@ func (n *NotificationManager) UpdateAllowedPrivateCIDRs(cidrsString string) erro
 
 	// Empty string means no allowlist (block all private IPs)
 	if cidrsString == "" {
-		log.Info().Msg("Webhook private IP allowlist cleared - all private IPs blocked")
+		log.Info().Msg("webhook private IP allowlist cleared - all private IPs blocked")
 		return nil
 	}
 
@@ -2678,7 +2678,7 @@ func (n *NotificationManager) UpdateAllowedPrivateCIDRs(cidrsString string) erro
 	log.Info().
 		Str("cidrs", cidrsString).
 		Int("count", len(parsedNets)).
-		Msg("Webhook private IP allowlist updated")
+		Msg("webhook private IP allowlist updated")
 
 	return nil
 }
@@ -2773,7 +2773,7 @@ func (n *NotificationManager) SendTestNotification(method string) error {
 			Int("port", n.emailConfig.SMTPPort).
 			Str("from", n.emailConfig.From).
 			Int("toCount", len(n.emailConfig.To)).
-			Msg("Testing email notification")
+			Msg("testing email notification")
 		if !n.emailConfig.Enabled {
 			return fmt.Errorf("email notifications are not enabled")
 		}
@@ -2811,7 +2811,7 @@ func (n *NotificationManager) SendTestNotification(method string) error {
 			Bool("enabled", appriseConfig.Enabled).
 			Str("mode", string(appriseConfig.Mode)).
 			Int("targetCount", len(appriseConfig.Targets)).
-			Msg("Testing Apprise notification")
+			Msg("testing Apprise notification")
 
 		if !appriseConfig.Enabled {
 			return fmt.Errorf("apprise notifications are not enabled")
@@ -2833,7 +2833,7 @@ func (n *NotificationManager) SendTestAppriseWithConfig(config AppriseConfig) er
 		Str("mode", string(cfg.Mode)).
 		Int("targetCount", len(cfg.Targets)).
 		Str("serverURL", cfg.ServerURL).
-		Msg("Testing Apprise notification with provided config")
+		Msg("testing Apprise notification with provided config")
 
 	if !cfg.Enabled {
 		switch cfg.Mode {
@@ -2933,7 +2933,7 @@ func (n *NotificationManager) SendTestNotificationWithConfig(method string, conf
 			Strs("to", config.To).
 			Bool("smtpEmpty", config.SMTPHost == "").
 			Bool("fromEmpty", config.From == "").
-			Msg("Testing email notification with provided config")
+			Msg("testing email notification with provided config")
 
 		if !config.Enabled {
 			return fmt.Errorf("email notifications are not enabled in the provided configuration")
@@ -2994,7 +2994,7 @@ func (n *NotificationManager) ProcessQueuedNotification(notif *QueuedNotificatio
 		Str("type", baseType).
 		Str("event", string(event)).
 		Int("alertCount", len(notif.Alerts)).
-		Msg("Processing queued notification")
+		Msg("processing queued notification")
 
 	var err error
 	switch baseType {
@@ -3076,7 +3076,7 @@ func (n *NotificationManager) cleanupOldNotificationRecords() {
 				log.Debug().
 					Int("cleaned", cleaned).
 					Int("remaining", len(n.lastNotified)).
-					Msg("Cleaned up old notification cooldown records")
+					Msg("cleaned up old notification cooldown records")
 			}
 			n.mu.Unlock()
 		case <-n.stopCleanup:
@@ -3118,5 +3118,5 @@ func (n *NotificationManager) Stop() {
 	// Clear pending alerts
 	n.pendingAlerts = nil
 
-	log.Info().Msg("NotificationManager stopped")
+	log.Info().Msg("notification manager stopped")
 }
