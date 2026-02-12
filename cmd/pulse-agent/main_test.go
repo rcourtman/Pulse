@@ -874,6 +874,39 @@ func TestInitDockerWithRetry_Cancel(t *testing.T) {
 	}
 }
 
+func TestInitDockerWithRetry_CancelDuringBackoff(t *testing.T) {
+	origAgent := newDockerAgent
+	origInitial := retryInitialDelay
+	origMax := retryMaxDelay
+	defer func() {
+		newDockerAgent = origAgent
+		retryInitialDelay = origInitial
+		retryMaxDelay = origMax
+	}()
+
+	newDockerAgent = func(cfg dockeragent.Config) (RunnableCloser, error) {
+		return nil, errors.New("not available")
+	}
+	retryInitialDelay = 5 * time.Second
+	retryMaxDelay = 5 * time.Second
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		cancel()
+	}()
+
+	start := time.Now()
+	logger := zerolog.New(os.Stdout)
+	agent := initDockerWithRetry(ctx, dockeragent.Config{}, &logger)
+	if agent != nil {
+		t.Fatalf("expected nil agent when cancelled")
+	}
+	if elapsed := time.Since(start); elapsed > 500*time.Millisecond {
+		t.Fatalf("expected prompt cancellation during backoff, took %v", elapsed)
+	}
+}
+
 func TestInitDockerWithRetry_Success(t *testing.T) {
 	orig := newDockerAgent
 	defer func() { newDockerAgent = orig }()
@@ -922,6 +955,39 @@ func TestInitKubernetesWithRetry_Cancel(t *testing.T) {
 	agent := initKubernetesWithRetry(ctx, cfg, &logger)
 	if agent != nil {
 		t.Errorf("expected nil agent when cancelled")
+	}
+}
+
+func TestInitKubernetesWithRetry_CancelDuringBackoff(t *testing.T) {
+	origAgent := newKubeAgent
+	origInitial := retryInitialDelay
+	origMax := retryMaxDelay
+	defer func() {
+		newKubeAgent = origAgent
+		retryInitialDelay = origInitial
+		retryMaxDelay = origMax
+	}()
+
+	newKubeAgent = func(cfg kubernetesagent.Config) (Runnable, error) {
+		return nil, errors.New("not available")
+	}
+	retryInitialDelay = 5 * time.Second
+	retryMaxDelay = 5 * time.Second
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		cancel()
+	}()
+
+	start := time.Now()
+	logger := zerolog.New(os.Stdout)
+	agent := initKubernetesWithRetry(ctx, kubernetesagent.Config{}, &logger)
+	if agent != nil {
+		t.Fatalf("expected nil agent when cancelled")
+	}
+	if elapsed := time.Since(start); elapsed > 500*time.Millisecond {
+		t.Fatalf("expected prompt cancellation during backoff, took %v", elapsed)
 	}
 }
 
