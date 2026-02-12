@@ -39,18 +39,18 @@ func (m *Monitor) pollCephCluster(ctx context.Context, instanceName string, clie
 
 	status, err := client.GetCephStatus(cephCtx)
 	if err != nil {
-		log.Debug().Err(err).Str("instance", instanceName).Msg("Ceph status unavailable – preserving previous Ceph state")
+		log.Debug().Err(err).Str("instance", instanceName).Msg("ceph status unavailable – preserving previous ceph state")
 		return
 	}
 	if status == nil {
-		log.Debug().Str("instance", instanceName).Msg("Ceph status response empty – clearing cached Ceph state")
+		log.Debug().Str("instance", instanceName).Msg("ceph status response empty – clearing cached ceph state")
 		m.state.UpdateCephClustersForInstance(instanceName, []models.CephCluster{})
 		return
 	}
 
 	df, err := client.GetCephDF(cephCtx)
 	if err != nil {
-		log.Debug().Err(err).Str("instance", instanceName).Msg("Ceph DF unavailable – continuing with status-only data")
+		log.Debug().Err(err).Str("instance", instanceName).Msg("ceph DF unavailable – continuing with status-only data")
 	}
 
 	cluster := buildCephClusterModel(instanceName, status, df)
