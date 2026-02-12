@@ -67,8 +67,7 @@ func IsPasswordHashed(password string) bool {
 	if length >= 55 && length < 60 {
 		log.Error().
 			Int("length", length).
-			Str("hash_start", password[:20]+"...").
-			Msg("Bcrypt hash appears truncated! Should be 60 characters. Password will be treated as plaintext.")
+			Msg("Bcrypt hash appears truncated; expected 60 characters; treating value as plaintext")
 		return false // Treat as plaintext to force user to fix it
 	}
 
@@ -1404,8 +1403,13 @@ func Load() (*Config, error) {
 		} else {
 			// Already hashed - validate it's complete
 			if len(authPass) != 60 {
-				log.Error().Int("length", len(authPass)).Msg("Bcrypt hash appears truncated! Expected 60 characters. Authentication may fail.")
-				log.Error().Msg("Ensure the full hash is enclosed in single quotes in your .env file or Docker environment")
+				log.Error().
+					Int("length", len(authPass)).
+					Str("env_var", "PULSE_AUTH_PASS").
+					Msg("Bcrypt hash appears truncated; expected 60 characters; authentication may fail")
+				log.Error().
+					Str("env_var", "PULSE_AUTH_PASS").
+					Msg("Ensure the full bcrypt hash is enclosed in single quotes in your .env file or Docker environment")
 			}
 			cfg.AuthPass = authPass
 			log.Debug().Msg("Loaded pre-hashed password from env var")
