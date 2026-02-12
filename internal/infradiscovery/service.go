@@ -559,17 +559,7 @@ func (s *Service) GetLastRun() time.Time {
 
 // ForceRefresh triggers an immediate discovery scan.
 func (s *Service) ForceRefresh(ctx context.Context) {
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				log.Error().
-					Interface("panic", r).
-					Stack().
-					Msg("Recovered from panic in ForceRefresh infrastructure discovery")
-			}
-		}()
-		s.RunDiscovery(ctx)
-	}()
+	goRecover("ForceRefresh infrastructure discovery", func() { s.RunDiscovery(ctx) })
 }
 
 // ClearCache clears the analysis cache, forcing re-analysis of all containers.
