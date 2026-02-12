@@ -62,10 +62,16 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	// Use http.ResponseController (Go 1.20+) to clear the deadline.
 	rc := http.NewResponseController(w)
 	if err := rc.SetReadDeadline(time.Time{}); err != nil {
-		log.Debug().Err(err).Msg("Failed to clear read deadline via ResponseController")
+		log.Debug().
+			Err(err).
+			Str("remote_addr", remoteAddr).
+			Msg("Failed to clear read deadline via ResponseController")
 	}
 	if err := rc.SetWriteDeadline(time.Time{}); err != nil {
-		log.Debug().Err(err).Msg("Failed to clear write deadline via ResponseController")
+		log.Debug().
+			Err(err).
+			Str("remote_addr", remoteAddr).
+			Msg("Failed to clear write deadline via ResponseController")
 	}
 
 	conn, err := upgrader.Upgrade(w, r, nil)
@@ -264,10 +270,16 @@ func (s *Server) readLoop(ac *agentConn) {
 				select {
 				case ch <- result:
 				default:
-					log.Warn().Str("request_id", result.RequestID).Msg("Result channel full, dropping")
+					log.Warn().
+						Str("request_id", result.RequestID).
+						Str("agent_id", ac.agent.AgentID).
+						Msg("Result channel full, dropping")
 				}
 			} else {
-				log.Warn().Str("request_id", result.RequestID).Msg("No pending request for result")
+				log.Warn().
+					Str("request_id", result.RequestID).
+					Str("agent_id", ac.agent.AgentID).
+					Msg("No pending request for result")
 			}
 		}
 	}
@@ -302,6 +314,7 @@ func (s *Server) pingLoop(ac *agentConn, done chan struct{}) {
 
 				if consecutiveFailures >= maxConsecutiveFailures {
 					log.Error().
+						Err(err).
 						Str("agent_id", ac.agent.AgentID).
 						Str("hostname", ac.agent.Hostname).
 						Int("failures", consecutiveFailures).
