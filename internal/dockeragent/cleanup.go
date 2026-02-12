@@ -23,23 +23,13 @@ func (a *Agent) cleanupOrphanedBackups(ctx context.Context) {
 	}
 
 	for _, c := range list {
-		// Check if it's a backup container
-		// Name format:  originalName + "_pulse_backup_" + timestamp
-		isBackup := false
-		for _, name := range c.Names {
-			if strings.Contains(name, "_pulse_backup_") {
-				isBackup = true
-				break
-			}
-		}
-
-		if !isBackup {
+		if !isBackupContainer(c.Names) {
 			continue
 		}
 
 		// Check age based on the timestamp in the name, not the container's creation date
 		// (Renaming a container does not change its creation date)
-		parts := strings.Split(c.Names[0], "_pulse_backup_")
+		parts := strings.Split(c.Names[0], backupContainerMarker)
 		if len(parts) < 2 {
 			continue
 		}
