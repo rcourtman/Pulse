@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/rcourtman/pulse-go-rewrite/internal/agentbinaries"
+	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/api"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -171,7 +171,7 @@ func Run(ctx context.Context, version string) error {
 	log.Info().Msg("Starting Pulse monitoring server")
 
 	// Validate agent binaries are available for download
-	agentbinaries.EnsureHostAgentBinaries(version)
+	updates.EnsureHostAgentBinaries(version)
 
 	// Create derived context that cancels on interrupt
 	ctx, cancel := context.WithCancel(ctx)

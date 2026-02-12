@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/agentbinaries"
+	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 )
 
@@ -113,7 +113,7 @@ func TestSortedHostAgentKeys(t *testing.T) {
 		t.Fatalf("expected nil result for nil map, got %v", got)
 	}
 
-	missing := map[string]agentbinaries.HostAgentBinary{
+	missing := map[string]updates.HostAgentBinary{
 		"zeta":  {},
 		"alpha": {},
 		"beta":  {},
