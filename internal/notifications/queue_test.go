@@ -3,6 +3,7 @@ package notifications
 import (
 	"fmt"
 	"os"
+	"runtime"
 	"testing"
 	"time"
 
@@ -266,6 +267,30 @@ func TestCancelByAlertIDs_NoMatchingNotifications(t *testing.T) {
 	}
 	if stats["cancelled"] != 0 {
 		t.Errorf("Expected 0 cancelled notifications, got %d", stats["cancelled"])
+	}
+}
+
+func TestNewNotificationQueueCreatesSecureDirectory(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("directory permission bits are not reliably enforced on windows")
+	}
+
+	baseDir := t.TempDir()
+	queueDir := baseDir + "/notification-queue"
+
+	nq, err := NewNotificationQueue(queueDir)
+	if err != nil {
+		t.Fatalf("Failed to create notification queue: %v", err)
+	}
+	defer nq.Stop()
+
+	info, err := os.Stat(queueDir)
+	if err != nil {
+		t.Fatalf("failed to stat queue directory: %v", err)
+	}
+
+	if perms := info.Mode().Perm(); perms != 0700 {
+		t.Fatalf("expected queue directory permissions 0700, got %#o", perms)
 	}
 }
 

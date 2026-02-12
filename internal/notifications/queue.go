@@ -66,8 +66,9 @@ func NewNotificationQueue(dataDir string) (*NotificationQueue, error) {
 		dataDir = filepath.Join(utils.GetDataDir(), "notifications")
 	}
 
-	// Ensure directory exists
-	if err := os.MkdirAll(dataDir, 0755); err != nil {
+	// Queue data includes alert payload/context and destination configuration;
+	// keep it owner-only by default.
+	if err := os.MkdirAll(dataDir, 0700); err != nil {
 		return nil, fmt.Errorf("failed to create notification queue directory: %w", err)
 	}
 
