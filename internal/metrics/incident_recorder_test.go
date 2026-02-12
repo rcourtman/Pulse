@@ -1,6 +1,8 @@
 package metrics
 
 import (
+	"os"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -247,5 +249,28 @@ func TestSaveAndLoad(t *testing.T) {
 	}
 	if window.Status != IncidentWindowStatusComplete {
 		t.Fatalf("expected status to persist, got %s", window.Status)
+	}
+}
+
+func TestSaveToDiskCreatesSecureDirectory(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("directory permission bits are not reliably enforced on windows")
+	}
+
+	baseDir := t.TempDir()
+	dataDir := baseDir + "/incident-data"
+	recorder := NewIncidentRecorder(IncidentRecorderConfig{DataDir: dataDir})
+
+	if err := recorder.saveToDisk(); err != nil {
+		t.Fatalf("save failed: %v", err)
+	}
+
+	info, err := os.Stat(dataDir)
+	if err != nil {
+		t.Fatalf("failed to stat data dir: %v", err)
+	}
+
+	if perms := info.Mode().Perm(); perms != 0700 {
+		t.Fatalf("expected data dir permissions 0700, got %#o", perms)
 	}
 }
