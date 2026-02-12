@@ -33,6 +33,29 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 	r.mux.HandleFunc("/api/security/oidc", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.handleOIDCConfig)))
 	r.mux.HandleFunc("/api/oidc/login", r.handleOIDCLogin)
 	r.mux.HandleFunc(config.DefaultOIDCCallbackPath, r.handleOIDCCallback)
+	// Per-provider SSO OIDC routes: /api/oidc/{providerID}/login and /api/oidc/{providerID}/callback
+	// Use a prefix handler since Go 1.x ServeMux doesn't support path params.
+	// Requests matching /api/oidc/{something}/ are dispatched here; the legacy
+	// /api/oidc/login and /api/oidc/callback routes registered above take priority
+	// because ServeMux prefers longer exact matches over prefix patterns.
+	r.mux.HandleFunc("/api/oidc/", func(w http.ResponseWriter, req *http.Request) {
+		// Determine which sub-endpoint was requested
+		parts := strings.Split(strings.TrimPrefix(req.URL.Path, "/"), "/")
+		// Expected: ["api", "oidc", "{providerID}", "{endpoint}"]
+		if len(parts) < 4 {
+			http.NotFound(w, req)
+			return
+		}
+		endpoint := parts[3]
+		switch endpoint {
+		case "login":
+			r.handleSSOOIDCLogin(w, req)
+		case "callback":
+			r.handleSSOOIDCCallback(w, req)
+		default:
+			http.NotFound(w, req)
+		}
+	})
 	r.mux.HandleFunc("/api/security/sso/providers/test", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, func(w http.ResponseWriter, req *http.Request) {
 		if !ensureScope(w, req, config.ScopeSettingsWrite) {
 			return
@@ -117,7 +140,8 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 				(oidcCfg != nil && oidcCfg.Enabled) ||
 				r.config.HasAPITokens() ||
 				r.config.ProxyAuthSecret != "" ||
-				r.hostedMode
+				r.hostedMode ||
+				(r.ssoConfig != nil && r.ssoConfig.HasEnabledProviders())
 
 			// Check if .env file exists but hasn't been loaded yet (pending restart)
 			configuredButPendingRestart := false
@@ -199,7 +223,8 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 			requiresAuth := r.config.HasAPITokens() ||
 				(r.config.AuthUser != "" && r.config.AuthPass != "") ||
 				(r.config.OIDC != nil && r.config.OIDC.Enabled) ||
-				r.config.ProxyAuthSecret != ""
+				r.config.ProxyAuthSecret != "" ||
+				(r.ssoConfig != nil && r.ssoConfig.HasEnabledProviders())
 
 			// Resolve the public URL for agent install commands
 			// If PULSE_PUBLIC_URL is configured, use that; otherwise derive from request
@@ -248,6 +273,46 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 				status["oidcLogoutURL"] = oidcCfg.LogoutURL
 				if len(oidcCfg.EnvOverrides) > 0 {
 					status["oidcEnvOverrides"] = oidcCfg.EnvOverrides
+				}
+			}
+
+			// Include SSO providers for login page discovery
+			if r.ssoConfig != nil {
+				enabledProviders := r.ssoConfig.GetEnabledProviders()
+				if len(enabledProviders) > 0 {
+					baseURL := r.config.PublicURL
+					if baseURL == "" {
+						baseURL = ""
+					}
+					type ssoProviderInfo struct {
+						ID          string `json:"id"`
+						Name        string `json:"name"`
+						Type        string `json:"type"`
+						DisplayName string `json:"displayName,omitempty"`
+						IconURL     string `json:"iconUrl,omitempty"`
+						LoginURL    string `json:"loginUrl"`
+					}
+					var ssoProviders []ssoProviderInfo
+					for _, p := range enabledProviders {
+						info := ssoProviderInfo{
+							ID:          p.ID,
+							Name:        p.Name,
+							Type:        string(p.Type),
+							DisplayName: p.DisplayName,
+							IconURL:     p.IconURL,
+						}
+						if info.DisplayName == "" {
+							info.DisplayName = p.Name
+						}
+						switch p.Type {
+						case config.SSOProviderTypeOIDC:
+							info.LoginURL = "/api/oidc/" + p.ID + "/login"
+						case config.SSOProviderTypeSAML:
+							info.LoginURL = "/api/saml/" + p.ID + "/login"
+						}
+						ssoProviders = append(ssoProviders, info)
+					}
+					status["ssoProviders"] = ssoProviders
 				}
 			}
 

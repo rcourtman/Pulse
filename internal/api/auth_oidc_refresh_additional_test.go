@@ -101,7 +101,7 @@ func TestRefreshOIDCSessionTokens_Success(t *testing.T) {
 	}
 }
 
-func TestRefreshOIDCSessionTokens_IssuerMismatchInvalidates(t *testing.T) {
+func TestRefreshOIDCSessionTokens_IssuerMismatchSkipsRefresh(t *testing.T) {
 	InitSessionStore(t.TempDir())
 	store := GetSessionStore()
 
@@ -127,8 +127,10 @@ func TestRefreshOIDCSessionTokens_IssuerMismatchInvalidates(t *testing.T) {
 
 	refreshOIDCSessionTokens(cfg, sessionToken, session)
 
-	if store.GetSession(sessionToken) != nil {
-		t.Fatalf("expected session to be invalidated on issuer mismatch")
+	// Session should survive — the issuer mismatch means this is likely an SSO
+	// OIDC session managed by a different provider. Skip refresh, don't invalidate.
+	if store.GetSession(sessionToken) == nil {
+		t.Fatalf("expected session to remain when issuer does not match legacy OIDC config")
 	}
 }
 

@@ -72,6 +72,7 @@ func setupTestRouter(t *testing.T) (*Router, string) {
 		config:      cfg,
 		// samlManager is needed if we enable saml provider, initialized here if strict dependencies allow
 		samlManager: NewSAMLServiceManager("http://localhost:8080"),
+		oidcManager: NewOIDCServiceManager(),
 	}
 
 	// Save initial empty config to disk so persistence works

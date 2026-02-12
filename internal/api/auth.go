@@ -1035,17 +1035,21 @@ func refreshOIDCSessionTokens(cfg *config.Config, sessionToken string, session *
 	// Get or create OIDC service for this session's issuer
 	oidcCfg := cfg.OIDC
 	if oidcCfg == nil || !oidcCfg.Enabled {
-		log.Warn().Msg("OIDC not enabled, cannot refresh tokens")
+		// Legacy OIDC not configured — session may be from an SSO OIDC provider.
+		// Skip refresh silently; the session continues until natural expiry.
+		log.Debug().Msg("Legacy OIDC not enabled, skipping token refresh")
 		return
 	}
 
 	// Verify the session's issuer matches our config
 	if oidcCfg.IssuerURL != session.OIDCIssuer {
-		log.Warn().
+		// Issuer mismatch — session was likely created by a different OIDC provider
+		// (e.g., SSO multi-provider). Don't invalidate; skip refresh and let the
+		// session continue until natural expiry.
+		log.Debug().
 			Str("session_issuer", session.OIDCIssuer).
 			Str("config_issuer", oidcCfg.IssuerURL).
-			Msg("OIDC issuer mismatch, cannot refresh tokens")
-		GetSessionStore().InvalidateSession(sessionToken)
+			Msg("OIDC issuer mismatch, skipping token refresh (session may be from SSO provider)")
 		return
 	}
 

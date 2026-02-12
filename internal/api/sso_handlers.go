@@ -89,6 +89,8 @@ type SSOProviderResponse struct {
 	OIDCIssuerURL       string `json:"oidcIssuerUrl,omitempty"`
 	OIDCClientID        string `json:"oidcClientId,omitempty"`
 	OIDCClientSecretSet bool   `json:"oidcClientSecretSet,omitempty"`
+	OIDCLoginURL        string `json:"oidcLoginUrl,omitempty"`
+	OIDCCallbackURL     string `json:"oidcCallbackUrl,omitempty"`
 
 	// SAML-specific (only present for SAML providers)
 	SAMLIDPEntityID string `json:"samlIdpEntityId,omitempty"`
@@ -303,6 +305,13 @@ func (r *Router) handleCreateSSOProvider(w http.ResponseWriter, req *http.Reques
 		}
 	}
 
+	// Initialize OIDC provider if applicable
+	if provider.Type == config.SSOProviderTypeOIDC && provider.Enabled && provider.OIDC != nil {
+		if err := r.oidcManager.InitializeProvider(req.Context(), provider.ID, &provider, ""); err != nil {
+			log.Warn().Err(err).Str("provider_id", provider.ID).Msg("Failed to initialize OIDC provider (will retry on first use)")
+		}
+	}
+
 	LogAuditEventForTenant(GetOrgID(req.Context()), "sso_provider_created", "", GetClientIP(req), req.URL.Path, true, "Created provider: "+provider.Name)
 
 	w.Header().Set("Content-Type", "application/json")
@@ -408,6 +417,16 @@ func (r *Router) handleUpdateSSOProvider(w http.ResponseWriter, req *http.Reques
 		return
 	}
 
+	// Clean up stale services when the provider type changed
+	if existing.Type != updated.Type {
+		if existing.Type == config.SSOProviderTypeSAML {
+			r.samlManager.RemoveProvider(updated.ID)
+		}
+		if existing.Type == config.SSOProviderTypeOIDC {
+			r.oidcManager.RemoveService(updated.ID)
+		}
+	}
+
 	// Re-initialize SAML provider if applicable
 	if updated.Type == config.SSOProviderTypeSAML && updated.SAML != nil {
 		if updated.Enabled {
@@ -416,6 +435,17 @@ func (r *Router) handleUpdateSSOProvider(w http.ResponseWriter, req *http.Reques
 			}
 		} else {
 			r.samlManager.RemoveProvider(updated.ID)
+		}
+	}
+
+	// Re-initialize OIDC provider if applicable
+	if updated.Type == config.SSOProviderTypeOIDC {
+		if updated.Enabled && updated.OIDC != nil {
+			if err := r.oidcManager.InitializeProvider(req.Context(), updated.ID, &updated, ""); err != nil {
+				log.Warn().Err(err).Str("provider_id", updated.ID).Msg("Failed to re-initialize OIDC provider")
+			}
+		} else {
+			r.oidcManager.RemoveService(updated.ID)
 		}
 	}
 
@@ -457,6 +487,11 @@ func (r *Router) handleDeleteSSOProvider(w http.ResponseWriter, req *http.Reques
 		r.samlManager.RemoveProvider(providerID)
 	}
 
+	// Remove OIDC service if applicable
+	if existing.Type == config.SSOProviderTypeOIDC {
+		r.oidcManager.RemoveService(providerID)
+	}
+
 	LogAuditEventForTenant(GetOrgID(req.Context()), "sso_provider_deleted", "", GetClientIP(req), req.URL.Path, true, "Deleted provider: "+existing.Name)
 
 	w.WriteHeader(http.StatusNoContent)
@@ -496,6 +531,8 @@ func providerToResponse(p *config.SSOProvider, publicURL string) SSOProviderResp
 		resp.OIDCIssuerURL = p.OIDC.IssuerURL
 		resp.OIDCClientID = p.OIDC.ClientID
 		resp.OIDCClientSecretSet = p.OIDC.ClientSecretSet || p.OIDC.ClientSecret != ""
+		resp.OIDCLoginURL = baseURL + "/api/oidc/" + p.ID + "/login"
+		resp.OIDCCallbackURL = baseURL + "/api/oidc/" + p.ID + "/callback"
 	}
 
 	if p.Type == config.SSOProviderTypeSAML && p.SAML != nil {

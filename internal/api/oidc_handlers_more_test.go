@@ -240,7 +240,7 @@ func TestHandleOIDCCallback_InvalidState(t *testing.T) {
 
 func TestHandleOIDCCallback_MissingCode(t *testing.T) {
 	router, svc := newOIDCRouterWithService(t, "https://auth.example.com/authorize", "")
-	state, _, err := svc.newStateEntry("/dashboard")
+	state, _, err := svc.newStateEntry("", "/dashboard")
 	if err != nil {
 		t.Fatalf("newStateEntry error: %v", err)
 	}
@@ -270,7 +270,7 @@ func TestHandleOIDCCallback_ExchangeFailed(t *testing.T) {
 
 	router, svc := newOIDCRouterWithService(t, "https://auth.example.com/authorize", tokenServer.URL)
 	svc.httpClient = tokenServer.Client()
-	state, _, err := svc.newStateEntry("/dashboard")
+	state, _, err := svc.newStateEntry("", "/dashboard")
 	if err != nil {
 		t.Fatalf("newStateEntry error: %v", err)
 	}
@@ -298,7 +298,7 @@ func TestHandleOIDCCallback_MissingIDToken(t *testing.T) {
 
 	router, svc := newOIDCRouterWithService(t, "https://auth.example.com/authorize", tokenServer.URL)
 	svc.httpClient = tokenServer.Client()
-	state, _, err := svc.newStateEntry("/dashboard")
+	state, _, err := svc.newStateEntry("", "/dashboard")
 	if err != nil {
 		t.Fatalf("newStateEntry error: %v", err)
 	}

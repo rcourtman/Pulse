@@ -101,6 +101,7 @@ type Router struct {
 	multiTenant               *config.MultiTenantPersistence
 	oidcMu                    sync.Mutex
 	oidcService               *OIDCService
+	oidcManager               *OIDCServiceManager
 	samlManager               *SAMLServiceManager
 	ssoConfig                 *config.SSOConfig
 	authorizer                auth.Authorizer
@@ -210,7 +211,8 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monit
 		auth.SetAdminUser(cfg.AuthUser)
 	}
 
-	// Initialize SAML manager (baseURL will be set dynamically on first use)
+	// Initialize SSO service managers
+	r.oidcManager = NewOIDCServiceManager()
 	r.samlManager = NewSAMLServiceManager("")
 
 	r.initializeBootstrapToken()
@@ -2774,6 +2776,25 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				}
 			}
 
+			// Per-provider SSO OIDC routes are public (login initiation + callback)
+			if strings.HasPrefix(normalizedPath, "/api/oidc/") {
+				oidcParts := strings.Split(strings.TrimPrefix(normalizedPath, "/"), "/")
+				if len(oidcParts) >= 4 && (oidcParts[3] == "login" || oidcParts[3] == "callback") {
+					isPublic = true
+				}
+			}
+
+			// Per-provider SSO SAML routes are public (login, ACS, metadata, SLO)
+			if strings.HasPrefix(normalizedPath, "/api/saml/") {
+				samlParts := strings.Split(strings.TrimPrefix(normalizedPath, "/"), "/")
+				if len(samlParts) >= 4 {
+					switch samlParts[3] {
+					case "login", "acs", "metadata", "slo", "logout":
+						isPublic = true
+					}
+				}
+			}
+
 			// Special case: setup-script should be public (uses setup codes for auth)
 			if normalizedPath == "/api/setup-script" {
 				// The script itself prompts for a setup code
@@ -2845,6 +2866,10 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 		// Skip CSRF for login to avoid blocking re-auth when a stale session cookie exists.
 		if req.URL.Path == "/api/login" {
+			skipCSRF = true
+		}
+		// Skip CSRF for SSO login/callback endpoints (OIDC and SAML)
+		if strings.HasPrefix(req.URL.Path, "/api/oidc/") || strings.HasPrefix(req.URL.Path, "/api/saml/") {
 			skipCSRF = true
 		}
 		// Skip CSRF for hosted public endpoints (may be called without a session or with a stale cookie).

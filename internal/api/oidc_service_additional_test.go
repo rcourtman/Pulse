@@ -52,7 +52,7 @@ func TestOIDCServiceMatches(t *testing.T) {
 func TestOIDCServiceStateEntryAndConsume(t *testing.T) {
 	svc := &OIDCService{stateStore: newOIDCStateStore()}
 
-	state, entry, err := svc.newStateEntry("/return")
+	state, entry, err := svc.newStateEntry("", "/return")
 	if err != nil {
 		t.Fatalf("newStateEntry error: %v", err)
 	}
@@ -299,7 +299,7 @@ func TestOIDCStateStoreConsumeUnknown(t *testing.T) {
 
 func TestOIDCServiceNewStateEntryFields(t *testing.T) {
 	svc := &OIDCService{stateStore: newOIDCStateStore()}
-	_, entry, err := svc.newStateEntry("/return")
+	_, entry, err := svc.newStateEntry("", "/return")
 	if err != nil {
 		t.Fatalf("newStateEntry error: %v", err)
 	}
