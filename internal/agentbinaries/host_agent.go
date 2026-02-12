@@ -147,7 +147,7 @@ func EnsureHostAgentBinaries(version string) map[string]HostAgentBinary {
 		return remaining
 	}
 
-	log.Info().Msg("Host agent binaries restored from GitHub release bundle")
+	log.Info().Msg("host agent binaries restored from GitHub release bundle")
 	return nil
 }
 
