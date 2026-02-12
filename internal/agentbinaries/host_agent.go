@@ -217,7 +217,7 @@ func verifyHostAgentBundleChecksum(bundlePath, bundleURL, checksumURL string) er
 	}
 
 	if !strings.EqualFold(actual, checksum) {
-		return fmt.Errorf("host agent bundle checksum mismatch")
+		return fmt.Errorf("host agent bundle checksum mismatch for %s (expected: %s, actual: %s)", bundlePath, checksum, actual)
 	}
 
 	return nil
@@ -247,10 +247,10 @@ func downloadHostAgentChecksum(checksumURL string) (string, string, error) {
 
 	checksum := strings.ToLower(strings.TrimSpace(fields[0]))
 	if len(checksum) != 64 {
-		return "", "", fmt.Errorf("checksum file has invalid hash")
+		return "", "", fmt.Errorf("checksum file has invalid hash (wrong length)")
 	}
 	if _, err := hex.DecodeString(checksum); err != nil {
-		return "", "", fmt.Errorf("checksum file has invalid hash")
+		return "", "", fmt.Errorf("checksum file has invalid hash (bad hex): %w", err)
 	}
 
 	filename := ""
