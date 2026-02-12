@@ -134,6 +134,37 @@ func TestHandleApplyUpdate_Success(t *testing.T) {
 	// Note: ApplyUpdate runs in background, so we just check it was accepted
 }
 
+func TestHandleApplyUpdate_ErrorPaths(t *testing.T) {
+	h := NewUpdateHandlers(&MockUpdateManager{}, nil)
+
+	t.Run("method not allowed", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodGet, "/updates/apply", nil)
+		h.HandleApplyUpdate(w, r)
+		if w.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("Expected status 405, got %d", w.Code)
+		}
+	})
+
+	t.Run("invalid json", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodPost, "/updates/apply", strings.NewReader("{"))
+		h.HandleApplyUpdate(w, r)
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("Expected status 400, got %d", w.Code)
+		}
+	})
+
+	t.Run("missing download url", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodPost, "/updates/apply", strings.NewReader(`{}`))
+		h.HandleApplyUpdate(w, r)
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("Expected status 400, got %d", w.Code)
+		}
+	})
+}
+
 func TestHandleUpdateStatus_Fresh(t *testing.T) {
 	mockManager := &MockUpdateManager{
 		GetStatusFunc: func() updates.UpdateStatus {
@@ -239,6 +270,24 @@ func TestHandleUpdateStream(t *testing.T) {
 	}
 }
 
+func TestHandleUpdateStream_StreamingNotSupported(t *testing.T) {
+	mockManager := &MockUpdateManager{
+		AddSSEClientFunc: func(w http.ResponseWriter, clientID string) *updates.SSEClient {
+			return nil
+		},
+	}
+
+	h := NewUpdateHandlers(mockManager, nil)
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/updates/stream", nil)
+
+	h.HandleUpdateStream(w, r)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("Expected status 500, got %d", w.Code)
+	}
+}
+
 func TestHandleListUpdateHistory(t *testing.T) {
 	tmp := t.TempDir()
 	history, _ := updates.NewUpdateHistory(tmp)
@@ -267,6 +316,28 @@ func TestHandleListUpdateHistory(t *testing.T) {
 	}
 }
 
+func TestHandleListUpdateHistory_ErrorPaths(t *testing.T) {
+	h := NewUpdateHandlers(&MockUpdateManager{}, nil)
+
+	t.Run("method not allowed", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodPost, "/updates/history", nil)
+		h.HandleListUpdateHistory(w, r)
+		if w.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("Expected status 405, got %d", w.Code)
+		}
+	})
+
+	t.Run("history unavailable", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodGet, "/updates/history", nil)
+		h.HandleListUpdateHistory(w, r)
+		if w.Code != http.StatusServiceUnavailable {
+			t.Fatalf("Expected status 503, got %d", w.Code)
+		}
+	})
+}
+
 func TestHandleGetUpdateHistoryEntry(t *testing.T) {
 	tmp := t.TempDir()
 	history, _ := updates.NewUpdateHistory(tmp)
@@ -293,6 +364,52 @@ func TestHandleGetUpdateHistoryEntry(t *testing.T) {
 	if entry.EventID != "test-entry-1" {
 		t.Errorf("Expected EventID test-entry-1, got %s", entry.EventID)
 	}
+}
+
+func TestHandleGetUpdateHistoryEntry_ErrorPaths(t *testing.T) {
+	tmp := t.TempDir()
+	history, err := updates.NewUpdateHistory(tmp)
+	if err != nil {
+		t.Fatalf("failed to create update history: %v", err)
+	}
+
+	h := NewUpdateHandlers(&MockUpdateManager{}, history)
+
+	t.Run("method not allowed", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodPost, "/updates/history/entry?id=test-entry", nil)
+		h.HandleGetUpdateHistoryEntry(w, r)
+		if w.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("Expected status 405, got %d", w.Code)
+		}
+	})
+
+	t.Run("missing id", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodGet, "/updates/history/entry", nil)
+		h.HandleGetUpdateHistoryEntry(w, r)
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("Expected status 400, got %d", w.Code)
+		}
+	})
+
+	t.Run("entry not found", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodGet, "/updates/history/entry?id=does-not-exist", nil)
+		h.HandleGetUpdateHistoryEntry(w, r)
+		if w.Code != http.StatusNotFound {
+			t.Fatalf("Expected status 404, got %d", w.Code)
+		}
+	})
+
+	t.Run("history unavailable", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodGet, "/updates/history/entry?id=test-entry", nil)
+		NewUpdateHandlers(&MockUpdateManager{}, nil).HandleGetUpdateHistoryEntry(w, r)
+		if w.Code != http.StatusServiceUnavailable {
+			t.Fatalf("Expected status 503, got %d", w.Code)
+		}
+	})
 }
 
 func TestDoCleanupRateLimits(t *testing.T) {
@@ -356,5 +473,24 @@ func TestHandleGetUpdatePlan(t *testing.T) {
 	json.NewDecoder(w.Body).Decode(&plan)
 	if len(plan.Instructions) != 1 {
 		t.Errorf("Expected 1 instruction, got %d", len(plan.Instructions))
+	}
+}
+
+func TestHandleGetUpdatePlan_PrepareError(t *testing.T) {
+	t.Setenv("PULSE_MOCK_MODE", "true")
+
+	h := NewUpdateHandlers(nil, nil)
+	h.registry.Register("mock", &mockUpdater{
+		prepareFunc: func(ctx context.Context, req updates.UpdateRequest) (*updates.UpdatePlan, error) {
+			return nil, errors.New("prepare failed")
+		},
+	})
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/api/updates/plan?version=v1.2.3", nil)
+	h.HandleGetUpdatePlan(w, r)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("Expected status 500, got %d", w.Code)
 	}
 }
