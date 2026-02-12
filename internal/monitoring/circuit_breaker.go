@@ -84,10 +84,14 @@ func (b *circuitBreaker) allow(now time.Time) bool {
 func (b *circuitBreaker) recordSuccess() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+
+	// Circuit breaker thresholds are based on consecutive failures.
+	// Any successful operation should reset the failure streak.
+	b.failureCount = 0
+
 	if b.state != breakerClosed {
 		now := time.Now()
 		b.state = breakerClosed
-		b.failureCount = 0
 		b.retryInterval = b.baseRetryInterval
 		b.stateSince = now
 		b.lastTransition = now
