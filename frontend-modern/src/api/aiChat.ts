@@ -67,6 +67,9 @@ export interface SessionDiff {
 
 export class AIChatAPI {
   private static baseUrl = '/api/ai';
+  private static encodeSegment(value: string): string {
+    return encodeURIComponent(value);
+  }
 
   // Get AI status
   static async getStatus(): Promise<AIStatus> {
@@ -87,33 +90,33 @@ export class AIChatAPI {
 
   // Delete a session
   static async deleteSession(sessionId: string): Promise<void> {
-    await apiFetch(`${this.baseUrl}/sessions/${sessionId}`, {
+    await apiFetch(`${this.baseUrl}/sessions/${this.encodeSegment(sessionId)}`, {
       method: 'DELETE',
     });
   }
 
   // Get messages for a session
   static async getMessages(sessionId: string): Promise<ChatMessage[]> {
-    return apiFetchJSON(`${this.baseUrl}/sessions/${sessionId}/messages`) as Promise<ChatMessage[]>;
+    return apiFetchJSON(`${this.baseUrl}/sessions/${this.encodeSegment(sessionId)}/messages`) as Promise<ChatMessage[]>;
   }
 
   // Abort a session
   static async abortSession(sessionId: string): Promise<void> {
-    await apiFetch(`${this.baseUrl}/sessions/${sessionId}/abort`, {
+    await apiFetch(`${this.baseUrl}/sessions/${this.encodeSegment(sessionId)}/abort`, {
       method: 'POST',
     });
   }
 
   // Approve a pending command
   static async approveCommand(approvalId: string): Promise<{ approved: boolean; message: string }> {
-    return apiFetchJSON(`${this.baseUrl}/approvals/${approvalId}/approve`, {
+    return apiFetchJSON(`${this.baseUrl}/approvals/${this.encodeSegment(approvalId)}/approve`, {
       method: 'POST',
     }) as Promise<{ approved: boolean; message: string }>;
   }
 
   // Deny a pending command
   static async denyCommand(approvalId: string, reason?: string): Promise<{ denied: boolean; message: string }> {
-    return apiFetchJSON(`${this.baseUrl}/approvals/${approvalId}/deny`, {
+    return apiFetchJSON(`${this.baseUrl}/approvals/${this.encodeSegment(approvalId)}/deny`, {
       method: 'POST',
       body: JSON.stringify({ reason: reason || 'User skipped' }),
     }) as Promise<{ denied: boolean; message: string }>;
@@ -121,7 +124,7 @@ export class AIChatAPI {
 
   // Answer a pending question from the AI chat
   static async answerQuestion(questionId: string, answers: Array<{ id: string; value: string }>): Promise<void> {
-    await apiFetch(`${this.baseUrl}/question/${questionId}/answer`, {
+    await apiFetch(`${this.baseUrl}/question/${this.encodeSegment(questionId)}/answer`, {
       method: 'POST',
       body: JSON.stringify({ answers }),
     });
@@ -138,33 +141,33 @@ export class AIChatAPI {
 
   // Summarize a session (compress context when nearing limits)
   static async summarizeSession(sessionId: string): Promise<{ success: boolean; message?: string }> {
-    return apiFetchJSON(`${this.baseUrl}/sessions/${sessionId}/summarize`, {
+    return apiFetchJSON(`${this.baseUrl}/sessions/${this.encodeSegment(sessionId)}/summarize`, {
       method: 'POST',
     }) as Promise<{ success: boolean; message?: string }>;
   }
 
   // Get file changes/diff for a session
   static async getSessionDiff(sessionId: string): Promise<SessionDiff> {
-    return apiFetchJSON(`${this.baseUrl}/sessions/${sessionId}/diff`) as Promise<SessionDiff>;
+    return apiFetchJSON(`${this.baseUrl}/sessions/${this.encodeSegment(sessionId)}/diff`) as Promise<SessionDiff>;
   }
 
   // Fork a session (create a branch point)
   static async forkSession(sessionId: string): Promise<ChatSession> {
-    return apiFetchJSON(`${this.baseUrl}/sessions/${sessionId}/fork`, {
+    return apiFetchJSON(`${this.baseUrl}/sessions/${this.encodeSegment(sessionId)}/fork`, {
       method: 'POST',
     }) as Promise<ChatSession>;
   }
 
   // Revert session changes
   static async revertSession(sessionId: string): Promise<{ success: boolean }> {
-    return apiFetchJSON(`${this.baseUrl}/sessions/${sessionId}/revert`, {
+    return apiFetchJSON(`${this.baseUrl}/sessions/${this.encodeSegment(sessionId)}/revert`, {
       method: 'POST',
     }) as Promise<{ success: boolean }>;
   }
 
   // Unrevert session changes (redo)
   static async unrevertSession(sessionId: string): Promise<{ success: boolean }> {
-    return apiFetchJSON(`${this.baseUrl}/sessions/${sessionId}/unrevert`, {
+    return apiFetchJSON(`${this.baseUrl}/sessions/${this.encodeSegment(sessionId)}/unrevert`, {
       method: 'POST',
     }) as Promise<{ success: boolean }>;
   }

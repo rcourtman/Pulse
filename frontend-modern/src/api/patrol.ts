@@ -380,12 +380,26 @@ export interface PatrolRunRecord {
     tool_call_count: number;
 }
 
+function normalizeHistoryLimit(limit: number): number {
+    if (!Number.isFinite(limit)) {
+        return 30;
+    }
+    const normalized = Math.floor(limit);
+    if (normalized < 1) {
+        return 1;
+    }
+    return normalized;
+}
+
 /**
  * Get patrol run history
  * @param limit Maximum number of runs to return (default: 30)
  */
 export async function getPatrolRunHistory(limit: number = 30): Promise<PatrolRunRecord[]> {
-    const runs = await apiFetchJSON<PatrolRunRecord[]>(`/api/ai/patrol/runs?limit=${limit}`);
+    const search = new URLSearchParams({
+        limit: String(normalizeHistoryLimit(limit)),
+    });
+    const runs = await apiFetchJSON<PatrolRunRecord[]>(`/api/ai/patrol/runs?${search.toString()}`);
     return runs || [];
 }
 
@@ -394,7 +408,11 @@ export async function getPatrolRunHistory(limit: number = 30): Promise<PatrolRun
  * @param limit Maximum number of runs to return (default: 30)
  */
 export async function getPatrolRunHistoryWithToolCalls(limit: number = 30): Promise<PatrolRunRecord[]> {
-    const runs = await apiFetchJSON<PatrolRunRecord[]>(`/api/ai/patrol/runs?include=tool_calls&limit=${limit}`);
+    const search = new URLSearchParams({
+        include: 'tool_calls',
+        limit: String(normalizeHistoryLimit(limit)),
+    });
+    const runs = await apiFetchJSON<PatrolRunRecord[]>(`/api/ai/patrol/runs?${search.toString()}`);
     return runs || [];
 }
 

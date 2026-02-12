@@ -15,6 +15,9 @@ import type {
 
 export class AIAPI {
   private static baseUrl = '/api';
+  private static encodeSegment(value: string): string {
+    return encodeURIComponent(value);
+  }
 
   // Get AI settings
   static async getSettings(): Promise<AISettings> {
@@ -38,7 +41,7 @@ export class AIAPI {
 
   // Test a specific provider connection
   static async testProvider(provider: string): Promise<{ success: boolean; message: string; provider: string }> {
-    return apiFetchJSON(`${this.baseUrl}/ai/test/${provider}`, {
+    return apiFetchJSON(`${this.baseUrl}/ai/test/${this.encodeSegment(provider)}`, {
       method: 'POST',
     }) as Promise<{ success: boolean; message: string; provider: string }>;
   }
@@ -50,7 +53,8 @@ export class AIAPI {
 
   // Get AI cost/usage summary
   static async getCostSummary(days = 30): Promise<AICostSummary> {
-    return apiFetchJSON(`${this.baseUrl}/ai/cost/summary?days=${days}`) as Promise<AICostSummary>;
+    const search = new URLSearchParams({ days: String(days) });
+    return apiFetchJSON(`${this.baseUrl}/ai/cost/summary?${search.toString()}`) as Promise<AICostSummary>;
   }
 
   // Reset AI usage history (admin-only)
@@ -62,7 +66,11 @@ export class AIAPI {
   }
 
   static async exportCostHistory(days = 30, format: 'json' | 'csv' = 'csv'): Promise<Response> {
-    return apiFetch(`${this.baseUrl}/ai/cost/export?days=${days}&format=${format}`, { method: 'GET' });
+    const search = new URLSearchParams({
+      days: String(days),
+      format,
+    });
+    return apiFetch(`${this.baseUrl}/ai/cost/export?${search.toString()}`, { method: 'GET' });
   }
 
   // ============================================
@@ -242,7 +250,8 @@ export class AIAPI {
   }
 
   static async getRemediationPlan(planId: string): Promise<RemediationPlan> {
-    return apiFetchJSON(`${this.baseUrl}/ai/remediation/plan?plan_id=${planId}`) as Promise<RemediationPlan>;
+    const search = new URLSearchParams({ plan_id: planId });
+    return apiFetchJSON(`${this.baseUrl}/ai/remediation/plan?${search.toString()}`) as Promise<RemediationPlan>;
   }
 
   static async approveRemediationPlan(planId: string): Promise<{ success: boolean; execution?: { id: string } }> {
@@ -283,14 +292,14 @@ export class AIAPI {
 
   // Approve and execute an investigation fix
   static async approveInvestigationFix(approvalId: string): Promise<ApprovalExecutionResult> {
-    return apiFetchJSON(`${this.baseUrl}/ai/approvals/${approvalId}/approve`, {
+    return apiFetchJSON(`${this.baseUrl}/ai/approvals/${this.encodeSegment(approvalId)}/approve`, {
       method: 'POST',
     }) as Promise<ApprovalExecutionResult>;
   }
 
   // Deny an investigation fix
   static async denyInvestigationFix(approvalId: string, reason?: string): Promise<ApprovalRequest> {
-    return apiFetchJSON(`${this.baseUrl}/ai/approvals/${approvalId}/deny`, {
+    return apiFetchJSON(`${this.baseUrl}/ai/approvals/${this.encodeSegment(approvalId)}/deny`, {
       method: 'POST',
       body: JSON.stringify({ reason: reason || 'User declined' }),
     }) as Promise<ApprovalRequest>;
@@ -299,7 +308,7 @@ export class AIAPI {
   // Get investigation details for a finding (includes proposed fix)
   static async getInvestigation(findingId: string): Promise<InvestigationSession | null> {
     try {
-      return await apiFetchJSON(`${this.baseUrl}/ai/findings/${findingId}/investigation`) as InvestigationSession;
+      return await apiFetchJSON(`${this.baseUrl}/ai/findings/${this.encodeSegment(findingId)}/investigation`) as InvestigationSession;
     } catch {
       return null;
     }
@@ -307,7 +316,7 @@ export class AIAPI {
 
   // Re-create an approval for an investigation fix (when original approval expired)
   static async reapproveInvestigationFix(findingId: string): Promise<{ approval_id: string; message: string }> {
-    return apiFetchJSON(`${this.baseUrl}/ai/findings/${findingId}/reapprove`, {
+    return apiFetchJSON(`${this.baseUrl}/ai/findings/${this.encodeSegment(findingId)}/reapprove`, {
       method: 'POST',
     }) as Promise<{ approval_id: string; message: string }>;
   }

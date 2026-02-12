@@ -43,7 +43,12 @@ export interface UpdatePlan {
 
 export class UpdatesAPI {
   static async checkForUpdates(channel?: string): Promise<UpdateInfo> {
-    const url = channel ? `/api/updates/check?channel=${channel}` : '/api/updates/check';
+    const search = new URLSearchParams();
+    if (channel) {
+      search.set('channel', channel);
+    }
+    const query = search.toString();
+    const url = query ? `/api/updates/check?${query}` : '/api/updates/check';
     return apiFetchJSON(url);
   }
 
@@ -63,9 +68,11 @@ export class UpdatesAPI {
   }
 
   static async getUpdatePlan(version: string, channel?: string): Promise<UpdatePlan> {
-    const url = channel
-      ? `/api/updates/plan?version=${version}&channel=${channel}`
-      : `/api/updates/plan?version=${version}`;
+    const search = new URLSearchParams({ version });
+    if (channel) {
+      search.set('channel', channel);
+    }
+    const url = `/api/updates/plan?${search.toString()}`;
     return apiFetchJSON(url);
   }
 }

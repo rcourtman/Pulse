@@ -29,7 +29,7 @@ export async function listDiscoveries(): Promise<DiscoveryListResponse> {
 export async function listDiscoveriesByType(
     resourceType: ResourceType
 ): Promise<DiscoveryListResponse> {
-    const response = await apiFetch(`${API_BASE}/type/${resourceType}`);
+    const response = await apiFetch(`${API_BASE}/type/${encodeURIComponent(resourceType)}`);
     if (!response.ok) {
         throw new Error(`Failed to list discoveries for type ${resourceType}`);
     }
@@ -93,7 +93,7 @@ export async function getDiscovery(
     }
 
     const response = await apiFetch(
-        `${API_BASE}/${resourceType}/${encodeURIComponent(hostId)}/${encodeURIComponent(resourceId)}`
+        `${API_BASE}/${encodeURIComponent(resourceType)}/${encodeURIComponent(hostId)}/${encodeURIComponent(resourceId)}`
     );
     if (response.status === 404) {
         return null;
@@ -114,7 +114,7 @@ export async function triggerDiscovery(
     options?: TriggerDiscoveryRequest
 ): Promise<ResourceDiscovery> {
     const response = await apiFetch(
-        `${API_BASE}/${resourceType}/${encodeURIComponent(hostId)}/${encodeURIComponent(resourceId)}`,
+        `${API_BASE}/${encodeURIComponent(resourceType)}/${encodeURIComponent(hostId)}/${encodeURIComponent(resourceId)}`,
         {
             method: 'POST',
             headers: {
@@ -139,7 +139,7 @@ export async function getDiscoveryProgress(
     resourceId: string
 ): Promise<DiscoveryProgress> {
     const response = await apiFetch(
-        `${API_BASE}/${resourceType}/${encodeURIComponent(hostId)}/${encodeURIComponent(resourceId)}/progress`
+        `${API_BASE}/${encodeURIComponent(resourceType)}/${encodeURIComponent(hostId)}/${encodeURIComponent(resourceId)}/progress`
     );
     if (!response.ok) {
         throw new Error('Failed to get discovery progress');
@@ -157,7 +157,7 @@ export async function updateDiscoveryNotes(
     notes: UpdateNotesRequest
 ): Promise<ResourceDiscovery> {
     const response = await apiFetch(
-        `${API_BASE}/${resourceType}/${encodeURIComponent(hostId)}/${encodeURIComponent(resourceId)}/notes`,
+        `${API_BASE}/${encodeURIComponent(resourceType)}/${encodeURIComponent(hostId)}/${encodeURIComponent(resourceId)}/notes`,
         {
             method: 'PUT',
             headers: {
@@ -181,7 +181,7 @@ export async function deleteDiscovery(
     resourceId: string
 ): Promise<void> {
     const response = await apiFetch(
-        `${API_BASE}/${resourceType}/${encodeURIComponent(hostId)}/${encodeURIComponent(resourceId)}`,
+        `${API_BASE}/${encodeURIComponent(resourceType)}/${encodeURIComponent(hostId)}/${encodeURIComponent(resourceId)}`,
         {
             method: 'DELETE',
         }
@@ -206,7 +206,7 @@ export async function getDiscoveryStatus(): Promise<DiscoveryStatus> {
  * Get discovery info for a resource type (AI provider info, commands that will run)
  */
 export async function getDiscoveryInfo(resourceType: ResourceType): Promise<DiscoveryInfo> {
-    const response = await apiFetch(`${API_BASE}/info/${resourceType}`);
+    const response = await apiFetch(`${API_BASE}/info/${encodeURIComponent(resourceType)}`);
     if (!response.ok) {
         throw new Error('Failed to get discovery info');
     }

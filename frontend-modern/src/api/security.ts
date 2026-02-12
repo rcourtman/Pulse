@@ -42,7 +42,7 @@ export class SecurityAPI {
   }
 
   static async deleteToken(id: string): Promise<void> {
-    await apiFetchJSON(`/api/security/tokens/${id}`, {
+    await apiFetchJSON(`/api/security/tokens/${encodeURIComponent(id)}`, {
       method: 'DELETE',
     });
   }

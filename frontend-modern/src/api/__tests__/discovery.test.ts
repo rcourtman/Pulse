@@ -4,7 +4,7 @@ vi.mock('@/utils/apiClient', () => ({
   apiFetch: vi.fn(),
 }));
 
-import { getDiscovery } from '@/api/discovery';
+import { getDiscovery, getDiscoveryInfo, listDiscoveriesByType } from '@/api/discovery';
 import { apiFetch } from '@/utils/apiClient';
 
 describe('discovery api', () => {
@@ -131,5 +131,33 @@ describe('discovery api', () => {
     expect(result?.id).toBe('vm:node-1:100');
     expect(apiFetchMock).toHaveBeenCalledTimes(1);
     expect(apiFetchMock).toHaveBeenCalledWith('/api/discovery/vm/node-1/100');
+  });
+
+  it('encodes dynamic resource type segments', async () => {
+    apiFetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          discoveries: [],
+          total: 0,
+        }),
+        { status: 200 }
+      )
+    );
+
+    await listDiscoveriesByType('vm/root' as any);
+    expect(apiFetchMock).toHaveBeenCalledWith('/api/discovery/type/vm%2Froot');
+
+    apiFetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          commands: [],
+          ai_provider: '',
+          notes: '',
+        }),
+        { status: 200 }
+      )
+    );
+    await getDiscoveryInfo('host/root' as any);
+    expect(apiFetchMock).toHaveBeenCalledWith('/api/discovery/info/host%2Froot');
   });
 });

@@ -21,14 +21,14 @@ export class NodesAPI {
     nodeId: string,
     node: NodeConfig,
   ): Promise<{ success: boolean; message?: string }> {
-    return apiFetchJSON(`${this.baseUrl}/${nodeId}`, {
+    return apiFetchJSON(`${this.baseUrl}/${encodeURIComponent(nodeId)}`, {
       method: 'PUT',
       body: JSON.stringify(node),
     });
   }
 
   static async deleteNode(nodeId: string): Promise<{ success: boolean; message?: string }> {
-    return apiFetchJSON(`${this.baseUrl}/${nodeId}`, {
+    return apiFetchJSON(`${this.baseUrl}/${encodeURIComponent(nodeId)}`, {
       method: 'DELETE',
     });
   }
@@ -54,7 +54,7 @@ export class NodesAPI {
     latency?: number;
     warnings?: string[];
   }> {
-    return apiFetchJSON(`${this.baseUrl}/${nodeId}/test`, {
+    return apiFetchJSON(`${this.baseUrl}/${encodeURIComponent(nodeId)}/test`, {
       method: 'POST',
     });
   }
@@ -72,7 +72,7 @@ export class NodesAPI {
       online: boolean;
     }>;
   }> {
-    return apiFetchJSON(`${this.baseUrl}/${nodeId}/refresh-cluster`, {
+    return apiFetchJSON(`${this.baseUrl}/${encodeURIComponent(nodeId)}/refresh-cluster`, {
       method: 'POST',
     });
   }
