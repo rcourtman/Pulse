@@ -153,10 +153,10 @@ func (r *RegistryChecker) CheckImageUpdate(ctx context.Context, image, currentDi
 
 	// Check cache first.
 	cacheKey := fmt.Sprintf("%s/%s:%s|%s/%s/%s", registry, repository, tag, arch, os, variant)
-	r.logger.Debug().Str("image", image).Str("cacheKey", cacheKey).Msg("Checking image update cache")
+	r.logger.Debug().Str("image", image).Str("cacheKey", cacheKey).Msg("checking image update cache")
 
 	if cached := r.getCached(cacheKey); cached != nil {
-		r.logger.Debug().Str("image", image).Msg("Cache hit for update check")
+		r.logger.Debug().Str("image", image).Msg("cache hit for update check")
 		if cached.err != "" {
 			return &ImageUpdateResult{
 				Image:           image,

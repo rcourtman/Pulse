@@ -11,14 +11,14 @@ import (
 // cleanupOrphanedBackups searches for and removes any Pulse backup containers
 // (created during updates) that are older than 15 minutes.
 func (a *Agent) cleanupOrphanedBackups(ctx context.Context) {
-	a.logger.Debug().Msg("Checking for orphaned backup containers")
+	a.logger.Debug().Msg("checking for orphaned backup containers")
 
 	// List all containers (including stopped ones)
 	list, err := a.docker.ContainerList(ctx, container.ListOptions{
 		All: true,
 	})
 	if err != nil {
-		a.logger.Warn().Err(err).Msg("Failed to list containers for cleanup")
+		a.logger.Warn().Err(err).Msg("failed to list containers for cleanup")
 		return
 	}
 
@@ -59,10 +59,10 @@ func (a *Agent) cleanupOrphanedBackups(ctx context.Context) {
 			a.logger.Info().
 				Str("container", c.Names[0]).
 				Time("backupTime", backupTime).
-				Msg("Removing orphaned backup container")
+				Msg("removing orphaned backup container")
 
 			if err := a.docker.ContainerRemove(ctx, c.ID, container.RemoveOptions{Force: true}); err != nil {
-				a.logger.Warn().Err(err).Str("id", c.ID).Msg("Failed to remove orphaned backup container")
+				a.logger.Warn().Err(err).Str("id", c.ID).Msg("failed to remove orphaned backup container")
 			}
 		}
 	}

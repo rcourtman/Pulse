@@ -210,7 +210,7 @@ func (a *Agent) collectContainers(ctx context.Context) ([]agentsdocker.Container
 
 		container, err := a.collectContainer(ctx, summary)
 		if err != nil {
-			a.logger.Warn().Str("container", strings.Join(summary.Names, ",")).Err(err).Msg("Failed to collect container stats")
+			a.logger.Warn().Str("container", strings.Join(summary.Names, ",")).Err(err).Msg("failed to collect container stats")
 			continue
 		}
 		containers = append(containers, container)
