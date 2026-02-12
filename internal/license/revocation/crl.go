@@ -55,8 +55,8 @@ func (c *CRLCache) Update(revokedIDs []string) {
 	defer c.mu.Unlock()
 
 	next := make(map[string]bool, len(revokedIDs))
-	for _, id := range revokedIDs {
-		next[id] = true
+	for _, revokedID := range revokedIDs {
+		next[revokedID] = true
 	}
 
 	c.revokedIDs = next
