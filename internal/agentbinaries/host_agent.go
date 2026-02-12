@@ -76,6 +76,22 @@ var (
 	closeFileFn                           = func(f *os.File) error { return f.Close() }
 )
 
+// httpGetWithErrorContext performs an HTTP GET and returns a detailed error if the status is not 200 OK.
+func httpGetWithErrorContext(url string) (*http.Response, error) {
+	resp, err := httpClient.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("failed to download from %s: %w", url, err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		resp.Body.Close()
+		return nil, fmt.Errorf("unexpected status %d downloading %s: %s", resp.StatusCode, url, strings.TrimSpace(string(body)))
+	}
+
+	return resp, nil
+}
+
 // HostAgentSearchPaths returns the directories to search for host agent binaries.
 func HostAgentSearchPaths() []string {
 	primary := strings.TrimSpace(os.Getenv("PULSE_BIN_DIR"))
@@ -169,16 +185,11 @@ func DownloadAndInstallHostAgentBinaries(version string, targetDir string) error
 	}
 	defer removeFn(tempFile.Name())
 
-	resp, err := httpClient.Get(url)
+	resp, err := httpGetWithErrorContext(url)
 	if err != nil {
-		return fmt.Errorf("failed to download host agent bundle from %s: %w", url, err)
+		return err
 	}
 	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
-		return fmt.Errorf("unexpected status %d downloading %s: %s", resp.StatusCode, url, strings.TrimSpace(string(body)))
-	}
 
 	if _, err := io.Copy(tempFile, resp.Body); err != nil {
 		return fmt.Errorf("failed to save host agent bundle: %w", err)
@@ -224,16 +235,11 @@ func verifyHostAgentBundleChecksum(bundlePath, bundleURL, checksumURL string) er
 }
 
 func downloadHostAgentChecksum(checksumURL string) (string, string, error) {
-	resp, err := httpClient.Get(checksumURL)
+	resp, err := httpGetWithErrorContext(checksumURL)
 	if err != nil {
-		return "", "", fmt.Errorf("failed to download checksum from %s: %w", checksumURL, err)
+		return "", "", err
 	}
 	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
-		return "", "", fmt.Errorf("unexpected status %d downloading checksum %s: %s", resp.StatusCode, checksumURL, strings.TrimSpace(string(body)))
-	}
 
 	payload, err := io.ReadAll(io.LimitReader(resp.Body, 1024))
 	if err != nil {
