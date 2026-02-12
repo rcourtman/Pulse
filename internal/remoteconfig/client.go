@@ -122,6 +122,13 @@ func (c *Client) Fetch(ctx context.Context) (map[string]interface{}, *bool, erro
 	}
 
 	if configResp.Config.Signature != "" {
+		responseHostID := strings.TrimSpace(configResp.HostID)
+		if responseHostID == "" {
+			return nil, nil, fmt.Errorf("config signature missing host metadata")
+		}
+		if responseHostID != hostID {
+			return nil, nil, fmt.Errorf("config signature host mismatch: expected %q, got %q", hostID, responseHostID)
+		}
 		if configResp.Config.IssuedAt.IsZero() || configResp.Config.ExpiresAt.IsZero() {
 			return nil, nil, fmt.Errorf("config signature missing timestamp metadata")
 		}
@@ -134,7 +141,7 @@ func (c *Client) Fetch(ctx context.Context) (map[string]interface{}, *bool, erro
 		}
 
 		payload := SignedConfigPayload{
-			HostID:          configResp.HostID,
+			HostID:          responseHostID,
 			IssuedAt:        configResp.Config.IssuedAt,
 			ExpiresAt:       configResp.Config.ExpiresAt,
 			CommandsEnabled: configResp.Config.CommandsEnabled,
