@@ -515,7 +515,7 @@ func determineArch() string {
 
 	// For known OS/arch combinations, return directly
 	switch os {
-	case "linux", "darwin", "windows":
+	case "linux", "darwin", "windows", "freebsd":
 		return fmt.Sprintf("%s-%s", os, arch)
 	}
 

@@ -96,6 +96,17 @@ func TestDetermineArchOverrides(t *testing.T) {
 		t.Fatalf("expected linux-386, got %q", got)
 	}
 
+	runtimeGOOS = "freebsd"
+	runtimeGOARCH = "amd64"
+	if got := determineArch(); got != "freebsd-amd64" {
+		t.Fatalf("expected freebsd-amd64, got %q", got)
+	}
+
+	runtimeGOARCH = "arm64"
+	if got := determineArch(); got != "freebsd-arm64" {
+		t.Fatalf("expected freebsd-arm64, got %q", got)
+	}
+
 	runtimeGOOS = "solaris"
 	runtimeGOARCH = "amd64"
 	unameCommand = func() ([]byte, error) { return []byte("aarch64"), nil }
