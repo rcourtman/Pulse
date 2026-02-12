@@ -1,4 +1,4 @@
-import { Component, createSignal, For, Show } from 'solid-js';
+import { Component, createSignal, For, Show, onCleanup, onMount } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { POLLING_INTERVALS } from '@/constants';
 
@@ -17,8 +17,10 @@ interface ToastProps {
   onRemove: (id: string) => void;
 }
 
-const Toast: Component<ToastProps> = (props) => {
+export const Toast: Component<ToastProps> = (props) => {
   const [show, setShow] = createSignal(true);
+  let autoRemoveTimer: number | undefined;
+  let closeAnimationTimer: number | undefined;
 
   const icons = {
     success: (
@@ -83,14 +85,36 @@ const Toast: Component<ToastProps> = (props) => {
   };
 
   const handleClose = () => {
+    if (!show()) {
+      return;
+    }
     setShow(false);
-    window.setTimeout(() => props.onRemove(props.toast.id), 300);
+    if (autoRemoveTimer !== undefined) {
+      window.clearTimeout(autoRemoveTimer);
+      autoRemoveTimer = undefined;
+    }
+    if (closeAnimationTimer !== undefined) {
+      window.clearTimeout(closeAnimationTimer);
+    }
+    closeAnimationTimer = window.setTimeout(() => props.onRemove(props.toast.id), 300);
   };
 
-  // Auto-remove after duration
-  window.setTimeout(() => {
-    handleClose();
-  }, props.toast.duration || POLLING_INTERVALS.TOAST_DURATION);
+  onMount(() => {
+    // Auto-remove after duration.
+    autoRemoveTimer = window.setTimeout(
+      () => handleClose(),
+      props.toast.duration || POLLING_INTERVALS.TOAST_DURATION,
+    );
+  });
+
+  onCleanup(() => {
+    if (autoRemoveTimer !== undefined) {
+      window.clearTimeout(autoRemoveTimer);
+    }
+    if (closeAnimationTimer !== undefined) {
+      window.clearTimeout(closeAnimationTimer);
+    }
+  });
 
   return (
     <div
@@ -152,13 +176,13 @@ export const ToastContainer: Component = () => {
   const [toasts, setToasts] = createSignal<ToastMessage[]>([]);
 
   const removeToast = (id: string) => {
-    setToasts(toasts().filter((t) => t.id !== id));
+    setToasts((prev) => prev.filter((t) => t.id !== id));
   };
 
   // Expose global toast function
   window.showToast = (type: ToastType, title: string, message?: string, duration?: number) => {
     const id = (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString());
-    setToasts([...toasts(), { id, type, title, message, duration }]);
+    setToasts((prev) => [...prev, { id, type, title, message, duration }]);
     return id;
   };
 
