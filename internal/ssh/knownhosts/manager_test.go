@@ -53,6 +53,46 @@ func TestEnsureCreatesFileAndCaches(t *testing.T) {
 	}
 }
 
+func TestEnsureReconcilesCacheWithKnownHostsFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "known_hosts")
+
+	var calls int
+	keyscan := func(ctx context.Context, host string, port int, timeout time.Duration) ([]byte, error) {
+		calls++
+		return []byte(host + " ssh-ed25519 AAAA"), nil
+	}
+
+	mgr, err := NewManager(path, WithKeyscanFunc(keyscan))
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
+
+	ctx := context.Background()
+	if err := mgr.Ensure(ctx, "example.com"); err != nil {
+		t.Fatalf("Ensure: %v", err)
+	}
+
+	if err := os.WriteFile(path, nil, 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	if err := mgr.Ensure(ctx, "example.com"); err != nil {
+		t.Fatalf("Ensure after truncation: %v", err)
+	}
+	if calls != 2 {
+		t.Fatalf("expected keyscan twice after cache/file mismatch, got %d", calls)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if got := strings.TrimSpace(string(data)); got != "example.com ssh-ed25519 AAAA" {
+		t.Fatalf("unexpected known_hosts contents after reconciliation: %s", got)
+	}
+}
+
 func TestEnsureUsesSanitizedOutput(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "known_hosts")

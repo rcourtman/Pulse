@@ -149,11 +149,20 @@ func (m *manager) EnsureWithPort(ctx context.Context, host string, port int) err
 
 	cacheKey := fmt.Sprintf("%s:%d", host, port)
 	m.mu.Lock()
-	_, cached := m.cache[cacheKey]
-	m.mu.Unlock()
-	if cached {
-		return nil
+	if _, cached := m.cache[cacheKey]; cached {
+		existing, err := findHostKeyLine(m.path, hostSpec, "")
+		if err != nil {
+			m.mu.Unlock()
+			return err
+		}
+		if existing != "" {
+			m.mu.Unlock()
+			return nil
+		}
+
+		delete(m.cache, cacheKey)
 	}
+	m.mu.Unlock()
 
 	keyData, err := m.keyscanFn(ctx, host, port, m.keyscanTimeout)
 	if err != nil {
