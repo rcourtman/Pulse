@@ -43,6 +43,10 @@ type DiscoveryCommand struct {
 	Optional    bool     `json:"optional"`    // If true, don't fail if command fails
 }
 
+// dockerMountsCommand collects Docker mount metadata without relying on extra
+// text utilities (sed/grep), which may be missing in minimal guest images.
+const dockerMountsCommand = `sh -c 'docker ps -q 2>/dev/null | head -15 | while read -r id; do name=$(docker inspect --format "{{.Name}}" "$id" 2>/dev/null); name=${name#/}; [ -n "$name" ] || name="$id"; echo "CONTAINER:$name"; docker inspect --format "{{range .Mounts}}{{.Source}}|{{.Destination}}|{{.Type}}{{println}}{{end}}" "$id" 2>/dev/null || true; done; echo docker_mounts_done'`
+
 // GetCommandsForResource returns the commands to run for a given resource type.
 func GetCommandsForResource(resourceType ResourceType) []DiscoveryCommand {
 	switch resourceType {
@@ -117,7 +121,7 @@ func getLXCCommands() []DiscoveryCommand {
 		},
 		{
 			Name:        "docker_mounts",
-			Command:     `sh -c 'docker ps -q 2>/dev/null | head -15 | while read id; do name=$(docker inspect --format "{{.Name}}" "$id" 2>/dev/null | sed "s|^/||"); echo "CONTAINER:$name"; docker inspect --format "{{range .Mounts}}{{.Source}}|{{.Destination}}|{{.Type}}{{println}}{{end}}" "$id" 2>/dev/null | grep -v "^$" || true; done; echo docker_mounts_done'`,
+			Command:     dockerMountsCommand,
 			Description: "Docker container bind mounts (source -> destination)",
 			Categories:  []string{"config", "storage"},
 			Optional:    true,
@@ -214,7 +218,7 @@ func getVMCommands() []DiscoveryCommand {
 		},
 		{
 			Name:        "docker_mounts",
-			Command:     `sh -c 'docker ps -q 2>/dev/null | head -15 | while read id; do name=$(docker inspect --format "{{.Name}}" "$id" 2>/dev/null | sed "s|^/||"); echo "CONTAINER:$name"; docker inspect --format "{{range .Mounts}}{{.Source}}|{{.Destination}}|{{.Type}}{{println}}{{end}}" "$id" 2>/dev/null | grep -v "^$" || true; done; echo docker_mounts_done'`,
+			Command:     dockerMountsCommand,
 			Description: "Docker container bind mounts (source -> destination)",
 			Categories:  []string{"config", "storage"},
 			Optional:    true,

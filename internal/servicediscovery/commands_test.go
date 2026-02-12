@@ -79,3 +79,33 @@ func TestCommandsAndTemplates(t *testing.T) {
 		t.Fatalf("unexpected formatted access: %s", formatted)
 	}
 }
+
+func TestDockerMountsCommandAvoidsExtraTextUtilities(t *testing.T) {
+	lxcCmds := GetCommandsForResource(ResourceTypeLXC)
+	vmCmds := GetCommandsForResource(ResourceTypeVM)
+
+	findByName := func(cmds []DiscoveryCommand, name string) string {
+		for _, cmd := range cmds {
+			if cmd.Name == name {
+				return cmd.Command
+			}
+		}
+		return ""
+	}
+
+	lxcMounts := findByName(lxcCmds, "docker_mounts")
+	vmMounts := findByName(vmCmds, "docker_mounts")
+
+	if lxcMounts == "" || vmMounts == "" {
+		t.Fatalf("expected docker_mounts command for both LXC and VM")
+	}
+	if lxcMounts != vmMounts {
+		t.Fatalf("expected shared docker_mounts command, got lxc=%q vm=%q", lxcMounts, vmMounts)
+	}
+	if strings.Contains(lxcMounts, "sed ") || strings.Contains(lxcMounts, "grep ") {
+		t.Fatalf("docker_mounts should not depend on sed/grep: %s", lxcMounts)
+	}
+	if !strings.Contains(lxcMounts, "name=${name#/}") {
+		t.Fatalf("expected shell-native container name trimming, got: %s", lxcMounts)
+	}
+}
