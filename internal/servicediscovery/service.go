@@ -2131,8 +2131,11 @@ func parseDockerMounts(output string) []DockerBindMount {
 // GetDiscovery retrieves a discovery by ID.
 func (s *Service) GetDiscovery(id string) (*ResourceDiscovery, error) {
 	d, err := s.store.Get(id)
-	if err != nil || d == nil {
-		return d, err
+	if err != nil {
+		return nil, fmt.Errorf("get discovery %q: %w", id, err)
+	}
+	if d == nil {
+		return nil, nil
 	}
 	s.upgradeCLIAccessIfNeeded(d)
 	return d, nil
@@ -2159,7 +2162,10 @@ func (s *Service) GetDiscoveryByResource(resourceType ResourceType, hostID, reso
 				return dAlias, nil
 			}
 		}
-		return d, err
+		if err != nil {
+			return nil, fmt.Errorf("get discovery for %s/%s/%s: %w", resourceType, req.HostID, req.ResourceID, err)
+		}
+		return nil, nil
 	}
 
 	s.upgradeCLIAccessIfNeeded(d)
@@ -2170,7 +2176,7 @@ func (s *Service) GetDiscoveryByResource(resourceType ResourceType, hostID, reso
 func (s *Service) ListDiscoveries() ([]*ResourceDiscovery, error) {
 	discoveries, err := s.store.List()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list discoveries: %w", err)
 	}
 	discoveries = s.deduplicateDiscoveries(discoveries)
 	for _, d := range discoveries {
@@ -2183,7 +2189,7 @@ func (s *Service) ListDiscoveries() ([]*ResourceDiscovery, error) {
 func (s *Service) ListDiscoveriesByType(resourceType ResourceType) ([]*ResourceDiscovery, error) {
 	discoveries, err := s.store.ListByType(resourceType)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list discoveries by type %q: %w", resourceType, err)
 	}
 	discoveries = s.deduplicateDiscoveries(discoveries)
 	for _, d := range discoveries {
@@ -2196,7 +2202,7 @@ func (s *Service) ListDiscoveriesByType(resourceType ResourceType) ([]*ResourceD
 func (s *Service) ListDiscoveriesByHost(hostID string) ([]*ResourceDiscovery, error) {
 	discoveries, err := s.store.ListByHost(hostID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list discoveries by host %q: %w", hostID, err)
 	}
 	discoveries = s.deduplicateDiscoveries(discoveries)
 	for _, d := range discoveries {
@@ -2487,7 +2493,7 @@ func (s *Service) GetChangedResourceCount() (int, error) {
 	}
 	changed, err := s.store.GetChangedResources()
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("get changed discovery resources: %w", err)
 	}
 	return len(changed), nil
 }
@@ -2500,7 +2506,7 @@ func (s *Service) GetStaleResourceCount() (int, error) {
 	}
 	stale, err := s.store.GetStaleResources(s.maxDiscoveryAge)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("get stale discovery resources: %w", err)
 	}
 	return len(stale), nil
 }
