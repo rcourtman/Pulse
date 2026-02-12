@@ -404,6 +404,56 @@ const createDefaultAppriseConfig = (): UIAppriseConfig => ({
   skipTlsVerify: false,
 });
 
+const createDefaultEmailConfig = (): UIEmailConfig => ({
+  enabled: false,
+  provider: '',
+  server: '',
+  port: 587,
+  username: '',
+  password: '',
+  from: '',
+  to: [],
+  tls: true,
+  startTLS: false,
+  replyTo: '',
+  maxRetries: 3,
+  retryDelay: 5,
+  rateLimit: 60,
+});
+
+const readStringValue = (value: unknown, fallback = ''): string =>
+  typeof value === 'string' ? value : fallback;
+
+const readBooleanValue = (value: unknown, fallback = false): boolean =>
+  typeof value === 'boolean' ? value : fallback;
+
+const readNumberValue = (value: unknown, fallback: number): number =>
+  typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+
+const readStringArrayValue = (value: unknown): string[] =>
+  Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : [];
+
+export const normalizeEmailConfigFromAPI = (
+  value: Partial<EmailConfig> | null | undefined,
+): UIEmailConfig => {
+  const defaults = createDefaultEmailConfig();
+
+  return {
+    ...defaults,
+    enabled: readBooleanValue(value?.enabled, defaults.enabled),
+    provider: readStringValue(value?.provider, defaults.provider),
+    server: readStringValue(value?.server, defaults.server),
+    port: readNumberValue(value?.port, defaults.port),
+    username: readStringValue(value?.username, defaults.username),
+    password: readStringValue(value?.password, defaults.password),
+    from: readStringValue(value?.from, defaults.from),
+    to: readStringArrayValue(value?.to),
+    tls: readBooleanValue(value?.tls, defaults.tls),
+    startTLS: readBooleanValue(value?.startTLS, defaults.startTLS),
+    rateLimit: readNumberValue(value?.rateLimit, defaults.rateLimit),
+  };
+};
+
 const parseAppriseTargets = (value: string): string[] =>
   value
     .split(/\r?\n|,/)
@@ -1077,22 +1127,7 @@ export function Alerts() {
     setScheduleGrouping(createDefaultGrouping());
     setScheduleEscalation(createDefaultEscalation());
 
-    setEmailConfig({
-      enabled: false,
-      provider: '',
-      server: '',
-      port: 587,
-      username: '',
-      password: '',
-      from: '',
-      to: [],
-      tls: true,
-      startTLS: false,
-      replyTo: '',
-      maxRetries: 3,
-      retryDelay: 5,
-      rateLimit: 60,
-    });
+    setEmailConfig(createDefaultEmailConfig());
 
     setAppriseConfig(createDefaultAppriseConfig());
 
@@ -1424,22 +1459,7 @@ export function Alerts() {
 
       try {
         const emailConfigData = await NotificationsAPI.getEmailConfig();
-        setEmailConfig({
-          enabled: emailConfigData.enabled,
-          provider: emailConfigData.provider || '',
-          server: emailConfigData.server || '',
-          port: emailConfigData.port || 587,
-          username: emailConfigData.username || '',
-          password: emailConfigData.password || '',
-          from: emailConfigData.from || '',
-          to: emailConfigData.to || [],
-          tls: emailConfigData.tls !== undefined ? emailConfigData.tls : true,
-          startTLS: emailConfigData.startTLS || false,
-          replyTo: '',
-          maxRetries: 3,
-          retryDelay: 5,
-          rateLimit: emailConfigData.rateLimit ?? 60,
-        });
+        setEmailConfig(normalizeEmailConfigFromAPI(emailConfigData));
       } catch (emailErr) {
         logger.error('Failed to load email configuration:', emailErr);
       }
@@ -1489,22 +1509,7 @@ export function Alerts() {
       // Reload email config from server when switching to destinations tab
       NotificationsAPI.getEmailConfig()
         .then((emailConfigData) => {
-          setEmailConfig({
-            enabled: emailConfigData.enabled,
-            provider: emailConfigData.provider || '',
-            server: emailConfigData.server || '',
-            port: emailConfigData.port || 587,
-            username: emailConfigData.username || '',
-            password: emailConfigData.password || '',
-            from: emailConfigData.from || '',
-            to: emailConfigData.to || [],
-            tls: emailConfigData.tls !== undefined ? emailConfigData.tls : true,
-            startTLS: emailConfigData.startTLS || false,
-            replyTo: '',
-            maxRetries: 3,
-            retryDelay: 5,
-            rateLimit: emailConfigData.rateLimit ?? 60,
-          });
+          setEmailConfig(normalizeEmailConfigFromAPI(emailConfigData));
         })
         .catch((err) => {
           logger.error('Failed to reload email configuration:', err);
