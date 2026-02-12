@@ -23,6 +23,15 @@ var containerMarkers = []string{
 	"lxcfs",
 }
 
+var dockerRuntimeMarkers = []string{
+	"docker",
+	"containerd",
+	"kubepods",
+	"podman",
+	"crio",
+	"libpod",
+}
+
 // InContainer reports whether Pulse is running inside a containerised environment.
 func InContainer() bool {
 	// Allow operators to force container behaviour when automatic detection falls short.
@@ -53,10 +62,8 @@ func InContainer() bool {
 	// Fall back to cgroup inspection which covers older Docker/LXC setups.
 	if data, err := readFileFn("/proc/1/cgroup"); err == nil {
 		content := strings.ToLower(string(data))
-		for _, marker := range containerMarkers {
-			if strings.Contains(content, marker) {
-				return true
-			}
+		if hasAnyMarker(content, containerMarkers) {
+			return true
 		}
 	}
 
@@ -66,6 +73,10 @@ func InContainer() bool {
 // DetectDockerContainerName attempts to detect the Docker container name.
 // Returns empty string if not in Docker or name cannot be determined.
 func DetectDockerContainerName() string {
+	if !inDockerRuntime() {
+		return ""
+	}
+
 	// Method 1: Check hostname (Docker uses container ID or name as hostname)
 	if hostname, err := hostnameFn(); err == nil && hostname != "" {
 		// Docker hostnames are either short container ID (12 chars) or custom name
@@ -83,6 +94,52 @@ func DetectDockerContainerName() string {
 	}
 
 	return ""
+}
+
+func inDockerRuntime() bool {
+	if _, err := statFn("/.dockerenv"); err == nil {
+		return true
+	}
+	if _, err := statFn("/run/.containerenv"); err == nil {
+		return true
+	}
+
+	switch strings.ToLower(strings.TrimSpace(envGetFn("container"))) {
+	case "docker", "podman", "containerd", "crio", "cri-o", "libpod", "kubepods", "oci":
+		return true
+	}
+
+	for _, path := range []string{"/proc/1/environ", "/proc/self/environ"} {
+		if data, err := readFileFn(path); err == nil {
+			lower := strings.ToLower(string(data))
+			if strings.Contains(lower, "container=docker") ||
+				strings.Contains(lower, "container=podman") ||
+				strings.Contains(lower, "container=containerd") ||
+				strings.Contains(lower, "container=crio") ||
+				strings.Contains(lower, "container=cri-o") {
+				return true
+			}
+		}
+	}
+
+	for _, path := range []string{"/proc/1/cgroup", "/proc/self/cgroup"} {
+		if data, err := readFileFn(path); err == nil {
+			if hasAnyMarker(strings.ToLower(string(data)), dockerRuntimeMarkers) {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+func hasAnyMarker(content string, markers []string) bool {
+	for _, marker := range markers {
+		if strings.Contains(content, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func isHexString(s string) bool {
