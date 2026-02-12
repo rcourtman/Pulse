@@ -71,7 +71,8 @@ format-frontend:
 
 # Build control plane binary
 control-plane:
-	go build -o pulse-control-plane ./cmd/pulse-control-plane
+	@VERSION=$$(cat VERSION | tr -d '\n') && \
+	go build -ldflags="-s -w -X main.Version=v$$VERSION" -trimpath -o pulse-control-plane ./cmd/pulse-control-plane
 
 test:
 	@./scripts/ensure_test_assets.sh
