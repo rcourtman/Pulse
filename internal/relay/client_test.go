@@ -451,6 +451,74 @@ func TestClient_SessionTokenReuse(t *testing.T) {
 	<-errCh
 }
 
+func TestClient_RejectsOversizedWebSocketMessage(t *testing.T) {
+	logger := zerolog.New(zerolog.NewTestWriter(t))
+
+	relayServer := mockRelayServer(t, func(conn *websocket.Conn) {
+		// Read REGISTER
+		_, msg, _ := conn.ReadMessage()
+		frame, _ := DecodeFrame(msg)
+		if frame.Type != FrameRegister {
+			return
+		}
+
+		// Send REGISTER_ACK
+		ack, _ := NewControlFrame(FrameRegisterAck, 0, RegisterAckPayload{
+			InstanceID:   "inst_oversized",
+			SessionToken: "sess_oversized",
+			ExpiresAt:    time.Now().Add(time.Hour).Unix(),
+		})
+		ackBytes, _ := EncodeFrame(ack)
+		conn.WriteMessage(websocket.BinaryMessage, ackBytes)
+
+		// Send one oversized websocket binary message. This should trip
+		// conn.SetReadLimit and force the client to drop/reconnect.
+		oversized := make([]byte, wsReadLimit+1)
+		conn.WriteMessage(websocket.BinaryMessage, oversized)
+
+		time.Sleep(200 * time.Millisecond)
+	})
+	defer relayServer.Close()
+
+	cfg := Config{
+		Enabled:   true,
+		ServerURL: wsURL(relayServer),
+	}
+
+	deps := ClientDeps{
+		LicenseTokenFunc: func() string { return "test-jwt" },
+		TokenValidator:   func(token string) bool { return true },
+		LocalAddr:        "127.0.0.1:9999",
+		ServerVersion:    "1.0.0",
+		IdentityPubKey:   "test-pub-key",
+	}
+
+	client := NewClient(cfg, deps, logger)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	errCh := make(chan error, 1)
+	go func() { errCh <- client.Run(ctx) }()
+
+	deadline := time.After(3 * time.Second)
+	observed := false
+	for !observed {
+		status := client.Status()
+		if strings.Contains(status.LastError, "read limit exceeded") {
+			observed = true
+			break
+		}
+		select {
+		case <-deadline:
+			t.Fatalf("timed out waiting for read-limit error, last error=%q", status.LastError)
+		case <-time.After(50 * time.Millisecond):
+		}
+	}
+
+	cancel()
+	<-errCh
+}
+
 // testIdentityKeyPair generates an Ed25519 keypair for testing and returns
 // the base64 private key and public key.
 func testIdentityKeyPair(t *testing.T) (privB64, pubB64 string) {

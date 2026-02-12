@@ -28,6 +28,9 @@ const (
 	wsWriteWait      = 10 * time.Second
 	wsHandshakeWait  = 15 * time.Second
 	sendChBufferSize = 256
+
+	// wsReadLimit bounds inbound WebSocket message size to a single relay frame.
+	wsReadLimit = HeaderSize + MaxPayloadSize
 )
 
 // TokenValidator validates an API token and returns the raw token if valid.
@@ -214,6 +217,7 @@ func (c *Client) connectAndHandle(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("dial relay: %w", err)
 	}
+	conn.SetReadLimit(wsReadLimit)
 
 	// Per-connection send channel — no races because each writePump gets its own
 	sendCh := make(chan []byte, sendChBufferSize)
