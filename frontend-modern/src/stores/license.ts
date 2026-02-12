@@ -1,5 +1,6 @@
 import { createSignal, createMemo, createRoot } from 'solid-js';
 import { LicenseAPI, type LicenseEntitlements } from '@/api/license';
+import { eventBus } from '@/stores/events';
 import { logger } from '@/utils/logger';
 
 // Reactive signals for entitlements (canonical gating source).
@@ -122,6 +123,13 @@ function parseRangeDays(range: string): number {
 export function isRangeLocked(range: string): boolean {
     return parseRangeDays(range) > MAX_FREE_DAYS && !hasFeature('long_term_metrics');
 }
+
+// Ensure org-scoped entitlements do not leak across tenant switches.
+eventBus.on('org_switched', () => {
+    setEntitlements(null);
+    setLoaded(false);
+    void loadLicenseStatus(true);
+});
 
 /**
  * Get the full license status.
