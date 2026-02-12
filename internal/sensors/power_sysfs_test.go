@@ -2,6 +2,7 @@ package sensors
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -196,5 +197,84 @@ func TestCollectPower_FallbackToAMD(t *testing.T) {
 	}
 	if data.Source != "amd_energy" {
 		t.Fatalf("expected amd_energy fallback, got %q", data.Source)
+	}
+}
+
+func TestCollectRALP_CanceledDuringSampleWait(t *testing.T) {
+	tmpDir := t.TempDir()
+	original := raplBasePath
+	raplBasePath = tmpDir
+	t.Cleanup(func() {
+		raplBasePath = original
+	})
+
+	pkg0 := filepath.Join(tmpDir, "intel-rapl:0")
+	if err := os.MkdirAll(pkg0, 0755); err != nil {
+		t.Fatalf("mkdir pkg0: %v", err)
+	}
+	if err := writeEnergyFile(filepath.Join(pkg0, "energy_uj"), "1000000"); err != nil {
+		t.Fatalf("write package energy: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(pkg0, "name"), []byte("package-0"), 0644); err != nil {
+		t.Fatalf("write name: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		cancel()
+	}()
+
+	start := time.Now()
+	data, err := collectRALP(ctx)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context canceled error, got %v", err)
+	}
+	if data != nil {
+		t.Fatalf("expected nil data on cancellation, got %+v", data)
+	}
+	if elapsed := time.Since(start); elapsed >= sampleInterval {
+		t.Fatalf("expected cancellation before sample interval elapsed, took %v", elapsed)
+	}
+}
+
+func TestCollectAMDEnergy_CanceledDuringSampleWait(t *testing.T) {
+	tmpDir := t.TempDir()
+	original := hwmonBasePath
+	hwmonBasePath = tmpDir
+	t.Cleanup(func() {
+		hwmonBasePath = original
+	})
+
+	hwmon := filepath.Join(tmpDir, "hwmon0")
+	if err := os.MkdirAll(hwmon, 0755); err != nil {
+		t.Fatalf("mkdir hwmon: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(hwmon, "name"), []byte("amd_energy"), 0644); err != nil {
+		t.Fatalf("write hwmon name: %v", err)
+	}
+	if err := writeEnergyFile(filepath.Join(hwmon, "energy1_input"), "1000000"); err != nil {
+		t.Fatalf("write energy input: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(hwmon, "energy1_label"), []byte("socket"), 0644); err != nil {
+		t.Fatalf("write energy label: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		cancel()
+	}()
+
+	start := time.Now()
+	data, err := collectAMDEnergy(ctx)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context canceled error, got %v", err)
+	}
+	if data != nil {
+		t.Fatalf("expected nil data on cancellation, got %+v", data)
+	}
+	if elapsed := time.Since(start); elapsed >= sampleInterval {
+		t.Fatalf("expected cancellation before sample interval elapsed, took %v", elapsed)
 	}
 }
