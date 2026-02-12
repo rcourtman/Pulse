@@ -78,10 +78,10 @@ test:
 	@echo "Running backend tests (excluding tmp tooling)..."
 	go test $$(go list ./... | grep -v '/tmp$$')
 
-# Run integration tests (requires Ollama at OLLAMA_URL or 192.168.0.124:11434)
+# Run integration tests (requires Ollama at OLLAMA_URL or 127.0.0.1:11434)
 test-integration:
 	@echo "Running AI integration tests against Ollama..."
-	@echo "Set OLLAMA_URL to override default (http://192.168.0.124:11434)"
+	@echo "Set OLLAMA_URL to override default (http://127.0.0.1:11434)"
 	go test -tags=integration -v ./internal/ai/providers/... -run "TestIntegration"
 
 # Run both unit and integration tests
