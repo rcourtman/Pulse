@@ -14,6 +14,8 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+const smartctlComponent = "smartctl_collector"
+
 var (
 	execLookPath     = exec.LookPath
 	runCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
@@ -111,7 +113,12 @@ func CollectLocal(ctx context.Context, diskExclude []string) ([]DiskSMART, error
 	// List block devices
 	devices, err := listBlockDevices(ctx, diskExclude)
 	if err != nil {
-		log.Debug().Err(err).Msg("Failed to list block devices for SMART collection")
+		log.Debug().
+			Str("component", smartctlComponent).
+			Str("action", "list_block_devices_failed").
+			Int("exclude_patterns", len(diskExclude)).
+			Err(err).
+			Msg("Failed to list block devices for SMART collection")
 		return nil, err
 	}
 
@@ -123,13 +130,25 @@ func CollectLocal(ctx context.Context, diskExclude []string) ([]DiskSMART, error
 	for _, dev := range devices {
 		smart, err := collectDeviceSMART(ctx, dev)
 		if err != nil {
-			log.Debug().Err(err).Str("device", dev).Msg("Failed to collect SMART data for device")
+			log.Debug().
+				Str("component", smartctlComponent).
+				Str("action", "collect_device_smart_failed").
+				Str("device", dev).
+				Err(err).
+				Msg("Failed to collect SMART data for device")
 			continue
 		}
 		if smart != nil {
 			results = append(results, *smart)
 		}
 	}
+
+	log.Debug().
+		Str("component", smartctlComponent).
+		Str("action", "collect_local_complete").
+		Int("devices_discovered", len(devices)).
+		Int("devices_collected", len(results)).
+		Msg("Completed SMART collection for local devices")
 
 	return results, nil
 }
@@ -161,7 +180,11 @@ func listBlockDevicesLinux(ctx context.Context, diskExclude []string) ([]string,
 		if devType == "disk" {
 			devicePath := "/dev/" + name
 			if matchesDeviceExclude(name, devicePath, diskExclude) {
-				log.Debug().Str("device", devicePath).Msg("Skipping excluded device for SMART collection")
+				log.Debug().
+					Str("component", smartctlComponent).
+					Str("action", "skip_excluded_device").
+					Str("device", devicePath).
+					Msg("Skipping excluded device for SMART collection")
 				continue
 			}
 			devices = append(devices, devicePath)
@@ -185,7 +208,11 @@ func listBlockDevicesFreeBSD(ctx context.Context, diskExclude []string) ([]strin
 		}
 		devicePath := "/dev/" + name
 		if matchesDeviceExclude(name, devicePath, diskExclude) {
-			log.Debug().Str("device", devicePath).Msg("Skipping excluded device for SMART collection")
+			log.Debug().
+				Str("component", smartctlComponent).
+				Str("action", "skip_excluded_device").
+				Str("device", devicePath).
+				Msg("Skipping excluded device for SMART collection")
 			continue
 		}
 		devices = append(devices, devicePath)
@@ -264,6 +291,11 @@ func collectDeviceSMART(ctx context.Context, device string) (*DiskSMART, error) 
 			exitCode := exitErr.ExitCode()
 			// Check for standby (bit 1 set in exit status)
 			if exitCode&2 != 0 {
+				log.Debug().
+					Str("component", smartctlComponent).
+					Str("action", "device_in_standby").
+					Str("device", filepath.Base(device)).
+					Msg("Skipping SMART collection for standby device")
 				return &DiskSMART{
 					Device:      filepath.Base(device),
 					Standby:     true,
@@ -275,6 +307,12 @@ func collectDeviceSMART(ctx context.Context, device string) (*DiskSMART, error) 
 			if len(output) == 0 {
 				return nil, err
 			}
+			log.Debug().
+				Str("component", smartctlComponent).
+				Str("action", "collect_device_smart_nonzero_exit").
+				Str("device", filepath.Base(device)).
+				Int("exit_code", exitCode).
+				Msg("smartctl returned non-zero exit status with JSON output")
 		} else {
 			return nil, err
 		}
@@ -317,7 +355,10 @@ func collectDeviceSMART(ctx context.Context, device string) (*DiskSMART, error) 
 	result.Attributes = parseSMARTAttributes(&smartData, result.Type)
 
 	log.Debug().
+		Str("component", smartctlComponent).
+		Str("action", "collect_device_smart_success").
 		Str("device", result.Device).
+		Str("type", result.Type).
 		Str("model", result.Model).
 		Int("temperature", result.Temperature).
 		Str("health", result.Health).
