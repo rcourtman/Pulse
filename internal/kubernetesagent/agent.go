@@ -179,7 +179,7 @@ func New(cfg Config) (*Agent, error) {
 	}
 
 	if err := agent.discoverClusterMetadata(context.Background()); err != nil {
-		agent.logger.Warn().Err(err).Msg("Failed to discover Kubernetes cluster metadata")
+		agent.logger.Warn().Err(err).Str("cluster_id", agent.clusterID).Msg("failed to discover cluster metadata")
 	}
 
 	agent.logger.Info().
@@ -187,7 +187,7 @@ func New(cfg Config) (*Agent, error) {
 		Str("cluster_name", agent.clusterName).
 		Str("server", agent.clusterServer).
 		Str("context", agent.clusterContext).
-		Msg("Kubernetes agent initialized")
+		Msg("kubernetes agent initialized")
 
 	return agent, nil
 }
@@ -291,12 +291,12 @@ func (a *Agent) runOnce(ctx context.Context) {
 
 	report, err := a.collectReport(ctx)
 	if err != nil {
-		a.logger.Warn().Err(err).Msg("Failed to collect Kubernetes report")
+		a.logger.Warn().Err(err).Str("cluster_id", a.clusterID).Msg("failed to collect kubernetes report")
 		return
 	}
 
 	if err := a.sendReport(ctx, report); err != nil {
-		a.logger.Warn().Err(err).Msg("Failed to send Kubernetes report, buffering")
+		a.logger.Warn().Err(err).Str("cluster_id", a.clusterID).Msg("failed to send kubernetes report, buffering")
 		a.reportBuffer.Push(report)
 	}
 }
@@ -356,7 +356,7 @@ func (a *Agent) collectReport(ctx context.Context) (agentsk8s.Report, error) {
 
 	nodeUsage, podUsage, usageErr := a.collectUsageMetrics(ctx, nodes)
 	if usageErr != nil {
-		a.logger.Debug().Err(usageErr).Msg("Kubernetes usage metrics unavailable; continuing with inventory-only report")
+		a.logger.Debug().Err(usageErr).Str("cluster_id", a.clusterID).Msg("kubernetes usage metrics unavailable, continuing with inventory-only report")
 	}
 	applyNodeUsage(nodes, nodeUsage)
 	applyPodUsage(pods, podUsage)
@@ -405,7 +405,7 @@ func (a *Agent) collectUsageMetrics(ctx context.Context, nodes []agentsk8s.Node)
 	if nodeErr == nil {
 		parsed, err := parseNodeMetricsPayload(nodeRaw)
 		if err != nil {
-			a.logger.Debug().Err(err).Msg("Failed to parse Kubernetes node metrics payload")
+			a.logger.Debug().Err(err).Str("cluster_id", a.clusterID).Msg("failed to parse kubernetes node metrics payload")
 		} else {
 			nodeUsage = parsed
 		}
@@ -415,7 +415,7 @@ func (a *Agent) collectUsageMetrics(ctx context.Context, nodes []agentsk8s.Node)
 	if podErr == nil {
 		parsed, err := parsePodMetricsPayload(podRaw)
 		if err != nil {
-			a.logger.Debug().Err(err).Msg("Failed to parse Kubernetes pod metrics payload")
+			a.logger.Debug().Err(err).Str("cluster_id", a.clusterID).Msg("failed to parse kubernetes pod metrics payload")
 		} else {
 			podUsage = parsed
 		}
@@ -423,7 +423,7 @@ func (a *Agent) collectUsageMetrics(ctx context.Context, nodes []agentsk8s.Node)
 
 	summaryUsage, summaryErr := a.collectPodSummaryMetrics(ctx, nodes)
 	if summaryErr != nil {
-		a.logger.Debug().Err(summaryErr).Msg("Failed to collect Kubernetes pod summary metrics")
+		a.logger.Debug().Err(summaryErr).Str("cluster_id", a.clusterID).Msg("failed to collect kubernetes pod summary metrics")
 	}
 	mergePodSummaryUsage(podUsage, summaryUsage)
 
