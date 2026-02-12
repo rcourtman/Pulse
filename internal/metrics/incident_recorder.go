@@ -143,7 +143,7 @@ func NewIncidentRecorder(cfg IncidentRecorderConfig) *IncidentRecorder {
 	if cfg.DataDir != "" {
 		recorder.filePath = filepath.Join(cfg.DataDir, "incident_windows.json")
 		if err := recorder.loadFromDisk(); err != nil {
-			log.Warn().Err(err).Msg("Failed to load incident windows from disk")
+			log.Warn().Err(err).Msg("failed to load incident windows from disk")
 		}
 	}
 
@@ -169,7 +169,7 @@ func (r *IncidentRecorder) Start() {
 	r.mu.Unlock()
 
 	go r.recordingLoop()
-	log.Info().Msg("Incident recorder started")
+	log.Info().Msg("incident recorder started")
 }
 
 // Stop stops the incident recorder
@@ -185,9 +185,9 @@ func (r *IncidentRecorder) Stop() {
 
 	// Save to disk
 	if err := r.saveToDisk(); err != nil {
-		log.Warn().Err(err).Msg("Failed to save incident windows on stop")
+		log.Warn().Err(err).Msg("failed to save incident windows on stop")
 	}
-	log.Info().Msg("Incident recorder stopped")
+	log.Info().Msg("incident recorder stopped")
 }
 
 // recordingLoop runs in the background to maintain pre-incident buffers and active windows
@@ -241,7 +241,7 @@ func (r *IncidentRecorder) recordSample() {
 			log.Debug().
 				Str("resource_id", window.ResourceID).
 				Err(err).
-				Msg("Failed to get metrics for incident window")
+				Msg("failed to get metrics for incident window")
 			continue
 		}
 
@@ -335,7 +335,7 @@ func (r *IncidentRecorder) StartRecording(resourceID, resourceName, resourceType
 		Str("window_id", windowID).
 		Str("resource_id", resourceID).
 		Str("trigger_type", triggerType).
-		Msg("Started incident recording")
+		Msg("started incident recording")
 
 	return windowID
 }
@@ -376,12 +376,12 @@ func (r *IncidentRecorder) completeWindow(window *IncidentWindow) {
 		Str("window_id", window.ID).
 		Str("resource_id", window.ResourceID).
 		Int("data_points", len(window.DataPoints)).
-		Msg("Completed incident recording")
+		Msg("completed incident recording")
 
 	// Save asynchronously
 	go func() {
 		if err := r.saveToDisk(); err != nil {
-			log.Warn().Err(err).Msg("Failed to save incident windows")
+			log.Warn().Err(err).Msg("failed to save incident windows")
 		}
 	}()
 }
