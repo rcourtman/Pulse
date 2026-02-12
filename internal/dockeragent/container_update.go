@@ -29,9 +29,16 @@ type ContainerUpdateResult struct {
 func (a *Agent) handleUpdateContainerCommand(ctx context.Context, target TargetConfig, command agentsdocker.Command) error {
 	containerID, ok := command.Payload["containerId"].(string)
 	if !ok || containerID == "" {
-		a.logger.Error().Msg("Update command missing containerId in payload")
+		a.logger.Error().
+			Str("commandID", command.ID).
+			Str("target", target.URL).
+			Msg("Update command missing containerId in payload")
 		if err := a.sendCommandAck(ctx, target, command.ID, agentsdocker.CommandStatusFailed, "Missing containerId in payload"); err != nil {
-			a.logger.Error().Err(err).Msg("Failed to send failure acknowledgement")
+			a.logger.Error().
+				Err(err).
+				Str("commandID", command.ID).
+				Str("target", target.URL).
+				Msg("Failed to send failure acknowledgement")
 		}
 		return nil
 	}
@@ -43,7 +50,12 @@ func (a *Agent) handleUpdateContainerCommand(ctx context.Context, target TargetC
 
 	// Send acknowledgement that we're starting the update
 	if err := a.sendCommandAck(ctx, target, command.ID, agentsdocker.CommandStatusAcknowledged, "Starting container update"); err != nil {
-		a.logger.Error().Err(err).Msg("Failed to send acknowledgement to Pulse")
+		a.logger.Error().
+			Err(err).
+			Str("commandID", command.ID).
+			Str("containerId", containerID).
+			Str("target", target.URL).
+			Msg("Failed to send acknowledgement to Pulse")
 		return nil
 	}
 
@@ -51,7 +63,13 @@ func (a *Agent) handleUpdateContainerCommand(ctx context.Context, target TargetC
 	progressFn := func(step string) {
 		// Send progress update (using "in_progress" status with step message)
 		if err := a.sendCommandAck(ctx, target, command.ID, agentsdocker.CommandStatusInProgress, step); err != nil {
-			a.logger.Warn().Err(err).Str("step", step).Msg("Failed to send progress update")
+			a.logger.Warn().
+				Err(err).
+				Str("commandID", command.ID).
+				Str("containerId", containerID).
+				Str("target", target.URL).
+				Str("step", step).
+				Msg("Failed to send progress update")
 		}
 	}
 
@@ -67,7 +85,13 @@ func (a *Agent) handleUpdateContainerCommand(ctx context.Context, target TargetC
 	}
 
 	if err := a.sendCommandAck(ctx, target, command.ID, status, message); err != nil {
-		a.logger.Error().Err(err).Msg("Failed to send completion acknowledgement to Pulse")
+		a.logger.Error().
+			Err(err).
+			Str("commandID", command.ID).
+			Str("containerId", containerID).
+			Str("target", target.URL).
+			Str("status", status).
+			Msg("Failed to send completion acknowledgement to Pulse")
 	}
 
 	return nil
@@ -288,7 +312,7 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 		sleepFn(5 * time.Minute)
 		cleanupCtx := context.Background()
 		if err := a.docker.ContainerRemove(cleanupCtx, backupName, container.RemoveOptions{Force: true}); err != nil {
-			a.logger.Warn().Err(err).Str("backup", backupName).Msg("Failed to cleanup backup container")
+			a.logger.Warn().Err(err).Str("backup", backupName).Msg("Failed to clean up backup container")
 		} else {
 			a.logger.Info().Str("backup", backupName).Msg("Backup container cleaned up")
 		}

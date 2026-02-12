@@ -151,12 +151,9 @@ func (r *RegistryChecker) CheckImageUpdate(ctx context.Context, image, currentDi
 		}
 	}
 
-	// Check cache first
-	// internal/dockeragent/registry.go
-	// Check cache first
-	// internal/dockeragent/registry.go
+	// Check cache first.
 	cacheKey := fmt.Sprintf("%s/%s:%s|%s/%s/%s", registry, repository, tag, arch, os, variant)
-	r.logger.Debug().Str("image", image).Str("cacheKey", cacheKey).Msg("Checking update (internal)")
+	r.logger.Debug().Str("image", image).Str("cacheKey", cacheKey).Msg("Checking image update cache")
 
 	if cached := r.getCached(cacheKey); cached != nil {
 		r.logger.Debug().Str("image", image).Msg("Cache hit for update check")
@@ -210,7 +207,7 @@ func (r *RegistryChecker) CheckImageUpdate(ctx context.Context, image, currentDi
 
 	updateAvailable := r.digestsDiffer(currentDigest, cacheValue)
 
-	r.logger.Info().
+	r.logger.Debug().
 		Str("image", image).
 		Str("currentDigest", currentDigest).
 		Str("latestDigest", latestDigest).

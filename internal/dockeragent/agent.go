@@ -787,7 +787,11 @@ func (a *Agent) handleCommand(ctx context.Context, target TargetConfig, command 
 	case agentsdocker.CommandTypeCheckUpdates:
 		return a.handleCheckUpdatesCommand(ctx, target, command)
 	default:
-		a.logger.Warn().Str("command", command.Type).Msg("Received unsupported control command")
+		a.logger.Warn().
+			Str("command", command.Type).
+			Str("commandID", command.ID).
+			Str("target", target.URL).
+			Msg("Received unsupported control command")
 		return nil
 	}
 }
@@ -818,9 +822,17 @@ func (a *Agent) handleStopCommand(ctx context.Context, target TargetConfig, comm
 	a.logger.Info().Str("commandID", command.ID).Msg("Received stop command from Pulse")
 
 	if err := a.disableSelf(ctx); err != nil {
-		a.logger.Error().Err(err).Msg("Failed to disable pulse-docker-agent service")
+		a.logger.Error().
+			Err(err).
+			Str("commandID", command.ID).
+			Str("target", target.URL).
+			Msg("Failed to disable pulse-docker-agent service")
 		if ackErr := a.sendCommandAck(ctx, target, command.ID, agentsdocker.CommandStatusFailed, err.Error()); ackErr != nil {
-			a.logger.Error().Err(ackErr).Msg("Failed to send failure acknowledgement to Pulse")
+			a.logger.Error().
+				Err(ackErr).
+				Str("commandID", command.ID).
+				Str("target", target.URL).
+				Msg("Failed to send failure acknowledgement to Pulse")
 		}
 		return nil
 	}
@@ -829,7 +841,7 @@ func (a *Agent) handleStopCommand(ctx context.Context, target TargetConfig, comm
 		return fmt.Errorf("send stop acknowledgement: %w", err)
 	}
 
-	a.logger.Info().Msg("Stop command acknowledged; terminating agent")
+	a.logger.Info().Str("commandID", command.ID).Msg("Stop command acknowledged; terminating agent")
 
 	// After sending the acknowledgement, stop the systemd service to prevent restart.
 	// This is done after the ack to ensure the acknowledgement is sent before the
@@ -839,7 +851,11 @@ func (a *Agent) handleStopCommand(ctx context.Context, target TargetConfig, comm
 		sleepFn(1 * time.Second)
 		stopServiceCtx := context.Background()
 		if err := stopSystemdService(stopServiceCtx, "pulse-docker-agent"); err != nil {
-			a.logger.Warn().Err(err).Msg("Failed to stop systemd service, agent will exit normally")
+			a.logger.Warn().
+				Err(err).
+				Str("commandID", command.ID).
+				Str("service", "pulse-docker-agent").
+				Msg("Failed to stop systemd service, agent will exit normally")
 		}
 	}()
 
@@ -853,7 +869,10 @@ func (a *Agent) disableSelf(ctx context.Context) error {
 
 	// Remove Unraid startup script if present to prevent restart on reboot.
 	if err := removeFileIfExists(unraidStartupScriptPath); err != nil {
-		a.logger.Warn().Err(err).Msg("Failed to remove Unraid startup script")
+		a.logger.Warn().
+			Err(err).
+			Str("path", unraidStartupScriptPath).
+			Msg("Failed to remove Unraid startup script")
 	}
 
 	// Best-effort log cleanup (ignore errors).
