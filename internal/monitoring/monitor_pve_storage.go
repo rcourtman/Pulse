@@ -29,6 +29,7 @@ func (s *storageFallback) snapshot() map[string]models.Disk {
 }
 
 func (m *Monitor) startStorageFallback(
+	ctx context.Context,
 	instanceName string,
 	instanceCfg *config.PVEInstance,
 	client PVEClientInterface,
@@ -50,7 +51,15 @@ func (m *Monitor) startStorageFallback(
 
 		// Use a short timeout for storage fallback - it's an optimization, not critical
 		storageFallbackTimeout := 10 * time.Second
-		storageCtx, storageCancel := context.WithTimeout(context.Background(), storageFallbackTimeout)
+		// Derive timeout from monitor lifecycle context so shutdown can cancel this work.
+		parentCtx := m.runtimeCtx
+		if parentCtx == nil {
+			parentCtx = ctx
+		}
+		if parentCtx == nil {
+			parentCtx = context.Background()
+		}
+		storageCtx, storageCancel := context.WithTimeout(parentCtx, storageFallbackTimeout)
 		defer storageCancel()
 
 		_, err := client.GetAllStorage(storageCtx)
@@ -129,10 +138,20 @@ func (m *Monitor) awaitStorageFallback(instanceName string, sf *storageFallback,
 		return nil
 	}
 
+	timer := time.NewTimer(timeout)
+	defer func() {
+		if !timer.Stop() {
+			select {
+			case <-timer.C:
+			default:
+			}
+		}
+	}()
+
 	select {
 	case <-sf.done:
 		// Storage fallback completed normally
-	case <-time.After(timeout):
+	case <-timer.C:
 		log.Debug().
 			Str("instance", instanceName).
 			Msg("Storage fallback still running - proceeding without waiting (disk fallback may be unavailable)")
@@ -238,7 +257,15 @@ func (m *Monitor) pollStorageAsync(
 
 			// Use a generous timeout for storage polling - it's not blocking the main task
 			storageTimeout := 60 * time.Second
-			storageCtx, storageCancel := context.WithTimeout(context.Background(), storageTimeout)
+			// Use monitor lifecycle context so shutdown can interrupt detached async polling.
+			parentCtx := m.runtimeCtx
+			if parentCtx == nil {
+				parentCtx = ctx
+			}
+			if parentCtx == nil {
+				parentCtx = context.Background()
+			}
+			storageCtx, storageCancel := context.WithTimeout(parentCtx, storageTimeout)
 			defer storageCancel()
 
 			m.pollStorageWithNodes(storageCtx, inst, pveClient, nodeList)
