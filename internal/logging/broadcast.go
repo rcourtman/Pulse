@@ -2,7 +2,6 @@ package logging
 
 import (
 	"container/ring"
-	"fmt"
 	"sync"
 
 	"github.com/google/uuid"
@@ -55,11 +54,9 @@ func (b *LogBroadcaster) Write(p []byte) (n int, err error) {
 		case ch <- msg:
 			// Sent successfully
 		default:
-			// Channel blocked, too slow consumer.
-			// In a real production system we might drop the client,
-			// here we just skip this message for them to avoid blocking writer.
-			// Ideally we should warn or close their channel.
-			fmt.Printf("logging: subscriber %s blocked, dropping message\n", id)
+			// Channel blocked, too slow consumer - skip this message to avoid blocking the writer.
+			// We intentionally don't log here to prevent recursive logging issues.
+			_ = id // Subscriber is too slow, message dropped
 		}
 	}
 
@@ -98,7 +95,7 @@ func (b *LogBroadcaster) Unsubscribe(id string) {
 	}
 }
 
-// GetHistory returns the current in-memory log log history.
+// GetHistory returns the current in-memory log history.
 func (b *LogBroadcaster) GetHistory() []string {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
