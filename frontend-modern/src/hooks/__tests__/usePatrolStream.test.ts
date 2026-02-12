@@ -42,6 +42,11 @@ class MockEventSource {
         this.onmessage?.(evt);
     }
 
+    emitRawMessage(data: unknown, lastEventId = '') {
+        const evt = { data, lastEventId } as MessageEvent;
+        this.onmessage?.(evt);
+    }
+
     emitError() {
         this.onerror?.(new Event('error'));
     }
@@ -141,6 +146,81 @@ describe('usePatrolStream', () => {
         expect(state.bufferStartSeq()).toBe(120);
         expect(state.bufferEndSeq()).toBe(320);
         expect(state.outputTruncated()).toBe(true);
+
+        dispose();
+    });
+
+    it('drops oversized SSE message payloads', () => {
+        let dispose!: () => void;
+        let state!: ReturnType<typeof usePatrolStream>;
+
+        createRoot((d) => {
+            dispose = d;
+            const [running] = createSignal(true);
+            state = usePatrolStream({ running });
+        });
+
+        const stream = MockEventSource.instances[0];
+        stream.emitOpen();
+        stream.emitMessage({ type: 'phase', phase: 'initial-phase' });
+        expect(state.phase()).toBe('initial-phase');
+
+        stream.emitMessage({ type: 'phase', phase: 'x'.repeat(70 * 1024) });
+
+        expect(state.phase()).toBe('initial-phase');
+        expect(loggerMock.warn).toHaveBeenCalledWith('[PatrolStream] Dropping oversized SSE event payload');
+
+        dispose();
+    });
+
+    it('clamps stream text fields and token counters from SSE input', () => {
+        let dispose!: () => void;
+        let state!: ReturnType<typeof usePatrolStream>;
+
+        createRoot((d) => {
+            dispose = d;
+            const [running] = createSignal(true);
+            state = usePatrolStream({ running });
+        });
+
+        const stream = MockEventSource.instances[0];
+        stream.emitOpen();
+        stream.emitMessage({
+            type: 'snapshot',
+            phase: 'p'.repeat(5000),
+            tokens: 999999999,
+            tool_name: 't'.repeat(5000),
+        });
+
+        expect(state.phase().length).toBe(4096);
+        expect(state.currentTool().length).toBe(4096);
+        expect(state.tokens()).toBe(10_000_000);
+
+        stream.emitMessage({ type: 'error', content: 'e'.repeat(5000) });
+        expect(state.errorMessage().length).toBe(4096);
+
+        dispose();
+    });
+
+    it('ignores unknown stream event types', () => {
+        let dispose!: () => void;
+        let state!: ReturnType<typeof usePatrolStream>;
+
+        createRoot((d) => {
+            dispose = d;
+            const [running] = createSignal(true);
+            state = usePatrolStream({ running });
+        });
+
+        const stream = MockEventSource.instances[0];
+        stream.emitOpen();
+        stream.emitMessage({ type: 'start', run_id: 'run-1', tokens: 2 });
+        expect(state.tokens()).toBe(2);
+
+        stream.emitRawMessage(JSON.stringify({ type: 'unexpected_type', tokens: 999 }));
+
+        expect(state.tokens()).toBe(2);
+        expect(loggerMock.warn).toHaveBeenCalledWith('[PatrolStream] Ignoring unknown SSE event type');
 
         dispose();
     });
