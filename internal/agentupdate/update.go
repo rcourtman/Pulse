@@ -123,12 +123,12 @@ func New(cfg Config) *Updater {
 // RunLoop starts the update check loop. It blocks until the context is cancelled.
 func (u *Updater) RunLoop(ctx context.Context) {
 	if u.cfg.Disabled {
-		u.logger.Info().Msg("Auto-update disabled")
+		u.logger.Info().Msg("auto-update disabled")
 		return
 	}
 
 	if u.cfg.CurrentVersion == "dev" {
-		u.logger.Debug().Msg("Auto-update disabled in development mode")
+		u.logger.Debug().Msg("auto-update disabled in development mode")
 		return
 	}
 
@@ -160,25 +160,25 @@ func (u *Updater) CheckAndUpdate(ctx context.Context) {
 	}
 
 	if u.cfg.CurrentVersion == "dev" {
-		u.logger.Debug().Msg("Skipping update check - running in development mode")
+		u.logger.Debug().Msg("skipping update check - running in development mode")
 		return
 	}
 
 	if u.cfg.PulseURL == "" {
-		u.logger.Debug().Msg("Skipping update check - no Pulse URL configured")
+		u.logger.Debug().Msg("skipping update check - no pulse URL configured")
 		return
 	}
 
-	u.logger.Debug().Msg("Checking for agent updates")
+	u.logger.Debug().Msg("checking for agent updates")
 
 	serverVersion, err := u.getServerVersion(ctx)
 	if err != nil {
-		u.logger.Warn().Err(err).Msg("Failed to check for updates")
+		u.logger.Warn().Err(err).Msg("failed to check for updates")
 		return
 	}
 
 	if serverVersion == "dev" {
-		u.logger.Debug().Msg("Skipping update - server is in development mode")
+		u.logger.Debug().Msg("skipping update - server is in development mode")
 		return
 	}
 
@@ -189,28 +189,32 @@ func (u *Updater) CheckAndUpdate(ctx context.Context) {
 
 	cmp := utils.CompareVersions(serverNorm, currentNorm)
 	if cmp == 0 {
-		u.logger.Debug().Str("version", u.cfg.CurrentVersion).Msg("Agent is up to date")
+		u.logger.Debug().Str("version", u.cfg.CurrentVersion).Msg("agent is up to date")
 		return
 	}
 	if cmp < 0 {
 		u.logger.Debug().
 			Str("currentVersion", currentNorm).
 			Str("serverVersion", serverNorm).
-			Msg("Server has older version, skipping downgrade")
+			Msg("server has older version, skipping downgrade")
 		return
 	}
 
 	u.logger.Info().
 		Str("currentVersion", u.cfg.CurrentVersion).
 		Str("availableVersion", serverVersion).
-		Msg("New agent version available, performing self-update")
+		Msg("new agent version available, performing self-update")
 
 	if err := u.performUpdateFn(ctx); err != nil {
-		u.logger.Error().Err(err).Msg("Failed to self-update agent")
+		u.logger.Error().
+			Err(err).
+			Str("currentVersion", u.cfg.CurrentVersion).
+			Str("targetVersion", serverVersion).
+			Msg("failed to self-update agent")
 		return
 	}
 
-	u.logger.Info().Msg("Agent updated successfully, restarting...")
+	u.logger.Info().Msg("agent updated successfully, restarting")
 }
 
 // getServerVersion fetches the current version from the Pulse server.
@@ -258,7 +262,7 @@ func isUnraid() bool {
 func verifyBinaryMagic(path string) error {
 	f, err := os.Open(path)
 	if err != nil {
-		return fmt.Errorf("verifyBinaryMagic: open %s: %w", path, err)
+		return fmt.Errorf("open %s: %w", path, err)
 	}
 	defer f.Close()
 
@@ -356,7 +360,7 @@ func (u *Updater) performUpdateWithExecPath(ctx context.Context, execPath string
 		}
 
 		resp = response
-		u.logger.Debug().Str("url", url).Msg("Downloaded agent binary")
+		u.logger.Debug().Str("url", url).Msg("downloaded agent binary")
 		break
 	}
 
@@ -417,7 +421,7 @@ func (u *Updater) performUpdateWithExecPath(ctx context.Context, execPath string
 	if expected != actual {
 		return fmt.Errorf("checksum mismatch: expected %s, got %s", expected, actual)
 	}
-	u.logger.Debug().Str("checksum", downloadChecksum).Msg("Checksum verified")
+	u.logger.Debug().Str("checksum", downloadChecksum).Msg("checksum verified")
 
 	// Make executable
 	if err := chmodFn(tmpPath, 0755); err != nil {
@@ -449,22 +453,22 @@ func (u *Updater) performUpdateWithExecPath(ctx context.Context, execPath string
 		persistPath := unraidPersistentPathFn(u.cfg.AgentName)
 		if _, err := os.Stat(persistPath); err == nil {
 			// Persistent path exists, update it
-			u.logger.Debug().Str("path", persistPath).Msg("Updating Unraid persistent binary")
+			u.logger.Debug().Str("path", persistPath).Msg("updating unraid persistent binary")
 
 			// Read the newly installed binary
 			newBinary, err := readFileFn(execPath)
 			if err != nil {
-				u.logger.Warn().Err(err).Msg("Failed to read new binary for Unraid persistence")
+				u.logger.Warn().Err(err).Str("path", execPath).Msg("failed to read new binary for unraid persistence")
 			} else {
 				// Write to persistent storage (atomic via temp file)
 				tmpPersist := persistPath + ".tmp"
 				if err := writeFileFn(tmpPersist, newBinary, 0644); err != nil {
-					u.logger.Warn().Err(err).Msg("Failed to write Unraid persistent binary")
+					u.logger.Warn().Err(err).Str("path", tmpPersist).Msg("failed to write unraid persistent binary")
 				} else if err := renameFn(tmpPersist, persistPath); err != nil {
-					u.logger.Warn().Err(err).Msg("Failed to rename Unraid persistent binary")
+					u.logger.Warn().Err(err).Str("path", persistPath).Msg("failed to rename unraid persistent binary")
 					os.Remove(tmpPersist)
 				} else {
-					u.logger.Info().Str("path", persistPath).Msg("Updated Unraid persistent binary")
+					u.logger.Info().Str("path", persistPath).Msg("updated unraid persistent binary")
 				}
 			}
 		}
