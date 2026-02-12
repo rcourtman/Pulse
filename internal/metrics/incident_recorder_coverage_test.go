@@ -1,11 +1,16 @@
 package metrics
 
 import (
+	"bytes"
 	"math"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 func TestNewIncidentRecorderLoadFromDiskInvalidJSON(t *testing.T) {
@@ -243,6 +248,57 @@ func TestStopHandlesSaveErrorPath(t *testing.T) {
 
 	recorder.Start()
 	recorder.Stop()
+}
+
+type logSignalWriter struct {
+	hit atomic.Bool
+}
+
+func (w *logSignalWriter) Write(p []byte) (int, error) {
+	if bytes.Contains(p, []byte("Failed to save incident windows")) {
+		w.hit.Store(true)
+	}
+	return len(p), nil
+}
+
+func TestCompleteWindowAsyncSaveErrorPath(t *testing.T) {
+	base := t.TempDir()
+	fileAsDir := filepath.Join(base, "file-instead-of-dir")
+	if err := os.WriteFile(fileAsDir, []byte("x"), 0600); err != nil {
+		t.Fatalf("write setup file: %v", err)
+	}
+
+	writer := &logSignalWriter{}
+	originalLogger := log.Logger
+	log.Logger = zerolog.New(writer).Level(zerolog.WarnLevel)
+	t.Cleanup(func() {
+		log.Logger = originalLogger
+	})
+
+	recorder := NewIncidentRecorder(IncidentRecorderConfig{
+		DataDir:           fileAsDir,
+		RetentionDuration: time.Hour,
+		MaxWindows:        10,
+	})
+	window := &IncidentWindow{
+		ID:         "async-save-error",
+		ResourceID: "res-1",
+		Status:     IncidentWindowStatusRecording,
+		DataPoints: []IncidentDataPoint{
+			{Timestamp: time.Now(), Metrics: map[string]float64{"cpu": 42}},
+		},
+	}
+	recorder.activeWindows[window.ID] = window
+
+	recorder.completeWindow(window)
+
+	deadline := time.Now().Add(500 * time.Millisecond)
+	for !writer.hit.Load() && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !writer.hit.Load() {
+		t.Fatal("expected async save error warning to be logged")
+	}
 }
 
 func TestSaveToDiskErrorPaths(t *testing.T) {
