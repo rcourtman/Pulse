@@ -877,3 +877,17 @@ func TestNewNotificationQueue_InvalidPath(t *testing.T) {
 		t.Error("expected error when creating notification queue with invalid path, got nil")
 	}
 }
+
+func TestNotificationQueueStop_Idempotent(t *testing.T) {
+	nq, err := NewNotificationQueue(t.TempDir())
+	if err != nil {
+		t.Fatalf("failed to create notification queue: %v", err)
+	}
+
+	if err := nq.Stop(); err != nil {
+		t.Fatalf("first stop failed: %v", err)
+	}
+	if err := nq.Stop(); err != nil {
+		t.Fatalf("second stop failed: %v", err)
+	}
+}

@@ -190,3 +190,10 @@ func containsArg(args []string, value string) bool {
 	}
 	return false
 }
+
+func TestNotificationManagerStop_Idempotent(t *testing.T) {
+	manager := NewNotificationManager("")
+
+	manager.Stop()
+	manager.Stop()
+}

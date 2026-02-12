@@ -3090,11 +3090,15 @@ func (n *NotificationManager) cleanupOldNotificationRecords() {
 func (n *NotificationManager) Stop() {
 	n.mu.Lock()
 
-	// Stop cleanup goroutine
-	close(n.stopCleanup)
+	// Stop cleanup goroutine.
+	if n.stopCleanup != nil {
+		close(n.stopCleanup)
+		n.stopCleanup = nil
+	}
 
 	// Get queue reference before unlocking
 	queue := n.queue
+	n.queue = nil
 
 	// Unlock before stopping queue to avoid deadlock with queue workers
 	// that may need to acquire n.mu during ProcessQueuedNotification
@@ -3102,7 +3106,9 @@ func (n *NotificationManager) Stop() {
 
 	// Stop the notification queue if it exists
 	if queue != nil {
-		queue.Stop()
+		if err := queue.Stop(); err != nil {
+			log.Warn().Err(err).Msg("Notification queue stop returned error")
+		}
 	}
 
 	// Relock for remaining cleanup
