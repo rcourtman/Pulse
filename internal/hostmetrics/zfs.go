@@ -63,6 +63,20 @@ func summarizeZFSPools(ctx context.Context, datasets []zfsDatasetUsage) []agents
 	return fallbackZFSDisks(bestDatasets, mountpoints)
 }
 
+// newZFSDisk constructs a Disk entry for a ZFS pool with computed usage.
+func newZFSDisk(pool, mountpoint string, total, used, free uint64) agentshost.Disk {
+	return agentshost.Disk{
+		Device:     pool,
+		Mountpoint: mountpoint,
+		Filesystem: "zfs",
+		Type:       "zfs",
+		TotalBytes: int64(total),
+		UsedBytes:  int64(used),
+		FreeBytes:  int64(free),
+		Usage:      clampPercent(calculatePercent(total, used)),
+	}
+}
+
 func disksFromZpoolStats(
 	pools []string,
 	stats map[string]zpoolStats,
@@ -108,34 +122,14 @@ func disksFromZpoolStats(
 				usedBytes = 0
 			}
 
-			usage := clampPercent(calculatePercent(totalBytes, usedBytes))
-			log.Debug().Str("pool", pool).Int64("totalBytes", int64(totalBytes)).Int64("usedBytes", int64(usedBytes)).Int64("freeBytes", int64(freeBytes)).Float64("usage", usage).Msg("zfs: emitting disk entry")
-			disks = append(disks, agentshost.Disk{
-				Device:     pool,
-				Mountpoint: mp,
-				Filesystem: "zfs",
-				Type:       "zfs",
-				TotalBytes: int64(totalBytes),
-				UsedBytes:  int64(usedBytes),
-				FreeBytes:  int64(freeBytes),
-				Usage:      usage,
-			})
+			log.Debug().Str("pool", pool).Int64("totalBytes", int64(totalBytes)).Int64("usedBytes", int64(usedBytes)).Int64("freeBytes", int64(freeBytes)).Float64("usage", clampPercent(calculatePercent(totalBytes, usedBytes))).Msg("zfs: emitting disk entry")
+			disks = append(disks, newZFSDisk(pool, mp, totalBytes, usedBytes, freeBytes))
 			continue
 		}
 
 		if ds.Total > 0 {
-			usage := clampPercent(calculatePercent(ds.Total, ds.Used))
-			log.Debug().Str("pool", pool).Int64("totalBytes", int64(ds.Total)).Int64("usedBytes", int64(ds.Used)).Float64("usage", usage).Msg("zfs: emitting disk entry from dataset only (no zpool stats)")
-			disks = append(disks, agentshost.Disk{
-				Device:     pool,
-				Mountpoint: mp,
-				Filesystem: "zfs",
-				Type:       "zfs",
-				TotalBytes: int64(ds.Total),
-				UsedBytes:  int64(ds.Used),
-				FreeBytes:  int64(ds.Free),
-				Usage:      usage,
-			})
+			log.Debug().Str("pool", pool).Int64("totalBytes", int64(ds.Total)).Int64("usedBytes", int64(ds.Used)).Float64("usage", clampPercent(calculatePercent(ds.Total, ds.Used))).Msg("zfs: emitting disk entry from dataset only (no zpool stats)")
+			disks = append(disks, newZFSDisk(pool, mp, ds.Total, ds.Used, ds.Free))
 		} else {
 			log.Debug().Str("pool", pool).Msg("zfs: skipping pool with no zpool stats and zero dataset total")
 		}
@@ -168,17 +162,7 @@ func fallbackZFSDisks(bestDatasets map[string]zfsDatasetUsage, mountpoints map[s
 			mp = fmt.Sprintf("zpool:%s", pool)
 		}
 
-		usage := clampPercent(calculatePercent(ds.Total, ds.Used))
-		disks = append(disks, agentshost.Disk{
-			Device:     pool,
-			Mountpoint: mp,
-			Filesystem: "zfs",
-			Type:       "zfs",
-			TotalBytes: int64(ds.Total),
-			UsedBytes:  int64(ds.Used),
-			FreeBytes:  int64(ds.Free),
-			Usage:      usage,
-		})
+		disks = append(disks, newZFSDisk(pool, mp, ds.Total, ds.Used, ds.Free))
 	}
 
 	return disks
