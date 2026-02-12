@@ -106,8 +106,9 @@ type IncidentRecorder struct {
 	filePath string
 
 	// Control
-	stopCh  chan struct{}
-	running bool
+	stopCh   chan struct{}
+	loopDone chan struct{}
+	running  bool
 }
 
 // NewIncidentRecorder creates a new incident recorder
@@ -165,10 +166,13 @@ func (r *IncidentRecorder) Start() {
 		return
 	}
 	r.running = true
-	r.stopCh = make(chan struct{})
+	stopCh := make(chan struct{})
+	loopDone := make(chan struct{})
+	r.stopCh = stopCh
+	r.loopDone = loopDone
 	r.mu.Unlock()
 
-	go r.recordingLoop()
+	go r.recordingLoop(stopCh, loopDone)
 	log.Info().Msg("Incident recorder started")
 }
 
@@ -180,8 +184,14 @@ func (r *IncidentRecorder) Stop() {
 		return
 	}
 	r.running = false
-	close(r.stopCh)
+	stopCh := r.stopCh
+	loopDone := r.loopDone
+	close(stopCh)
 	r.mu.Unlock()
+
+	if loopDone != nil {
+		<-loopDone
+	}
 
 	// Save to disk
 	if err := r.saveToDisk(); err != nil {
@@ -191,13 +201,15 @@ func (r *IncidentRecorder) Stop() {
 }
 
 // recordingLoop runs in the background to maintain pre-incident buffers and active windows
-func (r *IncidentRecorder) recordingLoop() {
+func (r *IncidentRecorder) recordingLoop(stopCh <-chan struct{}, done chan<- struct{}) {
+	defer close(done)
+
 	ticker := time.NewTicker(r.config.SampleInterval)
 	defer ticker.Stop()
 
 	for {
 		select {
-		case <-r.stopCh:
+		case <-stopCh:
 			return
 		case <-ticker.C:
 			r.recordSample()
@@ -208,13 +220,13 @@ func (r *IncidentRecorder) recordingLoop() {
 // recordSample captures a data point for all active windows and buffers
 func (r *IncidentRecorder) recordSample() {
 	r.mu.Lock()
-	defer r.mu.Unlock()
-
 	if r.provider == nil {
+		r.mu.Unlock()
 		return
 	}
 
 	now := time.Now()
+	shouldSave := false
 
 	// Record for active windows
 	for _, window := range r.activeWindows {
@@ -224,14 +236,16 @@ func (r *IncidentRecorder) recordSample() {
 
 		// Check if we've exceeded the post-incident window
 		if window.EndTime != nil && now.After(*window.EndTime) {
-			r.completeWindow(window)
+			r.completeWindowLocked(window)
+			shouldSave = true
 			continue
 		}
 
 		// Check if we've exceeded max data points
 		if len(window.DataPoints) >= r.config.MaxDataPointsPerWindow {
 			window.Status = IncidentWindowStatusTruncated
-			r.completeWindow(window)
+			r.completeWindowLocked(window)
+			shouldSave = true
 			continue
 		}
 
@@ -289,6 +303,13 @@ func (r *IncidentRecorder) recordSample() {
 			delete(r.preIncidentBuffer, resourceID)
 		}
 	}
+	r.mu.Unlock()
+
+	if shouldSave {
+		if err := r.saveToDisk(); err != nil {
+			log.Warn().Err(err).Msg("Failed to save incident windows")
+		}
+	}
 }
 
 // StartRecording begins recording an incident window
@@ -343,15 +364,23 @@ func (r *IncidentRecorder) StartRecording(resourceID, resourceName, resourceType
 // StopRecording stops recording for a specific window
 func (r *IncidentRecorder) StopRecording(windowID string) {
 	r.mu.Lock()
-	defer r.mu.Unlock()
-
+	shouldSave := false
 	if window, ok := r.activeWindows[windowID]; ok {
-		r.completeWindow(window)
+		r.completeWindowLocked(window)
+		shouldSave = true
+	}
+	r.mu.Unlock()
+
+	if shouldSave {
+		if err := r.saveToDisk(); err != nil {
+			log.Warn().Err(err).Msg("Failed to save incident windows")
+		}
 	}
 }
 
-// completeWindow finalizes a recording window
-func (r *IncidentRecorder) completeWindow(window *IncidentWindow) {
+// completeWindowLocked finalizes a recording window.
+// Caller must hold r.mu.
+func (r *IncidentRecorder) completeWindowLocked(window *IncidentWindow) {
 	if window.Status != IncidentWindowStatusRecording && window.Status != IncidentWindowStatusTruncated {
 		return
 	}
@@ -377,13 +406,6 @@ func (r *IncidentRecorder) completeWindow(window *IncidentWindow) {
 		Str("resource_id", window.ResourceID).
 		Int("data_points", len(window.DataPoints)).
 		Msg("Completed incident recording")
-
-	// Save asynchronously
-	go func() {
-		if err := r.saveToDisk(); err != nil {
-			log.Warn().Err(err).Msg("Failed to save incident windows")
-		}
-	}()
 }
 
 // computeSummary computes statistics for a window
