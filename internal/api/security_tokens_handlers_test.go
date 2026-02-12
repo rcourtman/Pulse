@@ -9,9 +9,21 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/audit"
+	authpkg "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
 func TestSecurityTokens_ListCreateDelete(t *testing.T) {
+	capture := &auditCaptureLogger{}
+	prevLogger := audit.GetLogger()
+	prevManager := GetTenantAuditManager()
+	audit.SetLogger(capture)
+	SetTenantAuditManager(nil)
+	t.Cleanup(func() {
+		audit.SetLogger(prevLogger)
+		SetTenantAuditManager(prevManager)
+	})
+
 	cfg := &config.Config{}
 	persistence := config.NewConfigPersistence(t.TempDir())
 	router := &Router{
@@ -34,6 +46,7 @@ func TestSecurityTokens_ListCreateDelete(t *testing.T) {
 	}
 
 	req = httptest.NewRequest(http.MethodPost, "/api/security/tokens", strings.NewReader(`{"name":"test","scopes":["monitoring:read"]}`))
+	req = req.WithContext(authpkg.WithUser(req.Context(), "alice"))
 	rr = httptest.NewRecorder()
 	router.handleCreateAPIToken(rr, req)
 	if rr.Code != http.StatusOK {
@@ -98,6 +111,7 @@ func TestSecurityTokens_ListCreateDelete(t *testing.T) {
 	cfg.APITokens = append(cfg.APITokens, record)
 
 	req = httptest.NewRequest(http.MethodDelete, "/api/security/tokens/migrated", nil)
+	req = req.WithContext(authpkg.WithUser(req.Context(), "alice"))
 	rr = httptest.NewRecorder()
 	router.handleDeleteAPIToken(rr, req)
 	if rr.Code != http.StatusNoContent {
@@ -105,6 +119,33 @@ func TestSecurityTokens_ListCreateDelete(t *testing.T) {
 	}
 	if !cfg.IsEnvMigrationSuppressed("hash-migrated") {
 		t.Fatalf("expected env migration suppression to be recorded")
+	}
+
+	events, err := capture.Query(audit.QueryFilter{})
+	if err != nil {
+		t.Fatalf("query audit events: %v", err)
+	}
+
+	var sawCreate, sawDelete bool
+	for _, event := range events {
+		if event.EventType == "token_created" && event.Success {
+			sawCreate = true
+			if event.User != "alice" {
+				t.Fatalf("token_created audit user = %q, want %q", event.User, "alice")
+			}
+			if strings.Contains(event.Details, createResp.Token) {
+				t.Fatalf("token_created audit details leaked raw token")
+			}
+		}
+		if event.EventType == "token_deleted" && event.Success {
+			sawDelete = true
+		}
+	}
+	if !sawCreate {
+		t.Fatalf("expected successful token_created audit event")
+	}
+	if !sawDelete {
+		t.Fatalf("expected successful token_deleted audit event")
 	}
 }
 

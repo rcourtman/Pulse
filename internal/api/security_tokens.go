@@ -109,6 +109,14 @@ type createTokenRequest struct {
 	ExpiresIn *string   `json:"expiresIn,omitempty"` // e.g. "24h", "720h", "8760h"
 }
 
+func (r *Router) auditTokenEvent(req *http.Request, event string, success bool, details string) {
+	user := internalauth.GetUser(req.Context())
+	if user == "" && r != nil && r.config != nil {
+		user = getAuthUsername(r.config, req)
+	}
+	LogAuditEventForTenant(GetOrgID(req.Context()), event, user, GetClientIP(req), req.URL.Path, success, details)
+}
+
 // handleCreateAPIToken generates and stores a new API token.
 func (r *Router) handleCreateAPIToken(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodPost {
@@ -118,6 +126,7 @@ func (r *Router) handleCreateAPIToken(w http.ResponseWriter, req *http.Request) 
 
 	var payload createTokenRequest
 	if err := json.NewDecoder(req.Body).Decode(&payload); err != nil && err != io.EOF {
+		r.auditTokenEvent(req, "token_created", false, "Failed to decode create token request body")
 		log.Warn().Err(err).Msg("Failed to decode API token create request")
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
@@ -130,6 +139,7 @@ func (r *Router) handleCreateAPIToken(w http.ResponseWriter, req *http.Request) 
 
 	scopes, err := normalizeRequestedScopes(payload.Scopes)
 	if err != nil {
+		r.auditTokenEvent(req, "token_created", false, "Invalid scope request for token creation")
 		log.Warn().Err(err).Msg("Invalid scopes provided for API token creation")
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -137,6 +147,7 @@ func (r *Router) handleCreateAPIToken(w http.ResponseWriter, req *http.Request) 
 
 	rawToken, err := internalauth.GenerateAPIToken()
 	if err != nil {
+		r.auditTokenEvent(req, "token_created", false, "Failed to generate API token")
 		log.Error().Err(err).Msg("Failed to generate API token")
 		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
 		return
@@ -144,6 +155,7 @@ func (r *Router) handleCreateAPIToken(w http.ResponseWriter, req *http.Request) 
 
 	record, err := config.NewAPITokenRecord(rawToken, name, scopes)
 	if err != nil {
+		r.auditTokenEvent(req, "token_created", false, "Failed to construct API token record")
 		log.Error().Err(err).Str("token_name", name).Msg("Failed to construct API token record")
 		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
 		return
@@ -152,10 +164,12 @@ func (r *Router) handleCreateAPIToken(w http.ResponseWriter, req *http.Request) 
 	if payload.ExpiresIn != nil && *payload.ExpiresIn != "" {
 		dur, err := time.ParseDuration(*payload.ExpiresIn)
 		if err != nil {
+			r.auditTokenEvent(req, "token_created", false, "Invalid token expiration duration")
 			http.Error(w, "Invalid expiresIn duration: "+err.Error(), http.StatusBadRequest)
 			return
 		}
 		if dur < time.Minute {
+			r.auditTokenEvent(req, "token_created", false, "Token expiration duration below minimum")
 			http.Error(w, "Token expiration must be at least 1 minute", http.StatusBadRequest)
 			return
 		}
@@ -173,11 +187,14 @@ func (r *Router) handleCreateAPIToken(w http.ResponseWriter, req *http.Request) 
 		if err := r.persistence.SaveAPITokens(r.config.APITokens); err != nil {
 			// Rollback the in-memory addition
 			r.config.APITokens = r.config.APITokens[:len(r.config.APITokens)-1]
+			r.auditTokenEvent(req, "token_created", false, "Failed to persist API token")
 			log.Error().Err(err).Msg("Failed to persist API tokens after creation")
 			http.Error(w, "Failed to save token to disk: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 	}
+
+	r.auditTokenEvent(req, "token_created", true, fmt.Sprintf("Created API token id=%s scopes=%s", record.ID, strings.Join(record.Scopes, ",")))
 
 	log.Info().
 		Str("audit_event", "token_created").
@@ -202,6 +219,7 @@ func (r *Router) handleDeleteAPIToken(w http.ResponseWriter, req *http.Request) 
 
 	id := strings.TrimPrefix(req.URL.Path, "/api/security/tokens/")
 	if id == "" {
+		r.auditTokenEvent(req, "token_deleted", false, "Missing API token ID in delete request")
 		http.Error(w, "Token ID required", http.StatusBadRequest)
 		return
 	}
@@ -211,6 +229,7 @@ func (r *Router) handleDeleteAPIToken(w http.ResponseWriter, req *http.Request) 
 
 	removed := r.config.RemoveAPIToken(id)
 	if removed == nil {
+		r.auditTokenEvent(req, "token_deleted", false, fmt.Sprintf("API token id=%s not found for deletion", id))
 		http.Error(w, "Token not found", http.StatusNotFound)
 		return
 	}
@@ -233,6 +252,8 @@ func (r *Router) handleDeleteAPIToken(w http.ResponseWriter, req *http.Request) 
 		}
 	}
 
+	r.auditTokenEvent(req, "token_deleted", true, fmt.Sprintf("Deleted API token id=%s", removed.ID))
+
 	log.Info().
 		Str("audit_event", "token_deleted").
 		Str("token_id", removed.ID).
@@ -254,6 +275,7 @@ func (r *Router) handleRotateAPIToken(w http.ResponseWriter, req *http.Request) 
 	path := strings.TrimPrefix(req.URL.Path, "/api/security/tokens/")
 	parts := strings.Split(path, "/")
 	if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" || parts[1] != "rotate" {
+		r.auditTokenEvent(req, "token_rotated", false, "Missing or invalid API token ID for rotate request")
 		http.Error(w, "Token ID required", http.StatusBadRequest)
 		return
 	}
@@ -273,6 +295,7 @@ func (r *Router) handleRotateAPIToken(w http.ResponseWriter, req *http.Request) 
 		}
 	}
 	if !found {
+		r.auditTokenEvent(req, "token_rotated", false, fmt.Sprintf("API token id=%s not found for rotation", id))
 		http.Error(w, "Token not found", http.StatusNotFound)
 		return
 	}
@@ -280,6 +303,7 @@ func (r *Router) handleRotateAPIToken(w http.ResponseWriter, req *http.Request) 
 	// Generate new token
 	rawToken, err := internalauth.GenerateAPIToken()
 	if err != nil {
+		r.auditTokenEvent(req, "token_rotated", false, fmt.Sprintf("Failed to generate replacement token for id=%s", id))
 		log.Error().Err(err).Msg("Failed to generate token during rotation")
 		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
 		return
@@ -287,6 +311,7 @@ func (r *Router) handleRotateAPIToken(w http.ResponseWriter, req *http.Request) 
 
 	newRecord, err := config.NewAPITokenRecord(rawToken, oldRecord.Name, oldRecord.Scopes)
 	if err != nil {
+		r.auditTokenEvent(req, "token_rotated", false, fmt.Sprintf("Failed to construct replacement token for id=%s", id))
 		log.Error().Err(err).Msg("Failed to construct token record during rotation")
 		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
 		return
@@ -328,11 +353,14 @@ func (r *Router) handleRotateAPIToken(w http.ResponseWriter, req *http.Request) 
 			// Rollback the in-memory rotation so the in-memory config stays consistent with disk.
 			r.config.APITokens = prevTokens
 			r.config.SortAPITokens()
+			r.auditTokenEvent(req, "token_rotated", false, fmt.Sprintf("Failed to persist rotated token for id=%s", id))
 			log.Error().Err(err).Msg("Failed to persist API tokens after rotation")
 			http.Error(w, "Failed to save rotated token", http.StatusInternalServerError)
 			return
 		}
 	}
+
+	r.auditTokenEvent(req, "token_rotated", true, fmt.Sprintf("Rotated API token old_id=%s new_id=%s", id, newRecord.ID))
 
 	log.Info().
 		Str("audit_event", "token_rotated").
