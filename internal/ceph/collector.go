@@ -211,10 +211,10 @@ func parseStatus(data []byte) (*ClusterStatus, error) {
 			} `json:"standbys"`
 		} `json:"mgrmap"`
 		OSDMap struct {
-			Epoch  int `json:"epoch"`
-			NumOSD int `json:"num_osds"`
-			NumUp  int `json:"num_up_osds"`
-			NumIn  int `json:"num_in_osds"`
+			Epoch   int `json:"epoch"`
+			NumOSDs int `json:"num_osds"`
+			NumUp   int `json:"num_up_osds"`
+			NumIn   int `json:"num_in_osds"`
 		} `json:"osdmap"`
 		PGMap struct {
 			NumPGs           int     `json:"num_pgs"`
@@ -253,11 +253,11 @@ func parseStatus(data []byte) (*ClusterStatus, error) {
 		},
 		OSDMap: OSDMap{
 			Epoch:   raw.OSDMap.Epoch,
-			NumOSDs: raw.OSDMap.NumOSD,
+			NumOSDs: raw.OSDMap.NumOSDs,
 			NumUp:   raw.OSDMap.NumUp,
 			NumIn:   raw.OSDMap.NumIn,
-			NumDown: raw.OSDMap.NumOSD - raw.OSDMap.NumUp,
-			NumOut:  raw.OSDMap.NumOSD - raw.OSDMap.NumIn,
+			NumDown: raw.OSDMap.NumOSDs - raw.OSDMap.NumUp,
+			NumOut:  raw.OSDMap.NumOSDs - raw.OSDMap.NumIn,
 		},
 		PGMap: PGMap{
 			NumPGs:           raw.PGMap.NumPGs,
@@ -305,7 +305,7 @@ func parseStatus(data []byte) (*ClusterStatus, error) {
 	status.Services = []ServiceInfo{
 		{Type: "mon", Running: len(raw.MonMap.Mons), Total: len(raw.MonMap.Mons)},
 		{Type: "mgr", Running: boolToInt(raw.MgrMap.Available), Total: status.MgrMap.NumMgrs},
-		{Type: "osd", Running: raw.OSDMap.NumUp, Total: raw.OSDMap.NumOSD},
+		{Type: "osd", Running: raw.OSDMap.NumUp, Total: raw.OSDMap.NumOSDs},
 	}
 
 	return status, nil
