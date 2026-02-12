@@ -121,5 +121,23 @@ describe('url utils', () => {
             const wsUrl = getPulseWebSocketUrl('/ws');
             expect(wsUrl).toContain('token=secret');
         });
+
+        it('getPulseWebSocketUrl appends token to existing query string safely', () => {
+            vi.mocked(window.sessionStorage.getItem).mockImplementation((key) => {
+                if (key === 'pulse_auth') return JSON.stringify({ type: 'token', value: 'secret' });
+                return null;
+            });
+            const wsUrl = getPulseWebSocketUrl('/ws?stream=1');
+            expect(wsUrl).toContain('stream=1&token=secret');
+        });
+
+        it('getPulseWebSocketUrl ignores malformed auth token values', () => {
+            vi.mocked(window.sessionStorage.getItem).mockImplementation((key) => {
+                if (key === 'pulse_auth') return JSON.stringify({ type: 'token', value: 'bad\nsecret' });
+                return null;
+            });
+            const wsUrl = getPulseWebSocketUrl('/ws');
+            expect(wsUrl).not.toContain('token=');
+        });
     });
 });
