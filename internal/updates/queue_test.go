@@ -194,6 +194,55 @@ func TestUpdateQueue_MaxHistory(t *testing.T) {
 	}
 }
 
+func TestUpdateQueue_GetCurrentJobReturnsCopy(t *testing.T) {
+	queue := NewUpdateQueue()
+
+	job, accepted := queue.Enqueue("https://example.com/update.tar.gz")
+	if !accepted {
+		t.Fatal("job should be accepted")
+	}
+	queue.MarkRunning(job.ID)
+
+	current := queue.GetCurrentJob()
+	if current == nil {
+		t.Fatal("expected current job")
+	}
+	current.State = JobStateFailed
+
+	again := queue.GetCurrentJob()
+	if again == nil {
+		t.Fatal("expected current job")
+	}
+	if again.State != JobStateRunning {
+		t.Fatalf("internal state mutated through returned job pointer: %s", again.State)
+	}
+}
+
+func TestUpdateQueue_GetHistoryReturnsCopies(t *testing.T) {
+	queue := NewUpdateQueue()
+
+	job, accepted := queue.Enqueue("https://example.com/update.tar.gz")
+	if !accepted {
+		t.Fatal("job should be accepted")
+	}
+	queue.MarkRunning(job.ID)
+	queue.MarkCompleted(job.ID, nil)
+
+	history := queue.GetHistory()
+	if len(history) != 1 {
+		t.Fatalf("expected one history entry, got %d", len(history))
+	}
+	history[0].State = JobStateFailed
+
+	again := queue.GetHistory()
+	if len(again) != 1 {
+		t.Fatalf("expected one history entry, got %d", len(again))
+	}
+	if again[0].State != JobStateCompleted {
+		t.Fatalf("internal history mutated through returned pointer: %s", again[0].State)
+	}
+}
+
 // Helper type for testing
 type testError struct {
 	msg string

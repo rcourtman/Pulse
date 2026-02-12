@@ -201,7 +201,7 @@ func (h *UpdateHistory) GetEntry(eventID string) (*UpdateHistoryEntry, error) {
 
 	for i := range h.cache {
 		if h.cache[i].EventID == eventID {
-			return &h.cache[i], nil
+			return cloneHistoryEntry(h.cache[i]), nil
 		}
 	}
 
@@ -247,7 +247,7 @@ func (h *UpdateHistory) GetLatestSuccessful() (*UpdateHistoryEntry, error) {
 
 	for i := len(h.cache) - 1; i >= 0; i-- {
 		if h.cache[i].Status == StatusSuccess {
-			return &h.cache[i], nil
+			return cloneHistoryEntry(h.cache[i]), nil
 		}
 	}
 
@@ -365,4 +365,13 @@ func (h *UpdateHistory) addToCache(entry UpdateHistoryEntry) {
 	if len(h.cache) > h.maxCache {
 		h.cache = h.cache[len(h.cache)-h.maxCache:]
 	}
+}
+
+func cloneHistoryEntry(entry UpdateHistoryEntry) *UpdateHistoryEntry {
+	entryCopy := entry
+	if entry.Error != nil {
+		errCopy := *entry.Error
+		entryCopy.Error = &errCopy
+	}
+	return &entryCopy
 }
