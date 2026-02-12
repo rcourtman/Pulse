@@ -15,6 +15,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/forecast"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/remediation"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rs/zerolog/log"
 )
 
 // ForecastDataAdapter adapts monitoring.MetricsHistory to the forecast.DataProvider interface.
@@ -337,7 +338,9 @@ func NewKnowledgeStore(dataDir string) *KnowledgeStore {
 		dataDir: dataDir,
 	}
 	if dataDir != "" {
-		_ = store.loadFromDisk() // Ignore error, start fresh if load fails
+		if err := store.loadFromDisk(); err != nil {
+			log.Warn().Err(err).Str("data_dir", dataDir).Msg("ai.adapters.NewKnowledgeStore: failed to load knowledge store from disk")
+		}
 	}
 	return store
 }
@@ -395,6 +398,7 @@ func (s *KnowledgeStore) saveToDisk() {
 
 	data, err := json.Marshal(s.entries)
 	if err != nil {
+		log.Warn().Err(err).Msg("ai.adapters.KnowledgeStore.saveToDisk: failed to marshal entries")
 		return
 	}
 
@@ -402,9 +406,15 @@ func (s *KnowledgeStore) saveToDisk() {
 	// Use atomic write (temp file + rename) to prevent corruption from concurrent saves.
 	tmp := path + ".tmp"
 	if err := os.WriteFile(tmp, data, 0644); err != nil {
+		log.Warn().Err(err).Str("path", tmp).Msg("ai.adapters.KnowledgeStore.saveToDisk: failed to write temp store file")
 		return
 	}
-	_ = os.Rename(tmp, path)
+	if err := os.Rename(tmp, path); err != nil {
+		log.Warn().Err(err).Str("from", tmp).Str("to", path).Msg("ai.adapters.KnowledgeStore.saveToDisk: failed to atomically replace store file")
+		if removeErr := os.Remove(tmp); removeErr != nil && !os.IsNotExist(removeErr) {
+			log.Warn().Err(removeErr).Str("path", tmp).Msg("ai.adapters.KnowledgeStore.saveToDisk: failed to clean up temp store file")
+		}
+	}
 }
 
 func (s *KnowledgeStore) loadFromDisk() error {
