@@ -326,7 +326,7 @@ func (c *Client) FetchSnapshot(ctx context.Context) (*FixtureSnapshot, error) {
 func (c *Client) getJSON(ctx context.Context, method string, path string, destination any) (err error) {
 	request, err := c.newRequest(ctx, method, path)
 	if err != nil {
-		return err
+		return fmt.Errorf("build truenas request %s %s: %w", method, path, err)
 	}
 
 	response, err := c.httpClient.Do(request)
