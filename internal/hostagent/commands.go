@@ -240,7 +240,7 @@ func (c *CommandClient) connectAndHandle(ctx context.Context) error {
 func (c *CommandClient) buildWebSocketURL() (string, error) {
 	parsed, err := url.Parse(c.pulseURL)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("parse pulse url %q: %w", c.pulseURL, err)
 	}
 
 	// Convert http(s) to ws(s)

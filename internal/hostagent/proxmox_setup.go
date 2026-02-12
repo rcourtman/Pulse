@@ -201,7 +201,7 @@ func (p *ProxmoxSetup) RunAll(ctx context.Context) ([]*ProxmoxSetupResult, error
 	if p.proxmoxType != "" {
 		result, err := p.runForType(ctx, p.proxmoxType)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("setup proxmox type %s: %w", p.proxmoxType, err)
 		}
 		if result != nil {
 			results = append(results, result)
