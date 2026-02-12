@@ -187,6 +187,17 @@ func TestSQLiteLoggerQuery(t *testing.T) {
 			t.Errorf("Expected 2 events with limit, got %d", len(results))
 		}
 	})
+
+	// SQLite requires LIMIT when using OFFSET; OFFSET-only should still work.
+	t.Run("OffsetWithoutLimit", func(t *testing.T) {
+		results, err := logger.Query(QueryFilter{Offset: 1})
+		if err != nil {
+			t.Fatalf("Query failed: %v", err)
+		}
+		if len(results) != 3 {
+			t.Errorf("Expected 3 events with offset-only query, got %d", len(results))
+		}
+	})
 }
 
 func TestSQLiteLoggerCount(t *testing.T) {

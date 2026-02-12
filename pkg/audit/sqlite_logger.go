@@ -259,6 +259,10 @@ func (l *SQLiteLogger) Query(filter QueryFilter) ([]Event, error) {
 		args = append(args, filter.Limit)
 	}
 	if filter.Offset > 0 {
+		// SQLite requires LIMIT when OFFSET is present.
+		if filter.Limit <= 0 {
+			query += " LIMIT -1"
+		}
 		query += " OFFSET ?"
 		args = append(args, filter.Offset)
 	}
