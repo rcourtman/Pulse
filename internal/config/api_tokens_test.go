@@ -41,11 +41,10 @@ func TestAPITokenRecord_CanAccessOrg(t *testing.T) {
 			expected: false,
 		},
 		{
-			name:     "Bound Token - Access Default (Allowed)",
+			name:     "Bound Token - Access Default (Denied)",
 			token:    APITokenRecord{OrgID: "org-1"},
 			orgID:    "default",
-			expected: true, // Specific requirement: Default org is always accessible?
-			// Let's check api_tokens.go: "Default org is always accessible for backward compatibility" -> YES
+			expected: false,
 		},
 
 		// Multi-Org Binding
@@ -66,6 +65,12 @@ func TestAPITokenRecord_CanAccessOrg(t *testing.T) {
 			token:    APITokenRecord{OrgIDs: []string{"org-1", "org-2"}},
 			orgID:    "org-3",
 			expected: false,
+		},
+		{
+			name:     "Multi-Bound Token - Explicit Default",
+			token:    APITokenRecord{OrgIDs: []string{"org-1", "default"}},
+			orgID:    "default",
+			expected: true,
 		},
 	}
 
