@@ -90,6 +90,7 @@ func (s *ConversionStore) initSchema() error {
 	);
 	CREATE INDEX IF NOT EXISTS idx_conversion_events_org_time ON conversion_events(org_id, created_at);
 	CREATE INDEX IF NOT EXISTS idx_conversion_events_type ON conversion_events(event_type, created_at);
+	CREATE INDEX IF NOT EXISTS idx_conversion_events_time ON conversion_events(created_at);
 	`
 
 	if _, err := s.db.Exec(schema); err != nil {
