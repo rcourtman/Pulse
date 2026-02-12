@@ -747,6 +747,22 @@ func TestGetRebuildSpeedError(t *testing.T) {
 	}
 }
 
+func TestGetRebuildSpeedWithContextCanceled(t *testing.T) {
+	canceledCtx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		if !errors.Is(ctx.Err(), context.Canceled) {
+			t.Fatalf("expected canceled context, got %v", ctx.Err())
+		}
+		return nil, context.Canceled
+	})
+
+	if speed := getRebuildSpeedWithContext(canceledCtx, "/dev/md0"); speed != "" {
+		t.Fatalf("expected empty speed, got %s", speed)
+	}
+}
+
 func TestParseDetailSetsRebuildSpeed(t *testing.T) {
 	output := `/dev/md0:
         Raid Level : raid1

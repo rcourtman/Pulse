@@ -97,11 +97,15 @@ func collectArrayDetail(ctx context.Context, device string) (host.RAIDArray, err
 		return host.RAIDArray{}, fmt.Errorf("mdadm --detail %s: %w", device, err)
 	}
 
-	return parseDetail(device, string(output))
+	return parseDetailWithContext(ctx, device, string(output))
 }
 
 // parseDetail parses the output of mdadm --detail
 func parseDetail(device, output string) (host.RAIDArray, error) {
+	return parseDetailWithContext(context.Background(), device, output)
+}
+
+func parseDetailWithContext(ctx context.Context, device, output string) (host.RAIDArray, error) {
 	array := host.RAIDArray{
 		Device:  device,
 		Devices: []host.RAIDDevice{},
@@ -205,7 +209,7 @@ func parseDetail(device, output string) (host.RAIDArray, error) {
 
 	// Check for rebuild/resync info in /proc/mdstat for speed information
 	if array.RebuildPercent > 0 {
-		speed := getRebuildSpeed(device)
+		speed := getRebuildSpeedWithContext(ctx, device)
 		if speed != "" {
 			array.RebuildSpeed = speed
 		}
@@ -216,10 +220,18 @@ func parseDetail(device, output string) (host.RAIDArray, error) {
 
 // getRebuildSpeed extracts rebuild speed from /proc/mdstat
 func getRebuildSpeed(device string) string {
+	return getRebuildSpeedWithContext(context.Background(), device)
+}
+
+func getRebuildSpeedWithContext(parentCtx context.Context, device string) string {
 	// Remove /dev/ prefix for /proc/mdstat lookup
 	deviceName := strings.TrimPrefix(device, "/dev/")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	if parentCtx == nil {
+		parentCtx = context.Background()
+	}
+
+	ctx, cancel := context.WithTimeout(parentCtx, 2*time.Second)
 	defer cancel()
 
 	output, err := runCommandOutput(ctx, "cat", "/proc/mdstat")
