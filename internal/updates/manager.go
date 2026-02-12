@@ -606,7 +606,7 @@ func (m *Manager) getLatestReleaseForChannel(ctx context.Context, channel string
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("build releases request for channel %q: %w", channel, err)
 	}
 
 	// Add headers
@@ -934,15 +934,19 @@ func inferVersionFromDownloadURL(downloadURL string) string {
 func (m *Manager) downloadFile(ctx context.Context, url, dest string) (int64, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("build download request for %q: %w", url, err)
 	}
 
 	client := &http.Client{Timeout: 5 * time.Minute}
 	resp, err := client.Do(req)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("download %q: %w", url, err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			log.Warn().Err(closeErr).Str("url", url).Msg("Failed to close download response body")
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return 0, fmt.Errorf("download failed with status %d", resp.StatusCode)
@@ -950,14 +954,18 @@ func (m *Manager) downloadFile(ctx context.Context, url, dest string) (int64, er
 
 	out, err := os.Create(dest)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("create download destination %q: %w", dest, err)
 	}
-	defer out.Close()
+	defer func() {
+		if closeErr := out.Close(); closeErr != nil {
+			log.Warn().Err(closeErr).Str("path", dest).Msg("Failed to close downloaded file")
+		}
+	}()
 
 	// Copy with progress updates
 	written, err := io.Copy(out, resp.Body)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("copy download response to %q: %w", dest, err)
 	}
 
 	log.Info().Int64("bytes", written).Str("file", dest).Msg("Downloaded file")
@@ -982,24 +990,35 @@ func (m *Manager) verifyChecksum(ctx context.Context, tarballURL, tarballPath st
 
 		req, err := http.NewRequestWithContext(ctx, "GET", checksumURL, nil)
 		if err != nil {
+			log.Debug().Err(err).Str("url", checksumURL).Msg("Failed to create checksum request")
 			continue
 		}
 
 		client := &http.Client{Timeout: 30 * time.Second}
 		resp, err := client.Do(req)
 		if err != nil {
+			log.Debug().Err(err).Str("url", checksumURL).Msg("Failed to fetch checksum file")
 			continue
 		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode == http.StatusOK {
-			body, err := io.ReadAll(resp.Body)
-			if err == nil {
-				checksumContent = string(body)
-				log.Info().Str("file", name).Msg("Found checksum file")
-				break
+		if resp.StatusCode != http.StatusOK {
+			if closeErr := resp.Body.Close(); closeErr != nil {
+				log.Debug().Err(closeErr).Str("url", checksumURL).Msg("Failed to close checksum response body")
 			}
+			continue
 		}
+
+		body, readErr := io.ReadAll(resp.Body)
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			log.Debug().Err(closeErr).Str("url", checksumURL).Msg("Failed to close checksum response body")
+		}
+		if readErr != nil {
+			log.Debug().Err(readErr).Str("url", checksumURL).Msg("Failed to read checksum response body")
+			continue
+		}
+
+		checksumContent = string(body)
+		log.Info().Str("file", name).Msg("Found checksum file")
+		break
 	}
 
 	if checksumContent == "" {
@@ -1040,7 +1059,11 @@ func (m *Manager) verifyChecksum(ctx context.Context, tarballURL, tarballPath st
 	if err != nil {
 		return fmt.Errorf("failed to open tarball for checksum: %w", err)
 	}
-	defer file.Close()
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil {
+			log.Warn().Err(closeErr).Str("path", tarballPath).Msg("Failed to close tarball after checksum verification")
+		}
+	}()
 
 	hash := sha256.New()
 	if _, err := io.Copy(hash, file); err != nil {
@@ -1070,15 +1093,23 @@ func (m *Manager) verifyChecksum(ctx context.Context, tarballURL, tarballPath st
 func (m *Manager) extractTarball(src, dest string) error {
 	file, err := os.Open(src)
 	if err != nil {
-		return err
+		return fmt.Errorf("open tarball %q: %w", src, err)
 	}
-	defer file.Close()
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil {
+			log.Warn().Err(closeErr).Str("path", src).Msg("Failed to close tarball file")
+		}
+	}()
 
 	gzr, err := gzip.NewReader(file)
 	if err != nil {
-		return err
+		return fmt.Errorf("open gzip reader for %q: %w", src, err)
 	}
-	defer gzr.Close()
+	defer func() {
+		if closeErr := gzr.Close(); closeErr != nil {
+			log.Warn().Err(closeErr).Str("path", src).Msg("Failed to close gzip reader")
+		}
+	}()
 
 	tr := tar.NewReader(gzr)
 
@@ -1088,7 +1119,7 @@ func (m *Manager) extractTarball(src, dest string) error {
 			break
 		}
 		if err != nil {
-			return err
+			return fmt.Errorf("read tarball entry from %q: %w", src, err)
 		}
 
 		// Sanitize the path to prevent directory traversal attacks
@@ -1108,23 +1139,30 @@ func (m *Manager) extractTarball(src, dest string) error {
 		switch header.Typeflag {
 		case tar.TypeDir:
 			if err := os.MkdirAll(target, 0755); err != nil {
-				return err
+				return fmt.Errorf("create archive directory %q: %w", target, err)
 			}
 		case tar.TypeReg:
 			if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
-				return err
+				return fmt.Errorf("create parent directory for archive file %q: %w", target, err)
 			}
 
 			out, err := os.OpenFile(target, os.O_CREATE|os.O_RDWR, os.FileMode(header.Mode))
 			if err != nil {
-				return err
+				return fmt.Errorf("open archive target file %q: %w", target, err)
 			}
 
 			if _, err := io.Copy(out, tr); err != nil {
-				out.Close()
-				return err
+				if closeErr := out.Close(); closeErr != nil {
+					return errors.Join(
+						fmt.Errorf("write archive file %q: %w", target, err),
+						fmt.Errorf("close archive file %q after write failure: %w", target, closeErr),
+					)
+				}
+				return fmt.Errorf("write archive file %q: %w", target, err)
 			}
-			out.Close()
+			if closeErr := out.Close(); closeErr != nil {
+				return fmt.Errorf("close archive file %q: %w", target, closeErr)
+			}
 		}
 	}
 
@@ -1562,7 +1600,7 @@ func (m *Manager) copyFileSafe(src, dest string) error {
 	// Get file info and check if it's a symlink
 	info, err := os.Lstat(src)
 	if err != nil {
-		return err
+		return fmt.Errorf("lstat source file %q: %w", src, err)
 	}
 
 	// Skip symlinks for security
@@ -1574,20 +1612,28 @@ func (m *Manager) copyFileSafe(src, dest string) error {
 	// Open source file
 	srcFile, err := os.Open(src)
 	if err != nil {
-		return err
+		return fmt.Errorf("open source file %q: %w", src, err)
 	}
-	defer srcFile.Close()
+	defer func() {
+		if closeErr := srcFile.Close(); closeErr != nil {
+			log.Warn().Err(closeErr).Str("path", src).Msg("Failed to close source file after copy")
+		}
+	}()
 
 	// Create destination file with same permissions
 	destFile, err := os.OpenFile(dest, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, info.Mode())
 	if err != nil {
-		return err
+		return fmt.Errorf("open destination file %q: %w", dest, err)
 	}
-	defer destFile.Close()
+	defer func() {
+		if closeErr := destFile.Close(); closeErr != nil {
+			log.Warn().Err(closeErr).Str("path", dest).Msg("Failed to close destination file after copy")
+		}
+	}()
 
 	// Copy contents
 	if _, err := io.Copy(destFile, srcFile); err != nil {
-		return err
+		return fmt.Errorf("copy %q to %q: %w", src, dest, err)
 	}
 
 	return nil
@@ -1598,18 +1644,18 @@ func (m *Manager) copyDirSafe(src, dest string) error {
 	// Get source directory info
 	srcInfo, err := os.Stat(src)
 	if err != nil {
-		return err
+		return fmt.Errorf("stat source directory %q: %w", src, err)
 	}
 
 	// Create destination directory
 	if err := os.MkdirAll(dest, srcInfo.Mode()); err != nil {
-		return err
+		return fmt.Errorf("create destination directory %q: %w", dest, err)
 	}
 
 	// Read source directory entries
 	entries, err := os.ReadDir(src)
 	if err != nil {
-		return err
+		return fmt.Errorf("read source directory %q: %w", src, err)
 	}
 
 	for _, entry := range entries {
@@ -1632,7 +1678,7 @@ func (m *Manager) copyDirSafe(src, dest string) error {
 		if entry.IsDir() {
 			// Recursively copy subdirectory
 			if err := m.copyDirSafe(srcPath, destPath); err != nil {
-				return err
+				return fmt.Errorf("copy subdirectory %q: %w", srcPath, err)
 			}
 		} else {
 			// Copy file
