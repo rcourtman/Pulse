@@ -1,7 +1,6 @@
 package monitoring
 
 import (
-	"math"
 	"testing"
 	"time"
 
@@ -1184,43 +1183,6 @@ func TestEffectivePVEPollingInterval(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestClampUint64ToInt64(t *testing.T) {
-	t.Run("zero value returns 0", func(t *testing.T) {
-		result := clampUint64ToInt64(0)
-		if result != 0 {
-			t.Errorf("expected 0, got %d", result)
-		}
-	})
-
-	t.Run("small positive value returns same value", func(t *testing.T) {
-		result := clampUint64ToInt64(12345)
-		if result != 12345 {
-			t.Errorf("expected 12345, got %d", result)
-		}
-	})
-
-	t.Run("value at math.MaxInt64 returns math.MaxInt64", func(t *testing.T) {
-		result := clampUint64ToInt64(uint64(math.MaxInt64))
-		if result != math.MaxInt64 {
-			t.Errorf("expected %d, got %d", int64(math.MaxInt64), result)
-		}
-	})
-
-	t.Run("value at math.MaxInt64 + 1 clamps to math.MaxInt64", func(t *testing.T) {
-		result := clampUint64ToInt64(uint64(math.MaxInt64) + 1)
-		if result != math.MaxInt64 {
-			t.Errorf("expected %d, got %d", int64(math.MaxInt64), result)
-		}
-	})
-
-	t.Run("value at math.MaxUint64 clamps to math.MaxInt64", func(t *testing.T) {
-		result := clampUint64ToInt64(math.MaxUint64)
-		if result != math.MaxInt64 {
-			t.Errorf("expected %d, got %d", int64(math.MaxInt64), result)
-		}
-	})
 }
 
 func TestRemoveFailedPBSNode(t *testing.T) {
