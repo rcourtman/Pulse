@@ -709,7 +709,7 @@ func NewManagerWithDataDir(dataDir string) *Manager {
 
 	// Load saved active alerts
 	if err := m.LoadActiveAlerts(); err != nil {
-		log.Error().Err(err).Msg("Failed to load active alerts")
+		log.Error().Err(err).Msg("failed to load active alerts")
 	}
 
 	// Start escalation checker
@@ -762,7 +762,7 @@ func (m *Manager) SetAlertForAICallback(cb func(alert *Alert)) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.onAlertForAI = cb
-	log.Info().Msg("Alert-for-AI callback registered (bypasses notification suppression)")
+	log.Info().Msg("alert-for-AI callback registered (bypasses notification suppression)")
 }
 
 // SetResolvedCallback sets the callback for resolved alerts
@@ -1478,11 +1478,11 @@ func (m *Manager) migrateActivationState(config *AlertConfig) {
 			config.ActivationState = ActivationActive
 			now := time.Now()
 			config.ActivationTime = &now
-			log.Info().Msg("Migrating existing installation to active alert state")
+			log.Info().Msg("migrating existing installation to active alert state")
 		} else {
 			// New install: start in pending review
 			config.ActivationState = ActivationPending
-			log.Info().Msg("New installation: alerts pending activation")
+			log.Info().Msg("new installation: alerts pending activation")
 		}
 	}
 }
@@ -1933,11 +1933,11 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 		go func() {
 			defer func() {
 				if r := recover(); r != nil {
-					log.Error().Interface("panic", r).Msg("Panic in SaveActiveAlerts goroutine (config update)")
+					log.Error().Interface("panic", r).Msg("panic in SaveActiveAlerts goroutine (config update)")
 				}
 			}()
 			if err := m.SaveActiveAlerts(); err != nil {
-				log.Error().Err(err).Msg("Failed to save active alerts after config update")
+				log.Error().Err(err).Msg("failed to save active alerts after config update")
 			}
 		}()
 	}
@@ -2101,7 +2101,7 @@ func (m *Manager) isInQuietHours() bool {
 		var err error
 		loc, err = time.LoadLocation(m.config.Schedule.QuietHours.Timezone)
 		if err != nil {
-			log.Warn().Err(err).Str("timezone", m.config.Schedule.QuietHours.Timezone).Msg("Failed to load timezone, using local time")
+			log.Warn().Err(err).Str("timezone", m.config.Schedule.QuietHours.Timezone).Msg("failed to load timezone, using local time")
 			loc = time.Local
 		}
 		m.quietHoursLoc = loc
@@ -2118,13 +2118,13 @@ func (m *Manager) isInQuietHours() bool {
 	// Parse start and end times
 	startTime, err := time.ParseInLocation("15:04", m.config.Schedule.QuietHours.Start, loc)
 	if err != nil {
-		log.Warn().Err(err).Str("start", m.config.Schedule.QuietHours.Start).Msg("Failed to parse quiet hours start time")
+		log.Warn().Err(err).Str("start", m.config.Schedule.QuietHours.Start).Msg("failed to parse quiet hours start time")
 		return false
 	}
 
 	endTime, err := time.ParseInLocation("15:04", m.config.Schedule.QuietHours.End, loc)
 	if err != nil {
-		log.Warn().Err(err).Str("end", m.config.Schedule.QuietHours.End).Msg("Failed to parse quiet hours end time")
+		log.Warn().Err(err).Str("end", m.config.Schedule.QuietHours.End).Msg("failed to parse quiet hours end time")
 		return false
 	}
 
@@ -2270,11 +2270,11 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 	m.mu.RUnlock()
 
 	if !enabled {
-		log.Debug().Msg("CheckGuest: alerts disabled globally")
+		log.Debug().Msg("checkGuest: alerts disabled globally")
 		return
 	}
 	if disableAllGuests {
-		log.Debug().Msg("CheckGuest: all guest alerts disabled")
+		log.Debug().Msg("checkGuest: all guest alerts disabled")
 		return
 	}
 
@@ -2371,7 +2371,7 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 				if cleared := m.suppressGuestAlerts(guestID); cleared {
 					m.saveActiveAlertsAsync("tag-blacklist")
 				}
-				log.Debug().Str("guestID", guestID).Msg("Guest suppressed by tag blacklist")
+				log.Debug().Str("guestID", guestID).Msg("guest suppressed by tag blacklist")
 				return
 			}
 		}
@@ -2389,7 +2389,7 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 				if cleared := m.suppressGuestAlerts(guestID); cleared {
 					m.saveActiveAlertsAsync("tag-whitelist")
 				}
-				log.Debug().Str("guestID", guestID).Msg("Guest suppressed by tag whitelist (required tag not found)")
+				log.Debug().Str("guestID", guestID).Msg("guest suppressed by tag whitelist (required tag not found)")
 				return
 			}
 		}
@@ -4310,7 +4310,7 @@ func (m *Manager) HandleDockerHostOffline(host models.DockerHost) {
 		go func(a *Alert) {
 			defer func() {
 				if r := recover(); r != nil {
-					log.Error().Interface("panic", r).Str("alertID", a.ID).Msg("Panic in AI alert callback")
+					log.Error().Interface("panic", r).Str("alertID", a.ID).Msg("panic in AI alert callback")
 				}
 			}()
 			m.onAlertForAI(a)
@@ -5351,11 +5351,11 @@ func (m *Manager) CheckSnapshotsForInstance(instanceName string, snapshots []mod
 		go func() {
 			defer func() {
 				if r := recover(); r != nil {
-					log.Error().Interface("panic", r).Msg("Panic in SaveActiveAlerts goroutine (snapshot)")
+					log.Error().Interface("panic", r).Msg("panic in SaveActiveAlerts goroutine (snapshot)")
 				}
 			}()
 			if err := m.SaveActiveAlerts(); err != nil {
-				log.Error().Err(err).Msg("Failed to save active alerts after snapshot alert creation")
+				log.Error().Err(err).Msg("failed to save active alerts after snapshot alert creation")
 			}
 		}()
 
@@ -5776,11 +5776,11 @@ func (m *Manager) CheckBackups(
 		go func() {
 			defer func() {
 				if r := recover(); r != nil {
-					log.Error().Interface("panic", r).Msg("Panic in SaveActiveAlerts goroutine (backup)")
+					log.Error().Interface("panic", r).Msg("panic in SaveActiveAlerts goroutine (backup)")
 				}
 			}()
 			if err := m.SaveActiveAlerts(); err != nil {
-				log.Error().Err(err).Msg("Failed to save active alerts after backup alert creation")
+				log.Error().Err(err).Msg("failed to save active alerts after backup alert creation")
 			}
 		}()
 
@@ -6364,11 +6364,11 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 			go func() {
 				defer func() {
 					if r := recover(); r != nil {
-						log.Error().Interface("panic", r).Msg("Panic in SaveActiveAlerts goroutine")
+						log.Error().Interface("panic", r).Msg("panic in SaveActiveAlerts goroutine")
 					}
 				}()
 				if err := m.SaveActiveAlerts(); err != nil {
-					log.Error().Err(err).Msg("Failed to save active alerts after creation")
+					log.Error().Err(err).Msg("failed to save active alerts after creation")
 				}
 			}()
 
@@ -6388,7 +6388,7 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 				go func(a *Alert) {
 					defer func() {
 						if r := recover(); r != nil {
-							log.Error().Interface("panic", r).Str("alertID", a.ID).Msg("Panic in AI alert callback")
+							log.Error().Interface("panic", r).Str("alertID", a.ID).Msg("panic in AI alert callback")
 						}
 					}()
 					m.onAlertForAI(a)
@@ -6410,12 +6410,12 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 				now := time.Now()
 				alert.LastNotified = &now
 				if m.dispatchAlert(alert, true) {
-					log.Info().Str("alertID", alertID).Msg("Calling onAlert callback")
+					log.Info().Str("alertID", alertID).Msg("calling onAlert callback")
 				} else {
 					alert.LastNotified = nil
 				}
 			} else {
-				log.Warn().Msg("No onAlert callback set!")
+				log.Warn().Msg("no onAlert callback set!")
 			}
 		} else {
 			// Update existing alert
@@ -6517,11 +6517,11 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 				go func() {
 					defer func() {
 						if r := recover(); r != nil {
-							log.Error().Interface("panic", r).Msg("Panic in SaveActiveAlerts goroutine (resolution)")
+							log.Error().Interface("panic", r).Msg("panic in SaveActiveAlerts goroutine (resolution)")
 						}
 					}()
 					if err := m.SaveActiveAlerts(); err != nil {
-						log.Error().Err(err).Msg("Failed to save active alerts after resolution")
+						log.Error().Err(err).Msg("failed to save active alerts after resolution")
 					}
 				}()
 
@@ -9164,7 +9164,7 @@ func (m *Manager) Stop() {
 
 	// Save active alerts before stopping
 	if err := m.SaveActiveAlerts(); err != nil {
-		log.Error().Err(err).Msg("Failed to save active alerts on stop")
+		log.Error().Err(err).Msg("failed to save active alerts on stop")
 	}
 }
 
@@ -9203,7 +9203,7 @@ func (m *Manager) SaveActiveAlerts() error {
 
 	if _, err := tmpFile.Write(data); err != nil {
 		if closeErr := tmpFile.Close(); closeErr != nil {
-			log.Warn().Err(closeErr).Str("file", tmpName).Msg("Failed to close temp file after write error")
+			log.Warn().Err(closeErr).Str("file", tmpName).Msg("failed to close temp file after write error")
 		}
 		return fmt.Errorf("failed to write active alerts: %w", err)
 	}
@@ -9216,7 +9216,7 @@ func (m *Manager) SaveActiveAlerts() error {
 		return fmt.Errorf("failed to rename active alerts file: %w", err)
 	}
 
-	log.Debug().Int("count", len(alerts)).Msg("Saved active alerts to disk")
+	log.Debug().Int("count", len(alerts)).Msg("saved active alerts to disk")
 	return nil
 }
 
@@ -9248,7 +9248,7 @@ func (m *Manager) LoadActiveAlerts() error {
 	data, err := os.ReadFile(alertsFile)
 	if err != nil {
 		if os.IsNotExist(err) {
-			log.Info().Msg("No active alerts file found, starting fresh")
+			log.Info().Msg("no active alerts file found, starting fresh")
 			return nil
 		}
 		return fmt.Errorf("failed to read active alerts: %w", err)
@@ -9315,14 +9315,14 @@ func (m *Manager) LoadActiveAlerts() error {
 		// Skip duplicates
 		if seen[alert.ID] {
 			duplicateCount++
-			log.Warn().Str("alertID", alert.ID).Msg("Skipping duplicate alert during restore")
+			log.Warn().Str("alertID", alert.ID).Msg("skipping duplicate alert during restore")
 			continue
 		}
 		seen[alert.ID] = true
 
 		// Skip very old alerts (older than 24 hours)
 		if now.Sub(alert.StartTime) > 24*time.Hour {
-			log.Debug().Str("alertID", alert.ID).Msg("Skipping old alert during restore")
+			log.Debug().Str("alertID", alert.ID).Msg("skipping old alert during restore")
 			continue
 		}
 
@@ -9330,7 +9330,7 @@ func (m *Manager) LoadActiveAlerts() error {
 		// but still preserve the ackState so if the same alert reappears
 		// (e.g., backup-age alerts) it won't retrigger notifications.
 		if alert.Acknowledged && alert.AckTime != nil && now.Sub(*alert.AckTime) > time.Hour {
-			log.Debug().Str("alertID", alert.ID).Msg("Skipping old acknowledged alert from activeAlerts but preserving ackState")
+			log.Debug().Str("alertID", alert.ID).Msg("skipping old acknowledged alert from activeAlerts but preserving ackState")
 			ackTime := alert.StartTime
 			if alert.AckTime != nil {
 				ackTime = *alert.AckTime
@@ -9427,25 +9427,25 @@ func (m *Manager) CleanupAlertsForNodes(existingNodes map[string]bool) {
 		if node == "" || !existingNodes[node] {
 			m.removeActiveAlertNoLock(alertID)
 			removedCount++
-			log.Debug().Str("alertID", alertID).Str("node", node).Msg("Removed alert for non-existent node")
+			log.Debug().Str("alertID", alertID).Str("node", node).Msg("removed alert for non-existent node")
 		}
 	}
 
 	if removedCount > 0 {
-		log.Debug().Int("removed", removedCount).Int("remaining", len(m.activeAlerts)).Msg("Cleaned up alerts for non-existent nodes")
+		log.Debug().Int("removed", removedCount).Int("remaining", len(m.activeAlerts)).Msg("cleaned up alerts for non-existent nodes")
 		// Save the cleaned up state
 		go func() {
 			defer func() {
 				if r := recover(); r != nil {
-					log.Error().Interface("panic", r).Msg("Panic in SaveActiveAlerts goroutine (cleanup)")
+					log.Error().Interface("panic", r).Msg("panic in SaveActiveAlerts goroutine (cleanup)")
 				}
 			}()
 			if err := m.SaveActiveAlerts(); err != nil {
-				log.Error().Err(err).Msg("Failed to save alerts after cleanup")
+				log.Error().Err(err).Msg("failed to save alerts after cleanup")
 			}
 		}()
 	} else {
-		log.Info().Msg("No alerts needed cleanup")
+		log.Info().Msg("no alerts needed cleanup")
 	}
 }
 
@@ -9476,16 +9476,16 @@ func (m *Manager) ClearActiveAlerts() {
 	m.recentlyResolved = make(map[string]*ResolvedAlert)
 	m.resolvedMutex.Unlock()
 
-	log.Info().Msg("Cleared all active and pending alerts")
+	log.Info().Msg("cleared all active and pending alerts")
 
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
-				log.Error().Interface("panic", r).Msg("Panic in SaveActiveAlerts goroutine (clear)")
+				log.Error().Interface("panic", r).Msg("panic in SaveActiveAlerts goroutine (clear)")
 			}
 		}()
 		if err := m.SaveActiveAlerts(); err != nil {
-			log.Error().Err(err).Msg("Failed to persist cleared alerts")
+			log.Error().Err(err).Msg("failed to persist cleared alerts")
 		}
 	}()
 }
@@ -9499,7 +9499,7 @@ func (m *Manager) periodicSaveAlerts() {
 		select {
 		case <-ticker.C:
 			if err := m.SaveActiveAlerts(); err != nil {
-				log.Error().Err(err).Msg("Failed to save active alerts during periodic save")
+				log.Error().Err(err).Msg("failed to save active alerts during periodic save")
 			}
 		case <-m.escalationStop:
 			return
@@ -9720,11 +9720,11 @@ func (m *Manager) cleanupStaleMaps() {
 		go func() {
 			defer func() {
 				if r := recover(); r != nil {
-					log.Error().Interface("panic", r).Msg("Panic in SaveActiveAlerts goroutine (stale cleanup)")
+					log.Error().Interface("panic", r).Msg("panic in SaveActiveAlerts goroutine (stale cleanup)")
 				}
 			}()
 			if err := m.SaveActiveAlerts(); err != nil {
-				log.Error().Err(err).Msg("Failed to save active alerts after stale cleanup")
+				log.Error().Err(err).Msg("failed to save active alerts after stale cleanup")
 			}
 		}()
 		log.Info().
