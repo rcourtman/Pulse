@@ -12,6 +12,9 @@ import (
 // DefaultBufferSize is the number of log lines to keep in memory.
 const (
 	DefaultBufferSize = 1000
+	// Cap each broadcasted log line to bound per-entry memory usage.
+	maxBroadcastMessageBytes = 16 * 1024
+	broadcastTruncationTag   = "...[truncated]"
 )
 
 var (
@@ -39,8 +42,15 @@ func GetBroadcaster() *LogBroadcaster {
 
 // Write implements io.Writer. It writes to the internal buffer and notifies subscribers.
 func (b *LogBroadcaster) Write(p []byte) (n int, err error) {
-	// Copy slice to avoid race conditions if p is reused
+	// Copy at most a bounded prefix so oversized log lines cannot inflate memory.
 	msg := string(p)
+	if len(p) > maxBroadcastMessageBytes {
+		keep := maxBroadcastMessageBytes - len(broadcastTruncationTag)
+		if keep < 0 {
+			keep = 0
+		}
+		msg = string(p[:keep]) + broadcastTruncationTag
+	}
 
 	b.mu.Lock()
 	defer b.mu.Unlock()
