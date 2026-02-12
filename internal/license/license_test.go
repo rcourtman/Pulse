@@ -81,6 +81,67 @@ func TestLicenseHasFeature(t *testing.T) {
 	}
 }
 
+func TestLicenseHasFeature_UsesExplicitCapabilities(t *testing.T) {
+	license := &License{
+		Claims: Claims{
+			Tier:         TierPro,
+			Features:     []string{FeatureAIAutoFix},
+			Capabilities: []string{FeatureAIAlerts},
+		},
+	}
+
+	if !license.HasFeature(FeatureAIAlerts) {
+		t.Fatalf("expected explicit capability %q to be granted", FeatureAIAlerts)
+	}
+	if license.HasFeature(FeatureAIAutoFix) {
+		t.Fatalf("expected legacy feature %q to be ignored when capabilities are explicit", FeatureAIAutoFix)
+	}
+	if license.HasFeature(FeatureAIPatrol) {
+		t.Fatalf("expected tier-derived feature %q to be ignored when capabilities are explicit", FeatureAIPatrol)
+	}
+}
+
+func TestServiceStatus_UsesEffectiveClaimsEntitlements(t *testing.T) {
+	t.Setenv("PULSE_DEV", "false")
+	t.Setenv("PULSE_MOCK_MODE", "false")
+
+	svc := NewService()
+	svc.mu.Lock()
+	svc.license = &License{
+		Claims: Claims{
+			LicenseID:    "explicit-entitlements",
+			Email:        "entitlements@example.com",
+			Tier:         TierPro,
+			Capabilities: []string{FeatureAIAutoFix},
+			Limits: map[string]int64{
+				"max_nodes":  99,
+				"max_guests": 7,
+			},
+			MaxNodes:  1,
+			MaxGuests: 2,
+		},
+	}
+	svc.mu.Unlock()
+
+	if got := svc.HasFeature(FeatureAIAutoFix); !got {
+		t.Fatalf("HasFeature(%q)=%v, want true", FeatureAIAutoFix, got)
+	}
+	if got := svc.HasFeature(FeatureAIPatrol); got {
+		t.Fatalf("HasFeature(%q)=%v, want false", FeatureAIPatrol, got)
+	}
+
+	status := svc.Status()
+	if !reflect.DeepEqual(status.Features, []string{FeatureAIAutoFix}) {
+		t.Fatalf("Status().Features=%v, want %v", status.Features, []string{FeatureAIAutoFix})
+	}
+	if status.MaxNodes != 99 {
+		t.Fatalf("Status().MaxNodes=%d, want 99", status.MaxNodes)
+	}
+	if status.MaxGuests != 7 {
+		t.Fatalf("Status().MaxGuests=%d, want 7", status.MaxGuests)
+	}
+}
+
 func TestLicenseExpiration(t *testing.T) {
 	t.Run("lifetime license never expires", func(t *testing.T) {
 		license := &License{

@@ -192,33 +192,19 @@ func (l *License) ExpiresAt() *time.Time {
 
 // HasFeature checks if the license grants a specific feature.
 func (l *License) HasFeature(feature string) bool {
-	// Check explicit feature list first
-	for _, f := range l.Claims.Features {
-		if f == feature {
+	for _, capability := range l.Claims.EffectiveCapabilities() {
+		if capability == feature {
 			return true
 		}
 	}
-	// Fall back to tier-based features
-	return TierHasFeature(l.Claims.Tier, feature)
+	return false
 }
 
 // AllFeatures returns all features granted by this license.
 func (l *License) AllFeatures() []string {
-	// Start with tier features
-	features := make(map[string]bool)
-	for _, f := range TierFeatures[l.Claims.Tier] {
-		features[f] = true
-	}
-	// Add explicit features
-	for _, f := range l.Claims.Features {
-		features[f] = true
-	}
-	// Convert to slice
-	result := make([]string, 0, len(features))
-	for f := range features {
-		result = append(result, f)
-	}
-	return result
+	features := append([]string(nil), l.Claims.EffectiveCapabilities()...)
+	sort.Strings(features)
+	return features
 }
 
 // Service manages license validation and feature gating.
@@ -412,6 +398,17 @@ func (s *Service) GetLicenseState() (LicenseState, *License) {
 	defer s.mu.Unlock()
 
 	if s.license == nil {
+		if s.evaluator != nil {
+			switch s.evaluator.SubscriptionState() {
+			case SubStateActive, SubStateTrial:
+				return LicenseStateActive, nil
+			case SubStateGrace:
+				return LicenseStateGracePeriod, nil
+			default:
+				// Suspended/canceled/expired (or unknown) are treated as non-entitled.
+				return LicenseStateExpired, nil
+			}
+		}
 		return LicenseStateNone, nil
 	}
 
@@ -510,8 +507,13 @@ func (s *Service) Status() *LicenseStatus {
 	status.IsLifetime = s.license.IsLifetime()
 	status.DaysRemaining = s.license.DaysRemaining()
 	status.Features = s.license.AllFeatures()
-	status.MaxNodes = s.license.Claims.MaxNodes
-	status.MaxGuests = s.license.Claims.MaxGuests
+
+	if maxNodes, ok := s.license.Claims.EffectiveLimits()["max_nodes"]; ok {
+		status.MaxNodes = safeIntFromInt64(maxNodes)
+	}
+	if maxGuests, ok := s.license.Claims.EffectiveLimits()["max_guests"]; ok {
+		status.MaxGuests = safeIntFromInt64(maxGuests)
+	}
 
 	if s.license.ExpiresAt() != nil {
 		exp := s.license.ExpiresAt().Format(time.RFC3339)
