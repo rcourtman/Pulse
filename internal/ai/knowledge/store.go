@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/crypto"
+	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog/log"
 )
 
@@ -725,29 +726,29 @@ func addResourceIDTokens(tokens map[string]struct{}, resourceID string) {
 		return
 	}
 
-	addToken(tokens, trimmed)
+	utils.AddToken(tokens, trimmed)
 
-	if last := lastSegment(trimmed, '/'); last != "" {
-		addToken(tokens, last)
+	if last := utils.LastSegment(trimmed, '/'); last != "" {
+		utils.AddToken(tokens, last)
 	}
-	if last := lastSegment(trimmed, ':'); last != "" {
-		addToken(tokens, last)
+	if last := utils.LastSegment(trimmed, ':'); last != "" {
+		utils.AddToken(tokens, last)
 	}
 
 	lower := strings.ToLower(trimmed)
 	if strings.HasPrefix(lower, "vm-") {
-		addToken(tokens, trimmed[3:])
+		utils.AddToken(tokens, trimmed[3:])
 	}
 	if strings.HasPrefix(lower, "ct-") {
-		addToken(tokens, trimmed[3:])
+		utils.AddToken(tokens, trimmed[3:])
 	}
 	if strings.HasPrefix(lower, "lxc-") {
-		addToken(tokens, trimmed[4:])
+		utils.AddToken(tokens, trimmed[4:])
 	}
 
 	if strings.Contains(lower, "qemu/") || strings.Contains(lower, "lxc/") || strings.HasPrefix(lower, "vm-") || strings.HasPrefix(lower, "ct-") {
-		if digits := trailingDigits(trimmed); digits != "" {
-			addToken(tokens, digits)
+		if digits := utils.TrailingDigits(trimmed); digits != "" {
+			utils.AddToken(tokens, digits)
 		}
 	}
 
@@ -758,8 +759,8 @@ func addResourceIDTokens(tokens map[string]struct{}, resourceID string) {
 			if slash := strings.Index(rest, "/"); slash >= 0 {
 				host := strings.TrimSpace(rest[:slash])
 				container := strings.TrimSpace(rest[slash+1:])
-				addToken(tokens, host)
-				addToken(tokens, container)
+				utils.AddToken(tokens, host)
+				utils.AddToken(tokens, container)
 			}
 		}
 	}
@@ -776,43 +777,6 @@ func matchesResourceTokens(guestID string, tokens map[string]struct{}) bool {
 		}
 	}
 	return false
-}
-
-func addToken(tokens map[string]struct{}, value string) {
-	trimmed := strings.TrimSpace(value)
-	if trimmed == "" {
-		return
-	}
-	tokens[strings.ToLower(trimmed)] = struct{}{}
-}
-
-func lastSegment(value string, sep byte) string {
-	if value == "" {
-		return ""
-	}
-	idx := strings.LastIndexByte(value, sep)
-	if idx == -1 || idx+1 >= len(value) {
-		return ""
-	}
-	return value[idx+1:]
-}
-
-func trailingDigits(value string) string {
-	if value == "" {
-		return ""
-	}
-	i := len(value)
-	for i > 0 {
-		c := value[i-1]
-		if c < '0' || c > '9' {
-			break
-		}
-		i--
-	}
-	if i == len(value) {
-		return ""
-	}
-	return value[i:]
 }
 
 // getLegacyInfrastructureContext returns infrastructure context from legacy knowledge notes.
