@@ -16,6 +16,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentupdate"
 	"github.com/rcourtman/pulse-go-rewrite/internal/buffer"
+	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rs/zerolog"
 	gohost "github.com/shirou/gopsutil/v4/host"
@@ -889,7 +890,7 @@ func GetReliableMachineID(c SystemCollector, gopsutilHostID string, logger zerol
 			machineID := strings.TrimSpace(string(data))
 			if machineID != "" && len(machineID) >= 8 {
 				// Format as UUID if it's a 32-char hex string (like machine-id typically is).
-				if len(machineID) == 32 && isHexString(machineID) {
+				if len(machineID) == 32 && utils.IsHexString(machineID) {
 					machineID = fmt.Sprintf("%s-%s-%s-%s-%s",
 						machineID[0:8], machineID[8:12], machineID[12:16],
 						machineID[16:20], machineID[20:32])
@@ -918,19 +919,6 @@ func GetReliableMachineID(c SystemCollector, gopsutilHostID string, logger zerol
 	return gopsutilID
 }
 
-func isHexString(input string) bool {
-	for i := 0; i < len(input); i++ {
-		ch := input[i]
-		switch {
-		case ch >= '0' && ch <= '9':
-		case ch >= 'a' && ch <= 'f':
-		case ch >= 'A' && ch <= 'F':
-		default:
-			return false
-		}
-	}
-	return input != ""
-}
 
 func getPrimaryMACIdentifier(c SystemCollector) string {
 	interfaces, err := c.NetInterfaces()

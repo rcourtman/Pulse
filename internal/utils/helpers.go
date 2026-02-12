@@ -37,6 +37,20 @@ func ParseBool(value string) bool {
 	}
 }
 
+// IsHexString reports whether s consists entirely of hexadecimal characters (0-9, a-f, A-F).
+// Returns false for the empty string.
+func IsHexString(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, c := range s {
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+			return false
+		}
+	}
+	return true
+}
+
 // GetenvTrim returns the environment variable value with surrounding whitespace removed.
 func GetenvTrim(key string) string {
 	return strings.TrimSpace(os.Getenv(key))

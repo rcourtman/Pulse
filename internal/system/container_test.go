@@ -4,6 +4,8 @@ import (
 	"errors"
 	"os"
 	"testing"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 )
 
 func resetSystemFns() {
@@ -22,7 +24,7 @@ func TestIsHexString(t *testing.T) {
 		{"ABCDEF", true},
 		{"0123456789ABCDEF", true},
 		{"abc123", true},
-		{"", true}, // empty string has no non-hex chars
+		{"", false}, // utils.IsHexString returns false for empty string
 		{"xyz", false},
 		{"123g", false},
 		{"hello-world", false},
@@ -32,9 +34,9 @@ func TestIsHexString(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.input, func(t *testing.T) {
-			result := isHexString(tc.input)
+			result := utils.IsHexString(tc.input)
 			if result != tc.expected {
-				t.Errorf("isHexString(%q) = %v, want %v", tc.input, result, tc.expected)
+				t.Errorf("IsHexString(%q) = %v, want %v", tc.input, result, tc.expected)
 			}
 		})
 	}

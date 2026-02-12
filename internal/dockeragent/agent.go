@@ -1024,7 +1024,7 @@ func readMachineID() (string, error) {
 			id := strings.TrimSpace(string(data))
 			// Format as UUID if it's a 32-char hex string (like machine-id typically is),
 			// to match the behavior of the host agent.
-			if len(id) == 32 && isHexString(id) {
+			if len(id) == 32 && utils.IsHexString(id) {
 				return fmt.Sprintf("%s-%s-%s-%s-%s",
 					id[0:8], id[8:12], id[12:16],
 					id[16:20], id[20:32]), nil
@@ -1035,14 +1035,6 @@ func readMachineID() (string, error) {
 	return "", errors.New("machine-id not found")
 }
 
-func isHexString(s string) bool {
-	for _, c := range s {
-		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
-			return false
-		}
-	}
-	return true
-}
 
 func readSystemUptime() int64 {
 	seconds, err := readProcUptime()

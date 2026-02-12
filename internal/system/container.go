@@ -3,6 +3,8 @@ package system
 import (
 	"os"
 	"strings"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 )
 
 var (
@@ -70,7 +72,7 @@ func DetectDockerContainerName() string {
 	if hostname, err := hostnameFn(); err == nil && hostname != "" {
 		// Docker hostnames are either short container ID (12 chars) or custom name
 		// If it looks like a container ID (hex), skip it - user needs to use name
-		if !isHexString(hostname) || len(hostname) > 12 {
+		if !utils.IsHexString(hostname) || len(hostname) > 12 {
 			return hostname
 		}
 	}
@@ -85,14 +87,6 @@ func DetectDockerContainerName() string {
 	return ""
 }
 
-func isHexString(s string) bool {
-	for _, c := range s {
-		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
-			return false
-		}
-	}
-	return true
-}
 
 // DetectLXCCTID attempts to detect the Proxmox LXC container ID.
 // Returns empty string if not in an LXC container or CTID cannot be determined.
