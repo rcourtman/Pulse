@@ -1,13 +1,10 @@
-// Package finding defines the shared Finding type used across the ai and
-// investigation packages. Keeping it in a leaf package avoids circular
-// imports while giving both packages a single canonical struct.
 package finding
 
 import "time"
 
 // Finding represents a patrol finding with investigation metadata.
-// This is the canonical type shared between the patrol system (internal/ai)
-// and the investigation orchestrator (internal/ai/investigation).
+// This is the canonical type shared between the patrol system and
+// the investigation orchestrator.
 type Finding struct {
 	ID                     string     `json:"id"`
 	Key                    string     `json:"key,omitempty"`

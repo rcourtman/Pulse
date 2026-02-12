@@ -7,7 +7,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
-	internalerrors "github.com/rcourtman/pulse-go-rewrite/internal/errors"
+	internalerrors "github.com/rcourtman/pulse-go-rewrite/internal/monitoring/errors"
 )
 
 // newTestPollMetrics creates a PollMetrics instance with an isolated registry for testing.
