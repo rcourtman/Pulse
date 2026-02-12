@@ -5,7 +5,9 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/auditlog"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
+	"github.com/rs/zerolog/log"
 )
 
 // HandleListTenants returns an authenticated handler that lists all tenants.
@@ -57,6 +59,14 @@ func AdminKeyMiddleware(adminKey string, next http.Handler) http.Handler {
 		}
 
 		if key == "" || key != adminKey {
+			log.Warn().
+				Str("audit_event", "cp_admin_auth").
+				Str("outcome", "failure").
+				Str("reason", "invalid_admin_key").
+				Str("client_ip", auditlog.ClientIP(r)).
+				Str("method", r.Method).
+				Str("path", auditlog.RequestPath(r)).
+				Msg("Control plane admin authentication failed")
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusUnauthorized)
 			_ = json.NewEncoder(w).Encode(map[string]string{
