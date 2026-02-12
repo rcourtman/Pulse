@@ -26,6 +26,49 @@ interface FetchOptions extends Omit<RequestInit, 'headers'> {
   skipOrgContext?: boolean;
 }
 
+function createAbortError(): Error {
+  if (typeof DOMException !== 'undefined') {
+    return new DOMException('The operation was aborted.', 'AbortError');
+  }
+  const error = new Error('The operation was aborted.');
+  error.name = 'AbortError';
+  return error;
+}
+
+function waitWithSignal(ms: number, signal?: AbortSignal | null): Promise<void> {
+  if (ms <= 0) {
+    return Promise.resolve();
+  }
+
+  if (signal?.aborted) {
+    return Promise.reject(createAbortError());
+  }
+
+  return new Promise((resolve, reject) => {
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+    const cleanup = () => {
+      if (timeoutId !== null) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+      signal?.removeEventListener('abort', onAbort);
+    };
+
+    const onAbort = () => {
+      cleanup();
+      reject(createAbortError());
+    };
+
+    timeoutId = setTimeout(() => {
+      cleanup();
+      resolve();
+    }, ms);
+
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
 class ApiClient {
   private apiToken: string | null = null;
   private csrfToken: string | null = null;
@@ -302,7 +345,7 @@ class ApiClient {
       // The response should have set the pulse_csrf cookie
       if (response.ok) {
         // Small delay to ensure cookie is set
-        await new Promise(resolve => setTimeout(resolve, 10));
+        await waitWithSignal(10);
         return this.loadCSRFToken();
       }
     } catch (err) {
@@ -451,7 +494,7 @@ class ApiClient {
       logger.warn(`Rate limit hit, retrying after ${waitTime}ms`);
 
       // Wait and retry once
-      await new Promise((resolve) => setTimeout(resolve, waitTime));
+      await waitWithSignal(waitTime, fetchOptions.signal);
 
       const retryResponse = await fetch(url, {
         ...fetchOptions,

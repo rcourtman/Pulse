@@ -81,6 +81,9 @@ export function scheduleSparkline(draw: () => void): () => void {
 
   return () => {
     pending.delete(draw);
+    if (pending.size === 0 && rafId !== null) {
+      cancelAnimationFrame(rafId);
+      rafId = null;
+    }
   };
 }
-
