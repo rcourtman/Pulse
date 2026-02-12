@@ -3,6 +3,7 @@ package relay
 import (
 	"bytes"
 	"encoding/binary"
+	"strings"
 	"testing"
 )
 
@@ -172,6 +173,22 @@ func TestControlFrameRoundTrip(t *testing.T) {
 			t.Errorf("Message: got %q, want %q", got.Message, "bad token")
 		}
 	})
+}
+
+func TestNewControlFrame_MarshalError(t *testing.T) {
+	badPayload := struct {
+		Func func()
+	}{
+		Func: func() {},
+	}
+
+	_, err := NewControlFrame(FrameRegister, 0, badPayload)
+	if err == nil {
+		t.Fatal("expected NewControlFrame() to fail for non-JSON payload")
+	}
+	if !strings.Contains(err.Error(), "marshal control payload") {
+		t.Fatalf("NewControlFrame() error = %q, want marshal context", err.Error())
+	}
 }
 
 // TestWireCompatibility verifies that hand-crafted byte sequences decode correctly.
