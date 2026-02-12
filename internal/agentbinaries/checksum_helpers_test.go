@@ -315,4 +315,26 @@ func TestVerifyHostAgentBundleChecksum(t *testing.T) {
 			t.Fatalf("expected checksum download error")
 		}
 	})
+
+	t.Run("hash file error", func(t *testing.T) {
+		restore := saveHostAgentHooks()
+		t.Cleanup(restore)
+
+		bundlePath, bundleName := makeBundle(t, "bundle-content")
+		sum := fmt.Sprintf("%x", sha256.Sum256([]byte("bundle-content")))
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = w.Write([]byte(sum + "  " + bundleName + "\n"))
+		}))
+		t.Cleanup(server.Close)
+
+		httpClient = server.Client()
+		openFileFn = func(string) (*os.File, error) {
+			return nil, errors.New("open fail")
+		}
+
+		bundleURL := "https://example.com/releases/" + bundleName
+		if err := verifyHostAgentBundleChecksum(bundlePath, bundleURL, server.URL+"/checksum.sha256"); err == nil {
+			t.Fatalf("expected hash file error")
+		}
+	})
 }
