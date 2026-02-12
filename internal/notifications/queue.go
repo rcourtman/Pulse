@@ -242,7 +242,7 @@ func (nq *NotificationQueue) Enqueue(notif *QueuedNotification) error {
 }
 
 // UpdateStatus updates the status of a queued notification without incrementing attempts
-func (nq *NotificationQueue) UpdateStatus(id string, status NotificationQueueStatus, errorMsg string) error {
+func (nq *NotificationQueue) UpdateStatus(notificationID string, status NotificationQueueStatus, errorMsg string) error {
 	nq.mu.Lock()
 	defer nq.mu.Unlock()
 
@@ -258,26 +258,26 @@ func (nq *NotificationQueue) UpdateStatus(id string, status NotificationQueueSta
 		WHERE id = ?
 	`
 
-	result, err := nq.db.Exec(query, status, now, errorMsg, completedAt, id)
+	result, err := nq.db.Exec(query, status, now, errorMsg, completedAt, notificationID)
 	if err != nil {
 		return fmt.Errorf("failed to update notification status: %w", err)
 	}
 
 	rows, _ := result.RowsAffected()
 	if rows == 0 {
-		return fmt.Errorf("notification not found: %s", id)
+		return fmt.Errorf("notification not found: %s", notificationID)
 	}
 
 	return nil
 }
 
 // IncrementAttempt increments the attempt counter for a notification
-func (nq *NotificationQueue) IncrementAttempt(id string) error {
+func (nq *NotificationQueue) IncrementAttempt(notificationID string) error {
 	nq.mu.Lock()
 	defer nq.mu.Unlock()
 
 	query := `UPDATE notification_queue SET attempts = attempts + 1 WHERE id = ?`
-	_, err := nq.db.Exec(query, id)
+	_, err := nq.db.Exec(query, notificationID)
 	if err != nil {
 		return fmt.Errorf("failed to increment attempt counter: %w", err)
 	}
@@ -285,7 +285,7 @@ func (nq *NotificationQueue) IncrementAttempt(id string) error {
 }
 
 // IncrementAttemptAndSetStatus atomically increments attempt counter and sets status in a single operation
-func (nq *NotificationQueue) IncrementAttemptAndSetStatus(id string, status NotificationQueueStatus) error {
+func (nq *NotificationQueue) IncrementAttemptAndSetStatus(notificationID string, status NotificationQueueStatus) error {
 	nq.mu.Lock()
 	defer nq.mu.Unlock()
 
@@ -296,7 +296,7 @@ func (nq *NotificationQueue) IncrementAttemptAndSetStatus(id string, status Noti
 		    last_attempt = ?
 		WHERE id = ?
 	`
-	_, err := nq.db.Exec(query, status, time.Now().Unix(), id)
+	_, err := nq.db.Exec(query, status, time.Now().Unix(), notificationID)
 	if err != nil {
 		return fmt.Errorf("failed to increment attempt and set status: %w", err)
 	}
@@ -389,7 +389,7 @@ func (nq *NotificationQueue) scanNotification(rows *sql.Rows) (*QueuedNotificati
 }
 
 // ScheduleRetry schedules a notification for retry with exponential backoff
-func (nq *NotificationQueue) ScheduleRetry(id string, attempt int) error {
+func (nq *NotificationQueue) ScheduleRetry(notificationID string, attempt int) error {
 	backoff := calculateBackoff(attempt)
 	nextRetry := time.Now().Add(backoff)
 
@@ -402,13 +402,13 @@ func (nq *NotificationQueue) ScheduleRetry(id string, attempt int) error {
 		WHERE id = ?
 	`
 
-	_, err := nq.db.Exec(query, nextRetry.Unix(), time.Now().Unix(), id)
+	_, err := nq.db.Exec(query, nextRetry.Unix(), time.Now().Unix(), notificationID)
 	if err != nil {
 		return fmt.Errorf("failed to schedule retry: %w", err)
 	}
 
 	log.Debug().
-		Str("id", id).
+		Str("id", notificationID).
 		Int("attempt", attempt).
 		Dur("backoff", backoff).
 		Time("nextRetry", nextRetry).
@@ -418,8 +418,8 @@ func (nq *NotificationQueue) ScheduleRetry(id string, attempt int) error {
 }
 
 // MoveToDLQ moves a notification to the dead letter queue
-func (nq *NotificationQueue) MoveToDLQ(id string, reason string) error {
-	return nq.UpdateStatus(id, QueueStatusDLQ, reason)
+func (nq *NotificationQueue) MoveToDLQ(notificationID string, reason string) error {
+	return nq.UpdateStatus(notificationID, QueueStatusDLQ, reason)
 }
 
 // GetDLQ returns all notifications in the dead letter queue
@@ -758,8 +758,8 @@ func (nq *NotificationQueue) CancelByAlertIDs(alertIDs []string) error {
 
 	var toCancelIDs []string
 	alertIDSet := make(map[string]struct{})
-	for _, id := range alertIDs {
-		alertIDSet[id] = struct{}{}
+	for _, alertID := range alertIDs {
+		alertIDSet[alertID] = struct{}{}
 	}
 
 	for rows.Next() {
