@@ -182,4 +182,31 @@ describe('websocket store unified resource contract', () => {
       dispose();
     }
   });
+
+  it('removes alerts activation listener when store is disposed', async () => {
+    const { ALERTS_ACTIVATION_EVENT } = await import('@/utils/alertsActivation');
+    const addSpy = vi.spyOn(window, 'addEventListener');
+    const removeSpy = vi.spyOn(window, 'removeEventListener');
+
+    const { dispose } = await createStoreHarness();
+    let disposed = false;
+    try {
+      const addCall = addSpy.mock.calls.find((call) => call[0] === ALERTS_ACTIVATION_EVENT);
+      expect(addCall).toBeDefined();
+
+      dispose();
+      disposed = true;
+
+      const removeCall = removeSpy.mock.calls.find(
+        (call) => call[0] === ALERTS_ACTIVATION_EVENT && call[1] === addCall?.[1],
+      );
+      expect(removeCall).toBeDefined();
+    } finally {
+      if (!disposed) {
+        dispose();
+      }
+      addSpy.mockRestore();
+      removeSpy.mockRestore();
+    }
+  });
 });
