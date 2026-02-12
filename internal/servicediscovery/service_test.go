@@ -29,6 +29,19 @@ func (errorAnalyzer) AnalyzeForDiscovery(ctx context.Context, prompt string) (st
 	return "", context.Canceled
 }
 
+type blockingAnalyzer struct {
+	started chan struct{}
+	once    sync.Once
+}
+
+func (b *blockingAnalyzer) AnalyzeForDiscovery(ctx context.Context, prompt string) (string, error) {
+	b.once.Do(func() {
+		close(b.started)
+	})
+	<-ctx.Done()
+	return "", ctx.Err()
+}
+
 func TestFilterSensitiveLabels(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -734,6 +747,52 @@ func TestService_FingerprintLoop_StopAndCancel(t *testing.T) {
 
 	runLoop(false)
 	runLoop(true)
+}
+
+func TestService_StopCancelsInFlightAutomaticRefresh(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore error: %v", err)
+	}
+	store.crypto = nil
+
+	state := StateSnapshot{
+		DockerHosts: []DockerHost{
+			{
+				AgentID:  "host1",
+				Hostname: "host1",
+				Containers: []DockerContainer{
+					{Name: "web", Image: "nginx:latest", Status: "running"},
+				},
+			},
+		},
+	}
+
+	service := NewService(store, nil, stubStateProvider{state: state}, DefaultConfig())
+	service.initialDelay = time.Millisecond
+	service.interval = time.Hour
+	analyzer := &blockingAnalyzer{started: make(chan struct{})}
+	service.SetAIAnalyzer(analyzer)
+
+	service.Start(context.Background())
+
+	select {
+	case <-analyzer.started:
+	case <-time.After(250 * time.Millisecond):
+		t.Fatalf("expected analyzer to be invoked")
+	}
+
+	stopped := make(chan struct{})
+	go func() {
+		service.Stop()
+		close(stopped)
+	}()
+
+	select {
+	case <-stopped:
+	case <-time.After(250 * time.Millisecond):
+		t.Fatalf("Stop did not return after canceling in-flight discovery")
+	}
 }
 
 func TestService_DiscoverDockerContainersSkips(t *testing.T) {

@@ -227,6 +227,8 @@ type Service struct {
 	mu              sync.RWMutex
 	running         bool
 	stopCh          chan struct{}
+	loopDone        chan struct{}
+	runCancel       context.CancelFunc
 	intervalCh      chan time.Duration // Channel for live interval updates
 	interval        time.Duration
 	initialDelay    time.Duration
@@ -326,24 +328,46 @@ func (s *Service) Start(ctx context.Context) {
 		s.mu.Unlock()
 		return
 	}
+	runCtx, cancel := context.WithCancel(ctx)
 	s.running = true
-	s.stopCh = make(chan struct{})
+	stopCh := make(chan struct{})
+	loopDone := make(chan struct{})
+	s.stopCh = stopCh
+	s.loopDone = loopDone
+	s.runCancel = cancel
 	s.mu.Unlock()
 
 	log.Info().
 		Dur("interval", s.interval).
 		Msg("Starting infrastructure discovery service")
 
-	go s.discoveryLoop(ctx)
+	go s.runDiscoveryLoop(runCtx, stopCh, loopDone)
 }
 
 // Stop stops the background discovery service.
 func (s *Service) Stop() {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.running {
-		close(s.stopCh)
-		s.running = false
+	if !s.running {
+		s.mu.Unlock()
+		return
+	}
+	s.running = false
+	stopCh := s.stopCh
+	loopDone := s.loopDone
+	runCancel := s.runCancel
+	s.stopCh = nil
+	s.loopDone = nil
+	s.runCancel = nil
+	s.mu.Unlock()
+
+	if runCancel != nil {
+		runCancel()
+	}
+	if stopCh != nil {
+		close(stopCh)
+	}
+	if loopDone != nil {
+		<-loopDone
 	}
 }
 
@@ -433,15 +457,29 @@ func (s *Service) IsRunning() bool {
 // discoveryLoop runs periodic fingerprint collection and automatic refreshes.
 // Fingerprints detect changes cheaply; changed/stale/new resources are then refreshed.
 func (s *Service) discoveryLoop(ctx context.Context) {
+	s.mu.RLock()
+	stopCh := s.stopCh
+	s.mu.RUnlock()
+	s.runDiscoveryLoop(ctx, stopCh, nil)
+}
+
+func (s *Service) runDiscoveryLoop(ctx context.Context, stopCh <-chan struct{}, done chan<- struct{}) {
+	if done != nil {
+		defer close(done)
+	}
+
 	delay := s.initialDelay
 	if delay <= 0 {
 		delay = 30 * time.Second
 	}
 
+	startupTimer := time.NewTimer(delay)
+	defer startupTimer.Stop()
+
 	// Run initial fingerprint collection after a short delay
 	select {
-	case <-time.After(delay):
-	case <-s.stopCh:
+	case <-startupTimer.C:
+	case <-stopCh:
 		return
 	case <-ctx.Done():
 		return
@@ -467,7 +505,7 @@ func (s *Service) discoveryLoop(ctx context.Context) {
 			ticker.Stop()
 			ticker = time.NewTicker(newInterval)
 			log.Info().Dur("interval", newInterval).Msg("Fingerprint collection interval reset")
-		case <-s.stopCh:
+		case <-stopCh:
 			log.Info().Msg("Stopping discovery service")
 			return
 		case <-ctx.Done():
