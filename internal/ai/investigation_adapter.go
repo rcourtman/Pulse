@@ -17,8 +17,8 @@ func NewInvestigationOrchestratorAdapter(o *investigation.Orchestrator) *Investi
 }
 
 // InvestigateFinding starts an investigation for a finding.
-// Both *InvestigationFinding and *investigation.Finding are type aliases for
-// *finding.Finding, so no conversion is needed.
+// Both *InvestigationFinding and *investigation.Finding are the same alias,
+// so no conversion is needed.
 func (a *InvestigationOrchestratorAdapter) InvestigateFinding(ctx context.Context, f *InvestigationFinding, autonomyLevel string) error {
 	return a.orchestrator.InvestigateFinding(ctx, f, autonomyLevel)
 }

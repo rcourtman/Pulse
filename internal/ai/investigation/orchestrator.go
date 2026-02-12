@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai/finding"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/safety"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license"
 	"github.com/rs/zerolog/log"
@@ -90,11 +89,6 @@ type FindingsStore interface {
 	Get(id string) *Finding
 	Update(f *Finding) bool
 }
-
-// Finding is the shared finding type from the finding package.
-// Type alias ensures full backwards compatibility — *investigation.Finding
-// and *finding.Finding are the same type.
-type Finding = finding.Finding
 
 // ApprovalStore interface for queuing fixes for approval
 type ApprovalStore interface {
