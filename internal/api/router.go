@@ -7864,7 +7864,28 @@ func (r *Router) handleDiagnosticsDockerPrepareToken(w http.ResponseWriter, req 
 		return
 	}
 
-	host, ok := r.monitor.GetDockerHost(hostID)
+	orgID := strings.TrimSpace(GetOrgID(req.Context()))
+
+	monitor := r.getTenantMonitor(req.Context())
+	if orgID != "" && orgID != "default" {
+		// Security-sensitive endpoint: do not fall back to the default monitor for tenant-scoped requests.
+		if r.mtMonitor == nil {
+			writeErrorResponse(w, http.StatusInternalServerError, "tenant_unavailable", "Tenant monitor is not configured", nil)
+			return
+		}
+		tenantMonitor, err := r.mtMonitor.GetMonitor(orgID)
+		if err != nil || tenantMonitor == nil {
+			writeErrorResponse(w, http.StatusInternalServerError, "tenant_unavailable", "Failed to resolve tenant monitor", nil)
+			return
+		}
+		monitor = tenantMonitor
+	}
+	if monitor == nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "monitor_unavailable", "Monitor is not configured", nil)
+		return
+	}
+
+	host, ok := monitor.GetDockerHost(hostID)
 	if !ok {
 		writeErrorResponse(w, http.StatusNotFound, "host_not_found", "Docker host not found", nil)
 		return
@@ -7890,17 +7911,48 @@ func (r *Router) handleDiagnosticsDockerPrepareToken(w http.ResponseWriter, req 
 		return
 	}
 
-	r.config.APITokens = append(r.config.APITokens, *record)
-	r.config.SortAPITokens()
+	if orgID != "" && orgID != "default" {
+		record.OrgID = orgID
+	}
 
-	if r.persistence != nil {
-		if err := r.persistence.SaveAPITokens(r.config.APITokens); err != nil {
-			r.config.RemoveAPIToken(record.ID)
+	activeConfig := r.config
+	activePersistence := r.persistence
+	if orgID != "" && orgID != "default" {
+		activeConfig = monitor.GetConfig()
+		if activeConfig == nil {
+			writeErrorResponse(w, http.StatusInternalServerError, "tenant_config_unavailable", "Tenant config is not available", nil)
+			return
+		}
+		if r.multiTenant == nil {
+			writeErrorResponse(w, http.StatusInternalServerError, "tenant_persistence_unavailable", "Tenant persistence is not configured", nil)
+			return
+		}
+		tenantPersistence, err := r.multiTenant.GetPersistence(orgID)
+		if err != nil {
+			writeErrorResponse(w, http.StatusInternalServerError, "tenant_persistence_unavailable", "Failed to resolve tenant persistence", nil)
+			return
+		}
+		activePersistence = tenantPersistence
+	}
+	if activeConfig == nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "config_unavailable", "Configuration is not loaded", nil)
+		return
+	}
+
+	config.Mu.Lock()
+	activeConfig.APITokens = append(activeConfig.APITokens, *record)
+	activeConfig.SortAPITokens()
+
+	if activePersistence != nil {
+		if err := activePersistence.SaveAPITokens(activeConfig.APITokens); err != nil {
+			activeConfig.RemoveAPIToken(record.ID)
+			config.Mu.Unlock()
 			log.Error().Err(err).Msg("Failed to persist API tokens after docker migration generation")
 			writeErrorResponse(w, http.StatusInternalServerError, "token_persist_failed", "Failed to persist API token", nil)
 			return
 		}
 	}
+	config.Mu.Unlock()
 
 	baseURL := strings.TrimRight(r.resolvePublicURL(req), "/")
 	installCommand := fmt.Sprintf("curl -fSL '%s/install-docker-agent.sh' -o /tmp/pulse-install-docker-agent.sh && sudo bash /tmp/pulse-install-docker-agent.sh --url '%s' --token '%s' && rm -f /tmp/pulse-install-docker-agent.sh", baseURL, baseURL, rawToken)
