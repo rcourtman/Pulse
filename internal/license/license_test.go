@@ -315,6 +315,23 @@ func TestValidateLicense_ExpiredPastGrace(t *testing.T) {
 	}
 }
 
+func TestValidateLicense_DevModeEnvIsCaseInsensitive(t *testing.T) {
+	originalKey := publicKey
+	defer SetPublicKey(originalKey)
+	SetPublicKey(nil)
+
+	t.Setenv("PULSE_LICENSE_DEV_MODE", " TRUE ")
+
+	key, err := GenerateLicenseForTesting("test@example.com", TierPro, 24*time.Hour)
+	if err != nil {
+		t.Fatalf("GenerateLicenseForTesting() error: %v", err)
+	}
+
+	if _, err := ValidateLicense(key); err != nil {
+		t.Fatalf("ValidateLicense() should accept normalized dev mode env value: %v", err)
+	}
+}
+
 func TestLicenseStatus(t *testing.T) {
 	service := NewService()
 
