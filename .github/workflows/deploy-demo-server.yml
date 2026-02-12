@@ -47,7 +47,20 @@ jobs:
           cp -r frontend-modern/dist internal/api/frontend-modern/
 
       - name: Build static binary
-        run: CGO_ENABLED=0 go build -ldflags="-s -w" -o pulse ./cmd/pulse/
+        env:
+          PULSE_LICENSE_PUBLIC_KEY: ${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
+        run: |
+          VERSION="v$(cat VERSION | tr -d '\n')"
+          BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+          LICENSE_LDFLAGS=""
+          if [ -n "${PULSE_LICENSE_PUBLIC_KEY:-}" ]; then
+            LICENSE_LDFLAGS=" -X github.com/rcourtman/pulse-go-rewrite/internal/license.EmbeddedPublicKey=${PULSE_LICENSE_PUBLIC_KEY}"
+          fi
+          CGO_ENABLED=0 go build \
+            -ldflags="-s -w -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME} -X main.GitCommit=${GIT_COMMIT}${LICENSE_LDFLAGS}" \
+            -trimpath \
+            -o pulse ./cmd/pulse/
       
       - name: Tailscale
         uses: tailscale/github-action@v2
