@@ -2448,7 +2448,7 @@ func (m *Monitor) GetLiveStateSnapshot() models.StateSnapshot {
 func (m *Monitor) SetOrgID(orgID string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.orgID = orgID
+	m.orgID = strings.TrimSpace(orgID)
 }
 
 // GetOrgID returns the organization ID for this monitor instance.
@@ -2459,20 +2459,23 @@ func (m *Monitor) GetOrgID() string {
 	return m.orgID
 }
 
+type stateBroadcaster interface {
+	BroadcastState(state interface{})
+	BroadcastStateToTenant(orgID string, state interface{})
+}
+
 // broadcastState broadcasts state to WebSocket clients.
-// For tenant monitors, it broadcasts only to clients of that tenant.
-// For default monitors, it broadcasts to all clients.
-func (m *Monitor) broadcastState(hub *websocket.Hub, frontendState interface{}) {
+// Monitors with an explicit org ID (including "default") are tenant-scoped.
+// Legacy monitors without an org ID broadcast globally.
+func (m *Monitor) broadcastState(hub stateBroadcaster, frontendState interface{}) {
 	if hub == nil {
 		return
 	}
 
-	orgID := m.GetOrgID()
-	if orgID != "" && orgID != "default" {
-		// Tenant-specific broadcast
+	orgID := strings.TrimSpace(m.GetOrgID())
+	if orgID != "" {
 		hub.BroadcastStateToTenant(orgID, frontendState)
 	} else {
-		// Legacy broadcast to all clients
 		hub.BroadcastState(frontendState)
 	}
 }

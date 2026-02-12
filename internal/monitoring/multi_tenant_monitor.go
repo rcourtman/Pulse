@@ -3,6 +3,7 @@ package monitoring
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -37,6 +38,11 @@ func NewMultiTenantMonitor(baseCfg *config.Config, persistence *config.MultiTena
 // GetMonitor returns the monitor instance for a specific organization.
 // It lazily initializes the monitor if it doesn't exist.
 func (mtm *MultiTenantMonitor) GetMonitor(orgID string) (*Monitor, error) {
+	orgID = strings.TrimSpace(orgID)
+	if orgID == "" {
+		return nil, fmt.Errorf("organization ID is required")
+	}
+
 	mtm.mu.RLock()
 	monitor, exists := mtm.monitors[orgID]
 	mtm.mu.RUnlock()
@@ -116,6 +122,11 @@ func (mtm *MultiTenantMonitor) GetMonitor(orgID string) (*Monitor, error) {
 // PeekMonitor returns the tenant monitor instance if it is already initialized.
 // It does not create a new monitor.
 func (mtm *MultiTenantMonitor) PeekMonitor(orgID string) (*Monitor, bool) {
+	orgID = strings.TrimSpace(orgID)
+	if orgID == "" {
+		return nil, false
+	}
+
 	mtm.mu.RLock()
 	defer mtm.mu.RUnlock()
 	monitor, exists := mtm.monitors[orgID]
@@ -140,6 +151,11 @@ func (mtm *MultiTenantMonitor) Stop() {
 // RemoveTenant stops and removes a specific tenant's monitor.
 // Useful for offboarding or manual reloading.
 func (mtm *MultiTenantMonitor) RemoveTenant(orgID string) {
+	orgID = strings.TrimSpace(orgID)
+	if orgID == "" {
+		return
+	}
+
 	mtm.mu.Lock()
 	defer mtm.mu.Unlock()
 
@@ -152,6 +168,11 @@ func (mtm *MultiTenantMonitor) RemoveTenant(orgID string) {
 
 // OrgExists checks if an organization exists (directory exists) without creating it.
 func (mtm *MultiTenantMonitor) OrgExists(orgID string) bool {
+	orgID = strings.TrimSpace(orgID)
+	if orgID == "" {
+		return false
+	}
+
 	if mtm.persistence == nil {
 		return false
 	}
