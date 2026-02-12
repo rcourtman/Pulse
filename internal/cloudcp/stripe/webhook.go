@@ -219,5 +219,7 @@ func (s *Subscription) FirstPriceID() string {
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
+	if err := json.NewEncoder(w).Encode(v); err != nil {
+		log.Error().Err(err).Int("status", status).Msg("cloudcp.stripe: encode webhook response")
+	}
 }

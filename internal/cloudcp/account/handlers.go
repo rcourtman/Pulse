@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
+	"github.com/rs/zerolog/log"
 )
 
 type memberResponse struct {
@@ -72,7 +73,7 @@ func HandleListMembers(reg *registry.TenantRegistry) http.HandlerFunc {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(resp)
+		encodeJSON(w, resp)
 	}
 }
 
@@ -326,6 +327,12 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) error {
 		return fmt.Errorf("decode request body: %w", err)
 	}
 	return nil
+}
+
+func encodeJSON(w http.ResponseWriter, payload any) {
+	if err := json.NewEncoder(w).Encode(payload); err != nil {
+		log.Error().Err(err).Msg("cloudcp.account: encode JSON response")
+	}
 }
 
 func isNotFoundErr(err error) bool {

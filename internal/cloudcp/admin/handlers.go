@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
+	"github.com/rs/zerolog/log"
 )
 
 // HandleListTenants returns an authenticated handler that lists all tenants.
@@ -37,7 +38,7 @@ func HandleListTenants(reg *registry.TenantRegistry) http.HandlerFunc {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{
+		encodeJSON(w, map[string]any{
 			"tenants": tenants,
 			"count":   len(tenants),
 		})
@@ -59,7 +60,7 @@ func AdminKeyMiddleware(adminKey string, next http.Handler) http.Handler {
 		if key == "" || key != adminKey {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusUnauthorized)
-			_ = json.NewEncoder(w).Encode(map[string]string{
+			encodeJSON(w, map[string]string{
 				"error": "unauthorized",
 			})
 			return
@@ -67,4 +68,10 @@ func AdminKeyMiddleware(adminKey string, next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+func encodeJSON(w http.ResponseWriter, payload any) {
+	if err := json.NewEncoder(w).Encode(payload); err != nil {
+		log.Error().Err(err).Msg("cloudcp.admin: encode JSON response")
+	}
 }

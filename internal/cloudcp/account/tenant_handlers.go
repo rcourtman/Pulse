@@ -2,7 +2,6 @@ package account
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -52,7 +51,7 @@ func HandleListTenants(reg *registry.TenantRegistry) http.HandlerFunc {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(tenants)
+		encodeJSON(w, tenants)
 	}
 }
 
@@ -107,7 +106,7 @@ func HandleCreateTenant(reg *registry.TenantRegistry, provisioner WorkspaceProvi
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
-		_ = json.NewEncoder(w).Encode(tenant)
+		encodeJSON(w, tenant)
 	}
 }
 
@@ -215,7 +214,7 @@ func HandleUpdateTenant(reg *registry.TenantRegistry) http.HandlerFunc {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(tenant)
+		encodeJSON(w, tenant)
 	}
 }
 

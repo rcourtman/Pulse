@@ -144,20 +144,24 @@ func HandleAdminGenerateMagicLink(svc *Service, baseURL string, emailSender emai
 			Msg("Admin generated magic link")
 
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			"url":        magicURL,
 			"email":      req.Email,
 			"tenant_id":  req.TenantID,
 			"email_sent": emailSent,
-		})
+		}); err != nil {
+			log.Error().Err(err).Msg("cloudcp.auth: encode admin magic link response")
+		}
 	}
 }
 
 func writeError(w http.ResponseWriter, status int, code, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(map[string]string{
+	if err := json.NewEncoder(w).Encode(map[string]string{
 		"error":   code,
 		"message": message,
-	})
+	}); err != nil {
+		log.Error().Err(err).Msg("cloudcp.auth: encode error response")
+	}
 }
