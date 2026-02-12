@@ -95,7 +95,11 @@ func (m *Monitor) checkAll(ctx context.Context) {
 		}
 
 		if err := m.registry.Update(tenant); err != nil {
-			log.Error().Err(err).Str("tenant_id", tenant.ID).Msg("Failed to update health status")
+			log.Error().
+				Err(err).
+				Str("tenant_id", tenant.ID).
+				Str("container_id", tenant.ContainerID).
+				Msg("Failed to update health status")
 			continue
 		}
 
@@ -106,7 +110,11 @@ func (m *Monitor) checkAll(ctx context.Context) {
 				Msg("Container unhealthy, attempting restart")
 
 			if err := m.docker.Stop(ctx, tenant.ContainerID); err != nil {
-				log.Error().Err(err).Str("tenant_id", tenant.ID).Msg("Failed to stop unhealthy container")
+				log.Error().
+					Err(err).
+					Str("tenant_id", tenant.ID).
+					Str("container_id", tenant.ContainerID).
+					Msg("Failed to stop unhealthy container")
 			}
 			// Docker restart policy (unless-stopped) will restart the container
 		}

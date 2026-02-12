@@ -123,7 +123,11 @@ func HandleAdminGenerateMagicLink(svc *Service, baseURL string, emailSender emai
 		if req.SendEmail && emailSender != nil && emailFrom != "" {
 			html, text, renderErr := email.RenderMagicLinkEmail(email.MagicLinkData{MagicLinkURL: magicURL})
 			if renderErr != nil {
-				log.Error().Err(renderErr).Msg("Failed to render magic link email")
+				log.Error().
+					Err(renderErr).
+					Str("tenant_id", req.TenantID).
+					Str("email", req.Email).
+					Msg("Failed to render magic link email")
 			} else if sendErr := emailSender.Send(r.Context(), email.Message{
 				From:    emailFrom,
 				To:      req.Email,
@@ -131,7 +135,11 @@ func HandleAdminGenerateMagicLink(svc *Service, baseURL string, emailSender emai
 				HTML:    html,
 				Text:    text,
 			}); sendErr != nil {
-				log.Error().Err(sendErr).Str("to", req.Email).Msg("Failed to send magic link email")
+				log.Error().
+					Err(sendErr).
+					Str("tenant_id", req.TenantID).
+					Str("email", req.Email).
+					Msg("Failed to send magic link email")
 			} else {
 				emailSent = true
 			}
