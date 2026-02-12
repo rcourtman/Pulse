@@ -80,6 +80,26 @@ func TestTenantLoggerManager_GetLogger_Default(t *testing.T) {
 	}
 }
 
+func TestTenantLoggerManager_GetLogger_InvalidOrgID(t *testing.T) {
+	logger := &stubLogger{}
+	factory := &stubLoggerFactory{logger: logger}
+	manager := NewTenantLoggerManager("data", factory)
+
+	got := manager.GetLogger("../org-1")
+	if got == nil {
+		t.Fatalf("expected fallback logger for invalid org ID")
+	}
+	if got == logger {
+		t.Fatalf("expected invalid org ID to bypass tenant logger factory")
+	}
+	if len(factory.created) != 0 {
+		t.Fatalf("expected no tenant logger creation for invalid org ID, got %v", factory.created)
+	}
+	if len(manager.GetAllLoggers()) != 0 {
+		t.Fatalf("expected invalid org ID logger not to be cached")
+	}
+}
+
 func TestTenantLoggerManager_LogQueryCount(t *testing.T) {
 	logger := &stubLogger{}
 	manager := NewTenantLoggerManager("data", &stubLoggerFactory{logger: logger})
