@@ -114,11 +114,11 @@ func deriveKey(secret []byte, info string) ([]byte, error) {
 func newChannelCipher(key []byte) (*channelCipher, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create AES cipher: %w", err)
 	}
 	aead, err := cipher.NewGCM(block)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create GCM cipher: %w", err)
 	}
 	return &channelCipher{aead: aead}, nil
 }
@@ -132,7 +132,7 @@ func (ce *ChannelEncryption) Encrypt(plaintext []byte) ([]byte, error) {
 
 	nonce, err := c.nextNonce()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("generate next nonce: %w", err)
 	}
 
 	ciphertext := c.aead.Seal(nil, nonce, plaintext, nil)
