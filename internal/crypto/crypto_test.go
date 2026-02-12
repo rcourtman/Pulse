@@ -139,6 +139,17 @@ func TestDeriveKeyDeterministicAndPurposeScoped(t *testing.T) {
 	}
 }
 
+func TestDeriveKeyEntropyLimitError(t *testing.T) {
+	cm := &CryptoManager{key: make([]byte, 32)}
+
+	// HKDF-SHA256 expand is limited to 255 * hashLen (8160 bytes).
+	// Requesting more triggers an hkdf reader error path.
+	_, err := cm.DeriveKey("storage", 9000)
+	if err == nil {
+		t.Fatal("DeriveKey() expected entropy limit error")
+	}
+}
+
 func TestEncryptDecrypt(t *testing.T) {
 	// Create a temp directory for the test
 	tmpDir := t.TempDir()
@@ -429,6 +440,33 @@ func TestGetOrCreateKeyAt_MigrateSuccess(t *testing.T) {
 	}
 	if string(contents) != encoded {
 		t.Fatalf("migrated key contents mismatch")
+	}
+}
+
+func TestGetOrCreateKeyAt_UsesEnvLegacyKeyPathOverride(t *testing.T) {
+	envLegacyDir := t.TempDir()
+	envLegacyPath := filepath.Join(envLegacyDir, ".encryption.key")
+	t.Setenv("PULSE_LEGACY_KEY_PATH", envLegacyPath)
+
+	// Ensure env override actually wins over the package-level default path.
+	withLegacyKeyPath(t, filepath.Join(t.TempDir(), ".encryption.key"))
+
+	oldKey := make([]byte, 32)
+	for i := range oldKey {
+		oldKey[i] = byte(i + 1)
+	}
+	encoded := base64.StdEncoding.EncodeToString(oldKey)
+	if err := os.WriteFile(envLegacyPath, []byte(encoded), 0600); err != nil {
+		t.Fatalf("Failed to write env legacy key: %v", err)
+	}
+
+	newDir := t.TempDir()
+	key, err := getOrCreateKeyAt(newDir)
+	if err != nil {
+		t.Fatalf("getOrCreateKeyAt() error: %v", err)
+	}
+	if !bytes.Equal(key, oldKey) {
+		t.Fatalf("expected key loaded via env legacy key path")
 	}
 }
 
