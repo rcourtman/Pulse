@@ -201,7 +201,7 @@ func newRollingFileWriter(cfg Config) (io.Writer, error) {
 	}
 
 	if err := writer.openOrCreateLocked(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("initialize rolling log file %s: %w", path, err)
 	}
 	writer.cleanupOldFiles()
 	return writer, nil
@@ -212,12 +212,12 @@ func (w *rollingFileWriter) Write(p []byte) (int, error) {
 	defer w.mu.Unlock()
 
 	if err := w.openOrCreateLocked(); err != nil {
-		return 0, err
+		return 0, fmt.Errorf("open log file %s for write: %w", w.path, err)
 	}
 
 	if w.maxBytes > 0 && w.currentSize+int64(len(p)) > w.maxBytes {
 		if err := w.rotateLocked(); err != nil {
-			return 0, err
+			return 0, fmt.Errorf("rotate log file %s: %w", w.path, err)
 		}
 	}
 
