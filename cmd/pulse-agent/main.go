@@ -102,7 +102,7 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 	// 1. Parse Configuration
 	cfg, err := loadConfig(args, getenv)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to load unified agent configuration: %w", err)
 	}
 
 	// 2. Setup Logging
@@ -381,7 +381,7 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 		logger.Error().Err(err).Msg("Agent terminated with error")
 		agentUp.Set(0)
 		cleanupDockerAgent(dockerAgent, &logger)
-		return err
+		return fmt.Errorf("unified agent runtime failed: %w", err)
 	}
 
 	// 12. Cleanup

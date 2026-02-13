@@ -474,7 +474,10 @@ func (n *NotificationManager) sendWebhookOnceWithResponse(webhook EnhancedWebhoo
 // sendWebhookOnce sends a single webhook request (compatibility wrapper)
 func (n *NotificationManager) sendWebhookOnce(webhook EnhancedWebhookConfig, payload []byte) error {
 	_, err := n.sendWebhookOnceWithResponse(webhook, payload)
-	return err
+	if err != nil {
+		return fmt.Errorf("send webhook %q once: %w", webhook.Name, err)
+	}
+	return nil
 }
 
 // NOTE: formatWebhookDuration is now defined in notifications.go to avoid duplication

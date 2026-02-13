@@ -427,14 +427,18 @@ func (r *RegistryChecker) getAuthToken(ctx context.Context, registry, repository
 func (r *RegistryChecker) fetchAuthToken(ctx context.Context, tokenURL string) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, tokenURL, nil)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("create token request: %w", err)
 	}
 
 	resp, err := r.httpClient.Do(req)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("send token request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			r.logger.Warn().Err(closeErr).Msg("Failed to close token response body")
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("token request failed: %d", resp.StatusCode)
@@ -442,14 +446,14 @@ func (r *RegistryChecker) fetchAuthToken(ctx context.Context, tokenURL string) (
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("read token response: %w", err)
 	}
 
 	var tokenResp struct {
 		Token string `json:"token"`
 	}
 	if err := json.Unmarshal(body, &tokenResp); err != nil {
-		return "", err
+		return "", fmt.Errorf("decode token response: %w", err)
 	}
 
 	return tokenResp.Token, nil

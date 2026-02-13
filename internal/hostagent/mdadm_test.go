@@ -654,8 +654,13 @@ func TestCollectRAIDArraysNoDevices(t *testing.T) {
 	}
 }
 
+<<<<<<< HEAD:internal/hostagent/mdadm_test.go
 func TestCollectRAIDArraysSkipsDetailError(t *testing.T) {
 	withMdadmCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
+=======
+func TestCollectArraysReturnsErrorWhenAllDetailsFail(t *testing.T) {
+	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
+>>>>>>> refactor/parallel-05-error-handling:internal/mdadm/mdadm_test.go
 		switch name {
 		case "mdadm":
 			if len(args) > 0 && args[0] == "--version" {
@@ -669,12 +674,18 @@ func TestCollectRAIDArraysSkipsDetailError(t *testing.T) {
 		}
 	})
 
+<<<<<<< HEAD:internal/hostagent/mdadm_test.go
 	arrays, err := CollectRAIDArrays(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+=======
+	arrays, err := CollectArrays(context.Background())
+	if err == nil {
+		t.Fatal("expected error")
+>>>>>>> refactor/parallel-05-error-handling:internal/mdadm/mdadm_test.go
 	}
-	if len(arrays) != 0 {
-		t.Fatalf("expected empty arrays, got %v", arrays)
+	if arrays != nil {
+		t.Fatalf("expected nil arrays, got %v", arrays)
 	}
 }
 
@@ -710,6 +721,48 @@ func TestCollectRAIDArraysSuccess(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if len(arrays) != 1 || arrays[0].Device != "/dev/md0" {
+		t.Fatalf("unexpected arrays: %v", arrays)
+	}
+}
+
+func TestCollectArraysPartialSuccessIgnoresDetailErrors(t *testing.T) {
+	detail := `/dev/md1:
+        Raid Level : raid1
+             State : clean
+     Total Devices : 2
+    Active Devices : 2
+   Working Devices : 2
+    Failed Devices : 0
+     Spare Devices : 0
+
+    Number   Major   Minor   RaidDevice State
+       0       8       17        0      active sync   /dev/sdb1`
+
+	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		switch name {
+		case "mdadm":
+			if len(args) > 0 && args[0] == "--version" {
+				return []byte("mdadm"), nil
+			}
+			if len(args) > 1 && args[0] == "--detail" && args[1] == "/dev/md0" {
+				return nil, errors.New("detail failed")
+			}
+			if len(args) > 1 && args[0] == "--detail" && args[1] == "/dev/md1" {
+				return []byte(detail), nil
+			}
+			return nil, errors.New("unexpected mdadm call")
+		case "cat":
+			return []byte("md0 : active raid1 sda1[0]\nmd1 : active raid1 sdb1[0]"), nil
+		default:
+			return nil, errors.New("unexpected")
+		}
+	})
+
+	arrays, err := CollectArrays(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(arrays) != 1 || arrays[0].Device != "/dev/md1" {
 		t.Fatalf("unexpected arrays: %v", arrays)
 	}
 }

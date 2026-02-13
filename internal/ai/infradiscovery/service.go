@@ -338,7 +338,15 @@ func (s *Service) analyzeContainer(ctx context.Context, analyzer AIAnalyzer, con
 		info := s.buildContainerInfo(container)
 
 		// Create analysis prompt
-		prompt := s.buildAnalysisPrompt(info)
+		prompt, err := s.buildAnalysisPrompt(info)
+		if err != nil {
+			log.Warn().
+				Err(err).
+				Str("container", c.Name).
+				Str("image", c.Image).
+				Msg("Failed to build AI analysis prompt for container")
+			return nil
+		}
 
 		// Call AI with a per-request timeout so a stalled model call can't hang discovery.
 		analyzeCtx, cancel := context.WithTimeout(ctx, s.aiAnalysisTimeout)
@@ -466,9 +474,12 @@ func (s *Service) buildContainerInfo(container models.DockerContainer) Container
 }
 
 // buildAnalysisPrompt creates the prompt for AI container analysis.
-func (s *Service) buildAnalysisPrompt(info ContainerInfo) string {
+func (s *Service) buildAnalysisPrompt(info ContainerInfo) (string, error) {
 	// Convert info to JSON for the prompt
-	infoJSON, _ := json.MarshalIndent(info, "", "  ")
+	infoJSON, err := json.MarshalIndent(info, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("marshal container info for analysis prompt: %w", err)
+	}
 
 	return fmt.Sprintf(`Analyze this Docker container and identify what service or application it's running.
 
@@ -509,7 +520,7 @@ Common services to look for:
 - Media: Plex, Jellyfin
 - CI/CD: Jenkins, Drone, GitLab Runner
 
-Respond with ONLY the JSON, no other text.`, string(infoJSON))
+Respond with ONLY the JSON, no other text.`, string(infoJSON)), nil
 }
 
 // parseAIResponse parses the AI's JSON response.

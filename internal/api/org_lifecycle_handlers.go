@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -217,7 +218,7 @@ func decodeOptionalLifecycleRequest(w http.ResponseWriter, r *http.Request, out 
 		if errors.Is(err, io.EOF) {
 			return nil
 		}
-		return err
+		return fmt.Errorf("decode lifecycle request body: %w", err)
 	}
 	return nil
 }
@@ -235,7 +236,7 @@ func (h *OrgLifecycleHandlers) loadOrganization(orgID string) (*models.Organizat
 
 	org, err := h.persistence.LoadOrganization(orgID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("load organization %q: %w", orgID, err)
 	}
 	if org == nil {
 		return nil, errOrgNotFound

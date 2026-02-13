@@ -2,7 +2,10 @@ package dockeragent
 
 import (
 	"context"
+<<<<<<< HEAD
 	"encoding/json"
+=======
+>>>>>>> refactor/parallel-05-error-handling
 	"errors"
 	"fmt"
 	"io"
@@ -166,10 +169,20 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 		a.logger.Error().Err(err).Str("image", imageName).Msg("Failed to pull latest image")
 		return result
 	}
+<<<<<<< HEAD
 	// Consume the pull response to ensure the pull completes
 	_, _ = io.Copy(io.Discard, pullResp)
 	_ = pullResp.Close()
 	pullCancel()
+=======
+	// Consume and close the pull response to ensure the pull completes and
+	// response-stream failures are not silently ignored.
+	if err := drainAndClosePullResponse(pullResp); err != nil {
+		result.Error = fmt.Sprintf("Failed to process image pull response: %v", err)
+		a.logger.Error().Err(err).Str("image", imageName).Msg("Failed to finalize image pull response")
+		return result
+	}
+>>>>>>> refactor/parallel-05-error-handling
 
 	a.logger.Info().Str("image", imageName).Msg("Successfully pulled latest image")
 
@@ -198,7 +211,12 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 		result.Error = fmt.Sprintf("Failed to rename container for backup: %v", annotateDockerConnectionError(err))
 		a.logger.Error().Err(err).Str("container", result.ContainerName).Msg("Failed to rename container for backup")
 		// Try to restart the original container
-		_ = a.docker.ContainerStart(ctx, containerID, container.StartOptions{})
+		if restartErr := a.docker.ContainerStart(ctx, containerID, container.StartOptions{}); restartErr != nil {
+			a.logger.Warn().
+				Err(restartErr).
+				Str("container", result.ContainerName).
+				Msg("Rollback step failed: restart original container after backup rename failure")
+		}
 		return result
 	}
 
@@ -247,8 +265,7 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 		result.Error = fmt.Sprintf("Failed to create new container: %v", annotateDockerConnectionError(err))
 		a.logger.Error().Err(err).Str("container", result.ContainerName).Msg("Failed to create new container")
 		// Rollback: rename backup back to original name
-		_ = a.docker.ContainerRename(ctx, backupName, result.ContainerName)
-		_ = a.docker.ContainerStart(ctx, containerID, container.StartOptions{})
+		a.rollbackRenameAndRestart(ctx, backupName, result.ContainerName, containerID)
 		return result
 	}
 
@@ -284,9 +301,7 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 		result.Error = fmt.Sprintf("Failed to start new container: %v", annotateDockerConnectionError(err))
 		a.logger.Error().Err(err).Str("container", result.ContainerName).Msg("Failed to start new container")
 		// Rollback: remove new container, rename backup back
-		_ = a.docker.ContainerRemove(ctx, newContainerID, container.RemoveOptions{Force: true})
-		_ = a.docker.ContainerRename(ctx, backupName, result.ContainerName)
-		_ = a.docker.ContainerStart(ctx, containerID, container.StartOptions{})
+		a.rollbackRemoveRenameAndRestart(ctx, newContainerID, backupName, result.ContainerName, containerID)
 		return result
 	}
 
@@ -304,9 +319,7 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 		result.Error = fmt.Sprintf("Failed to inspect new container during verification: %v", annotateDockerConnectionError(err))
 		a.logger.Error().Err(err).Str("container", result.ContainerName).Msg("Failed to verify container stability")
 		// Rollback
-		_ = a.docker.ContainerRemove(ctx, newContainerID, container.RemoveOptions{Force: true})
-		_ = a.docker.ContainerRename(ctx, backupName, result.ContainerName)
-		_ = a.docker.ContainerStart(ctx, containerID, container.StartOptions{})
+		a.rollbackRemoveRenameAndRestart(ctx, newContainerID, backupName, result.ContainerName, containerID)
 		return result
 	}
 
@@ -315,9 +328,7 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 		result.Error = fmt.Sprintf("New container crashed immediately (exit code %d): %s", verifyInspect.State.ExitCode, verifyInspect.State.Error)
 		a.logger.Error().Str("container", result.ContainerName).Int("exitCode", verifyInspect.State.ExitCode).Msg("New container crashed, rolling back")
 		// Rollback
-		_ = a.docker.ContainerRemove(ctx, newContainerID, container.RemoveOptions{Force: true})
-		_ = a.docker.ContainerRename(ctx, backupName, result.ContainerName)
-		_ = a.docker.ContainerStart(ctx, containerID, container.StartOptions{})
+		a.rollbackRemoveRenameAndRestart(ctx, newContainerID, backupName, result.ContainerName, containerID)
 		return result
 	}
 
@@ -326,9 +337,7 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 		result.Error = "New container reported unhealthy status"
 		a.logger.Error().Str("container", result.ContainerName).Msg("New container unhealthy, rolling back")
 		// Rollback
-		_ = a.docker.ContainerRemove(ctx, newContainerID, container.RemoveOptions{Force: true})
-		_ = a.docker.ContainerRename(ctx, backupName, result.ContainerName)
-		_ = a.docker.ContainerStart(ctx, containerID, container.StartOptions{})
+		a.rollbackRemoveRenameAndRestart(ctx, newContainerID, backupName, result.ContainerName, containerID)
 		return result
 	}
 
@@ -350,9 +359,67 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 	result.Success = true
 	a.logger.Info().
 		Str("container", result.ContainerName).
-		Str("oldDigest", result.OldImageDigest[:12]).
-		Str("newDigest", result.NewImageDigest[:12]).
+		Str("oldDigest", shortDigest(result.OldImageDigest)).
+		Str("newDigest", shortDigest(result.NewImageDigest)).
 		Msg("Container update completed successfully")
 
 	return result
+}
+
+func drainAndClosePullResponse(pullResp io.ReadCloser) error {
+	if pullResp == nil {
+		return errors.New("pull response body is nil")
+	}
+
+	_, drainErr := io.Copy(io.Discard, pullResp)
+	closeErr := pullResp.Close()
+
+	if drainErr != nil && closeErr != nil {
+		return errors.Join(
+			fmt.Errorf("drain pull response body: %w", drainErr),
+			fmt.Errorf("close pull response body: %w", closeErr),
+		)
+	}
+	if drainErr != nil {
+		return fmt.Errorf("drain pull response body: %w", drainErr)
+	}
+	if closeErr != nil {
+		return fmt.Errorf("close pull response body: %w", closeErr)
+	}
+
+	return nil
+}
+
+func (a *Agent) rollbackRenameAndRestart(ctx context.Context, backupName, originalName, originalID string) {
+	if err := a.docker.ContainerRename(ctx, backupName, originalName); err != nil {
+		a.logger.Warn().
+			Err(err).
+			Str("backup", backupName).
+			Str("container", originalName).
+			Msg("Rollback step failed: restore original container name")
+	}
+	if err := a.docker.ContainerStart(ctx, originalID, container.StartOptions{}); err != nil {
+		a.logger.Warn().
+			Err(err).
+			Str("container", originalName).
+			Msg("Rollback step failed: restart original container")
+	}
+}
+
+func (a *Agent) rollbackRemoveRenameAndRestart(ctx context.Context, newContainerID, backupName, originalName, originalID string) {
+	if err := a.docker.ContainerRemove(ctx, newContainerID, container.RemoveOptions{Force: true}); err != nil {
+		a.logger.Warn().
+			Err(err).
+			Str("containerId", newContainerID).
+			Msg("Rollback step failed: remove replacement container")
+	}
+	a.rollbackRenameAndRestart(ctx, backupName, originalName, originalID)
+}
+
+func shortDigest(digest string) string {
+	const digestPreviewLen = 12
+	if len(digest) <= digestPreviewLen {
+		return digest
+	}
+	return digest[:digestPreviewLen]
 }

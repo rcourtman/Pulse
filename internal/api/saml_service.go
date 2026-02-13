@@ -574,11 +574,14 @@ func (s *SAMLService) RefreshMetadata(ctx context.Context) error {
 	}
 
 	if err := s.loadIDPMetadata(ctx); err != nil {
-		return err
+		return fmt.Errorf("load idp metadata: %w", err)
 	}
 
 	// Reinitialize SP with new metadata
-	return s.initServiceProvider()
+	if err := s.initServiceProvider(); err != nil {
+		return fmt.Errorf("initialize service provider: %w", err)
+	}
+	return nil
 }
 
 // ProviderID returns the provider identifier

@@ -1,11 +1,11 @@
 package admin
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/cpmetrics"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
+	"github.com/rs/zerolog/log"
 )
 
 type statusResponse struct {
@@ -20,7 +20,9 @@ type statusResponse struct {
 func HandleHealthz(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte("ok"))
+	if _, err := w.Write([]byte("ok")); err != nil {
+		log.Error().Err(err).Msg("cloudcp.admin: write /healthz response")
+	}
 }
 
 // HandleReadyz returns a handler that checks database connectivity (readiness probe).
@@ -29,12 +31,16 @@ func HandleReadyz(reg *registry.TenantRegistry) http.HandlerFunc {
 		if err := reg.Ping(); err != nil {
 			w.Header().Set("Content-Type", "text/plain")
 			w.WriteHeader(http.StatusServiceUnavailable)
-			_, _ = w.Write([]byte("not ready"))
+			if _, writeErr := w.Write([]byte("not ready")); writeErr != nil {
+				log.Error().Err(writeErr).Msg("cloudcp.admin: write /readyz unavailable response")
+			}
 			return
 		}
 		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("ready"))
+		if _, writeErr := w.Write([]byte("ready")); writeErr != nil {
+			log.Error().Err(writeErr).Msg("cloudcp.admin: write /readyz response")
+		}
 	}
 }
 
@@ -73,6 +79,6 @@ func HandleStatus(reg *registry.TenantRegistry, version string) http.HandlerFunc
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(resp)
+		encodeJSON(w, resp)
 	}
 }

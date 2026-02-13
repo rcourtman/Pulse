@@ -284,7 +284,7 @@ func (s *Service) Evaluator() *entitlements.Evaluator {
 func (s *Service) Activate(licenseKey string) (*License, error) {
 	license, err := ValidateLicense(licenseKey)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("validate license: %w", err)
 	}
 
 	s.mu.Lock()
@@ -775,7 +775,10 @@ func GenerateLicenseForTesting(email string, tier Tier, expiresIn time.Duration)
 
 	// Create unsigned JWT (for testing only)
 	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"EdDSA","typ":"JWT"}`))
-	payloadBytes, _ := json.Marshal(claims)
+	payloadBytes, err := json.Marshal(claims)
+	if err != nil {
+		return "", fmt.Errorf("marshal test license claims: %w", err)
+	}
 	payload := base64.RawURLEncoding.EncodeToString(payloadBytes)
 
 	// Fake signature (testing only - real licenses need proper signing)

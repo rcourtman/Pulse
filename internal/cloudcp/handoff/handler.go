@@ -188,12 +188,18 @@ func HandleHandoff(reg *registry.TenantRegistry, tenantsDir string) http.Handler
 
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
-		_ = handoffHTMLTemplate.Execute(w, handoffHTMLData{
+		if err := handoffHTMLTemplate.Execute(w, handoffHTMLData{
 			TenantID:    tenantID,
 			BaseDomain:  baseDomain,
 			Token:       token,
 			GeneratedAt: now,
-		})
+		}); err != nil {
+			log.Error().Err(err).
+				Str("tenant_id", tenantID).
+				Str("account_id", accountID).
+				Str("user_id", userID).
+				Msg("cloudcp.handoff: render response")
+		}
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
+	"github.com/rs/zerolog/log"
 )
 
 type accountInfo struct {
@@ -140,7 +141,7 @@ func HandlePortalDashboard(reg *registry.TenantRegistry) http.HandlerFunc {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(resp)
+		encodeJSON(w, resp)
 	}
 }
 
@@ -197,6 +198,12 @@ func HandlePortalWorkspaceDetail(reg *registry.TenantRegistry) http.HandlerFunc 
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(resp)
+		encodeJSON(w, resp)
+	}
+}
+
+func encodeJSON(w http.ResponseWriter, payload any) {
+	if err := json.NewEncoder(w).Encode(payload); err != nil {
+		log.Error().Err(err).Msg("cloudcp.portal: encode JSON response")
 	}
 }

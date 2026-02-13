@@ -230,7 +230,10 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 				msg.ReasoningContent = m.ReasoningContent
 			}
 			for _, tc := range m.ToolCalls {
-				argsJSON, _ := json.Marshal(tc.Input)
+				argsJSON, err := json.Marshal(tc.Input)
+				if err != nil {
+					return nil, fmt.Errorf("failed to marshal tool call input for %s: %w", tc.Name, err)
+				}
 				msg.ToolCalls = append(msg.ToolCalls, openaiToolCall{
 					ID:   tc.ID,
 					Type: "function",
@@ -456,8 +459,10 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 // TestConnection validates the API key by listing models
 // This avoids dependencies on specific model names which may get deprecated
 func (c *OpenAIClient) TestConnection(ctx context.Context) error {
-	_, err := c.ListModels(ctx)
-	return err
+	if _, err := c.ListModels(ctx); err != nil {
+		return fmt.Errorf("openai test connection failed: %w", err)
+	}
+	return nil
 }
 
 func (c *OpenAIClient) modelsEndpoint() string {
@@ -576,7 +581,10 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback
 				msg.ReasoningContent = m.ReasoningContent
 			}
 			for _, tc := range m.ToolCalls {
-				argsJSON, _ := json.Marshal(tc.Input)
+				argsJSON, err := json.Marshal(tc.Input)
+				if err != nil {
+					return fmt.Errorf("failed to marshal tool call input for %s: %w", tc.Name, err)
+				}
 				msg.ToolCalls = append(msg.ToolCalls, openaiToolCall{
 					ID:   tc.ID,
 					Type: "function",

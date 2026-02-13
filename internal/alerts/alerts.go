@@ -2,6 +2,7 @@ package alerts
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -25,6 +26,8 @@ const (
 	AlertLevelWarning  AlertLevel = "warning"
 	AlertLevelCritical AlertLevel = "critical"
 )
+
+var ErrAlertNotFound = errors.New("alert not found")
 
 // ActivationState represents the alert notification activation state
 type ActivationState string
@@ -468,7 +471,11 @@ func SetMetricHooks(fired func(*Alert), resolved func(*Alert), suppressed func(s
 
 type Manager struct {
 	mu               sync.RWMutex
+<<<<<<< HEAD
 	dataDir          string
+=======
+	stopOnce         sync.Once
+>>>>>>> refactor/parallel-05-error-handling
 	config           AlertConfig
 	activeAlerts     map[string]*Alert
 	historyManager   *HistoryManager
@@ -6624,7 +6631,7 @@ func (m *Manager) AcknowledgeAlert(alertID, user string) error {
 	alert, exists := m.activeAlerts[alertID]
 	if !exists {
 		m.mu.Unlock()
-		return fmt.Errorf("alert not found: %s", alertID)
+		return fmt.Errorf("%w: %s", ErrAlertNotFound, alertID)
 	}
 
 	alert.Acknowledged = true
@@ -6660,7 +6667,7 @@ func (m *Manager) UnacknowledgeAlert(alertID string) error {
 	alert, exists := m.activeAlerts[alertID]
 	if !exists {
 		m.mu.Unlock()
-		return fmt.Errorf("alert not found: %s", alertID)
+		return fmt.Errorf("%w: %s", ErrAlertNotFound, alertID)
 	}
 
 	alert.Acknowledged = false
@@ -9007,17 +9014,19 @@ func (m *Manager) checkEscalations() {
 
 // Stop stops the alert manager and saves history
 func (m *Manager) Stop() {
-	close(m.escalationStop)
-	close(m.cleanupStop)
-	m.historyManager.Stop()
+	m.stopOnce.Do(func() {
+		close(m.escalationStop)
+		close(m.cleanupStop)
+		m.historyManager.Stop()
 
-	// Give background goroutines time to exit cleanly
-	time.Sleep(100 * time.Millisecond)
+		// Give background goroutines time to exit cleanly
+		time.Sleep(100 * time.Millisecond)
 
-	// Save active alerts before stopping
-	if err := m.SaveActiveAlerts(); err != nil {
-		log.Error().Err(err).Msg("Failed to save active alerts on stop")
-	}
+		// Save active alerts before stopping
+		if err := m.SaveActiveAlerts(); err != nil {
+			log.Error().Err(err).Msg("Failed to save active alerts on stop")
+		}
+	})
 }
 
 // SaveActiveAlerts persists active alerts to disk
@@ -9049,24 +9058,35 @@ func (m *Manager) SaveActiveAlerts() error {
 		return fmt.Errorf("failed to create temp file: %w", err)
 	}
 	tmpName := tmpFile.Name()
+	cleanupTemp := true
 
 	// Ensure cleanup of temp file in case of failure
-	defer os.Remove(tmpName)
+	defer func() {
+		if !cleanupTemp {
+			return
+		}
+		if err := os.Remove(tmpName); err != nil && !os.IsNotExist(err) {
+			log.Warn().Err(err).Str("file", tmpName).Msg("Failed to remove temp active alerts file")
+		}
+	}()
 
 	if _, err := tmpFile.Write(data); err != nil {
+		writeErr := fmt.Errorf("failed to write active alerts temp file %s: %w", tmpName, err)
 		if closeErr := tmpFile.Close(); closeErr != nil {
-			log.Warn().Err(closeErr).Str("file", tmpName).Msg("Failed to close temp file after write error")
+			closeErr = fmt.Errorf("failed to close temp file %s after write failure: %w", tmpName, closeErr)
+			return fmt.Errorf("failed to persist active alerts: %w", errors.Join(writeErr, closeErr))
 		}
-		return fmt.Errorf("failed to write active alerts: %w", err)
+		return writeErr
 	}
 	if err := tmpFile.Close(); err != nil {
-		return fmt.Errorf("failed to close temp file: %w", err)
+		return fmt.Errorf("failed to close active alerts temp file %s: %w", tmpName, err)
 	}
 
 	finalFile := filepath.Join(alertsDir, "active-alerts.json")
 	if err := os.Rename(tmpName, finalFile); err != nil {
-		return fmt.Errorf("failed to rename active alerts file: %w", err)
+		return fmt.Errorf("failed to rename active alerts file from %s to %s: %w", tmpName, finalFile, err)
 	}
+	cleanupTemp = false
 
 	log.Debug().Int("count", len(alerts)).Msg("Saved active alerts to disk")
 	return nil

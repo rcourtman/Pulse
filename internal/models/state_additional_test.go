@@ -1,6 +1,7 @@
 package models
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -341,10 +342,10 @@ func TestStateLinkHostAgentToNode(t *testing.T) {
 		t.Fatalf("expected VM/container links cleared")
 	}
 
-	if err := state.LinkHostAgentToNode("missing", "n2"); err == nil || !strings.Contains(err.Error(), "host agent not found") {
+	if err := state.LinkHostAgentToNode("missing", "n2"); err == nil || !errors.Is(err, ErrHostAgentNotFound) || !strings.Contains(err.Error(), "missing") {
 		t.Fatalf("expected host not found error, got %v", err)
 	}
-	if err := state.LinkHostAgentToNode("h2", "missing"); err == nil || !strings.Contains(err.Error(), "node not found") {
+	if err := state.LinkHostAgentToNode("h2", "missing"); err == nil || !errors.Is(err, ErrNodeNotFound) || !strings.Contains(err.Error(), "missing") {
 		t.Fatalf("expected node not found error, got %v", err)
 	}
 }

@@ -4,6 +4,7 @@ package providers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -83,7 +84,7 @@ var providerMapping = map[string][]string{
 }
 
 // Refresh fetches the latest data from models.dev API
-func (c *NotableModelsCache) Refresh(ctx context.Context) error {
+func (c *NotableModelsCache) Refresh(ctx context.Context) (retErr error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -96,7 +97,7 @@ func (c *NotableModelsCache) Refresh(ctx context.Context) error {
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.apiURL, nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("providers.NotableModelsCache.Refresh: create request: %w", err)
 	}
 	req.Header.Set("User-Agent", "Pulse/1.0")
 
@@ -104,9 +105,18 @@ func (c *NotableModelsCache) Refresh(ctx context.Context) error {
 	resp, err := client.Do(req)
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to fetch models.dev API, using fallback")
-		return err
+		return fmt.Errorf("providers.NotableModelsCache.Refresh: execute request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			closeWrapped := fmt.Errorf("providers.NotableModelsCache.Refresh: close response body: %w", closeErr)
+			if retErr != nil {
+				retErr = errors.Join(retErr, closeWrapped)
+				return
+			}
+			retErr = closeWrapped
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		log.Warn().Int("status", resp.StatusCode).Msg("models.dev API returned non-200 status")
@@ -117,7 +127,7 @@ func (c *NotableModelsCache) Refresh(ctx context.Context) error {
 	var providers map[string]ModelsDevProvider
 	if err := json.NewDecoder(resp.Body).Decode(&providers); err != nil {
 		log.Warn().Err(err).Msg("Failed to decode models.dev API response")
-		return err
+		return fmt.Errorf("providers.NotableModelsCache.Refresh: decode response: %w", err)
 	}
 
 	// Build the lookup map

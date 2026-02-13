@@ -137,7 +137,7 @@ type cpuSample struct {
 func New(cfg Config) (*Agent, error) {
 	targets, err := normalizeTargetsFn(cfg.Targets)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("dockeragent.New: normalize targets: %w", err)
 	}
 
 	if len(targets) == 0 {
@@ -153,7 +153,7 @@ func New(cfg Config) (*Agent, error) {
 			InsecureSkipVerify: cfg.InsecureSkipVerify,
 		}})
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("dockeragent.New: normalize fallback target: %w", err)
 		}
 	}
 
@@ -164,13 +164,13 @@ func New(cfg Config) (*Agent, error) {
 
 	stateFilters, err := normalizeContainerStates(cfg.ContainerStates)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("dockeragent.New: normalize container states: %w", err)
 	}
 	cfg.ContainerStates = stateFilters
 
 	scope, err := normalizeSwarmScope(cfg.SwarmScope)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("dockeragent.New: normalize swarm scope: %w", err)
 	}
 	cfg.SwarmScope = scope
 
@@ -195,12 +195,12 @@ func New(cfg Config) (*Agent, error) {
 
 	runtimePref, err := normalizeRuntime(cfg.Runtime)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("dockeragent.New: normalize runtime: %w", err)
 	}
 
 	dockerClient, info, runtimeKind, err := connectRuntimeFn(runtimePref, logger)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("dockeragent.New: connect runtime: %w", err)
 	}
 	cfg.Runtime = string(runtimeKind)
 
@@ -396,7 +396,9 @@ func connectRuntime(preference RuntimeKind, logger *zerolog.Logger) (dockerClien
 
 		if preference != RuntimeAuto && runtime != preference {
 			attempts = append(attempts, fmt.Sprintf("%s: detected %s runtime", candidate.label, runtime))
-			_ = cli.Close()
+			if closeErr := cli.Close(); closeErr != nil {
+				attempts = append(attempts, fmt.Sprintf("%s: close client after runtime mismatch: %v", candidate.label, closeErr))
+			}
 			continue
 		}
 
@@ -425,7 +427,12 @@ func tryRuntimeCandidate(opts []client.Opt) (dockerClient, systemtypes.Info, err
 
 	info, err := cli.Info(ctx)
 	if err != nil {
-		_ = cli.Close()
+		if closeErr := cli.Close(); closeErr != nil {
+			return nil, systemtypes.Info{}, errors.Join(
+				err,
+				fmt.Errorf("close runtime client after info failure: %w", closeErr),
+			)
+		}
 		return nil, systemtypes.Info{}, err
 	}
 
@@ -742,10 +749,17 @@ func (a *Agent) sendReportToTarget(ctx context.Context, target TargetConfig, pay
 	if err != nil {
 		return fmt.Errorf("target %s: send report: %w", target.URL, err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			a.logger.Warn().Err(closeErr).Str("target", target.URL).Msg("Failed to close report response body")
+		}
+	}()
 
 	if resp.StatusCode >= 300 {
-		bodyBytes, _ := io.ReadAll(resp.Body)
+		bodyBytes, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			return fmt.Errorf("target %s: read error response: %w", target.URL, readErr)
+		}
 		if hostRemoved := detectHostRemovedError(bodyBytes); hostRemoved != "" {
 			a.logger.Warn().
 				Str("hostID", a.hostID).
@@ -877,7 +891,9 @@ func (a *Agent) disableSelf(ctx context.Context) error {
 	}
 
 	// Best-effort log cleanup (ignore errors).
-	_ = removeFileIfExists(agentLogPath)
+	if err := removeFileIfExists(agentLogPath); err != nil {
+		a.logger.Warn().Err(err).Msg("Failed to remove agent log directory")
+	}
 
 	return nil
 }
@@ -960,10 +976,17 @@ func (a *Agent) sendCommandAck(ctx context.Context, target TargetConfig, command
 	if err != nil {
 		return fmt.Errorf("send acknowledgement: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			a.logger.Warn().Err(closeErr).Str("target", target.URL).Msg("Failed to close acknowledgement response body")
+		}
+	}()
 
 	if resp.StatusCode >= 300 {
-		bodyBytes, _ := io.ReadAll(resp.Body)
+		bodyBytes, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("read acknowledgement error response: %w", err)
+		}
 		return fmt.Errorf("pulse responded %s: %s", resp.Status, strings.TrimSpace(string(bodyBytes)))
 	}
 

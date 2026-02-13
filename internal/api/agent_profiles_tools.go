@@ -269,7 +269,7 @@ func formatValidationIssues(result models.ValidationResult) string {
 func (m *MCPAgentProfileManager) saveVersion(profile models.AgentProfile, note string) error {
 	versions, err := m.persistence.LoadAgentProfileVersions()
 	if err != nil {
-		return err
+		return fmt.Errorf("load profile versions: %w", err)
 	}
 
 	versions = append(versions, models.AgentProfileVersion{
@@ -284,7 +284,10 @@ func (m *MCPAgentProfileManager) saveVersion(profile models.AgentProfile, note s
 		ChangeNote:  note,
 	})
 
-	return m.persistence.SaveAgentProfileVersions(versions)
+	if err := m.persistence.SaveAgentProfileVersions(versions); err != nil {
+		return fmt.Errorf("save profile versions: %w", err)
+	}
+	return nil
 }
 
 func (m *MCPAgentProfileManager) logChange(entry models.ProfileChangeLog) {

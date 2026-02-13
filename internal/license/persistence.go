@@ -37,7 +37,10 @@ type Persistence struct {
 // to machine-id for backwards compatibility with existing installations.
 func NewPersistence(configDir string) (*Persistence, error) {
 	// Try to load persistent key from config directory first
-	persistentKey, _ := loadPersistentKey(configDir)
+	persistentKey, err := loadPersistentKey(configDir)
+	if err != nil && !os.IsNotExist(err) {
+		return nil, fmt.Errorf("load persistent license key: %w", err)
+	}
 
 	// Get machine-id as fallback for backwards compatibility
 	machineID, err := getMachineID()
@@ -157,7 +160,7 @@ func (p *Persistence) SaveWithGracePeriod(licenseKey string, gracePeriodEnd *int
 func (p *Persistence) Load() (string, error) {
 	persisted, err := p.LoadWithMetadata()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("load license metadata: %w", err)
 	}
 	return persisted.LicenseKey, nil
 }
@@ -228,17 +231,17 @@ func (p *Persistence) encrypt(plaintext []byte) ([]byte, error) {
 
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create AES cipher: %w", err)
 	}
 
 	gcm, err := cipher.NewGCM(block)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create GCM: %w", err)
 	}
 
 	nonce := make([]byte, gcm.NonceSize())
 	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("generate nonce: %w", err)
 	}
 
 	ciphertext := gcm.Seal(nonce, nonce, plaintext, nil)
@@ -254,16 +257,16 @@ func (p *Persistence) decrypt(ciphertext []byte) ([]byte, error) {
 func (p *Persistence) decryptWithKey(ciphertext []byte, key []byte) ([]byte, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create AES cipher: %w", err)
 	}
 
 	gcm, err := cipher.NewGCM(block)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create GCM: %w", err)
 	}
 
 	if len(ciphertext) < gcm.NonceSize() {
-		return nil, errors.New("ciphertext too short")
+		return nil, fmt.Errorf("ciphertext too short: got %d bytes, need at least %d", len(ciphertext), gcm.NonceSize())
 	}
 
 	nonce := ciphertext[:gcm.NonceSize()]
@@ -271,7 +274,7 @@ func (p *Persistence) decryptWithKey(ciphertext []byte, key []byte) ([]byte, err
 
 	plaintext, err := gcm.Open(nil, nonce, data, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("decrypt ciphertext: %w", err)
 	}
 
 	return plaintext, nil

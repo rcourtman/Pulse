@@ -364,7 +364,13 @@ func (h *StripeWebhookHandlers) handleSubscriptionUpdated(ctx context.Context, s
 			return fmt.Errorf("scan org by customer id: %w", err)
 		}
 		if ok {
-			_ = h.index.Save(customerID, orgID)
+			if saveErr := h.index.Save(customerID, orgID); saveErr != nil {
+				log.Warn().
+					Err(saveErr).
+					Str("customer_id", customerID).
+					Str("org_id", orgID).
+					Msg("Stripe subscription.updated: failed to backfill customer org index")
+			}
 		}
 	}
 	if !ok {
@@ -423,7 +429,13 @@ func (h *StripeWebhookHandlers) handleSubscriptionDeleted(ctx context.Context, s
 			return fmt.Errorf("scan org by customer id: %w", err)
 		}
 		if ok {
-			_ = h.index.Save(customerID, orgID)
+			if saveErr := h.index.Save(customerID, orgID); saveErr != nil {
+				log.Warn().
+					Err(saveErr).
+					Str("customer_id", customerID).
+					Str("org_id", orgID).
+					Msg("Stripe subscription.deleted: failed to backfill customer org index")
+			}
 		}
 	}
 	if !ok {
@@ -584,7 +596,7 @@ func (d *stripeWebhookDeduper) Do(eventID string, fn func() error) (already bool
 	lockPath := d.lockPath(eventID)
 	acquired, lockErr := d.acquireLock(lockPath)
 	if lockErr != nil {
-		return false, lockErr
+		return false, fmt.Errorf("acquire dedupe lock: %w", lockErr)
 	}
 	if !acquired {
 		// Another in-flight processor exists. If processing has already completed, treat as a duplicate.
@@ -597,11 +609,13 @@ func (d *stripeWebhookDeduper) Do(eventID string, fn func() error) (already bool
 	}
 
 	defer func() {
-		_ = os.Remove(lockPath)
+		if rmErr := os.Remove(lockPath); rmErr != nil && !errors.Is(rmErr, os.ErrNotExist) {
+			log.Warn().Err(rmErr).Str("path", lockPath).Msg("Stripe dedupe: failed to remove lock file")
+		}
 	}()
 
 	if err := fn(); err != nil {
-		return false, err
+		return false, fmt.Errorf("process webhook event: %w", err)
 	}
 
 	if err := os.MkdirAll(filepath.Dir(donePath), 0o700); err != nil {
@@ -611,13 +625,21 @@ func (d *stripeWebhookDeduper) Do(eventID string, fn func() error) (already bool
 	meta := map[string]any{
 		"handled_at": d.now().UTC().UnixMilli(),
 	}
-	data, _ := json.Marshal(meta)
+	data, err := json.Marshal(meta)
+	if err != nil {
+		return false, fmt.Errorf("marshal dedupe metadata: %w", err)
+	}
 	tmp := donePath + ".tmp"
 	if err := os.WriteFile(tmp, data, 0o600); err != nil {
 		return false, fmt.Errorf("write dedupe tmp: %w", err)
 	}
 	if err := os.Rename(tmp, donePath); err != nil {
-		_ = os.Remove(tmp)
+		if rmErr := os.Remove(tmp); rmErr != nil && !errors.Is(rmErr, os.ErrNotExist) {
+			return false, errors.Join(
+				fmt.Errorf("commit dedupe: %w", err),
+				fmt.Errorf("remove dedupe tmp %s: %w", tmp, rmErr),
+			)
+		}
 		return false, fmt.Errorf("commit dedupe: %w", err)
 	}
 
@@ -631,7 +653,15 @@ func (d *stripeWebhookDeduper) acquireLock(lockPath string) (bool, error) {
 
 	f, err := os.OpenFile(lockPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err == nil {
-		_ = f.Close()
+		if closeErr := f.Close(); closeErr != nil {
+			if rmErr := os.Remove(lockPath); rmErr != nil && !errors.Is(rmErr, os.ErrNotExist) {
+				return false, errors.Join(
+					fmt.Errorf("close lock file: %w", closeErr),
+					fmt.Errorf("cleanup lock file %s: %w", lockPath, rmErr),
+				)
+			}
+			return false, fmt.Errorf("close lock file: %w", closeErr)
+		}
 		return true, nil
 	}
 
@@ -641,18 +671,30 @@ func (d *stripeWebhookDeduper) acquireLock(lockPath string) (bool, error) {
 
 	// Break stale locks (e.g., process crash) so Stripe retries can succeed.
 	info, statErr := os.Stat(lockPath)
+	if statErr != nil && !errors.Is(statErr, os.ErrNotExist) {
+		return false, fmt.Errorf("stat lock file: %w", statErr)
+	}
 	if statErr == nil && d.now().Sub(info.ModTime()) > d.lockTTL {
-		if rmErr := os.Remove(lockPath); rmErr == nil {
-			f, err := os.OpenFile(lockPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
-			if err == nil {
-				_ = f.Close()
-				return true, nil
-			}
-			if errors.Is(err, os.ErrExist) {
-				return false, nil
-			}
-			return false, fmt.Errorf("recreate lock: %w", err)
+		if rmErr := os.Remove(lockPath); rmErr != nil && !errors.Is(rmErr, os.ErrNotExist) {
+			return false, fmt.Errorf("remove stale lock: %w", rmErr)
 		}
+		f, err := os.OpenFile(lockPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+		if err == nil {
+			if closeErr := f.Close(); closeErr != nil {
+				if rmErr := os.Remove(lockPath); rmErr != nil && !errors.Is(rmErr, os.ErrNotExist) {
+					return false, errors.Join(
+						fmt.Errorf("close recreated lock file: %w", closeErr),
+						fmt.Errorf("cleanup recreated lock file %s: %w", lockPath, rmErr),
+					)
+				}
+				return false, fmt.Errorf("close recreated lock file: %w", closeErr)
+			}
+			return true, nil
+		}
+		if errors.Is(err, os.ErrExist) {
+			return false, nil
+		}
+		return false, fmt.Errorf("recreate lock: %w", err)
 	}
 
 	return false, nil
@@ -699,13 +741,13 @@ func (i *stripeCustomerOrgIndex) LookupOrgID(customerID string) (string, bool, e
 		if errors.Is(err, os.ErrNotExist) {
 			return "", false, nil
 		}
-		return "", false, err
+		return "", false, fmt.Errorf("read customer org index %s: %w", path, err)
 	}
 	var rec struct {
 		OrgID string `json:"org_id"`
 	}
 	if err := json.Unmarshal(data, &rec); err != nil {
-		return "", false, err
+		return "", false, fmt.Errorf("decode customer org index %s: %w", path, err)
 	}
 	orgID := strings.TrimSpace(rec.OrgID)
 	if orgID == "" {
@@ -731,22 +773,30 @@ func (i *stripeCustomerOrgIndex) Save(customerID, orgID string) error {
 	}
 
 	if err := os.MkdirAll(i.dir, 0o700); err != nil {
-		return err
+		return fmt.Errorf("create customer org index directory: %w", err)
 	}
 
 	path := filepath.Join(i.dir, customerID+".json")
-	data, _ := json.Marshal(map[string]any{
+	data, err := json.Marshal(map[string]any{
 		"org_id":      orgID,
 		"updated_at":  time.Now().UTC().UnixMilli(),
 		"customer_id": customerID,
 	})
+	if err != nil {
+		return fmt.Errorf("marshal customer org index entry: %w", err)
+	}
 	tmp := path + ".tmp"
 	if err := os.WriteFile(tmp, data, 0o600); err != nil {
-		return err
+		return fmt.Errorf("write customer org index temp file: %w", err)
 	}
 	if err := os.Rename(tmp, path); err != nil {
-		_ = os.Remove(tmp)
-		return err
+		if rmErr := os.Remove(tmp); rmErr != nil && !errors.Is(rmErr, os.ErrNotExist) {
+			return errors.Join(
+				fmt.Errorf("commit customer org index: %w", err),
+				fmt.Errorf("remove customer org index temp file: %w", rmErr),
+			)
+		}
+		return fmt.Errorf("commit customer org index: %w", err)
 	}
 	return nil
 }

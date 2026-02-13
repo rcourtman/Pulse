@@ -1,4 +1,5 @@
 import { apiFetch } from '@/utils/apiClient';
+import { logger } from '@/utils/logger';
 
 export interface ConversionEvent {
   type: string;
@@ -68,11 +69,20 @@ export function trackConversionEvent(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
-    }).catch(() => {
+    }).catch((error) => {
       // Conversion tracking should never break user interactions.
+      logger.debug('[conversionEvents] Failed to send conversion event', {
+        type: event.type,
+        surface: event.surface,
+        error,
+      });
     });
-  } catch {
-    // Fire-and-forget, swallow sync failures.
+  } catch (error) {
+    logger.debug('[conversionEvents] Failed to queue conversion event request', {
+      type: event.type,
+      surface: event.surface,
+      error,
+    });
   }
 }
 

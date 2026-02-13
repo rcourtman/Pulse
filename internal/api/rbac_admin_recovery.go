@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -158,28 +159,41 @@ func BackupRBACData(provider *TenantRBACProvider, orgID string, destDir string) 
 	if err != nil {
 		return "", fmt.Errorf("failed to open source db: %w", err)
 	}
-	defer src.Close()
+	defer func() {
+		if closeErr := src.Close(); closeErr != nil {
+			err = errors.Join(err, fmt.Errorf("failed to close source db: %w", closeErr))
+		}
+	}()
 
 	dst, err := os.OpenFile(backupPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
 	if err != nil {
 		return "", fmt.Errorf("failed to create backup file: %w", err)
 	}
 
+	cleanupFailedBackup := func(baseErr error) error {
+		if closeErr := dst.Close(); closeErr != nil {
+			baseErr = errors.Join(baseErr, fmt.Errorf("failed to close backup file after failure: %w", closeErr))
+		}
+		if removeErr := os.Remove(backupPath); removeErr != nil && !os.IsNotExist(removeErr) {
+			baseErr = errors.Join(baseErr, fmt.Errorf("failed to remove incomplete backup %s: %w", backupPath, removeErr))
+		}
+		return baseErr
+	}
+
 	if _, err := io.Copy(dst, src); err != nil {
-		dst.Close()
-		_ = os.Remove(backupPath)
-		return "", fmt.Errorf("failed to copy database: %w", err)
+		return "", cleanupFailedBackup(fmt.Errorf("failed to copy database: %w", err))
 	}
 
 	if err := dst.Sync(); err != nil {
-		dst.Close()
-		_ = os.Remove(backupPath)
-		return "", fmt.Errorf("failed to flush backup file: %w", err)
+		return "", cleanupFailedBackup(fmt.Errorf("failed to flush backup file: %w", err))
 	}
 
 	if err := dst.Close(); err != nil {
-		_ = os.Remove(backupPath)
-		return "", fmt.Errorf("failed to close backup file: %w", err)
+		closeErr := fmt.Errorf("failed to close backup file: %w", err)
+		if removeErr := os.Remove(backupPath); removeErr != nil && !os.IsNotExist(removeErr) {
+			return "", errors.Join(closeErr, fmt.Errorf("failed to remove incomplete backup %s: %w", backupPath, removeErr))
+		}
+		return "", closeErr
 	}
 
 	return backupPath, nil

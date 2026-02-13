@@ -142,7 +142,7 @@ func CollectCeph(ctx context.Context) (*CephClusterStatus, error) {
 
 	status, err := parseCephStatus(statusJSON)
 	if err != nil {
-		return nil, fmt.Errorf("parse ceph status: %w", err)
+		return nil, err
 	}
 
 	// Get pool usage from ceph df
@@ -230,7 +230,7 @@ func parseCephStatus(data []byte) (*CephClusterStatus, error) {
 	}
 
 	if err := json.Unmarshal(data, &raw); err != nil {
-		return nil, fmt.Errorf("unmarshal: %w", err)
+		return nil, fmt.Errorf("ceph.parseStatus: unmarshal ceph status JSON: %w", err)
 	}
 
 	status := &CephClusterStatus{
@@ -330,7 +330,7 @@ func parseCephDF(data []byte) ([]CephPool, float64, error) {
 	}
 
 	if err := json.Unmarshal(data, &raw); err != nil {
-		return nil, 0, fmt.Errorf("unmarshal df: %w", err)
+		return nil, 0, fmt.Errorf("ceph.parseDF: unmarshal ceph df JSON: %w", err)
 	}
 
 	pools := make([]CephPool, 0, len(raw.Pools))

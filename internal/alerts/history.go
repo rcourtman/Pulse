@@ -45,6 +45,7 @@ type AlertCallback func(alert Alert)
 type HistoryManager struct {
 	mu           sync.RWMutex
 	saveMu       sync.Mutex // Serializes disk writes to prevent save race condition
+	stopOnce     sync.Once
 	dataDir      string
 	historyFile  string
 	backupFile   string
@@ -175,6 +176,7 @@ func (hm *HistoryManager) GetAllHistory(limit int) []Alert {
 
 // loadHistory loads history from disk
 func (hm *HistoryManager) loadHistory() error {
+<<<<<<< HEAD
 	type historySource struct {
 		path   string
 		isMain bool
@@ -190,6 +192,19 @@ func (hm *HistoryManager) loadHistory() error {
 
 	for _, source := range sources {
 		data, err := os.ReadFile(source.path)
+=======
+	// Try loading from main file first
+	sourceFile := hm.historyFile
+	data, err := os.ReadFile(sourceFile)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			log.Warn().Err(err).Str("file", sourceFile).Msg("Failed to read history file")
+		}
+
+		// Try backup file
+		sourceFile = hm.backupFile
+		data, err = os.ReadFile(sourceFile)
+>>>>>>> refactor/parallel-05-error-handling
 		if err != nil {
 			if os.IsNotExist(err) {
 				continue
@@ -202,11 +217,15 @@ func (hm *HistoryManager) loadHistory() error {
 					Msg("Permission denied reading history file - check file ownership")
 				continue
 			}
+<<<<<<< HEAD
 			log.Warn().Err(err).Str("file", source.path).Msg("Failed to read history file")
 			if firstErr == nil {
 				firstErr = fmt.Errorf("failed to read history file %q: %w", source.path, err)
 			}
 			continue
+=======
+			return fmt.Errorf("historyManager.loadHistory: read backup history file %s: %w", hm.backupFile, err)
+>>>>>>> refactor/parallel-05-error-handling
 		}
 
 		var history []HistoryEntry
@@ -232,11 +251,17 @@ func (hm *HistoryManager) loadHistory() error {
 		return nil
 	}
 
+<<<<<<< HEAD
 	if firstErr != nil {
 		return firstErr
 	}
 	if hadPermissionError {
 		return nil
+=======
+	var history []HistoryEntry
+	if err := json.Unmarshal(data, &history); err != nil {
+		return fmt.Errorf("historyManager.loadHistory: unmarshal history from %s: %w", sourceFile, err)
+>>>>>>> refactor/parallel-05-error-handling
 	}
 
 	// Both files don't exist - this is normal on first startup
@@ -252,7 +277,11 @@ func (hm *HistoryManager) saveHistory() error {
 // saveHistoryWithRetry saves history with exponential backoff retry
 func (hm *HistoryManager) saveHistoryWithRetry(maxRetries int) error {
 	if maxRetries < 1 {
+<<<<<<< HEAD
 		maxRetries = 1
+=======
+		return fmt.Errorf("historyManager.saveHistoryWithRetry: maxRetries must be at least 1, got %d", maxRetries)
+>>>>>>> refactor/parallel-05-error-handling
 	}
 
 	// Serialize all disk writes to prevent concurrent saves from overwriting each other
@@ -266,7 +295,7 @@ func (hm *HistoryManager) saveHistoryWithRetry(maxRetries int) error {
 
 	data, err := json.Marshal(snapshot)
 	if err != nil {
-		return fmt.Errorf("failed to marshal history: %w", err)
+		return fmt.Errorf("historyManager.saveHistoryWithRetry: marshal history snapshot: %w", err)
 	}
 
 	historyFile := hm.historyFile
@@ -280,7 +309,11 @@ func (hm *HistoryManager) saveHistoryWithRetry(maxRetries int) error {
 			log.Warn().Err(err).Str("file", backupFile).Msg("Failed to remove existing backup file before save")
 		}
 		if err := os.Rename(historyFile, backupFile); err != nil {
-			log.Warn().Err(err).Msg("Failed to create backup file")
+			log.Warn().
+				Err(err).
+				Str("source", historyFile).
+				Str("backup", backupFile).
+				Msg("Failed to create backup file")
 		} else {
 			backupCreated = true
 		}
@@ -288,11 +321,17 @@ func (hm *HistoryManager) saveHistoryWithRetry(maxRetries int) error {
 
 	var lastErr error
 	for attempt := 1; attempt <= maxRetries; attempt++ {
+<<<<<<< HEAD
 		tempFile := fmt.Sprintf("%s.tmp-%d-%d", historyFile, os.Getpid(), time.Now().UnixNano())
 
 		if err := writeFileSynced(tempFile, data, 0644); err != nil {
 			lastErr = fmt.Errorf("failed to write temp history file: %w", err)
 			_ = os.Remove(tempFile)
+=======
+		// Write new file
+		if err := os.WriteFile(historyFile, data, 0644); err != nil {
+			lastErr = fmt.Errorf("write history file %s (attempt %d/%d): %w", historyFile, attempt, maxRetries, err)
+>>>>>>> refactor/parallel-05-error-handling
 			log.Warn().
 				Err(lastErr).
 				Int("attempt", attempt).
@@ -338,19 +377,29 @@ func (hm *HistoryManager) saveHistoryWithRetry(maxRetries int) error {
 		return nil
 	}
 
+	if lastErr == nil {
+		lastErr = fmt.Errorf("historyManager.saveHistoryWithRetry: no write attempts executed for %s", historyFile)
+	}
+
 	// All retries failed - restore backup if we have one
 	if backupCreated {
 		if restoreErr := os.Rename(backupFile, historyFile); restoreErr != nil {
+			restoreErr = fmt.Errorf("restore backup file %s to %s: %w", backupFile, historyFile, restoreErr)
 			log.Error().Err(restoreErr).Msg("Failed to restore backup after all write attempts failed")
+<<<<<<< HEAD
 		} else {
 			if err := syncDir(filepath.Dir(historyFile)); err != nil {
 				log.Warn().Err(err).Str("dir", filepath.Dir(historyFile)).Msg("Failed to sync history directory after restore")
 			}
 			log.Info().Msg("Restored backup after history save failure")
+=======
+			return fmt.Errorf("historyManager.saveHistoryWithRetry: failed to write history file after %d attempts: %w", maxRetries, errors.Join(lastErr, restoreErr))
+>>>>>>> refactor/parallel-05-error-handling
 		}
+		log.Info().Msg("Restored backup after history save failure")
 	}
 
-	return fmt.Errorf("failed to write history file after %d attempts: %w", maxRetries, lastErr)
+	return fmt.Errorf("historyManager.saveHistoryWithRetry: failed to write history file after %d attempts: %w", maxRetries, lastErr)
 }
 
 func writeFileSynced(path string, data []byte, perm os.FileMode) error {
@@ -499,15 +548,17 @@ func (hm *HistoryManager) ClearAllHistory() error {
 
 // Stop stops the history manager
 func (hm *HistoryManager) Stop() {
-	close(hm.stopChan)
-	if hm.saveTicker != nil {
-		hm.saveTicker.Stop()
-	}
+	hm.stopOnce.Do(func() {
+		close(hm.stopChan)
+		if hm.saveTicker != nil {
+			hm.saveTicker.Stop()
+		}
 
-	// Save one final time
-	if err := hm.saveHistory(); err != nil {
-		log.Error().Err(err).Msg("Failed to save alert history on shutdown")
-	}
+		// Save one final time
+		if err := hm.saveHistory(); err != nil {
+			log.Error().Err(err).Msg("Failed to save alert history on shutdown")
+		}
+	})
 }
 
 // GetStats returns statistics about the alert history

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -205,7 +206,10 @@ func (c *ConfigPersistence) SaveOrganization(org *models.Organization) error {
 
 // EnsureConfigDir ensures the configuration directory exists
 func (c *ConfigPersistence) EnsureConfigDir() error {
-	return c.fs.MkdirAll(c.configDir, 0700)
+	if err := c.fs.MkdirAll(c.configDir, 0700); err != nil {
+		return fmt.Errorf("ensure config directory %s: %w", c.configDir, err)
+	}
+	return nil
 }
 
 func (c *ConfigPersistence) beginTransaction(tx *importTransaction) {
@@ -230,16 +234,22 @@ func (c *ConfigPersistence) writeConfigFileLocked(path string, data []byte, perm
 	tx := c.tx
 
 	if tx != nil {
-		return tx.StageFile(path, data, perm)
+		if err := tx.StageFile(path, data, perm); err != nil {
+			return fmt.Errorf("stage config file %s: %w", path, err)
+		}
+		return nil
 	}
 
 	tmp := path + ".tmp"
 	if err := c.fs.WriteFile(tmp, data, perm); err != nil {
-		return err
+		return fmt.Errorf("write temp config file %s: %w", tmp, err)
 	}
 	if err := c.fs.Rename(tmp, path); err != nil {
-		_ = c.fs.Remove(tmp)
-		return err
+		renameErr := fmt.Errorf("rename temp config file %s to %s: %w", tmp, path, err)
+		if removeErr := c.fs.Remove(tmp); removeErr != nil && !os.IsNotExist(removeErr) {
+			return errors.Join(renameErr, fmt.Errorf("cleanup temp config file %s: %w", tmp, removeErr))
+		}
+		return renameErr
 	}
 	return nil
 }
@@ -252,22 +262,25 @@ func saveJSON[T any](c *ConfigPersistence, filePath string, data T, encrypt bool
 
 	jsonData, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal config data for %s: %w", filePath, err)
 	}
 
 	if encrypt && c.crypto != nil {
 		encrypted, err := c.crypto.Encrypt(jsonData)
 		if err != nil {
-			return err
+			return fmt.Errorf("encrypt config data for %s: %w", filePath, err)
 		}
 		jsonData = encrypted
 	}
 
 	if err := c.EnsureConfigDir(); err != nil {
-		return err
+		return fmt.Errorf("prepare config directory for %s: %w", filePath, err)
 	}
 
-	return c.writeConfigFileLocked(filePath, jsonData, 0600)
+	if err := c.writeConfigFileLocked(filePath, jsonData, 0600); err != nil {
+		return fmt.Errorf("persist config file %s: %w", filePath, err)
+	}
+	return nil
 }
 
 // loadSlice is a generic helper that reads a JSON file, optionally decrypts,
@@ -282,7 +295,7 @@ func loadSlice[T any](c *ConfigPersistence, filePath string, decrypt bool) ([]T,
 		if os.IsNotExist(err) {
 			return []T{}, nil
 		}
-		return nil, err
+		return nil, fmt.Errorf("read config file %s: %w", filePath, err)
 	}
 
 	if len(data) == 0 {
@@ -299,7 +312,7 @@ func loadSlice[T any](c *ConfigPersistence, filePath string, decrypt bool) ([]T,
 
 	var result []T
 	if err := json.Unmarshal(data, &result); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("decode config file %s: %w", filePath, err)
 	}
 
 	return result, nil
@@ -313,18 +326,21 @@ func loadJSON[T any](c *ConfigPersistence, filePath string, decrypt bool, target
 
 	data, err := c.fs.ReadFile(filePath)
 	if err != nil {
-		return err
+		return fmt.Errorf("read config file %s: %w", filePath, err)
 	}
 
 	if decrypt && c.crypto != nil {
 		decrypted, err := c.crypto.Decrypt(data)
 		if err != nil {
-			return err
+			return fmt.Errorf("decrypt config file %s: %w", filePath, err)
 		}
 		data = decrypted
 	}
 
-	return json.Unmarshal(data, target)
+	if err := json.Unmarshal(data, target); err != nil {
+		return fmt.Errorf("decode config file %s: %w", filePath, err)
+	}
+	return nil
 }
 
 // LoadAPITokens loads API token metadata from disk.
@@ -337,7 +353,7 @@ func (c *ConfigPersistence) LoadAPITokens() ([]APITokenRecord, error) {
 		if os.IsNotExist(err) {
 			return []APITokenRecord{}, nil
 		}
-		return nil, err
+		return nil, fmt.Errorf("read api tokens file %s: %w", c.apiTokensFile, err)
 	}
 
 	if len(data) == 0 {
@@ -346,7 +362,7 @@ func (c *ConfigPersistence) LoadAPITokens() ([]APITokenRecord, error) {
 
 	var tokens []APITokenRecord
 	if err := json.Unmarshal(data, &tokens); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("decode api tokens file %s: %w", c.apiTokensFile, err)
 	}
 
 	for i := range tokens {
@@ -382,7 +398,7 @@ func (c *ConfigPersistence) SaveAPITokens(tokens []APITokenRecord) error {
 	defer c.mu.Unlock()
 
 	if err := c.EnsureConfigDir(); err != nil {
-		return err
+		return fmt.Errorf("prepare config directory for api tokens: %w", err)
 	}
 
 	// Backup previous state (best effort).
@@ -401,10 +417,13 @@ func (c *ConfigPersistence) SaveAPITokens(tokens []APITokenRecord) error {
 
 	data, err := json.Marshal(sanitized)
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal api token records: %w", err)
 	}
 
-	return c.writeConfigFileLocked(c.apiTokensFile, data, 0600)
+	if err := c.writeConfigFileLocked(c.apiTokensFile, data, 0600); err != nil {
+		return fmt.Errorf("persist api tokens file %s: %w", c.apiTokensFile, err)
+	}
+	return nil
 }
 
 // normalizeHysteresisThreshold ensures a hysteresis threshold pointer has valid
@@ -571,15 +590,15 @@ func (c *ConfigPersistence) SaveAlertConfig(config alerts.AlertConfig) error {
 
 	data, err := json.Marshal(config)
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal alert config: %w", err)
 	}
 
 	if err := c.EnsureConfigDir(); err != nil {
-		return err
+		return fmt.Errorf("prepare config directory for alert config: %w", err)
 	}
 
 	if err := c.writeConfigFileLocked(c.alertFile, data, 0600); err != nil {
-		return err
+		return fmt.Errorf("persist alert config: %w", err)
 	}
 
 	log.Info().Str("file", c.alertFile).Msg("Alert configuration saved")
@@ -720,25 +739,25 @@ func (c *ConfigPersistence) SaveEmailConfig(config notifications.EmailConfig) er
 	// Marshal to JSON first
 	data, err := json.Marshal(config)
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal email config: %w", err)
 	}
 
 	if err := c.EnsureConfigDir(); err != nil {
-		return err
+		return fmt.Errorf("prepare config directory for email config: %w", err)
 	}
 
 	// Encrypt if crypto manager is available
 	if c.crypto != nil {
 		encrypted, err := c.crypto.Encrypt(data)
 		if err != nil {
-			return err
+			return fmt.Errorf("encrypt email config: %w", err)
 		}
 		data = encrypted
 	}
 
 	// Save with restricted permissions (owner read/write only)
 	if err := c.writeConfigFileLocked(c.emailFile, data, 0600); err != nil {
-		return err
+		return fmt.Errorf("persist email config: %w", err)
 	}
 
 	log.Info().
@@ -797,23 +816,23 @@ func (c *ConfigPersistence) SaveAppriseConfig(config notifications.AppriseConfig
 
 	data, err := json.Marshal(config)
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal apprise config: %w", err)
 	}
 
 	if err := c.EnsureConfigDir(); err != nil {
-		return err
+		return fmt.Errorf("prepare config directory for apprise config: %w", err)
 	}
 
 	if c.crypto != nil {
 		encrypted, err := c.crypto.Encrypt(data)
 		if err != nil {
-			return err
+			return fmt.Errorf("encrypt apprise config: %w", err)
 		}
 		data = encrypted
 	}
 
 	if err := c.writeConfigFileLocked(c.appriseFile, data, 0600); err != nil {
-		return err
+		return fmt.Errorf("persist apprise config: %w", err)
 	}
 
 	log.Info().
@@ -873,24 +892,24 @@ func (c *ConfigPersistence) SaveWebhooks(webhooks []notifications.WebhookConfig)
 
 	data, err := json.Marshal(webhooks)
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal webhooks config: %w", err)
 	}
 
 	if err := c.EnsureConfigDir(); err != nil {
-		return err
+		return fmt.Errorf("prepare config directory for webhooks: %w", err)
 	}
 
 	// Encrypt if crypto manager is available
 	if c.crypto != nil {
 		encrypted, err := c.crypto.Encrypt(data)
 		if err != nil {
-			return err
+			return fmt.Errorf("encrypt webhooks config: %w", err)
 		}
 		data = encrypted
 	}
 
 	if err := c.writeConfigFileLocked(c.webhookFile, data, 0600); err != nil {
-		return err
+		return fmt.Errorf("persist webhooks config: %w", err)
 	}
 
 	log.Info().Str("file", c.webhookFile).
@@ -1148,11 +1167,11 @@ func (c *ConfigPersistence) saveNodesConfig(pveInstances []PVEInstance, pbsInsta
 
 	data, err := json.Marshal(config)
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal nodes config: %w", err)
 	}
 
 	if err := c.EnsureConfigDir(); err != nil {
-		return err
+		return fmt.Errorf("prepare config directory for nodes config: %w", err)
 	}
 
 	// Create TIMESTAMPED backup of existing file before overwriting (if it exists and has content)
@@ -1184,13 +1203,13 @@ func (c *ConfigPersistence) saveNodesConfig(pveInstances []PVEInstance, pbsInsta
 	if c.crypto != nil {
 		encrypted, err := c.crypto.Encrypt(data)
 		if err != nil {
-			return err
+			return fmt.Errorf("encrypt nodes config: %w", err)
 		}
 		data = encrypted
 	}
 
 	if err := c.writeConfigFileLocked(c.nodesFile, data, 0600); err != nil {
-		return err
+		return fmt.Errorf("persist nodes config: %w", err)
 	}
 
 	log.Info().Str("file", c.nodesFile).
@@ -1486,15 +1505,15 @@ func (c *ConfigPersistence) SaveSystemSettings(settings SystemSettings) error {
 
 	data, err := json.Marshal(settings)
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal system settings: %w", err)
 	}
 
 	if err := c.EnsureConfigDir(); err != nil {
-		return err
+		return fmt.Errorf("prepare config directory for system settings: %w", err)
 	}
 
 	if err := c.writeConfigFileLocked(c.systemFile, data, 0600); err != nil {
-		return err
+		return fmt.Errorf("persist system settings: %w", err)
 	}
 
 	// Also update the .env file if it exists
@@ -1514,7 +1533,7 @@ func (c *ConfigPersistence) SaveOIDCConfig(settings OIDCConfig) error {
 	defer c.mu.Unlock()
 
 	if err := c.EnsureConfigDir(); err != nil {
-		return err
+		return fmt.Errorf("prepare config directory for oidc config: %w", err)
 	}
 
 	// Do not persist runtime-only flags.
@@ -1522,19 +1541,19 @@ func (c *ConfigPersistence) SaveOIDCConfig(settings OIDCConfig) error {
 
 	data, err := json.Marshal(settings)
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal oidc config: %w", err)
 	}
 
 	if c.crypto != nil {
 		encrypted, err := c.crypto.Encrypt(data)
 		if err != nil {
-			return err
+			return fmt.Errorf("encrypt oidc config: %w", err)
 		}
 		data = encrypted
 	}
 
 	if err := c.writeConfigFileLocked(c.oidcFile, data, 0600); err != nil {
-		return err
+		return fmt.Errorf("persist oidc config: %w", err)
 	}
 
 	log.Info().Str("file", c.oidcFile).Msg("OIDC configuration saved")
@@ -1577,7 +1596,7 @@ func (c *ConfigPersistence) SaveSSOConfig(settings *SSOConfig) error {
 	defer c.mu.Unlock()
 
 	if err := c.EnsureConfigDir(); err != nil {
-		return err
+		return fmt.Errorf("prepare config directory for sso config: %w", err)
 	}
 
 	if settings == nil {
@@ -1596,19 +1615,19 @@ func (c *ConfigPersistence) SaveSSOConfig(settings *SSOConfig) error {
 
 	data, err := json.Marshal(clone)
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal sso config: %w", err)
 	}
 
 	if c.crypto != nil {
 		encrypted, err := c.crypto.Encrypt(data)
 		if err != nil {
-			return err
+			return fmt.Errorf("encrypt sso config: %w", err)
 		}
 		data = encrypted
 	}
 
 	if err := c.writeConfigFileLocked(c.ssoFile, data, 0600); err != nil {
-		return err
+		return fmt.Errorf("persist sso config: %w", err)
 	}
 
 	log.Info().Str("file", c.ssoFile).Int("providers", len(clone.Providers)).Msg("SSO configuration saved")
@@ -1718,24 +1737,24 @@ func (c *ConfigPersistence) SaveAIConfig(settings AIConfig) error {
 	defer c.mu.Unlock()
 
 	if err := c.EnsureConfigDir(); err != nil {
-		return err
+		return fmt.Errorf("prepare config directory for ai config: %w", err)
 	}
 
 	data, err := json.Marshal(settings)
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal ai config: %w", err)
 	}
 
 	if c.crypto != nil {
 		encrypted, err := c.crypto.Encrypt(data)
 		if err != nil {
-			return err
+			return fmt.Errorf("encrypt ai config: %w", err)
 		}
 		data = encrypted
 	}
 
 	if err := c.writeConfigFileLocked(c.aiFile, data, 0600); err != nil {
-		return err
+		return fmt.Errorf("persist ai config: %w", err)
 	}
 
 	log.Info().Str("file", c.aiFile).Bool("enabled", settings.Enabled).Msg("AI configuration saved")
@@ -2089,7 +2108,7 @@ func (c *ConfigPersistence) SaveAIUsageHistory(events []AIUsageEventRecord) erro
 	defer c.mu.Unlock()
 
 	if err := c.EnsureConfigDir(); err != nil {
-		return err
+		return fmt.Errorf("prepare config directory for ai usage history: %w", err)
 	}
 
 	data := AIUsageHistoryData{
@@ -2100,11 +2119,11 @@ func (c *ConfigPersistence) SaveAIUsageHistory(events []AIUsageEventRecord) erro
 
 	jsonData, err := json.Marshal(data)
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal ai usage history: %w", err)
 	}
 
 	if err := c.writeConfigFileLocked(c.aiUsageHistoryFile, jsonData, 0600); err != nil {
-		return err
+		return fmt.Errorf("persist ai usage history: %w", err)
 	}
 
 	log.Debug().
@@ -2157,7 +2176,7 @@ func (c *ConfigPersistence) SavePatrolRunHistory(runs []PatrolRunRecord) error {
 	defer c.mu.Unlock()
 
 	if err := c.EnsureConfigDir(); err != nil {
-		return err
+		return fmt.Errorf("prepare config directory for patrol run history: %w", err)
 	}
 
 	data := PatrolRunHistoryData{
@@ -2168,11 +2187,11 @@ func (c *ConfigPersistence) SavePatrolRunHistory(runs []PatrolRunRecord) error {
 
 	jsonData, err := json.Marshal(data)
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal patrol run history: %w", err)
 	}
 
 	if err := c.writeConfigFileLocked(c.aiPatrolRunsFile, jsonData, 0600); err != nil {
-		return err
+		return fmt.Errorf("persist patrol run history: %w", err)
 	}
 
 	log.Debug().
@@ -2258,7 +2277,7 @@ func (c *ConfigPersistence) updateEnvFile(envFile string, settings SystemSetting
 	// Read the existing .env file content
 	existingContent, err := c.fs.ReadFile(envFile)
 	if err != nil {
-		return err
+		return fmt.Errorf("read env file %s: %w", envFile, err)
 	}
 
 	var lines []string
@@ -2283,7 +2302,7 @@ func (c *ConfigPersistence) updateEnvFile(envFile string, settings SystemSetting
 	}
 
 	if err := scanner.Err(); err != nil {
-		return err
+		return fmt.Errorf("scan env file %s: %w", envFile, err)
 	}
 
 	// Note: legacy POLLING_INTERVAL is deprecated and no longer written
@@ -2312,11 +2331,14 @@ func (c *ConfigPersistence) updateEnvFile(envFile string, settings SystemSetting
 		}
 	}
 	if err := c.fs.WriteFile(tempFile, []byte(content), perm); err != nil {
-		return err
+		return fmt.Errorf("write temp env file %s: %w", tempFile, err)
 	}
 
 	// Atomic rename
-	return c.fs.Rename(tempFile, envFile)
+	if err := c.fs.Rename(tempFile, envFile); err != nil {
+		return fmt.Errorf("rename temp env file %s to %s: %w", tempFile, envFile, err)
+	}
+	return nil
 }
 
 // IsEncryptionEnabled returns whether the config persistence has encryption enabled
@@ -2441,7 +2463,7 @@ func (c *ConfigPersistence) SaveProfileChangeLogs(logs []models.ProfileChangeLog
 func (c *ConfigPersistence) AppendProfileChangeLog(entry models.ProfileChangeLog) error {
 	logs, err := c.LoadProfileChangeLogs()
 	if err != nil {
-		return err
+		return fmt.Errorf("load profile change logs: %w", err)
 	}
 
 	// Keep last 1000 entries
@@ -2505,7 +2527,7 @@ func (c *ConfigPersistence) SaveAIChatSessions(sessions map[string]*AIChatSessio
 	defer c.mu.Unlock()
 
 	if err := c.EnsureConfigDir(); err != nil {
-		return err
+		return fmt.Errorf("prepare config directory for ai chat sessions: %w", err)
 	}
 
 	data := AIChatSessionsData{
@@ -2516,11 +2538,11 @@ func (c *ConfigPersistence) SaveAIChatSessions(sessions map[string]*AIChatSessio
 
 	jsonData, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal ai chat sessions: %w", err)
 	}
 
 	if err := c.writeConfigFileLocked(c.aiChatSessionsFile, jsonData, 0600); err != nil {
-		return err
+		return fmt.Errorf("persist ai chat sessions: %w", err)
 	}
 
 	log.Debug().
@@ -2570,7 +2592,7 @@ func (c *ConfigPersistence) LoadAIChatSessions() (*AIChatSessionsData, error) {
 func (c *ConfigPersistence) SaveAIChatSession(session *AIChatSession) error {
 	sessionsData, err := c.LoadAIChatSessions()
 	if err != nil {
-		return err
+		return fmt.Errorf("load ai chat sessions: %w", err)
 	}
 
 	session.UpdatedAt = time.Now()
@@ -2583,7 +2605,7 @@ func (c *ConfigPersistence) SaveAIChatSession(session *AIChatSession) error {
 func (c *ConfigPersistence) DeleteAIChatSession(sessionID string) error {
 	sessionsData, err := c.LoadAIChatSessions()
 	if err != nil {
-		return err
+		return fmt.Errorf("load ai chat sessions: %w", err)
 	}
 
 	delete(sessionsData.Sessions, sessionID)

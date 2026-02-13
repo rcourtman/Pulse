@@ -398,7 +398,7 @@ func (c *AnthropicOAuthClient) forceRefreshToken(ctx context.Context) error {
 func (c *AnthropicOAuthClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse, error) {
 	// Ensure we have a valid token
 	if err := c.ensureValidToken(ctx); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to ensure valid OAuth token: %w", err)
 	}
 
 	// Convert messages to Anthropic format (same as regular client)
@@ -409,7 +409,10 @@ func (c *AnthropicOAuthClient) Chat(ctx context.Context, req ChatRequest) (*Chat
 		}
 
 		if m.ToolResult != nil {
-			contentJSON, _ := json.Marshal(m.ToolResult.Content)
+			contentJSON, err := json.Marshal(m.ToolResult.Content)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal tool result content for %s: %w", m.ToolResult.ToolUseID, err)
+			}
 			messages = append(messages, anthropicMessage{
 				Role: "user",
 				Content: []anthropicContent{
@@ -635,8 +638,10 @@ func (c *AnthropicOAuthClient) Chat(ctx context.Context, req ChatRequest) (*Chat
 // TestConnection validates the OAuth token by listing models
 // This avoids dependencies on specific model names which may get deprecated
 func (c *AnthropicOAuthClient) TestConnection(ctx context.Context) error {
-	_, err := c.ListModels(ctx)
-	return err
+	if _, err := c.ListModels(ctx); err != nil {
+		return fmt.Errorf("anthropic oauth test connection failed: %w", err)
+	}
+	return nil
 }
 
 func (c *AnthropicOAuthClient) modelsEndpoint() string {
@@ -652,7 +657,7 @@ func (c *AnthropicOAuthClient) modelsEndpoint() string {
 func (c *AnthropicOAuthClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	// Ensure we have a valid token
 	if err := c.ensureValidToken(ctx); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to ensure valid OAuth token: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "GET", c.modelsEndpoint(), nil)

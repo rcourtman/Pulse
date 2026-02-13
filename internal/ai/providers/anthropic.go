@@ -152,7 +152,10 @@ func (c *AnthropicClient) Chat(ctx context.Context, req ChatRequest) (*ChatRespo
 		// Handle tool results specially
 		if m.ToolResult != nil {
 			// Tool result message - Content needs to be JSON-encoded string
-			contentJSON, _ := json.Marshal(m.ToolResult.Content)
+			contentJSON, err := json.Marshal(m.ToolResult.Content)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal tool result content for %s: %w", m.ToolResult.ToolUseID, err)
+			}
 			messages = append(messages, anthropicMessage{
 				Role: "user",
 				Content: []anthropicContent{
@@ -395,8 +398,10 @@ func (c *AnthropicClient) Chat(ctx context.Context, req ChatRequest) (*ChatRespo
 // TestConnection validates the API key by listing models
 // This avoids dependencies on specific model names which may get deprecated
 func (c *AnthropicClient) TestConnection(ctx context.Context) error {
-	_, err := c.ListModels(ctx)
-	return err
+	if _, err := c.ListModels(ctx); err != nil {
+		return fmt.Errorf("anthropic test connection failed: %w", err)
+	}
+	return nil
 }
 
 func (c *AnthropicClient) modelsEndpoint() string {
@@ -530,7 +535,10 @@ func (c *AnthropicClient) ChatStream(ctx context.Context, req ChatRequest, callb
 		}
 
 		if m.ToolResult != nil {
-			contentJSON, _ := json.Marshal(m.ToolResult.Content)
+			contentJSON, err := json.Marshal(m.ToolResult.Content)
+			if err != nil {
+				return fmt.Errorf("failed to marshal tool result content for %s: %w", m.ToolResult.ToolUseID, err)
+			}
 			messages = append(messages, anthropicMessage{
 				Role: "user",
 				Content: []anthropicContent{

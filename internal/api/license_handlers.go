@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"sync"
 	"time"
@@ -42,7 +43,9 @@ func (h *LicenseHandlers) getTenantComponents(ctx context.Context) (*license.Ser
 	// Check if service already exists
 	if v, ok := h.services.Load(orgID); ok {
 		svc := v.(*license.Service)
-		_ = h.ensureEvaluatorForOrg(orgID, svc)
+		if err := h.ensureEvaluatorForOrg(orgID, svc); err != nil {
+			log.Warn().Str("org_id", orgID).Err(err).Msg("Failed to refresh license evaluator for org")
+		}
 		// We need persistence too, reconstruct it or cache it?
 		// Reconstructing persistence is cheap (just a struct with path).
 		// But let's recreate it to be safe and stateless here.
@@ -59,7 +62,9 @@ func (h *LicenseHandlers) getTenantComponents(ctx context.Context) (*license.Ser
 
 	service := license.NewService()
 
-	_ = h.ensureEvaluatorForOrg(orgID, service)
+	if err := h.ensureEvaluatorForOrg(orgID, service); err != nil {
+		log.Warn().Str("org_id", orgID).Err(err).Msg("Failed to initialize license evaluator for org")
+	}
 
 	// Try to load existing license
 	if persistence != nil {
@@ -104,7 +109,7 @@ func (h *LicenseHandlers) ensureEvaluatorForOrg(orgID string, service *license.S
 	// Self-hosted default org: only wire trial evaluator when an explicit, active trial exists.
 	state, err := billingStore.GetBillingState(orgID)
 	if err != nil {
-		return err
+		return fmt.Errorf("load billing state for org %q: %w", orgID, err)
 	}
 	if state == nil || state.SubscriptionState == "" {
 		service.SetEvaluator(nil)

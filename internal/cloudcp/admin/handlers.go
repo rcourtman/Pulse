@@ -48,9 +48,15 @@ func HandleListTenants(reg *registry.TenantRegistry) http.HandlerFunc {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
+<<<<<<< HEAD
 		_ = json.NewEncoder(w).Encode(listTenantsResponse{
 			Tenants: tenants,
 			Count:   len(tenants),
+=======
+		encodeJSON(w, map[string]any{
+			"tenants": tenants,
+			"count":   len(tenants),
+>>>>>>> refactor/parallel-05-error-handling
 		})
 	}
 }
@@ -78,10 +84,22 @@ func AdminKeyMiddleware(adminKey string, next http.Handler) http.Handler {
 				Msg("Control plane admin authentication failed")
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusUnauthorized)
+<<<<<<< HEAD
 			_ = json.NewEncoder(w).Encode(unauthorizedResponse{Error: "unauthorized"})
+=======
+			encodeJSON(w, map[string]string{
+				"error": "unauthorized",
+			})
+>>>>>>> refactor/parallel-05-error-handling
 			return
 		}
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+func encodeJSON(w http.ResponseWriter, payload any) {
+	if err := json.NewEncoder(w).Encode(payload); err != nil {
+		log.Error().Err(err).Msg("cloudcp.admin: encode JSON response")
+	}
 }

@@ -527,6 +527,8 @@ func (h *Hub) Run() {
 						} else {
 							log.Debug().Str("client", client.id).Msg("Client disconnected before welcome message")
 						}
+					} else {
+						log.Error().Err(err).Str("client", client.id).Msg("Failed to marshal welcome message")
 					}
 
 					// Then send the initial state after another delay
@@ -830,6 +832,8 @@ func (h *Hub) runBroadcastSequencer() {
 					if pending != nil {
 						if data, err := json.Marshal(*pending); err == nil {
 							h.dispatchToClients(data, "Client send channel full, dropping coalesced message and closing connection")
+						} else {
+							log.Error().Err(err).Str("type", pending.Type).Msg("Failed to marshal coalesced broadcast message")
 						}
 					}
 				})
@@ -839,6 +843,8 @@ func (h *Hub) runBroadcastSequencer() {
 				// Non-state messages (alerts, etc.) - send immediately
 				if data, err := json.Marshal(msg); err == nil {
 					h.dispatchToClients(data, "Client send channel full, dropping message and closing connection")
+				} else {
+					log.Error().Err(err).Str("type", msg.Type).Msg("Failed to marshal broadcast message")
 				}
 			}
 
@@ -868,6 +874,8 @@ func (h *Hub) runBroadcastSequencer() {
 					if pending != nil {
 						if data, err := json.Marshal(*pending); err == nil {
 							h.dispatchToTenantClients(orgID, data, "Client send channel full, dropping tenant coalesced message and closing connection")
+						} else {
+							log.Error().Err(err).Str("org_id", orgID).Str("type", pending.Type).Msg("Failed to marshal tenant coalesced broadcast message")
 						}
 					}
 				})
@@ -877,6 +885,8 @@ func (h *Hub) runBroadcastSequencer() {
 				// Non-state messages - send immediately to tenant
 				if data, err := json.Marshal(tb.Message); err == nil {
 					h.dispatchToTenantClients(tb.OrgID, data, "Client send channel full, dropping tenant message and closing connection")
+				} else {
+					log.Error().Err(err).Str("org_id", tb.OrgID).Str("type", tb.Message.Type).Msg("Failed to marshal tenant broadcast message")
 				}
 			}
 
@@ -1125,7 +1135,9 @@ func (c *Client) readPump() {
 	defer func() {
 		log.Info().Str("client", c.id).Msg("ReadPump exiting")
 		c.hub.unregister <- c
-		c.conn.Close()
+		if err := c.conn.Close(); err != nil {
+			log.Debug().Err(err).Str("client", c.id).Msg("Failed to close WebSocket connection in readPump")
+		}
 	}()
 
 	if err := c.conn.SetReadDeadline(time.Now().Add(60 * time.Second)); err != nil {
@@ -1168,7 +1180,11 @@ func (c *Client) readPump() {
 				Data: map[string]int64{"timestamp": time.Now().Unix()},
 			}
 			if data, err := json.Marshal(pong); err == nil {
-				c.safeSend(data)
+				if !c.safeSend(data) {
+					log.Warn().Str("client", c.id).Msg("Failed to queue pong response; client channel closed or full")
+				}
+			} else {
+				log.Error().Err(err).Str("client", c.id).Msg("Failed to marshal pong response")
 			}
 		case "requestData":
 			// Send current state
@@ -1178,9 +1194,11 @@ func (c *Client) readPump() {
 					Data: sanitizeData(c.hub.prepareStateForBroadcast(c.hub.getState())),
 				}
 				if data, err := json.Marshal(stateMsg); err == nil {
-					c.safeSend(data)
+					if !c.safeSend(data) {
+						log.Warn().Str("client", c.id).Msg("Failed to queue requestData state response; client channel closed or full")
+					}
 				} else {
-					log.Error().Err(err).Msg("Failed to marshal state for requestData")
+					log.Error().Err(err).Str("client", c.id).Msg("Failed to marshal state for requestData")
 				}
 			}
 		default:
@@ -1204,7 +1222,9 @@ func (c *Client) writePump() {
 	defer func() {
 		log.Info().Str("client", c.id).Msg("WritePump exiting")
 		ticker.Stop()
-		c.conn.Close()
+		if err := c.conn.Close(); err != nil {
+			log.Debug().Err(err).Str("client", c.id).Msg("Failed to close WebSocket connection in writePump")
+		}
 	}()
 
 	log.Info().Str("client", c.id).Msg("WritePump started")

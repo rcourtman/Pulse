@@ -98,7 +98,7 @@ func (p *Provider) Refresh(ctx context.Context) error {
 
 	snapshot, err := p.fetcher.Fetch(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("refresh truenas snapshot: %w", err)
 	}
 
 	p.mu.Lock()

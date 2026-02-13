@@ -81,7 +81,7 @@ func (mtp *MultiTenantPersistence) GetPersistence(orgID string) (*ConfigPersiste
 
 	// Ensure the directory exists
 	if err := cp.EnsureConfigDir(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("ensure config directory for org %s: %w", orgID, err)
 	}
 
 	mtp.tenants[orgID] = cp
@@ -109,12 +109,15 @@ func (mtp *MultiTenantPersistence) OrgExists(orgID string) bool {
 func (mtp *MultiTenantPersistence) LoadOrganization(orgID string) (*models.Organization, error) {
 	persistence, err := mtp.GetPersistence(orgID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get persistence for org %s: %w", orgID, err)
 	}
 
 	org, err := persistence.LoadOrganization()
 	if err != nil {
-		// If org.json doesn't exist, return a default org
+		// If org.json doesn't exist, return a default org.
+		if !os.IsNotExist(err) {
+			return nil, fmt.Errorf("load organization %s: %w", orgID, err)
+		}
 		return &models.Organization{
 			ID:          orgID,
 			DisplayName: orgID,
@@ -135,19 +138,31 @@ func (mtp *MultiTenantPersistence) LoadOrganizationStrict(orgID string) (*models
 	}
 	persistence, err := mtp.GetPersistence(orgID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get persistence for org %s: %w", orgID, err)
 	}
-	return persistence.LoadOrganization()
+	org, err := persistence.LoadOrganization()
+	if err != nil {
+		return nil, fmt.Errorf("load organization %s: %w", orgID, err)
+	}
+	return org, nil
 }
 
 // SaveOrganization saves the organization metadata.
 func (mtp *MultiTenantPersistence) SaveOrganization(org *models.Organization) error {
-	persistence, err := mtp.GetPersistence(org.ID)
-	if err != nil {
-		return err
+	if org == nil {
+		return fmt.Errorf("organization is required")
 	}
 
-	return persistence.SaveOrganization(org)
+	persistence, err := mtp.GetPersistence(org.ID)
+	if err != nil {
+		return fmt.Errorf("get persistence for org %s: %w", org.ID, err)
+	}
+
+	if err := persistence.SaveOrganization(org); err != nil {
+		return fmt.Errorf("save organization %s: %w", org.ID, err)
+	}
+
+	return nil
 }
 
 // ListOrganizations returns all known organizations (including the default org).

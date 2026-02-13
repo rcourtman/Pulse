@@ -4,6 +4,7 @@ import { readAPIErrorMessage } from '@/api/responseUtils';
 import { apiFetch } from '@/utils/apiClient';
 import { getGlobalWebSocketStore } from '@/stores/websocket-global';
 import type { Resource, PlatformType, SourceType, ResourceStatus, ResourceType } from '@/types/resource';
+import { logger } from '@/utils/logger';
 
 const UNIFIED_RESOURCES_BASE_URL = '/api/resources';
 const DEFAULT_UNIFIED_RESOURCES_QUERY = 'type=host,pbs,pmg,k8s_cluster,k8s_node';
@@ -630,7 +631,9 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
 
   // If cache is stale, refresh it in the background without blocking initial render.
   if (!hasFreshUnifiedResourcesCache(cacheEntry)) {
-    void runRefetch({ source: 'initial' }).catch(() => undefined);
+    void runRefetch({ source: 'initial' }).catch((err) => {
+      logger.warn('[useUnifiedResources] Failed background refresh for stale cache', err);
+    });
   }
 
   const scheduleRefetch = () => {
@@ -644,7 +647,9 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
 
     refreshHandle = setTimeout(() => {
       refreshHandle = undefined;
-      void runRefetch({ source: 'ws' }).catch(() => undefined);
+      void runRefetch({ source: 'ws' }).catch((err) => {
+        logger.debug('[useUnifiedResources] WebSocket-triggered refetch failed', err);
+      });
     }, delay);
   };
 

@@ -2,6 +2,7 @@ package conversion
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -66,8 +67,11 @@ func NewConversionStore(dbPath string) (*ConversionStore, error) {
 
 	store := &ConversionStore{db: db}
 	if err := store.initSchema(); err != nil {
-		_ = db.Close()
-		return nil, err
+		initErr := fmt.Errorf("initialize conversion schema: %w", err)
+		if closeErr := db.Close(); closeErr != nil {
+			return nil, errors.Join(initErr, fmt.Errorf("close conversion db after init failure: %w", closeErr))
+		}
+		return nil, initErr
 	}
 	return store, nil
 }
@@ -151,9 +155,15 @@ func (s *ConversionStore) Record(event StoredConversionEvent) error {
 	return nil
 }
 
+<<<<<<< HEAD
 func (s *ConversionStore) Query(orgID string, from, to time.Time, eventType string) ([]StoredConversionEvent, error) {
 	if err := s.ensureInitialized(); err != nil {
 		return nil, err
+=======
+func (s *ConversionStore) Query(orgID string, from, to time.Time, eventType string) (events []StoredConversionEvent, retErr error) {
+	if s == nil || s.db == nil {
+		return nil, fmt.Errorf("conversion store is not initialized")
+>>>>>>> refactor/parallel-05-error-handling
 	}
 
 	where := make([]string, 0, 8)
@@ -198,9 +208,18 @@ func (s *ConversionStore) Query(orgID string, from, to time.Time, eventType stri
 	if err != nil {
 		return nil, fmt.Errorf("failed to query conversion events: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil {
+			wrappedCloseErr := fmt.Errorf("close conversion event rows: %w", closeErr)
+			if retErr != nil {
+				retErr = errors.Join(retErr, wrappedCloseErr)
+				return
+			}
+			retErr = wrappedCloseErr
+		}
+	}()
 
-	events := make([]StoredConversionEvent, 0)
+	events = make([]StoredConversionEvent, 0)
 	for rows.Next() {
 		var ev StoredConversionEvent
 		var createdAtUnix int64
@@ -224,9 +243,15 @@ func (s *ConversionStore) Query(orgID string, from, to time.Time, eventType stri
 	return events, nil
 }
 
+<<<<<<< HEAD
 func (s *ConversionStore) FunnelSummary(orgID string, from, to time.Time) (*FunnelSummary, error) {
 	if err := s.ensureInitialized(); err != nil {
 		return nil, err
+=======
+func (s *ConversionStore) FunnelSummary(orgID string, from, to time.Time) (summary *FunnelSummary, retErr error) {
+	if s == nil || s.db == nil {
+		return nil, fmt.Errorf("conversion store is not initialized")
+>>>>>>> refactor/parallel-05-error-handling
 	}
 	if from.IsZero() || to.IsZero() {
 		return nil, fmt.Errorf("from/to are required")
@@ -254,9 +279,18 @@ func (s *ConversionStore) FunnelSummary(orgID string, from, to time.Time) (*Funn
 	if err != nil {
 		return nil, fmt.Errorf("failed to query funnel summary: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil {
+			wrappedCloseErr := fmt.Errorf("close funnel summary rows: %w", closeErr)
+			if retErr != nil {
+				retErr = errors.Join(retErr, wrappedCloseErr)
+				return
+			}
+			retErr = wrappedCloseErr
+		}
+	}()
 
-	summary := &FunnelSummary{}
+	summary = &FunnelSummary{}
 	summary.Period.From = from.UTC()
 	summary.Period.To = to.UTC()
 

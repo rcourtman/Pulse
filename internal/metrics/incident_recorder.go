@@ -3,6 +3,8 @@ package metrics
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -260,6 +262,10 @@ func (r *IncidentRecorder) recordSample() {
 	for _, resourceID := range monitoredResources {
 		metrics, err := r.provider.GetCurrentMetrics(resourceID)
 		if err != nil {
+			log.Debug().
+				Str("resource_id", resourceID).
+				Err(err).
+				Msg("Failed to get pre-incident metrics sample")
 			continue
 		}
 
@@ -539,19 +545,27 @@ func (r *IncidentRecorder) saveToDisk() error {
 
 	jsonData, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
-		return err
+		return fmt.Errorf("incident recorder save: marshal completed windows: %w", err)
 	}
 
 	if err := os.MkdirAll(r.dataDir, 0755); err != nil {
-		return err
+		return fmt.Errorf("incident recorder save: ensure data directory %q: %w", r.dataDir, err)
 	}
 
 	tmpPath := r.filePath + ".tmp"
 	if err := os.WriteFile(tmpPath, jsonData, 0600); err != nil {
-		return err
+		return fmt.Errorf("incident recorder save: write temp file %q: %w", tmpPath, err)
 	}
 
-	return os.Rename(tmpPath, r.filePath)
+	if err := os.Rename(tmpPath, r.filePath); err != nil {
+		renameErr := fmt.Errorf("incident recorder save: commit temp file %q to %q: %w", tmpPath, r.filePath, err)
+		if removeErr := os.Remove(tmpPath); removeErr != nil && !os.IsNotExist(removeErr) {
+			return errors.Join(renameErr, fmt.Errorf("incident recorder save: cleanup temp file %q: %w", tmpPath, removeErr))
+		}
+		return renameErr
+	}
+
+	return nil
 }
 
 // loadFromDisk loads completed windows
@@ -565,7 +579,7 @@ func (r *IncidentRecorder) loadFromDisk() error {
 		if os.IsNotExist(err) {
 			return nil
 		}
-		return err
+		return fmt.Errorf("incident recorder load: read file %q: %w", r.filePath, err)
 	}
 
 	var data struct {
@@ -573,7 +587,7 @@ func (r *IncidentRecorder) loadFromDisk() error {
 	}
 
 	if err := json.Unmarshal(jsonData, &data); err != nil {
-		return err
+		return fmt.Errorf("incident recorder load: parse file %q: %w", r.filePath, err)
 	}
 
 	r.completedWindows = data.CompletedWindows

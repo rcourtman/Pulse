@@ -22,10 +22,13 @@ func WriteJSONResponse(w http.ResponseWriter, data interface{}) error {
 	// Use Marshal instead of Encoder for better performance with large payloads
 	jsonData, err := json.Marshal(data)
 	if err != nil {
-		return err
+		return fmt.Errorf("utils.WriteJSONResponse: marshal response data: %w", err)
 	}
 	_, err = w.Write(jsonData)
-	return err
+	if err != nil {
+		return fmt.Errorf("utils.WriteJSONResponse: write response body: %w", err)
+	}
+	return nil
 }
 
 // ParseBool interprets common boolean strings, returning true for typical truthy values.

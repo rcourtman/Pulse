@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rs/zerolog/log"
 	_ "modernc.org/sqlite"
 )
 
@@ -71,7 +72,9 @@ func NewStore(dir string) (*Store, error) {
 		stopCleanup: make(chan struct{}),
 	}
 	if err := s.initSchema(); err != nil {
-		_ = db.Close()
+		if closeErr := db.Close(); closeErr != nil {
+			return nil, errors.Join(err, fmt.Errorf("close magic link db after schema init failure: %w", closeErr))
+		}
 		return nil, err
 	}
 
@@ -105,7 +108,9 @@ func (s *Store) cleanupLoop() {
 	for {
 		select {
 		case <-ticker.C:
-			s.DeleteExpired(time.Now().UTC())
+			if err := s.DeleteExpired(time.Now().UTC()); err != nil {
+				log.Warn().Err(err).Msg("Failed to delete expired magic link tokens")
+			}
 		case <-s.stopCleanup:
 			return
 		}
@@ -159,7 +164,11 @@ func (s *Store) Consume(tokenHash []byte, now time.Time) (*TokenRecord, error) {
 	if err != nil {
 		return nil, fmt.Errorf("begin consume tx: %w", err)
 	}
-	defer func() { _ = tx.Rollback() }()
+	defer func() {
+		if rollbackErr := tx.Rollback(); rollbackErr != nil && !errors.Is(rollbackErr, sql.ErrTxDone) {
+			log.Warn().Err(rollbackErr).Msg("Failed to rollback magic link consume transaction")
+		}
+	}()
 
 	var email, tenantID string
 	var expiresAtUnix int64
@@ -185,7 +194,10 @@ func (s *Store) Consume(tokenHash []byte, now time.Time) (*TokenRecord, error) {
 	if err != nil {
 		return nil, fmt.Errorf("mark magic link token used: %w", err)
 	}
-	affected, _ := res.RowsAffected()
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return nil, fmt.Errorf("get consume update rows affected: %w", err)
+	}
 	if affected == 0 {
 		return nil, ErrTokenUsed
 	}
@@ -203,13 +215,16 @@ func (s *Store) Consume(tokenHash []byte, now time.Time) (*TokenRecord, error) {
 }
 
 // DeleteExpired removes tokens that have passed their expiry time.
-func (s *Store) DeleteExpired(now time.Time) {
+func (s *Store) DeleteExpired(now time.Time) error {
 	if s == nil || s.db == nil {
-		return
+		return nil
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	_, _ = s.db.Exec(`DELETE FROM magic_link_tokens WHERE expires_at < ?`, now.UTC().Unix())
+	if _, err := s.db.Exec(`DELETE FROM magic_link_tokens WHERE expires_at < ?`, now.UTC().Unix()); err != nil {
+		return fmt.Errorf("delete expired magic link tokens: %w", err)
+	}
+	return nil
 }
 
 // Close stops the background cleanup goroutine and closes the database.
@@ -226,7 +241,9 @@ func (s *Store) Close() {
 		close(s.stopCleanup)
 	}
 	if s.db != nil {
-		_ = s.db.Close()
+		if err := s.db.Close(); err != nil {
+			log.Warn().Err(err).Msg("Failed to close magic link store database")
+		}
 		s.db = nil
 	}
 }

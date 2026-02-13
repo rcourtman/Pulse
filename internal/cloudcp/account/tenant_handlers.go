@@ -2,7 +2,7 @@ package account
 
 import (
 	"context"
-	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -51,7 +51,7 @@ func HandleListTenants(reg *registry.TenantRegistry) http.HandlerFunc {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(tenants)
+		encodeJSON(w, tenants)
 	}
 }
 
@@ -144,7 +144,7 @@ func HandleCreateTenant(reg *registry.TenantRegistry, provisioner WorkspaceProvi
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
-		_ = json.NewEncoder(w).Encode(tenant)
+		encodeJSON(w, tenant)
 	}
 }
 
@@ -165,6 +165,23 @@ func parseTenantState(s string) (registry.TenantState, bool) {
 	}
 }
 
+<<<<<<< HEAD
+=======
+func loadTenantForAccount(reg *registry.TenantRegistry, accountID, tenantID string) (*registry.Tenant, error) {
+	t, err := reg.Get(tenantID)
+	if err != nil {
+		return nil, fmt.Errorf("load tenant %q: %w", tenantID, err)
+	}
+	if t == nil {
+		return nil, nil
+	}
+	if strings.TrimSpace(t.AccountID) == "" || t.AccountID != accountID {
+		return nil, nil
+	}
+	return t, nil
+}
+
+>>>>>>> refactor/parallel-05-error-handling
 // HandleUpdateTenant updates display name and/or state.
 // Route: PATCH /api/accounts/{account_id}/tenants/{tenant_id}
 func HandleUpdateTenant(reg *registry.TenantRegistry) http.HandlerFunc {
@@ -302,7 +319,7 @@ func HandleUpdateTenant(reg *registry.TenantRegistry) http.HandlerFunc {
 			Msg("Tenant updated")
 
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(tenant)
+		encodeJSON(w, tenant)
 	}
 }
 

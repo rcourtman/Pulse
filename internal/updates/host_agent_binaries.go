@@ -84,6 +84,7 @@ var (
 	retrySleepFn                          = time.Sleep
 )
 
+<<<<<<< HEAD:internal/updates/host_agent_binaries.go
 // httpGetWithErrorContext performs an HTTP GET and returns a detailed error if the status is not 200 OK.
 func httpGetWithErrorContext(url string) (*http.Response, error) {
 	resp, err := httpClient.Get(url)
@@ -98,6 +99,53 @@ func httpGetWithErrorContext(url string) (*http.Response, error) {
 	}
 
 	return resp, nil
+=======
+func appendError(target *error, err error) {
+	if target == nil || err == nil {
+		return
+	}
+	if *target == nil {
+		*target = err
+		return
+	}
+	*target = errors.Join(*target, err)
+}
+
+func closeFileWithContext(target *error, file *os.File, context string) {
+	if file == nil {
+		return
+	}
+	if err := closeFileFn(file); err != nil {
+		appendError(target, fmt.Errorf("%s: %w", context, err))
+	}
+}
+
+func closeReadCloserWithContext(target *error, closer io.ReadCloser, context string) {
+	if closer == nil {
+		return
+	}
+	if err := closer.Close(); err != nil {
+		appendError(target, fmt.Errorf("%s: %w", context, err))
+	}
+}
+
+func closeCloserWithContext(target *error, closer io.Closer, context string) {
+	if closer == nil {
+		return
+	}
+	if err := closer.Close(); err != nil {
+		appendError(target, fmt.Errorf("%s: %w", context, err))
+	}
+}
+
+func removeFileWithContext(target *error, filePath string, context string) {
+	if strings.TrimSpace(filePath) == "" {
+		return
+	}
+	if err := removeFn(filePath); err != nil && !os.IsNotExist(err) {
+		appendError(target, fmt.Errorf("%s: %w", context, err))
+	}
+>>>>>>> refactor/parallel-05-error-handling:internal/agentbinaries/host_agent.go
 }
 
 // HostAgentSearchPaths returns the directories to search for host agent binaries.
@@ -176,7 +224,7 @@ func EnsureHostAgentBinaries(version string) map[string]HostAgentBinary {
 }
 
 // DownloadAndInstallHostAgentBinaries fetches the universal host agent bundle for the given version and installs it.
-func DownloadAndInstallHostAgentBinaries(version string, targetDir string) error {
+func DownloadAndInstallHostAgentBinaries(version string, targetDir string) (retErr error) {
 	normalizedVersion := normalizeVersionTag(version)
 	if normalizedVersion == "" || strings.EqualFold(normalizedVersion, "vdev") {
 		return fmt.Errorf("cannot download host agent bundle for non-release version %q", version)
@@ -191,10 +239,29 @@ func DownloadAndInstallHostAgentBinaries(version string, targetDir string) error
 	if err != nil {
 		return fmt.Errorf("failed to create temporary archive file: %w", err)
 	}
-	defer removeFn(tempFile.Name())
+	defer removeFileWithContext(&retErr, tempFile.Name(), "failed to remove temporary archive file")
 
+<<<<<<< HEAD:internal/updates/host_agent_binaries.go
 	if err := downloadHostAgentBundle(bundleURL, tempFile); err != nil {
 		return err
+=======
+	resp, err := httpClient.Get(url)
+	if err != nil {
+		return fmt.Errorf("failed to download host agent bundle from %s: %w", url, err)
+	}
+	defer closeReadCloserWithContext(&retErr, resp.Body, "failed to close host agent bundle response body")
+
+	if resp.StatusCode != http.StatusOK {
+		body, readErr := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		if readErr != nil {
+			return fmt.Errorf("unexpected status %d downloading %s (failed to read response body: %w)", resp.StatusCode, url, readErr)
+		}
+		return fmt.Errorf("unexpected status %d downloading %s: %s", resp.StatusCode, url, strings.TrimSpace(string(body)))
+	}
+
+	if _, err := io.Copy(tempFile, resp.Body); err != nil {
+		return fmt.Errorf("failed to save host agent bundle: %w", err)
+>>>>>>> refactor/parallel-05-error-handling:internal/agentbinaries/host_agent.go
 	}
 
 	if err := closeFileFn(tempFile); err != nil {
@@ -294,6 +361,7 @@ func verifyHostAgentBundleChecksum(bundlePath, bundleURL, checksumURL string) er
 	return nil
 }
 
+<<<<<<< HEAD:internal/updates/host_agent_binaries.go
 func downloadHostAgentChecksum(checksumURL string) (string, string, error) {
 	backoff := hostAgentRetryInitialBackoff
 
@@ -337,6 +405,21 @@ func downloadHostAgentChecksum(checksumURL string) (string, string, error) {
 		}
 
 		return checksum, filename, nil
+=======
+func downloadHostAgentChecksum(checksumURL string) (checksum string, filename string, retErr error) {
+	resp, err := httpClient.Get(checksumURL)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to download checksum from %s: %w", checksumURL, err)
+	}
+	defer closeReadCloserWithContext(&retErr, resp.Body, "failed to close checksum response body")
+
+	if resp.StatusCode != http.StatusOK {
+		body, readErr := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		if readErr != nil {
+			return "", "", fmt.Errorf("unexpected status %d downloading checksum %s (failed to read response body: %w)", resp.StatusCode, checksumURL, readErr)
+		}
+		return "", "", fmt.Errorf("unexpected status %d downloading checksum %s: %s", resp.StatusCode, checksumURL, strings.TrimSpace(string(body)))
+>>>>>>> refactor/parallel-05-error-handling:internal/agentbinaries/host_agent.go
 	}
 
 	return "", "", fmt.Errorf("failed to download checksum from %s", checksumURL)
@@ -348,7 +431,7 @@ func parseHostAgentChecksumPayload(payload []byte) (string, string, error) {
 		return "", "", fmt.Errorf("checksum file is empty")
 	}
 
-	checksum := strings.ToLower(strings.TrimSpace(fields[0]))
+	checksum = strings.ToLower(strings.TrimSpace(fields[0]))
 	if len(checksum) != 64 {
 		return "", "", fmt.Errorf("checksum file has invalid hash")
 	}
@@ -356,7 +439,7 @@ func parseHostAgentChecksumPayload(payload []byte) (string, string, error) {
 		return "", "", fmt.Errorf("checksum file has invalid hash")
 	}
 
-	filename := ""
+	filename = ""
 	if len(fields) > 1 {
 		filename = strings.TrimPrefix(path.Base(fields[1]), "*")
 	}
@@ -381,12 +464,12 @@ func fileNameFromURL(rawURL string) string {
 	return base
 }
 
-func hashFileSHA256(path string) (string, error) {
+func hashFileSHA256(path string) (hash string, retErr error) {
 	file, err := openFileFn(path)
 	if err != nil {
 		return "", fmt.Errorf("failed to open bundle for checksum: %w", err)
 	}
-	defer file.Close()
+	defer closeFileWithContext(&retErr, file, "failed to close bundle after checksum")
 
 	hasher := sha256.New()
 	if _, err := io.Copy(hasher, file); err != nil {
@@ -427,18 +510,18 @@ func normalizeVersionTag(version string) string {
 	return "v" + v
 }
 
-func extractHostAgentBinaries(archivePath, targetDir string) error {
+func extractHostAgentBinaries(archivePath, targetDir string) (retErr error) {
 	file, err := openFileFn(archivePath)
 	if err != nil {
 		return fmt.Errorf("failed to open host agent bundle: %w", err)
 	}
-	defer file.Close()
+	defer closeFileWithContext(&retErr, file, "failed to close host agent bundle")
 
 	gzReader, err := gzip.NewReader(file)
 	if err != nil {
 		return fmt.Errorf("failed to create gzip reader: %w", err)
 	}
-	defer gzReader.Close()
+	defer closeCloserWithContext(&retErr, gzReader, "failed to close host agent gzip reader")
 
 	tr := tar.NewReader(gzReader)
 	type pendingLink struct {
@@ -504,6 +587,7 @@ func extractHostAgentBinaries(archivePath, targetDir string) error {
 	return nil
 }
 
+<<<<<<< HEAD:internal/updates/host_agent_binaries.go
 func normalizeHostAgentSymlinkTarget(target string) (string, error) {
 	cleaned := strings.TrimSpace(path.Clean(target))
 	if cleaned == "" || cleaned == "." || cleaned == ".." {
@@ -519,6 +603,9 @@ func normalizeHostAgentSymlinkTarget(target string) (string, error) {
 }
 
 func writeHostAgentFile(destination string, reader io.Reader, mode os.FileMode) error {
+=======
+func writeHostAgentFile(destination string, reader io.Reader, mode os.FileMode) (retErr error) {
+>>>>>>> refactor/parallel-05-error-handling:internal/agentbinaries/host_agent.go
 	if err := mkdirAllFn(filepath.Dir(destination), 0o755); err != nil {
 		return fmt.Errorf("failed to create directory for %s: %w", destination, err)
 	}
@@ -527,15 +614,25 @@ func writeHostAgentFile(destination string, reader io.Reader, mode os.FileMode) 
 	if err != nil {
 		return fmt.Errorf("failed to create temporary file for %s: %w", destination, err)
 	}
-	defer removeFn(tmpFile.Name())
+	defer removeFileWithContext(&retErr, tmpFile.Name(), fmt.Sprintf("failed to remove temporary file for %s", destination))
 
 	if _, err := copyFn(tmpFile, reader); err != nil {
-		closeFileFn(tmpFile)
+		if closeErr := closeFileFn(tmpFile); closeErr != nil {
+			return errors.Join(
+				fmt.Errorf("failed to extract %s: %w", destination, err),
+				fmt.Errorf("failed to close temporary file for %s: %w", destination, closeErr),
+			)
+		}
 		return fmt.Errorf("failed to extract %s: %w", destination, err)
 	}
 
 	if err := chmodFileFn(tmpFile, normalizeExecutableMode(mode)); err != nil {
-		closeFileFn(tmpFile)
+		if closeErr := closeFileFn(tmpFile); closeErr != nil {
+			return errors.Join(
+				fmt.Errorf("failed to set permissions on %s: %w", destination, err),
+				fmt.Errorf("failed to close temporary file for %s: %w", destination, closeErr),
+			)
+		}
 		return fmt.Errorf("failed to set permissions on %s: %w", destination, err)
 	}
 
@@ -550,12 +647,12 @@ func writeHostAgentFile(destination string, reader io.Reader, mode os.FileMode) 
 	return nil
 }
 
-func copyHostAgentFile(source, destination string) error {
+func copyHostAgentFile(source, destination string) (retErr error) {
 	src, err := openFileFn(source)
 	if err != nil {
 		return fmt.Errorf("failed to open %s for fallback copy: %w", source, err)
 	}
-	defer src.Close()
+	defer closeFileWithContext(&retErr, src, fmt.Sprintf("failed to close source file %s", source))
 
 	if err := mkdirAllFn(filepath.Dir(destination), 0o755); err != nil {
 		return fmt.Errorf("failed to prepare directory for %s: %w", destination, err)
@@ -565,7 +662,7 @@ func copyHostAgentFile(source, destination string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create fallback copy %s: %w", destination, err)
 	}
-	defer dst.Close()
+	defer closeFileWithContext(&retErr, dst, fmt.Sprintf("failed to close fallback copy %s", destination))
 
 	if _, err := copyFn(dst, src); err != nil {
 		return fmt.Errorf("failed to copy %s to %s: %w", source, destination, err)

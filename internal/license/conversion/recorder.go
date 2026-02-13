@@ -22,7 +22,7 @@ func NewRecorder(agg *metering.WindowedAggregator, store *ConversionStore) *Reco
 // Record validates and records a conversion event as a metering event.
 func (r *Recorder) Record(event ConversionEvent) error {
 	if err := event.Validate(); err != nil {
-		return err
+		return fmt.Errorf("validate conversion event: %w", err)
 	}
 	if r == nil {
 		return nil
@@ -45,7 +45,7 @@ func (r *Recorder) Record(event ConversionEvent) error {
 			IdempotencyKey: event.IdempotencyKey,
 			CreatedAt:      time.UnixMilli(event.Timestamp).UTC(),
 		}); err != nil {
-			return err
+			return fmt.Errorf("persist conversion event: %w", err)
 		}
 	}
 
@@ -61,7 +61,9 @@ func (r *Recorder) Record(event ConversionEvent) error {
 		if errors.Is(err, metering.ErrDuplicateEvent) {
 			return nil
 		}
-		return err
+		if err != nil {
+			return fmt.Errorf("record metering conversion event: %w", err)
+		}
 	}
 
 	return nil

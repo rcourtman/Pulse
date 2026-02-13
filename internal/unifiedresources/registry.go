@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"log"
 	"sort"
 	"strings"
 	"sync"
@@ -92,6 +93,8 @@ func (rr *ResourceRegistry) loadOverrides() {
 	links, err := rr.store.GetLinks()
 	if err == nil {
 		rr.links = links
+	} else {
+		log.Printf("unifiedresources: failed to load manual links from store: %v", err)
 	}
 	exclusions, err := rr.store.GetExclusions()
 	if err == nil {
@@ -99,6 +102,8 @@ func (rr *ResourceRegistry) loadOverrides() {
 			key := exclusionKey(exclusion.ResourceA, exclusion.ResourceB)
 			rr.exclusions[key] = struct{}{}
 		}
+	} else {
+		log.Printf("unifiedresources: failed to load manual exclusions from store: %v", err)
 	}
 }
 

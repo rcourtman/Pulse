@@ -3,6 +3,7 @@ package hostagent
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -111,7 +112,7 @@ func CollectSMARTLocal(ctx context.Context, diskExclude []string) ([]DiskSMART, 
 	devices, err := listBlockDevices(ctx, diskExclude)
 	if err != nil {
 		log.Debug().Err(err).Msg("Failed to list block devices for SMART collection")
-		return nil, err
+		return nil, fmt.Errorf("list block devices for SMART collection: %w", err)
 	}
 
 	if len(devices) == 0 {
@@ -137,16 +138,24 @@ func CollectSMARTLocal(ctx context.Context, diskExclude []string) ([]DiskSMART, 
 // Devices matching any of the diskExclude patterns are skipped.
 func listBlockDevices(ctx context.Context, diskExclude []string) ([]string, error) {
 	if runtimeGOOS == "freebsd" {
-		return listBlockDevicesFreeBSD(ctx, diskExclude)
+		devices, err := listBlockDevicesFreeBSD(ctx, diskExclude)
+		if err != nil {
+			return nil, fmt.Errorf("list FreeBSD block devices: %w", err)
+		}
+		return devices, nil
 	}
-	return listBlockDevicesLinux(ctx, diskExclude)
+	devices, err := listBlockDevicesLinux(ctx, diskExclude)
+	if err != nil {
+		return nil, fmt.Errorf("list Linux block devices: %w", err)
+	}
+	return devices, nil
 }
 
 // listBlockDevicesLinux uses lsblk to find disks on Linux.
 func listBlockDevicesLinux(ctx context.Context, diskExclude []string) ([]string, error) {
 	output, err := runCommandOutput(ctx, "lsblk", "-d", "-n", "-o", "NAME,TYPE")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("run lsblk for block devices: %w", err)
 	}
 
 	var devices []string
@@ -174,7 +183,7 @@ func listBlockDevicesLinux(ctx context.Context, diskExclude []string) ([]string,
 func listBlockDevicesFreeBSD(ctx context.Context, diskExclude []string) ([]string, error) {
 	output, err := runCommandOutput(ctx, "sysctl", "-n", "kern.disks")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("run sysctl kern.disks: %w", err)
 	}
 
 	var devices []string
@@ -246,7 +255,7 @@ func collectDeviceSMART(ctx context.Context, device string) (*DiskSMART, error) 
 	// Check if smartctl is available
 	smartctlPath, err := execLookPath("smartctl")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("look up smartctl binary: %w", err)
 	}
 
 	// Run smartctl with standby check to avoid waking sleeping drives
@@ -272,17 +281,17 @@ func collectDeviceSMART(ctx context.Context, device string) (*DiskSMART, error) 
 			// Other exit codes might still have valid JSON output
 			// Continue parsing if we got output
 			if len(output) == 0 {
-				return nil, err
+				return nil, fmt.Errorf("run smartctl for %s: %w", device, err)
 			}
 		} else {
-			return nil, err
+			return nil, fmt.Errorf("run smartctl for %s: %w", device, err)
 		}
 	}
 
 	// Parse JSON output
 	var smartData smartctlJSON
 	if err := json.Unmarshal(output, &smartData); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse smartctl JSON for %s: %w", device, err)
 	}
 
 	result := &DiskSMART{

@@ -203,7 +203,10 @@ func (h *AIHandler) initTenantService(ctx context.Context, orgID string) AIServi
 	}
 
 	// We need the config to get the data directory
-	aiCfg, _ := persistence.LoadAIConfig()
+	aiCfg, err := persistence.LoadAIConfig()
+	if err != nil {
+		log.Warn().Str("orgID", orgID).Err(err).Msg("Failed to load AI config for tenant service initialization")
+	}
 
 	dataDir := h.getDataDir(aiCfg, persistence.DataDir())
 
@@ -314,8 +317,7 @@ func (h *AIHandler) Start(ctx context.Context, stateProvider AIStateProvider) er
 
 	h.legacyService = newChatService(chatCfg)
 	if err := h.legacyService.Start(ctx); err != nil {
-		log.Error().Err(err).Msg("Failed to start AI chat service")
-		return err
+		return fmt.Errorf("start AI chat service: %w", err)
 	}
 
 	// Initialize approval store for command approval workflow

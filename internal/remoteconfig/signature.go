@@ -62,7 +62,7 @@ func SignConfigPayload(payload SignedConfigPayload, privateKey ed25519.PrivateKe
 
 	canonical, err := canonicalConfigPayload(payload)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("canonicalize config payload: %w", err)
 	}
 
 	signature := ed25519.Sign(privateKey, canonical)
@@ -77,7 +77,7 @@ func VerifyConfigPayloadSignature(payload SignedConfigPayload, signatureBase64 s
 
 	canonical, err := canonicalConfigPayload(payload)
 	if err != nil {
-		return err
+		return fmt.Errorf("canonicalize config payload: %w", err)
 	}
 
 	signature, err := base64.StdEncoding.DecodeString(signatureBase64)
@@ -87,7 +87,7 @@ func VerifyConfigPayloadSignature(payload SignedConfigPayload, signatureBase64 s
 
 	keys, err := trustedConfigPublicKeys()
 	if err != nil {
-		return err
+		return fmt.Errorf("load trusted config public keys: %w", err)
 	}
 
 	for _, key := range keys {
@@ -112,7 +112,7 @@ func canonicalConfigPayload(payload SignedConfigPayload) ([]byte, error) {
 	if len(payload.Settings) > 0 {
 		data, err := marshalSortedMap(payload.Settings)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("marshal canonical settings: %w", err)
 		}
 		settings = data
 	}
@@ -125,7 +125,11 @@ func canonicalConfigPayload(payload SignedConfigPayload) ([]byte, error) {
 		Settings:        settings,
 	}
 
-	return json.Marshal(canonical)
+	data, err := json.Marshal(canonical)
+	if err != nil {
+		return nil, fmt.Errorf("marshal canonical payload: %w", err)
+	}
+	return data, nil
 }
 
 func trustedConfigPublicKeys() ([]ed25519.PublicKey, error) {
@@ -212,11 +216,11 @@ func marshalSortedMap(values map[string]interface{}) ([]byte, error) {
 		}
 		keyJSON, err := json.Marshal(key)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("marshal settings key %q: %w", key, err)
 		}
 		valueJSON, err := marshalCanonicalValue(values[key])
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("marshal settings value for key %q: %w", key, err)
 		}
 
 		builder.Write(keyJSON)
@@ -231,7 +235,11 @@ func marshalSortedMap(values map[string]interface{}) ([]byte, error) {
 func marshalCanonicalValue(value interface{}) ([]byte, error) {
 	switch typed := value.(type) {
 	case map[string]interface{}:
-		return marshalSortedMap(typed)
+		data, err := marshalSortedMap(typed)
+		if err != nil {
+			return nil, fmt.Errorf("marshal nested map value: %w", err)
+		}
+		return data, nil
 	case []interface{}:
 		var builder strings.Builder
 		builder.WriteByte('[')
@@ -241,13 +249,17 @@ func marshalCanonicalValue(value interface{}) ([]byte, error) {
 			}
 			itemJSON, err := marshalCanonicalValue(item)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("marshal list item %d: %w", i, err)
 			}
 			builder.Write(itemJSON)
 		}
 		builder.WriteByte(']')
 		return []byte(builder.String()), nil
 	default:
-		return json.Marshal(typed)
+		data, err := json.Marshal(typed)
+		if err != nil {
+			return nil, fmt.Errorf("marshal scalar value (%T): %w", typed, err)
+		}
+		return data, nil
 	}
 }

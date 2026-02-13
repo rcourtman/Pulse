@@ -2,6 +2,7 @@ package hostagent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 	"regexp"
@@ -42,14 +43,24 @@ func CollectRAIDArrays(ctx context.Context) ([]agentshost.RAIDArray, error) {
 	}
 
 	// Collect detailed info for each array
+<<<<<<< HEAD:internal/hostagent/mdadm.go
 	var arrays []agentshost.RAIDArray
+=======
+	var arrays []host.RAIDArray
+	var detailErrs []error
+>>>>>>> refactor/parallel-05-error-handling:internal/mdadm/mdadm.go
 	for _, device := range devices {
 		array, err := collectArrayDetail(ctx, device)
 		if err != nil {
-			// Log but don't fail - continue with other arrays
+			detailErrs = append(detailErrs, fmt.Errorf("collect detail for %s: %w", device, err))
 			continue
 		}
 		arrays = append(arrays, array)
+	}
+
+	// Keep best-effort behavior for partial success, but surface failures when all detail probes fail.
+	if len(arrays) == 0 && len(detailErrs) > 0 {
+		return nil, fmt.Errorf("collect mdadm array details: %w", errors.Join(detailErrs...))
 	}
 
 	return arrays, nil
@@ -128,7 +139,10 @@ func parseMdadmDetail(device, output string) (agentshost.RAIDArray, error) {
 		if inDeviceSection {
 			matches := slotRe.FindStringSubmatch(line)
 			if len(matches) >= 7 {
-				slot, _ := strconv.Atoi(matches[1])
+				slot, err := strconv.Atoi(matches[1])
+				if err != nil {
+					return host.RAIDArray{}, fmt.Errorf("parse slot for %s from %q: %w", device, matches[1], err)
+				}
 				state := strings.TrimSpace(matches[5])
 				devicePath := strings.TrimSpace(matches[6])
 
@@ -175,19 +189,61 @@ func parseMdadmDetail(device, output string) (agentshost.RAIDArray, error) {
 			case "State":
 				array.State = strings.ToLower(value)
 			case "Total Devices":
-				array.TotalDevices, _ = strconv.Atoi(value)
+				totalDevices, err := parseIntField(device, key, value)
+				if err != nil {
+					return host.RAIDArray{}, err
+				}
+				array.TotalDevices = totalDevices
 			case "Active Devices":
-				array.ActiveDevices, _ = strconv.Atoi(value)
+				activeDevices, err := parseIntField(device, key, value)
+				if err != nil {
+					return host.RAIDArray{}, err
+				}
+				array.ActiveDevices = activeDevices
 			case "Working Devices":
-				array.WorkingDevices, _ = strconv.Atoi(value)
+				workingDevices, err := parseIntField(device, key, value)
+				if err != nil {
+					return host.RAIDArray{}, err
+				}
+				array.WorkingDevices = workingDevices
 			case "Failed Devices":
-				array.FailedDevices, _ = strconv.Atoi(value)
+				failedDevices, err := parseIntField(device, key, value)
+				if err != nil {
+					return host.RAIDArray{}, err
+				}
+				array.FailedDevices = failedDevices
 			case "Spare Devices":
-				array.SpareDevices, _ = strconv.Atoi(value)
+				spareDevices, err := parseIntField(device, key, value)
+				if err != nil {
+					return host.RAIDArray{}, err
+				}
+				array.SpareDevices = spareDevices
 			case "UUID":
 				array.UUID = value
+<<<<<<< HEAD:internal/hostagent/mdadm.go
 			case "Rebuild Status", "Reshape Status":
 				array.RebuildPercent = parsePercentValue(value)
+=======
+			case "Rebuild Status":
+				// Parse rebuild percentage
+				// Format: "50% complete"
+				if strings.Contains(value, "%") {
+					rebuildPercent, err := parsePercentField(device, key, value)
+					if err != nil {
+						return host.RAIDArray{}, err
+					}
+					array.RebuildPercent = rebuildPercent
+				}
+			case "Reshape Status":
+				// Handle reshape similarly to rebuild
+				if strings.Contains(value, "%") {
+					reshapePercent, err := parsePercentField(device, key, value)
+					if err != nil {
+						return host.RAIDArray{}, err
+					}
+					array.RebuildPercent = reshapePercent
+				}
+>>>>>>> refactor/parallel-05-error-handling:internal/mdadm/mdadm.go
 			}
 		}
 	}
@@ -203,6 +259,7 @@ func parseMdadmDetail(device, output string) (agentshost.RAIDArray, error) {
 	return array, nil
 }
 
+<<<<<<< HEAD:internal/hostagent/mdadm.go
 // parsePercentValue parses a percentage string like "50% complete" and returns the numeric value.
 func parsePercentValue(value string) float64 {
 	if strings.Contains(value, "%") {
@@ -211,6 +268,23 @@ func parsePercentValue(value string) float64 {
 		return result
 	}
 	return 0
+=======
+func parseIntField(device, field, value string) (int, error) {
+	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		return 0, fmt.Errorf("parse %s for %s from %q: %w", strings.ToLower(field), device, value, err)
+	}
+	return parsed, nil
+}
+
+func parsePercentField(device, field, value string) (float64, error) {
+	percentStr := strings.TrimSpace(strings.SplitN(value, "%", 2)[0])
+	parsed, err := strconv.ParseFloat(percentStr, 64)
+	if err != nil {
+		return 0, fmt.Errorf("parse %s for %s from %q: %w", strings.ToLower(field), device, value, err)
+	}
+	return parsed, nil
+>>>>>>> refactor/parallel-05-error-handling:internal/mdadm/mdadm.go
 }
 
 // getRebuildSpeed extracts rebuild speed from /proc/mdstat

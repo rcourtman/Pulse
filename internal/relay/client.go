@@ -254,11 +254,17 @@ func (c *Client) connectAndHandle(ctx context.Context) (bool, error) {
 		c.channels = make(map[uint32]*channelState)
 		c.connected = false
 		c.mu.Unlock()
+<<<<<<< HEAD
 		conn.Close()
 		c.logger.Info().
 			Str("instance_id", instanceID).
 			Int("active_channels", activeChannels).
 			Msg("Relay connection closed")
+=======
+		if err := conn.Close(); err != nil {
+			c.logger.Debug().Err(err).Msg("Relay websocket close failed")
+		}
+>>>>>>> refactor/parallel-05-error-handling
 	}()
 
 	// Register with relay server
@@ -409,14 +415,18 @@ func (c *Client) readPump(ctx context.Context, conn *websocket.Conn, sendCh chan
 
 		case FrameDrain:
 			var drain DrainPayload
-			if err := UnmarshalControlPayload(frame.Payload, &drain); err == nil {
+			if err := UnmarshalControlPayload(frame.Payload, &drain); err != nil {
+				c.logger.Debug().Err(err).Msg("Failed to unmarshal DRAIN payload")
+			} else {
 				c.logger.Info().Str("reason", drain.Reason).Msg("Relay server draining, will reconnect")
 			}
 			return nil // exit readPump, triggers reconnect
 
 		case FrameError:
 			var errPayload ErrorPayload
-			if err := UnmarshalControlPayload(frame.Payload, &errPayload); err == nil {
+			if err := UnmarshalControlPayload(frame.Payload, &errPayload); err != nil {
+				c.logger.Warn().Err(err).Msg("Failed to unmarshal ERROR payload")
+			} else {
 				c.logger.Warn().Str("code", errPayload.Code).Str("message", errPayload.Message).Msg("Relay error")
 				if errPayload.Code == ErrCodeLicenseInvalid || errPayload.Code == ErrCodeLicenseExpired {
 					return &licenseError{code: errPayload.Code, message: errPayload.Message}
@@ -441,8 +451,10 @@ func (c *Client) writePump(ctx context.Context, conn *websocket.Conn, sendCh <-c
 		case <-ctx.Done():
 			// Send close message
 			conn.SetWriteDeadline(time.Now().Add(wsWriteWait))
-			conn.WriteMessage(websocket.CloseMessage,
-				websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+			if err := conn.WriteMessage(websocket.CloseMessage,
+				websocket.FormatCloseMessage(websocket.CloseNormalClosure, "")); err != nil {
+				c.logger.Debug().Err(err).Msg("WS close frame write failed")
+			}
 			return
 
 		case data, ok := <-sendCh:
@@ -491,7 +503,9 @@ func (c *Client) handleChannelOpen(frame Frame, sendCh chan<- []byte) {
 			ChannelID: payload.ChannelID,
 			Reason:    "invalid auth token",
 		})
-		if err == nil {
+		if err != nil {
+			c.logger.Warn().Err(err).Uint32("channel", payload.ChannelID).Msg("Failed to build CHANNEL_CLOSE frame")
+		} else {
 			queueFrame(sendCh, closeFrame, c.logger)
 		}
 		return
@@ -506,7 +520,9 @@ func (c *Client) handleChannelOpen(frame Frame, sendCh chan<- []byte) {
 
 	// Echo CHANNEL_OPEN to acknowledge
 	ackFrame, err := NewControlFrame(FrameChannelOpen, payload.ChannelID, payload)
-	if err == nil {
+	if err != nil {
+		c.logger.Warn().Err(err).Uint32("channel", payload.ChannelID).Msg("Failed to build CHANNEL_OPEN ack frame")
+	} else {
 		queueFrame(sendCh, ackFrame, c.logger)
 	}
 }
@@ -692,7 +708,9 @@ func (c *Client) closeAndRemoveChannel(channelID uint32, reason string, sendCh c
 		ChannelID: channelID,
 		Reason:    reason,
 	})
-	if err == nil {
+	if err != nil {
+		c.logger.Warn().Err(err).Uint32("channel", channelID).Msg("Failed to build CHANNEL_CLOSE frame")
+	} else {
 		queueFrame(sendCh, closeFrame, c.logger)
 	}
 }
@@ -700,6 +718,7 @@ func (c *Client) closeAndRemoveChannel(channelID uint32, reason string, sendCh c
 func (c *Client) handleChannelClose(frame Frame) {
 	var payload ChannelClosePayload
 	if err := UnmarshalControlPayload(frame.Payload, &payload); err != nil {
+		c.logger.Debug().Err(err).Uint32("channel", frame.Channel).Msg("Failed to unmarshal CHANNEL_CLOSE payload, using frame channel")
 		// Fall back to using frame channel ID
 		payload.ChannelID = frame.Channel
 	}

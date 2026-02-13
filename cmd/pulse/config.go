@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -240,15 +241,29 @@ var configAutoImportCmd = &cobra.Command{
 			if err != nil {
 				return fmt.Errorf("failed to fetch configuration from URL: %w", err)
 			}
-			defer resp.Body.Close()
 
 			if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+				if closeErr := resp.Body.Close(); closeErr != nil {
+					return errors.Join(
+						fmt.Errorf("failed to fetch configuration from URL: %s", resp.Status),
+						fmt.Errorf("failed to close configuration response body: %w", closeErr),
+					)
+				}
 				return fmt.Errorf("failed to fetch configuration from URL: %s", resp.Status)
 			}
 
 			body, err := io.ReadAll(resp.Body)
 			if err != nil {
+				if closeErr := resp.Body.Close(); closeErr != nil {
+					return errors.Join(
+						fmt.Errorf("failed to read configuration response: %w", err),
+						fmt.Errorf("failed to close configuration response body: %w", closeErr),
+					)
+				}
 				return fmt.Errorf("failed to read configuration response: %w", err)
+			}
+			if closeErr := resp.Body.Close(); closeErr != nil {
+				return fmt.Errorf("failed to close configuration response body: %w", closeErr)
 			}
 			if len(body) == 0 {
 				return fmt.Errorf("configuration response from URL was empty")
@@ -256,13 +271,13 @@ var configAutoImportCmd = &cobra.Command{
 
 			payload, err := server.NormalizeImportPayload(body)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to normalize imported configuration payload from URL: %w", err)
 			}
 			encryptedData = payload
 		} else if configData != "" {
 			payload, err := server.NormalizeImportPayload([]byte(configData))
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to normalize imported configuration payload from PULSE_INIT_CONFIG_DATA: %w", err)
 			}
 			encryptedData = payload
 		}

@@ -2,13 +2,14 @@ package account
 
 import (
 	"encoding/json"
-	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
+	"github.com/rs/zerolog/log"
 )
 
 type memberResponse struct {
@@ -72,7 +73,7 @@ func HandleListMembers(reg *registry.TenantRegistry) http.HandlerFunc {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(resp)
+		encodeJSON(w, resp)
 	}
 }
 
@@ -498,17 +499,23 @@ func decodeJSON[T any](w http.ResponseWriter, r *http.Request, dst *T) error {
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(dst); err != nil {
 		http.Error(w, "invalid JSON body", http.StatusBadRequest)
-		return err
+		return fmt.Errorf("decode request body: %w", err)
 	}
 	if err := dec.Decode(&struct{}{}); err != io.EOF {
 		if err == nil {
 			http.Error(w, "invalid JSON body", http.StatusBadRequest)
-			return errors.New("multiple JSON values")
+			return fmt.Errorf("decode request body: multiple JSON values")
 		}
 		http.Error(w, "invalid JSON body", http.StatusBadRequest)
-		return err
+		return fmt.Errorf("decode request body: %w", err)
 	}
 	return nil
+}
+
+func encodeJSON(w http.ResponseWriter, payload any) {
+	if err := json.NewEncoder(w).Encode(payload); err != nil {
+		log.Error().Err(err).Msg("cloudcp.account: encode JSON response")
+	}
 }
 
 func isNotFoundErr(err error) bool {

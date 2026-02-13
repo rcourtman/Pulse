@@ -60,7 +60,7 @@ func LoadConfig() (*CPConfig, error) {
 	}
 
 	if err := cfg.validate(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("validate control plane config: %w", err)
 	}
 	return cfg, nil
 }

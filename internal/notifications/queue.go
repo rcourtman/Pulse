@@ -3,6 +3,7 @@ package notifications
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -104,8 +105,13 @@ func NewNotificationQueue(dataDir string) (*NotificationQueue, error) {
 	}
 
 	if err := nq.initSchema(); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("failed to initialize schema: %w", err)
+		if closeErr := db.Close(); closeErr != nil {
+			return nil, fmt.Errorf(
+				"initialize notification queue schema: %w",
+				errors.Join(err, fmt.Errorf("close notification queue database after schema init failure: %w", closeErr)),
+			)
+		}
+		return nil, fmt.Errorf("initialize notification queue schema: %w", err)
 	}
 
 	// Reset any stuck "sending" items to "pending" (crash recovery)
@@ -172,7 +178,10 @@ func (nq *NotificationQueue) initSchema() error {
 	`
 
 	_, err := nq.db.Exec(schema)
-	return err
+	if err != nil {
+		return fmt.Errorf("create notification queue schema: %w", err)
+	}
+	return nil
 }
 
 // Enqueue adds a notification to the queue
@@ -264,7 +273,10 @@ func (nq *NotificationQueue) UpdateStatus(notificationID string, status Notifica
 		return fmt.Errorf("failed to update notification status: %w", err)
 	}
 
-	rows, _ := result.RowsAffected()
+	rows, rowsErr := result.RowsAffected()
+	if rowsErr != nil {
+		return fmt.Errorf("read rows affected for notification status update %q: %w", id, rowsErr)
+	}
 	if rows == 0 {
 		return fmt.Errorf("notification not found: %s", notificationID)
 	}
@@ -335,7 +347,10 @@ func (nq *NotificationQueue) GetPending(limit int) ([]*QueuedNotification, error
 		notifications = append(notifications, notif)
 	}
 
-	return notifications, rows.Err()
+	if err := rows.Err(); err != nil {
+		return notifications, fmt.Errorf("iterate pending notifications: %w", err)
+	}
+	return notifications, nil
 }
 
 // scanNotification scans a database row into a QueuedNotification
@@ -362,7 +377,7 @@ func (nq *NotificationQueue) scanNotification(rows *sql.Rows) (*QueuedNotificati
 		&notif.PayloadBytes,
 	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("scan notification row: %w", err)
 	}
 
 	notif.CreatedAt = time.Unix(createdAtUnix, 0)
@@ -453,7 +468,10 @@ func (nq *NotificationQueue) GetDLQ(limit int) ([]*QueuedNotification, error) {
 		notifications = append(notifications, notif)
 	}
 
-	return notifications, rows.Err()
+	if err := rows.Err(); err != nil {
+		return notifications, fmt.Errorf("iterate DLQ notifications: %w", err)
+	}
+	return notifications, nil
 }
 
 // RecordAudit records a notification delivery attempt in the audit log
@@ -465,7 +483,10 @@ func (nq *NotificationQueue) RecordAudit(notif *QueuedNotification, success bool
 	for i, alert := range notif.Alerts {
 		alertIDs[i] = alert.ID
 	}
-	alertIDsJSON, _ := json.Marshal(alertIDs)
+	alertIDsJSON, err := json.Marshal(alertIDs)
+	if err != nil {
+		return fmt.Errorf("marshal notification audit alert IDs for %q: %w", notif.ID, err)
+	}
 
 	query := `
 		INSERT INTO notification_audit
@@ -473,7 +494,7 @@ func (nq *NotificationQueue) RecordAudit(notif *QueuedNotification, success bool
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
-	_, err := nq.db.Exec(query,
+	_, err = nq.db.Exec(query,
 		notif.ID,
 		notif.Type,
 		notif.Method,
@@ -487,7 +508,10 @@ func (nq *NotificationQueue) RecordAudit(notif *QueuedNotification, success bool
 		time.Now().Unix(),
 	)
 
-	return err
+	if err != nil {
+		return fmt.Errorf("record notification audit for %q: %w", notif.ID, err)
+	}
+	return nil
 }
 
 // GetQueueStats returns statistics about the notification queue
@@ -507,7 +531,7 @@ func (nq *NotificationQueue) GetQueueStats() (map[string]int, error) {
 
 	rows, err := nq.db.Query(query, since)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("query notification queue stats: %w", err)
 	}
 	defer rows.Close()
 
@@ -516,9 +540,14 @@ func (nq *NotificationQueue) GetQueueStats() (map[string]int, error) {
 		var status string
 		var count int
 		if err := rows.Scan(&status, &count); err != nil {
+			log.Warn().Err(err).Msg("Failed to scan notification queue stats row")
 			continue
 		}
 		stats[status] = count
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate notification queue stats rows: %w", err)
 	}
 
 	return stats, nil
@@ -705,6 +734,7 @@ func (nq *NotificationQueue) performCleanup() {
 	query = `DELETE FROM notification_queue WHERE status IN ('sent', 'failed', 'cancelled') AND completed_at < ?`
 	result, err = tx.Exec(query, completedCutoff)
 	if err != nil {
+<<<<<<< HEAD
 		_ = tx.Rollback()
 		log.Error().Err(err).Msg("Failed to cleanup old completed notifications")
 		return
@@ -726,6 +756,15 @@ func (nq *NotificationQueue) performCleanup() {
 	}
 	if rows, rowsErr := result.RowsAffected(); rowsErr == nil {
 		auditDeleted += rows
+=======
+		log.Error().Err(err).Msg("Failed to cleanup old notifications")
+	} else {
+		if rows, rowsErr := result.RowsAffected(); rowsErr != nil {
+			log.Warn().Err(rowsErr).Msg("Failed to read rows affected for completed-notification cleanup")
+		} else if rows > 0 {
+			log.Info().Int64("count", rows).Msg("Cleaned up old completed notifications")
+		}
+>>>>>>> refactor/parallel-05-error-handling
 	}
 
 	// Clean old DLQ entries
@@ -734,10 +773,19 @@ func (nq *NotificationQueue) performCleanup() {
 	if err != nil {
 		_ = tx.Rollback()
 		log.Error().Err(err).Msg("Failed to cleanup old DLQ entries")
+<<<<<<< HEAD
 		return
 	}
 	if rows, rowsErr := result.RowsAffected(); rowsErr == nil {
 		queueDLQDeleted = rows
+=======
+	} else {
+		if rows, rowsErr := result.RowsAffected(); rowsErr != nil {
+			log.Warn().Err(rowsErr).Msg("Failed to read rows affected for DLQ cleanup")
+		} else if rows > 0 {
+			log.Info().Int64("count", rows).Msg("Cleaned up old DLQ entries")
+		}
+>>>>>>> refactor/parallel-05-error-handling
 	}
 
 	// Clean old audit logs (keep 30 days)
@@ -746,6 +794,7 @@ func (nq *NotificationQueue) performCleanup() {
 	if err != nil {
 		_ = tx.Rollback()
 		log.Error().Err(err).Msg("Failed to cleanup old audit logs")
+<<<<<<< HEAD
 		return
 	}
 	if rows, rowsErr := result.RowsAffected(); rowsErr == nil {
@@ -765,6 +814,14 @@ func (nq *NotificationQueue) performCleanup() {
 	}
 	if auditDeleted > 0 {
 		log.Debug().Int64("count", auditDeleted).Msg("Cleaned up old audit logs")
+=======
+	} else {
+		if rows, rowsErr := result.RowsAffected(); rowsErr != nil {
+			log.Warn().Err(rowsErr).Msg("Failed to read rows affected for audit-log cleanup")
+		} else if rows > 0 {
+			log.Debug().Int64("count", rows).Msg("Cleaned up old audit logs")
+		}
+>>>>>>> refactor/parallel-05-error-handling
 	}
 }
 
@@ -853,9 +910,12 @@ func (nq *NotificationQueue) CancelByAlertIDs(alertIDs []string) error {
 	}
 
 	rowsErr := rows.Err()
-	rows.Close() // Release connection before executing updates
+	closeErr := rows.Close() // Release connection before executing updates
 	if rowsErr != nil {
 		return fmt.Errorf("error iterating notifications for cancellation: %w", rowsErr)
+	}
+	if closeErr != nil {
+		return fmt.Errorf("close notification cancellation query rows: %w", closeErr)
 	}
 
 	// Cancel the matched notifications (using direct SQL since we already hold the lock)

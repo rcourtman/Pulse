@@ -1,6 +1,7 @@
 import { createMemo, createResource, onCleanup, createEffect, type Accessor } from 'solid-js';
 import { apiFetchJSON } from '@/utils/apiClient';
 import type { WorkloadGuest, WorkloadType } from '@/types/workloads';
+import { logger } from '@/utils/logger';
 
 const WORKLOADS_URL = '/api/resources?type=vm,lxc,docker_container,pod';
 const WORKLOADS_PAGE_LIMIT = 200;
@@ -514,7 +515,11 @@ export function useWorkloads(enabled: Accessor<boolean> = () => true) {
   };
 
   if (!hasFreshWorkloadsCache()) {
-    void fetchWorkloadsShared().then(applyWorkloads).catch(() => undefined);
+    void fetchWorkloadsShared()
+      .then(applyWorkloads)
+      .catch((err) => {
+        logger.warn('[useWorkloads] Failed to refresh stale workloads cache', err);
+      });
   }
 
   // Poll for fresh metrics while enabled.
@@ -527,8 +532,9 @@ export function useWorkloads(enabled: Accessor<boolean> = () => true) {
       try {
         const data = await fetchWorkloadsShared(true);
         applyWorkloads(data);
-      } catch {
-        // Silently ignore poll errors; keep showing last data
+      } catch (err) {
+        // Keep showing the last successful snapshot while polling recovers.
+        logger.debug('[useWorkloads] Poll refresh failed; retaining cached data', err);
       }
     }, DEFAULT_POLL_INTERVAL_MS);
     onCleanup(() => clearInterval(id));

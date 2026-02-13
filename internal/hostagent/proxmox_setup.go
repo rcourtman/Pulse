@@ -81,7 +81,9 @@ func (p *ProxmoxSetup) probePVEPrivilege(ctx context.Context, privilege string) 
 	if _, err := p.collector.CommandCombinedOutput(ctx, "pveum", "role", "add", roleName, "-privs", privilege); err != nil {
 		return false
 	}
-	_, _ = p.collector.CommandCombinedOutput(ctx, "pveum", "role", "delete", roleName)
+	if _, err := p.collector.CommandCombinedOutput(ctx, "pveum", "role", "delete", roleName); err != nil {
+		p.logger.Debug().Err(err).Str("role", roleName).Msg("Failed to cleanup temporary PVE privilege probe role")
+	}
 	return true
 }
 
@@ -128,7 +130,9 @@ func (p *ProxmoxSetup) configurePVEPermissions(ctx context.Context) {
 	}
 
 	// Add PVEDatastoreAdmin on /storage for backup visibility (issue #1139)
-	_, _ = p.collector.CommandCombinedOutput(ctx, "pveum", "aclmod", "/storage", "-user", proxmoxUserPVE, "-role", "PVEDatastoreAdmin")
+	if _, err := p.collector.CommandCombinedOutput(ctx, "pveum", "aclmod", "/storage", "-user", proxmoxUserPVE, "-role", "PVEDatastoreAdmin"); err != nil {
+		p.logger.Warn().Err(err).Msg("Failed to apply PVEDatastoreAdmin role on /storage")
+	}
 }
 
 var (
@@ -247,7 +251,7 @@ func (p *ProxmoxSetup) RunAll(ctx context.Context) ([]*ProxmoxSetupResult, error
 	if p.proxmoxType != proxmoxProductUnknown {
 		result, err := p.runForType(ctx, p.proxmoxType)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("setup proxmox type %s: %w", p.proxmoxType, err)
 		}
 		if result != nil {
 			results = append(results, result)
@@ -372,7 +376,13 @@ func (p *ProxmoxSetup) setupToken(ctx context.Context, ptype proxmoxProductType)
 // setupPVEToken creates a PVE monitoring user and token.
 func (p *ProxmoxSetup) setupPVEToken(ctx context.Context, tokenName string) (string, string, error) {
 	// Create user (ignore error if already exists)
-	_, _ = p.collector.CommandCombinedOutput(ctx, "pveum", "user", "add", proxmoxUserPVE, "--comment", proxmoxComment)
+	if out, err := p.collector.CommandCombinedOutput(ctx, "pveum", "user", "add", proxmoxUserPVE, "--comment", proxmoxComment); err != nil {
+		if isAlreadyExistsOutput(out) {
+			p.logger.Debug().Msg("Proxmox PVE monitor user already exists")
+		} else {
+			p.logger.Warn().Err(err).Str("output", strings.TrimSpace(out)).Msg("Failed to create Proxmox PVE monitor user")
+		}
+	}
 
 	// Apply baseline + optional enhanced permissions (Sys.Audit, guest agent access).
 	p.configurePVEPermissions(ctx)
@@ -396,10 +406,18 @@ func (p *ProxmoxSetup) setupPVEToken(ctx context.Context, tokenName string) (str
 // setupPBSToken creates a PBS monitoring user and token.
 func (p *ProxmoxSetup) setupPBSToken(ctx context.Context, tokenName string) (string, string, error) {
 	// Create user (ignore error if already exists)
-	_, _ = p.collector.CommandCombinedOutput(ctx, "proxmox-backup-manager", "user", "create", proxmoxUserPBS)
+	if out, err := p.collector.CommandCombinedOutput(ctx, "proxmox-backup-manager", "user", "create", proxmoxUserPBS); err != nil {
+		if isAlreadyExistsOutput(out) {
+			p.logger.Debug().Msg("Proxmox PBS monitor user already exists")
+		} else {
+			p.logger.Warn().Err(err).Str("output", strings.TrimSpace(out)).Msg("Failed to create Proxmox PBS monitor user")
+		}
+	}
 
 	// Add Audit role
-	_, _ = p.collector.CommandCombinedOutput(ctx, "proxmox-backup-manager", "acl", "update", "/", "Audit", "--auth-id", proxmoxUserPBS)
+	if out, err := p.collector.CommandCombinedOutput(ctx, "proxmox-backup-manager", "acl", "update", "/", "Audit", "--auth-id", proxmoxUserPBS); err != nil {
+		p.logger.Warn().Err(err).Str("output", strings.TrimSpace(out)).Msg("Failed to apply PBS Audit role to monitor user")
+	}
 
 	// Create token
 	output, err := p.collector.CommandCombinedOutput(ctx, "proxmox-backup-manager", "user", "generate-token", proxmoxUserPBS, tokenName)
@@ -415,7 +433,9 @@ func (p *ProxmoxSetup) setupPBSToken(ctx context.Context, tokenName string) (str
 
 	// Add Audit role for the token itself
 	tokenID := fmt.Sprintf("%s!%s", proxmoxUserPBS, tokenName)
-	_, _ = p.collector.CommandCombinedOutput(ctx, "proxmox-backup-manager", "acl", "update", "/", "Audit", "--auth-id", tokenID)
+	if out, err := p.collector.CommandCombinedOutput(ctx, "proxmox-backup-manager", "acl", "update", "/", "Audit", "--auth-id", tokenID); err != nil {
+		p.logger.Warn().Err(err).Str("token_id", tokenID).Str("output", strings.TrimSpace(out)).Msg("Failed to apply PBS Audit role to token")
+	}
 
 	return tokenID, tokenValue, nil
 }
@@ -562,7 +582,11 @@ func (p *ProxmoxSetup) getIPThatReachesPulse() string {
 		p.logger.Debug().Err(err).Str("target", host).Msg("Could not determine local IP for Pulse connection (routing check failed)")
 		return ""
 	}
-	defer conn.Close()
+	defer func() {
+		if closeErr := conn.Close(); closeErr != nil {
+			p.logger.Debug().Err(closeErr).Msg("Failed to close local route probe connection")
+		}
+	}()
 
 	localAddr, ok := conn.LocalAddr().(*net.UDPAddr)
 	if !ok || localAddr == nil {
@@ -582,7 +606,12 @@ func (p *ProxmoxSetup) getIPThatReachesPulse() string {
 func (p *ProxmoxSetup) getIPForHostname() string {
 	hostname := p.hostname
 	if hostname == "" {
-		hostname, _ = p.collector.Hostname()
+		var err error
+		hostname, err = p.collector.Hostname()
+		if err != nil {
+			p.logger.Debug().Err(err).Msg("Could not resolve system hostname")
+			return ""
+		}
 	}
 	if hostname == "" {
 		return ""
@@ -732,13 +761,22 @@ func (p *ProxmoxSetup) registerWithPulse(ctx context.Context, ptype proxmoxProdu
 	if err != nil {
 		return fmt.Errorf("request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			p.logger.Debug().Err(closeErr).Msg("Failed to close auto-register response body")
+		}
+	}()
 
 	if resp.StatusCode >= 400 {
 		return fmt.Errorf("auto-register returned %d", resp.StatusCode)
 	}
 
 	return nil
+}
+
+func isAlreadyExistsOutput(output string) bool {
+	text := strings.ToLower(strings.TrimSpace(output))
+	return strings.Contains(text, "already exists")
 }
 
 // isAlreadyRegistered checks if we've already done Proxmox setup.

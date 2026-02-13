@@ -1,6 +1,9 @@
 package metrics
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -96,5 +99,74 @@ func TestGetWindowsForResource(t *testing.T) {
 	limited := recorder.GetWindowsForResource("res-1", 1)
 	if len(limited) != 1 || limited[0].ID != "new" {
 		t.Fatalf("expected most recent completed window, got %+v", limited)
+	}
+}
+
+func TestSaveToDiskWrapsMkdirError(t *testing.T) {
+	dir := t.TempDir()
+	blockingPath := filepath.Join(dir, "not-a-directory")
+	if err := os.WriteFile(blockingPath, []byte("x"), 0600); err != nil {
+		t.Fatalf("failed to create blocking file: %v", err)
+	}
+
+	recorder := NewIncidentRecorder(IncidentRecorderConfig{})
+	recorder.dataDir = blockingPath
+	recorder.filePath = filepath.Join(blockingPath, "incident_windows.json")
+
+	err := recorder.saveToDisk()
+	if err == nil {
+		t.Fatal("expected saveToDisk to fail when data dir is a file")
+	}
+	if !strings.Contains(err.Error(), "incident recorder save: ensure data directory") {
+		t.Fatalf("expected contextual mkdir error, got: %v", err)
+	}
+}
+
+func TestLoadFromDiskWrapsParseError(t *testing.T) {
+	dir := t.TempDir()
+	filePath := filepath.Join(dir, "incident_windows.json")
+	if err := os.WriteFile(filePath, []byte("{"), 0600); err != nil {
+		t.Fatalf("failed to seed invalid JSON: %v", err)
+	}
+
+	recorder := NewIncidentRecorder(IncidentRecorderConfig{})
+	recorder.filePath = filePath
+
+	err := recorder.loadFromDisk()
+	if err == nil {
+		t.Fatal("expected loadFromDisk to fail on malformed JSON")
+	}
+	if !strings.Contains(err.Error(), "incident recorder load: parse file") {
+		t.Fatalf("expected contextual parse error, got: %v", err)
+	}
+}
+
+func TestSaveToDiskRenameFailureCleansTempFile(t *testing.T) {
+	dir := t.TempDir()
+	recorder := NewIncidentRecorder(IncidentRecorderConfig{DataDir: dir})
+
+	now := time.Now()
+	recorder.completedWindows = []*IncidentWindow{
+		{
+			ID:      "window-1",
+			EndTime: &now,
+			Status:  IncidentWindowStatusComplete,
+		},
+	}
+
+	if err := os.Mkdir(recorder.filePath, 0755); err != nil {
+		t.Fatalf("failed to create destination directory at file path: %v", err)
+	}
+
+	tmpPath := recorder.filePath + ".tmp"
+	err := recorder.saveToDisk()
+	if err == nil {
+		t.Fatal("expected saveToDisk to fail when rename target is a directory")
+	}
+	if !strings.Contains(err.Error(), "incident recorder save: commit temp file") {
+		t.Fatalf("expected contextual rename error, got: %v", err)
+	}
+	if _, statErr := os.Stat(tmpPath); !os.IsNotExist(statErr) {
+		t.Fatalf("expected temp file cleanup after rename failure, stat err: %v", statErr)
 	}
 }

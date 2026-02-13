@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -45,6 +46,8 @@ type Response struct {
 		Signature       string                 `json:"signature,omitempty"`
 	} `json:"config"`
 }
+
+const maxHTTPErrorBodyBytes = 4096
 
 // New creates a new remote config client.
 func New(cfg Config) *Client {
@@ -91,7 +94,7 @@ func (c *Client) Fetch(ctx context.Context) (map[string]interface{}, *bool, erro
 	signatureRequired := isConfigSignatureRequired()
 	hostID := c.cfg.AgentID
 	if resolved, err := c.resolveHostID(ctx); err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("resolve host ID: %w", err)
 	} else if resolved != "" {
 		hostID = resolved
 	}
@@ -110,10 +113,14 @@ func (c *Client) Fetch(ctx context.Context) (map[string]interface{}, *bool, erro
 	if err != nil {
 		return nil, nil, fmt.Errorf("do request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			c.cfg.Logger.Warn().Err(closeErr).Msg("Failed to close config response body")
+		}
+	}()
 
 	if resp.StatusCode >= 300 {
-		return nil, nil, fmt.Errorf("server responded with status %s", resp.Status)
+		return nil, nil, formatHTTPStatusError(resp, "fetch remote config")
 	}
 
 	var configResp Response
@@ -183,13 +190,17 @@ func (c *Client) resolveHostID(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("host lookup request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			c.cfg.Logger.Warn().Err(closeErr).Msg("Failed to close host lookup response body")
+		}
+	}()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return "", nil
 	}
 	if resp.StatusCode >= 300 {
-		return "", fmt.Errorf("host lookup responded with status %s", resp.Status)
+		return "", formatHTTPStatusError(resp, "host lookup")
 	}
 
 	var payload struct {
@@ -207,6 +218,7 @@ func (c *Client) resolveHostID(ctx context.Context) (string, error) {
 	return strings.TrimSpace(payload.Host.ID), nil
 }
 
+<<<<<<< HEAD
 func normalizeConfig(cfg Config) (Config, error) {
 	cfg.PulseURL = strings.TrimSpace(cfg.PulseURL)
 	if cfg.PulseURL == "" {
@@ -255,4 +267,18 @@ func normalizePulseURL(raw string) (string, error) {
 	}
 
 	return strings.TrimRight(parsed.String(), "/"), nil
+=======
+func formatHTTPStatusError(resp *http.Response, operation string) error {
+	body, readErr := io.ReadAll(io.LimitReader(resp.Body, maxHTTPErrorBodyBytes))
+	if readErr != nil {
+		return fmt.Errorf("%s responded with status %s (failed to read response body: %w)", operation, resp.Status, readErr)
+	}
+
+	detail := strings.TrimSpace(string(body))
+	if detail == "" {
+		return fmt.Errorf("%s responded with status %s", operation, resp.Status)
+	}
+
+	return fmt.Errorf("%s responded with status %s: %s", operation, resp.Status, detail)
+>>>>>>> refactor/parallel-05-error-handling
 }

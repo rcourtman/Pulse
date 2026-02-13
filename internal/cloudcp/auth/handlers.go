@@ -189,12 +189,23 @@ func HandleAdminGenerateMagicLink(svc *Service, baseURL string, emailSender emai
 			Msg("Admin generated magic link")
 
 		w.Header().Set("Content-Type", "application/json")
+<<<<<<< HEAD
 		_ = json.NewEncoder(w).Encode(adminGenerateMagicLinkResponse{
 			URL:       magicURL,
 			Email:     req.Email,
 			TenantID:  req.TenantID,
 			EmailSent: emailSent,
 		})
+=======
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			"url":        magicURL,
+			"email":      req.Email,
+			"tenant_id":  req.TenantID,
+			"email_sent": emailSent,
+		}); err != nil {
+			log.Error().Err(err).Msg("cloudcp.auth: encode admin magic link response")
+		}
+>>>>>>> refactor/parallel-05-error-handling
 	}
 }
 
@@ -221,8 +232,17 @@ func auditEvent(r *http.Request, eventName, outcome string) *zerolog.Event {
 func writeError(w http.ResponseWriter, status int, code, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
+<<<<<<< HEAD
 	_ = json.NewEncoder(w).Encode(errorResponse{
 		Error:   code,
 		Message: message,
 	})
+=======
+	if err := json.NewEncoder(w).Encode(map[string]string{
+		"error":   code,
+		"message": message,
+	}); err != nil {
+		log.Error().Err(err).Msg("cloudcp.auth: encode error response")
+	}
+>>>>>>> refactor/parallel-05-error-handling
 }

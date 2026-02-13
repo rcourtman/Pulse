@@ -256,6 +256,7 @@ func (u *Updater) getServerVersion(ctx context.Context) (string, error) {
 
 	resp, err := u.getWithRetry(ctx, versionURL, "version check")
 	if err != nil {
+<<<<<<< HEAD
 		return "", err
 	}
 	defer resp.Body.Close()
@@ -310,6 +311,9 @@ func (u *Updater) newAuthedGetRequest(ctx context.Context, requestURL string) (*
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
 	if err != nil {
 		return nil, err
+=======
+		return "", fmt.Errorf("agentupdate.getServerVersion: create request: %w", err)
+>>>>>>> refactor/parallel-05-error-handling
 	}
 
 	if u.cfg.APIToken != "" {
@@ -317,6 +321,7 @@ func (u *Updater) newAuthedGetRequest(ctx context.Context, requestURL string) (*
 		req.Header.Set("Authorization", "Bearer "+u.cfg.APIToken)
 	}
 
+<<<<<<< HEAD
 	return req, nil
 }
 
@@ -378,13 +383,35 @@ func (u *Updater) getWithRetry(ctx context.Context, requestURL, operation string
 		if err := retrySleepFn(ctx, delay); err != nil {
 			return nil, fmt.Errorf("%s request canceled while waiting to retry: %w", operation, err)
 		}
+=======
+	resp, err := u.client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("agentupdate.getServerVersion: execute request: %w", err)
+	}
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			u.logger.Warn().Err(closeErr).Msg("agentupdate.getServerVersion: failed to close response body")
+		}
+	}()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("agentupdate.getServerVersion: server returned status %d", resp.StatusCode)
+>>>>>>> refactor/parallel-05-error-handling
 	}
 
 	if lastErr == nil {
 		lastErr = fmt.Errorf("%s request failed", operation)
 	}
 
+<<<<<<< HEAD
 	return nil, lastErr
+=======
+	if err := json.NewDecoder(resp.Body).Decode(&versionResp); err != nil {
+		return "", fmt.Errorf("agentupdate.getServerVersion: decode response: %w", err)
+	}
+
+	return versionResp.Version, nil
+>>>>>>> refactor/parallel-05-error-handling
 }
 
 // isUnraid checks if we're running on Unraid by looking for /etc/unraid-version
@@ -394,16 +421,25 @@ func isUnraid() bool {
 }
 
 // verifyBinaryMagic checks that the file is a valid executable for the current platform
-func verifyBinaryMagic(path string) error {
+func verifyBinaryMagic(path string) (retErr error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return fmt.Errorf("verifyBinaryMagic: open %s: %w", path, err)
 	}
-	defer f.Close()
+	defer func() {
+		if closeErr := f.Close(); closeErr != nil {
+			closeWrapped := fmt.Errorf("verifyBinaryMagic: close %s: %w", path, closeErr)
+			if retErr != nil {
+				retErr = errors.Join(retErr, closeWrapped)
+				return
+			}
+			retErr = closeWrapped
+		}
+	}()
 
 	magic := make([]byte, 4)
 	if _, err := io.ReadFull(f, magic); err != nil {
-		return fmt.Errorf("failed to read magic bytes: %w", err)
+		return fmt.Errorf("verifyBinaryMagic: read magic bytes from %s: %w", path, err)
 	}
 
 	switch runtimeGOOS {
@@ -412,7 +448,7 @@ func verifyBinaryMagic(path string) error {
 		if magic[0] == 0x7f && magic[1] == 'E' && magic[2] == 'L' && magic[3] == 'F' {
 			return nil
 		}
-		return errors.New("not a valid ELF binary")
+		return fmt.Errorf("verifyBinaryMagic: %s is not a valid ELF binary", path)
 
 	case goOSDarwin:
 		// Mach-O magic bytes (little-endian):
@@ -425,14 +461,14 @@ func verifyBinaryMagic(path string) error {
 			(magic[0] == 0xca && magic[1] == 0xfe && magic[2] == 0xba && magic[3] == 0xbe) { // universal
 			return nil
 		}
-		return errors.New("not a valid Mach-O binary")
+		return fmt.Errorf("verifyBinaryMagic: %s is not a valid Mach-O binary", path)
 
 	case goOSWindows:
 		// PE magic: 'M' 'Z'
 		if magic[0] == 'M' && magic[1] == 'Z' {
 			return nil
 		}
-		return errors.New("not a valid PE binary")
+		return fmt.Errorf("verifyBinaryMagic: %s is not a valid PE binary", path)
 
 	default:
 		// Unknown platform, skip verification
@@ -468,12 +504,37 @@ func (u *Updater) performUpdateWithExecPath(ctx context.Context, execPath string
 	candidates = append(candidates, downloadBase)
 
 	var resp *http.Response
-	lastErr := errors.New("failed to download binary")
+	lastErr := fmt.Errorf("failed to download binary from all candidate URLs")
 
 	for _, candidateURL := range candidates {
 		response, err := u.getWithRetry(ctx, candidateURL, "binary download")
 		if err != nil {
+<<<<<<< HEAD
 			lastErr = err
+=======
+			lastErr = fmt.Errorf("failed to create download request for %s: %w", url, err)
+			continue
+		}
+
+		if u.cfg.APIToken != "" {
+			req.Header.Set("X-API-Token", u.cfg.APIToken)
+			req.Header.Set("Authorization", "Bearer "+u.cfg.APIToken)
+		}
+
+		response, err := u.client.Do(req)
+		if err != nil {
+			lastErr = fmt.Errorf("failed to download binary from %s: %w", url, err)
+			continue
+		}
+
+		if response.StatusCode != http.StatusOK {
+			statusErr := fmt.Errorf("download from %s failed with status: %s", url, response.Status)
+			if closeErr := response.Body.Close(); closeErr != nil {
+				lastErr = errors.Join(statusErr, fmt.Errorf("failed to close failed download response body: %w", closeErr))
+			} else {
+				lastErr = statusErr
+			}
+>>>>>>> refactor/parallel-05-error-handling
 			continue
 		}
 
@@ -485,7 +546,11 @@ func (u *Updater) performUpdateWithExecPath(ctx context.Context, execPath string
 	if resp == nil {
 		return lastErr
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			u.logger.Warn().Err(closeErr).Msg("agentupdate.performUpdateWithExecPath: failed to close download response body")
+		}
+	}()
 
 	// Verify checksum if provided
 	checksumHeader := strings.TrimSpace(resp.Header.Get(checksumSHA256Header))
@@ -505,19 +570,29 @@ func (u *Updater) performUpdateWithExecPath(ctx context.Context, execPath string
 		return fmt.Errorf("failed to create temp file: %w", err)
 	}
 	tmpPath := tmpFile.Name()
-	defer os.Remove(tmpPath) // Clean up on failure
+	defer func() {
+		if removeErr := os.Remove(tmpPath); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
+			u.logger.Warn().Err(removeErr).Str("path", tmpPath).Msg("agentupdate.performUpdateWithExecPath: failed to remove temp file")
+		}
+	}() // Clean up on failure
 
 	// Write downloaded binary with checksum calculation and size limit
 	hasher := sha256.New()
 	limitedReader := io.LimitReader(resp.Body, maxBinarySizeBytes+1) // +1 to detect overflow
 	written, err := io.Copy(tmpFile, io.TeeReader(limitedReader, hasher))
 	if err != nil {
-		closeFileFn(tmpFile)
-		return fmt.Errorf("failed to write binary: %w", err)
+		writeErr := fmt.Errorf("failed to write binary: %w", err)
+		if closeErr := closeFileFn(tmpFile); closeErr != nil {
+			return errors.Join(writeErr, fmt.Errorf("failed to close temp file after write failure: %w", closeErr))
+		}
+		return writeErr
 	}
 	if written > maxBinarySizeBytes {
-		closeFileFn(tmpFile)
-		return fmt.Errorf("downloaded binary exceeds maximum size (%d bytes)", maxBinarySizeBytes)
+		sizeErr := fmt.Errorf("downloaded binary exceeds maximum size (%d bytes)", maxBinarySizeBytes)
+		if closeErr := closeFileFn(tmpFile); closeErr != nil {
+			return errors.Join(sizeErr, fmt.Errorf("failed to close temp file after size validation failure: %w", closeErr))
+		}
+		return sizeErr
 	}
 	if err := closeFileFn(tmpFile); err != nil {
 		return fmt.Errorf("failed to close temp file: %w", err)
@@ -554,16 +629,25 @@ func (u *Updater) performUpdateWithExecPath(ctx context.Context, execPath string
 
 	if err := renameFn(tmpPath, realExecPath); err != nil {
 		// Restore backup on failure
-		renameFn(backupPath, realExecPath)
+		if restoreErr := renameFn(backupPath, realExecPath); restoreErr != nil {
+			return errors.Join(
+				fmt.Errorf("failed to replace binary: %w", err),
+				fmt.Errorf("failed to restore backup binary: %w", restoreErr),
+			)
+		}
 		return fmt.Errorf("failed to replace binary: %w", err)
 	}
 
 	// Remove backup on success
-	os.Remove(backupPath)
+	if err := os.Remove(backupPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+		u.logger.Warn().Err(err).Str("path", backupPath).Msg("agentupdate.performUpdateWithExecPath: failed to remove backup binary")
+	}
 
 	// Write previous version to a file so the agent can report "updated from X" on next start
 	updateInfoPath := filepath.Join(targetDir, ".pulse-update-info")
-	_ = writeFileFn(updateInfoPath, []byte(u.cfg.CurrentVersion), 0644)
+	if err := writeFileFn(updateInfoPath, []byte(u.cfg.CurrentVersion), 0644); err != nil {
+		u.logger.Warn().Err(err).Str("path", updateInfoPath).Msg("agentupdate.performUpdateWithExecPath: failed to write update info")
+	}
 
 	// On Unraid, also update the persistent copy on the flash drive
 	// This ensures the update survives reboots
@@ -584,7 +668,9 @@ func (u *Updater) performUpdateWithExecPath(ctx context.Context, execPath string
 					u.logger.Warn().Err(err).Msg("Failed to write Unraid persistent binary")
 				} else if err := renameFn(tmpPersist, persistPath); err != nil {
 					u.logger.Warn().Err(err).Msg("Failed to rename Unraid persistent binary")
-					os.Remove(tmpPersist)
+					if removeErr := os.Remove(tmpPersist); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
+						u.logger.Warn().Err(removeErr).Str("path", tmpPersist).Msg("Failed to remove temporary Unraid persistent binary")
+					}
 				} else {
 					u.logger.Info().Str("path", persistPath).Msg("Updated Unraid persistent binary")
 				}

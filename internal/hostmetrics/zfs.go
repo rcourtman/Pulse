@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -59,7 +60,11 @@ func summarizeZFSPools(ctx context.Context, datasets []zfsDatasetUsage) []agents
 		return disksFromZpoolStats(pools, stats, mountpoints, bestDatasets)
 	}
 
-	log.Debug().Err(err).Msg("zfs: zpool stats unavailable, using fallback")
+	if err != nil {
+		log.Debug().Err(err).Msg("zfs: zpool stats unavailable, using fallback")
+	} else {
+		log.Debug().Msg("zfs: zpool stats query returned no data, using fallback")
+	}
 	return fallbackZFSDisks(bestDatasets, mountpoints)
 }
 
@@ -211,7 +216,7 @@ func fetchZpoolStats(ctx context.Context, pools []string) (map[string]zpoolStats
 
 	path, err := findZpool()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("zfs: locate zpool binary: %w", err)
 	}
 
 	args := []string{"list", "-Hp", "-o", "name,size,allocated,free"}
@@ -222,17 +227,25 @@ func fetchZpoolStats(ctx context.Context, pools []string) (map[string]zpoolStats
 	output, err := cmd.Output()
 	if err != nil {
 		log.Debug().Err(err).Str("cmd", cmd.String()).Msg("zfs: zpool list failed")
-		return nil, err
+		return nil, fmt.Errorf("zfs: execute %q: %w", cmd.String(), err)
 	}
 	log.Debug().Int("outputBytes", len(output)).Msg("zfs: zpool list succeeded")
 
-	return parseZpoolList(output)
+	stats, err := parseZpoolList(output)
+	if err != nil {
+		return nil, fmt.Errorf("zfs: parse zpool list output: %w", err)
+	}
+	return stats, nil
 }
 
 func parseZpoolList(output []byte) (map[string]zpoolStats, error) {
 	stats := make(map[string]zpoolStats)
 	scanner := bufio.NewScanner(bytes.NewReader(output))
+	var firstParseErr error
+	invalidLines := 0
+	lineNumber := 0
 	for scanner.Scan() {
+		lineNumber++
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" {
 			continue
@@ -240,19 +253,35 @@ func parseZpoolList(output []byte) (map[string]zpoolStats, error) {
 
 		fields := strings.Split(line, "\t")
 		if len(fields) < 4 {
+			invalidLines++
+			if firstParseErr == nil {
+				firstParseErr = fmt.Errorf("line %d: expected at least 4 tab-separated fields", lineNumber)
+			}
 			continue
 		}
 
 		size, err := strconv.ParseUint(fields[1], 10, 64)
 		if err != nil {
+			invalidLines++
+			if firstParseErr == nil {
+				firstParseErr = fmt.Errorf("line %d: parse size %q: %w", lineNumber, fields[1], err)
+			}
 			continue
 		}
 		alloc, err := strconv.ParseUint(fields[2], 10, 64)
 		if err != nil {
+			invalidLines++
+			if firstParseErr == nil {
+				firstParseErr = fmt.Errorf("line %d: parse allocated %q: %w", lineNumber, fields[2], err)
+			}
 			continue
 		}
 		free, err := strconv.ParseUint(fields[3], 10, 64)
 		if err != nil {
+			invalidLines++
+			if firstParseErr == nil {
+				firstParseErr = fmt.Errorf("line %d: parse free %q: %w", lineNumber, fields[3], err)
+			}
 			continue
 		}
 
@@ -264,10 +293,19 @@ func parseZpoolList(output []byte) (map[string]zpoolStats, error) {
 	}
 
 	if err := scanner.Err(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("scan zpool list output: %w", err)
 	}
 	if len(stats) == 0 {
-		return nil, fmt.Errorf("zpool list returned no usable data")
+		if firstParseErr != nil {
+			return nil, fmt.Errorf("zpool list returned no usable data (%d invalid lines): %w", invalidLines, firstParseErr)
+		}
+		return nil, errors.New("zpool list returned no usable data")
+	}
+	if invalidLines > 0 {
+		log.Debug().
+			Int("invalidLines", invalidLines).
+			Int("validPools", len(stats)).
+			Msg("zfs: skipped malformed zpool list rows")
 	}
 	return stats, nil
 }

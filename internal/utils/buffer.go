@@ -13,6 +13,10 @@ type Queue[T any] struct {
 
 // NewQueue creates a new Queue with the specified capacity.
 func NewQueue[T any](capacity int) *Queue[T] {
+	if capacity < 0 {
+		capacity = 0
+	}
+
 	return &Queue[T]{
 		data:     make([]T, 0, capacity),
 		capacity: capacity,
@@ -23,6 +27,11 @@ func NewQueue[T any](capacity int) *Queue[T] {
 func (q *Queue[T]) Push(item T) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
+
+	// Non-positive capacity means the queue is effectively disabled.
+	if q.capacity <= 0 {
+		return
+	}
 
 	if len(q.data) >= q.capacity {
 		// Drop oldest (shift left)

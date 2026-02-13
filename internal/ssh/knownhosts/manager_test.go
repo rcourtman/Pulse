@@ -440,8 +440,12 @@ func TestEnsureKnownHostsFileStatError(t *testing.T) {
 	}
 
 	m := &manager{path: filepath.Join(t.TempDir(), "known_hosts")}
-	if err := m.ensureKnownHostsFile(); err == nil {
+	err := m.ensureKnownHostsFile()
+	if err == nil {
 		t.Fatal("expected stat error")
+	}
+	if !strings.Contains(err.Error(), "knownhosts: stat") {
+		t.Fatalf("expected stat context, got %v", err)
 	}
 }
 
@@ -510,8 +514,48 @@ func TestAppendHostKeyWriteError(t *testing.T) {
 		return errWriteCloser{err: errors.New("write failed")}, nil
 	}
 
-	if err := appendHostKey("ignored", [][]byte{[]byte("example.com ssh-ed25519 AAAA")}); err == nil {
+	err := appendHostKey("ignored", [][]byte{[]byte("example.com ssh-ed25519 AAAA")})
+	if err == nil {
 		t.Fatal("expected write error")
+	}
+	if !strings.Contains(err.Error(), "knownhosts: write entry to ignored") {
+		t.Fatalf("expected write context, got %v", err)
+	}
+}
+
+func TestAppendHostKeyCloseError(t *testing.T) {
+	t.Cleanup(resetKnownHostsFns)
+	closeErr := errors.New("close failed")
+	appendOpenFileFn = func(string) (io.WriteCloser, error) {
+		return errWriteCloser{closeErr: closeErr}, nil
+	}
+
+	err := appendHostKey("ignored", [][]byte{[]byte("example.com ssh-ed25519 AAAA")})
+	if err == nil {
+		t.Fatal("expected close error")
+	}
+	if !errors.Is(err, closeErr) {
+		t.Fatalf("expected close error to be wrapped, got %v", err)
+	}
+}
+
+func TestAppendHostKeyWriteAndCloseErrorJoined(t *testing.T) {
+	t.Cleanup(resetKnownHostsFns)
+	writeErr := errors.New("write failed")
+	closeErr := errors.New("close failed")
+	appendOpenFileFn = func(string) (io.WriteCloser, error) {
+		return errWriteCloser{err: writeErr, closeErr: closeErr}, nil
+	}
+
+	err := appendHostKey("ignored", [][]byte{[]byte("example.com ssh-ed25519 AAAA")})
+	if err == nil {
+		t.Fatal("expected write+close error")
+	}
+	if !errors.Is(err, writeErr) {
+		t.Fatalf("expected write error to be wrapped, got %v", err)
+	}
+	if !errors.Is(err, closeErr) {
+		t.Fatalf("expected close error to be joined, got %v", err)
 	}
 }
 
@@ -545,8 +589,12 @@ func TestFindHostKeyLineOpenError(t *testing.T) {
 		return nil, errors.New("open failed")
 	}
 
-	if _, err := findHostKeyLine("ignored", "example.com", ""); err == nil {
+	_, err := findHostKeyLine("ignored", "example.com", "")
+	if err == nil {
 		t.Fatal("expected open error")
+	}
+	if !strings.Contains(err.Error(), "knownhosts: open ignored") {
+		t.Fatalf("expected open context, got %v", err)
 	}
 }
 
@@ -558,8 +606,12 @@ func TestFindHostKeyLineScannerError(t *testing.T) {
 		t.Fatalf("failed to write file: %v", err)
 	}
 
-	if _, err := findHostKeyLine(path, "example.com", ""); err == nil {
+	_, err := findHostKeyLine(path, "example.com", "")
+	if err == nil {
 		t.Fatal("expected scanner error")
+	}
+	if !strings.Contains(err.Error(), "knownhosts: scan "+path) {
+		t.Fatalf("expected scan context, got %v", err)
 	}
 }
 
@@ -744,15 +796,19 @@ func TestKeyscanCmdRunnerDefault(t *testing.T) {
 }
 
 type errWriteCloser struct {
-	err error
+	err      error
+	closeErr error
 }
 
 func (e errWriteCloser) Write(p []byte) (int, error) {
-	return 0, e.err
+	if e.err != nil {
+		return 0, e.err
+	}
+	return len(p), nil
 }
 
 func (e errWriteCloser) Close() error {
-	return nil
+	return e.closeErr
 }
 
 type bufferWriteCloser struct {

@@ -614,7 +614,14 @@ func (s *Service) collectFingerprints(ctx context.Context) {
 			fpKey := "docker:" + host.AgentID + ":" + newFP.ResourceID
 
 			// Get previous fingerprint
-			oldFP, _ := s.store.GetFingerprint(fpKey)
+			oldFP, err := s.store.GetFingerprint(fpKey)
+			if err != nil {
+				log.Warn().
+					Err(err).
+					Str("resource_id", fpKey).
+					Str("container", container.Name).
+					Msg("Failed to load previous Docker fingerprint")
+			}
 
 			// Update the fingerprint's ResourceID to include prefix for storage
 			newFP.ResourceID = fpKey
@@ -666,7 +673,15 @@ func (s *Service) collectFingerprints(ctx context.Context) {
 		fpKey := "lxc:" + lxc.Node + ":" + newFP.ResourceID
 
 		// Get previous fingerprint
-		oldFP, _ := s.store.GetFingerprint(fpKey)
+		oldFP, err := s.store.GetFingerprint(fpKey)
+		if err != nil {
+			log.Warn().
+				Err(err).
+				Str("resource_id", fpKey).
+				Str("lxc", lxc.Name).
+				Int("vmid", lxc.VMID).
+				Msg("Failed to load previous LXC fingerprint")
+		}
 
 		// Update the fingerprint's ResourceID to include prefix for storage
 		newFP.ResourceID = fpKey
@@ -719,7 +734,15 @@ func (s *Service) collectFingerprints(ctx context.Context) {
 		fpKey := "vm:" + vm.Node + ":" + newFP.ResourceID
 
 		// Get previous fingerprint
-		oldFP, _ := s.store.GetFingerprint(fpKey)
+		oldFP, err := s.store.GetFingerprint(fpKey)
+		if err != nil {
+			log.Warn().
+				Err(err).
+				Str("resource_id", fpKey).
+				Str("vm", vm.Name).
+				Int("vmid", vm.VMID).
+				Msg("Failed to load previous VM fingerprint")
+		}
 
 		// Update the fingerprint's ResourceID to include prefix for storage
 		newFP.ResourceID = fpKey
@@ -773,7 +796,15 @@ func (s *Service) collectFingerprints(ctx context.Context) {
 			fpKey := "k8s:" + cluster.ID + ":" + pod.Namespace + "/" + pod.Name
 
 			// Get previous fingerprint
-			oldFP, _ := s.store.GetFingerprint(fpKey)
+			oldFP, err := s.store.GetFingerprint(fpKey)
+			if err != nil {
+				log.Warn().
+					Err(err).
+					Str("resource_id", fpKey).
+					Str("pod", pod.Name).
+					Str("namespace", pod.Namespace).
+					Msg("Failed to load previous K8s pod fingerprint")
+			}
 
 			// Update the fingerprint's ResourceID to include prefix for storage
 			newFP.ResourceID = fpKey
@@ -921,7 +952,10 @@ func (s *Service) discoverDockerContainers(ctx context.Context, hosts []DockerHo
 			}
 
 			// Check existing discovery to see if it needs a deep scan
-			existing, _ := s.store.Get(id)
+			existing, err := s.store.Get(id)
+			if err != nil {
+				log.Warn().Err(err).Str("id", id).Msg("Failed to load existing discovery before shallow analysis")
+			}
 
 			// Analyze using metadata (shallow discovery)
 			discovery := s.analyzeDockerContainer(ctx, analyzer, container, host)
@@ -1186,10 +1220,16 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 
 	// Get current fingerprint (if available)
 	// Fingerprint key matches the resource ID format: type:host:id
-	currentFP, _ := s.store.GetFingerprint(resourceID)
+	currentFP, err := s.store.GetFingerprint(resourceID)
+	if err != nil {
+		log.Warn().Err(err).Str("id", resourceID).Msg("Failed to load current fingerprint; continuing without fingerprint check")
+	}
 
 	// Get existing discovery
-	existing, _ := s.store.Get(resourceID)
+	existing, err := s.store.Get(resourceID)
+	if err != nil {
+		log.Warn().Err(err).Str("id", resourceID).Msg("Failed to load existing discovery; running fresh discovery")
+	}
 
 	// Determine if we need to run discovery
 	needsDiscovery := false
@@ -1920,7 +1960,11 @@ func (s *Service) buildMetadataAnalysisPrompt(c DockerContainer, host DockerHost
 		info["mounts"] = mounts
 	}
 
-	infoJSON, _ := json.MarshalIndent(info, "", "  ")
+	infoJSON, err := json.MarshalIndent(info, "", "  ")
+	if err != nil {
+		log.Warn().Err(err).Str("container", c.Name).Msg("Failed to marshal Docker metadata for discovery prompt")
+		infoJSON = []byte("{}")
+	}
 
 	return fmt.Sprintf(`Analyze this Docker container and identify what service it's running.
 
@@ -1960,8 +2004,13 @@ Resource ID: %s
 Host: %s (%s)`, req.ResourceType, req.ResourceID, req.Hostname, req.HostID))
 
 	if len(req.Metadata) > 0 {
-		metaJSON, _ := json.MarshalIndent(req.Metadata, "", "  ")
-		sections = append(sections, fmt.Sprintf("Metadata:\n%s", string(metaJSON)))
+		metaJSON, err := json.MarshalIndent(req.Metadata, "", "  ")
+		if err != nil {
+			log.Warn().Err(err).Msg("Failed to marshal discovery metadata for analysis prompt")
+			sections = append(sections, fmt.Sprintf("Metadata:\n%v", req.Metadata))
+		} else {
+			sections = append(sections, fmt.Sprintf("Metadata:\n%s", string(metaJSON)))
+		}
 	}
 
 	if len(req.CommandOutputs) > 0 {
@@ -2165,8 +2214,11 @@ func parseDockerMounts(output string) []DockerBindMount {
 // GetDiscovery retrieves a discovery by ID.
 func (s *Service) GetDiscovery(id string) (*ResourceDiscovery, error) {
 	d, err := s.store.Get(id)
-	if err != nil || d == nil {
-		return d, err
+	if err != nil {
+		return nil, fmt.Errorf("get discovery %q: %w", id, err)
+	}
+	if d == nil {
+		return nil, nil
 	}
 	s.upgradeCLIAccessIfNeeded(d)
 	return d, nil
@@ -2193,7 +2245,10 @@ func (s *Service) GetDiscoveryByResource(resourceType ResourceType, hostID, reso
 				return dAlias, nil
 			}
 		}
-		return d, err
+		if err != nil {
+			return nil, fmt.Errorf("get discovery for %s/%s/%s: %w", resourceType, req.HostID, req.ResourceID, err)
+		}
+		return nil, nil
 	}
 
 	s.upgradeCLIAccessIfNeeded(d)
@@ -2204,7 +2259,7 @@ func (s *Service) GetDiscoveryByResource(resourceType ResourceType, hostID, reso
 func (s *Service) ListDiscoveries() ([]*ResourceDiscovery, error) {
 	discoveries, err := s.store.List()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list discoveries: %w", err)
 	}
 	discoveries = s.deduplicateDiscoveries(discoveries)
 	for _, d := range discoveries {
@@ -2217,7 +2272,7 @@ func (s *Service) ListDiscoveries() ([]*ResourceDiscovery, error) {
 func (s *Service) ListDiscoveriesByType(resourceType ResourceType) ([]*ResourceDiscovery, error) {
 	discoveries, err := s.store.ListByType(resourceType)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list discoveries by type %q: %w", resourceType, err)
 	}
 	discoveries = s.deduplicateDiscoveries(discoveries)
 	for _, d := range discoveries {
@@ -2230,7 +2285,7 @@ func (s *Service) ListDiscoveriesByType(resourceType ResourceType) ([]*ResourceD
 func (s *Service) ListDiscoveriesByHost(hostID string) ([]*ResourceDiscovery, error) {
 	discoveries, err := s.store.ListByHost(hostID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list discoveries by host %q: %w", hostID, err)
 	}
 	discoveries = s.deduplicateDiscoveries(discoveries)
 	for _, d := range discoveries {
@@ -2527,7 +2582,7 @@ func (s *Service) GetChangedResourceCount() (int, error) {
 	}
 	changed, err := s.store.GetChangedResources()
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("get changed discovery resources: %w", err)
 	}
 	return len(changed), nil
 }
@@ -2540,7 +2595,7 @@ func (s *Service) GetStaleResourceCount() (int, error) {
 	}
 	stale, err := s.store.GetStaleResources(s.maxDiscoveryAge)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("get stale discovery resources: %w", err)
 	}
 	return len(stale), nil
 }

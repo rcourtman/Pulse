@@ -2,6 +2,7 @@ package servicediscovery
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 )
@@ -23,7 +24,7 @@ func NewToolsAdapter(service *Service) *ToolsAdapter {
 func (a *ToolsAdapter) GetDiscovery(id string) (tools.DiscoverySourceData, error) {
 	discovery, err := a.service.GetDiscovery(id)
 	if err != nil {
-		return tools.DiscoverySourceData{}, err
+		return tools.DiscoverySourceData{}, fmt.Errorf("get discovery %q: %w", id, err)
 	}
 	if discovery == nil {
 		return tools.DiscoverySourceData{}, nil
@@ -35,7 +36,7 @@ func (a *ToolsAdapter) GetDiscovery(id string) (tools.DiscoverySourceData, error
 func (a *ToolsAdapter) GetDiscoveryByResource(resourceType, hostID, resourceID string) (tools.DiscoverySourceData, error) {
 	discovery, err := a.service.GetDiscoveryByResource(ResourceType(resourceType), hostID, resourceID)
 	if err != nil {
-		return tools.DiscoverySourceData{}, err
+		return tools.DiscoverySourceData{}, fmt.Errorf("get discovery for %s/%s/%s: %w", resourceType, hostID, resourceID, err)
 	}
 	if discovery == nil {
 		return tools.DiscoverySourceData{}, nil
@@ -47,7 +48,7 @@ func (a *ToolsAdapter) GetDiscoveryByResource(resourceType, hostID, resourceID s
 func (a *ToolsAdapter) ListDiscoveries() ([]tools.DiscoverySourceData, error) {
 	discoveries, err := a.service.ListDiscoveries()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list discoveries: %w", err)
 	}
 	return a.convertList(discoveries), nil
 }
@@ -56,7 +57,7 @@ func (a *ToolsAdapter) ListDiscoveries() ([]tools.DiscoverySourceData, error) {
 func (a *ToolsAdapter) ListDiscoveriesByType(resourceType string) ([]tools.DiscoverySourceData, error) {
 	discoveries, err := a.service.ListDiscoveriesByType(ResourceType(resourceType))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list discoveries by type %q: %w", resourceType, err)
 	}
 	return a.convertList(discoveries), nil
 }
@@ -65,7 +66,7 @@ func (a *ToolsAdapter) ListDiscoveriesByType(resourceType string) ([]tools.Disco
 func (a *ToolsAdapter) ListDiscoveriesByHost(hostID string) ([]tools.DiscoverySourceData, error) {
 	discoveries, err := a.service.ListDiscoveriesByHost(hostID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list discoveries by host %q: %w", hostID, err)
 	}
 	return a.convertList(discoveries), nil
 }
@@ -91,7 +92,7 @@ func (a *ToolsAdapter) TriggerDiscovery(ctx context.Context, resourceType, hostI
 
 	discovery, err := a.service.DiscoverResource(ctx, req)
 	if err != nil {
-		return tools.DiscoverySourceData{}, err
+		return tools.DiscoverySourceData{}, fmt.Errorf("trigger discovery for %s/%s/%s: %w", resourceType, hostID, resourceID, err)
 	}
 	if discovery == nil {
 		return tools.DiscoverySourceData{}, nil

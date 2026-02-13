@@ -79,7 +79,11 @@ func (a *InstallShAdapter) Execute(ctx context.Context, request UpdateRequest, p
 	if err != nil {
 		return fmt.Errorf("failed to create log file: %w", err)
 	}
-	defer logFd.Close()
+	defer func() {
+		if closeErr := logFd.Close(); closeErr != nil {
+			log.Warn().Err(closeErr).Str("log_file", logFile).Msg("Failed to close update log file")
+		}
+	}()
 
 	// Download install script
 	progressCb(UpdateProgress{
@@ -147,7 +151,9 @@ func (a *InstallShAdapter) Execute(ctx context.Context, request UpdateRequest, p
 			line := scanner.Text()
 
 			// Write to log file
-			fmt.Fprintln(logFd, line)
+			if _, writeErr := fmt.Fprintln(logFd, line); writeErr != nil {
+				log.Warn().Err(writeErr).Str("log_file", logFile).Msg("Failed to write update stdout line to log")
+			}
 
 			// Parse for backup path
 			if matches := backupRe.FindStringSubmatch(line); len(matches) > 1 {
@@ -167,7 +173,9 @@ func (a *InstallShAdapter) Execute(ctx context.Context, request UpdateRequest, p
 		scanner := bufio.NewScanner(stderr)
 		for scanner.Scan() {
 			line := scanner.Text()
-			fmt.Fprintln(logFd, "STDERR:", line)
+			if _, writeErr := fmt.Fprintln(logFd, "STDERR:", line); writeErr != nil {
+				log.Warn().Err(writeErr).Str("log_file", logFile).Msg("Failed to write update stderr line to log")
+			}
 		}
 	}()
 
@@ -269,11 +277,16 @@ func (a *InstallShAdapter) Rollback(ctx context.Context, eventID string) error {
 		}
 	}
 
-	_ = a.history.UpdateEntry(ctx, rollbackEventID, func(e *UpdateHistoryEntry) error {
+	if err := a.history.UpdateEntry(ctx, rollbackEventID, func(e *UpdateHistoryEntry) error {
 		e.Status = finalStatus
 		e.Error = updateError
 		return nil
-	})
+	}); err != nil {
+		log.Warn().
+			Err(err).
+			Str("event_id", rollbackEventID).
+			Msg("Failed to update rollback history entry")
+	}
 
 	return rollbackErr
 }
@@ -314,7 +327,12 @@ func (a *InstallShAdapter) executeRollback(ctx context.Context, entry *UpdateHis
 	log.Info().Str("source", entry.BackupPath).Msg("Restoring configuration")
 	if err := a.restoreConfig(ctx, entry.BackupPath, configDir); err != nil {
 		// Try to start service anyway
-		_ = a.startService(ctx, serviceName)
+		if startErr := a.startService(ctx, serviceName); startErr != nil {
+			log.Warn().
+				Err(startErr).
+				Str("service", serviceName).
+				Msg("Failed to restart Pulse service after configuration restore failure")
+		}
 		return fmt.Errorf("failed to restore config: %w", err)
 	}
 
@@ -323,7 +341,12 @@ func (a *InstallShAdapter) executeRollback(ctx context.Context, entry *UpdateHis
 	installDir := "/opt/pulse/bin/pulse"
 	if err := a.installBinary(ctx, binaryPath, installDir); err != nil {
 		// Try to start service anyway
-		_ = a.startService(ctx, serviceName)
+		if startErr := a.startService(ctx, serviceName); startErr != nil {
+			log.Warn().
+				Err(startErr).
+				Str("service", serviceName).
+				Msg("Failed to restart Pulse service after binary install failure")
+		}
 		return fmt.Errorf("failed to install binary: %w", err)
 	}
 
@@ -371,10 +394,14 @@ func (a *InstallShAdapter) downloadBinary(ctx context.Context, version string) (
 	// Determine architecture
 	arch := "amd64"
 	if _, err := os.Stat("/proc/cpuinfo"); err == nil {
-		output, _ := exec.Command("uname", "-m").Output()
-		machine := strings.TrimSpace(string(output))
-		if machine == "aarch64" || machine == "arm64" {
-			arch = "arm64"
+		output, cmdErr := exec.Command("uname", "-m").Output()
+		if cmdErr != nil {
+			log.Debug().Err(cmdErr).Msg("Failed to detect CPU architecture with uname -m; using amd64")
+		} else {
+			machine := strings.TrimSpace(string(output))
+			if machine == "aarch64" || machine == "arm64" {
+				arch = "arm64"
+			}
 		}
 	}
 
@@ -385,7 +412,7 @@ func (a *InstallShAdapter) downloadBinary(ctx context.Context, version string) (
 	// Create temp file
 	tmpDir, err := os.MkdirTemp("", "pulse-rollback-*")
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to create rollback temp directory: %w", err)
 	}
 
 	tarballPath := filepath.Join(tmpDir, tarballName)
@@ -423,7 +450,11 @@ func (a *InstallShAdapter) downloadBinary(ctx context.Context, version string) (
 		os.RemoveAll(tmpDir)
 		return "", fmt.Errorf("failed to open downloaded tarball: %w", err)
 	}
-	defer file.Close()
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil {
+			log.Warn().Err(closeErr).Str("path", tarballPath).Msg("Failed to close downloaded tarball")
+		}
+	}()
 
 	hasher := sha256.New()
 	if _, err := io.Copy(hasher, file); err != nil {
@@ -437,7 +468,9 @@ func (a *InstallShAdapter) downloadBinary(ctx context.Context, version string) (
 		return "", fmt.Errorf("checksum verification failed for %s", tarballName)
 	}
 
-	_ = os.Remove(checksumPath)
+	if removeErr := os.Remove(checksumPath); removeErr != nil && !os.IsNotExist(removeErr) {
+		log.Debug().Err(removeErr).Str("path", checksumPath).Msg("Failed to remove checksum file")
+	}
 
 	// Extract tarball to get the binary
 	extractDir := filepath.Join(tmpDir, "extracted")
@@ -461,7 +494,9 @@ func (a *InstallShAdapter) downloadBinary(ctx context.Context, version string) (
 	}
 
 	// Remove tarball to save space
-	_ = os.Remove(tarballPath)
+	if removeErr := os.Remove(tarballPath); removeErr != nil && !os.IsNotExist(removeErr) {
+		log.Debug().Err(removeErr).Str("path", tarballPath).Msg("Failed to remove downloaded tarball")
+	}
 
 	return binaryPath, nil
 }
@@ -495,21 +530,30 @@ func (a *InstallShAdapter) installBinary(ctx context.Context, sourcePath, target
 	// Backup current binary
 	if _, err := os.Stat(targetPath); err == nil {
 		backupPath := targetPath + ".pre-rollback"
-		_ = os.Rename(targetPath, backupPath)
+		if renameErr := os.Rename(targetPath, backupPath); renameErr != nil {
+			log.Warn().
+				Err(renameErr).
+				Str("target", targetPath).
+				Str("backup", backupPath).
+				Msg("Failed to back up existing binary before install")
+		}
 	}
 
 	// Copy new binary
 	if err := exec.CommandContext(ctx, "cp", sourcePath, targetPath).Run(); err != nil {
-		return err
+		return fmt.Errorf("copy binary to %s: %w", targetPath, err)
 	}
 
 	// Set permissions
 	if err := os.Chmod(targetPath, 0755); err != nil {
-		return err
+		return fmt.Errorf("set permissions on %s: %w", targetPath, err)
 	}
 
 	// Set ownership
-	return exec.CommandContext(ctx, "chown", "pulse:pulse", targetPath).Run()
+	if err := exec.CommandContext(ctx, "chown", "pulse:pulse", targetPath).Run(); err != nil {
+		return fmt.Errorf("set ownership on %s: %w", targetPath, err)
+	}
+	return nil
 }
 
 // waitForHealth waits for the service to become healthy
@@ -538,7 +582,7 @@ func (a *InstallShAdapter) waitForHealth(ctx context.Context, timeout time.Durat
 func (a *InstallShAdapter) downloadInstallScript(ctx context.Context) (string, error) {
 	tmpDir, err := os.MkdirTemp("", "pulse-installsh-*")
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to create install.sh temp directory: %w", err)
 	}
 	defer os.RemoveAll(tmpDir)
 
@@ -546,7 +590,7 @@ func (a *InstallShAdapter) downloadInstallScript(ctx context.Context) (string, e
 
 	cmd := exec.CommandContext(ctx, "curl", "-fsSL", "-o", scriptPath, a.installScriptURL)
 	if err := cmd.Run(); err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to download install.sh: %w", err)
 	}
 
 	checksumURL := a.installScriptURL + ".sha256"
@@ -570,7 +614,11 @@ func (a *InstallShAdapter) downloadInstallScript(ctx context.Context) (string, e
 	if err != nil {
 		return "", fmt.Errorf("failed to open install.sh for hashing: %w", err)
 	}
-	defer file.Close()
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil {
+			log.Warn().Err(closeErr).Str("path", scriptPath).Msg("Failed to close install.sh file")
+		}
+	}()
 
 	hasher := sha256.New()
 	if _, err := io.Copy(hasher, file); err != nil {
@@ -625,7 +673,11 @@ func (a *InstallShAdapter) readLastLines(filepath string, n int) string {
 	if err != nil {
 		return ""
 	}
-	defer file.Close()
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil {
+			log.Debug().Err(closeErr).Str("path", filepath).Msg("Failed to close log file while reading last lines")
+		}
+	}()
 
 	// Read file backwards (simplified approach - read all lines and take last N)
 	var lines []string

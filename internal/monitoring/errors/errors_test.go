@@ -67,6 +67,26 @@ func TestMonitorError_Unwrap(t *testing.T) {
 	}
 }
 
+func TestMonitorError_NilReceiverSafety(t *testing.T) {
+	var monErr *MonitorError
+
+	if got := monErr.Error(); got != "<nil>" {
+		t.Errorf("Error() = %q, want %q", got, "<nil>")
+	}
+	if got := monErr.Unwrap(); got != nil {
+		t.Errorf("Unwrap() = %v, want nil", got)
+	}
+	if monErr.Is(ErrTimeout) {
+		t.Error("Is() should return false for nil receiver")
+	}
+	if monErr.WithNode("node1") != nil {
+		t.Error("WithNode() should return nil for nil receiver")
+	}
+	if monErr.WithStatusCode(500) != nil {
+		t.Error("WithStatusCode() should return nil for nil receiver")
+	}
+}
+
 func TestMonitorError_Is(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -374,6 +394,14 @@ func TestIsRetryableError(t *testing.T) {
 			expected: true,
 		},
 		{
+			name: "typed nil MonitorError is not retryable",
+			err: func() error {
+				var monErr *MonitorError
+				return monErr
+			}(),
+			expected: false,
+		},
+		{
 			name:     "regular error not retryable",
 			err:      fmt.Errorf("regular error"),
 			expected: false,
@@ -460,6 +488,14 @@ func TestIsAuthError(t *testing.T) {
 			name:     "error with '403' in message",
 			err:      fmt.Errorf("HTTP 403 response"),
 			expected: true,
+		},
+		{
+			name: "typed nil MonitorError",
+			err: func() error {
+				var monErr *MonitorError
+				return monErr
+			}(),
+			expected: false,
 		},
 		{
 			name:     "regular error",

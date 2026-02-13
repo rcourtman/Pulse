@@ -40,7 +40,7 @@ func (m *SAMLServiceManager) GetService(providerID string) *SAMLService {
 func (m *SAMLServiceManager) InitializeProvider(ctx context.Context, providerID string, cfg *config.SAMLProviderConfig) error {
 	service, err := NewSAMLService(ctx, providerID, cfg, m.baseURL)
 	if err != nil {
-		return err
+		return fmt.Errorf("initialize SAML provider %q: %w", providerID, err)
 	}
 
 	m.mu.Lock()

@@ -1,6 +1,7 @@
 package models
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -39,6 +40,13 @@ type State struct {
 	LastUpdate                   time.Time                  `json:"lastUpdate"`
 	TemperatureMonitoringEnabled bool                       `json:"temperatureMonitoringEnabled"`
 }
+
+var (
+	// ErrHostAgentNotFound indicates a requested host agent ID does not exist in state.
+	ErrHostAgentNotFound = errors.New("host agent not found")
+	// ErrNodeNotFound indicates a requested node ID does not exist in state.
+	ErrNodeNotFound = errors.New("node not found")
+)
 
 // Alert represents an active alert (simplified for State)
 type Alert struct {
@@ -2434,7 +2442,7 @@ func (s *State) LinkHostAgentToNode(hostID, nodeID string) error {
 		}
 	}
 	if hostIdx < 0 {
-		return fmt.Errorf("host agent not found: %s", hostID)
+		return fmt.Errorf("%w: %s", ErrHostAgentNotFound, hostID)
 	}
 
 	// Find the node
@@ -2446,7 +2454,7 @@ func (s *State) LinkHostAgentToNode(hostID, nodeID string) error {
 		}
 	}
 	if nodeIdx < 0 {
-		return fmt.Errorf("node not found: %s", nodeID)
+		return fmt.Errorf("%w: %s", ErrNodeNotFound, nodeID)
 	}
 
 	// Clear any existing links from this host
