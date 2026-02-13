@@ -47,6 +47,7 @@ const (
 var (
 	mkdirAllFn       = os.MkdirAll
 	statFn           = os.Stat
+	chmodFn          = os.Chmod
 	openFileFn       = os.OpenFile
 	openFn           = os.Open
 	appendOpenFileFn = func(path string) (io.WriteCloser, error) {
@@ -66,6 +67,7 @@ var (
 var (
 	defaultMkdirAllFn       = mkdirAllFn
 	defaultStatFn           = statFn
+	defaultChmodFn          = chmodFn
 	defaultOpenFileFn       = openFileFn
 	defaultOpenFn           = openFn
 	defaultAppendOpenFileFn = appendOpenFileFn
@@ -239,8 +241,14 @@ func (m *manager) ensureKnownHostsFile() error {
 	if err := mkdirAllFn(dir, 0o700); err != nil {
 		return fmt.Errorf("knownhosts: mkdir %s: %w", dir, err)
 	}
+	if err := chmodFn(dir, 0o700); err != nil {
+		return fmt.Errorf("knownhosts: chmod %s: %w", dir, err)
+	}
 
 	if _, err := statFn(m.path); err == nil {
+		if err := chmodFn(m.path, 0o600); err != nil {
+			return fmt.Errorf("knownhosts: chmod %s: %w", m.path, err)
+		}
 		return nil
 	} else if !os.IsNotExist(err) {
 		return err
@@ -250,7 +258,13 @@ func (m *manager) ensureKnownHostsFile() error {
 	if err != nil {
 		return fmt.Errorf("knownhosts: create %s: %w", m.path, err)
 	}
-	return f.Close()
+	if err := f.Close(); err != nil {
+		return err
+	}
+	if err := chmodFn(m.path, 0o600); err != nil {
+		return fmt.Errorf("knownhosts: chmod %s: %w", m.path, err)
+	}
+	return nil
 }
 
 func appendHostKey(path string, entries [][]byte) error {
@@ -411,7 +425,7 @@ func defaultKeyscan(ctx context.Context, host string, port int, timeout time.Dur
 
 	output, err := keyscanCmdRunner(scanCtx, args...)
 	if err != nil {
-		return nil, fmt.Errorf("%w (output: %s)", err, strings.TrimSpace(string(output)))
+		return nil, fmt.Errorf("ssh-keyscan command failed: %w", err)
 	}
 	return output, nil
 }

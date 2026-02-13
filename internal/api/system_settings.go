@@ -909,12 +909,24 @@ func (h *SystemSettingsHandler) HandleSSHConfig(w http.ResponseWriter, r *http.R
 		http.Error(w, "Failed to create SSH directory", http.StatusInternalServerError)
 		return
 	}
+	// Harden permissions even when the directory already existed.
+	if err := os.Chmod(sshDir, 0700); err != nil {
+		log.Error().Err(err).Str("dir", sshDir).Msg("Failed to set .ssh directory permissions")
+		http.Error(w, "Failed to secure SSH directory", http.StatusInternalServerError)
+		return
+	}
 
 	// Write SSH config file
 	configPath := filepath.Join(sshDir, "config")
 	if err := os.WriteFile(configPath, sshConfig, 0600); err != nil {
 		log.Error().Err(err).Str("path", configPath).Msg("Failed to write SSH config")
 		http.Error(w, "Failed to write SSH config", http.StatusInternalServerError)
+		return
+	}
+	// os.WriteFile does not change mode on existing files; enforce least-privilege.
+	if err := os.Chmod(configPath, 0600); err != nil {
+		log.Error().Err(err).Str("path", configPath).Msg("Failed to set SSH config file permissions")
+		http.Error(w, "Failed to secure SSH config", http.StatusInternalServerError)
 		return
 	}
 
