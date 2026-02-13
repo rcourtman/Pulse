@@ -91,10 +91,11 @@ func run(ctx context.Context, cfg Config) error {
 	g, ctx := errgroup.WithContext(ctx)
 
 	// Deprecation warning
-	logger.Warn().Msg("pulse-host-agent is DEPRECATED and will be removed in a future release")
-	logger.Warn().Msg("Please migrate to the unified 'pulse-agent' with --enable-host flag")
-	logger.Warn().Msg("Example: pulse-agent --url <URL> --token <TOKEN> --enable-host")
-	logger.Warn().Msg("")
+	logger.Warn().
+		Str("component", "startup").
+		Str("action", "deprecation_notice").
+		Str("replacement", "pulse-agent --enable-host").
+		Msg("pulse-host-agent is deprecated and will be removed in a future release")
 
 	logger.Info().
 		Str("version", Version).

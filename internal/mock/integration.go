@@ -360,6 +360,20 @@ func LoadMockConfig() MockConfig {
 	return normalizeMockConfig(config)
 }
 
+func parseIntEnv(key, value string, fallback int, min int) (int, bool) {
+	n, err := strconv.Atoi(value)
+	if err == nil && n >= min {
+		return n, true
+	}
+	log.Warn().
+		Str("env_var", key).
+		Str("env_value", value).
+		Int("default", fallback).
+		Int("minimum", min).
+		Msg("Ignoring invalid mock configuration integer override")
+	return 0, false
+}
+
 // SetMockConfig updates the mock configuration dynamically and regenerates data when enabled.
 func SetMockConfig(cfg MockConfig) {
 	normalized := normalizeMockConfig(cfg)
@@ -407,17 +421,18 @@ func SetMockConfig(cfg MockConfig) {
 	dataMu.Unlock()
 
 	log.Info().
-		Int("nodes", normalized.NodeCount).
-		Int("vms_per_node", normalized.VMsPerNode).
-		Int("lxcs_per_node", normalized.LXCsPerNode).
-		Int("docker_hosts", normalized.DockerHostCount).
-		Int("docker_containers_per_host", normalized.DockerContainersPerHost).
-		Int("k8s_clusters", normalized.K8sClusterCount).
-		Int("k8s_nodes_per_cluster", normalized.K8sNodesPerCluster).
-		Int("k8s_pods_per_cluster", normalized.K8sPodsPerCluster).
-		Int("k8s_deployments_per_cluster", normalized.K8sDeploymentsPerCluster).
-		Bool("random_metrics", normalized.RandomMetrics).
-		Float64("stopped_percent", normalized.StoppedPercent).
+		Int("nodes", cfg.NodeCount).
+		Int("vms_per_node", cfg.VMsPerNode).
+		Int("lxcs_per_node", cfg.LXCsPerNode).
+		Int("host_agents", cfg.GenericHostCount).
+		Int("docker_hosts", cfg.DockerHostCount).
+		Int("docker_containers_per_host", cfg.DockerContainersPerHost).
+		Int("k8s_clusters", cfg.K8sClusterCount).
+		Int("k8s_nodes_per_cluster", cfg.K8sNodesPerCluster).
+		Int("k8s_pods_per_cluster", cfg.K8sPodsPerCluster).
+		Int("k8s_deployments_per_cluster", cfg.K8sDeploymentsPerCluster).
+		Bool("random_metrics", cfg.RandomMetrics).
+		Float64("stopped_percent", cfg.StoppedPercent).
 		Msg("Mock configuration updated")
 }
 

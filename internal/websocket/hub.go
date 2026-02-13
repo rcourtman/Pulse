@@ -599,7 +599,12 @@ func (h *Hub) Run() {
 					}
 				}()
 			} else {
-				log.Warn().Msg("no getState function defined")
+				log.Warn().
+					Str("component", websocketHubComponent).
+					Str("action", "initial_state_skipped_missing_getter").
+					Str("client", client.id).
+					Str("org_id", client.orgID).
+					Msg("No getState function defined")
 			}
 
 		case client := <-h.unregister:
@@ -1006,7 +1011,13 @@ func (h *Hub) BroadcastState(state interface{}) {
 	select {
 	case h.broadcastSeq <- msg:
 	default:
-		log.Warn().Msg("broadcast sequencer channel full, dropping state update")
+		log.Warn().
+			Str("component", websocketHubComponent).
+			Str("action", "enqueue_state_dropped").
+			Str("channel", "broadcast_seq").
+			Int("channel_depth", len(h.broadcastSeq)).
+			Int("channel_capacity", cap(h.broadcastSeq)).
+			Msg("Broadcast sequencer channel full, dropping state update")
 	}
 }
 
@@ -1029,7 +1040,14 @@ func (h *Hub) BroadcastStateToTenant(orgID string, state interface{}) {
 	select {
 	case h.tenantBroadcast <- TenantBroadcast{OrgID: orgID, Message: msg}:
 	default:
-		log.Warn().Str("org_id", orgID).Msg("tenant broadcast channel full, dropping state update")
+		log.Warn().
+			Str("component", websocketHubComponent).
+			Str("action", "enqueue_tenant_state_dropped").
+			Str("org_id", orgID).
+			Str("channel", "tenant_broadcast").
+			Int("channel_depth", len(h.tenantBroadcast)).
+			Int("channel_capacity", cap(h.tenantBroadcast)).
+			Msg("Tenant broadcast channel full, dropping state update")
 	}
 }
 
@@ -1139,7 +1157,14 @@ func (h *Hub) BroadcastAlertToTenant(orgID string, alert interface{}) {
 	select {
 	case h.tenantBroadcast <- TenantBroadcast{OrgID: orgID, Message: msg}:
 	default:
-		log.Warn().Str("org_id", orgID).Msg("tenant broadcast channel full, dropping alert")
+		log.Warn().
+			Str("component", websocketHubComponent).
+			Str("action", "enqueue_tenant_alert_dropped").
+			Str("org_id", orgID).
+			Str("channel", "tenant_broadcast").
+			Int("channel_depth", len(h.tenantBroadcast)).
+			Int("channel_capacity", cap(h.tenantBroadcast)).
+			Msg("Tenant broadcast channel full, dropping alert")
 	}
 }
 
@@ -1164,7 +1189,14 @@ func (h *Hub) BroadcastAlertResolvedToTenant(orgID string, alertID string) {
 	select {
 	case h.tenantBroadcast <- TenantBroadcast{OrgID: orgID, Message: msg}:
 	default:
-		log.Warn().Str("org_id", orgID).Msg("tenant broadcast channel full, dropping alert resolved")
+		log.Warn().
+			Str("component", websocketHubComponent).
+			Str("action", "enqueue_tenant_alert_resolved_dropped").
+			Str("org_id", orgID).
+			Str("channel", "tenant_broadcast").
+			Int("channel_depth", len(h.tenantBroadcast)).
+			Int("channel_capacity", cap(h.tenantBroadcast)).
+			Msg("Tenant broadcast channel full, dropping alert resolved")
 	}
 }
 
@@ -1208,7 +1240,14 @@ func (h *Hub) BroadcastMessage(msg Message) {
 	select {
 	case h.broadcast <- data:
 	default:
-		log.Warn().Msg("webSocket broadcast channel full")
+		log.Warn().
+			Str("component", websocketHubComponent).
+			Str("action", "enqueue_broadcast_dropped").
+			Str("message_type", msg.Type).
+			Str("channel", "broadcast").
+			Int("channel_depth", len(h.broadcast)).
+			Int("channel_capacity", cap(h.broadcast)).
+			Msg("WebSocket broadcast channel full")
 	}
 }
 

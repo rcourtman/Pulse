@@ -141,7 +141,13 @@ type ScanResult struct {
 func (s *DeepScanner) Scan(ctx context.Context, req DiscoveryRequest) (*ScanResult, error) {
 	resourceID := MakeResourceID(req.ResourceType, req.HostID, req.ResourceID)
 	startTime := time.Now()
-	maxParallel, timeout := s.runtimeSettings()
+	scanLog := log.With().
+		Str("component", "service_discovery_scanner").
+		Str("resource_id", resourceID).
+		Str("resource_type", string(req.ResourceType)).
+		Str("host_id", req.HostID).
+		Str("hostname", req.Hostname).
+		Logger()
 
 	// Initialize progress
 	s.mu.Lock()
@@ -175,18 +181,30 @@ func (s *DeepScanner) Scan(ctx context.Context, req DiscoveryRequest) (*ScanResu
 
 	// Check if we have an agent for this host
 	if s.executor == nil {
+		scanLog.Warn().
+			Str("action", "scan_precondition_failed").
+			Str("reason", "executor_missing").
+			Msg("Deep scan unavailable")
 		return nil, fmt.Errorf("no command executor available")
 	}
 
 	// Find the agent for this host
 	agentID := s.findAgentForHost(req.HostID, req.Hostname)
 	if agentID == "" {
+		scanLog.Warn().
+			Str("action", "scan_precondition_failed").
+			Str("reason", "agent_not_connected").
+			Msg("Deep scan unavailable")
 		return nil, fmt.Errorf("no connected agent for host %s (%s)", req.HostID, req.Hostname)
 	}
 
 	// Get commands for this resource type
 	commands := GetCommandsForResource(req.ResourceType)
 	if len(commands) == 0 {
+		scanLog.Warn().
+			Str("action", "scan_precondition_failed").
+			Str("reason", "commands_not_defined").
+			Msg("Deep scan unavailable")
 		return nil, fmt.Errorf("no commands defined for resource type %s", req.ResourceType)
 	}
 
@@ -257,10 +275,11 @@ func (s *DeepScanner) Scan(ctx context.Context, req DiscoveryRequest) (*ScanResu
 				if !cmd.Optional {
 					result.Errors[cmd.Name] = err.Error()
 				}
-				log.Debug().
+				scanLog.Debug().
+					Str("action", "command_execute_failed").
 					Err(err).
 					Str("command", cmd.Name).
-					Str("resource", resourceID).
+					Bool("optional", cmd.Optional).
 					Msg("Command failed during discovery")
 				return
 			}
@@ -279,6 +298,21 @@ func (s *DeepScanner) Scan(ctx context.Context, req DiscoveryRequest) (*ScanResu
 
 				if !cmdResult.Success && cmdResult.Error != "" && !cmd.Optional {
 					result.Errors[cmd.Name] = cmdResult.Error
+				}
+
+				if !cmdResult.Success {
+					event := scanLog.Debug()
+					if !cmd.Optional {
+						event = scanLog.Warn()
+					}
+					event.
+						Str("action", "command_result_failed").
+						Str("command", cmd.Name).
+						Bool("optional", cmd.Optional).
+						Int("exit_code", cmdResult.ExitCode).
+						Str("request_id", cmdResult.RequestID).
+						Str("command_error", cmdResult.Error).
+						Msg("Deep scan command reported failure")
 				}
 			}
 
@@ -312,8 +346,8 @@ func (s *DeepScanner) Scan(ctx context.Context, req DiscoveryRequest) (*ScanResu
 	}
 	s.notifyProgress(&completionProgress)
 
-	log.Info().
-		Str("resource", resourceID).
+	scanLog.Info().
+		Str("action", "scan_completed").
 		Int("outputs", len(result.CommandOutputs)).
 		Int("errors", len(result.Errors)).
 		Dur("duration", result.CompletedAt.Sub(result.StartedAt)).
@@ -401,7 +435,9 @@ func (s *DeepScanner) findAgentForHost(hostID, hostname string) string {
 	agents := s.executor.GetConnectedAgents()
 
 	log.Debug().
-		Str("hostID", hostID).
+		Str("component", "service_discovery_scanner").
+		Str("action", "find_agent_for_host").
+		Str("host_id", hostID).
 		Str("hostname", hostname).
 		Int("connected_agents", len(agents)).
 		Msg("Finding agent for host")
@@ -409,6 +445,8 @@ func (s *DeepScanner) findAgentForHost(hostID, hostname string) string {
 	// Log connected agents for debugging
 	for _, agent := range agents {
 		log.Debug().
+			Str("component", "service_discovery_scanner").
+			Str("action", "find_agent_for_host").
 			Str("agent_id", agent.AgentID).
 			Str("agent_hostname", agent.Hostname).
 			Msg("Connected agent")

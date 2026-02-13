@@ -87,6 +87,17 @@ type Agent struct {
 }
 
 const defaultInterval = 30 * time.Second
+const hostReportEndpoint = "/api/agents/host/report"
+
+type reportHTTPStatusError struct {
+	Endpoint   string
+	Status     string
+	StatusCode int
+}
+
+func (e *reportHTTPStatusError) Error() string {
+	return fmt.Sprintf("pulse responded with status %s", e.Status)
+}
 
 var newCommandClient = NewCommandClient
 var runCommandClient = func(client *CommandClient, ctx context.Context) error {
@@ -474,17 +485,25 @@ func (a *Agent) process(ctx context.Context) error {
 		return fmt.Errorf("build report: %w", err)
 	}
 	if err := a.sendReport(ctx, report); err != nil {
-		if strings.Contains(err.Error(), "403 Forbidden") {
+		var statusErr *reportHTTPStatusError
+		if errors.As(err, &statusErr) && statusErr.StatusCode == http.StatusForbidden {
 			a.logger.Error().
-				Str("hostname", a.hostname).
-				Msg("Failed to send host report: 403 Forbidden - API token may lack 'Host agent reporting' scope (set PULSE_ENABLE_HOST=false to disable)")
+				Err(err).
+				Str("endpoint", statusErr.Endpoint).
+				Int("status_code", statusErr.StatusCode).
+				Msg("Failed to send host report (403 Forbidden). API token may lack 'Host agent reporting' scope. Set PULSE_ENABLE_HOST=false if host monitoring is not needed.")
 			return nil
 		}
-		a.logger.Warn().
-			Err(err).
-			Str("hostname", a.hostname).
-			Msg("Failed to send report, buffering")
+
 		a.reportBuffer.Push(report)
+		event := a.logger.Warn().
+			Err(err).
+			Str("endpoint", hostReportEndpoint).
+			Int("buffered_reports", a.reportBuffer.Len())
+		if errors.As(err, &statusErr) {
+			event.Int("status_code", statusErr.StatusCode)
+		}
+		event.Msg("Failed to send report, buffering")
 		return nil
 	}
 
@@ -513,7 +532,15 @@ func (a *Agent) flushBuffer(ctx context.Context) {
 		}
 
 		if err := a.sendReport(ctx, report); err != nil {
-			a.logger.Warn().Err(err).Msg("Failed to flush buffered report, stopping flush")
+			var statusErr *reportHTTPStatusError
+			event := a.logger.Warn().
+				Err(err).
+				Str("endpoint", hostReportEndpoint).
+				Int("remaining_buffered_reports", a.reportBuffer.Len())
+			if errors.As(err, &statusErr) {
+				event.Int("status_code", statusErr.StatusCode)
+			}
+			event.Msg("Failed to flush buffered report, stopping flush")
 			return
 		}
 
@@ -599,8 +626,8 @@ func (a *Agent) sendReport(ctx context.Context, report agentshost.Report) error 
 		return fmt.Errorf("marshal report: %w", err)
 	}
 
-	reportURL := fmt.Sprintf("%s/api/agents/host/report", a.trimmedPulseURL)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reportURL, bytes.NewReader(payload))
+	url := fmt.Sprintf("%s%s", a.trimmedPulseURL, hostReportEndpoint)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(payload))
 	if err != nil {
 		return fmt.Errorf("create request: %w", err)
 	}
@@ -621,7 +648,11 @@ func (a *Agent) sendReport(ctx context.Context, report agentshost.Report) error 
 	}()
 
 	if resp.StatusCode >= 300 {
-		return fmt.Errorf("pulse responded with status %s", resp.Status)
+		return &reportHTTPStatusError{
+			Endpoint:   hostReportEndpoint,
+			Status:     resp.Status,
+			StatusCode: resp.StatusCode,
+		}
 	}
 
 	// Parse response to check for server-side config overrides

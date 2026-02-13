@@ -19,11 +19,29 @@ func NewSafeEvaluator(inner *entitlements.Evaluator) *SafeEvaluator {
 	return &SafeEvaluator{inner: inner}
 }
 
-func safeCall[T any](fallback T, fn func() T) (result T) {
+func safeCall[T any](operation, key, fallbackPolicy string, observed *int64, fallback T, fn func() T) (result T) {
 	result = fallback
 	defer func() {
 		if r := recover(); r != nil {
-			log.Printf("CRITICAL [P0]: entitlement evaluator panic recovered: %v", r)
+			if observed == nil {
+				log.Printf(
+					"CRITICAL [P0]: entitlement evaluator panic recovered operation=%s key=%q fallback_policy=%s panic=%v",
+					operation,
+					key,
+					fallbackPolicy,
+					r,
+				)
+				return
+			}
+
+			log.Printf(
+				"CRITICAL [P0]: entitlement evaluator panic recovered operation=%s key=%q observed=%d fallback_policy=%s panic=%v",
+				operation,
+				key,
+				*observed,
+				fallbackPolicy,
+				r,
+			)
 		}
 	}()
 	return fn()
@@ -32,7 +50,7 @@ func safeCall[T any](fallback T, fn func() T) (result T) {
 // HasCapability delegates to inner evaluator with panic recovery.
 // On panic: logs P0 error, returns true (fail-open: allow access).
 func (s *SafeEvaluator) HasCapability(key string) bool {
-	return safeCall(true, func() bool {
+	return safeCall("has_capability", key, "allow_access", nil, true, func() bool {
 		return s.inner.HasCapability(key)
 	})
 }
@@ -45,7 +63,7 @@ func (s *SafeEvaluator) GetLimit(key string) (int64, bool) {
 		ok    bool
 	}
 
-	res := safeCall(result{limit: 0, ok: false}, func() result {
+	res := safeCall("get_limit", key, "no_limit", nil, result{limit: 0, ok: false}, func() result {
 		limit, ok := s.inner.GetLimit(key)
 		return result{
 			limit: limit,
@@ -59,7 +77,7 @@ func (s *SafeEvaluator) GetLimit(key string) (int64, bool) {
 // CheckLimit delegates to inner evaluator with panic recovery.
 // On panic: logs P0 error, returns LimitAllowed (fail-open).
 func (s *SafeEvaluator) CheckLimit(key string, observed int64) license.LimitCheckResult {
-	return safeCall(license.LimitAllowed, func() license.LimitCheckResult {
+	return safeCall("check_limit", key, "limit_allowed", &observed, license.LimitAllowed, func() license.LimitCheckResult {
 		return s.inner.CheckLimit(key, observed)
 	})
 }
@@ -67,7 +85,7 @@ func (s *SafeEvaluator) CheckLimit(key string, observed int64) license.LimitChec
 // MeterEnabled delegates to inner evaluator with panic recovery.
 // On panic: logs P0 error, returns false.
 func (s *SafeEvaluator) MeterEnabled(key string) bool {
-	return safeCall(false, func() bool {
+	return safeCall("meter_enabled", key, "disabled", nil, false, func() bool {
 		return s.inner.MeterEnabled(key)
 	})
 }

@@ -50,6 +50,62 @@ func TestHandleSchedulerHealth_NoMonitor(t *testing.T) {
 	}
 }
 
+func TestHandleHealth_NoMonitor(t *testing.T) {
+	router := &Router{}
+	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	rec := httptest.NewRecorder()
+
+	router.handleHealth(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected status %d, got %d", http.StatusServiceUnavailable, rec.Code)
+	}
+
+	var response HealthResponse
+	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if response.Status != "unhealthy" {
+		t.Fatalf("expected unhealthy status, got %q", response.Status)
+	}
+
+	if response.Dependencies["monitor"] {
+		t.Fatalf("expected monitor dependency to be unhealthy")
+	}
+}
+
+func TestHandleHealth_WithMonitor(t *testing.T) {
+	monitor, _, _ := newTestMonitor(t)
+	router := &Router{monitor: monitor}
+	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	rec := httptest.NewRecorder()
+
+	router.handleHealth(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	var response HealthResponse
+	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if response.Status != "healthy" {
+		t.Fatalf("expected healthy status, got %q", response.Status)
+	}
+	if !response.Dependencies["monitor"] {
+		t.Fatalf("expected monitor dependency to be healthy")
+	}
+	if !response.Dependencies["scheduler"] {
+		t.Fatalf("expected scheduler dependency to be healthy")
+	}
+	if response.Dependencies["websocket"] {
+		t.Fatalf("expected websocket dependency to be false when ws hub is not configured")
+	}
+}
+
 func TestHandleChangePassword_MethodNotAllowed(t *testing.T) {
 	router := &Router{}
 	req := httptest.NewRequest(http.MethodGet, "/api/change-password", nil)

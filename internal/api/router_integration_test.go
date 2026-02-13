@@ -128,6 +128,20 @@ func TestHealthEndpoint(t *testing.T) {
 	if payload["status"] != "healthy" {
 		t.Fatalf("expected status=healthy, got %v", payload["status"])
 	}
+
+	dependencies, ok := payload["dependencies"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected dependencies map in health response, got %#v", payload["dependencies"])
+	}
+	if dependencies["monitor"] != true {
+		t.Fatalf("expected monitor dependency to be true, got %#v", dependencies["monitor"])
+	}
+	if dependencies["scheduler"] != true {
+		t.Fatalf("expected scheduler dependency to be true, got %#v", dependencies["scheduler"])
+	}
+	if dependencies["websocket"] != true {
+		t.Fatalf("expected websocket dependency to be true, got %#v", dependencies["websocket"])
+	}
 }
 
 func TestVersionEndpointUsesRepoVersion(t *testing.T) {

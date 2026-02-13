@@ -72,6 +72,22 @@ func (a *Agent) checkForUpdates(ctx context.Context) {
 			Err(err).
 			Str("target", target.URL).
 			Str("url", url).
+			Msg("Failed to create version check request")
+		return
+	}
+
+	if target.Token != "" {
+		req.Header.Set("X-API-Token", target.Token)
+		req.Header.Set("Authorization", "Bearer "+target.Token)
+	}
+
+	client := a.httpClientFor(target)
+	resp, err := client.Do(req)
+	if err != nil {
+		a.logger.Warn().
+			Err(err).
+			Str("target", target.URL).
+			Str("url", url).
 			Msg("Failed to check for updates")
 		return
 	}
@@ -126,6 +142,7 @@ func (a *Agent) checkForUpdates(ctx context.Context) {
 	a.logger.Info().
 		Str("currentVersion", Version).
 		Str("availableVersion", versionResp.Version).
+		Str("target", target.URL).
 		Msg("New agent version available, performing self-update")
 
 	// Perform self-update

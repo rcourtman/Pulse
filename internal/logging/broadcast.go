@@ -2,6 +2,9 @@ package logging
 
 import (
 	"container/ring"
+	"fmt"
+	"io"
+	"os"
 	"sync"
 
 	"github.com/google/uuid"
@@ -17,8 +20,9 @@ const (
 )
 
 var (
-	broadcaster *LogBroadcaster
-	broadcastMu sync.Once
+	broadcaster         *LogBroadcaster
+	broadcastMu         sync.Once
+	broadcastWarnWriter io.Writer = os.Stderr
 )
 
 // LogBroadcaster captures log writes, buffers them, and broadcasts them to subscribers.
@@ -68,7 +72,11 @@ func (b *LogBroadcaster) Write(p []byte) (n int, err error) {
 			// In a real production system we might drop the client,
 			// here we just skip this message for them to avoid blocking writer.
 			// Ideally we should warn or close their channel.
-			fmt.Printf("logging: subscriber %s blocked, dropping message\n", subscriberID)
+			fmt.Fprintf(
+				broadcastWarnWriter,
+				"logging: subscriber_blocked subscriber_id=%s action=drop_message\n",
+				id,
+			)
 		}
 	}
 

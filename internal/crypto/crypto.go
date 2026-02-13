@@ -289,17 +289,18 @@ func getOrCreateKeyAt(dataDir string) ([]byte, error) {
 					// Migration failed, but we can still use the old key
 					log.Warn().
 						Err(err).
-						Str("keyPath", keyPath).
-						Msg("failed to create directory for key migration, using legacy key location")
+						Str("from", oldKeyPath).
+						Str("to", keyPath).
+						Msg("Failed to create directory for key migration, using old location")
 					return key, nil
 				}
 				if err := os.WriteFile(keyPath, data, 0600); err != nil {
 					// Migration failed, but we can still use the old key
 					log.Warn().
 						Err(err).
-						Str("oldKeyPath", oldKeyPath).
-						Str("keyPath", keyPath).
-						Msg("failed to migrate encryption key, using legacy key location")
+						Str("from", oldKeyPath).
+						Str("to", keyPath).
+						Msg("Failed to migrate encryption key, using old location")
 					return key, nil
 				}
 				log.Info().

@@ -784,16 +784,30 @@ func (c *Client) handleChannelClose(frame Frame) {
 
 // queueFrame encodes and sends a frame to the send channel (non-blocking).
 func queueFrame(sendCh chan<- []byte, f Frame, logger zerolog.Logger) {
+	frameLog := logger.With().
+		Str("component", "relay_client").
+		Str("frame_type", FrameTypeName(f.Type)).
+		Uint32("channel", f.Channel).
+		Int("payload_bytes", len(f.Payload)).
+		Logger()
+
 	data, err := EncodeFrame(f)
 	if err != nil {
-		logger.Warn().Err(err).Msg("failed to encode frame for send")
+		frameLog.Warn().
+			Err(err).
+			Str("action", "encode_frame").
+			Msg("Failed to encode frame for send")
 		return
 	}
 
 	select {
 	case sendCh <- data:
 	default:
-		logger.Warn().Msg("send channel full, dropping frame")
+		frameLog.Warn().
+			Str("action", "drop_frame").
+			Int("send_queue_depth", len(sendCh)).
+			Int("send_queue_capacity", cap(sendCh)).
+			Msg("Send channel full, dropping frame")
 	}
 }
 

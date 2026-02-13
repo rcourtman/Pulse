@@ -600,6 +600,7 @@ func (s *Service) performScan() {
 		}
 		log.Warn().
 			Err(err).
+			Str("subnet", s.subnet).
 			Int("servers_found", len(result.Servers)).
 			Int("errors", discoveryErrorCount(result)).
 			Str("subnet", s.subnet).
@@ -622,6 +623,7 @@ func (s *Service) performScan() {
 		}
 
 		log.Info().
+			Str("subnet", s.subnet).
 			Int("servers", len(result.Servers)).
 			Int("errors", discoveryErrorCount(result)).
 			Int("legacy_errors", len(result.Errors)).

@@ -20,6 +20,8 @@ const (
 	JobStateCancelled JobState = "cancelled"
 )
 
+const updatesQueueComponent = "updates_queue"
+
 // UpdateJob represents a single update job
 type UpdateJob struct {
 	ID          string
@@ -60,8 +62,11 @@ func (q *UpdateQueue) Enqueue(downloadURL string) (*UpdateJob, bool) {
 	// Check if there's already a job running
 	if q.currentJob != nil && (q.currentJob.State == JobStateQueued || q.currentJob.State == JobStateRunning) {
 		log.Warn().
+			Str("component", updatesQueueComponent).
+			Str("action", "enqueue_rejected").
 			Str("current_job_id", q.currentJob.ID).
 			Str("current_state", string(q.currentJob.State)).
+			Str("requested_download_url", downloadURL).
 			Msg("Update job rejected: another job is already running")
 		return nil, false
 	}
@@ -82,7 +87,10 @@ func (q *UpdateQueue) Enqueue(downloadURL string) (*UpdateJob, bool) {
 
 	q.currentJob = job
 	log.Info().
+		Str("component", updatesQueueComponent).
+		Str("action", "enqueue").
 		Str("job_id", job.ID).
+		Str("job_state", string(job.State)).
 		Str("download_url", downloadURL).
 		Msg("Update job enqueued")
 
@@ -98,8 +106,15 @@ func (q *UpdateQueue) MarkRunning(jobID string) bool {
 		return false
 	}
 
+	previousState := q.currentJob.State
 	q.currentJob.State = JobStateRunning
-	log.Info().Str("job_id", jobID).Msg("Update job started")
+	log.Info().
+		Str("component", updatesQueueComponent).
+		Str("action", "mark_running").
+		Str("job_id", jobID).
+		Str("previous_state", string(previousState)).
+		Str("job_state", string(q.currentJob.State)).
+		Msg("Update job started")
 	return true
 }
 
@@ -120,14 +135,20 @@ func (q *UpdateQueue) MarkCompleted(jobID string, err error) {
 		q.currentJob.State = JobStateFailed
 		q.currentJob.Error = err
 		log.Error().
+			Str("component", updatesQueueComponent).
+			Str("action", "complete_failed").
 			Err(err).
 			Str("job_id", jobID).
+			Str("job_state", string(q.currentJob.State)).
 			Dur("duration", q.currentJob.CompletedAt.Sub(q.currentJob.StartedAt)).
 			Msg("Update job failed")
 	} else {
 		q.currentJob.State = JobStateCompleted
 		log.Info().
+			Str("component", updatesQueueComponent).
+			Str("action", "complete_succeeded").
 			Str("job_id", jobID).
+			Str("job_state", string(q.currentJob.State)).
 			Dur("duration", q.currentJob.CompletedAt.Sub(q.currentJob.StartedAt)).
 			Msg("Update job completed")
 	}
@@ -149,12 +170,17 @@ func (q *UpdateQueue) Cancel(jobID string) bool {
 	}
 
 	if q.currentJob.State == JobStateQueued || q.currentJob.State == JobStateRunning {
+		previousState := q.currentJob.State
 		q.currentJob.Cancel()
 		q.currentJob.State = JobStateCancelled
 		q.currentJob.CompletedAt = time.Now()
-		log.Info().Str("job_id", jobID).Msg("Update job cancelled")
-		q.addToHistory(q.currentJob)
-		q.scheduleClearCurrentJobLocked(jobID)
+		log.Info().
+			Str("component", updatesQueueComponent).
+			Str("action", "cancel").
+			Str("job_id", jobID).
+			Str("previous_state", string(previousState)).
+			Str("job_state", string(q.currentJob.State)).
+			Msg("Update job cancelled")
 		return true
 	}
 

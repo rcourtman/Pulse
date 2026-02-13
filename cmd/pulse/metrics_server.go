@@ -30,14 +30,28 @@ func startMetricsServer(ctx context.Context, addr string) {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), metricsShutdownTimeout)
 		defer cancel()
 		if err := srv.Shutdown(shutdownCtx); err != nil && err != http.ErrServerClosed {
-			log.Warn().Err(err).Msg("Failed to shut down metrics server cleanly")
+			log.Warn().
+				Err(err).
+				Str("component", "metrics_server").
+				Str("action", "shutdown_failed").
+				Str("addr", addr).
+				Msg("Failed to shut down metrics server cleanly")
 		}
 	}()
 
 	go func() {
-		log.Info().Str("addr", addr).Msg("Metrics endpoint listening")
+		log.Info().
+			Str("component", "metrics_server").
+			Str("action", "listening").
+			Str("addr", addr).
+			Msg("Metrics endpoint listening")
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Warn().Err(err).Msg("Metrics server stopped unexpectedly")
+			log.Warn().
+				Err(err).
+				Str("component", "metrics_server").
+				Str("action", "stopped_unexpectedly").
+				Str("addr", addr).
+				Msg("Metrics server stopped unexpectedly")
 		}
 	}()
 }

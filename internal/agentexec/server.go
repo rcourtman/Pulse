@@ -418,6 +418,10 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	// Close existing connection if any
 	if existing, ok := s.agents[reg.AgentID]; ok {
+		log.Info().
+			Str("agent_id", reg.AgentID).
+			Str("hostname", reg.Hostname).
+			Msg("Replacing existing agent connection")
 		close(existing.done)
 		if err := existing.conn.Close(); err != nil {
 			log.Debug().Err(err).Str("agent_id", reg.AgentID).Msg("Failed to close existing connection during reconnect")
@@ -442,8 +446,16 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ac.writeMu.Lock()
-	if err := s.sendMessage(conn, registeredMsg); err != nil {
-		log.Warn().Err(err).Str("agent_id", reg.AgentID).Msg("Failed to send registration ack")
+	if err := s.sendMessage(conn, Message{
+		Type:      MsgTypeRegistered,
+		Timestamp: time.Now(),
+		Payload:   RegisteredPayload{Success: true, Message: "Registered"},
+	}); err != nil {
+		log.Warn().
+			Err(err).
+			Str("agent_id", reg.AgentID).
+			Str("hostname", reg.Hostname).
+			Msg("Failed to send registration ack")
 	}
 	ac.writeMu.Unlock()
 
@@ -539,6 +551,13 @@ func (s *Server) readLoop(ac *agentConn) {
 			if ok {
 				select {
 				case ch <- result:
+					log.Debug().
+						Str("agent_id", ac.agent.AgentID).
+						Str("request_id", result.RequestID).
+						Bool("success", result.Success).
+						Int("exit_code", result.ExitCode).
+						Int64("duration_ms", result.Duration).
+						Msg("Received command result from agent")
 				default:
 					log.Warn().
 						Str("agent_id", ac.agent.AgentID).
@@ -655,8 +674,19 @@ func (s *Server) ExecuteCommand(ctx context.Context, agentID string, cmd Execute
 	s.mu.RUnlock()
 
 	if !ok {
+		log.Warn().
+			Str("agent_id", agentID).
+			Str("request_id", cmd.RequestID).
+			Msg("Execute command requested for disconnected agent")
 		return nil, fmt.Errorf("agent %s not connected", agentID)
 	}
+
+	execLog := log.With().
+		Str("agent_id", agentID).
+		Str("request_id", cmd.RequestID).
+		Str("target_type", cmd.TargetType).
+		Str("target_id", cmd.TargetID).
+		Logger()
 
 	// Create response channel
 	respCh := make(chan CommandResultPayload, 1)
@@ -684,6 +714,10 @@ func (s *Server) ExecuteCommand(ctx context.Context, agentID string, cmd Execute
 	ac.writeMu.Unlock()
 
 	if err != nil {
+		execLog.Error().
+			Err(err).
+			Dur("duration", time.Since(startedAt)).
+			Msg("Failed to send command to agent")
 		return nil, fmt.Errorf("failed to send command: %w", err)
 	}
 
@@ -704,10 +738,24 @@ func (s *Server) ExecuteCommand(ctx context.Context, agentID string, cmd Execute
 
 	select {
 	case result := <-respCh:
+		execLog.Info().
+			Bool("success", result.Success).
+			Int("exit_code", result.ExitCode).
+			Int64("agent_duration_ms", result.Duration).
+			Dur("duration", time.Since(startedAt)).
+			Msg("Agent command completed")
 		return &result, nil
-	case <-timer.C:
+	case <-time.After(timeout):
+		execLog.Warn().
+			Dur("timeout", timeout).
+			Dur("duration", time.Since(startedAt)).
+			Msg("Agent command timed out")
 		return nil, fmt.Errorf("command timed out after %v", timeout)
 	case <-ctx.Done():
+		execLog.Warn().
+			Err(ctx.Err()).
+			Dur("duration", time.Since(startedAt)).
+			Msg("Agent command canceled")
 		return nil, ctx.Err()
 	case <-s.shutdown:
 		return nil, errServerShuttingDown
@@ -733,8 +781,21 @@ func (s *Server) ReadFile(ctx context.Context, agentID string, req ReadFilePaylo
 	s.mu.RUnlock()
 
 	if !ok {
+		log.Warn().
+			Str("agent_id", agentID).
+			Str("request_id", req.RequestID).
+			Msg("Read file requested for disconnected agent")
 		return nil, fmt.Errorf("agent %s not connected", agentID)
 	}
+
+	readLog := log.With().
+		Str("agent_id", agentID).
+		Str("request_id", req.RequestID).
+		Str("path", req.Path).
+		Str("target_type", req.TargetType).
+		Str("target_id", req.TargetID).
+		Int64("max_bytes", req.MaxBytes).
+		Logger()
 
 	// Create response channel
 	respCh := make(chan CommandResultPayload, 1)
@@ -760,7 +821,11 @@ func (s *Server) ReadFile(ctx context.Context, agentID string, req ReadFilePaylo
 	ac.writeMu.Unlock()
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to send %s request: %w", msgType, err)
+		readLog.Error().
+			Err(err).
+			Dur("duration", time.Since(startedAt)).
+			Msg("Failed to send read_file request to agent")
+		return nil, fmt.Errorf("failed to send read_file request: %w", err)
 	}
 
 	// Wait for result
@@ -777,6 +842,12 @@ func (s *Server) ReadFile(ctx context.Context, agentID string, req ReadFilePaylo
 
 	select {
 	case result := <-respCh:
+		readLog.Info().
+			Bool("success", result.Success).
+			Int("exit_code", result.ExitCode).
+			Int64("agent_duration_ms", result.Duration).
+			Dur("duration", time.Since(startedAt)).
+			Msg("Agent read_file completed")
 		return &result, nil
 	case <-timer.C:
 		return nil, fmt.Errorf("read_file timed out after %v", timeout)

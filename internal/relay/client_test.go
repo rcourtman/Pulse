@@ -1,6 +1,7 @@
 package relay
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdh"
 	"encoding/json"
@@ -973,6 +974,54 @@ func TestClient_KeyExchangeRejectedWithoutIdentityKey(t *testing.T) {
 
 	cancel()
 	<-errCh
+}
+
+func TestQueueFrameLogsStructuredContextOnEncodeFailure(t *testing.T) {
+	var logOutput bytes.Buffer
+	logger := zerolog.New(&logOutput)
+	sendCh := make(chan []byte, 1)
+
+	// Oversized payload ensures EncodeFrame fails.
+	queueFrame(sendCh, NewFrame(FrameData, 7, make([]byte, MaxPayloadSize+1)), logger)
+
+	got := logOutput.String()
+	for _, expected := range []string{
+		`"component":"relay_client"`,
+		`"action":"encode_frame"`,
+		`"frame_type":"DATA"`,
+		`"channel":7`,
+		`"payload_bytes":65537`,
+		`"message":"Failed to encode frame for send"`,
+	} {
+		if !strings.Contains(got, expected) {
+			t.Fatalf("expected log output to include %s, got %q", expected, got)
+		}
+	}
+}
+
+func TestQueueFrameLogsStructuredContextOnDrop(t *testing.T) {
+	var logOutput bytes.Buffer
+	logger := zerolog.New(&logOutput)
+	sendCh := make(chan []byte, 1)
+	sendCh <- []byte("full")
+
+	queueFrame(sendCh, NewFrame(FramePing, 11, nil), logger)
+
+	got := logOutput.String()
+	for _, expected := range []string{
+		`"component":"relay_client"`,
+		`"action":"drop_frame"`,
+		`"frame_type":"PING"`,
+		`"channel":11`,
+		`"payload_bytes":0`,
+		`"send_queue_depth":1`,
+		`"send_queue_capacity":1`,
+		`"message":"Send channel full, dropping frame"`,
+	} {
+		if !strings.Contains(got, expected) {
+			t.Fatalf("expected log output to include %s, got %q", expected, got)
+		}
+	}
 }
 
 func TestClient_SendPushNotification(t *testing.T) {

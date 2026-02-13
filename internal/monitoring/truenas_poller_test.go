@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"net"
@@ -16,6 +17,8 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 func TestTrueNASPollerPollsConfiguredConnections(t *testing.T) {
@@ -694,6 +697,48 @@ func TestTrueNASPollerStopsCleanly(t *testing.T) {
 	}
 }
 
+func TestTrueNASPollerSyncConnectionsLogsStructuredContextWhenPersistenceNil(t *testing.T) {
+	logOutput := captureTrueNASPollerLogs(t)
+
+	poller := NewTrueNASPoller(unifiedresources.NewRegistry(nil), nil, time.Second)
+	poller.syncConnections()
+
+	for _, expected := range []string{
+		`"level":"warn"`,
+		`"component":"truenas_poller"`,
+		`"action":"sync_connections"`,
+		`"message":"TrueNAS poller cannot sync connections because persistence is nil"`,
+	} {
+		if !strings.Contains(logOutput.String(), expected) {
+			t.Fatalf("expected log output to include %s, got %q", expected, logOutput.String())
+		}
+	}
+}
+
+func TestTrueNASPollerPollAllLogsStructuredContextOnRefreshFailure(t *testing.T) {
+	logOutput := captureTrueNASPollerLogs(t)
+
+	poller := NewTrueNASPoller(unifiedresources.NewRegistry(nil), nil, time.Second)
+	poller.mu.Lock()
+	poller.providers["conn-refresh-fail"] = truenas.NewLiveProvider(failingTrueNASFetcher{err: fmt.Errorf("refresh exploded")})
+	poller.mu.Unlock()
+
+	poller.pollAll(context.Background())
+
+	for _, expected := range []string{
+		`"level":"warn"`,
+		`"component":"truenas_poller"`,
+		`"action":"refresh_connection"`,
+		`"connection_id":"conn-refresh-fail"`,
+		`"error":"refresh exploded"`,
+		`"message":"TrueNAS poller refresh failed"`,
+	} {
+		if !strings.Contains(logOutput.String(), expected) {
+			t.Fatalf("expected log output to include %s, got %q", expected, logOutput.String())
+		}
+	}
+}
+
 func TestClassifyTrueNASError(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -964,4 +1009,25 @@ func injectTrueNASProviderTimeout(t *testing.T, poller *TrueNASPoller, instance 
 	poller.mu.Lock()
 	defer poller.mu.Unlock()
 	poller.providers[instance.ID] = truenas.NewLiveProvider(&truenas.APIFetcher{Client: client})
+}
+
+func captureTrueNASPollerLogs(t *testing.T) *bytes.Buffer {
+	t.Helper()
+
+	var buf bytes.Buffer
+	origLogger := log.Logger
+	log.Logger = zerolog.New(&buf).Level(zerolog.DebugLevel).With().Timestamp().Logger()
+	t.Cleanup(func() {
+		log.Logger = origLogger
+	})
+
+	return &buf
+}
+
+type failingTrueNASFetcher struct {
+	err error
+}
+
+func (f failingTrueNASFetcher) Fetch(context.Context) (*truenas.FixtureSnapshot, error) {
+	return nil, f.err
 }

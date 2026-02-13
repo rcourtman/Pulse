@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
+	"github.com/rs/zerolog/log"
 )
 
 type commandRunner func(ctx context.Context, name string, args ...string) ([]byte, error)
@@ -48,7 +49,11 @@ func collectArrays(ctx context.Context, run commandRunner) ([]host.RAIDArray, er
 	for _, device := range devices {
 		array, err := collectArrayDetailWithRunner(ctx, device, run)
 		if err != nil {
-			// Log but don't fail - continue with other arrays
+			log.Warn().
+				Err(err).
+				Str("component", "mdadm").
+				Str("device", device).
+				Msg("Skipping RAID array after detail collection failure")
 			continue
 		}
 		arrays = append(arrays, array)
@@ -250,6 +255,11 @@ func getRebuildSpeedWithContext(parentCtx context.Context, device string) string
 
 	output, err := run(ctx, "cat", "/proc/mdstat")
 	if err != nil {
+		log.Debug().
+			Err(err).
+			Str("component", "mdadm").
+			Str("device", device).
+			Msg("Failed to read /proc/mdstat for rebuild speed lookup")
 		return ""
 	}
 
