@@ -500,6 +500,18 @@ func TestCheckRateLimit_Concurrency(t *testing.T) {
 		t.Errorf("expected count 50 after concurrent calls, got %d", count)
 	}
 }
+
+func TestSanitizeEmailHeaderValue(t *testing.T) {
+	t.Parallel()
+
+	got := sanitizeEmailHeaderValue("Alert subject\r\nBcc: attacker@example.com")
+	want := "Alert subject  Bcc: attacker@example.com"
+
+	if got != want {
+		t.Fatalf("sanitizeEmailHeaderValue() = %q, want %q", got, want)
+	}
+}
+
 func TestSendPlain_Success(t *testing.T) {
 	config := EmailProviderConfig{
 		EmailConfig: EmailConfig{
