@@ -108,3 +108,101 @@ func TestAgent_RunProxmoxSetup(t *testing.T) {
 		a.runProxmoxSetup(context.Background())
 	}
 }
+
+func TestAgent_ApplyRemoteConfig_DefersCommandStartWithoutRunContext(t *testing.T) {
+	originalRun := runCommandClient
+	defer func() { runCommandClient = originalRun }()
+
+	started := make(chan struct{}, 1)
+	runCommandClient = func(_ *CommandClient, ctx context.Context) error {
+		started <- struct{}{}
+		<-ctx.Done()
+		return ctx.Err()
+	}
+
+	mc := &mockCollector{}
+	logger := zerolog.Nop()
+	a, _ := New(Config{
+		APIToken:  "token",
+		PulseURL:  "http://pulse",
+		Collector: mc,
+		Logger:    &logger,
+	})
+	if a == nil {
+		t.Fatal("expected agent")
+	}
+
+	a.applyRemoteConfig(true)
+	if a.commandClient == nil {
+		t.Fatal("expected command client to be configured")
+	}
+
+	select {
+	case <-started:
+		t.Fatal("command client should not start before run context is available")
+	default:
+	}
+
+	parentCtx, cancel := context.WithCancel(context.Background())
+	a.startCommandClient(parentCtx)
+	select {
+	case <-started:
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("expected command client to start")
+	}
+
+	cancel()
+	a.stopCommandClient(true)
+}
+
+func TestAgent_CommandClientLifecycle_StopCancelsContext(t *testing.T) {
+	originalRun := runCommandClient
+	defer func() { runCommandClient = originalRun }()
+
+	started := make(chan struct{})
+	stopped := make(chan struct{})
+	runCommandClient = func(_ *CommandClient, ctx context.Context) error {
+		close(started)
+		<-ctx.Done()
+		close(stopped)
+		return ctx.Err()
+	}
+
+	mc := &mockCollector{}
+	logger := zerolog.Nop()
+	a, _ := New(Config{
+		APIToken:       "token",
+		PulseURL:       "http://pulse",
+		EnableCommands: true,
+		Collector:      mc,
+		Logger:         &logger,
+	})
+	if a == nil {
+		t.Fatal("expected agent")
+	}
+	if a.commandClient == nil {
+		t.Fatal("expected command client")
+	}
+
+	parentCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	a.startCommandClient(parentCtx)
+
+	select {
+	case <-started:
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("expected command client run loop to start")
+	}
+
+	a.stopCommandClient(true)
+
+	select {
+	case <-stopped:
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("expected command client context to be canceled")
+	}
+
+	if a.commandClient != nil {
+		t.Fatal("expected command client to be cleared")
+	}
+}

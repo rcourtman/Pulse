@@ -221,7 +221,7 @@ func TestGetHostURL(t *testing.T) {
 
 	t.Run("uses reportIP override", func(t *testing.T) {
 		p.reportIP = "1.2.3.4"
-		if got := p.getHostURL("pve"); got != "https://1.2.3.4:8006" {
+		if got := p.getHostURL(context.Background(), "pve"); got != "https://1.2.3.4:8006" {
 			t.Errorf("got %s", got)
 		}
 	})
@@ -232,7 +232,7 @@ func TestGetHostURL(t *testing.T) {
 		mc.dialTimeoutFn = func(network, address string, timeout time.Duration) (net.Conn, error) {
 			return &mockConn{localAddr: &net.UDPAddr{IP: net.ParseIP("10.1.1.1")}}, nil
 		}
-		if got := p.getHostURL("pve"); got != "https://10.1.1.1:8006" {
+		if got := p.getHostURL(context.Background(), "pve"); got != "https://10.1.1.1:8006" {
 			t.Errorf("got %s", got)
 		}
 	})
@@ -250,7 +250,7 @@ func TestGetHostURL(t *testing.T) {
 		mc.hostnameFn = func() (string, error) { return "test-host", nil }
 		mc.lookupIPFn = func(h string) ([]net.IP, error) { return nil, nil }
 
-		if got := p.getHostURL("pbs"); got != "https://10.0.0.5:8007" {
+		if got := p.getHostURL(context.Background(), "pbs"); got != "https://10.0.0.5:8007" {
 			t.Errorf("got %s", got)
 		}
 	})
@@ -261,8 +261,32 @@ func TestGetHostURL(t *testing.T) {
 		mc.commandCombinedOutputFn = func(ctx context.Context, name string, arg ...string) (string, error) {
 			return "", fmt.Errorf("fail")
 		}
-		if got := p.getHostURL("pve"); got != "https://test-host:8006" {
+		if got := p.getHostURL(context.Background(), "pve"); got != "https://test-host:8006" {
 			t.Errorf("got %s", got)
+		}
+	})
+
+	t.Run("hostname probe uses caller context", func(t *testing.T) {
+		p.reportIP = ""
+		p.pulseURL = ""
+		mc.dialTimeoutFn = func(n, a string, d time.Duration) (net.Conn, error) { return nil, fmt.Errorf("fail") }
+
+		var sawCanceledCtx bool
+		mc.commandCombinedOutputFn = func(ctx context.Context, name string, arg ...string) (string, error) {
+			if name == "hostname" && len(arg) > 0 && arg[0] == "-I" && ctx.Err() == context.Canceled {
+				sawCanceledCtx = true
+			}
+			return "", context.Canceled
+		}
+
+		canceledCtx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		if got := p.getHostURL(canceledCtx, "pve"); got != "https://test-host:8006" {
+			t.Errorf("got %s", got)
+		}
+		if !sawCanceledCtx {
+			t.Fatalf("expected hostname probe to observe canceled caller context")
 		}
 	})
 }
