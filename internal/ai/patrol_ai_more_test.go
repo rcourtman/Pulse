@@ -294,7 +294,13 @@ func TestSeedResourceInventory_QuietSummary(t *testing.T) {
 
 func TestRunAIAnalysis_StreamEvents(t *testing.T) {
 	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
-	svc := &Service{}
+	svc := &Service{
+		cfg: &config.AIConfig{
+			Model:       "openai:gpt-4o-mini",
+			PatrolModel: "openai:gpt-4o-mini",
+		},
+		costStore: cost.NewStore(cost.DefaultMaxDays),
+	}
 	svc.SetChatService(&streamChatService{executor: executor})
 
 	ps := NewPatrolService(svc, nil)
@@ -309,6 +315,60 @@ func TestRunAIAnalysis_StreamEvents(t *testing.T) {
 	}
 	if len(res.ToolCalls) == 0 {
 		t.Fatalf("expected tool calls to be recorded")
+	}
+
+	summary := svc.costStore.GetSummary(1)
+	if summary.Totals.InputTokens != 5 || summary.Totals.OutputTokens != 7 {
+		t.Fatalf("expected patrol usage to be recorded (5/7), got %d/%d", summary.Totals.InputTokens, summary.Totals.OutputTokens)
+	}
+
+	foundPatrol := false
+	for _, useCase := range summary.UseCases {
+		if useCase.UseCase == "patrol" {
+			foundPatrol = true
+			break
+		}
+	}
+	if !foundPatrol {
+		t.Fatalf("expected patrol use-case in summary, got %+v", summary.UseCases)
+	}
+}
+
+func TestRunEvaluationPass_RecordsCostUsage(t *testing.T) {
+	svc := &Service{
+		cfg: &config.AIConfig{
+			Model:       "openai:gpt-4o-mini",
+			PatrolModel: "openai:gpt-4o-mini",
+		},
+		costStore: cost.NewStore(cost.DefaultMaxDays),
+	}
+	svc.SetChatService(&streamChatService{})
+	ps := NewPatrolService(svc, nil)
+
+	signals := []DetectedSignal{
+		{
+			SignalType:        SignalHighCPU,
+			ResourceID:        "node-1",
+			ResourceName:      "node-1",
+			ResourceType:      "node",
+			SuggestedSeverity: "warning",
+			Category:          "performance",
+			Summary:           "High CPU",
+			Evidence:          "cpu=95",
+		},
+	}
+
+	resp, err := ps.runEvaluationPass(context.Background(), nil, signals)
+	if err != nil {
+		t.Fatalf("runEvaluationPass failed: %v", err)
+	}
+	if resp == nil {
+		t.Fatal("expected non-nil response")
+	}
+
+	summary := svc.costStore.GetSummary(1)
+	if summary.Totals.InputTokens != 5 || summary.Totals.OutputTokens != 7 {
+		t.Fatalf("expected eval usage to be recorded (5/7), got %d/%d", summary.Totals.InputTokens, summary.Totals.OutputTokens)
 	}
 }
 

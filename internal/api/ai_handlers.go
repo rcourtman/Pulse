@@ -777,6 +777,14 @@ func (h *AISettingsHandler) setupInvestigationOrchestrator(orgID string, svc *ai
 		log.Warn().Str("orgID", orgID).Msg("Chat service is not *chat.Service, cannot create adapter")
 		return
 	}
+
+	// Mirror default-org router wiring for per-org services so patrol/investigation
+	// executions always use the chat backend path with mid-run budget enforcement.
+	svc.SetChatService(&chatServiceAdapter{svc: chatService})
+	chatService.SetBudgetChecker(func() error {
+		return svc.CheckBudget("patrol")
+	})
+
 	chatAdapter := investigation.NewChatServiceAdapter(chatService)
 
 	// Create findings store adapter

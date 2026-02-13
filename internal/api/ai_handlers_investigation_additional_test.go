@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -92,6 +93,39 @@ func (s *stubChatService) DeleteSession(ctx context.Context, sessionID string) e
 
 func (s *stubChatService) ReloadConfig(ctx context.Context, cfg *config.AIConfig) error {
 	return nil
+}
+
+func TestSetupInvestigationOrchestrator_WiresTenantBudgetChecker(t *testing.T) {
+	handler := &AISettingsHandler{
+		investigationStores: make(map[string]*investigation.Store),
+	}
+
+	tenantSvc := ai.NewService(nil, nil)
+	tenantSvc.SetStateProvider(&MockStateProvider{})
+	if tenantSvc.GetPatrolService() == nil {
+		t.Fatalf("expected patrol service to be initialized")
+	}
+
+	tenantChatSvc := chat.NewService(chat.Config{AIConfig: config.NewDefaultAIConfig()})
+	handler.chatHandler = &AIHandler{
+		services: map[string]AIService{
+			"tenant-1": tenantChatSvc,
+		},
+	}
+
+	handler.setupInvestigationOrchestrator("tenant-1", tenantSvc)
+
+	if tenantSvc.GetChatService() == nil {
+		t.Fatalf("expected tenant AI service chat adapter to be wired")
+	}
+	if _, ok := tenantSvc.GetChatService().(*chatServiceAdapter); !ok {
+		t.Fatalf("expected chat service adapter wiring, got %T", tenantSvc.GetChatService())
+	}
+
+	budgetChecker := reflect.ValueOf(tenantChatSvc).Elem().FieldByName("budgetChecker")
+	if !budgetChecker.IsValid() || budgetChecker.IsNil() {
+		t.Fatalf("expected tenant chat service budget checker to be wired")
+	}
 }
 
 func TestFindingsStoreWrapper_GetAndUpdate(t *testing.T) {

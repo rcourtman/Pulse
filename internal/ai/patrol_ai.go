@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/baseline"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/cost"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -441,6 +442,7 @@ func (p *PatrolService) runAIAnalysis(ctx context.Context, state models.StateSna
 	}
 	inputTokens = chatResp.InputTokens
 	outputTokens = chatResp.OutputTokens
+	p.recordPatrolUsage(chatResp.InputTokens, chatResp.OutputTokens)
 
 	// Clean thinking tokens
 	finalContent = CleanThinkingTokens(finalContent)
@@ -707,6 +709,10 @@ func (p *PatrolService) runEvaluationPass(ctx context.Context, adapter *patrolFi
 	if cs == nil {
 		return nil, fmt.Errorf("chat service not available for evaluation pass")
 	}
+	if err := p.aiService.CheckBudget("patrol"); err != nil {
+		log.Warn().Err(err).Msg("AI Patrol: Budget exceeded, skipping evaluation pass")
+		return nil, fmt.Errorf("patrol evaluation skipped: %w", err)
+	}
 
 	systemPrompt := buildEvalSystemPrompt()
 	userPrompt := buildEvalUserPrompt(unmatchedSignals)
@@ -735,8 +741,53 @@ func (p *PatrolService) runEvaluationPass(ctx context.Context, adapter *patrolFi
 		Int("input_tokens", resp.InputTokens).
 		Int("output_tokens", resp.OutputTokens).
 		Msg("AI Patrol: Evaluation pass complete")
+	p.recordPatrolUsage(resp.InputTokens, resp.OutputTokens)
 
 	return resp, nil
+}
+
+func (p *PatrolService) recordPatrolUsage(inputTokens, outputTokens int) {
+	if p == nil || p.aiService == nil || (inputTokens <= 0 && outputTokens <= 0) {
+		return
+	}
+
+	p.aiService.mu.RLock()
+	store := p.aiService.costStore
+	cfg := p.aiService.cfg
+	provider := p.aiService.provider
+	p.aiService.mu.RUnlock()
+
+	if store == nil {
+		return
+	}
+
+	model := ""
+	if cfg != nil {
+		model = strings.TrimSpace(cfg.GetPatrolModel())
+		if model == "" {
+			model = strings.TrimSpace(cfg.GetChatModel())
+		}
+	}
+
+	providerName := ""
+	if model != "" {
+		parts := strings.SplitN(model, ":", 2)
+		if len(parts) == 2 {
+			providerName = strings.TrimSpace(strings.ToLower(parts[0]))
+		}
+	}
+	if providerName == "" && provider != nil {
+		providerName = strings.TrimSpace(strings.ToLower(provider.Name()))
+	}
+
+	store.Record(cost.UsageEvent{
+		Timestamp:    time.Now(),
+		Provider:     providerName,
+		RequestModel: model,
+		UseCase:      "patrol",
+		InputTokens:  inputTokens,
+		OutputTokens: outputTokens,
+	})
 }
 
 // buildEvalSystemPrompt returns the system prompt for the evaluation pass.
