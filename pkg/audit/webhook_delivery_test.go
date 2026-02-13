@@ -159,7 +159,7 @@ func TestWebhookDeliveryDeliverInvalidURL(t *testing.T) {
 	}
 }
 
-func TestWebhookDeliveryStopIsIdempotent(t *testing.T) {
+func TestWebhookDeliveryStopIdempotent(t *testing.T) {
 	delivery := NewWebhookDelivery([]string{})
 	delivery.Start()
 

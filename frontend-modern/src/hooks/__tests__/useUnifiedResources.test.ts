@@ -365,4 +365,33 @@ describe('useUnifiedResources', () => {
 
     dispose();
   });
+
+  it('filters malformed source entries from backend payloads', async () => {
+    apiFetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: [
+          {
+            ...v2Resource,
+            sources: ['agent', 42, null, { bad: true }, 'proxmox'],
+          },
+        ],
+      }),
+    });
+
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources();
+    });
+
+    await result!.refetch();
+    const resource = result!.resources()[0];
+    expect(resource.platformType).toBe('proxmox-pve');
+    expect(resource.sourceType).toBe('hybrid');
+    expect(resource.platformData?.sources).toEqual(['agent', 'proxmox']);
+
+    dispose();
+  });
 });

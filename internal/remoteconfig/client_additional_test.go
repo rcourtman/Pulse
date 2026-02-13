@@ -83,10 +83,10 @@ func TestClientFetchSignatureFailures(t *testing.T) {
 	t.Setenv("PULSE_AGENT_CONFIG_PUBLIC_KEYS", base64.StdEncoding.EncodeToString(pub))
 
 	settings := map[string]interface{}{"interval": "1m"}
-	makeResp := func(sig string, issued, expires time.Time) Response {
+	makeResp := func(hostID, sig string, issued, expires time.Time) Response {
 		resp := Response{
 			Success: true,
-			HostID:  "agent-1",
+			HostID:  hostID,
 		}
 		resp.Config.Settings = settings
 		resp.Config.Signature = sig
@@ -113,10 +113,12 @@ func TestClientFetchSignatureFailures(t *testing.T) {
 		resp     Response
 		wantText string
 	}{
-		{name: "missing timestamps", resp: makeResp(signature, time.Time{}, time.Time{}), wantText: "missing timestamp"},
-		{name: "expired", resp: makeResp(signature, issuedAt.Add(-10*time.Minute), issuedAt.Add(-5*time.Minute)), wantText: "expired"},
-		{name: "future", resp: makeResp(signature, issuedAt.Add(10*time.Minute), issuedAt.Add(20*time.Minute)), wantText: "future"},
-		{name: "invalid signature", resp: makeResp("nope", issuedAt, expiresAt), wantText: "verification failed"},
+		{name: "missing host metadata", resp: makeResp("", signature, issuedAt, expiresAt), wantText: "missing host metadata"},
+		{name: "host mismatch", resp: makeResp("agent-2", signature, issuedAt, expiresAt), wantText: "host mismatch"},
+		{name: "missing timestamps", resp: makeResp("agent-1", signature, time.Time{}, time.Time{}), wantText: "missing timestamp"},
+		{name: "expired", resp: makeResp("agent-1", signature, issuedAt.Add(-10*time.Minute), issuedAt.Add(-5*time.Minute)), wantText: "expired"},
+		{name: "future", resp: makeResp("agent-1", signature, issuedAt.Add(10*time.Minute), issuedAt.Add(20*time.Minute)), wantText: "future"},
+		{name: "invalid signature", resp: makeResp("agent-1", "nope", issuedAt, expiresAt), wantText: "verification failed"},
 	}
 
 	for _, tt := range tests {

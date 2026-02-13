@@ -319,6 +319,35 @@ func TestUpdateHistory_GetEntry(t *testing.T) {
 			t.Error("Expected error for non-existent entry")
 		}
 	})
+
+	t.Run("returns defensive copy", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		h, _ := NewUpdateHistory(tmpDir)
+
+		h.CreateEntry(ctx, UpdateHistoryEntry{
+			EventID: "immutable",
+			Status:  StatusSuccess,
+			Error:   &UpdateError{Message: "original"},
+		})
+
+		entry, err := h.GetEntry("immutable")
+		if err != nil {
+			t.Fatalf("GetEntry() error = %v", err)
+		}
+		entry.Status = StatusFailed
+		entry.Error.Message = "changed"
+
+		again, err := h.GetEntry("immutable")
+		if err != nil {
+			t.Fatalf("GetEntry() error = %v", err)
+		}
+		if again.Status != StatusSuccess {
+			t.Fatalf("stored status mutated via returned pointer: %s", again.Status)
+		}
+		if again.Error == nil || again.Error.Message != "original" {
+			t.Fatalf("stored error mutated via returned pointer: %+v", again.Error)
+		}
+	})
 }
 
 func TestUpdateHistory_ListEntries(t *testing.T) {
@@ -473,6 +502,28 @@ func TestUpdateHistory_GetLatestSuccessful(t *testing.T) {
 		_, err := h.GetLatestSuccessful()
 		if err == nil {
 			t.Error("Expected error when cache is empty")
+		}
+	})
+
+	t.Run("returns defensive copy", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		h, _ := NewUpdateHistory(tmpDir)
+
+		h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "e1", Status: StatusSuccess})
+		h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "e2", Status: StatusSuccess})
+
+		entry, err := h.GetLatestSuccessful()
+		if err != nil {
+			t.Fatalf("GetLatestSuccessful() error = %v", err)
+		}
+		entry.EventID = "changed"
+
+		again, err := h.GetLatestSuccessful()
+		if err != nil {
+			t.Fatalf("GetLatestSuccessful() error = %v", err)
+		}
+		if again.EventID != "e2" {
+			t.Fatalf("stored latest-success entry mutated via returned pointer: %s", again.EventID)
 		}
 	})
 }

@@ -571,3 +571,23 @@ func TestSQLiteLoggerConcurrentAccess(t *testing.T) {
 		t.Errorf("Expected 100 events, got %d", count)
 	}
 }
+
+func TestSQLiteLoggerCloseIdempotent(t *testing.T) {
+	tempDir := t.TempDir()
+
+	logger, err := NewSQLiteLogger(SQLiteLoggerConfig{
+		DataDir:       tempDir,
+		CryptoMgr:     newMockCryptoManager(),
+		RetentionDays: 30,
+	})
+	if err != nil {
+		t.Fatalf("NewSQLiteLogger failed: %v", err)
+	}
+
+	if err := logger.Close(); err != nil {
+		t.Fatalf("first Close failed: %v", err)
+	}
+	if err := logger.Close(); err != nil {
+		t.Fatalf("second Close failed: %v", err)
+	}
+}

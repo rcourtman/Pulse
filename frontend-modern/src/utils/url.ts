@@ -132,17 +132,25 @@ function getPulseOriginUrl(): URL | null {
   }
 }
 
-function sanitizeApiToken(value: unknown): string | null {
-  if (typeof value !== 'string') {
+function getStoredSessionAuthToken(storage: Storage): string | null {
+  const stored = storage.getItem('pulse_auth');
+  if (!stored) {
     return null;
   }
 
-  const normalized = value.trim();
-  if (!normalized || normalized.length > MAX_API_TOKEN_LENGTH || CONTROL_CHAR_PATTERN.test(normalized)) {
+  try {
+    const parsed = JSON.parse(stored) as unknown;
+    if (!parsed || typeof parsed !== 'object') {
+      return null;
+    }
+    const auth = parsed as { type?: unknown; value?: unknown };
+    if (auth.type !== 'token' || typeof auth.value !== 'string' || auth.value === '') {
+      return null;
+    }
+    return auth.value;
+  } catch {
     return null;
   }
-
-  return normalized;
 }
 
 export function getPulseHostname(): string {

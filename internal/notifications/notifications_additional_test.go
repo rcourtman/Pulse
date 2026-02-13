@@ -460,8 +460,8 @@ func containsArg(args []string, value string) bool {
 	return false
 }
 
-func TestNotificationManagerStopIsIdempotent(t *testing.T) {
-	manager := NewNotificationManagerWithDataDir("", t.TempDir())
+func TestNotificationManagerStop_Idempotent(t *testing.T) {
+	manager := NewNotificationManager("")
 
 	manager.Stop()
 	manager.Stop()

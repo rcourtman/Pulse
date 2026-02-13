@@ -3265,15 +3265,15 @@ func (n *NotificationManager) Stop() {
 		cleanupDone := n.cleanupDone
 		client := n.webhookClient
 
-		// Cancel any pending group timer
-		if n.groupTimer != nil {
-			n.groupTimer.Stop()
-			n.groupTimer = nil
+		// Stop cleanup goroutine.
+		if n.stopCleanup != nil {
+			close(n.stopCleanup)
+			n.stopCleanup = nil
 		}
 
-		// Clear pending alerts
-		n.pendingAlerts = nil
-		n.mu.Unlock()
+		// Get queue reference before unlocking
+		queue := n.queue
+		n.queue = nil
 
 		// Stop cleanup goroutine and wait for exit before returning
 		if stopCleanup != nil {
@@ -3283,11 +3283,10 @@ func (n *NotificationManager) Stop() {
 			<-cleanupDone
 		}
 
-		// Stop queue outside n.mu to avoid deadlock with queue workers that may
-		// call back into NotificationManager during in-flight processing.
+		// Stop the notification queue if it exists
 		if queue != nil {
 			if err := queue.Stop(); err != nil {
-				log.Error().Err(err).Msg("Failed to stop notification queue")
+				log.Warn().Err(err).Msg("Notification queue stop returned error")
 			}
 		}
 

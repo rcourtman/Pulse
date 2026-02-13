@@ -80,6 +80,25 @@ export interface NotificationTestRequest {
 
 export class NotificationsAPI {
   private static baseUrl = '/api/notifications';
+  private static readString(value: unknown, fallback = ''): string {
+    return typeof value === 'string' ? value : fallback;
+  }
+
+  private static readBoolean(value: unknown, fallback = false): boolean {
+    return typeof value === 'boolean' ? value : fallback;
+  }
+
+  private static readNumber(value: unknown): number | undefined {
+    return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+  }
+
+  private static readStringArray(value: unknown): string[] {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+
+    return value.filter((item): item is string => typeof item === 'string');
+  }
 
   static async getAppriseConfig(): Promise<AppriseConfig> {
     return apiFetchJSON(`${this.baseUrl}/apprise`);
@@ -95,20 +114,21 @@ export class NotificationsAPI {
   // Email configuration
   static async getEmailConfig(): Promise<EmailConfig> {
     const backendConfig = await apiFetchJSON<Record<string, unknown>>(`${this.baseUrl}/email`);
+    const port = this.readNumber(backendConfig.port);
 
     // Backend already returns fields with correct names (server, port)
     return {
-      enabled: (backendConfig.enabled as boolean) || false,
-      provider: (backendConfig.provider as string) || '',
-      server: (backendConfig.server as string) || '',
-      port: (backendConfig.port as number) || 587,
-      username: (backendConfig.username as string) || '',
-      password: (backendConfig.password as string) || '',
-      from: (backendConfig.from as string) || '',
-      to: (backendConfig.to as string[]) || [],
-      tls: (backendConfig.tls as boolean) || false,
-      startTLS: (backendConfig.startTLS as boolean) || false,
-      rateLimit: (backendConfig.rateLimit as number) || undefined,
+      enabled: this.readBoolean(backendConfig.enabled),
+      provider: this.readString(backendConfig.provider),
+      server: this.readString(backendConfig.server),
+      port: port ?? 587,
+      username: this.readString(backendConfig.username),
+      password: this.readString(backendConfig.password),
+      from: this.readString(backendConfig.from),
+      to: this.readStringArray(backendConfig.to),
+      tls: this.readBoolean(backendConfig.tls),
+      startTLS: this.readBoolean(backendConfig.startTLS),
+      rateLimit: this.readNumber(backendConfig.rateLimit),
     };
   }
 
@@ -122,9 +142,9 @@ export class NotificationsAPI {
       password: config.password,
       from: config.from,
       to: config.to,
-      tls: config.tls || false,
-      startTLS: config.startTLS || false,
-      provider: config.provider || '',
+      tls: config.tls,
+      startTLS: config.startTLS,
+      provider: config.provider,
     };
 
     // Only include rateLimit if it's explicitly set

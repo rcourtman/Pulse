@@ -182,7 +182,14 @@ type UnifiedResourcesCacheEntry = {
 
 const unifiedResourcesCaches = new Map<string, UnifiedResourcesCacheEntry>();
 
-const readSourceFlags = (sources: string[] | undefined): SourceFlags => {
+const sanitizeSources = (sources: unknown): string[] => {
+  if (!Array.isArray(sources)) {
+    return [];
+  }
+  return sources.filter((source): source is string => typeof source === 'string');
+};
+
+const readSourceFlags = (sources: string[]): SourceFlags => {
   const flags: SourceFlags = {
     hasAgent: false,
     hasProxmox: false,
@@ -330,7 +337,7 @@ const metricToResourceMetric = (metric?: APIMetricValue) => {
 };
 
 const toResource = (v2: APIResource): Resource => {
-  const sources = v2.sources || [];
+  const sources = sanitizeSources(v2.sources);
   const sourceFlags = readSourceFlags(sources);
   const lastSeen = v2.lastSeen ? Date.parse(v2.lastSeen) : NaN;
   const name = v2.name || v2.id;
@@ -408,7 +415,7 @@ const toResource = (v2: APIResource): Resource => {
     discoveryTarget,
     metricsTarget,
     platformData: {
-      sources: v2.sources,
+      sources,
       sourceStatus: v2.sourceStatus,
       proxmox: v2.proxmox,
       agent: v2.agent,

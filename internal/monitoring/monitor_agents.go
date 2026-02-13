@@ -1879,17 +1879,18 @@ func (m *Monitor) cleanupTrackingMaps(now time.Time) {
 		}
 	}
 
-	// Clean up circuit breakers for keys not in active clients
-	// Build set of active keys from pveClients and pbsClients
+	// Clean up circuit breakers for keys not in active clients.
+	// Circuit breaker keys are typed ("{instanceType}::{instance}"), so the
+	// active set must use the same shape to avoid evicting healthy live entries.
 	activeKeys := make(map[string]struct{})
 	for key := range m.pveClients {
-		activeKeys[key] = struct{}{}
+		activeKeys[schedulerKey(InstanceTypePVE, key)] = struct{}{}
 	}
 	for key := range m.pbsClients {
-		activeKeys[key] = struct{}{}
+		activeKeys[schedulerKey(InstanceTypePBS, key)] = struct{}{}
 	}
 	for key := range m.pmgClients {
-		activeKeys[key] = struct{}{}
+		activeKeys[schedulerKey(InstanceTypePMG, key)] = struct{}{}
 	}
 
 	// Only clean up circuit breakers for inactive keys that have been idle

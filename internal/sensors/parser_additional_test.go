@@ -163,3 +163,60 @@ func TestParse_WithStringTemperatureValues(t *testing.T) {
 		t.Fatalf("nvme0 = %v, want 39.0", data.NVMe["nvme0"])
 	}
 }
+
+func TestExtractTempInput_NumericMillidegrees(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    map[string]interface{}
+		expected float64
+	}{
+		{
+			name: "float millidegrees",
+			input: map[string]interface{}{
+				"temp1_input": 42000.0,
+			},
+			expected: 42.0,
+		},
+		{
+			name: "int millidegrees",
+			input: map[string]interface{}{
+				"temp1_input": 55000,
+			},
+			expected: 55.0,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := extractTempInput(tc.input)
+			if math.Abs(got-tc.expected) > 0.0001 {
+				t.Fatalf("extractTempInput(%v) = %v, want %v", tc.input, got, tc.expected)
+			}
+		})
+	}
+}
+
+func TestParse_RaspberryPiMillidegreeFallbackShape(t *testing.T) {
+	input := `{
+		"cpu_thermal-virtual-0": {
+			"temp1": {
+				"temp1_input": 42000
+			}
+		}
+	}`
+
+	data, err := Parse(input)
+	if err != nil {
+		t.Fatalf("Parse() error: %v", err)
+	}
+
+	if !data.Available {
+		t.Fatal("Expected Available to be true")
+	}
+	if math.Abs(data.CPUPackage-42.0) > 0.0001 {
+		t.Fatalf("CPUPackage = %v, want 42.0", data.CPUPackage)
+	}
+	if math.Abs(data.CPUMax-42.0) > 0.0001 {
+		t.Fatalf("CPUMax = %v, want 42.0", data.CPUMax)
+	}
+}

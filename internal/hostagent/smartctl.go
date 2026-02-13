@@ -62,6 +62,20 @@ type SMARTAttributes struct {
 	UnsafeShutdowns *int64 `json:"unsafeShutdowns,omitempty"`
 }
 
+type smartStatusJSON struct {
+	Passed bool `json:"passed"`
+}
+
+type nvmeSmartHealthInformationLogJSON struct {
+	Temperature     int   `json:"temperature"`
+	AvailableSpare  int   `json:"available_spare"`
+	PercentageUsed  int   `json:"percentage_used"`
+	PowerOnHours    int64 `json:"power_on_hours"`
+	UnsafeShutdowns int64 `json:"unsafe_shutdowns"`
+	MediaErrors     int64 `json:"media_errors"`
+	PowerCycles     int64 `json:"power_cycles"`
+}
+
 // smartctlJSON represents the JSON output from smartctl --json.
 type smartctlJSON struct {
 	Device struct {
@@ -98,16 +112,8 @@ type smartctlJSON struct {
 		} `json:"table"`
 	} `json:"ata_smart_attributes"`
 	// NVMe-specific health information
-	NVMeSmartHealthInformationLog struct {
-		Temperature     int   `json:"temperature"`
-		AvailableSpare  int   `json:"available_spare"`
-		PercentageUsed  int   `json:"percentage_used"`
-		PowerOnHours    int64 `json:"power_on_hours"`
-		UnsafeShutdowns int64 `json:"unsafe_shutdowns"`
-		MediaErrors     int64 `json:"media_errors"`
-		PowerCycles     int64 `json:"power_cycles"`
-	} `json:"nvme_smart_health_information_log"`
-	PowerMode string `json:"power_mode"`
+	NVMeSmartHealthInformationLog *nvmeSmartHealthInformationLogJSON `json:"nvme_smart_health_information_log"`
+	PowerMode                     string                             `json:"power_mode"`
 }
 
 // CollectSMARTLocal collects S.M.A.R.T. data from all local block devices.
@@ -346,11 +352,11 @@ func collectDeviceSMART(ctx context.Context, device string) (*DiskSMART, error) 
 	// Get temperature (different location for NVMe vs SATA)
 	if smartData.Temperature.Current > 0 {
 		result.Temperature = smartData.Temperature.Current
-	} else if smartData.NVMeSmartHealthInformationLog.Temperature > 0 {
+	} else if smartData.NVMeSmartHealthInformationLog != nil && smartData.NVMeSmartHealthInformationLog.Temperature > 0 {
 		result.Temperature = smartData.NVMeSmartHealthInformationLog.Temperature
 	}
 
-	// Get health status. Some devices/versions omit smart_status entirely.
+	// Get health status
 	if smartData.SmartStatus == nil {
 		result.Health = "UNKNOWN"
 	} else if smartData.SmartStatus.Passed {
@@ -381,10 +387,8 @@ func parseSMARTAttributes(data *smartctlJSON, diskType string) *SMARTAttributes 
 	hasData := false
 
 	if diskType == "nvme" {
-		nvmeLog := &data.NVMeSmartHealthInformationLog
-		// NVMe health log fields are always present when the log is available.
-		// We use simple heuristics: power_on_hours > 0 means the log was populated.
-		if nvmeLog.PowerOnHours > 0 || nvmeLog.PowerCycles > 0 || nvmeLog.AvailableSpare > 0 {
+		nvmeLog := data.NVMeSmartHealthInformationLog
+		if nvmeLog != nil {
 			hasData = true
 			poh := nvmeLog.PowerOnHours
 			attrs.PowerOnHours = &poh

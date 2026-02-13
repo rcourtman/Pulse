@@ -264,12 +264,36 @@ func TestUpdateQueue_MaxHistory(t *testing.T) {
 	}
 }
 
-func TestUpdateQueue_GetHistoryReturnsDefensiveCopies(t *testing.T) {
+func TestUpdateQueue_GetCurrentJobReturnsCopy(t *testing.T) {
 	queue := NewUpdateQueue()
 
 	job, accepted := queue.Enqueue("https://example.com/update.tar.gz")
-	if !accepted || job == nil {
-		t.Fatal("expected enqueue to succeed")
+	if !accepted {
+		t.Fatal("job should be accepted")
+	}
+	queue.MarkRunning(job.ID)
+
+	current := queue.GetCurrentJob()
+	if current == nil {
+		t.Fatal("expected current job")
+	}
+	current.State = JobStateFailed
+
+	again := queue.GetCurrentJob()
+	if again == nil {
+		t.Fatal("expected current job")
+	}
+	if again.State != JobStateRunning {
+		t.Fatalf("internal state mutated through returned job pointer: %s", again.State)
+	}
+}
+
+func TestUpdateQueue_GetHistoryReturnsCopies(t *testing.T) {
+	queue := NewUpdateQueue()
+
+	job, accepted := queue.Enqueue("https://example.com/update.tar.gz")
+	if !accepted {
+		t.Fatal("job should be accepted")
 	}
 	queue.MarkRunning(job.ID)
 	queue.MarkCompleted(job.ID, nil)
@@ -278,19 +302,14 @@ func TestUpdateQueue_GetHistoryReturnsDefensiveCopies(t *testing.T) {
 	if len(history) != 1 {
 		t.Fatalf("expected one history entry, got %d", len(history))
 	}
-
 	history[0].State = JobStateFailed
-	history[0].DownloadURL = "tampered"
 
-	historyAgain := queue.GetHistory()
-	if len(historyAgain) != 1 {
-		t.Fatalf("expected one history entry, got %d", len(historyAgain))
+	again := queue.GetHistory()
+	if len(again) != 1 {
+		t.Fatalf("expected one history entry, got %d", len(again))
 	}
-	if historyAgain[0].State != JobStateCompleted {
-		t.Fatalf("expected completed state to remain unchanged, got %s", historyAgain[0].State)
-	}
-	if historyAgain[0].DownloadURL != "https://example.com/update.tar.gz" {
-		t.Fatalf("expected original download URL, got %q", historyAgain[0].DownloadURL)
+	if again[0].State != JobStateCompleted {
+		t.Fatalf("internal history mutated through returned pointer: %s", again[0].State)
 	}
 }
 

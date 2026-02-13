@@ -10,9 +10,9 @@ type MetricPoint struct {
 
 // IOMetrics represents I/O metrics at a point in time
 type IOMetrics struct {
-	DiskRead   int64
-	DiskWrite  int64
-	NetworkIn  int64
-	NetworkOut int64
-	Timestamp  time.Time
+	DiskRead   int64     `json:"diskRead"`
+	DiskWrite  int64     `json:"diskWrite"`
+	NetworkIn  int64     `json:"networkIn"`
+	NetworkOut int64     `json:"networkOut"`
+	Timestamp  time.Time `json:"timestamp"`
 }

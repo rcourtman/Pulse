@@ -32,6 +32,7 @@ type WebhookDelivery struct {
 	client   *http.Client
 	queue    chan Event
 	stopChan chan struct{}
+	stopOnce sync.Once
 	wg       sync.WaitGroup
 	stopOnce sync.Once
 }

@@ -206,10 +206,10 @@ func (q *UpdateQueue) GetHistory() []*UpdateJob {
 	q.mu.RLock()
 	defer q.mu.RUnlock()
 
-	// Return deep copies to avoid exposing mutable internal state.
-	history := make([]*UpdateJob, 0, len(q.jobHistory))
-	for _, job := range q.jobHistory {
-		history = append(history, cloneUpdateJob(job))
+	// Return a deep copy of job structs to avoid exposing mutable internal state.
+	history := make([]*UpdateJob, len(q.jobHistory))
+	for i, job := range q.jobHistory {
+		history[i] = cloneUpdateJob(job)
 	}
 	return history
 }
@@ -269,6 +269,7 @@ func cloneUpdateJob(job *UpdateJob) *UpdateJob {
 	if job == nil {
 		return nil
 	}
-	cloned := *job
-	return &cloned
+
+	jobCopy := *job
+	return &jobCopy
 }

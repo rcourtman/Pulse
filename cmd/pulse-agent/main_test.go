@@ -1339,6 +1339,53 @@ func TestRun_AgentFailure(t *testing.T) {
 	}
 }
 
+func TestRun_PropagatesDisableCephToHostAgent(t *testing.T) {
+	origDocker := newDockerAgent
+	origKube := newKubeAgent
+	origHost := newHostAgent
+	defer func() {
+		newDockerAgent = origDocker
+		newKubeAgent = origKube
+		newHostAgent = origHost
+	}()
+
+	hostCfgCh := make(chan hostagent.Config, 1)
+	newHostAgent = func(cfg hostagent.Config) (Runnable, error) {
+		hostCfgCh <- cfg
+		return &mockRunnable{}, nil
+	}
+	newDockerAgent = func(cfg dockeragent.Config) (RunnableCloser, error) {
+		return &mockRunnableCloser{}, nil
+	}
+	newKubeAgent = func(cfg kubernetesagent.Config) (Runnable, error) {
+		return &mockRunnable{}, nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+
+	err := run(ctx, []string{
+		"-token", "T",
+		"-enable-host=true",
+		"-enable-docker=false",
+		"-enable-kubernetes=false",
+		"-disable-ceph=true",
+		"-health-addr", "127.0.0.1:0",
+	}, func(string) string { return "" })
+	if err != nil && err != context.Canceled {
+		t.Fatalf("run returned unexpected error: %v", err)
+	}
+
+	select {
+	case hostCfg := <-hostCfgCh:
+		if !hostCfg.DisableCeph {
+			t.Fatalf("expected DisableCeph=true on host agent config")
+		}
+	default:
+		t.Fatalf("host agent was not initialized")
+	}
+}
+
 func TestLoadConfig_Comprehensive(t *testing.T) {
 	tests := []struct {
 		name     string

@@ -163,9 +163,9 @@ class ApiClient {
   }
 
   private loadStoredAuth() {
+    // First, check for token in URL query parameter (for kiosk/dashboard mode)
+    // This allows visiting ?token=xxx to auto-authenticate without cookies
     try {
-      // First, check for token in URL query parameter (for kiosk/dashboard mode)
-      // This allows visiting ?token=xxx to auto-authenticate without cookies
       if (typeof window !== 'undefined' && window.location?.search) {
         const params = new URLSearchParams(window.location.search);
         const urlToken = params.get('token');
@@ -184,9 +184,12 @@ class ApiClient {
           return;
         }
       }
+    } catch {
+      // Ignore URL parsing/history errors.
+    }
 
-      const storage = getSessionStorage();
-      if (!storage) return;
+    const storage = getSessionStorage();
+    if (!storage) return;
 
       const stored = storage.getItem(AUTH_STORAGE_KEY);
       if (stored) {
@@ -202,21 +205,27 @@ class ApiClient {
         } else {
           storage.removeItem(AUTH_STORAGE_KEY);
         }
-        return;
+      } catch {
+        // Ignore parse failures and fall back to legacy key if present.
       }
 
-      // Legacy storage key used before apiClient refactor
-      const legacyToken = storage.getItem(STORAGE_KEYS.LEGACY_TOKEN);
-      const sanitizedLegacyToken = sanitizeApiToken(legacyToken);
-      if (sanitizedLegacyToken) {
-        this.apiToken = sanitizedLegacyToken;
-        this.persistToken(sanitizedLegacyToken);
-        storage.removeItem(STORAGE_KEYS.LEGACY_TOKEN);
-      } else if (legacyToken) {
-        storage.removeItem(STORAGE_KEYS.LEGACY_TOKEN);
+      try {
+        storage.removeItem(AUTH_STORAGE_KEY);
+      } catch {
+        // Ignore storage errors.
       }
-    } catch (_err) {
-      // Invalid stored auth, ignore
+    }
+
+    // Legacy storage key used before apiClient refactor
+    const legacyToken = storage.getItem(STORAGE_KEYS.LEGACY_TOKEN);
+    if (legacyToken) {
+      this.apiToken = legacyToken;
+      this.persistToken(legacyToken);
+      try {
+        storage.removeItem(STORAGE_KEYS.LEGACY_TOKEN);
+      } catch {
+        // Ignore storage errors.
+      }
     }
   }
 
@@ -333,22 +342,26 @@ class ApiClient {
       return null;
     }
 
-    try {
-      const stored = storage.getItem(AUTH_STORAGE_KEY);
-      if (stored) {
-        if (stored.length > MAX_AUTH_STORAGE_CHARS) {
-          storage.removeItem(AUTH_STORAGE_KEY);
-          return null;
-        }
-        const parsed = JSON.parse(stored);
-        const token = parsed?.type === 'token' ? sanitizeApiToken(parsed?.value) : null;
+    const stored = storage.getItem(AUTH_STORAGE_KEY);
+    if (stored) {
+      try {
+        const token = extractStoredToken(JSON.parse(stored));
         if (token) {
           this.apiToken = token;
           return token;
         }
-        storage.removeItem(AUTH_STORAGE_KEY);
+      } catch {
+        // Ignore parse failures and continue to fallback.
       }
 
+      try {
+        storage.removeItem(AUTH_STORAGE_KEY);
+      } catch {
+        // Ignore storage errors.
+      }
+    }
+
+    try {
       const legacyToken = storage.getItem(STORAGE_KEYS.LEGACY_TOKEN);
       const sanitizedLegacyToken = sanitizeApiToken(legacyToken);
       if (sanitizedLegacyToken) {
@@ -361,7 +374,7 @@ class ApiClient {
         storage.removeItem(STORAGE_KEYS.LEGACY_TOKEN);
       }
     } catch {
-      // Ignore parsing/storage errors
+      // Ignore storage errors.
     }
 
     return null;

@@ -98,11 +98,23 @@ describe('updateStore', () => {
       }),
     );
 
-    mockGetVersion.mockResolvedValue(baseVersionInfo);
-
     await updateStore.checkForUpdates();
 
-    expect(updateStore.isDismissed()).toBe(false);
-    expect(mockCheckForUpdates).not.toHaveBeenCalled();
+    expect(getVersionMock).toHaveBeenCalledTimes(1);
+    expect(checkForUpdatesMock).toHaveBeenCalledTimes(1);
+    expect(updateStore.updateAvailable()).toBe(true);
+    expect(updateStore.updateInfo()).toEqual({
+      available: true,
+      currentVersion: 'v1.2.3',
+      latestVersion: 'v1.2.4',
+      releaseNotes: 'Bug fixes',
+      releaseDate: '2026-02-12T00:00:00.000Z',
+      downloadUrl: '/download',
+      isPrerelease: false,
+    });
+
+    const stored = JSON.parse(localStorage.getItem(STORAGE_KEYS.UPDATES) || '{}');
+    expect(typeof stored.updateInfo.available).toBe('boolean');
+    expect(typeof stored.updateInfo.latestVersion).toBe('string');
   });
 });

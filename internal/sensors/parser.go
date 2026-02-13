@@ -276,9 +276,9 @@ func extractTempInput(sensorMap map[string]interface{}) float64 {
 		if strings.HasSuffix(key, "_input") {
 			switch v := value.(type) {
 			case float64:
-				return v
+				return normalizeTemperatureValue(v)
 			case int:
-				return float64(v)
+				return normalizeTemperatureValue(float64(v))
 			case string:
 				if parsed, ok := parseStringTemperature(v); ok {
 					return parsed
@@ -287,6 +287,15 @@ func extractTempInput(sensorMap map[string]interface{}) float64 {
 		}
 	}
 	return math.NaN()
+}
+
+func normalizeTemperatureValue(value float64) float64 {
+	// Some sensor backends report temperatures in millidegrees (e.g. 42000).
+	// Convert only when magnitude strongly indicates millidegrees.
+	if math.Abs(value) >= 1000 {
+		return value / 1000.0
+	}
+	return value
 }
 
 // parseStringTemperature parses numeric string temperature values.
@@ -306,13 +315,7 @@ func parseStringTemperature(value string) (float64, bool) {
 		}
 	}
 
-	// lm-sensors fallback on some platforms can report millidegrees as raw strings.
-	// Convert only when the magnitude strongly indicates millidegrees.
-	if math.Abs(parsed) >= 1000 {
-		parsed = parsed / 1000.0
-	}
-
-	return parsed, true
+	return normalizeTemperatureValue(parsed), true
 }
 
 // parseFansAndOther extracts fan speeds and other temperature readings from a sensor chip.

@@ -277,6 +277,7 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 			EnableCommands:     cfg.EnableCommands,
 			DiskExclude:        cfg.DiskExclude,
 			ReportIP:           cfg.ReportIP,
+			DisableCeph:        cfg.DisableCeph,
 		}
 
 		agent, err := newHostAgent(hostCfg)

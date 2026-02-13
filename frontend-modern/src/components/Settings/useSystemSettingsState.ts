@@ -336,7 +336,7 @@ export function useSystemSettingsState({
       const isPresetInterval = BACKUP_INTERVAL_OPTIONS.some((opt) => opt.value === intervalSeconds);
       setBackupPollingUseCustom(!isPresetInterval && intervalSeconds > 0);
       setAutoUpdateEnabled(systemSettings.autoUpdateEnabled || false);
-      setAutoUpdateCheckInterval(systemSettings.autoUpdateCheckInterval || 24);
+      setAutoUpdateCheckInterval(systemSettings.autoUpdateCheckInterval ?? 24);
       setAutoUpdateTime(systemSettings.autoUpdateTime || '03:00');
 
       if (systemSettings.updateChannel) {

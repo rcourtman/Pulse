@@ -12,6 +12,7 @@ import {
   fallbackMaxAlertsPerHour,
   extractTriggerValues,
   getTriggerValue,
+  normalizeEmailConfigFromAPI,
   normalizeMetricDelayMap,
   pathForTab,
   tabFromPath,
@@ -194,6 +195,76 @@ describe('threshold helper utilities', () => {
     expect(getTriggerValue({ trigger: 90, clear: 80 })).toBe(90);
     expect(getTriggerValue(true)).toBe(0);
     expect(getTriggerValue(undefined)).toBe(0);
+  });
+});
+
+describe('normalizeEmailConfigFromAPI', () => {
+  it('preserves explicit zero values and false booleans', () => {
+    const result = normalizeEmailConfigFromAPI({
+      enabled: true,
+      provider: 'custom',
+      server: 'smtp.example.com',
+      port: 0,
+      username: 'user',
+      password: 'pass',
+      from: 'alerts@example.com',
+      to: ['ops@example.com'],
+      tls: false,
+      startTLS: false,
+      rateLimit: 0,
+    });
+
+    expect(result).toEqual({
+      enabled: true,
+      provider: 'custom',
+      server: 'smtp.example.com',
+      port: 0,
+      username: 'user',
+      password: 'pass',
+      from: 'alerts@example.com',
+      to: ['ops@example.com'],
+      tls: false,
+      startTLS: false,
+      replyTo: '',
+      maxRetries: 3,
+      retryDelay: 5,
+      rateLimit: 0,
+    });
+  });
+
+  it('falls back to defaults for malformed payload types', () => {
+    const malformed = {
+      enabled: 'yes',
+      provider: 123,
+      server: ['smtp'],
+      port: '587',
+      username: null,
+      password: {},
+      from: true,
+      to: ['ops@example.com', 42, null],
+      tls: 'true',
+      startTLS: {},
+      rateLimit: '60',
+    } as unknown as Partial<import('@/api/notifications').EmailConfig>;
+
+    const result = normalizeEmailConfigFromAPI(malformed);
+
+    expect(result).toEqual({
+      enabled: false,
+      provider: '',
+      server: '',
+      port: 587,
+      username: '',
+      password: '',
+      from: '',
+      to: ['ops@example.com'],
+      tls: true,
+      startTLS: false,
+      replyTo: '',
+      maxRetries: 3,
+      retryDelay: 5,
+      rateLimit: 60,
+    });
   });
 });
 

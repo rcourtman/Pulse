@@ -112,6 +112,35 @@ func TestKubernetesClusterToFrontend_DisplayNameFallback(t *testing.T) {
 	}
 }
 
+func TestKubernetesClusterToFrontend_ZeroTokenLastUsedAtOmitted(t *testing.T) {
+	zero := time.Time{}
+	cluster := KubernetesCluster{
+		ID:              "cluster-3",
+		Name:            "cluster",
+		LastSeen:        time.Now(),
+		TokenLastUsedAt: &zero,
+	}
+
+	frontend := cluster.ToFrontend()
+	if frontend.TokenLastUsedAt != nil {
+		t.Fatalf("TokenLastUsedAt = %v, want nil for zero timestamp", frontend.TokenLastUsedAt)
+	}
+
+	payload, err := json.Marshal(frontend)
+	if err != nil {
+		t.Fatalf("json.Marshal error: %v", err)
+	}
+
+	var decoded map[string]any
+	if err := json.Unmarshal(payload, &decoded); err != nil {
+		t.Fatalf("json.Unmarshal error: %v", err)
+	}
+
+	if _, ok := decoded["tokenLastUsedAt"]; ok {
+		t.Fatalf("tokenLastUsedAt should be omitted from JSON for zero timestamp")
+	}
+}
+
 func TestTimeToUnixMillis(t *testing.T) {
 	if got := timeToUnixMillis(time.Time{}); got != 0 {
 		t.Fatalf("timeToUnixMillis(zero) = %d, want 0", got)

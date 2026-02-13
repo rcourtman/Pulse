@@ -57,6 +57,8 @@ type NotificationQueue struct {
 	db              *sql.DB
 	dbPath          string
 	stopChan        chan struct{}
+	stopOnce        sync.Once
+	stopErr         error
 	wg              sync.WaitGroup
 	stopOnce        sync.Once
 	stopErr         error
@@ -857,9 +859,10 @@ func (nq *NotificationQueue) performCleanup() {
 func (nq *NotificationQueue) Stop() error {
 	nq.stopOnce.Do(func() {
 		close(nq.stopChan)
+		nq.wg.Wait()
+
 		nq.processorTicker.Stop()
 		nq.cleanupTicker.Stop()
-		nq.wg.Wait()
 
 		if err := nq.db.Close(); err != nil {
 			nq.stopErr = fmt.Errorf("failed to close database: %w", err)
@@ -869,12 +872,7 @@ func (nq *NotificationQueue) Stop() error {
 		log.Info().Msg("Notification queue stopped")
 	})
 
-	log.Info().
-		Str("component", "notification_queue").
-		Str("action", "stop").
-		Str("dbPath", nq.dbPath).
-		Msg("Notification queue stopped")
-	return nil
+	return nq.stopErr
 }
 
 // calculateBackoff calculates exponential backoff duration

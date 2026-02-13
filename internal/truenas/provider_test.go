@@ -138,6 +138,31 @@ func TestProviderRefreshPreservesLastSnapshotOnError(t *testing.T) {
 	}
 }
 
+func TestProviderRefreshPreservesLastSnapshotOnNilSnapshot(t *testing.T) {
+	initial := DefaultFixtures()
+	provider := NewProvider(initial)
+	provider.fetcher = &stubFetcher{snapshot: nil}
+
+	err := provider.Refresh(context.Background())
+	if !errors.Is(err, errNilSnapshot) {
+		t.Fatalf("expected errNilSnapshot, got %v", err)
+	}
+
+	provider.mu.Lock()
+	snapshot := copyFixtureSnapshot(provider.lastSnapshot)
+	provider.mu.Unlock()
+
+	if snapshot == nil {
+		t.Fatal("expected cached snapshot")
+	}
+	if snapshot.System.Hostname != initial.System.Hostname {
+		t.Fatalf("expected hostname %q, got %q", initial.System.Hostname, snapshot.System.Hostname)
+	}
+	if len(snapshot.Pools) != len(initial.Pools) {
+		t.Fatalf("expected pool count %d, got %d", len(initial.Pools), len(snapshot.Pools))
+	}
+}
+
 func TestRecordsDoesNotCallRefreshWhenSnapshotMissing(t *testing.T) {
 	previous := IsFeatureEnabled()
 	SetFeatureEnabled(true)

@@ -327,7 +327,10 @@ func (c KubernetesCluster) ToFrontend() KubernetesClusterFrontend {
 		PendingUninstall:  c.PendingUninstall,
 	}
 
-	cluster.TokenLastUsedAt = optionalTimeToUnixMillis(c.TokenLastUsedAt)
+	if c.TokenLastUsedAt != nil && !c.TokenLastUsedAt.IsZero() {
+		ts := c.TokenLastUsedAt.Unix() * 1000
+		cluster.TokenLastUsedAt = &ts
+	}
 
 	if len(c.Nodes) > 0 {
 		cluster.Nodes = make([]KubernetesNodeFrontend, len(c.Nodes))
