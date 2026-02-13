@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"math"
 	"net/http"
 	"os"
 	"os/exec"
@@ -633,7 +634,19 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 
 	logLevel, err := parseLogLevel(*logLevelFlag)
 	if err != nil {
-		logLevel = zerolog.InfoLevel
+		return Config{}, fmt.Errorf("invalid log level %q: %w", strings.TrimSpace(*logLevelFlag), err)
+	}
+	interval := *intervalFlag
+	if interval <= 0 {
+		return Config{}, fmt.Errorf("interval must be greater than 0 (got %s)", interval)
+	}
+	kubeMaxPods := *kubeMaxPodsFlag
+	if kubeMaxPods <= 0 {
+		return Config{}, fmt.Errorf("kube-max-pods must be greater than 0 (got %d)", kubeMaxPods)
+	}
+	dockerRuntime, err := normalizeDockerRuntime(*dockerRuntimeFlag)
+	if err != nil {
+		return Config{}, err
 	}
 
 	tags := gatherTags(envTags, tagFlags)
@@ -654,7 +667,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	return Config{
 		PulseURL:                  pulseURL,
 		APIToken:                  token,
-		Interval:                  *intervalFlag,
+		Interval:                  interval,
 		HostnameOverride:          strings.TrimSpace(*hostnameFlag),
 		AgentID:                   strings.TrimSpace(*agentIDFlag),
 		Tags:                      tags,
@@ -668,7 +681,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 		ProxmoxType:               strings.TrimSpace(*proxmoxTypeFlag),
 		DisableAutoUpdate:         *disableAutoUpdateFlag,
 		DisableDockerUpdateChecks: *disableDockerUpdateChecksFlag,
-		DockerRuntime:             strings.TrimSpace(*dockerRuntimeFlag),
+		DockerRuntime:             dockerRuntime,
 		EnableCommands:            resolveEnableCommands(*enableCommandsFlag, *disableCommandsFlag, envEnableCommands, envDisableCommands),
 		HealthAddr:                strings.TrimSpace(*healthAddrFlag),
 		KubeconfigPath:            strings.TrimSpace(*kubeconfigFlag),
@@ -677,7 +690,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 		KubeExcludeNamespaces:     kubeExcludeNamespaces,
 		KubeIncludeAllPods:        *kubeIncludeAllPodsFlag,
 		KubeIncludeAllDeployments: *kubeIncludeAllDeploymentsFlag,
-		KubeMaxPods:               *kubeMaxPodsFlag,
+		KubeMaxPods:               kubeMaxPods,
 		DiskExclude:               diskExclude,
 		ReportIP:                  strings.TrimSpace(*reportIPFlag),
 		DisableCeph:               *disableCephFlag,
@@ -733,6 +746,18 @@ func defaultInt(value string, fallback int) int {
 		return fallback
 	}
 	return parsed
+}
+
+func normalizeDockerRuntime(value string) (string, error) {
+	runtime := strings.ToLower(strings.TrimSpace(value))
+	switch runtime {
+	case "", "auto", "default":
+		return "", nil
+	case "docker", "podman":
+		return runtime, nil
+	default:
+		return "", fmt.Errorf("invalid docker runtime %q: must be auto, docker, or podman", value)
+	}
 }
 
 func parseLogLevel(value string) (zerolog.Level, error) {
@@ -922,43 +947,106 @@ func initKubernetesWithRetry(ctx context.Context, cfg kubernetesagent.Config, lo
 // - report_ip (string)
 // - disable_ceph (bool)
 func applyRemoteSettings(cfg *Config, settings map[string]interface{}, logger *zerolog.Logger) {
-	if b, ok := remoteBoolSetting(settings, "enable_host"); ok {
-		cfg.EnableHost = b
-		logger.Info().Bool("val", b).Msg("Remote config: enable_host")
-	}
-	if b, ok := remoteBoolSetting(settings, "enable_docker"); ok {
-		cfg.EnableDocker = b
-		cfg.DockerConfigured = true
-		logger.Info().Bool("val", b).Msg("Remote config: enable_docker")
-	}
-	if b, ok := remoteBoolSetting(settings, "enable_kubernetes"); ok {
-		cfg.EnableKubernetes = b
-		logger.Info().Bool("val", b).Msg("Remote config: enable_kubernetes")
-	}
-	if b, ok := remoteBoolSetting(settings, "enable_proxmox"); ok {
-		cfg.EnableProxmox = b
-		logger.Info().Bool("val", b).Msg("Remote config: enable_proxmox")
-	}
-	if s, ok := remoteStringSetting(settings, "proxmox_type"); ok {
-		normalized := strings.TrimSpace(strings.ToLower(s))
-		if normalized == "auto" {
-			normalized = ""
-		}
-		cfg.ProxmoxType = normalized
-		logger.Info().Str("val", s).Msg("Remote config: proxmox_type")
-	}
-	if s, ok := remoteStringSetting(settings, "docker_runtime"); ok {
-		cfg.DockerRuntime = strings.TrimSpace(strings.ToLower(s))
-		logger.Info().Str("val", s).Msg("Remote config: docker_runtime")
-	}
-	if s, ok := remoteStringSetting(settings, "log_level"); ok {
-		if l, err := zerolog.ParseLevel(s); err == nil {
-			cfg.LogLevel = l
-			zerolog.SetGlobalLevel(l)
-			// Re-create logger with new level
-			newLogger := zerolog.New(os.Stdout).Level(l).With().Timestamp().Logger()
-			cfg.Logger = &newLogger
-			logger.Info().Str("val", s).Msg("Remote config: log_level")
+	for k, v := range settings {
+		switch k {
+		case "enable_host":
+			if b, ok := v.(bool); ok {
+				cfg.EnableHost = b
+				logger.Info().Bool("val", b).Msg("Remote config: enable_host")
+			}
+		case "enable_docker":
+			if b, ok := v.(bool); ok {
+				cfg.EnableDocker = b
+				cfg.DockerConfigured = true
+				logger.Info().Bool("val", b).Msg("Remote config: enable_docker")
+			}
+		case "enable_kubernetes":
+			if b, ok := v.(bool); ok {
+				cfg.EnableKubernetes = b
+				logger.Info().Bool("val", b).Msg("Remote config: enable_kubernetes")
+			}
+		case "enable_proxmox":
+			if b, ok := v.(bool); ok {
+				cfg.EnableProxmox = b
+				logger.Info().Bool("val", b).Msg("Remote config: enable_proxmox")
+			}
+		case "proxmox_type":
+			if s, ok := v.(string); ok {
+				normalized := strings.TrimSpace(strings.ToLower(s))
+				if normalized == "auto" {
+					normalized = ""
+				}
+				cfg.ProxmoxType = normalized
+				logger.Info().Str("val", s).Msg("Remote config: proxmox_type")
+			}
+		case "docker_runtime":
+			if s, ok := v.(string); ok {
+				runtime, err := normalizeDockerRuntime(s)
+				if err != nil {
+					logger.Warn().Str("val", s).Msg("Remote config: ignoring invalid docker_runtime value")
+					continue
+				}
+				cfg.DockerRuntime = runtime
+				logger.Info().Str("val", s).Msg("Remote config: docker_runtime")
+			}
+		case "log_level":
+			if s, ok := v.(string); ok {
+				if l, err := zerolog.ParseLevel(s); err == nil {
+					cfg.LogLevel = l
+					zerolog.SetGlobalLevel(l)
+					// Re-create logger with new level
+					newLogger := zerolog.New(os.Stdout).Level(l).With().Timestamp().Logger()
+					cfg.Logger = &newLogger
+					logger.Info().Str("val", s).Msg("Remote config: log_level")
+				}
+			}
+		case "interval":
+			if s, ok := v.(string); ok {
+				if d, err := time.ParseDuration(s); err == nil && d > 0 {
+					cfg.Interval = d
+					logger.Info().Str("val", s).Msg("Remote config: interval")
+				} else {
+					logger.Warn().Str("val", s).Msg("Remote config: ignoring invalid interval value")
+				}
+			} else if f, ok := v.(float64); ok {
+				if math.IsNaN(f) || math.IsInf(f, 0) || f <= 0 {
+					logger.Warn().Float64("val", f).Msg("Remote config: ignoring invalid interval value")
+					continue
+				}
+				// JSON numbers are floats, assume seconds.
+				cfg.Interval = time.Duration(f * float64(time.Second))
+				logger.Info().Float64("val", f).Msg("Remote config: interval (s)")
+			}
+		case "disable_auto_update":
+			if b, ok := v.(bool); ok {
+				cfg.DisableAutoUpdate = b
+				logger.Info().Bool("val", b).Msg("Remote config: disable_auto_update")
+			}
+		case "disable_docker_update_checks":
+			if b, ok := v.(bool); ok {
+				cfg.DisableDockerUpdateChecks = b
+				logger.Info().Bool("val", b).Msg("Remote config: disable_docker_update_checks")
+			}
+		case "kube_include_all_pods":
+			if b, ok := v.(bool); ok {
+				cfg.KubeIncludeAllPods = b
+				logger.Info().Bool("val", b).Msg("Remote config: kube_include_all_pods")
+			}
+		case "kube_include_all_deployments":
+			if b, ok := v.(bool); ok {
+				cfg.KubeIncludeAllDeployments = b
+				logger.Info().Bool("val", b).Msg("Remote config: kube_include_all_deployments")
+			}
+		case "report_ip":
+			if s, ok := v.(string); ok {
+				cfg.ReportIP = s
+				logger.Info().Str("val", s).Msg("Remote config: report_ip")
+			}
+		case "disable_ceph":
+			if b, ok := v.(bool); ok {
+				cfg.DisableCeph = b
+				logger.Info().Bool("val", b).Msg("Remote config: disable_ceph")
+			}
 		}
 	}
 	if d, ok := remoteDurationSetting(settings, "interval"); ok {

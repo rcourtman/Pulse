@@ -138,6 +138,11 @@ func TestProfileValidator_ValidateDurationType(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name:    "valid duration with surrounding whitespace",
+			config:  AgentConfigMap{"interval": " 30s "},
+			wantErr: false,
+		},
+		{
 			name:    "invalid duration format",
 			config:  AgentConfigMap{"interval": "30"},
 			wantErr: true,
@@ -146,6 +151,24 @@ func TestProfileValidator_ValidateDurationType(t *testing.T) {
 		{
 			name:    "invalid duration - not a string",
 			config:  AgentConfigMap{"interval": 30},
+			wantErr: true,
+			errKey:  "interval",
+		},
+		{
+			name:    "invalid duration - empty after trim",
+			config:  AgentConfigMap{"interval": "   "},
+			wantErr: true,
+			errKey:  "interval",
+		},
+		{
+			name:    "invalid duration - zero value",
+			config:  AgentConfigMap{"interval": "0s"},
+			wantErr: true,
+			errKey:  "interval",
+		},
+		{
+			name:    "invalid duration - negative value",
+			config:  AgentConfigMap{"interval": "-5s"},
 			wantErr: true,
 			errKey:  "interval",
 		},
@@ -408,24 +431,45 @@ func TestAgentProfile_MergedConfigParentNotFound(t *testing.T) {
 	}
 }
 
-func TestAgentProfile_MergedConfigCircularInheritance(t *testing.T) {
-	profileA := AgentProfile{
-		ID:       "profile-a",
-		Name:     "Profile A",
-		ParentID: "profile-b",
+func TestAgentProfile_MergedConfigSelfCycle(t *testing.T) {
+	profile := AgentProfile{
+		ID:       "profile-1",
+		Name:     "Self Cycle",
+		ParentID: "profile-1",
 		Config: AgentConfigMap{
-			"interval":  "15s",
-			"log_level": "debug",
+			"interval":    "15s",
+			"enable_host": true,
+		},
+	}
+
+	merged := profile.MergedConfig([]AgentProfile{profile})
+
+	if merged["interval"] != "15s" {
+		t.Errorf("expected interval to be '15s', got %v", merged["interval"])
+	}
+	if merged["enable_host"] != true {
+		t.Errorf("expected enable_host to be true, got %v", merged["enable_host"])
+	}
+}
+
+func TestAgentProfile_MergedConfigMutualCycle(t *testing.T) {
+	profileA := AgentProfile{
+		ID:       "a",
+		Name:     "Profile A",
+		ParentID: "b",
+		Config: AgentConfigMap{
+			"interval":      "10s",
+			"enable_docker": true,
 		},
 	}
 
 	profileB := AgentProfile{
-		ID:       "profile-b",
+		ID:       "b",
 		Name:     "Profile B",
-		ParentID: "profile-a",
+		ParentID: "a",
 		Config: AgentConfigMap{
-			"enable_docker": true,
-			"log_level":     "info",
+			"interval":  "30s",
+			"log_level": "info",
 		},
 	}
 

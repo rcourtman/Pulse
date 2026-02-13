@@ -1044,11 +1044,11 @@ func New(cfg *config.Config) (*Monitor, error) {
 	holdDuration := defaultGuestMetadataHold
 
 	// Load guest agent timeout configuration from environment variables (refs #592)
-	guestAgentFSInfoTimeout := parseDurationEnv("GUEST_AGENT_FSINFO_TIMEOUT", defaultGuestAgentFSInfoTimeout)
-	guestAgentNetworkTimeout := parseDurationEnv("GUEST_AGENT_NETWORK_TIMEOUT", defaultGuestAgentNetworkTimeout)
-	guestAgentOSInfoTimeout := parseDurationEnv("GUEST_AGENT_OSINFO_TIMEOUT", defaultGuestAgentOSInfoTimeout)
-	guestAgentVersionTimeout := parseDurationEnv("GUEST_AGENT_VERSION_TIMEOUT", defaultGuestAgentVersionTimeout)
-	guestAgentRetries := parseIntEnv("GUEST_AGENT_RETRIES", defaultGuestAgentRetries)
+	guestAgentFSInfoTimeout := parsePositiveDurationEnv("GUEST_AGENT_FSINFO_TIMEOUT", defaultGuestAgentFSInfoTimeout)
+	guestAgentNetworkTimeout := parsePositiveDurationEnv("GUEST_AGENT_NETWORK_TIMEOUT", defaultGuestAgentNetworkTimeout)
+	guestAgentOSInfoTimeout := parsePositiveDurationEnv("GUEST_AGENT_OSINFO_TIMEOUT", defaultGuestAgentOSInfoTimeout)
+	guestAgentVersionTimeout := parsePositiveDurationEnv("GUEST_AGENT_VERSION_TIMEOUT", defaultGuestAgentVersionTimeout)
+	guestAgentRetries := parseNonNegativeIntEnv("GUEST_AGENT_RETRIES", defaultGuestAgentRetries)
 
 	// Initialize persistent metrics store (SQLite) with configurable retention
 	var metricsStore *metrics.Store

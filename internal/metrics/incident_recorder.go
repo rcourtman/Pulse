@@ -143,6 +143,15 @@ func NewIncidentRecorder(cfg IncidentRecorderConfig) *IncidentRecorder {
 	if cfg.RetentionDuration <= 0 {
 		cfg.RetentionDuration = 24 * time.Hour
 	}
+	if cfg.DataDir != "" {
+		trimmed := strings.TrimSpace(cfg.DataDir)
+		if trimmed == "" {
+			log.Warn().Msg("Ignoring incident recorder data dir: blank after trimming whitespace")
+			cfg.DataDir = ""
+		} else {
+			cfg.DataDir = filepath.Clean(trimmed)
+		}
+	}
 
 	dataDir := strings.TrimSpace(cfg.DataDir)
 	if dataDir != "" {

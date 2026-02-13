@@ -256,6 +256,34 @@ func TestApplyRemoteSettingsIntervalFloat(t *testing.T) {
 	}
 }
 
+func TestApplyRemoteSettingsIgnoresInvalidValues(t *testing.T) {
+	logger := zerolog.New(io.Discard)
+	cfg := &Config{
+		Interval:      30 * time.Second,
+		DockerRuntime: "docker",
+	}
+
+	applyRemoteSettings(cfg, map[string]interface{}{
+		"interval":       "invalid",
+		"docker_runtime": "not-a-runtime",
+	}, &logger)
+
+	if cfg.Interval != 30*time.Second {
+		t.Fatalf("expected interval to remain unchanged, got %v", cfg.Interval)
+	}
+	if cfg.DockerRuntime != "docker" {
+		t.Fatalf("expected docker runtime to remain unchanged, got %q", cfg.DockerRuntime)
+	}
+
+	applyRemoteSettings(cfg, map[string]interface{}{
+		"interval": float64(0),
+	}, &logger)
+
+	if cfg.Interval != 30*time.Second {
+		t.Fatalf("expected non-positive numeric interval to be ignored, got %v", cfg.Interval)
+	}
+}
+
 func TestDefaultInt(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -814,6 +842,34 @@ func TestLoadConfig(t *testing.T) {
 		_, err := loadConfig([]string{"-interval", "invalid"}, func(s string) string { return "" })
 		if err == nil {
 			t.Fatal("expected error for invalid interval")
+		}
+	})
+
+	t.Run("non-positive interval returns error", func(t *testing.T) {
+		_, err := loadConfig([]string{"-token", "test-token", "-interval", "0s"}, func(s string) string { return "" })
+		if err == nil {
+			t.Fatal("expected error for non-positive interval")
+		}
+	})
+
+	t.Run("invalid kube max pods returns error", func(t *testing.T) {
+		_, err := loadConfig([]string{"-token", "test-token", "-kube-max-pods", "0"}, func(s string) string { return "" })
+		if err == nil {
+			t.Fatal("expected error for non-positive kube-max-pods")
+		}
+	})
+
+	t.Run("invalid docker runtime returns error", func(t *testing.T) {
+		_, err := loadConfig([]string{"-token", "test-token", "-docker-runtime", "containerd"}, func(s string) string { return "" })
+		if err == nil {
+			t.Fatal("expected error for invalid docker runtime")
+		}
+	})
+
+	t.Run("invalid log level returns error", func(t *testing.T) {
+		_, err := loadConfig([]string{"-token", "test-token", "-log-level", "invalid"}, func(s string) string { return "" })
+		if err == nil {
+			t.Fatal("expected error for invalid log level")
 		}
 	})
 

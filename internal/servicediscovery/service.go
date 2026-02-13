@@ -273,16 +273,64 @@ type Config struct {
 	FingerprintInterval time.Duration // How often to collect fingerprints (default 5 min)
 }
 
+const (
+	defaultDiscoveryInterval     = 5 * time.Minute
+	defaultDiscoveryCacheExpiry  = 1 * time.Hour
+	defaultDiscoveryScanTimeout  = 60 * time.Second
+	defaultDiscoveryMaxAge       = 30 * 24 * time.Hour
+	minDiscoveryMaxAge           = 24 * time.Hour
+	defaultDiscoveryInitialDelay = 30 * time.Second
+)
+
 // DefaultConfig returns the default discovery configuration.
 func DefaultConfig() Config {
 	return Config{
-		Interval:            5 * time.Minute, // Fingerprint collection interval
-		CacheExpiry:         1 * time.Hour,
-		DeepScanTimeout:     60 * time.Second,
-		AIAnalysisTimeout:   45 * time.Second,
-		MaxDiscoveryAge:     30 * 24 * time.Hour, // 30 days
-		FingerprintInterval: 5 * time.Minute,
+		Interval:            defaultDiscoveryInterval, // Fingerprint collection interval
+		CacheExpiry:         defaultDiscoveryCacheExpiry,
+		DeepScanTimeout:     defaultDiscoveryScanTimeout,
+		MaxDiscoveryAge:     defaultDiscoveryMaxAge,
+		FingerprintInterval: defaultDiscoveryInterval,
 	}
+}
+
+func normalizeServiceConfig(cfg Config) Config {
+	if cfg.Interval <= 0 {
+		log.Warn().Dur("interval", cfg.Interval).Dur("default", defaultDiscoveryInterval).Msg("Invalid discovery interval; using default")
+		cfg.Interval = defaultDiscoveryInterval
+	}
+	if cfg.CacheExpiry <= 0 {
+		log.Warn().Dur("cache_expiry", cfg.CacheExpiry).Dur("default", defaultDiscoveryCacheExpiry).Msg("Invalid discovery cache expiry; using default")
+		cfg.CacheExpiry = defaultDiscoveryCacheExpiry
+	}
+	if cfg.DeepScanTimeout <= 0 {
+		log.Warn().Dur("deep_scan_timeout", cfg.DeepScanTimeout).Dur("default", defaultDiscoveryScanTimeout).Msg("Invalid deep scan timeout; using default")
+		cfg.DeepScanTimeout = defaultDiscoveryScanTimeout
+	}
+	switch {
+	case cfg.MaxDiscoveryAge <= 0:
+		log.Warn().Dur("max_discovery_age", cfg.MaxDiscoveryAge).Dur("default", defaultDiscoveryMaxAge).Msg("Invalid max discovery age; using default")
+		cfg.MaxDiscoveryAge = defaultDiscoveryMaxAge
+	case cfg.MaxDiscoveryAge < minDiscoveryMaxAge:
+		log.Warn().Dur("max_discovery_age", cfg.MaxDiscoveryAge).Dur("minimum", minDiscoveryMaxAge).Msg("Max discovery age below minimum; clamping")
+		cfg.MaxDiscoveryAge = minDiscoveryMaxAge
+	}
+	return cfg
+}
+
+func normalizeDiscoveryInterval(interval time.Duration) time.Duration {
+	if interval > 0 {
+		return interval
+	}
+	log.Warn().Dur("interval", interval).Dur("default", defaultDiscoveryInterval).Msg("Invalid discovery interval; using default")
+	return defaultDiscoveryInterval
+}
+
+func normalizeDeepScanTimeout(timeout time.Duration) time.Duration {
+	if timeout > 0 {
+		return timeout
+	}
+	log.Warn().Dur("deep_scan_timeout", timeout).Dur("default", defaultDiscoveryScanTimeout).Msg("Invalid deep scan timeout; using default")
+	return defaultDiscoveryScanTimeout
 }
 
 // NewService creates a new discovery service.
@@ -357,19 +405,21 @@ func (s *Service) Stop() {
 
 // SetInterval updates the scan interval. Takes effect immediately if running.
 func (s *Service) SetInterval(interval time.Duration) {
+	normalizedInterval := normalizeDiscoveryInterval(interval)
+
 	s.mu.Lock()
-	s.interval = interval
+	s.interval = normalizedInterval
 	running := s.running
 	s.mu.Unlock()
 
 	// If running, send the new interval to the loop (non-blocking)
 	if running {
 		select {
-		case s.intervalCh <- interval:
-			log.Info().Dur("interval", interval).Msg("discovery interval updated (live)")
+		case s.intervalCh <- normalizedInterval:
+			log.Info().Dur("interval", normalizedInterval).Msg("Discovery interval updated (live)")
 		default:
 			// Channel full, interval will be picked up eventually
-			log.Debug().Dur("interval", interval).Msg("discovery interval updated (pending)")
+			log.Debug().Dur("interval", normalizedInterval).Msg("Discovery interval updated (pending)")
 		}
 	}
 }
@@ -443,7 +493,7 @@ func (s *Service) IsRunning() bool {
 func (s *Service) discoveryLoop(ctx context.Context) {
 	delay := s.initialDelay
 	if delay <= 0 {
-		delay = 30 * time.Second
+		delay = defaultDiscoveryInitialDelay
 	}
 
 	// Run initial fingerprint collection after a short delay
@@ -461,6 +511,7 @@ func (s *Service) discoveryLoop(ctx context.Context) {
 	s.mu.RLock()
 	currentInterval := s.interval
 	s.mu.RUnlock()
+	currentInterval = normalizeDiscoveryInterval(currentInterval)
 
 	ticker := time.NewTicker(currentInterval)
 	defer ticker.Stop()
@@ -472,6 +523,7 @@ func (s *Service) discoveryLoop(ctx context.Context) {
 			s.runAutomaticDiscoveryRefresh(ctx)
 		case newInterval := <-s.intervalCh:
 			// Interval changed - reset the ticker
+			newInterval = normalizeDiscoveryInterval(newInterval)
 			ticker.Stop()
 			ticker = time.NewTicker(newInterval)
 			log.Info().Dur("interval", newInterval).Msg("fingerprint collection interval reset")
@@ -989,6 +1041,7 @@ func (s *Service) enhanceWithDeepScan(ctx context.Context, discovery *ResourceDi
 	timeout := s.deepScanTimeout
 	analyzer := s.aiAnalyzer
 	s.mu.RUnlock()
+	timeout = normalizeDeepScanTimeout(timeout)
 
 	if s.scanner == nil || analyzer == nil {
 		return discovery
@@ -2521,8 +2574,8 @@ func (s *Service) SetMaxDiscoveryAge(age time.Duration) {
 	defer s.mu.Unlock()
 
 	// Enforce minimum of 1 day
-	if age < 24*time.Hour {
-		age = 24 * time.Hour
+	if age < minDiscoveryMaxAge {
+		age = minDiscoveryMaxAge
 	}
 
 	s.maxDiscoveryAge = age

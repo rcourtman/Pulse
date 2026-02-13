@@ -379,6 +379,10 @@ func isDevMode() bool {
 	return strings.EqualFold(os.Getenv("PULSE_DEV"), "true")
 }
 
+func isLicenseValidationDevMode() bool {
+	return strings.EqualFold(strings.TrimSpace(os.Getenv("PULSE_LICENSE_DEV_MODE")), "true")
+}
+
 // LicenseState represents the current state of the license
 type LicenseState string
 
@@ -722,7 +726,7 @@ func ValidateLicense(licenseKey string) (*License, error) {
 
 	// Verify signature
 	// In production, public key MUST be set. In dev mode, we skip signature validation.
-	devMode := os.Getenv("PULSE_LICENSE_DEV_MODE") == "true"
+	devMode := isLicenseValidationDevMode()
 	signedData := []byte(parts[0] + "." + parts[1])
 
 	if len(publicKey) > 0 {

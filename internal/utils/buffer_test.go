@@ -190,7 +190,37 @@ func TestCapacityOne(t *testing.T) {
 	}
 }
 
-func TestPushSanitizesInvalidManualQueueCapacity(t *testing.T) {
+func TestNewNonPositiveCapacityUsesMinimum(t *testing.T) {
+	tests := []struct {
+		name         string
+		capacity     int
+		wantCapacity int
+	}{
+		{name: "zero", capacity: 0, wantCapacity: 1},
+		{name: "negative", capacity: -5, wantCapacity: 1},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			q := New[int](tc.capacity)
+			if q.capacity != tc.wantCapacity {
+				t.Fatalf("expected capacity %d, got %d", tc.wantCapacity, q.capacity)
+			}
+
+			q.Push(42)
+			if got := q.Len(); got != 1 {
+				t.Fatalf("expected len 1 after push, got %d", got)
+			}
+
+			val, ok := q.Pop()
+			if !ok || val != 42 {
+				t.Fatalf("expected (42, true), got (%d, %v)", val, ok)
+			}
+		})
+	}
+}
+
+func TestPushNormalizesInvalidCapacityState(t *testing.T) {
 	q := &Queue[int]{capacity: 0}
 
 	q.Push(1)

@@ -117,6 +117,25 @@ func (m *Monitor) releaseGuestMetadataSlot() {
 
 // retryGuestAgentCall executes a guest agent API call with timeout and retry logic (refs #592)
 func (m *Monitor) retryGuestAgentCall(ctx context.Context, timeout time.Duration, maxRetries int, fn func(context.Context) (interface{}, error)) (interface{}, error) {
+	if fn == nil {
+		return nil, fmt.Errorf("guest agent call function is nil")
+	}
+
+	if timeout <= 0 {
+		log.Warn().
+			Dur("timeout", timeout).
+			Dur("default", defaultGuestAgentNetworkTimeout).
+			Msg("Guest agent timeout must be greater than zero, using default")
+		timeout = defaultGuestAgentNetworkTimeout
+	}
+
+	if maxRetries < 0 {
+		log.Warn().
+			Int("maxRetries", maxRetries).
+			Msg("Guest agent retries must be non-negative, using 0")
+		maxRetries = 0
+	}
+
 	var lastErr error
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		callCtx, cancel := context.WithTimeout(ctx, timeout)

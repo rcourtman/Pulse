@@ -63,8 +63,8 @@ func InitPublicKey() {
 	}
 
 	// No key available
-	if os.Getenv("PULSE_LICENSE_DEV_MODE") == "true" {
-		log.Warn().Msg("license validation running in DEV MODE - signatures not verified")
+	if isLicenseValidationDevMode() {
+		log.Warn().Msg("License validation running in DEV MODE - signatures not verified")
 	} else {
 		log.Warn().Msg("no license public key configured - license activation will fail")
 	}

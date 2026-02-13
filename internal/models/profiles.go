@@ -75,11 +75,25 @@ const maxProfileInheritanceDepth = 64
 // MergedConfig returns the effective configuration by merging parent configs.
 // Parent configs are applied first, then overridden by child configs.
 func (p *AgentProfile) MergedConfig(profiles []AgentProfile) AgentConfigMap {
-	if p == nil {
-		return AgentConfigMap{}
+	return p.mergedConfig(profiles, map[string]struct{}{})
+}
+
+func (p *AgentProfile) mergedConfig(profiles []AgentProfile, visited map[string]struct{}) AgentConfigMap {
+	if p.ParentID == "" {
+		return p.Config
 	}
 
-	byID := make(map[string]*AgentProfile, len(profiles))
+	if p.ID != "" {
+		if _, seen := visited[p.ID]; seen {
+			// Cycle in inheritance chain; stop walking parents and use local config.
+			return p.Config
+		}
+		visited[p.ID] = struct{}{}
+		defer delete(visited, p.ID)
+	}
+
+	// Find parent profile
+	var parent *AgentProfile
 	for i := range profiles {
 		if profiles[i].ID == "" {
 			continue
@@ -115,6 +129,14 @@ func (p *AgentProfile) MergedConfig(profiles []AgentProfile) AgentConfigMap {
 		current = parent
 	}
 
+	if parent == nil {
+		return p.Config
+	}
+
+	// Get parent's merged config (recursive)
+	parentConfig := parent.mergedConfig(profiles, visited)
+
+	// Merge: start with parent config, override with current
 	merged := make(AgentConfigMap)
 	for i := len(chain) - 1; i >= 0; i-- {
 		for k, v := range chain[i].Config {

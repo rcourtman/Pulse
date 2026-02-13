@@ -52,6 +52,35 @@ func baseWriterDebugString() string {
 	return fmt.Sprintf("%#v", baseWriter)
 }
 
+func captureStderr(t *testing.T, fn func()) string {
+	t.Helper()
+
+	originalStderr := os.Stderr
+	readPipe, writePipe, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("failed to create stderr pipe: %v", err)
+	}
+
+	os.Stderr = writePipe
+	defer func() {
+		os.Stderr = originalStderr
+		_ = readPipe.Close()
+		_ = writePipe.Close()
+	}()
+
+	fn()
+
+	if err := writePipe.Close(); err != nil {
+		t.Fatalf("failed to close write pipe: %v", err)
+	}
+	output, err := io.ReadAll(readPipe)
+	if err != nil {
+		t.Fatalf("failed to read stderr output: %v", err)
+	}
+
+	return string(output)
+}
+
 func TestInitJSONFormatSetsLevelAndComponent(t *testing.T) {
 	t.Cleanup(resetLoggingState)
 
@@ -269,16 +298,21 @@ func TestParseLevelDefaults(t *testing.T) {
 		input string
 		want  zerolog.Level
 	}{
+		{"", zerolog.InfoLevel},
 		{"debug", zerolog.DebugLevel},
 		{"DEBUG", zerolog.DebugLevel},
+		{"trace", zerolog.TraceLevel},
 		{"info", zerolog.InfoLevel},
 		{"INFO", zerolog.InfoLevel},
 		{"warn", zerolog.WarnLevel},
+		{"warning", zerolog.WarnLevel},
 		{"WARN", zerolog.WarnLevel},
 		{"error", zerolog.ErrorLevel},
 		{"ERROR", zerolog.ErrorLevel},
+		{"fatal", zerolog.FatalLevel},
+		{"panic", zerolog.PanicLevel},
+		{"disabled", zerolog.Disabled},
 		{"unknown", zerolog.InfoLevel},
-		{"", zerolog.InfoLevel},
 	}
 
 	for _, tc := range tests {
@@ -286,6 +320,20 @@ func TestParseLevelDefaults(t *testing.T) {
 		if got != tc.want {
 			t.Errorf("parseLevel(%q) = %v, want %v", tc.input, got, tc.want)
 		}
+	}
+}
+
+func TestParseLevelWarnsOnInvalidValue(t *testing.T) {
+	t.Cleanup(resetLoggingState)
+
+	stderr := captureStderr(t, func() {
+		if got := parseLevel(" VERBOSE "); got != zerolog.InfoLevel {
+			t.Fatalf("expected info fallback for invalid level, got %s", got)
+		}
+	})
+
+	if !strings.Contains(stderr, `logging: invalid level "verbose"; using "info"`) {
+		t.Fatalf("expected invalid level warning, got %q", stderr)
 	}
 }
 
@@ -324,6 +372,21 @@ func TestSelectWriterDefault(t *testing.T) {
 	w := selectWriter("unknown")
 	if w != os.Stderr {
 		t.Fatalf("expected default writer to be os.Stderr, got %#v", w)
+	}
+}
+
+func TestSelectWriterWarnsOnInvalidFormat(t *testing.T) {
+	t.Cleanup(resetLoggingState)
+
+	stderr := captureStderr(t, func() {
+		w := selectWriter("pretty")
+		if w != os.Stderr {
+			t.Fatalf("expected invalid format fallback to os.Stderr, got %#v", w)
+		}
+	})
+
+	if !strings.Contains(stderr, `logging: invalid format "pretty"; using "json"`) {
+		t.Fatalf("expected invalid format warning, got %q", stderr)
 	}
 }
 
@@ -448,8 +511,116 @@ func TestNewRollingFileWriter_DefaultMaxSize(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected rollingFileWriter, got %#v", writer)
 	}
-	if w.maxBytes != 100*1024*1024 {
+	if w.maxBytes != int64(defaultMaxSizeMB)*bytesPerMB {
 		t.Fatalf("expected default max bytes, got %d", w.maxBytes)
+	}
+	_ = w.closeLocked()
+}
+
+func TestNewRollingFileWriter_NegativeMaxSizeUsesDefault(t *testing.T) {
+	t.Cleanup(resetLoggingState)
+
+	dir := t.TempDir()
+	writer, err := newRollingFileWriter(Config{
+		FilePath:  filepath.Join(dir, "app.log"),
+		MaxSizeMB: -1,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	w, ok := writer.(*rollingFileWriter)
+	if !ok {
+		t.Fatalf("expected rollingFileWriter, got %#v", writer)
+	}
+	if w.maxBytes != int64(defaultMaxSizeMB)*bytesPerMB {
+		t.Fatalf("expected default max bytes, got %d", w.maxBytes)
+	}
+	_ = w.closeLocked()
+}
+
+func TestNewRollingFileWriter_MaxSizeOverflowUsesDefault(t *testing.T) {
+	t.Cleanup(resetLoggingState)
+
+	dir := t.TempDir()
+	writer, err := newRollingFileWriter(Config{
+		FilePath:  filepath.Join(dir, "app.log"),
+		MaxSizeMB: int(maxSafeSizeMB + 1),
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	w, ok := writer.(*rollingFileWriter)
+	if !ok {
+		t.Fatalf("expected rollingFileWriter, got %#v", writer)
+	}
+	if w.maxBytes != int64(defaultMaxSizeMB)*bytesPerMB {
+		t.Fatalf("expected default max bytes, got %d", w.maxBytes)
+	}
+	_ = w.closeLocked()
+}
+
+func TestNewRollingFileWriter_NegativeMaxAgeUsesDefault(t *testing.T) {
+	t.Cleanup(resetLoggingState)
+
+	dir := t.TempDir()
+	writer, err := newRollingFileWriter(Config{
+		FilePath:   filepath.Join(dir, "app.log"),
+		MaxSizeMB:  1,
+		MaxAgeDays: -1,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	w, ok := writer.(*rollingFileWriter)
+	if !ok {
+		t.Fatalf("expected rollingFileWriter, got %#v", writer)
+	}
+	if w.maxAge != time.Duration(defaultMaxAgeDays)*24*time.Hour {
+		t.Fatalf("expected default max age, got %s", w.maxAge)
+	}
+	_ = w.closeLocked()
+}
+
+func TestNewRollingFileWriter_ZeroMaxAgeDisablesCleanup(t *testing.T) {
+	t.Cleanup(resetLoggingState)
+
+	dir := t.TempDir()
+	writer, err := newRollingFileWriter(Config{
+		FilePath:   filepath.Join(dir, "app.log"),
+		MaxSizeMB:  1,
+		MaxAgeDays: 0,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	w, ok := writer.(*rollingFileWriter)
+	if !ok {
+		t.Fatalf("expected rollingFileWriter, got %#v", writer)
+	}
+	if w.maxAge != 0 {
+		t.Fatalf("expected max age 0, got %s", w.maxAge)
+	}
+	_ = w.closeLocked()
+}
+
+func TestNewRollingFileWriter_MaxAgeOverflowClamps(t *testing.T) {
+	t.Cleanup(resetLoggingState)
+
+	dir := t.TempDir()
+	writer, err := newRollingFileWriter(Config{
+		FilePath:   filepath.Join(dir, "app.log"),
+		MaxSizeMB:  1,
+		MaxAgeDays: maxDurationDays + 1,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	w, ok := writer.(*rollingFileWriter)
+	if !ok {
+		t.Fatalf("expected rollingFileWriter, got %#v", writer)
+	}
+	if w.maxAge != time.Duration(maxDurationDays)*24*time.Hour {
+		t.Fatalf("expected clamped max age, got %s", w.maxAge)
 	}
 	_ = w.closeLocked()
 }

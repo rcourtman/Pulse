@@ -133,9 +133,9 @@ type Persistence struct {
 // It tries to use a persistent key stored in configDir first, then falls back
 // to machine-id for backwards compatibility with existing installations.
 func NewPersistence(configDir string) (*Persistence, error) {
-	configDir = filepath.Clean(strings.TrimSpace(configDir))
-	if configDir == "" || configDir == "." {
-		return nil, errors.New("config directory is required")
+	configDir = strings.TrimSpace(configDir)
+	if configDir == "" {
+		return nil, errors.New("config directory cannot be empty")
 	}
 
 	// Try to load persistent key from config directory first
@@ -230,6 +230,7 @@ func (p *Persistence) Save(licenseKey string) error {
 
 // SaveWithGracePeriod encrypts and saves a license with optional grace period.
 func (p *Persistence) SaveWithGracePeriod(licenseKey string, gracePeriodEnd *int64) error {
+	licenseKey = strings.TrimSpace(licenseKey)
 	if licenseKey == "" {
 		return errors.New("license key cannot be empty")
 	}

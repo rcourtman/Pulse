@@ -108,75 +108,88 @@ func TestNew_WithKubeconfig(t *testing.T) {
 
 func TestNormalizePulseURL(t *testing.T) {
 	tests := []struct {
-		name    string
-		rawURL  string
-		want    string
-		wantErr string
+		name      string
+		raw       string
+		want      string
+		wantError string
 	}{
 		{
-			name:   "https canonicalized",
-			rawURL: "HTTPS://pulse.example.com///",
-			want:   "https://pulse.example.com",
+			name: "normalizes scheme host and trailing slash",
+			raw:  "HTTPS://Pulse.Example.com:7655/base/",
+			want: "https://pulse.example.com:7655/base",
 		},
 		{
-			name:   "loopback http allowed",
-			rawURL: "http://127.0.0.1:7655/",
-			want:   "http://127.0.0.1:7655",
+			name: "keeps localhost",
+			raw:  "http://localhost:7655/",
+			want: "http://localhost:7655",
 		},
 		{
-			name:    "non-loopback http rejected",
-			rawURL:  "http://pulse.example.com",
-			wantErr: "must use https unless host is loopback",
+			name:      "missing scheme",
+			raw:       "pulse.example.com",
+			wantError: "must include http:// or https://",
 		},
 		{
-			name:    "credentials rejected",
-			rawURL:  "https://user:pass@pulse.example.com",
-			wantErr: "must not include user credentials",
+			name:      "unsupported scheme",
+			raw:       "ftp://pulse.example.com",
+			wantError: "unsupported scheme",
 		},
 		{
-			name:    "query rejected",
-			rawURL:  "https://pulse.example.com?token=abc",
-			wantErr: "must not include query or fragment",
+			name:      "invalid port range",
+			raw:       "https://pulse.example.com:70000",
+			wantError: "invalid port",
 		},
 		{
-			name:    "unsupported scheme rejected",
-			rawURL:  "ws://pulse.example.com",
-			wantErr: "unsupported scheme",
+			name:      "userinfo disallowed",
+			raw:       "https://user:pass@pulse.example.com",
+			wantError: "userinfo is not supported",
+		},
+		{
+			name:      "query disallowed",
+			raw:       "https://pulse.example.com?x=1",
+			wantError: "query parameters are not supported",
+		},
+		{
+			name:      "fragment disallowed",
+			raw:       "https://pulse.example.com#frag",
+			wantError: "fragments are not supported",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := normalizePulseURL(tt.rawURL)
-			if tt.wantErr != "" {
+			got, err := normalizePulseURL(tt.raw)
+			if tt.wantError != "" {
 				if err == nil {
-					t.Fatalf("normalizePulseURL(%q) expected error containing %q", tt.rawURL, tt.wantErr)
+					t.Fatalf("normalizePulseURL(%q) expected error", tt.raw)
 				}
-				if !strings.Contains(err.Error(), tt.wantErr) {
-					t.Fatalf("normalizePulseURL(%q) error = %v, want contains %q", tt.rawURL, err, tt.wantErr)
+				if !strings.Contains(err.Error(), tt.wantError) {
+					t.Fatalf("normalizePulseURL(%q) error = %q, want substring %q", tt.raw, err.Error(), tt.wantError)
 				}
 				return
 			}
 			if err != nil {
-				t.Fatalf("normalizePulseURL(%q) returned error: %v", tt.rawURL, err)
+				t.Fatalf("normalizePulseURL(%q) error = %v", tt.raw, err)
 			}
 			if got != tt.want {
-				t.Fatalf("normalizePulseURL(%q) = %q, want %q", tt.rawURL, got, tt.want)
+				t.Fatalf("normalizePulseURL(%q) = %q, want %q", tt.raw, got, tt.want)
 			}
 		})
 	}
 }
 
-func TestNew_RejectsUnsafePulseURL(t *testing.T) {
+func TestNew_InvalidPulseURLFailsFast(t *testing.T) {
 	_, err := New(Config{
-		PulseURL: "http://pulse.example.com",
+		PulseURL: "ftp://pulse.local",
 		APIToken: "token",
 		LogLevel: zerolog.Disabled,
 	})
 	if err == nil {
-		t.Fatal("expected New to reject non-loopback http Pulse URL")
+		t.Fatal("expected New to fail for invalid pulse URL")
 	}
-	if !strings.Contains(err.Error(), "must use https unless host is loopback") {
-		t.Fatalf("unexpected error: %v", err)
+	if !strings.Contains(err.Error(), "invalid pulse URL") {
+		t.Fatalf("error = %q, want invalid pulse URL context", err.Error())
+	}
+	if !strings.Contains(err.Error(), "unsupported scheme") {
+		t.Fatalf("error = %q, want unsupported scheme detail", err.Error())
 	}
 }

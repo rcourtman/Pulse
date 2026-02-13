@@ -36,6 +36,38 @@ func TestNewStoreEmptyDataDir(t *testing.T) {
 	}
 }
 
+func TestNewStore_NonPositiveConfigUsesDefaults(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "approval-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	store, err := NewStore(StoreConfig{
+		DataDir:        tmpDir,
+		DefaultTimeout: -1 * time.Minute,
+		MaxApprovals:   -10,
+	})
+	if err != nil {
+		t.Fatalf("NewStore() error = %v", err)
+	}
+
+	if store.defaultTimeout != 5*time.Minute {
+		t.Fatalf("defaultTimeout = %v, want %v", store.defaultTimeout, 5*time.Minute)
+	}
+	if store.maxApprovals != 100 {
+		t.Fatalf("maxApprovals = %d, want 100", store.maxApprovals)
+	}
+
+	req := &ApprovalRequest{Command: "echo ok"}
+	if err := store.CreateApproval(req); err != nil {
+		t.Fatalf("CreateApproval() error = %v", err)
+	}
+	if !req.ExpiresAt.After(req.RequestedAt) {
+		t.Fatal("approval expiry should be after request time")
+	}
+}
+
 func TestCreateApproval(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "approval-test-*")
 	if err != nil {

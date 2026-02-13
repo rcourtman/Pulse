@@ -13,6 +13,8 @@ type Queue[T any] struct {
 	capacity int
 }
 
+const minCapacity = 1
+
 // New creates a new Queue with the specified capacity.
 // Capacity must be greater than zero.
 func New[T any](capacity int) *Queue[T] {
@@ -42,6 +44,13 @@ func (q *Queue[T]) Push(item T) {
 		q.data = q.data[1:]
 	}
 	q.data = append(q.data, item)
+}
+
+func normalizeCapacity(capacity int) int {
+	if capacity < minCapacity {
+		return minCapacity
+	}
+	return capacity
 }
 
 // Pop removes and returns the oldest item from the queue.

@@ -1430,6 +1430,61 @@ func TestGetEmailConfig(t *testing.T) {
 	}
 }
 
+func TestSetEmailConfig_NormalizesInvalidValues(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+	nm := NewNotificationManager("")
+	defer nm.Stop()
+
+	nm.SetEmailConfig(EmailConfig{
+		Enabled:   true,
+		Provider:  "  Custom SMTP  ",
+		SMTPHost:  " smtp.example.com ",
+		SMTPPort:  70000,
+		Username:  " user@example.com ",
+		Password:  "secret",
+		From:      " alerts@example.com ",
+		To:        []string{" admin@example.com ", "", "ADMIN@example.com", "ops@example.com"},
+		StartTLS:  true,
+		RateLimit: -5,
+	})
+
+	got := nm.GetEmailConfig()
+	if got.Provider != "Custom SMTP" {
+		t.Fatalf("expected provider to be trimmed, got %q", got.Provider)
+	}
+	if got.SMTPHost != "smtp.example.com" {
+		t.Fatalf("expected SMTP host to be trimmed, got %q", got.SMTPHost)
+	}
+	if got.SMTPPort != defaultSMTPPort {
+		t.Fatalf("expected invalid SMTP port to default to %d, got %d", defaultSMTPPort, got.SMTPPort)
+	}
+	if got.Username != "user@example.com" {
+		t.Fatalf("expected username to be trimmed, got %q", got.Username)
+	}
+	if got.From != "alerts@example.com" {
+		t.Fatalf("expected from address to be trimmed, got %q", got.From)
+	}
+	if len(got.To) != 2 {
+		t.Fatalf("expected deduplicated recipient list of length 2, got %d (%v)", len(got.To), got.To)
+	}
+	if got.To[0] != "admin@example.com" {
+		t.Fatalf("expected first recipient to be normalized, got %q", got.To[0])
+	}
+	if got.To[1] != "ops@example.com" {
+		t.Fatalf("expected second recipient to be preserved, got %q", got.To[1])
+	}
+	if got.RateLimit != 0 {
+		t.Fatalf("expected invalid negative rate limit to normalize to default behavior (0), got %d", got.RateLimit)
+	}
+
+	if nm.emailManager == nil {
+		t.Fatalf("expected email manager to be initialized")
+	}
+	if nm.emailManager.config.RateLimit != defaultEmailRateLimit {
+		t.Fatalf("expected effective email rate limit to default to %d, got %d", defaultEmailRateLimit, nm.emailManager.config.RateLimit)
+	}
+}
+
 func TestBuildApprisePayload(t *testing.T) {
 	t.Run("nil alerts filtered out", func(t *testing.T) {
 		alertList := []*alerts.Alert{

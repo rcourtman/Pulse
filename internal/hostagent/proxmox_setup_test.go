@@ -226,6 +226,13 @@ func TestGetHostURL(t *testing.T) {
 		}
 	})
 
+	t.Run("formats IPv6 reportIP override", func(t *testing.T) {
+		p.reportIP = "2001:db8::1"
+		if got := p.getHostURL("pbs"); got != "https://[2001:db8::1]:8007" {
+			t.Errorf("got %s", got)
+		}
+	})
+
 	t.Run("uses IP that reaches pulse", func(t *testing.T) {
 		p.reportIP = ""
 		p.pulseURL = "http://pulse:7655"
@@ -289,6 +296,26 @@ func TestGetHostURL(t *testing.T) {
 			t.Fatalf("expected hostname probe to observe canceled caller context")
 		}
 	})
+}
+
+func TestGetIPThatReachesPulse_IPv6Target(t *testing.T) {
+	mc := &mockCollector{}
+	var dialAddress string
+	mc.dialTimeoutFn = func(network, address string, timeout time.Duration) (net.Conn, error) {
+		dialAddress = address
+		return nil, fmt.Errorf("expected failure to stop flow")
+	}
+
+	p := &ProxmoxSetup{
+		logger:    zerolog.Nop(),
+		collector: mc,
+		pulseURL:  "https://[2001:db8::1]",
+	}
+
+	_ = p.getIPThatReachesPulse()
+	if dialAddress != "[2001:db8::1]:443" {
+		t.Fatalf("dial address = %q, want %q", dialAddress, "[2001:db8::1]:443")
+	}
 }
 
 func TestProxmoxSetup_RunForType(t *testing.T) {
@@ -506,6 +533,13 @@ func TestProxmoxSetup_RunAll(t *testing.T) {
 			t.Errorf("expected pbs result")
 		}
 	})
+
+	t.Run("invalid forced type returns error", func(t *testing.T) {
+		p := NewProxmoxSetup(zerolog.Nop(), http.DefaultClient, mc, "http://pulse", "token", "invalid", "host", "", false)
+		if _, err := p.RunAll(context.Background()); err == nil || !strings.Contains(err.Error(), "invalid proxmox type") {
+			t.Fatalf("expected proxmox type validation error, got %v", err)
+		}
+	})
 }
 
 func TestIsTypeRegistered_Legacy(t *testing.T) {
@@ -710,6 +744,27 @@ func TestProxmoxSetup_Run_TopLevel(t *testing.T) {
 		res, err := p.Run(context.Background())
 		if err != nil || res == nil || !res.Registered || res.ProxmoxType != "pve" {
 			t.Fatalf("failed: %v (res: %v)", err, res)
+		}
+	})
+
+	t.Run("invalid pulse URL fails fast", func(t *testing.T) {
+		p := NewProxmoxSetup(zerolog.Nop(), server.Client(), mc, "not-a-url", "token", "", "host", "", false)
+		if _, err := p.Run(context.Background()); err == nil || !strings.Contains(err.Error(), "invalid pulse URL") {
+			t.Fatalf("expected pulse URL validation error, got %v", err)
+		}
+	})
+
+	t.Run("missing token fails fast", func(t *testing.T) {
+		p := NewProxmoxSetup(zerolog.Nop(), server.Client(), mc, server.URL, " ", "", "host", "", false)
+		if _, err := p.Run(context.Background()); err == nil || !strings.Contains(err.Error(), "api token is required") {
+			t.Fatalf("expected missing token error, got %v", err)
+		}
+	})
+
+	t.Run("invalid proxmox type fails fast", func(t *testing.T) {
+		p := NewProxmoxSetup(zerolog.Nop(), server.Client(), mc, server.URL, "token", "bad", "host", "", false)
+		if _, err := p.Run(context.Background()); err == nil || !strings.Contains(err.Error(), "invalid proxmox type") {
+			t.Fatalf("expected proxmox type validation error, got %v", err)
 		}
 	})
 }

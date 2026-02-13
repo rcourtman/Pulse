@@ -104,8 +104,8 @@ func (c *Client) Fetch(ctx context.Context) (map[string]interface{}, *bool, erro
 		hostID = resolved
 	}
 
-	requestURL := fmt.Sprintf("%s/api/agents/host/%s/config", c.cfg.PulseURL, url.PathEscape(hostID))
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
+	endpointURL := fmt.Sprintf("%s/api/agents/host/%s/config", c.cfg.PulseURL, url.PathEscape(hostID))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpointURL, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("create request: %w", err)
 	}
@@ -181,8 +181,8 @@ func (c *Client) resolveHostID(ctx context.Context) (string, error) {
 		return "", nil
 	}
 
-	requestURL := fmt.Sprintf("%s/api/agents/host/lookup?hostname=%s", c.cfg.PulseURL, url.QueryEscape(hostname))
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
+	endpointURL := fmt.Sprintf("%s/api/agents/host/lookup?hostname=%s", c.cfg.PulseURL, url.QueryEscape(hostname))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpointURL, nil)
 	if err != nil {
 		return "", fmt.Errorf("create host lookup request: %w", err)
 	}
@@ -223,16 +223,52 @@ func (c *Client) resolveHostID(ctx context.Context) (string, error) {
 	return strings.TrimSpace(payload.Host.ID), nil
 }
 
-func formatHTTPStatusError(resp *http.Response, operation string) error {
-	body, readErr := io.ReadAll(io.LimitReader(resp.Body, maxHTTPErrorBodyBytes))
-	if readErr != nil {
-		return fmt.Errorf("%s responded with status %s (failed to read response body: %w)", operation, resp.Status, readErr)
+func normalizeConfig(cfg Config) (Config, error) {
+	cfg.PulseURL = strings.TrimSpace(cfg.PulseURL)
+	if cfg.PulseURL == "" {
+		cfg.PulseURL = "http://localhost:7655"
+	}
+	cfg.APIToken = strings.TrimSpace(cfg.APIToken)
+	cfg.AgentID = strings.TrimSpace(cfg.AgentID)
+	cfg.Hostname = strings.TrimSpace(cfg.Hostname)
+
+	normalizedPulseURL, err := normalizePulseURL(cfg.PulseURL)
+	if err != nil {
+		return cfg, err
+	}
+	cfg.PulseURL = normalizedPulseURL
+
+	return cfg, nil
+}
+
+func normalizePulseURL(raw string) (string, error) {
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return "", fmt.Errorf("invalid pulse URL: %w", err)
 	}
 
-	detail := strings.TrimSpace(string(body))
-	if detail == "" {
-		return fmt.Errorf("%s responded with status %s", operation, resp.Status)
+	switch parsed.Scheme {
+	case "http", "https":
+	default:
+		return "", fmt.Errorf("invalid pulse URL scheme %q: must be http or https", parsed.Scheme)
 	}
 
-	return fmt.Errorf("%s responded with status %s: %s", operation, resp.Status, detail)
+	if parsed.Hostname() == "" {
+		return "", errors.New("invalid pulse URL: missing host")
+	}
+	if parsed.User != nil {
+		return "", errors.New("invalid pulse URL: userinfo is not allowed")
+	}
+	if parsed.RawQuery != "" || parsed.Fragment != "" {
+		return "", errors.New("invalid pulse URL: query and fragment are not allowed")
+	}
+
+	if port := parsed.Port(); port != "" {
+		portValue, err := strconv.Atoi(port)
+		if err != nil || portValue < 1 || portValue > 65535 {
+			return "", fmt.Errorf("invalid pulse URL port %q: must be between 1 and 65535", port)
+		}
+	}
+
+	return strings.TrimRight(parsed.String(), "/"), nil
 }

@@ -85,7 +85,11 @@ func (h historyEntry) Status() string {
 	return string(h.status)
 }
 
-const defaultHistoryLimit = 20
+const (
+	defaultHistoryLimit = 20
+	defaultScanInterval = 5 * time.Minute
+	defaultSubnet       = "auto"
+)
 
 type scanResultStatus string
 
@@ -205,8 +209,12 @@ func init() {
 
 // NewService creates a new discovery service
 func NewService(wsHub *websocket.Hub, interval time.Duration, subnet string, cfgProvider func() config.DiscoveryConfig) *Service {
-	if interval == 0 {
-		interval = 5 * time.Minute // Default to 5 minutes
+	normalizedInterval := normalizeScanInterval(interval)
+	if normalizedInterval != interval {
+		log.Warn().
+			Dur("provided_interval", interval).
+			Dur("default_interval", normalizedInterval).
+			Msg("Invalid discovery scan interval; using default")
 	}
 	normalizedSubnet, err := normalizeDiscoverySubnet(subnet)
 	if err != nil {
@@ -216,6 +224,7 @@ func NewService(wsHub *websocket.Hub, interval time.Duration, subnet string, cfg
 			Msg("Invalid discovery subnet configuration; defaulting to auto")
 		normalizedSubnet = "auto"
 	}
+	subnet = normalizedSubnet
 
 	if cfgProvider == nil {
 		cfgProvider = func() config.DiscoveryConfig { return config.DefaultDiscoveryConfig() }
@@ -304,7 +313,22 @@ func (s *Service) Stop() {
 
 // scanLoop runs periodic scans
 func (s *Service) scanLoop() {
-	ticker := time.NewTicker(s.interval)
+	s.mu.RLock()
+	interval := s.interval
+	s.mu.RUnlock()
+
+	normalizedInterval := normalizeScanInterval(interval)
+	if normalizedInterval != interval {
+		log.Warn().
+			Dur("provided_interval", interval).
+			Dur("default_interval", normalizedInterval).
+			Msg("Invalid discovery scan interval detected in scan loop; using default")
+		s.mu.Lock()
+		s.interval = normalizedInterval
+		s.mu.Unlock()
+	}
+
+	ticker := time.NewTicker(normalizedInterval)
 	defer ticker.Stop()
 
 	for {
@@ -609,10 +633,18 @@ func (s *Service) ForceRefresh() {
 
 // SetInterval updates the scan interval
 func (s *Service) SetInterval(interval time.Duration) {
+	normalizedInterval := normalizeScanInterval(interval)
+	if normalizedInterval != interval {
+		log.Warn().
+			Dur("provided_interval", interval).
+			Dur("default_interval", normalizedInterval).
+			Msg("Invalid discovery scan interval update; using default")
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.interval = interval
-	log.Info().Dur("interval", interval).Msg("Updated discovery scan interval")
+	s.interval = normalizedInterval
+	log.Info().Dur("interval", normalizedInterval).Msg("Updated discovery scan interval")
 }
 
 // SetSubnet updates the subnet to scan
@@ -663,4 +695,47 @@ func (s *Service) GetStatusSnapshot() ServiceStatus {
 		Interval:   s.interval,
 		Subnet:     s.subnet,
 	}
+}
+
+func normalizeScanInterval(interval time.Duration) time.Duration {
+	if interval <= 0 {
+		return defaultScanInterval
+	}
+	return interval
+}
+
+func normalizeDiscoverySubnet(subnet string) string {
+	trimmed := strings.TrimSpace(subnet)
+	if trimmed == "" || strings.EqualFold(trimmed, defaultSubnet) {
+		return defaultSubnet
+	}
+
+	var (
+		normalized []string
+		seen       = make(map[string]struct{})
+	)
+	for _, token := range strings.Split(trimmed, ",") {
+		token = strings.TrimSpace(token)
+		if token == "" {
+			continue
+		}
+
+		_, parsedNet, err := net.ParseCIDR(token)
+		if err != nil {
+			continue
+		}
+
+		canonical := parsedNet.String()
+		if _, exists := seen[canonical]; exists {
+			continue
+		}
+		seen[canonical] = struct{}{}
+		normalized = append(normalized, canonical)
+	}
+
+	if len(normalized) == 0 {
+		return defaultSubnet
+	}
+
+	return strings.Join(normalized, ",")
 }

@@ -38,6 +38,18 @@ func TestConfig_Validate(t *testing.T) {
 			errMsg:  "invalid frontend port",
 		},
 		{
+			name:    "Invalid SSH Port Low",
+			mutate:  func(c *Config) { c.SSHPort = -1 },
+			isValid: false,
+			errMsg:  "invalid SSH port",
+		},
+		{
+			name:    "Invalid SSH Port High",
+			mutate:  func(c *Config) { c.SSHPort = 70000 },
+			isValid: false,
+			errMsg:  "invalid SSH port",
+		},
+		{
 			name:    "Invalid PVE Polling Interval Low",
 			mutate:  func(c *Config) { c.PVEPollingInterval = 1 * time.Second },
 			isValid: false,

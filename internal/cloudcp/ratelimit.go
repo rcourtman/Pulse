@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	defaultCPRateLimit       = 120
-	defaultCPRateLimitWindow = time.Minute
+	defaultCPRateLimit  = 120
+	defaultCPRateWindow = time.Minute
 )
 
 // CPRateLimiter provides simple IP-based rate limiting for control plane endpoints.
@@ -29,9 +29,8 @@ func NewCPRateLimiter(limit int, window time.Duration) *CPRateLimiter {
 		limit = defaultCPRateLimit
 	}
 	if window <= 0 {
-		window = defaultCPRateLimitWindow
+		window = defaultCPRateWindow
 	}
-
 	return &CPRateLimiter{
 		attempts: make(map[string][]time.Time),
 		limit:    limit,

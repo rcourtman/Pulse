@@ -25,6 +25,8 @@ var (
 // CollectLocal reads sensor data from the local machine using lm-sensors.
 // Returns the raw JSON output from `sensors -j` or an error if sensors is not available.
 func CollectLocal(ctx context.Context) (string, error) {
+	ctx = normalizeCollectionContext(ctx)
+
 	// Check if sensors command exists
 	sensorsPath, err := exec.LookPath("sensors")
 	if err != nil {

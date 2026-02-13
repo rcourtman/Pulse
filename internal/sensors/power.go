@@ -44,6 +44,8 @@ const sampleInterval = 100 * time.Millisecond
 // Supports Intel RAPL and AMD energy driver.
 // Returns nil if no power data is available.
 func CollectPower(ctx context.Context) (*PowerData, error) {
+	ctx = normalizeCollectionContext(ctx)
+
 	// Try Intel RAPL first (most common on Intel)
 	raplData, raplErr := collectRALP(ctx)
 	if raplErr == nil && raplData.Available {
@@ -64,7 +66,9 @@ func CollectPower(ctx context.Context) (*PowerData, error) {
 // collectRAPL reads power data from Intel RAPL sysfs interface.
 // RAPL provides energy counters in microjoules that we sample twice
 // to calculate instantaneous power in watts.
-func collectRAPL(ctx context.Context) (*PowerData, error) {
+func collectRALP(ctx context.Context) (*PowerData, error) {
+	ctx = normalizeCollectionContext(ctx)
+
 	// Check if RAPL is available
 	if _, err := os.Stat(raplBasePath); err != nil {
 		if os.IsNotExist(err) {
@@ -250,6 +254,8 @@ var hwmonBasePath = "/sys/class/hwmon"
 // collectAMDEnergy reads power data from AMD energy driver via hwmon.
 // The amd_energy module exposes energy counters similar to Intel RAPL.
 func collectAMDEnergy(ctx context.Context) (*PowerData, error) {
+	ctx = normalizeCollectionContext(ctx)
+
 	// Find hwmon device with amd_energy driver
 	hwmonPath, err := findAMDEnergyHwmon()
 	if err != nil {

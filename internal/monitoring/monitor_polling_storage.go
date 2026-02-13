@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -14,6 +15,33 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 	"github.com/rs/zerolog/log"
 )
+
+func zfsMonitoringEnabledFromEnv() bool {
+	raw, ok := os.LookupEnv("PULSE_DISABLE_ZFS_MONITORING")
+	if !ok {
+		return true
+	}
+
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		log.Warn().
+			Str("env", "PULSE_DISABLE_ZFS_MONITORING").
+			Msg("Ignoring empty value; ZFS monitoring remains enabled by default")
+		return true
+	}
+
+	disabled, err := strconv.ParseBool(trimmed)
+	if err != nil {
+		log.Warn().
+			Err(err).
+			Str("env", "PULSE_DISABLE_ZFS_MONITORING").
+			Str("value", raw).
+			Msg("Invalid boolean value; ZFS monitoring remains enabled by default")
+		return true
+	}
+
+	return !disabled
+}
 
 func convertPoolInfoToModel(poolInfo *proxmox.ZFSPoolInfo) *models.ZFSPool {
 	if poolInfo == nil {
@@ -131,6 +159,7 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 
 	// Track which nodes we successfully polled
 	polledNodes := make(map[string]bool)
+	enableZFSMonitoring := zfsMonitoringEnabledFromEnv()
 
 	// Launch a goroutine for each online node
 	for _, node := range nodes {
@@ -197,7 +226,6 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 			// Get ZFS pool status for this node if any storage is ZFS
 			// This is now production-ready with proper API integration
 			var zfsPoolMap = make(map[string]*models.ZFSPool)
-			enableZFSMonitoring := os.Getenv("PULSE_DISABLE_ZFS_MONITORING") != "true" // Enabled by default
 
 			if enableZFSMonitoring {
 				hasZFSStorage := false

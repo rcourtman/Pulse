@@ -473,6 +473,54 @@ func splitAndTrim(value string) []string {
 	return result
 }
 
+func parsePortOverride(envVar, value string) (int, error) {
+	port, err := strconv.Atoi(strings.TrimSpace(value))
+	if err != nil {
+		return 0, fmt.Errorf("%s must be an integer", envVar)
+	}
+	if port <= 0 || port > 65535 {
+		return 0, fmt.Errorf("%s must be between 1 and 65535", envVar)
+	}
+	return port, nil
+}
+
+func parseConnectionTimeoutOverride(value string) (time.Duration, error) {
+	raw := strings.TrimSpace(value)
+	if raw == "" {
+		return 0, fmt.Errorf("connection timeout value cannot be empty")
+	}
+	if looksLikeNumericSeconds(raw) {
+		return time.ParseDuration(raw + "s")
+	}
+	return time.ParseDuration(raw)
+}
+
+func looksLikeNumericSeconds(value string) bool {
+	if value == "" {
+		return false
+	}
+	if value[0] == '+' || value[0] == '-' {
+		value = value[1:]
+		if value == "" {
+			return false
+		}
+	}
+	dotSeen := false
+	for _, ch := range value {
+		if ch == '.' {
+			if dotSeen {
+				return false
+			}
+			dotSeen = true
+			continue
+		}
+		if ch < '0' || ch > '9' {
+			return false
+		}
+	}
+	return true
+}
+
 // PVEInstance represents a Proxmox VE connection
 type PVEInstance struct {
 	Name                         string
@@ -1018,9 +1066,13 @@ func Load() (*Config, error) {
 
 	if baseInterval := utils.GetenvTrim("ADAPTIVE_POLLING_BASE_INTERVAL"); baseInterval != "" {
 		if dur, err := time.ParseDuration(baseInterval); err == nil {
-			cfg.AdaptivePollingBaseInterval = dur
-			cfg.EnvOverrides["ADAPTIVE_POLLING_BASE_INTERVAL"] = true
-			log.Info().Dur("interval", dur).Msg("Adaptive polling base interval overridden by environment")
+			if dur <= 0 {
+				log.Warn().Str("value", baseInterval).Msg("Ignoring non-positive ADAPTIVE_POLLING_BASE_INTERVAL from environment")
+			} else {
+				cfg.AdaptivePollingBaseInterval = dur
+				cfg.EnvOverrides["ADAPTIVE_POLLING_BASE_INTERVAL"] = true
+				log.Info().Dur("interval", dur).Msg("Adaptive polling base interval overridden by environment")
+			}
 		} else {
 			log.Warn().Str("value", baseInterval).Msg("Invalid ADAPTIVE_POLLING_BASE_INTERVAL value, expected duration string")
 		}
@@ -1028,9 +1080,13 @@ func Load() (*Config, error) {
 
 	if minInterval := utils.GetenvTrim("ADAPTIVE_POLLING_MIN_INTERVAL"); minInterval != "" {
 		if dur, err := time.ParseDuration(minInterval); err == nil {
-			cfg.AdaptivePollingMinInterval = dur
-			cfg.EnvOverrides["ADAPTIVE_POLLING_MIN_INTERVAL"] = true
-			log.Info().Dur("interval", dur).Msg("Adaptive polling min interval overridden by environment")
+			if dur <= 0 {
+				log.Warn().Str("value", minInterval).Msg("Ignoring non-positive ADAPTIVE_POLLING_MIN_INTERVAL from environment")
+			} else {
+				cfg.AdaptivePollingMinInterval = dur
+				cfg.EnvOverrides["ADAPTIVE_POLLING_MIN_INTERVAL"] = true
+				log.Info().Dur("interval", dur).Msg("Adaptive polling min interval overridden by environment")
+			}
 		} else {
 			log.Warn().Str("value", minInterval).Msg("Invalid ADAPTIVE_POLLING_MIN_INTERVAL value, expected duration string")
 		}
@@ -1038,9 +1094,13 @@ func Load() (*Config, error) {
 
 	if maxInterval := utils.GetenvTrim("ADAPTIVE_POLLING_MAX_INTERVAL"); maxInterval != "" {
 		if dur, err := time.ParseDuration(maxInterval); err == nil {
-			cfg.AdaptivePollingMaxInterval = dur
-			cfg.EnvOverrides["ADAPTIVE_POLLING_MAX_INTERVAL"] = true
-			log.Info().Dur("interval", dur).Msg("Adaptive polling max interval overridden by environment")
+			if dur <= 0 {
+				log.Warn().Str("value", maxInterval).Msg("Ignoring non-positive ADAPTIVE_POLLING_MAX_INTERVAL from environment")
+			} else {
+				cfg.AdaptivePollingMaxInterval = dur
+				cfg.EnvOverrides["ADAPTIVE_POLLING_MAX_INTERVAL"] = true
+				log.Info().Dur("interval", dur).Msg("Adaptive polling max interval overridden by environment")
+			}
 		} else {
 			log.Warn().Str("value", maxInterval).Msg("Invalid ADAPTIVE_POLLING_MAX_INTERVAL value, expected duration string")
 		}
@@ -1167,16 +1227,22 @@ func Load() (*Config, error) {
 	}
 
 	// Support both FRONTEND_PORT (preferred) and PORT (legacy) env vars
-	if frontendPort := os.Getenv("FRONTEND_PORT"); frontendPort != "" {
-		if p, err := strconv.Atoi(frontendPort); err == nil {
+	if frontendPort := utils.GetenvTrim("FRONTEND_PORT"); frontendPort != "" {
+		if p, err := parsePortOverride("FRONTEND_PORT", frontendPort); err == nil {
 			cfg.FrontendPort = p
+			cfg.EnvOverrides["FRONTEND_PORT"] = true
 			log.Info().Int("port", p).Msg("Overriding frontend port from FRONTEND_PORT env var")
+		} else {
+			log.Warn().Str("value", frontendPort).Msg("Ignoring invalid FRONTEND_PORT from environment")
 		}
-	} else if port := os.Getenv("PORT"); port != "" {
+	} else if port := utils.GetenvTrim("PORT"); port != "" {
 		// Fall back to PORT for backwards compatibility
-		if p, err := strconv.Atoi(port); err == nil {
+		if p, err := parsePortOverride("PORT", port); err == nil {
 			cfg.FrontendPort = p
+			cfg.EnvOverrides["PORT"] = true
 			log.Info().Int("port", p).Msg("Overriding frontend port from PORT env var (legacy)")
+		} else {
+			log.Warn().Str("value", port).Msg("Ignoring invalid PORT from environment")
 		}
 	}
 	envTokens := make([]string, 0, 4)
@@ -1551,18 +1617,30 @@ func Load() (*Config, error) {
 	}
 
 	if logMaxSize := os.Getenv("LOG_MAX_SIZE"); logMaxSize != "" {
-		if size, err := strconv.Atoi(logMaxSize); err == nil && size > 0 {
-			cfg.LogMaxSize = size
-			cfg.EnvOverrides["logMaxSize"] = true
-			log.Info().Int("size_mb", size).Msg("Log max size overridden by LOG_MAX_SIZE env var")
+		if size, err := strconv.Atoi(logMaxSize); err == nil {
+			if size <= 0 {
+				log.Warn().Str("value", logMaxSize).Msg("Ignoring non-positive LOG_MAX_SIZE from environment")
+			} else {
+				cfg.LogMaxSize = size
+				cfg.EnvOverrides["logMaxSize"] = true
+				log.Info().Int("size_mb", size).Msg("Log max size overridden by LOG_MAX_SIZE env var")
+			}
+		} else {
+			log.Warn().Str("value", logMaxSize).Msg("Invalid LOG_MAX_SIZE value, expected integer")
 		}
 	}
 
 	if logMaxAge := os.Getenv("LOG_MAX_AGE"); logMaxAge != "" {
-		if age, err := strconv.Atoi(logMaxAge); err == nil && age > 0 {
-			cfg.LogMaxAge = age
-			cfg.EnvOverrides["logMaxAge"] = true
-			log.Info().Int("days", age).Msg("Log max age overridden by LOG_MAX_AGE env var")
+		if age, err := strconv.Atoi(logMaxAge); err == nil {
+			if age <= 0 {
+				log.Warn().Str("value", logMaxAge).Msg("Ignoring non-positive LOG_MAX_AGE from environment")
+			} else {
+				cfg.LogMaxAge = age
+				cfg.EnvOverrides["logMaxAge"] = true
+				log.Info().Int("days", age).Msg("Log max age overridden by LOG_MAX_AGE env var")
+			}
+		} else {
+			log.Warn().Str("value", logMaxAge).Msg("Invalid LOG_MAX_AGE value, expected integer")
 		}
 	}
 
@@ -1573,15 +1651,17 @@ func Load() (*Config, error) {
 	}
 
 	cfg.Discovery = NormalizeDiscoveryConfig(cfg.Discovery)
-	if connectionTimeout := os.Getenv("CONNECTION_TIMEOUT"); connectionTimeout != "" {
-		if d, err := time.ParseDuration(connectionTimeout + "s"); err == nil {
-			cfg.ConnectionTimeout = d
-			cfg.EnvOverrides["connectionTimeout"] = true
-			log.Info().Dur("timeout", d).Msg("Connection timeout overridden by CONNECTION_TIMEOUT env var")
-		} else if d, err := time.ParseDuration(connectionTimeout); err == nil {
-			cfg.ConnectionTimeout = d
-			cfg.EnvOverrides["connectionTimeout"] = true
-			log.Info().Dur("timeout", d).Msg("Connection timeout overridden by CONNECTION_TIMEOUT env var")
+	if connectionTimeout := utils.GetenvTrim("CONNECTION_TIMEOUT"); connectionTimeout != "" {
+		if d, err := parseConnectionTimeoutOverride(connectionTimeout); err == nil {
+			if d < time.Second {
+				log.Warn().Dur("value", d).Msg("Ignoring CONNECTION_TIMEOUT below 1s from environment")
+			} else {
+				cfg.ConnectionTimeout = d
+				cfg.EnvOverrides["connectionTimeout"] = true
+				log.Info().Dur("timeout", d).Msg("Connection timeout overridden by CONNECTION_TIMEOUT env var")
+			}
+		} else {
+			log.Warn().Str("value", connectionTimeout).Msg("Invalid CONNECTION_TIMEOUT value, expected seconds or duration string")
 		}
 	}
 	if maxPollTimeout := os.Getenv("MAX_POLL_TIMEOUT"); maxPollTimeout != "" {
@@ -1679,6 +1759,9 @@ func (c *Config) Validate() error {
 	// Validate server settings
 	if c.FrontendPort <= 0 || c.FrontendPort > 65535 {
 		return fmt.Errorf("invalid frontend port: %d", c.FrontendPort)
+	}
+	if c.SSHPort != 0 && (c.SSHPort < 1 || c.SSHPort > 65535) {
+		return fmt.Errorf("invalid SSH port: %d (must be between 1 and 65535)", c.SSHPort)
 	}
 
 	// Validate monitoring settings

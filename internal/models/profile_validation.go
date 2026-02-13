@@ -277,8 +277,16 @@ func (v *ProfileValidator) validateValue(def ConfigKeyDefinition, value interfac
 		if !ok {
 			return fmt.Errorf("expected duration string, got %T", value)
 		}
-		if _, err := time.ParseDuration(s); err != nil {
-			return fmt.Errorf("invalid duration format: %w", err)
+		s = strings.TrimSpace(s)
+		if s == "" {
+			return fmt.Errorf("duration cannot be empty")
+		}
+		dur, err := time.ParseDuration(s)
+		if err != nil {
+			return fmt.Errorf("invalid duration format: %v", err)
+		}
+		if dur <= 0 {
+			return fmt.Errorf("duration must be greater than 0")
 		}
 
 	case ConfigTypeEnum:

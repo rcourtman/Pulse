@@ -96,11 +96,11 @@ func NewStore(cfg StoreConfig) (*Store, error) {
 		return nil, fmt.Errorf("data directory is required")
 	}
 
-	if cfg.DefaultTimeout == 0 {
+	if cfg.DefaultTimeout <= 0 {
 		cfg.DefaultTimeout = 5 * time.Minute
 	}
 
-	if cfg.MaxApprovals == 0 {
+	if cfg.MaxApprovals <= 0 {
 		cfg.MaxApprovals = 100
 	}
 

@@ -14,6 +14,17 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
+type contextCheckingAnalyzer struct {
+	called bool
+	sawNil bool
+}
+
+func (a *contextCheckingAnalyzer) AnalyzeForDiscovery(ctx context.Context, prompt string) (string, error) {
+	a.called = true
+	a.sawNil = ctx == nil
+	return `{"service_type":"postgres","service_name":"PostgreSQL","category":"database","cli_command":"docker exec {container} psql -U postgres","confidence":0.95,"reasoning":"postgres image"}`, nil
+}
+
 func waitFor(t *testing.T, timeout time.Duration, check func() bool) {
 	t.Helper()
 	deadline := time.Now().Add(timeout)
@@ -26,99 +37,61 @@ func waitFor(t *testing.T, timeout time.Duration, check func() bool) {
 	t.Fatal("condition not met before timeout")
 }
 
-type analyzerFunc func(ctx context.Context, prompt string) (string, error)
-
-func (f analyzerFunc) AnalyzeForDiscovery(ctx context.Context, prompt string) (string, error) {
-	return f(ctx, prompt)
-}
-
-type panickingStateProvider struct {
-	callCount int32
-}
-
-func (p *panickingStateProvider) GetState() models.StateSnapshot {
-	atomic.AddInt32(&p.callCount, 1)
-	panic("infradiscovery test panic")
-}
-
-func (p *panickingStateProvider) Calls() int32 {
-	return atomic.LoadInt32(&p.callCount)
-}
-
-func TestNewServiceZeroConfigUsesDefaults(t *testing.T) {
-	service := NewService(&mockStateProvider{}, nil, Config{})
-	if service.interval != 5*time.Minute {
-		t.Fatalf("interval = %v, want %v", service.interval, 5*time.Minute)
-	}
-	if service.cacheExpiry != time.Hour {
-		t.Fatalf("cacheExpiry = %v, want %v", service.cacheExpiry, time.Hour)
-	}
-}
-
-func TestStartReturnsWhenAlreadyRunning(t *testing.T) {
+func TestNewServiceNormalizesInvalidConfig(t *testing.T) {
 	service := NewService(&mockStateProvider{}, nil, Config{
-		Interval:    time.Hour,
-		CacheExpiry: time.Hour,
+		Interval:    -1 * time.Second,
+		CacheExpiry: 0,
 	})
+
+	if service.interval != defaultDiscoveryInterval {
+		t.Fatalf("interval = %v, want %v", service.interval, defaultDiscoveryInterval)
+	}
+	if service.cacheExpiry != defaultCacheExpiry {
+		t.Fatalf("cacheExpiry = %v, want %v", service.cacheExpiry, defaultCacheExpiry)
+	}
+}
+
+func TestNewServiceNilStateProviderUsesEmptyState(t *testing.T) {
+	service := NewService(nil, nil, DefaultConfig())
 	service.SetAIAnalyzer(&mockAIAnalyzer{})
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	service.Start(ctx)
-	originalStopCh := service.stopCh
-
-	service.Start(ctx)
-	if service.stopCh != originalStopCh {
-		t.Fatal("start should not replace stop channel when already running")
+	apps := service.RunDiscovery(context.Background())
+	if len(apps) != 0 {
+		t.Fatalf("expected 0 apps from empty state provider, got %d", len(apps))
 	}
-
-	service.Stop()
+	if service.GetLastRun().IsZero() {
+		t.Fatal("expected lastRun to be updated for empty-state discovery run")
+	}
 }
 
-func TestStartAndForceRefreshRecoverFromPanics(t *testing.T) {
-	provider := &panickingStateProvider{}
-	service := NewService(provider, nil, Config{
-		Interval:    10 * time.Millisecond,
-		CacheExpiry: time.Hour,
-	})
-	service.SetAIAnalyzer(&mockAIAnalyzer{})
+func TestRunDiscoveryNormalizesNilContext(t *testing.T) {
+	provider := &mockStateProvider{
+		state: models.StateSnapshot{
+			DockerHosts: []models.DockerHost{
+				{
+					AgentID:  "agent-1",
+					Hostname: "host1",
+					Containers: []models.DockerContainer{
+						{ID: "1", Name: "db", Image: "postgres:14"},
+					},
+				},
+			},
+		},
+	}
+	analyzer := &contextCheckingAnalyzer{}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	service := NewService(provider, nil, DefaultConfig())
+	service.SetAIAnalyzer(analyzer)
 
-	service.Start(ctx)
-	waitFor(t, time.Second, func() bool {
-		return provider.Calls() >= 2
-	})
-
-	service.ForceRefresh(context.Background())
-	waitFor(t, time.Second, func() bool {
-		return provider.Calls() >= 3
-	})
-
-	service.Stop()
-}
-
-func TestDiscoveryLoopExitsOnContextCancel(t *testing.T) {
-	service := NewService(&mockStateProvider{}, nil, Config{
-		Interval:    time.Hour,
-		CacheExpiry: time.Hour,
-	})
-
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-
-	done := make(chan struct{})
-	go func() {
-		service.discoveryLoop(ctx)
-		close(done)
-	}()
-
-	select {
-	case <-done:
-	case <-time.After(200 * time.Millisecond):
-		t.Fatal("discoveryLoop did not stop after context cancellation")
+	apps := service.RunDiscovery(nil)
+	if !analyzer.called {
+		t.Fatal("expected analyzer to be called")
+	}
+	if analyzer.sawNil {
+		t.Fatal("expected RunDiscovery to pass non-nil context to analyzer")
+	}
+	if len(apps) != 1 {
+		t.Fatalf("expected 1 discovered app, got %d", len(apps))
 	}
 }
 

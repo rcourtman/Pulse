@@ -283,6 +283,9 @@ func (c *CommandClient) buildWebSocketURL() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("pulse URL is invalid: %w", err)
 	}
+	if parsed.Host == "" {
+		return "", fmt.Errorf("missing host in pulse URL")
+	}
 
 	if parsed.Scheme == "" {
 		return "", fmt.Errorf("pulse URL %q must include scheme", c.pulseURL)
@@ -313,11 +316,18 @@ func (c *CommandClient) buildWebSocketURL() (string, error) {
 		}
 		parsed.Scheme = "ws"
 	default:
-		return "", fmt.Errorf("pulse URL %q has unsupported scheme %q", c.pulseURL, parsed.Scheme)
+		return "", fmt.Errorf("unsupported URL scheme %q", parsed.Scheme)
 	}
 
-	parsed.Path = "/api/agent/ws"
+	basePath := strings.TrimRight(parsed.Path, "/")
+	if basePath == "" {
+		parsed.Path = "/api/agent/ws"
+	} else {
+		parsed.Path = basePath + "/api/agent/ws"
+	}
 	parsed.RawPath = ""
+	parsed.RawQuery = ""
+	parsed.Fragment = ""
 	return parsed.String(), nil
 }
 

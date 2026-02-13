@@ -198,3 +198,53 @@ func TestCollectPower_FallbackToAMD(t *testing.T) {
 		t.Fatalf("expected amd_energy fallback, got %q", data.Source)
 	}
 }
+
+func TestCollectPower_NilContext(t *testing.T) {
+	originalRAPL := raplBasePath
+	originalHwmon := hwmonBasePath
+	tmpDir := t.TempDir()
+	raplBasePath = filepath.Join(tmpDir, "missing-rapl")
+	hwmonBasePath = filepath.Join(tmpDir, "hwmon")
+	t.Cleanup(func() {
+		raplBasePath = originalRAPL
+		hwmonBasePath = originalHwmon
+	})
+
+	if err := os.MkdirAll(hwmonBasePath, 0755); err != nil {
+		t.Fatalf("mkdir hwmon base: %v", err)
+	}
+	hwmon := filepath.Join(hwmonBasePath, "hwmon0")
+	if err := os.MkdirAll(hwmon, 0755); err != nil {
+		t.Fatalf("mkdir hwmon: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(hwmon, "name"), []byte("amd_energy"), 0644); err != nil {
+		t.Fatalf("write hwmon name: %v", err)
+	}
+	if err := writeEnergyFile(filepath.Join(hwmon, "energy1_input"), "1000000"); err != nil {
+		t.Fatalf("write energy input: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(hwmon, "energy1_label"), []byte("package"), 0644); err != nil {
+		t.Fatalf("write energy label: %v", err)
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		if err := writeEnergyFile(filepath.Join(hwmon, "energy1_input"), "2000000"); err != nil {
+			errCh <- err
+		}
+	}()
+
+	data, err := CollectPower(nil)
+	if err != nil {
+		t.Fatalf("CollectPower error: %v", err)
+	}
+	select {
+	case err := <-errCh:
+		t.Fatalf("update energy input: %v", err)
+	default:
+	}
+	if data.Source != "amd_energy" {
+		t.Fatalf("expected amd_energy fallback, got %q", data.Source)
+	}
+}

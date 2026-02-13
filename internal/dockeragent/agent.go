@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -306,9 +307,9 @@ func normalizeTargets(raw []TargetConfig) ([]TargetConfig, error) {
 			return nil, fmt.Errorf("pulse target %s is missing API token", targetURL)
 		}
 
-		normalizedURL, err := normalizeTargetURL(targetURL)
+		normalizedURL, err := normalizeTargetURL(url)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("invalid pulse target URL %q: %w", url, err)
 		}
 
 		key := fmt.Sprintf("%s|%s|%t", normalizedURL, token, target.InsecureSkipVerify)
@@ -327,51 +328,57 @@ func normalizeTargets(raw []TargetConfig) ([]TargetConfig, error) {
 	return normalized, nil
 }
 
-func normalizeTargetURL(rawURL string) (string, error) {
-	parsed, err := url.Parse(rawURL)
+func normalizeTargetURL(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+
+	parsed, err := url.Parse(raw)
 	if err != nil {
-		return "", fmt.Errorf("pulse target URL %q is invalid: %w", rawURL, err)
+		return "", err
 	}
 
-	if parsed.Scheme == "" {
-		return "", fmt.Errorf("pulse target URL %q must include scheme (https:// or loopback http://)", rawURL)
-	}
-	if parsed.Host == "" {
-		return "", fmt.Errorf("pulse target URL %q must include host", rawURL)
-	}
-	if parsed.User != nil {
-		return "", fmt.Errorf("pulse target URL %q must not include user credentials", rawURL)
-	}
-	if parsed.RawQuery != "" || parsed.Fragment != "" {
-		return "", fmt.Errorf("pulse target URL %q must not include query or fragment", rawURL)
+	if parsed.Scheme == "" || parsed.Host == "" {
+		return "", errors.New("must include http:// or https:// with a valid host")
 	}
 
 	scheme := strings.ToLower(parsed.Scheme)
-	switch scheme {
-	case "https":
-		// Always allowed.
-	case "http":
-		if !isLoopbackTargetHost(parsed.Hostname()) {
-			return "", fmt.Errorf("pulse target URL %q must use https unless host is loopback", rawURL)
+	if scheme != "http" && scheme != "https" {
+		return "", fmt.Errorf("unsupported scheme %q", parsed.Scheme)
+	}
+
+	if parsed.User != nil {
+		return "", errors.New("userinfo is not supported")
+	}
+
+	if parsed.RawQuery != "" {
+		return "", errors.New("query parameters are not supported")
+	}
+
+	if parsed.Fragment != "" {
+		return "", errors.New("fragments are not supported")
+	}
+
+	if parsed.Hostname() == "" {
+		return "", errors.New("host is required")
+	}
+
+	if port := parsed.Port(); port != "" {
+		portNum, err := strconv.Atoi(port)
+		if err != nil || portNum < 1 || portNum > 65535 {
+			return "", fmt.Errorf("invalid port %q: must be between 1 and 65535", port)
 		}
-	default:
-		return "", fmt.Errorf("pulse target URL %q has unsupported scheme %q", rawURL, parsed.Scheme)
 	}
 
 	parsed.Scheme = scheme
+	parsed.Host = strings.ToLower(parsed.Host)
 	parsed.Path = strings.TrimRight(parsed.Path, "/")
-	parsed.RawPath = strings.TrimRight(parsed.RawPath, "/")
+	parsed.RawPath = ""
 
-	return parsed.String(), nil
-}
-
-func isLoopbackTargetHost(host string) bool {
-	if strings.EqualFold(host, "localhost") {
-		return true
+	normalized := strings.TrimRight(parsed.String(), "/")
+	if normalized == "" {
+		return "", errors.New("URL is empty after normalization")
 	}
 
-	ip := net.ParseIP(host)
-	return ip != nil && ip.IsLoopback()
+	return normalized, nil
 }
 
 func normalizeContainerStates(raw []string) ([]string, error) {

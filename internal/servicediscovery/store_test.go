@@ -340,6 +340,25 @@ func TestStore_NewStoreError(t *testing.T) {
 	}
 }
 
+func TestStore_NewStoreRejectsBlankDataDir(t *testing.T) {
+	if _, err := NewStore(" \t\n "); err == nil {
+		t.Fatalf("expected error for blank data dir")
+	}
+}
+
+func TestStore_NewStoreTrimsDataDir(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewStore("  " + dir + "  ")
+	if err != nil {
+		t.Fatalf("NewStore error: %v", err)
+	}
+
+	want := filepath.Join(dir, "discovery")
+	if store.dataDir != want {
+		t.Fatalf("store.dataDir = %q, want %q", store.dataDir, want)
+	}
+}
+
 func TestStore_NewStoreCryptoFailure(t *testing.T) {
 	orig := newCryptoManagerAt
 	newCryptoManagerAt = func(dataDir string) (*crypto.CryptoManager, error) {

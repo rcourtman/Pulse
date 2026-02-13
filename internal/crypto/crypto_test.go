@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -384,6 +385,31 @@ func TestNewCryptoManagerAt_DefaultDataDir(t *testing.T) {
 	}
 }
 
+func TestNewCryptoManagerAt_WhitespaceDataDirUsesDefault(t *testing.T) {
+	tmpDir := t.TempDir()
+	withDefaultDataDir(t, tmpDir)
+
+	cm, err := NewCryptoManagerAt("   ")
+	if err != nil {
+		t.Fatalf("NewCryptoManagerAt() error: %v", err)
+	}
+	if cm.keyPath != filepath.Join(tmpDir, ".encryption.key") {
+		t.Fatalf("keyPath = %q, want %q", cm.keyPath, filepath.Join(tmpDir, ".encryption.key"))
+	}
+}
+
+func TestNewCryptoManagerAt_EmptyDefaultDataDirFails(t *testing.T) {
+	withDefaultDataDir(t, "   ")
+
+	_, err := NewCryptoManagerAt("")
+	if err == nil {
+		t.Fatal("Expected error when default data dir is empty")
+	}
+	if !strings.Contains(err.Error(), "data directory is required") {
+		t.Fatalf("expected data directory validation error, got: %v", err)
+	}
+}
+
 func TestNewCryptoManagerAt_KeyError(t *testing.T) {
 	tmpDir := t.TempDir()
 	withLegacyKeyPath(t, filepath.Join(t.TempDir(), ".encryption.key"))
@@ -522,21 +548,19 @@ func TestGetOrCreateKeyAt_MigrateSuccess(t *testing.T) {
 	}
 }
 
-func TestGetOrCreateKeyAt_UsesEnvLegacyKeyPathOverride(t *testing.T) {
-	envLegacyDir := t.TempDir()
-	envLegacyPath := filepath.Join(envLegacyDir, ".encryption.key")
-	t.Setenv("PULSE_LEGACY_KEY_PATH", envLegacyPath)
-
-	// Ensure env override actually wins over the package-level default path.
-	withLegacyKeyPath(t, filepath.Join(t.TempDir(), ".encryption.key"))
+func TestGetOrCreateKeyAt_IgnoresRelativeLegacyOverride(t *testing.T) {
+	legacyDir := t.TempDir()
+	legacyPath := filepath.Join(legacyDir, ".encryption.key")
+	withLegacyKeyPath(t, legacyPath)
+	t.Setenv("PULSE_LEGACY_KEY_PATH", "relative/.encryption.key")
 
 	oldKey := make([]byte, 32)
 	for i := range oldKey {
-		oldKey[i] = byte(i + 1)
+		oldKey[i] = byte(i)
 	}
 	encoded := base64.StdEncoding.EncodeToString(oldKey)
-	if err := os.WriteFile(envLegacyPath, []byte(encoded), 0600); err != nil {
-		t.Fatalf("Failed to write env legacy key: %v", err)
+	if err := os.WriteFile(legacyPath, []byte(encoded), 0600); err != nil {
+		t.Fatalf("Failed to write legacy key: %v", err)
 	}
 
 	newDir := t.TempDir()
@@ -545,7 +569,14 @@ func TestGetOrCreateKeyAt_UsesEnvLegacyKeyPathOverride(t *testing.T) {
 		t.Fatalf("getOrCreateKeyAt() error: %v", err)
 	}
 	if !bytes.Equal(key, oldKey) {
-		t.Fatalf("expected key loaded via env legacy key path")
+		t.Fatalf("migrated key mismatch")
+	}
+	contents, err := os.ReadFile(filepath.Join(newDir, ".encryption.key"))
+	if err != nil {
+		t.Fatalf("Failed to read migrated key: %v", err)
+	}
+	if string(contents) != encoded {
+		t.Fatalf("migrated key contents mismatch")
 	}
 }
 

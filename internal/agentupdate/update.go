@@ -124,13 +124,20 @@ type Updater struct {
 
 // New creates a new Updater with the given configuration.
 func New(cfg Config) *Updater {
-	if cfg.CheckInterval == 0 {
+	originalCheckInterval := cfg.CheckInterval
+	if cfg.CheckInterval <= 0 {
 		cfg.CheckInterval = 1 * time.Hour
 	}
 
 	logger := zerolog.Nop()
 	if cfg.Logger != nil {
 		logger = *cfg.Logger
+	}
+	if originalCheckInterval < 0 {
+		logger.Warn().
+			Dur("check_interval", originalCheckInterval).
+			Dur("default_check_interval", cfg.CheckInterval).
+			Msg("Invalid agent update check interval; using default")
 	}
 
 	transport := &http.Transport{
