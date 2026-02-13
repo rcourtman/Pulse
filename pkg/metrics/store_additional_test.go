@@ -111,3 +111,35 @@ func TestStoreGetMetaIntInvalid(t *testing.T) {
 		t.Fatalf("expected getMetaInt to fail for invalid int, got %d", val)
 	}
 }
+
+func TestStoreWriteAfterCloseDoesNotPanic(t *testing.T) {
+	dir := t.TempDir()
+	cfg := DefaultConfig(dir)
+	cfg.DBPath = filepath.Join(dir, "metrics-after-close.db")
+	cfg.WriteBufferSize = 1
+	cfg.FlushInterval = time.Hour
+
+	store, err := NewStore(cfg)
+	if err != nil {
+		t.Fatalf("NewStore returned error: %v", err)
+	}
+
+	if err := store.Close(); err != nil {
+		t.Fatalf("Close returned error: %v", err)
+	}
+
+	var panicked bool
+	func() {
+		defer func() {
+			if recover() != nil {
+				panicked = true
+			}
+		}()
+		store.Write("vm", "v1", "cpu", 1.0, time.Now())
+		store.Flush()
+	}()
+
+	if panicked {
+		t.Fatal("expected writes after close to be ignored without panic")
+	}
+}

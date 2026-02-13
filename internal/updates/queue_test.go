@@ -148,6 +148,49 @@ func TestUpdateQueue_IsRunning(t *testing.T) {
 	// This is by design to allow status polling
 }
 
+func TestUpdateQueue_MarkCompletedClearsAfterDelay(t *testing.T) {
+	queue := NewUpdateQueue()
+	queue.clearDelay = 20 * time.Millisecond
+
+	job, _ := queue.Enqueue("https://example.com/update.tar.gz")
+	queue.MarkRunning(job.ID)
+	queue.MarkCompleted(job.ID, nil)
+
+	if queue.GetCurrentJob() == nil {
+		t.Fatal("current job should be visible immediately after completion")
+	}
+
+	time.Sleep(50 * time.Millisecond)
+	if queue.GetCurrentJob() != nil {
+		t.Fatal("current job should be cleared after delay")
+	}
+}
+
+func TestUpdateQueue_CancelAddsHistoryAndClearsAfterDelay(t *testing.T) {
+	queue := NewUpdateQueue()
+	queue.clearDelay = 20 * time.Millisecond
+
+	job, _ := queue.Enqueue("https://example.com/update.tar.gz")
+	queue.MarkRunning(job.ID)
+
+	if ok := queue.Cancel(job.ID); !ok {
+		t.Fatal("Cancel should succeed")
+	}
+
+	history := queue.GetHistory()
+	if len(history) != 1 {
+		t.Fatalf("History should contain 1 cancelled job, got %d", len(history))
+	}
+	if history[0].State != JobStateCancelled {
+		t.Fatalf("history state = %s, want %s", history[0].State, JobStateCancelled)
+	}
+
+	time.Sleep(50 * time.Millisecond)
+	if queue.GetCurrentJob() != nil {
+		t.Fatal("current job should be cleared after cancellation delay")
+	}
+}
+
 func TestUpdateQueue_History(t *testing.T) {
 	queue := NewUpdateQueue()
 

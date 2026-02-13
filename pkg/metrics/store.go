@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -92,6 +93,7 @@ type Store struct {
 	stopCh   chan struct{}
 	doneCh   chan struct{}
 	stopOnce sync.Once
+	stopping atomic.Bool
 }
 
 // NewStore creates a new metrics store with the given configuration
@@ -197,8 +199,16 @@ func (s *Store) Write(resourceType, resourceID, metricType string, value float64
 
 // WriteWithTier adds a metric to the write buffer with a specific tier
 func (s *Store) WriteWithTier(resourceType, resourceID, metricType string, value float64, timestamp time.Time, tier Tier) {
+	if s.stopping.Load() {
+		return
+	}
+
 	s.bufferMu.Lock()
 	defer s.bufferMu.Unlock()
+
+	if s.stopping.Load() {
+		return
+	}
 
 	s.buffer = append(s.buffer, bufferedMetric{
 		resourceType: resourceType,
@@ -811,6 +821,7 @@ func (s *Store) SetMaxOpenConns(n int) {
 // Close shuts down the store gracefully
 func (s *Store) Close() error {
 	s.stopOnce.Do(func() {
+		s.stopping.Store(true)
 		close(s.stopCh)
 	})
 

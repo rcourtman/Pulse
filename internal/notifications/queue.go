@@ -727,7 +727,15 @@ func (nq *NotificationQueue) Stop() error {
 
 // calculateBackoff calculates exponential backoff duration
 func calculateBackoff(attempt int) time.Duration {
-	// 1s, 2s, 4s, 8s, 16s, 32s, 60s (capped)
+	// 1s, 2s, 4s, 8s, 16s, 32s, then capped at 60s.
+	// Clamp before shifting to avoid integer overflow on very large attempts.
+	if attempt <= 0 {
+		return 1 * time.Second
+	}
+	if attempt >= 6 {
+		return 60 * time.Second
+	}
+
 	backoff := time.Duration(1<<uint(attempt)) * time.Second
 	if backoff > 60*time.Second {
 		backoff = 60 * time.Second
@@ -796,11 +804,11 @@ func (nq *NotificationQueue) CancelByAlertIDs(alertIDs []string) error {
 		now := time.Now().Unix()
 		updateQuery := `
 			UPDATE notification_queue
-			SET status = ?, last_attempt = ?, last_error = ?
+			SET status = ?, last_attempt = ?, last_error = ?, next_retry_at = NULL, completed_at = ?
 			WHERE id = ?
 		`
 		for _, notifID := range toCancelIDs {
-			if _, err := nq.db.Exec(updateQuery, QueueStatusCancelled, now, "Alert resolved", notifID); err != nil {
+			if _, err := nq.db.Exec(updateQuery, QueueStatusCancelled, now, "Alert resolved", now, notifID); err != nil {
 				log.Error().Err(err).Str("notifID", notifID).Msg("Failed to mark notification as cancelled")
 			}
 		}
