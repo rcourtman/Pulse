@@ -22,7 +22,7 @@ type hostedTenantAgentInstallCommandResponse struct {
 // tenant-scoped agent install command by minting an org-bound API token.
 func (r *Router) handleHostedTenantAgentInstallCommand(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed", nil)
 		return
 	}
 	if !r.hostedMode {
@@ -32,7 +32,7 @@ func (r *Router) handleHostedTenantAgentInstallCommand(w http.ResponseWriter, re
 
 	orgID := strings.TrimSpace(req.PathValue("id"))
 	if orgID == "" {
-		http.Error(w, "Organization ID required", http.StatusBadRequest)
+		writeErrorResponse(w, http.StatusBadRequest, "missing_org_id", "Organization ID required", nil)
 		return
 	}
 	if r.multiTenant == nil || !r.multiTenant.OrgExists(orgID) {
@@ -44,13 +44,13 @@ func (r *Router) handleHostedTenantAgentInstallCommand(w http.ResponseWriter, re
 		Type string `json:"type"` // "pve" or "pbs"
 	}
 	if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid request body", map[string]string{"error": err.Error()})
 		return
 	}
 
 	installType, err := normalizeProxmoxInstallType(payload.Type)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeErrorResponse(w, http.StatusBadRequest, "validation_error", err.Error(), nil)
 		return
 	}
 
@@ -67,16 +67,16 @@ func (r *Router) handleHostedTenantAgentInstallCommand(w http.ResponseWriter, re
 		switch {
 		case errors.Is(err, errAgentInstallTokenGeneration):
 			log.Error().Err(err).Msg("Failed to generate hosted tenant agent API token")
-			http.Error(w, "Failed to generate API token", http.StatusInternalServerError)
+			writeErrorResponse(w, http.StatusInternalServerError, "token_generation_failed", "Failed to generate API token", nil)
 		case errors.Is(err, errAgentInstallTokenRecord):
 			log.Error().Err(err).Str("token_name", tokenName).Msg("Failed to construct hosted tenant agent token record")
-			http.Error(w, "Failed to generate token", http.StatusInternalServerError)
+			writeErrorResponse(w, http.StatusInternalServerError, "token_generation_failed", "Failed to generate token", nil)
 		case errors.Is(err, errAgentInstallTokenPersist):
 			log.Error().Err(err).Msg("Failed to persist hosted tenant agent token")
-			http.Error(w, "Failed to save token to disk: "+err.Error(), http.StatusInternalServerError)
+			writeErrorResponse(w, http.StatusInternalServerError, "token_persist_failed", "Failed to save token to disk", map[string]string{"error": err.Error()})
 		default:
 			log.Error().Err(err).Msg("Failed to create hosted tenant agent token")
-			http.Error(w, "Failed to generate API token", http.StatusInternalServerError)
+			writeErrorResponse(w, http.StatusInternalServerError, "token_generation_failed", "Failed to generate API token", nil)
 		}
 		return
 	}

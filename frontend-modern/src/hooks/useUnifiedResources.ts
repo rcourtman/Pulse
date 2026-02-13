@@ -1,5 +1,6 @@
 import { batch, createEffect, createSignal, onCleanup } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
+import { readAPIErrorMessage } from '@/api/responseUtils';
 import { apiFetch } from '@/utils/apiClient';
 import { getGlobalWebSocketStore } from '@/stores/websocket-global';
 import type { Resource, PlatformType, SourceType, ResourceStatus, ResourceType } from '@/types/resource';
@@ -496,7 +497,11 @@ async function fetchUnifiedResources(query: string): Promise<Resource[]> {
   for (let page = 1; page <= totalPages && page <= UNIFIED_RESOURCES_MAX_PAGES; page += 1) {
     const response = await apiFetch(buildUnifiedResourcesUrl(normalizedQuery, page), { cache: 'no-store' });
     if (!response.ok) {
-      throw new Error('Failed to fetch unified resources');
+      const message = await readAPIErrorMessage(
+        response,
+        `Failed to fetch unified resources (HTTP ${response.status})`,
+      );
+      throw new Error(message);
     }
 
     const payload = (await response.json()) as APIListResponse | APIResource[];

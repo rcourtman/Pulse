@@ -1,5 +1,6 @@
 import type { State, Performance, Stats, DockerHostCommand, HostLookupResponse } from '@/types/api';
 import { apiFetch, apiFetchJSON } from '@/utils/apiClient';
+import { parseOptionalJSON, readAPIErrorMessage } from './responseUtils';
 
 export class MonitoringAPI {
   private static baseUrl = '/api';
@@ -40,42 +41,14 @@ export class MonitoringAPI {
         return {};
       }
 
-      let message = `Failed with status ${response.status}`;
-      try {
-        const text = await response.text();
-        if (text?.trim()) {
-          message = text.trim();
-          try {
-            const parsed = JSON.parse(text);
-            if (typeof parsed?.error === 'string' && parsed.error.trim()) {
-              message = parsed.error.trim();
-            }
-          } catch (_jsonErr) {
-            // ignore JSON parse errors, fallback to raw text
-          }
-        }
-      } catch (_err) {
-        // ignore read error, keep default message
-      }
-
-      throw new Error(message);
+      throw new Error(await readAPIErrorMessage(response, `Failed with status ${response.status}`));
     }
 
     if (response.status === 204) {
       return {};
     }
 
-    const text = await response.text();
-    if (!text?.trim()) {
-      return {};
-    }
-
-    try {
-      const parsed = JSON.parse(text) as DeleteDockerHostResponse;
-      return parsed;
-    } catch (err) {
-      throw new Error((err as Error).message || 'Failed to parse delete docker host response');
-    }
+    return parseOptionalJSON(response, {}, 'Failed to parse delete docker host response');
   }
 
   static async unhideDockerHost(hostId: string): Promise<void> {
@@ -91,25 +64,7 @@ export class MonitoringAPI {
         return;
       }
 
-      let message = `Failed with status ${response.status}`;
-      try {
-        const text = await response.text();
-        if (text?.trim()) {
-          message = text.trim();
-          try {
-            const parsed = JSON.parse(text);
-            if (typeof parsed?.error === 'string' && parsed.error.trim()) {
-              message = parsed.error.trim();
-            }
-          } catch (_jsonErr) {
-            // ignore JSON parse errors, fallback to raw text
-          }
-        }
-      } catch (_err) {
-        // ignore read error, keep default message
-      }
-
-      throw new Error(message);
+      throw new Error(await readAPIErrorMessage(response, `Failed with status ${response.status}`));
     }
   }
 
@@ -126,25 +81,7 @@ export class MonitoringAPI {
         return;
       }
 
-      let message = `Failed with status ${response.status}`;
-      try {
-        const text = await response.text();
-        if (text?.trim()) {
-          message = text.trim();
-          try {
-            const parsed = JSON.parse(text);
-            if (typeof parsed?.error === 'string' && parsed.error.trim()) {
-              message = parsed.error.trim();
-            }
-          } catch (_jsonErr) {
-            // ignore JSON parse errors, fallback to raw text
-          }
-        }
-      } catch (_err) {
-        // ignore read error, keep default message
-      }
-
-      throw new Error(message);
+      throw new Error(await readAPIErrorMessage(response, `Failed with status ${response.status}`));
     }
   }
 
@@ -164,25 +101,7 @@ export class MonitoringAPI {
         throw new Error('Docker host not found');
       }
 
-      let message = `Failed with status ${response.status}`;
-      try {
-        const text = await response.text();
-        if (text?.trim()) {
-          message = text.trim();
-          try {
-            const parsed = JSON.parse(text);
-            if (typeof parsed?.error === 'string' && parsed.error.trim()) {
-              message = parsed.error.trim();
-            }
-          } catch (_jsonErr) {
-            // ignore JSON parse errors, fallback to raw text
-          }
-        }
-      } catch (_err) {
-        // ignore read error, keep default message
-      }
-
-      throw new Error(message);
+      throw new Error(await readAPIErrorMessage(response, `Failed with status ${response.status}`));
     }
   }
 
@@ -194,25 +113,7 @@ export class MonitoringAPI {
     });
 
     if (!response.ok) {
-      let message = `Failed with status ${response.status}`;
-      try {
-        const text = await response.text();
-        if (text?.trim()) {
-          message = text.trim();
-          try {
-            const parsed = JSON.parse(text);
-            if (typeof parsed?.error === 'string' && parsed.error.trim()) {
-              message = parsed.error.trim();
-            }
-          } catch (_err) {
-            // ignore parse error, use raw text
-          }
-        }
-      } catch (_err) {
-        // ignore read error
-      }
-
-      throw new Error(message);
+      throw new Error(await readAPIErrorMessage(response, `Failed with status ${response.status}`));
     }
   }
 
@@ -228,41 +129,14 @@ export class MonitoringAPI {
         return {};
       }
 
-      let message = `Failed with status ${response.status}`;
-      try {
-        const text = await response.text();
-        if (text?.trim()) {
-          message = text.trim();
-          try {
-            const parsed = JSON.parse(text);
-            if (typeof parsed?.error === 'string' && parsed.error.trim()) {
-              message = parsed.error.trim();
-            }
-          } catch (_jsonErr) {
-            // ignore parse errors
-          }
-        }
-      } catch (_err) {
-        // ignore read error
-      }
-
-      throw new Error(message);
+      throw new Error(await readAPIErrorMessage(response, `Failed with status ${response.status}`));
     }
 
     if (response.status === 204) {
       return {};
     }
 
-    const text = await response.text();
-    if (!text?.trim()) {
-      return {};
-    }
-
-    try {
-      return JSON.parse(text) as DeleteKubernetesClusterResponse;
-    } catch (err) {
-      throw new Error((err as Error).message || 'Failed to parse delete kubernetes cluster response');
-    }
+    return parseOptionalJSON(response, {}, 'Failed to parse delete kubernetes cluster response');
   }
 
   static async unhideKubernetesCluster(clusterId: string): Promise<void> {
@@ -277,25 +151,7 @@ export class MonitoringAPI {
         return;
       }
 
-      let message = `Failed with status ${response.status}`;
-      try {
-        const text = await response.text();
-        if (text?.trim()) {
-          message = text.trim();
-          try {
-            const parsed = JSON.parse(text);
-            if (typeof parsed?.error === 'string' && parsed.error.trim()) {
-              message = parsed.error.trim();
-            }
-          } catch (_jsonErr) {
-            // ignore parse errors
-          }
-        }
-      } catch (_err) {
-        // ignore read error
-      }
-
-      throw new Error(message);
+      throw new Error(await readAPIErrorMessage(response, `Failed with status ${response.status}`));
     }
   }
 
@@ -311,25 +167,7 @@ export class MonitoringAPI {
         return;
       }
 
-      let message = `Failed with status ${response.status}`;
-      try {
-        const text = await response.text();
-        if (text?.trim()) {
-          message = text.trim();
-          try {
-            const parsed = JSON.parse(text);
-            if (typeof parsed?.error === 'string' && parsed.error.trim()) {
-              message = parsed.error.trim();
-            }
-          } catch (_jsonErr) {
-            // ignore parse errors
-          }
-        }
-      } catch (_err) {
-        // ignore read error
-      }
-
-      throw new Error(message);
+      throw new Error(await readAPIErrorMessage(response, `Failed with status ${response.status}`));
     }
   }
 
@@ -349,25 +187,7 @@ export class MonitoringAPI {
         throw new Error('Kubernetes cluster not found');
       }
 
-      let message = `Failed with status ${response.status}`;
-      try {
-        const text = await response.text();
-        if (text?.trim()) {
-          message = text.trim();
-          try {
-            const parsed = JSON.parse(text);
-            if (typeof parsed?.error === 'string' && parsed.error.trim()) {
-              message = parsed.error.trim();
-            }
-          } catch (_jsonErr) {
-            // ignore parse errors
-          }
-        }
-      } catch (_err) {
-        // ignore read error
-      }
-
-      throw new Error(message);
+      throw new Error(await readAPIErrorMessage(response, `Failed with status ${response.status}`));
     }
   }
 
@@ -379,25 +199,7 @@ export class MonitoringAPI {
     });
 
     if (!response.ok) {
-      let message = `Failed with status ${response.status}`;
-      try {
-        const text = await response.text();
-        if (text?.trim()) {
-          message = text.trim();
-          try {
-            const parsed = JSON.parse(text);
-            if (typeof parsed?.error === 'string' && parsed.error.trim()) {
-              message = parsed.error.trim();
-            }
-          } catch (_err) {
-            // ignore parse error
-          }
-        }
-      } catch (_err) {
-        // ignore read error
-      }
-
-      throw new Error(message);
+      throw new Error(await readAPIErrorMessage(response, `Failed with status ${response.status}`));
     }
   }
 
@@ -410,27 +212,7 @@ export class MonitoringAPI {
     const response = await apiFetch(url, { method: 'DELETE' });
 
     if (!response.ok) {
-      let message = `Failed with status ${response.status}`;
-      try {
-        const text = await response.text();
-        if (text?.trim()) {
-          message = text.trim();
-          try {
-            const parsed = JSON.parse(text);
-            if (typeof parsed?.error === 'string' && parsed.error.trim()) {
-              message = parsed.error.trim();
-            } else if (typeof parsed?.message === 'string' && parsed.message.trim()) {
-              message = parsed.message.trim();
-            }
-          } catch (_err) {
-            // Ignore JSON parse errors, fallback to raw text.
-          }
-        }
-      } catch (_err) {
-        // Ignore body read errors, keep default message.
-      }
-
-      throw new Error(message);
+      throw new Error(await readAPIErrorMessage(response, `Failed with status ${response.status}`));
     }
 
     // Consume and ignore the body so the fetch can be reused by the connection pool.
@@ -456,27 +238,7 @@ export class MonitoringAPI {
     });
 
     if (!response.ok) {
-      let message = `Failed with status ${response.status}`;
-      try {
-        const text = await response.text();
-        if (text?.trim()) {
-          message = text.trim();
-          try {
-            const parsed = JSON.parse(text);
-            if (typeof parsed?.error === 'string' && parsed.error.trim()) {
-              message = parsed.error.trim();
-            } else if (typeof parsed?.message === 'string' && parsed.message.trim()) {
-              message = parsed.message.trim();
-            }
-          } catch (_err) {
-            // Ignore JSON parse errors.
-          }
-        }
-      } catch (_err) {
-        // Ignore body read errors.
-      }
-
-      throw new Error(message);
+      throw new Error(await readAPIErrorMessage(response, `Failed with status ${response.status}`));
     }
   }
 
@@ -495,27 +257,7 @@ export class MonitoringAPI {
     });
 
     if (!response.ok) {
-      let message = `Failed with status ${response.status}`;
-      try {
-        const text = await response.text();
-        if (text?.trim()) {
-          message = text.trim();
-          try {
-            const parsed = JSON.parse(text);
-            if (typeof parsed?.error === 'string' && parsed.error.trim()) {
-              message = parsed.error.trim();
-            } else if (typeof parsed?.message === 'string' && parsed.message.trim()) {
-              message = parsed.message.trim();
-            }
-          } catch (_err) {
-            // Ignore JSON parse errors.
-          }
-        }
-      } catch (_err) {
-        // Ignore body read errors.
-      }
-
-      throw new Error(message);
+      throw new Error(await readAPIErrorMessage(response, `Failed with status ${response.status}`));
     }
   }
 
@@ -536,17 +278,7 @@ export class MonitoringAPI {
     }
 
     if (!response.ok) {
-      const text = await response.text();
-      let message = text?.trim() || `Lookup failed with status ${response.status}`;
-      try {
-        const parsed = text ? JSON.parse(text) : null;
-        if (parsed?.error) {
-          message = parsed.error;
-        }
-      } catch (_err) {
-        // ignore parse error
-      }
-      throw new Error(message);
+      throw new Error(await readAPIErrorMessage(response, `Lookup failed with status ${response.status}`));
     }
 
     const text = await response.text();
@@ -589,39 +321,10 @@ export class MonitoringAPI {
     });
 
     if (!response.ok) {
-      let message = `Failed with status ${response.status}`;
-      try {
-        const text = await response.text();
-        if (text?.trim()) {
-          message = text.trim();
-          try {
-            const parsed = JSON.parse(text);
-            if (typeof parsed?.error === 'string' && parsed.error.trim()) {
-              message = parsed.error.trim();
-            } else if (typeof parsed?.message === 'string' && parsed.message.trim()) {
-              message = parsed.message.trim();
-            }
-          } catch (_jsonErr) {
-            // ignore JSON parse errors, fallback to raw text
-          }
-        }
-      } catch (_err) {
-        // ignore read error, keep default message
-      }
-
-      throw new Error(message);
+      throw new Error(await readAPIErrorMessage(response, `Failed with status ${response.status}`));
     }
 
-    const text = await response.text();
-    if (!text?.trim()) {
-      return { success: true };
-    }
-
-    try {
-      return JSON.parse(text) as UpdateDockerContainerResponse;
-    } catch (err) {
-      throw new Error((err as Error).message || 'Failed to parse update container response');
-    }
+    return parseOptionalJSON(response, { success: true }, 'Failed to parse update container response');
   }
 
   /**
@@ -635,35 +338,10 @@ export class MonitoringAPI {
     });
 
     if (!response.ok) {
-      let message = `Failed with status ${response.status}`;
-      try {
-        const text = await response.text();
-        if (text?.trim()) {
-          try {
-            const parsed = JSON.parse(text);
-            if (typeof parsed?.error === 'string' && parsed.error.trim()) {
-              message = parsed.error.trim();
-            }
-          } catch (_jsonErr) {
-            message = text.trim();
-          }
-        }
-      } catch (_err) {
-        // ignore read error
-      }
-      throw new Error(message);
+      throw new Error(await readAPIErrorMessage(response, `Failed with status ${response.status}`));
     }
 
-    const text = await response.text();
-    if (!text?.trim()) {
-      return { success: true };
-    }
-
-    try {
-      return JSON.parse(text) as { success: boolean; commandId?: string };
-    } catch (err) {
-      throw new Error((err as Error).message || 'Failed to parse check updates response');
-    }
+    return parseOptionalJSON(response, { success: true }, 'Failed to parse check updates response');
   }
 }
 

@@ -41,7 +41,7 @@ type errorResponse struct {
 func HandleMagicLinkVerify(svc *Service, reg *registry.TenantRegistry, tenantsDir, baseDomain string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 			return
 		}
 
@@ -110,7 +110,7 @@ func HandleMagicLinkVerify(svc *Service, reg *registry.TenantRegistry, tenantsDi
 func HandleAdminGenerateMagicLink(svc *Service, baseURL string, emailSender email.Sender, emailFrom string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed")
 			return
 		}
 

@@ -1,4 +1,5 @@
 import { apiFetch } from '@/utils/apiClient';
+import { readAPIErrorMessage } from './responseUtils';
 import type {
     ResourceType,
     ResourceDiscovery,
@@ -18,7 +19,7 @@ const API_BASE = '/api/discovery';
 export async function listDiscoveries(): Promise<DiscoveryListResponse> {
     const response = await apiFetch(API_BASE);
     if (!response.ok) {
-        throw new Error('Failed to list discoveries');
+        throw new Error(await readAPIErrorMessage(response, 'Failed to list discoveries'));
     }
     return response.json();
 }
@@ -31,7 +32,7 @@ export async function listDiscoveriesByType(
 ): Promise<DiscoveryListResponse> {
     const response = await apiFetch(`${API_BASE}/type/${resourceType}`);
     if (!response.ok) {
-        throw new Error(`Failed to list discoveries for type ${resourceType}`);
+        throw new Error(await readAPIErrorMessage(response, `Failed to list discoveries for type ${resourceType}`));
     }
     return response.json();
 }
@@ -42,7 +43,7 @@ export async function listDiscoveriesByType(
 export async function listDiscoveriesByHost(hostId: string): Promise<DiscoveryListResponse> {
     const response = await apiFetch(`${API_BASE}/host/${encodeURIComponent(hostId)}`);
     if (!response.ok) {
-        throw new Error(`Failed to list discoveries for host ${hostId}`);
+        throw new Error(await readAPIErrorMessage(response, `Failed to list discoveries for host ${hostId}`));
     }
     return response.json();
 }
@@ -60,7 +61,7 @@ export async function getDiscovery(
         // first to avoid noisy 404s for expected "not discovered yet" states.
         const hostListResponse = await apiFetch(`${API_BASE}/host/${encodeURIComponent(hostId)}`);
         if (!hostListResponse.ok) {
-            throw new Error('Failed to list host discoveries');
+            throw new Error(await readAPIErrorMessage(hostListResponse, 'Failed to list host discoveries'));
         }
 
         const hostList = await hostListResponse.json() as DiscoveryListResponse;
@@ -87,7 +88,7 @@ export async function getDiscovery(
             return null;
         }
         if (!response.ok) {
-            throw new Error('Failed to get discovery');
+            throw new Error(await readAPIErrorMessage(response, 'Failed to get discovery'));
         }
         return response.json();
     }
@@ -99,7 +100,7 @@ export async function getDiscovery(
         return null;
     }
     if (!response.ok) {
-        throw new Error('Failed to get discovery');
+        throw new Error(await readAPIErrorMessage(response, 'Failed to get discovery'));
     }
     return response.json();
 }
@@ -124,8 +125,7 @@ export async function triggerDiscovery(
         }
     );
     if (!response.ok) {
-        const error = await response.json().catch(() => ({ message: 'Discovery failed' }));
-        throw new Error(error.message || 'Discovery failed');
+        throw new Error(await readAPIErrorMessage(response, 'Discovery failed'));
     }
     return response.json();
 }
@@ -142,7 +142,7 @@ export async function getDiscoveryProgress(
         `${API_BASE}/${resourceType}/${encodeURIComponent(hostId)}/${encodeURIComponent(resourceId)}/progress`
     );
     if (!response.ok) {
-        throw new Error('Failed to get discovery progress');
+        throw new Error(await readAPIErrorMessage(response, 'Failed to get discovery progress'));
     }
     return response.json();
 }
@@ -167,7 +167,7 @@ export async function updateDiscoveryNotes(
         }
     );
     if (!response.ok) {
-        throw new Error('Failed to update notes');
+        throw new Error(await readAPIErrorMessage(response, 'Failed to update notes'));
     }
     return response.json();
 }
@@ -187,7 +187,7 @@ export async function deleteDiscovery(
         }
     );
     if (!response.ok) {
-        throw new Error('Failed to delete discovery');
+        throw new Error(await readAPIErrorMessage(response, 'Failed to delete discovery'));
     }
 }
 
@@ -197,7 +197,7 @@ export async function deleteDiscovery(
 export async function getDiscoveryStatus(): Promise<DiscoveryStatus> {
     const response = await apiFetch(`${API_BASE}/status`);
     if (!response.ok) {
-        throw new Error('Failed to get discovery status');
+        throw new Error(await readAPIErrorMessage(response, 'Failed to get discovery status'));
     }
     return response.json();
 }
@@ -208,7 +208,7 @@ export async function getDiscoveryStatus(): Promise<DiscoveryStatus> {
 export async function getDiscoveryInfo(resourceType: ResourceType): Promise<DiscoveryInfo> {
     const response = await apiFetch(`${API_BASE}/info/${resourceType}`);
     if (!response.ok) {
-        throw new Error('Failed to get discovery info');
+        throw new Error(await readAPIErrorMessage(response, 'Failed to get discovery info'));
     }
     return response.json();
 }
@@ -292,7 +292,7 @@ export interface ConnectedAgent {
 export async function getConnectedAgents(): Promise<{ count: number; agents: ConnectedAgent[] }> {
     const response = await apiFetch('/api/ai/agents');
     if (!response.ok) {
-        throw new Error('Failed to get connected agents');
+        throw new Error(await readAPIErrorMessage(response, 'Failed to get connected agents'));
     }
     return response.json();
 }
