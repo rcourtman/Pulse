@@ -12,8 +12,8 @@ import (
 	"time"
 
 	systemtypes "github.com/docker/docker/api/types/system"
-	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rcourtman/pulse-go-rewrite/internal/hostmetrics"
+	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 	"github.com/rs/zerolog"
 )

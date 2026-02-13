@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 )
 
 func TestExtractBearerToken(t *testing.T) {
