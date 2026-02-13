@@ -87,6 +87,28 @@ func TestConversionStoreIdempotency(t *testing.T) {
 	}
 }
 
+func TestConversionStoreSchemaHasCreatedAtIndex(t *testing.T) {
+	tmp := t.TempDir()
+	store, err := NewConversionStore(filepath.Join(tmp, "conversion.db"))
+	if err != nil {
+		t.Fatalf("NewConversionStore() error = %v", err)
+	}
+	defer store.Close()
+
+	var count int
+	err = store.db.QueryRow(
+		`SELECT COUNT(1)
+		 FROM sqlite_master
+		 WHERE type = 'index' AND name = 'idx_conversion_events_time'`,
+	).Scan(&count)
+	if err != nil {
+		t.Fatalf("failed to query sqlite_master: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("idx_conversion_events_time missing, count = %d", count)
+	}
+}
+
 func TestConversionStoreFunnelSummaryAggregation(t *testing.T) {
 	tmp := t.TempDir()
 	store, err := NewConversionStore(filepath.Join(tmp, "conversion.db"))

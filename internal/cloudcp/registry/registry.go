@@ -28,6 +28,7 @@ func NewTenantRegistry(dir string) (*TenantRegistry, error) {
 	dsn := dbPath + "?" + url.Values{
 		"_pragma": []string{
 			"busy_timeout(30000)",
+			"foreign_keys(ON)",
 			"journal_mode(WAL)",
 			"synchronous(NORMAL)",
 		},
@@ -71,6 +72,8 @@ func (r *TenantRegistry) initSchema() error {
 	);
 	CREATE INDEX IF NOT EXISTS idx_tenants_state ON tenants(state);
 	CREATE INDEX IF NOT EXISTS idx_tenants_stripe_customer_id ON tenants(stripe_customer_id);
+	CREATE INDEX IF NOT EXISTS idx_tenants_state_created_at ON tenants(state, created_at DESC);
+	CREATE INDEX IF NOT EXISTS idx_tenants_account_id_created_at ON tenants(account_id, created_at DESC);
 
 	CREATE TABLE IF NOT EXISTS accounts (
 		id TEXT PRIMARY KEY,
@@ -119,6 +122,8 @@ func (r *TenantRegistry) initSchema() error {
 		FOREIGN KEY (user_id) REFERENCES users(id)
 	);
 	CREATE INDEX IF NOT EXISTS idx_memberships_user_id ON account_memberships(user_id);
+	CREATE INDEX IF NOT EXISTS idx_memberships_user_id_created_at ON account_memberships(user_id, created_at DESC);
+	CREATE INDEX IF NOT EXISTS idx_memberships_account_id_created_at ON account_memberships(account_id, created_at DESC);
 	`
 	if _, err := r.db.Exec(schema); err != nil {
 		return fmt.Errorf("init tenant registry schema: %w", err)
