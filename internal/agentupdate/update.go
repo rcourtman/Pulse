@@ -223,9 +223,9 @@ func (u *Updater) setAuthHeaders(req *http.Request) {
 
 // getServerVersion fetches the current version from the Pulse server.
 func (u *Updater) getServerVersion(ctx context.Context) (string, error) {
-	url := fmt.Sprintf("%s/api/agent/version", strings.TrimRight(u.cfg.PulseURL, "/"))
+	versionURL := fmt.Sprintf("%s/api/agent/version", strings.TrimRight(u.cfg.PulseURL, "/"))
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, versionURL, nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to create request: %w", err)
 	}
@@ -336,8 +336,8 @@ func (u *Updater) performUpdateWithExecPath(ctx context.Context, execPath string
 	var resp *http.Response
 	lastErr := errors.New("failed to download binary")
 
-	for _, url := range candidates {
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	for _, candidateURL := range candidates {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, candidateURL, nil)
 		if err != nil {
 			lastErr = fmt.Errorf("failed to create download request: %w", err)
 			continue
@@ -358,7 +358,7 @@ func (u *Updater) performUpdateWithExecPath(ctx context.Context, execPath string
 		}
 
 		resp = response
-		u.logger.Debug().Str("url", url).Msg("Downloaded agent binary")
+		u.logger.Debug().Str("url", candidateURL).Msg("Downloaded agent binary")
 		break
 	}
 
@@ -504,7 +504,7 @@ func GetUpdatedFromVersion() string {
 
 // determineArch returns the architecture string for download URLs (e.g., "linux-amd64", "darwin-arm64").
 func determineArch() string {
-	os := runtimeGOOS
+	goos := runtimeGOOS
 	arch := runtimeGOARCH
 
 	// Normalize architecture
@@ -516,9 +516,9 @@ func determineArch() string {
 	}
 
 	// For known OS/arch combinations, return directly
-	switch os {
+	switch goos {
 	case "linux", "darwin", "windows":
-		return fmt.Sprintf("%s-%s", os, arch)
+		return fmt.Sprintf("%s-%s", goos, arch)
 	}
 
 	// Fall back to uname for edge cases on unknown OS

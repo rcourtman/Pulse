@@ -115,7 +115,7 @@ func (h *TrueNASHandlers) HandleDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id, ok := trueNASConnectionIDFromPath(r.URL.Path)
+	connectionID, ok := trueNASConnectionIDFromPath(r.URL.Path)
 	if !ok {
 		writeErrorResponse(w, http.StatusBadRequest, "missing_connection_id", "Connection ID is required", nil)
 		return
@@ -134,7 +134,7 @@ func (h *TrueNASHandlers) HandleDelete(w http.ResponseWriter, r *http.Request) {
 
 	index := -1
 	for i := range instances {
-		if strings.TrimSpace(instances[i].ID) == id {
+		if strings.TrimSpace(instances[i].ID) == connectionID {
 			index = i
 			break
 		}
@@ -152,7 +152,7 @@ func (h *TrueNASHandlers) HandleDelete(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"success": true,
-		"id":      id,
+		"id":      connectionID,
 	})
 }
 
@@ -275,14 +275,14 @@ func trueNASConnectionIDFromPath(path string) (string, bool) {
 		return "", false
 	}
 
-	id, err := url.PathUnescape(raw)
+	connectionID, err := url.PathUnescape(raw)
 	if err != nil {
 		return "", false
 	}
-	id = strings.TrimSpace(id)
-	if id == "" || strings.Contains(id, "/") {
+	connectionID = strings.TrimSpace(connectionID)
+	if connectionID == "" || strings.Contains(connectionID, "/") {
 		return "", false
 	}
 
-	return id, true
+	return connectionID, true
 }

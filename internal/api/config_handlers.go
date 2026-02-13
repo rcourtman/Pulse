@@ -169,8 +169,8 @@ func (h *ConfigHandlers) SetConfig(cfg *config.Config) {
 func (h *ConfigHandlers) getContextState(ctx context.Context) (*config.Config, *config.ConfigPersistence, *monitoring.Monitor) {
 	orgID := "default"
 	if ctx != nil {
-		if id := GetOrgID(ctx); id != "" {
-			orgID = id
+		if requestOrgID := GetOrgID(ctx); requestOrgID != "" {
+			orgID = requestOrgID
 		}
 	}
 

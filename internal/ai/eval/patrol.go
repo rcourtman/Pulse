@@ -448,9 +448,9 @@ func (r *Runner) getPatrolStatus(ctx context.Context) (bool, bool, error) {
 
 // triggerPatrolRun triggers POST /api/ai/patrol/run.
 func (r *Runner) triggerPatrolRun() error {
-	url := r.config.BaseURL + "/api/ai/patrol/run"
+	patrolRunURL := r.config.BaseURL + "/api/ai/patrol/run"
 
-	req, err := http.NewRequest("POST", url, nil)
+	req, err := http.NewRequest("POST", patrolRunURL, nil)
 	if err != nil {
 		return err
 	}

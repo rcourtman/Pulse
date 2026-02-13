@@ -3632,11 +3632,11 @@ func dockerContainerDisplayName(container models.DockerContainer) string {
 		name = strings.TrimLeft(name, "/")
 	}
 	if name == "" {
-		id := strings.TrimSpace(container.ID)
-		if len(id) > 12 {
-			id = id[:12]
+		containerID := strings.TrimSpace(container.ID)
+		if len(containerID) > 12 {
+			containerID = containerID[:12]
 		}
-		return id
+		return containerID
 	}
 	return name
 }
@@ -3682,8 +3682,8 @@ func dockerUpdateTrackingHostKey(host models.DockerHost) string {
 }
 
 func dockerUpdateTrackingContainerKey(container models.DockerContainer) string {
-	if id := normalizeDockerUpdateTrackingPart(container.ID); id != "" {
-		return "id:" + id
+	if containerID := normalizeDockerUpdateTrackingPart(container.ID); containerID != "" {
+		return "id:" + containerID
 	}
 
 	name := normalizeDockerUpdateTrackingPart(container.Name)
@@ -3713,20 +3713,20 @@ func dockerServiceDisplayName(service models.DockerService) string {
 	if name != "" {
 		return name
 	}
-	id := strings.TrimSpace(service.ID)
-	if len(id) > 12 {
-		id = id[:12]
+	serviceID := strings.TrimSpace(service.ID)
+	if len(serviceID) > 12 {
+		serviceID = serviceID[:12]
 	}
-	if id == "" {
+	if serviceID == "" {
 		return "service"
 	}
-	return id
+	return serviceID
 }
 
 func dockerServiceResourceID(hostID, serviceID, serviceName string) string {
 	hostID = strings.TrimSpace(hostID)
-	id := strings.TrimSpace(serviceID)
-	if id == "" {
+	normalizedServiceID := strings.TrimSpace(serviceID)
+	if normalizedServiceID == "" {
 		name := strings.TrimSpace(serviceName)
 		if name == "" {
 			name = "service"
@@ -3744,18 +3744,18 @@ func dockerServiceResourceID(hostID, serviceID, serviceName string) string {
 				builder.WriteRune('-')
 			}
 		}
-		id = strings.Trim(builder.String(), "-_")
-		if id == "" {
-			id = "service"
+		normalizedServiceID = strings.Trim(builder.String(), "-_")
+		if normalizedServiceID == "" {
+			normalizedServiceID = "service"
 		}
-		if len(id) > 32 {
-			id = id[:32]
+		if len(normalizedServiceID) > 32 {
+			normalizedServiceID = normalizedServiceID[:32]
 		}
 	}
 	if hostID == "" {
-		return fmt.Sprintf("docker-service:%s", id)
+		return fmt.Sprintf("docker-service:%s", normalizedServiceID)
 	}
-	return fmt.Sprintf("docker:%s/service/%s", hostID, id)
+	return fmt.Sprintf("docker:%s/service/%s", hostID, normalizedServiceID)
 }
 
 func matchesDockerIgnoredPrefix(name, id string, prefixes []string) bool {

@@ -220,9 +220,9 @@ func (a *Agent) pruneStaleCPUSamples(active map[string]struct{}) {
 		return
 	}
 
-	for id := range a.prevContainerCPU {
-		if _, ok := active[id]; !ok {
-			delete(a.prevContainerCPU, id)
+	for containerID := range a.prevContainerCPU {
+		if _, ok := active[containerID]; !ok {
+			delete(a.prevContainerCPU, containerID)
 			// Reset stats failure counter when containers are removed,
 			// though it's global per agent so not strictly necessary but good hygiene
 		}
@@ -592,7 +592,7 @@ func extractPodmanMetadata(labels map[string]string) *agentsdocker.PodmanContain
 	return meta
 }
 
-func (a *Agent) calculateContainerCPUPercent(id string, stats containertypes.StatsResponse) float64 {
+func (a *Agent) calculateContainerCPUPercent(containerID string, stats containertypes.StatsResponse) float64 {
 	a.cpuMu.Lock()
 	defer a.cpuMu.Unlock()
 
@@ -606,9 +606,9 @@ func (a *Agent) calculateContainerCPUPercent(id string, stats containertypes.Sta
 	// Try to use PreCPUStats if available
 	percent := calculateCPUPercent(stats, a.cpuCount)
 	if percent > 0 {
-		a.prevContainerCPU[id] = current
+		a.prevContainerCPU[containerID] = current
 		a.logger.Debug().
-			Str("container_id", id[:12]).
+			Str("container_id", containerID[:12]).
 			Float64("cpu_percent", percent).
 			Msg("CPU calculated from PreCPUStats")
 		return percent
@@ -621,13 +621,13 @@ func (a *Agent) calculateContainerCPUPercent(id string, stats containertypes.Sta
 			Str("runtime", string(a.runtime)).
 			Msg("PreCPUStats consistently unavailable from Docker API - using manual CPU tracking (this is normal for one-shot stats)")
 	}
-	prev, ok := a.prevContainerCPU[id]
+	prev, ok := a.prevContainerCPU[containerID]
 	if !ok {
 		// First time seeing this container - store current sample and return 0
 		// On next collection cycle we'll have a previous sample to compare against
-		a.prevContainerCPU[id] = current
+		a.prevContainerCPU[containerID] = current
 		a.logger.Debug().
-			Str("container_id", id[:12]).
+			Str("container_id", containerID[:12]).
 			Uint64("total_usage", current.totalUsage).
 			Uint64("system_usage", current.systemUsage).
 			Msg("First CPU sample collected, no previous data for delta calculation")
@@ -635,7 +635,7 @@ func (a *Agent) calculateContainerCPUPercent(id string, stats containertypes.Sta
 	}
 
 	// We have a previous sample - update it after calculation
-	a.prevContainerCPU[id] = current
+	a.prevContainerCPU[containerID] = current
 
 	var totalDelta float64
 	if current.totalUsage >= prev.totalUsage {
@@ -670,7 +670,7 @@ func (a *Agent) calculateContainerCPUPercent(id string, stats containertypes.Sta
 	if systemDelta > 0 {
 		cpuPercent := safeFloat((totalDelta / systemDelta) * float64(onlineCPUs) * 100.0)
 		a.logger.Debug().
-			Str("container_id", id[:12]).
+			Str("container_id", containerID[:12]).
 			Float64("cpu_percent", cpuPercent).
 			Float64("total_delta", totalDelta).
 			Float64("system_delta", systemDelta).
@@ -688,7 +688,7 @@ func (a *Agent) calculateContainerCPUPercent(id string, stats containertypes.Sta
 				cpuPercent := (totalDelta / denominator) * 100.0
 				result := safeFloat(cpuPercent)
 				a.logger.Debug().
-					Str("container_id", id[:12]).
+					Str("container_id", containerID[:12]).
 					Float64("cpu_percent", result).
 					Float64("total_delta", totalDelta).
 					Float64("elapsed_seconds", elapsed).
@@ -700,7 +700,7 @@ func (a *Agent) calculateContainerCPUPercent(id string, stats containertypes.Sta
 	}
 
 	a.logger.Debug().
-		Str("container_id", id[:12]).
+		Str("container_id", containerID[:12]).
 		Float64("total_delta", totalDelta).
 		Float64("system_delta", systemDelta).
 		Bool("prev_read_zero", prev.read.IsZero()).

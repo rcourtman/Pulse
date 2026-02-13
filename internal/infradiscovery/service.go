@@ -273,10 +273,10 @@ func (s *Service) RunDiscovery(ctx context.Context) []DiscoveredApp {
 }
 
 // analyzeContainer uses AI to analyze a single container.
-func (s *Service) analyzeContainer(ctx context.Context, analyzer AIAnalyzer, c models.DockerContainer, host models.DockerHost) *DiscoveredApp {
+func (s *Service) analyzeContainer(ctx context.Context, analyzer AIAnalyzer, container models.DockerContainer, host models.DockerHost) *DiscoveredApp {
 	// Check cache first
 	s.cacheMu.RLock()
-	cached, found := s.analysisCache[c.Image]
+	cached, found := s.analysisCache[container.Image]
 	cacheValid := time.Since(s.lastCacheUpdate) < s.cacheExpiry
 	s.cacheMu.RUnlock()
 
@@ -285,12 +285,12 @@ func (s *Service) analyzeContainer(ctx context.Context, analyzer AIAnalyzer, c m
 	if found && cacheValid {
 		result = cached
 		log.Debug().
-			Str("container", c.Name).
-			Str("image", c.Image).
+			Str("container", container.Name).
+			Str("image", container.Image).
 			Msg("Using cached analysis result")
 	} else {
 		// Build container info for AI analysis
-		info := s.buildContainerInfo(c)
+		info := s.buildContainerInfo(container)
 
 		// Create analysis prompt
 		prompt := s.buildAnalysisPrompt(info)
@@ -300,8 +300,8 @@ func (s *Service) analyzeContainer(ctx context.Context, analyzer AIAnalyzer, c m
 		if err != nil {
 			log.Warn().
 				Err(err).
-				Str("container", c.Name).
-				Str("image", c.Image).
+				Str("container", container.Name).
+				Str("image", container.Image).
 				Msg("AI analysis failed for container")
 			return nil
 		}
@@ -310,7 +310,7 @@ func (s *Service) analyzeContainer(ctx context.Context, analyzer AIAnalyzer, c m
 		result = s.parseAIResponse(response)
 		if result == nil {
 			log.Warn().
-				Str("container", c.Name).
+				Str("container", container.Name).
 				Str("response", response).
 				Msg("Failed to parse AI response")
 			return nil
@@ -318,13 +318,13 @@ func (s *Service) analyzeContainer(ctx context.Context, analyzer AIAnalyzer, c m
 
 		// Cache the result
 		s.cacheMu.Lock()
-		s.analysisCache[c.Image] = result
+		s.analysisCache[container.Image] = result
 		s.lastCacheUpdate = time.Now()
 		s.cacheMu.Unlock()
 
 		log.Debug().
-			Str("container", c.Name).
-			Str("image", c.Image).
+			Str("container", container.Name).
+			Str("image", container.Image).
 			Str("service_type", result.ServiceType).
 			Float64("confidence", result.Confidence).
 			Msg("AI analyzed container")
@@ -339,30 +339,30 @@ func (s *Service) analyzeContainer(ctx context.Context, analyzer AIAnalyzer, c m
 	cliAccess := result.CLICommand
 	if cliAccess != "" {
 		// Replace placeholder with actual container name
-		cliAccess = strings.ReplaceAll(cliAccess, "{container}", c.Name)
-		cliAccess = strings.ReplaceAll(cliAccess, "${container}", c.Name)
+		cliAccess = strings.ReplaceAll(cliAccess, "{container}", container.Name)
+		cliAccess = strings.ReplaceAll(cliAccess, "${container}", container.Name)
 	}
 
 	// Extract ports
 	var ports []int
-	for _, p := range c.Ports {
-		if p.PublicPort > 0 {
-			ports = append(ports, int(p.PublicPort))
-		} else if p.PrivatePort > 0 {
-			ports = append(ports, int(p.PrivatePort))
+	for _, port := range container.Ports {
+		if port.PublicPort > 0 {
+			ports = append(ports, int(port.PublicPort))
+		} else if port.PrivatePort > 0 {
+			ports = append(ports, int(port.PrivatePort))
 		}
 	}
 
 	return &DiscoveredApp{
-		ID:            fmt.Sprintf("docker:%s:%s", host.Hostname, c.Name),
+		ID:            fmt.Sprintf("docker:%s:%s", host.Hostname, container.Name),
 		Type:          result.ServiceType,
 		Name:          result.ServiceName,
 		Category:      result.Category,
 		RunsIn:        "docker",
 		HostID:        host.AgentID,
 		Hostname:      host.Hostname,
-		ContainerID:   c.ID,
-		ContainerName: c.Name,
+		ContainerID:   container.ID,
+		ContainerName: container.Name,
 		Ports:         ports,
 		CLIAccess:     cliAccess,
 		Confidence:    result.Confidence,
@@ -372,35 +372,35 @@ func (s *Service) analyzeContainer(ctx context.Context, analyzer AIAnalyzer, c m
 }
 
 // buildContainerInfo extracts relevant information from a container for AI analysis.
-func (s *Service) buildContainerInfo(c models.DockerContainer) ContainerInfo {
+func (s *Service) buildContainerInfo(container models.DockerContainer) ContainerInfo {
 	info := ContainerInfo{
-		Name:   c.Name,
-		Image:  c.Image,
-		Status: c.Status,
+		Name:   container.Name,
+		Image:  container.Image,
+		Status: container.Status,
 	}
 
 	// Extract ports
-	for _, p := range c.Ports {
+	for _, port := range container.Ports {
 		info.Ports = append(info.Ports, PortInfo{
-			HostPort:      int(p.PublicPort),
-			ContainerPort: int(p.PrivatePort),
-			Protocol:      p.Protocol,
+			HostPort:      int(port.PublicPort),
+			ContainerPort: int(port.PrivatePort),
+			Protocol:      port.Protocol,
 		})
 	}
 
 	// Extract labels
-	if len(c.Labels) > 0 {
-		info.Labels = c.Labels
+	if len(container.Labels) > 0 {
+		info.Labels = container.Labels
 	}
 
 	// Extract mount destinations
-	for _, m := range c.Mounts {
-		info.Mounts = append(info.Mounts, m.Destination)
+	for _, mount := range container.Mounts {
+		info.Mounts = append(info.Mounts, mount.Destination)
 	}
 
 	// Extract network names
-	for _, n := range c.Networks {
-		info.Networks = append(info.Networks, n.Name)
+	for _, network := range container.Networks {
+		info.Networks = append(info.Networks, network.Name)
 	}
 
 	return info

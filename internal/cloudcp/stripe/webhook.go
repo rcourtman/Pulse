@@ -209,8 +209,8 @@ type Subscription struct {
 // FirstPriceID returns the price ID from the first subscription item.
 func (s *Subscription) FirstPriceID() string {
 	for _, item := range s.Items.Data {
-		if id := strings.TrimSpace(item.Price.ID); id != "" {
-			return id
+		if priceID := strings.TrimSpace(item.Price.ID); priceID != "" {
+			return priceID
 		}
 	}
 	return ""

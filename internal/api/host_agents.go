@@ -110,10 +110,10 @@ func (h *HostAgentHandlers) HandleLookup(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	id := strings.TrimSpace(r.URL.Query().Get("id"))
+	lookupID := strings.TrimSpace(r.URL.Query().Get("id"))
 	hostname := strings.TrimSpace(r.URL.Query().Get("hostname"))
 
-	if id == "" && hostname == "" {
+	if lookupID == "" && hostname == "" {
 		writeErrorResponse(w, http.StatusBadRequest, "missing_lookup_param", "Provide either id or hostname to look up a host", nil)
 		return
 	}
@@ -127,9 +127,9 @@ func (h *HostAgentHandlers) HandleLookup(w http.ResponseWriter, r *http.Request)
 		found bool
 	)
 
-	if id != "" {
+	if lookupID != "" {
 		for _, candidate := range state.Hosts {
-			if candidate.ID == id {
+			if candidate.ID == lookupID {
 				host = candidate
 				found = true
 				break

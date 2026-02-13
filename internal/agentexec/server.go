@@ -29,10 +29,10 @@ var (
 
 // Server manages WebSocket connections from agents
 type Server struct {
-	mu            sync.RWMutex
-	agents        map[string]*agentConn                // agentID -> connection
-	pendingReqs   map[string]chan CommandResultPayload // requestID -> response channel
-	validateToken func(token string, agentID string) bool
+	mu              sync.RWMutex
+	agents          map[string]*agentConn                // agentID -> connection
+	pendingRequests map[string]chan CommandResultPayload // requestID -> response channel
+	validateToken   func(token string, agentID string) bool
 }
 
 type agentConn struct {
@@ -45,9 +45,9 @@ type agentConn struct {
 // NewServer creates a new agent execution server
 func NewServer(validateToken func(token string, agentID string) bool) *Server {
 	return &Server{
-		agents:        make(map[string]*agentConn),
-		pendingReqs:   make(map[string]chan CommandResultPayload),
-		validateToken: validateToken,
+		agents:          make(map[string]*agentConn),
+		pendingRequests: make(map[string]chan CommandResultPayload),
+		validateToken:   validateToken,
 	}
 }
 
@@ -254,7 +254,7 @@ func (s *Server) readLoop(ac *agentConn) {
 			}
 
 			s.mu.RLock()
-			ch, ok := s.pendingReqs[result.RequestID]
+			ch, ok := s.pendingRequests[result.RequestID]
 			s.mu.RUnlock()
 
 			if ok {
@@ -337,12 +337,12 @@ func (s *Server) sendRequestAndWait(ctx context.Context, agentID string, msgType
 	// Create response channel
 	respCh := make(chan CommandResultPayload, 1)
 	s.mu.Lock()
-	s.pendingReqs[requestID] = respCh
+	s.pendingRequests[requestID] = respCh
 	s.mu.Unlock()
 
 	defer func() {
 		s.mu.Lock()
-		delete(s.pendingReqs, requestID)
+		delete(s.pendingRequests, requestID)
 		s.mu.Unlock()
 	}()
 

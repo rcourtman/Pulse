@@ -879,8 +879,8 @@ func extractAndStoreAuthContext(cfg *config.Config, mtm *monitoring.MultiTenantM
 		if mtm != nil {
 			// Check for Tenant ID in header or cookie
 			orgID := "default"
-			if id := r.Header.Get("X-Pulse-Org-ID"); id != "" {
-				orgID = id
+			if headerOrgID := r.Header.Get("X-Pulse-Org-ID"); headerOrgID != "" {
+				orgID = headerOrgID
 			} else if cookie, err := r.Cookie("pulse_org_id"); err == nil && cookie.Value != "" {
 				orgID = cookie.Value
 			}

@@ -315,7 +315,7 @@ func (h *DiscoveryHandlers) HandleUpdateNotes(w http.ResponseWriter, r *http.Req
 	resourceID := parts[2]
 
 	// Build the full ID
-	id := servicediscovery.MakeResourceID(resourceType, hostID, resourceID)
+	discoveryID := servicediscovery.MakeResourceID(resourceType, hostID, resourceID)
 
 	// Parse request body
 	var req servicediscovery.UpdateNotesRequest
@@ -331,14 +331,14 @@ func (h *DiscoveryHandlers) HandleUpdateNotes(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if err := h.service.UpdateNotes(id, req.UserNotes, req.UserSecrets); err != nil {
-		log.Error().Err(err).Str("id", id).Msg("Failed to update notes")
+	if err := h.service.UpdateNotes(discoveryID, req.UserNotes, req.UserSecrets); err != nil {
+		log.Error().Err(err).Str("id", discoveryID).Msg("Failed to update notes")
 		writeDiscoveryError(w, http.StatusInternalServerError, "Failed to update notes: "+err.Error())
 		return
 	}
 
 	// Return updated discovery
-	discovery, err := h.service.GetDiscovery(id)
+	discovery, err := h.service.GetDiscovery(discoveryID)
 	if err != nil {
 		writeDiscoveryError(w, http.StatusInternalServerError, "Notes updated but failed to fetch result")
 		return
@@ -371,15 +371,15 @@ func (h *DiscoveryHandlers) HandleDeleteDiscovery(w http.ResponseWriter, r *http
 	hostID := parts[1]
 	resourceID := parts[2]
 
-	id := servicediscovery.MakeResourceID(resourceType, hostID, resourceID)
+	discoveryID := servicediscovery.MakeResourceID(resourceType, hostID, resourceID)
 
-	if err := h.service.DeleteDiscovery(id); err != nil {
-		log.Error().Err(err).Str("id", id).Msg("Failed to delete discovery")
+	if err := h.service.DeleteDiscovery(discoveryID); err != nil {
+		log.Error().Err(err).Str("id", discoveryID).Msg("Failed to delete discovery")
 		writeDiscoveryError(w, http.StatusInternalServerError, "Failed to delete discovery")
 		return
 	}
 
-	writeDiscoveryJSON(w, map[string]any{"success": true, "id": id})
+	writeDiscoveryJSON(w, map[string]any{"success": true, "id": discoveryID})
 }
 
 // HandleGetProgress handles GET /api/discovery/{type}/{host}/{id}/progress
@@ -402,16 +402,16 @@ func (h *DiscoveryHandlers) HandleGetProgress(w http.ResponseWriter, r *http.Req
 	hostID := parts[1]
 	resourceID := parts[2]
 
-	id := servicediscovery.MakeResourceID(resourceType, hostID, resourceID)
+	discoveryID := servicediscovery.MakeResourceID(resourceType, hostID, resourceID)
 
-	progress := h.service.GetProgress(id)
+	progress := h.service.GetProgress(discoveryID)
 	if progress == nil {
 		// Not currently scanning - check if we have a discovery
-		discovery, err := h.service.GetDiscovery(id)
+		discovery, err := h.service.GetDiscovery(discoveryID)
 		if err == nil && discovery != nil {
 			// Return completed status with all fields for frontend compatibility
 			writeDiscoveryJSON(w, map[string]any{
-				"resource_id":     id,
+				"resource_id":     discoveryID,
 				"status":          "completed",
 				"current_step":    "",
 				"total_steps":     0,
@@ -424,7 +424,7 @@ func (h *DiscoveryHandlers) HandleGetProgress(w http.ResponseWriter, r *http.Req
 
 		// Return not_started status with all fields for frontend compatibility
 		writeDiscoveryJSON(w, map[string]any{
-			"resource_id":     id,
+			"resource_id":     discoveryID,
 			"status":          "not_started",
 			"current_step":    "",
 			"total_steps":     0,

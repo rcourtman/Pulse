@@ -82,10 +82,10 @@ func GenerateAlertHistory(nodes []models.Node, vms []models.VM, containers []mod
 			switch resourceType {
 			case 0: // Node alert
 				if len(nodes) > 0 {
-					n := nodes[rand.Intn(len(nodes))]
-					resourceName = n.Name
-					resourceID = n.ID
-					node = n.Name
+					selectedNode := nodes[rand.Intn(len(nodes))]
+					resourceName = selectedNode.Name
+					resourceID = selectedNode.ID
+					node = selectedNode.Name
 				}
 			case 1: // VM alert
 				if len(vms) > 0 {
@@ -96,10 +96,10 @@ func GenerateAlertHistory(nodes []models.Node, vms []models.VM, containers []mod
 				}
 			case 2: // Container alert
 				if len(containers) > 0 {
-					ct := containers[rand.Intn(len(containers))]
-					resourceName = ct.Name
-					resourceID = ct.ID
-					node = ct.Node
+					selectedContainer := containers[rand.Intn(len(containers))]
+					resourceName = selectedContainer.Name
+					resourceID = selectedContainer.ID
+					node = selectedContainer.Node
 				}
 			}
 
@@ -153,10 +153,10 @@ func GenerateAlertHistory(nodes []models.Node, vms []models.VM, containers []mod
 
 		var resourceName, resourceID, node string
 		if len(nodes) > 0 {
-			n := nodes[rand.Intn(len(nodes))]
-			resourceName = n.Name
-			resourceID = n.ID
-			node = n.Name
+			selectedNode := nodes[rand.Intn(len(nodes))]
+			resourceName = selectedNode.Name
+			resourceID = selectedNode.ID
+			node = selectedNode.Name
 		}
 
 		startTime := now.Add(-time.Duration(rand.Intn(120)) * time.Minute)

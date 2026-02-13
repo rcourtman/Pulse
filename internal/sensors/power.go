@@ -45,7 +45,7 @@ const sampleInterval = 100 * time.Millisecond
 // Returns nil if no power data is available.
 func CollectPower(ctx context.Context) (*PowerData, error) {
 	// Try Intel RAPL first (most common on Intel)
-	if data, err := collectRALP(ctx); err == nil && data.Available {
+	if data, err := collectRAPL(ctx); err == nil && data.Available {
 		return data, nil
 	}
 
@@ -59,10 +59,10 @@ func CollectPower(ctx context.Context) (*PowerData, error) {
 	return nil, fmt.Errorf("no power monitoring available")
 }
 
-// collectRALP reads power data from Intel RAPL sysfs interface.
+// collectRAPL reads power data from Intel RAPL sysfs interface.
 // RAPL provides energy counters in microjoules that we sample twice
 // to calculate instantaneous power in watts.
-func collectRALP(ctx context.Context) (*PowerData, error) {
+func collectRAPL(ctx context.Context) (*PowerData, error) {
 	// Check if RAPL is available
 	if _, err := os.Stat(raplBasePath); os.IsNotExist(err) {
 		return nil, fmt.Errorf("RAPL not available: %w", err)

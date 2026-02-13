@@ -472,17 +472,17 @@ func (p *ProxmoxSetup) getIPThatReachesPulse() string {
 	}
 
 	// Parse the Pulse URL to get host:port
-	u, err := url.Parse(p.pulseURL)
+	pulseServerURL, err := url.Parse(p.pulseURL)
 	if err != nil {
 		return ""
 	}
 
-	host := u.Host
+	host := pulseServerURL.Host
 	if !strings.Contains(host, ":") {
 		// If port is missing, try to infer it from scheme
-		if u.Scheme == "https" {
+		if pulseServerURL.Scheme == "https" {
 			host += ":443"
-		} else if u.Scheme == "http" {
+		} else if pulseServerURL.Scheme == "http" {
 			host += ":80"
 		} else {
 			// Pulse default if scheme is missing or weird

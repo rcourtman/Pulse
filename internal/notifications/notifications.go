@@ -568,31 +568,31 @@ func (n *NotificationManager) AddWebhook(webhook WebhookConfig) {
 }
 
 // UpdateWebhook updates an existing webhook
-func (n *NotificationManager) UpdateWebhook(id string, webhook WebhookConfig) error {
+func (n *NotificationManager) UpdateWebhook(webhookID string, webhook WebhookConfig) error {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
 	for i, w := range n.webhooks {
-		if w.ID == id {
+		if w.ID == webhookID {
 			n.webhooks[i] = webhook
 			return nil
 		}
 	}
-	return fmt.Errorf("webhook not found: %s", id)
+	return fmt.Errorf("webhook not found: %s", webhookID)
 }
 
 // DeleteWebhook removes a webhook
-func (n *NotificationManager) DeleteWebhook(id string) error {
+func (n *NotificationManager) DeleteWebhook(webhookID string) error {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
 	for i, w := range n.webhooks {
-		if w.ID == id {
+		if w.ID == webhookID {
 			n.webhooks = append(n.webhooks[:i], n.webhooks[i+1:]...)
 			return nil
 		}
 	}
-	return fmt.Errorf("webhook not found: %s", id)
+	return fmt.Errorf("webhook not found: %s", webhookID)
 }
 
 // GetWebhooks returns all webhook configurations

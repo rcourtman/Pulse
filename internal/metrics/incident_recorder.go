@@ -282,8 +282,8 @@ func (r *IncidentRecorder) recordSample() {
 
 	// Clean up buffers for resources no longer monitored
 	monitoredSet := make(map[string]bool, len(monitoredResources))
-	for _, id := range monitoredResources {
-		monitoredSet[id] = true
+	for _, resourceID := range monitoredResources {
+		monitoredSet[resourceID] = true
 	}
 	for resourceID := range r.preIncidentBuffer {
 		if !monitoredSet[resourceID] {
@@ -588,28 +588,28 @@ func copyWindow(w *IncidentWindow) *IncidentWindow {
 	if w == nil {
 		return nil
 	}
-	copy := *w
+	windowCopy := *w
 	if w.EndTime != nil {
 		t := *w.EndTime
-		copy.EndTime = &t
+		windowCopy.EndTime = &t
 	}
 	if w.DataPoints != nil {
-		copy.DataPoints = make([]IncidentDataPoint, len(w.DataPoints))
+		windowCopy.DataPoints = make([]IncidentDataPoint, len(w.DataPoints))
 		for i, dp := range w.DataPoints {
-			copy.DataPoints[i] = dp
+			windowCopy.DataPoints[i] = dp
 			if dp.Metrics != nil {
-				copy.DataPoints[i].Metrics = make(map[string]float64)
+				windowCopy.DataPoints[i].Metrics = make(map[string]float64)
 				for k, v := range dp.Metrics {
-					copy.DataPoints[i].Metrics[k] = v
+					windowCopy.DataPoints[i].Metrics[k] = v
 				}
 			}
 		}
 	}
 	if w.Summary != nil {
 		s := *w.Summary
-		copy.Summary = &s
+		windowCopy.Summary = &s
 	}
-	return &copy
+	return &windowCopy
 }
 
 var windowCounter int64

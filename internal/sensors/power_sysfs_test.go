@@ -73,9 +73,9 @@ func TestCollectRALP_MockSysfs(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	data, err := collectRALP(ctx)
+	data, err := collectRAPL(ctx)
 	if err != nil {
-		t.Fatalf("collectRALP error: %v", err)
+		t.Fatalf("collectRAPL error: %v", err)
 	}
 	select {
 	case err := <-errCh:

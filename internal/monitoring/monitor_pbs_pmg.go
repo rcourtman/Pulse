@@ -621,13 +621,13 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 		for _, b := range backups {
 			timestamp := b.Timestamp.Int64()
 			backupTime := time.Unix(timestamp, 0)
-			id := fmt.Sprintf("pmg-%s-%s-%d", instanceName, nodeName, timestamp)
-			if _, exists := seenBackupIDs[id]; exists {
+			backupID := fmt.Sprintf("pmg-%s-%s-%d", instanceName, nodeName, timestamp)
+			if _, exists := seenBackupIDs[backupID]; exists {
 				continue
 			}
-			seenBackupIDs[id] = struct{}{}
+			seenBackupIDs[backupID] = struct{}{}
 			pmgBackups = append(pmgBackups, models.PMGBackup{
-				ID:         id,
+				ID:         backupID,
 				Instance:   instanceName,
 				Node:       nodeName,
 				Filename:   b.Filename,

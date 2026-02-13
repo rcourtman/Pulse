@@ -112,15 +112,15 @@ func IsLevelEnabled(level zerolog.Level) bool {
 }
 
 // WithRequestID stores (or generates) a request ID on the context.
-func WithRequestID(ctx context.Context, id string) (context.Context, string) {
+func WithRequestID(ctx context.Context, requestID string) (context.Context, string) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	id = strings.TrimSpace(id)
-	if id == "" {
-		id = uuid.NewString()
+	requestID = strings.TrimSpace(requestID)
+	if requestID == "" {
+		requestID = uuid.NewString()
 	}
-	return context.WithValue(ctx, requestIDKey, id), id
+	return context.WithValue(ctx, requestIDKey, requestID), requestID
 }
 
 func parseLevel(level string) zerolog.Level {

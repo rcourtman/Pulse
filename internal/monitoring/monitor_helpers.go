@@ -99,7 +99,6 @@ func parseIntEnv(key string, defaultVal int) int {
 	return parsed
 }
 
-
 func cloneStringFloatMap(src map[string]float64) map[string]float64 {
 	if len(src) == 0 {
 		return nil
@@ -430,13 +429,13 @@ func convertAgentCephToModels(ceph *agentshost.CephCluster) *models.HostCephClus
 // used by the State.CephClusters list.
 func convertAgentCephToGlobalCluster(ceph *agentshost.CephCluster, hostname, hostID string, timestamp time.Time) models.CephCluster {
 	// Use FSID as the primary ID since it's unique per Ceph cluster
-	id := ceph.FSID
-	if id == "" {
-		id = "agent-ceph-" + hostID
+	clusterID := ceph.FSID
+	if clusterID == "" {
+		clusterID = "agent-ceph-" + hostID
 	}
 
 	cluster := models.CephCluster{
-		ID:             id,
+		ID:             clusterID,
 		Instance:       "agent:" + hostname,
 		Name:           hostname + " Ceph",
 		FSID:           ceph.FSID,

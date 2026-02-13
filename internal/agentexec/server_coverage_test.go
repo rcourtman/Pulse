@@ -258,7 +258,7 @@ func TestReadLoopCommandResultBranches(t *testing.T) {
 
 	s.mu.Lock()
 	s.agents["a1"] = ac
-	s.pendingReqs["req-full"] = make(chan CommandResultPayload)
+	s.pendingRequests["req-full"] = make(chan CommandResultPayload)
 	s.mu.Unlock()
 
 	done := make(chan struct{})
@@ -281,7 +281,7 @@ func TestReadLoopCommandResultBranches(t *testing.T) {
 	}
 
 	s.mu.Lock()
-	delete(s.pendingReqs, "req-full")
+	delete(s.pendingRequests, "req-full")
 	s.mu.Unlock()
 }
 
@@ -421,7 +421,7 @@ func TestExecuteCommandDefaultTimeout(t *testing.T) {
 	go func() {
 		for {
 			s.mu.RLock()
-			ch := s.pendingReqs["r-default"]
+			ch := s.pendingRequests["r-default"]
 			s.mu.RUnlock()
 			if ch != nil {
 				ch <- CommandResultPayload{RequestID: "r-default", Success: true}

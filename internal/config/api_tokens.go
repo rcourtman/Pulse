@@ -146,8 +146,8 @@ func (r *APITokenRecord) CanAccessOrg(orgID string) bool {
 
 	// Check multi-org binding first (takes precedence)
 	if len(r.OrgIDs) > 0 {
-		for _, id := range r.OrgIDs {
-			if id == orgID {
+		for _, boundOrgID := range r.OrgIDs {
+			if boundOrgID == orgID {
 				return true
 			}
 		}
@@ -357,9 +357,9 @@ func (c *Config) UpsertAPIToken(record APITokenRecord) {
 }
 
 // RemoveAPIToken removes a token by ID and returns the removed record (if any).
-func (c *Config) RemoveAPIToken(id string) *APITokenRecord {
+func (c *Config) RemoveAPIToken(tokenID string) *APITokenRecord {
 	for idx, record := range c.APITokens {
-		if record.ID == id {
+		if record.ID == tokenID {
 			removed := record
 			c.APITokens = append(c.APITokens[:idx], c.APITokens[idx+1:]...)
 			return &removed

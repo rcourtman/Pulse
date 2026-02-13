@@ -46,10 +46,10 @@ func isRootVolumeForContainer(volid string, vmid int) bool {
 		normalized = normalized[:idx]
 	}
 
-	id := strconv.Itoa(vmid)
+	vmIDString := strconv.Itoa(vmid)
 	patterns := []string{
-		"subvol-" + id + "-disk-0",
-		"vm-" + id + "-disk-0",
+		"subvol-" + vmIDString + "-disk-0",
+		"vm-" + vmIDString + "-disk-0",
 	}
 
 	for _, pattern := range patterns {
@@ -68,8 +68,8 @@ func (m *Monitor) collectContainerRootUsage(ctx context.Context, client PVEClien
 	}
 
 	vmidSet := make(map[int]struct{}, len(vmIDs))
-	for _, id := range vmIDs {
-		vmidSet[id] = struct{}{}
+	for _, vmID := range vmIDs {
+		vmidSet[vmID] = struct{}{}
 	}
 
 	storages, err := client.GetStorage(ctx, node)

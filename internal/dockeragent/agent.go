@@ -1021,20 +1021,19 @@ func readMachineID() (string, error) {
 	for _, path := range machineIDPaths {
 		data, err := osReadFileFn(path)
 		if err == nil {
-			id := strings.TrimSpace(string(data))
+			machineID := strings.TrimSpace(string(data))
 			// Format as UUID if it's a 32-char hex string (like machine-id typically is),
 			// to match the behavior of the host agent.
-			if len(id) == 32 && utils.IsHexString(id) {
+			if len(machineID) == 32 && utils.IsHexString(machineID) {
 				return fmt.Sprintf("%s-%s-%s-%s-%s",
-					id[0:8], id[8:12], id[12:16],
-					id[16:20], id[20:32]), nil
+					machineID[0:8], machineID[8:12], machineID[12:16],
+					machineID[16:20], machineID[20:32]), nil
 			}
-			return id, nil
+			return machineID, nil
 		}
 	}
 	return "", errors.New("machine-id not found")
 }
-
 
 func readSystemUptime() int64 {
 	seconds, err := readProcUptime()

@@ -123,14 +123,14 @@ func (h *ResourceHandlers) HandleGetResource(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	id := strings.TrimPrefix(r.URL.Path, "/api/resources/")
-	id = strings.TrimSuffix(id, "/")
-	if id == "" {
+	resourceID := strings.TrimPrefix(r.URL.Path, "/api/resources/")
+	resourceID = strings.TrimSuffix(resourceID, "/")
+	if resourceID == "" {
 		http.Error(w, "Resource ID required", http.StatusBadRequest)
 		return
 	}
 
-	resource, ok := registry.Get(id)
+	resource, ok := registry.Get(resourceID)
 	if !ok {
 		http.Error(w, "Resource not found", http.StatusNotFound)
 		return

@@ -1545,21 +1545,21 @@ func (s *State) UpdateNodesForInstance(instanceName string, nodes []Node) {
 			candidates := make(map[string]struct{})
 			if nodeName != "" {
 				if ids, ok := hostAgentByHostname[nodeName]; ok {
-					for id := range ids {
-						candidates[id] = struct{}{}
+					for hostID := range ids {
+						candidates[hostID] = struct{}{}
 					}
 				}
 				if idx := strings.Index(nodeName, "."); idx > 0 {
 					if ids, ok := hostAgentByHostname[nodeName[:idx]]; ok {
-						for id := range ids {
-							candidates[id] = struct{}{}
+						for hostID := range ids {
+							candidates[hostID] = struct{}{}
 						}
 					}
 				}
 			}
 			if len(candidates) == 1 {
-				for id := range candidates {
-					node.LinkedHostAgentID = id
+				for hostID := range candidates {
+					node.LinkedHostAgentID = hostID
 				}
 			}
 		}

@@ -26,8 +26,8 @@ func (h *GuestMetadataHandler) getStore(ctx context.Context) *config.GuestMetada
 	// Default to "default" org if none specified (though middleware should always set it)
 	orgID := "default"
 	if ctx != nil {
-		if id := GetOrgID(ctx); id != "" {
-			orgID = id
+		if requestOrgID := GetOrgID(ctx); requestOrgID != "" {
+			orgID = requestOrgID
 		}
 	}
 	p, _ := h.mtPersistence.GetPersistence(orgID)

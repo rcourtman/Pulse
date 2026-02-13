@@ -178,14 +178,14 @@ func DownloadAndInstallHostAgentBinaries(version string, targetDir string) error
 		return fmt.Errorf("failed to ensure bin directory %s: %w", targetDir, err)
 	}
 
-	url := downloadURLForVersion(normalizedVersion)
+	bundleURL := downloadURLForVersion(normalizedVersion)
 	tempFile, err := createTempFn("", "pulse-host-agent-*.tar.gz")
 	if err != nil {
 		return fmt.Errorf("failed to create temporary archive file: %w", err)
 	}
 	defer removeFn(tempFile.Name())
 
-	resp, err := httpGetWithErrorContext(url)
+	resp, err := httpGetWithErrorContext(bundleURL)
 	if err != nil {
 		return err
 	}
@@ -200,7 +200,7 @@ func DownloadAndInstallHostAgentBinaries(version string, targetDir string) error
 	}
 
 	checksumURL := checksumURLForVersion(normalizedVersion)
-	if err := verifyHostAgentBundleChecksum(tempFile.Name(), url, checksumURL); err != nil {
+	if err := verifyHostAgentBundleChecksum(tempFile.Name(), bundleURL, checksumURL); err != nil {
 		return fmt.Errorf("agentbinaries.DownloadAndInstallHostAgentBinaries: %w", err)
 	}
 
