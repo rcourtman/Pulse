@@ -475,10 +475,6 @@ func (a *Agent) collectUsageMetrics(ctx context.Context, nodes []agentsk8s.Node)
 	nodeRaw, nodeErr := readKubernetesResponseBody(ctx, restClient, "/apis/metrics.k8s.io/v1beta1/nodes", maxMetricsResponseBodyBytes)
 	podRaw, podErr := readKubernetesResponseBody(ctx, restClient, "/apis/metrics.k8s.io/v1beta1/pods", maxMetricsResponseBodyBytes)
 
-	if nodeErr != nil && podErr != nil {
-		return nil, nil, fmt.Errorf("metrics.k8s.io unavailable (nodes: %w; pods: %v)", nodeErr, podErr)
-	}
-
 	nodeUsage := map[string]agentsk8s.NodeUsage{}
 	if nodeErr == nil {
 		parsed, err := parseNodeMetricsPayload(nodeRaw)

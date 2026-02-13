@@ -142,6 +142,78 @@ func TestHandleWebSocket_RegistrationPayloadUnmarshalError(t *testing.T) {
 	}
 }
 
+func TestHandleWebSocket_InvalidTokenRejectionSendFailure(t *testing.T) {
+	origWriteTextMessage := writeTextMessage
+	t.Cleanup(func() { writeTextMessage = origWriteTextMessage })
+	writeTextMessage = func(*websocket.Conn, []byte) error {
+		return errors.New("write failure")
+	}
+
+	s := NewServer(func(string, string) bool { return false })
+	ts := newWSServer(t, s)
+	defer ts.Close()
+
+	conn, _, err := websocket.DefaultDialer.Dial(wsURLForHTTP(ts.URL), nil)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	defer conn.Close()
+
+	wsWriteMessage(t, conn, Message{
+		Type:      MsgTypeAgentRegister,
+		Timestamp: time.Now(),
+		Payload: AgentRegisterPayload{
+			AgentID:  "a1",
+			Hostname: "host1",
+			Token:    "bad",
+		},
+	})
+
+	conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+	if _, _, err := conn.ReadMessage(); err == nil {
+		t.Fatalf("expected server to close connection after rejection send failure")
+	}
+	waitFor(t, 2*time.Second, func() bool { return !s.IsAgentConnected("a1") })
+}
+
+func TestHandleWebSocket_RegistrationAckSendFailure(t *testing.T) {
+	origWriteTextMessage := writeTextMessage
+	t.Cleanup(func() { writeTextMessage = origWriteTextMessage })
+	writeTextMessage = func(*websocket.Conn, []byte) error {
+		return errors.New("write failure")
+	}
+
+	s := NewServer(nil)
+	ts := newWSServer(t, s)
+	defer ts.Close()
+
+	conn, _, err := websocket.DefaultDialer.Dial(wsURLForHTTP(ts.URL), nil)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	defer conn.Close()
+
+	wsWriteMessage(t, conn, Message{
+		Type:      MsgTypeAgentRegister,
+		Timestamp: time.Now(),
+		Payload: AgentRegisterPayload{
+			AgentID:  "a1",
+			Hostname: "host1",
+			Token:    "any",
+		},
+	})
+
+	waitFor(t, 2*time.Second, func() bool { return s.IsAgentConnected("a1") })
+
+	conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+	if _, _, err := conn.ReadMessage(); err == nil {
+		t.Fatalf("expected no registration ack when send fails")
+	}
+
+	conn.Close()
+	waitFor(t, 2*time.Second, func() bool { return !s.IsAgentConnected("a1") })
+}
+
 func TestHandleWebSocket_PongHandler(t *testing.T) {
 	s := NewServer(nil)
 	ts := newWSServer(t, s)
@@ -266,7 +338,13 @@ func TestReadLoopCommandResultBranches(t *testing.T) {
 	s.mu.Unlock()
 }
 
-func TestReadLoopCommandResultWrongAgentIsolation(t *testing.T) {
+func TestReadLoopAgentPingPongSendFailure(t *testing.T) {
+	origWriteTextMessage := writeTextMessage
+	t.Cleanup(func() { writeTextMessage = origWriteTextMessage })
+	writeTextMessage = func(*websocket.Conn, []byte) error {
+		return errors.New("write failure")
+	}
+
 	s := NewServer(nil)
 	serverConn, clientConn, cleanup := newConnPair(t)
 	defer cleanup()
@@ -290,7 +368,10 @@ func TestReadLoopCommandResultWrongAgentIsolation(t *testing.T) {
 		close(done)
 	}()
 
-	_ = clientConn.WriteMessage(websocket.TextMessage, []byte(`{"type":"command_result","payload":{"request_id":"req-shared","success":true}}`))
+	wsWriteMessage(t, clientConn, Message{
+		Type:      MsgTypeAgentPing,
+		Timestamp: time.Now(),
+	})
 	clientConn.Close()
 
 	select {

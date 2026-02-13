@@ -15,25 +15,29 @@ func TestNewQueue(t *testing.T) {
 	}
 }
 
-func TestNewSanitizesNonPositiveCapacity(t *testing.T) {
-	tests := []int{0, -5}
+func TestNewPanicsOnNonPositiveCapacity(t *testing.T) {
+	testCases := []struct {
+		name     string
+		capacity int
+	}{
+		{name: "zero capacity", capacity: 0},
+		{name: "negative capacity", capacity: -1},
+	}
 
-	for _, capacity := range tests {
-		q := New[int](capacity)
-		if q.capacity != 1 {
-			t.Fatalf("expected sanitized capacity 1 for input %d, got %d", capacity, q.capacity)
-		}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			defer func() {
+				r := recover()
+				if r == nil {
+					t.Fatalf("expected panic for capacity=%d", tc.capacity)
+				}
+				if r != "buffer queue capacity must be > 0" {
+					t.Fatalf("unexpected panic message: %v", r)
+				}
+			}()
 
-		q.Push(1)
-		q.Push(2)
-		if q.Len() != 1 {
-			t.Fatalf("expected len 1 for sanitized queue, got %d", q.Len())
-		}
-
-		val, ok := q.Pop()
-		if !ok || val != 2 {
-			t.Fatalf("expected (2, true) after overwrite, got (%d, %v)", val, ok)
-		}
+			_ = New[int](tc.capacity)
+		})
 	}
 }
 

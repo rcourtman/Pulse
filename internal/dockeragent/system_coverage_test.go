@@ -120,6 +120,42 @@ func TestReadMachineID(t *testing.T) {
 		}
 	})
 
+	t.Run("formats 32-char hex as uuid", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "machine-id")
+		if err := os.WriteFile(path, []byte("0123456789abcdef0123456789abcdef\n"), 0600); err != nil {
+			t.Fatalf("write machine-id: %v", err)
+		}
+		swap(t, &machineIDPaths, []string{path})
+
+		got, err := readMachineID()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		want := "01234567-89ab-cdef-0123-456789abcdef"
+		if got != want {
+			t.Fatalf("expected %s, got %q", want, got)
+		}
+	})
+
+	t.Run("keeps non-hex 32-char machine id unchanged", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "machine-id")
+		raw := "0123456789abcdef0123456789abcdeg"
+		if err := os.WriteFile(path, []byte(raw+"\n"), 0600); err != nil {
+			t.Fatalf("write machine-id: %v", err)
+		}
+		swap(t, &machineIDPaths, []string{path})
+
+		got, err := readMachineID()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != raw {
+			t.Fatalf("expected machine-id %q, got %q", raw, got)
+		}
+	})
+
 	t.Run("not found", func(t *testing.T) {
 		swap(t, &machineIDPaths, []string{filepath.Join(t.TempDir(), "missing")})
 
@@ -127,6 +163,28 @@ func TestReadMachineID(t *testing.T) {
 			t.Fatal("expected error for missing machine-id")
 		}
 	})
+}
+
+func TestIsHexString(t *testing.T) {
+	tests := []struct {
+		name  string
+		value string
+		want  bool
+	}{
+		{name: "lowercase", value: "abcdef012345", want: true},
+		{name: "uppercase", value: "ABCDEF012345", want: true},
+		{name: "mixed case", value: "aBcDeF012345", want: true},
+		{name: "invalid character", value: "abcdxef0zz", want: false},
+		{name: "empty string", value: "", want: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isHexString(tt.value); got != tt.want {
+				t.Fatalf("isHexString(%q) = %v, want %v", tt.value, got, tt.want)
+			}
+		})
+	}
 }
 
 func TestIsUnraid(t *testing.T) {

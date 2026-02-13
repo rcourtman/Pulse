@@ -581,6 +581,51 @@ func TestRollingFileWriter_RotateCompress(t *testing.T) {
 	_ = w.closeLocked()
 }
 
+func TestRollingFileWriter_RotateRenameError(t *testing.T) {
+	t.Cleanup(resetLoggingState)
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "app.log")
+	if err := os.WriteFile(path, []byte("data"), 0600); err != nil {
+		t.Fatalf("failed to write file: %v", err)
+	}
+
+	w := &rollingFileWriter{path: path, maxBytes: 1, compress: true}
+	if err := w.openOrCreateLocked(); err != nil {
+		t.Fatalf("openOrCreateLocked error: %v", err)
+	}
+
+	renameCalled := false
+	renameFn = func(oldpath, newpath string) error {
+		renameCalled = true
+		return errors.New("rename failed")
+	}
+
+	compressCalled := make(chan struct{}, 1)
+	compressFn = func(string) {
+		compressCalled <- struct{}{}
+	}
+
+	if err := w.rotateLocked(); err != nil {
+		t.Fatalf("rotateLocked error: %v", err)
+	}
+	if !renameCalled {
+		t.Fatal("expected rename to be attempted")
+	}
+
+	select {
+	case <-compressCalled:
+		t.Fatal("expected compression to be skipped on rename error")
+	default:
+	}
+
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("expected log file to exist after rename failure: %v", err)
+	}
+
+	_ = w.closeLocked()
+}
+
 func TestRotateLockedCloseError(t *testing.T) {
 	t.Cleanup(resetLoggingState)
 

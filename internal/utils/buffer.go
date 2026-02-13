@@ -13,10 +13,11 @@ type Queue[T any] struct {
 	capacity int
 }
 
-// NewQueue creates a new Queue with the specified capacity.
-func NewQueue[T any](capacity int) *Queue[T] {
-	if capacity < 0 {
-		capacity = 0
+// New creates a new Queue with the specified capacity.
+// Capacity must be greater than zero.
+func New[T any](capacity int) *Queue[T] {
+	if capacity <= 0 {
+		panic("buffer queue capacity must be > 0")
 	}
 
 	return &Queue[T]{

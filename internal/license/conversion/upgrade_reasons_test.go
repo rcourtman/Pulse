@@ -75,6 +75,22 @@ func TestUpgradeReasonMatrix_CompletenessAgainstProMinusFree(t *testing.T) {
 	}
 }
 
+func TestUpgradeURLForFeature(t *testing.T) {
+	for _, entry := range UpgradeReasonMatrix {
+		got := UpgradeURLForFeature(entry.Feature)
+		if got != entry.ActionURL {
+			t.Fatalf("expected action URL %q for feature %q, got %q", entry.ActionURL, entry.Feature, got)
+		}
+	}
+}
+
+func TestUpgradeURLForFeatureUnknownFallsBackToGenericPricing(t *testing.T) {
+	const expected = "https://pulserelay.pro/pricing?utm_source=pulse&utm_medium=app&utm_campaign=upgrade"
+	if got := UpgradeURLForFeature("nonexistent_feature"); got != expected {
+		t.Fatalf("expected generic pricing URL %q, got %q", expected, got)
+	}
+}
+
 func expectedProOnlyFeatureSet() map[string]struct{} {
 	proFeatures := make(map[string]struct{}, len(license.TierFeatures[license.TierPro]))
 	for _, feature := range license.TierFeatures[license.TierPro] {

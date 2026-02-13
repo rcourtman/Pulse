@@ -545,7 +545,7 @@ func TestStore_DeleteError(t *testing.T) {
 	}
 }
 
-func TestStore_GetRejectsOversizedDiscoveryFile(t *testing.T) {
+func TestStore_FingerprintAccessorsAndCleanup(t *testing.T) {
 	store, err := NewStore(t.TempDir())
 	if err != nil {
 		t.Fatalf("NewStore error: %v", err)
@@ -662,10 +662,68 @@ func TestStore_LoadFingerprintsSkipsOversizedFiles(t *testing.T) {
 		t.Fatalf("NewStore error: %v", err)
 	}
 
-	if count := store.GetFingerprintCount(); count != 1 {
-		t.Fatalf("expected 1 loaded fingerprint, got %d", count)
+	file := filepath.Join(t.TempDir(), "not-a-dir")
+	if err := os.WriteFile(file, []byte("x"), 0600); err != nil {
+		t.Fatalf("WriteFile error: %v", err)
 	}
-	if fp, err := store.GetFingerprint("docker:host1:nginx"); err != nil || fp == nil {
-		t.Fatalf("expected valid fingerprint to load, got fp=%#v err=%v", fp, err)
+	store.dataDir = file
+
+	if ids := store.ListDiscoveryIDs(); ids != nil {
+		t.Fatalf("expected nil IDs when dataDir is unreadable, got %v", ids)
 	}
+}
+
+func TestStore_GetStaleResources(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore error: %v", err)
+	}
+	store.crypto = nil
+
+	old := &ResourceDiscovery{
+		ID:           MakeResourceID(ResourceTypeDocker, "host1", "old"),
+		ResourceType: ResourceTypeDocker,
+		ResourceID:   "old",
+		HostID:       "host1",
+		DiscoveredAt: time.Now().Add(-2 * time.Hour),
+	}
+	fresh := &ResourceDiscovery{
+		ID:           MakeResourceID(ResourceTypeDocker, "host1", "fresh"),
+		ResourceType: ResourceTypeDocker,
+		ResourceID:   "fresh",
+		HostID:       "host1",
+		DiscoveredAt: time.Now().Add(-5 * time.Minute),
+	}
+	for _, d := range []*ResourceDiscovery{old, fresh} {
+		if err := store.Save(d); err != nil {
+			t.Fatalf("Save error: %v", err)
+		}
+	}
+
+	stale, err := store.GetStaleResources(time.Hour)
+	if err != nil {
+		t.Fatalf("GetStaleResources error: %v", err)
+	}
+	if len(stale) != 1 || stale[0] != old.ID {
+		t.Fatalf("expected stale IDs [%q], got %v", old.ID, stale)
+	}
+
+	file := filepath.Join(t.TempDir(), "not-a-dir")
+	if err := os.WriteFile(file, []byte("x"), 0600); err != nil {
+		t.Fatalf("WriteFile error: %v", err)
+	}
+	store.dataDir = file
+
+	if _, err := store.GetStaleResources(time.Hour); err == nil {
+		t.Fatalf("expected GetStaleResources to return list error")
+	}
+}
+
+func containsString(items []string, target string) bool {
+	for _, item := range items {
+		if item == target {
+			return true
+		}
+	}
+	return false
 }

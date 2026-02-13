@@ -7,6 +7,16 @@ import (
 	"time"
 )
 
+func TestNewDefaultCollector(t *testing.T) {
+	c := NewDefaultCollector()
+	if c == nil {
+		t.Fatal("NewDefaultCollector returned nil")
+	}
+	if _, ok := c.(*defaultCollector); !ok {
+		t.Fatalf("NewDefaultCollector returned %T, want *defaultCollector", c)
+	}
+}
+
 func TestDefaultCollector_Smoke(t *testing.T) {
 	// These tests just ensure the wrappers don't crash and call the expected libraries.
 	// We don't need to verify the actual system data here, just that the plumbing works.

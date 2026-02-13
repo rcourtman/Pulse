@@ -411,3 +411,47 @@ func TestCollectDeviceSMARTWWN(t *testing.T) {
 		t.Fatalf("unexpected WWN: %q", result.WWN)
 	}
 }
+
+func TestListBlockDevicesLinuxWithExcludes(t *testing.T) {
+	origRun := runCommandOutput
+	t.Cleanup(func() { runCommandOutput = origRun })
+
+	runCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		if name != "lsblk" {
+			return nil, errors.New("unexpected command")
+		}
+		// Include malformed/non-disk lines to ensure they are ignored.
+		return []byte("sda disk\nsdb disk\nbadline\nsr0 rom\n"), nil
+	}
+
+	devices, err := listBlockDevicesLinux(context.Background(), []string{"sdb"})
+	if err != nil {
+		t.Fatalf("listBlockDevicesLinux error: %v", err)
+	}
+	if len(devices) != 1 || devices[0] != "/dev/sda" {
+		t.Fatalf("unexpected devices: %#v", devices)
+	}
+}
+
+func TestListBlockDevicesFreeBSDError(t *testing.T) {
+	origRun := runCommandOutput
+	t.Cleanup(func() { runCommandOutput = origRun })
+
+	runCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		if name != "sysctl" {
+			return nil, errors.New("unexpected command")
+		}
+		return nil, errors.New("sysctl failed")
+	}
+
+	if _, err := listBlockDevicesFreeBSD(context.Background(), nil); err == nil {
+		t.Fatalf("expected error")
+	}
+}
+
+func TestMatchesDeviceExcludePrefixNoMatchFallsThrough(t *testing.T) {
+	matched := matchesDeviceExclude("sda", "/dev/sda", []string{"nvme*", "vda"})
+	if matched {
+		t.Fatalf("expected no match")
+	}
+}

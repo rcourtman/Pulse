@@ -25,6 +25,10 @@ var upgrader = websocket.Upgrader{
 }
 
 var (
+	jsonMarshal      = json.Marshal
+	writeTextMessage = func(conn *websocket.Conn, data []byte) error {
+		return conn.WriteMessage(websocket.TextMessage, data)
+	}
 	pingInterval    = 5 * time.Second
 	pingWriteWait   = 5 * time.Second
 	readFileTimeout = 30 * time.Second

@@ -47,6 +47,109 @@ func withNewGCM(t *testing.T, fn func(cipher.Block) (cipher.AEAD, error)) {
 	t.Cleanup(func() { newGCM = orig })
 }
 
+func TestDeriveKeyValidation(t *testing.T) {
+	tests := []struct {
+		name    string
+		cm      *CryptoManager
+		purpose string
+		length  int
+	}{
+		{
+			name:    "nil manager",
+			cm:      nil,
+			purpose: "storage",
+			length:  32,
+		},
+		{
+			name:    "empty manager key",
+			cm:      &CryptoManager{},
+			purpose: "storage",
+			length:  32,
+		},
+		{
+			name:    "zero length",
+			cm:      &CryptoManager{key: make([]byte, 32)},
+			purpose: "storage",
+			length:  0,
+		},
+		{
+			name:    "negative length",
+			cm:      &CryptoManager{key: make([]byte, 32)},
+			purpose: "storage",
+			length:  -1,
+		},
+		{
+			name:    "empty purpose",
+			cm:      &CryptoManager{key: make([]byte, 32)},
+			purpose: "",
+			length:  32,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := tc.cm.DeriveKey(tc.purpose, tc.length)
+			if err == nil {
+				t.Fatal("DeriveKey() expected error")
+			}
+		})
+	}
+}
+
+func TestDeriveKeyDeterministicAndPurposeScoped(t *testing.T) {
+	masterKey := make([]byte, 32)
+	for i := range masterKey {
+		masterKey[i] = byte(i + 1)
+	}
+
+	cm := &CryptoManager{key: masterKey}
+
+	first, err := cm.DeriveKey("storage", 32)
+	if err != nil {
+		t.Fatalf("DeriveKey() first call error: %v", err)
+	}
+	second, err := cm.DeriveKey("storage", 32)
+	if err != nil {
+		t.Fatalf("DeriveKey() second call error: %v", err)
+	}
+	if !bytes.Equal(first, second) {
+		t.Fatal("DeriveKey() should be deterministic for same purpose/length")
+	}
+	if bytes.Equal(first, masterKey) {
+		t.Fatal("DeriveKey() should not return the raw master key bytes")
+	}
+
+	otherPurpose, err := cm.DeriveKey("session", 32)
+	if err != nil {
+		t.Fatalf("DeriveKey() other purpose error: %v", err)
+	}
+	if bytes.Equal(first, otherPurpose) {
+		t.Fatal("DeriveKey() should produce distinct keys for different purposes")
+	}
+
+	short, err := cm.DeriveKey("storage", 16)
+	if err != nil {
+		t.Fatalf("DeriveKey() short length error: %v", err)
+	}
+	if len(short) != 16 {
+		t.Fatalf("DeriveKey() short length = %d, want 16", len(short))
+	}
+	if !bytes.Equal(first[:16], short) {
+		t.Fatal("DeriveKey() output stream prefix mismatch for shorter length")
+	}
+}
+
+func TestDeriveKeyEntropyLimitError(t *testing.T) {
+	cm := &CryptoManager{key: make([]byte, 32)}
+
+	// HKDF-SHA256 expand is limited to 255 * hashLen (8160 bytes).
+	// Requesting more triggers an hkdf reader error path.
+	_, err := cm.DeriveKey("storage", 9000)
+	if err == nil {
+		t.Fatal("DeriveKey() expected entropy limit error")
+	}
+}
+
 func TestEncryptDecrypt(t *testing.T) {
 	// Create a temp directory for the test
 	tmpDir := t.TempDir()
@@ -416,6 +519,33 @@ func TestGetOrCreateKeyAt_MigrateSuccess(t *testing.T) {
 	}
 	if string(contents) != encoded {
 		t.Fatalf("migrated key contents mismatch")
+	}
+}
+
+func TestGetOrCreateKeyAt_UsesEnvLegacyKeyPathOverride(t *testing.T) {
+	envLegacyDir := t.TempDir()
+	envLegacyPath := filepath.Join(envLegacyDir, ".encryption.key")
+	t.Setenv("PULSE_LEGACY_KEY_PATH", envLegacyPath)
+
+	// Ensure env override actually wins over the package-level default path.
+	withLegacyKeyPath(t, filepath.Join(t.TempDir(), ".encryption.key"))
+
+	oldKey := make([]byte, 32)
+	for i := range oldKey {
+		oldKey[i] = byte(i + 1)
+	}
+	encoded := base64.StdEncoding.EncodeToString(oldKey)
+	if err := os.WriteFile(envLegacyPath, []byte(encoded), 0600); err != nil {
+		t.Fatalf("Failed to write env legacy key: %v", err)
+	}
+
+	newDir := t.TempDir()
+	key, err := getOrCreateKeyAt(newDir)
+	if err != nil {
+		t.Fatalf("getOrCreateKeyAt() error: %v", err)
+	}
+	if !bytes.Equal(key, oldKey) {
+		t.Fatalf("expected key loaded via env legacy key path")
 	}
 }
 
