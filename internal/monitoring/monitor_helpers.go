@@ -99,12 +99,6 @@ func parseIntEnv(key string, defaultVal int) int {
 	return parsed
 }
 
-func clampUint64ToInt64(val uint64) int64 {
-	if val > math.MaxInt64 {
-		return math.MaxInt64
-	}
-	return int64(val)
-}
 
 func cloneStringFloatMap(src map[string]float64) map[string]float64 {
 	if len(src) == 0 {
@@ -281,13 +275,7 @@ func extractSnapshotName(volid string) string {
 	return ""
 }
 
-func isLegacyHostAgent(agentType string) bool {
-	// Unified agent reports type="unified"
-	// Legacy standalone agents have empty type
-	return agentType != "unified"
-}
-
-func isLegacyDockerAgent(agentType string) bool {
+func isLegacyAgent(agentType string) bool {
 	// Unified agent reports type="unified"
 	// Legacy standalone agents have empty type
 	return agentType != "unified"

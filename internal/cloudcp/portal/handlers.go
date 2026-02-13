@@ -176,12 +176,12 @@ func HandlePortalWorkspaceDetail(reg *registry.TenantRegistry) http.HandlerFunc 
 			return
 		}
 
-		t, err := reg.Get(tenantID)
+		t, err := reg.GetTenantForAccount(accountID, tenantID)
 		if err != nil {
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
-		if t == nil || strings.TrimSpace(t.AccountID) == "" || t.AccountID != accountID {
+		if t == nil {
 			http.Error(w, "tenant not found", http.StatusNotFound)
 			return
 		}

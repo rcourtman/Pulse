@@ -312,6 +312,23 @@ func (r *TenantRegistry) ListByAccountID(accountID string) ([]*Tenant, error) {
 	return scanTenants(rows)
 }
 
+// GetTenantForAccount retrieves a tenant by ID and verifies it belongs to the
+// given account. Returns (nil, nil) if the tenant does not exist or belongs to
+// a different account.
+func (r *TenantRegistry) GetTenantForAccount(accountID, tenantID string) (*Tenant, error) {
+	t, err := r.Get(tenantID)
+	if err != nil {
+		return nil, err
+	}
+	if t == nil {
+		return nil, nil
+	}
+	if strings.TrimSpace(t.AccountID) == "" || t.AccountID != accountID {
+		return nil, nil
+	}
+	return t, nil
+}
+
 // CountByState returns a map of state -> count.
 func (r *TenantRegistry) CountByState() (map[TenantState]int, error) {
 	rows, err := r.db.Query(`SELECT state, COUNT(*) FROM tenants GROUP BY state`)

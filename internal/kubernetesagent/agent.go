@@ -382,17 +382,22 @@ func (a *Agent) collectReport(ctx context.Context) (agentsk8s.Report, error) {
 	}, nil
 }
 
-func (a *Agent) collectUsageMetrics(ctx context.Context, nodes []agentsk8s.Node) (map[string]agentsk8s.NodeUsage, map[string]agentsk8s.PodUsage, error) {
+func (a *Agent) getDiscoveryRESTClient() rest.Interface {
 	if a == nil || a.kubeClient == nil {
-		return nil, nil, nil
+		return nil
 	}
-
 	discovery := a.kubeClient.Discovery()
 	if discovery == nil || discovery.RESTClient() == nil {
+		return nil
+	}
+	return discovery.RESTClient()
+}
+
+func (a *Agent) collectUsageMetrics(ctx context.Context, nodes []agentsk8s.Node) (map[string]agentsk8s.NodeUsage, map[string]agentsk8s.PodUsage, error) {
+	restClient := a.getDiscoveryRESTClient()
+	if restClient == nil {
 		return nil, nil, nil
 	}
-
-	restClient := discovery.RESTClient()
 
 	nodeRaw, nodeErr := restClient.Get().AbsPath("/apis/metrics.k8s.io/v1beta1/nodes").DoRaw(ctx)
 	podRaw, podErr := restClient.Get().AbsPath("/apis/metrics.k8s.io/v1beta1/pods").DoRaw(ctx)
@@ -445,16 +450,10 @@ type podSummaryUsage struct {
 }
 
 func (a *Agent) collectPodSummaryMetrics(ctx context.Context, nodes []agentsk8s.Node) (map[string]podSummaryUsage, error) {
-	if a == nil || a.kubeClient == nil {
+	restClient := a.getDiscoveryRESTClient()
+	if restClient == nil {
 		return nil, nil
 	}
-
-	discovery := a.kubeClient.Discovery()
-	if discovery == nil || discovery.RESTClient() == nil {
-		return nil, nil
-	}
-
-	restClient := discovery.RESTClient()
 	result := make(map[string]podSummaryUsage)
 	var failed int
 	var succeeded int
@@ -673,7 +672,15 @@ func hasPodUsage(usage agentsk8s.PodUsage) bool {
 		usage.EphemeralStorageCapacityBytes > 0
 }
 
-func parseCPUMilli(value string) int64 {
+func copyStringMap(m map[string]string) map[string]string {
+	c := make(map[string]string, len(m))
+	for k, v := range m {
+		c[k] = v
+	}
+	return c
+}
+
+func parseQuantity(value string, convert func(k8sresource.Quantity) int64) int64 {
 	value = strings.TrimSpace(value)
 	if value == "" {
 		return 0
@@ -682,7 +689,11 @@ func parseCPUMilli(value string) int64 {
 	if err != nil {
 		return 0
 	}
-	return quantity.MilliValue()
+	return convert(quantity)
+}
+
+func parseCPUMilli(value string) int64 {
+	return parseQuantity(value, func(q k8sresource.Quantity) int64 { return q.MilliValue() })
 }
 
 func int64FromUint64Ptr(value *uint64) int64 {
@@ -697,15 +708,7 @@ func int64FromUint64Ptr(value *uint64) int64 {
 }
 
 func parseBytes(value string) int64 {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return 0
-	}
-	quantity, err := k8sresource.ParseQuantity(value)
-	if err != nil {
-		return 0
-	}
-	return quantity.Value()
+	return parseQuantity(value, func(q k8sresource.Quantity) int64 { return q.Value() })
 }
 
 func podUsageKey(namespace, name string) string {
@@ -851,10 +854,7 @@ func (a *Agent) collectPods(ctx context.Context) ([]agentsk8s.Pod, error) {
 			continue
 		}
 
-		labelsCopy := make(map[string]string, len(pod.Labels))
-		for k, v := range pod.Labels {
-			labelsCopy[k] = v
-		}
+		labelsCopy := copyStringMap(pod.Labels)
 
 		containers := make([]agentsk8s.PodContainer, 0, len(pod.Status.ContainerStatuses))
 		restarts := 0
@@ -983,10 +983,7 @@ func (a *Agent) collectDeployments(ctx context.Context) ([]agentsk8s.Deployment,
 			continue
 		}
 
-		labelsCopy := make(map[string]string, len(dep.Labels))
-		for k, v := range dep.Labels {
-			labelsCopy[k] = v
-		}
+		labelsCopy := copyStringMap(dep.Labels)
 
 		items = append(items, agentsk8s.Deployment{
 			UID:               string(dep.UID),

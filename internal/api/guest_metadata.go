@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"net/url"
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -119,44 +118,15 @@ func (h *GuestMetadataHandler) HandleUpdateMetadata(w http.ResponseWriter, r *ht
 	}
 
 	// Validate URL if provided
-	if meta.CustomURL != "" {
-		// Parse and validate the URL
-		parsedURL, err := url.Parse(meta.CustomURL)
-		if err != nil {
-			http.Error(w, "Invalid URL format: "+err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		// Check scheme
-		if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
-			http.Error(w, "URL must use http:// or https:// scheme", http.StatusBadRequest)
-			return
-		}
-
-		// Check host is present and valid
-		if parsedURL.Host == "" {
-			http.Error(w, "Invalid URL: missing host/domain (e.g., use https://192.168.1.100:8006 or https://emby.local)", http.StatusBadRequest)
-			return
-		}
-
-		// Check for incomplete URLs like "https://emby."
-		if strings.HasSuffix(parsedURL.Host, ".") && !strings.Contains(parsedURL.Host, "..") {
-			http.Error(w, "Incomplete URL: '"+meta.CustomURL+"' - please enter a complete domain or IP address", http.StatusBadRequest)
-			return
-		}
+	if errMsg := validateCustomURL(meta.CustomURL); errMsg != "" {
+		http.Error(w, errMsg, http.StatusBadRequest)
+		return
 	}
 
 	store := h.getStore(r.Context())
 	if err := store.Set(guestID, &meta); err != nil {
 		log.Error().Err(err).Str("guestID", guestID).Msg("Failed to save guest metadata")
-		// Provide more specific error message
-		errMsg := "Failed to save metadata"
-		if strings.Contains(err.Error(), "permission") {
-			errMsg = "Permission denied - check file permissions"
-		} else if strings.Contains(err.Error(), "no space") {
-			errMsg = "Disk full - cannot save metadata"
-		}
-		http.Error(w, errMsg, http.StatusInternalServerError)
+		http.Error(w, metadataSaveErrorMessage(err), http.StatusInternalServerError)
 		return
 	}
 

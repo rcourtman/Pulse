@@ -109,30 +109,33 @@ func (a *AlertManagerAdapter) GetAlertHistory(resourceID string, limit int) []Re
 	return result
 }
 
+// buildAlertInfo constructs an AlertInfo from pre-extracted field values.
+// This is the shared implementation used by both convertAlertFromManager and convertAlertFromModels.
+func buildAlertInfo(id, alertType, level, resourceID, resourceName, node, instance, message string, value, threshold float64, startTime time.Time, acknowledged bool, metadata map[string]interface{}) AlertInfo {
+	return AlertInfo{
+		ID:           id,
+		Type:         alertType,
+		Level:        level,
+		ResourceID:   resourceID,
+		ResourceName: resourceName,
+		ResourceType: inferResourceType(alertType, metadata),
+		Node:         node,
+		Instance:     instance,
+		Message:      message,
+		Value:        value,
+		Threshold:    threshold,
+		StartTime:    startTime,
+		Duration:     formatDuration(time.Since(startTime)),
+		Acknowledged: acknowledged,
+	}
+}
+
 // convertAlertFromManager converts an alerts.Alert to AI's AlertInfo
 func convertAlertFromManager(alert *alerts.Alert) AlertInfo {
 	if alert == nil {
 		return AlertInfo{}
 	}
-
-	resourceType := inferResourceType(alert.Type, alert.Metadata)
-
-	return AlertInfo{
-		ID:           alert.ID,
-		Type:         alert.Type,
-		Level:        string(alert.Level),
-		ResourceID:   alert.ResourceID,
-		ResourceName: alert.ResourceName,
-		ResourceType: resourceType,
-		Node:         alert.Node,
-		Instance:     alert.Instance,
-		Message:      alert.Message,
-		Value:        alert.Value,
-		Threshold:    alert.Threshold,
-		StartTime:    alert.StartTime,
-		Duration:     formatDuration(time.Since(alert.StartTime)),
-		Acknowledged: alert.Acknowledged,
-	}
+	return buildAlertInfo(alert.ID, alert.Type, string(alert.Level), alert.ResourceID, alert.ResourceName, alert.Node, alert.Instance, alert.Message, alert.Value, alert.Threshold, alert.StartTime, alert.Acknowledged, alert.Metadata)
 }
 
 // convertAlertFromModels converts a models.Alert to AI's AlertInfo
@@ -140,25 +143,7 @@ func convertAlertFromModels(alert *models.Alert) AlertInfo {
 	if alert == nil {
 		return AlertInfo{}
 	}
-
-	resourceType := inferResourceType(alert.Type, nil)
-
-	return AlertInfo{
-		ID:           alert.ID,
-		Type:         alert.Type,
-		Level:        alert.Level,
-		ResourceID:   alert.ResourceID,
-		ResourceName: alert.ResourceName,
-		ResourceType: resourceType,
-		Node:         alert.Node,
-		Instance:     alert.Instance,
-		Message:      alert.Message,
-		Value:        alert.Value,
-		Threshold:    alert.Threshold,
-		StartTime:    alert.StartTime,
-		Duration:     formatDuration(time.Since(alert.StartTime)),
-		Acknowledged: alert.Acknowledged,
-	}
+	return buildAlertInfo(alert.ID, alert.Type, alert.Level, alert.ResourceID, alert.ResourceName, alert.Node, alert.Instance, alert.Message, alert.Value, alert.Threshold, alert.StartTime, alert.Acknowledged, nil)
 }
 
 // inferResourceType infers resource type from alert type

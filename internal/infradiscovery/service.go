@@ -142,6 +142,21 @@ func (s *Service) SetAIAnalyzer(analyzer AIAnalyzer) {
 	s.aiAnalyzer = analyzer
 }
 
+// goRecover launches fn in a goroutine with panic recovery logging.
+func goRecover(label string, fn func()) {
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Error().
+					Interface("panic", r).
+					Stack().
+					Msgf("Recovered from panic in %s", label)
+			}
+		}()
+		fn()
+	}()
+}
+
 // Start begins the background discovery service.
 func (s *Service) Start(ctx context.Context) {
 	s.mu.Lock()
@@ -157,30 +172,10 @@ func (s *Service) Start(ctx context.Context) {
 		Msg("Starting infrastructure discovery service")
 
 	// Run immediately on startup
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				log.Error().
-					Interface("panic", r).
-					Stack().
-					Msg("Recovered from panic in initial infrastructure discovery")
-			}
-		}()
-		s.RunDiscovery(ctx)
-	}()
+	goRecover("initial infrastructure discovery", func() { s.RunDiscovery(ctx) })
 
 	// Start periodic discovery loop
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				log.Error().
-					Interface("panic", r).
-					Stack().
-					Msg("Recovered from panic in infrastructure discovery loop")
-			}
-		}()
-		s.discoveryLoop(ctx)
-	}()
+	goRecover("infrastructure discovery loop", func() { s.discoveryLoop(ctx) })
 }
 
 // Stop stops the background discovery service.
@@ -564,17 +559,7 @@ func (s *Service) GetLastRun() time.Time {
 
 // ForceRefresh triggers an immediate discovery scan.
 func (s *Service) ForceRefresh(ctx context.Context) {
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				log.Error().
-					Interface("panic", r).
-					Stack().
-					Msg("Recovered from panic in ForceRefresh infrastructure discovery")
-			}
-		}()
-		s.RunDiscovery(ctx)
-	}()
+	goRecover("ForceRefresh infrastructure discovery", func() { s.RunDiscovery(ctx) })
 }
 
 // ClearCache clears the analysis cache, forcing re-analysis of all containers.

@@ -231,6 +231,17 @@ func (mh *MetricsHistory) GetNodeMetrics(nodeID string, metricType string, durat
 	return result
 }
 
+// filterMetricsByTime returns only the points whose timestamp is after cutoffTime.
+func filterMetricsByTime(data []MetricPoint, cutoffTime time.Time) []MetricPoint {
+	filtered := make([]MetricPoint, 0)
+	for _, point := range data {
+		if point.Timestamp.After(cutoffTime) {
+			filtered = append(filtered, point)
+		}
+	}
+	return filtered
+}
+
 // GetAllGuestMetrics returns all metrics for a guest within a duration
 func (mh *MetricsHistory) GetAllGuestMetrics(guestID string, duration time.Duration) map[string][]MetricPoint {
 	mh.mu.RLock()
@@ -244,24 +255,13 @@ func (mh *MetricsHistory) GetAllGuestMetrics(guestID string, duration time.Durat
 		return result
 	}
 
-	// Helper function to filter by time
-	filterByTime := func(data []MetricPoint) []MetricPoint {
-		filtered := make([]MetricPoint, 0)
-		for _, point := range data {
-			if point.Timestamp.After(cutoffTime) {
-				filtered = append(filtered, point)
-			}
-		}
-		return filtered
-	}
-
-	result["cpu"] = filterByTime(metrics.CPU)
-	result["memory"] = filterByTime(metrics.Memory)
-	result["disk"] = filterByTime(metrics.Disk)
-	result["diskread"] = filterByTime(metrics.DiskRead)
-	result["diskwrite"] = filterByTime(metrics.DiskWrite)
-	result["netin"] = filterByTime(metrics.NetworkIn)
-	result["netout"] = filterByTime(metrics.NetworkOut)
+	result["cpu"] = filterMetricsByTime(metrics.CPU, cutoffTime)
+	result["memory"] = filterMetricsByTime(metrics.Memory, cutoffTime)
+	result["disk"] = filterMetricsByTime(metrics.Disk, cutoffTime)
+	result["diskread"] = filterMetricsByTime(metrics.DiskRead, cutoffTime)
+	result["diskwrite"] = filterMetricsByTime(metrics.DiskWrite, cutoffTime)
+	result["netin"] = filterMetricsByTime(metrics.NetworkIn, cutoffTime)
+	result["netout"] = filterMetricsByTime(metrics.NetworkOut, cutoffTime)
 
 	return result
 }
@@ -305,21 +305,10 @@ func (mh *MetricsHistory) GetAllStorageMetrics(storageID string, duration time.D
 		return result
 	}
 
-	// Helper function to filter by time
-	filterByTime := func(data []MetricPoint) []MetricPoint {
-		filtered := make([]MetricPoint, 0)
-		for _, point := range data {
-			if point.Timestamp.After(cutoffTime) {
-				filtered = append(filtered, point)
-			}
-		}
-		return filtered
-	}
-
-	result["usage"] = filterByTime(metrics.Usage)
-	result["used"] = filterByTime(metrics.Used)
-	result["total"] = filterByTime(metrics.Total)
-	result["avail"] = filterByTime(metrics.Avail)
+	result["usage"] = filterMetricsByTime(metrics.Usage, cutoffTime)
+	result["used"] = filterMetricsByTime(metrics.Used, cutoffTime)
+	result["total"] = filterMetricsByTime(metrics.Total, cutoffTime)
+	result["avail"] = filterMetricsByTime(metrics.Avail, cutoffTime)
 
 	return result
 }

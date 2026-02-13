@@ -127,20 +127,6 @@ func parseTenantState(s string) (registry.TenantState, bool) {
 	}
 }
 
-func loadTenantForAccount(reg *registry.TenantRegistry, accountID, tenantID string) (*registry.Tenant, error) {
-	t, err := reg.Get(tenantID)
-	if err != nil {
-		return nil, err
-	}
-	if t == nil {
-		return nil, nil
-	}
-	if strings.TrimSpace(t.AccountID) == "" || t.AccountID != accountID {
-		return nil, nil
-	}
-	return t, nil
-}
-
 // HandleUpdateTenant updates display name and/or state.
 // Route: PATCH /api/accounts/{account_id}/tenants/{tenant_id}
 func HandleUpdateTenant(reg *registry.TenantRegistry) http.HandlerFunc {
@@ -167,7 +153,7 @@ func HandleUpdateTenant(reg *registry.TenantRegistry) http.HandlerFunc {
 			return
 		}
 
-		tenant, err := loadTenantForAccount(reg, accountID, tenantID)
+		tenant, err := reg.GetTenantForAccount(accountID, tenantID)
 		if err != nil {
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
@@ -244,7 +230,7 @@ func HandleDeleteTenant(reg *registry.TenantRegistry, provisioner WorkspaceProvi
 			return
 		}
 
-		tenant, err := loadTenantForAccount(reg, accountID, tenantID)
+		tenant, err := reg.GetTenantForAccount(accountID, tenantID)
 		if err != nil {
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return

@@ -229,6 +229,19 @@ func getOrCreateKeyAt(dataDir string) ([]byte, error) {
 	return key, nil
 }
 
+// newAEAD creates an AES-GCM cipher.AEAD from the manager's key.
+func (c *CryptoManager) newAEAD() (cipher.AEAD, error) {
+	block, err := newCipher(c.key)
+	if err != nil {
+		return nil, fmt.Errorf("create AES cipher: %w", err)
+	}
+	gcm, err := newGCM(block)
+	if err != nil {
+		return nil, fmt.Errorf("create GCM: %w", err)
+	}
+	return gcm, nil
+}
+
 // Encrypt encrypts data using AES-GCM
 // SAFETY: Verifies the encryption key file still exists on disk before encrypting.
 // This prevents orphaned encrypted data if the key was deleted while Pulse was running.
@@ -244,14 +257,9 @@ func (c *CryptoManager) Encrypt(plaintext []byte) ([]byte, error) {
 		}
 	}
 
-	block, err := newCipher(c.key)
+	gcm, err := c.newAEAD()
 	if err != nil {
-		return nil, fmt.Errorf("crypto.Encrypt: create AES cipher: %w", err)
-	}
-
-	gcm, err := newGCM(block)
-	if err != nil {
-		return nil, fmt.Errorf("crypto.Encrypt: create GCM: %w", err)
+		return nil, fmt.Errorf("crypto.Encrypt: %w", err)
 	}
 
 	nonce := make([]byte, gcm.NonceSize())
@@ -265,14 +273,9 @@ func (c *CryptoManager) Encrypt(plaintext []byte) ([]byte, error) {
 
 // Decrypt decrypts data using AES-GCM
 func (c *CryptoManager) Decrypt(ciphertext []byte) ([]byte, error) {
-	block, err := newCipher(c.key)
+	gcm, err := c.newAEAD()
 	if err != nil {
-		return nil, fmt.Errorf("crypto.Decrypt: create AES cipher: %w", err)
-	}
-
-	gcm, err := newGCM(block)
-	if err != nil {
-		return nil, fmt.Errorf("crypto.Decrypt: create GCM: %w", err)
+		return nil, fmt.Errorf("crypto.Decrypt: %w", err)
 	}
 
 	nonceSize := gcm.NonceSize()

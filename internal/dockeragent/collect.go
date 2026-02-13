@@ -195,14 +195,7 @@ func (a *Agent) collectContainers(ctx context.Context) ([]agentsdocker.Container
 		}
 
 		// Skip backup containers created during updates - they're temporary
-		isBackup := false
-		for _, name := range summary.Names {
-			if strings.Contains(name, "_pulse_backup_") {
-				isBackup = true
-				break
-			}
-		}
-		if isBackup {
+		if isBackupContainer(summary.Names) {
 			continue
 		}
 

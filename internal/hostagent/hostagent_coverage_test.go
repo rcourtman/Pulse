@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/hostmetrics"
+	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog"
 )
 
@@ -85,10 +86,10 @@ func TestAgent_RunOnce_Coverage(t *testing.T) {
 }
 
 func TestIsHexString(t *testing.T) {
-	if !isHexString("abc123") {
+	if !utils.IsHexString("abc123") {
 		t.Errorf("expected true for abc123")
 	}
-	if isHexString("xyz") {
+	if utils.IsHexString("xyz") {
 		t.Errorf("expected false for xyz")
 	}
 }

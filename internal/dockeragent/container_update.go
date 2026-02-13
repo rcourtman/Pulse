@@ -107,7 +107,7 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 	result.OldImageDigest = inspect.Image
 
 	// Reject updates for backup containers (created during previous updates)
-	if strings.Contains(result.ContainerName, "_pulse_backup_") {
+	if strings.Contains(result.ContainerName, backupContainerMarker) {
 		result.Error = "Cannot update backup containers - these are temporary and should be cleaned up"
 		a.logger.Warn().
 			Str("container", result.ContainerName).
@@ -149,7 +149,7 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 	a.logger.Info().Str("container", result.ContainerName).Msg("Container stopped")
 
 	// 4. Rename the old container for backup
-	backupName := result.ContainerName + "_pulse_backup_" + nowFn().Format("20060102_150405")
+	backupName := result.ContainerName + backupContainerMarker + nowFn().Format("20060102_150405")
 	if err := a.docker.ContainerRename(ctx, containerID, backupName); err != nil {
 		result.Error = fmt.Sprintf("Failed to rename container for backup: %v", err)
 		a.logger.Error().Err(err).Str("container", result.ContainerName).Msg("Failed to rename container for backup")

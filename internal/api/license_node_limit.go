@@ -78,12 +78,13 @@ func enforceNodeLimitForConfigRegistration(
 	return true
 }
 
-func enforceNodeLimitForHostReport(
+// enforceNodeLimitForReport is the shared implementation for all report-type node limit checks.
+// targetsExisting should return true if the report corresponds to an already-registered node.
+func enforceNodeLimitForReport(
 	w http.ResponseWriter,
 	ctx context.Context,
 	monitor *monitoring.Monitor,
-	report agentshost.Report,
-	tokenRecord *config.APITokenRecord,
+	targetsExisting func(models.StateSnapshot) bool,
 ) bool {
 	limit := maxNodesLimitForContext(ctx)
 	if limit <= 0 || monitor == nil {
@@ -91,7 +92,7 @@ func enforceNodeLimitForHostReport(
 	}
 
 	snapshot := monitor.GetLiveStateSnapshot()
-	if hostReportTargetsExistingHost(snapshot, report, tokenRecord) {
+	if targetsExisting(snapshot) {
 		return false
 	}
 
@@ -102,6 +103,18 @@ func enforceNodeLimitForHostReport(
 
 	writeMaxNodesLimitExceeded(w, current, limit)
 	return true
+}
+
+func enforceNodeLimitForHostReport(
+	w http.ResponseWriter,
+	ctx context.Context,
+	monitor *monitoring.Monitor,
+	report agentshost.Report,
+	tokenRecord *config.APITokenRecord,
+) bool {
+	return enforceNodeLimitForReport(w, ctx, monitor, func(snapshot models.StateSnapshot) bool {
+		return hostReportTargetsExistingHost(snapshot, report, tokenRecord)
+	})
 }
 
 func enforceNodeLimitForDockerReport(
@@ -111,23 +124,9 @@ func enforceNodeLimitForDockerReport(
 	report agentsdocker.Report,
 	tokenRecord *config.APITokenRecord,
 ) bool {
-	limit := maxNodesLimitForContext(ctx)
-	if limit <= 0 || monitor == nil {
-		return false
-	}
-
-	snapshot := monitor.GetLiveStateSnapshot()
-	if dockerReportTargetsExistingHost(snapshot, report, tokenRecord) {
-		return false
-	}
-
-	current := registeredNodeSlotCount(monitor.GetConfig(), monitor)
-	if current+1 <= limit {
-		return false
-	}
-
-	writeMaxNodesLimitExceeded(w, current, limit)
-	return true
+	return enforceNodeLimitForReport(w, ctx, monitor, func(snapshot models.StateSnapshot) bool {
+		return dockerReportTargetsExistingHost(snapshot, report, tokenRecord)
+	})
 }
 
 func enforceNodeLimitForKubernetesReport(
@@ -137,23 +136,9 @@ func enforceNodeLimitForKubernetesReport(
 	report agentsk8s.Report,
 	tokenRecord *config.APITokenRecord,
 ) bool {
-	limit := maxNodesLimitForContext(ctx)
-	if limit <= 0 || monitor == nil {
-		return false
-	}
-
-	snapshot := monitor.GetLiveStateSnapshot()
-	if kubernetesReportTargetsExistingCluster(snapshot, report, tokenRecord) {
-		return false
-	}
-
-	current := registeredNodeSlotCount(monitor.GetConfig(), monitor)
-	if current+1 <= limit {
-		return false
-	}
-
-	writeMaxNodesLimitExceeded(w, current, limit)
-	return true
+	return enforceNodeLimitForReport(w, ctx, monitor, func(snapshot models.StateSnapshot) bool {
+		return kubernetesReportTargetsExistingCluster(snapshot, report, tokenRecord)
+	})
 }
 
 func hostReportTargetsExistingHost(

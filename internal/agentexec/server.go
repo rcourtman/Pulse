@@ -324,8 +324,8 @@ func (s *Server) sendMessage(conn *websocket.Conn, msg Message) error {
 	return conn.WriteMessage(websocket.TextMessage, msgBytes)
 }
 
-// ExecuteCommand sends a command to an agent and waits for the result
-func (s *Server) ExecuteCommand(ctx context.Context, agentID string, cmd ExecuteCommandPayload) (*CommandResultPayload, error) {
+// sendRequestAndWait is a generic helper for sending a request to an agent and waiting for the result
+func (s *Server) sendRequestAndWait(ctx context.Context, agentID string, msgType MessageType, requestID string, payload interface{}, timeout time.Duration) (*CommandResultPayload, error) {
 	s.mu.RLock()
 	ac, ok := s.agents[agentID]
 	s.mu.RUnlock()
@@ -337,75 +337,21 @@ func (s *Server) ExecuteCommand(ctx context.Context, agentID string, cmd Execute
 	// Create response channel
 	respCh := make(chan CommandResultPayload, 1)
 	s.mu.Lock()
-	s.pendingReqs[cmd.RequestID] = respCh
+	s.pendingReqs[requestID] = respCh
 	s.mu.Unlock()
 
 	defer func() {
 		s.mu.Lock()
-		delete(s.pendingReqs, cmd.RequestID)
-		s.mu.Unlock()
-	}()
-
-	// Send command
-	msg := Message{
-		Type:      MsgTypeExecuteCmd,
-		ID:        cmd.RequestID,
-		Timestamp: time.Now(),
-		Payload:   cmd,
-	}
-
-	ac.writeMu.Lock()
-	err := s.sendMessage(ac.conn, msg)
-	ac.writeMu.Unlock()
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to send command: %w", err)
-	}
-
-	// Wait for result
-	timeout := time.Duration(cmd.Timeout) * time.Second
-	if timeout <= 0 {
-		timeout = 60 * time.Second
-	}
-
-	select {
-	case result := <-respCh:
-		return &result, nil
-	case <-time.After(timeout):
-		return nil, fmt.Errorf("command timed out after %v", timeout)
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	}
-}
-
-// ReadFile reads a file from an agent
-func (s *Server) ReadFile(ctx context.Context, agentID string, req ReadFilePayload) (*CommandResultPayload, error) {
-	s.mu.RLock()
-	ac, ok := s.agents[agentID]
-	s.mu.RUnlock()
-
-	if !ok {
-		return nil, fmt.Errorf("agent %s not connected", agentID)
-	}
-
-	// Create response channel
-	respCh := make(chan CommandResultPayload, 1)
-	s.mu.Lock()
-	s.pendingReqs[req.RequestID] = respCh
-	s.mu.Unlock()
-
-	defer func() {
-		s.mu.Lock()
-		delete(s.pendingReqs, req.RequestID)
+		delete(s.pendingReqs, requestID)
 		s.mu.Unlock()
 	}()
 
 	// Send request
 	msg := Message{
-		Type:      MsgTypeReadFile,
-		ID:        req.RequestID,
+		Type:      msgType,
+		ID:        requestID,
 		Timestamp: time.Now(),
-		Payload:   req,
+		Payload:   payload,
 	}
 
 	ac.writeMu.Lock()
@@ -413,19 +359,32 @@ func (s *Server) ReadFile(ctx context.Context, agentID string, req ReadFilePaylo
 	ac.writeMu.Unlock()
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to send read_file request: %w", err)
+		return nil, fmt.Errorf("failed to send %s request: %w", msgType, err)
 	}
 
 	// Wait for result
-	timeout := readFileTimeout
 	select {
 	case result := <-respCh:
 		return &result, nil
 	case <-time.After(timeout):
-		return nil, fmt.Errorf("read_file timed out after %v", timeout)
+		return nil, fmt.Errorf("%s timed out after %v", msgType, timeout)
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
+}
+
+// ExecuteCommand sends a command to an agent and waits for the result
+func (s *Server) ExecuteCommand(ctx context.Context, agentID string, cmd ExecuteCommandPayload) (*CommandResultPayload, error) {
+	timeout := time.Duration(cmd.Timeout) * time.Second
+	if timeout <= 0 {
+		timeout = 60 * time.Second
+	}
+	return s.sendRequestAndWait(ctx, agentID, MsgTypeExecuteCmd, cmd.RequestID, cmd, timeout)
+}
+
+// ReadFile reads a file from an agent
+func (s *Server) ReadFile(ctx context.Context, agentID string, req ReadFilePayload) (*CommandResultPayload, error) {
+	return s.sendRequestAndWait(ctx, agentID, MsgTypeReadFile, req.RequestID, req, readFileTimeout)
 }
 
 // GetConnectedAgents returns a list of currently connected agents

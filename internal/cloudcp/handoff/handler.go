@@ -65,12 +65,12 @@ func HandleHandoff(reg *registry.TenantRegistry, tenantsDir string) http.Handler
 			return
 		}
 
-		t, err := reg.Get(tenantID)
+		t, err := reg.GetTenantForAccount(accountID, tenantID)
 		if err != nil {
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
-		if t == nil || strings.TrimSpace(t.AccountID) == "" || t.AccountID != accountID {
+		if t == nil {
 			log.Info().
 				Str("audit_event", "handoff_denied").
 				Str("reason", "tenant_not_found").

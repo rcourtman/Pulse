@@ -74,6 +74,30 @@ const (
 	RuntimePodman RuntimeKind = "podman"
 )
 
+// backupContainerMarker is the substring used to identify backup containers
+// created during container updates.
+const backupContainerMarker = "_pulse_backup_"
+
+// isBackupContainer reports whether any of the given container names contains
+// the Pulse backup marker (e.g. "myapp_pulse_backup_20240101_120000").
+func isBackupContainer(names []string) bool {
+	for _, name := range names {
+		if strings.Contains(name, backupContainerMarker) {
+			return true
+		}
+	}
+	return false
+}
+
+// setAgentHeaders sets the standard authentication and metadata headers for
+// requests from the Docker agent to a Pulse backend.
+func setAgentHeaders(req *http.Request, token string) {
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-API-Token", token)
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("User-Agent", "pulse-docker-agent/"+Version)
+}
+
 // Agent collects Docker metrics and posts them to Pulse.
 type Agent struct {
 	cfg                 Config
@@ -712,10 +736,7 @@ func (a *Agent) sendReportToTarget(ctx context.Context, target TargetConfig, pay
 		return fmt.Errorf("target %s: create request: %w", target.URL, err)
 	}
 
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-API-Token", target.Token)
-	req.Header.Set("Authorization", "Bearer "+target.Token)
-	req.Header.Set("User-Agent", "pulse-docker-agent/"+Version)
+	setAgentHeaders(req, target.Token)
 
 	client := a.httpClientFor(target)
 	resp, err := client.Do(req)
@@ -934,10 +955,7 @@ func (a *Agent) sendCommandAck(ctx context.Context, target TargetConfig, command
 		return fmt.Errorf("create acknowledgement request: %w", err)
 	}
 
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-API-Token", target.Token)
-	req.Header.Set("Authorization", "Bearer "+target.Token)
-	req.Header.Set("User-Agent", "pulse-docker-agent/"+Version)
+	setAgentHeaders(req, target.Token)
 
 	resp, err := a.httpClientFor(target).Do(req)
 	if err != nil {
@@ -1006,7 +1024,7 @@ func readMachineID() (string, error) {
 			id := strings.TrimSpace(string(data))
 			// Format as UUID if it's a 32-char hex string (like machine-id typically is),
 			// to match the behavior of the host agent.
-			if len(id) == 32 && isHexString(id) {
+			if len(id) == 32 && utils.IsHexString(id) {
 				return fmt.Sprintf("%s-%s-%s-%s-%s",
 					id[0:8], id[8:12], id[12:16],
 					id[16:20], id[20:32]), nil
@@ -1017,14 +1035,6 @@ func readMachineID() (string, error) {
 	return "", errors.New("machine-id not found")
 }
 
-func isHexString(s string) bool {
-	for _, c := range s {
-		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
-			return false
-		}
-	}
-	return true
-}
 
 func readSystemUptime() int64 {
 	seconds, err := readProcUptime()

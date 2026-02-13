@@ -511,7 +511,7 @@ type dockerContainerSyntheticIOMetrics struct {
 }
 
 func syntheticDockerContainerIOMetrics(ct models.DockerContainer) dockerContainerSyntheticIOMetrics {
-	seed := hashDockerMetricsSeed(ct.ID, ct.Name, ct.Image, ct.State)
+	seed := hashMetricsSeed(ct.ID, ct.Name, ct.Image, ct.State)
 	rng := rand.New(rand.NewSource(int64(seed)))
 
 	state := strings.ToLower(strings.TrimSpace(ct.State))
@@ -536,7 +536,7 @@ func syntheticDockerContainerIOMetrics(ct models.DockerContainer) dockerContaine
 }
 
 func syntheticKubernetesPodMetrics(cluster models.KubernetesCluster, pod models.KubernetesPod) kubernetesPodSyntheticMetrics {
-	seed := hashKubernetesMetricsSeed(
+	seed := hashMetricsSeed(
 		cluster.ID,
 		cluster.Name,
 		cluster.DisplayName,
@@ -633,16 +633,7 @@ func syntheticKubernetesPodMetrics(cluster models.KubernetesCluster, pod models.
 	}
 }
 
-func hashKubernetesMetricsSeed(parts ...string) uint64 {
-	h := fnv.New64a()
-	for _, p := range parts {
-		_, _ = h.Write([]byte(p))
-		_, _ = h.Write([]byte{0})
-	}
-	return h.Sum64()
-}
-
-func hashDockerMetricsSeed(parts ...string) uint64 {
+func hashMetricsSeed(parts ...string) uint64 {
 	h := fnv.New64a()
 	for _, p := range parts {
 		_, _ = h.Write([]byte(p))

@@ -2046,46 +2046,11 @@ func getThresholdForMetric(config ThresholdConfig, metricType string) *Hysteresi
 // getThresholdForMetricFromConfig returns the threshold for a specific metric type from a ThresholdConfig
 // ensuring hysteresis is properly set
 func getThresholdForMetricFromConfig(config ThresholdConfig, metricType string) *HysteresisThreshold {
-	var threshold *HysteresisThreshold
-	switch metricType {
-	case "cpu":
-		if config.CPU != nil {
-			threshold = ensureHysteresisThreshold(config.CPU)
-		}
-	case "memory":
-		if config.Memory != nil {
-			threshold = ensureHysteresisThreshold(config.Memory)
-		}
-	case "disk":
-		if config.Disk != nil {
-			threshold = ensureHysteresisThreshold(config.Disk)
-		}
-	case "diskRead":
-		if config.DiskRead != nil {
-			threshold = ensureHysteresisThreshold(config.DiskRead)
-		}
-	case "diskWrite":
-		if config.DiskWrite != nil {
-			threshold = ensureHysteresisThreshold(config.DiskWrite)
-		}
-	case "networkIn":
-		if config.NetworkIn != nil {
-			threshold = ensureHysteresisThreshold(config.NetworkIn)
-		}
-	case "networkOut":
-		if config.NetworkOut != nil {
-			threshold = ensureHysteresisThreshold(config.NetworkOut)
-		}
-	case "temperature":
-		if config.Temperature != nil {
-			threshold = ensureHysteresisThreshold(config.Temperature)
-		}
-	case "usage":
-		if config.Usage != nil {
-			threshold = ensureHysteresisThreshold(config.Usage)
-		}
+	th := getThresholdForMetric(config, metricType)
+	if th == nil {
+		return nil
 	}
-	return threshold
+	return ensureHysteresisThreshold(th)
 }
 
 // isInQuietHours checks if the current time is within quiet hours
@@ -6907,6 +6872,132 @@ func (m *Manager) OnAlertHistory(cb AlertCallback) {
 	}
 }
 
+// offlineCheckParams holds parameters for a generic offline resource check.
+type offlineCheckParams struct {
+	alertPrefix  string // e.g. "pbs-offline" or "pmg-offline"
+	resourceID   string
+	resourceName string
+	host         string
+	alertType    string // e.g. "offline"
+	resourceKind string // e.g. "PBS" or "PMG" — used in log messages
+}
+
+// checkResourceOffline creates an alert for an offline resource after confirmation.
+// It uses the offlineConfirmations map to track consecutive offline polls.
+func (m *Manager) checkResourceOffline(p offlineCheckParams) {
+	alertID := fmt.Sprintf("%s-%s", p.alertPrefix, p.resourceID)
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Check if offline alerts are disabled
+	if override, exists := m.config.Overrides[p.resourceID]; exists && (override.Disabled || override.DisableConnectivity) {
+		if _, alertExists := m.activeAlerts[alertID]; alertExists {
+			m.clearAlertNoLock(alertID)
+			log.Debug().
+				Str(strings.ToLower(p.resourceKind), p.resourceName).
+				Msg(p.resourceKind + " offline alert cleared (connectivity alerts disabled)")
+		}
+		return
+	}
+
+	// Track confirmation count
+	m.offlineConfirmations[p.resourceID]++
+
+	// Require 3 consecutive offline polls (~15 seconds) before alerting
+	if m.offlineConfirmations[p.resourceID] < 3 {
+		log.Debug().
+			Str(strings.ToLower(p.resourceKind), p.resourceName).
+			Int("confirmations", m.offlineConfirmations[p.resourceID]).
+			Msg(p.resourceKind + " offline detected, waiting for confirmation")
+		return
+	}
+
+	// Check if alert already exists
+	if _, exists := m.activeAlerts[alertID]; exists {
+		m.activeAlerts[alertID].LastSeen = time.Now()
+		return
+	}
+
+	// Create new offline alert after confirmation
+	alert := &Alert{
+		ID:           alertID,
+		Type:         p.alertType,
+		Level:        AlertLevelCritical,
+		ResourceID:   p.resourceID,
+		ResourceName: p.resourceName,
+		Node:         p.host,
+		Instance:     p.resourceName,
+		Message:      fmt.Sprintf("%s instance %s is offline", p.resourceKind, p.resourceName),
+		Value:        0,
+		Threshold:    0,
+		StartTime:    time.Now(),
+		LastSeen:     time.Now(),
+	}
+
+	m.preserveAlertState(alertID, alert)
+	m.activeAlerts[alertID] = alert
+
+	log.Error().
+		Str(strings.ToLower(p.resourceKind), p.resourceName).
+		Str("host", p.host).
+		Int("confirmations", m.offlineConfirmations[p.resourceID]).
+		Msg(p.resourceKind + " instance is offline")
+
+	if !m.checkRateLimit(alertID) {
+		log.Debug().
+			Str("alertID", alertID).
+			Int("maxPerHour", m.config.Schedule.MaxAlertsHour).
+			Msg(p.resourceKind + " offline alert suppressed due to rate limit")
+		return
+	}
+
+	m.dispatchAlert(alert, true)
+}
+
+// clearResourceOfflineAlert removes an offline alert when a resource comes back online.
+func (m *Manager) clearResourceOfflineAlert(alertPrefix, resourceID, resourceName, host, resourceKind string) {
+	alertID := fmt.Sprintf("%s-%s", alertPrefix, resourceID)
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Reset offline confirmation count
+	if count, exists := m.offlineConfirmations[resourceID]; exists && count > 0 {
+		log.Debug().
+			Str(strings.ToLower(resourceKind), resourceName).
+			Int("previousCount", count).
+			Msg(resourceKind + " is online, resetting offline confirmation count")
+		delete(m.offlineConfirmations, resourceID)
+	}
+
+	// Check if offline alert exists
+	alert, exists := m.activeAlerts[alertID]
+	if !exists {
+		return
+	}
+
+	// Remove from active alerts
+	m.removeActiveAlertNoLock(alertID)
+
+	resolvedAlert := &ResolvedAlert{
+		Alert:        alert,
+		ResolvedTime: time.Now(),
+	}
+	m.addRecentlyResolvedWithPrimaryLock(alertID, resolvedAlert)
+
+	// Send recovery notification (async to avoid deadlock — callback acquires m.mu.RLock
+	// via ShouldSuppressResolvedNotification, and we currently hold m.mu.Lock)
+	m.safeCallResolvedCallback(alertID, true)
+
+	// Log recovery
+	log.Info().
+		Str(strings.ToLower(resourceKind), resourceName).
+		Str("host", host).
+		Dur("downtime", time.Since(alert.StartTime)).
+		Msg(resourceKind + " instance is back online")
+}
+
 // checkNodeOffline creates an alert for offline nodes after confirmation
 func (m *Manager) checkNodeOffline(node models.Node) {
 	alertID := fmt.Sprintf("node-offline-%s", node.ID)
@@ -7047,240 +7138,36 @@ func (m *Manager) clearNodeOfflineAlert(node models.Node) {
 
 // checkPBSOffline creates an alert for offline PBS instances
 func (m *Manager) checkPBSOffline(pbs models.PBSInstance) {
-	alertID := fmt.Sprintf("pbs-offline-%s", pbs.ID)
-
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	// Check if PBS offline alerts are disabled via disableConnectivity flag
-	if override, exists := m.config.Overrides[pbs.ID]; exists && (override.Disabled || override.DisableConnectivity) {
-		// PBS connectivity alerts are disabled, clear any existing alert and return
-		if _, alertExists := m.activeAlerts[alertID]; alertExists {
-			m.clearAlertNoLock(alertID)
-			log.Debug().
-				Str("pbs", pbs.Name).
-				Msg("PBS offline alert cleared (connectivity alerts disabled)")
-		}
-		return
-	}
-
-	// Track confirmation count for this PBS
-	m.offlineConfirmations[pbs.ID]++
-
-	// Require 3 consecutive offline polls (~15 seconds) before alerting
-	if m.offlineConfirmations[pbs.ID] < 3 {
-		log.Debug().
-			Str("pbs", pbs.Name).
-			Int("confirmations", m.offlineConfirmations[pbs.ID]).
-			Msg("PBS offline detected, waiting for confirmation")
-		return
-	}
-
-	// Check if alert already exists
-	if _, exists := m.activeAlerts[alertID]; exists {
-		// Update last seen time
-		m.activeAlerts[alertID].LastSeen = time.Now()
-		return
-	}
-
-	// Create new offline alert after confirmation
-	alert := &Alert{
-		ID:           alertID,
-		Type:         "offline",
-		Level:        AlertLevelCritical,
-		ResourceID:   pbs.ID,
-		ResourceName: pbs.Name,
-		Node:         pbs.Host,
-		Instance:     pbs.Name,
-		Message:      fmt.Sprintf("PBS instance %s is offline", pbs.Name),
-		Value:        0,
-		Threshold:    0,
-		StartTime:    time.Now(),
-		LastSeen:     time.Now(),
-	}
-
-	m.preserveAlertState(alertID, alert)
-
-	m.activeAlerts[alertID] = alert
-
-	// Log and notify
-	log.Error().
-		Str("pbs", pbs.Name).
-		Str("host", pbs.Host).
-		Int("confirmations", m.offlineConfirmations[pbs.ID]).
-		Msg("PBS instance is offline")
-
-	if !m.checkRateLimit(alertID) {
-		log.Debug().
-			Str("alertID", alertID).
-			Int("maxPerHour", m.config.Schedule.MaxAlertsHour).
-			Msg("PBS offline alert suppressed due to rate limit")
-		return
-	}
-
-	m.dispatchAlert(alert, true)
+	m.checkResourceOffline(offlineCheckParams{
+		alertPrefix:  "pbs-offline",
+		resourceID:   pbs.ID,
+		resourceName: pbs.Name,
+		host:         pbs.Host,
+		alertType:    "offline",
+		resourceKind: "PBS",
+	})
 }
 
 // clearPBSOfflineAlert removes offline alert when PBS comes back online
 func (m *Manager) clearPBSOfflineAlert(pbs models.PBSInstance) {
-	alertID := fmt.Sprintf("pbs-offline-%s", pbs.ID)
-
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	// Reset offline confirmation count
-	if count, exists := m.offlineConfirmations[pbs.ID]; exists && count > 0 {
-		log.Debug().
-			Str("pbs", pbs.Name).
-			Int("previousCount", count).
-			Msg("PBS is online, resetting offline confirmation count")
-		delete(m.offlineConfirmations, pbs.ID)
-	}
-
-	// Check if offline alert exists
-	alert, exists := m.activeAlerts[alertID]
-	if !exists {
-		return
-	}
-
-	// Remove from active alerts
-	m.removeActiveAlertNoLock(alertID)
-
-	resolvedAlert := &ResolvedAlert{
-		Alert:        alert,
-		ResolvedTime: time.Now(),
-	}
-	m.addRecentlyResolvedWithPrimaryLock(alertID, resolvedAlert)
-
-	// Send recovery notification (async to avoid deadlock — callback acquires m.mu.RLock
-	// via ShouldSuppressResolvedNotification, and we currently hold m.mu.Lock)
-	m.safeCallResolvedCallback(alertID, true)
-
-	// Log recovery
-	log.Info().
-		Str("pbs", pbs.Name).
-		Str("host", pbs.Host).
-		Dur("downtime", time.Since(alert.StartTime)).
-		Msg("PBS instance is back online")
+	m.clearResourceOfflineAlert("pbs-offline", pbs.ID, pbs.Name, pbs.Host, "PBS")
 }
 
 // checkPMGOffline creates an alert for offline PMG instances
 func (m *Manager) checkPMGOffline(pmg models.PMGInstance) {
-	alertID := fmt.Sprintf("pmg-offline-%s", pmg.ID)
-
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	// Check if PMG offline alerts are disabled via disableConnectivity flag
-	if override, exists := m.config.Overrides[pmg.ID]; exists && (override.Disabled || override.DisableConnectivity) {
-		// PMG connectivity alerts are disabled, clear any existing alert and return
-		if _, alertExists := m.activeAlerts[alertID]; alertExists {
-			m.clearAlertNoLock(alertID)
-			log.Debug().
-				Str("pmg", pmg.Name).
-				Msg("PMG offline alert cleared (connectivity alerts disabled)")
-		}
-		return
-	}
-
-	// Track confirmation count for this PMG
-	m.offlineConfirmations[pmg.ID]++
-
-	// Require 3 consecutive offline polls (~15 seconds) before alerting
-	if m.offlineConfirmations[pmg.ID] < 3 {
-		log.Debug().
-			Str("pmg", pmg.Name).
-			Int("confirmations", m.offlineConfirmations[pmg.ID]).
-			Msg("PMG offline detected, waiting for confirmation")
-		return
-	}
-
-	// Check if alert already exists
-	if _, exists := m.activeAlerts[alertID]; exists {
-		// Update last seen time
-		m.activeAlerts[alertID].LastSeen = time.Now()
-		return
-	}
-
-	// Create new offline alert after confirmation
-	alert := &Alert{
-		ID:           alertID,
-		Type:         "offline",
-		Level:        AlertLevelCritical,
-		ResourceID:   pmg.ID,
-		ResourceName: pmg.Name,
-		Node:         pmg.Host,
-		Instance:     pmg.Name,
-		Message:      fmt.Sprintf("PMG instance %s is offline", pmg.Name),
-		Value:        0,
-		Threshold:    0,
-		StartTime:    time.Now(),
-		LastSeen:     time.Now(),
-	}
-
-	m.preserveAlertState(alertID, alert)
-
-	m.activeAlerts[alertID] = alert
-
-	// Log and notify
-	log.Error().
-		Str("pmg", pmg.Name).
-		Str("host", pmg.Host).
-		Int("confirmations", m.offlineConfirmations[pmg.ID]).
-		Msg("PMG instance is offline")
-
-	if !m.checkRateLimit(alertID) {
-		log.Debug().
-			Str("alertID", alertID).
-			Int("maxPerHour", m.config.Schedule.MaxAlertsHour).
-			Msg("PMG offline alert suppressed due to rate limit")
-		return
-	}
-
-	m.dispatchAlert(alert, true)
+	m.checkResourceOffline(offlineCheckParams{
+		alertPrefix:  "pmg-offline",
+		resourceID:   pmg.ID,
+		resourceName: pmg.Name,
+		host:         pmg.Host,
+		alertType:    "offline",
+		resourceKind: "PMG",
+	})
 }
 
 // clearPMGOfflineAlert removes offline alert when PMG comes back online
 func (m *Manager) clearPMGOfflineAlert(pmg models.PMGInstance) {
-	alertID := fmt.Sprintf("pmg-offline-%s", pmg.ID)
-
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	// Reset offline confirmation count
-	if count, exists := m.offlineConfirmations[pmg.ID]; exists && count > 0 {
-		log.Debug().
-			Str("pmg", pmg.Name).
-			Int("previousCount", count).
-			Msg("PMG is online, resetting offline confirmation count")
-		delete(m.offlineConfirmations, pmg.ID)
-	}
-
-	// Check if offline alert exists
-	alert, exists := m.activeAlerts[alertID]
-	if !exists {
-		return
-	}
-
-	// Remove from active alerts
-	m.removeActiveAlertNoLock(alertID)
-
-	resolvedAlert := &ResolvedAlert{
-		Alert:        alert,
-		ResolvedTime: time.Now(),
-	}
-	m.addRecentlyResolvedWithPrimaryLock(alertID, resolvedAlert)
-
-	// Send recovery notification (async to avoid deadlock — callback acquires m.mu.RLock
-	// via ShouldSuppressResolvedNotification, and we currently hold m.mu.Lock)
-	m.safeCallResolvedCallback(alertID, true)
-
-	// Log recovery
-	log.Info().
-		Str("pmg", pmg.Name).
-		Str("host", pmg.Host).
-		Dur("downtime", time.Since(alert.StartTime)).
-		Msg("PMG instance is back online")
+	m.clearResourceOfflineAlert("pmg-offline", pmg.ID, pmg.Name, pmg.Host, "PMG")
 }
 
 // checkPMGQueueDepths checks PMG mail queue depths and creates alerts
@@ -8370,45 +8257,7 @@ func (m *Manager) checkStorageOffline(storage models.Storage) {
 
 // clearStorageOfflineAlert removes offline alert when storage comes back online
 func (m *Manager) clearStorageOfflineAlert(storage models.Storage) {
-	alertID := fmt.Sprintf("storage-offline-%s", storage.ID)
-
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	// Reset offline confirmation count
-	if count, exists := m.offlineConfirmations[storage.ID]; exists && count > 0 {
-		log.Debug().
-			Str("storage", storage.Name).
-			Int("previousCount", count).
-			Msg("Storage is online, resetting offline confirmation count")
-		delete(m.offlineConfirmations, storage.ID)
-	}
-
-	// Check if offline alert exists
-	alert, exists := m.activeAlerts[alertID]
-	if !exists {
-		return
-	}
-
-	// Remove from active alerts
-	m.removeActiveAlertNoLock(alertID)
-
-	resolvedAlert := &ResolvedAlert{
-		Alert:        alert,
-		ResolvedTime: time.Now(),
-	}
-	m.addRecentlyResolvedWithPrimaryLock(alertID, resolvedAlert)
-
-	// Send recovery notification (async to avoid deadlock — callback acquires m.mu.RLock
-	// via ShouldSuppressResolvedNotification, and we currently hold m.mu.Lock)
-	m.safeCallResolvedCallback(alertID, true)
-
-	// Log recovery
-	log.Info().
-		Str("storage", storage.Name).
-		Str("node", storage.Node).
-		Dur("downtime", time.Since(alert.StartTime)).
-		Msg("Storage is back online")
+	m.clearResourceOfflineAlert("storage-offline", storage.ID, storage.Name, storage.Node, "Storage")
 }
 
 // checkGuestPoweredOff creates an alert for powered-off guests

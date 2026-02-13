@@ -213,6 +213,14 @@ func (u *Updater) CheckAndUpdate(ctx context.Context) {
 	u.logger.Info().Msg("Agent updated successfully, restarting...")
 }
 
+// setAuthHeaders adds authentication headers to the request if an API token is configured.
+func (u *Updater) setAuthHeaders(req *http.Request) {
+	if u.cfg.APIToken != "" {
+		req.Header.Set("X-API-Token", u.cfg.APIToken)
+		req.Header.Set("Authorization", "Bearer "+u.cfg.APIToken)
+	}
+}
+
 // getServerVersion fetches the current version from the Pulse server.
 func (u *Updater) getServerVersion(ctx context.Context) (string, error) {
 	url := fmt.Sprintf("%s/api/agent/version", strings.TrimRight(u.cfg.PulseURL, "/"))
@@ -222,10 +230,7 @@ func (u *Updater) getServerVersion(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("failed to create request: %w", err)
 	}
 
-	if u.cfg.APIToken != "" {
-		req.Header.Set("X-API-Token", u.cfg.APIToken)
-		req.Header.Set("Authorization", "Bearer "+u.cfg.APIToken)
-	}
+	u.setAuthHeaders(req)
 
 	resp, err := u.client.Do(req)
 	if err != nil {
@@ -338,10 +343,7 @@ func (u *Updater) performUpdateWithExecPath(ctx context.Context, execPath string
 			continue
 		}
 
-		if u.cfg.APIToken != "" {
-			req.Header.Set("X-API-Token", u.cfg.APIToken)
-			req.Header.Set("Authorization", "Bearer "+u.cfg.APIToken)
-		}
+		u.setAuthHeaders(req)
 
 		response, err := u.client.Do(req)
 		if err != nil {

@@ -581,6 +581,38 @@ var globalPersistence *ConfigPersistence
 // Kept as a var to allow tests to override without requiring /etc/pulse to exist.
 var defaultDataDir = "/etc/pulse"
 
+// parsePollingIntervalEnv reads an environment variable that represents a polling
+// interval (accepts Go duration strings like "30s" or plain integer seconds),
+// validates that it meets a minimum, and returns the parsed duration. Returns
+// (0, false) when the env var is unset or the value is invalid/below minimum.
+func parsePollingIntervalEnv(envName string, minDuration time.Duration) (time.Duration, bool) {
+	intervalStr := utils.GetenvTrim(envName)
+	if intervalStr == "" {
+		return 0, false
+	}
+
+	if dur, err := time.ParseDuration(intervalStr); err == nil {
+		if dur < minDuration {
+			log.Warn().Dur("interval", dur).Msgf("Ignoring %s below %s from environment", envName, minDuration)
+			return 0, false
+		}
+		log.Info().Dur("interval", dur).Msgf("Overriding %s polling interval from environment", strings.TrimSuffix(envName, "_POLLING_INTERVAL"))
+		return dur, true
+	}
+
+	if seconds, err := strconv.Atoi(intervalStr); err == nil {
+		if time.Duration(seconds)*time.Second < minDuration {
+			log.Warn().Int("seconds", seconds).Msgf("Ignoring %s below %s from environment", envName, minDuration)
+			return 0, false
+		}
+		log.Info().Int("seconds", seconds).Msgf("Overriding %s polling interval (seconds) from environment", strings.TrimSuffix(envName, "_POLLING_INTERVAL"))
+		return time.Duration(seconds) * time.Second, true
+	}
+
+	log.Warn().Str("value", intervalStr).Msgf("Invalid %s value, expected duration or seconds", envName)
+	return 0, false
+}
+
 // Load reads configuration from encrypted persistence files
 func Load() (*Config, error) {
 	// Get data directory from environment
@@ -877,70 +909,19 @@ func Load() (*Config, error) {
 		}
 	}
 
-	if intervalStr := utils.GetenvTrim("PVE_POLLING_INTERVAL"); intervalStr != "" {
-		if dur, err := time.ParseDuration(intervalStr); err == nil {
-			if dur < 10*time.Second {
-				log.Warn().Dur("interval", dur).Msg("Ignoring PVE_POLLING_INTERVAL below 10s from environment")
-			} else {
-				cfg.PVEPollingInterval = dur
-				cfg.EnvOverrides["PVE_POLLING_INTERVAL"] = true
-				log.Info().Dur("interval", dur).Msg("Overriding PVE polling interval from environment")
-			}
-		} else if seconds, err := strconv.Atoi(intervalStr); err == nil {
-			if seconds < 10 {
-				log.Warn().Int("seconds", seconds).Msg("Ignoring PVE_POLLING_INTERVAL below 10s from environment")
-			} else {
-				cfg.PVEPollingInterval = time.Duration(seconds) * time.Second
-				cfg.EnvOverrides["PVE_POLLING_INTERVAL"] = true
-				log.Info().Int("seconds", seconds).Msg("Overriding PVE polling interval (seconds) from environment")
-			}
-		} else {
-			log.Warn().Str("value", intervalStr).Msg("Invalid PVE_POLLING_INTERVAL value, expected duration or seconds")
-		}
+	if dur, ok := parsePollingIntervalEnv("PVE_POLLING_INTERVAL", 10*time.Second); ok {
+		cfg.PVEPollingInterval = dur
+		cfg.EnvOverrides["PVE_POLLING_INTERVAL"] = true
 	}
 
-	if intervalStr := utils.GetenvTrim("PBS_POLLING_INTERVAL"); intervalStr != "" {
-		if dur, err := time.ParseDuration(intervalStr); err == nil {
-			if dur < 10*time.Second {
-				log.Warn().Dur("interval", dur).Msg("Ignoring PBS_POLLING_INTERVAL below 10s from environment")
-			} else {
-				cfg.PBSPollingInterval = dur
-				cfg.EnvOverrides["PBS_POLLING_INTERVAL"] = true
-				log.Info().Dur("interval", dur).Msg("Overriding PBS polling interval from environment")
-			}
-		} else if seconds, err := strconv.Atoi(intervalStr); err == nil {
-			if seconds < 10 {
-				log.Warn().Int("seconds", seconds).Msg("Ignoring PBS_POLLING_INTERVAL below 10s from environment")
-			} else {
-				cfg.PBSPollingInterval = time.Duration(seconds) * time.Second
-				cfg.EnvOverrides["PBS_POLLING_INTERVAL"] = true
-				log.Info().Int("seconds", seconds).Msg("Overriding PBS polling interval (seconds) from environment")
-			}
-		} else {
-			log.Warn().Str("value", intervalStr).Msg("Invalid PBS_POLLING_INTERVAL value, expected duration or seconds")
-		}
+	if dur, ok := parsePollingIntervalEnv("PBS_POLLING_INTERVAL", 10*time.Second); ok {
+		cfg.PBSPollingInterval = dur
+		cfg.EnvOverrides["PBS_POLLING_INTERVAL"] = true
 	}
 
-	if intervalStr := utils.GetenvTrim("PMG_POLLING_INTERVAL"); intervalStr != "" {
-		if dur, err := time.ParseDuration(intervalStr); err == nil {
-			if dur < 10*time.Second {
-				log.Warn().Dur("interval", dur).Msg("Ignoring PMG_POLLING_INTERVAL below 10s from environment")
-			} else {
-				cfg.PMGPollingInterval = dur
-				cfg.EnvOverrides["PMG_POLLING_INTERVAL"] = true
-				log.Info().Dur("interval", dur).Msg("Overriding PMG polling interval from environment")
-			}
-		} else if seconds, err := strconv.Atoi(intervalStr); err == nil {
-			if seconds < 10 {
-				log.Warn().Int("seconds", seconds).Msg("Ignoring PMG_POLLING_INTERVAL below 10s from environment")
-			} else {
-				cfg.PMGPollingInterval = time.Duration(seconds) * time.Second
-				cfg.EnvOverrides["PMG_POLLING_INTERVAL"] = true
-				log.Info().Int("seconds", seconds).Msg("Overriding PMG polling interval (seconds) from environment")
-			}
-		} else {
-			log.Warn().Str("value", intervalStr).Msg("Invalid PMG_POLLING_INTERVAL value, expected duration or seconds")
-		}
+	if dur, ok := parsePollingIntervalEnv("PMG_POLLING_INTERVAL", 10*time.Second); ok {
+		cfg.PMGPollingInterval = dur
+		cfg.EnvOverrides["PMG_POLLING_INTERVAL"] = true
 	}
 
 	if enabledStr := utils.GetenvTrim("ENABLE_TEMPERATURE_MONITORING"); enabledStr != "" {

@@ -893,13 +893,13 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 		}
 		if strings.TrimSpace(containerIdentifier) != "" {
 			metrics := types.IOMetrics{
-				NetworkIn:  clampUint64ToInt64(payload.NetworkRXBytes),
-				NetworkOut: clampUint64ToInt64(payload.NetworkTXBytes),
+				NetworkIn:  clampToInt64(payload.NetworkRXBytes),
+				NetworkOut: clampToInt64(payload.NetworkTXBytes),
 				Timestamp:  timestamp,
 			}
 			if payload.BlockIO != nil {
-				metrics.DiskRead = clampUint64ToInt64(payload.BlockIO.ReadBytes)
-				metrics.DiskWrite = clampUint64ToInt64(payload.BlockIO.WriteBytes)
+				metrics.DiskRead = clampToInt64(payload.BlockIO.ReadBytes)
+				metrics.DiskWrite = clampToInt64(payload.BlockIO.WriteBytes)
 			}
 
 			readRate, writeRate, netInRate, netOutRate := m.rateTracker.CalculateRates(
@@ -1049,7 +1049,7 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 		Services:          services,
 		Tasks:             tasks,
 		Swarm:             swarmInfo,
-		IsLegacy:          isLegacyDockerAgent(report.Agent.Type),
+		IsLegacy:          isLegacyAgent(report.Agent.Type),
 	}
 
 	if tokenRecord != nil {
@@ -1463,7 +1463,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		CommandsEnabled: report.Agent.CommandsEnabled,
 		ReportIP:        strings.TrimSpace(report.Host.ReportIP),
 		Tags:            append([]string(nil), report.Tags...),
-		IsLegacy:        isLegacyHostAgent(report.Agent.Type),
+		IsLegacy:        isLegacyAgent(report.Agent.Type),
 	}
 
 	// Apply any pending commands execution override from server config

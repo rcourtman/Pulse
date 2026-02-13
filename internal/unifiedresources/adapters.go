@@ -41,7 +41,7 @@ func resourceFromProxmoxNode(node models.Node) (Resource, ResourceIdentity) {
 	resource := Resource{
 		Type:      ResourceTypeHost,
 		Name:      name,
-		Status:    statusFromNode(node.Status),
+		Status:    statusFromString(node.Status),
 		LastSeen:  node.LastSeen,
 		UpdatedAt: time.Now().UTC(),
 		Metrics:   metrics,
@@ -175,7 +175,7 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 	resource := Resource{
 		Type:      ResourceTypeHost,
 		Name:      name,
-		Status:    statusFromHost(host.Status),
+		Status:    statusFromString(host.Status),
 		LastSeen:  host.LastSeen,
 		UpdatedAt: time.Now().UTC(),
 		Metrics:   metrics,
@@ -225,7 +225,7 @@ func resourceFromDockerHost(host models.DockerHost) (Resource, ResourceIdentity)
 	resource := Resource{
 		Type:      ResourceTypeHost,
 		Name:      name,
-		Status:    statusFromHost(host.Status),
+		Status:    statusFromString(host.Status),
 		LastSeen:  host.LastSeen,
 		UpdatedAt: time.Now().UTC(),
 		Metrics:   metrics,
