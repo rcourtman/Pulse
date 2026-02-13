@@ -293,7 +293,7 @@ func (p *PatrolService) generateRemediationPlanFromInvestigation(findingID strin
 		plan.RiskLevel = remediation.RiskMedium
 		plan.Warnings = append(plan.Warnings, fmt.Sprintf("Failed to store command steps for automated remediation: %v", err))
 		if createErr := engine.CreatePlan(plan); createErr != nil {
-			log.Warn().Err(createErr).Str("findingID", finding.ID).Msg("Failed to create fallback remediation plan")
+			log.Warn().Err(createErr).Str("findingID", finding.ID).Msg("failed to create fallback remediation plan")
 		}
 	}
 }

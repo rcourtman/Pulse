@@ -45,14 +45,9 @@ const sampleInterval = 100 * time.Millisecond
 // Returns nil if no power data is available.
 func CollectPower(ctx context.Context) (*PowerData, error) {
 	// Try Intel RAPL first (most common on Intel)
-<<<<<<< HEAD
-	if data, err := collectRAPL(ctx); err == nil && data.Available {
-		return data, nil
-=======
 	raplData, raplErr := collectRALP(ctx)
 	if raplErr == nil && raplData.Available {
 		return raplData, nil
->>>>>>> refactor/parallel-05-error-handling
 	}
 
 	// Try AMD energy driver (for AMD Ryzen/EPYC)

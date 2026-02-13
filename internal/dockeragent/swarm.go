@@ -93,7 +93,7 @@ func (a *Agent) collectSwarmData(ctx context.Context, info systemtypes.Info, con
 	if info.Swarm.ControlAvailable && (includeServices || includeTasks) {
 		managerServices, managerTasks, err := a.collectSwarmDataFromManager(ctx, info, scope, containerIndex, includeServices, includeTasks)
 		if err != nil {
-			a.logger.Warn().Err(err).Msg("Failed to collect swarm data from manager; falling back to local inference")
+			a.logger.Warn().Err(err).Msg("failed to collect swarm data from manager; falling back to local inference")
 		} else {
 			if includeServices {
 				services = managerServices

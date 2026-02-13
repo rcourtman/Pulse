@@ -274,7 +274,7 @@ func (o *Orchestrator) CanStartInvestigation() bool {
 // Shutdown signals all running investigations to stop, persists state,
 // and waits for them to finish up to the context deadline.
 func (o *Orchestrator) Shutdown(ctx context.Context) error {
-	log.Info().Msg("Investigation orchestrator: starting shutdown")
+	log.Info().Msg("investigation orchestrator: starting shutdown")
 
 	// Signal all running investigations to cancel
 	o.shutdownFn()
@@ -282,7 +282,7 @@ func (o *Orchestrator) Shutdown(ctx context.Context) error {
 	// Force-save investigation state before waiting
 	if o.store != nil {
 		if err := o.store.ForceSave(); err != nil {
-			log.Error().Err(err).Msg("Investigation orchestrator: failed to force-save store during shutdown")
+			log.Error().Err(err).Msg("investigation orchestrator: failed to force-save store during shutdown")
 		}
 	}
 
@@ -295,13 +295,13 @@ func (o *Orchestrator) Shutdown(ctx context.Context) error {
 
 	select {
 	case <-done:
-		log.Info().Msg("Investigation orchestrator: all investigations completed")
+		log.Info().Msg("investigation orchestrator: all investigations completed")
 		return nil
 	case <-ctx.Done():
 		o.runningMu.Lock()
 		remaining := o.runningCount
 		o.runningMu.Unlock()
-		log.Warn().Int("remaining", remaining).Msg("Investigation orchestrator: shutdown timed out with running investigations")
+		log.Warn().Int("remaining", remaining).Msg("investigation orchestrator: shutdown timed out with running investigations")
 		return fmt.Errorf("shutdown timed out with %d investigations still running", remaining)
 	}
 }
@@ -652,7 +652,7 @@ func (o *Orchestrator) processResult(ctx context.Context, investigation *Investi
 	if fix != nil {
 		// Guard: investigation produced a fix with no commands — nothing to execute
 		if len(fix.Commands) == 0 {
-			log.Warn().Str("finding_id", finding.ID).Msg("Investigation fix has no commands, marking needs_attention")
+			log.Warn().Str("finding_id", finding.ID).Msg("investigation fix has no commands, marking needs_attention")
 			finding.InvestigationOutcome = string(OutcomeNeedsAttention)
 			finding.LastInvestigatedAt = &now
 			return nil
@@ -692,7 +692,7 @@ func (o *Orchestrator) processResult(ctx context.Context, investigation *Investi
 		if o.licenseChecker != nil && !o.licenseChecker.HasFeature(license.FeatureAIAutoFix) {
 			if currentLevel == "assisted" || currentLevel == "full" {
 				currentLevel = "approval"
-				log.Warn().Str("finding_id", finding.ID).Msg("Auto-fix requires Pro license - clamping to approval mode")
+				log.Warn().Str("finding_id", finding.ID).Msg("auto-fix requires Pro license - clamping to approval mode")
 			}
 		}
 
@@ -745,7 +745,7 @@ func (o *Orchestrator) processResult(ctx context.Context, investigation *Investi
 
 			if o.approvalStore != nil {
 				if err := o.approvalStore.Create(approval); err != nil {
-					log.Error().Err(err).Msg("Failed to queue fix for approval")
+					log.Error().Err(err).Msg("failed to queue fix for approval")
 					outcome = OutcomeNeedsAttention
 				} else {
 					o.store.SetApprovalID(investigation.ID, approval.ID)
@@ -823,14 +823,14 @@ func (o *Orchestrator) processResult(ctx context.Context, investigation *Investi
 						o.mu.RUnlock()
 						if verifyErr != nil {
 							if errors.Is(verifyErr, ErrVerificationUnknown) {
-								log.Warn().Err(verifyErr).Str("finding_id", finding.ID).Msg("Fix verification inconclusive")
+								log.Warn().Err(verifyErr).Str("finding_id", finding.ID).Msg("fix verification inconclusive")
 								outcome = OutcomeFixVerificationUnknown
 								fix.Rationale += fmt.Sprintf("\n\nVerification inconclusive: %v", verifyErr)
 								if vmc != nil {
 									vmc.RecordFixVerification("unknown")
 								}
 							} else {
-								log.Error().Err(verifyErr).Str("finding_id", finding.ID).Msg("Fix verification failed with error")
+								log.Error().Err(verifyErr).Str("finding_id", finding.ID).Msg("fix verification failed with error")
 								outcome = OutcomeFixVerificationFailed
 								fix.Rationale += fmt.Sprintf("\n\nVerification error: %v", verifyErr)
 								if vmc != nil {
@@ -838,14 +838,14 @@ func (o *Orchestrator) processResult(ctx context.Context, investigation *Investi
 								}
 							}
 						} else if !verified {
-							log.Warn().Str("finding_id", finding.ID).Msg("Fix executed but issue persists")
+							log.Warn().Str("finding_id", finding.ID).Msg("fix executed but issue persists")
 							outcome = OutcomeFixVerificationFailed
 							fix.Rationale += "\n\nVerification: Issue persists after fix execution."
 							if vmc != nil {
 								vmc.RecordFixVerification("failed")
 							}
 						} else {
-							log.Info().Str("finding_id", finding.ID).Msg("Fix verified - issue resolved")
+							log.Info().Str("finding_id", finding.ID).Msg("fix verified - issue resolved")
 							outcome = OutcomeFixVerified
 							fix.Rationale += "\n\nVerification: Issue confirmed resolved."
 							if vmc != nil {
@@ -1012,13 +1012,13 @@ func (o *Orchestrator) parseInvestigationSummary(summary string) (*Fix, Outcome)
 
 	// Look for CANNOT_FIX marker (case-insensitive)
 	if strings.Index(upper, "CANNOT_FIX:") >= 0 {
-		log.Debug().Msg("Found CANNOT_FIX marker")
+		log.Debug().Msg("found CANNOT_FIX marker")
 		return nil, OutcomeCannotFix
 	}
 
 	// Look for NEEDS_ATTENTION marker (case-insensitive)
 	if strings.Index(upper, "NEEDS_ATTENTION:") >= 0 {
-		log.Debug().Msg("Found NEEDS_ATTENTION marker")
+		log.Debug().Msg("found NEEDS_ATTENTION marker")
 		return nil, OutcomeNeedsAttention
 	}
 

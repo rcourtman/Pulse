@@ -58,7 +58,7 @@ func (p *PatrolService) Stop() {
 	findings := p.findings
 	p.mu.Unlock()
 
-	log.Info().Msg("Stopping AI Patrol Service")
+	log.Info().Msg("stopping AI Patrol Service")
 
 	// Give investigations 15 seconds to finish (leaves headroom within server's 30s budget)
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -157,7 +157,7 @@ func (p *PatrolService) patrolLoop(ctx context.Context) {
 
 		case alert := <-p.adHocTrigger:
 			// Run immediate targeted patrol for this alert
-			log.Info().Str("alert_id", alert.ID).Msg("Patrol triggered by alert")
+			log.Info().Str("alert_id", alert.ID).Msg("patrol triggered by alert")
 			p.runTargetedPatrol(ctx, alert)
 
 		case <-configCh:
@@ -1172,15 +1172,15 @@ func (p *PatrolService) SubscribeToStreamFrom(lastSeq int64) chan PatrolStreamEv
 	metrics := GetPatrolMetrics()
 	if replayedCount > 0 {
 		metrics.RecordStreamReplay(replayedCount)
-		log.Debug().Int64("last_seq", lastSeq).Int("replayed_events", replayedCount).Msg("Patrol stream replayed buffered events")
+		log.Debug().Int64("last_seq", lastSeq).Int("replayed_events", replayedCount).Msg("patrol stream replayed buffered events")
 	}
 	for _, reason := range snapshotReasons {
 		metrics.RecordStreamSnapshot(reason)
-		log.Debug().Int64("last_seq", lastSeq).Str("resync_reason", reason).Msg("Patrol stream sent synthetic snapshot")
+		log.Debug().Int64("last_seq", lastSeq).Str("resync_reason", reason).Msg("patrol stream sent synthetic snapshot")
 	}
 	if lastSeq > 0 && replayedCount == 0 && len(snapshotReasons) == 0 {
 		metrics.RecordStreamMiss()
-		log.Debug().Int64("last_seq", lastSeq).Msg("Patrol stream resume had no replay or snapshot")
+		log.Debug().Int64("last_seq", lastSeq).Msg("patrol stream resume had no replay or snapshot")
 	}
 
 	return ch
@@ -1253,7 +1253,7 @@ func (p *PatrolService) broadcast(event PatrolStreamEvent) {
 		delete(p.streamSubscribers, ch)
 		reason := dropReasons[ch]
 		GetPatrolMetrics().RecordStreamSubscriberDrop(reason)
-		log.Debug().Str("reason", reason).Msg("Patrol stream subscriber dropped")
+		log.Debug().Str("reason", reason).Msg("patrol stream subscriber dropped")
 		if sub != nil && sub.closed.CompareAndSwap(false, true) {
 			close(ch)
 		}
@@ -1719,9 +1719,9 @@ func (p *PatrolService) TriggerPatrolForAlert(alert *alerts.Alert) {
 	if triggerManager != nil {
 		scope := AlertTriggeredPatrolScope(alert.ID, alert.ResourceID, resourceType, alert.Type)
 		if triggerManager.TriggerPatrol(scope) {
-			log.Debug().Str("alert_id", alert.ID).Msg("Queued alert-triggered patrol via trigger manager")
+			log.Debug().Str("alert_id", alert.ID).Msg("queued alert-triggered patrol via trigger manager")
 		} else {
-			log.Warn().Str("alert_id", alert.ID).Msg("Alert-triggered patrol rejected by trigger manager")
+			log.Warn().Str("alert_id", alert.ID).Msg("alert-triggered patrol rejected by trigger manager")
 		}
 		return
 	}
@@ -1729,9 +1729,9 @@ func (p *PatrolService) TriggerPatrolForAlert(alert *alerts.Alert) {
 	// Non-blocking send
 	select {
 	case p.adHocTrigger <- alert:
-		log.Debug().Str("alert_id", alert.ID).Msg("Queued ad-hoc patrol trigger")
+		log.Debug().Str("alert_id", alert.ID).Msg("queued ad-hoc patrol trigger")
 	default:
-		log.Warn().Str("alert_id", alert.ID).Msg("Patrol trigger queue full, dropping trigger")
+		log.Warn().Str("alert_id", alert.ID).Msg("patrol trigger queue full, dropping trigger")
 	}
 }
 

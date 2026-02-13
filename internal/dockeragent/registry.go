@@ -159,7 +159,7 @@ func (r *RegistryChecker) CheckImageUpdate(ctx context.Context, image, currentDi
 	r.logger.Debug().Str("image", image).Str("cacheKey", cacheKey).Msg("Checking update (internal)")
 
 	if cached := r.getCached(cacheKey); cached != nil {
-		r.logger.Debug().Str("image", image).Msg("Cache hit for update check")
+		r.logger.Debug().Str("image", image).Msg("cache hit for update check")
 		if cached.err != "" {
 			return &ImageUpdateResult{
 				Image:           image,
@@ -210,7 +210,7 @@ func (r *RegistryChecker) CheckImageUpdate(ctx context.Context, image, currentDi
 
 	updateAvailable := r.digestsDiffer(currentDigest, cacheValue)
 
-	r.logger.Info().
+	r.logger.Debug().
 		Str("image", image).
 		Str("currentDigest", currentDigest).
 		Str("latestDigest", latestDigest).

@@ -434,7 +434,7 @@ func (m *Monitor) RemoveKubernetesCluster(clusterID string) (models.KubernetesCl
 	cluster, removed := m.state.RemoveKubernetesCluster(clusterID)
 	if !removed {
 		if logging.IsLevelEnabled(zerolog.DebugLevel) {
-			log.Debug().Str("k8sClusterID", clusterID).Msg("Kubernetes cluster not present in state during removal; proceeding")
+			log.Debug().Str("k8sClusterID", clusterID).Msg("kubernetes cluster not present in state during removal; proceeding")
 		}
 		cluster = models.KubernetesCluster{
 			ID:          clusterID,
@@ -451,7 +451,7 @@ func (m *Monitor) RemoveKubernetesCluster(clusterID string) (models.KubernetesCl
 
 			if m.persistence != nil {
 				if err := m.persistence.SaveAPITokens(m.config.APITokens); err != nil {
-					log.Warn().Err(err).Str("tokenID", cluster.TokenID).Msg("Failed to persist API token revocation after Kubernetes cluster removal")
+					log.Warn().Err(err).Str("tokenID", cluster.TokenID).Msg("failed to persist API token revocation after Kubernetes cluster removal")
 				} else {
 					log.Info().Str("tokenID", cluster.TokenID).Str("tokenName", cluster.TokenName).Msg("API token revoked for removed Kubernetes cluster")
 				}

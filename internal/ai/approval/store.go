@@ -116,7 +116,7 @@ func NewStore(cfg StoreConfig) (*Store, error) {
 	// Load existing data
 	if s.persist {
 		if err := s.load(); err != nil {
-			log.Warn().Err(err).Msg("Failed to load approval data, starting fresh")
+			log.Warn().Err(err).Msg("failed to load approval data, starting fresh")
 		}
 	}
 
@@ -252,7 +252,7 @@ func (s *Store) Approve(id, username string) (*ApprovalRequest, error) {
 	if time.Now().After(req.ExpiresAt) {
 		req.Status = StatusExpired
 		s.saveAsync()
-		return nil, fmt.Errorf("approval request has expired")
+		return nil, fmt.Errorf("approval request %s has expired (expires_at: %v)", id, req.ExpiresAt)
 	}
 
 	now := time.Now()
@@ -319,13 +319,13 @@ func (s *Store) ConsumeApproval(id, command, targetType, targetID string) (*Appr
 	}
 
 	if req.Consumed {
-		return nil, fmt.Errorf("approval request has already been consumed")
+		return nil, fmt.Errorf("approval request %s has already been consumed", id)
 	}
 
 	if time.Now().After(req.ExpiresAt) {
 		req.Status = StatusExpired
 		s.saveAsync()
-		return nil, fmt.Errorf("approval request has expired")
+		return nil, fmt.Errorf("approval request %s has expired (expires_at: %v)", id, req.ExpiresAt)
 	}
 
 	// Verify command hash matches
@@ -516,7 +516,7 @@ func (s *Store) save() {
 	}
 	if data, err := json.MarshalIndent(approvals, "", "  "); err == nil {
 		if err := os.WriteFile(s.approvalsFile(), data, 0600); err != nil {
-			log.Error().Err(err).Msg("Failed to save approvals")
+			log.Error().Err(err).Msg("failed to save approvals")
 		}
 	}
 
@@ -527,7 +527,7 @@ func (s *Store) save() {
 	}
 	if data, err := json.MarshalIndent(executions, "", "  "); err == nil {
 		if err := os.WriteFile(s.executionsFile(), data, 0600); err != nil {
-			log.Error().Err(err).Msg("Failed to save executions")
+			log.Error().Err(err).Msg("failed to save executions")
 		}
 	}
 }
@@ -555,12 +555,12 @@ func (s *Store) scheduleSave() {
 
 		if data, err := json.MarshalIndent(approvals, "", "  "); err == nil {
 			if err := os.WriteFile(s.approvalsFile(), data, 0600); err != nil {
-				log.Error().Err(err).Msg("Failed to save approvals")
+				log.Error().Err(err).Msg("failed to save approvals")
 			}
 		}
 		if data, err := json.MarshalIndent(executions, "", "  "); err == nil {
 			if err := os.WriteFile(s.executionsFile(), data, 0600); err != nil {
-				log.Error().Err(err).Msg("Failed to save executions")
+				log.Error().Err(err).Msg("failed to save executions")
 			}
 		}
 	})
@@ -600,12 +600,12 @@ func (s *Store) cleanupLoop(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Debug().Msg("Approval store cleanup loop stopped")
+			log.Debug().Msg("approval store cleanup loop stopped")
 			return
 		case <-ticker.C:
 			cleaned := s.CleanupExpired()
 			if cleaned > 0 {
-				log.Debug().Int("count", cleaned).Msg("Cleaned up expired approval items")
+				log.Debug().Int("count", cleaned).Msg("cleaned up expired approval items")
 			}
 		}
 	}

@@ -958,7 +958,7 @@ func (s *UnifiedStore) scheduleSave() {
 
 		if persistence != nil {
 			if err := persistence.SaveFindings(findingsCopy); err != nil {
-				log.Error().Err(err).Msg("Failed to save unified findings")
+				log.Error().Err(err).Msg("failed to save unified findings")
 			}
 		}
 	})

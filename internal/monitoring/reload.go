@@ -70,12 +70,12 @@ func (rm *ReloadableMonitor) watchReload(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case done := <-rm.reloadChan:
-			log.Info().Msg("Reloading monitor configuration")
+			log.Info().Msg("reloading monitor configuration")
 			if err := rm.doReload(); err != nil {
-				log.Error().Err(err).Msg("Failed to reload monitor")
+				log.Error().Err(err).Msg("failed to reload monitor")
 				done <- err
 			} else {
-				log.Info().Msg("Monitor reloaded successfully")
+				log.Info().Msg("monitor reloaded successfully")
 				done <- nil
 			}
 		}
@@ -94,7 +94,7 @@ func (rm *ReloadableMonitor) doReload() error {
 	}
 
 	// Polling interval changes and other settings require a full reload
-	log.Info().Msg("Performing full monitor reload")
+	log.Info().Msg("performing full monitor reload")
 
 	// Cancel current monitor
 	if rm.cancel != nil {

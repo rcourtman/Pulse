@@ -127,7 +127,10 @@ func (p *Provisioner) generateAndLogMagicLink(email, tenantID string) {
 	}
 	magicURL := cpauth.BuildVerifyURL(p.baseURL, token)
 	if magicURL == "" {
-		log.Error().Str("tenant_id", tenantID).Msg("Failed to build magic link URL (empty baseURL?)")
+		log.Error().
+			Str("tenant_id", tenantID).
+			Str("base_url", strings.TrimSpace(p.baseURL)).
+			Msg("Failed to build magic link URL")
 		return
 	}
 

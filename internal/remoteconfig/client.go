@@ -153,7 +153,7 @@ func (c *Client) Fetch(ctx context.Context) (map[string]interface{}, *bool, erro
 	} else if signatureRequired {
 		return nil, nil, fmt.Errorf("config signature required but missing")
 	} else if len(configResp.Config.Settings) > 0 || configResp.Config.CommandsEnabled != nil {
-		c.cfg.Logger.Warn().Msg("Remote config response missing signature - skipping verification")
+		c.cfg.Logger.Warn().Msg("remote config response missing signature - skipping verification")
 	}
 
 	return configResp.Config.Settings, configResp.Config.CommandsEnabled, nil
@@ -218,56 +218,6 @@ func (c *Client) resolveHostID(ctx context.Context) (string, error) {
 	return strings.TrimSpace(payload.Host.ID), nil
 }
 
-<<<<<<< HEAD
-func normalizeConfig(cfg Config) (Config, error) {
-	cfg.PulseURL = strings.TrimSpace(cfg.PulseURL)
-	if cfg.PulseURL == "" {
-		cfg.PulseURL = "http://localhost:7655"
-	}
-	cfg.APIToken = strings.TrimSpace(cfg.APIToken)
-	cfg.AgentID = strings.TrimSpace(cfg.AgentID)
-	cfg.Hostname = strings.TrimSpace(cfg.Hostname)
-
-	normalizedPulseURL, err := normalizePulseURL(cfg.PulseURL)
-	if err != nil {
-		return cfg, err
-	}
-	cfg.PulseURL = normalizedPulseURL
-
-	return cfg, nil
-}
-
-func normalizePulseURL(raw string) (string, error) {
-	parsed, err := url.Parse(raw)
-	if err != nil {
-		return "", fmt.Errorf("invalid pulse URL: %w", err)
-	}
-
-	switch parsed.Scheme {
-	case "http", "https":
-	default:
-		return "", fmt.Errorf("invalid pulse URL scheme %q: must be http or https", parsed.Scheme)
-	}
-
-	if parsed.Hostname() == "" {
-		return "", errors.New("invalid pulse URL: missing host")
-	}
-	if parsed.User != nil {
-		return "", errors.New("invalid pulse URL: userinfo is not allowed")
-	}
-	if parsed.RawQuery != "" || parsed.Fragment != "" {
-		return "", errors.New("invalid pulse URL: query and fragment are not allowed")
-	}
-
-	if port := parsed.Port(); port != "" {
-		portValue, err := strconv.Atoi(port)
-		if err != nil || portValue < 1 || portValue > 65535 {
-			return "", fmt.Errorf("invalid pulse URL port %q: must be between 1 and 65535", port)
-		}
-	}
-
-	return strings.TrimRight(parsed.String(), "/"), nil
-=======
 func formatHTTPStatusError(resp *http.Response, operation string) error {
 	body, readErr := io.ReadAll(io.LimitReader(resp.Body, maxHTTPErrorBodyBytes))
 	if readErr != nil {
@@ -280,5 +230,4 @@ func formatHTTPStatusError(resp *http.Response, operation string) error {
 	}
 
 	return fmt.Errorf("%s responded with status %s: %s", operation, resp.Status, detail)
->>>>>>> refactor/parallel-05-error-handling
 }

@@ -14,7 +14,7 @@ import (
 
 // pollReplicationStatus polls storage replication jobs for a PVE instance.
 func (m *Monitor) pollReplicationStatus(ctx context.Context, instanceName string, client PVEClientInterface, vms []models.VM) {
-	log.Debug().Str("instance", instanceName).Msg("Polling replication status")
+	log.Debug().Str("instance", instanceName).Msg("polling replication status")
 
 	jobs, err := client.GetReplicationStatus(ctx)
 	if err != nil {

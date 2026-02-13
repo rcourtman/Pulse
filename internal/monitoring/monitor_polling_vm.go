@@ -63,7 +63,7 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 			vms, err := client.GetVMs(ctx, n.Node)
 			if err != nil {
 				monErr := errors.NewMonitorError(errors.ErrorTypeAPI, "get_vms", instanceName, err).WithNode(n.Node)
-				log.Error().Err(monErr).Str("node", n.Node).Msg("Failed to get VMs; deferring node poll until next cycle")
+				log.Error().Err(monErr).Str("node", n.Node).Msg("failed to get VMs; deferring node poll until next cycle")
 				resultChan <- nodeResult{node: n.Node, err: err}
 				return
 			}

@@ -150,7 +150,7 @@ func NewEventCorrelator(cfg EventCorrelatorConfig) *EventCorrelator {
 	// Load from disk
 	if cfg.DataDir != "" {
 		if err := correlator.loadFromDisk(); err != nil {
-			log.Warn().Err(err).Msg("Failed to load Proxmox event data from disk")
+			log.Warn().Err(err).Msg("failed to load Proxmox event data from disk")
 		}
 	}
 
@@ -585,7 +585,7 @@ func (c *EventCorrelator) trimCorrelations() {
 // saveIfDirty saves to disk if there are changes
 func (c *EventCorrelator) saveIfDirty() {
 	if err := c.saveToDisk(); err != nil {
-		log.Warn().Err(err).Msg("Failed to save Proxmox event data")
+		log.Warn().Err(err).Msg("failed to save Proxmox event data")
 	}
 }
 

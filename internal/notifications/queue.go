@@ -3,7 +3,6 @@ package notifications
 import (
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -105,18 +104,13 @@ func NewNotificationQueue(dataDir string) (*NotificationQueue, error) {
 	}
 
 	if err := nq.initSchema(); err != nil {
-		if closeErr := db.Close(); closeErr != nil {
-			return nil, fmt.Errorf(
-				"initialize notification queue schema: %w",
-				errors.Join(err, fmt.Errorf("close notification queue database after schema init failure: %w", closeErr)),
-			)
-		}
-		return nil, fmt.Errorf("initialize notification queue schema: %w", err)
+		db.Close()
+		return nil, fmt.Errorf("failed to initialize schema: %w", err)
 	}
 
 	// Reset any stuck "sending" items to "pending" (crash recovery)
 	if _, err := nq.db.Exec(`UPDATE notification_queue SET status = 'pending' WHERE status = 'sending'`); err != nil {
-		log.Error().Err(err).Msg("Failed to recover stuck sending notifications")
+		log.Error().Err(err).Msg("failed to recover stuck sending notifications")
 	}
 
 	// Start background processors
@@ -126,7 +120,7 @@ func NewNotificationQueue(dataDir string) (*NotificationQueue, error) {
 
 	log.Info().
 		Str("dbPath", dbPath).
-		Msg("Notification queue initialized")
+		Msg("notification queue initialized")
 
 	return nq, nil
 }
@@ -154,7 +148,6 @@ func (nq *NotificationQueue) initSchema() error {
 	CREATE INDEX IF NOT EXISTS idx_status ON notification_queue(status);
 	CREATE INDEX IF NOT EXISTS idx_next_retry ON notification_queue(next_retry_at) WHERE status = 'pending';
 	CREATE INDEX IF NOT EXISTS idx_created_at ON notification_queue(created_at);
-	CREATE INDEX IF NOT EXISTS idx_status_completed_at ON notification_queue(status, completed_at);
 
 	CREATE TABLE IF NOT EXISTS notification_audit (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -178,10 +171,7 @@ func (nq *NotificationQueue) initSchema() error {
 	`
 
 	_, err := nq.db.Exec(schema)
-	if err != nil {
-		return fmt.Errorf("create notification queue schema: %w", err)
-	}
-	return nil
+	return err
 }
 
 // Enqueue adds a notification to the queue
@@ -240,7 +230,7 @@ func (nq *NotificationQueue) Enqueue(notif *QueuedNotification) error {
 		Str("id", notif.ID).
 		Str("type", notif.Type).
 		Int("alertCount", len(notif.Alerts)).
-		Msg("Notification enqueued")
+		Msg("notification enqueued")
 
 	// Signal processor that new work is available
 	select {
@@ -252,7 +242,7 @@ func (nq *NotificationQueue) Enqueue(notif *QueuedNotification) error {
 }
 
 // UpdateStatus updates the status of a queued notification without incrementing attempts
-func (nq *NotificationQueue) UpdateStatus(notificationID string, status NotificationQueueStatus, errorMsg string) error {
+func (nq *NotificationQueue) UpdateStatus(id string, status NotificationQueueStatus, errorMsg string) error {
 	nq.mu.Lock()
 	defer nq.mu.Unlock()
 
@@ -268,29 +258,26 @@ func (nq *NotificationQueue) UpdateStatus(notificationID string, status Notifica
 		WHERE id = ?
 	`
 
-	result, err := nq.db.Exec(query, status, now, errorMsg, completedAt, notificationID)
+	result, err := nq.db.Exec(query, status, now, errorMsg, completedAt, id)
 	if err != nil {
 		return fmt.Errorf("failed to update notification status: %w", err)
 	}
 
-	rows, rowsErr := result.RowsAffected()
-	if rowsErr != nil {
-		return fmt.Errorf("read rows affected for notification status update %q: %w", id, rowsErr)
-	}
+	rows, _ := result.RowsAffected()
 	if rows == 0 {
-		return fmt.Errorf("notification not found: %s", notificationID)
+		return fmt.Errorf("notification not found: %s", id)
 	}
 
 	return nil
 }
 
 // IncrementAttempt increments the attempt counter for a notification
-func (nq *NotificationQueue) IncrementAttempt(notificationID string) error {
+func (nq *NotificationQueue) IncrementAttempt(id string) error {
 	nq.mu.Lock()
 	defer nq.mu.Unlock()
 
 	query := `UPDATE notification_queue SET attempts = attempts + 1 WHERE id = ?`
-	_, err := nq.db.Exec(query, notificationID)
+	_, err := nq.db.Exec(query, id)
 	if err != nil {
 		return fmt.Errorf("failed to increment attempt counter: %w", err)
 	}
@@ -298,7 +285,7 @@ func (nq *NotificationQueue) IncrementAttempt(notificationID string) error {
 }
 
 // IncrementAttemptAndSetStatus atomically increments attempt counter and sets status in a single operation
-func (nq *NotificationQueue) IncrementAttemptAndSetStatus(notificationID string, status NotificationQueueStatus) error {
+func (nq *NotificationQueue) IncrementAttemptAndSetStatus(id string, status NotificationQueueStatus) error {
 	nq.mu.Lock()
 	defer nq.mu.Unlock()
 
@@ -309,7 +296,7 @@ func (nq *NotificationQueue) IncrementAttemptAndSetStatus(notificationID string,
 		    last_attempt = ?
 		WHERE id = ?
 	`
-	_, err := nq.db.Exec(query, status, time.Now().Unix(), notificationID)
+	_, err := nq.db.Exec(query, status, time.Now().Unix(), id)
 	if err != nil {
 		return fmt.Errorf("failed to increment attempt and set status: %w", err)
 	}
@@ -341,16 +328,13 @@ func (nq *NotificationQueue) GetPending(limit int) ([]*QueuedNotification, error
 	for rows.Next() {
 		notif, err := nq.scanNotification(rows)
 		if err != nil {
-			log.Error().Err(err).Msg("Failed to scan notification row")
+			log.Error().Err(err).Msg("failed to scan notification row")
 			continue
 		}
 		notifications = append(notifications, notif)
 	}
 
-	if err := rows.Err(); err != nil {
-		return notifications, fmt.Errorf("iterate pending notifications: %w", err)
-	}
-	return notifications, nil
+	return notifications, rows.Err()
 }
 
 // scanNotification scans a database row into a QueuedNotification
@@ -377,7 +361,7 @@ func (nq *NotificationQueue) scanNotification(rows *sql.Rows) (*QueuedNotificati
 		&notif.PayloadBytes,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("scan notification row: %w", err)
+		return nil, err
 	}
 
 	notif.CreatedAt = time.Unix(createdAtUnix, 0)
@@ -405,7 +389,7 @@ func (nq *NotificationQueue) scanNotification(rows *sql.Rows) (*QueuedNotificati
 }
 
 // ScheduleRetry schedules a notification for retry with exponential backoff
-func (nq *NotificationQueue) ScheduleRetry(notificationID string, attempt int) error {
+func (nq *NotificationQueue) ScheduleRetry(id string, attempt int) error {
 	backoff := calculateBackoff(attempt)
 	nextRetry := time.Now().Add(backoff)
 
@@ -418,24 +402,24 @@ func (nq *NotificationQueue) ScheduleRetry(notificationID string, attempt int) e
 		WHERE id = ?
 	`
 
-	_, err := nq.db.Exec(query, nextRetry.Unix(), time.Now().Unix(), notificationID)
+	_, err := nq.db.Exec(query, nextRetry.Unix(), time.Now().Unix(), id)
 	if err != nil {
 		return fmt.Errorf("failed to schedule retry: %w", err)
 	}
 
 	log.Debug().
-		Str("id", notificationID).
+		Str("id", id).
 		Int("attempt", attempt).
 		Dur("backoff", backoff).
 		Time("nextRetry", nextRetry).
-		Msg("Notification retry scheduled")
+		Msg("notification retry scheduled")
 
 	return nil
 }
 
 // MoveToDLQ moves a notification to the dead letter queue
-func (nq *NotificationQueue) MoveToDLQ(notificationID string, reason string) error {
-	return nq.UpdateStatus(notificationID, QueueStatusDLQ, reason)
+func (nq *NotificationQueue) MoveToDLQ(id string, reason string) error {
+	return nq.UpdateStatus(id, QueueStatusDLQ, reason)
 }
 
 // GetDLQ returns all notifications in the dead letter queue
@@ -462,16 +446,13 @@ func (nq *NotificationQueue) GetDLQ(limit int) ([]*QueuedNotification, error) {
 	for rows.Next() {
 		notif, err := nq.scanNotification(rows)
 		if err != nil {
-			log.Error().Err(err).Msg("Failed to scan DLQ notification")
+			log.Error().Err(err).Msg("failed to scan DLQ notification")
 			continue
 		}
 		notifications = append(notifications, notif)
 	}
 
-	if err := rows.Err(); err != nil {
-		return notifications, fmt.Errorf("iterate DLQ notifications: %w", err)
-	}
-	return notifications, nil
+	return notifications, rows.Err()
 }
 
 // RecordAudit records a notification delivery attempt in the audit log
@@ -483,10 +464,7 @@ func (nq *NotificationQueue) RecordAudit(notif *QueuedNotification, success bool
 	for i, alert := range notif.Alerts {
 		alertIDs[i] = alert.ID
 	}
-	alertIDsJSON, err := json.Marshal(alertIDs)
-	if err != nil {
-		return fmt.Errorf("marshal notification audit alert IDs for %q: %w", notif.ID, err)
-	}
+	alertIDsJSON, _ := json.Marshal(alertIDs)
 
 	query := `
 		INSERT INTO notification_audit
@@ -494,7 +472,7 @@ func (nq *NotificationQueue) RecordAudit(notif *QueuedNotification, success bool
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
-	_, err = nq.db.Exec(query,
+	_, err := nq.db.Exec(query,
 		notif.ID,
 		notif.Type,
 		notif.Method,
@@ -508,10 +486,7 @@ func (nq *NotificationQueue) RecordAudit(notif *QueuedNotification, success bool
 		time.Now().Unix(),
 	)
 
-	if err != nil {
-		return fmt.Errorf("record notification audit for %q: %w", notif.ID, err)
-	}
-	return nil
+	return err
 }
 
 // GetQueueStats returns statistics about the notification queue
@@ -531,7 +506,7 @@ func (nq *NotificationQueue) GetQueueStats() (map[string]int, error) {
 
 	rows, err := nq.db.Query(query, since)
 	if err != nil {
-		return nil, fmt.Errorf("query notification queue stats: %w", err)
+		return nil, err
 	}
 	defer rows.Close()
 
@@ -540,14 +515,9 @@ func (nq *NotificationQueue) GetQueueStats() (map[string]int, error) {
 		var status string
 		var count int
 		if err := rows.Scan(&status, &count); err != nil {
-			log.Warn().Err(err).Msg("Failed to scan notification queue stats row")
 			continue
 		}
 		stats[status] = count
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate notification queue stats rows: %w", err)
 	}
 
 	return stats, nil
@@ -581,7 +551,7 @@ func (nq *NotificationQueue) SetProcessor(processor func(*QueuedNotification) er
 func (nq *NotificationQueue) processBatch() {
 	pending, err := nq.GetPending(20) // Increased batch size for concurrency
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to get pending notifications")
+		log.Error().Err(err).Msg("failed to get pending notifications")
 		return
 	}
 
@@ -589,7 +559,7 @@ func (nq *NotificationQueue) processBatch() {
 		return
 	}
 
-	log.Debug().Int("count", len(pending)).Msg("Processing notification batch")
+	log.Debug().Int("count", len(pending)).Msg("processing notification batch")
 
 	// Process notifications concurrently with semaphore limiting
 	var wg sync.WaitGroup
@@ -612,13 +582,13 @@ func (nq *NotificationQueue) processBatch() {
 func (nq *NotificationQueue) processNotification(notif *QueuedNotification) {
 	// Skip cancelled notifications
 	if notif.Status == QueueStatusCancelled {
-		log.Debug().Str("id", notif.ID).Msg("Skipping cancelled notification")
+		log.Debug().Str("id", notif.ID).Msg("skipping cancelled notification")
 		return
 	}
 
 	// Atomically increment attempt counter and set status to sending
 	if err := nq.IncrementAttemptAndSetStatus(notif.ID, QueueStatusSending); err != nil {
-		log.Error().Err(err).Str("id", notif.ID).Msg("Failed to increment attempt and set status")
+		log.Error().Err(err).Str("id", notif.ID).Msg("failed to increment attempt and set status")
 		return
 	}
 
@@ -642,40 +612,40 @@ func (nq *NotificationQueue) processNotification(notif *QueuedNotification) {
 	}
 
 	if auditErr := nq.RecordAudit(notif, success, errorMsg); auditErr != nil {
-		log.Error().Err(auditErr).Str("id", notif.ID).Msg("Failed to record audit")
+		log.Error().Err(auditErr).Str("id", notif.ID).Msg("failed to record audit")
 	}
 
 	if success {
 		// Mark as sent
 		if err := nq.UpdateStatus(notif.ID, QueueStatusSent, ""); err != nil {
-			log.Error().Err(err).Str("id", notif.ID).Msg("Failed to update notification status to sent")
+			log.Error().Err(err).Str("id", notif.ID).Msg("failed to update notification status to sent")
 		}
-		log.Info().Str("id", notif.ID).Str("type", notif.Type).Msg("Notification sent successfully")
+		log.Info().Str("id", notif.ID).Str("type", notif.Type).Msg("notification sent successfully")
 	} else {
 		// Check if we should retry or move to DLQ
 		if notif.Attempts+1 >= notif.MaxAttempts {
 			// Move to DLQ
 			if dlqErr := nq.MoveToDLQ(notif.ID, errorMsg); dlqErr != nil {
-				log.Error().Err(dlqErr).Str("id", notif.ID).Msg("Failed to move notification to DLQ")
+				log.Error().Err(dlqErr).Str("id", notif.ID).Msg("failed to move notification to DLQ")
 			} else {
 				log.Warn().
 					Str("id", notif.ID).
 					Str("type", notif.Type).
 					Int("attempts", notif.Attempts+1).
 					Str("error", errorMsg).
-					Msg("Notification moved to DLQ after max retries")
+					Msg("notification moved to DLQ after max retries")
 			}
 		} else {
 			// Schedule retry
 			if retryErr := nq.ScheduleRetry(notif.ID, notif.Attempts+1); retryErr != nil {
-				log.Error().Err(retryErr).Str("id", notif.ID).Msg("Failed to schedule retry")
+				log.Error().Err(retryErr).Str("id", notif.ID).Msg("failed to schedule retry")
 			} else {
 				log.Warn().
 					Str("id", notif.ID).
 					Str("type", notif.Type).
 					Int("attempt", notif.Attempts+1).
 					Str("error", errorMsg).
-					Msg("Notification failed, scheduled for retry")
+					Msg("notification failed, scheduled for retry")
 			}
 		}
 	}
@@ -703,125 +673,39 @@ func (nq *NotificationQueue) performCleanup() {
 	// Keep completed/failed for 7 days, DLQ for 30 days
 	completedCutoff := time.Now().Add(-7 * 24 * time.Hour).Unix()
 	dlqCutoff := time.Now().Add(-30 * 24 * time.Hour).Unix()
-	auditCutoff := time.Now().Add(-30 * 24 * time.Hour).Unix()
-
-	tx, err := nq.db.Begin()
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to start cleanup transaction")
-		return
-	}
-
-	var queueCompletedDeleted int64
-	var queueDLQDeleted int64
-	var auditDeleted int64
-
-	// With foreign keys enabled, delete child audit rows before parent queue rows.
-	query := `DELETE FROM notification_audit WHERE notification_id IN (
-		SELECT id FROM notification_queue
-		WHERE status IN ('sent', 'failed', 'cancelled') AND completed_at < ?
-	)`
-	result, err := tx.Exec(query, completedCutoff)
-	if err != nil {
-		_ = tx.Rollback()
-		log.Error().Err(err).Msg("Failed to cleanup audit rows for completed notifications")
-		return
-	}
-	if rows, rowsErr := result.RowsAffected(); rowsErr == nil {
-		auditDeleted += rows
-	}
 
 	// Clean completed/sent/failed/cancelled
-	query = `DELETE FROM notification_queue WHERE status IN ('sent', 'failed', 'cancelled') AND completed_at < ?`
-	result, err = tx.Exec(query, completedCutoff)
+	query := `DELETE FROM notification_queue WHERE status IN ('sent', 'failed', 'cancelled') AND completed_at < ?`
+	result, err := nq.db.Exec(query, completedCutoff)
 	if err != nil {
-<<<<<<< HEAD
-		_ = tx.Rollback()
-		log.Error().Err(err).Msg("Failed to cleanup old completed notifications")
-		return
-	}
-	if rows, rowsErr := result.RowsAffected(); rowsErr == nil {
-		queueCompletedDeleted = rows
-	}
-
-	// Delete audit rows for expired DLQ entries before deleting DLQ queue rows.
-	query = `DELETE FROM notification_audit WHERE notification_id IN (
-		SELECT id FROM notification_queue
-		WHERE status = 'dlq' AND completed_at < ?
-	)`
-	result, err = tx.Exec(query, dlqCutoff)
-	if err != nil {
-		_ = tx.Rollback()
-		log.Error().Err(err).Msg("Failed to cleanup audit rows for old DLQ notifications")
-		return
-	}
-	if rows, rowsErr := result.RowsAffected(); rowsErr == nil {
-		auditDeleted += rows
-=======
-		log.Error().Err(err).Msg("Failed to cleanup old notifications")
+		log.Error().Err(err).Msg("failed to cleanup old notifications")
 	} else {
-		if rows, rowsErr := result.RowsAffected(); rowsErr != nil {
-			log.Warn().Err(rowsErr).Msg("Failed to read rows affected for completed-notification cleanup")
-		} else if rows > 0 {
-			log.Info().Int64("count", rows).Msg("Cleaned up old completed notifications")
+		if rows, _ := result.RowsAffected(); rows > 0 {
+			log.Info().Int64("count", rows).Msg("cleaned up old completed notifications")
 		}
->>>>>>> refactor/parallel-05-error-handling
 	}
 
 	// Clean old DLQ entries
 	query = `DELETE FROM notification_queue WHERE status = 'dlq' AND completed_at < ?`
-	result, err = tx.Exec(query, dlqCutoff)
+	result, err = nq.db.Exec(query, dlqCutoff)
 	if err != nil {
-		_ = tx.Rollback()
-		log.Error().Err(err).Msg("Failed to cleanup old DLQ entries")
-<<<<<<< HEAD
-		return
-	}
-	if rows, rowsErr := result.RowsAffected(); rowsErr == nil {
-		queueDLQDeleted = rows
-=======
+		log.Error().Err(err).Msg("failed to cleanup old DLQ entries")
 	} else {
-		if rows, rowsErr := result.RowsAffected(); rowsErr != nil {
-			log.Warn().Err(rowsErr).Msg("Failed to read rows affected for DLQ cleanup")
-		} else if rows > 0 {
-			log.Info().Int64("count", rows).Msg("Cleaned up old DLQ entries")
+		if rows, _ := result.RowsAffected(); rows > 0 {
+			log.Info().Int64("count", rows).Msg("cleaned up old DLQ entries")
 		}
->>>>>>> refactor/parallel-05-error-handling
 	}
 
 	// Clean old audit logs (keep 30 days)
+	auditCutoff := time.Now().Add(-30 * 24 * time.Hour).Unix()
 	query = `DELETE FROM notification_audit WHERE timestamp < ?`
-	result, err = tx.Exec(query, auditCutoff)
+	result, err = nq.db.Exec(query, auditCutoff)
 	if err != nil {
-		_ = tx.Rollback()
-		log.Error().Err(err).Msg("Failed to cleanup old audit logs")
-<<<<<<< HEAD
-		return
-	}
-	if rows, rowsErr := result.RowsAffected(); rowsErr == nil {
-		auditDeleted += rows
-	}
-
-	if err := tx.Commit(); err != nil {
-		log.Error().Err(err).Msg("Failed to commit cleanup transaction")
-		return
-	}
-
-	if queueCompletedDeleted > 0 {
-		log.Info().Int64("count", queueCompletedDeleted).Msg("Cleaned up old completed notifications")
-	}
-	if queueDLQDeleted > 0 {
-		log.Info().Int64("count", queueDLQDeleted).Msg("Cleaned up old DLQ entries")
-	}
-	if auditDeleted > 0 {
-		log.Debug().Int64("count", auditDeleted).Msg("Cleaned up old audit logs")
-=======
+		log.Error().Err(err).Msg("failed to cleanup old audit logs")
 	} else {
-		if rows, rowsErr := result.RowsAffected(); rowsErr != nil {
-			log.Warn().Err(rowsErr).Msg("Failed to read rows affected for audit-log cleanup")
-		} else if rows > 0 {
-			log.Debug().Int64("count", rows).Msg("Cleaned up old audit logs")
+		if rows, _ := result.RowsAffected(); rows > 0 {
+			log.Debug().Int64("count", rows).Msg("cleaned up old audit logs")
 		}
->>>>>>> refactor/parallel-05-error-handling
 	}
 }
 
@@ -837,21 +721,13 @@ func (nq *NotificationQueue) Stop() error {
 		return fmt.Errorf("failed to close database: %w", err)
 	}
 
-	log.Info().Msg("Notification queue stopped")
+	log.Info().Msg("notification queue stopped")
 	return nil
 }
 
 // calculateBackoff calculates exponential backoff duration
 func calculateBackoff(attempt int) time.Duration {
-	// 1s, 2s, 4s, 8s, 16s, 32s, then capped at 60s.
-	// Clamp before shifting to avoid integer overflow on very large attempts.
-	if attempt <= 0 {
-		return 1 * time.Second
-	}
-	if attempt >= 6 {
-		return 60 * time.Second
-	}
-
+	// 1s, 2s, 4s, 8s, 16s, 32s, 60s (capped)
 	backoff := time.Duration(1<<uint(attempt)) * time.Second
 	if backoff > 60*time.Second {
 		backoff = 60 * time.Second
@@ -882,21 +758,21 @@ func (nq *NotificationQueue) CancelByAlertIDs(alertIDs []string) error {
 
 	var toCancelIDs []string
 	alertIDSet := make(map[string]struct{})
-	for _, alertID := range alertIDs {
-		alertIDSet[alertID] = struct{}{}
+	for _, id := range alertIDs {
+		alertIDSet[id] = struct{}{}
 	}
 
 	for rows.Next() {
 		var notifID string
 		var alertsJSON []byte
 		if err := rows.Scan(&notifID, &alertsJSON); err != nil {
-			log.Error().Err(err).Msg("Failed to scan notification for cancellation")
+			log.Error().Err(err).Msg("failed to scan notification for cancellation")
 			continue
 		}
 
 		var alerts []*alerts.Alert
 		if err := json.Unmarshal(alertsJSON, &alerts); err != nil {
-			log.Error().Err(err).Str("notifID", notifID).Msg("Failed to unmarshal alerts for cancellation check")
+			log.Error().Err(err).Str("notifID", notifID).Msg("failed to unmarshal alerts for cancellation check")
 			continue
 		}
 
@@ -910,12 +786,9 @@ func (nq *NotificationQueue) CancelByAlertIDs(alertIDs []string) error {
 	}
 
 	rowsErr := rows.Err()
-	closeErr := rows.Close() // Release connection before executing updates
+	rows.Close() // Release connection before executing updates
 	if rowsErr != nil {
 		return fmt.Errorf("error iterating notifications for cancellation: %w", rowsErr)
-	}
-	if closeErr != nil {
-		return fmt.Errorf("close notification cancellation query rows: %w", closeErr)
 	}
 
 	// Cancel the matched notifications (using direct SQL since we already hold the lock)
@@ -923,19 +796,19 @@ func (nq *NotificationQueue) CancelByAlertIDs(alertIDs []string) error {
 		now := time.Now().Unix()
 		updateQuery := `
 			UPDATE notification_queue
-			SET status = ?, last_attempt = ?, last_error = ?, next_retry_at = NULL, completed_at = ?
+			SET status = ?, last_attempt = ?, last_error = ?
 			WHERE id = ?
 		`
 		for _, notifID := range toCancelIDs {
-			if _, err := nq.db.Exec(updateQuery, QueueStatusCancelled, now, "Alert resolved", now, notifID); err != nil {
-				log.Error().Err(err).Str("notifID", notifID).Msg("Failed to mark notification as cancelled")
+			if _, err := nq.db.Exec(updateQuery, QueueStatusCancelled, now, "Alert resolved", notifID); err != nil {
+				log.Error().Err(err).Str("notifID", notifID).Msg("failed to mark notification as cancelled")
 			}
 		}
 
 		log.Info().
 			Int("count", len(toCancelIDs)).
 			Strs("alertIDs", alertIDs).
-			Msg("Cancelled queued notifications for resolved alerts")
+			Msg("cancelled queued notifications for resolved alerts")
 	}
 
 	return nil

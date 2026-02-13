@@ -205,15 +205,15 @@ func NewService(persistence *config.ConfigPersistence, agentServer AgentServer) 
 		var err error
 		knowledgeStore, err = knowledge.NewStore(persistence.DataDir())
 		if err != nil {
-			log.Warn().Err(err).Msg("Failed to initialize knowledge store")
+			log.Warn().Err(err).Msg("failed to initialize knowledge store")
 		}
 		if err := costStore.SetPersistence(NewCostPersistenceAdapter(persistence)); err != nil {
-			log.Warn().Err(err).Msg("Failed to initialize AI usage cost store")
+			log.Warn().Err(err).Msg("failed to initialize AI usage cost store")
 		}
 		// Initialize discovery store for deep infrastructure discovery
 		discoveryStore, err = servicediscovery.NewStore(persistence.DataDir())
 		if err != nil {
-			log.Warn().Err(err).Msg("Failed to initialize discovery store")
+			log.Warn().Err(err).Msg("failed to initialize discovery store")
 		}
 	}
 
@@ -745,7 +745,7 @@ func (s *Service) StartPatrol(ctx context.Context) {
 	s.mu.RUnlock()
 
 	if patrol == nil {
-		log.Debug().Msg("Patrol service not initialized, cannot start")
+		log.Debug().Msg("patrol service not initialized, cannot start")
 		return
 	}
 
@@ -861,7 +861,7 @@ func (s *Service) ReconfigurePatrol() {
 		enabled := cfg.IsAlertTriggeredAnalysisEnabled()
 		// Re-check license - don't allow re-enabling without valid license
 		if enabled && licenseChecker != nil && !licenseChecker.HasFeature(FeatureAIAlerts) {
-			log.Debug().Msg("Alert-triggered analysis requires Pulse Pro license - staying disabled")
+			log.Debug().Msg("alert-triggered analysis requires Pulse Pro license - staying disabled")
 			enabled = false
 		}
 		alertAnalyzer.SetEnabled(enabled)
@@ -882,19 +882,19 @@ func (s *Service) enrichRequestFromFinding(req *ExecuteRequest) {
 	s.mu.RUnlock()
 
 	if patrol == nil {
-		log.Debug().Str("finding_id", req.FindingID).Msg("Cannot enrich request - patrol service not available")
+		log.Debug().Str("finding_id", req.FindingID).Msg("cannot enrich request - patrol service not available")
 		return
 	}
 
 	findings := patrol.GetFindings()
 	if findings == nil {
-		log.Debug().Str("finding_id", req.FindingID).Msg("Cannot enrich request - findings store not available")
+		log.Debug().Str("finding_id", req.FindingID).Msg("cannot enrich request - findings store not available")
 		return
 	}
 
 	finding := findings.Get(req.FindingID)
 	if finding == nil {
-		log.Debug().Str("finding_id", req.FindingID).Msg("Cannot enrich request - finding not found")
+		log.Debug().Str("finding_id", req.FindingID).Msg("cannot enrich request - finding not found")
 		return
 	}
 
@@ -1179,7 +1179,7 @@ func (s *Service) LoadConfig() error {
 					Str("model", cfg.GetModel()).
 					Msg("AI service initialized via legacy config (migration path)")
 			} else {
-				log.Warn().Err(legacyErr).Msg("Failed to initialize legacy AI provider")
+				log.Warn().Err(legacyErr).Msg("failed to initialize legacy AI provider")
 				s.provider = nil
 				return nil
 			}
@@ -1218,7 +1218,7 @@ func (s *Service) LoadConfig() error {
 						selectedModel = fallbackModel
 						selectedProvider = fallbackProvider
 					} else {
-						log.Error().Err(err).Str("fallback_model", fallbackModel).Msg("Failed to create fallback provider")
+						log.Error().Err(err).Str("fallback_model", fallbackModel).Msg("failed to create fallback provider")
 						s.provider = nil
 						return nil
 					}
@@ -1547,7 +1547,7 @@ func (s *Service) Execute(ctx context.Context, req ExecuteRequest) (*ExecuteResp
 	provider, err := providers.NewForModel(cfg, modelString)
 	if err != nil {
 		// Fall back to default provider if model-specific provider can't be created
-		log.Debug().Err(err).Str("model", modelString).Msg("Could not create provider for model, using default")
+		log.Debug().Err(err).Str("model", modelString).Msg("could not create provider for model, using default")
 		provider = defaultProvider
 	}
 
@@ -1747,7 +1747,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 	provider, err := providers.NewForModel(cfg, modelString)
 	if err != nil {
 		// Fall back to default provider if model-specific provider can't be created
-		log.Debug().Err(err).Str("model", modelString).Msg("Could not create provider for model, using default")
+		log.Debug().Err(err).Str("model", modelString).Msg("could not create provider for model, using default")
 		provider = defaultProvider
 	}
 
@@ -1810,7 +1810,7 @@ Always execute the commands rather than telling the user how to do it.`
 					Msg("Injecting saved knowledge into AI context")
 				systemPrompt += knowledgeContext
 			} else {
-				log.Debug().Str("guest_id", guestID).Msg("No saved knowledge for guest")
+				log.Debug().Str("guest_id", guestID).Msg("no saved knowledge for guest")
 			}
 		}
 	}
@@ -3282,7 +3282,7 @@ func (s *Service) executeOnAgent(ctx context.Context, req ExecuteRequest, comman
 
 	// Log any warnings from routing
 	for _, warning := range routeResult.Warnings {
-		log.Warn().Str("warning", warning).Msg("Routing warning")
+		log.Warn().Str("warning", warning).Msg("routing warning")
 	}
 
 	agentID := routeResult.AgentID
@@ -3695,10 +3695,10 @@ func (s *Service) buildUserAnnotationsContext() string {
 	// Load guest metadata
 	guestStore, err := s.persistence.LoadGuestMetadata()
 	if err != nil {
-		log.Warn().Err(err).Msg("Failed to load guest metadata for AI context")
+		log.Warn().Err(err).Msg("failed to load guest metadata for AI context")
 	} else {
 		guestMeta := guestStore.GetAll()
-		log.Debug().Int("count", len(guestMeta)).Msg("Loaded guest metadata for AI context")
+		log.Debug().Int("count", len(guestMeta)).Msg("loaded guest metadata for AI context")
 		for id, meta := range guestMeta {
 			if meta != nil && len(meta.Notes) > 0 {
 				// Use LastKnownName if available, otherwise use ID
@@ -3716,10 +3716,10 @@ func (s *Service) buildUserAnnotationsContext() string {
 	// Load docker metadata - include host info for context
 	dockerStore, err := s.persistence.LoadDockerMetadata()
 	if err != nil {
-		log.Warn().Err(err).Msg("Failed to load docker metadata for AI context")
+		log.Warn().Err(err).Msg("failed to load docker metadata for AI context")
 	} else {
 		dockerMeta := dockerStore.GetAll()
-		log.Debug().Int("count", len(dockerMeta)).Msg("Loaded docker metadata for AI context")
+		log.Debug().Int("count", len(dockerMeta)).Msg("loaded docker metadata for AI context")
 		for id, meta := range dockerMeta {
 			if meta != nil && len(meta.Notes) > 0 {
 				// Extract host and container info from ID (format: hostid:container:containerid)
@@ -3734,7 +3734,7 @@ func (s *Service) buildUserAnnotationsContext() string {
 					}
 					name = fmt.Sprintf("Docker container %s", containerID)
 				}
-				log.Debug().Str("name", name).Str("host", hostInfo).Int("notes", len(meta.Notes)).Msg("Found docker container with annotations")
+				log.Debug().Str("name", name).Str("host", hostInfo).Int("notes", len(meta.Notes)).Msg("found docker container with annotations")
 				for _, note := range meta.Notes {
 					if hostInfo != "" {
 						annotations = append(annotations, fmt.Sprintf("- %s (on host '%s'): %s", name, hostInfo, note))
@@ -3746,7 +3746,7 @@ func (s *Service) buildUserAnnotationsContext() string {
 		}
 	}
 
-	log.Debug().Int("total_annotations", len(annotations)).Msg("Built user annotations context")
+	log.Debug().Int("total_annotations", len(annotations)).Msg("built user annotations context")
 
 	if len(annotations) == 0 {
 		return ""
@@ -3780,7 +3780,7 @@ func (s *Service) TestConnection(ctx context.Context) error {
 	provider, err := providers.NewForModel(cfg, cfg.GetModel())
 	if err != nil {
 		// Fall back to default provider or NewFromConfig
-		log.Debug().Err(err).Str("model", cfg.GetModel()).Msg("Could not create provider for model, using fallback")
+		log.Debug().Err(err).Str("model", cfg.GetModel()).Msg("could not create provider for model, using fallback")
 		if defaultProvider != nil {
 			provider = defaultProvider
 		} else {
@@ -3844,14 +3844,14 @@ func (s *Service) ListModelsWithCache(ctx context.Context) ([]providers.ModelInf
 		// Create provider
 		provider, err := providers.NewForProvider(cfg, providerName, "")
 		if err != nil {
-			log.Debug().Err(err).Str("provider", providerName).Msg("Skipping provider - not configured")
+			log.Debug().Err(err).Str("provider", providerName).Msg("skipping provider - not configured")
 			continue
 		}
 
 		// Fetch models from this provider
 		models, err := provider.ListModels(ctx)
 		if err != nil {
-			log.Warn().Err(err).Str("provider", providerName).Msg("Failed to fetch models from provider")
+			log.Warn().Err(err).Str("provider", providerName).Msg("failed to fetch models from provider")
 			// Keep stale entry (don't overwrite or delete) — the provider's
 			// previous models remain visible until a successful fetch replaces them.
 			continue
@@ -3941,7 +3941,7 @@ func (s *Service) Reload() error {
 
 	if cs != nil && cfg != nil {
 		if err := cs.ReloadConfig(context.Background(), cfg); err != nil {
-			log.Warn().Err(err).Msg("Failed to reload chat service config")
+			log.Warn().Err(err).Msg("failed to reload chat service config")
 		}
 	}
 

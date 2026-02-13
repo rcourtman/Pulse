@@ -43,12 +43,7 @@ func CollectRAIDArrays(ctx context.Context) ([]agentshost.RAIDArray, error) {
 	}
 
 	// Collect detailed info for each array
-<<<<<<< HEAD:internal/hostagent/mdadm.go
 	var arrays []agentshost.RAIDArray
-=======
-	var arrays []host.RAIDArray
-	var detailErrs []error
->>>>>>> refactor/parallel-05-error-handling:internal/mdadm/mdadm.go
 	for _, device := range devices {
 		array, err := collectArrayDetail(ctx, device)
 		if err != nil {
@@ -220,30 +215,8 @@ func parseMdadmDetail(device, output string) (agentshost.RAIDArray, error) {
 				array.SpareDevices = spareDevices
 			case "UUID":
 				array.UUID = value
-<<<<<<< HEAD:internal/hostagent/mdadm.go
 			case "Rebuild Status", "Reshape Status":
 				array.RebuildPercent = parsePercentValue(value)
-=======
-			case "Rebuild Status":
-				// Parse rebuild percentage
-				// Format: "50% complete"
-				if strings.Contains(value, "%") {
-					rebuildPercent, err := parsePercentField(device, key, value)
-					if err != nil {
-						return host.RAIDArray{}, err
-					}
-					array.RebuildPercent = rebuildPercent
-				}
-			case "Reshape Status":
-				// Handle reshape similarly to rebuild
-				if strings.Contains(value, "%") {
-					reshapePercent, err := parsePercentField(device, key, value)
-					if err != nil {
-						return host.RAIDArray{}, err
-					}
-					array.RebuildPercent = reshapePercent
-				}
->>>>>>> refactor/parallel-05-error-handling:internal/mdadm/mdadm.go
 			}
 		}
 	}
@@ -259,7 +232,6 @@ func parseMdadmDetail(device, output string) (agentshost.RAIDArray, error) {
 	return array, nil
 }
 
-<<<<<<< HEAD:internal/hostagent/mdadm.go
 // parsePercentValue parses a percentage string like "50% complete" and returns the numeric value.
 func parsePercentValue(value string) float64 {
 	if strings.Contains(value, "%") {
@@ -268,23 +240,6 @@ func parsePercentValue(value string) float64 {
 		return result
 	}
 	return 0
-=======
-func parseIntField(device, field, value string) (int, error) {
-	parsed, err := strconv.Atoi(value)
-	if err != nil {
-		return 0, fmt.Errorf("parse %s for %s from %q: %w", strings.ToLower(field), device, value, err)
-	}
-	return parsed, nil
-}
-
-func parsePercentField(device, field, value string) (float64, error) {
-	percentStr := strings.TrimSpace(strings.SplitN(value, "%", 2)[0])
-	parsed, err := strconv.ParseFloat(percentStr, 64)
-	if err != nil {
-		return 0, fmt.Errorf("parse %s for %s from %q: %w", strings.ToLower(field), device, value, err)
-	}
-	return parsed, nil
->>>>>>> refactor/parallel-05-error-handling:internal/mdadm/mdadm.go
 }
 
 // getRebuildSpeed extracts rebuild speed from /proc/mdstat

@@ -2,7 +2,6 @@ package logging
 
 import (
 	"container/ring"
-	"fmt"
 	"sync"
 
 	"github.com/google/uuid"
@@ -90,7 +89,7 @@ func (b *LogBroadcaster) Unsubscribe(subscriberID string) {
 	}
 }
 
-// GetHistory returns the current in-memory log log history.
+// GetHistory returns the current in-memory log history.
 func (b *LogBroadcaster) GetHistory() []string {
 	b.mu.RLock()
 	defer b.mu.RUnlock()

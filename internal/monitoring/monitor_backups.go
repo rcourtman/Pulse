@@ -83,7 +83,7 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 
 		if err != nil {
 			monErr := errors.NewMonitorError(errors.ErrorTypeAPI, "get_storage_for_backups", instanceName, err).WithNode(node.Node)
-			log.Warn().Err(monErr).Str("node", node.Node).Msg("Failed to get storage for backups - skipping node")
+			log.Warn().Err(monErr).Str("node", node.Node).Msg("failed to get storage for backups - skipping node")
 			for _, storageName := range storageNamesForNode(instanceName, node.Node, snapshot) {
 				storagePreserveNeeded[storageName] = struct{}{}
 			}
@@ -504,7 +504,7 @@ func persistGuestIdentity(metadataStore *config.GuestMetadataStore, guestKey, na
 		// Save asynchronously to avoid blocking the monitor
 		go func() {
 			if err := metadataStore.Set(guestKey, existing); err != nil {
-				log.Error().Err(err).Str("guestKey", guestKey).Msg("Failed to persist guest identity")
+				log.Error().Err(err).Str("guestKey", guestKey).Msg("failed to persist guest identity")
 			}
 		}()
 	}
@@ -548,7 +548,7 @@ func (m *Monitor) calculateBackupOperationTimeout(instanceName string) time.Dura
 
 // pollGuestSnapshots polls snapshots for all VMs and containers
 func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, client PVEClientInterface) {
-	log.Debug().Str("instance", instanceName).Msg("Polling guest snapshots")
+	log.Debug().Str("instance", instanceName).Msg("polling guest snapshots")
 
 	// Get current VMs and containers from a properly-locked state snapshot.
 	// Using GetSnapshot() ensures we read a consistent view of VMs/containers
@@ -1038,7 +1038,7 @@ type pbsBackupFetchRequest struct {
 
 // pollPBSBackups fetches all backups from PBS datastores
 func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, client *pbs.Client, datastores []models.PBSDatastore) {
-	log.Debug().Str("instance", instanceName).Msg("Polling PBS backups")
+	log.Debug().Str("instance", instanceName).Msg("polling PBS backups")
 
 	// Cache existing PBS backups so we can avoid redundant API calls when no changes occurred.
 	existingGroups := m.buildPBSBackupCache(instanceName)
@@ -1446,12 +1446,12 @@ func convertPBSSnapshots(instanceName, datastore, namespace string, snapshots []
 
 // pollBackupTasks polls backup tasks from a PVE instance
 func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, client PVEClientInterface) {
-	log.Debug().Str("instance", instanceName).Msg("Polling backup tasks")
+	log.Debug().Str("instance", instanceName).Msg("polling backup tasks")
 
 	tasks, err := client.GetBackupTasks(ctx)
 	if err != nil {
 		monErr := errors.WrapAPIError("get_backup_tasks", instanceName, err, 0)
-		log.Error().Err(monErr).Str("instance", instanceName).Msg("Failed to get backup tasks")
+		log.Error().Err(monErr).Str("instance", instanceName).Msg("failed to get backup tasks")
 		return
 	}
 

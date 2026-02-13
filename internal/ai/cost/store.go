@@ -308,7 +308,7 @@ func (s *Store) scheduleSaveLocked() {
 
 		if p != nil {
 			if err := p.SaveUsageHistory(events); err != nil {
-				log.Error().Err(err).Msg("Failed to save AI usage history")
+				log.Error().Err(err).Msg("failed to save AI usage history")
 				s.mu.Lock()
 				s.lastSaveError = err
 				s.mu.Unlock()

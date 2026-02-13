@@ -46,7 +46,7 @@ func (m *Monitor) detectClusterMembership(ctx context.Context, instanceName stri
 			// Save the updated configuration
 			if m.persistence != nil {
 				if err := m.persistence.SaveNodesConfig(m.config.PVEInstances, m.config.PBSInstances, m.config.PMGInstances); err != nil {
-					log.Warn().Err(err).Msg("Failed to persist updated node configuration")
+					log.Warn().Err(err).Msg("failed to persist updated node configuration")
 				}
 			}
 			break

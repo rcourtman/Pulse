@@ -62,13 +62,21 @@ func (a *Agent) checkForUpdates(ctx context.Context) {
 	url := fmt.Sprintf("%s/api/agent/version", target.URL)
 	resp, err := a.doSelfUpdateGetWithRetry(ctx, target, url, "version check")
 	if err != nil {
-		a.logger.Warn().Err(err).Msg("Failed to check for updates")
+		a.logger.Warn().
+			Err(err).
+			Str("target", target.URL).
+			Str("url", url).
+			Msg("Failed to check for updates")
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		a.logger.Warn().Int("status", resp.StatusCode).Msg("Version endpoint returned non-200 status")
+		a.logger.Warn().
+			Int("status", resp.StatusCode).
+			Str("target", target.URL).
+			Str("url", url).
+			Msg("Version endpoint returned non-200 status")
 		return
 	}
 
@@ -77,7 +85,11 @@ func (a *Agent) checkForUpdates(ctx context.Context) {
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&versionResp); err != nil {
-		a.logger.Warn().Err(err).Msg("Failed to decode version response")
+		a.logger.Warn().
+			Err(err).
+			Str("target", target.URL).
+			Str("url", url).
+			Msg("Failed to decode version response")
 		return
 	}
 
@@ -110,7 +122,12 @@ func (a *Agent) checkForUpdates(ctx context.Context) {
 
 	// Perform self-update
 	if err := selfUpdateFunc(a, ctx); err != nil {
-		a.logger.Error().Err(err).Msg("Failed to self-update agent")
+		a.logger.Error().
+			Err(err).
+			Str("target", target.URL).
+			Str("currentVersion", Version).
+			Str("availableVersion", versionResp.Version).
+			Msg("Failed to self-update agent")
 		return
 	}
 
@@ -354,33 +371,7 @@ func (a *Agent) selfUpdate(ctx context.Context) error {
 	for _, candidate := range candidates {
 		response, err := a.doSelfUpdateGetWithRetry(ctx, target, candidate.url, "binary download")
 		if err != nil {
-<<<<<<< HEAD
 			lastErr = err
-=======
-			lastErr = fmt.Errorf("failed to create download request: %w", err)
-			continue
-		}
-
-		if target.Token != "" {
-			req.Header.Set("X-API-Token", target.Token)
-			req.Header.Set("Authorization", "Bearer "+target.Token)
-		}
-
-		response, err := client.Do(req)
-		if err != nil {
-			lastErr = fmt.Errorf("failed to download new binary: %w", err)
-			continue
-		}
-
-		if response.StatusCode != http.StatusOK {
-			lastErr = fmt.Errorf("download failed with status: %s", response.Status)
-			if closeErr := response.Body.Close(); closeErr != nil {
-				a.logger.Warn().
-					Err(closeErr).
-					Str("url", candidate.url).
-					Msg("Self-update: failed to close non-success download response body")
-			}
->>>>>>> refactor/parallel-05-error-handling
 			continue
 		}
 
@@ -486,7 +477,10 @@ func (a *Agent) selfUpdate(ctx context.Context) error {
 	// Let's use the actual token configured to be safe.
 	checkCmd := execCommandContextFn(ctx, tmpPath, "--self-test", "--token", a.cfg.APIToken)
 	if output, err := checkCmd.CombinedOutput(); err != nil {
-		a.logger.Error().Str("output", string(output)).Err(err).Msg("Self-update: pre-flight check failed")
+		a.logger.Error().
+			Err(err).
+			Int("outputBytes", len(output)).
+			Msg("Self-update: pre-flight check failed")
 		return fmt.Errorf("new binary failed self-test: %w", err)
 	}
 	a.logger.Debug().Msg("Self-update: pre-flight check passed")

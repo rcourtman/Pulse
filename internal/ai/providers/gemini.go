@@ -422,7 +422,7 @@ func (c *GeminiClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 					names[i] = f.Name
 				}
 				return names
-			}()).Msg("Gemini request includes tools")
+			}()).Msg("gemini request includes tools")
 		}
 	}
 
@@ -434,7 +434,7 @@ func (c *GeminiClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 	// Build the URL with API key
 	generateContentURL := fmt.Sprintf("%s/models/%s:generateContent?key=%s", c.baseURL, model, c.apiKey)
 
-	log.Debug().Str("model", model).Str("base_url", c.baseURL).Msg("Gemini Chat request")
+	log.Debug().Str("model", model).Str("base_url", c.baseURL).Msg("gemini Chat request")
 
 	// Retry loop for transient errors
 	var respBody []byte
@@ -531,7 +531,7 @@ func (c *GeminiClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 	}
 
 	if len(geminiResp.Candidates) == 0 {
-		log.Warn().Str("raw_response", string(respBody)).Msg("Gemini returned no candidates")
+		log.Warn().Str("raw_response", string(respBody)).Msg("gemini returned no candidates")
 		return nil, fmt.Errorf("no response candidates returned")
 	}
 
@@ -892,7 +892,7 @@ func (c *GeminiClient) ChatStream(ctx context.Context, req ChatRequest, callback
 
 				var event geminiStreamEvent
 				if err := json.Unmarshal([]byte(data), &event); err != nil {
-					log.Debug().Err(err).Str("data", data).Msg("Failed to parse Gemini stream event")
+					log.Debug().Err(err).Str("data", data).Msg("failed to parse Gemini stream event")
 					continue
 				}
 

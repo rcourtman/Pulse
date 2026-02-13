@@ -125,11 +125,11 @@ func (p *HTTPProxy) HandleRequest(payload []byte, apiToken string) ([]byte, erro
 		Str("request_id", req.ID).
 		Str("method", req.Method).
 		Str("path", req.Path).
-		Msg("Proxying relay request to local API")
+		Msg("proxying relay request to local API")
 
 	resp, err := p.client.Do(httpReq)
 	if err != nil {
-		p.logger.Warn().Err(err).Str("request_id", req.ID).Msg("Local API request failed")
+		p.logger.Warn().Err(err).Str("request_id", req.ID).Msg("local API request failed")
 		return p.errorResponse(req.ID, http.StatusBadGateway, "local API request failed"), nil
 	}
 	defer func() {
@@ -224,11 +224,11 @@ func (p *HTTPProxy) HandleStreamRequest(ctx context.Context, payload []byte, api
 		Str("request_id", req.ID).
 		Str("method", req.Method).
 		Str("path", req.Path).
-		Msg("Proxying relay request (stream-capable)")
+		Msg("proxying relay request (stream-capable)")
 
 	resp, err := p.streamClient.Do(httpReq)
 	if err != nil {
-		p.logger.Warn().Err(err).Str("request_id", req.ID).Msg("Local API request failed")
+		p.logger.Warn().Err(err).Str("request_id", req.ID).Msg("local API request failed")
 		sendFrame(p.errorResponse(req.ID, http.StatusBadGateway, "local API request failed"))
 		return nil
 	}
@@ -325,7 +325,7 @@ func (p *HTTPProxy) HandleStreamRequest(ctx context.Context, payload []byte, api
 				}
 				chunkData, err := json.Marshal(chunk)
 				if err != nil {
-					p.logger.Warn().Err(err).Msg("Failed to marshal SSE chunk")
+					p.logger.Warn().Err(err).Msg("failed to marshal SSE chunk")
 					continue
 				}
 				sendFrame(chunkData)

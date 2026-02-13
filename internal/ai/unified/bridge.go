@@ -126,7 +126,7 @@ func (b *AlertBridge) Start() {
 	// Sync existing alerts
 	b.syncExistingAlerts()
 
-	log.Info().Msg("Alert bridge started")
+	log.Info().Msg("alert bridge started")
 }
 
 // Stop stops the bridge
@@ -146,7 +146,7 @@ func (b *AlertBridge) Stop() {
 	b.pendingEnhancements = make(map[string]*time.Timer)
 	b.mu.Unlock()
 
-	log.Info().Msg("Alert bridge stopped")
+	log.Info().Msg("alert bridge stopped")
 }
 
 // syncExistingAlerts syncs all currently active alerts to the unified store

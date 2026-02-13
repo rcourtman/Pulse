@@ -938,7 +938,7 @@ func (e *PulseToolExecutor) resolveDockerHostRoutingFull(dockerHost *models.Dock
 func createApprovalRecord(command, targetType, targetID, targetName, context string) string {
 	store := approval.GetStore()
 	if store == nil {
-		log.Debug().Msg("Approval store not available, approval will not be persisted")
+		log.Debug().Msg("approval store not available, approval will not be persisted")
 		return ""
 	}
 
@@ -951,11 +951,11 @@ func createApprovalRecord(command, targetType, targetID, targetName, context str
 	}
 
 	if err := store.CreateApproval(req); err != nil {
-		log.Warn().Err(err).Msg("Failed to create approval record")
+		log.Warn().Err(err).Msg("failed to create approval record")
 		return ""
 	}
 
-	log.Debug().Str("approval_id", req.ID).Str("command", command).Msg("Created approval record")
+	log.Debug().Str("approval_id", req.ID).Str("command", command).Msg("created approval record")
 	return req.ID
 }
 
@@ -975,16 +975,16 @@ func isPreApproved(args map[string]interface{}) bool {
 
 	req, found := store.GetApproval(approvalID)
 	if !found {
-		log.Debug().Str("approval_id", approvalID).Msg("Pre-approval check: approval not found")
+		log.Debug().Str("approval_id", approvalID).Msg("pre-approval check: approval not found")
 		return false
 	}
 
 	if req.Status == approval.StatusApproved {
-		log.Debug().Str("approval_id", approvalID).Msg("Pre-approval check: approved, skipping approval flow")
+		log.Debug().Str("approval_id", approvalID).Msg("pre-approval check: approved, skipping approval flow")
 		return true
 	}
 
-	log.Debug().Str("approval_id", approvalID).Str("status", string(req.Status)).Msg("Pre-approval check: not approved")
+	log.Debug().Str("approval_id", approvalID).Str("status", string(req.Status)).Msg("pre-approval check: not approved")
 	return false
 }
 
@@ -1004,7 +1004,7 @@ func consumeApprovalWithValidation(args map[string]interface{}, command, targetT
 
 	_, err := store.ConsumeApproval(approvalID, command, targetType, targetID)
 	if err != nil {
-		log.Warn().Err(err).Str("approval_id", approvalID).Msg("Failed to consume approval")
+		log.Warn().Err(err).Str("approval_id", approvalID).Msg("failed to consume approval")
 		return false
 	}
 

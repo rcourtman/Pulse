@@ -168,7 +168,11 @@ func HandleAdminGenerateMagicLink(svc *Service, baseURL string, emailSender emai
 		if req.SendEmail && emailSender != nil && emailFrom != "" {
 			html, text, renderErr := email.RenderMagicLinkEmail(email.MagicLinkData{MagicLinkURL: magicURL})
 			if renderErr != nil {
-				log.Error().Err(renderErr).Msg("Failed to render magic link email")
+				log.Error().
+					Err(renderErr).
+					Str("tenant_id", req.TenantID).
+					Str("email", req.Email).
+					Msg("Failed to render magic link email")
 			} else if sendErr := emailSender.Send(r.Context(), email.Message{
 				From:    emailFrom,
 				To:      req.Email,
@@ -176,7 +180,11 @@ func HandleAdminGenerateMagicLink(svc *Service, baseURL string, emailSender emai
 				HTML:    html,
 				Text:    text,
 			}); sendErr != nil {
-				log.Error().Err(sendErr).Str("to", req.Email).Msg("Failed to send magic link email")
+				log.Error().
+					Err(sendErr).
+					Str("tenant_id", req.TenantID).
+					Str("email", req.Email).
+					Msg("Failed to send magic link email")
 			} else {
 				emailSent = true
 			}
@@ -189,14 +197,6 @@ func HandleAdminGenerateMagicLink(svc *Service, baseURL string, emailSender emai
 			Msg("Admin generated magic link")
 
 		w.Header().Set("Content-Type", "application/json")
-<<<<<<< HEAD
-		_ = json.NewEncoder(w).Encode(adminGenerateMagicLinkResponse{
-			URL:       magicURL,
-			Email:     req.Email,
-			TenantID:  req.TenantID,
-			EmailSent: emailSent,
-		})
-=======
 		if err := json.NewEncoder(w).Encode(map[string]any{
 			"url":        magicURL,
 			"email":      req.Email,
@@ -205,7 +205,6 @@ func HandleAdminGenerateMagicLink(svc *Service, baseURL string, emailSender emai
 		}); err != nil {
 			log.Error().Err(err).Msg("cloudcp.auth: encode admin magic link response")
 		}
->>>>>>> refactor/parallel-05-error-handling
 	}
 }
 
@@ -232,17 +231,10 @@ func auditEvent(r *http.Request, eventName, outcome string) *zerolog.Event {
 func writeError(w http.ResponseWriter, status int, code, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-<<<<<<< HEAD
-	_ = json.NewEncoder(w).Encode(errorResponse{
-		Error:   code,
-		Message: message,
-	})
-=======
 	if err := json.NewEncoder(w).Encode(map[string]string{
 		"error":   code,
 		"message": message,
 	}); err != nil {
 		log.Error().Err(err).Msg("cloudcp.auth: encode error response")
 	}
->>>>>>> refactor/parallel-05-error-handling
 }

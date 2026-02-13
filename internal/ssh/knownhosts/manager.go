@@ -259,14 +259,7 @@ func (m *manager) ensureKnownHostsFile() error {
 		return fmt.Errorf("knownhosts: create %s: %w", m.path, err)
 	}
 	if err := f.Close(); err != nil {
-<<<<<<< HEAD
-		return err
-	}
-	if err := chmodFn(m.path, 0o600); err != nil {
-		return fmt.Errorf("knownhosts: chmod %s: %w", m.path, err)
-=======
 		return fmt.Errorf("knownhosts: close %s: %w", m.path, err)
->>>>>>> refactor/parallel-05-error-handling
 	}
 	return nil
 }

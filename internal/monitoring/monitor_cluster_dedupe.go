@@ -95,9 +95,9 @@ func (m *Monitor) consolidateDuplicateClusters() {
 	// Persist the consolidated configuration
 	if m.persistence != nil {
 		if err := m.persistence.SaveNodesConfig(m.config.PVEInstances, m.config.PBSInstances, m.config.PMGInstances); err != nil {
-			log.Error().Err(err).Msg("Failed to persist cluster consolidation")
+			log.Error().Err(err).Msg("failed to persist cluster consolidation")
 		} else {
-			log.Info().Msg("Persisted consolidated cluster configuration")
+			log.Info().Msg("persisted consolidated cluster configuration")
 		}
 	}
 }

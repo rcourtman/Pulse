@@ -216,7 +216,7 @@ func (s *Service) Stop(ctx context.Context) error {
 
 	s.started = false
 	s.provider = nil
-	log.Info().Msg("Pulse AI (direct) stopped")
+	log.Info().Msg("pulse AI (direct) stopped")
 	return nil
 }
 
@@ -306,7 +306,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		Timestamp: time.Now(),
 	}
 	if err := sessions.AddMessage(session.ID, userMsg); err != nil {
-		log.Warn().Err(err).Msg("Failed to save user message")
+		log.Warn().Err(err).Msg("failed to save user message")
 	}
 
 	// Get existing messages for context
@@ -557,7 +557,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		// Still save any messages we got
 		for _, msg := range resultMessages {
 			if saveErr := sessions.AddMessage(session.ID, msg); saveErr != nil {
-				log.Warn().Err(saveErr).Msg("Failed to save message after error")
+				log.Warn().Err(saveErr).Msg("failed to save message after error")
 			}
 		}
 		return err
@@ -570,7 +570,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 			continue
 		}
 		if err := sessions.AddMessage(session.ID, msg); err != nil {
-			log.Warn().Err(err).Msg("Failed to save message")
+			log.Warn().Err(err).Msg("failed to save message")
 		}
 	}
 
@@ -695,7 +695,7 @@ func (s *Service) ExecutePatrolStream(ctx context.Context, req PatrolRequest, ca
 		Timestamp: time.Now(),
 	}
 	if err := sessions.AddMessage(session.ID, userMsg); err != nil {
-		log.Warn().Err(err).Msg("Failed to save patrol user message")
+		log.Warn().Err(err).Msg("failed to save patrol user message")
 	}
 
 	// Get messages for context
@@ -713,7 +713,7 @@ func (s *Service) ExecutePatrolStream(ctx context.Context, req PatrolRequest, ca
 		// Still save any messages we got
 		for _, msg := range resultMessages {
 			if saveErr := sessions.AddMessage(session.ID, msg); saveErr != nil {
-				log.Warn().Err(saveErr).Msg("Failed to save patrol message after error")
+				log.Warn().Err(saveErr).Msg("failed to save patrol message after error")
 			}
 		}
 		return nil, err
@@ -725,7 +725,7 @@ func (s *Service) ExecutePatrolStream(ctx context.Context, req PatrolRequest, ca
 			continue
 		}
 		if err := sessions.AddMessage(session.ID, msg); err != nil {
-			log.Warn().Err(err).Msg("Failed to save patrol message")
+			log.Warn().Err(err).Msg("failed to save patrol message")
 		}
 	}
 

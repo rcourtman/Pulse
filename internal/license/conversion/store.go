@@ -155,15 +155,9 @@ func (s *ConversionStore) Record(event StoredConversionEvent) error {
 	return nil
 }
 
-<<<<<<< HEAD
-func (s *ConversionStore) Query(orgID string, from, to time.Time, eventType string) ([]StoredConversionEvent, error) {
-	if err := s.ensureInitialized(); err != nil {
-		return nil, err
-=======
 func (s *ConversionStore) Query(orgID string, from, to time.Time, eventType string) (events []StoredConversionEvent, retErr error) {
 	if s == nil || s.db == nil {
 		return nil, fmt.Errorf("conversion store is not initialized")
->>>>>>> refactor/parallel-05-error-handling
 	}
 
 	where := make([]string, 0, 8)
@@ -243,15 +237,9 @@ func (s *ConversionStore) Query(orgID string, from, to time.Time, eventType stri
 	return events, nil
 }
 
-<<<<<<< HEAD
-func (s *ConversionStore) FunnelSummary(orgID string, from, to time.Time) (*FunnelSummary, error) {
-	if err := s.ensureInitialized(); err != nil {
-		return nil, err
-=======
 func (s *ConversionStore) FunnelSummary(orgID string, from, to time.Time) (summary *FunnelSummary, retErr error) {
 	if s == nil || s.db == nil {
 		return nil, fmt.Errorf("conversion store is not initialized")
->>>>>>> refactor/parallel-05-error-handling
 	}
 	if from.IsZero() || to.IsZero() {
 		return nil, fmt.Errorf("from/to are required")

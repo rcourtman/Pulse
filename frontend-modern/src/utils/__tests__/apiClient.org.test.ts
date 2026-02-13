@@ -66,59 +66,6 @@ describe('apiClient org context', () => {
     expect(getOrgID()).toBeNull();
   });
 
-<<<<<<< HEAD
-  it('retries 429 responses using numeric Retry-After seconds', async () => {
-    vi.useFakeTimers();
-    mockFetch
-      .mockResolvedValueOnce(new Response('{}', { status: 429, headers: { 'Retry-After': '3' } }))
-      .mockResolvedValueOnce(new Response('{}', { status: 200 }));
-
-    const request = apiFetch('/api/state');
-    expect(mockFetch).toHaveBeenCalledTimes(1);
-
-    await vi.advanceTimersByTimeAsync(2999);
-    expect(mockFetch).toHaveBeenCalledTimes(1);
-
-    await vi.advanceTimersByTimeAsync(1);
-    await request;
-    expect(mockFetch).toHaveBeenCalledTimes(2);
-  });
-
-  it('retries 429 responses using HTTP-date Retry-After values', async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
-    const retryAt = new Date(Date.now() + 5000).toUTCString();
-
-    mockFetch
-      .mockResolvedValueOnce(new Response('{}', { status: 429, headers: { 'Retry-After': retryAt } }))
-      .mockResolvedValueOnce(new Response('{}', { status: 200 }));
-
-    const request = apiFetch('/api/state');
-    expect(mockFetch).toHaveBeenCalledTimes(1);
-
-    await vi.advanceTimersByTimeAsync(4999);
-    expect(mockFetch).toHaveBeenCalledTimes(1);
-
-    await vi.advanceTimersByTimeAsync(1);
-    await request;
-    expect(mockFetch).toHaveBeenCalledTimes(2);
-  });
-
-  it('falls back to default retry delay when Retry-After is invalid', async () => {
-    vi.useFakeTimers();
-    mockFetch
-      .mockResolvedValueOnce(new Response('{}', { status: 429, headers: { 'Retry-After': 'not-a-date' } }))
-      .mockResolvedValueOnce(new Response('{}', { status: 200 }));
-
-    const request = apiFetch('/api/state');
-    expect(mockFetch).toHaveBeenCalledTimes(1);
-
-    await vi.advanceTimersByTimeAsync(1999);
-    expect(mockFetch).toHaveBeenCalledTimes(1);
-
-    await vi.advanceTimersByTimeAsync(1);
-    await request;
-=======
   it('honors HTTP-date Retry-After before retrying a 429 response', async () => {
     vi.useFakeTimers();
     const retryAfter = new Date(Date.now() + 5000).toUTCString();
@@ -135,7 +82,6 @@ describe('apiClient org context', () => {
 
     await vi.advanceTimersByTimeAsync(5000);
     await pending;
->>>>>>> refactor/parallel-44-circuit-breakers
     expect(mockFetch).toHaveBeenCalledTimes(2);
   });
 });

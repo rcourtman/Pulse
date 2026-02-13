@@ -152,7 +152,7 @@ func New(cfg Config) *Updater {
 // RunLoop starts the update check loop. It blocks until the context is cancelled.
 func (u *Updater) RunLoop(ctx context.Context) {
 	if u.cfg.Disabled {
-		u.logger.Info().Msg("Auto-update disabled")
+		u.logger.Info().Msg("auto-update disabled")
 		return
 	}
 
@@ -194,15 +194,15 @@ func (u *Updater) CheckAndUpdate(ctx context.Context) {
 	}
 
 	if u.cfg.PulseURL == "" {
-		u.logger.Debug().Msg("Skipping update check - no Pulse URL configured")
+		u.logger.Debug().Msg("skipping update check - no pulse URL configured")
 		return
 	}
 
-	u.logger.Debug().Msg("Checking for agent updates")
+	u.logger.Debug().Msg("checking for agent updates")
 
 	serverVersion, err := u.getServerVersion(ctx)
 	if err != nil {
-		u.logger.Warn().Err(err).Msg("Failed to check for updates")
+		u.logger.Warn().Err(err).Msg("failed to check for updates")
 		return
 	}
 
@@ -218,28 +218,32 @@ func (u *Updater) CheckAndUpdate(ctx context.Context) {
 
 	cmp := utils.CompareVersions(serverNorm, currentNorm)
 	if cmp == 0 {
-		u.logger.Debug().Str("version", u.cfg.CurrentVersion).Msg("Agent is up to date")
+		u.logger.Debug().Str("version", u.cfg.CurrentVersion).Msg("agent is up to date")
 		return
 	}
 	if cmp < 0 {
 		u.logger.Debug().
 			Str("currentVersion", currentNorm).
 			Str("serverVersion", serverNorm).
-			Msg("Server has older version, skipping downgrade")
+			Msg("server has older version, skipping downgrade")
 		return
 	}
 
 	u.logger.Info().
 		Str("currentVersion", u.cfg.CurrentVersion).
 		Str("availableVersion", serverVersion).
-		Msg("New agent version available, performing self-update")
+		Msg("new agent version available, performing self-update")
 
 	if err := u.performUpdateFn(ctx); err != nil {
-		u.logger.Error().Err(err).Msg("Failed to self-update agent")
+		u.logger.Error().
+			Err(err).
+			Str("currentVersion", u.cfg.CurrentVersion).
+			Str("targetVersion", serverVersion).
+			Msg("failed to self-update agent")
 		return
 	}
 
-	u.logger.Info().Msg("Agent updated successfully, restarting...")
+	u.logger.Info().Msg("agent updated successfully, restarting")
 }
 
 // setAuthHeaders adds authentication headers to the request if an API token is configured.
@@ -256,7 +260,6 @@ func (u *Updater) getServerVersion(ctx context.Context) (string, error) {
 
 	resp, err := u.getWithRetry(ctx, versionURL, "version check")
 	if err != nil {
-<<<<<<< HEAD
 		return "", err
 	}
 	defer resp.Body.Close()
@@ -311,9 +314,6 @@ func (u *Updater) newAuthedGetRequest(ctx context.Context, requestURL string) (*
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
 	if err != nil {
 		return nil, err
-=======
-		return "", fmt.Errorf("agentupdate.getServerVersion: create request: %w", err)
->>>>>>> refactor/parallel-05-error-handling
 	}
 
 	if u.cfg.APIToken != "" {
@@ -321,7 +321,6 @@ func (u *Updater) newAuthedGetRequest(ctx context.Context, requestURL string) (*
 		req.Header.Set("Authorization", "Bearer "+u.cfg.APIToken)
 	}
 
-<<<<<<< HEAD
 	return req, nil
 }
 
@@ -383,35 +382,13 @@ func (u *Updater) getWithRetry(ctx context.Context, requestURL, operation string
 		if err := retrySleepFn(ctx, delay); err != nil {
 			return nil, fmt.Errorf("%s request canceled while waiting to retry: %w", operation, err)
 		}
-=======
-	resp, err := u.client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("agentupdate.getServerVersion: execute request: %w", err)
-	}
-	defer func() {
-		if closeErr := resp.Body.Close(); closeErr != nil {
-			u.logger.Warn().Err(closeErr).Msg("agentupdate.getServerVersion: failed to close response body")
-		}
-	}()
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("agentupdate.getServerVersion: server returned status %d", resp.StatusCode)
->>>>>>> refactor/parallel-05-error-handling
 	}
 
 	if lastErr == nil {
 		lastErr = fmt.Errorf("%s request failed", operation)
 	}
 
-<<<<<<< HEAD
 	return nil, lastErr
-=======
-	if err := json.NewDecoder(resp.Body).Decode(&versionResp); err != nil {
-		return "", fmt.Errorf("agentupdate.getServerVersion: decode response: %w", err)
-	}
-
-	return versionResp.Version, nil
->>>>>>> refactor/parallel-05-error-handling
 }
 
 // isUnraid checks if we're running on Unraid by looking for /etc/unraid-version
@@ -424,7 +401,7 @@ func isUnraid() bool {
 func verifyBinaryMagic(path string) (retErr error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return fmt.Errorf("verifyBinaryMagic: open %s: %w", path, err)
+		return fmt.Errorf("open %s: %w", path, err)
 	}
 	defer func() {
 		if closeErr := f.Close(); closeErr != nil {
@@ -509,32 +486,7 @@ func (u *Updater) performUpdateWithExecPath(ctx context.Context, execPath string
 	for _, candidateURL := range candidates {
 		response, err := u.getWithRetry(ctx, candidateURL, "binary download")
 		if err != nil {
-<<<<<<< HEAD
 			lastErr = err
-=======
-			lastErr = fmt.Errorf("failed to create download request for %s: %w", url, err)
-			continue
-		}
-
-		if u.cfg.APIToken != "" {
-			req.Header.Set("X-API-Token", u.cfg.APIToken)
-			req.Header.Set("Authorization", "Bearer "+u.cfg.APIToken)
-		}
-
-		response, err := u.client.Do(req)
-		if err != nil {
-			lastErr = fmt.Errorf("failed to download binary from %s: %w", url, err)
-			continue
-		}
-
-		if response.StatusCode != http.StatusOK {
-			statusErr := fmt.Errorf("download from %s failed with status: %s", url, response.Status)
-			if closeErr := response.Body.Close(); closeErr != nil {
-				lastErr = errors.Join(statusErr, fmt.Errorf("failed to close failed download response body: %w", closeErr))
-			} else {
-				lastErr = statusErr
-			}
->>>>>>> refactor/parallel-05-error-handling
 			continue
 		}
 
@@ -614,7 +566,7 @@ func (u *Updater) performUpdateWithExecPath(ctx context.Context, execPath string
 	if expected != actual {
 		return fmt.Errorf("checksum mismatch: expected %s, got %s", expected, actual)
 	}
-	u.logger.Debug().Str("checksum", downloadChecksum).Msg("Checksum verified")
+	u.logger.Debug().Str("checksum", downloadChecksum).Msg("checksum verified")
 
 	// Make executable
 	if err := chmodFn(tmpPath, 0755); err != nil {
@@ -655,24 +607,24 @@ func (u *Updater) performUpdateWithExecPath(ctx context.Context, execPath string
 		persistPath := unraidPersistentPathFn(u.cfg.AgentName)
 		if _, err := os.Stat(persistPath); err == nil {
 			// Persistent path exists, update it
-			u.logger.Debug().Str("path", persistPath).Msg("Updating Unraid persistent binary")
+			u.logger.Debug().Str("path", persistPath).Msg("updating unraid persistent binary")
 
 			// Read the newly installed binary
 			newBinary, err := readFileFn(execPath)
 			if err != nil {
-				u.logger.Warn().Err(err).Msg("Failed to read new binary for Unraid persistence")
+				u.logger.Warn().Err(err).Str("path", execPath).Msg("failed to read new binary for unraid persistence")
 			} else {
 				// Write to persistent storage (atomic via temp file)
 				tmpPersist := persistPath + ".tmp"
 				if err := writeFileFn(tmpPersist, newBinary, 0644); err != nil {
-					u.logger.Warn().Err(err).Msg("Failed to write Unraid persistent binary")
+					u.logger.Warn().Err(err).Str("path", tmpPersist).Msg("failed to write unraid persistent binary")
 				} else if err := renameFn(tmpPersist, persistPath); err != nil {
 					u.logger.Warn().Err(err).Msg("Failed to rename Unraid persistent binary")
 					if removeErr := os.Remove(tmpPersist); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
 						u.logger.Warn().Err(removeErr).Str("path", tmpPersist).Msg("Failed to remove temporary Unraid persistent binary")
 					}
 				} else {
-					u.logger.Info().Str("path", persistPath).Msg("Updated Unraid persistent binary")
+					u.logger.Info().Str("path", persistPath).Msg("updated unraid persistent binary")
 				}
 			}
 		}

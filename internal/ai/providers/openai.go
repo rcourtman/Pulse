@@ -272,7 +272,7 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 	}
 
 	// Debug log to trace model issues
-	log.Debug().Str("model", model).Str("req_model", req.Model).Str("c_model", c.model).Str("base_url", c.baseURL).Msg("OpenAI/DeepSeek Chat request")
+	log.Debug().Str("model", model).Str("req_model", req.Model).Str("c_model", c.model).Str("base_url", c.baseURL).Msg("OpenAI/DeepSeek chat request")
 
 	// Build request
 	openaiReq := openaiRequest{
@@ -320,7 +320,7 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 	}
 
 	// Log actual model being sent (INFO level for visibility)
-	log.Info().Str("model_in_request", openaiReq.Model).Str("base_url", c.baseURL).Msg("Sending OpenAI/DeepSeek request")
+	log.Info().Str("model_in_request", openaiReq.Model).Str("base_url", c.baseURL).Msg("sending OpenAI/DeepSeek request")
 
 	body, err := json.Marshal(openaiReq)
 	if err != nil {
@@ -765,7 +765,7 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback
 
 			var event openaiStreamEvent
 			if err := json.Unmarshal([]byte(data), &event); err != nil {
-				log.Debug().Err(err).Str("data", data).Msg("Failed to parse stream event")
+				log.Debug().Err(err).Str("data", data).Msg("failed to parse stream event")
 				continue
 			}
 

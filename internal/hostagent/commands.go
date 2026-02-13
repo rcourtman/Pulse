@@ -7,12 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-<<<<<<< HEAD
-	"math"
-	"math/rand/v2"
-=======
 	"net"
->>>>>>> refactor/parallel-05-error-handling
 	"net/url"
 	"os"
 	"os/exec"
@@ -434,14 +429,7 @@ func (c *CommandClient) handleExecuteCommand(ctx context.Context, conn *websocke
 	// Send result back
 	resultPayload, err := json.Marshal(result)
 	if err != nil {
-<<<<<<< HEAD
-		c.logger.Error().
-			Err(err).
-			Str("request_id", payload.RequestID).
-			Msg("Failed to marshal command result")
-=======
 		c.logger.Error().Err(err).Str("request_id", payload.RequestID).Msg("Failed to marshal command result")
->>>>>>> refactor/parallel-05-error-handling
 		return
 	}
 	msg := wsMessage{
@@ -452,11 +440,7 @@ func (c *CommandClient) handleExecuteCommand(ctx context.Context, conn *websocke
 	}
 
 	c.connMu.Lock()
-<<<<<<< HEAD
-	err = conn.WriteJSON(msg)
-=======
 	writeErr := conn.WriteJSON(msg)
->>>>>>> refactor/parallel-05-error-handling
 	c.connMu.Unlock()
 
 	if writeErr != nil {

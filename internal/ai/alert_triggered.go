@@ -68,7 +68,7 @@ func (a *AlertTriggeredAnalyzer) Start() {
 			}
 		}
 	}()
-	log.Debug().Msg("Alert-triggered analyzer cleanup goroutine started")
+	log.Debug().Msg("alert-triggered analyzer cleanup goroutine started")
 }
 
 // Stop stops the background cleanup goroutine
@@ -87,7 +87,7 @@ func (a *AlertTriggeredAnalyzer) Stop() {
 		close(a.stopCh)
 	}
 	a.stopCh = make(chan struct{}) // Reset for potential restart
-	log.Debug().Msg("Alert-triggered analyzer cleanup goroutine stopped")
+	log.Debug().Msg("alert-triggered analyzer cleanup goroutine stopped")
 }
 
 // SetEnabled enables or disables alert-triggered analysis
@@ -95,7 +95,7 @@ func (a *AlertTriggeredAnalyzer) SetEnabled(enabled bool) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.enabled = enabled
-	log.Info().Bool("enabled", enabled).Msg("Alert-triggered AI analysis setting updated")
+	log.Info().Bool("enabled", enabled).Msg("alert-triggered AI analysis setting updated")
 }
 
 // IsEnabled returns whether alert-triggered analysis is enabled

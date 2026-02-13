@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -88,7 +89,7 @@ func NewConfigWatcher(config *Config) (*ConfigWatcher, error) {
 		if strings.Contains(persistentDataDir, "/mock-data") || strings.Contains(persistentDataDir, "/tmp/") {
 			log.Warn().
 				Str("authConfigDir", persistentDataDir).
-				Msg("WARNING: Auth config watcher is using temporary/mock directory - auth may be unstable")
+				Msg("Auth config watcher is using a temporary or mock directory; auth may be unstable")
 		}
 	} else {
 		// Option 6: Last resort default
@@ -185,7 +186,11 @@ func (cw *ConfigWatcher) Start() error {
 	}
 
 	if err != nil {
-		log.Warn().Msg("Falling back to polling for config changes")
+		log.Warn().
+			Err(err).
+			Str("env_path", cw.envPath).
+			Dur("poll_interval", cw.pollInterval).
+			Msg("Falling back to polling for config changes")
 		go cw.pollForChanges()
 		return nil
 	}
@@ -528,7 +533,8 @@ func (cw *ConfigWatcher) reloadAPITokens() {
 				Int("attempt", attempt).
 				Int("maxRetries", maxRetries).
 				Dur("retryDelay", retryDelay).
-				Msg("Failed to reload API tokens, retrying...")
+				Str("api_tokens_path", cw.apiTokensPath).
+				Msg("Failed to reload API tokens, retrying")
 			time.Sleep(retryDelay)
 			retryDelay *= 2 // Exponential backoff
 		}
@@ -595,7 +601,7 @@ func (cw *ConfigWatcher) reloadMockConfig() {
 			log.Error().Err(err).Msg("Failed to read mock.env file")
 			return
 		}
-		log.Warn().Msg("mock.env file not found")
+		log.Warn().Str("path", cw.mockEnvPath).Msg("mock.env file not found")
 		return
 	}
 
@@ -610,16 +616,22 @@ func (cw *ConfigWatcher) reloadMockConfig() {
 	}
 
 	// Update environment variables for the mock package to read
+	mockKeys := make([]string, 0, len(envMap))
 	for key, value := range envMap {
 		if strings.HasPrefix(key, "PULSE_MOCK_") {
 			os.Setenv(key, value)
+			mockKeys = append(mockKeys, key)
 		}
 	}
+	sort.Strings(mockKeys)
 
 	log.Info().
 		Str("path", cw.mockEnvPath).
-		Interface("config", envMap).
+		Int("variable_count", len(mockKeys)).
 		Msg("Reloaded mock.env configuration")
+	log.Debug().
+		Strs("variables", mockKeys).
+		Msg("Applied mock.env variables")
 
 	// Trigger callback to restart backend if set
 	if callback != nil {

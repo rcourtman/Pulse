@@ -43,7 +43,7 @@ func (m *Monitor) RemoveDockerHost(hostID string) (models.DockerHost, error) {
 
 			if m.persistence != nil {
 				if err := m.persistence.SaveAPITokens(m.config.APITokens); err != nil {
-					log.Warn().Err(err).Str("tokenID", host.TokenID).Msg("Failed to persist API token revocation after Docker host removal")
+					log.Warn().Err(err).Str("tokenID", host.TokenID).Msg("failed to persist API token revocation after Docker host removal")
 				} else {
 					log.Info().Str("tokenID", host.TokenID).Str("tokenName", host.TokenName).Msg("API token revoked for removed Docker host")
 				}
@@ -102,7 +102,7 @@ func (m *Monitor) RemoveHostAgent(hostID string) (models.Host, error) {
 	host, removed := m.state.RemoveHost(hostID)
 	if !removed {
 		if logging.IsLevelEnabled(zerolog.DebugLevel) {
-			log.Debug().Str("hostID", hostID).Msg("Host not present in state during removal")
+			log.Debug().Str("hostID", hostID).Msg("host not present in state during removal")
 		}
 		host = models.Host{
 			ID:       hostID,
@@ -139,7 +139,7 @@ func (m *Monitor) RemoveHostAgent(hostID string) (models.Host, error) {
 
 			if m.persistence != nil {
 				if err := m.persistence.SaveAPITokens(m.config.APITokens); err != nil {
-					log.Warn().Err(err).Str("tokenID", tokenID).Msg("Failed to persist API token revocation after host agent removal")
+					log.Warn().Err(err).Str("tokenID", tokenID).Msg("failed to persist API token revocation after host agent removal")
 				} else {
 					log.Info().Str("tokenID", tokenID).Str("tokenName", host.TokenName).Msg("API token revoked for removed host agent")
 				}
@@ -335,13 +335,13 @@ func (m *Monitor) getAgentProfileCache() ([]models.AgentProfile, []models.AgentP
 	var assignments []models.AgentProfileAssignment
 
 	if loadedAssignments, err := m.persistence.LoadAgentProfileAssignments(); err != nil {
-		log.Warn().Err(err).Msg("Failed to load agent profile assignments for cache")
+		log.Warn().Err(err).Msg("failed to load agent profile assignments for cache")
 	} else {
 		assignments = loadedAssignments
 	}
 
 	if loadedProfiles, err := m.persistence.LoadAgentProfiles(); err != nil {
-		log.Warn().Err(err).Msg("Failed to load agent profiles for cache")
+		log.Warn().Err(err).Msg("failed to load agent profiles for cache")
 	} else {
 		profiles = loadedProfiles
 	}
@@ -485,7 +485,7 @@ func (m *Monitor) SetDockerHostCustomDisplayName(hostID string, customName strin
 		}
 	}
 	if err := m.dockerMetadataStore.SetHostMetadata(hostID, hostMeta); err != nil {
-		log.Error().Err(err).Str("hostID", hostID).Msg("Failed to persist Docker host metadata")
+		log.Error().Err(err).Str("hostID", hostID).Msg("failed to persist Docker host metadata")
 		return models.DockerHost{}, fmt.Errorf("failed to persist custom display name: %w", err)
 	}
 
@@ -521,7 +521,7 @@ func (m *Monitor) AllowDockerHostReenroll(hostID string) error {
 		if found {
 			event = event.Str("dockerHost", host.Hostname)
 		}
-		event.Msg("Allow re-enroll requested but host was not blocked; ignoring")
+		event.Msg("allow re-enroll requested but host was not blocked; ignoring")
 		return nil
 	}
 

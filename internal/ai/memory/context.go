@@ -152,11 +152,11 @@ func NewContextStore(cfg ContextStoreConfig) *ContextStore {
 	// Load from disk
 	if cfg.DataDir != "" {
 		if err := store.loadFromDisk(); err != nil {
-			log.Warn().Err(err).Msg("Failed to load context store from disk")
+			log.Warn().Err(err).Msg("failed to load context store from disk")
 		} else {
 			total := len(store.resourceMemories) + len(store.incidentMemories) + len(store.patternMemories)
 			if total > 0 {
-				log.Info().Int("total_memories", total).Msg("Loaded context store from disk")
+				log.Info().Int("total_memories", total).Msg("loaded context store from disk")
 			}
 		}
 	}
@@ -644,7 +644,7 @@ func (s *ContextStore) saveIfDirty() {
 	s.mu.Unlock()
 
 	if err := s.saveToDisk(); err != nil {
-		log.Warn().Err(err).Msg("Failed to save context store")
+		log.Warn().Err(err).Msg("failed to save context store")
 		s.mu.Lock()
 		s.dirty = true
 		s.mu.Unlock()

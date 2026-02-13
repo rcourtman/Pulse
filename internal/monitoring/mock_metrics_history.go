@@ -633,7 +633,7 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, state models.
 		}
 	}
 
-	log.Debug().Int("count", len(state.Nodes)).Msg("Mock seeding: processing nodes")
+	log.Debug().Int("count", len(state.Nodes)).Msg("mock seeding: processing nodes")
 	for _, node := range state.Nodes {
 		recordNode(node)
 		time.Sleep(50 * time.Millisecond) // Reduced from 200ms for faster startup
@@ -645,7 +645,7 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, state models.
 			runningVMs++
 		}
 	}
-	log.Debug().Int("total", len(state.VMs)).Int("running", runningVMs).Msg("Mock seeding: processing VMs")
+	log.Debug().Int("total", len(state.VMs)).Int("running", runningVMs).Msg("mock seeding: processing VMs")
 	for _, vm := range state.VMs {
 		if vm.Status != "running" {
 			continue
@@ -660,7 +660,7 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, state models.
 			runningContainers++
 		}
 	}
-	log.Debug().Int("total", len(state.Containers)).Int("running", runningContainers).Msg("Mock seeding: processing containers")
+	log.Debug().Int("total", len(state.Containers)).Int("running", runningContainers).Msg("mock seeding: processing containers")
 	for _, ct := range state.Containers {
 		if ct.Status != "running" {
 			continue
@@ -676,7 +676,7 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, state models.
 		}
 		k8sPodCount += len(cluster.Pods)
 	}
-	log.Debug().Int("clusters", len(state.KubernetesClusters)).Int("pods", k8sPodCount).Msg("Mock seeding: processing kubernetes pods")
+	log.Debug().Int("clusters", len(state.KubernetesClusters)).Int("pods", k8sPodCount).Msg("mock seeding: processing kubernetes pods")
 	for _, cluster := range state.KubernetesClusters {
 		if cluster.Hidden {
 			continue
@@ -706,7 +706,7 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, state models.
 		time.Sleep(30 * time.Millisecond)
 	}
 
-	log.Debug().Int("count", len(state.Storage)).Msg("Mock seeding: processing storage")
+	log.Debug().Int("count", len(state.Storage)).Msg("mock seeding: processing storage")
 	for _, storage := range state.Storage {
 		if storage.ID == "" {
 			continue
@@ -726,7 +726,7 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, state models.
 		time.Sleep(50 * time.Millisecond) // Reduced from 200ms for faster startup
 	}
 
-	log.Debug().Int("count", len(state.PhysicalDisks)).Msg("Mock seeding: processing physical disks")
+	log.Debug().Int("count", len(state.PhysicalDisks)).Msg("mock seeding: processing physical disks")
 	for _, disk := range state.PhysicalDisks {
 		if disk.Temperature <= 0 {
 			continue
@@ -754,7 +754,7 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, state models.
 		queueMetric("disk", resourceID, "smart_temp", float64(disk.Temperature), now)
 	}
 
-	log.Debug().Int("count", len(state.CephClusters)).Msg("Mock seeding: processing ceph clusters")
+	log.Debug().Int("count", len(state.CephClusters)).Msg("mock seeding: processing ceph clusters")
 	for _, cluster := range state.CephClusters {
 		if cluster.TotalBytes <= 0 {
 			continue
@@ -785,7 +785,7 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, state models.
 		queueMetric("ceph", cephID, "usage", cluster.UsagePercent, now)
 	}
 
-	log.Debug().Int("count", len(state.DockerHosts)).Msg("Mock seeding: processing docker hosts")
+	log.Debug().Int("count", len(state.DockerHosts)).Msg("mock seeding: processing docker hosts")
 	for _, host := range state.DockerHosts {
 		if host.ID == "" {
 			continue
@@ -820,7 +820,7 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, state models.
 		time.Sleep(50 * time.Millisecond) // Add delay for docker hosts
 	}
 
-	log.Debug().Int("count", len(state.Hosts)).Msg("Mock seeding: processing host agents")
+	log.Debug().Int("count", len(state.Hosts)).Msg("mock seeding: processing host agents")
 	for _, host := range state.Hosts {
 		if host.ID == "" || host.Status != "online" {
 			continue
@@ -837,7 +837,7 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, state models.
 
 	// Seed TrueNAS pool/dataset disk-usage metrics
 	fixtures := truenas.DefaultFixtures()
-	log.Debug().Int("pools", len(fixtures.Pools)).Int("datasets", len(fixtures.Datasets)).Msg("Mock seeding: processing TrueNAS fixtures")
+	log.Debug().Int("pools", len(fixtures.Pools)).Int("datasets", len(fixtures.Datasets)).Msg("mock seeding: processing TrueNAS fixtures")
 
 	// System host: aggregated disk usage across all pools
 	totalCap, totalUsed := int64(0), int64(0)
@@ -890,7 +890,7 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, state models.
 	if ms != nil && len(seedBatch) > 0 {
 		ms.WriteBatchSync(seedBatch)
 	}
-	log.Debug().Msg("Mock seeding: completed")
+	log.Debug().Msg("mock seeding: completed")
 }
 
 func recordMockStateToMetricsHistory(mh *MetricsHistory, ms *metrics.Store, state models.StateSnapshot, ts time.Time) {
@@ -1193,15 +1193,15 @@ func diskMetricsResourceID(disk models.PhysicalDisk) string {
 
 func (m *Monitor) startMockMetricsSampler(ctx context.Context) {
 	if ctx == nil || m == nil {
-		log.Debug().Msg("Mock metrics sampler: nil context or monitor")
+		log.Debug().Msg("mock metrics sampler: nil context or monitor")
 		return
 	}
 	if !mock.IsMockEnabled() {
-		log.Debug().Msg("Mock metrics sampler: mock mode not enabled")
+		log.Debug().Msg("mock metrics sampler: mock mode not enabled")
 		return
 	}
 
-	log.Info().Msg("Mock metrics sampler: starting initialization")
+	log.Info().Msg("mock metrics sampler: starting initialization")
 
 	cfg := mockMetricsSamplerConfigFromEnv()
 	seedDuration := cfg.SeedDuration
@@ -1216,7 +1216,7 @@ func (m *Monitor) startMockMetricsSampler(ctx context.Context) {
 	m.mu.Lock()
 	if m.mockMetricsCancel != nil {
 		m.mu.Unlock()
-		log.Debug().Msg("Mock metrics sampler: already running")
+		log.Debug().Msg("mock metrics sampler: already running")
 		return
 	}
 	samplerCtx, cancel := context.WithCancel(ctx)
@@ -1276,6 +1276,6 @@ func (m *Monitor) stopMockMetricsSampler() {
 	if cancel != nil {
 		cancel()
 		m.mockMetricsWg.Wait()
-		log.Info().Msg("Mock metrics history sampler stopped")
+		log.Info().Msg("mock metrics history sampler stopped")
 	}
 }

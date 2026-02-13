@@ -14,7 +14,7 @@ import (
 func (m *Monitor) syncAlertsToState() {
 	if m.pruneStaleDockerAlerts() {
 		if logging.IsLevelEnabled(zerolog.DebugLevel) {
-			log.Debug().Msg("Pruned stale docker alerts during sync")
+			log.Debug().Msg("pruned stale docker alerts during sync")
 		}
 	}
 
@@ -39,14 +39,14 @@ func (m *Monitor) syncAlertsToState() {
 			AckUser:         alert.AckUser,
 		})
 		if alert.Acknowledged && logging.IsLevelEnabled(zerolog.DebugLevel) {
-			log.Debug().Str("alertID", alert.ID).Interface("ackTime", alert.AckTime).Msg("Syncing acknowledged alert")
+			log.Debug().Str("alertID", alert.ID).Interface("ackTime", alert.AckTime).Msg("syncing acknowledged alert")
 		}
 	}
 	m.state.UpdateActiveAlerts(modelAlerts)
 
 	recentlyResolved := m.alertManager.GetRecentlyResolved()
 	if len(recentlyResolved) > 0 {
-		log.Info().Int("count", len(recentlyResolved)).Msg("Syncing recently resolved alerts")
+		log.Info().Int("count", len(recentlyResolved)).Msg("syncing recently resolved alerts")
 	}
 	m.state.UpdateRecentlyResolved(recentlyResolved)
 }

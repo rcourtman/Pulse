@@ -165,8 +165,6 @@ func parseTenantState(s string) (registry.TenantState, bool) {
 	}
 }
 
-<<<<<<< HEAD
-=======
 func loadTenantForAccount(reg *registry.TenantRegistry, accountID, tenantID string) (*registry.Tenant, error) {
 	t, err := reg.Get(tenantID)
 	if err != nil {
@@ -181,7 +179,6 @@ func loadTenantForAccount(reg *registry.TenantRegistry, accountID, tenantID stri
 	return t, nil
 }
 
->>>>>>> refactor/parallel-05-error-handling
 // HandleUpdateTenant updates display name and/or state.
 // Route: PATCH /api/accounts/{account_id}/tenants/{tenant_id}
 func HandleUpdateTenant(reg *registry.TenantRegistry) http.HandlerFunc {

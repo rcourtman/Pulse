@@ -52,6 +52,8 @@ func NewServer(validateToken func(token string, agentID string) bool) *Server {
 
 // HandleWebSocket handles incoming WebSocket connections from agents
 func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
+	remoteAddr := r.RemoteAddr
+
 	// CRITICAL: Clear http.Server deadlines BEFORE WebSocket upgrade.
 	// The http.Server.ReadTimeout sets a deadline on the underlying connection when
 	// the request starts. We must clear it before the upgrade or the connection will
@@ -59,15 +61,21 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	// Use http.ResponseController (Go 1.20+) to clear the deadline.
 	rc := http.NewResponseController(w)
 	if err := rc.SetReadDeadline(time.Time{}); err != nil {
-		log.Debug().Err(err).Msg("Failed to clear read deadline via ResponseController")
+		log.Debug().
+			Err(err).
+			Str("remote_addr", remoteAddr).
+			Msg("Failed to clear read deadline via ResponseController")
 	}
 	if err := rc.SetWriteDeadline(time.Time{}); err != nil {
-		log.Debug().Err(err).Msg("Failed to clear write deadline via ResponseController")
+		log.Debug().
+			Err(err).
+			Str("remote_addr", remoteAddr).
+			Msg("Failed to clear write deadline via ResponseController")
 	}
 
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to upgrade WebSocket connection")
+		log.Error().Err(err).Str("remote_addr", remoteAddr).Msg("Failed to upgrade WebSocket connection")
 		return
 	}
 	closeConn := func(context string) {
@@ -92,38 +100,35 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 	_, msgBytes, err := conn.ReadMessage()
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to read registration message")
+		log.Error().Err(err).Str("remote_addr", remoteAddr).Msg("Failed to read registration message")
 		closeConn("Failed to close connection after registration read error")
 		return
 	}
 
 	var msg Message
 	if err := json.Unmarshal(msgBytes, &msg); err != nil {
-		log.Error().Err(err).Msg("Failed to parse registration message")
+		log.Error().Err(err).Str("remote_addr", remoteAddr).Msg("Failed to parse registration message")
 		closeConn("Failed to close connection after registration parse error")
 		return
 	}
 
 	if msg.Type != MsgTypeAgentRegister {
-		log.Error().Str("type", string(msg.Type)).Msg("First message must be agent_register")
+		log.Error().Str("type", string(msg.Type)).Str("remote_addr", remoteAddr).Msg("First message must be agent_register")
 		closeConn("Failed to close connection after invalid first message type")
 		return
 	}
 
-<<<<<<< HEAD
-=======
 	// Parse registration payload
 	payloadBytes, err := jsonMarshal(msg.Payload)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to marshal registration payload")
+		log.Error().Err(err).Str("remote_addr", remoteAddr).Msg("Failed to marshal registration payload")
 		closeConn("Failed to close connection after registration payload marshal error")
 		return
 	}
 
->>>>>>> refactor/parallel-05-error-handling
 	var reg AgentRegisterPayload
 	if err := msg.DecodePayload(&reg); err != nil {
-		log.Error().Err(err).Msg("Failed to parse registration payload")
+		log.Error().Err(err).Str("remote_addr", remoteAddr).Msg("Failed to parse registration payload")
 		closeConn("Failed to close connection after registration payload parse error")
 		return
 	}
@@ -252,9 +257,10 @@ func (s *Server) readLoop(ac *agentConn) {
 
 		_, msgBytes, err := ac.conn.ReadMessage()
 		if err != nil {
-			log.Debug().Err(err).Str("agent_id", ac.agent.AgentID).Msg("Read loop exiting: read error")
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				log.Error().Err(err).Str("agent_id", ac.agent.AgentID).Msg("WebSocket read error")
+				log.Error().Err(err).Str("agent_id", ac.agent.AgentID).Msg("Unexpected WebSocket close error")
+			} else {
+				log.Debug().Err(err).Str("agent_id", ac.agent.AgentID).Msg("Read loop exiting: read error")
 			}
 			return
 		}
@@ -279,17 +285,14 @@ func (s *Server) readLoop(ac *agentConn) {
 			ac.writeMu.Unlock()
 
 		case MsgTypeCommandResult:
-<<<<<<< HEAD
-=======
 			payloadBytes, err := json.Marshal(msg.Payload)
 			if err != nil {
 				log.Error().Err(err).Str("agent_id", ac.agent.AgentID).Msg("Failed to marshal command result payload")
 				continue
 			}
->>>>>>> refactor/parallel-05-error-handling
 			var result CommandResultPayload
 			if err := msg.DecodePayload(&result); err != nil {
-				log.Error().Err(err).Msg("Failed to parse command result")
+				log.Error().Err(err).Str("agent_id", ac.agent.AgentID).Msg("Failed to parse command result")
 				continue
 			}
 
@@ -301,10 +304,16 @@ func (s *Server) readLoop(ac *agentConn) {
 				select {
 				case ch <- result:
 				default:
-					log.Warn().Str("request_id", result.RequestID).Msg("Result channel full, dropping")
+					log.Warn().
+						Str("request_id", result.RequestID).
+						Str("agent_id", ac.agent.AgentID).
+						Msg("Result channel full, dropping")
 				}
 			} else {
-				log.Warn().Str("request_id", result.RequestID).Msg("No pending request for result")
+				log.Warn().
+					Str("request_id", result.RequestID).
+					Str("agent_id", ac.agent.AgentID).
+					Msg("No pending request for result")
 			}
 		}
 	}
@@ -339,6 +348,7 @@ func (s *Server) pingLoop(ac *agentConn, done chan struct{}) {
 
 				if consecutiveFailures >= maxConsecutiveFailures {
 					log.Error().
+						Err(err).
 						Str("agent_id", ac.agent.AgentID).
 						Str("hostname", ac.agent.Hostname).
 						Int("failures", consecutiveFailures).
@@ -402,11 +412,7 @@ func (s *Server) sendRequestAndWait(ctx context.Context, agentID string, msgType
 	ac.writeMu.Unlock()
 
 	if err != nil {
-<<<<<<< HEAD
 		return nil, fmt.Errorf("failed to send %s request: %w", msgType, err)
-=======
-		return nil, fmt.Errorf("send execute_command %q to agent %q: %w", cmd.RequestID, agentID, err)
->>>>>>> refactor/parallel-05-error-handling
 	}
 
 	// Wait for result
@@ -414,11 +420,7 @@ func (s *Server) sendRequestAndWait(ctx context.Context, agentID string, msgType
 	case result := <-respCh:
 		return &result, nil
 	case <-time.After(timeout):
-<<<<<<< HEAD
 		return nil, fmt.Errorf("%s timed out after %v", msgType, timeout)
-=======
-		return nil, fmt.Errorf("execute command %q on agent %q timed out after %v", cmd.RequestID, agentID, timeout)
->>>>>>> refactor/parallel-05-error-handling
 	case <-ctx.Done():
 		return nil, fmt.Errorf("execute command %q on agent %q canceled: %w", cmd.RequestID, agentID, ctx.Err())
 	}
@@ -435,56 +437,7 @@ func (s *Server) ExecuteCommand(ctx context.Context, agentID string, cmd Execute
 
 // ReadFile reads a file from an agent
 func (s *Server) ReadFile(ctx context.Context, agentID string, req ReadFilePayload) (*CommandResultPayload, error) {
-<<<<<<< HEAD
 	return s.sendRequestAndWait(ctx, agentID, MsgTypeReadFile, req.RequestID, req, readFileTimeout)
-=======
-	s.mu.RLock()
-	ac, ok := s.agents[agentID]
-	s.mu.RUnlock()
-
-	if !ok {
-		return nil, fmt.Errorf("agent %s not connected", agentID)
-	}
-
-	// Create response channel
-	respCh := make(chan CommandResultPayload, 1)
-	s.mu.Lock()
-	s.pendingReqs[req.RequestID] = respCh
-	s.mu.Unlock()
-
-	defer func() {
-		s.mu.Lock()
-		delete(s.pendingReqs, req.RequestID)
-		s.mu.Unlock()
-	}()
-
-	// Send request
-	msg := Message{
-		Type:      MsgTypeReadFile,
-		ID:        req.RequestID,
-		Timestamp: time.Now(),
-		Payload:   req,
-	}
-
-	ac.writeMu.Lock()
-	err := s.sendMessage(ac.conn, msg)
-	ac.writeMu.Unlock()
-
-	if err != nil {
-		return nil, fmt.Errorf("send read_file %q to agent %q: %w", req.RequestID, agentID, err)
-	}
-
-	// Wait for result
-	timeout := readFileTimeout
-	select {
-	case result := <-respCh:
-		return &result, nil
-	case <-time.After(timeout):
-		return nil, fmt.Errorf("read_file %q on agent %q timed out after %v", req.RequestID, agentID, timeout)
-	case <-ctx.Done():
-		return nil, fmt.Errorf("read_file %q on agent %q canceled: %w", req.RequestID, agentID, ctx.Err())
-	}
->>>>>>> refactor/parallel-05-error-handling
 }
 
 // GetConnectedAgents returns a list of currently connected agents

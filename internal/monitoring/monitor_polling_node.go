@@ -264,16 +264,16 @@ func (m *Monitor) pollPVENode(
 						if haveRRDMetrics && rrdMetrics.available > 0 {
 							logCtx = logCtx.Uint64("rrdAvailable", rrdMetrics.available)
 						}
-						logCtx.Msg("Node memory: using RRD memavailable fallback (excludes reclaimable cache)")
+						logCtx.Msg("node memory: using RRD memavailable fallback (excludes reclaimable cache)")
 						nodeMemorySource = "rrd-memavailable"
 						nodeFallbackReason = "rrd-memavailable"
 						nodeSnapshotRaw.FallbackCalculated = true
 						nodeSnapshotRaw.ProxmoxMemorySource = "rrd-memavailable"
 					} else if nodeInfo.Memory.Available > 0 {
-						logCtx.Msg("Node memory: using available field (excludes reclaimable cache)")
+						logCtx.Msg("node memory: using available field (excludes reclaimable cache)")
 						nodeMemorySource = "available-field"
 					} else if nodeInfo.Memory.Avail > 0 {
-						logCtx.Msg("Node memory: using avail field (excludes reclaimable cache)")
+						logCtx.Msg("node memory: using avail field (excludes reclaimable cache)")
 						nodeMemorySource = "avail-field"
 					} else if derivedFromTotalMinusUsed {
 						logCtx.

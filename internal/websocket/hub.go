@@ -494,16 +494,16 @@ func (h *Hub) Run() {
 				h.clientsByTenant[client.orgID][client] = true
 			}
 			h.mu.Unlock()
-			log.Info().Str("client", client.id).Str("org_id", client.orgID).Msg("WebSocket client connected")
+			log.Info().Str("client", client.id).Str("org_id", client.orgID).Msg("webSocket client connected")
 
 			// Send initial state to the new client immediately
 			// Use tenant-aware state getter if available
 			hasGetState := h.getState != nil || h.getStateByTenant != nil
-			log.Debug().Bool("hasGetState", hasGetState).Msg("Checking getState function for new client")
+			log.Debug().Bool("hasGetState", hasGetState).Msg("checking getState function for new client")
 			if hasGetState {
 				// Add a small delay to ensure client is ready
 				go func() {
-					log.Debug().Str("client", client.id).Msg("Starting initial state goroutine")
+					log.Debug().Str("client", client.id).Msg("starting initial state goroutine")
 					time.Sleep(500 * time.Millisecond)
 
 					// First send a small welcome message
@@ -518,14 +518,14 @@ func (h *Hub) Run() {
 						h.mu.RUnlock()
 
 						if stillRegistered {
-							log.Info().Str("client", client.id).Msg("Sending welcome message")
+							log.Info().Str("client", client.id).Msg("sending welcome message")
 							if client.safeSend(data) {
-								log.Info().Str("client", client.id).Msg("Welcome message sent")
+								log.Info().Str("client", client.id).Msg("welcome message sent")
 							} else {
-								log.Warn().Str("client", client.id).Msg("Failed to send welcome message - client closed or buffer full")
+								log.Warn().Str("client", client.id).Msg("failed to send welcome message - client closed or buffer full")
 							}
 						} else {
-							log.Debug().Str("client", client.id).Msg("Client disconnected before welcome message")
+							log.Debug().Str("client", client.id).Msg("client disconnected before welcome message")
 						}
 					} else {
 						log.Error().Err(err).Str("client", client.id).Msg("Failed to marshal welcome message")
@@ -533,11 +533,11 @@ func (h *Hub) Run() {
 
 					// Then send the initial state after another delay
 					time.Sleep(100 * time.Millisecond)
-					log.Debug().Str("client", client.id).Msg("About to get state")
+					log.Debug().Str("client", client.id).Msg("about to get state")
 
 					// Get the state using tenant-aware getter
 					stateData := h.getStateForClient(client)
-					log.Debug().Str("client", client.id).Interface("stateType", fmt.Sprintf("%T", stateData)).Msg("Got state for initial message")
+					log.Debug().Str("client", client.id).Interface("stateType", fmt.Sprintf("%T", stateData)).Msg("got state for initial message")
 
 					initialMsg := Message{
 						Type: "initialState",
@@ -550,21 +550,21 @@ func (h *Hub) Run() {
 						h.mu.RUnlock()
 
 						if stillRegistered {
-							log.Info().Str("client", client.id).Int("dataLen", len(data)).Int("dataKB", len(data)/1024).Msg("Sending initial state to client")
+							log.Info().Str("client", client.id).Int("dataLen", len(data)).Int("dataKB", len(data)/1024).Msg("sending initial state to client")
 							if client.safeSend(data) {
-								log.Info().Str("client", client.id).Msg("Initial state sent successfully")
+								log.Info().Str("client", client.id).Msg("initial state sent successfully")
 							} else {
-								log.Warn().Str("client", client.id).Msg("Client closed or buffer full, skipping initial state")
+								log.Warn().Str("client", client.id).Msg("client closed or buffer full, skipping initial state")
 							}
 						} else {
-							log.Debug().Str("client", client.id).Msg("Client disconnected before initial state")
+							log.Debug().Str("client", client.id).Msg("client disconnected before initial state")
 						}
 					} else {
-						log.Error().Err(err).Str("client", client.id).Msg("Failed to marshal initial state")
+						log.Error().Err(err).Str("client", client.id).Msg("failed to marshal initial state")
 					}
 				}()
 			} else {
-				log.Warn().Msg("No getState function defined")
+				log.Warn().Msg("no getState function defined")
 			}
 
 		case client := <-h.unregister:
@@ -582,7 +582,7 @@ func (h *Hub) Run() {
 				client.closed.Store(true) // Mark closed before closing channel to prevent sends
 				close(client.send)
 				h.mu.Unlock()
-				log.Info().Str("client", client.id).Str("org_id", client.orgID).Msg("WebSocket client disconnected")
+				log.Info().Str("client", client.id).Str("org_id", client.orgID).Msg("webSocket client disconnected")
 			} else {
 				h.mu.Unlock()
 			}
@@ -612,7 +612,7 @@ func (h *Hub) Run() {
 			h.sendPing()
 
 		case <-h.stopChan:
-			log.Info().Msg("WebSocket hub shutting down")
+			log.Info().Msg("webSocket hub shutting down")
 			// Close all client connections
 			h.mu.Lock()
 			for client := range h.clients {
@@ -731,7 +731,7 @@ func (h *Hub) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to upgrade WebSocket connection")
+		log.Error().Err(err).Msg("failed to upgrade WebSocket connection")
 		return
 	}
 	conn.EnableWriteCompression(true)
@@ -750,7 +750,7 @@ func (h *Hub) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		lastPing: time.Now(),
 	}
 
-	log.Info().Str("client", clientID).Str("org_id", orgID).Msg("WebSocket client created")
+	log.Info().Str("client", clientID).Str("org_id", orgID).Msg("webSocket client created")
 
 	client.hub.register <- client
 
@@ -891,7 +891,7 @@ func (h *Hub) runBroadcastSequencer() {
 			}
 
 		case <-h.stopChan:
-			log.Debug().Msg("Broadcast sequencer shutting down")
+			log.Debug().Msg("broadcast sequencer shutting down")
 			// Cancel pending timer if exists
 			h.coalesceMutex.Lock()
 			if h.coalesceTimer != nil {
@@ -921,7 +921,7 @@ func (h *Hub) BroadcastState(state interface{}) {
 			dockerHostsCount = field.Len()
 		}
 	}
-	log.Debug().Int("dockerHostsCount", dockerHostsCount).Msg("Broadcasting state")
+	log.Debug().Int("dockerHostsCount", dockerHostsCount).Msg("broadcasting state")
 	stateData := h.prepareStateForBroadcast(state)
 
 	msg := Message{
@@ -933,13 +933,13 @@ func (h *Hub) BroadcastState(state interface{}) {
 	select {
 	case h.broadcastSeq <- msg:
 	default:
-		log.Warn().Msg("Broadcast sequencer channel full, dropping state update")
+		log.Warn().Msg("broadcast sequencer channel full, dropping state update")
 	}
 }
 
 // BroadcastStateToTenant broadcasts state update only to clients of a specific tenant.
 func (h *Hub) BroadcastStateToTenant(orgID string, state interface{}) {
-	log.Debug().Str("org_id", orgID).Msg("Broadcasting state to tenant")
+	log.Debug().Str("org_id", orgID).Msg("broadcasting state to tenant")
 	stateData := h.prepareStateForBroadcast(state)
 
 	msg := Message{
@@ -951,7 +951,7 @@ func (h *Hub) BroadcastStateToTenant(orgID string, state interface{}) {
 	select {
 	case h.tenantBroadcast <- TenantBroadcast{OrgID: orgID, Message: msg}:
 	default:
-		log.Warn().Str("org_id", orgID).Msg("Tenant broadcast channel full, dropping state update")
+		log.Warn().Str("org_id", orgID).Msg("tenant broadcast channel full, dropping state update")
 	}
 }
 
@@ -1022,7 +1022,7 @@ func (h *Hub) GetTenantClientCount(orgID string) int {
 
 // BroadcastAlert broadcasts alert to all clients
 func (h *Hub) BroadcastAlert(alert interface{}) {
-	log.Info().Interface("alert", alert).Msg("Broadcasting alert to WebSocket clients")
+	log.Info().Interface("alert", alert).Msg("broadcasting alert to WebSocket clients")
 	msg := Message{
 		Type: "alert",
 		Data: cloneAlertData(alert),
@@ -1032,7 +1032,7 @@ func (h *Hub) BroadcastAlert(alert interface{}) {
 
 // BroadcastAlertResolved broadcasts alert resolution to all clients
 func (h *Hub) BroadcastAlertResolved(alertID string) {
-	log.Info().Str("alertID", alertID).Msg("Broadcasting alert resolved to WebSocket clients")
+	log.Info().Str("alertID", alertID).Msg("broadcasting alert resolved to WebSocket clients")
 	msg := Message{
 		Type: "alertResolved",
 		Data: map[string]string{"alertId": alertID},
@@ -1048,7 +1048,7 @@ func (h *Hub) BroadcastAlertToTenant(orgID string, alert interface{}) {
 		return
 	}
 
-	log.Info().Str("org_id", orgID).Msg("Broadcasting alert to tenant WebSocket clients")
+	log.Info().Str("org_id", orgID).Msg("broadcasting alert to tenant WebSocket clients")
 	msg := Message{
 		Type: "alert",
 		Data: cloneAlertData(alert),
@@ -1057,7 +1057,7 @@ func (h *Hub) BroadcastAlertToTenant(orgID string, alert interface{}) {
 	select {
 	case h.tenantBroadcast <- TenantBroadcast{OrgID: orgID, Message: msg}:
 	default:
-		log.Warn().Str("org_id", orgID).Msg("Tenant broadcast channel full, dropping alert")
+		log.Warn().Str("org_id", orgID).Msg("tenant broadcast channel full, dropping alert")
 	}
 }
 
@@ -1069,7 +1069,7 @@ func (h *Hub) BroadcastAlertResolvedToTenant(orgID string, alertID string) {
 		return
 	}
 
-	log.Info().Str("org_id", orgID).Str("alertID", alertID).Msg("Broadcasting alert resolved to tenant WebSocket clients")
+	log.Info().Str("org_id", orgID).Str("alertID", alertID).Msg("broadcasting alert resolved to tenant WebSocket clients")
 	msg := Message{
 		Type: "alertResolved",
 		Data: map[string]string{"alertId": alertID},
@@ -1078,7 +1078,7 @@ func (h *Hub) BroadcastAlertResolvedToTenant(orgID string, alertID string) {
 	select {
 	case h.tenantBroadcast <- TenantBroadcast{OrgID: orgID, Message: msg}:
 	default:
-		log.Warn().Str("org_id", orgID).Msg("Tenant broadcast channel full, dropping alert resolved")
+		log.Warn().Str("org_id", orgID).Msg("tenant broadcast channel full, dropping alert resolved")
 	}
 }
 
@@ -1105,11 +1105,11 @@ func (h *Hub) BroadcastMessage(msg Message) {
 
 	data, err := json.Marshal(msg)
 	if err != nil {
-		log.Error().Err(err).Str("type", msg.Type).Msg("Failed to marshal WebSocket message")
+		log.Error().Err(err).Str("type", msg.Type).Msg("failed to marshal WebSocket message")
 		// Try to marshal without data to see what's failing
 		debugMsg := Message{Type: msg.Type, Data: "[error marshaling data]"}
 		if debugData, debugErr := json.Marshal(debugMsg); debugErr == nil {
-			log.Debug().Str("debugMsg", string(debugData)).Msg("Debug message")
+			log.Debug().Str("debugMsg", string(debugData)).Msg("debug message")
 		}
 		return
 	}
@@ -1117,7 +1117,7 @@ func (h *Hub) BroadcastMessage(msg Message) {
 	select {
 	case h.broadcast <- data:
 	default:
-		log.Warn().Msg("WebSocket broadcast channel full")
+		log.Warn().Msg("webSocket broadcast channel full")
 	}
 }
 
@@ -1133,7 +1133,7 @@ func (h *Hub) sendPing() {
 // readPump handles incoming messages from the client
 func (c *Client) readPump() {
 	defer func() {
-		log.Info().Str("client", c.id).Msg("ReadPump exiting")
+		log.Info().Str("client", c.id).Msg("readPump exiting")
 		c.hub.unregister <- c
 		if err := c.conn.Close(); err != nil {
 			log.Debug().Err(err).Str("client", c.id).Msg("Failed to close WebSocket connection in readPump")
@@ -1141,25 +1141,25 @@ func (c *Client) readPump() {
 	}()
 
 	if err := c.conn.SetReadDeadline(time.Now().Add(60 * time.Second)); err != nil {
-		log.Warn().Err(err).Str("client", c.id).Msg("Failed to set initial read deadline")
+		log.Warn().Err(err).Str("client", c.id).Msg("failed to set initial read deadline")
 	}
 	c.conn.SetPongHandler(func(string) error {
 		if err := c.conn.SetReadDeadline(time.Now().Add(60 * time.Second)); err != nil {
-			log.Warn().Err(err).Str("client", c.id).Msg("Failed to refresh read deadline on pong")
+			log.Warn().Err(err).Str("client", c.id).Msg("failed to refresh read deadline on pong")
 		}
 		c.lastPing = time.Now()
 		return nil
 	})
 
-	log.Info().Str("client", c.id).Msg("ReadPump started")
+	log.Info().Str("client", c.id).Msg("readPump started")
 
 	for {
 		_, message, err := c.conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				log.Error().Err(err).Str("client", c.id).Msg("WebSocket read error")
+				log.Error().Err(err).Str("client", c.id).Msg("webSocket read error")
 			} else {
-				log.Info().Err(err).Str("client", c.id).Msg("WebSocket closed")
+				log.Info().Err(err).Str("client", c.id).Msg("webSocket closed")
 			}
 			break
 		}
@@ -1167,7 +1167,7 @@ func (c *Client) readPump() {
 		// Handle incoming messages
 		var msg Message
 		if err := json.Unmarshal(message, &msg); err != nil {
-			log.Error().Err(err).Str("client", c.id).Msg("Failed to unmarshal WebSocket message")
+			log.Error().Err(err).Str("client", c.id).Msg("failed to unmarshal WebSocket message")
 			continue
 		}
 
@@ -1198,11 +1198,11 @@ func (c *Client) readPump() {
 						log.Warn().Str("client", c.id).Msg("Failed to queue requestData state response; client channel closed or full")
 					}
 				} else {
-					log.Error().Err(err).Str("client", c.id).Msg("Failed to marshal state for requestData")
+					log.Error().Err(err).Str("client", c.id).Msg("failed to marshal state for requestData")
 				}
 			}
 		default:
-			log.Debug().Str("client", c.id).Str("type", msg.Type).Msg("Received WebSocket message")
+			log.Debug().Str("client", c.id).Str("type", msg.Type).Msg("received WebSocket message")
 		}
 	}
 }
@@ -1220,25 +1220,25 @@ func (c *Client) writePump() {
 
 	ticker := time.NewTicker(54 * time.Second)
 	defer func() {
-		log.Info().Str("client", c.id).Msg("WritePump exiting")
+		log.Info().Str("client", c.id).Msg("writePump exiting")
 		ticker.Stop()
 		if err := c.conn.Close(); err != nil {
 			log.Debug().Err(err).Str("client", c.id).Msg("Failed to close WebSocket connection in writePump")
 		}
 	}()
 
-	log.Info().Str("client", c.id).Msg("WritePump started")
+	log.Info().Str("client", c.id).Msg("writePump started")
 
 	for {
 		select {
 		case message, ok := <-c.send:
 			if err := c.conn.SetWriteDeadline(time.Now().Add(writeDeadline)); err != nil {
-				log.Warn().Err(err).Str("client", c.id).Msg("Failed to set write deadline before message send")
+				log.Warn().Err(err).Str("client", c.id).Msg("failed to set write deadline before message send")
 			}
 			if !ok {
-				log.Debug().Str("client", c.id).Msg("Send channel closed")
+				log.Debug().Str("client", c.id).Msg("send channel closed")
 				if err := c.conn.WriteMessage(websocket.CloseMessage, []byte{}); err != nil {
-					log.Warn().Err(err).Str("client", c.id).Msg("Failed to send close message")
+					log.Warn().Err(err).Str("client", c.id).Msg("failed to send close message")
 				}
 				return
 			}
@@ -1275,7 +1275,7 @@ func (c *Client) writePump() {
 				select {
 				case msg := <-c.send:
 					if err := c.conn.WriteMessage(websocket.TextMessage, msg); err != nil {
-						log.Warn().Err(err).Str("client", c.id).Int("msgSize", len(msg)).Msg("Failed to flush queued message")
+						log.Warn().Err(err).Str("client", c.id).Int("msgSize", len(msg)).Msg("failed to flush queued message")
 						// Don't disconnect on queued message failure, just break the flush loop
 						break flushLoop
 					}
@@ -1286,10 +1286,10 @@ func (c *Client) writePump() {
 
 		case <-ticker.C:
 			if err := c.conn.SetWriteDeadline(time.Now().Add(pingDeadline)); err != nil {
-				log.Warn().Err(err).Str("client", c.id).Msg("Failed to set write deadline for ping")
+				log.Warn().Err(err).Str("client", c.id).Msg("failed to set write deadline for ping")
 			}
 			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
-				log.Debug().Err(err).Str("client", c.id).Msg("Failed to send ping; closing connection")
+				log.Debug().Err(err).Str("client", c.id).Msg("failed to send ping; closing connection")
 				return
 			}
 		}

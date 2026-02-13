@@ -64,7 +64,7 @@ func NewIntegration(config IntegrationConfig) *Integration {
 	// Set up persistence
 	persistence := NewVersionedPersistence(config.DataDir)
 	if err := store.SetPersistence(persistence); err != nil {
-		log.Error().Err(err).Msg("Failed to set up unified findings persistence")
+		log.Error().Err(err).Msg("failed to set up unified findings persistence")
 	}
 
 	return &Integration{
@@ -106,16 +106,16 @@ func (i *Integration) SetPatrolTrigger(fn PatrolTriggerFunc) {
 // Start starts the unified system
 func (i *Integration) Start() {
 	i.bridge.Start()
-	log.Info().Msg("Unified alert/finding system started")
+	log.Info().Msg("unified alert/finding system started")
 }
 
 // Stop stops the unified system
 func (i *Integration) Stop() {
 	i.bridge.Stop()
 	if err := i.store.ForceSave(); err != nil {
-		log.Error().Err(err).Msg("Failed to save unified findings on shutdown")
+		log.Error().Err(err).Msg("failed to save unified findings on shutdown")
 	}
-	log.Info().Msg("Unified alert/finding system stopped")
+	log.Info().Msg("unified alert/finding system stopped")
 }
 
 // GetStore returns the unified store

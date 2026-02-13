@@ -121,9 +121,9 @@ func NewIncidentStore(cfg IncidentStoreConfig) *IncidentStore {
 	if store.dataDir != "" {
 		store.filePath = filepath.Join(store.dataDir, incidentFileName)
 		if err := store.loadFromDisk(); err != nil {
-			log.Warn().Err(err).Msg("Failed to load incident history from disk")
+			log.Warn().Err(err).Msg("failed to load incident history from disk")
 		} else if len(store.incidents) > 0 {
-			log.Info().Int("count", len(store.incidents)).Msg("Loaded incident history from disk")
+			log.Info().Int("count", len(store.incidents)).Msg("loaded incident history from disk")
 		}
 	}
 
@@ -717,7 +717,7 @@ func (s *IncidentStore) saveAsync() {
 	}
 	go func() {
 		if err := s.saveToDisk(); err != nil {
-			log.Warn().Err(err).Msg("Failed to save incident history")
+			log.Warn().Err(err).Msg("failed to save incident history")
 		}
 	}()
 }

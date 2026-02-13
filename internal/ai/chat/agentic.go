@@ -673,7 +673,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				callback(StreamEvent{Type: "content", Data: jsonData})
 			}
 
-			log.Debug().Msg("Agentic loop complete - no tool calls")
+			log.Debug().Msg("agentic loop complete - no tool calls")
 			resultMessages = a.ensureFinalTextResponse(ctx, sessionID, resultMessages, providerMessages, callback)
 			return resultMessages, nil
 		}
@@ -1255,7 +1255,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 					Description string `json:"description"`
 				}
 				if err := json.Unmarshal([]byte(approvalJSON), &approvalData); err != nil {
-					log.Error().Err(err).Str("data", approvalJSON).Msg("Failed to parse approval request")
+					log.Error().Err(err).Str("data", approvalJSON).Msg("failed to parse approval request")
 					resultText = "Error: failed to parse approval request"
 					isError = true
 				} else {
@@ -1468,7 +1468,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 		turn++
 	}
 
-	log.Warn().Int("max_turns", maxTurns).Str("session_id", sessionID).Msg("Agentic loop hit max turns limit")
+	log.Warn().Int("max_turns", maxTurns).Str("session_id", sessionID).Msg("agentic loop hit max turns limit")
 	resultMessages = a.ensureFinalTextResponse(ctx, sessionID, resultMessages, providerMessages, callback)
 	return resultMessages, nil
 }

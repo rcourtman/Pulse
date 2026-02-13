@@ -93,7 +93,7 @@ func (c *NotableModelsCache) Refresh(ctx context.Context) (retErr error) {
 		return nil
 	}
 
-	log.Debug().Str("url", c.apiURL).Msg("Refreshing notable models cache from models.dev")
+	log.Debug().Str("url", c.apiURL).Msg("refreshing notable models cache from models.dev")
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.apiURL, nil)
 	if err != nil {
@@ -104,7 +104,7 @@ func (c *NotableModelsCache) Refresh(ctx context.Context) (retErr error) {
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Warn().Err(err).Msg("Failed to fetch models.dev API, using fallback")
+		log.Warn().Err(err).Msg("failed to fetch models.dev API, using fallback")
 		return fmt.Errorf("providers.NotableModelsCache.Refresh: execute request: %w", err)
 	}
 	defer func() {
@@ -126,7 +126,7 @@ func (c *NotableModelsCache) Refresh(ctx context.Context) (retErr error) {
 	// Parse the response - it's a map of provider ID to provider info
 	var providers map[string]ModelsDevProvider
 	if err := json.NewDecoder(resp.Body).Decode(&providers); err != nil {
-		log.Warn().Err(err).Msg("Failed to decode models.dev API response")
+		log.Warn().Err(err).Msg("failed to decode models.dev API response")
 		return fmt.Errorf("providers.NotableModelsCache.Refresh: decode response: %w", err)
 	}
 
@@ -148,7 +148,7 @@ func (c *NotableModelsCache) Refresh(ctx context.Context) (retErr error) {
 
 	c.data = newData
 	c.lastFetched = time.Now()
-	log.Info().Int("models", len(newData)).Msg("Notable models cache refreshed")
+	log.Info().Int("models", len(newData)).Msg("notable models cache refreshed")
 
 	return nil
 }
@@ -169,21 +169,21 @@ func (c *NotableModelsCache) IsNotable(provider, modelID string, createdAt int64
 	defer cancel()
 	err := c.Refresh(ctx)
 	if err != nil {
-		log.Debug().Err(err).Str("provider", provider).Str("model", modelID).Msg("Cache refresh failed in IsNotable")
+		log.Debug().Err(err).Str("provider", provider).Str("model", modelID).Msg("cache refresh failed in IsNotable")
 	}
 
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
 	// Log cache size for debugging
-	log.Debug().Int("cache_size", len(c.data)).Str("provider", provider).Str("model", modelID).Msg("Checking IsNotable")
+	log.Debug().Int("cache_size", len(c.data)).Str("provider", provider).Str("model", modelID).Msg("checking IsNotable")
 
 	// Try exact match with provider prefix
 	for _, providerID := range getProviderIDs(provider) {
 		key := normalizeKey(providerID, modelID)
 		if info, found := c.data[key]; found {
 			isNotable := isRecentlyReleased(info.ReleaseDate, info.LastUpdated)
-			log.Debug().Str("key", key).Str("release", info.ReleaseDate).Bool("notable", isNotable).Msg("Found model in cache")
+			log.Debug().Str("key", key).Str("release", info.ReleaseDate).Bool("notable", isNotable).Msg("found model in cache")
 			return isNotable
 		}
 	}
@@ -192,7 +192,7 @@ func (c *NotableModelsCache) IsNotable(provider, modelID string, createdAt int64
 	key := normalizeModelID(modelID)
 	if info, found := c.data[key]; found {
 		isNotable := isRecentlyReleased(info.ReleaseDate, info.LastUpdated)
-		log.Debug().Str("key", key).Str("release", info.ReleaseDate).Bool("notable", isNotable).Msg("Found model via fuzzy match")
+		log.Debug().Str("key", key).Str("release", info.ReleaseDate).Bool("notable", isNotable).Msg("found model via fuzzy match")
 		return isNotable
 	}
 
@@ -212,7 +212,7 @@ func (c *NotableModelsCache) IsNotable(provider, modelID string, createdAt int64
 				key := normalizeKey(providerID, alias)
 				if info, found := c.data[key]; found {
 					if isRecentlyReleased(info.ReleaseDate, info.LastUpdated) {
-						log.Debug().Str("original", modelID).Str("alias", alias).Str("release", info.ReleaseDate).Msg("Model family has notable newer release")
+						log.Debug().Str("original", modelID).Str("alias", alias).Str("release", info.ReleaseDate).Msg("model family has notable newer release")
 						return true
 					}
 				}
@@ -221,7 +221,7 @@ func (c *NotableModelsCache) IsNotable(provider, modelID string, createdAt int64
 	}
 
 	// Default: not notable
-	log.Debug().Str("provider", provider).Str("model", modelID).Msg("Model not found in cache, defaulting to not notable")
+	log.Debug().Str("provider", provider).Str("model", modelID).Msg("model not found in cache, defaulting to not notable")
 	return false
 }
 

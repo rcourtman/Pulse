@@ -85,9 +85,9 @@ func NewRemediationLog(cfg RemediationLogConfig) *RemediationLog {
 	// Load existing records from disk
 	if cfg.DataDir != "" {
 		if err := r.loadFromDisk(); err != nil {
-			log.Warn().Err(err).Msg("Failed to load remediation log from disk")
+			log.Warn().Err(err).Msg("failed to load remediation log from disk")
 		} else if len(r.records) > 0 {
-			log.Info().Int("count", len(r.records)).Msg("Loaded remediation log from disk")
+			log.Info().Int("count", len(r.records)).Msg("loaded remediation log from disk")
 		}
 	}
 
@@ -112,7 +112,7 @@ func (r *RemediationLog) Log(record RemediationRecord) error {
 	// Persist asynchronously
 	go func() {
 		if err := r.saveToDisk(); err != nil {
-			log.Warn().Err(err).Msg("Failed to save remediation log")
+			log.Warn().Err(err).Msg("failed to save remediation log")
 		}
 	}()
 
@@ -479,7 +479,7 @@ func (r *RemediationLog) MarkRolledBack(id, rollbackID, username string) error {
 			// Persist
 			go func() {
 				if err := r.saveToDisk(); err != nil {
-					log.Warn().Err(err).Msg("Failed to save remediation log after rollback")
+					log.Warn().Err(err).Msg("failed to save remediation log after rollback")
 				}
 			}()
 

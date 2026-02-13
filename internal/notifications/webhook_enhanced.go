@@ -74,7 +74,7 @@ func (n *NotificationManager) SendEnhancedWebhook(webhook EnhancedWebhookConfig,
 		log.Debug().
 			Str("webhook", webhook.Name).
 			Str("alertID", alert.ID).
-			Msg("Alert filtered out by webhook rules")
+			Msg("alert filtered out by webhook rules")
 		return nil
 	}
 
@@ -98,7 +98,7 @@ func (n *NotificationManager) SendEnhancedWebhook(webhook EnhancedWebhookConfig,
 		log.Warn().
 			Str("webhook", webhook.Name).
 			Str("url", webhook.URL).
-			Msg("Webhook request dropped due to rate limiting")
+			Msg("webhook request dropped due to rate limiting")
 		return fmt.Errorf("rate limit exceeded for webhook %s", webhook.Name)
 	}
 
@@ -114,7 +114,7 @@ func (n *NotificationManager) SendEnhancedWebhook(webhook EnhancedWebhookConfig,
 			log.Debug().
 				Str("webhook", webhook.Name).
 				Str("chatID", chatID).
-				Msg("Extracted Telegram chat_id from rendered URL for enhanced webhook")
+				Msg("extracted Telegram chat_id from rendered URL for enhanced webhook")
 		}
 	case "pagerduty":
 		if data.CustomFields == nil {
@@ -237,7 +237,7 @@ func (n *NotificationManager) sendWebhookWithRetry(webhook EnhancedWebhookConfig
 						log.Debug().
 							Str("webhook", webhook.Name).
 							Dur("retryAfter", customBackoff).
-							Msg("Using Retry-After header for backoff")
+							Msg("using Retry-After header for backoff")
 						time.Sleep(customBackoff)
 						backoff = customBackoff // Use this for next iteration
 					}
@@ -248,7 +248,7 @@ func (n *NotificationManager) sendWebhookWithRetry(webhook EnhancedWebhookConfig
 						Int("attempt", attempt).
 						Int("maxRetries", maxRetries).
 						Dur("backoff", backoff).
-						Msg("Retrying webhook after backoff")
+						Msg("retrying webhook after backoff")
 					time.Sleep(backoff)
 				}
 			} else {
@@ -258,7 +258,7 @@ func (n *NotificationManager) sendWebhookWithRetry(webhook EnhancedWebhookConfig
 					Int("attempt", attempt).
 					Int("maxRetries", maxRetries).
 					Dur("backoff", backoff).
-					Msg("Retrying webhook after backoff")
+					Msg("retrying webhook after backoff")
 				time.Sleep(backoff)
 			}
 
@@ -278,14 +278,14 @@ func (n *NotificationManager) sendWebhookWithRetry(webhook EnhancedWebhookConfig
 					Str("webhook", webhook.Name).
 					Int("attempt", attempt).
 					Int("totalAttempts", attempt+1).
-					Msg("Webhook succeeded after retry")
+					Msg("webhook succeeded after retry")
 			}
 			// Log successful delivery
 			log.Debug().
 				Str("webhook", webhook.Name).
 				Str("service", webhook.Service).
 				Int("payloadSize", len(payload)).
-				Msg("Webhook delivered successfully")
+				Msg("webhook delivered successfully")
 
 			// Track successful delivery
 			delivery := WebhookDelivery{
@@ -319,20 +319,14 @@ func (n *NotificationManager) sendWebhookWithRetry(webhook EnhancedWebhookConfig
 			Int("attempt", attempt+1).
 			Int("maxRetries", maxRetries+1).
 			Bool("retryable", isRetryable).
-			Msg("Webhook attempt failed")
+			Msg("webhook attempt failed")
 
-<<<<<<< HEAD
-		// If error is not retryable, stop immediately.
-		// Continuing would waste attempts and can mask permanent misconfiguration
-		// (for example, a 400-level payload/schema error).
-=======
 		// If error is not retryable, stop immediately regardless of attempt.
->>>>>>> refactor/parallel-44-circuit-breakers
 		if !isRetryable {
 			log.Error().
 				Err(err).
 				Str("webhook", webhook.Name).
-				Msg("Non-retryable webhook error - not attempting retry")
+				Msg("non-retryable webhook error - not attempting retry")
 			break
 		}
 	}
@@ -349,7 +343,7 @@ func (n *NotificationManager) sendWebhookWithRetry(webhook EnhancedWebhookConfig
 		Str("service", webhook.Service).
 		Int("totalAttempts", totalAttempts).
 		Int("retryableErrors", retryableErrors).
-		Msg("Webhook delivery failed after all retry attempts")
+		Msg("webhook delivery failed after all retry attempts")
 
 	// Track failed delivery
 	delivery := WebhookDelivery{
@@ -450,7 +444,7 @@ func (n *NotificationManager) sendWebhookOnceWithResponse(webhook EnhancedWebhoo
 		log.Warn().
 			Str("webhook", webhook.Name).
 			Int64("bytesRead", bytesRead).
-			Msg("Webhook response exceeded size limit")
+			Msg("webhook response exceeded size limit")
 	}
 
 	responseBody := respBody.String()
@@ -461,7 +455,7 @@ func (n *NotificationManager) sendWebhookOnceWithResponse(webhook EnhancedWebhoo
 			Str("webhook", webhook.Name).
 			Int("status", resp.StatusCode).
 			Str("response", responseBody).
-			Msg("Webhook response")
+			Msg("webhook response")
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
@@ -525,7 +519,7 @@ func (n *NotificationManager) TestEnhancedWebhook(webhook EnhancedWebhookConfig)
 			Err(err).
 			Str("webhook", webhook.Name).
 			Str("url", webhook.URL).
-			Msg("Webhook URL validation failed for test request")
+			Msg("webhook URL validation failed for test request")
 		return 0, "", fmt.Errorf("webhook URL validation failed: %w", err)
 	}
 
@@ -537,7 +531,7 @@ func (n *NotificationManager) TestEnhancedWebhook(webhook EnhancedWebhookConfig)
 			log.Warn().
 				Err(err).
 				Str("webhook", webhook.Name).
-				Msg("Failed to extract Telegram chat_id during enhanced webhook test")
+				Msg("failed to extract Telegram chat_id during enhanced webhook test")
 		}
 		// Note: For test webhooks, we don't fail if chat_id is missing
 		// as this may be intentional during testing

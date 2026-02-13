@@ -186,7 +186,7 @@ func NewEngine(cfg EngineConfig) *Engine {
 	// Load from disk
 	if cfg.DataDir != "" {
 		if err := engine.loadFromDisk(); err != nil {
-			log.Warn().Err(err).Msg("Failed to load remediation data from disk")
+			log.Warn().Err(err).Msg("failed to load remediation data from disk")
 		}
 	}
 
@@ -479,7 +479,7 @@ func (e *Engine) ApprovePlan(planID, approvedBy string) (*RemediationExecution, 
 
 	// Check if expired
 	if plan.ExpiresAt != nil && time.Now().After(*plan.ExpiresAt) {
-		return nil, fmt.Errorf("plan has expired")
+		return nil, fmt.Errorf("plan %s has expired (expires_at: %v)", planID, plan.ExpiresAt)
 	}
 
 	// Create execution
@@ -680,7 +680,7 @@ func (e *Engine) Rollback(ctx context.Context, executionID string) error {
 	go e.saveIfDirty()
 
 	if len(rollbackErrors) > 0 {
-		return fmt.Errorf("rollback had errors")
+		return fmt.Errorf("rollback had errors: %v", rollbackErrors)
 	}
 	return nil
 }
@@ -822,7 +822,7 @@ func (e *Engine) FormatPlanForContext(plan *RemediationPlan) string {
 // saveIfDirty saves to disk if there are changes
 func (e *Engine) saveIfDirty() {
 	if err := e.saveToDisk(); err != nil {
-		log.Warn().Err(err).Msg("Failed to save remediation data")
+		log.Warn().Err(err).Msg("failed to save remediation data")
 	}
 }
 

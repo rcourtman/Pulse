@@ -595,8 +595,6 @@ func (m *Manager) getLatestReleaseForChannel(ctx context.Context, channel string
 		baseURL = "https://api.github.com"
 	}
 	url := baseURL + "/repos/rcourtman/Pulse/releases"
-<<<<<<< HEAD
-=======
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -607,7 +605,6 @@ func (m *Manager) getLatestReleaseForChannel(ctx context.Context, channel string
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
 	req.Header.Set("User-Agent", "Pulse-Update-Checker")
 
->>>>>>> refactor/parallel-05-error-handling
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := m.getWithRetry(ctx, client, url, map[string]string{
 		"Accept":     "application/vnd.github.v3+json",
@@ -1060,10 +1057,6 @@ func (m *Manager) getWithRetry(ctx context.Context, client *http.Client, url str
 
 // downloadFile downloads a file from URL to dest
 func (m *Manager) downloadFile(ctx context.Context, url, dest string) (int64, error) {
-<<<<<<< HEAD
-	client := &http.Client{Timeout: 5 * time.Minute}
-	tempDest := dest + ".partial"
-=======
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return 0, fmt.Errorf("build download request for %q: %w", url, err)
@@ -1079,65 +1072,11 @@ func (m *Manager) downloadFile(ctx context.Context, url, dest string) (int64, er
 			log.Warn().Err(closeErr).Str("url", url).Msg("Failed to close download response body")
 		}
 	}()
->>>>>>> refactor/parallel-05-error-handling
 
 	if updateHTTPAttempts < 1 {
 		updateHTTPAttempts = 1
 	}
 
-<<<<<<< HEAD
-	for attempt := 1; attempt <= updateHTTPAttempts; attempt++ {
-		resp, err := m.getWithRetry(ctx, client, url, nil, "download update tarball")
-		if err != nil {
-			return 0, err
-		}
-
-		if resp.StatusCode != http.StatusOK {
-			statusErr := fmt.Errorf("download failed with status %d", resp.StatusCode)
-			resp.Body.Close()
-			return 0, statusErr
-		}
-
-		out, err := os.Create(tempDest)
-		if err != nil {
-			resp.Body.Close()
-			return 0, err
-		}
-
-		written, copyErr := io.Copy(out, resp.Body)
-		closeErr := out.Close()
-		resp.Body.Close()
-		if copyErr == nil {
-			copyErr = closeErr
-		}
-		if copyErr != nil {
-			_ = os.Remove(tempDest)
-			if !isRetryableUpdateRequestError(copyErr) || attempt == updateHTTPAttempts {
-				return 0, copyErr
-			}
-
-			delay := retryDelayForAttempt(attempt)
-			log.Warn().
-				Err(copyErr).
-				Int("attempt", attempt).
-				Int("maxAttempts", updateHTTPAttempts).
-				Dur("retryIn", delay).
-				Str("url", url).
-				Msg("Transient error while writing downloaded update; retrying")
-			if err := sleepWithContext(ctx, delay); err != nil {
-				return 0, err
-			}
-			continue
-		}
-
-		if err := os.Rename(tempDest, dest); err != nil {
-			_ = os.Remove(tempDest)
-			return 0, err
-		}
-
-		log.Info().Int64("bytes", written).Str("file", dest).Msg("Downloaded file")
-		return written, nil
-=======
 	out, err := os.Create(dest)
 	if err != nil {
 		return 0, fmt.Errorf("create download destination %q: %w", dest, err)
@@ -1152,7 +1091,6 @@ func (m *Manager) downloadFile(ctx context.Context, url, dest string) (int64, er
 	written, err := io.Copy(out, resp.Body)
 	if err != nil {
 		return 0, fmt.Errorf("copy download response to %q: %w", dest, err)
->>>>>>> refactor/parallel-05-error-handling
 	}
 
 	return 0, fmt.Errorf("download failed after retries")
@@ -1182,19 +1120,6 @@ func (m *Manager) verifyChecksum(ctx context.Context, tarballURL, tarballPath st
 			continue
 		}
 
-<<<<<<< HEAD
-		if resp.StatusCode == http.StatusOK {
-			body, err := io.ReadAll(resp.Body)
-			resp.Body.Close()
-			if err == nil {
-				checksumContent = string(body)
-				log.Info().Str("file", name).Msg("Found checksum file")
-				break
-			}
-			continue
-		}
-		resp.Body.Close()
-=======
 		client := &http.Client{Timeout: 30 * time.Second}
 		resp, err := client.Do(req)
 		if err != nil {
@@ -1220,7 +1145,6 @@ func (m *Manager) verifyChecksum(ctx context.Context, tarballURL, tarballPath st
 		checksumContent = string(body)
 		log.Info().Str("file", name).Msg("Found checksum file")
 		break
->>>>>>> refactor/parallel-05-error-handling
 	}
 
 	if checksumContent == "" {

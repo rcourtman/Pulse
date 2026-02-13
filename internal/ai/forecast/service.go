@@ -212,7 +212,7 @@ func (s *Service) Forecast(resourceID, resourceName, metric string, horizon time
 	}
 
 	if len(data) < 2 {
-		return nil, fmt.Errorf("insufficient data points for forecast")
+		return nil, fmt.Errorf("insufficient data points for forecast of %s/%s: got %d points, need at least 2", resourceID, metric, len(data))
 	}
 
 	// Calculate trend
@@ -735,7 +735,7 @@ func (s *Service) ForecastAll(metric string, horizon time.Duration, threshold fl
 	for _, vm := range state.VMs {
 		forecast, err := s.Forecast(vm.ID, vm.Name, metric, horizon, threshold)
 		if err != nil {
-			log.Debug().Str("resource", vm.ID).Str("metric", metric).Err(err).Msg("Skipping VM forecast")
+			log.Debug().Str("resource", vm.ID).Str("metric", metric).Err(err).Msg("skipping VM forecast")
 			continue
 		}
 		addIfActionable(forecast, "vm")
@@ -745,7 +745,7 @@ func (s *Service) ForecastAll(metric string, horizon time.Duration, threshold fl
 	for _, ct := range state.Containers {
 		forecast, err := s.Forecast(ct.ID, ct.Name, metric, horizon, threshold)
 		if err != nil {
-			log.Debug().Str("resource", ct.ID).Str("metric", metric).Err(err).Msg("Skipping container forecast")
+			log.Debug().Str("resource", ct.ID).Str("metric", metric).Err(err).Msg("skipping container forecast")
 			continue
 		}
 		addIfActionable(forecast, "lxc")
@@ -755,7 +755,7 @@ func (s *Service) ForecastAll(metric string, horizon time.Duration, threshold fl
 	for _, node := range state.Nodes {
 		forecast, err := s.Forecast(node.ID, node.Name, metric, horizon, threshold)
 		if err != nil {
-			log.Debug().Str("resource", node.ID).Str("metric", metric).Err(err).Msg("Skipping node forecast")
+			log.Debug().Str("resource", node.ID).Str("metric", metric).Err(err).Msg("skipping node forecast")
 			continue
 		}
 		addIfActionable(forecast, "node")

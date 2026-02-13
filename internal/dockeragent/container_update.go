@@ -2,10 +2,7 @@ package dockeragent
 
 import (
 	"context"
-<<<<<<< HEAD
 	"encoding/json"
-=======
->>>>>>> refactor/parallel-05-error-handling
 	"errors"
 	"fmt"
 	"io"
@@ -60,7 +57,11 @@ func (a *Agent) handleUpdateContainerCommand(ctx context.Context, target TargetC
 	if err != nil {
 		a.logger.Error().Err(err).Msg("Update command missing or invalid containerId in payload")
 		if err := a.sendCommandAck(ctx, target, command.ID, agentsdocker.CommandStatusFailed, "Missing containerId in payload"); err != nil {
-			a.logger.Error().Err(err).Msg("Failed to send failure acknowledgement")
+			a.logger.Error().
+				Err(err).
+				Str("commandID", command.ID).
+				Str("target", target.URL).
+				Msg("Failed to send failure acknowledgement")
 		}
 		return nil
 	}
@@ -73,7 +74,12 @@ func (a *Agent) handleUpdateContainerCommand(ctx context.Context, target TargetC
 
 	// Send acknowledgement that we're starting the update
 	if err := a.sendCommandAck(ctx, target, command.ID, agentsdocker.CommandStatusAcknowledged, "Starting container update"); err != nil {
-		a.logger.Error().Err(err).Msg("Failed to send acknowledgement to Pulse")
+		a.logger.Error().
+			Err(err).
+			Str("commandID", command.ID).
+			Str("containerId", containerID).
+			Str("target", target.URL).
+			Msg("Failed to send acknowledgement to Pulse")
 		return nil
 	}
 
@@ -81,7 +87,13 @@ func (a *Agent) handleUpdateContainerCommand(ctx context.Context, target TargetC
 	progressFn := func(step string) {
 		// Send progress update (using "in_progress" status with step message)
 		if err := a.sendCommandAck(ctx, target, command.ID, agentsdocker.CommandStatusInProgress, step); err != nil {
-			a.logger.Warn().Err(err).Str("step", step).Msg("Failed to send progress update")
+			a.logger.Warn().
+				Err(err).
+				Str("commandID", command.ID).
+				Str("containerId", containerID).
+				Str("target", target.URL).
+				Str("step", step).
+				Msg("Failed to send progress update")
 		}
 	}
 
@@ -97,7 +109,13 @@ func (a *Agent) handleUpdateContainerCommand(ctx context.Context, target TargetC
 	}
 
 	if err := a.sendCommandAck(ctx, target, command.ID, status, message); err != nil {
-		a.logger.Error().Err(err).Msg("Failed to send completion acknowledgement to Pulse")
+		a.logger.Error().
+			Err(err).
+			Str("commandID", command.ID).
+			Str("containerId", containerID).
+			Str("target", target.URL).
+			Str("status", status).
+			Msg("Failed to send completion acknowledgement to Pulse")
 	}
 
 	return nil
@@ -169,20 +187,10 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 		a.logger.Error().Err(err).Str("image", imageName).Msg("Failed to pull latest image")
 		return result
 	}
-<<<<<<< HEAD
 	// Consume the pull response to ensure the pull completes
 	_, _ = io.Copy(io.Discard, pullResp)
 	_ = pullResp.Close()
 	pullCancel()
-=======
-	// Consume and close the pull response to ensure the pull completes and
-	// response-stream failures are not silently ignored.
-	if err := drainAndClosePullResponse(pullResp); err != nil {
-		result.Error = fmt.Sprintf("Failed to process image pull response: %v", err)
-		a.logger.Error().Err(err).Str("image", imageName).Msg("Failed to finalize image pull response")
-		return result
-	}
->>>>>>> refactor/parallel-05-error-handling
 
 	a.logger.Info().Str("image", imageName).Msg("Successfully pulled latest image")
 
@@ -350,7 +358,7 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), dockerCleanupCallTimeout)
 		defer cleanupCancel()
 		if err := a.docker.ContainerRemove(cleanupCtx, backupName, container.RemoveOptions{Force: true}); err != nil {
-			a.logger.Warn().Err(err).Str("backup", backupName).Msg("Failed to cleanup backup container")
+			a.logger.Warn().Err(err).Str("backup", backupName).Msg("Failed to clean up backup container")
 		} else {
 			a.logger.Info().Str("backup", backupName).Msg("Backup container cleaned up")
 		}

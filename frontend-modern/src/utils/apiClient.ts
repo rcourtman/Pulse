@@ -497,17 +497,7 @@ class ApiClient {
 
     // Handle rate limiting with automatic retry for idempotent requests only.
     if (response.status === 429) {
-<<<<<<< HEAD
-      if (!isRateLimitRetryableMethod(method)) {
-        logger.warn(`Rate limit hit for non-idempotent ${method} request; skipping auto-retry`, {
-          method,
-          url,
-        });
-        return response;
-      }
-=======
       const waitTime = resolveRetryAfterMs(response.headers.get('Retry-After'));
->>>>>>> refactor/parallel-44-circuit-breakers
 
 
       const waitTime = parseRetryAfterMs(response.headers.get('Retry-After'));

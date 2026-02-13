@@ -108,7 +108,7 @@ func enableMockMode(fromInit bool) {
 		Msg("mock mode enabled")
 
 	if !fromInit {
-		log.Info().Msg("Mock data generator started")
+		log.Info().Msg("mock data generator started")
 	}
 }
 
@@ -124,7 +124,7 @@ func disableMockMode() {
 	mockAlerts = nil
 	dataMu.Unlock()
 
-	log.Info().Msg("Mock mode disabled")
+	log.Info().Msg("mock mode disabled")
 }
 
 func startUpdateLoopLocked() {
@@ -294,7 +294,7 @@ func SetMockConfig(cfg MockConfig) {
 		Int("k8s_deployments_per_cluster", cfg.K8sDeploymentsPerCluster).
 		Bool("random_metrics", cfg.RandomMetrics).
 		Float64("stopped_percent", cfg.StoppedPercent).
-		Msg("Mock configuration updated")
+		Msg("mock configuration updated")
 }
 
 // GetMockState returns the current mock state snapshot.

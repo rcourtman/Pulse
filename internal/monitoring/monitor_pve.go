@@ -365,7 +365,7 @@ func (m *Monitor) retryPVEPortFallback(ctx context.Context, instanceName string,
 	// Persist to disk so restarts keep the working endpoint.
 	if m.persistence != nil {
 		if err := m.persistence.SaveNodesConfig(m.config.PVEInstances, m.config.PBSInstances, m.config.PMGInstances); err != nil {
-			log.Warn().Err(err).Str("instance", instanceName).Msg("Failed to persist fallback PVE host")
+			log.Warn().Err(err).Str("instance", instanceName).Msg("failed to persist fallback PVE host")
 		}
 	}
 
@@ -386,7 +386,7 @@ func (m *Monitor) fetchPVENodes(ctx context.Context, instanceName string, instan
 		}
 
 		monErr := errors.WrapConnectionError("poll_nodes", instanceName, err)
-		log.Error().Err(monErr).Str("instance", instanceName).Msg("Failed to get nodes")
+		log.Error().Err(monErr).Str("instance", instanceName).Msg("failed to get nodes")
 		m.state.SetConnectionHealth(instanceName, false)
 
 		// Track auth failure if it's an authentication error
@@ -656,7 +656,7 @@ func (m *Monitor) maybePollPhysicalDisksAsync(
 	// Physical disk polling runs in a background goroutine since GetDisks can be slow
 	// and we don't want it to cause task timeouts. It has its own 5-minute interval anyway.
 	if instanceCfg.MonitorPhysicalDisks != nil && !*instanceCfg.MonitorPhysicalDisks {
-		log.Debug().Str("instance", instanceName).Msg("Physical disk monitoring explicitly disabled")
+		log.Debug().Str("instance", instanceName).Msg("physical disk monitoring explicitly disabled")
 		// Keep any existing disk data visible (don't clear it)
 		return
 	}
@@ -741,12 +741,12 @@ func (m *Monitor) maybePollPhysicalDisksAsync(
 
 			// Skip offline nodes but preserve their existing disk data
 			if nodeStatus[node.Node] != "online" {
-				log.Debug().Str("node", node.Node).Msg("Skipping disk poll for offline node - preserving existing data")
+				log.Debug().Str("node", node.Node).Msg("skipping disk poll for offline node - preserving existing data")
 				continue
 			}
 
 			// Get disk list for this node
-			log.Debug().Str("node", node.Node).Msg("Getting disk list for node")
+			log.Debug().Str("node", node.Node).Msg("getting disk list for node")
 			disks, err := pveClient.GetDisks(diskCtx, node.Node)
 			if err != nil {
 				// Check if it's a permission error or if the endpoint doesn't exist
@@ -905,14 +905,14 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 	case <-ctx.Done():
 		pollErr = ctx.Err()
 		if debugEnabled {
-			log.Debug().Str("instance", instanceName).Msg("Polling cancelled")
+			log.Debug().Str("instance", instanceName).Msg("polling cancelled")
 		}
 		return
 	default:
 	}
 
 	if debugEnabled {
-		log.Debug().Str("instance", instanceName).Msg("Polling PVE instance")
+		log.Debug().Str("instance", instanceName).Msg("polling PVE instance")
 	}
 
 	// Get instance config

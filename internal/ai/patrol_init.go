@@ -208,7 +208,7 @@ func (p *PatrolService) SetCircuitBreaker(breaker *circuit.Breaker) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.circuitBreaker = breaker
-	log.Info().Msg("Circuit breaker configured for patrol")
+	log.Info().Msg("circuit breaker configured for patrol")
 }
 
 // SetRemediationEngine sets the remediation engine for generating fix plans from findings
@@ -216,7 +216,7 @@ func (p *PatrolService) SetRemediationEngine(engine *remediation.Engine) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.remediationEngine = engine
-	log.Info().Msg("Remediation engine configured for patrol")
+	log.Info().Msg("remediation engine configured for patrol")
 }
 
 // GetRemediationEngine returns the remediation engine
@@ -231,7 +231,7 @@ func (p *PatrolService) SetInvestigationOrchestrator(orchestrator InvestigationO
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.investigationOrchestrator = orchestrator
-	log.Info().Msg("Investigation orchestrator configured for patrol")
+	log.Info().Msg("investigation orchestrator configured for patrol")
 }
 
 // GetInvestigationOrchestrator returns the investigation orchestrator
@@ -270,7 +270,7 @@ func (p *PatrolService) SetUnifiedFindingCallback(cb UnifiedFindingCallback) {
 			Int("total", len(activeFindings)).
 			Msg("Unified finding callback configured and existing findings synced")
 	} else {
-		log.Info().Msg("Unified finding callback configured for patrol")
+		log.Info().Msg("unified finding callback configured for patrol")
 	}
 }
 
@@ -280,7 +280,7 @@ func (p *PatrolService) SetUnifiedFindingResolver(cb func(findingID string)) {
 	defer p.mu.Unlock()
 	p.unifiedFindingResolver = cb
 	if cb != nil {
-		log.Info().Msg("Unified finding resolver configured for patrol")
+		log.Info().Msg("unified finding resolver configured for patrol")
 	}
 }
 

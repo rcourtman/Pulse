@@ -195,11 +195,7 @@ func TestSendWebhookWithRetry_429RetryAfter(t *testing.T) {
 	assert.Equal(t, 2, attempts)
 }
 
-<<<<<<< HEAD
-func TestSendWebhookWithRetry_StopsOnNonRetryableAfterRetry(t *testing.T) {
-=======
 func TestSendWebhookWithRetry_StopsOnNonRetryableErrorAfterRetryable(t *testing.T) {
->>>>>>> refactor/parallel-44-circuit-breakers
 	nm := NewNotificationManager("http://pulse.local")
 	nm.UpdateAllowedPrivateCIDRs("127.0.0.1")
 
@@ -208,23 +204,12 @@ func TestSendWebhookWithRetry_StopsOnNonRetryableErrorAfterRetryable(t *testing.
 		attempts++
 		switch attempts {
 		case 1:
-<<<<<<< HEAD
-			// Retryable first failure with zero-delay retry.
-			w.Header().Set("Retry-After", "0")
-			w.WriteHeader(http.StatusTooManyRequests)
-		case 2:
-			// Permanent client-side error should terminate retries immediately.
-			w.WriteHeader(http.StatusBadRequest)
-		default:
-			// Should not be reached if retries stop correctly.
-=======
 			// Keep test fast by making the retry delay zero.
 			w.Header().Set("Retry-After", "0")
 			w.WriteHeader(http.StatusTooManyRequests)
 		case 2:
 			w.WriteHeader(http.StatusBadRequest)
 		default:
->>>>>>> refactor/parallel-44-circuit-breakers
 			w.WriteHeader(http.StatusOK)
 		}
 	}))
@@ -236,21 +221,13 @@ func TestSendWebhookWithRetry_StopsOnNonRetryableErrorAfterRetryable(t *testing.
 			URL:  server.URL,
 		},
 		RetryEnabled: true,
-<<<<<<< HEAD
-		RetryCount:   3,
-=======
 		RetryCount:   5,
->>>>>>> refactor/parallel-44-circuit-breakers
 	}
 
 	err := nm.sendWebhookWithRetry(webhook, []byte(`{"test":true}`))
 	assert.Error(t, err)
-<<<<<<< HEAD
-	assert.True(t, strings.Contains(err.Error(), "status 400"), "expected final error to include status 400, got %v", err)
-=======
 	assert.Contains(t, err.Error(), "status 400")
 	assert.Contains(t, err.Error(), "after 2 attempts")
->>>>>>> refactor/parallel-44-circuit-breakers
 	assert.Equal(t, 2, attempts)
 }
 

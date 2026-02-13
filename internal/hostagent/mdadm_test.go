@@ -654,13 +654,8 @@ func TestCollectRAIDArraysNoDevices(t *testing.T) {
 	}
 }
 
-<<<<<<< HEAD:internal/hostagent/mdadm_test.go
-func TestCollectRAIDArraysSkipsDetailError(t *testing.T) {
-	withMdadmCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
-=======
 func TestCollectArraysReturnsErrorWhenAllDetailsFail(t *testing.T) {
 	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
->>>>>>> refactor/parallel-05-error-handling:internal/mdadm/mdadm_test.go
 		switch name {
 		case "mdadm":
 			if len(args) > 0 && args[0] == "--version" {
@@ -674,15 +669,9 @@ func TestCollectArraysReturnsErrorWhenAllDetailsFail(t *testing.T) {
 		}
 	})
 
-<<<<<<< HEAD:internal/hostagent/mdadm_test.go
-	arrays, err := CollectRAIDArrays(context.Background())
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-=======
 	arrays, err := CollectArrays(context.Background())
 	if err == nil {
 		t.Fatal("expected error")
->>>>>>> refactor/parallel-05-error-handling:internal/mdadm/mdadm_test.go
 	}
 	if arrays != nil {
 		t.Fatalf("expected nil arrays, got %v", arrays)

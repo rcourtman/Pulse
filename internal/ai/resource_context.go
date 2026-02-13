@@ -503,7 +503,7 @@ func (s *Service) buildUnifiedResourceContext() string {
 			result = result[:maxContextSize] + "\n\n[... Context truncated ...]"
 		}
 
-		log.Debug().Int("unified_resource_context_size", len(result)).Msg("Built unified resource context")
+		log.Debug().Int("unified_resource_context_size", len(result)).Msg("built unified resource context")
 		return result
 	}
 

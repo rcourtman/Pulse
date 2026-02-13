@@ -191,7 +191,7 @@ func (tm *TriggerManager) Start(ctx context.Context) {
 	tm.mu.Unlock()
 
 	go tm.processLoop(ctx)
-	log.Info().Msg("Patrol trigger manager started")
+	log.Info().Msg("patrol trigger manager started")
 }
 
 // Stop stops the trigger manager
@@ -204,7 +204,7 @@ func (tm *TriggerManager) Stop() {
 	tm.running = false
 	close(tm.stopCh)
 	tm.mu.Unlock()
-	log.Info().Msg("Patrol trigger manager stopped")
+	log.Info().Msg("patrol trigger manager stopped")
 }
 
 // processLoop processes pending triggers and handles scheduled patrols
