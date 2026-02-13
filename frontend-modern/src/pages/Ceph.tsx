@@ -408,9 +408,10 @@ const Ceph: Component = () => {
                         title="Connection lost"
                         description={reconnecting() ? 'Attempting to reconnect…' : 'Unable to connect to the backend server'}
                         tone="danger"
-                        actions={
+                                actions={
                             !reconnecting() ? (
                                 <button
+                                    type="button"
                                     onClick={() => reconnect()}
                                     class="mt-2 inline-flex items-center px-4 py-2 text-xs font-medium rounded bg-red-600 text-white hover:bg-red-700 transition-colors"
                                 >
@@ -616,6 +617,7 @@ const Ceph: Component = () => {
                                         ref={(el) => (searchInputRef = el)}
                                         type="text"
                                         placeholder="Search pools..."
+                                        aria-label="Search storage pools"
                                         value={searchTerm()}
                                         onInput={(e) => setSearchTerm(e.currentTarget.value)}
                                         class="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg 
@@ -632,6 +634,8 @@ const Ceph: Component = () => {
                                     </svg>
                                     <Show when={searchTerm()}>
                                         <button
+                                            type="button"
+                                            aria-label="Clear pool search"
                                             onClick={() => setSearchTerm('')}
                                             class="absolute right-2.5 top-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
                                         >

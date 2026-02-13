@@ -535,11 +535,16 @@ export function ResourceTable(props: ResourceTableProps) {
                         }}
                       />
                       <Show when={isOff()}>
-                        <button type="button" class="absolute inset-0 w-full" onClick={() => {
-                          if (!props.setGlobalDefaults) return;
-                          props.setGlobalDefaults((prev) => ({ ...prev, [metric]: getEnabledDefaultValue(metric) }));
-                          props.setHasUnsavedChanges?.(true);
-                        }}></button>
+                        <button
+                          type="button"
+                          class="absolute inset-0 w-full"
+                          onClick={() => {
+                            if (!props.setGlobalDefaults) return;
+                            props.setGlobalDefaults((prev) => ({ ...prev, [metric]: getEnabledDefaultValue(metric) }));
+                            props.setHasUnsavedChanges?.(true);
+                          }}
+                          aria-label={`Enable ${column} default`}
+                        ></button>
                       </Show>
                     </div>
                   </div>
@@ -620,20 +625,40 @@ export function ResourceTable(props: ResourceTableProps) {
                       {/* Actions */}
                       <div class="flex gap-1 shrink-0">
                         <Show when={!isEditing() && resource.type !== 'dockerHost'}>
-                          <button onClick={() => props.onEdit(resource.id, resource.thresholds ? { ...resource.thresholds } : {}, resource.defaults ? { ...resource.defaults } : {}, resource.note)} class="p-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 rounded">
+                          <button
+                            type="button"
+                            onClick={() => props.onEdit(resource.id, resource.thresholds ? { ...resource.thresholds } : {}, resource.defaults ? { ...resource.defaults } : {}, resource.note)}
+                            class="p-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 rounded"
+                            aria-label={`Edit thresholds for ${resource.displayName || resource.name}`}
+                          >
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
                           </button>
                         </Show>
                         <Show when={isEditing()}>
-                          <button onClick={() => { props.onCancelEdit(); setActiveMetricInput(null); }} class="p-1.5 bg-gray-100 dark:bg-gray-700 text-gray-600 rounded">
+                          <button
+                            type="button"
+                            onClick={() => { props.onCancelEdit(); setActiveMetricInput(null); }}
+                            class="p-1.5 bg-gray-100 dark:bg-gray-700 text-gray-600 rounded"
+                            aria-label="Cancel threshold edits"
+                          >
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
                           </button>
-                          <button onClick={() => { props.onSaveEdit(resource.id); setActiveMetricInput(null); }} class="p-1.5 bg-green-50 dark:bg-green-900/30 text-green-600 rounded">
+                          <button
+                            type="button"
+                            onClick={() => { props.onSaveEdit(resource.id); setActiveMetricInput(null); }}
+                            class="p-1.5 bg-green-50 dark:bg-green-900/30 text-green-600 rounded"
+                            aria-label={`Save threshold edits for ${resource.displayName || resource.name}`}
+                          >
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
                           </button>
                         </Show>
                         <Show when={resource.hasOverride || (resource.type === 'node' && resource.disableConnectivity)}>
-                          <button onClick={() => props.onRemoveOverride(resource.id)} class="p-1.5 bg-red-50 dark:bg-red-900/30 text-red-600 rounded">
+                          <button
+                            type="button"
+                            onClick={() => props.onRemoveOverride(resource.id)}
+                            class="p-1.5 bg-red-50 dark:bg-red-900/30 text-red-600 rounded"
+                            aria-label={`Remove override for ${resource.displayName || resource.name}`}
+                          >
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                           </button>
                         </Show>
@@ -667,9 +692,23 @@ export function ResourceTable(props: ResourceTableProps) {
                               <span class="text-[10px] text-gray-500 uppercase font-bold tracking-wider">{column.replace(/mb\/s|%|°c/gi, '').trim()}</span>
 
                               <Show when={isEditing()} fallback={
-                                <div onClick={(e) => { e.stopPropagation(); setActiveMetricInput({ resourceId: resource.id, metric }); props.onEdit(resource.id, resource.thresholds ? { ...resource.thresholds } : {}, resource.defaults ? { ...resource.defaults } : {}, resource.note) }} class="font-mono text-xs font-medium cursor-pointer">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setActiveMetricInput({ resourceId: resource.id, metric });
+                                    props.onEdit(
+                                      resource.id,
+                                      resource.thresholds ? { ...resource.thresholds } : {},
+                                      resource.defaults ? { ...resource.defaults } : {},
+                                      resource.note,
+                                    );
+                                  }}
+                                  class="font-mono text-xs font-medium cursor-pointer rounded px-1 -mx-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                                  aria-label={`Edit ${column} threshold for ${resource.displayName || resource.name}`}
+                                >
                                   <MetricValueWithHeat resourceId={resource.id} metric={metric} value={displayValue(metric)} isOverridden={isOverridden(metric)} />
-                                </div>
+                                </button>
                               }>
                                 <input type="number" min={bounds.min} max={bounds.max}
                                   value={thresholds()?.[metric] ?? ''}
@@ -909,6 +948,9 @@ export function ResourceTable(props: ResourceTableProps) {
                           title={
                             showDelayRow() ? 'Hide alert delay settings' : 'Show alert delay settings'
                           }
+                          aria-label={
+                            showDelayRow() ? 'Hide alert delay settings' : 'Show alert delay settings'
+                          }
                         >
                           <svg
                             class={`w-4 h-4 transition-transform ${showDelayRow() ? 'rotate-180' : ''}`}
@@ -931,6 +973,7 @@ export function ResourceTable(props: ResourceTableProps) {
                           onClick={() => props.onResetDefaults?.()}
                           class="p-1 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 transition-colors"
                           title="Reset to factory defaults"
+                          aria-label="Reset to factory defaults"
                         >
                           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path
@@ -1490,6 +1533,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                           }}
                                           class="p-1 text-gray-600 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
                                           title="Cancel editing"
+                                          aria-label="Cancel editing"
                                         >
                                           <svg
                                             class="w-4 h-4"
@@ -1520,6 +1564,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                           }
                                           class="p-1 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
                                           title="Edit thresholds"
+                                          aria-label={`Edit thresholds for ${resource.displayName || resource.name}`}
                                         >
                                           <svg
                                             class="w-4 h-4"
@@ -1549,6 +1594,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                           onClick={() => props.onRemoveOverride(resource.id)}
                                           class="p-1 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                                           title="Remove override"
+                                          aria-label={`Remove override for ${resource.displayName || resource.name}`}
                                         >
                                           <svg
                                             class="w-4 h-4"
@@ -1921,6 +1967,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                         }}
                                         class="p-1 text-gray-600 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
                                         title="Cancel editing"
+                                        aria-label="Cancel editing"
                                       >
                                         <svg
                                           class="w-4 h-4"
@@ -1951,6 +1998,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                         }
                                         class="p-1 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
                                         title="Edit thresholds"
+                                        aria-label={`Edit thresholds for ${resource.displayName || resource.name}`}
                                       >
                                         <svg
                                           class="w-4 h-4"
@@ -1977,6 +2025,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                           onClick={() => props.onRemoveOverride(resource.id)}
                                           class="p-1 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                                           title="Remove override"
+                                          aria-label={`Remove override for ${resource.displayName || resource.name}`}
                                         >
                                           <svg
                                             class="w-4 h-4"
