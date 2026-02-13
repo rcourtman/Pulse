@@ -189,7 +189,8 @@ func (r *Router) registerAIRelayRoutesGroup() {
 	})))
 
 	// AI chat endpoints
-	r.mux.HandleFunc("/api/ai/status", RequireAuth(r.config, r.aiHandler.HandleStatus))
+	// SECURITY: Status endpoint is part of chat UX and should require ai:chat scope for token clients.
+	r.mux.HandleFunc("/api/ai/status", RequireAuth(r.config, RequireScope(config.ScopeAIChat, r.aiHandler.HandleStatus)))
 	r.mux.HandleFunc("/api/ai/chat", RequireAuth(r.config, RequireScope(config.ScopeAIChat, r.aiHandler.HandleChat)))
 	r.mux.HandleFunc("/api/ai/sessions", RequireAuth(r.config, RequireScope(config.ScopeAIChat, func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {

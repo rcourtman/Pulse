@@ -29,8 +29,8 @@ func (r *Router) registerOrgLicenseRoutesGroup(orgHandlers *OrgHandlers, rbacHan
 	r.mux.HandleFunc("POST /api/conversion/events", RequireAuth(r.config, conversionHandlers.HandleRecordEvent))
 	r.mux.HandleFunc("GET /api/conversion/stats", RequireAuth(r.config, conversionHandlers.HandleGetStats))
 	r.mux.HandleFunc("GET /api/conversion/health", RequireAuth(r.config, conversionHandlers.HandleGetHealth))
-	r.mux.HandleFunc("GET /api/conversion/config", RequireAuth(r.config, conversionHandlers.HandleGetConfig))
-	r.mux.HandleFunc("PUT /api/conversion/config", RequireAuth(r.config, conversionHandlers.HandleUpdateConfig))
+	r.mux.HandleFunc("GET /api/conversion/config", RequireAuth(r.config, RequireScope(config.ScopeSettingsRead, conversionHandlers.HandleGetConfig)))
+	r.mux.HandleFunc("PUT /api/conversion/config", RequireAuth(r.config, RequireScope(config.ScopeSettingsWrite, conversionHandlers.HandleUpdateConfig)))
 	r.mux.HandleFunc("GET /api/admin/conversion-funnel", RequireAdmin(r.config, conversionHandlers.HandleConversionFunnel))
 
 	// Organization routes (multi-tenant foundation)

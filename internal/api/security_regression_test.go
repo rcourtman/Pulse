@@ -430,6 +430,25 @@ func TestAIStatusRequiresAuthInAPIMode(t *testing.T) {
 	}
 }
 
+func TestAIStatusRequiresAIChatScope(t *testing.T) {
+	rawToken := "ai-status-scope-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/status", nil)
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for missing ai:chat scope, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), config.ScopeAIChat) {
+		t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeAIChat, rec.Body.String())
+	}
+}
+
 func TestWebSocketRequiresMonitoringReadScope(t *testing.T) {
 	rawToken := "ws-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeHostReport}, nil)
@@ -1431,6 +1450,35 @@ func TestAlertMutationEndpointsRequireMonitoringWriteScope(t *testing.T) {
 		if !strings.Contains(rec.Body.String(), config.ScopeMonitoringWrite) {
 			t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeMonitoringWrite, rec.Body.String())
 		}
+	}
+}
+
+func TestAlertMutationEndpointsAllowMonitoringWriteWithoutReadScope(t *testing.T) {
+	rawToken := "alerts-write-only-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringWrite}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/alerts/acknowledge", strings.NewReader(`{}`))
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code == http.StatusForbidden {
+		t.Fatalf("expected write-only token to reach alert mutation handler, got 403 body=%q", rec.Body.String())
+	}
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected validation failure (400) after passing scope checks, got %d body=%q", rec.Code, rec.Body.String())
+	}
+
+	readReq := httptest.NewRequest(http.MethodGet, "/api/alerts/config", nil)
+	readReq.Header.Set("X-API-Token", rawToken)
+	readRec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(readRec, readReq)
+	if readRec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for read endpoint with write-only token, got %d", readRec.Code)
+	}
+	if !strings.Contains(readRec.Body.String(), config.ScopeMonitoringRead) {
+		t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeMonitoringRead, readRec.Body.String())
 	}
 }
 
