@@ -158,7 +158,9 @@ func TestCollectSMARTLocalSkipsErrors(t *testing.T) {
 				SerialNumber: "Serial",
 			}
 			payload.Device.Protocol = "ATA"
-			payload.SmartStatus.Passed = true
+			payload.SmartStatus = &struct {
+				Passed bool `json:"passed"`
+			}{Passed: true}
 			payload.Temperature.Current = 30
 			out, _ := json.Marshal(payload)
 			return out, nil
@@ -285,6 +287,29 @@ func TestCollectDeviceSMARTJSONError(t *testing.T) {
 	}
 }
 
+func TestCollectDeviceSMARTMissingSmartStatusUsesUnknownHealth(t *testing.T) {
+	origRun := runCommandOutput
+	origLook := execLookPath
+	t.Cleanup(func() {
+		runCommandOutput = origRun
+		execLookPath = origLook
+	})
+
+	execLookPath = func(string) (string, error) { return "smartctl", nil }
+	runCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		payload := `{"model_name":"Model","serial_number":"Serial","device":{"protocol":"ATA"},"temperature":{"current":40}}`
+		return []byte(payload), nil
+	}
+
+	result, err := collectDeviceSMART(context.Background(), "/dev/sda")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result == nil || result.Health != "UNKNOWN" {
+		t.Fatalf("expected UNKNOWN health, got %#v", result)
+	}
+}
+
 func TestCollectDeviceSMARTNVMeTempFallback(t *testing.T) {
 	origRun := runCommandOutput
 	origLook := execLookPath
@@ -302,7 +327,9 @@ func TestCollectDeviceSMARTNVMeTempFallback(t *testing.T) {
 		payload := smartctlJSON{}
 		payload.Device.Protocol = "NVMe"
 		payload.NVMeSmartHealthInformationLog.Temperature = 55
-		payload.SmartStatus.Passed = true
+		payload.SmartStatus = &struct {
+			Passed bool `json:"passed"`
+		}{Passed: true}
 		out, _ := json.Marshal(payload)
 		return out, nil
 	}
@@ -331,7 +358,9 @@ func TestCollectDeviceSMARTWWN(t *testing.T) {
 		payload.WWN.OUI = 0xabc
 		payload.WWN.ID = 0x1234
 		payload.Device.Protocol = "SAS"
-		payload.SmartStatus.Passed = true
+		payload.SmartStatus = &struct {
+			Passed bool `json:"passed"`
+		}{Passed: true}
 		out, _ := json.Marshal(payload)
 		return out, nil
 	}

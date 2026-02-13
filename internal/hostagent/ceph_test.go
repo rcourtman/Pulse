@@ -185,6 +185,26 @@ func TestParseCephDF(t *testing.T) {
 	}
 }
 
+func TestParseCephDFSupportsPercentValueFormat(t *testing.T) {
+	data := []byte(`{
+	  "stats":{"total_bytes":1000,"total_used_bytes":123,"percent_used":12.34},
+	  "pools":[
+		{"id":1,"name":"pool-a","stats":{"bytes_used":10,"max_avail":90,"objects":7,"percent_used":20.5}}
+	  ]
+	}`)
+
+	pools, usagePercent, err := parseCephDF(data)
+	if err != nil {
+		t.Fatalf("parseCephDF returned error: %v", err)
+	}
+	if usagePercent != 12.34 {
+		t.Fatalf("expected percent_used 12.34, got %v", usagePercent)
+	}
+	if len(pools) != 1 || pools[0].Name != "pool-a" || pools[0].PercentUsed != 20.5 {
+		t.Fatalf("unexpected pools parsed: %+v", pools)
+	}
+}
+
 func TestParseCephDFInvalidJSON(t *testing.T) {
 	_, _, err := parseCephDF([]byte(`{not-json}`))
 	if err == nil {

@@ -71,9 +71,9 @@ type smartctlJSON struct {
 		OUI uint64 `json:"oui"`
 		ID  uint64 `json:"id"`
 	} `json:"wwn"`
-	SmartStatus struct {
+	SmartStatus *struct {
 		Passed bool `json:"passed"`
-	} `json:"smart_status"`
+	} `json:"smart_status,omitempty"`
 	Temperature struct {
 		Current int `json:"current"`
 	} `json:"temperature"`
@@ -305,8 +305,10 @@ func collectDeviceSMART(ctx context.Context, device string) (*DiskSMART, error) 
 		result.Temperature = smartData.NVMeSmartHealthInformationLog.Temperature
 	}
 
-	// Get health status
-	if smartData.SmartStatus.Passed {
+	// Get health status. Some devices/versions omit smart_status entirely.
+	if smartData.SmartStatus == nil {
+		result.Health = "UNKNOWN"
+	} else if smartData.SmartStatus.Passed {
 		result.Health = "PASSED"
 	} else {
 		result.Health = "FAILED"

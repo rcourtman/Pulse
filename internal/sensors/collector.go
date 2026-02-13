@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -35,8 +36,15 @@ func CollectLocal(ctx context.Context) (string, error) {
 		if rpiOutput, rpiErr := cmd.Output(); rpiErr == nil {
 			rpiTemp := strings.TrimSpace(string(rpiOutput))
 			if rpiTemp != "" {
+				if parsed, parseErr := strconv.ParseFloat(rpiTemp, 64); parseErr == nil {
+					// Linux thermal_zone values are commonly millidegrees (e.g. 42000).
+					// Convert only when magnitude indicates millidegrees to keep degree inputs intact.
+					if parsed >= 1000 || parsed <= -1000 {
+						parsed = parsed / 1000.0
+					}
+					rpiTemp = strconv.FormatFloat(parsed, 'f', 3, 64)
+				}
 				// Convert to pseudo-sensors format for compatibility
-				// Raspberry Pi reports in millidegrees Celsius
 				return fmt.Sprintf(`{"cpu_thermal-virtual-0":{"temp1":{"temp1_input":%s}}}`, rpiTemp), nil
 			}
 		}

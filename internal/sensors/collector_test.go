@@ -48,7 +48,23 @@ func TestCollectLocalFallbackToPiTemp(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	expected := `{"cpu_thermal-virtual-0":{"temp1":{"temp1_input":42000}}}`
+	expected := `{"cpu_thermal-virtual-0":{"temp1":{"temp1_input":42.000}}}`
+	if out != expected {
+		t.Fatalf("unexpected fallback output: %s", out)
+	}
+}
+
+func TestCollectLocalFallbackKeepsDegreeInput(t *testing.T) {
+	dir := t.TempDir()
+	writeScript(t, dir, "sensors", "#!/bin/sh\necho '{}'\n")
+	writeScript(t, dir, "cat", "#!/bin/sh\necho '42'\n")
+	t.Setenv("PATH", dir+":"+os.Getenv("PATH"))
+
+	out, err := CollectLocal(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	expected := `{"cpu_thermal-virtual-0":{"temp1":{"temp1_input":42.000}}}`
 	if out != expected {
 		t.Fatalf("unexpected fallback output: %s", out)
 	}
