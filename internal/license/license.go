@@ -18,12 +18,38 @@ import (
 // Public key for license validation (Ed25519).
 // This will be embedded at build time or set via SetPublicKey.
 // For development, leave empty to skip validation.
-var publicKey ed25519.PublicKey
+var (
+	publicKeyMu sync.RWMutex
+	publicKey   ed25519.PublicKey
+)
 
 // SetPublicKey sets the public key for license validation.
 // This should be called during initialization with the production key.
 func SetPublicKey(key ed25519.PublicKey) {
-	publicKey = key
+	publicKeyMu.Lock()
+	defer publicKeyMu.Unlock()
+
+	if len(key) == 0 {
+		publicKey = nil
+		return
+	}
+
+	keyCopy := make(ed25519.PublicKey, len(key))
+	copy(keyCopy, key)
+	publicKey = keyCopy
+}
+
+func currentPublicKey() ed25519.PublicKey {
+	publicKeyMu.RLock()
+	defer publicKeyMu.RUnlock()
+
+	if len(publicKey) == 0 {
+		return nil
+	}
+
+	keyCopy := make(ed25519.PublicKey, len(publicKey))
+	copy(keyCopy, publicKey)
+	return keyCopy
 }
 
 // License errors
@@ -728,9 +754,10 @@ func ValidateLicense(licenseKey string) (*License, error) {
 	// In production, public key MUST be set. In dev mode, we skip signature validation.
 	devMode := isLicenseValidationDevMode()
 	signedData := []byte(parts[0] + "." + parts[1])
+	key := currentPublicKey()
 
-	if len(publicKey) > 0 {
-		if !ed25519.Verify(publicKey, signedData, signature) {
+	if len(key) > 0 {
+		if !ed25519.Verify(key, signedData, signature) {
 			return nil, ErrSignatureInvalid
 		}
 	} else if !devMode {

@@ -153,15 +153,61 @@ func getNodeDisplayName(instance *config.PVEInstance, nodeName string) string {
 }
 
 func (m *Monitor) getInstanceConfig(instanceName string) *config.PVEInstance {
-	if m == nil || m.config == nil {
+	if m == nil {
 		return nil
 	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.config == nil {
+		return nil
+	}
+
 	for i := range m.config.PVEInstances {
 		if strings.EqualFold(m.config.PVEInstances[i].Name, instanceName) {
-			return &m.config.PVEInstances[i]
+			instanceCopy := m.config.PVEInstances[i]
+			return &instanceCopy
 		}
 	}
 	return nil
+}
+
+func (m *Monitor) totalClientCount() int {
+	if m == nil {
+		return 0
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return len(m.pveClients) + len(m.pbsClients) + len(m.pmgClients)
+}
+
+func (m *Monitor) getPVEClient(name string) (PVEClientInterface, bool) {
+	if m == nil {
+		return nil, false
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	client, ok := m.pveClients[name]
+	return client, ok
+}
+
+func (m *Monitor) getPBSClient(name string) (*pbs.Client, bool) {
+	if m == nil {
+		return nil, false
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	client, ok := m.pbsClients[name]
+	return client, ok
+}
+
+func (m *Monitor) getPMGClient(name string) (*pmg.Client, bool) {
+	if m == nil {
+		return nil, false
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	client, ok := m.pmgClients[name]
+	return client, ok
 }
 
 func mergeNVMeTempsIntoDisks(disks []models.PhysicalDisk, nodes []models.Node) []models.PhysicalDisk {
@@ -1524,7 +1570,7 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 
 	// Create separate tickers for polling and broadcasting using the configured cadence
 
-	workerCount := len(m.pveClients) + len(m.pbsClients) + len(m.pmgClients)
+	workerCount := m.totalClientCount()
 	m.startTaskWorkers(ctx, workerCount)
 
 	pollTicker := time.NewTicker(pollingInterval)
@@ -1772,21 +1818,21 @@ func (m *Monitor) executeScheduledTask(ctx context.Context, task ScheduledTask) 
 
 	switch task.InstanceType {
 	case InstanceTypePVE:
-		client, ok := m.pveClients[task.InstanceName]
+		client, ok := m.getPVEClient(task.InstanceName)
 		if !ok || client == nil {
 			log.Warn().Str("instance", task.InstanceName).Msg("PVE client missing for scheduled task")
 			return
 		}
 		pollTask.PVEClient = client
 	case InstanceTypePBS:
-		client, ok := m.pbsClients[task.InstanceName]
+		client, ok := m.getPBSClient(task.InstanceName)
 		if !ok || client == nil {
 			log.Warn().Str("instance", task.InstanceName).Msg("PBS client missing for scheduled task")
 			return
 		}
 		pollTask.PBSClient = client
 	case InstanceTypePMG:
-		client, ok := m.pmgClients[task.InstanceName]
+		client, ok := m.getPMGClient(task.InstanceName)
 		if !ok || client == nil {
 			log.Warn().Str("instance", task.InstanceName).Msg("PMG client missing for scheduled task")
 			return

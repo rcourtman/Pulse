@@ -1,4 +1,4 @@
-import { createSignal, createEffect, onCleanup } from 'solid-js';
+import { createSignal, onCleanup } from 'solid-js';
 import { AIAPI } from '@/api/ai';
 import type { AnomalyReport, AnomaliesResponse } from '@/types/aiIntelligence';
 
@@ -15,7 +15,7 @@ const [lastUpdate, setLastUpdate] = createSignal<Date | null>(null);
 const REFRESH_INTERVAL = 30000;
 
 let refreshTimer: ReturnType<typeof setInterval> | null = null;
-let activeConsumers = 0;
+let activeSubscribers = 0;
 
 // Fetch anomalies from the API
 async function fetchAnomalies(): Promise<void> {
@@ -51,7 +51,7 @@ function startRefreshTimer(): void {
     if (refreshTimer) return;
 
     // Initial fetch
-    fetchAnomalies();
+    void fetchAnomalies();
 
     // Set up interval for periodic refresh
     refreshTimer = setInterval(fetchAnomalies, REFRESH_INTERVAL);
@@ -94,7 +94,7 @@ export function useAnomalyForMetric(
     resourceId: () => string | undefined,
     metric: () => 'cpu' | 'memory' | 'disk'
 ): () => AnomalyReport | null {
-    useAnomalyRefreshSubscription();
+    useAnomalySubscription();
 
     return () => {
         const rid = resourceId();
@@ -114,7 +114,7 @@ export function useAnomalyForMetric(
 export function useAnomaliesForResource(
     resourceId: () => string | undefined
 ): () => AnomalyReport[] {
-    useAnomalyRefreshSubscription();
+    useAnomalySubscription();
 
     return () => {
         const rid = resourceId();
@@ -139,7 +139,7 @@ export function useAllAnomalies(): {
     lastUpdate: () => Date | null;
     refresh: () => void;
 } {
-    useAnomalyRefreshSubscription();
+    useAnomalySubscription();
 
     return {
         anomalies: () => {
@@ -171,7 +171,7 @@ export function useAllAnomalies(): {
  * Hook to check if a resource has any anomalies.
  */
 export function useHasAnomalies(resourceId: () => string | undefined): () => boolean {
-    useAnomalyRefreshSubscription();
+    useAnomalySubscription();
 
     return () => {
         const rid = resourceId();
@@ -186,7 +186,7 @@ export function useHasAnomalies(resourceId: () => string | undefined): () => boo
 // Cleanup when the module is unloaded (for HMR)
 if (import.meta.hot) {
     import.meta.hot.dispose(() => {
-        activeConsumers = 0;
+        activeSubscribers = 0;
         stopRefreshTimer();
     });
 }

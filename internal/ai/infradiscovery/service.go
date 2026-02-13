@@ -94,6 +94,8 @@ type Service struct {
 	interval       time.Duration
 	stopCh         chan struct{}
 	running        bool
+	discoveryMu    sync.Mutex
+	discoveryRun   bool
 	discoveries    []DiscoveredApp
 
 	// Cache to avoid re-analyzing the same containers
@@ -260,6 +262,8 @@ func (s *Service) Start(ctx context.Context) {
 		s.mu.Unlock()
 		return
 	}
+	s.stopCh = make(chan struct{})
+	stopCh := s.stopCh
 	s.running = true
 	s.stopCh = make(chan struct{})
 	s.mu.Unlock()
@@ -272,7 +276,17 @@ func (s *Service) Start(ctx context.Context) {
 	goRecover("initial infrastructure discovery", func() { s.RunDiscovery(ctx) })
 
 	// Start periodic discovery loop
-	goRecover("infrastructure discovery loop", func() { s.discoveryLoop(ctx) })
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Error().
+					Interface("panic", r).
+					Stack().
+					Msg("Recovered from panic in infrastructure discovery loop")
+			}
+		}()
+		s.discoveryLoop(ctx, stopCh)
+	}()
 }
 
 // Stop stops the background discovery service.
@@ -286,7 +300,7 @@ func (s *Service) Stop() {
 }
 
 // discoveryLoop runs periodic discovery.
-func (s *Service) discoveryLoop(ctx context.Context) {
+func (s *Service) discoveryLoop(ctx context.Context, stopCh <-chan struct{}) {
 	ticker := time.NewTicker(s.interval)
 	defer ticker.Stop()
 
@@ -294,8 +308,8 @@ func (s *Service) discoveryLoop(ctx context.Context) {
 		select {
 		case <-ticker.C:
 			s.RunDiscovery(ctx)
-		case <-s.stopCh:
-			log.Info().Msg("stopping infrastructure discovery service")
+		case <-stopCh:
+			log.Info().Msg("Stopping infrastructure discovery service")
 			return
 		case <-ctx.Done():
 			log.Info().Msg("infrastructure discovery context cancelled")
@@ -306,7 +320,12 @@ func (s *Service) discoveryLoop(ctx context.Context) {
 
 // RunDiscovery performs a discovery scan using AI analysis.
 func (s *Service) RunDiscovery(ctx context.Context) []DiscoveredApp {
-	ctx = normalizeContext(ctx)
+	if !s.tryStartDiscovery() {
+		log.Debug().Msg("Infrastructure discovery already running, skipping overlapping run")
+		return nil
+	}
+	defer s.finishDiscovery()
+
 	start := time.Now()
 
 	if s.stateProvider == nil {
@@ -739,6 +758,22 @@ func (s *Service) saveDiscoveries(apps []DiscoveredApp) {
 				Msg("Failed to save infrastructure discovery to knowledge store")
 		}
 	}
+}
+
+func (s *Service) tryStartDiscovery() bool {
+	s.discoveryMu.Lock()
+	defer s.discoveryMu.Unlock()
+	if s.discoveryRun {
+		return false
+	}
+	s.discoveryRun = true
+	return true
+}
+
+func (s *Service) finishDiscovery() {
+	s.discoveryMu.Lock()
+	s.discoveryRun = false
+	s.discoveryMu.Unlock()
 }
 
 // GetDiscoveries returns the cached list of discovered applications.

@@ -46,10 +46,18 @@ func TestConfigWatcher_WatchForChanges_Live(t *testing.T) {
 	cw.SetMockReloadCallback(func() { mockReloaded <- true })
 	cw.SetAPITokenReloadCallback(func() { tokensReloaded <- true })
 
+	// Mock global persistence for API token reloads before starting the watcher goroutine.
+	p := NewConfigPersistence(tempDir)
+	originalPersistence := globalPersistence
+	globalPersistence = p
+
 	// Start watching
 	err = cw.Start()
 	require.NoError(t, err)
-	defer cw.Stop()
+	t.Cleanup(func() {
+		cw.Stop()
+		globalPersistence = originalPersistence
+	})
 
 	// 1. Test .env change
 	require.NoError(t, os.WriteFile(envPath, []byte("PULSE_AUTH_USER=something-different"), 0644))
@@ -61,11 +69,6 @@ func TestConfigWatcher_WatchForChanges_Live(t *testing.T) {
 	}, 5*time.Second, 25*time.Millisecond)
 
 	// 2. Test api_tokens.json change
-	// Mock global persistence for API token reloads
-	p := NewConfigPersistence(tempDir)
-	originalPersistence := globalPersistence
-	globalPersistence = p
-	defer func() { globalPersistence = originalPersistence }()
 
 	// Write empty tokens list but it MUST be valid JSON
 	require.NoError(t, os.WriteFile(apiTokensPath, []byte("[]"), 0644))

@@ -341,10 +341,17 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 				Str("last_error", lastErr.Error()).
 				Msg("Retrying OpenAI/DeepSeek API request after transient error")
 
+			backoffTimer := time.NewTimer(backoff)
 			select {
 			case <-ctx.Done():
+				if !backoffTimer.Stop() {
+					select {
+					case <-backoffTimer.C:
+					default:
+					}
+				}
 				return nil, ctx.Err()
-			case <-time.After(backoff):
+			case <-backoffTimer.C:
 			}
 		}
 

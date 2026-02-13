@@ -6,21 +6,31 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
-var featureTrueNASEnabled = parseBool(os.Getenv("PULSE_ENABLE_TRUENAS"))
+const (
+	// FeatureTrueNAS gates fixture-first TrueNAS ingestion.
+	FeatureTrueNAS = "PULSE_ENABLE_TRUENAS"
+)
+
+var featureTrueNASEnabled atomic.Bool
+
+func init() {
+	featureTrueNASEnabled.Store(parseBool(os.Getenv(FeatureTrueNAS)))
+}
 
 // IsFeatureEnabled returns whether fixture-driven TrueNAS ingestion is enabled.
 func IsFeatureEnabled() bool {
-	return featureTrueNASEnabled
+	return featureTrueNASEnabled.Load()
 }
 
 // SetFeatureEnabled allows tests to control the feature flag.
 func SetFeatureEnabled(enabled bool) {
-	featureTrueNASEnabled = enabled
+	featureTrueNASEnabled.Store(enabled)
 }
 
 // Fetcher loads a TrueNAS snapshot from a concrete source.

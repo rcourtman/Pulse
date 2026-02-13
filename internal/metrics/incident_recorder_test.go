@@ -262,6 +262,7 @@ func TestCopyWindowDeepCopy(t *testing.T) {
 	window.Summary.Peaks["cpu"] = 9
 	window.Summary.Anomalies[0] = "mutated"
 	*window.EndTime = end.Add(5 * time.Second)
+	window.Summary.Peaks["cpu"] = 9
 
 	if clone.DataPoints[0].Metrics["cpu"] != 1 {
 		t.Fatalf("expected data points to be copied")

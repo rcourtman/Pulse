@@ -111,17 +111,15 @@ func TestStopClosesChannel(t *testing.T) {
 
 func TestStopIsIdempotent(t *testing.T) {
 	hub := NewHub(nil)
-	hub.Stop()
-	hub.Stop()
 
-	select {
-	case _, ok := <-hub.stopChan:
-		if ok {
-			t.Fatal("expected stopChan to remain closed")
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("Stop panicked on repeated call: %v", r)
 		}
-	case <-time.After(200 * time.Millisecond):
-		t.Fatal("expected closed stopChan")
-	}
+	}()
+
+	hub.Stop()
+	hub.Stop()
 }
 
 func TestHandleWebSocketPingPong(t *testing.T) {

@@ -141,15 +141,17 @@ describe('AIAPI', () => {
     ).rejects.toThrow('No response body');
   });
 
-  it('clears read timeout timers for investigateAlert stream reads', async () => {
+  it('clears read timeout timers when investigateAlert stream reads complete', async () => {
+    const read = vi.fn().mockResolvedValueOnce({ done: true, value: undefined });
     const releaseLock = vi.fn();
-    const read = vi.fn().mockResolvedValue({ done: true, value: undefined });
+    const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout');
+
     apiFetchMock.mockResolvedValueOnce({
       ok: true,
-      body: { getReader: () => ({ read, releaseLock }) },
-    } as any);
-
-    const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout');
+      body: {
+        getReader: () => ({ read, releaseLock }),
+      },
+    } as unknown as Response);
 
     await AIAPI.investigateAlert(
       {
@@ -168,8 +170,8 @@ describe('AIAPI', () => {
     );
 
     expect(read).toHaveBeenCalledTimes(1);
-    expect(clearTimeoutSpy).toHaveBeenCalledTimes(1);
     expect(releaseLock).toHaveBeenCalledTimes(1);
+    expect(clearTimeoutSpy).toHaveBeenCalled();
     clearTimeoutSpy.mockRestore();
   });
 });

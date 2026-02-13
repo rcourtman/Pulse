@@ -104,6 +104,17 @@ func NewCommandClient(cfg Config, agentID, hostname, platform, version string) *
 	}
 }
 
+func (c *CommandClient) stopChan() <-chan struct{} {
+	c.connMu.Lock()
+	defer c.connMu.Unlock()
+
+	if c.done == nil {
+		c.done = make(chan struct{})
+	}
+
+	return c.done
+}
+
 // Message types matching agentexec package
 type messageType string
 
@@ -158,11 +169,14 @@ type commandResultPayload struct {
 
 // Run starts the command client and maintains the WebSocket connection
 func (c *CommandClient) Run(ctx context.Context) error {
+	stopCh := c.stopChan()
 	consecutiveFailures := 0
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
+		case <-stopCh:
+			return nil
 		default:
 		}
 
@@ -194,7 +208,9 @@ func (c *CommandClient) Run(ctx context.Context) error {
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
-			case <-time.After(delay):
+			case <-stopCh:
+				return nil
+			case <-time.After(reconnectDelay):
 			}
 		} else {
 			// Connection closed cleanly (shouldn't happen in normal operation)
@@ -617,8 +633,19 @@ func (c *CommandClient) Close() error {
 	c.connMu.Lock()
 	defer c.connMu.Unlock()
 
+	if c.done == nil {
+		c.done = make(chan struct{})
+	}
+	select {
+	case <-c.done:
+	default:
+		close(c.done)
+	}
+
 	if c.conn != nil {
-		return c.conn.Close()
+		err := c.conn.Close()
+		c.conn = nil
+		return err
 	}
 	return nil
 }

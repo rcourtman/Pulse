@@ -109,6 +109,10 @@ func TestUpdaterExecuteRollbackErrors(t *testing.T) {
 func TestManagerCloseAndBackup(t *testing.T) {
 	manager := NewManager(&config.Config{})
 	manager.Close()
+	manager.Close()
+
+	// Ensure post-close status updates are no-ops for broadcast/progress fan-out.
+	manager.updateStatus("completed", 100, "done")
 
 	select {
 	case _, ok := <-manager.GetProgressChannel():

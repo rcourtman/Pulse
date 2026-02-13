@@ -14,15 +14,27 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
-type contextCheckingAnalyzer struct {
-	called bool
-	sawNil bool
+type blockingAIAnalyzer struct {
+	response  string
+	startedCh chan struct{}
+	releaseCh chan struct{}
+	callCount int32
 }
 
-func (a *contextCheckingAnalyzer) AnalyzeForDiscovery(ctx context.Context, prompt string) (string, error) {
-	a.called = true
-	a.sawNil = ctx == nil
-	return `{"service_type":"postgres","service_name":"PostgreSQL","category":"database","cli_command":"docker exec {container} psql -U postgres","confidence":0.95,"reasoning":"postgres image"}`, nil
+func (b *blockingAIAnalyzer) AnalyzeForDiscovery(ctx context.Context, prompt string) (string, error) {
+	atomic.AddInt32(&b.callCount, 1)
+	select {
+	case b.startedCh <- struct{}{}:
+	default:
+	}
+
+	select {
+	case <-b.releaseCh:
+	case <-ctx.Done():
+		return "", ctx.Err()
+	}
+
+	return b.response, nil
 }
 
 func waitFor(t *testing.T, timeout time.Duration, check func() bool) {
@@ -120,6 +132,40 @@ func TestStartStopUpdatesStatus(t *testing.T) {
 	status = service.GetStatus()
 	if running, ok := status["running"].(bool); !ok || running {
 		t.Fatalf("expected running status false, got %v", status["running"])
+	}
+}
+
+func TestStartStopRestartStopIsSafe(t *testing.T) {
+	provider := &mockStateProvider{state: models.StateSnapshot{}}
+	service := NewService(provider, nil, Config{
+		Interval:    10 * time.Millisecond,
+		CacheExpiry: time.Millisecond,
+	})
+	service.SetAIAnalyzer(&mockAIAnalyzer{})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	service.Start(ctx)
+	waitFor(t, 500*time.Millisecond, func() bool {
+		return !service.GetLastRun().IsZero()
+	})
+	service.Stop()
+
+	firstRun := service.GetLastRun()
+	if firstRun.IsZero() {
+		t.Fatal("expected first discovery run timestamp")
+	}
+
+	service.Start(ctx)
+	waitFor(t, 500*time.Millisecond, func() bool {
+		return service.GetLastRun().After(firstRun)
+	})
+	service.Stop()
+
+	status := service.GetStatus()
+	if running, ok := status["running"].(bool); !ok || running {
+		t.Fatalf("expected running status false after second stop, got %v", status["running"])
 	}
 }
 
@@ -253,7 +299,7 @@ func TestGetDiscoveriesReturnsCopy(t *testing.T) {
 	}
 }
 
-func TestRunDiscoveryHandlesAnalysisFailures(t *testing.T) {
+func TestRunDiscoverySkipsOverlappingRuns(t *testing.T) {
 	provider := &mockStateProvider{
 		state: models.StateSnapshot{
 			DockerHosts: []models.DockerHost{
@@ -261,7 +307,7 @@ func TestRunDiscoveryHandlesAnalysisFailures(t *testing.T) {
 					AgentID:  "agent-1",
 					Hostname: "host1",
 					Containers: []models.DockerContainer{
-						{ID: "1", Name: "app", Image: "app:image"},
+						{ID: "1", Name: "db", Image: "postgres:14"},
 					},
 				},
 			},

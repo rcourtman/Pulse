@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -165,6 +166,26 @@ func TestOIDCStateStoreCleanupAndConsume(t *testing.T) {
 func TestOIDCStateStoreStop(t *testing.T) {
 	store := &oidcStateStore{entries: make(map[string]*oidcStateEntry), stopCleanup: make(chan struct{})}
 	store.Stop()
+	select {
+	case <-store.stopCleanup:
+	default:
+		t.Fatalf("expected stop channel to be closed")
+	}
+}
+
+func TestOIDCStateStoreStopIdempotentConcurrent(t *testing.T) {
+	store := &oidcStateStore{entries: make(map[string]*oidcStateEntry), stopCleanup: make(chan struct{})}
+
+	var wg sync.WaitGroup
+	for i := 0; i < 16; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			store.Stop()
+		}()
+	}
+	wg.Wait()
+
 	select {
 	case <-store.stopCleanup:
 	default:

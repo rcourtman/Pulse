@@ -127,7 +127,7 @@ func (s *Store) cleanupLoop() {
 
 // Put inserts or replaces a token record.
 func (s *Store) Put(tokenHash []byte, rec *TokenRecord) error {
-	if s == nil || s.db == nil {
+	if s == nil {
 		return fmt.Errorf("store not configured")
 	}
 	if len(tokenHash) == 0 {
@@ -141,8 +141,13 @@ func (s *Store) Put(tokenHash []byte, rec *TokenRecord) error {
 	now := time.Now().UTC().Unix()
 
 	s.mu.Lock()
+	db := s.db
+	if db == nil {
+		s.mu.Unlock()
+		return fmt.Errorf("store not configured")
+	}
 	defer s.mu.Unlock()
-	_, err := s.db.Exec(
+	_, err := db.Exec(
 		`INSERT OR REPLACE INTO magic_link_tokens (token_hash, email, tenant_id, expires_at, used, created_at, used_at)
 		 VALUES (?, ?, ?, ?, 0, ?, NULL)`,
 		key, rec.Email, rec.TenantID, rec.ExpiresAt.UTC().Unix(), now,
@@ -155,7 +160,7 @@ func (s *Store) Put(tokenHash []byte, rec *TokenRecord) error {
 
 // Consume atomically validates and marks a token as used. Returns the token record on success.
 func (s *Store) Consume(tokenHash []byte, now time.Time) (*TokenRecord, error) {
-	if s == nil || s.db == nil {
+	if s == nil {
 		return nil, ErrTokenInvalid
 	}
 	if len(tokenHash) == 0 {
@@ -166,9 +171,14 @@ func (s *Store) Consume(tokenHash []byte, now time.Time) (*TokenRecord, error) {
 	now = now.UTC()
 
 	s.mu.Lock()
+	db := s.db
+	if db == nil {
+		s.mu.Unlock()
+		return nil, ErrTokenInvalid
+	}
 	defer s.mu.Unlock()
 
-	tx, err := s.db.Begin()
+	tx, err := db.Begin()
 	if err != nil {
 		return nil, fmt.Errorf("begin consume tx: %w", err)
 	}
@@ -228,6 +238,11 @@ func (s *Store) DeleteExpired(now time.Time) error {
 		return nil
 	}
 	s.mu.Lock()
+	db := s.db
+	if db == nil {
+		s.mu.Unlock()
+		return
+	}
 	defer s.mu.Unlock()
 	if _, err := s.db.Exec(`DELETE FROM magic_link_tokens WHERE expires_at < ?`, now.UTC().Unix()); err != nil {
 		return fmt.Errorf("delete expired magic link tokens: %w", err)

@@ -324,7 +324,11 @@ func (m *Monitor) retryPVEPortFallback(ctx context.Context, instanceName string,
 
 	clientCfg := config.CreateProxmoxConfigWithHost(instanceCfg, fallbackHost, false)
 	if clientCfg.Timeout <= 0 {
-		clientCfg.Timeout = m.config.ConnectionTimeout
+		m.mu.RLock()
+		if m.config != nil {
+			clientCfg.Timeout = m.config.ConnectionTimeout
+		}
+		m.mu.RUnlock()
 	}
 
 	fallbackClient, err := newProxmoxClientFunc(clientCfg)
@@ -351,21 +355,35 @@ func (m *Monitor) retryPVEPortFallback(ctx context.Context, instanceName string,
 		persistHost = parsed.Scheme + "://" + parsed.Host
 	}
 
+	var persistence *config.ConfigPersistence
+	var pveInstances []config.PVEInstance
+	var pbsInstances []config.PBSInstance
+	var pmgInstances []config.PMGInstance
+
+	m.mu.Lock()
 	instanceCfg.Host = persistHost
 	m.pveClients[instanceName] = fallbackClient
 
 	// Update in-memory config so subsequent polls build clients against the working port.
-	for i := range m.config.PVEInstances {
-		if m.config.PVEInstances[i].Name == instanceName {
-			m.config.PVEInstances[i].Host = persistHost
-			break
+	if m.config != nil {
+		for i := range m.config.PVEInstances {
+			if m.config.PVEInstances[i].Name == instanceName {
+				m.config.PVEInstances[i].Host = persistHost
+				break
+			}
 		}
+
+		pveInstances = append(pveInstances, m.config.PVEInstances...)
+		pbsInstances = append(pbsInstances, m.config.PBSInstances...)
+		pmgInstances = append(pmgInstances, m.config.PMGInstances...)
 	}
+	persistence = m.persistence
+	m.mu.Unlock()
 
 	// Persist to disk so restarts keep the working endpoint.
-	if m.persistence != nil {
-		if err := m.persistence.SaveNodesConfig(m.config.PVEInstances, m.config.PBSInstances, m.config.PMGInstances); err != nil {
-			log.Warn().Err(err).Str("instance", instanceName).Msg("failed to persist fallback PVE host")
+	if persistence != nil {
+		if err := persistence.SaveNodesConfig(pveInstances, pbsInstances, pmgInstances); err != nil {
+			log.Warn().Err(err).Str("instance", instanceName).Msg("Failed to persist fallback PVE host")
 		}
 	}
 

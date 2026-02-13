@@ -586,9 +586,8 @@ func (s *LearningStore) saveToDisk() error {
 		ResourcePreferences: s.resourcePreferences,
 		CategoryPreferences: s.categoryPreferences,
 	}
-	s.mu.RUnlock()
-
 	jsonData, err := json.MarshalIndent(data, "", "  ")
+	s.mu.RUnlock()
 	if err != nil {
 		return err
 	}

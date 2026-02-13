@@ -123,6 +123,10 @@ type Agent struct {
 	preCPUStatsFailures int
 	reportBuffer        *utils.Queue[agentsdocker.Report]
 	registryChecker     *RegistryChecker // For checking container image updates
+	collectMu           sync.Mutex       // serializes collect/report cycles across goroutines
+	backgroundMu        sync.Mutex       // guards background task in-progress flags
+	updateCheckRunning  bool
+	cleanupTaskRunning  bool
 }
 
 // ErrStopRequested indicates the agent should terminate gracefully after acknowledging a stop command.
@@ -708,6 +712,9 @@ func stopTimer(timer *time.Timer) {
 }
 
 func (a *Agent) collectOnce(ctx context.Context) error {
+	a.collectMu.Lock()
+	defer a.collectMu.Unlock()
+
 	report, err := a.buildReport(ctx)
 	if err != nil {
 		return fmt.Errorf("build docker report: %w", err)
@@ -902,9 +909,10 @@ func (a *Agent) handleCheckUpdatesCommand(ctx context.Context, target TargetConf
 	}
 
 	// Trigger an immediate collection cycle to report updates
+	sleep := sleepFn
 	go func() {
 		// Small delay to ensure the ack response completes
-		sleepFn(1 * time.Second)
+		sleep(1 * time.Second)
 		a.collectOnce(ctx)
 	}()
 
@@ -939,9 +947,10 @@ func (a *Agent) handleStopCommand(ctx context.Context, target TargetConfig, comm
 	// After sending the acknowledgement, stop the systemd service to prevent restart.
 	// This is done after the ack to ensure the acknowledgement is sent before the
 	// process is terminated by systemctl stop.
+	sleep := sleepFn
 	go func() {
 		// Small delay to ensure the ack response completes
-		sleepFn(1 * time.Second)
+		sleep(1 * time.Second)
 		stopServiceCtx := context.Background()
 		if err := stopSystemdService(stopServiceCtx, "pulse-docker-agent"); err != nil {
 			a.logger.Warn().
@@ -1115,6 +1124,38 @@ func newHTTPClient(insecure bool) *http.Client {
 
 func (a *Agent) Close() error {
 	return a.docker.Close()
+}
+
+func (a *Agent) tryStartUpdateCheck() bool {
+	a.backgroundMu.Lock()
+	defer a.backgroundMu.Unlock()
+	if a.updateCheckRunning {
+		return false
+	}
+	a.updateCheckRunning = true
+	return true
+}
+
+func (a *Agent) finishUpdateCheck() {
+	a.backgroundMu.Lock()
+	a.updateCheckRunning = false
+	a.backgroundMu.Unlock()
+}
+
+func (a *Agent) tryStartCleanupTask() bool {
+	a.backgroundMu.Lock()
+	defer a.backgroundMu.Unlock()
+	if a.cleanupTaskRunning {
+		return false
+	}
+	a.cleanupTaskRunning = true
+	return true
+}
+
+func (a *Agent) finishCleanupTask() {
+	a.backgroundMu.Lock()
+	a.cleanupTaskRunning = false
+	a.backgroundMu.Unlock()
 }
 
 func readMachineID() (string, error) {

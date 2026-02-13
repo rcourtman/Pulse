@@ -36,6 +36,65 @@ type Store struct {
 	lastFingerprintScan time.Time
 }
 
+func cloneResourceDiscovery(src *ResourceDiscovery) *ResourceDiscovery {
+	if src == nil {
+		return nil
+	}
+
+	cloned := *src
+	if src.Facts != nil {
+		cloned.Facts = append([]DiscoveryFact(nil), src.Facts...)
+	}
+	if src.ConfigPaths != nil {
+		cloned.ConfigPaths = append([]string(nil), src.ConfigPaths...)
+	}
+	if src.DataPaths != nil {
+		cloned.DataPaths = append([]string(nil), src.DataPaths...)
+	}
+	if src.LogPaths != nil {
+		cloned.LogPaths = append([]string(nil), src.LogPaths...)
+	}
+	if src.Ports != nil {
+		cloned.Ports = append([]PortInfo(nil), src.Ports...)
+	}
+	if src.DockerMounts != nil {
+		cloned.DockerMounts = append([]DockerBindMount(nil), src.DockerMounts...)
+	}
+	if src.UserSecrets != nil {
+		cloned.UserSecrets = make(map[string]string, len(src.UserSecrets))
+		for k, v := range src.UserSecrets {
+			cloned.UserSecrets[k] = v
+		}
+	}
+	if src.RawCommandOutput != nil {
+		cloned.RawCommandOutput = make(map[string]string, len(src.RawCommandOutput))
+		for k, v := range src.RawCommandOutput {
+			cloned.RawCommandOutput[k] = v
+		}
+	}
+
+	return &cloned
+}
+
+func cloneContainerFingerprint(src *ContainerFingerprint) *ContainerFingerprint {
+	if src == nil {
+		return nil
+	}
+
+	cloned := *src
+	if src.Ports != nil {
+		cloned.Ports = append([]string(nil), src.Ports...)
+	}
+	if src.MountPaths != nil {
+		cloned.MountPaths = append([]string(nil), src.MountPaths...)
+	}
+	if src.EnvKeys != nil {
+		cloned.EnvKeys = append([]string(nil), src.EnvKeys...)
+	}
+
+	return &cloned
+}
+
 // For testing - allows injecting a mock crypto manager
 var newCryptoManagerAt = crypto.NewCryptoManagerAt
 
@@ -155,7 +214,10 @@ func (s *Store) Save(d *ResourceDiscovery) error {
 		d.DiscoveredAt = d.UpdatedAt
 	}
 
-	data, err := marshalDiscovery(d)
+	// Persist/cache a defensive copy so callers cannot mutate shared state after Save.
+	toSave := cloneResourceDiscovery(d)
+
+	data, err := marshalDiscovery(toSave)
 	if err != nil {
 		return fmt.Errorf("failed to marshal discovery: %w", err)
 	}
@@ -185,7 +247,7 @@ func (s *Store) Save(d *ResourceDiscovery) error {
 	}
 
 	// Update cache
-	s.cache[d.ID] = d
+	s.cache[d.ID] = toSave
 	s.cacheTime[d.ID] = time.Now()
 
 	log.Debug().Str("id", d.ID).Str("service", d.ServiceType).Msg("discovery saved")
@@ -200,7 +262,7 @@ func (s *Store) Get(id string) (*ResourceDiscovery, error) {
 		if cacheTime, hasTime := s.cacheTime[id]; hasTime {
 			if time.Since(cacheTime) < s.cacheTTL {
 				s.mu.RUnlock()
-				return cached, nil
+				return cloneResourceDiscovery(cached), nil
 			}
 		}
 	}
@@ -233,10 +295,10 @@ func (s *Store) Get(id string) (*ResourceDiscovery, error) {
 	}
 
 	// Update cache
-	s.cache[id] = &discovery
+	s.cache[id] = cloneResourceDiscovery(&discovery)
 	s.cacheTime[id] = time.Now()
 
-	return &discovery, nil
+	return cloneResourceDiscovery(&discovery), nil
 }
 
 // GetByResource retrieves a discovery by resource type and ID.
@@ -485,15 +547,16 @@ func (s *Store) SaveFingerprint(fp *ContainerFingerprint) error {
 	defer s.fingerprintMu.Unlock()
 
 	// Update in-memory cache
-	s.fingerprints[fp.ResourceID] = fp
+	fpCopy := cloneContainerFingerprint(fp)
+	s.fingerprints[fpCopy.ResourceID] = fpCopy
 
 	// Persist to disk
-	data, err := json.Marshal(fp)
+	data, err := json.Marshal(fpCopy)
 	if err != nil {
 		return fmt.Errorf("failed to marshal fingerprint: %w", err)
 	}
 
-	filePath := s.getFingerprintFilePath(fp.ResourceID)
+	filePath := s.getFingerprintFilePath(fpCopy.ResourceID)
 	tmpPath := filePath + ".tmp"
 
 	if err := os.WriteFile(tmpPath, data, 0600); err != nil {
@@ -519,7 +582,7 @@ func (s *Store) GetFingerprint(resourceID string) (*ContainerFingerprint, error)
 	if !ok {
 		return nil, nil // Not found is not an error
 	}
-	return fp, nil
+	return cloneContainerFingerprint(fp), nil
 }
 
 // GetAllFingerprints returns all stored fingerprints.
@@ -529,7 +592,7 @@ func (s *Store) GetAllFingerprints() map[string]*ContainerFingerprint {
 
 	result := make(map[string]*ContainerFingerprint, len(s.fingerprints))
 	for k, v := range s.fingerprints {
-		result[k] = v
+		result[k] = cloneContainerFingerprint(v)
 	}
 	return result
 }
@@ -540,7 +603,7 @@ func (s *Store) GetChangedResources() ([]string, error) {
 	s.fingerprintMu.RLock()
 	fingerprints := make(map[string]*ContainerFingerprint, len(s.fingerprints))
 	for k, v := range s.fingerprints {
-		fingerprints[k] = v
+		fingerprints[k] = cloneContainerFingerprint(v)
 	}
 	s.fingerprintMu.RUnlock()
 

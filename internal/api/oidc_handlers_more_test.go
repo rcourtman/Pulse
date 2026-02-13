@@ -64,6 +64,32 @@ func newOIDCRouterWithService(t *testing.T, authURL, tokenURL string) (*Router, 
 	return router, svc
 }
 
+func newOIDCDiscoveryServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	var server *httptest.Server
+	server = newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/.well-known/openid-configuration":
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"issuer":                                server.URL,
+				"authorization_endpoint":                server.URL + "/authorize",
+				"token_endpoint":                        server.URL + "/token",
+				"jwks_uri":                              server.URL + "/keys",
+				"response_types_supported":              []string{"code"},
+				"subject_types_supported":               []string{"public"},
+				"id_token_signing_alg_values_supported": []string{"RS256"},
+			})
+		case "/keys":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"keys":[]}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	return server
+}
+
 func TestHandleOIDCLogin_MethodNotAllowed(t *testing.T) {
 	router := &Router{config: &config.Config{OIDC: newTestOIDCConfig()}}
 	req := httptest.NewRequest(http.MethodPut, "/api/oidc/login", nil)
@@ -175,6 +201,33 @@ func TestGetOIDCService_ReturnsCachedService(t *testing.T) {
 	}
 	if got != svc {
 		t.Fatalf("expected cached service to be returned")
+	}
+}
+
+func TestGetOIDCService_ReplacesAndStopsPreviousService(t *testing.T) {
+	discovery := newOIDCDiscoveryServer(t)
+	defer discovery.Close()
+
+	cfg := newTestOIDCConfig()
+	cfg.IssuerURL = discovery.URL
+	cfg.RedirectURL = "https://app.example.com/callback-old"
+
+	old := newTestOIDCService(cfg, discovery.URL+"/authorize", discovery.URL+"/token")
+	router := &Router{config: &config.Config{OIDC: cfg}, oidcService: old}
+
+	got, err := router.getOIDCService(context.Background(), "https://app.example.com/callback-new")
+	if err != nil {
+		t.Fatalf("getOIDCService error: %v", err)
+	}
+	if got == old {
+		t.Fatalf("expected a new OIDC service instance")
+	}
+	t.Cleanup(got.Stop)
+
+	select {
+	case <-old.stateStore.stopCleanup:
+	default:
+		t.Fatalf("expected previous OIDC service state store to be stopped")
 	}
 }
 

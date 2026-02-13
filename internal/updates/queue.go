@@ -165,7 +165,7 @@ func (q *UpdateQueue) Cancel(jobID string) bool {
 func (q *UpdateQueue) GetCurrentJob() *UpdateJob {
 	q.mu.RLock()
 	defer q.mu.RUnlock()
-	return q.currentJob
+	return cloneUpdateJob(q.currentJob)
 }
 
 // IsRunning returns true if there's a job currently running or queued
@@ -180,9 +180,11 @@ func (q *UpdateQueue) GetHistory() []*UpdateJob {
 	q.mu.RLock()
 	defer q.mu.RUnlock()
 
-	// Return a copy to avoid concurrent access issues
-	history := make([]*UpdateJob, len(q.jobHistory))
-	copy(history, q.jobHistory)
+	// Return deep copies to avoid exposing mutable internal state.
+	history := make([]*UpdateJob, 0, len(q.jobHistory))
+	for _, job := range q.jobHistory {
+		history = append(history, cloneUpdateJob(job))
+	}
 	return history
 }
 
@@ -235,4 +237,12 @@ func (q *UpdateQueue) scheduleClearCurrentJobLocked(jobID string) {
 // generateJobID generates a unique job ID
 func generateJobID() string {
 	return time.Now().Format("20060102-150405.000")
+}
+
+func cloneUpdateJob(job *UpdateJob) *UpdateJob {
+	if job == nil {
+		return nil
+	}
+	cloned := *job
+	return &cloned
 }

@@ -353,10 +353,10 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 
 	// 10. Schedule cleanup of backup container after a delay
 	// This gives time to verify the new container is working
+	sleep := sleepFn
 	go func() {
-		sleepFn(5 * time.Minute)
-		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), dockerCleanupCallTimeout)
-		defer cleanupCancel()
+		sleep(5 * time.Minute)
+		cleanupCtx := context.Background()
 		if err := a.docker.ContainerRemove(cleanupCtx, backupName, container.RemoveOptions{Force: true}); err != nil {
 			a.logger.Warn().Err(err).Str("backup", backupName).Msg("Failed to clean up backup container")
 		} else {

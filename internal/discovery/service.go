@@ -291,17 +291,36 @@ func normalizeDiscoverySubnet(subnet string) (string, error) {
 
 // Start begins the background discovery service
 func (s *Service) Start(ctx context.Context) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	s.mu.Lock()
 	s.ctx = ctx
+	interval := s.interval
+	subnet := s.subnet
+	s.mu.Unlock()
+
 	log.Info().
-		Dur("interval", s.interval).
-		Str("subnet", s.subnet).
+		Dur("interval", interval).
+		Str("subnet", subnet).
 		Msg("Starting background discovery service")
 
 	// Do initial scan immediately
 	goRecover("initial discovery scan", s.performScan)
 
-	// Start background scanning loop
-	goRecover("discovery scan loop", s.scanLoop)
+	// Start background scanning loop with panic recovery
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Error().
+					Interface("panic", r).
+					Stack().
+					Msg("Recovered from panic in discovery scan loop")
+			}
+		}()
+		s.scanLoop(ctx)
+	}()
 }
 
 // Stop stops the background discovery service
@@ -312,7 +331,7 @@ func (s *Service) Stop() {
 }
 
 // scanLoop runs periodic scans
-func (s *Service) scanLoop() {
+func (s *Service) scanLoop(ctx context.Context) {
 	s.mu.RLock()
 	interval := s.interval
 	s.mu.RUnlock()
@@ -338,7 +357,7 @@ func (s *Service) scanLoop() {
 		case <-s.stopChan:
 			log.Info().Msg("Stopping background discovery service")
 			return
-		case <-s.ctx.Done():
+		case <-ctx.Done():
 			log.Info().Msg("Background discovery service context cancelled")
 			return
 		}
@@ -394,6 +413,8 @@ func (s *Service) performScan() {
 	s.isScanning = true
 	s.mu.Unlock()
 
+	scanSubnet := s.getSubnet()
+
 	var result *pkgdiscovery.DiscoveryResult
 
 	defer func() {
@@ -423,7 +444,7 @@ func (s *Service) performScan() {
 		s.appendHistory(historyEntry{
 			startedAt:       startTime,
 			completedAt:     completedAt,
-			subnet:          s.subnet,
+			subnet:          scanSubnet,
 			serverCount:     serverCount,
 			errorCount:      errorCount,
 			duration:        duration,
@@ -452,26 +473,23 @@ func (s *Service) performScan() {
 		}
 	}()
 
-	log.Info().Str("subnet", s.subnet).Msg("Starting background discovery scan")
+	log.Info().Str("subnet", scanSubnet).Msg("Starting background discovery scan")
 
 	// Send scan started notification
 	if s.wsHub != nil {
 		s.wsHub.Broadcast(websocket.Message{
 			Type: "discovery_started",
-			Data: discoveryStartedPayload{
-				Scanning:  true,
-				Subnet:    s.subnet,
-				Timestamp: time.Now().Unix(),
+			Data: map[string]interface{}{
+				"scanning":  true,
+				"subnet":    scanSubnet,
+				"timestamp": time.Now().Unix(),
 			},
 		})
 	}
 
 	// Create a context with timeout for the scan
 	// Scanning multiple subnets takes longer, allow 2 minutes
-	scanParentCtx := s.ctx
-	if scanParentCtx == nil {
-		scanParentCtx = context.Background()
-	}
+	scanParentCtx := s.getScanContext()
 	scanCtx, cancel := context.WithTimeout(scanParentCtx, 2*time.Minute)
 	defer cancel()
 
@@ -542,7 +560,7 @@ func (s *Service) performScan() {
 		}
 	}
 
-	result, err = newScanner.DiscoverServersWithCallbacks(scanCtx, s.subnet, serverCallback, progressCallback)
+	result, err = newScanner.DiscoverServersWithCallbacks(scanCtx, scanSubnet, serverCallback, progressCallback)
 	scanErr = err
 	if err != nil {
 		// Even if scan timed out, we might have partial results

@@ -121,7 +121,7 @@ func isValidWebSocketOrgID(orgID string) bool {
 func (h *Hub) SetAllowedOrigins(origins []string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	h.allowedOrigins = origins
+	h.allowedOrigins = append([]string(nil), origins...)
 }
 
 // checkOrigin validates the origin against allowed origins
@@ -133,7 +133,7 @@ func (h *Hub) checkOrigin(r *http.Request) bool {
 	}
 
 	h.mu.RLock()
-	allowedOrigins := h.allowedOrigins
+	allowedOrigins := append([]string(nil), h.allowedOrigins...)
 	h.mu.RUnlock()
 
 	// Determine the actual origin (accounting for proxy headers)
@@ -391,6 +391,7 @@ type Hub struct {
 	register            chan *Client
 	unregister          chan *Client
 	stopChan            chan struct{} // Signals shutdown
+	stopOnce            sync.Once
 	mu                  sync.RWMutex
 	getState            func() interface{}             // Function to get current state (legacy)
 	getStateByTenant    func(orgID string) interface{} // Function to get state for specific tenant
@@ -456,6 +457,12 @@ func (h *Hub) legacyPayloadCompatEnabled() bool {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	return h.legacyPayloadCompat
+}
+
+func (h *Hub) hasStateGetter() bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.getState != nil || h.getStateByTenant != nil
 }
 
 // getStateForClient returns the state for a specific client based on their tenant
@@ -526,8 +533,8 @@ func (h *Hub) Run() {
 
 			// Send initial state to the new client immediately
 			// Use tenant-aware state getter if available
-			hasGetState := h.getState != nil || h.getStateByTenant != nil
-			log.Debug().Bool("hasGetState", hasGetState).Msg("checking getState function for new client")
+			hasGetState := h.hasStateGetter()
+			log.Debug().Bool("hasGetState", hasGetState).Msg("Checking getState function for new client")
 			if hasGetState {
 				// Add a small delay to ensure client is ready
 				go func() {
@@ -1223,11 +1230,11 @@ func (c *Client) readPump() {
 				log.Error().Err(err).Str("client", c.id).Msg("Failed to marshal pong response")
 			}
 		case "requestData":
-			// Send current state
-			if c.hub.getState != nil {
+			// Send current state with lock-safe getter lookup.
+			if c.hub.hasStateGetter() {
 				stateMsg := Message{
 					Type: "rawData",
-					Data: sanitizeData(c.hub.prepareStateForBroadcast(c.hub.getState())),
+					Data: sanitizeData(c.hub.prepareStateForBroadcast(c.hub.getStateForClient(c))),
 				}
 				if data, err := json.Marshal(stateMsg); err == nil {
 					if !c.safeSend(data) {

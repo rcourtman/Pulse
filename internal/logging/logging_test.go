@@ -1038,10 +1038,10 @@ func TestCompressAndRemove(t *testing.T) {
 func TestConcurrentLogging(t *testing.T) {
 	t.Cleanup(resetLoggingState)
 
-	var buf bytes.Buffer
+	buf := &lockedBuffer{}
 	mu.Lock()
-	baseWriter = &buf
-	baseLogger = zerolog.New(&buf).With().Timestamp().Logger()
+	baseWriter = buf
+	baseLogger = zerolog.New(buf).With().Timestamp().Logger()
 	log.Logger = baseLogger
 	mu.Unlock()
 
@@ -1058,6 +1058,23 @@ func TestConcurrentLogging(t *testing.T) {
 	if buf.Len() == 0 {
 		t.Fatal("expected log output from concurrent logging")
 	}
+}
+
+type lockedBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *lockedBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *lockedBuffer) Len() int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Len()
 }
 
 type errDirEntry struct {

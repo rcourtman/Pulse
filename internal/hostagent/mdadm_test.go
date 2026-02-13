@@ -536,7 +536,7 @@ Consistency Policy : resync
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := parseMdadmDetail(tt.device, tt.output)
+			got, err := parseDetailWithRunner(tt.device, tt.output, failingRunner)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("parseMdadmDetail() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -606,7 +606,7 @@ func TestIsMdadmAvailable(t *testing.T) {
 			return []byte("mdadm"), nil
 		})
 
-		if !isMdadmAvailable(context.Background()) {
+		if !available {
 			t.Fatal("expected mdadm available")
 		}
 	})
@@ -617,7 +617,7 @@ func TestIsMdadmAvailable(t *testing.T) {
 			return nil, errors.New("missing")
 		})
 
-		if isMdadmAvailable(context.Background()) {
+		if available {
 			t.Fatal("expected mdadm unavailable")
 		}
 	})
@@ -635,11 +635,9 @@ func TestListArrayDevices(t *testing.T) {
 md0 : active raid1 sdb1[1] sda1[0]
 md1 : active raid6 sdc1[2] sdb1[1] sda1[0]
 unused devices: <none>`
-	withReadFile(t, func(name string) ([]byte, error) {
+	devices, err := listArrayDevicesWithRunner(context.Background(), func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		return []byte(mdstat), nil
 	})
-
-	devices, err := listArrayDevices(context.Background())
 	if err != nil {
 		t.Fatalf("listArrayDevices error: %v", err)
 	}
@@ -649,11 +647,11 @@ unused devices: <none>`
 }
 
 func TestListArrayDevicesError(t *testing.T) {
-	withReadFile(t, func(name string) ([]byte, error) {
+	_, err := listArrayDevicesWithRunner(context.Background(), func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		return nil, errors.New("read failed")
 	})
 
-	if _, err := listArrayDevices(context.Background()); err == nil {
+	if err == nil {
 		t.Fatal("expected error")
 	}
 }
@@ -664,7 +662,7 @@ func TestCollectArrayDetailError(t *testing.T) {
 		return nil, errors.New("detail failed")
 	})
 
-	if _, err := collectArrayDetail(context.Background(), "/dev/md0"); err == nil {
+	if err == nil {
 		t.Fatal("expected error")
 	}
 }
@@ -729,20 +727,25 @@ func TestCollectArraysNoDevices(t *testing.T) {
 }
 
 func TestCollectArraysSkipsDetailError(t *testing.T) {
-	withResolveMdadmBinary(t, func() (string, error) { return "mdadm", nil })
-	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
-		if len(args) > 0 && args[0] == "--version" {
-			return []byte("mdadm"), nil
+	arrays, err := collectArrays(context.Background(), func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		switch name {
+		case "mdadm":
+			if len(args) > 0 && args[0] == "--version" {
+				return []byte("mdadm"), nil
+			}
+			return nil, errors.New("detail failed")
+		case "cat":
+			return []byte("md0 : active raid1 sda1[0]"), nil
+		default:
+			return nil, errors.New("unexpected")
 		}
 		return nil, errors.New("detail failed")
 	})
 	withReadFile(t, func(name string) ([]byte, error) {
 		return []byte("md0 : active raid1 sda1[0]"), nil
 	})
-
-	arrays, err := CollectArrays(context.Background())
-	if err == nil {
-		t.Fatal("expected error")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
 	if arrays != nil {
 		t.Fatalf("expected nil arrays, got %v", arrays)
@@ -762,7 +765,7 @@ func TestCollectRAIDArraysSuccess(t *testing.T) {
     Number   Major   Minor   RaidDevice State
        0       8        1        0      active sync   /dev/sda1`
 
-	withMdadmCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	arrays, err := collectArrays(context.Background(), func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		switch name {
 		case "mdadm":
 			if len(args) > 0 && args[0] == "--version" {
@@ -835,31 +838,31 @@ func TestGetRebuildSpeed(t *testing.T) {
 	mdstat := `md0 : active raid1 sda1[0] sdb1[1]
       [>....................]  recovery = 12.6% (37043392/293039104) finish=127.5min speed=33440K/sec
 `
-	withReadFile(t, func(name string) ([]byte, error) {
+	speed := getRebuildSpeedWithRunner("/dev/md0", func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		return []byte(mdstat), nil
 	})
 
-	if speed := getRebuildSpeed("/dev/md0"); speed != "33440K/sec" {
+	if speed != "33440K/sec" {
 		t.Fatalf("unexpected speed: %s", speed)
 	}
 }
 
 func TestGetRebuildSpeedNoMatch(t *testing.T) {
-	withReadFile(t, func(name string) ([]byte, error) {
+	speed := getRebuildSpeedWithRunner("/dev/md0", func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		return []byte("md0 : active raid1 sda1[0]"), nil
 	})
 
-	if speed := getRebuildSpeed("/dev/md0"); speed != "" {
+	if speed != "" {
 		t.Fatalf("expected empty speed, got %s", speed)
 	}
 }
 
 func TestGetRebuildSpeedError(t *testing.T) {
-	withReadFile(t, func(name string) ([]byte, error) {
+	speed := getRebuildSpeedWithRunner("/dev/md0", func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		return nil, errors.New("read failed")
 	})
 
-	if speed := getRebuildSpeed("/dev/md0"); speed != "" {
+	if speed != "" {
 		t.Fatalf("expected empty speed, got %s", speed)
 	}
 }
@@ -894,11 +897,11 @@ func TestGetRebuildSpeedSectionExit(t *testing.T) {
       [>....................]  recovery = 12.6% (37043392/293039104) finish=127.5min
 md1 : active raid1 sdb1[0]
 `
-	withReadFile(t, func(name string) ([]byte, error) {
+	speed := getRebuildSpeedWithRunner("/dev/md0", func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		return []byte(mdstat), nil
 	})
 
-	if speed := getRebuildSpeed("/dev/md0"); speed != "" {
+	if speed != "" {
 		t.Fatalf("expected empty speed, got %s", speed)
 	}
 }

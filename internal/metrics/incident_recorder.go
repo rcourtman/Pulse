@@ -119,8 +119,15 @@ type IncidentRecorder struct {
 	filePath string
 
 	// Control
-	stopCh  chan struct{}
-	running bool
+	stopCh   chan struct{}
+	loopDone chan struct{}
+	running  bool
+
+	// Async save coordination
+	saveMu         sync.Mutex
+	saveCond       *sync.Cond
+	saveInProgress bool
+	saveRequested  bool
 }
 
 // NewIncidentRecorder creates a new incident recorder
@@ -165,7 +172,9 @@ func NewIncidentRecorder(cfg IncidentRecorderConfig) *IncidentRecorder {
 		preIncidentBuffer: make(map[string][]IncidentDataPoint),
 		dataDir:           dataDir,
 		stopCh:            make(chan struct{}),
+		loopDone:          make(chan struct{}),
 	}
+	recorder.saveCond = sync.NewCond(&recorder.saveMu)
 
 	if dataDir != "" {
 		recorder.filePath = filepath.Join(dataDir, "incident_windows.json")
@@ -191,12 +200,15 @@ func (r *IncidentRecorder) Start() {
 		r.mu.Unlock()
 		return
 	}
+	stopCh := make(chan struct{})
+	loopDone := make(chan struct{})
 	r.running = true
-	r.stopCh = make(chan struct{})
+	r.stopCh = stopCh
+	r.loopDone = loopDone
 	r.mu.Unlock()
 
-	go r.recordingLoop()
-	log.Info().Msg("incident recorder started")
+	go r.recordingLoop(stopCh, loopDone)
+	log.Info().Msg("Incident recorder started")
 }
 
 // Stop stops the incident recorder
@@ -207,7 +219,10 @@ func (r *IncidentRecorder) Stop() {
 		return
 	}
 	r.running = false
-	close(r.stopCh)
+	stopCh := r.stopCh
+	loopDone := r.loopDone
+	r.stopCh = nil
+	r.loopDone = nil
 	r.mu.Unlock()
 
 	// Save to disk
@@ -218,13 +233,15 @@ func (r *IncidentRecorder) Stop() {
 }
 
 // recordingLoop runs in the background to maintain pre-incident buffers and active windows
-func (r *IncidentRecorder) recordingLoop() {
+func (r *IncidentRecorder) recordingLoop(stopCh <-chan struct{}, done chan<- struct{}) {
+	defer close(done)
+
 	ticker := time.NewTicker(r.config.SampleInterval)
 	defer ticker.Stop()
 
 	for {
 		select {
-		case <-r.stopCh:
+		case <-stopCh:
 			return
 		case <-ticker.C:
 			r.recordSample()
@@ -275,7 +292,7 @@ func (r *IncidentRecorder) recordSample() {
 
 		window.DataPoints = append(window.DataPoints, IncidentDataPoint{
 			Timestamp: now,
-			Metrics:   cloneFloatMap(metrics),
+			Metrics:   copyMetrics(metrics),
 		})
 	}
 
@@ -298,7 +315,7 @@ func (r *IncidentRecorder) recordSample() {
 		buffer := r.preIncidentBuffer[resourceID]
 		buffer = append(buffer, IncidentDataPoint{
 			Timestamp: now,
-			Metrics:   cloneFloatMap(metrics),
+			Metrics:   copyMetrics(metrics),
 		})
 
 		// Keep only last PreIncidentWindow duration
@@ -560,12 +577,11 @@ func (r *IncidentRecorder) saveToDisk() error {
 		return nil
 	}
 
-	r.mu.RLock()
-	completed := make([]*IncidentWindow, len(r.completedWindows))
-	for i, window := range r.completedWindows {
-		completed[i] = copyWindow(window)
+	data := struct {
+		CompletedWindows []*IncidentWindow `json:"completed_windows"`
+	}{
+		CompletedWindows: r.snapshotCompletedWindows(),
 	}
-	r.mu.RUnlock()
 
 	data := struct {
 		CompletedWindows []*IncidentWindow `json:"completed_windows"`
@@ -618,6 +634,64 @@ func (r *IncidentRecorder) saveToDisk() error {
 	}
 	cleanup = false
 	return os.Chmod(r.filePath, incidentRecorderFilePerm)
+}
+
+func (r *IncidentRecorder) snapshotCompletedWindows() []*IncidentWindow {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	snapshot := make([]*IncidentWindow, len(r.completedWindows))
+	for i, window := range r.completedWindows {
+		snapshot[i] = copyWindow(window)
+	}
+	return snapshot
+}
+
+func (r *IncidentRecorder) requestAsyncSave() {
+	if r.filePath == "" {
+		return
+	}
+
+	r.saveMu.Lock()
+	r.saveRequested = true
+	if r.saveInProgress {
+		r.saveMu.Unlock()
+		return
+	}
+	r.saveInProgress = true
+	r.saveMu.Unlock()
+
+	go r.saveLoop()
+}
+
+func (r *IncidentRecorder) saveLoop() {
+	for {
+		r.saveMu.Lock()
+		if !r.saveRequested {
+			r.saveInProgress = false
+			r.saveCond.Broadcast()
+			r.saveMu.Unlock()
+			return
+		}
+		r.saveRequested = false
+		r.saveMu.Unlock()
+
+		if err := r.saveToDisk(); err != nil {
+			log.Warn().Err(err).Msg("Failed to save incident windows")
+		}
+	}
+}
+
+func (r *IncidentRecorder) waitForPendingSaves() {
+	if r.filePath == "" {
+		return
+	}
+
+	r.saveMu.Lock()
+	for r.saveInProgress || r.saveRequested {
+		r.saveCond.Wait()
+	}
+	r.saveMu.Unlock()
 }
 
 // loadFromDisk loads completed windows
@@ -763,15 +837,18 @@ func copyWindow(w *IncidentWindow) *IncidentWindow {
 	windowCopy := *w
 	if w.EndTime != nil {
 		t := *w.EndTime
-		windowCopy.EndTime = &t
+		copy.EndTime = &t
+	}
+	if w.DataPoints != nil {
+		copy.DataPoints = copyDataPoints(w.DataPoints)
 	}
 	copy.DataPoints = copyDataPoints(w.DataPoints)
 	if w.Summary != nil {
 		s := *w.Summary
-		s.Peaks = cloneFloatMap(w.Summary.Peaks)
-		s.Lows = cloneFloatMap(w.Summary.Lows)
-		s.Averages = cloneFloatMap(w.Summary.Averages)
-		s.Changes = cloneFloatMap(w.Summary.Changes)
+		s.Peaks = copyMetrics(w.Summary.Peaks)
+		s.Lows = copyMetrics(w.Summary.Lows)
+		s.Averages = copyMetrics(w.Summary.Averages)
+		s.Changes = copyMetrics(w.Summary.Changes)
 		if w.Summary.Anomalies != nil {
 			s.Anomalies = append([]string(nil), w.Summary.Anomalies...)
 		}
@@ -783,47 +860,35 @@ func copyWindow(w *IncidentWindow) *IncidentWindow {
 var windowCounter int64
 
 func generateWindowID(resourceID string) string {
-	segment := sanitizeResourceIDSegment(resourceID)
-	seq := atomic.AddInt64(&windowCounter, 1)
-	return "iw-" + segment + "-" + time.Now().Format("20060102150405") + "-" + intToString(int(seq%1000))
+	counter := atomic.AddInt64(&windowCounter, 1)
+	return "iw-" + resourceID + "-" + time.Now().Format("20060102150405") + "-" + intToString(int(counter))
 }
 
-func sanitizeResourceIDSegment(resourceID string) string {
-	resourceID = strings.TrimSpace(resourceID)
-	if resourceID == "" {
-		return unknownWindowResourceSegment
-	}
-
-	var builder strings.Builder
-	builder.Grow(min(len(resourceID), maxWindowIDResourceSegment))
-	for i := 0; i < len(resourceID) && builder.Len() < maxWindowIDResourceSegment; i++ {
-		ch := resourceID[i]
-		switch {
-		case ch >= 'a' && ch <= 'z':
-			builder.WriteByte(ch)
-		case ch >= 'A' && ch <= 'Z':
-			builder.WriteByte(ch)
-		case ch >= '0' && ch <= '9':
-			builder.WriteByte(ch)
-		case ch == '-' || ch == '_':
-			builder.WriteByte(ch)
-		default:
-			builder.WriteByte('-')
+func copyDataPoints(points []IncidentDataPoint) []IncidentDataPoint {
+	copied := make([]IncidentDataPoint, len(points))
+	for i, dp := range points {
+		copied[i] = dp
+		copied[i].Metrics = copyMetrics(dp.Metrics)
+		if dp.Metadata != nil {
+			copied[i].Metadata = make(map[string]interface{}, len(dp.Metadata))
+			for k, v := range dp.Metadata {
+				copied[i].Metadata[k] = v
+			}
 		}
 	}
-
-	cleaned := strings.Trim(builder.String(), "-")
-	if cleaned == "" {
-		return unknownWindowResourceSegment
-	}
-	return cleaned
+	return copied
 }
 
-func min(a, b int) int {
-	if a < b {
-		return a
+func copyMetrics(metrics map[string]float64) map[string]float64 {
+	if metrics == nil {
+		return nil
 	}
-	return b
+
+	copied := make(map[string]float64, len(metrics))
+	for k, v := range metrics {
+		copied[k] = v
+	}
+	return copied
 }
 
 func intToString(n int) string {

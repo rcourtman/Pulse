@@ -638,7 +638,14 @@ func (s *Server) ExecuteCommand(ctx context.Context, agentID string, cmd Execute
 		timeout = 60 * time.Second
 	}
 	timer := time.NewTimer(timeout)
-	defer timer.Stop()
+	defer func() {
+		if !timer.Stop() {
+			select {
+			case <-timer.C:
+			default:
+			}
+		}
+	}()
 
 	select {
 	case result := <-respCh:
@@ -701,11 +708,15 @@ func (s *Server) ReadFile(ctx context.Context, agentID string, req ReadFilePaylo
 
 	// Wait for result
 	timeout := readFileTimeout
-	if timeout <= 0 {
-		timeout = 30 * time.Second
-	}
 	timer := time.NewTimer(timeout)
-	defer timer.Stop()
+	defer func() {
+		if !timer.Stop() {
+			select {
+			case <-timer.C:
+			default:
+			}
+		}
+	}()
 
 	select {
 	case result := <-respCh:

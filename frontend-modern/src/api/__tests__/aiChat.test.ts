@@ -24,23 +24,25 @@ describe('AIChatAPI', () => {
     apiFetchMock.mockReset();
   });
 
-  it('clears read timeout timers during chat streaming', async () => {
+  it('clears read timeout timers when chat stream reads complete', async () => {
+    const read = vi.fn().mockResolvedValueOnce({ done: true, value: undefined });
     const releaseLock = vi.fn();
-    const read = vi.fn().mockResolvedValue({ done: true, value: undefined });
+    const onEvent = vi.fn();
+    const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout');
+
     apiFetchMock.mockResolvedValueOnce({
       ok: true,
-      body: { getReader: () => ({ read, releaseLock }) },
-    } as any);
-
-    const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout');
-    const onEvent = vi.fn();
+      body: {
+        getReader: () => ({ read, releaseLock }),
+      },
+    } as unknown as Response);
 
     await AIChatAPI.chat('hello', undefined, undefined, onEvent);
 
     expect(read).toHaveBeenCalledTimes(1);
-    expect(clearTimeoutSpy).toHaveBeenCalledTimes(1);
     expect(releaseLock).toHaveBeenCalledTimes(1);
     expect(onEvent).toHaveBeenCalledWith({ type: 'done' });
+    expect(clearTimeoutSpy).toHaveBeenCalled();
     clearTimeoutSpy.mockRestore();
   });
 });

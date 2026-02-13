@@ -603,9 +603,8 @@ func (c *EventCorrelator) saveToDisk() error {
 		Events:       c.events,
 		Correlations: c.correlations,
 	}
-	c.mu.RUnlock()
-
 	jsonData, err := json.MarshalIndent(data, "", "  ")
+	c.mu.RUnlock()
 	if err != nil {
 		return err
 	}

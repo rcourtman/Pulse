@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
-	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -1083,5 +1083,46 @@ func TestNewNotificationQueue_InvalidPath(t *testing.T) {
 	_, err := NewNotificationQueue(invalidPath)
 	if err == nil {
 		t.Error("expected error when creating notification queue with invalid path, got nil")
+	}
+}
+
+func TestNotificationQueueStop_IdempotentConcurrent(t *testing.T) {
+	tempDir := t.TempDir()
+	nq, err := NewNotificationQueue(tempDir)
+	if err != nil {
+		t.Fatalf("Failed to create notification queue: %v", err)
+	}
+
+	const callers = 16
+	var wg sync.WaitGroup
+	wg.Add(callers)
+
+	panicCh := make(chan interface{}, callers)
+	errCh := make(chan error, callers)
+
+	for i := 0; i < callers; i++ {
+		go func() {
+			defer wg.Done()
+			defer func() {
+				if r := recover(); r != nil {
+					panicCh <- r
+				}
+			}()
+			errCh <- nq.Stop()
+		}()
+	}
+
+	wg.Wait()
+	close(panicCh)
+	close(errCh)
+
+	if len(panicCh) > 0 {
+		t.Fatalf("Stop panicked under concurrent calls: %v", <-panicCh)
+	}
+
+	for stopErr := range errCh {
+		if stopErr != nil {
+			t.Fatalf("Stop returned error under concurrent calls: %v", stopErr)
+		}
 	}
 }

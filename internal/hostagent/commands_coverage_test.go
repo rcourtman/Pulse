@@ -142,3 +142,33 @@ func TestCommandClient_RegistrationFailure(t *testing.T) {
 		t.Error("expected error from registration failure")
 	}
 }
+
+func TestCommandClient_RunStopsAfterClose(t *testing.T) {
+	origDelay := reconnectDelay
+	reconnectDelay = 5 * time.Millisecond
+	t.Cleanup(func() { reconnectDelay = origDelay })
+
+	client := &CommandClient{
+		pulseURL: "http://127.0.0.1:1",
+		logger:   zerolog.Nop(),
+		done:     make(chan struct{}),
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- client.Run(context.Background())
+	}()
+
+	if err := client.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Fatalf("Run() error = %v, want nil after Close()", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Run() did not stop after Close()")
+	}
+}

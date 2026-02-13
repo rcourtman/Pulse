@@ -156,12 +156,10 @@ func (s *GuestMetadataStore) GetWithLegacyMigration(guestID, instance, node stri
 			s.metadata[guestID] = legacyMeta
 			legacyMeta.ID = guestID
 			delete(s.metadata, legacyID)
-			// Save asynchronously
-			go func() {
-				if err := s.save(); err != nil {
-					log.Error().Err(err).Msg("Failed to save guest metadata after migration")
-				}
-			}()
+			// Persist while holding the store lock. save() assumes locked access.
+			if err := s.save(); err != nil {
+				log.Error().Err(err).Msg("Failed to save guest metadata after migration")
+			}
 			s.mu.Unlock()
 
 			return legacyMeta

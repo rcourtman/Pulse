@@ -2376,6 +2376,7 @@ function OverviewTab(props: {
   licenseLoading: () => boolean;
 }) {
   const location = useLocation();
+  const pendingProcessingClearTimers = new Set<ReturnType<typeof setTimeout>>();
   // Loading states for buttons
   const [processingAlerts, setProcessingAlerts] = createSignal<Set<string>>(new Set());
   const [incidentTimelines, setIncidentTimelines] = createSignal<Record<string, Incident | null>>({});
@@ -2389,6 +2390,13 @@ function OverviewTab(props: {
   const [lastHashScrolled, setLastHashScrolled] = createSignal<string | null>(null);
   let hashScrollRafId: number | undefined;
   const pendingProcessingResetTimeouts = new Set<number>();
+
+  onCleanup(() => {
+    for (const timer of pendingProcessingClearTimers) {
+      clearTimeout(timer);
+    }
+    pendingProcessingClearTimers.clear();
+  });
 
   const loadIncidentTimeline = async (alertId: string, startedAt?: string) => {
     setIncidentLoading((prev) => ({ ...prev, [alertId]: true }));
@@ -2832,8 +2840,16 @@ function OverviewTab(props: {
                             );
                             // Don't update local state on error - let WebSocket keep the correct state
                           } finally {
-                            // Keep button disabled briefly to prevent race conditions with WebSocket updates
-                            scheduleProcessingReset(alert.id);
+                            // Keep button disabled for longer to prevent race conditions with WebSocket updates
+                            const timer = setTimeout(() => {
+                              pendingProcessingClearTimers.delete(timer);
+                              setProcessingAlerts((prev) => {
+                                const next = new Set(prev);
+                                next.delete(alert.id);
+                                return next;
+                              });
+                            }, 1500); // 1.5 seconds to allow server to process and WebSocket to sync
+                            pendingProcessingClearTimers.add(timer);
                           }
                         }}
                       >

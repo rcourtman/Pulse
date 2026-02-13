@@ -622,6 +622,21 @@ func TestHub_SetAllowedOrigins(t *testing.T) {
 	}
 }
 
+func TestHub_SetAllowedOrigins_DefensiveCopy(t *testing.T) {
+	hub := NewHub(nil)
+	origins := []string{"http://localhost:3000", "https://example.com"}
+
+	hub.SetAllowedOrigins(origins)
+	origins[0] = "https://mutated.example.com"
+
+	hub.mu.RLock()
+	defer hub.mu.RUnlock()
+
+	if hub.allowedOrigins[0] != "http://localhost:3000" {
+		t.Fatalf("allowedOrigins leaked caller mutation, got %q", hub.allowedOrigins[0])
+	}
+}
+
 func TestHub_SetStateGetter(t *testing.T) {
 	hub := NewHub(nil)
 

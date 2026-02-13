@@ -11,7 +11,13 @@ import (
 // cleanupOrphanedBackups searches for and removes any Pulse backup containers
 // (created during updates) that are older than 15 minutes.
 func (a *Agent) cleanupOrphanedBackups(ctx context.Context) {
-	a.logger.Debug().Msg("checking for orphaned backup containers")
+	if !a.tryStartCleanupTask() {
+		a.logger.Debug().Msg("Skipping orphaned backup cleanup - previous cleanup still running")
+		return
+	}
+	defer a.finishCleanupTask()
+
+	a.logger.Debug().Msg("Checking for orphaned backup containers")
 
 	// List all containers (including stopped ones)
 	list, err := dockerCallWithRetry(ctx, dockerCleanupCallTimeout, func(callCtx context.Context) ([]container.Summary, error) {

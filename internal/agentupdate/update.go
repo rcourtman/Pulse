@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
@@ -117,6 +118,9 @@ type Updater struct {
 	client *http.Client
 	logger zerolog.Logger
 
+	checkMu         sync.Mutex
+	checkInProgress bool
+
 	performUpdateFn func(context.Context) error
 	initialDelay    time.Duration
 	newTicker       func(time.Duration) *time.Ticker
@@ -178,10 +182,20 @@ func (u *Updater) RunLoop(ctx context.Context) {
 	}
 
 	// Initial check after a short delay (5s to quickly update outdated agents)
+	initialDelayTimer := time.NewTimer(u.initialDelay)
+	defer func() {
+		if !initialDelayTimer.Stop() {
+			select {
+			case <-initialDelayTimer.C:
+			default:
+			}
+		}
+	}()
+
 	select {
 	case <-ctx.Done():
 		return
-	case <-time.After(u.initialDelay):
+	case <-initialDelayTimer.C:
 		u.CheckAndUpdate(ctx)
 	}
 
@@ -200,6 +214,12 @@ func (u *Updater) RunLoop(ctx context.Context) {
 
 // CheckAndUpdate checks for a new version and performs the update if available.
 func (u *Updater) CheckAndUpdate(ctx context.Context) {
+	if !u.startCheck() {
+		u.logger.Debug().Msg("Skipping update check - another check is already in progress")
+		return
+	}
+	defer u.finishCheck()
+
 	if u.cfg.Disabled {
 		return
 	}
@@ -272,6 +292,24 @@ func (u *Updater) setAuthHeaders(req *http.Request) {
 		req.Header.Set(apiTokenHeader, u.cfg.APIToken)
 		req.Header.Set(authorizationHeader, bearerTokenPrefix+u.cfg.APIToken)
 	}
+}
+
+func (u *Updater) startCheck() bool {
+	u.checkMu.Lock()
+	defer u.checkMu.Unlock()
+
+	if u.checkInProgress {
+		return false
+	}
+
+	u.checkInProgress = true
+	return true
+}
+
+func (u *Updater) finishCheck() {
+	u.checkMu.Lock()
+	u.checkInProgress = false
+	u.checkMu.Unlock()
 }
 
 // getServerVersion fetches the current version from the Pulse server.

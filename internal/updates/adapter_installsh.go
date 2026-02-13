@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -142,10 +143,21 @@ func (a *InstallShAdapter) Execute(ctx context.Context, request UpdateRequest, p
 
 	// Track backup path from output
 	var backupPath string
+	var backupPathMu sync.RWMutex
+	var progressMu sync.Mutex
+	emitProgress := func(progress UpdateProgress) {
+		progressMu.Lock()
+		defer progressMu.Unlock()
+		progressCb(progress)
+	}
+
 	backupRe := regexp.MustCompile(`[Bb]ackup.*:\s*(.+)`)
+	var streamWG sync.WaitGroup
 
 	// Monitor output
+	streamWG.Add(1)
 	go func() {
+		defer streamWG.Done()
 		scanner := bufio.NewScanner(stdout)
 		for scanner.Scan() {
 			line := scanner.Text()
@@ -157,19 +169,26 @@ func (a *InstallShAdapter) Execute(ctx context.Context, request UpdateRequest, p
 
 			// Parse for backup path
 			if matches := backupRe.FindStringSubmatch(line); len(matches) > 1 {
+				backupPathMu.Lock()
 				backupPath = strings.TrimSpace(matches[1])
+				backupPathMu.Unlock()
 			}
 
 			// Emit progress based on output
 			progress := a.parseProgress(line)
 			if progress.Message != "" {
-				progressCb(progress)
+				emitProgress(progress)
 			}
+		}
+		if err := scanner.Err(); err != nil {
+			log.Debug().Err(err).Msg("Failed scanning install.sh stdout")
 		}
 	}()
 
 	// Also capture stderr
+	streamWG.Add(1)
 	go func() {
+		defer streamWG.Done()
 		scanner := bufio.NewScanner(stderr)
 		for scanner.Scan() {
 			line := scanner.Text()
@@ -177,22 +196,30 @@ func (a *InstallShAdapter) Execute(ctx context.Context, request UpdateRequest, p
 				log.Warn().Err(writeErr).Str("log_file", logFile).Msg("Failed to write update stderr line to log")
 			}
 		}
+		if err := scanner.Err(); err != nil {
+			log.Debug().Err(err).Msg("Failed scanning install.sh stderr")
+		}
 	}()
 
 	// Wait for completion
-	progressCb(UpdateProgress{
+	emitProgress(UpdateProgress{
 		Stage:    "installing",
 		Progress: 50,
 		Message:  "Installing update...",
 	})
 
 	err = cmd.Wait()
+	streamWG.Wait()
+
+	backupPathMu.RLock()
+	finalBackupPath := backupPath
+	backupPathMu.RUnlock()
 
 	if err != nil {
 		// Read last few lines of log for error context
 		errorDetails := a.readLastLines(logFile, 10)
 
-		progressCb(UpdateProgress{
+		emitProgress(UpdateProgress{
 			Stage:      "failed",
 			Progress:   0,
 			Message:    "Update failed",
@@ -203,7 +230,7 @@ func (a *InstallShAdapter) Execute(ctx context.Context, request UpdateRequest, p
 		return fmt.Errorf("install script failed: %w\n%s", err, errorDetails)
 	}
 
-	progressCb(UpdateProgress{
+	emitProgress(UpdateProgress{
 		Stage:      "completed",
 		Progress:   100,
 		Message:    "Update completed successfully",
@@ -212,7 +239,7 @@ func (a *InstallShAdapter) Execute(ctx context.Context, request UpdateRequest, p
 
 	log.Info().
 		Str("version", request.Version).
-		Str("backup", backupPath).
+		Str("backup", finalBackupPath).
 		Str("log", logFile).
 		Msg("Update completed successfully")
 

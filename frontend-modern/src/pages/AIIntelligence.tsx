@@ -101,15 +101,19 @@ export function AIIntelligence() {
   let safetyTimerRef: ReturnType<typeof setTimeout> | undefined;
   let findingScrollTimerRef: ReturnType<typeof setTimeout> | undefined;
 
+  const clearSafetyTimer = () => {
+    if (safetyTimerRef !== undefined) {
+      clearTimeout(safetyTimerRef);
+      safetyTimerRef = undefined;
+    }
+  };
+
   // Live patrol streaming
   const patrolStream = usePatrolStream({
     running: () => patrolEnabledLocal() && ((patrolStatus()?.running ?? false) || manualRunRequested()),
     onStart: () => {
       // SSE connected — clear the safety timeout
-      if (safetyTimerRef !== undefined) {
-        clearTimeout(safetyTimerRef);
-        safetyTimerRef = undefined;
-      }
+      clearSafetyTimer();
     },
     onComplete: () => {
       setManualRunRequested(false);
@@ -260,10 +264,7 @@ export function AIIntelligence() {
     setPatrolEnabledLocal(newValue);
     if (!newValue) {
       setManualRunRequested(false);
-      if (safetyTimerRef !== undefined) {
-        clearTimeout(safetyTimerRef);
-        safetyTimerRef = undefined;
-      }
+      clearSafetyTimer();
     }
     try {
       const data = await apiFetchJSON<AISettings>('/api/settings/ai/update', {
@@ -313,10 +314,7 @@ export function AIIntelligence() {
       setManualRunRequested(false);
       notificationStore.error('Failed to start patrol run');
       // Clear safety timer on API error
-      if (safetyTimerRef !== undefined) {
-        clearTimeout(safetyTimerRef);
-        safetyTimerRef = undefined;
-      }
+      clearSafetyTimer();
     } finally {
       setIsTriggeringPatrol(false);
     }

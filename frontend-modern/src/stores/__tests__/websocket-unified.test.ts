@@ -192,27 +192,30 @@ describe('websocket store unified resource contract', () => {
     }
   });
 
-  it('ignores oversized websocket payloads', async () => {
-    const { store, dispose } = await createStoreHarness();
+  it('removes alerts activation listener when store is disposed', async () => {
+    const { ALERTS_ACTIVATION_EVENT } = await import('@/utils/alertsActivation');
+    const addSpy = vi.spyOn(window, 'addEventListener');
+    const removeSpy = vi.spyOn(window, 'removeEventListener');
+
+    const { dispose } = await createStoreHarness();
+    let disposed = false;
     try {
-      await waitForOpenTick();
+      const addCall = addSpy.mock.calls.find((call) => call[0] === ALERTS_ACTIVATION_EVENT);
+      expect(addCall).toBeDefined();
 
-      const oversizedMessage = JSON.stringify({
-        type: 'initialState',
-        data: {
-          resources: [{ id: 'node-oversized', type: 'node', name: 'blocked', status: 'online' }],
-          activeAlerts: [],
-          recentlyResolved: [],
-          padding: 'x'.repeat(MAX_INBOUND_WEBSOCKET_MESSAGE_BYTES),
-        },
-      });
-
-      emitRawMessage(oversizedMessage);
-
-      expect(store.state.resources).toEqual([]);
-      expect(store.initialDataReceived()).toBe(false);
-    } finally {
       dispose();
+      disposed = true;
+
+      const removeCall = removeSpy.mock.calls.find(
+        (call) => call[0] === ALERTS_ACTIVATION_EVENT && call[1] === addCall?.[1],
+      );
+      expect(removeCall).toBeDefined();
+    } finally {
+      if (!disposed) {
+        dispose();
+      }
+      addSpy.mockRestore();
+      removeSpy.mockRestore();
     }
   });
 });

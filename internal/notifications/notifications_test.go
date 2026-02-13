@@ -3302,3 +3302,160 @@ func TestSendTestNotificationWithConfig(t *testing.T) {
 		t.Fatal("expected error for disabled email config")
 	}
 }
+
+func TestGetEmailConfigReturnsDefensiveCopy(t *testing.T) {
+	nm := NewNotificationManager("")
+	defer nm.Stop()
+
+	initial := EmailConfig{
+		Enabled:  true,
+		SMTPHost: "smtp.example.com",
+		SMTPPort: 587,
+		From:     "alerts@example.com",
+		To:       []string{"ops@example.com", "admin@example.com"},
+	}
+	nm.SetEmailConfig(initial)
+
+	initial.To[0] = "mutated@example.com"
+
+	cfg := nm.GetEmailConfig()
+	if cfg.To[0] != "ops@example.com" {
+		t.Fatalf("expected manager to copy caller input, got %q", cfg.To[0])
+	}
+
+	cfg.To[0] = "another-change@example.com"
+	cfgAgain := nm.GetEmailConfig()
+	if cfgAgain.To[0] != "ops@example.com" {
+		t.Fatalf("expected manager to return defensive copy, got %q", cfgAgain.To[0])
+	}
+}
+
+func TestGetWebhooksReturnsDeepCopies(t *testing.T) {
+	nm := NewNotificationManager("")
+	defer nm.Stop()
+
+	original := WebhookConfig{
+		ID:      "hook-1",
+		Name:    "Primary",
+		URL:     "https://example.com/hook",
+		Enabled: true,
+		Headers: map[string]string{
+			"X-Test": "value-1",
+		},
+		CustomFields: map[string]string{
+			"severity": "critical",
+		},
+	}
+
+	nm.AddWebhook(original)
+
+	original.Headers["X-Test"] = "mutated"
+	original.CustomFields["severity"] = "mutated"
+
+	webhooks := nm.GetWebhooks()
+	if webhooks[0].Headers["X-Test"] != "value-1" {
+		t.Fatalf("expected AddWebhook to copy header map, got %q", webhooks[0].Headers["X-Test"])
+	}
+	if webhooks[0].CustomFields["severity"] != "critical" {
+		t.Fatalf("expected AddWebhook to copy custom field map, got %q", webhooks[0].CustomFields["severity"])
+	}
+
+	webhooks[0].Headers["X-Test"] = "caller-changed"
+	webhooks[0].CustomFields["severity"] = "caller-changed"
+
+	again := nm.GetWebhooks()
+	if again[0].Headers["X-Test"] != "value-1" {
+		t.Fatalf("expected GetWebhooks to return defensive copies, got %q", again[0].Headers["X-Test"])
+	}
+	if again[0].CustomFields["severity"] != "critical" {
+		t.Fatalf("expected GetWebhooks to return defensive copies, got %q", again[0].CustomFields["severity"])
+	}
+}
+
+func TestSendGroupedAlertsQueueEnqueueFailureDoesNotDeadlock(t *testing.T) {
+	origSpawn := spawnAsync
+	spawnAsync = func(func()) {}
+	t.Cleanup(func() { spawnAsync = origSpawn })
+
+	nm := NewNotificationManager("")
+	defer nm.Stop()
+	nm.SetGroupingWindow(3600)
+	nm.SetCooldown(0)
+	nm.SetEmailConfig(EmailConfig{
+		Enabled:  true,
+		SMTPHost: "localhost",
+		SMTPPort: 25,
+		From:     "alerts@example.com",
+		To:       []string{"ops@example.com"},
+	})
+
+	queue := nm.GetQueue()
+	if queue == nil {
+		t.Skip("queue unavailable in this environment")
+	}
+	if err := queue.Stop(); err != nil {
+		t.Fatalf("failed to stop queue before enqueue fallback test: %v", err)
+	}
+
+	alert := &alerts.Alert{
+		ID:           "deadlock-check",
+		Type:         "cpu",
+		Level:        alerts.AlertLevelCritical,
+		ResourceID:   "resource-1",
+		ResourceName: "resource-1",
+		Node:         "node-1",
+		Instance:     "instance-1",
+		Message:      "cpu threshold crossed",
+		Value:        95,
+		Threshold:    90,
+		StartTime:    time.Now(),
+	}
+	nm.SendAlert(alert)
+
+	done := make(chan struct{})
+	go func() {
+		nm.sendGroupedAlerts()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("sendGroupedAlerts deadlocked when queue enqueue failed")
+	}
+
+	nm.mu.RLock()
+	_, notified := nm.lastNotified[alert.ID]
+	nm.mu.RUnlock()
+	if !notified {
+		t.Fatal("expected cooldown record to be marked for fallback direct send")
+	}
+}
+
+func TestNotificationManagerStopIdempotentConcurrent(t *testing.T) {
+	nm := NewNotificationManager("")
+
+	const callers = 16
+	var wg sync.WaitGroup
+	wg.Add(callers)
+
+	panicCh := make(chan interface{}, callers)
+	for i := 0; i < callers; i++ {
+		go func() {
+			defer wg.Done()
+			defer func() {
+				if r := recover(); r != nil {
+					panicCh <- r
+				}
+			}()
+			nm.Stop()
+		}()
+	}
+
+	wg.Wait()
+	close(panicCh)
+
+	if len(panicCh) > 0 {
+		t.Fatalf("Stop panicked under concurrent calls: %v", <-panicCh)
+	}
+}

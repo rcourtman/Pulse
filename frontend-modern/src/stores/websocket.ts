@@ -173,6 +173,11 @@ export function createWebSocketStore(url: string) {
 
   let alertsEnabled = isAlertsActivationEnabled();
   let lastActiveAlertsPayload: Record<string, Alert> = {};
+  const handleAlertsActivation = (event: Event) => {
+    const detail = (event as CustomEvent<ActivationStateType | null>).detail;
+    alertsEnabled = detail === 'active';
+    applyActiveAlerts(alertsEnabled ? lastActiveAlertsPayload : {});
+  };
 
   const applyActiveAlerts = (alertsMap: Record<string, Alert>) => {
     // Remove alerts that no longer exist
@@ -226,13 +231,17 @@ export function createWebSocketStore(url: string) {
   };
 
   if (typeof window !== 'undefined') {
-    window.addEventListener(ALERTS_ACTIVATION_EVENT, handleAlertsActivationEvent, { passive: true });
+    window.addEventListener(
+      ALERTS_ACTIVATION_EVENT,
+      handleAlertsActivation,
+      { passive: true },
+    );
   }
 
   let ws: WebSocket | null = null;
-  let reconnectTimeout = 0;
-  let heartbeatInterval = 0;
-  let connectDelayTimeout = 0;
+  let connectDelayTimeout: number;
+  let reconnectTimeout: number;
+  let heartbeatInterval: number;
   let reconnectAttempt = 0;
   let isReconnecting = false;
   let isDisposed = false;
@@ -290,9 +299,12 @@ export function createWebSocketStore(url: string) {
       // Add a small delay before reconnecting to avoid rapid reconnect loops
       if (reconnectAttempt > 0) {
         const delay = Math.min(100 * reconnectAttempt, 1000);
+        if (connectDelayTimeout) {
+          window.clearTimeout(connectDelayTimeout);
+          connectDelayTimeout = 0;
+        }
         connectDelayTimeout = window.setTimeout(() => {
           connectDelayTimeout = 0;
-          if (isDisposed) return;
           ws = new WebSocket(wsUrl);
           setupWebSocket();
         }, delay);
@@ -717,12 +729,12 @@ export function createWebSocketStore(url: string) {
 
   // Cleanup on unmount
   onCleanup(() => {
-    isDisposed = true;
-    clearConnectDelayTimeout();
-    clearReconnectTimer();
-    clearHeartbeatTimer();
-    isReconnecting = false;
-    window.removeEventListener(ALERTS_ACTIVATION_EVENT, handleAlertsActivationEvent);
+    window.clearTimeout(connectDelayTimeout);
+    window.clearTimeout(reconnectTimeout);
+    window.clearInterval(heartbeatInterval);
+    if (typeof window !== 'undefined') {
+      window.removeEventListener(ALERTS_ACTIVATION_EVENT, handleAlertsActivation);
+    }
     if (ws) {
       ws.close(1000, 'Component unmounting');
       ws = null;
@@ -753,10 +765,9 @@ export function createWebSocketStore(url: string) {
     initialDataReceived,
     updateProgress,
     reconnect: () => {
-      ws?.close(1000, 'Reconnecting');
-      clearConnectDelayTimeout();
-      clearReconnectTimer();
-      clearHeartbeatTimer();
+      ws?.close();
+      window.clearTimeout(connectDelayTimeout);
+      window.clearTimeout(reconnectTimeout);
       reconnectAttempt = 0; // Reset attempts for manual reconnect
       isReconnecting = false;
       setReconnecting(false);
@@ -778,9 +789,8 @@ export function createWebSocketStore(url: string) {
         setRecentlyResolved(reconcile({}));
       });
 
-      clearReconnectTimer();
-      clearHeartbeatTimer();
-      clearConnectDelayTimeout();
+      window.clearTimeout(connectDelayTimeout);
+      window.clearTimeout(reconnectTimeout);
       reconnectAttempt = 0;
       isReconnecting = false;
       ws?.close(1000, 'Reconnecting');

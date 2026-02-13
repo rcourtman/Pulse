@@ -53,9 +53,8 @@ func InitRecoveryTokenStore(dataPath string) {
 
 // GetRecoveryTokenStore returns the global recovery token store
 func GetRecoveryTokenStore() *RecoveryTokenStore {
-	if recoveryStore == nil {
-		InitRecoveryTokenStore("/etc/pulse")
-	}
+	// Always route through sync.Once to avoid unsynchronized reads on recoveryStore.
+	InitRecoveryTokenStore("/etc/pulse")
 	return recoveryStore
 }
 
