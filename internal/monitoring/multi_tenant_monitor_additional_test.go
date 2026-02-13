@@ -71,3 +71,27 @@ func TestMultiTenantMonitorGetMonitor_MetricsIsolationByTenant(t *testing.T) {
 		t.Fatalf("expected org-b cpu series to remain empty, got %d points", len(bMetrics["cpu"]))
 	}
 }
+
+func TestMultiTenantMonitorGetMonitorRejectsEmptyOrgID(t *testing.T) {
+	mtm := &MultiTenantMonitor{}
+	if _, err := mtm.GetMonitor("   "); err == nil {
+		t.Fatal("expected error for empty org ID")
+	}
+}
+
+func TestMultiTenantMonitorPeekMonitorTrimsOrgID(t *testing.T) {
+	expected := &Monitor{}
+	mtm := &MultiTenantMonitor{
+		monitors: map[string]*Monitor{
+			"org-a": expected,
+		},
+	}
+
+	got, ok := mtm.PeekMonitor("  org-a  ")
+	if !ok {
+		t.Fatal("expected trimmed org ID lookup to succeed")
+	}
+	if got != expected {
+		t.Fatalf("expected same monitor pointer, got %p want %p", got, expected)
+	}
+}

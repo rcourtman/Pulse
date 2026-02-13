@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChartData, TimeRange } from '@/api/charts';
+import { setOrgID } from '@/utils/apiClient';
 import {
   __resetInfrastructureSummaryFetchesForTests,
   extractInfrastructureSummaryChartMapFromInfrastructureResponse,
@@ -52,12 +53,14 @@ const makeMetricSeries = (count: number, start = Date.now() - count * 30_000) =>
     value: i % 100,
   }));
 
-const cacheKeyForRange = (range: TimeRange) => `pulse.infrastructureSummaryCharts.${range}`;
+const cacheKeyForRange = (range: TimeRange, orgScope = 'default') =>
+  `pulse.infrastructureSummaryCharts.${encodeURIComponent(orgScope)}::${range}`;
 
 describe('infrastructureSummaryCache fetch dedupe', () => {
   beforeEach(() => {
     mockGetCharts.mockReset();
     __resetInfrastructureSummaryFetchesForTests();
+    setOrgID('default');
     localStorage.clear();
   });
 
@@ -141,6 +144,7 @@ describe('infrastructureSummaryCache fetch dedupe', () => {
 
 describe('infrastructureSummaryCache persistence', () => {
   beforeEach(() => {
+    setOrgID('default');
     localStorage.clear();
   });
 
@@ -248,5 +252,53 @@ describe('infrastructureSummaryCache persistence', () => {
 
     persistInfrastructureSummaryCache('1h', oversizedMap, null);
     expect(localStorage.getItem(cacheKeyForRange('1h'))).toBeNull();
+  });
+
+  it('keeps cache entries isolated per org scope', () => {
+    const now = Date.now();
+
+    setOrgID('org-a');
+    persistInfrastructureSummaryCache(
+      '1h',
+      new Map([
+        [
+          'node-a',
+          {
+            cpu: makeMetricSeries(2, now - 60_000),
+            memory: makeMetricSeries(2, now - 60_000),
+            disk: makeMetricSeries(2, now - 60_000),
+            netin: makeMetricSeries(2, now - 60_000),
+            netout: makeMetricSeries(2, now - 60_000),
+          },
+        ],
+      ]),
+      now - 60_000,
+    );
+
+    setOrgID('org-b');
+    persistInfrastructureSummaryCache(
+      '1h',
+      new Map([
+        [
+          'node-b',
+          {
+            cpu: makeMetricSeries(2, now - 60_000),
+            memory: makeMetricSeries(2, now - 60_000),
+            disk: makeMetricSeries(2, now - 60_000),
+            netin: makeMetricSeries(2, now - 60_000),
+            netout: makeMetricSeries(2, now - 60_000),
+          },
+        ],
+      ]),
+      now - 60_000,
+    );
+
+    expect(readInfrastructureSummaryCache('1h')?.map.get('node-b')).toBeDefined();
+    expect(readInfrastructureSummaryCache('1h')?.map.get('node-a')).toBeUndefined();
+
+    expect(readInfrastructureSummaryCache('1h', undefined, 'org-a')?.map.get('node-a')).toBeDefined();
+    expect(readInfrastructureSummaryCache('1h', undefined, 'org-a')?.map.get('node-b')).toBeUndefined();
+    expect(localStorage.getItem(cacheKeyForRange('1h', 'org-a'))).not.toBeNull();
+    expect(localStorage.getItem(cacheKeyForRange('1h', 'org-b'))).not.toBeNull();
   });
 });

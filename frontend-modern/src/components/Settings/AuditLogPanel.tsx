@@ -17,6 +17,7 @@ import {
     createLocalStorageStringSignal,
     STORAGE_KEYS,
 } from '@/utils/localStorage';
+import { apiFetch } from '@/utils/apiClient';
 import { showSuccess, showWarning, showToast } from '@/utils/toast';
 import { getUpgradeActionUrlOrFallback, hasFeature, loadLicenseStatus, licenseLoaded } from '@/stores/license';
 import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/conversionEvents';
@@ -130,7 +131,11 @@ export default function AuditLogPanel() {
             if (successFilter() === 'success') params.set('success', 'true');
             if (successFilter() === 'failed') params.set('success', 'false');
 
-            const data = await apiFetchJSON<AuditResponse>(`/api/audit?${params.toString()}`);
+            const response = await apiFetch(`/api/audit?${params.toString()}`);
+            if (!response.ok) {
+                throw new Error(`Failed to fetch audit events: ${response.statusText}`);
+            }
+            const data: AuditResponse = await response.json();
             setEvents(data.events || []);
             setIsPersistent(data.persistentLogging);
             setTotalEvents(data.total ?? 0);
@@ -168,9 +173,11 @@ export default function AuditLogPanel() {
             if (!isMounted()) {
                 controller.abort();
             }
-            const data = await apiFetchJSON<VerifyResponse>(`/api/audit/${event.id}/verify`, {
-                signal: controller.signal,
-            });
+            const response = await apiFetch(`/api/audit/${event.id}/verify`, { signal: controller.signal });
+            if (!response.ok) {
+                throw new Error(`Failed to verify signature: ${response.statusText}`);
+            }
+            const data: VerifyResponse = await response.json();
             let status: VerificationState['status'] = 'unavailable';
             if (!data.available) {
                 status = 'unavailable';

@@ -24,7 +24,9 @@ import { useColumnVisibility } from '@/hooks/useColumnVisibility';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { useWorkloads } from '@/hooks/useWorkloads';
 import { STORAGE_KEYS } from '@/utils/localStorage';
+import { getOrgID } from '@/utils/apiClient';
 import { aiChatStore } from '@/stores/aiChat';
+import { eventBus } from '@/stores/events';
 import { isKioskMode, subscribeToKioskMode } from '@/utils/url';
 import { getCanonicalWorkloadId, resolveWorkloadType } from '@/utils/workloads';
 import {
@@ -72,10 +74,22 @@ type IdleCapableWindow = Window & {
 };
 
 let cachedGuestMetadata: GuestMetadataRecord | null = null;
+let cachedGuestMetadataStorageKey: string | null = null;
 let lastPersistedGuestMetadataJSON: string | null = null;
+let lastPersistedGuestMetadataStorageKey: string | null = null;
 let pendingPersistMetadata: GuestMetadataRecord | null = null;
+let pendingPersistStorageKey: string | null = null;
 let persistHandle: number | null = null;
 let persistHandleType: 'idle' | 'timeout' | null = null;
+const DEFAULT_ORG_SCOPE = 'default';
+
+const normalizeOrgScope = (orgID?: string | null): string => {
+  const normalized = (orgID || '').trim();
+  return normalized || DEFAULT_ORG_SCOPE;
+};
+
+const guestMetadataStorageKeyForOrg = (orgScope: string): string =>
+  `${STORAGE_KEYS.GUEST_METADATA}.${encodeURIComponent(orgScope)}`;
 
 const instrumentationEnabled = import.meta.env.DEV && typeof performance !== 'undefined';
 const DASHBOARD_TABLE_ESTIMATED_ROW_HEIGHT = 40;
@@ -89,27 +103,32 @@ const workloadMetricPercent = (value: number | null | undefined): number => {
 const workloadSummaryGuestId = (guest: WorkloadGuest): string =>
   getCanonicalWorkloadId(guest);
 
-const readGuestMetadataCache = (): GuestMetadataRecord => {
-  if (cachedGuestMetadata) {
+const readGuestMetadataCache = (storageKey: string): GuestMetadataRecord => {
+  if (cachedGuestMetadata && cachedGuestMetadataStorageKey === storageKey) {
     return cachedGuestMetadata;
   }
 
   if (typeof window === 'undefined') {
     cachedGuestMetadata = {};
+    cachedGuestMetadataStorageKey = storageKey;
     return cachedGuestMetadata;
   }
 
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEYS.GUEST_METADATA);
+    const raw = window.localStorage.getItem(storageKey);
     if (!raw) {
       cachedGuestMetadata = {};
+      cachedGuestMetadataStorageKey = storageKey;
       lastPersistedGuestMetadataJSON = null;
+      lastPersistedGuestMetadataStorageKey = storageKey;
       return cachedGuestMetadata;
     }
     const parsed = JSON.parse(raw);
     if (parsed && typeof parsed === 'object') {
       cachedGuestMetadata = parsed as GuestMetadataRecord;
+      cachedGuestMetadataStorageKey = storageKey;
       lastPersistedGuestMetadataJSON = raw;
+      lastPersistedGuestMetadataStorageKey = storageKey;
       return cachedGuestMetadata;
     }
   } catch (err) {
@@ -117,7 +136,9 @@ const readGuestMetadataCache = (): GuestMetadataRecord => {
   }
 
   cachedGuestMetadata = {};
+  cachedGuestMetadataStorageKey = storageKey;
   lastPersistedGuestMetadataJSON = null;
+  lastPersistedGuestMetadataStorageKey = storageKey;
   return cachedGuestMetadata;
 };
 
@@ -137,13 +158,16 @@ const clearPendingPersistHandle = (idleWindow: IdleCapableWindow) => {
 };
 
 const runGuestMetadataPersist = () => {
-  if (typeof window === 'undefined' || !pendingPersistMetadata) {
+  if (typeof window === 'undefined' || !pendingPersistMetadata || !pendingPersistStorageKey) {
     pendingPersistMetadata = null;
+    pendingPersistStorageKey = null;
     return;
   }
 
   const metadata = pendingPersistMetadata;
+  const storageKey = pendingPersistStorageKey;
   pendingPersistMetadata = null;
+  pendingPersistStorageKey = null;
 
   const markBase = instrumentationEnabled ? `guest-metadata:persist:${Date.now()}` : null;
   if (markBase) {
@@ -165,7 +189,10 @@ const runGuestMetadataPersist = () => {
     return;
   }
 
-  if (serialized === lastPersistedGuestMetadataJSON) {
+  if (
+    serialized === lastPersistedGuestMetadataJSON &&
+    storageKey === lastPersistedGuestMetadataStorageKey
+  ) {
     if (markBase) {
       performance.mark(`${markBase}:end`);
       performance.measure(markBase, `${markBase}:start`, `${markBase}:end`);
@@ -184,8 +211,9 @@ const runGuestMetadataPersist = () => {
   }
 
   try {
-    window.localStorage.setItem(STORAGE_KEYS.GUEST_METADATA, serialized);
+    window.localStorage.setItem(storageKey, serialized);
     lastPersistedGuestMetadataJSON = serialized;
+    lastPersistedGuestMetadataStorageKey = storageKey;
     if (markBase) {
       performance.mark(`${markBase}:end`);
       performance.measure(markBase, `${markBase}:start`, `${markBase}:end`);
@@ -213,14 +241,16 @@ const runGuestMetadataPersist = () => {
   }
 };
 
-const queueGuestMetadataPersist = (metadata: GuestMetadataRecord) => {
+const queueGuestMetadataPersist = (storageKey: string, metadata: GuestMetadataRecord) => {
   cachedGuestMetadata = metadata;
+  cachedGuestMetadataStorageKey = storageKey;
 
   if (typeof window === 'undefined') {
     return;
   }
 
   pendingPersistMetadata = metadata;
+  pendingPersistStorageKey = storageKey;
   const idleWindow = window as IdleCapableWindow;
 
   clearPendingPersistHandle(idleWindow);
@@ -345,9 +375,16 @@ export function Dashboard(props: DashboardProps) {
       if (scroller) scroller.scrollTop = scrollTop;
     });
   };
+  const [orgScope, setOrgScope] = createSignal(normalizeOrgScope(getOrgID()));
+  const guestMetadataStorageKey = createMemo(() => guestMetadataStorageKeyForOrg(orgScope()));
   const [guestMetadata, setGuestMetadata] = createSignal<GuestMetadataRecord>(
-    readGuestMetadataCache(),
+    readGuestMetadataCache(guestMetadataStorageKey()),
   );
+
+  createEffect(() => {
+    const storageKey = guestMetadataStorageKey();
+    setGuestMetadata(readGuestMetadataCache(storageKey));
+  });
 
   const updateGuestMetadataState = (updater: (prev: GuestMetadataRecord) => GuestMetadataRecord) =>
     setGuestMetadata((prev) => {
@@ -355,7 +392,7 @@ export function Dashboard(props: DashboardProps) {
       if (next === prev) {
         return prev;
       }
-      queueGuestMetadataPersist(next);
+      queueGuestMetadataPersist(guestMetadataStorageKey(), next);
       return next;
     });
 
@@ -621,8 +658,8 @@ export function Dashboard(props: DashboardProps) {
   };
 
   // Load all guest metadata on mount (single API call for all guests)
-  onMount(async () => {
-    await refreshGuestMetadata();
+  onMount(() => {
+    void refreshGuestMetadata();
 
     // Listen for metadata changes from AI or other sources
     const handleMetadataChanged = (event: Event) => {
@@ -660,9 +697,15 @@ export function Dashboard(props: DashboardProps) {
 
     logger.debug('[Dashboard] Adding pulse:metadata-changed listener');
     window.addEventListener('pulse:metadata-changed', handleMetadataChanged);
+    const unsubscribeOrgSwitched = eventBus.on('org_switched', (nextOrgID) => {
+      setOrgScope(normalizeOrgScope(nextOrgID));
+      void refreshGuestMetadata();
+    });
 
-    // Note: SolidJS onMount doesn't support cleanup return, so we rely on component unmount
-    // In practice, Dashboard is always mounted so this is fine
+    onCleanup(() => {
+      window.removeEventListener('pulse:metadata-changed', handleMetadataChanged);
+      unsubscribeOrgSwitched();
+    });
   });
 
   let lastConnected = connected();

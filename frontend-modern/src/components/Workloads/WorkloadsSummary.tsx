@@ -15,6 +15,8 @@ import {
   SUMMARY_TIME_RANGES,
   SUMMARY_TIME_RANGE_LABEL,
 } from '@/components/shared/summaryTimeRange';
+import { getOrgID } from '@/utils/apiClient';
+import { eventBus } from '@/stores/events';
 
 interface WorkloadsSummaryProps {
   timeRange?: TimeRange;
@@ -90,6 +92,7 @@ const WORKLOAD_COLORS = [
 ];
 
 const WORKLOADS_SUMMARY_CACHE_PREFIX = 'pulse.workloadsSummaryCharts.';
+const DEFAULT_ORG_SCOPE = 'default';
 const WORKLOADS_SUMMARY_CACHE_VERSION = 2;
 const WORKLOADS_SUMMARY_CACHE_MAX_AGE_MS = 5 * 60_000;
 const WORKLOADS_SUMMARY_CACHE_MAX_POINTS_PER_SERIES = 360;
@@ -111,8 +114,13 @@ interface CachedWorkloadsSummary {
   dockerData: Record<string, CachedChartData>;
 }
 
-const cacheKeyFor = (range: TimeRange, nodeScope: string) =>
-  `${WORKLOADS_SUMMARY_CACHE_PREFIX}${range}::${encodeURIComponent(nodeScope || '__all__')}`;
+const normalizeOrgScope = (orgID?: string | null): string => {
+  const normalized = (orgID || '').trim();
+  return normalized || DEFAULT_ORG_SCOPE;
+};
+
+const cacheKeyFor = (range: TimeRange, nodeScope: string, orgScope: string) =>
+  `${WORKLOADS_SUMMARY_CACHE_PREFIX}${encodeURIComponent(orgScope)}::${range}::${encodeURIComponent(nodeScope || '__all__')}`;
 
 const trimPoints = <T,>(points: T[] | undefined, max: number): T[] => {
   if (!points || points.length === 0) return [];
@@ -145,6 +153,7 @@ const toCachedChartData = (data: ChartData): CachedChartData => ({
 const persistWorkloadsSummaryCache = (
   range: TimeRange,
   nodeScope: string,
+  orgScope: string,
   response: WorkloadChartsResponse,
 ): void => {
   if (typeof window === 'undefined') return;
@@ -168,10 +177,10 @@ const persistWorkloadsSummaryCache = (
     };
     const serialized = JSON.stringify(payload);
     if (serialized.length > WORKLOADS_SUMMARY_CACHE_MAX_CHARS) {
-      window.localStorage.removeItem(cacheKeyFor(range, nodeScope));
+      window.localStorage.removeItem(cacheKeyFor(range, nodeScope, orgScope));
       return;
     }
-    window.localStorage.setItem(cacheKeyFor(range, nodeScope), serialized);
+    window.localStorage.setItem(cacheKeyFor(range, nodeScope, orgScope), serialized);
   } catch {
     // Ignore cache write failures.
   }
@@ -180,10 +189,11 @@ const persistWorkloadsSummaryCache = (
 const readWorkloadsSummaryCache = (
   range: TimeRange,
   nodeScope: string,
+  orgScope: string,
 ): WorkloadChartsResponse | null => {
   if (typeof window === 'undefined') return null;
   try {
-    const raw = window.localStorage.getItem(cacheKeyFor(range, nodeScope));
+    const raw = window.localStorage.getItem(cacheKeyFor(range, nodeScope, orgScope));
     if (!raw) return null;
 
     const parsed = JSON.parse(raw) as CachedWorkloadsSummary;
@@ -196,7 +206,7 @@ const readWorkloadsSummaryCache = (
       return null;
     }
     if (Date.now() - parsed.cachedAt > WORKLOADS_SUMMARY_CACHE_MAX_AGE_MS) {
-      window.localStorage.removeItem(cacheKeyFor(range, nodeScope));
+      window.localStorage.removeItem(cacheKeyFor(range, nodeScope, orgScope));
       return null;
     }
 
@@ -370,12 +380,13 @@ const buildWorkloadSeriesFromCharts = (
 };
 
 export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
-  const [charts, setCharts] = createSignal<WorkloadChartsResponse | null>(lastWorkloadsSummaryCharts);
-  const [loadedScopeKey, setLoadedScopeKey] = createSignal<string | null>(lastWorkloadsSummaryScopeKey);
+  const [charts, setCharts] = createSignal<WorkloadChartsResponse | null>(null);
+  const [loadedScopeKey, setLoadedScopeKey] = createSignal<string | null>(null);
   const [fetchFailed, setFetchFailed] = createSignal(false);
+  const [orgScope, setOrgScope] = createSignal(normalizeOrgScope(getOrgID()));
   const selectedRange = createMemo<TimeRange>(() => props.timeRange || '1h');
   const selectedNodeScope = createMemo(() => props.selectedNodeId?.trim() || '');
-  const activeScopeKey = createMemo(() => `${selectedRange()}::${selectedNodeScope()}`);
+  const activeScopeKey = createMemo(() => `${orgScope()}::${selectedRange()}::${selectedNodeScope()}`);
   const hasCurrentRangeData = createMemo(() => loadedScopeKey() === activeScopeKey());
 
   let refreshTimer: ReturnType<typeof setTimeout> | undefined;
@@ -408,6 +419,7 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
 
     const range = selectedRange();
     const nodeId = selectedNodeScope() || undefined;
+    const currentOrgScope = orgScope();
     const scopeKey = activeScopeKey();
     const controller = new AbortController();
     activeFetchController = controller;
@@ -418,7 +430,7 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
         maxPoints: workloadPointLimit(),
       });
       if (activeFetchController !== controller) return;
-      persistWorkloadsSummaryCache(range, selectedNodeScope(), response);
+      persistWorkloadsSummaryCache(range, selectedNodeScope(), currentOrgScope, response);
       setCharts(response);
       setLoadedScopeKey(scopeKey);
       lastWorkloadsSummaryCharts = response;
@@ -443,21 +455,29 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
     const scopeKey = activeScopeKey();
     const range = selectedRange();
     const nodeScope = selectedNodeScope();
+    const currentOrgScope = orgScope();
     const token = ++pollingToken;
 
     clearRefreshTimer();
-    const cached = readWorkloadsSummaryCache(range, nodeScope);
+    const cached = readWorkloadsSummaryCache(range, nodeScope, currentOrgScope);
     if (cached) {
       setCharts(cached);
       setLoadedScopeKey(scopeKey);
       lastWorkloadsSummaryCharts = cached;
       lastWorkloadsSummaryScopeKey = scopeKey;
-    } else if (lastWorkloadsSummaryCharts) {
+    } else if (lastWorkloadsSummaryCharts && lastWorkloadsSummaryScopeKey === scopeKey) {
       setCharts(lastWorkloadsSummaryCharts);
       setLoadedScopeKey(lastWorkloadsSummaryScopeKey);
+    } else {
+      setCharts(null);
+      setLoadedScopeKey(null);
     }
     setFetchFailed(false);
     void fetchCharts({ prioritize: true }).finally(() => scheduleNextFetch(token));
+  });
+
+  const unsubscribeOrgSwitch = eventBus.on('org_switched', (nextOrgID) => {
+    setOrgScope(normalizeOrgScope(nextOrgID));
   });
 
   createEffect(() => {
@@ -491,6 +511,7 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
   onCleanup(() => {
     clearRefreshTimer();
     if (activeFetchController) activeFetchController.abort();
+    unsubscribeOrgSwitch();
   });
 
   const guestCounts = createMemo(() => {

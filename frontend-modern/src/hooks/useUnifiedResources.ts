@@ -15,6 +15,7 @@ const UNIFIED_RESOURCES_MAX_PAGES = 20;
 const UNIFIED_RESOURCES_CACHE_MAX_AGE_MS = 15_000;
 const UNIFIED_RESOURCES_WS_DEBOUNCE_MS = 800;
 const UNIFIED_RESOURCES_WS_MIN_REFETCH_INTERVAL_MS = 2_500;
+const DEFAULT_ORG_SCOPE = 'default';
 
 type APIMetricValue = {
   value?: number;
@@ -182,14 +183,15 @@ type UnifiedResourcesCacheEntry = {
 
 const unifiedResourcesCaches = new Map<string, UnifiedResourcesCacheEntry>();
 
-const sanitizeSources = (sources: unknown): string[] => {
-  if (!Array.isArray(sources)) {
-    return [];
-  }
-  return sources.filter((source): source is string => typeof source === 'string');
+const normalizeOrgScope = (orgID?: string | null): string => {
+  const normalized = (orgID || '').trim();
+  return normalized || DEFAULT_ORG_SCOPE;
 };
 
-const readSourceFlags = (sources: string[]): SourceFlags => {
+const buildScopedUnifiedResourcesCacheKey = (cacheKey: string, orgScope: string): string =>
+  `${encodeURIComponent(orgScope)}::${cacheKey}`;
+
+const readSourceFlags = (sources: string[] | undefined): SourceFlags => {
   const flags: SourceFlags = {
     hasAgent: false,
     hasProxmox: false,
@@ -568,7 +570,9 @@ type UseUnifiedResourcesOptions = {
 export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
   const query = normalizeUnifiedResourcesQuery(options?.query ?? DEFAULT_UNIFIED_RESOURCES_QUERY);
   const cacheKey = (options?.cacheKey || query || 'all').trim();
-  const cacheEntry = getUnifiedResourcesCacheEntry(cacheKey);
+  const [orgScope, setOrgScope] = createSignal(normalizeOrgScope(getOrgID()));
+  const resolveScopedCacheKey = () => buildScopedUnifiedResourcesCacheKey(cacheKey, orgScope());
+  let cacheEntry = getUnifiedResourcesCacheEntry(resolveScopedCacheKey());
   const initialResources = cacheEntry.resources;
   const hasCachedResources = initialResources.length > 0;
 
@@ -580,9 +584,13 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
   let inFlightRefetch: Promise<Resource[]> | null = null;
   let wsInitialized = false;
   let lastWsUpdateToken = '';
+  let scopeVersion = 0;
 
-  const applyResources = (next: Resource[]) => {
-    setUnifiedResourcesCache(cacheEntry, next);
+  const applyResources = (next: Resource[], targetEntry: UnifiedResourcesCacheEntry = cacheEntry) => {
+    setUnifiedResourcesCache(targetEntry, next);
+    if (targetEntry !== cacheEntry) {
+      return;
+    }
     setResources(reconcile(next, { key: 'id' }));
   };
 
@@ -604,11 +612,16 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
       setLoading(true);
     }
 
+    const requestVersion = scopeVersion;
+    const entryForRequest = cacheEntry;
     const request = (async () => {
       try {
-        const fetched = await fetchUnifiedResourcesShared(cacheEntry, query, shouldForceNetwork);
+        const fetched = await fetchUnifiedResourcesShared(entryForRequest, query, shouldForceNetwork);
+        if (requestVersion !== scopeVersion || entryForRequest !== cacheEntry) {
+          return resources as unknown as Resource[];
+        }
         batch(() => {
-          applyResources(fetched);
+          applyResources(fetched, entryForRequest);
           setError(undefined);
         });
         return fetched;
@@ -661,6 +674,8 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
   };
 
   createEffect(() => {
+    orgScope();
+
     if (!wsStore.connected() || !wsStore.initialDataReceived()) {
       wsInitialized = false;
       lastWsUpdateToken = '';
@@ -684,7 +699,33 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
     scheduleRefetch();
   });
 
+  const unsubscribeOrgSwitch = eventBus.on('org_switched', (nextOrgID) => {
+    const nextOrgScope = normalizeOrgScope(nextOrgID);
+    if (nextOrgScope === orgScope()) {
+      return;
+    }
+
+    scopeVersion += 1;
+    setOrgScope(nextOrgScope);
+    cacheEntry = getUnifiedResourcesCacheEntry(resolveScopedCacheKey());
+    inFlightRefetch = null;
+    wsInitialized = false;
+    lastWsUpdateToken = '';
+
+    const scopedResources = cacheEntry.resources;
+    batch(() => {
+      setError(undefined);
+      setResources(reconcile(scopedResources, { key: 'id' }));
+      setLoading(scopedResources.length === 0);
+    });
+
+    if (!hasFreshUnifiedResourcesCache(cacheEntry)) {
+      void runRefetch({ force: true, source: 'initial' }).catch(() => undefined);
+    }
+  });
+
   onCleanup(() => {
+    unsubscribeOrgSwitch();
     if (refreshHandle !== undefined) {
       clearTimeout(refreshHandle);
     }

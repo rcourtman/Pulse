@@ -34,7 +34,6 @@ type WebhookDelivery struct {
 	stopChan chan struct{}
 	stopOnce sync.Once
 	wg       sync.WaitGroup
-	stopOnce sync.Once
 }
 
 // WebhookPayload is the JSON payload sent to webhooks.

@@ -78,29 +78,16 @@ func (p *AgentProfile) MergedConfig(profiles []AgentProfile) AgentConfigMap {
 	return p.mergedConfig(profiles, map[string]struct{}{})
 }
 
-func (p *AgentProfile) mergedConfig(profiles []AgentProfile, visited map[string]struct{}) AgentConfigMap {
-	if p.ParentID == "" {
-		return p.Config
-	}
-
-	if p.ID != "" {
-		if _, seen := visited[p.ID]; seen {
-			// Cycle in inheritance chain; stop walking parents and use local config.
-			return p.Config
-		}
-		visited[p.ID] = struct{}{}
-		defer delete(visited, p.ID)
-	}
-
-	// Find parent profile
-	var parent *AgentProfile
+func (p *AgentProfile) mergedConfig(profiles []AgentProfile, _ map[string]struct{}) AgentConfigMap {
+	// Build lookup map for parent resolution
+	byID := make(map[string]*AgentProfile, len(profiles))
 	for i := range profiles {
-		if profiles[i].ID == "" {
-			continue
+		if profiles[i].ID != "" {
+			byID[profiles[i].ID] = &profiles[i]
 		}
-		byID[profiles[i].ID] = &profiles[i]
 	}
 
+	// Walk the inheritance chain collecting configs from root to leaf
 	chain := make([]*AgentProfile, 0, maxProfileInheritanceDepth)
 	visited := make(map[string]struct{}, maxProfileInheritanceDepth)
 	current := p
@@ -109,6 +96,10 @@ func (p *AgentProfile) mergedConfig(profiles []AgentProfile, visited map[string]
 		chain = append(chain, current)
 
 		if current.ID != "" {
+			if _, seen := visited[current.ID]; seen {
+				// Cycle detected; stop walking.
+				break
+			}
 			visited[current.ID] = struct{}{}
 		}
 
@@ -122,21 +113,10 @@ func (p *AgentProfile) mergedConfig(profiles []AgentProfile, visited map[string]
 			break
 		}
 
-		if _, seen := visited[parent.ID]; seen {
-			break
-		}
-
 		current = parent
 	}
 
-	if parent == nil {
-		return p.Config
-	}
-
-	// Get parent's merged config (recursive)
-	parentConfig := parent.mergedConfig(profiles, visited)
-
-	// Merge: start with parent config, override with current
+	// Merge: apply from root (end of chain) to leaf (start), so child overrides parent
 	merged := make(AgentConfigMap)
 	for i := len(chain) - 1; i >= 0; i-- {
 		for k, v := range chain[i].Config {

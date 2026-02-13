@@ -132,15 +132,10 @@ func (r *APITokenRecord) Clone() APITokenRecord {
 // - Token has no org binding (legacy wildcard access)
 // - Token's OrgID matches the requested orgID
 // - Token's OrgIDs contains the requested orgID
-// - Requested orgID is "default" (backward compatibility)
+// - Requested orgID is "default" and token is explicitly bound to "default"
 func (r *APITokenRecord) CanAccessOrg(orgID string) bool {
 	// Legacy tokens (no org binding) have wildcard access during migration period
 	if r.OrgID == "" && len(r.OrgIDs) == 0 {
-		return true
-	}
-
-	// Default org is always accessible for backward compatibility
-	if orgID == "default" {
 		return true
 	}
 

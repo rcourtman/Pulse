@@ -705,17 +705,14 @@ func (h *Hub) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	// Extract org ID from request for tenant isolation
 	// Priority: Header > Cookie > Query param > Default
-	orgID := r.Header.Get("X-Pulse-Org-ID")
+	orgID := strings.TrimSpace(r.Header.Get("X-Pulse-Org-ID"))
 	if orgID == "" {
 		if cookie, err := r.Cookie("pulse_org_id"); err == nil {
-			orgID = cookie.Value
+			orgID = strings.TrimSpace(cookie.Value)
 		}
 	}
 	if orgID == "" {
-		orgID = r.URL.Query().Get("org_id")
-	}
-	if orgID == "" {
-		orgID = "default"
+		orgID = strings.TrimSpace(r.URL.Query().Get("org_id"))
 	}
 	if !isValidWebSocketOrgID(orgID) {
 		log.Warn().
@@ -840,6 +837,14 @@ func getUserFromContext(ctx context.Context) string {
 // getAPITokenFromContext extracts the API token from request context.
 func getAPITokenFromContext(ctx context.Context) interface{} {
 	return auth.GetAPIToken(ctx)
+}
+
+func normalizeOrgID(orgID string) string {
+	orgID = strings.TrimSpace(orgID)
+	if orgID == "" {
+		return "default"
+	}
+	return orgID
 }
 
 // dispatchToClients fan-outs a marshaled payload to all clients, dropping any that
@@ -1108,6 +1113,7 @@ func (h *Hub) prepareStateForBroadcast(state interface{}) interface{} {
 
 // GetTenantClientCount returns the number of connected clients for a specific tenant.
 func (h *Hub) GetTenantClientCount(orgID string) int {
+	orgID = normalizeOrgID(orgID)
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	if tenantClients := h.clientsByTenant[orgID]; tenantClients != nil {
@@ -1137,12 +1143,9 @@ func (h *Hub) BroadcastAlertResolved(alertID string) {
 }
 
 // BroadcastAlertToTenant broadcasts alert to clients of a specific tenant only.
-// If orgID is empty, falls back to global broadcast for single-tenant/legacy mode.
+// Empty org IDs are normalized to the default tenant.
 func (h *Hub) BroadcastAlertToTenant(orgID string, alert interface{}) {
-	if orgID == "" {
-		h.BroadcastAlert(alert)
-		return
-	}
+	orgID = normalizeOrgID(orgID)
 
 	log.Info().Str("org_id", orgID).Msg("broadcasting alert to tenant WebSocket clients")
 	msg := Message{
@@ -1169,12 +1172,9 @@ func (h *Hub) BroadcastAlertToTenant(orgID string, alert interface{}) {
 }
 
 // BroadcastAlertResolvedToTenant broadcasts alert resolution to clients of a specific tenant only.
-// If orgID is empty, falls back to global broadcast for single-tenant/legacy mode.
+// Empty org IDs are normalized to the default tenant.
 func (h *Hub) BroadcastAlertResolvedToTenant(orgID string, alertID string) {
-	if orgID == "" {
-		h.BroadcastAlertResolved(alertID)
-		return
-	}
+	orgID = normalizeOrgID(orgID)
 
 	log.Info().Str("org_id", orgID).Str("alertID", alertID).Msg("broadcasting alert resolved to tenant WebSocket clients")
 	msg := Message{

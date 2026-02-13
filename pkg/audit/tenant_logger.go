@@ -1,6 +1,7 @@
 package audit
 
 import (
+	"path"
 	"path/filepath"
 	"sync"
 	"time"
@@ -16,6 +17,16 @@ type TenantLoggerManager struct {
 	loggers  map[string]Logger
 	dataPath string        // Base data path
 	factory  LoggerFactory // Factory for creating tenant loggers
+}
+
+func isValidOrgID(orgID string) bool {
+	if orgID == "" || orgID == "." || orgID == ".." {
+		return false
+	}
+	if path.Clean(orgID) != orgID {
+		return false
+	}
+	return filepath.Base(orgID) == orgID
 }
 
 // LoggerFactory creates audit loggers for specific paths.
@@ -51,6 +62,10 @@ func (m *TenantLoggerManager) GetLogger(orgID string) Logger {
 	// Default org uses the global logger
 	if orgID == "" || orgID == "default" {
 		return GetLogger()
+	}
+	if !isValidOrgID(orgID) {
+		log.Warn().Str("org_id", orgID).Msg("Invalid organization ID for tenant audit logger; using console logger")
+		return NewConsoleLogger()
 	}
 
 	m.mu.RLock()

@@ -1,5 +1,6 @@
-import { createMemo, createResource, onCleanup, createEffect, type Accessor } from 'solid-js';
-import { apiFetchJSON } from '@/utils/apiClient';
+import { createMemo, createResource, onCleanup, createEffect, createSignal, type Accessor } from 'solid-js';
+import { apiFetchJSON, getOrgID } from '@/utils/apiClient';
+import { eventBus } from '@/stores/events';
 import type { WorkloadGuest, WorkloadType } from '@/types/workloads';
 import { logger } from '@/utils/logger';
 
@@ -7,6 +8,7 @@ const WORKLOADS_URL = '/api/resources?type=vm,lxc,docker_container,pod';
 const WORKLOADS_PAGE_LIMIT = 200;
 const WORKLOADS_MAX_PAGES = 20;
 const WORKLOADS_CACHE_MAX_AGE_MS = 15_000;
+const DEFAULT_ORG_SCOPE = 'default';
 
 type APIMetricValue = {
   value?: number;
@@ -112,9 +114,32 @@ type APIListResponse = {
   };
 };
 
-let cachedWorkloads: WorkloadGuest[] = [];
-let cachedWorkloadsAt = 0;
-let sharedFetchWorkloads: Promise<WorkloadGuest[]> | null = null;
+type WorkloadsCacheEntry = {
+  workloads: WorkloadGuest[];
+  cachedAt: number;
+  sharedFetch: Promise<WorkloadGuest[]> | null;
+};
+
+const workloadsCaches = new Map<string, WorkloadsCacheEntry>();
+
+const normalizeOrgScope = (orgID?: string | null): string => {
+  const normalized = (orgID || '').trim();
+  return normalized || DEFAULT_ORG_SCOPE;
+};
+
+const getWorkloadsCacheEntry = (orgScope: string): WorkloadsCacheEntry => {
+  const existing = workloadsCaches.get(orgScope);
+  if (existing) {
+    return existing;
+  }
+  const created: WorkloadsCacheEntry = {
+    workloads: [],
+    cachedAt: 0,
+    sharedFetch: null,
+  };
+  workloadsCaches.set(orgScope, created);
+  return created;
+};
 
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && Object.getPrototypeOf(value) === Object.prototype;
@@ -428,58 +453,59 @@ async function fetchWorkloads(): Promise<WorkloadGuest[]> {
 
 const DEFAULT_POLL_INTERVAL_MS = 5_000;
 
-const hasFreshWorkloadsCache = () =>
-  cachedWorkloads.length > 0 && Date.now() - cachedWorkloadsAt <= WORKLOADS_CACHE_MAX_AGE_MS;
+const hasFreshWorkloadsCache = (entry: WorkloadsCacheEntry) =>
+  entry.workloads.length > 0 && Date.now() - entry.cachedAt <= WORKLOADS_CACHE_MAX_AGE_MS;
 
-const setWorkloadsCache = (workloads: WorkloadGuest[], at = Date.now()) => {
-  cachedWorkloads = workloads;
-  cachedWorkloadsAt = at;
+const setWorkloadsCache = (entry: WorkloadsCacheEntry, workloads: WorkloadGuest[], at = Date.now()) => {
+  entry.workloads = workloads;
+  entry.cachedAt = at;
 };
 
-const fetchWorkloadsShared = async (force = false): Promise<WorkloadGuest[]> => {
-  if (!force && hasFreshWorkloadsCache()) {
-    return cachedWorkloads;
+const fetchWorkloadsShared = async (entry: WorkloadsCacheEntry, force = false): Promise<WorkloadGuest[]> => {
+  if (!force && hasFreshWorkloadsCache(entry)) {
+    return entry.workloads;
   }
 
-  if (sharedFetchWorkloads) {
-    return sharedFetchWorkloads;
+  if (entry.sharedFetch) {
+    return entry.sharedFetch;
   }
 
   const request = (async () => {
-    const previous = cachedWorkloads;
+    const previous = entry.workloads;
     const fetched = await fetchWorkloads();
     if (areWorkloadsEqual(previous, fetched)) {
-      cachedWorkloadsAt = Date.now();
+      entry.cachedAt = Date.now();
       return previous;
     }
-    setWorkloadsCache(fetched);
+    setWorkloadsCache(entry, fetched);
     return fetched;
   })();
 
-  sharedFetchWorkloads = request;
+  entry.sharedFetch = request;
 
   try {
     return await request;
   } finally {
-    if (sharedFetchWorkloads === request) {
-      sharedFetchWorkloads = null;
+    if (entry.sharedFetch === request) {
+      entry.sharedFetch = null;
     }
   }
 };
 
 export const __resetWorkloadsCacheForTests = () => {
-  cachedWorkloads = [];
-  cachedWorkloadsAt = 0;
-  sharedFetchWorkloads = null;
+  workloadsCaches.clear();
 };
 
 export function useWorkloads(enabled: Accessor<boolean> = () => true) {
-  const source = createMemo(() => (enabled() ? 'workloads' : null));
+  const [orgScope, setOrgScope] = createSignal(normalizeOrgScope(getOrgID()));
+  const resolveActiveOrgScope = () => orgScope();
+  const resolveActiveCacheEntry = () => getWorkloadsCacheEntry(resolveActiveOrgScope());
+  const source = createMemo(() => (enabled() ? resolveActiveOrgScope() : null));
   const [workloads, { mutate: resourceMutate }] = createResource(
     source,
-    () => fetchWorkloadsShared(),
+    async (activeScope) => fetchWorkloadsShared(getWorkloadsCacheEntry(activeScope)),
     {
-      initialValue: cachedWorkloads,
+      initialValue: resolveActiveCacheEntry().workloads,
     },
   );
 
@@ -488,38 +514,47 @@ export function useWorkloads(enabled: Accessor<boolean> = () => true) {
       const current = previous ?? [];
       const next = typeof value === 'function' ? value(current) : value;
       const normalized = next ?? [];
+      const cacheEntry = resolveActiveCacheEntry();
       if (areWorkloadsEqual(current, normalized)) {
-        setWorkloadsCache(current);
+        setWorkloadsCache(cacheEntry, current);
         return current;
       }
-      setWorkloadsCache(normalized);
+      setWorkloadsCache(cacheEntry, normalized);
       return normalized;
     });
 
-  const applyWorkloads = (next: WorkloadGuest[]) => {
+  const applyWorkloads = (next: WorkloadGuest[], targetOrgScope = resolveActiveOrgScope()) => {
+    const cacheEntry = getWorkloadsCacheEntry(targetOrgScope);
     resourceMutate((previous) => {
       const current = previous ?? [];
       if (areWorkloadsEqual(current, next)) {
-        setWorkloadsCache(current);
+        setWorkloadsCache(cacheEntry, current);
         return current;
       }
-      setWorkloadsCache(next);
+      setWorkloadsCache(cacheEntry, next);
       return next;
     });
   };
 
   const refetch = async () => {
-    const data = await fetchWorkloadsShared(true);
-    applyWorkloads(data);
+    const scope = resolveActiveOrgScope();
+    const data = await fetchWorkloadsShared(getWorkloadsCacheEntry(scope), true);
+    if (scope === resolveActiveOrgScope()) {
+      applyWorkloads(data, scope);
+    }
     return data;
   };
 
-  if (!hasFreshWorkloadsCache()) {
-    void fetchWorkloadsShared()
-      .then(applyWorkloads)
-      .catch((err) => {
-        logger.warn('[useWorkloads] Failed to refresh stale workloads cache', err);
-      });
+  if (!hasFreshWorkloadsCache(resolveActiveCacheEntry())) {
+    const scope = resolveActiveOrgScope();
+    void fetchWorkloadsShared(getWorkloadsCacheEntry(scope))
+      .then((data) => {
+        if (scope !== resolveActiveOrgScope()) {
+          return;
+        }
+        applyWorkloads(data, scope);
+      })
+      .catch(() => undefined);
   }
 
   // Poll for fresh metrics while enabled.
@@ -528,17 +563,43 @@ export function useWorkloads(enabled: Accessor<boolean> = () => true) {
   // <Suspense> boundary, briefly unmounting the entire page every poll cycle.
   createEffect(() => {
     if (!enabled()) return;
+    const scope = resolveActiveOrgScope();
     const id = setInterval(async () => {
       try {
-        const data = await fetchWorkloadsShared(true);
-        applyWorkloads(data);
-      } catch (err) {
-        // Keep showing the last successful snapshot while polling recovers.
-        logger.debug('[useWorkloads] Poll refresh failed; retaining cached data', err);
+        const data = await fetchWorkloadsShared(getWorkloadsCacheEntry(scope), true);
+        if (scope !== resolveActiveOrgScope()) {
+          return;
+        }
+        applyWorkloads(data, scope);
+      } catch {
+        // Silently ignore poll errors; keep showing last data
       }
     }, DEFAULT_POLL_INTERVAL_MS);
     onCleanup(() => clearInterval(id));
   });
+
+  const unsubscribeOrgSwitch = eventBus.on('org_switched', (nextOrgID) => {
+    const nextOrgScope = normalizeOrgScope(nextOrgID);
+    if (nextOrgScope === resolveActiveOrgScope()) {
+      return;
+    }
+
+    const nextCacheEntry = getWorkloadsCacheEntry(nextOrgScope);
+    resourceMutate(nextCacheEntry.workloads);
+    setOrgScope(nextOrgScope);
+
+    if (!hasFreshWorkloadsCache(nextCacheEntry)) {
+      void fetchWorkloadsShared(nextCacheEntry, true)
+        .then((nextWorkloads) => {
+          if (resolveActiveOrgScope() !== nextOrgScope) {
+            return;
+          }
+          applyWorkloads(nextWorkloads, nextOrgScope);
+        })
+        .catch(() => undefined);
+    }
+  });
+  onCleanup(unsubscribeOrgSwitch);
 
   return {
     workloads,

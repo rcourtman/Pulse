@@ -91,6 +91,17 @@ func (h *ConversionHandlers) HandleConversionFunnel(w http.ResponseWriter, r *ht
 	}
 
 	orgID := strings.TrimSpace(r.URL.Query().Get("org_id"))
+	contextOrgID := strings.TrimSpace(GetOrgID(r.Context()))
+	if orgID == "" {
+		orgID = contextOrgID
+	} else if contextOrgID != "" && orgID != contextOrgID {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	if orgID == "" {
+		http.Error(w, "org_id is required", http.StatusBadRequest)
+		return
+	}
 
 	now := time.Now().UTC()
 	to, err := parseOptionalTimeParam(r.URL.Query().Get("to"), now)

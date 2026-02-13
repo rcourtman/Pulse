@@ -1,4 +1,5 @@
 import { ChartsAPI, type ChartData, type ChartsResponse, type InfrastructureChartsResponse, type TimeRange } from '@/api/charts';
+import { getOrgID } from '@/utils/apiClient';
 import { eventBus } from '@/stores/events';
 
 export const INFRA_SUMMARY_CACHE_PREFIX = 'pulse.infrastructureSummaryCharts.';
@@ -6,6 +7,7 @@ export const INFRA_SUMMARY_CACHE_MAX_AGE_MS = 5 * 60_000;
 const INFRA_SUMMARY_CACHE_VERSION = 1;
 const INFRA_SUMMARY_CACHE_MAX_CHARS = 900_000;
 const INFRA_SUMMARY_CACHE_MAX_POINTS_PER_SERIES = 360;
+const DEFAULT_ORG_SCOPE = 'default';
 
 const INFRA_SUMMARY_PERF_LOG_PREFIX = '[InfraSummaryPerf]';
 
@@ -96,7 +98,19 @@ const toCachedChartData = (data: ChartData): CachedChartData => ({
   netout: trimPoints(data.netout ?? [], INFRA_SUMMARY_CACHE_MAX_POINTS_PER_SERIES),
 });
 
-const cacheKeyForRange = (range: TimeRange) => `${INFRA_SUMMARY_CACHE_PREFIX}${range}`;
+const normalizeOrgScope = (orgID: string | null | undefined): string => {
+  const normalized = orgID?.trim();
+  if (!normalized) {
+    return DEFAULT_ORG_SCOPE;
+  }
+  return normalized;
+};
+
+const inFlightKeyFor = (range: TimeRange, orgScope: string) =>
+  `${encodeURIComponent(orgScope)}::${range}`;
+
+const cacheKeyForRange = (range: TimeRange, orgScope: string = normalizeOrgScope(getOrgID())) =>
+  `${INFRA_SUMMARY_CACHE_PREFIX}${encodeURIComponent(orgScope)}::${range}`;
 
 function trimPoints<T>(points: T[], max: number): T[] {
   if (points.length <= max) return points;
@@ -162,10 +176,12 @@ export function persistInfrastructureSummaryCache(
   range: TimeRange,
   map: Map<string, ChartData>,
   oldestDataTimestamp: number | null,
+  orgScope?: string,
 ): void {
   if (typeof window === 'undefined') return;
 
   try {
+    const scopedOrg = normalizeOrgScope(orgScope ?? getOrgID());
     const charts: Record<string, CachedChartData> = {};
     for (const [key, value] of map.entries()) {
       charts[key] = toCachedChartData(value);
@@ -181,11 +197,11 @@ export function persistInfrastructureSummaryCache(
     const serialized = JSON.stringify(payload);
     if (serialized.length > INFRA_SUMMARY_CACHE_MAX_CHARS) {
       // Avoid blowing past localStorage limits (and evicting unrelated app state).
-      window.localStorage.removeItem(cacheKeyForRange(range));
+      window.localStorage.removeItem(cacheKeyForRange(range, scopedOrg));
       return;
     }
 
-    window.localStorage.setItem(cacheKeyForRange(range), serialized);
+    window.localStorage.setItem(cacheKeyForRange(range, scopedOrg), serialized);
   } catch {
     // Ignore storage write failures.
   }
@@ -194,11 +210,14 @@ export function persistInfrastructureSummaryCache(
 export function readInfrastructureSummaryCache(
   range: TimeRange,
   maxAgeMs: number = INFRA_SUMMARY_CACHE_MAX_AGE_MS,
+  orgScope?: string,
 ): InfrastructureSummaryCacheHit | null {
   if (typeof window === 'undefined') return null;
 
   try {
-    const raw = window.localStorage.getItem(cacheKeyForRange(range));
+    const scopedOrg = normalizeOrgScope(orgScope ?? getOrgID());
+    const cacheKey = cacheKeyForRange(range, scopedOrg);
+    const raw = window.localStorage.getItem(cacheKey);
     if (!raw) return null;
 
     const parsed = JSON.parse(raw) as CachedInfrastructureSummary;
@@ -211,7 +230,7 @@ export function readInfrastructureSummaryCache(
     }
 
     if (Date.now() - parsed.cachedAt > maxAgeMs) {
-      window.localStorage.removeItem(cacheKeyForRange(range));
+      window.localStorage.removeItem(cacheKey);
       return null;
     }
 
@@ -252,7 +271,7 @@ export function hasFreshInfrastructureSummaryCache(
   return readInfrastructureSummaryCache(range, maxAgeMs) !== null;
 }
 
-const inFlightFetches = new Map<TimeRange, Promise<InfrastructureSummaryFetchResult>>();
+const inFlightFetches = new Map<string, Promise<InfrastructureSummaryFetchResult>>();
 let infraSummaryFetchSeq = 0;
 
 /**
@@ -264,16 +283,18 @@ export function fetchInfrastructureSummaryAndCache(
   options?: InfrastructureSummaryFetchOptions,
 ): Promise<InfrastructureSummaryFetchResult> {
   const caller = options?.caller || 'unknown';
+  const orgScope = normalizeOrgScope(getOrgID());
+  const inFlightKey = inFlightKeyFor(range, orgScope);
 
-  const existing = inFlightFetches.get(range);
+  const existing = inFlightFetches.get(inFlightKey);
   if (existing) {
-    infraSummaryPerfLog('fetch deduped', { caller, range });
+    infraSummaryPerfLog('fetch deduped', { caller, range, orgScope });
     return existing;
   }
 
   const requestId = ++infraSummaryFetchSeq;
   const startedAt = infraSummaryPerfNow();
-  infraSummaryPerfLog('fetch start', { caller, range, requestId });
+  infraSummaryPerfLog('fetch start', { caller, range, orgScope, requestId });
 
   const request = ChartsAPI.getInfrastructureSummaryCharts(range)
     .then((response) => {
@@ -282,11 +303,12 @@ export function fetchInfrastructureSummaryAndCache(
         typeof response.stats?.oldestDataTimestamp === 'number' && Number.isFinite(response.stats.oldestDataTimestamp)
           ? response.stats.oldestDataTimestamp
           : null;
-      persistInfrastructureSummaryCache(range, map, oldestDataTimestamp);
+      persistInfrastructureSummaryCache(range, map, oldestDataTimestamp, orgScope);
 
       infraSummaryPerfLog('fetch done', {
         caller,
         range,
+        orgScope,
         requestId,
         ms: Math.round(infraSummaryPerfNow() - startedAt),
         series: map.size,
@@ -303,6 +325,7 @@ export function fetchInfrastructureSummaryAndCache(
       infraSummaryPerfLog('fetch error', {
         caller,
         range,
+        orgScope,
         requestId,
         ms: Math.round(infraSummaryPerfNow() - startedAt),
         error: error instanceof Error ? error.message : String(error),
@@ -310,10 +333,10 @@ export function fetchInfrastructureSummaryAndCache(
       throw error;
     })
     .finally(() => {
-      inFlightFetches.delete(range);
+      inFlightFetches.delete(inFlightKey);
     });
 
-  inFlightFetches.set(range, request);
+  inFlightFetches.set(inFlightKey, request);
   return request;
 }
 

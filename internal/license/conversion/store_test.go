@@ -185,6 +185,24 @@ func TestConversionStoreOrgIsolation(t *testing.T) {
 	}
 }
 
+func TestConversionStoreRequiresOrgScopeForReads(t *testing.T) {
+	tmp := t.TempDir()
+	store, err := NewConversionStore(filepath.Join(tmp, "conversion.db"))
+	if err != nil {
+		t.Fatalf("NewConversionStore() error = %v", err)
+	}
+	defer store.Close()
+
+	now := time.Now().UTC().Truncate(time.Second)
+	if _, err := store.Query("", now.Add(-time.Minute), now.Add(time.Minute), ""); err == nil {
+		t.Fatal("Query() with empty org_id error = nil, want error")
+	}
+
+	if _, err := store.FunnelSummary("", now.Add(-time.Minute), now.Add(time.Minute)); err == nil {
+		t.Fatal("FunnelSummary() with empty org_id error = nil, want error")
+	}
+}
+
 func TestConversionStoreTimeRangeFiltering(t *testing.T) {
 	tmp := t.TempDir()
 	store, err := NewConversionStore(filepath.Join(tmp, "conversion.db"))

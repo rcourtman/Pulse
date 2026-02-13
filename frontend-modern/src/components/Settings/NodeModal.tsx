@@ -989,7 +989,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                             const scriptUrl = `/api/setup-script?type=pve&host=${encodedHost}&pulse_url=${pulseUrl}&backup_perms=true`;
 
                                             // Fetch the script using the current session
-                                            const response = await fetch(scriptUrl);
+                                            const response = await apiFetch(scriptUrl);
                                             if (!response.ok) {
                                               throw new Error('Failed to fetch setup script');
                                             }

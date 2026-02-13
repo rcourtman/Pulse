@@ -56,6 +56,7 @@ describe('useUnifiedResources', () => {
   let useUnifiedResources: UseUnifiedResourcesModule['useUnifiedResources'];
   let useStorageBackupsResources: UseUnifiedResourcesModule['useStorageBackupsResources'];
   let resetUnifiedResourcesCacheForTests: UseUnifiedResourcesModule['__resetUnifiedResourcesCacheForTests'];
+  let eventBus: (typeof import('@/stores/events'))['eventBus'];
 
   beforeEach(async () => {
     vi.useFakeTimers();
@@ -84,6 +85,7 @@ describe('useUnifiedResources', () => {
 
     vi.doMock('@/utils/apiClient', () => ({
       apiFetch: apiFetchMock,
+      getOrgID: () => 'default',
     }));
     vi.doMock('@/stores/websocket-global', () => ({
       getGlobalWebSocketStore: () => wsStore,
@@ -94,6 +96,7 @@ describe('useUnifiedResources', () => {
       useStorageBackupsResources,
       __resetUnifiedResourcesCacheForTests: resetUnifiedResourcesCacheForTests,
     } = await import('@/hooks/useUnifiedResources'));
+    ({ eventBus } = await import('@/stores/events'));
     resetUnifiedResourcesCacheForTests();
   });
 
@@ -386,11 +389,36 @@ describe('useUnifiedResources', () => {
       result = useUnifiedResources();
     });
 
-    await result!.refetch();
-    const resource = result!.resources()[0];
-    expect(resource.platformType).toBe('proxmox-pve');
-    expect(resource.sourceType).toBe('hybrid');
-    expect(resource.platformData?.sources).toEqual(['agent', 'proxmox']);
+    await flushAsync();
+    await waitForResourceCount(() => result!.resources().length);
+    expect(apiFetchMock).toHaveBeenCalledTimes(1);
+    expect(result!.resources()[0]?.id).toBe('node-1');
+
+    apiFetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: [
+          {
+            ...v2Resource,
+            id: 'node-2',
+            name: 'node-2',
+          },
+        ],
+      }),
+    });
+
+    eventBus.emit('org_switched', 'tenant-b');
+    await flushAsync();
+    await waitForResourceCount(() => result!.resources().length);
+
+    expect(apiFetchMock).toHaveBeenCalledTimes(2);
+    expect(result!.resources()[0]?.id).toBe('node-2');
+
+    eventBus.emit('org_switched', 'default');
+    await flushAsync();
+
+    expect(apiFetchMock).toHaveBeenCalledTimes(2);
+    expect(result!.resources()[0]?.id).toBe('node-1');
 
     dispose();
   });
