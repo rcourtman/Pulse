@@ -339,6 +339,10 @@ func shouldFallbackToForm(err error) bool {
 
 // request performs an API request
 func (c *Client) request(ctx context.Context, method, path string, data url.Values) (*http.Response, error) {
+	return c.requestWithRetry(ctx, method, path, data, false)
+}
+
+func (c *Client) requestWithRetry(ctx context.Context, method, path string, data url.Values, retriedAfter401 bool) (*http.Response, error) {
 	// Re-authenticate if needed
 	if c.config.Password != "" && c.auth.tokenName == "" && time.Now().After(c.auth.expiresAt) {
 		if err := c.authenticate(ctx); err != nil {
@@ -389,8 +393,17 @@ func (c *Client) request(ctx context.Context, method, path string, data url.Valu
 
 	// Check for errors
 	if resp.StatusCode >= 400 {
-		defer resp.Body.Close()
 		body, _ := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+
+		// Password sessions can be invalidated server-side before local expiry.
+		// Retry once after forcing re-authentication on 401.
+		if resp.StatusCode == http.StatusUnauthorized && !retriedAfter401 && c.config.Password != "" && c.auth.tokenName == "" {
+			if err := c.authenticate(ctx); err != nil {
+				return nil, fmt.Errorf("re-authentication failed after 401: %w", err)
+			}
+			return c.requestWithRetry(ctx, method, path, data, true)
+		}
 
 		// Create base error with helpful guidance for common issues
 		var err error
