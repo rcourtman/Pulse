@@ -80,7 +80,6 @@ func (e *PulseToolExecutor) executeControl(ctx context.Context, args map[string]
 
 func (e *PulseToolExecutor) executeRunCommand(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
 	command, _ := args["command"].(string)
-	runOnHost, _ := args["run_on_host"].(bool)
 	targetHost, _ := args["target_host"].(string)
 
 	if command == "" {
@@ -131,32 +130,6 @@ func (e *PulseToolExecutor) executeRunCommand(ctx context.Context, args map[stri
 		}
 	}
 
-	// Determine target type for approval validation
-	targetType := "container"
-	if runOnHost {
-		targetType = "host"
-	}
-
-	// Check if this is a pre-approved execution with command hash validation
-	// This validates the approval matches this exact command+target and marks it as consumed
-	preApproved := consumeApprovalWithValidation(args, command, targetType, e.targetID)
-
-	// Skip approval checks if pre-approved or in autonomous mode
-	if !preApproved && !e.isAutonomous && e.controlLevel == ControlLevelControlled {
-		approvalID := createApprovalRecord(command, targetType, e.targetID, targetHost, "Control level requires approval")
-		return NewTextResult(formatApprovalNeeded(command, "Control level requires approval", approvalID)), nil
-	}
-	if e.isAutonomous {
-		log.Debug().
-			Str("command", command).
-			Bool("read_only", safety.IsReadOnlyCommand(command)).
-			Msg("Auto-approving command for autonomous investigation")
-	}
-	if !preApproved && decision == agentexec.PolicyRequireApproval && !e.isAutonomous {
-		approvalID := createApprovalRecord(command, targetType, e.targetID, targetHost, "Security policy requires approval")
-		return NewTextResult(formatApprovalNeeded(command, "Security policy requires approval", approvalID)), nil
-	}
-
 	// Execute via agent server
 	if e.agentServer == nil {
 		return NewErrorResult(fmt.Errorf("no agent server available")), nil
@@ -174,6 +147,28 @@ func (e *PulseToolExecutor) executeRunCommand(ctx context.Context, args map[stri
 			return NewErrorResult(fmt.Errorf("no agent available for target '%s'. %s", targetHost, formatAvailableAgentHosts(e.agentServer.GetConnectedAgents()))), nil
 		}
 		return NewErrorResult(fmt.Errorf("no agent available for target")), nil
+	}
+
+	approvalTargetType, approvalTargetID, approvalTargetName := approvalTargetForCommand(targetHost, routing)
+
+	// Check if this is a pre-approved execution with command hash validation.
+	// This validates the approval matches this exact command+target and marks it as consumed.
+	preApproved := consumeApprovalWithValidation(args, command, approvalTargetType, approvalTargetID)
+
+	// Skip approval checks if pre-approved or in autonomous mode.
+	if !preApproved && !e.isAutonomous && e.controlLevel == ControlLevelControlled {
+		approvalID := createApprovalRecord(command, approvalTargetType, approvalTargetID, approvalTargetName, "Control level requires approval")
+		return NewTextResult(formatApprovalNeeded(command, "Control level requires approval", approvalID)), nil
+	}
+	if e.isAutonomous {
+		log.Debug().
+			Str("command", command).
+			Bool("read_only", safety.IsReadOnlyCommand(command)).
+			Msg("Auto-approving command for autonomous investigation")
+	}
+	if !preApproved && decision == agentexec.PolicyRequireApproval && !e.isAutonomous {
+		approvalID := createApprovalRecord(command, approvalTargetType, approvalTargetID, approvalTargetName, "Security policy requires approval")
+		return NewTextResult(formatApprovalNeeded(command, "Security policy requires approval", approvalID)), nil
 	}
 
 	log.Debug().
@@ -216,6 +211,39 @@ func (e *PulseToolExecutor) executeRunCommand(ctx context.Context, args map[stri
 		"verification": map[string]interface{}{"ok": success, "method": "exit_code", "exit_code": result.ExitCode},
 	}
 	return NewJSONResultWithIsError(response, !success), nil
+}
+
+// approvalTargetForCommand derives stable approval binding fields from resolved routing.
+// This ensures replay protection hashes match the actual execution target.
+func approvalTargetForCommand(targetHost string, routing CommandRoutingResult) (targetType, targetID, targetName string) {
+	targetType = routing.TargetType
+	targetID = strings.TrimSpace(routing.TargetID)
+
+	if targetType == "" {
+		targetType = "host"
+	}
+
+	if targetType == "host" {
+		// Host executions do not carry routing.TargetID in ExecuteCommand payload.
+		// Use agent ID to bind approvals to a specific connected host.
+		targetID = strings.TrimSpace(routing.AgentID)
+		if targetID == "" {
+			targetID = strings.TrimSpace(targetHost)
+		}
+	} else if targetID == "" {
+		// Defensive fallback for unexpected missing IDs.
+		targetID = strings.TrimSpace(targetHost)
+	}
+
+	targetName = strings.TrimSpace(targetHost)
+	if targetName == "" {
+		targetName = strings.TrimSpace(routing.AgentHostname)
+	}
+	if targetName == "" {
+		targetName = strings.TrimSpace(routing.AgentID)
+	}
+
+	return targetType, targetID, targetName
 }
 
 func (e *PulseToolExecutor) executeControlGuest(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {

@@ -64,6 +64,34 @@ func isRetryableProviderStreamError(err error) bool {
 	return false
 }
 
+func fallbackProviderStreamErrorMessage(err error) string {
+	const defaultMessage = "AI response stream interrupted before completion. Please retry."
+	if err == nil {
+		return defaultMessage
+	}
+
+	msg := strings.TrimSpace(err.Error())
+	if msg == "" {
+		return defaultMessage
+	}
+
+	msgLower := strings.ToLower(msg)
+	switch {
+	case strings.Contains(msgLower, "context canceled"):
+		return "AI response was canceled before completion."
+	case strings.Contains(msgLower, "timeout"),
+		strings.Contains(msgLower, "timed out"),
+		strings.Contains(msgLower, "deadline exceeded"):
+		return "AI response timed out before completion. Please retry."
+	}
+
+	const maxLen = 220
+	if len(msg) > maxLen {
+		msg = msg[:maxLen] + "..."
+	}
+	return "AI response stream interrupted: " + msg
+}
+
 func (a *AgenticLoop) executeToolSafely(ctx context.Context, name string, input map[string]interface{}) (result tools.CallToolResult, err error) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
@@ -446,6 +474,11 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				// Defer emitting error events until retries are exhausted so transient
 				// provider blips don't leak to the client stream.
 				jsonData, _ := json.Marshal(ErrorData{Message: attemptErrorMessages[0]})
+				callback(StreamEvent{Type: "error", Data: jsonData})
+			} else {
+				// Transport-level failures may not include an explicit provider error event.
+				// Emit a fallback error so clients can render a clear failure state.
+				jsonData, _ := json.Marshal(ErrorData{Message: fallbackProviderStreamErrorMessage(effectiveErr)})
 				callback(StreamEvent{Type: "error", Data: jsonData})
 			}
 			err = effectiveErr

@@ -2,9 +2,17 @@ package ai
 
 import (
 	"context"
+	"strings"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
+)
+
+const (
+	defaultDiscoveryCommandTimeoutSeconds = 60
+	minDiscoveryCommandTimeoutSeconds     = 1
 )
 
 // discoveryCommandAdapter adapts agentexec.Server to servicediscovery.CommandExecutor
@@ -19,35 +27,41 @@ func newDiscoveryCommandAdapter(server *agentexec.Server) *discoveryCommandAdapt
 
 // ExecuteCommand implements servicediscovery.CommandExecutor
 func (a *discoveryCommandAdapter) ExecuteCommand(ctx context.Context, agentID string, cmd servicediscovery.ExecuteCommandPayload) (*servicediscovery.CommandResultPayload, error) {
+	ctx = nonNilContext(ctx)
+	execCmd := normalizeDiscoveryExecuteCommandPayload(ctx, cmd)
+
 	if a.server == nil {
 		return &servicediscovery.CommandResultPayload{
-			RequestID: cmd.RequestID,
+			RequestID: execCmd.RequestID,
 			Success:   false,
 			Error:     "agent server not available",
 		}, nil
 	}
 
-	// Convert to agentexec types
-	execCmd := agentexec.ExecuteCommandPayload{
-		RequestID:  cmd.RequestID,
-		Command:    cmd.Command,
-		TargetType: cmd.TargetType,
-		TargetID:   cmd.TargetID,
-		Timeout:    cmd.Timeout,
-	}
-
 	result, err := a.server.ExecuteCommand(ctx, agentID, execCmd)
 	if err != nil {
 		return &servicediscovery.CommandResultPayload{
-			RequestID: cmd.RequestID,
+			RequestID: execCmd.RequestID,
 			Success:   false,
 			Error:     err.Error(),
 		}, nil
 	}
+	if result == nil {
+		return &servicediscovery.CommandResultPayload{
+			RequestID: execCmd.RequestID,
+			Success:   false,
+			Error:     "agent server returned no command result",
+		}, nil
+	}
+
+	resultRequestID := result.RequestID
+	if strings.TrimSpace(resultRequestID) == "" {
+		resultRequestID = execCmd.RequestID
+	}
 
 	// Convert result back
 	return &servicediscovery.CommandResultPayload{
-		RequestID: result.RequestID,
+		RequestID: resultRequestID,
 		Success:   result.Success,
 		Stdout:    result.Stdout,
 		Stderr:    result.Stderr,
@@ -71,7 +85,7 @@ func (a *discoveryCommandAdapter) GetConnectedAgents() []servicediscovery.Connec
 			Hostname:    agent.Hostname,
 			Version:     agent.Version,
 			Platform:    agent.Platform,
-			Tags:        agent.Tags,
+			Tags:        cloneStringSlice(agent.Tags),
 			ConnectedAt: agent.ConnectedAt,
 		}
 	}
@@ -83,12 +97,7 @@ func (a *discoveryCommandAdapter) IsAgentConnected(agentID string) bool {
 	if a.server == nil {
 		return false
 	}
-	for _, agent := range a.server.GetConnectedAgents() {
-		if agent.AgentID == agentID {
-			return true
-		}
-	}
-	return false
+	return a.server.IsAgentConnected(agentID)
 }
 
 // discoveryStateAdapter adapts StateProvider to servicediscovery.StateProvider
@@ -118,7 +127,7 @@ func (a *discoveryStateAdapter) GetState() servicediscovery.StateSnapshot {
 			Node:        vm.Node,
 			Status:      vm.Status,
 			Instance:    vm.Instance,
-			IPAddresses: vm.IPAddresses,
+			IPAddresses: cloneStringSlice(vm.IPAddresses),
 		}
 	}
 
@@ -131,7 +140,7 @@ func (a *discoveryStateAdapter) GetState() servicediscovery.StateSnapshot {
 			Node:        c.Node,
 			Status:      c.Status,
 			Instance:    c.Instance,
-			IPAddresses: c.IPAddresses,
+			IPAddresses: cloneStringSlice(c.IPAddresses),
 		}
 	}
 
@@ -161,7 +170,7 @@ func (a *discoveryStateAdapter) GetState() servicediscovery.StateSnapshot {
 				Image:  dc.Image,
 				Status: dc.Status,
 				Ports:  ports,
-				Labels: dc.Labels,
+				Labels: cloneStringMap(dc.Labels),
 				Mounts: mounts,
 			}
 		}
@@ -186,7 +195,7 @@ func (a *discoveryStateAdapter) GetState() servicediscovery.StateSnapshot {
 			Architecture:  h.Architecture,
 			CPUCount:      h.CPUCount,
 			Status:        h.Status,
-			Tags:          h.Tags,
+			Tags:          cloneStringSlice(h.Tags),
 		}
 	}
 
@@ -207,4 +216,66 @@ func (a *discoveryStateAdapter) GetState() servicediscovery.StateSnapshot {
 		Hosts:       hosts,
 		Nodes:       nodes,
 	}
+}
+
+func nonNilContext(ctx context.Context) context.Context {
+	if ctx == nil {
+		return context.Background()
+	}
+	return ctx
+}
+
+func normalizeDiscoveryExecuteCommandPayload(ctx context.Context, cmd servicediscovery.ExecuteCommandPayload) agentexec.ExecuteCommandPayload {
+	requestID := strings.TrimSpace(cmd.RequestID)
+	if requestID == "" {
+		requestID = uuid.NewString()
+	}
+
+	timeoutSeconds := cmd.Timeout
+	if timeoutSeconds <= 0 {
+		timeoutSeconds = defaultDiscoveryCommandTimeoutSeconds
+	}
+
+	if deadline, ok := ctx.Deadline(); ok {
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			timeoutSeconds = minDiscoveryCommandTimeoutSeconds
+		} else {
+			maxTimeout := int((remaining + time.Second - 1) / time.Second)
+			if maxTimeout < minDiscoveryCommandTimeoutSeconds {
+				maxTimeout = minDiscoveryCommandTimeoutSeconds
+			}
+			if timeoutSeconds > maxTimeout {
+				timeoutSeconds = maxTimeout
+			}
+		}
+	}
+
+	return agentexec.ExecuteCommandPayload{
+		RequestID:  requestID,
+		Command:    cmd.Command,
+		TargetType: cmd.TargetType,
+		TargetID:   cmd.TargetID,
+		Timeout:    timeoutSeconds,
+	}
+}
+
+func cloneStringSlice(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	cloned := make([]string, len(values))
+	copy(cloned, values)
+	return cloned
+}
+
+func cloneStringMap(values map[string]string) map[string]string {
+	if len(values) == 0 {
+		return nil
+	}
+	cloned := make(map[string]string, len(values))
+	for k, v := range values {
+		cloned[k] = v
+	}
+	return cloned
 }
