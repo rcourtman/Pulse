@@ -225,6 +225,7 @@ func (n *NotificationManager) sendWebhookWithRetry(webhook EnhancedWebhookConfig
 	var lastResp *http.Response
 	backoff := WebhookInitialBackoff
 	retryableErrors := 0
+	totalAttempts := 0
 
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		if attempt > 0 {
@@ -269,6 +270,7 @@ func (n *NotificationManager) sendWebhookWithRetry(webhook EnhancedWebhookConfig
 		}
 
 		resp, err := n.sendWebhookOnceWithResponse(webhook, payload)
+		totalAttempts = attempt + 1
 		lastResp = resp
 		if err == nil {
 			if attempt > 0 {
@@ -319,9 +321,13 @@ func (n *NotificationManager) sendWebhookWithRetry(webhook EnhancedWebhookConfig
 			Bool("retryable", isRetryable).
 			Msg("Webhook attempt failed")
 
+<<<<<<< HEAD
 		// If error is not retryable, stop immediately.
 		// Continuing would waste attempts and can mask permanent misconfiguration
 		// (for example, a 400-level payload/schema error).
+=======
+		// If error is not retryable, stop immediately regardless of attempt.
+>>>>>>> refactor/parallel-44-circuit-breakers
 		if !isRetryable {
 			log.Error().
 				Err(err).
@@ -331,12 +337,17 @@ func (n *NotificationManager) sendWebhookWithRetry(webhook EnhancedWebhookConfig
 		}
 	}
 
+	if totalAttempts == 0 {
+		totalAttempts = maxRetries + 1
+	}
+	retryAttempts := totalAttempts - 1
+
 	// Final error logging with summary
 	log.Error().
 		Err(lastErr).
 		Str("webhook", webhook.Name).
 		Str("service", webhook.Service).
-		Int("totalAttempts", maxRetries+1).
+		Int("totalAttempts", totalAttempts).
 		Int("retryableErrors", retryableErrors).
 		Msg("Webhook delivery failed after all retry attempts")
 
@@ -350,12 +361,12 @@ func (n *NotificationManager) sendWebhookWithRetry(webhook EnhancedWebhookConfig
 		StatusCode:    0, // Unknown status
 		Success:       false,
 		ErrorMessage:  lastErr.Error(),
-		RetryAttempts: maxRetries,
+		RetryAttempts: retryAttempts,
 		PayloadSize:   len(payload),
 	}
 	n.addWebhookDelivery(delivery)
 
-	return fmt.Errorf("webhook failed after %d attempts: %w", maxRetries+1, lastErr)
+	return fmt.Errorf("webhook failed after %d attempts: %w", totalAttempts, lastErr)
 }
 
 // isRetryableWebhookError determines if a webhook error should trigger a retry

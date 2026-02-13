@@ -241,12 +241,25 @@ export class AIChatAPI {
           break;
         }
 
+<<<<<<< HEAD
+=======
+        const readPromise = reader.read();
+        let timeoutId: ReturnType<typeof setTimeout> | undefined;
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          timeoutId = setTimeout(() => reject(new Error('Read timeout')), STREAM_TIMEOUT_MS);
+        });
+
+>>>>>>> refactor/parallel-44-circuit-breakers
         let result: ReadableStreamReadResult<Uint8Array>;
         try {
           result = await readWithTimeout();
         } catch (e) {
           if ((e as Error).message === 'Read timeout') break;
           throw e;
+        } finally {
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+          }
         }
 
         const { done, value } = result;

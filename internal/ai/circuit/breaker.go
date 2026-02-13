@@ -93,8 +93,9 @@ type Breaker struct {
 	lastError            error
 
 	// Backoff tracking
-	currentBackoff time.Duration
-	openedAt       time.Time
+	currentBackoff        time.Duration
+	openedAt              time.Time
+	halfOpenProbeInFlight bool
 
 	// Statistics
 	totalFailures  int64
@@ -162,7 +163,7 @@ func (b *Breaker) CanAllow() bool {
 		// Check if backoff period has elapsed (but don't transition)
 		return time.Since(b.openedAt) >= b.currentBackoff
 	case StateHalfOpen:
-		return true
+		return !b.halfOpenProbeInFlight
 	default:
 		return true
 	}
@@ -183,6 +184,7 @@ func (b *Breaker) Allow() bool {
 		// Check if backoff period has elapsed
 		if time.Since(b.openedAt) >= b.currentBackoff {
 			b.transitionTo(StateHalfOpen)
+			b.halfOpenProbeInFlight = true
 			log.Info().
 				Str("breaker", b.name).
 				Str("state", "half-open").
@@ -193,6 +195,10 @@ func (b *Breaker) Allow() bool {
 
 	case StateHalfOpen:
 		// Allow one test operation
+		if b.halfOpenProbeInFlight {
+			return false
+		}
+		b.halfOpenProbeInFlight = true
 		return true
 
 	default:
@@ -212,6 +218,7 @@ func (b *Breaker) RecordSuccess() {
 
 	switch b.state {
 	case StateHalfOpen:
+		b.halfOpenProbeInFlight = false
 		if b.consecutiveSuccesses >= b.config.SuccessThreshold {
 			b.transitionTo(StateClosed)
 			b.currentBackoff = b.config.InitialBackoff // Reset backoff
@@ -246,6 +253,9 @@ func (b *Breaker) RecordFailureWithCategory(err error, category ErrorCategory) {
 	switch category {
 	case ErrorCategoryInvalid, ErrorCategoryFatal:
 		// Don't trip on invalid/fatal errors - these won't be fixed by waiting
+		if b.state == StateHalfOpen {
+			b.halfOpenProbeInFlight = false
+		}
 		log.Warn().
 			Str("breaker", b.name).
 			Err(err).
@@ -265,6 +275,7 @@ func (b *Breaker) RecordFailureWithCategory(err error, category ErrorCategory) {
 		}
 
 	case StateHalfOpen:
+		b.halfOpenProbeInFlight = false
 		// Single failure in half-open returns to open with increased backoff
 		b.currentBackoff = time.Duration(float64(b.currentBackoff) * b.config.BackoffMultiplier)
 		if b.currentBackoff > b.config.MaxBackoff {
@@ -278,6 +289,7 @@ func (b *Breaker) RecordFailureWithCategory(err error, category ErrorCategory) {
 func (b *Breaker) tripCircuit(err error) {
 	b.transitionTo(StateOpen)
 	b.openedAt = time.Now()
+	b.halfOpenProbeInFlight = false
 	b.totalTrips++
 
 	log.Warn().
@@ -317,6 +329,7 @@ func (b *Breaker) Reset() {
 	b.consecutiveSuccesses = 0
 	b.currentBackoff = b.config.InitialBackoff
 	b.lastError = nil
+	b.halfOpenProbeInFlight = false
 
 	log.Info().
 		Str("breaker", b.name).

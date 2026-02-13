@@ -1141,7 +1141,7 @@ func TestClient_RegisterFailsWithoutLicenseTokenProvider(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	err := client.connectAndHandle(ctx)
+	_, err := client.connectAndHandle(ctx)
 	if err == nil {
 		t.Fatal("expected error when LicenseTokenFunc is nil")
 	}
@@ -1361,4 +1361,35 @@ func TestClient_OverloadedDataReturnsBusyResponse(t *testing.T) {
 
 	cancel()
 	<-errCh
+}
+
+func TestNextConsecutiveFailures(t *testing.T) {
+	tests := []struct {
+		name      string
+		current   int
+		connected bool
+		want      int
+	}{
+		{
+			name:      "increments when connection attempt never established",
+			current:   2,
+			connected: false,
+			want:      3,
+		},
+		{
+			name:      "resets streak after a registered session disconnects",
+			current:   5,
+			connected: true,
+			want:      1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := nextConsecutiveFailures(tt.current, tt.connected)
+			if got != tt.want {
+				t.Fatalf("nextConsecutiveFailures(%d, %v) = %d, want %d", tt.current, tt.connected, got, tt.want)
+			}
+		})
+	}
 }

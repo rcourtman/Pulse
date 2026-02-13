@@ -30,6 +30,7 @@ func TestClusterClientMarkAndClearError(t *testing.T) {
 		nodeHealth:      map[string]bool{"node1": true},
 		lastError:       make(map[string]string),
 		lastHealthCheck: make(map[string]time.Time),
+		rateLimitUntil:  map[string]time.Time{"node1": time.Now().Add(30 * time.Second)},
 	}
 
 	cc.markUnhealthyWithError("node1", "connection refused")
@@ -46,6 +47,9 @@ func TestClusterClientMarkAndClearError(t *testing.T) {
 	}
 	if _, ok := cc.lastError["node1"]; ok {
 		t.Fatal("expected lastError to be cleared")
+	}
+	if _, ok := cc.rateLimitUntil["node1"]; ok {
+		t.Fatal("expected rate-limit cooldown to be cleared")
 	}
 }
 

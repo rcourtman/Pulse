@@ -13,6 +13,7 @@ describe('apiClient org context', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     setOrgID(null);
   });
 
@@ -65,6 +66,7 @@ describe('apiClient org context', () => {
     expect(getOrgID()).toBeNull();
   });
 
+<<<<<<< HEAD
   it('retries 429 responses using numeric Retry-After seconds', async () => {
     vi.useFakeTimers();
     mockFetch
@@ -116,6 +118,24 @@ describe('apiClient org context', () => {
 
     await vi.advanceTimersByTimeAsync(1);
     await request;
+=======
+  it('honors HTTP-date Retry-After before retrying a 429 response', async () => {
+    vi.useFakeTimers();
+    const retryAfter = new Date(Date.now() + 5000).toUTCString();
+
+    mockFetch
+      .mockResolvedValueOnce(new Response('rate limited', { status: 429, headers: { 'Retry-After': retryAfter } }))
+      .mockResolvedValueOnce(new Response('{}', { status: 200 }));
+
+    const pending = apiFetch('/api/state');
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(2500);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(5000);
+    await pending;
+>>>>>>> refactor/parallel-44-circuit-breakers
     expect(mockFetch).toHaveBeenCalledTimes(2);
   });
 });
