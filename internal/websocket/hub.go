@@ -1,6 +1,7 @@
 package websocket
 
 import (
+	"compress/flate"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -376,6 +377,7 @@ type Hub struct {
 	// Per-tenant coalescing
 	tenantCoalescePending map[string]*Message
 	tenantCoalesceTimers  map[string]*time.Timer
+	stopOnce              sync.Once
 }
 
 // Message represents a WebSocket message
@@ -623,7 +625,9 @@ func (h *Hub) Run() {
 
 // Stop gracefully shuts down the hub
 func (h *Hub) Stop() {
-	close(h.stopChan)
+	h.stopOnce.Do(func() {
+		close(h.stopChan)
+	})
 }
 
 // HandleWebSocket handles WebSocket upgrade requests
@@ -697,15 +701,20 @@ func (h *Hub) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	// Create upgrader with our origin check
 	upgrader := websocket.Upgrader{
-		ReadBufferSize:  1024 * 1024 * 4, // 4MB to handle large state messages
-		WriteBufferSize: 1024 * 1024 * 4, // 4MB to handle large state messages
-		CheckOrigin:     h.checkOrigin,
+		ReadBufferSize:    1024 * 1024 * 4, // 4MB to handle large state messages
+		WriteBufferSize:   1024 * 1024 * 4, // 4MB to handle large state messages
+		CheckOrigin:       h.checkOrigin,
+		EnableCompression: true,
 	}
 
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to upgrade WebSocket connection")
 		return
+	}
+	conn.EnableWriteCompression(true)
+	if err := conn.SetCompressionLevel(flate.BestSpeed); err != nil {
+		log.Warn().Err(err).Msg("Failed to set WebSocket compression level")
 	}
 
 	clientID := utils.GenerateID("client")

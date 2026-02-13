@@ -25,6 +25,7 @@ const (
 
 	// WebSocket parameters
 	wsPingInterval   = 25 * time.Second
+	wsPongWait       = 60 * time.Second
 	wsWriteWait      = 10 * time.Second
 	wsHandshakeWait  = 15 * time.Second
 	sendChBufferSize = 256
@@ -237,6 +238,14 @@ func (c *Client) connectAndHandle(ctx context.Context) error {
 		return fmt.Errorf("register: %w", err)
 	}
 
+	// Enforce connection liveness: each Pong extends the read deadline.
+	if err := conn.SetReadDeadline(time.Now().Add(wsPongWait)); err != nil {
+		return fmt.Errorf("set initial read deadline: %w", err)
+	}
+	conn.SetPongHandler(func(string) error {
+		return conn.SetReadDeadline(time.Now().Add(wsPongWait))
+	})
+
 	// Expose sendCh only after successful registration so
 	// SendPushNotification callers can't enqueue frames during
 	// the handshake window before a relay session exists.
@@ -389,6 +398,9 @@ func (c *Client) readPump(ctx context.Context, conn *websocket.Conn, sendCh chan
 }
 
 func (c *Client) writePump(ctx context.Context, conn *websocket.Conn, sendCh <-chan []byte) {
+	// Always close the socket on writer exit so blocked readers unblock and reconnect.
+	defer conn.Close()
+
 	ticker := time.NewTicker(wsPingInterval)
 	defer ticker.Stop()
 
@@ -401,7 +413,10 @@ func (c *Client) writePump(ctx context.Context, conn *websocket.Conn, sendCh <-c
 				websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 			return
 
-		case data := <-sendCh:
+		case data, ok := <-sendCh:
+			if !ok {
+				return
+			}
 			conn.SetWriteDeadline(time.Now().Add(wsWriteWait))
 			if err := conn.WriteMessage(websocket.BinaryMessage, data); err != nil {
 				c.logger.Debug().Err(err).Msg("Write failed")

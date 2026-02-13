@@ -230,15 +230,48 @@ export function createWebSocketStore(url: string) {
   }
 
   let ws: WebSocket | null = null;
-  let reconnectTimeout: number;
-  let heartbeatInterval: number;
+  let reconnectTimeout = 0;
+  let heartbeatInterval = 0;
   let reconnectAttempt = 0;
   let isReconnecting = false;
+  let shouldReconnect = true;
+  let lastServerActivityAt = 0;
   const maxReconnectDelay = POLLING_INTERVALS.RECONNECT_MAX;
   const initialReconnectDelay = POLLING_INTERVALS.RECONNECT_BASE;
   const heartbeatIntervalMs = 30000; // Send heartbeat every 30 seconds
+  const heartbeatTimeoutMs = heartbeatIntervalMs * 3;
+  const reconnectJitterRatio = 0.2;
+
+  const clearReconnectTimer = () => {
+    if (reconnectTimeout) {
+      window.clearTimeout(reconnectTimeout);
+      reconnectTimeout = 0;
+    }
+  };
+
+  const clearHeartbeatTimer = () => {
+    if (heartbeatInterval) {
+      window.clearInterval(heartbeatInterval);
+      heartbeatInterval = 0;
+    }
+  };
+
+  const computeReconnectDelay = (attempt: number) => {
+    const baseDelay = Math.min(initialReconnectDelay * Math.pow(2, attempt), maxReconnectDelay);
+    const jitterWindow = Math.floor(baseDelay * reconnectJitterRatio);
+    if (jitterWindow <= 0) {
+      return baseDelay;
+    }
+
+    const jitter = Math.floor(Math.random() * (jitterWindow * 2 + 1)) - jitterWindow;
+    return Math.min(maxReconnectDelay, Math.max(0, baseDelay + jitter));
+  };
 
   const connect = () => {
+    if (!shouldReconnect) {
+      return;
+    }
+
     try {
       // Close existing connection if any
       if (ws) {
@@ -246,16 +279,6 @@ export function createWebSocketStore(url: string) {
           ws.close(1000, 'Reconnecting');
         }
         ws = null;
-      }
-
-      // Add a small delay before reconnecting to avoid rapid reconnect loops
-      if (reconnectAttempt > 0) {
-        const delay = Math.min(100 * reconnectAttempt, 1000);
-        setTimeout(() => {
-          ws = new WebSocket(wsUrl);
-          setupWebSocket();
-        }, delay);
-        return;
       }
 
       ws = new WebSocket(wsUrl);
@@ -273,21 +296,18 @@ export function createWebSocketStore(url: string) {
     setReconnecting(true);
 
     // Clear any existing timeout
-    if (reconnectTimeout) {
-      window.clearTimeout(reconnectTimeout);
-      reconnectTimeout = 0;
-    }
+    clearReconnectTimer();
 
-    // Calculate exponential backoff delay
-    const delay = Math.min(
-      initialReconnectDelay * Math.pow(2, reconnectAttempt),
-      maxReconnectDelay,
-    );
+    // Calculate exponential backoff delay with jitter
+    const delay = computeReconnectDelay(reconnectAttempt);
 
     logger.info(`Reconnecting in ${delay}ms (attempt ${reconnectAttempt + 1})`);
     reconnectAttempt++;
 
     reconnectTimeout = window.setTimeout(() => {
+      if (!shouldReconnect) {
+        return;
+      }
       isReconnecting = false;
       connect();
     }, delay);
@@ -303,16 +323,23 @@ export function createWebSocketStore(url: string) {
       setReconnecting(false); // Clear reconnecting state
       reconnectAttempt = 0; // Reset reconnect attempts on successful connection
       isReconnecting = false;
+      lastServerActivityAt = Date.now();
       Object.assign(dockerTracker, createTracker());
       Object.assign(hostTracker, createTracker());
       Object.assign(k8sTracker, createTracker());
 
       // Start heartbeat to keep connection alive
-      if (heartbeatInterval) {
-        window.clearInterval(heartbeatInterval);
-      }
+      clearHeartbeatTimer();
       heartbeatInterval = window.setInterval(() => {
         if (ws && ws.readyState === WebSocket.OPEN) {
+          const silenceDuration = Date.now() - lastServerActivityAt;
+          if (silenceDuration >= heartbeatTimeoutMs) {
+            logger.warn('WebSocket heartbeat timeout, forcing reconnect', {
+              silenceMs: silenceDuration,
+            });
+            ws.close(4000, 'Heartbeat timeout');
+            return;
+          }
           ws.send(JSON.stringify({ type: 'ping', data: { timestamp: Date.now() } }));
         }
       }, heartbeatIntervalMs);
@@ -329,6 +356,7 @@ export function createWebSocketStore(url: string) {
 
 
     ws.onmessage = (event) => {
+      lastServerActivityAt = Date.now();
       let data;
       try {
         data = JSON.parse(event.data);
@@ -617,9 +645,10 @@ export function createWebSocketStore(url: string) {
       setInitialDataReceived(false);
 
       // Clear heartbeat interval
-      if (heartbeatInterval) {
-        window.clearInterval(heartbeatInterval);
-        heartbeatInterval = 0;
+      clearHeartbeatTimer();
+
+      if (!shouldReconnect) {
+        return;
       }
 
       // Don't try to reconnect if the close was intentional (code 1000)
@@ -656,10 +685,13 @@ export function createWebSocketStore(url: string) {
 
   // Cleanup on unmount
   onCleanup(() => {
-    window.clearTimeout(reconnectTimeout);
-    window.clearInterval(heartbeatInterval);
+    shouldReconnect = false;
+    clearReconnectTimer();
+    clearHeartbeatTimer();
+    isReconnecting = false;
     if (ws) {
       ws.close(1000, 'Component unmounting');
+      ws = null;
     }
   });
 
@@ -687,9 +719,12 @@ export function createWebSocketStore(url: string) {
     initialDataReceived,
     updateProgress,
     reconnect: () => {
-      ws?.close();
-      window.clearTimeout(reconnectTimeout);
+      ws?.close(1000, 'Reconnecting');
+      clearReconnectTimer();
+      clearHeartbeatTimer();
       reconnectAttempt = 0; // Reset attempts for manual reconnect
+      isReconnecting = false;
+      setReconnecting(false);
       connect();
     },
     switchUrl: (nextUrl: string) => {
@@ -708,7 +743,8 @@ export function createWebSocketStore(url: string) {
         setRecentlyResolved(reconcile({}));
       });
 
-      window.clearTimeout(reconnectTimeout);
+      clearReconnectTimer();
+      clearHeartbeatTimer();
       reconnectAttempt = 0;
       isReconnecting = false;
       ws?.close(1000, 'Reconnecting');

@@ -6,6 +6,8 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"math"
+	"math/rand/v2"
 	"net/url"
 	"os"
 	"os/exec"
@@ -28,6 +30,13 @@ var execCommandContext = exec.CommandContext
 // How long the command client waits before retrying after a connection failure.
 // Package var so tests can override to avoid long sleeps.
 var reconnectDelay = 10 * time.Second
+
+// Reconnect backoff tuning. Package vars so tests can override deterministically.
+var (
+	reconnectMaxDelay    = 5 * time.Minute
+	reconnectJitterRatio = 0.20
+	reconnectRandFloat64 = rand.Float64
+)
 
 // CommandClient handles WebSocket connection to Pulse for AI command execution
 type CommandClient struct {
@@ -131,6 +140,7 @@ func (c *CommandClient) Run(ctx context.Context) error {
 			}
 
 			consecutiveFailures++
+			delay := computeReconnectDelay(consecutiveFailures)
 
 			// Distinguish between transient issues and persistent failures
 			// Normal close errors (server restart, reconnection) are expected and logged at debug
@@ -141,17 +151,17 @@ func (c *CommandClient) Run(ctx context.Context) error {
 				strings.Contains(errStr, "connection reset by peer")
 
 			if isNormalClose {
-				c.logger.Debug().Err(err).Msg("WebSocket closed, reconnecting in 10s")
+				c.logger.Debug().Err(err).Dur("retry_in", delay).Msg("WebSocket closed, reconnecting")
 			} else if consecutiveFailures >= 3 {
-				c.logger.Warn().Err(err).Int("failures", consecutiveFailures).Msg("WebSocket connection failed repeatedly, reconnecting in 10s")
+				c.logger.Warn().Err(err).Int("failures", consecutiveFailures).Dur("retry_in", delay).Msg("WebSocket connection failed repeatedly, reconnecting")
 			} else {
-				c.logger.Debug().Err(err).Msg("WebSocket connection interrupted, reconnecting in 10s")
+				c.logger.Debug().Err(err).Dur("retry_in", delay).Msg("WebSocket connection interrupted, reconnecting")
 			}
 
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
-			case <-time.After(reconnectDelay):
+			case <-time.After(delay):
 			}
 		} else {
 			// Connection closed cleanly (shouldn't happen in normal operation)
@@ -311,12 +321,38 @@ func (c *CommandClient) pingLoop(ctx context.Context, conn *websocket.Conn, done
 					Timestamp: time.Now(),
 				}
 				if err := conn.WriteJSON(msg); err != nil {
-					c.logger.Debug().Err(err).Msg("Failed to send ping")
+					c.logger.Debug().Err(err).Msg("Failed to send ping, closing connection for reconnect")
+					_ = conn.Close()
+					c.connMu.Unlock()
+					return
 				}
 			}
 			c.connMu.Unlock()
 		}
 	}
+}
+
+func computeReconnectDelay(failures int) time.Duration {
+	if reconnectDelay <= 0 {
+		return 0
+	}
+	if failures < 1 {
+		failures = 1
+	}
+
+	delay := reconnectDelay * time.Duration(math.Pow(2, float64(failures-1)))
+	if reconnectMaxDelay > 0 && delay > reconnectMaxDelay {
+		delay = reconnectMaxDelay
+	}
+	if reconnectJitterRatio <= 0 {
+		return delay
+	}
+
+	jitter := time.Duration(float64(delay) * reconnectJitterRatio * (reconnectRandFloat64()*2 - 1))
+	if delay+jitter < 0 {
+		return 0
+	}
+	return delay + jitter
 }
 
 func (c *CommandClient) handleMessages(ctx context.Context, conn *websocket.Conn) error {
