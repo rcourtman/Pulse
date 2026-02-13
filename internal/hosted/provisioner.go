@@ -113,6 +113,7 @@ func (p *Provisioner) ProvisionTenant(ctx context.Context, req ProvisionRequest)
 	}
 
 	req.Email = strings.TrimSpace(req.Email)
+	req.Email = strings.ToLower(req.Email)
 	req.OrgName = strings.TrimSpace(req.OrgName)
 	if err := validateProvisionRequest(req); err != nil {
 		return nil, err
@@ -129,7 +130,7 @@ func (p *Provisioner) ProvisionTenant(ctx context.Context, req ProvisionRequest)
 		if org == nil {
 			continue
 		}
-		if org.OwnerUserID == req.Email {
+		if strings.EqualFold(strings.TrimSpace(org.OwnerUserID), req.Email) {
 			return &ProvisionResult{
 				OrgID:  org.ID,
 				UserID: req.Email,

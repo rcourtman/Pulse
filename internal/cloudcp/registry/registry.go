@@ -268,6 +268,22 @@ func (r *TenantRegistry) Update(t *Tenant) error {
 	return nil
 }
 
+// Delete removes a tenant record by ID.
+func (r *TenantRegistry) Delete(id string) error {
+	res, err := r.db.Exec(`DELETE FROM tenants WHERE id = ?`, id)
+	if err != nil {
+		return fmt.Errorf("delete tenant: %w", err)
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("get rows affected: %w", err)
+	}
+	if affected == 0 {
+		return fmt.Errorf("tenant %q not found", id)
+	}
+	return nil
+}
+
 // List returns all tenants.
 func (r *TenantRegistry) List() ([]*Tenant, error) {
 	rows, err := r.db.Query(`SELECT

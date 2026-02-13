@@ -164,6 +164,59 @@ func TestProvisionTenantIdempotentDuplicateEmail(t *testing.T) {
 	}
 }
 
+func TestProvisionTenantIdempotentDuplicateEmailCaseInsensitive(t *testing.T) {
+	baseDir := t.TempDir()
+	persistence := config.NewMultiTenantPersistence(baseDir)
+	authManager := &mockAuthManager{}
+	authProvider := &mockAuthProvider{manager: authManager}
+	provisioner := NewProvisioner(persistence, authProvider)
+
+	existingOrg := &models.Organization{
+		ID:          "existing-org",
+		DisplayName: "Existing Org",
+		CreatedAt:   time.Now().UTC(),
+		OwnerUserID: "owner@example.com",
+		Members: []models.OrganizationMember{
+			{
+				UserID:  "owner@example.com",
+				Role:    models.OrgRoleOwner,
+				AddedAt: time.Now().UTC(),
+				AddedBy: "owner@example.com",
+			},
+		},
+	}
+	if err := persistence.SaveOrganization(existingOrg); err != nil {
+		t.Fatalf("SaveOrganization returned error: %v", err)
+	}
+
+	result, err := provisioner.ProvisionTenant(context.Background(), ProvisionRequest{
+		Email:    "Owner@Example.com",
+		Password: "securepass123",
+		OrgName:  "New Org Name",
+	})
+	if err != nil {
+		t.Fatalf("ProvisionTenant returned error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected result, got nil")
+	}
+	if result.Status != ProvisionStatusExisting {
+		t.Fatalf("expected status %q, got %q", ProvisionStatusExisting, result.Status)
+	}
+	if result.OrgID != "existing-org" {
+		t.Fatalf("expected org ID existing-org, got %q", result.OrgID)
+	}
+	if result.UserID != "owner@example.com" {
+		t.Fatalf("expected normalized user ID owner@example.com, got %q", result.UserID)
+	}
+	if authProvider.calls != 0 {
+		t.Fatalf("expected GetManager to not be called for idempotent path, got %d", authProvider.calls)
+	}
+	if authManager.calls != 0 {
+		t.Fatalf("expected UpdateUserRoles to not be called for idempotent path, got %d", authManager.calls)
+	}
+}
+
 func TestProvisionTenantValidationFailures(t *testing.T) {
 	baseDir := t.TempDir()
 	persistence := config.NewMultiTenantPersistence(baseDir)

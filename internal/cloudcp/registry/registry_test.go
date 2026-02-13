@@ -161,6 +161,23 @@ func TestCRUD(t *testing.T) {
 	if err := reg.Update(phantom); err == nil {
 		t.Error("Update non-existent tenant should error")
 	}
+
+	// Delete
+	if err := reg.Delete("t-TEST00001"); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+	deleted, err := reg.Get("t-TEST00001")
+	if err != nil {
+		t.Fatalf("Get after delete: %v", err)
+	}
+	if deleted != nil {
+		t.Fatalf("expected nil tenant after delete, got %+v", deleted)
+	}
+
+	// Delete not found
+	if err := reg.Delete("t-NONEXIST1"); err == nil {
+		t.Fatal("Delete non-existent tenant should error")
+	}
 }
 
 func TestAccountCRUD(t *testing.T) {
