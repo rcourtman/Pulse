@@ -14756,6 +14756,46 @@ func TestCheckPBSComprehensive(t *testing.T) {
 		}
 	})
 
+	t.Run("clears stale metric alerts when connection health is unhealthy", func(t *testing.T) {
+		m := newTestManager(t)
+		m.ClearActiveAlerts()
+
+		m.mu.Lock()
+		m.config.TimeThreshold = 0
+		m.config.TimeThresholds = map[string]int{}
+		m.activeAlerts["pbs1-cpu"] = &Alert{ID: "pbs1-cpu", Type: "cpu"}
+		m.activeAlerts["pbs1-memory"] = &Alert{ID: "pbs1-memory", Type: "memory"}
+		m.offlineConfirmations["pbs1"] = 2 // trigger offline alert immediately
+		m.mu.Unlock()
+
+		pbs := models.PBSInstance{
+			ID:               "pbs1",
+			Name:             "testpbs",
+			Status:           "online",
+			ConnectionHealth: "unhealthy",
+			CPU:              99,
+			Memory:           99,
+		}
+
+		m.CheckPBS(pbs)
+
+		m.mu.RLock()
+		_, cpuExists := m.activeAlerts["pbs1-cpu"]
+		_, memExists := m.activeAlerts["pbs1-memory"]
+		offline := m.activeAlerts["pbs-offline-pbs1"]
+		m.mu.RUnlock()
+
+		if cpuExists {
+			t.Fatal("expected stale CPU alert to be cleared while PBS is unhealthy")
+		}
+		if memExists {
+			t.Fatal("expected stale memory alert to be cleared while PBS is unhealthy")
+		}
+		if offline == nil {
+			t.Fatal("expected offline alert for unhealthy PBS connection")
+		}
+	})
+
 	t.Run("clears offline alert when back online", func(t *testing.T) {
 		// t.Parallel()
 		m := newTestManager(t)
@@ -15018,6 +15058,59 @@ func TestCheckPMGComprehensive(t *testing.T) {
 
 		if alert == nil {
 			t.Fatal("expected offline alert for connection health unhealthy")
+		}
+	})
+
+	t.Run("clears stale PMG metric alerts when connection health is unhealthy", func(t *testing.T) {
+		m := newTestManager(t)
+		m.ClearActiveAlerts()
+
+		m.mu.Lock()
+		m.activeAlerts["pmg1-queue-total"] = &Alert{
+			ID:         "pmg1-queue-total",
+			Type:       "queue-depth",
+			ResourceID: "pmg1",
+		}
+		m.activeAlerts["pmg1-anomaly-spamIn"] = &Alert{
+			ID:         "pmg1-anomaly-spamIn",
+			Type:       "anomaly-spamIn",
+			ResourceID: "pmg1",
+		}
+		m.activeAlerts["pmg1-node1-queue-hold"] = &Alert{
+			ID:         "pmg1-node1-queue-hold",
+			Type:       "queue-hold",
+			ResourceID: "pmg1",
+		}
+		m.offlineConfirmations["pmg1"] = 2 // trigger offline alert immediately
+		m.mu.Unlock()
+
+		pmg := models.PMGInstance{
+			ID:               "pmg1",
+			Name:             "testpmg",
+			Status:           "online",
+			ConnectionHealth: "unhealthy",
+		}
+
+		m.CheckPMG(pmg)
+
+		m.mu.RLock()
+		_, queueExists := m.activeAlerts["pmg1-queue-total"]
+		_, anomalyExists := m.activeAlerts["pmg1-anomaly-spamIn"]
+		_, nodeQueueExists := m.activeAlerts["pmg1-node1-queue-hold"]
+		offline := m.activeAlerts["pmg-offline-pmg1"]
+		m.mu.RUnlock()
+
+		if queueExists {
+			t.Fatal("expected stale queue alert to be cleared while PMG is unhealthy")
+		}
+		if anomalyExists {
+			t.Fatal("expected stale anomaly alert to be cleared while PMG is unhealthy")
+		}
+		if nodeQueueExists {
+			t.Fatal("expected stale per-node queue alert to be cleared while PMG is unhealthy")
+		}
+		if offline == nil {
+			t.Fatal("expected offline alert for unhealthy PMG connection")
 		}
 	})
 
@@ -16353,6 +16446,60 @@ func TestLoadActiveAlerts(t *testing.T) {
 			t.Errorf("first alert should win, got type %s", alert.Type)
 		}
 	})
+}
+
+func TestActiveAlertPersistenceUsesManagerDataDir(t *testing.T) {
+	managerDir := t.TempDir()
+	otherDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", otherDir)
+
+	m := NewManagerWithDataDir(managerDir)
+	t.Cleanup(func() {
+		m.Stop()
+	})
+
+	startTime := time.Now().Add(-5 * time.Minute)
+	m.mu.Lock()
+	m.activeAlerts["scoped-alert"] = &Alert{
+		ID:           "scoped-alert",
+		Type:         "cpu",
+		Level:        AlertLevelWarning,
+		ResourceID:   "scoped-resource",
+		ResourceName: "scoped-vm",
+		StartTime:    startTime,
+		LastSeen:     time.Now(),
+	}
+	m.mu.Unlock()
+
+	if err := m.SaveActiveAlerts(); err != nil {
+		t.Fatalf("SaveActiveAlerts failed: %v", err)
+	}
+
+	managerAlertsFile := filepath.Join(managerDir, "alerts", "active-alerts.json")
+	if _, err := os.Stat(managerAlertsFile); err != nil {
+		t.Fatalf("expected manager-scoped alerts file %s: %v", managerAlertsFile, err)
+	}
+
+	otherAlertsFile := filepath.Join(otherDir, "alerts", "active-alerts.json")
+	if _, err := os.Stat(otherAlertsFile); !os.IsNotExist(err) {
+		t.Fatalf("expected no active alerts in env dir %s, got err=%v", otherAlertsFile, err)
+	}
+
+	m.mu.Lock()
+	m.activeAlerts = make(map[string]*Alert)
+	m.mu.Unlock()
+
+	if err := m.LoadActiveAlerts(); err != nil {
+		t.Fatalf("LoadActiveAlerts failed: %v", err)
+	}
+
+	m.mu.RLock()
+	_, exists := m.activeAlerts["scoped-alert"]
+	m.mu.RUnlock()
+
+	if !exists {
+		t.Fatal("expected scoped-alert to be restored from manager-scoped data dir")
+	}
 }
 
 func TestNamespaceMatchesInstance(t *testing.T) {
