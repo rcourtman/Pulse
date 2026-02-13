@@ -1,0 +1,205 @@
+name: Issue Version Triage
+
+on:
+  issues:
+    types:
+      - opened
+      - edited
+      - reopened
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  triage:
+    if: ${{ github.event.issue.pull_request == null }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Apply version labels and retest guidance
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue;
+            const labelNames = new Set((issue.labels || []).map((label) => label.name));
+
+            // Restrict automation to bug reports only.
+            if (!labelNames.has("bug")) {
+              core.info("Issue is not labeled bug. Skipping version triage.");
+              return;
+            }
+
+            const VERSION_LABEL_PREFIX = "affects-";
+            const NEEDS_VERSION_LABEL = "needs-version-info";
+            const RETEST_LABEL = "needs-retest-on-latest";
+            const RETEST_COMMENT_MARKER = "<!-- issue-version-triage:v1 -->";
+
+            function normalizeVersion(value) {
+              if (!value) return null;
+              const match = String(value).match(/\bv?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)\b/);
+              return match ? match[1] : null;
+            }
+
+            function extractPulseVersion(body) {
+              if (!body) return null;
+
+              const lines = body.split(/\r?\n/);
+              for (let i = 0; i < lines.length; i += 1) {
+                const line = lines[i] || "";
+                if (/pulse\s*(\||-)?\s*version/i.test(line)) {
+                  const inlineVersion = normalizeVersion(line);
+                  if (inlineVersion) return inlineVersion;
+
+                  // Check nearby lines because issue forms often put values on the next line.
+                  for (let j = i + 1; j < Math.min(i + 6, lines.length); j += 1) {
+                    const nearby = (lines[j] || "").trim();
+                    if (!nearby) continue;
+                    const nearbyVersion = normalizeVersion(nearby);
+                    if (nearbyVersion) return nearbyVersion;
+                  }
+                }
+              }
+
+              // Fallback: issue-form block headed by "Pulse version".
+              const headingMatch = body.match(/#+\s*Pulse version[\s\S]{0,80}?(\bv?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?\b)/i);
+              if (headingMatch) return normalizeVersion(headingMatch[1]);
+
+              // Final fallback for older templates with "Pulse | Version: [5.1.2]".
+              const legacyMatch = body.match(/pulse\s*\|?\s*version[^\n]*?(\bv?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?\b)/i);
+              if (legacyMatch) return normalizeVersion(legacyMatch[1]);
+
+              return null;
+            }
+
+            function parseCore(version) {
+              const match = String(version || "").match(/^(\d+)\.(\d+)\.(\d+)/);
+              if (!match) return null;
+              return [Number(match[1]), Number(match[2]), Number(match[3])];
+            }
+
+            function compareCore(a, b) {
+              const av = parseCore(a);
+              const bv = parseCore(b);
+              if (!av || !bv) return null;
+              for (let i = 0; i < 3; i += 1) {
+                if (av[i] > bv[i]) return 1;
+                if (av[i] < bv[i]) return -1;
+              }
+              return 0;
+            }
+
+            async function ensureLabel(name, color, description) {
+              try {
+                await github.rest.issues.getLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name,
+                });
+              } catch (error) {
+                if (error.status !== 404) throw error;
+                await github.rest.issues.createLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name,
+                  color,
+                  description,
+                });
+              }
+            }
+
+            async function hasRetestComment(issueNumber) {
+              const comments = await github.paginate(github.rest.issues.listComments, {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                per_page: 100,
+              });
+              return comments.some((comment) => (comment.body || "").includes(RETEST_COMMENT_MARKER));
+            }
+
+            const reportedVersion = extractPulseVersion(issue.body);
+            core.info(`Reported Pulse version: ${reportedVersion || "not found"}`);
+
+            let latestVersion = null;
+            try {
+              const latest = await github.rest.repos.getLatestRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+              });
+              latestVersion = normalizeVersion(latest.data.tag_name || latest.data.name || "");
+            } catch (error) {
+              core.warning(`Could not determine latest release: ${error.message}`);
+            }
+            core.info(`Latest stable release: ${latestVersion || "unknown"}`);
+
+            const nextLabels = new Set(labelNames);
+
+            if (reportedVersion) {
+              await ensureLabel(
+                `${VERSION_LABEL_PREFIX}${reportedVersion}`,
+                "0e8a16",
+                `Bug reported against Pulse ${reportedVersion}`
+              );
+              await ensureLabel(
+                RETEST_LABEL,
+                "d93f0b",
+                "Reporter should retest on current latest stable release"
+              );
+
+              // Keep only one exact affects-X.Y.Z label for clarity.
+              for (const label of [...nextLabels]) {
+                if (/^affects-\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(label) && label !== `${VERSION_LABEL_PREFIX}${reportedVersion}`) {
+                  nextLabels.delete(label);
+                }
+              }
+
+              nextLabels.add(`${VERSION_LABEL_PREFIX}${reportedVersion}`);
+              nextLabels.delete(NEEDS_VERSION_LABEL);
+
+              const comparison = latestVersion ? compareCore(reportedVersion, latestVersion) : null;
+              if (comparison !== null && comparison < 0) {
+                nextLabels.add(RETEST_LABEL);
+
+                if (!(await hasRetestComment(issue.number))) {
+                  const body = [
+                    RETEST_COMMENT_MARKER,
+                    "Thanks for the report.",
+                    "",
+                    `I can see this was reported on **v${reportedVersion}**, while the latest stable release is **v${latestVersion}**.`,
+                    `Please retest on **v${latestVersion}** and comment with:`,
+                    "",
+                    "- whether the issue still reproduces",
+                    "- updated logs/diagnostics",
+                    "- exact running image tag or digest",
+                    "",
+                    "If there is no reporter follow-up after 7 days, this issue may be auto-closed until new confirmation is provided.",
+                    "",
+                    "If it still reproduces on the latest version, I will keep this open as an active regression.",
+                  ].join("\n");
+
+                  await github.rest.issues.createComment({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: issue.number,
+                    body,
+                  });
+                }
+              } else {
+                nextLabels.delete(RETEST_LABEL);
+              }
+            } else {
+              await ensureLabel(
+                NEEDS_VERSION_LABEL,
+                "fbca04",
+                "Issue is missing required Pulse version metadata"
+              );
+              nextLabels.add(NEEDS_VERSION_LABEL);
+              nextLabels.delete(RETEST_LABEL);
+            }
+
+            await github.rest.issues.setLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issue.number,
+              labels: [...nextLabels].sort(),
+            });
