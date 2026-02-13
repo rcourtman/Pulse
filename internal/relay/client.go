@@ -3,10 +3,12 @@ package relay
 import (
 	"context"
 	"crypto/ecdh"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
 	"math/rand/v2"
+	"net/http"
 	"sync"
 	"time"
 
@@ -24,12 +26,19 @@ const (
 	reconnectJitter    = 0.1
 
 	// WebSocket parameters
-	wsPingInterval   = 25 * time.Second
-	wsPongWait       = 60 * time.Second
-	wsWriteWait      = 10 * time.Second
-	wsHandshakeWait  = 15 * time.Second
-	sendChBufferSize = 256
+	wsPingInterval        = 25 * time.Second
+	wsPongWait            = 70 * time.Second
+	wsWriteWait           = 10 * time.Second
+	wsHandshakeWait       = 15 * time.Second
+	sendChBufferSize      = 256
+	wsMaxMessageSize      = HeaderSize + MaxPayloadSize
+	proxyStreamTimeout    = 15 * time.Minute
+	relayOverloadedReason = "relay overloaded, retry request"
 )
+
+// maxConcurrentDataHandlers limits active DATA stream handlers per connection.
+// This prevents unbounded goroutine growth if the relay floods DATA frames.
+var maxConcurrentDataHandlers = 64
 
 // TokenValidator validates an API token and returns the raw token if valid.
 type TokenValidator func(token string) bool
@@ -226,11 +235,18 @@ func (c *Client) connectAndHandle(ctx context.Context) error {
 
 	defer func() {
 		c.mu.Lock()
+		instanceID := c.instanceID
+		activeChannels := len(c.channels)
 		c.sendCh = nil
 		c.conn = nil
+		c.channels = make(map[uint32]*channelState)
 		c.connected = false
 		c.mu.Unlock()
 		conn.Close()
+		c.logger.Info().
+			Str("instance_id", instanceID).
+			Int("active_channels", activeChannels).
+			Msg("Relay connection closed")
 	}()
 
 	// Register with relay server
@@ -239,9 +255,8 @@ func (c *Client) connectAndHandle(ctx context.Context) error {
 	}
 
 	// Enforce connection liveness: each Pong extends the read deadline.
-	if err := conn.SetReadDeadline(time.Now().Add(wsPongWait)); err != nil {
-		return fmt.Errorf("set initial read deadline: %w", err)
-	}
+	conn.SetReadLimit(int64(wsMaxMessageSize))
+	_ = conn.SetReadDeadline(time.Now().Add(wsPongWait))
 	conn.SetPongHandler(func(string) error {
 		return conn.SetReadDeadline(time.Now().Add(wsPongWait))
 	})
@@ -263,14 +278,18 @@ func (c *Client) connectAndHandle(ctx context.Context) error {
 	// would keep running against a stale sendCh until the whole client stops.
 	connCtx, connCancel := context.WithCancel(ctx)
 	defer connCancel()
+	dataLimiter := make(chan struct{}, maxConcurrentDataHandlers)
 
 	go c.writePump(connCtx, conn, sendCh)
 
 	// Read pump (blocking) — passes connCtx so handleData streams inherit it
-	return c.readPump(connCtx, conn, sendCh)
+	return c.readPump(connCtx, conn, sendCh, dataLimiter)
 }
 
 func (c *Client) register(conn *websocket.Conn) error {
+	if c.deps.LicenseTokenFunc == nil {
+		return fmt.Errorf("license token provider not configured")
+	}
 	token := c.deps.LicenseTokenFunc()
 	if token == "" {
 		return fmt.Errorf("no license token available")
@@ -340,7 +359,7 @@ func (c *Client) register(conn *websocket.Conn) error {
 	}
 }
 
-func (c *Client) readPump(ctx context.Context, conn *websocket.Conn, sendCh chan<- []byte) error {
+func (c *Client) readPump(ctx context.Context, conn *websocket.Conn, sendCh chan<- []byte, dataLimiter chan struct{}) error {
 	for {
 		select {
 		case <-ctx.Done():
@@ -352,6 +371,7 @@ func (c *Client) readPump(ctx context.Context, conn *websocket.Conn, sendCh chan
 		if err != nil {
 			return fmt.Errorf("read message: %w", err)
 		}
+		_ = conn.SetReadDeadline(time.Now().Add(wsPongWait))
 
 		frame, err := DecodeFrame(msg)
 		if err != nil {
@@ -367,7 +387,7 @@ func (c *Client) readPump(ctx context.Context, conn *websocket.Conn, sendCh chan
 			c.handleKeyExchange(frame, sendCh)
 
 		case FrameData:
-			c.handleData(ctx, frame, sendCh)
+			c.handleData(ctx, frame, sendCh, dataLimiter)
 
 		case FrameChannelClose:
 			c.handleChannelClose(frame)
@@ -440,6 +460,18 @@ func (c *Client) handleChannelOpen(frame Frame, sendCh chan<- []byte) {
 		return
 	}
 
+	if c.deps.TokenValidator == nil {
+		c.logger.Error().Uint32("channel", payload.ChannelID).Msg("Rejecting channel: token validator not configured")
+		closeFrame, err := NewControlFrame(FrameChannelClose, payload.ChannelID, ChannelClosePayload{
+			ChannelID: payload.ChannelID,
+			Reason:    "token validation unavailable",
+		})
+		if err == nil {
+			queueFrame(sendCh, closeFrame, c.logger)
+		}
+		return
+	}
+
 	// Validate the auth token
 	if !c.deps.TokenValidator(payload.AuthToken) {
 		c.logger.Warn().Uint32("channel", payload.ChannelID).Msg("Rejecting channel: invalid auth token")
@@ -467,7 +499,7 @@ func (c *Client) handleChannelOpen(frame Frame, sendCh chan<- []byte) {
 	}
 }
 
-func (c *Client) handleData(connCtx context.Context, frame Frame, sendCh chan<- []byte) {
+func (c *Client) handleData(connCtx context.Context, frame Frame, sendCh chan<- []byte, dataLimiter chan struct{}) {
 	channelID := frame.Channel
 
 	// Snapshot channel state under lock so the goroutine below doesn't race
@@ -487,8 +519,16 @@ func (c *Client) handleData(connCtx context.Context, frame Frame, sendCh chan<- 
 		return
 	}
 
+	select {
+	case dataLimiter <- struct{}{}:
+	default:
+		c.handleOverloadedData(channelID, frame.Payload, enc, sendCh)
+		return
+	}
+
 	// Handle in background goroutine so we don't block the read pump
 	go func() {
+		defer func() { <-dataLimiter }()
 		payload := frame.Payload
 
 		// Decrypt incoming if encryption is active
@@ -503,7 +543,7 @@ func (c *Client) handleData(connCtx context.Context, frame Frame, sendCh chan<- 
 
 		// Derive from the connection context so streams are cancelled on disconnect.
 		// The 15-minute timeout is a safety net for runaway streams.
-		ctx, cancel := context.WithTimeout(connCtx, 15*time.Minute)
+		ctx, cancel := context.WithTimeout(connCtx, proxyStreamTimeout)
 		defer cancel()
 
 		err := c.proxy.HandleStreamRequest(ctx, payload, apiToken, func(respPayload []byte) {
@@ -522,6 +562,43 @@ func (c *Client) handleData(connCtx context.Context, frame Frame, sendCh chan<- 
 			c.logger.Warn().Err(err).Uint32("channel", channelID).Msg("Stream proxy error")
 		}
 	}()
+}
+
+func (c *Client) handleOverloadedData(channelID uint32, payload []byte, enc *ChannelEncryption, sendCh chan<- []byte) {
+	if enc != nil {
+		decrypted, err := enc.Decrypt(payload)
+		if err != nil {
+			c.logger.Warn().Err(err).Uint32("channel", channelID).Msg("Failed to decrypt overloaded DATA payload")
+			return
+		}
+		payload = decrypted
+	}
+
+	requestID := extractProxyRequestID(payload)
+	respPayload := c.proxy.errorResponse(requestID, http.StatusServiceUnavailable, relayOverloadedReason)
+	if enc != nil {
+		encrypted, err := enc.Encrypt(respPayload)
+		if err != nil {
+			c.logger.Warn().Err(err).Uint32("channel", channelID).Msg("Failed to encrypt overload response")
+			return
+		}
+		respPayload = encrypted
+	}
+
+	c.logger.Warn().
+		Uint32("channel", channelID).
+		Str("request_id", requestID).
+		Int("max_in_flight", maxConcurrentDataHandlers).
+		Msg("DATA handler limit reached, rejecting request")
+	queueFrame(sendCh, NewFrame(FrameData, channelID, respPayload), c.logger)
+}
+
+func extractProxyRequestID(payload []byte) string {
+	var req ProxyRequest
+	if err := json.Unmarshal(payload, &req); err != nil {
+		return ""
+	}
+	return req.ID
 }
 
 func (c *Client) handleKeyExchange(frame Frame, sendCh chan<- []byte) {

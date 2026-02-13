@@ -1115,3 +1115,250 @@ func TestClient_SendPushNotificationDisconnected(t *testing.T) {
 		t.Errorf("expected ErrNotConnected, got %v", err)
 	}
 }
+
+func TestClient_RegisterFailsWithoutLicenseTokenProvider(t *testing.T) {
+	logger := zerolog.New(zerolog.NewTestWriter(t))
+
+	relayServer := mockRelayServer(t, func(conn *websocket.Conn) {
+		time.Sleep(100 * time.Millisecond)
+	})
+	defer relayServer.Close()
+
+	cfg := Config{
+		Enabled:   true,
+		ServerURL: wsURL(relayServer),
+	}
+
+	deps := ClientDeps{
+		LicenseTokenFunc: nil, // explicit hardening guard
+		TokenValidator:   func(token string) bool { return true },
+		LocalAddr:        "127.0.0.1:9999",
+		ServerVersion:    "1.0.0",
+		IdentityPubKey:   "test-pub-key",
+	}
+
+	client := NewClient(cfg, deps, logger)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	err := client.connectAndHandle(ctx)
+	if err == nil {
+		t.Fatal("expected error when LicenseTokenFunc is nil")
+	}
+	if !strings.Contains(err.Error(), "license token provider not configured") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestClient_RejectChannelWhenTokenValidatorMissing(t *testing.T) {
+	logger := zerolog.New(zerolog.NewTestWriter(t))
+	channelCloseCh := make(chan ChannelClosePayload, 1)
+
+	relayServer := mockRelayServer(t, func(conn *websocket.Conn) {
+		// REGISTER
+		_, msg, _ := conn.ReadMessage()
+		frame, _ := DecodeFrame(msg)
+		if frame.Type != FrameRegister {
+			return
+		}
+
+		ack, _ := NewControlFrame(FrameRegisterAck, 0, RegisterAckPayload{
+			InstanceID:   "inst_missing_validator",
+			SessionToken: "sess_missing_validator",
+			ExpiresAt:    time.Now().Add(time.Hour).Unix(),
+		})
+		ackBytes, _ := EncodeFrame(ack)
+		conn.WriteMessage(websocket.BinaryMessage, ackBytes)
+
+		// CHANNEL_OPEN should be rejected because TokenValidator is nil.
+		time.Sleep(50 * time.Millisecond)
+		chOpen, _ := NewControlFrame(FrameChannelOpen, 77, ChannelOpenPayload{
+			ChannelID: 77,
+			AuthToken: "any-token",
+		})
+		chOpenBytes, _ := EncodeFrame(chOpen)
+		conn.WriteMessage(websocket.BinaryMessage, chOpenBytes)
+
+		_, msg, err := conn.ReadMessage()
+		if err != nil {
+			return
+		}
+		frame, _ = DecodeFrame(msg)
+		if frame.Type != FrameChannelClose {
+			return
+		}
+
+		var closePayload ChannelClosePayload
+		UnmarshalControlPayload(frame.Payload, &closePayload)
+		channelCloseCh <- closePayload
+	})
+	defer relayServer.Close()
+
+	cfg := Config{
+		Enabled:   true,
+		ServerURL: wsURL(relayServer),
+	}
+
+	deps := ClientDeps{
+		LicenseTokenFunc: func() string { return "test-jwt" },
+		TokenValidator:   nil, // explicit hardening guard
+		LocalAddr:        "127.0.0.1:9999",
+		ServerVersion:    "1.0.0",
+		IdentityPubKey:   "test-pub-key",
+	}
+
+	client := NewClient(cfg, deps, logger)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	errCh := make(chan error, 1)
+	go func() { errCh <- client.Run(ctx) }()
+
+	select {
+	case closePayload := <-channelCloseCh:
+		if closePayload.ChannelID != 77 {
+			t.Errorf("channel ID: got %d, want 77", closePayload.ChannelID)
+		}
+		if closePayload.Reason != "token validation unavailable" {
+			t.Errorf("reason: got %q, want %q", closePayload.Reason, "token validation unavailable")
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for CHANNEL_CLOSE")
+	}
+
+	cancel()
+	<-errCh
+}
+
+func TestClient_OverloadedDataReturnsBusyResponse(t *testing.T) {
+	logger := zerolog.New(zerolog.NewTestWriter(t))
+
+	origLimit := maxConcurrentDataHandlers
+	maxConcurrentDataHandlers = 1
+	defer func() { maxConcurrentDataHandlers = origLimit }()
+
+	releaseSlow := make(chan struct{})
+	mockAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/slow" {
+			<-releaseSlow
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"path": r.URL.Path})
+	}))
+	defer mockAPI.Close()
+	localAddr := strings.TrimPrefix(mockAPI.URL, "http://")
+
+	overloadedRespCh := make(chan ProxyResponse, 1)
+
+	relayServer := mockRelayServer(t, func(conn *websocket.Conn) {
+		// REGISTER
+		_, msg, _ := conn.ReadMessage()
+		frame, _ := DecodeFrame(msg)
+		if frame.Type != FrameRegister {
+			return
+		}
+		ack, _ := NewControlFrame(FrameRegisterAck, 0, RegisterAckPayload{
+			InstanceID:   "inst_overload",
+			SessionToken: "sess_overload",
+			ExpiresAt:    time.Now().Add(time.Hour).Unix(),
+		})
+		ackBytes, _ := EncodeFrame(ack)
+		conn.WriteMessage(websocket.BinaryMessage, ackBytes)
+
+		// Open channel
+		time.Sleep(50 * time.Millisecond)
+		chOpen, _ := NewControlFrame(FrameChannelOpen, 1, ChannelOpenPayload{
+			ChannelID: 1,
+			AuthToken: "valid-token",
+		})
+		chOpenBytes, _ := EncodeFrame(chOpen)
+		conn.WriteMessage(websocket.BinaryMessage, chOpenBytes)
+
+		// Read CHANNEL_OPEN ack
+		_, msg, err := conn.ReadMessage()
+		if err != nil {
+			return
+		}
+		frame, _ = DecodeFrame(msg)
+		if frame.Type != FrameChannelOpen {
+			return
+		}
+
+		// First request occupies the only in-flight slot.
+		firstReq := ProxyRequest{
+			ID:     "req_slow",
+			Method: "GET",
+			Path:   "/api/slow",
+		}
+		firstReqBytes, _ := json.Marshal(firstReq)
+		firstFrame := NewFrame(FrameData, 1, firstReqBytes)
+		firstData, _ := EncodeFrame(firstFrame)
+		conn.WriteMessage(websocket.BinaryMessage, firstData)
+
+		// Second request should get immediate 503 overload response.
+		secondReq := ProxyRequest{
+			ID:     "req_overload",
+			Method: "GET",
+			Path:   "/api/fast",
+		}
+		secondReqBytes, _ := json.Marshal(secondReq)
+		secondFrame := NewFrame(FrameData, 1, secondReqBytes)
+		secondData, _ := EncodeFrame(secondFrame)
+		conn.WriteMessage(websocket.BinaryMessage, secondData)
+
+		conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+		_, msg, err = conn.ReadMessage()
+		if err != nil {
+			return
+		}
+		frame, _ = DecodeFrame(msg)
+		if frame.Type != FrameData {
+			return
+		}
+		var resp ProxyResponse
+		if err := json.Unmarshal(frame.Payload, &resp); err != nil {
+			return
+		}
+		overloadedRespCh <- resp
+
+		close(releaseSlow)
+		time.Sleep(100 * time.Millisecond)
+	})
+	defer relayServer.Close()
+
+	cfg := Config{
+		Enabled:   true,
+		ServerURL: wsURL(relayServer),
+	}
+
+	deps := ClientDeps{
+		LicenseTokenFunc: func() string { return "test-jwt" },
+		TokenValidator:   func(token string) bool { return token == "valid-token" },
+		LocalAddr:        localAddr,
+		ServerVersion:    "1.0.0",
+		IdentityPubKey:   "test-pub-key",
+	}
+
+	client := NewClient(cfg, deps, logger)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	errCh := make(chan error, 1)
+	go func() { errCh <- client.Run(ctx) }()
+
+	select {
+	case resp := <-overloadedRespCh:
+		if resp.ID != "req_overload" {
+			t.Errorf("response ID: got %q, want %q", resp.ID, "req_overload")
+		}
+		if resp.Status != http.StatusServiceUnavailable {
+			t.Errorf("response status: got %d, want %d", resp.Status, http.StatusServiceUnavailable)
+		}
+	case <-time.After(3 * time.Second):
+		close(releaseSlow)
+		t.Fatal("timed out waiting for overload response")
+	}
+
+	cancel()
+	<-errCh
+}
