@@ -662,6 +662,7 @@ func (m *Monitor) pollGuestsWithFallback(
 }
 
 func (m *Monitor) maybePollPhysicalDisksAsync(
+	ctx context.Context,
 	instanceName string,
 	instanceCfg *config.PVEInstance,
 	client PVEClientInterface,
@@ -726,7 +727,15 @@ func (m *Monitor) maybePollPhysicalDisksAsync(
 
 		// Use a generous timeout for disk polling
 		diskTimeout := 60 * time.Second
-		diskCtx, diskCancel := context.WithTimeout(context.Background(), diskTimeout)
+		// Use monitor lifecycle context so shutdown can interrupt detached async polling.
+		parentCtx := m.runtimeCtx
+		if parentCtx == nil {
+			parentCtx = ctx
+		}
+		if parentCtx == nil {
+			parentCtx = context.Background()
+		}
+		diskCtx, diskCancel := context.WithTimeout(parentCtx, diskTimeout)
 		defer diskCancel()
 
 		log.Debug().
@@ -976,7 +985,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 	// We run this asynchronously with a short timeout so it doesn't block VM/container polling.
 	// This addresses the issue where slow storage APIs (e.g., NFS mounts) can cause the entire
 	// polling task to timeout before reaching VM/container polling.
-	storageFallback := m.startStorageFallback(instanceName, instanceCfg, client, nodes, nodeEffectiveStatus)
+	storageFallback := m.startStorageFallback(ctx, instanceName, instanceCfg, client, nodes, nodeEffectiveStatus)
 
 	// Pre-populate node display name cache so guest alerts created below
 	// can resolve friendly names. CheckNode() also does this, but it runs
@@ -992,7 +1001,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 		return
 	}
 
-	m.maybePollPhysicalDisksAsync(instanceName, instanceCfg, client, nodes, nodeEffectiveStatus, modelNodes)
+	m.maybePollPhysicalDisksAsync(ctx, instanceName, instanceCfg, client, nodes, nodeEffectiveStatus, modelNodes)
 	// Note: Physical disk monitoring is now enabled by default with a 5-minute polling interval.
 	// Users can explicitly disable it in node settings. Disk data is preserved between polls.
 

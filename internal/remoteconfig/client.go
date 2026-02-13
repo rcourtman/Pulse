@@ -39,6 +39,14 @@ type Client struct {
 	configErr  error
 }
 
+// Close releases any idle HTTP connections held by the client transport.
+func (c *Client) Close() {
+	if c == nil || c.httpClient == nil {
+		return
+	}
+	c.httpClient.CloseIdleConnections()
+}
+
 // Response represents the JSON response from the config endpoint.
 type Response struct {
 	Success bool   `json:"success"`

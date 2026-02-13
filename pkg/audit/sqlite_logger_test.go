@@ -413,6 +413,64 @@ func TestSQLiteLoggerSetRetentionDays(t *testing.T) {
 	}
 }
 
+func TestSQLiteLoggerCloseIsIdempotent(t *testing.T) {
+	tempDir := t.TempDir()
+
+	logger, err := NewSQLiteLogger(SQLiteLoggerConfig{
+		DataDir:       tempDir,
+		CryptoMgr:     newMockCryptoManager(),
+		RetentionDays: 30,
+	})
+	if err != nil {
+		t.Fatalf("NewSQLiteLogger failed: %v", err)
+	}
+
+	if err := logger.Close(); err != nil {
+		t.Fatalf("first Close failed: %v", err)
+	}
+	if err := logger.Close(); err != nil {
+		t.Fatalf("second Close failed: %v", err)
+	}
+}
+
+func TestSQLiteLoggerCloseCancelsStartupRetentionCleanup(t *testing.T) {
+	origDelay := retentionStartupCleanupDelay
+	origStartupCleanup := retentionStartupCleanup
+	retentionStartupCleanupDelay = 25 * time.Millisecond
+	startupCleanupCalled := make(chan struct{}, 1)
+	retentionStartupCleanup = func(l *SQLiteLogger) {
+		select {
+		case startupCleanupCalled <- struct{}{}:
+		default:
+		}
+	}
+	t.Cleanup(func() {
+		retentionStartupCleanupDelay = origDelay
+		retentionStartupCleanup = origStartupCleanup
+	})
+
+	tempDir := t.TempDir()
+	logger, err := NewSQLiteLogger(SQLiteLoggerConfig{
+		DataDir:       tempDir,
+		CryptoMgr:     newMockCryptoManager(),
+		RetentionDays: 30,
+	})
+	if err != nil {
+		t.Fatalf("NewSQLiteLogger failed: %v", err)
+	}
+
+	if err := logger.Close(); err != nil {
+		t.Fatalf("Close failed: %v", err)
+	}
+
+	time.Sleep(75 * time.Millisecond)
+	select {
+	case <-startupCleanupCalled:
+		t.Fatal("startup retention cleanup should not run after logger shutdown")
+	default:
+	}
+}
+
 func TestSQLiteLoggerPersistence(t *testing.T) {
 	tempDir := t.TempDir()
 

@@ -78,22 +78,21 @@ const (
 
 // Manager handles update operations
 type Manager struct {
-	config         *config.Config
-	history        *UpdateHistory
-	status         UpdateStatus
-	statusMu       sync.RWMutex
-	updateMu       sync.Mutex
-	updateInFlight bool
-	checkCache     map[string]*UpdateInfo // keyed by channel
-	cacheTime      map[string]time.Time   // keyed by channel
-	cacheDuration  time.Duration
-	progressChan   chan UpdateStatus
-	queue          *UpdateQueue
-	sseBroadcast   *SSEBroadcaster
-	lifecycleMu    sync.RWMutex
-	closed         bool
-	closeOnce      sync.Once
-	heartbeatStopC chan struct{}
+	config        *config.Config
+	history       *UpdateHistory
+	status        UpdateStatus
+	statusMu      sync.RWMutex
+	progressMu    sync.RWMutex
+	checkCache    map[string]*UpdateInfo // keyed by channel
+	cacheTime     map[string]time.Time   // keyed by channel
+	cacheDuration time.Duration
+	progressChan  chan UpdateStatus
+	queue         *UpdateQueue
+	sseBroadcast  *SSEBroadcaster
+	shutdownCh    chan struct{}
+	closeOnce     sync.Once
+	heartbeatWg   sync.WaitGroup
+	closed        bool
 }
 
 // ApplyUpdateRequest describes an update request initiated via the API/UI.
@@ -108,14 +107,14 @@ type ApplyUpdateRequest struct {
 // NewManager creates a new update manager
 func NewManager(cfg *config.Config) *Manager {
 	m := &Manager{
-		config:         cfg,
-		checkCache:     make(map[string]*UpdateInfo),
-		cacheTime:      make(map[string]time.Time),
-		cacheDuration:  5 * time.Minute, // Cache update checks for 5 minutes
-		progressChan:   make(chan UpdateStatus, 100),
-		queue:          NewUpdateQueue(),
-		sseBroadcast:   NewSSEBroadcaster(),
-		heartbeatStopC: make(chan struct{}),
+		config:        cfg,
+		checkCache:    make(map[string]*UpdateInfo),
+		cacheTime:     make(map[string]time.Time),
+		cacheDuration: 5 * time.Minute, // Cache update checks for 5 minutes
+		progressChan:  make(chan UpdateStatus, 100),
+		queue:         NewUpdateQueue(),
+		sseBroadcast:  NewSSEBroadcaster(),
+		shutdownCh:    make(chan struct{}),
 		status: UpdateStatus{
 			Status:    "idle",
 			UpdatedAt: time.Now().Format(time.RFC3339),
@@ -126,6 +125,7 @@ func NewManager(cfg *config.Config) *Manager {
 	go m.cleanupOldTempDirs()
 
 	// Start heartbeat for SSE connections (every 30 seconds)
+	m.heartbeatWg.Add(1)
 	go m.sseHeartbeatLoop()
 
 	return m
@@ -144,16 +144,18 @@ func (m *Manager) GetProgressChannel() <-chan UpdateStatus {
 // Close closes the progress channel and cleans up resources
 func (m *Manager) Close() {
 	m.closeOnce.Do(func() {
-		close(m.heartbeatStopC)
-
-		m.lifecycleMu.Lock()
+		m.progressMu.Lock()
 		m.closed = true
 		close(m.progressChan)
+		m.progressMu.Unlock()
+
+		close(m.shutdownCh)
+
 		if m.sseBroadcast != nil {
 			m.sseBroadcast.Close()
-			m.sseBroadcast = nil
 		}
-		m.lifecycleMu.Unlock()
+
+		m.heartbeatWg.Wait()
 	})
 }
 
@@ -1673,10 +1675,14 @@ func (m *Manager) updateStatus(status string, progress int, message string, err 
 		return
 	}
 	// Send to progress channel (non-blocking) for WebSocket compatibility
-	select {
-	case m.progressChan <- statusCopy:
-	default:
+	m.progressMu.RLock()
+	if !m.closed {
+		select {
+		case m.progressChan <- statusCopy:
+		default:
+		}
 	}
+	m.progressMu.RUnlock()
 
 	// Broadcast to SSE clients
 	if m.sseBroadcast != nil {
@@ -1691,6 +1697,8 @@ func (m *Manager) updateStatus(status string, progress int, message string, err 
 
 // sseHeartbeatLoop sends periodic heartbeats to SSE clients
 func (m *Manager) sseHeartbeatLoop() {
+	defer m.heartbeatWg.Done()
+
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 

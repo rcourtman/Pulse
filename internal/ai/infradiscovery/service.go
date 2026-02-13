@@ -93,6 +93,9 @@ type Service struct {
 	lastRun        time.Time
 	interval       time.Duration
 	stopCh         chan struct{}
+	lifecycleCtx   context.Context
+	lifecycleStop  context.CancelFunc
+	workerWG       sync.WaitGroup
 	running        bool
 	discoveryMu    sync.Mutex
 	discoveryRun   bool
@@ -255,17 +258,23 @@ func goRecover(label string, fn func()) {
 
 // Start begins the background discovery service.
 func (s *Service) Start(ctx context.Context) {
-	ctx = normalizeContext(ctx)
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	serviceCtx, cancel := context.WithCancel(ctx)
 
 	s.mu.Lock()
 	if s.running {
 		s.mu.Unlock()
+		cancel()
 		return
 	}
 	s.stopCh = make(chan struct{})
-	stopCh := s.stopCh
+	s.lifecycleCtx = serviceCtx
+	s.lifecycleStop = cancel
+	s.stopped = false
 	s.running = true
-	s.stopCh = make(chan struct{})
+	s.workerWG.Add(2)
 	s.mu.Unlock()
 
 	log.Info().
@@ -273,10 +282,22 @@ func (s *Service) Start(ctx context.Context) {
 		Msg("Starting infrastructure discovery service")
 
 	// Run immediately on startup
-	goRecover("initial infrastructure discovery", func() { s.RunDiscovery(ctx) })
+	go func() {
+		defer s.workerWG.Done()
+		defer func() {
+			if r := recover(); r != nil {
+				log.Error().
+					Interface("panic", r).
+					Stack().
+					Msg("Recovered from panic in initial infrastructure discovery")
+			}
+		}()
+		s.RunDiscovery(serviceCtx)
+	}()
 
 	// Start periodic discovery loop
 	go func() {
+		defer s.workerWG.Done()
 		defer func() {
 			if r := recover(); r != nil {
 				log.Error().
@@ -285,22 +306,65 @@ func (s *Service) Start(ctx context.Context) {
 					Msg("Recovered from panic in infrastructure discovery loop")
 			}
 		}()
-		s.discoveryLoop(ctx, stopCh)
+		s.discoveryLoop(serviceCtx)
 	}()
 }
 
 // Stop stops the background discovery service.
 func (s *Service) Stop() {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.running {
-		close(s.stopCh)
-		s.running = false
+	if s.stopped {
+		s.mu.Unlock()
+		return
+	}
+
+	stopCh := s.stopCh
+	stop := s.lifecycleStop
+	wasRunning := s.running
+
+	s.running = false
+	s.stopped = true
+	s.lifecycleCtx = nil
+	s.lifecycleStop = nil
+	s.mu.Unlock()
+
+	if stop != nil {
+		stop()
+	}
+	if wasRunning {
+		close(stopCh)
+		s.workerWG.Wait()
+	}
+}
+
+func (s *Service) isStopped() bool {
+	s.mu.RLock()
+	stopped := s.stopped
+	stopCh := s.stopCh
+	s.mu.RUnlock()
+	if stopped {
+		return true
+	}
+
+	select {
+	case <-stopCh:
+		return true
+	default:
+		return false
 	}
 }
 
 // discoveryLoop runs periodic discovery.
-func (s *Service) discoveryLoop(ctx context.Context, stopCh <-chan struct{}) {
+func (s *Service) discoveryLoop(ctx context.Context) {
+	defer func() {
+		s.mu.Lock()
+		s.running = false
+		s.stopped = true
+		s.lifecycleCtx = nil
+		s.lifecycleStop = nil
+		s.mu.Unlock()
+	}()
+
 	ticker := time.NewTicker(s.interval)
 	defer ticker.Stop()
 
@@ -320,11 +384,17 @@ func (s *Service) discoveryLoop(ctx context.Context, stopCh <-chan struct{}) {
 
 // RunDiscovery performs a discovery scan using AI analysis.
 func (s *Service) RunDiscovery(ctx context.Context) []DiscoveredApp {
-	if !s.tryStartDiscovery() {
-		log.Debug().Msg("Infrastructure discovery already running, skipping overlapping run")
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if s.isStopped() {
+		log.Debug().Msg("Infrastructure discovery service stopped, skipping discovery run")
 		return nil
 	}
-	defer s.finishDiscovery()
+	if ctx.Err() != nil {
+		log.Debug().Msg("Infrastructure discovery context canceled before run, skipping discovery")
+		return nil
+	}
 
 	start := time.Now()
 
@@ -371,16 +441,24 @@ func (s *Service) RunDiscovery(ctx context.Context) []DiscoveredApp {
 
 	// Analyze containers (check cache first, batch uncached ones)
 	for _, item := range allContainers {
-		select {
-		case <-ctx.Done():
-			log.Info().Err(ctx.Err()).Msg("Infrastructure discovery cancelled")
-			return apps
-		default:
+		if s.isStopped() {
+			log.Debug().Msg("Infrastructure discovery stopped mid-run, aborting discovery")
+			return nil
 		}
+		if ctx.Err() != nil {
+			log.Debug().Msg("Infrastructure discovery canceled mid-run, aborting discovery")
+			return nil
+		}
+
 		app := s.analyzeContainer(ctx, analyzer, item.Container, item.Host)
 		if app != nil {
 			apps = append(apps, *app)
 		}
+	}
+
+	if s.isStopped() || ctx.Err() != nil {
+		log.Debug().Msg("Infrastructure discovery interrupted before persistence, skipping cache updates")
+		return nil
 	}
 
 	// Save discoveries to knowledge store
@@ -402,9 +480,9 @@ func (s *Service) RunDiscovery(ctx context.Context) []DiscoveredApp {
 }
 
 // analyzeContainer uses AI to analyze a single container.
-func (s *Service) analyzeContainer(ctx context.Context, analyzer AIAnalyzer, container models.DockerContainer, host models.DockerHost) *DiscoveredApp {
-	if ctx == nil {
-		ctx = context.Background()
+func (s *Service) analyzeContainer(ctx context.Context, analyzer AIAnalyzer, c models.DockerContainer, host models.DockerHost) *DiscoveredApp {
+	if s.isStopped() || ctx.Err() != nil {
+		return nil
 	}
 
 	// Check cache first
@@ -428,6 +506,14 @@ func (s *Service) analyzeContainer(ctx context.Context, analyzer AIAnalyzer, con
 		// Create analysis prompt
 		prompt, err := s.buildAnalysisPrompt(info)
 		if err != nil {
+			if s.isStopped() || ctx.Err() != nil {
+				log.Debug().
+					Err(err).
+					Str("container", c.Name).
+					Str("image", c.Image).
+					Msg("Infrastructure discovery interrupted during AI analysis")
+				return nil
+			}
 			log.Warn().
 				Err(err).
 				Str("container", c.Name).
@@ -794,7 +880,22 @@ func (s *Service) GetLastRun() time.Time {
 
 // ForceRefresh triggers an immediate discovery scan.
 func (s *Service) ForceRefresh(ctx context.Context) {
-	ctx = normalizeContext(ctx)
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if s.isStopped() {
+		log.Debug().Msg("Infrastructure discovery service stopped, skipping force refresh")
+		return
+	}
+
+	s.mu.RLock()
+	serviceCtx := s.lifecycleCtx
+	running := s.running
+	s.mu.RUnlock()
+	if running && serviceCtx != nil {
+		ctx = serviceCtx
+	}
+
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
@@ -804,6 +905,11 @@ func (s *Service) ForceRefresh(ctx context.Context) {
 					Msg("Recovered from panic in ForceRefresh infrastructure discovery")
 			}
 		}()
+		if s.isStopped() || ctx.Err() != nil {
+			log.Debug().Msg("Infrastructure discovery force refresh canceled before execution")
+			return
+		}
+
 		s.RunDiscovery(ctx)
 	}()
 }

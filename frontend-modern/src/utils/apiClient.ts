@@ -51,33 +51,48 @@ interface FetchOptions extends Omit<RequestInit, 'headers'> {
   skipOrgContext?: boolean;
 }
 
-const RATE_LIMIT_DEFAULT_DELAY_MS = 2000;
-const RATE_LIMIT_MAX_DELAY_MS = 10000;
+function createAbortError(): Error {
+  if (typeof DOMException !== 'undefined') {
+    return new DOMException('The operation was aborted.', 'AbortError');
+  }
+  const error = new Error('The operation was aborted.');
+  error.name = 'AbortError';
+  return error;
+}
 
-const parseRetryAfterMs = (retryAfter: string | null): number => {
-  if (!retryAfter) {
-    return RATE_LIMIT_DEFAULT_DELAY_MS;
+function waitWithSignal(ms: number, signal?: AbortSignal | null): Promise<void> {
+  if (ms <= 0) {
+    return Promise.resolve();
   }
 
-  const seconds = Number(retryAfter);
-  if (Number.isFinite(seconds) && seconds >= 0) {
-    return Math.min(Math.round(seconds * 1000), RATE_LIMIT_MAX_DELAY_MS);
+  if (signal?.aborted) {
+    return Promise.reject(createAbortError());
   }
 
-  const retryAt = Date.parse(retryAfter);
-  if (Number.isFinite(retryAt)) {
-    const delta = retryAt - Date.now();
-    if (delta <= 0) {
-      return 0;
-    }
-    return Math.min(delta, RATE_LIMIT_MAX_DELAY_MS);
-  }
+  return new Promise((resolve, reject) => {
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
-  return RATE_LIMIT_DEFAULT_DELAY_MS;
-};
+    const cleanup = () => {
+      if (timeoutId !== null) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+      signal?.removeEventListener('abort', onAbort);
+    };
 
-const isRateLimitRetryableMethod = (method: string): boolean =>
-  method === 'GET' || method === 'HEAD' || method === 'OPTIONS';
+    const onAbort = () => {
+      cleanup();
+      reject(createAbortError());
+    };
+
+    timeoutId = setTimeout(() => {
+      cleanup();
+      resolve();
+    }, ms);
+
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+}
 
 class ApiClient {
   private apiToken: string | null = null;
@@ -411,7 +426,7 @@ class ApiClient {
       // The response should have set the pulse_csrf cookie
       if (response.ok) {
         // Small delay to ensure cookie is set
-        await new Promise(resolve => setTimeout(resolve, 10));
+        await waitWithSignal(10);
         return this.loadCSRFToken();
       }
     } catch (err) {

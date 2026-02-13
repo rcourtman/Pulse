@@ -165,6 +165,7 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 			InsecureSkipVerify: cfg.InsecureSkipVerify,
 			Logger:             logger,
 		})
+		defer rc.Close()
 
 		// Use a short timeout for config fetch so we don't block startup too long
 		rcCtx, rcCancel := context.WithTimeout(ctx, 10*time.Second)
@@ -860,6 +861,11 @@ func initDockerWithRetry(ctx context.Context, cfg dockeragent.Config, logger *ze
 	attempt := 0
 
 	for {
+		if err := ctx.Err(); err != nil {
+			logger.Info().Msg("Docker retry cancelled, context done")
+			return nil
+		}
+
 		agent, err := newDockerAgent(cfg)
 		if err == nil {
 			logger.Info().
@@ -875,11 +881,9 @@ func initDockerWithRetry(ctx context.Context, cfg dockeragent.Config, logger *ze
 			Str("next_retry", delay.String()).
 			Msg("Docker not available, will retry")
 
-		select {
-		case <-ctx.Done():
+		if !waitForRetryDelay(ctx, delay) {
 			logger.Info().Msg("Docker retry cancelled, context done")
 			return nil
-		case <-time.After(delay):
 		}
 
 		// Calculate next delay with exponential backoff, capped at retryMaxDelay
@@ -900,6 +904,11 @@ func initKubernetesWithRetry(ctx context.Context, cfg kubernetesagent.Config, lo
 	attempt := 0
 
 	for {
+		if err := ctx.Err(); err != nil {
+			logger.Info().Msg("Kubernetes retry cancelled, context done")
+			return nil
+		}
+
 		agent, err := newKubeAgent(cfg)
 		if err == nil {
 			logger.Info().
@@ -915,11 +924,9 @@ func initKubernetesWithRetry(ctx context.Context, cfg kubernetesagent.Config, lo
 			Str("next_retry", delay.String()).
 			Msg("Kubernetes still not available, will retry")
 
-		select {
-		case <-ctx.Done():
+		if !waitForRetryDelay(ctx, delay) {
 			logger.Info().Msg("Kubernetes retry cancelled, context done")
 			return nil
-		case <-time.After(delay):
 		}
 
 		// Calculate next delay with exponential backoff, capped at retryMaxDelay
@@ -927,6 +934,25 @@ func initKubernetesWithRetry(ctx context.Context, cfg kubernetesagent.Config, lo
 		if delay > retryMaxDelay {
 			delay = retryMaxDelay
 		}
+	}
+}
+
+func waitForRetryDelay(ctx context.Context, delay time.Duration) bool {
+	timer := time.NewTimer(delay)
+	defer func() {
+		if !timer.Stop() {
+			select {
+			case <-timer.C:
+			default:
+			}
+		}
+	}()
+
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
 	}
 }
 

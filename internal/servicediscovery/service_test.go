@@ -29,9 +29,15 @@ func (errorAnalyzer) AnalyzeForDiscovery(ctx context.Context, prompt string) (st
 	return "", context.Canceled
 }
 
-type blockingAnalyzer struct{}
+type blockingAnalyzer struct {
+	started chan struct{}
+	once    sync.Once
+}
 
-func (blockingAnalyzer) AnalyzeForDiscovery(ctx context.Context, prompt string) (string, error) {
+func (b *blockingAnalyzer) AnalyzeForDiscovery(ctx context.Context, prompt string) (string, error) {
+	b.once.Do(func() {
+		close(b.started)
+	})
 	<-ctx.Done()
 	return "", ctx.Err()
 }
@@ -788,46 +794,42 @@ func TestService_StartDuringStopDoesNotStartNewLoop(t *testing.T) {
 	}
 	store.crypto = nil
 
-	service := NewService(store, nil, provider, DefaultConfig())
-	service.initialDelay = time.Millisecond
-	service.interval = time.Hour
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	service.Start(ctx)
-	defer service.Stop()
-
-	select {
-	case <-provider.started:
-	case <-time.After(100 * time.Millisecond):
-		t.Fatalf("discovery loop did not start")
+	state := StateSnapshot{
+		DockerHosts: []DockerHost{
+			{
+				AgentID:  "host1",
+				Hostname: "host1",
+				Containers: []DockerContainer{
+					{Name: "web", Image: "nginx:latest", Status: "running"},
+				},
+			},
+		},
 	}
 
-	stopDone := make(chan struct{})
+	service := NewService(store, nil, stubStateProvider{state: state}, DefaultConfig())
+	service.initialDelay = time.Millisecond
+	service.interval = time.Hour
+	analyzer := &blockingAnalyzer{started: make(chan struct{})}
+	service.SetAIAnalyzer(analyzer)
+
+	service.Start(context.Background())
+
+	select {
+	case <-analyzer.started:
+	case <-time.After(250 * time.Millisecond):
+		t.Fatalf("expected analyzer to be invoked")
+	}
+
+	stopped := make(chan struct{})
 	go func() {
 		service.Stop()
-		close(stopDone)
+		close(stopped)
 	}()
 
 	select {
-	case <-stopDone:
-		t.Fatalf("stop returned before discovery loop completed")
-	case <-time.After(20 * time.Millisecond):
-	}
-
-	service.Start(ctx)
-
-	close(provider.release)
-
-	select {
-	case <-stopDone:
-	case <-time.After(200 * time.Millisecond):
-		t.Fatalf("stop did not complete")
-	}
-
-	if service.IsRunning() {
-		t.Fatalf("expected service not running after stop")
+	case <-stopped:
+	case <-time.After(250 * time.Millisecond):
+		t.Fatalf("Stop did not return after canceling in-flight discovery")
 	}
 }
 

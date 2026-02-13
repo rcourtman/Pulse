@@ -195,7 +195,7 @@ func (u *Updater) RunLoop(ctx context.Context) {
 	select {
 	case <-ctx.Done():
 		return
-	case <-initialDelayTimer.C:
+	case <-initialTimer.C:
 		u.CheckAndUpdate(ctx)
 	}
 

@@ -1,14 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const loadStore = () => import('@/stores/containerUpdates');
+const loadStore = async () => import('@/stores/containerUpdates');
 
-describe('containerUpdates store', () => {
+describe('containerUpdates store lifecycle', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.resetModules();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    const store = await loadStore();
+    store.stopContainerUpdateCleanup({ clearStates: true });
     vi.clearAllTimers();
     vi.useRealTimers();
   });

@@ -1086,9 +1086,8 @@ func TestNewNotificationQueue_InvalidPath(t *testing.T) {
 	}
 }
 
-func TestNotificationQueueStop_IdempotentConcurrent(t *testing.T) {
-	tempDir := t.TempDir()
-	nq, err := NewNotificationQueue(tempDir)
+func TestNotificationQueueStopIsIdempotent(t *testing.T) {
+	nq, err := NewNotificationQueue(t.TempDir())
 	if err != nil {
 		t.Fatalf("Failed to create notification queue: %v", err)
 	}

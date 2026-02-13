@@ -111,15 +111,15 @@ func collectArrayDetailWithRunner(ctx context.Context, device string, run comman
 		return host.RAIDArray{}, fmt.Errorf("mdadm --detail %s: %w", device, err)
 	}
 
-	return parseDetailWithRunner(device, string(output), run)
+	return parseDetailWithContext(ctx, device, string(output))
 }
 
 // parseDetail parses the output of mdadm --detail
 func parseDetail(device, output string) (host.RAIDArray, error) {
-	return parseDetailWithRunner(device, output, defaultRunCommandOutput)
+	return parseDetailWithContext(context.Background(), device, output)
 }
 
-func parseDetailWithRunner(device, output string, run commandRunner) (host.RAIDArray, error) {
+func parseDetailWithContext(ctx context.Context, device, output string) (host.RAIDArray, error) {
 	array := host.RAIDArray{
 		Device:  device,
 		Devices: []host.RAIDDevice{},
@@ -223,7 +223,7 @@ func parseDetailWithRunner(device, output string, run commandRunner) (host.RAIDA
 
 	// Check for rebuild/resync info in /proc/mdstat for speed information
 	if array.RebuildPercent > 0 {
-		speed := getRebuildSpeedWithRunner(device, run)
+		speed := getRebuildSpeedWithContext(ctx, device)
 		if speed != "" {
 			array.RebuildSpeed = speed
 		}
@@ -234,14 +234,18 @@ func parseDetailWithRunner(device, output string, run commandRunner) (host.RAIDA
 
 // getRebuildSpeed extracts rebuild speed from /proc/mdstat
 func getRebuildSpeed(device string) string {
-	return getRebuildSpeedWithRunner(device, defaultRunCommandOutput)
+	return getRebuildSpeedWithContext(context.Background(), device)
 }
 
-func getRebuildSpeedWithRunner(device string, run commandRunner) string {
+func getRebuildSpeedWithContext(parentCtx context.Context, device string) string {
 	// Remove /dev/ prefix for /proc/mdstat lookup
 	deviceName := strings.TrimPrefix(device, "/dev/")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	if parentCtx == nil {
+		parentCtx = context.Background()
+	}
+
+	ctx, cancel := context.WithTimeout(parentCtx, 2*time.Second)
 	defer cancel()
 
 	output, err := run(ctx, "cat", "/proc/mdstat")

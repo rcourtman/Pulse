@@ -2,6 +2,7 @@ package sensors
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -199,21 +200,53 @@ func TestCollectPower_FallbackToAMD(t *testing.T) {
 	}
 }
 
-func TestCollectPower_NilContext(t *testing.T) {
-	originalRAPL := raplBasePath
-	originalHwmon := hwmonBasePath
+func TestCollectRALP_CanceledDuringSampleWait(t *testing.T) {
 	tmpDir := t.TempDir()
-	raplBasePath = filepath.Join(tmpDir, "missing-rapl")
-	hwmonBasePath = filepath.Join(tmpDir, "hwmon")
+	original := raplBasePath
+	raplBasePath = tmpDir
 	t.Cleanup(func() {
-		raplBasePath = originalRAPL
-		hwmonBasePath = originalHwmon
+		raplBasePath = original
 	})
 
-	if err := os.MkdirAll(hwmonBasePath, 0755); err != nil {
-		t.Fatalf("mkdir hwmon base: %v", err)
+	pkg0 := filepath.Join(tmpDir, "intel-rapl:0")
+	if err := os.MkdirAll(pkg0, 0755); err != nil {
+		t.Fatalf("mkdir pkg0: %v", err)
 	}
-	hwmon := filepath.Join(hwmonBasePath, "hwmon0")
+	if err := writeEnergyFile(filepath.Join(pkg0, "energy_uj"), "1000000"); err != nil {
+		t.Fatalf("write package energy: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(pkg0, "name"), []byte("package-0"), 0644); err != nil {
+		t.Fatalf("write name: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		cancel()
+	}()
+
+	start := time.Now()
+	data, err := collectRALP(ctx)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context canceled error, got %v", err)
+	}
+	if data != nil {
+		t.Fatalf("expected nil data on cancellation, got %+v", data)
+	}
+	if elapsed := time.Since(start); elapsed >= sampleInterval {
+		t.Fatalf("expected cancellation before sample interval elapsed, took %v", elapsed)
+	}
+}
+
+func TestCollectAMDEnergy_CanceledDuringSampleWait(t *testing.T) {
+	tmpDir := t.TempDir()
+	original := hwmonBasePath
+	hwmonBasePath = tmpDir
+	t.Cleanup(func() {
+		hwmonBasePath = original
+	})
+
+	hwmon := filepath.Join(tmpDir, "hwmon0")
 	if err := os.MkdirAll(hwmon, 0755); err != nil {
 		t.Fatalf("mkdir hwmon: %v", err)
 	}

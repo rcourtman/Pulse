@@ -15,7 +15,7 @@ const [lastUpdate, setLastUpdate] = createSignal<Date | null>(null);
 const REFRESH_INTERVAL = 30000;
 
 let refreshTimer: ReturnType<typeof setInterval> | null = null;
-let activeSubscribers = 0;
+let activeConsumers = 0;
 
 // Fetch anomalies from the API
 async function fetchAnomalies(): Promise<void> {
@@ -65,18 +65,16 @@ function stopRefreshTimer(): void {
     }
 }
 
-function retainAnomalyRefreshSubscription(): () => void {
+function trackConsumerLifecycle(): void {
     activeConsumers += 1;
-    if (activeConsumers === 1) {
-        startRefreshTimer();
-    }
+    startRefreshTimer();
 
-    return () => {
+    onCleanup(() => {
         activeConsumers = Math.max(0, activeConsumers - 1);
         if (activeConsumers === 0) {
             stopRefreshTimer();
         }
-    };
+    });
 }
 
 function useAnomalyRefreshSubscription(): void {
@@ -94,7 +92,7 @@ export function useAnomalyForMetric(
     resourceId: () => string | undefined,
     metric: () => 'cpu' | 'memory' | 'disk'
 ): () => AnomalyReport | null {
-    useAnomalySubscription();
+    trackConsumerLifecycle();
 
     return () => {
         const rid = resourceId();
@@ -114,7 +112,7 @@ export function useAnomalyForMetric(
 export function useAnomaliesForResource(
     resourceId: () => string | undefined
 ): () => AnomalyReport[] {
-    useAnomalySubscription();
+    trackConsumerLifecycle();
 
     return () => {
         const rid = resourceId();
@@ -139,7 +137,7 @@ export function useAllAnomalies(): {
     lastUpdate: () => Date | null;
     refresh: () => void;
 } {
-    useAnomalySubscription();
+    trackConsumerLifecycle();
 
     return {
         anomalies: () => {
@@ -171,7 +169,7 @@ export function useAllAnomalies(): {
  * Hook to check if a resource has any anomalies.
  */
 export function useHasAnomalies(resourceId: () => string | undefined): () => boolean {
-    useAnomalySubscription();
+    trackConsumerLifecycle();
 
     return () => {
         const rid = resourceId();

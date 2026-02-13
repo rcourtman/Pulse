@@ -189,6 +189,7 @@ type NotificationManager struct {
 	queue              *NotificationQueue // Persistent notification queue
 	webhookClient      *http.Client       // Shared HTTP client for webhooks
 	stopCleanup        chan struct{}      // Signal to stop cleanup goroutine
+	cleanupDone        chan struct{}      // Signals cleanup goroutine exit during shutdown
 	allowedPrivateNets []*net.IPNet       // Parsed CIDR ranges allowed for private webhook targets
 	allowedPrivateMu   sync.RWMutex       // Protects allowedPrivateNets
 }
@@ -495,17 +496,17 @@ func NewNotificationManagerWithDataDir(publicURL string, dataDir string) *Notifi
 			TimeoutSeconds: 15,
 			APIKeyHeader:   "X-API-KEY",
 		},
-		groupWindow:        30 * time.Second,
-		pendingAlerts:      make([]*alerts.Alert, 0),
-		groupByNode:        true,
-		groupByGuest:       false,
-		webhookHistory:     make([]WebhookDelivery, 0, WebhookHistoryMaxSize),
-		webhookRateLimits:  make(map[string]*webhookRateLimit),
-		webhookRateCleanup: time.Now(),
-		publicURL:          cleanURL,
-		appriseExec:        defaultAppriseExec,
-		queue:              queue,
-		stopCleanup:        make(chan struct{}),
+		groupWindow:       30 * time.Second,
+		pendingAlerts:     make([]*alerts.Alert, 0),
+		groupByNode:       true,
+		groupByGuest:      false,
+		webhookHistory:    make([]WebhookDelivery, 0, WebhookHistoryMaxSize),
+		webhookRateLimits: make(map[string]*webhookRateLimit),
+		publicURL:         cleanURL,
+		appriseExec:       defaultAppriseExec,
+		queue:             queue,
+		stopCleanup:       make(chan struct{}),
+		cleanupDone:       make(chan struct{}),
 	}
 
 	// Create webhook client after NotificationManager is initialized
@@ -3217,7 +3218,9 @@ func (n *NotificationManager) ProcessQueuedNotification(notif *QueuedNotificatio
 
 // cleanupOldNotificationRecords periodically cleans up old entries from lastNotified map
 func (n *NotificationManager) cleanupOldNotificationRecords() {
-	defer n.cleanupWG.Done()
+	if n.cleanupDone != nil {
+		defer close(n.cleanupDone)
+	}
 
 	ticker := time.NewTicker(1 * time.Hour)
 	defer ticker.Stop()
@@ -3256,38 +3259,43 @@ func (n *NotificationManager) cleanupOldNotificationRecords() {
 func (n *NotificationManager) Stop() {
 	n.stopOnce.Do(func() {
 		n.mu.Lock()
-
-		if n.stopCleanup != nil {
-			close(n.stopCleanup)
-		}
 		n.enabled = false
-
 		queue := n.queue
-		n.queue = nil
+		stopCleanup := n.stopCleanup
+		cleanupDone := n.cleanupDone
+		client := n.webhookClient
 
+		// Cancel any pending group timer
 		if n.groupTimer != nil {
 			n.groupTimer.Stop()
 			n.groupTimer = nil
 		}
+
+		// Clear pending alerts
 		n.pendingAlerts = nil
 		n.mu.Unlock()
 
-		n.cleanupWG.Wait()
+		// Stop cleanup goroutine and wait for exit before returning
+		if stopCleanup != nil {
+			close(stopCleanup)
+		}
+		if cleanupDone != nil {
+			<-cleanupDone
+		}
 
+		// Stop queue outside n.mu to avoid deadlock with queue workers that may
+		// call back into NotificationManager during in-flight processing.
 		if queue != nil {
 			if err := queue.Stop(); err != nil {
-				log.Error().Err(err).Msg("Failed to stop notification queue cleanly")
+				log.Error().Err(err).Msg("Failed to stop notification queue")
 			}
 		}
 
-	// Cancel any pending group timer
-	if n.groupTimer != nil {
-		n.groupTimer.Stop()
-		n.groupTimer = nil
-	}
+		// Explicitly release pooled webhook connections during shutdown.
+		if client != nil {
+			client.CloseIdleConnections()
+		}
 
-	// Clear pending alerts
-	n.pendingAlerts = nil
-
-	log.Info().Msg("notification manager stopped")
+		log.Info().Msg("NotificationManager stopped")
+	})
 }

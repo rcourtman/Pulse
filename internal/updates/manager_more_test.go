@@ -102,6 +102,24 @@ func TestConfiguredStageDelay(t *testing.T) {
 	}
 }
 
+func TestManagerCloseIsIdempotentAndUpdateStatusAfterCloseIsSafe(t *testing.T) {
+	manager := NewManager(&config.Config{})
+
+	manager.Close()
+	manager.Close()
+
+	manager.updateStatus("idle", 0, "after close")
+
+	select {
+	case _, ok := <-manager.GetProgressChannel():
+		if ok {
+			t.Fatal("expected progress channel to remain closed")
+		}
+	default:
+		t.Fatal("expected progress channel to be closed")
+	}
+}
+
 func TestGetLatestReleaseFromFeedMocked(t *testing.T) {
 	feed := `<?xml version="1.0" encoding="UTF-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom">

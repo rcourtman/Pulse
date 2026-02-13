@@ -192,7 +192,13 @@ func DownloadAndInstallHostAgentBinaries(version string, targetDir string) (retE
 	if err != nil {
 		return fmt.Errorf("failed to create temporary archive file: %w", err)
 	}
-	defer removeFileWithContext(&retErr, tempFile.Name(), "failed to remove temporary archive file")
+	tempFileNeedsClose := true
+	defer func() {
+		if tempFileNeedsClose {
+			_ = closeFileFn(tempFile)
+		}
+		_ = removeFn(tempFile.Name())
+	}()
 
 	resp, err := httpClient.Get(url)
 	if err != nil {
@@ -221,6 +227,7 @@ func DownloadAndInstallHostAgentBinaries(version string, targetDir string) (retE
 	if err := closeFileFn(tempFile); err != nil {
 		return fmt.Errorf("failed to close temporary bundle file: %w", err)
 	}
+	tempFileNeedsClose = false
 
 	checksumURL := checksumURLForVersion(normalizedVersion)
 	if err := verifyHostAgentBundleChecksum(tempFile.Name(), bundleURL, checksumURL); err != nil {

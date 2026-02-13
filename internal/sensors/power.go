@@ -40,6 +40,25 @@ var raplBasePath = "/sys/class/powercap/intel-rapl"
 // Shorter intervals are less accurate; longer intervals add latency.
 const sampleInterval = 100 * time.Millisecond
 
+func waitForSample(ctx context.Context) error {
+	timer := time.NewTimer(sampleInterval)
+	defer func() {
+		if !timer.Stop() {
+			select {
+			case <-timer.C:
+			default:
+			}
+		}
+	}()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
 // CollectPower reads power consumption data from the system.
 // Supports Intel RAPL and AMD energy driver.
 // Returns nil if no power data is available.

@@ -48,8 +48,8 @@ func SetEnabled(enable bool) {
 }
 
 func setEnabled(enable bool, fromInit bool) {
-	modeMu.Lock()
-	defer modeMu.Unlock()
+	setEnabledMu.Lock()
+	defer setEnabledMu.Unlock()
 
 	current := enabled.Load()
 	if current == enable {
@@ -140,7 +140,10 @@ func disableMockMode() {
 		return
 	}
 	enabled.Store(false)
-	stopUpdateLoop()
+	stopUpdateLoopSignalLocked()
+	dataMu.Unlock()
+
+	waitForUpdateLoopStop()
 
 	dataMu.Lock()
 	mockData = models.StateSnapshot{}
@@ -182,6 +185,11 @@ func stopUpdateLoop() {
 }
 
 func stopUpdateLoopLocked() {
+	stopUpdateLoopSignalLocked()
+	waitForUpdateLoopStop()
+}
+
+func stopUpdateLoopSignalLocked() {
 	if ch := stopUpdatesCh; ch != nil {
 		close(ch)
 		stopUpdatesCh = nil
@@ -190,7 +198,9 @@ func stopUpdateLoopLocked() {
 		ticker.Stop()
 		updateTicker = nil
 	}
-	// Wait for the update goroutine to exit
+}
+
+func waitForUpdateLoopStop() {
 	updateLoopWg.Wait()
 }
 

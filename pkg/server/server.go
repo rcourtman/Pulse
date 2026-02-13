@@ -22,7 +22,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/license"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license/conversion"
 	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
-	_ "github.com/rcourtman/pulse-go-rewrite/internal/mock" // Import for init() to run
+	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
@@ -65,6 +65,7 @@ func Run(ctx context.Context, version string) error {
 		Level:     "info",
 		Component: "pulse",
 	})
+	defer logging.Shutdown()
 
 	// Check for auto-import on first startup
 	if ShouldAutoImport() {
@@ -444,6 +445,11 @@ shutdown:
 
 	// Stop AI chat service (kills sidecar process group)
 	router.StopAIChat(shutdownCtx)
+
+	// Ensure mock-mode background update ticker is stopped before process exit.
+	if mock.IsMockEnabled() {
+		mock.SetEnabled(false)
+	}
 
 	cancel()
 	reloadableMonitor.Stop()

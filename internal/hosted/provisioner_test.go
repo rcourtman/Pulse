@@ -44,6 +44,30 @@ func (m *mockAuthManager) UpdateUserRoles(userID string, roles []string) error {
 	return m.updateErr
 }
 
+type mockOrgPersistence struct {
+	base    *config.MultiTenantPersistence
+	saveErr error
+}
+
+func (m *mockOrgPersistence) GetPersistence(orgID string) (*config.ConfigPersistence, error) {
+	return m.base.GetPersistence(orgID)
+}
+
+func (m *mockOrgPersistence) SaveOrganization(org *models.Organization) error {
+	if m.saveErr != nil {
+		return m.saveErr
+	}
+	return m.base.SaveOrganization(org)
+}
+
+func (m *mockOrgPersistence) LoadOrganization(orgID string) (*models.Organization, error) {
+	return m.base.LoadOrganization(orgID)
+}
+
+func (m *mockOrgPersistence) ListOrganizations() ([]*models.Organization, error) {
+	return m.base.ListOrganizations()
+}
+
 func TestProvisionTenantSuccess(t *testing.T) {
 	baseDir := t.TempDir()
 	persistence := config.NewMultiTenantPersistence(baseDir)

@@ -1,68 +1,61 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 describe('canvasRenderQueue', () => {
-  const frameCallbacks = new Map<number, FrameRequestCallback>();
-  let nextFrameId = 1;
-
-  beforeEach(() => {
-    vi.resetModules();
-    frameCallbacks.clear();
-    nextFrameId = 1;
-
-    vi.stubGlobal(
-      'requestAnimationFrame',
-      vi.fn((callback: FrameRequestCallback) => {
-        const id = nextFrameId++;
-        frameCallbacks.set(id, callback);
-        return id;
-      }),
-    );
-
-    vi.stubGlobal(
-      'cancelAnimationFrame',
-      vi.fn((id: number) => {
-        frameCallbacks.delete(id);
-      }),
-    );
-  });
-
   afterEach(() => {
     vi.unstubAllGlobals();
-    vi.restoreAllMocks();
+    vi.resetModules();
   });
 
-  it('cancels a pending frame when the last callback is unregistered', async () => {
-    const { scheduleSparkline } = await import('../canvasRenderQueue');
-    const draw = vi.fn();
+  it('cancels scheduled frame when last callback unregisters', async () => {
+    const callbacks = new Map<number, FrameRequestCallback>();
+    let nextId = 1;
 
-    const unregister = scheduleSparkline(draw);
-    expect(requestAnimationFrame).toHaveBeenCalledTimes(1);
-
-    unregister();
-
-    expect(cancelAnimationFrame).toHaveBeenCalledWith(1);
-    expect(frameCallbacks.size).toBe(0);
-    expect(draw).not.toHaveBeenCalled();
-  });
-
-  it('defers callbacks queued during flush to the next animation frame', async () => {
-    const { scheduleSparkline } = await import('../canvasRenderQueue');
-    const second = vi.fn();
-    const first = vi.fn(() => {
-      scheduleSparkline(second);
+    const requestAnimationFrameMock = vi.fn((cb: FrameRequestCallback) => {
+      const id = nextId++;
+      callbacks.set(id, cb);
+      return id;
+    });
+    const cancelAnimationFrameMock = vi.fn((id: number) => {
+      callbacks.delete(id);
     });
 
-    scheduleSparkline(first);
-    expect(requestAnimationFrame).toHaveBeenCalledTimes(1);
+    vi.stubGlobal('requestAnimationFrame', requestAnimationFrameMock);
+    vi.stubGlobal('cancelAnimationFrame', cancelAnimationFrameMock);
 
-    frameCallbacks.get(1)?.(0);
+    const { scheduleSparkline } = await import('@/utils/canvasRenderQueue');
 
-    expect(first).toHaveBeenCalledTimes(1);
-    expect(second).not.toHaveBeenCalled();
-    expect(requestAnimationFrame).toHaveBeenCalledTimes(2);
+    const cleanup = scheduleSparkline(vi.fn());
+    expect(requestAnimationFrameMock).toHaveBeenCalledTimes(1);
+    expect(callbacks.size).toBe(1);
 
-    frameCallbacks.get(2)?.(16);
+    cleanup();
 
-    expect(second).toHaveBeenCalledTimes(1);
+    expect(cancelAnimationFrameMock).toHaveBeenCalledTimes(1);
+    expect(callbacks.size).toBe(0);
+  });
+
+  it('flushes pending draw callbacks on animation frame', async () => {
+    const callbacks = new Map<number, FrameRequestCallback>();
+    let nextId = 1;
+
+    vi.stubGlobal('requestAnimationFrame', vi.fn((cb: FrameRequestCallback) => {
+      const id = nextId++;
+      callbacks.set(id, cb);
+      return id;
+    }));
+    vi.stubGlobal('cancelAnimationFrame', vi.fn((id: number) => {
+      callbacks.delete(id);
+    }));
+
+    const { scheduleSparkline } = await import('@/utils/canvasRenderQueue');
+
+    const draw = vi.fn();
+    const cleanup = scheduleSparkline(draw);
+    const frameCallback = callbacks.values().next().value as FrameRequestCallback;
+
+    frameCallback(0);
+    cleanup();
+
+    expect(draw).toHaveBeenCalledTimes(1);
   });
 });

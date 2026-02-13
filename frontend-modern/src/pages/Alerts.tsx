@@ -2388,14 +2388,20 @@ function OverviewTab(props: {
     new Set(INCIDENT_EVENT_TYPES),
   );
   const [lastHashScrolled, setLastHashScrolled] = createSignal<string | null>(null);
-  let hashScrollRafId: number | undefined;
-  const pendingProcessingResetTimeouts = new Set<number>();
+  const processingReleaseTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+  const clearProcessingReleaseTimer = (alertId: string) => {
+    const timer = processingReleaseTimers.get(alertId);
+    if (timer === undefined) {
+      return;
+    }
+    clearTimeout(timer);
+    processingReleaseTimers.delete(alertId);
+  };
 
   onCleanup(() => {
-    for (const timer of pendingProcessingClearTimers) {
-      clearTimeout(timer);
-    }
-    pendingProcessingClearTimers.clear();
+    processingReleaseTimers.forEach((timer) => clearTimeout(timer));
+    processingReleaseTimers.clear();
   });
 
   const loadIncidentTimeline = async (alertId: string, startedAt?: string) => {
@@ -2841,15 +2847,16 @@ function OverviewTab(props: {
                             // Don't update local state on error - let WebSocket keep the correct state
                           } finally {
                             // Keep button disabled for longer to prevent race conditions with WebSocket updates
+                            clearProcessingReleaseTimer(alert.id);
                             const timer = setTimeout(() => {
-                              pendingProcessingClearTimers.delete(timer);
+                              processingReleaseTimers.delete(alert.id);
                               setProcessingAlerts((prev) => {
                                 const next = new Set(prev);
                                 next.delete(alert.id);
                                 return next;
                               });
                             }, 1500); // 1.5 seconds to allow server to process and WebSocket to sync
-                            pendingProcessingClearTimers.add(timer);
+                            processingReleaseTimers.set(alert.id, timer);
                           }
                         }}
                       >

@@ -1,9 +1,19 @@
 import { createRoot } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-type UseAnomaliesModule = typeof import('@/hooks/useAnomalies');
+const { getAnomaliesMock } = vi.hoisted(() => ({
+  getAnomaliesMock: vi.fn(),
+}));
 
-const flushAsync = async () => {
+vi.mock('@/api/ai', () => ({
+  AIAPI: {
+    getAnomalies: getAnomaliesMock,
+  },
+}));
+
+import { useAllAnomalies } from '@/hooks/useAnomalies';
+
+const flushMicrotasks = async () => {
   await Promise.resolve();
   await Promise.resolve();
 };
@@ -33,57 +43,53 @@ describe('useAnomalies', () => {
 
   afterEach(() => {
     vi.useRealTimers();
-    vi.clearAllMocks();
-    vi.resetModules();
   });
 
-  it('shares a single polling interval across consumers and stops on last dispose', async () => {
-    let disposeFirst = () => {};
+  it('keeps refresh interval alive until the last consumer unmounts', async () => {
+    let disposeA!: () => void;
+    let disposeB!: () => void;
+
     createRoot((dispose) => {
-      disposeFirst = dispose;
+      disposeA = dispose;
+      useAllAnomalies();
+    });
+    createRoot((dispose) => {
+      disposeB = dispose;
       useAllAnomalies();
     });
 
-    let disposeSecond = () => {};
-    createRoot((dispose) => {
-      disposeSecond = dispose;
-      useAnomalyForMetric(() => 'resource-1', () => 'cpu');
-    });
-
-    await flushAsync();
+    await flushMicrotasks();
     expect(getAnomaliesMock).toHaveBeenCalledTimes(1);
 
     vi.advanceTimersByTime(30_000);
-    await flushAsync();
+    await flushMicrotasks();
     expect(getAnomaliesMock).toHaveBeenCalledTimes(2);
 
-    disposeFirst();
-
+    disposeA();
     vi.advanceTimersByTime(30_000);
-    await flushAsync();
+    await flushMicrotasks();
     expect(getAnomaliesMock).toHaveBeenCalledTimes(3);
 
-    disposeSecond();
-
-    vi.advanceTimersByTime(60_000);
-    await flushAsync();
+    disposeB();
+    vi.advanceTimersByTime(30_000);
+    await flushMicrotasks();
     expect(getAnomaliesMock).toHaveBeenCalledTimes(3);
   });
 
-  it('restarts polling when a new consumer mounts after full cleanup', async () => {
-    let dispose = () => {};
+  it('restarts polling when a new consumer mounts after full teardown', async () => {
+    let dispose!: () => void;
+
     createRoot((rootDispose) => {
       dispose = rootDispose;
       useAllAnomalies();
     });
 
-    await flushAsync();
+    await flushMicrotasks();
     expect(getAnomaliesMock).toHaveBeenCalledTimes(1);
 
     dispose();
-
     vi.advanceTimersByTime(30_000);
-    await flushAsync();
+    await flushMicrotasks();
     expect(getAnomaliesMock).toHaveBeenCalledTimes(1);
 
     createRoot((rootDispose) => {

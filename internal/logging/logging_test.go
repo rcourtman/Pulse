@@ -23,6 +23,14 @@ func resetLoggingState() {
 	mu.Lock()
 	defer mu.Unlock()
 
+	// Always use the real close function during test cleanup so active writers
+	// can be closed even when a test has stubbed closeFileFn.
+	closeFileFn = defaultCloseFileFn
+	if fileCloser != nil {
+		_ = fileCloser.Close()
+		fileCloser = nil
+	}
+
 	baseWriter = os.Stderr
 	baseComponent = ""
 	baseLogger = zerolog.New(baseWriter).With().Timestamp().Logger()
@@ -46,6 +54,8 @@ func resetLoggingState() {
 	chmodFileFn = func(file *os.File, mode os.FileMode) error { return file.Chmod(mode) }
 	closeFileFn = defaultCloseFileFn
 	compressFn = compressAndRemove
+
+	GetBroadcaster().Shutdown()
 }
 
 func baseWriterDebugString() string {
@@ -290,6 +300,59 @@ func TestRollingFileWriter(t *testing.T) {
 	}
 	if len(data) == 0 {
 		t.Fatal("expected log file to have content")
+	}
+}
+
+func TestInitClosesPreviousRollingFileWriter(t *testing.T) {
+	t.Cleanup(resetLoggingState)
+
+	dir := t.TempDir()
+	logFile := filepath.Join(dir, "app.log")
+	closeCalls := 0
+	closeFileFn = func(file *os.File) error {
+		closeCalls++
+		return file.Close()
+	}
+
+	Init(Config{Format: "json", FilePath: logFile})
+	Init(Config{Format: "json", FilePath: logFile})
+
+	if closeCalls != 1 {
+		t.Fatalf("expected previous file writer to be closed once, got %d", closeCalls)
+	}
+}
+
+func TestShutdownClosesActiveRollingFileWriterAndSubscribers(t *testing.T) {
+	t.Cleanup(resetLoggingState)
+
+	dir := t.TempDir()
+	logFile := filepath.Join(dir, "app.log")
+	closeCalls := 0
+	closeFileFn = func(file *os.File) error {
+		closeCalls++
+		return file.Close()
+	}
+
+	Init(Config{Format: "json", FilePath: logFile})
+	_, ch, _ := GetBroadcaster().Subscribe()
+
+	Shutdown()
+	Shutdown()
+
+	if closeCalls != 1 {
+		t.Fatalf("expected active file writer to be closed once, got %d", closeCalls)
+	}
+	if fileCloser != nil {
+		t.Fatal("expected fileCloser to be cleared after shutdown")
+	}
+
+	select {
+	case _, ok := <-ch:
+		if ok {
+			t.Fatal("expected subscriber channel to be closed on shutdown")
+		}
+	default:
+		t.Fatal("expected subscriber channel to be closed immediately")
 	}
 }
 

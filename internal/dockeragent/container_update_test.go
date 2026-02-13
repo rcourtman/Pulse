@@ -225,6 +225,9 @@ func TestUpdateContainer_Errors(t *testing.T) {
 func TestUpdateContainer_Success(t *testing.T) {
 	logger := zerolog.Nop()
 	swap(t, &sleepFn, func(time.Duration) {})
+	swap(t, &newTimerFn, func(time.Duration) *time.Timer {
+		return time.NewTimer(0)
+	})
 	swap(t, &nowFn, func() time.Time {
 		return time.Date(2024, 3, 1, 12, 0, 0, 0, time.UTC)
 	})
@@ -299,6 +302,9 @@ func TestUpdateContainer_Success(t *testing.T) {
 func TestUpdateContainer_CleanupError(t *testing.T) {
 	logger := zerolog.Nop()
 	swap(t, &sleepFn, func(time.Duration) {})
+	swap(t, &newTimerFn, func(time.Duration) *time.Timer {
+		return time.NewTimer(0)
+	})
 	swap(t, &nowFn, func() time.Time {
 		return time.Date(2024, 3, 1, 12, 0, 0, 0, time.UTC)
 	})

@@ -182,10 +182,17 @@ func (c *Client) Run(ctx context.Context) error {
 				c.logger.Warn().Msg("license error from relay server, pausing reconnect")
 			}
 
+			timer := time.NewTimer(delay)
 			select {
 			case <-ctx.Done():
+				if !timer.Stop() {
+					select {
+					case <-timer.C:
+					default:
+					}
+				}
 				return ctx.Err()
-			case <-time.After(delay):
+			case <-timer.C:
 			}
 		} else {
 			consecutiveFailures = 0
@@ -205,23 +212,25 @@ func nextConsecutiveFailures(current int, connected bool) int {
 
 // Close stops the client and closes the connection.
 func (c *Client) Close() {
-	c.lifecycleMu.Lock()
+	c.mu.RLock()
 	cancel := c.cancel
 	done := c.done
-	c.lifecycleMu.Unlock()
+	c.mu.RUnlock()
 
-	if cancel != nil {
-		cancel()
-	}
-	if done == nil {
+	if cancel == nil {
 		return
 	}
 
+	cancel()
 	// Wait for Run to finish
+	timer := time.NewTimer(5 * time.Second)
+	defer timer.Stop()
 	select {
 	case <-done:
-	case <-time.After(5 * time.Second):
+	case <-timer.C:
 	}
+
+	c.proxy.Close()
 }
 
 // Status returns the current client status.
@@ -334,7 +343,10 @@ func (c *Client) connectAndHandle(ctx context.Context) (bool, error) {
 	// would keep running against a stale sendCh until the whole client stops.
 	connCtx, connCancel := context.WithCancel(ctx)
 	defer connCancel()
-	dataLimiter := make(chan struct{}, maxConcurrentDataHandlers)
+	go func() {
+		<-connCtx.Done()
+		_ = conn.Close()
+	}()
 
 	go c.writePump(connCtx, conn, sendCh)
 

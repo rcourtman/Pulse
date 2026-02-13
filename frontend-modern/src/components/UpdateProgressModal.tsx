@@ -249,7 +249,7 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
 
   // Watch websocket status during restart
   createEffect(() => {
-    if (!isRestarting()) return;
+    if (!props.isOpen || !isRestarting()) return;
 
     const connected = props.connected?.();
     const reconnecting = props.reconnecting?.();
@@ -263,7 +263,8 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
     if (wsDisconnected() && connected === true && !reconnecting) {
       logger.info('WebSocket reconnected after restart, verifying health...');
       // Give it a moment for the backend to fully initialize
-      setTimeout(async () => {
+      const reconnectTimer = window.setTimeout(async () => {
+        if (!props.isOpen) return;
         try {
           const response = await apiFetch('/api/health', { cache: 'no-store' });
           if (response.ok) {
@@ -274,6 +275,7 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
           logger.warn('Health check failed after websocket reconnect, will keep trying');
         }
       }, 1000);
+      onCleanup(() => window.clearTimeout(reconnectTimer));
     }
   });
 

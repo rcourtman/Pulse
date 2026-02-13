@@ -392,6 +392,8 @@ func (a *Agent) discoverClusterMetadata(ctx context.Context) error {
 }
 
 func (a *Agent) Run(ctx context.Context) error {
+	defer a.closeIdleConnections()
+
 	ticker := time.NewTicker(a.interval)
 	defer ticker.Stop()
 
@@ -405,6 +407,13 @@ func (a *Agent) Run(ctx context.Context) error {
 			return nil
 		}
 	}
+}
+
+func (a *Agent) closeIdleConnections() {
+	if a == nil || a.httpClient == nil {
+		return
+	}
+	a.httpClient.CloseIdleConnections()
 }
 
 func (a *Agent) runOnce(ctx context.Context) {

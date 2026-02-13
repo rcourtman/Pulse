@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -28,8 +29,10 @@ type SSEBroadcaster struct {
 	cachedStatus     UpdateStatus
 	cachedStatusTime time.Time
 	statusMu         sync.RWMutex
-	closeCh          chan struct{}
+	stopCh           chan struct{}
 	closeOnce        sync.Once
+	loopWg           sync.WaitGroup
+	closed           atomic.Bool
 }
 
 // NewSSEBroadcaster creates a new SSE broadcaster
@@ -37,7 +40,7 @@ func NewSSEBroadcaster() *SSEBroadcaster {
 	b := &SSEBroadcaster{
 		clients:     make(map[string]*SSEClient),
 		messageChan: make(chan UpdateStatus, 100),
-		closeCh:     make(chan struct{}),
+		stopCh:      make(chan struct{}),
 		cachedStatus: UpdateStatus{
 			Status:    "idle",
 			UpdatedAt: time.Now().Format(time.RFC3339),
@@ -46,9 +49,11 @@ func NewSSEBroadcaster() *SSEBroadcaster {
 	}
 
 	// Start the broadcast loop
+	b.loopWg.Add(1)
 	go b.broadcastLoop()
 
 	// Start client cleanup loop
+	b.loopWg.Add(1)
 	go b.cleanupLoop()
 
 	return b
@@ -56,7 +61,7 @@ func NewSSEBroadcaster() *SSEBroadcaster {
 
 // AddClient registers a new SSE client
 func (b *SSEBroadcaster) AddClient(w http.ResponseWriter, clientID string) *SSEClient {
-	if b.isClosed() {
+	if b.closed.Load() {
 		return nil
 	}
 
@@ -75,17 +80,17 @@ func (b *SSEBroadcaster) AddClient(w http.ResponseWriter, clientID string) *SSEC
 	}
 
 	b.mu.Lock()
-	if b.isClosed() {
+	if b.closed.Load() {
 		b.mu.Unlock()
 		return nil
 	}
 	b.clients[clientID] = client
-	totalClients := len(b.clients)
+	clientCount := len(b.clients)
 	b.mu.Unlock()
 
 	log.Info().
 		Str("client_id", clientID).
-		Int("total_clients", totalClients).
+		Int("total_clients", clientCount).
 		Msg("SSE client connected")
 
 	// Send the current cached status immediately to the new client
@@ -103,21 +108,25 @@ func (b *SSEBroadcaster) AddClient(w http.ResponseWriter, clientID string) *SSEC
 // RemoveClient unregisters an SSE client
 func (b *SSEBroadcaster) RemoveClient(clientID string) {
 	b.mu.Lock()
-	defer b.mu.Unlock()
-
-	if client, exists := b.clients[clientID]; exists {
-		closeDone(client.Done)
+	client, exists := b.clients[clientID]
+	if exists {
+		close(client.Done)
 		delete(b.clients, clientID)
+	}
+	clientCount := len(b.clients)
+	b.mu.Unlock()
+
+	if exists {
 		log.Info().
 			Str("client_id", clientID).
-			Int("total_clients", len(b.clients)).
+			Int("total_clients", clientCount).
 			Msg("SSE client disconnected")
 	}
 }
 
 // Broadcast sends an update status to all connected clients
 func (b *SSEBroadcaster) Broadcast(status UpdateStatus) {
-	if b.isClosed() {
+	if b.closed.Load() {
 		return
 	}
 
@@ -132,6 +141,7 @@ func (b *SSEBroadcaster) Broadcast(status UpdateStatus) {
 	case <-b.closeCh:
 		return
 	case b.messageChan <- status:
+	case <-b.stopCh:
 	default:
 		log.Warn().Msg("SSE message channel full, dropping message")
 	}
@@ -153,9 +163,11 @@ func (b *SSEBroadcaster) GetClientCount() int {
 
 // broadcastLoop continuously broadcasts messages to all clients
 func (b *SSEBroadcaster) broadcastLoop() {
+	defer b.loopWg.Done()
+
 	for {
 		select {
-		case <-b.closeCh:
+		case <-b.stopCh:
 			return
 		case status := <-b.messageChan:
 			b.mu.RLock()
@@ -238,24 +250,21 @@ func (b *SSEBroadcaster) sendToClient(client *SSEClient, status UpdateStatus) {
 
 // cleanupLoop periodically removes inactive clients
 func (b *SSEBroadcaster) cleanupLoop() {
+	defer b.loopWg.Done()
+
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
 	for {
 		select {
-		case <-b.closeCh:
+		case <-b.stopCh:
 			return
 		case <-ticker.C:
 			now := time.Now()
-			b.mu.RLock()
-			clients := make([]*SSEClient, 0, len(b.clients))
-			for _, client := range b.clients {
-				clients = append(clients, client)
-			}
-			b.mu.RUnlock()
+			b.mu.Lock()
 
 			idsToRemove := make([]string, 0)
-			for _, client := range clients {
+			for id, client := range b.clients {
 				// Acquire client lock to safely read LastActive (written by sendToClient/SendHeartbeat)
 				client.mu.Lock()
 				inactive := now.Sub(client.LastActive) > 5*time.Minute
@@ -263,23 +272,28 @@ func (b *SSEBroadcaster) cleanupLoop() {
 
 				// Remove clients inactive for more than 5 minutes
 				if inactive {
-					idsToRemove = append(idsToRemove, client.ID)
+					idsToRemove = append(idsToRemove, id)
 				}
 			}
 
 			for _, id := range idsToRemove {
-				b.RemoveClient(id)
-				log.Info().
-					Str("client_id", id).
-					Msg("Removed inactive SSE client")
+				if client, exists := b.clients[id]; exists {
+					close(client.Done)
+					delete(b.clients, id)
+					log.Info().
+						Str("client_id", id).
+						Msg("Removed inactive SSE client")
+				}
 			}
+
+			b.mu.Unlock()
 		}
 	}
 }
 
 // SendHeartbeat sends a heartbeat comment to all clients to keep connections alive
 func (b *SSEBroadcaster) SendHeartbeat() {
-	if b.isClosed() {
+	if b.closed.Load() {
 		return
 	}
 

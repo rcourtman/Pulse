@@ -38,6 +38,15 @@ type UpdateManager interface {
 
 // NewUpdateHandlers creates new update handlers
 func NewUpdateHandlers(manager UpdateManager, history *updates.UpdateHistory) *UpdateHandlers {
+	return NewUpdateHandlersWithContext(manager, history, context.Background())
+}
+
+// NewUpdateHandlersWithContext creates update handlers with a stoppable cleanup loop.
+func NewUpdateHandlersWithContext(manager UpdateManager, history *updates.UpdateHistory, cleanupCtx context.Context) *UpdateHandlers {
+	if cleanupCtx == nil {
+		cleanupCtx = context.Background()
+	}
+
 	// Initialize updater registry
 	registry := updates.NewUpdaterRegistry()
 
@@ -58,7 +67,7 @@ func NewUpdateHandlers(manager UpdateManager, history *updates.UpdateHistory) *U
 	}
 
 	// Start periodic cleanup of rate limit map
-	go h.cleanupRateLimits()
+	go h.cleanupRateLimits(cleanupCtx)
 
 	return h
 }
@@ -286,12 +295,17 @@ func (h *UpdateHandlers) HandleUpdateStream(w http.ResponseWriter, r *http.Reque
 }
 
 // cleanupRateLimits periodically cleans up old entries from the rate limit map
-func (h *UpdateHandlers) cleanupRateLimits() {
+func (h *UpdateHandlers) cleanupRateLimits(ctx context.Context) {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		h.doCleanupRateLimits(time.Now())
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			h.doCleanupRateLimits(time.Now())
+		}
 	}
 }
 

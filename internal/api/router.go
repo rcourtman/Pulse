@@ -121,6 +121,8 @@ type Router struct {
 	relayMu              sync.RWMutex
 	relayClient          *relay.Client
 	relayCancel          context.CancelFunc
+	lifecycleCtx         context.Context
+	lifecycleCancel      context.CancelFunc
 	hostedMode           bool
 	conversionStore      *conversion.ConversionStore
 }
@@ -175,6 +177,7 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monit
 
 	updateManager := updates.NewManager(cfg)
 	updateManager.SetHistory(updateHistory)
+	lifecycleCtx, lifecycleCancel := context.WithCancel(context.Background())
 
 	r := &Router{
 		mux:               http.NewServeMux(),
@@ -194,6 +197,8 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monit
 		serverVersion:     strings.TrimSpace(serverVersion),
 		projectRoot:       projectRoot,
 		checksumCache:     make(map[string]checksumCacheEntry),
+		lifecycleCtx:      lifecycleCtx,
+		lifecycleCancel:   lifecycleCancel,
 		hostedMode:        os.Getenv("PULSE_HOSTED_MODE") == "true",
 		conversionStore:   store,
 	}
@@ -223,7 +228,7 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monit
 	go r.forwardUpdateProgress()
 
 	// Start background update checker
-	go r.backgroundUpdateChecker()
+	go r.backgroundUpdateChecker(r.lifecycleCtx)
 
 	// Load system settings once at startup and cache them
 	r.reloadSystemSettings()
@@ -294,8 +299,8 @@ func (r *Router) setupRoutes() {
 		getMonitor:     r.configHandlers.getMonitor,
 	}
 	r.trueNASPoller = monitoring.NewTrueNASPoller(r.resourceRegistry, r.persistence, 0)
-	r.trueNASPoller.Start(context.Background())
-	updateHandlers := NewUpdateHandlers(r.updateManager, r.updateHistory)
+	r.trueNASPoller.Start(r.lifecycleCtx)
+	updateHandlers := NewUpdateHandlersWithContext(r.updateManager, r.updateHistory, r.lifecycleCtx)
 	r.dockerAgentHandlers = NewDockerAgentHandlers(r.mtMonitor, r.monitor, r.wsHub, r.config)
 	r.kubernetesAgentHandlers = NewKubernetesAgentHandlers(r.mtMonitor, r.monitor, r.wsHub)
 	r.hostAgentHandlers = NewHostAgentHandlers(r.mtMonitor, r.monitor, r.wsHub)
@@ -1502,6 +1507,8 @@ func (r *Router) StopPatrol() {
 // ShutdownAIIntelligence gracefully shuts down all AI intelligence services (Phase 6)
 // This should be called during application shutdown to ensure proper cleanup
 func (r *Router) ShutdownAIIntelligence() {
+	r.shutdownBackgroundWorkers()
+
 	if r.aiSettingsHandler == nil {
 		return
 	}
@@ -1544,6 +1551,15 @@ func (r *Router) ShutdownAIIntelligence() {
 	}
 
 	log.Info().Msg("AI Intelligence: Graceful shutdown complete")
+}
+
+func (r *Router) shutdownBackgroundWorkers() {
+	if r.lifecycleCancel != nil {
+		r.lifecycleCancel()
+	}
+	if r.trueNASPoller != nil {
+		r.trueNASPoller.Stop()
+	}
 }
 
 // StartAIChat starts the AI chat service
@@ -2359,10 +2375,13 @@ func (r *Router) startBaselineLearning(ctx context.Context, store *ai.BaselineSt
 	defer ticker.Stop()
 
 	// Run initial learning after a short delay (allow metrics to accumulate)
+	initialDelay := time.NewTimer(5 * time.Minute)
+	defer initialDelay.Stop()
+
 	select {
 	case <-ctx.Done():
 		return
-	case <-time.After(5 * time.Minute):
+	case <-initialDelay.C:
 		r.learnBaselines(store, metricsHistory)
 	}
 
@@ -7424,11 +7443,21 @@ func (r *Router) forwardUpdateProgress() {
 }
 
 // backgroundUpdateChecker periodically checks for updates and caches the result
-func (r *Router) backgroundUpdateChecker() {
-	// Delay initial check to allow WebSocket clients to receive welcome messages first
-	time.Sleep(1 * time.Second)
+func (r *Router) backgroundUpdateChecker(ctx context.Context) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 
-	ctx := context.Background()
+	// Delay initial check to allow WebSocket clients to receive welcome messages first
+	startupDelay := time.NewTimer(1 * time.Second)
+	defer startupDelay.Stop()
+
+	select {
+	case <-ctx.Done():
+		return
+	case <-startupDelay.C:
+	}
+
 	if _, err := r.updateManager.CheckForUpdates(ctx); err != nil {
 		log.Debug().Err(err).Msg("Initial update check failed")
 	} else {
@@ -7439,11 +7468,16 @@ func (r *Router) backgroundUpdateChecker() {
 	ticker := time.NewTicker(1 * time.Hour)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		if _, err := r.updateManager.CheckForUpdates(ctx); err != nil {
-			log.Debug().Err(err).Msg("Periodic update check failed")
-		} else {
-			log.Debug().Msg("Periodic update check completed")
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if _, err := r.updateManager.CheckForUpdates(ctx); err != nil {
+				log.Debug().Err(err).Msg("Periodic update check failed")
+			} else {
+				log.Debug().Msg("Periodic update check completed")
+			}
 		}
 	}
 }

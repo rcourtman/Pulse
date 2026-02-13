@@ -63,27 +63,27 @@ type Agent struct {
 	logger     zerolog.Logger
 	httpClient *http.Client
 
-	hostInfo               *gohost.InfoStat
-	hostname               string
-	displayName            string
-	platform               string
-	osName                 string
-	osVersion              string
-	kernelVersion          string
-	architecture           string
-	machineID              string
-	agentID                string
-	agentVersion           string
-	updatedFrom            string // Previous version if recently auto-updated (reported once)
-	reportIP               string // User-specified IP to report (for multi-NIC systems)
-	interval               time.Duration
-	trimmedPulseURL        string
-	reportBuffer           *buffer.Queue[agentshost.Report]
-	commandClient          *CommandClient
-	commandClientMu        sync.Mutex
-	commandClientRunCancel context.CancelFunc
-	commandClientParentCtx context.Context
-	collector              SystemCollector
+	hostInfo        *gohost.InfoStat
+	hostname        string
+	displayName     string
+	platform        string
+	osName          string
+	osVersion       string
+	kernelVersion   string
+	architecture    string
+	machineID       string
+	agentID         string
+	agentVersion    string
+	updatedFrom     string // Previous version if recently auto-updated (reported once)
+	reportIP        string // User-specified IP to report (for multi-NIC systems)
+	interval        time.Duration
+	trimmedPulseURL string
+	reportBuffer    *buffer.Queue[agentshost.Report]
+	commandClient   *CommandClient
+	runCtx          context.Context
+	commandCancel   context.CancelFunc
+	commandDone     chan struct{}
+	collector       SystemCollector
 }
 
 const defaultInterval = 30 * time.Second
@@ -386,8 +386,8 @@ func (a *Agent) Run(ctx context.Context) error {
 	}
 
 	// Start command client in background for AI command execution
-	if commandClient != nil {
-		a.startCommandClient(commandClient)
+	if a.commandClient != nil {
+		a.startCommandClient()
 	}
 
 	ticker := time.NewTicker(a.interval)
@@ -675,17 +675,54 @@ func (a *Agent) applyRemoteConfig(commandsEnabled bool) {
 			return
 		}
 		a.commandClient = client
-		if runCtx == nil {
-			a.commandMu.Unlock()
-			a.logger.Debug().Msg("Command client start deferred until agent run loop is active")
-			return
-		}
-		a.commandMu.Unlock()
-		a.startCommandClient(runCtx)
+		a.startCommandClient()
 	} else if !commandsEnabled && currentlyEnabled {
 		// Server disabled commands, but we have a command client running
 		a.logger.Info().Msg("Server disabled command execution - stopping command client")
-		a.stopCommandClient(true)
+		a.stopCommandClient()
+		a.commandClient = nil
+	}
+}
+
+func (a *Agent) startCommandClient() {
+	if a.commandClient == nil || a.runCtx == nil || a.commandCancel != nil {
+		return
+	}
+
+	clientCtx, cancel := context.WithCancel(a.runCtx)
+	a.commandCancel = cancel
+
+	done := make(chan struct{})
+	a.commandDone = done
+	client := a.commandClient
+
+	go func() {
+		defer close(done)
+		if err := client.Run(clientCtx); err != nil && !errors.Is(err, context.Canceled) {
+			a.logger.Error().Err(err).Msg("Command client stopped with error")
+		}
+	}()
+}
+
+func (a *Agent) stopCommandClient() {
+	if a.commandCancel != nil {
+		a.commandCancel()
+		a.commandCancel = nil
+	}
+
+	if a.commandClient != nil {
+		if err := a.commandClient.Close(); err != nil {
+			a.logger.Debug().Err(err).Msg("Error closing command client connection")
+		}
+	}
+
+	if a.commandDone != nil {
+		select {
+		case <-a.commandDone:
+		case <-time.After(2 * time.Second):
+			a.logger.Warn().Msg("Timed out waiting for command client shutdown")
+		}
+		a.commandDone = nil
 	}
 }
 

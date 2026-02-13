@@ -99,12 +99,19 @@ export function AIIntelligence() {
 
   // Safety timer ref — hoisted so onStart can clear it when SSE connects
   let safetyTimerRef: ReturnType<typeof setTimeout> | undefined;
-  let findingScrollTimerRef: ReturnType<typeof setTimeout> | undefined;
+  let scrollToFindingTimerRef: ReturnType<typeof setTimeout> | undefined;
 
   const clearSafetyTimer = () => {
     if (safetyTimerRef !== undefined) {
       clearTimeout(safetyTimerRef);
       safetyTimerRef = undefined;
+    }
+  };
+
+  const clearScrollToFindingTimer = () => {
+    if (scrollToFindingTimerRef !== undefined) {
+      clearTimeout(scrollToFindingTimerRef);
+      scrollToFindingTimerRef = undefined;
     }
   };
 
@@ -151,6 +158,8 @@ export function AIIntelligence() {
 
   onCleanup(() => {
     document.removeEventListener('mousedown', handleClickOutside);
+    clearSafetyTimer();
+    clearScrollToFindingTimer();
   });
 
   // AI settings state
@@ -298,7 +307,9 @@ export function AIIntelligence() {
 
     // Safety timeout: if SSE never connects within 15s, clear optimistic state.
     // Cleared early via onStart callback when the SSE connection opens.
+    clearSafetyTimer();
     safetyTimerRef = setTimeout(() => {
+      safetyTimerRef = undefined;
       if (manualRunRequested() && !patrolStream.isStreaming()) {
         setManualRunRequested(false);
         notificationStore.error('Patrol run did not start — connection timed out');
@@ -1058,10 +1069,9 @@ export function AIIntelligence() {
               setActiveTab('findings');
               setFindingsFilterOverride('approvals');
               // Allow SolidJS to re-render with new filter before scrolling
-              if (findingScrollTimerRef !== undefined) {
-                clearTimeout(findingScrollTimerRef);
-              }
-              findingScrollTimerRef = setTimeout(() => {
+              clearScrollToFindingTimer();
+              scrollToFindingTimerRef = setTimeout(() => {
+                scrollToFindingTimerRef = undefined;
                 const el = document.getElementById(`finding-${findingId}`);
                 el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 findingScrollTimerRef = undefined;

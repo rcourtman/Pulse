@@ -20,6 +20,18 @@ type apiResponse struct {
 	contentType string
 }
 
+type closeTrackingTransport struct {
+	closeCalls int
+}
+
+func (t *closeTrackingTransport) RoundTrip(*http.Request) (*http.Response, error) {
+	return nil, nil
+}
+
+func (t *closeTrackingTransport) CloseIdleConnections() {
+	t.closeCalls++
+}
+
 func TestClientGetters(t *testing.T) {
 	server := newMockServer(t, defaultAPIResponses(), nil)
 	t.Cleanup(server.Close)
@@ -326,6 +338,28 @@ func TestClientTLSFingerprintPinning(t *testing.T) {
 	if err := badClient.TestConnection(context.Background()); err == nil {
 		t.Fatal("expected pinning failure")
 	}
+}
+
+func TestClientCloseClosesIdleConnections(t *testing.T) {
+	transport := &closeTrackingTransport{}
+	client := &Client{
+		httpClient: &http.Client{
+			Transport: transport,
+		},
+	}
+
+	client.Close()
+	if transport.closeCalls != 1 {
+		t.Fatalf("expected CloseIdleConnections to be called once, got %d", transport.closeCalls)
+	}
+}
+
+func TestClientCloseNilSafe(t *testing.T) {
+	var nilClient *Client
+	nilClient.Close()
+
+	(&Client{}).Close()
+	(&Client{httpClient: &http.Client{}}).Close()
 }
 
 func defaultAPIResponses() map[string]apiResponse {

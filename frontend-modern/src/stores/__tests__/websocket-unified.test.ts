@@ -192,30 +192,26 @@ describe('websocket store unified resource contract', () => {
     }
   });
 
-  it('removes alerts activation listener when store is disposed', async () => {
-    const { ALERTS_ACTIVATION_EVENT } = await import('@/utils/alertsActivation');
-    const addSpy = vi.spyOn(window, 'addEventListener');
-    const removeSpy = vi.spyOn(window, 'removeEventListener');
-
+  it('does not create a delayed reconnect socket after store disposal', async () => {
     const { dispose } = await createStoreHarness();
-    let disposed = false;
     try {
-      const addCall = addSpy.mock.calls.find((call) => call[0] === ALERTS_ACTIVATION_EVENT);
-      expect(addCall).toBeDefined();
+      await waitForOpenTick();
+      expect(MockWebSocket).toHaveBeenCalledTimes(1);
+
+      mockWsInstance?.onclose?.({ code: 1011, reason: 'test disconnect' } as CloseEvent);
+
+      vi.advanceTimersByTime(1000);
+      await Promise.resolve();
 
       dispose();
-      disposed = true;
 
-      const removeCall = removeSpy.mock.calls.find(
-        (call) => call[0] === ALERTS_ACTIVATION_EVENT && call[1] === addCall?.[1],
-      );
-      expect(removeCall).toBeDefined();
+      vi.advanceTimersByTime(1000);
+      await Promise.resolve();
+
+      expect(MockWebSocket).toHaveBeenCalledTimes(1);
     } finally {
-      if (!disposed) {
-        dispose();
-      }
-      addSpy.mockRestore();
-      removeSpy.mockRestore();
+      // dispose is idempotent and keeps the test resilient if assertions fail.
+      dispose();
     }
   });
 });

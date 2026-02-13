@@ -119,9 +119,13 @@ func (p *TrueNASPoller) Stop() {
 		return
 	}
 
+	timer := time.NewTimer(5 * time.Second)
+	defer timer.Stop()
+
 	select {
 	case <-stopped:
-	case <-time.After(5 * time.Second):
+		p.closeAllProviders()
+	case <-timer.C:
 		log.Printf("[TrueNASPoller] Stop timed out waiting for shutdown")
 	}
 }
@@ -178,8 +182,26 @@ func (p *TrueNASPoller) syncConnections() {
 
 	for id := range p.providers {
 		if _, ok := activeIDs[id]; !ok {
+			if provider := p.providers[id]; provider != nil {
+				provider.Close()
+			}
 			delete(p.providers, id)
 			delete(p.cachedRecordsByConnID, id)
+		}
+	}
+}
+
+func (p *TrueNASPoller) closeAllProviders() {
+	if p == nil {
+		return
+	}
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	for _, provider := range p.providers {
+		if provider != nil {
+			provider.Close()
 		}
 	}
 }

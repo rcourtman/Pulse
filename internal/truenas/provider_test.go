@@ -3,6 +3,7 @@ package truenas
 import (
 	"context"
 	"errors"
+	"net/http"
 	"testing"
 )
 
@@ -18,6 +19,18 @@ func (s *stubFetcher) Fetch(context.Context) (*FixtureSnapshot, error) {
 		return nil, s.err
 	}
 	return copyFixtureSnapshot(s.snapshot), nil
+}
+
+type closableStubFetcher struct {
+	closeCalls int
+}
+
+func (s *closableStubFetcher) Fetch(context.Context) (*FixtureSnapshot, error) {
+	return nil, nil
+}
+
+func (s *closableStubFetcher) Close() {
+	s.closeCalls++
 }
 
 func TestFixtureFetcherReturnsSnapshotCopy(t *testing.T) {
@@ -141,5 +154,30 @@ func TestRecordsDoesNotCallRefreshWhenSnapshotMissing(t *testing.T) {
 	}
 	if stub.calls != 0 {
 		t.Fatalf("expected Records() to avoid fetch calls, got %d", stub.calls)
+	}
+}
+
+func TestAPIFetcherCloseDelegatesToClient(t *testing.T) {
+	transport := &closeTrackingTransport{}
+	client := &Client{
+		httpClient: &http.Client{
+			Transport: transport,
+		},
+	}
+	fetcher := &APIFetcher{Client: client}
+
+	fetcher.Close()
+	if transport.closeCalls != 1 {
+		t.Fatalf("expected CloseIdleConnections to be called once, got %d", transport.closeCalls)
+	}
+}
+
+func TestProviderCloseDelegatesToFetcher(t *testing.T) {
+	fetcher := &closableStubFetcher{}
+	provider := NewLiveProvider(fetcher)
+
+	provider.Close()
+	if fetcher.closeCalls != 1 {
+		t.Fatalf("expected fetcher Close() to be called once, got %d", fetcher.closeCalls)
 	}
 }

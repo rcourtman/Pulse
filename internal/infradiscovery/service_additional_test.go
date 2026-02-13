@@ -15,26 +15,37 @@ import (
 )
 
 type blockingAIAnalyzer struct {
-	response  string
-	startedCh chan struct{}
-	releaseCh chan struct{}
-	callCount int32
+	started  chan struct{}
+	returned chan struct{}
 }
 
-func (b *blockingAIAnalyzer) AnalyzeForDiscovery(ctx context.Context, prompt string) (string, error) {
-	atomic.AddInt32(&b.callCount, 1)
+func (a *blockingAIAnalyzer) AnalyzeForDiscovery(ctx context.Context, prompt string) (string, error) {
 	select {
-	case b.startedCh <- struct{}{}:
+	case a.started <- struct{}{}:
 	default:
 	}
 
+	<-ctx.Done()
+
 	select {
-	case <-b.releaseCh:
-	case <-ctx.Done():
-		return "", ctx.Err()
+	case a.returned <- struct{}{}:
+	default:
 	}
 
-	return b.response, nil
+	return "", ctx.Err()
+}
+
+type countingAIAnalyzer struct {
+	callCount int32
+}
+
+func (a *countingAIAnalyzer) AnalyzeForDiscovery(ctx context.Context, prompt string) (string, error) {
+	atomic.AddInt32(&a.callCount, 1)
+	return `{"service_type": "nginx", "service_name": "Nginx", "category": "web", "cli_command": "", "confidence": 0.9, "reasoning": "Web server"}`, nil
+}
+
+func (a *countingAIAnalyzer) Calls() int32 {
+	return atomic.LoadInt32(&a.callCount)
 }
 
 func waitFor(t *testing.T, timeout time.Duration, check func() bool) {
@@ -299,7 +310,7 @@ func TestGetDiscoveriesReturnsCopy(t *testing.T) {
 	}
 }
 
-func TestRunDiscoverySkipsOverlappingRuns(t *testing.T) {
+func TestStopCancelsInFlightDiscovery(t *testing.T) {
 	provider := &mockStateProvider{
 		state: models.StateSnapshot{
 			DockerHosts: []models.DockerHost{
@@ -307,7 +318,7 @@ func TestRunDiscoverySkipsOverlappingRuns(t *testing.T) {
 					AgentID:  "agent-1",
 					Hostname: "host1",
 					Containers: []models.DockerContainer{
-						{ID: "1", Name: "db", Image: "postgres:14"},
+						{ID: "1", Name: "web", Image: "nginx:latest"},
 					},
 				},
 			},

@@ -237,7 +237,7 @@ export class AIAPI {
           if ((e as Error).message === 'Read timeout') break;
           throw e;
         } finally {
-          if (timeoutId) {
+          if (timeoutId !== undefined) {
             clearTimeout(timeoutId);
           }
         }

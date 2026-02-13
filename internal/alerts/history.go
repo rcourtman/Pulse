@@ -531,7 +531,7 @@ func (hm *HistoryManager) ClearAllHistory() error {
 // Stop stops the history manager
 func (hm *HistoryManager) Stop() {
 	hm.stopOnce.Do(func() {
-		closeSignalChannel(hm.stopChan)
+		close(hm.stopChan)
 		if hm.saveTicker != nil {
 			hm.saveTicker.Stop()
 		}

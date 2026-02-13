@@ -111,15 +111,53 @@ func TestStopClosesChannel(t *testing.T) {
 
 func TestStopIsIdempotent(t *testing.T) {
 	hub := NewHub(nil)
+	hub.Stop()
+	hub.Stop()
 
-	defer func() {
-		if r := recover(); r != nil {
-			t.Fatalf("Stop panicked on repeated call: %v", r)
+	select {
+	case _, ok := <-hub.stopChan:
+		if ok {
+			t.Fatal("expected stopChan to be closed")
 		}
+	default:
+		t.Fatal("expected stopChan to be closed after repeated Stop calls")
+	}
+}
+
+func TestTryRegisterClientReturnsFalseWhenStopped(t *testing.T) {
+	hub := NewHub(nil)
+	hub.Stop()
+
+	done := make(chan bool, 1)
+	go func() {
+		done <- hub.tryRegisterClient(&Client{
+			hub:  hub,
+			id:   "stopped-client",
+			send: make(chan []byte, 1),
+		})
 	}()
 
+	select {
+	case ok := <-done:
+		if ok {
+			t.Fatal("expected tryRegisterClient to reject client during shutdown")
+		}
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("tryRegisterClient blocked during shutdown")
+	}
+}
+
+func TestBroadcastStateSkippedWhenStopped(t *testing.T) {
+	hub := NewHub(nil)
 	hub.Stop()
-	hub.Stop()
+
+	hub.BroadcastState(map[string]string{"status": "down"})
+
+	select {
+	case <-hub.broadcastSeq:
+		t.Fatal("expected no broadcastSeq enqueue while hub is stopping")
+	default:
+	}
 }
 
 func TestHandleWebSocketPingPong(t *testing.T) {

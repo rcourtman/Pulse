@@ -101,19 +101,26 @@ func (p *Provisioner) pollHealth(ctx context.Context, containerID string) bool {
 		interval = 2 * time.Second
 		timeout  = 60 * time.Second
 	)
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	timeoutTimer := time.NewTimer(timeout)
+	defer timeoutTimer.Stop()
+
+	for {
 		ok, err := p.docker.HealthCheck(ctx, containerID)
 		if err == nil && ok {
 			return true
 		}
+
 		select {
 		case <-ctx.Done():
 			return false
-		case <-time.After(interval):
+		case <-timeoutTimer.C:
+			return false
+		case <-ticker.C:
 		}
 	}
-	return false
 }
 
 func (p *Provisioner) generateAndLogMagicLink(email, tenantID string) {

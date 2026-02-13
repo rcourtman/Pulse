@@ -653,3 +653,130 @@ func TestReadFileTimeoutCancelAndSendError(t *testing.T) {
 		t.Fatalf("expected send error")
 	}
 }
+
+func TestShutdownRejectsNewWebSocketConnections(t *testing.T) {
+	s := NewServer(nil)
+	s.Shutdown()
+	ts := newWSServer(t, s)
+	defer ts.Close()
+
+	conn, resp, err := websocket.DefaultDialer.Dial(wsURLForHTTP(ts.URL), nil)
+	if conn != nil {
+		conn.Close()
+	}
+	if err == nil {
+		t.Fatalf("expected websocket dial to fail during shutdown")
+	}
+	if resp == nil {
+		t.Fatalf("expected HTTP response when dial fails")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusServiceUnavailable)
+	}
+}
+
+func TestShutdownClosesActiveConnectionsAndIsIdempotent(t *testing.T) {
+	s := NewServer(nil)
+	ts := newWSServer(t, s)
+	defer ts.Close()
+
+	conn, _, err := websocket.DefaultDialer.Dial(wsURLForHTTP(ts.URL), nil)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	defer conn.Close()
+
+	wsWriteMessage(t, conn, Message{
+		Type:      MsgTypeAgentRegister,
+		Timestamp: time.Now(),
+		Payload: AgentRegisterPayload{
+			AgentID:  "a1",
+			Hostname: "host1",
+			Token:    "any",
+		},
+	})
+	_ = wsReadRegisteredPayload(t, conn)
+
+	if !s.IsAgentConnected("a1") {
+		t.Fatalf("expected agent to be connected")
+	}
+
+	s.Shutdown()
+	s.Shutdown()
+
+	waitFor(t, 2*time.Second, func() bool { return !s.IsAgentConnected("a1") })
+
+	conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+	if _, _, err := conn.ReadMessage(); err == nil {
+		t.Fatalf("expected connection to be closed after shutdown")
+	}
+}
+
+func TestExecuteCommandAndReadFileReturnShutdownError(t *testing.T) {
+	t.Run("execute_command", func(t *testing.T) {
+		s := NewServer(nil)
+		serverConn, _, cleanup := newConnPair(t)
+		defer cleanup()
+
+		ac := &agentConn{
+			conn:  serverConn,
+			agent: ConnectedAgent{AgentID: "a1"},
+			done:  make(chan struct{}),
+		}
+		s.mu.Lock()
+		s.agents["a1"] = ac
+		s.mu.Unlock()
+
+		errCh := make(chan error, 1)
+		go func() {
+			_, err := s.ExecuteCommand(context.Background(), "a1", ExecuteCommandPayload{RequestID: "r-shutdown", Timeout: 60})
+			errCh <- err
+		}()
+
+		time.Sleep(20 * time.Millisecond)
+		s.Shutdown()
+
+		select {
+		case err := <-errCh:
+			if !errors.Is(err, errServerShuttingDown) {
+				t.Fatalf("expected shutdown error, got %v", err)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatalf("execute command did not unblock on shutdown")
+		}
+	})
+
+	t.Run("read_file", func(t *testing.T) {
+		s := NewServer(nil)
+		serverConn, _, cleanup := newConnPair(t)
+		defer cleanup()
+
+		ac := &agentConn{
+			conn:  serverConn,
+			agent: ConnectedAgent{AgentID: "a1"},
+			done:  make(chan struct{}),
+		}
+		s.mu.Lock()
+		s.agents["a1"] = ac
+		s.mu.Unlock()
+
+		errCh := make(chan error, 1)
+		go func() {
+			_, err := s.ReadFile(context.Background(), "a1", ReadFilePayload{RequestID: "read-shutdown"})
+			errCh <- err
+		}()
+
+		time.Sleep(20 * time.Millisecond)
+		s.Shutdown()
+
+		select {
+		case err := <-errCh:
+			if !errors.Is(err, errServerShuttingDown) {
+				t.Fatalf("expected shutdown error, got %v", err)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatalf("read file did not unblock on shutdown")
+		}
+	})
+}

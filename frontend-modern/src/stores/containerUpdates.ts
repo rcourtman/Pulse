@@ -22,43 +22,52 @@ interface UpdateEntry {
 // Global store for container update states
 // Key format: "hostId:containerId"
 const [updateStates, setUpdateStates] = createSignal<Record<string, UpdateEntry>>({});
-const clearTimers = new Map<string, ReturnType<typeof setTimeout>>();
-const stateVersions = new Map<string, number>();
+const AUTO_CLEAR_SUCCESS_MS = 5000;
+const AUTO_CLEAR_ERROR_MS = 10000;
+const STALE_CLEANUP_INTERVAL_MS = 60000;
+const STALE_THRESHOLD_MS = 5 * 60 * 1000;
 
-function getUpdateKey(hostId: string, containerId: string): string {
-    return `${hostId}:${containerId}`;
+const pendingClearTimers = new Map<string, ReturnType<typeof setTimeout>>();
+let staleCleanupInterval: ReturnType<typeof setInterval> | null = null;
+let unloadHandlerRegistered = false;
+
+function clearPendingAutoClearTimer(key: string): void {
+    const timer = pendingClearTimers.get(key);
+    if (timer) {
+        clearTimeout(timer);
+        pendingClearTimers.delete(key);
+    }
 }
 
-function cancelScheduledClear(key: string): void {
-    const timer = clearTimers.get(key);
-    if (!timer) return;
-    clearTimeout(timer);
-    clearTimers.delete(key);
-}
-
-function bumpStateVersion(key: string): number {
-    const next = (stateVersions.get(key) || 0) + 1;
-    stateVersions.set(key, next);
-    return next;
-}
-
-function scheduleAutoClear(
-    hostId: string,
-    containerId: string,
-    expectedState: Extract<ContainerUpdateState, 'success' | 'error'>,
-    delayMs: number
-): void {
+function scheduleAutoClear(hostId: string, containerId: string, delayMs: number): void {
     const key = `${hostId}:${containerId}`;
-    clearAutoClearTimer(key);
+    clearPendingAutoClearTimer(key);
 
     const timer = setTimeout(() => {
-        autoClearTimers.delete(key);
-        const current = updateStates()[key];
-        if (!current || current.state !== expectedState) return;
+        pendingClearTimers.delete(key);
         clearContainerUpdateState(hostId, containerId);
     }, delayMs);
 
-    autoClearTimers.set(key, timer);
+    pendingClearTimers.set(key, timer);
+}
+
+export function startContainerUpdateCleanup(): void {
+    if (staleCleanupInterval !== null) return;
+    staleCleanupInterval = setInterval(cleanupStaleUpdates, STALE_CLEANUP_INTERVAL_MS);
+}
+
+export function stopContainerUpdateCleanup(options?: { clearStates?: boolean }): void {
+    if (staleCleanupInterval !== null) {
+        clearInterval(staleCleanupInterval);
+        staleCleanupInterval = null;
+    }
+
+    pendingClearTimers.forEach((timer) => clearTimeout(timer));
+    pendingClearTimers.clear();
+
+    if (options?.clearStates) {
+        setUpdateStates({});
+    }
 }
 
 /**
@@ -73,9 +82,8 @@ export function getContainerUpdateState(hostId: string, containerId: string): Up
  * Mark a container as updating
  */
 export function markContainerUpdating(hostId: string, containerId: string, commandId?: string): void {
-    const key = getUpdateKey(hostId, containerId);
-    bumpStateVersion(key);
-    cancelScheduledClear(key);
+    const key = `${hostId}:${containerId}`;
+    clearPendingAutoClearTimer(key);
     setUpdateStates(prev => ({
         ...prev,
         [key]: {
@@ -90,9 +98,8 @@ export function markContainerUpdating(hostId: string, containerId: string, comma
  * Mark a container update as queued (command sent, waiting for agent)
  */
 export function markContainerQueued(hostId: string, containerId: string, commandId?: string): void {
-    const key = getUpdateKey(hostId, containerId);
-    bumpStateVersion(key);
-    cancelScheduledClear(key);
+    const key = `${hostId}:${containerId}`;
+    clearPendingAutoClearTimer(key);
     setUpdateStates(prev => ({
         ...prev,
         [key]: {
@@ -157,7 +164,7 @@ export function markContainerUpdateSuccess(hostId: string, containerId: string):
     }));
 
     // Auto-clear success state after 5 seconds
-    scheduleAutoClear(hostId, containerId, 5000, version);
+    scheduleAutoClear(hostId, containerId, AUTO_CLEAR_SUCCESS_MS);
 }
 
 /**
@@ -177,7 +184,7 @@ export function markContainerUpdateError(hostId: string, containerId: string, me
     }));
 
     // Auto-clear error state after 10 seconds
-    scheduleAutoClear(hostId, containerId, 'error', 10000);
+    scheduleAutoClear(hostId, containerId, AUTO_CLEAR_ERROR_MS);
 }
 
 /**
@@ -200,12 +207,11 @@ export function clearContainerUpdateState(hostId: string, containerId: string): 
  */
 export function cleanupStaleUpdates(): void {
     const now = Date.now();
-    const staleThreshold = 5 * 60 * 1000; // 5 minutes
 
     setUpdateStates(prev => {
         const next: Record<string, UpdateEntry> = {};
         for (const [key, entry] of Object.entries(prev)) {
-            if (now - entry.startedAt < staleThreshold) {
+            if (now - entry.startedAt < STALE_THRESHOLD_MS) {
                 next[key] = entry;
             } else {
                 cancelScheduledClear(key);
@@ -228,5 +234,12 @@ export function getAllUpdateStates(): Record<string, UpdateEntry> {
  */
 export { updateStates };
 
-// Cleanup stale entries every minute
-setInterval(cleanupStaleUpdates, 60000);
+// Start cleanup lifecycle immediately so stale states are pruned in long-lived sessions.
+startContainerUpdateCleanup();
+
+if (typeof window !== 'undefined' && !unloadHandlerRegistered) {
+    window.addEventListener('beforeunload', () => {
+        stopContainerUpdateCleanup();
+    }, { once: true });
+    unloadHandlerRegistered = true;
+}

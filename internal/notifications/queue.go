@@ -52,6 +52,8 @@ type QueuedNotification struct {
 // NotificationQueue manages persistent notification delivery with retries and DLQ
 type NotificationQueue struct {
 	mu              sync.RWMutex
+	stopOnce        sync.Once
+	stopErr         error
 	db              *sql.DB
 	dbPath          string
 	stopChan        chan struct{}
@@ -738,10 +740,9 @@ func (nq *NotificationQueue) performCleanup() {
 func (nq *NotificationQueue) Stop() error {
 	nq.stopOnce.Do(func() {
 		close(nq.stopChan)
-		nq.wg.Wait()
-
 		nq.processorTicker.Stop()
 		nq.cleanupTicker.Stop()
+		nq.wg.Wait()
 
 		if err := nq.db.Close(); err != nil {
 			nq.stopErr = fmt.Errorf("failed to close database: %w", err)

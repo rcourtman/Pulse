@@ -25,6 +25,7 @@ func Run(ctx context.Context, version string) error {
 		Level:     "info",
 		Component: "control-plane",
 	})
+	defer logging.Shutdown()
 
 	log.Info().Str("version", version).Msg("Starting Pulse Cloud Control Plane")
 
@@ -148,6 +149,7 @@ func Run(ctx context.Context, version string) error {
 	// Signal handling
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(sigChan)
 
 	select {
 	case <-ctx.Done():
