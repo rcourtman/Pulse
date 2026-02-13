@@ -8,11 +8,8 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/ceph"
 	"github.com/rcourtman/pulse-go-rewrite/internal/hostmetrics"
-	"github.com/rcourtman/pulse-go-rewrite/internal/mdadm"
 	"github.com/rcourtman/pulse-go-rewrite/internal/sensors"
-	"github.com/rcourtman/pulse-go-rewrite/internal/smartctl"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	gohost "github.com/shirou/gopsutil/v4/host"
 )
@@ -26,8 +23,8 @@ type SystemCollector interface {
 	SensorsParse(jsonStr string) (*sensors.TemperatureData, error)
 	SensorsPower(ctx context.Context) (*sensors.PowerData, error)
 	RAIDArrays(ctx context.Context) ([]agentshost.RAIDArray, error)
-	CephStatus(ctx context.Context) (*ceph.ClusterStatus, error)
-	SMARTLocal(ctx context.Context, exclude []string) ([]smartctl.DiskSMART, error)
+	CephStatus(ctx context.Context) (*CephClusterStatus, error)
+	SMARTLocal(ctx context.Context, exclude []string) ([]DiskSMART, error)
 	Now() time.Time
 	GOOS() string
 	ReadFile(name string) ([]byte, error)
@@ -74,15 +71,15 @@ func (c *defaultCollector) SensorsPower(ctx context.Context) (*sensors.PowerData
 }
 
 func (c *defaultCollector) RAIDArrays(ctx context.Context) ([]agentshost.RAIDArray, error) {
-	return mdadm.CollectArrays(ctx)
+	return CollectRAIDArrays(ctx)
 }
 
-func (c *defaultCollector) CephStatus(ctx context.Context) (*ceph.ClusterStatus, error) {
-	return ceph.Collect(ctx)
+func (c *defaultCollector) CephStatus(ctx context.Context) (*CephClusterStatus, error) {
+	return CollectCeph(ctx)
 }
 
-func (c *defaultCollector) SMARTLocal(ctx context.Context, exclude []string) ([]smartctl.DiskSMART, error) {
-	return smartctl.CollectLocal(ctx, exclude)
+func (c *defaultCollector) SMARTLocal(ctx context.Context, exclude []string) ([]DiskSMART, error) {
+	return CollectSMARTLocal(ctx, exclude)
 }
 
 func (c *defaultCollector) Now() time.Time {

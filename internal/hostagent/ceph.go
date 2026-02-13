@@ -1,6 +1,4 @@
-// Package ceph provides functionality for collecting Ceph cluster status
-// directly from the local system using the ceph CLI.
-package ceph
+package hostagent
 
 import (
 	"bytes"
@@ -12,37 +10,7 @@ import (
 	"time"
 )
 
-// HealthState represents Ceph cluster health values.
-type HealthState string
-
-const (
-	HealthStateOK      HealthState = "HEALTH_OK"
-	HealthStateWarn    HealthState = "HEALTH_WARN"
-	HealthStateErr     HealthState = "HEALTH_ERR"
-	HealthStateUnknown HealthState = "HEALTH_UNKNOWN"
-)
-
-// HealthSeverity represents severity values used in Ceph health checks.
-type HealthSeverity string
-
-const (
-	HealthSeverityWarn    HealthSeverity = "HEALTH_WARN"
-	HealthSeverityErr     HealthSeverity = "HEALTH_ERR"
-	HealthSeverityUnknown HealthSeverity = "HEALTH_UNKNOWN"
-)
-
-// ServiceType represents Ceph daemon service categories.
-type ServiceType string
-
-const (
-	ServiceTypeMonitor ServiceType = "mon"
-	ServiceTypeManager ServiceType = "mgr"
-	ServiceTypeOSD     ServiceType = "osd"
-	ServiceTypeMDS     ServiceType = "mds"
-	ServiceTypeRGW     ServiceType = "rgw"
-)
-
-var commandRunner = func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
+var cephCommandRunner = func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -51,64 +19,64 @@ var commandRunner = func(ctx context.Context, name string, args ...string) ([]by
 	return stdout.Bytes(), stderr.Bytes(), err
 }
 
-// ClusterStatus represents the complete Ceph cluster status as collected by the agent.
-type ClusterStatus struct {
-	FSID        string        `json:"fsid"`
-	Health      HealthStatus  `json:"health"`
-	MonMap      MonitorMap    `json:"monMap,omitempty"`
-	MgrMap      ManagerMap    `json:"mgrMap,omitempty"`
-	OSDMap      OSDMap        `json:"osdMap"`
-	PGMap       PGMap         `json:"pgMap"`
-	Pools       []Pool        `json:"pools,omitempty"`
-	Services    []ServiceInfo `json:"services,omitempty"`
-	CollectedAt time.Time     `json:"collectedAt"`
+// CephClusterStatus represents the complete Ceph cluster status as collected by the agent.
+type CephClusterStatus struct {
+	FSID        string            `json:"fsid"`
+	Health      CephHealthStatus  `json:"health"`
+	MonMap      CephMonitorMap    `json:"monMap,omitempty"`
+	MgrMap      CephManagerMap    `json:"mgrMap,omitempty"`
+	OSDMap      CephOSDMap        `json:"osdMap"`
+	PGMap       CephPGMap         `json:"pgMap"`
+	Pools       []CephPool        `json:"pools,omitempty"`
+	Services    []CephServiceInfo `json:"services,omitempty"`
+	CollectedAt time.Time         `json:"collectedAt"`
 }
 
-// HealthStatus represents Ceph cluster health.
-type HealthStatus struct {
-	Status  HealthState      `json:"status"` // HEALTH_OK, HEALTH_WARN, HEALTH_ERR
-	Checks  map[string]Check `json:"checks,omitempty"`
-	Summary []HealthSummary  `json:"summary,omitempty"`
+// CephHealthStatus represents Ceph cluster health.
+type CephHealthStatus struct {
+	Status  string               `json:"status"` // HEALTH_OK, HEALTH_WARN, HEALTH_ERR
+	Checks  map[string]CephCheck `json:"checks,omitempty"`
+	Summary []CephHealthSummary  `json:"summary,omitempty"`
 }
 
-// Check represents a health check detail.
-type Check struct {
-	Severity HealthSeverity `json:"severity"`
-	Message  string         `json:"message,omitempty"`
-	Detail   []string       `json:"detail,omitempty"`
+// CephCheck represents a health check detail.
+type CephCheck struct {
+	Severity string   `json:"severity"`
+	Message  string   `json:"message,omitempty"`
+	Detail   []string `json:"detail,omitempty"`
 }
 
-// HealthSummary represents a health summary message.
-type HealthSummary struct {
-	Severity HealthSeverity `json:"severity"`
-	Message  string         `json:"message"`
+// CephHealthSummary represents a health summary message.
+type CephHealthSummary struct {
+	Severity string `json:"severity"`
+	Message  string `json:"message"`
 }
 
-// MonitorMap represents Ceph monitor information.
-type MonitorMap struct {
-	Epoch    int       `json:"epoch"`
-	NumMons  int       `json:"numMons"`
-	Monitors []Monitor `json:"monitors,omitempty"`
+// CephMonitorMap represents Ceph monitor information.
+type CephMonitorMap struct {
+	Epoch    int           `json:"epoch"`
+	NumMons  int           `json:"numMons"`
+	Monitors []CephMonitor `json:"monitors,omitempty"`
 }
 
-// Monitor represents a single Ceph monitor.
-type Monitor struct {
+// CephMonitor represents a single Ceph monitor.
+type CephMonitor struct {
 	Name   string `json:"name"`
 	Rank   int    `json:"rank"`
 	Addr   string `json:"addr,omitempty"`
 	Status string `json:"status,omitempty"`
 }
 
-// ManagerMap represents Ceph manager information.
-type ManagerMap struct {
+// CephManagerMap represents Ceph manager information.
+type CephManagerMap struct {
 	Available bool   `json:"available"`
 	NumMgrs   int    `json:"numMgrs"`
 	ActiveMgr string `json:"activeMgr,omitempty"`
 	Standbys  int    `json:"standbys"`
 }
 
-// OSDMap represents OSD status summary.
-type OSDMap struct {
+// CephOSDMap represents OSD status summary.
+type CephOSDMap struct {
 	Epoch   int `json:"epoch"`
 	NumOSDs int `json:"numOsds"`
 	NumUp   int `json:"numUp"`
@@ -117,8 +85,8 @@ type OSDMap struct {
 	NumOut  int `json:"numOut,omitempty"`
 }
 
-// PGMap represents placement group statistics.
-type PGMap struct {
+// CephPGMap represents placement group statistics.
+type CephPGMap struct {
 	NumPGs           int     `json:"numPgs"`
 	BytesTotal       uint64  `json:"bytesTotal"`
 	BytesUsed        uint64  `json:"bytesUsed"`
@@ -133,8 +101,8 @@ type PGMap struct {
 	WriteOpsPerSec   uint64  `json:"writeOpsPerSec,omitempty"`
 }
 
-// Pool represents a Ceph pool.
-type Pool struct {
+// CephPool represents a Ceph pool.
+type CephPool struct {
 	ID             int     `json:"id"`
 	Name           string  `json:"name"`
 	BytesUsed      uint64  `json:"bytesUsed"`
@@ -143,25 +111,25 @@ type Pool struct {
 	PercentUsed    float64 `json:"percentUsed"`
 }
 
-// ServiceInfo represents a Ceph service summary.
-type ServiceInfo struct {
-	Type    ServiceType `json:"type"` // mon, mgr, osd, mds, rgw
-	Running int         `json:"running"`
-	Total   int         `json:"total"`
-	Daemons []string    `json:"daemons,omitempty"`
+// CephServiceInfo represents a Ceph service summary.
+type CephServiceInfo struct {
+	Type    string   `json:"type"` // mon, mgr, osd, mds, rgw
+	Running int      `json:"running"`
+	Total   int      `json:"total"`
+	Daemons []string `json:"daemons,omitempty"`
 }
 
-// IsAvailable checks if the ceph CLI is available on the system.
-func IsAvailable(ctx context.Context) bool {
-	_, _, err := commandRunner(ctx, "which", "ceph")
+// IsCephAvailable checks if the ceph CLI is available on the system.
+func IsCephAvailable(ctx context.Context) bool {
+	_, _, err := cephCommandRunner(ctx, "which", "ceph")
 	return err == nil
 }
 
-// Collect gathers Ceph cluster status using the ceph CLI.
+// CollectCeph gathers Ceph cluster status using the ceph CLI.
 // Returns nil if Ceph is not available or not configured on this host.
-func Collect(ctx context.Context) (*ClusterStatus, error) {
+func CollectCeph(ctx context.Context) (*CephClusterStatus, error) {
 	// Check if ceph CLI is available
-	if !IsAvailable(ctx) {
+	if !IsCephAvailable(ctx) {
 		return nil, nil
 	}
 
@@ -172,7 +140,7 @@ func Collect(ctx context.Context) (*ClusterStatus, error) {
 		return nil, nil
 	}
 
-	status, err := parseStatus(statusJSON)
+	status, err := parseCephStatus(statusJSON)
 	if err != nil {
 		return nil, fmt.Errorf("parse ceph status: %w", err)
 	}
@@ -180,7 +148,7 @@ func Collect(ctx context.Context) (*ClusterStatus, error) {
 	// Get pool usage from ceph df
 	dfJSON, err := runCephCommand(ctx, "df", "--format", "json")
 	if err == nil {
-		pools, usagePercent, err := parseDF(dfJSON)
+		pools, usagePercent, err := parseCephDF(dfJSON)
 		if err == nil {
 			status.Pools = pools
 			if status.PGMap.UsagePercent == 0 && usagePercent > 0 {
@@ -199,7 +167,7 @@ func runCephCommand(ctx context.Context, args ...string) ([]byte, error) {
 	cmdCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	stdout, stderr, err := commandRunner(cmdCtx, "ceph", args...)
+	stdout, stderr, err := cephCommandRunner(cmdCtx, "ceph", args...)
 	if err != nil {
 		return nil, fmt.Errorf("ceph %s failed: %w (stderr: %s)",
 			strings.Join(args, " "), err, string(stderr))
@@ -208,8 +176,8 @@ func runCephCommand(ctx context.Context, args ...string) ([]byte, error) {
 	return stdout, nil
 }
 
-// parseStatus parses the output of `ceph status --format json`.
-func parseStatus(data []byte) (*ClusterStatus, error) {
+// parseCephStatus parses the output of `ceph status --format json`.
+func parseCephStatus(data []byte) (*CephClusterStatus, error) {
 	var raw struct {
 		FSID   string `json:"fsid"`
 		Health struct {
@@ -265,23 +233,23 @@ func parseStatus(data []byte) (*ClusterStatus, error) {
 		return nil, fmt.Errorf("unmarshal: %w", err)
 	}
 
-	status := &ClusterStatus{
+	status := &CephClusterStatus{
 		FSID: raw.FSID,
-		Health: HealthStatus{
-			Status: normalizeHealthState(raw.Health.Status),
-			Checks: make(map[string]Check),
+		Health: CephHealthStatus{
+			Status: raw.Health.Status,
+			Checks: make(map[string]CephCheck),
 		},
-		MonMap: MonitorMap{
+		MonMap: CephMonitorMap{
 			Epoch:   raw.MonMap.Epoch,
 			NumMons: len(raw.MonMap.Mons),
 		},
-		MgrMap: ManagerMap{
+		MgrMap: CephManagerMap{
 			Available: raw.MgrMap.Available,
 			NumMgrs:   1 + len(raw.MgrMap.Standbys),
 			ActiveMgr: raw.MgrMap.ActiveName,
 			Standbys:  len(raw.MgrMap.Standbys),
 		},
-		OSDMap: OSDMap{
+		OSDMap: CephOSDMap{
 			Epoch:   raw.OSDMap.Epoch,
 			NumOSDs: raw.OSDMap.NumOSDs,
 			NumUp:   raw.OSDMap.NumUp,
@@ -289,7 +257,7 @@ func parseStatus(data []byte) (*ClusterStatus, error) {
 			NumDown: raw.OSDMap.NumOSDs - raw.OSDMap.NumUp,
 			NumOut:  raw.OSDMap.NumOSDs - raw.OSDMap.NumIn,
 		},
-		PGMap: PGMap{
+		PGMap: CephPGMap{
 			NumPGs:           raw.PGMap.NumPGs,
 			BytesTotal:       raw.PGMap.BytesTotal,
 			BytesUsed:        raw.PGMap.BytesUsed,
@@ -311,7 +279,7 @@ func parseStatus(data []byte) (*ClusterStatus, error) {
 
 	// Parse monitors
 	for _, mon := range raw.MonMap.Mons {
-		status.MonMap.Monitors = append(status.MonMap.Monitors, Monitor{
+		status.MonMap.Monitors = append(status.MonMap.Monitors, CephMonitor{
 			Name: mon.Name,
 			Rank: mon.Rank,
 			Addr: mon.Addr,
@@ -324,25 +292,25 @@ func parseStatus(data []byte) (*ClusterStatus, error) {
 		for _, d := range check.Detail {
 			details = append(details, d.Message)
 		}
-		status.Health.Checks[name] = Check{
-			Severity: normalizeHealthSeverity(check.Severity),
+		status.Health.Checks[name] = CephCheck{
+			Severity: check.Severity,
 			Message:  check.Summary.Message,
 			Detail:   details,
 		}
 	}
 
 	// Build service summary
-	status.Services = []ServiceInfo{
-		{Type: ServiceTypeMonitor, Running: len(raw.MonMap.Mons), Total: len(raw.MonMap.Mons)},
-		{Type: ServiceTypeManager, Running: boolToInt(raw.MgrMap.Available), Total: status.MgrMap.NumMgrs},
-		{Type: ServiceTypeOSD, Running: raw.OSDMap.NumUp, Total: raw.OSDMap.NumOSDs},
+	status.Services = []CephServiceInfo{
+		{Type: "mon", Running: len(raw.MonMap.Mons), Total: len(raw.MonMap.Mons)},
+		{Type: "mgr", Running: cephBoolToInt(raw.MgrMap.Available), Total: status.MgrMap.NumMgrs},
+		{Type: "osd", Running: raw.OSDMap.NumUp, Total: raw.OSDMap.NumOSDs},
 	}
 
 	return status, nil
 }
 
-// parseDF parses the output of `ceph df --format json`.
-func parseDF(data []byte) ([]Pool, float64, error) {
+// parseCephDF parses the output of `ceph df --format json`.
+func parseCephDF(data []byte) ([]CephPool, float64, error) {
 	var raw struct {
 		Stats struct {
 			TotalBytes     uint64  `json:"total_bytes"`
@@ -365,9 +333,9 @@ func parseDF(data []byte) ([]Pool, float64, error) {
 		return nil, 0, fmt.Errorf("unmarshal df: %w", err)
 	}
 
-	pools := make([]Pool, 0, len(raw.Pools))
+	pools := make([]CephPool, 0, len(raw.Pools))
 	for _, p := range raw.Pools {
-		pools = append(pools, Pool{
+		pools = append(pools, CephPool{
 			ID:             p.ID,
 			Name:           p.Name,
 			BytesUsed:      p.Stats.BytesUsed,
@@ -380,39 +348,9 @@ func parseDF(data []byte) ([]Pool, float64, error) {
 	return pools, raw.Stats.PercentUsed * 100, nil
 }
 
-func boolToInt(b bool) int {
+func cephBoolToInt(b bool) int {
 	if b {
 		return 1
 	}
 	return 0
-}
-
-func normalizeHealthState(value string) HealthState {
-	normalized := strings.TrimSpace(strings.ToUpper(value))
-	switch normalized {
-	case string(HealthStateOK):
-		return HealthStateOK
-	case string(HealthStateWarn):
-		return HealthStateWarn
-	case string(HealthStateErr):
-		return HealthStateErr
-	case "":
-		return HealthStateUnknown
-	default:
-		return HealthState(normalized)
-	}
-}
-
-func normalizeHealthSeverity(value string) HealthSeverity {
-	normalized := strings.TrimSpace(strings.ToUpper(value))
-	switch normalized {
-	case string(HealthSeverityWarn):
-		return HealthSeverityWarn
-	case string(HealthSeverityErr):
-		return HealthSeverityErr
-	case "":
-		return HealthSeverityUnknown
-	default:
-		return HealthSeverity(normalized)
-	}
 }

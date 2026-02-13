@@ -183,7 +183,7 @@ func (m *Monitor) queryStoreMetricSeriesWithGapFill(resourceType, resourceID, me
 }
 
 // convertAndDownsample converts pkg/metrics.MetricPoint slices to
-// internal/types.MetricPoint slices and applies LTTB downsampling.
+// internal/monitoring.MetricPoint slices and applies LTTB downsampling.
 func convertAndDownsample(sqlResult map[string][]metrics.MetricPoint, target int) map[string][]MetricPoint {
 	result := make(map[string][]MetricPoint, len(sqlResult))
 	for metric, points := range sqlResult {

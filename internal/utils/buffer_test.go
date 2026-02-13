@@ -1,12 +1,12 @@
-package buffer
+package utils
 
 import (
 	"sync"
 	"testing"
 )
 
-func TestNew(t *testing.T) {
-	q := New[int](5)
+func TestNewQueue(t *testing.T) {
+	q := NewQueue[int](5)
 	if q.capacity != 5 {
 		t.Errorf("expected capacity 5, got %d", q.capacity)
 	}
@@ -16,7 +16,7 @@ func TestNew(t *testing.T) {
 }
 
 func TestPushPop(t *testing.T) {
-	q := New[int](3)
+	q := NewQueue[int](3)
 
 	q.Push(1)
 	q.Push(2)
@@ -48,7 +48,7 @@ func TestPushPop(t *testing.T) {
 }
 
 func TestPushDropsOldest(t *testing.T) {
-	q := New[int](3)
+	q := NewQueue[int](3)
 
 	q.Push(1)
 	q.Push(2)
@@ -76,7 +76,7 @@ func TestPushDropsOldest(t *testing.T) {
 }
 
 func TestPeek(t *testing.T) {
-	q := New[string](2)
+	q := NewQueue[string](2)
 
 	_, ok := q.Peek()
 	if ok {
@@ -98,7 +98,7 @@ func TestPeek(t *testing.T) {
 }
 
 func TestIsEmpty(t *testing.T) {
-	q := New[int](2)
+	q := NewQueue[int](2)
 
 	if !q.IsEmpty() {
 		t.Error("new queue should be empty")
@@ -116,7 +116,7 @@ func TestIsEmpty(t *testing.T) {
 }
 
 func TestConcurrentAccess(t *testing.T) {
-	q := New[int](100)
+	q := NewQueue[int](100)
 	var wg sync.WaitGroup
 
 	// Concurrent pushes
@@ -149,7 +149,7 @@ func TestConcurrentAccess(t *testing.T) {
 }
 
 func TestCapacityOne(t *testing.T) {
-	q := New[int](1)
+	q := NewQueue[int](1)
 
 	q.Push(1)
 	q.Push(2) // drops 1

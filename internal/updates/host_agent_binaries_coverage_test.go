@@ -1,4 +1,4 @@
-package agentbinaries
+package updates
 
 import (
 	"archive/tar"
@@ -17,9 +17,9 @@ import (
 	"time"
 )
 
-type roundTripperFunc func(*http.Request) (*http.Response, error)
+type hostAgentRoundTripperFunc func(*http.Request) (*http.Response, error)
 
-func (f roundTripperFunc) RoundTrip(r *http.Request) (*http.Response, error) {
+func (f hostAgentRoundTripperFunc) RoundTrip(r *http.Request) (*http.Response, error) {
 	return f(r)
 }
 
@@ -290,7 +290,7 @@ func TestDownloadAndInstallHostAgentBinariesErrors(t *testing.T) {
 		t.Cleanup(restore)
 
 		httpClient = &http.Client{
-			Transport: roundTripperFunc(func(*http.Request) (*http.Response, error) {
+			Transport: hostAgentRoundTripperFunc(func(*http.Request) (*http.Response, error) {
 				return nil, errors.New("network")
 			}),
 		}
@@ -341,7 +341,7 @@ func TestDownloadAndInstallHostAgentBinariesErrors(t *testing.T) {
 		t.Cleanup(restore)
 
 		httpClient = &http.Client{
-			Transport: roundTripperFunc(func(*http.Request) (*http.Response, error) {
+			Transport: hostAgentRoundTripperFunc(func(*http.Request) (*http.Response, error) {
 				body := io.NopCloser(&errorReader{})
 				return &http.Response{
 					StatusCode: http.StatusOK,

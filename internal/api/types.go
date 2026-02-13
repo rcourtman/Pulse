@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
-	"github.com/rcourtman/pulse-go-rewrite/internal/types"
 )
 
 // Common response types for API endpoints
@@ -189,10 +188,10 @@ type StorageChartsResponse map[string]StorageMetrics
 
 // StorageMetrics represents storage metrics data
 type StorageMetrics struct {
-	Usage []types.MetricPoint `json:"usage"`
-	Used  []types.MetricPoint `json:"used"`
-	Total []types.MetricPoint `json:"total"`
-	Avail []types.MetricPoint `json:"avail"`
+	Usage []models.MetricPoint `json:"usage"`
+	Used  []models.MetricPoint `json:"used"`
+	Total []models.MetricPoint `json:"total"`
+	Avail []models.MetricPoint `json:"avail"`
 }
 
 // MetricPoint represents a single metric data point

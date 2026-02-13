@@ -12,7 +12,6 @@ import (
 	cpauth "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/auth"
 	cpDocker "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/docker"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/email"
-	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/health"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
 	cpstripe "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/stripe"
 	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
@@ -119,7 +118,7 @@ func Run(ctx context.Context, version string) error {
 
 	// Start health monitor if Docker is available
 	if dockerMgr != nil {
-		monitor := health.NewMonitor(reg, dockerMgr, health.MonitorConfig{
+		monitor := NewMonitor(reg, dockerMgr, MonitorConfig{
 			Interval:      60 * time.Second,
 			RestartOnFail: true,
 			FailThreshold: 3,
@@ -132,7 +131,7 @@ func Run(ctx context.Context, version string) error {
 	go graceEnforcer.Run(ctx)
 
 	// Start stuck provisioning cleanup
-	stuckCleanup := health.NewStuckProvisioningCleanup(reg)
+	stuckCleanup := NewStuckProvisioningCleanup(reg)
 	go stuckCleanup.Run(ctx)
 
 	// Start metrics updater

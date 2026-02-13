@@ -1,26 +1,26 @@
-package mdadm
+package hostagent
 
 import (
 	"context"
 	"errors"
 	"testing"
 
-	"github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
+	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 )
 
-func withRunCommandOutput(t *testing.T, fn func(ctx context.Context, name string, args ...string) ([]byte, error)) {
+func withMdadmCommandRunner(t *testing.T, fn func(ctx context.Context, name string, args ...string) ([]byte, error)) {
 	t.Helper()
-	orig := runCommandOutput
-	runCommandOutput = fn
-	t.Cleanup(func() { runCommandOutput = orig })
+	orig := mdadmCommandRunner
+	mdadmCommandRunner = fn
+	t.Cleanup(func() { mdadmCommandRunner = orig })
 }
 
-func TestParseDetail(t *testing.T) {
+func TestParseMdadmDetail(t *testing.T) {
 	tests := []struct {
 		name    string
 		device  string
 		output  string
-		want    host.RAIDArray
+		want    agentshost.RAIDArray
 		wantErr bool
 	}{
 		{
@@ -51,7 +51,7 @@ Consistency Policy : resync
     Number   Major   Minor   RaidDevice State
        0       8        1        0      active sync   /dev/sda1
        1       8       17        1      active sync   /dev/sdb1`,
-			want: host.RAIDArray{
+			want: agentshost.RAIDArray{
 				Device:         "/dev/md0",
 				Name:           "server:0",
 				Level:          "raid1",
@@ -62,7 +62,7 @@ Consistency Policy : resync
 				FailedDevices:  0,
 				SpareDevices:   0,
 				UUID:           "12345678:90abcdef:12345678:90abcdef",
-				Devices: []host.RAIDDevice{
+				Devices: []agentshost.RAIDDevice{
 					{Device: "/dev/sda1", State: "active sync", Slot: 0},
 					{Device: "/dev/sdb1", State: "active sync", Slot: 1},
 				},
@@ -97,7 +97,7 @@ Consistency Policy : resync
        2       8       33        2      active sync   /dev/sdc1
 
        1       8       17        -      faulty   /dev/sdb1`,
-			want: host.RAIDArray{
+			want: agentshost.RAIDArray{
 				Device:         "/dev/md1",
 				Name:           "server:1",
 				Level:          "raid5",
@@ -108,7 +108,7 @@ Consistency Policy : resync
 				FailedDevices:  1,
 				SpareDevices:   0,
 				UUID:           "abcdef12:34567890:abcdef12:34567890",
-				Devices: []host.RAIDDevice{
+				Devices: []agentshost.RAIDDevice{
 					{Device: "/dev/sda1", State: "active sync", Slot: 0},
 					{Device: "/dev/sdc1", State: "active sync", Slot: 2},
 					{Device: "/dev/sdb1", State: "faulty", Slot: -1},
@@ -147,7 +147,7 @@ Consistency Policy : resync
        3       8       49        3      active sync   /dev/sdd1
        6       8       81        4      spare rebuilding   /dev/sdf1
        5       8       65        5      active sync   /dev/sde1`,
-			want: host.RAIDArray{
+			want: agentshost.RAIDArray{
 				Device:         "/dev/md2",
 				Name:           "server:2",
 				Level:          "raid6",
@@ -159,7 +159,7 @@ Consistency Policy : resync
 				SpareDevices:   1,
 				UUID:           "fedcba09:87654321:fedcba09:87654321",
 				RebuildPercent: 42.0,
-				Devices: []host.RAIDDevice{
+				Devices: []agentshost.RAIDDevice{
 					{Device: "/dev/sda1", State: "active sync", Slot: 0},
 					{Device: "/dev/sdb1", State: "active sync", Slot: 1},
 					{Device: "/dev/sdc1", State: "active sync", Slot: 2},
@@ -192,7 +192,7 @@ Consistency Policy : resync
        1       8       17        1      active sync   /dev/sdb1
 
        2       8       33        -      spare   /dev/sdc1`,
-			want: host.RAIDArray{
+			want: agentshost.RAIDArray{
 				Device:         "/dev/md3",
 				Name:           "server:3",
 				Level:          "raid1",
@@ -203,7 +203,7 @@ Consistency Policy : resync
 				FailedDevices:  0,
 				SpareDevices:   1,
 				UUID:           "11223344:55667788:99aabbcc:ddeeff00",
-				Devices: []host.RAIDDevice{
+				Devices: []agentshost.RAIDDevice{
 					{Device: "/dev/sda1", State: "active sync", Slot: 0},
 					{Device: "/dev/sdb1", State: "active sync", Slot: 1},
 					{Device: "/dev/sdc1", State: "spare", Slot: -1},
@@ -237,7 +237,7 @@ Consistency Policy : resync
        1       8       17        1      active sync set-B   /dev/sdb1
        2       8       33        2      active sync set-A   /dev/sdc1
        3       8       49        3      active sync set-B   /dev/sdd1`,
-			want: host.RAIDArray{
+			want: agentshost.RAIDArray{
 				Device:         "/dev/md4",
 				Name:           "server:4",
 				Level:          "raid10",
@@ -248,7 +248,7 @@ Consistency Policy : resync
 				FailedDevices:  0,
 				SpareDevices:   0,
 				UUID:           "aabbccdd:eeff0011:22334455:66778899",
-				Devices: []host.RAIDDevice{
+				Devices: []agentshost.RAIDDevice{
 					{Device: "/dev/sda1", State: "active sync set-A", Slot: 0},
 					{Device: "/dev/sdb1", State: "active sync set-B", Slot: 1},
 					{Device: "/dev/sdc1", State: "active sync set-A", Slot: 2},
@@ -280,7 +280,7 @@ Consistency Policy : resync
     Number   Major   Minor   RaidDevice State
        0       8        1        0      active sync   /dev/sda1
        1       8       17        1      active sync   /dev/sdb1`,
-			want: host.RAIDArray{
+			want: agentshost.RAIDArray{
 				Device:         "/dev/md5",
 				Name:           "server:5",
 				Level:          "raid0",
@@ -291,7 +291,7 @@ Consistency Policy : resync
 				FailedDevices:  0,
 				SpareDevices:   0,
 				UUID:           "12ab34cd:56ef78gh:90ij12kl:34mn56op",
-				Devices: []host.RAIDDevice{
+				Devices: []agentshost.RAIDDevice{
 					{Device: "/dev/sda1", State: "active sync", Slot: 0},
 					{Device: "/dev/sdb1", State: "active sync", Slot: 1},
 				},
@@ -321,7 +321,7 @@ Consistency Policy : resync
        1       8       17        1      active sync   /dev/sdb1
        2       8       33        2      active sync   /dev/sdc1
        3       8       49        3      active sync   /dev/sdd1`,
-			want: host.RAIDArray{
+			want: agentshost.RAIDArray{
 				Device:         "/dev/md6",
 				Level:          "raid5",
 				State:          "active, reshaping",
@@ -332,7 +332,7 @@ Consistency Policy : resync
 				SpareDevices:   0,
 				UUID:           "99887766:55443322:11009988:77665544",
 				RebuildPercent: 23.5,
-				Devices: []host.RAIDDevice{
+				Devices: []agentshost.RAIDDevice{
 					{Device: "/dev/sda1", State: "active sync", Slot: 0},
 					{Device: "/dev/sdb1", State: "active sync", Slot: 1},
 					{Device: "/dev/sdc1", State: "active sync", Slot: 2},
@@ -365,7 +365,7 @@ Consistency Policy : resync
        3       8       49        -      spare   /dev/sdd1
        1       8       17        -      faulty   /dev/sdb1
        4       8       65        -      faulty   /dev/sde1`,
-			want: host.RAIDArray{
+			want: agentshost.RAIDArray{
 				Device:         "/dev/md7",
 				Level:          "raid5",
 				State:          "clean, degraded",
@@ -375,7 +375,7 @@ Consistency Policy : resync
 				FailedDevices:  2,
 				SpareDevices:   1,
 				UUID:           "ffeeddcc:bbaa9988:77665544:33221100",
-				Devices: []host.RAIDDevice{
+				Devices: []agentshost.RAIDDevice{
 					{Device: "/dev/sda1", State: "active sync", Slot: 0},
 					{Device: "/dev/sdc1", State: "active sync", Slot: 2},
 					{Device: "/dev/sdd1", State: "spare", Slot: -1},
@@ -388,9 +388,9 @@ Consistency Policy : resync
 			name:   "empty output",
 			device: "/dev/md99",
 			output: "",
-			want: host.RAIDArray{
+			want: agentshost.RAIDArray{
 				Device:  "/dev/md99",
-				Devices: []host.RAIDDevice{},
+				Devices: []agentshost.RAIDDevice{},
 			},
 		},
 		{
@@ -398,9 +398,9 @@ Consistency Policy : resync
 			device: "/dev/md10",
 			output: `/dev/md10:
            Version : 1.2`,
-			want: host.RAIDArray{
+			want: agentshost.RAIDArray{
 				Device:  "/dev/md10",
-				Devices: []host.RAIDDevice{},
+				Devices: []agentshost.RAIDDevice{},
 			},
 		},
 		{
@@ -429,7 +429,7 @@ Consistency Policy : resync
        1       8       17        1      active sync   /dev/sdb1
 
 `,
-			want: host.RAIDArray{
+			want: agentshost.RAIDArray{
 				Device:         "/dev/md11",
 				Level:          "raid1",
 				State:          "clean",
@@ -438,7 +438,7 @@ Consistency Policy : resync
 				FailedDevices:  0,
 				SpareDevices:   0,
 				UUID:           "12341234:56785678:90ab90ab:cdefcdef",
-				Devices: []host.RAIDDevice{
+				Devices: []agentshost.RAIDDevice{
 					{Device: "/dev/sda1", State: "active sync", Slot: 0},
 					{Device: "/dev/sdb1", State: "active sync", Slot: 1},
 				},
@@ -466,7 +466,7 @@ Consistency Policy : resync
     Number   Major   Minor   RaidDevice State
        0       8        1        0      active sync   /dev/sda1
        1       8       17        1      spare rebuilding   /dev/sdb1`,
-			want: host.RAIDArray{
+			want: agentshost.RAIDArray{
 				Device:         "/dev/md12",
 				Level:          "raid1",
 				State:          "active, degraded, recovering",
@@ -477,7 +477,7 @@ Consistency Policy : resync
 				SpareDevices:   1,
 				UUID:           "abcdef12:34567890:abcdef12:34567890",
 				RebuildPercent: 67.8,
-				Devices: []host.RAIDDevice{
+				Devices: []agentshost.RAIDDevice{
 					{Device: "/dev/sda1", State: "active sync", Slot: 0},
 					{Device: "/dev/sdb1", State: "spare rebuilding", Slot: 1},
 				},
@@ -487,9 +487,9 @@ Consistency Policy : resync
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := parseDetail(tt.device, tt.output)
+			got, err := parseMdadmDetail(tt.device, tt.output)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("parseDetail() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("parseMdadmDetail() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 
@@ -552,7 +552,7 @@ Consistency Policy : resync
 
 func TestIsMdadmAvailable(t *testing.T) {
 	t.Run("available", func(t *testing.T) {
-		withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		withMdadmCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
 			return []byte("mdadm"), nil
 		})
 
@@ -562,7 +562,7 @@ func TestIsMdadmAvailable(t *testing.T) {
 	})
 
 	t.Run("missing", func(t *testing.T) {
-		withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		withMdadmCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
 			return nil, errors.New("missing")
 		})
 
@@ -577,7 +577,7 @@ func TestListArrayDevices(t *testing.T) {
 md0 : active raid1 sdb1[1] sda1[0]
 md1 : active raid6 sdc1[2] sdb1[1] sda1[0]
 unused devices: <none>`
-	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	withMdadmCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		return []byte(mdstat), nil
 	})
 
@@ -591,7 +591,7 @@ unused devices: <none>`
 }
 
 func TestListArrayDevicesError(t *testing.T) {
-	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	withMdadmCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		return nil, errors.New("read failed")
 	})
 
@@ -601,7 +601,7 @@ func TestListArrayDevicesError(t *testing.T) {
 }
 
 func TestCollectArrayDetailError(t *testing.T) {
-	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	withMdadmCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		return nil, errors.New("detail failed")
 	})
 
@@ -610,12 +610,12 @@ func TestCollectArrayDetailError(t *testing.T) {
 	}
 }
 
-func TestCollectArraysNotAvailable(t *testing.T) {
-	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
+func TestCollectRAIDArraysNotAvailable(t *testing.T) {
+	withMdadmCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		return nil, errors.New("missing")
 	})
 
-	arrays, err := CollectArrays(context.Background())
+	arrays, err := CollectRAIDArrays(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -624,28 +624,28 @@ func TestCollectArraysNotAvailable(t *testing.T) {
 	}
 }
 
-func TestCollectArraysListError(t *testing.T) {
-	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
+func TestCollectRAIDArraysListError(t *testing.T) {
+	withMdadmCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		if name == "mdadm" {
 			return []byte("mdadm"), nil
 		}
 		return nil, errors.New("read failed")
 	})
 
-	if _, err := CollectArrays(context.Background()); err == nil {
+	if _, err := CollectRAIDArrays(context.Background()); err == nil {
 		t.Fatal("expected error")
 	}
 }
 
-func TestCollectArraysNoDevices(t *testing.T) {
-	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
+func TestCollectRAIDArraysNoDevices(t *testing.T) {
+	withMdadmCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		if name == "mdadm" {
 			return []byte("mdadm"), nil
 		}
 		return []byte("unused devices: <none>"), nil
 	})
 
-	arrays, err := CollectArrays(context.Background())
+	arrays, err := CollectRAIDArrays(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -654,8 +654,8 @@ func TestCollectArraysNoDevices(t *testing.T) {
 	}
 }
 
-func TestCollectArraysSkipsDetailError(t *testing.T) {
-	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
+func TestCollectRAIDArraysSkipsDetailError(t *testing.T) {
+	withMdadmCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		switch name {
 		case "mdadm":
 			if len(args) > 0 && args[0] == "--version" {
@@ -669,7 +669,7 @@ func TestCollectArraysSkipsDetailError(t *testing.T) {
 		}
 	})
 
-	arrays, err := CollectArrays(context.Background())
+	arrays, err := CollectRAIDArrays(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -678,7 +678,7 @@ func TestCollectArraysSkipsDetailError(t *testing.T) {
 	}
 }
 
-func TestCollectArraysSuccess(t *testing.T) {
+func TestCollectRAIDArraysSuccess(t *testing.T) {
 	detail := `/dev/md0:
         Raid Level : raid1
              State : clean
@@ -691,7 +691,7 @@ func TestCollectArraysSuccess(t *testing.T) {
     Number   Major   Minor   RaidDevice State
        0       8        1        0      active sync   /dev/sda1`
 
-	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	withMdadmCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		switch name {
 		case "mdadm":
 			if len(args) > 0 && args[0] == "--version" {
@@ -705,7 +705,7 @@ func TestCollectArraysSuccess(t *testing.T) {
 		}
 	})
 
-	arrays, err := CollectArrays(context.Background())
+	arrays, err := CollectRAIDArrays(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -718,7 +718,7 @@ func TestGetRebuildSpeed(t *testing.T) {
 	mdstat := `md0 : active raid1 sda1[0] sdb1[1]
       [>....................]  recovery = 12.6% (37043392/293039104) finish=127.5min speed=33440K/sec
 `
-	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	withMdadmCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		return []byte(mdstat), nil
 	})
 
@@ -728,7 +728,7 @@ func TestGetRebuildSpeed(t *testing.T) {
 }
 
 func TestGetRebuildSpeedNoMatch(t *testing.T) {
-	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	withMdadmCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		return []byte("md0 : active raid1 sda1[0]"), nil
 	})
 
@@ -738,7 +738,7 @@ func TestGetRebuildSpeedNoMatch(t *testing.T) {
 }
 
 func TestGetRebuildSpeedError(t *testing.T) {
-	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	withMdadmCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		return nil, errors.New("read failed")
 	})
 
@@ -747,7 +747,7 @@ func TestGetRebuildSpeedError(t *testing.T) {
 	}
 }
 
-func TestParseDetailSetsRebuildSpeed(t *testing.T) {
+func TestParseMdadmDetailSetsRebuildSpeed(t *testing.T) {
 	output := `/dev/md0:
         Raid Level : raid1
              State : clean
@@ -759,13 +759,13 @@ func TestParseDetailSetsRebuildSpeed(t *testing.T) {
 	mdstat := `md0 : active raid1 sda1[0]
       [>....................]  recovery = 12.6% (37043392/293039104) finish=127.5min speed=1234K/sec
 `
-	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	withMdadmCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		return []byte(mdstat), nil
 	})
 
-	array, err := parseDetail("/dev/md0", output)
+	array, err := parseMdadmDetail("/dev/md0", output)
 	if err != nil {
-		t.Fatalf("parseDetail error: %v", err)
+		t.Fatalf("parseMdadmDetail error: %v", err)
 	}
 	if array.RebuildSpeed != "1234K/sec" {
 		t.Fatalf("expected rebuild speed, got %s", array.RebuildSpeed)
@@ -777,7 +777,7 @@ func TestGetRebuildSpeedSectionExit(t *testing.T) {
       [>....................]  recovery = 12.6% (37043392/293039104) finish=127.5min
 md1 : active raid1 sdb1[0]
 `
-	withRunCommandOutput(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	withMdadmCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		return []byte(mdstat), nil
 	})
 

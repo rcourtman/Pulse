@@ -1,4 +1,4 @@
-package ceph
+package hostagent
 
 import (
 	"context"
@@ -7,17 +7,17 @@ import (
 	"testing"
 )
 
-func withCommandRunner(t *testing.T, fn func(ctx context.Context, name string, args ...string) ([]byte, []byte, error)) {
+func withCephCommandRunner(t *testing.T, fn func(ctx context.Context, name string, args ...string) ([]byte, []byte, error)) {
 	t.Helper()
-	orig := commandRunner
-	commandRunner = fn
-	t.Cleanup(func() { commandRunner = orig })
+	orig := cephCommandRunner
+	cephCommandRunner = fn
+	t.Cleanup(func() { cephCommandRunner = orig })
 }
 
-func TestCommandRunner_Default(t *testing.T) {
-	stdout, stderr, err := commandRunner(context.Background(), "sh", "-c", "true")
+func TestCephCommandRunner_Default(t *testing.T) {
+	stdout, stderr, err := cephCommandRunner(context.Background(), "sh", "-c", "true")
 	if err != nil {
-		t.Fatalf("commandRunner error: %v", err)
+		t.Fatalf("cephCommandRunner error: %v", err)
 	}
 	if len(stdout) != 0 {
 		t.Fatalf("unexpected stdout: %q", string(stdout))
@@ -27,7 +27,7 @@ func TestCommandRunner_Default(t *testing.T) {
 	}
 }
 
-func TestParseStatus(t *testing.T) {
+func TestParseCephStatus(t *testing.T) {
 	data := []byte(`{
 	  "fsid":"fsid-123",
 	  "health":{
@@ -58,19 +58,19 @@ func TestParseStatus(t *testing.T) {
 	  }
 	}`)
 
-	status, err := parseStatus(data)
+	status, err := parseCephStatus(data)
 	if err != nil {
-		t.Fatalf("parseStatus returned error: %v", err)
+		t.Fatalf("parseCephStatus returned error: %v", err)
 	}
 
 	if status.FSID != "fsid-123" {
 		t.Fatalf("expected FSID fsid-123, got %q", status.FSID)
 	}
-	if status.Health.Status != HealthStateWarn {
+	if status.Health.Status != "HEALTH_WARN" {
 		t.Fatalf("expected HEALTH_WARN, got %q", status.Health.Status)
 	}
 	check, ok := status.Health.Checks["OSD_DOWN"]
-	if !ok || check.Severity != HealthSeverityWarn || check.Message != "1 osd down" || len(check.Detail) != 1 {
+	if !ok || check.Severity != "HEALTH_WARN" || check.Message != "1 osd down" || len(check.Detail) != 1 {
 		t.Fatalf("unexpected parsed health checks: %+v", status.Health.Checks)
 	}
 
@@ -91,80 +91,38 @@ func TestParseStatus(t *testing.T) {
 	if len(status.Services) != 3 {
 		t.Fatalf("expected 3 service summaries, got %d", len(status.Services))
 	}
-	if status.Services[0].Type != ServiceTypeMonitor || status.Services[1].Type != ServiceTypeManager || status.Services[2].Type != ServiceTypeOSD {
+	if status.Services[0].Type != "mon" || status.Services[1].Type != "mgr" || status.Services[2].Type != "osd" {
 		t.Fatalf("unexpected service types: %+v", status.Services)
 	}
 }
 
-func TestNormalizeHealthState(t *testing.T) {
-	tests := []struct {
-		name  string
-		input string
-		want  HealthState
-	}{
-		{name: "ok", input: "HEALTH_OK", want: HealthStateOK},
-		{name: "warn with spaces and case", input: " health_warn ", want: HealthStateWarn},
-		{name: "empty becomes unknown", input: "", want: HealthStateUnknown},
-		{name: "unknown preserved normalized", input: "custom_state", want: HealthState("CUSTOM_STATE")},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := normalizeHealthState(tt.input); got != tt.want {
-				t.Fatalf("normalizeHealthState(%q) = %q, want %q", tt.input, got, tt.want)
-			}
-		})
-	}
-}
-
-func TestNormalizeHealthSeverity(t *testing.T) {
-	tests := []struct {
-		name  string
-		input string
-		want  HealthSeverity
-	}{
-		{name: "warn", input: "HEALTH_WARN", want: HealthSeverityWarn},
-		{name: "err with spaces and case", input: " health_err ", want: HealthSeverityErr},
-		{name: "empty becomes unknown", input: "", want: HealthSeverityUnknown},
-		{name: "unknown preserved normalized", input: "custom_level", want: HealthSeverity("CUSTOM_LEVEL")},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := normalizeHealthSeverity(tt.input); got != tt.want {
-				t.Fatalf("normalizeHealthSeverity(%q) = %q, want %q", tt.input, got, tt.want)
-			}
-		})
-	}
-}
-
-func TestIsAvailable(t *testing.T) {
+func TestIsCephAvailable(t *testing.T) {
 	t.Run("available", func(t *testing.T) {
-		withCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
+		withCephCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
 			if name != "which" || len(args) != 1 || args[0] != "ceph" {
 				t.Fatalf("unexpected command: %s %v", name, args)
 			}
 			return nil, nil, nil
 		})
 
-		if !IsAvailable(context.Background()) {
+		if !IsCephAvailable(context.Background()) {
 			t.Fatalf("expected available")
 		}
 	})
 
 	t.Run("missing", func(t *testing.T) {
-		withCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
+		withCephCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
 			return nil, nil, errors.New("missing")
 		})
 
-		if IsAvailable(context.Background()) {
+		if IsCephAvailable(context.Background()) {
 			t.Fatalf("expected unavailable")
 		}
 	})
 }
 
 func TestRunCephCommand(t *testing.T) {
-	withCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
+	withCephCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
 		if name != "ceph" {
 			t.Fatalf("unexpected command name: %s", name)
 		}
@@ -184,7 +142,7 @@ func TestRunCephCommand(t *testing.T) {
 }
 
 func TestRunCephCommandError(t *testing.T) {
-	withCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
+	withCephCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
 		return nil, []byte("bad"), errors.New("boom")
 	})
 
@@ -200,14 +158,14 @@ func TestRunCephCommandError(t *testing.T) {
 	}
 }
 
-func TestParseStatusInvalidJSON(t *testing.T) {
-	_, err := parseStatus([]byte(`{not-json}`))
+func TestParseCephStatusInvalidJSON(t *testing.T) {
+	_, err := parseCephStatus([]byte(`{not-json}`))
 	if err == nil {
 		t.Fatalf("expected error for invalid JSON")
 	}
 }
 
-func TestParseDF(t *testing.T) {
+func TestParseCephDF(t *testing.T) {
 	data := []byte(`{
 	  "stats":{"total_bytes":1000,"total_used_bytes":123,"percent_used":0.1234},
 	  "pools":[
@@ -215,9 +173,9 @@ func TestParseDF(t *testing.T) {
 	  ]
 	}`)
 
-	pools, usagePercent, err := parseDF(data)
+	pools, usagePercent, err := parseCephDF(data)
 	if err != nil {
-		t.Fatalf("parseDF returned error: %v", err)
+		t.Fatalf("parseCephDF returned error: %v", err)
 	}
 	if usagePercent != 12.34 {
 		t.Fatalf("expected percent_used 12.34, got %v", usagePercent)
@@ -227,15 +185,15 @@ func TestParseDF(t *testing.T) {
 	}
 }
 
-func TestParseDFInvalidJSON(t *testing.T) {
-	_, _, err := parseDF([]byte(`{not-json}`))
+func TestParseCephDFInvalidJSON(t *testing.T) {
+	_, _, err := parseCephDF([]byte(`{not-json}`))
 	if err == nil {
 		t.Fatalf("expected error for invalid JSON")
 	}
 }
 
-func TestCollect_NotAvailable(t *testing.T) {
-	withCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
+func TestCollectCeph_NotAvailable(t *testing.T) {
+	withCephCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
 		if name == "which" {
 			return nil, nil, errors.New("missing")
 		}
@@ -243,7 +201,7 @@ func TestCollect_NotAvailable(t *testing.T) {
 		return nil, nil, nil
 	})
 
-	status, err := Collect(context.Background())
+	status, err := CollectCeph(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -252,8 +210,8 @@ func TestCollect_NotAvailable(t *testing.T) {
 	}
 }
 
-func TestCollect_StatusError(t *testing.T) {
-	withCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
+func TestCollectCeph_StatusError(t *testing.T) {
+	withCephCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
 		if name == "which" {
 			return nil, nil, nil
 		}
@@ -264,7 +222,7 @@ func TestCollect_StatusError(t *testing.T) {
 		return nil, nil, nil
 	})
 
-	status, err := Collect(context.Background())
+	status, err := CollectCeph(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -273,8 +231,8 @@ func TestCollect_StatusError(t *testing.T) {
 	}
 }
 
-func TestCollect_ParseStatusError(t *testing.T) {
-	withCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
+func TestCollectCeph_ParseStatusError(t *testing.T) {
+	withCephCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
 		if name == "which" {
 			return nil, nil, nil
 		}
@@ -285,13 +243,13 @@ func TestCollect_ParseStatusError(t *testing.T) {
 		return nil, nil, nil
 	})
 
-	_, err := Collect(context.Background())
+	_, err := CollectCeph(context.Background())
 	if err == nil {
 		t.Fatalf("expected parse error")
 	}
 }
 
-func TestCollect_DFCommandError(t *testing.T) {
+func TestCollectCeph_DFCommandError(t *testing.T) {
 	statusJSON := []byte(`{
 	  "fsid":"fsid-1",
 	  "health":{"status":"HEALTH_OK","checks":{}},
@@ -302,7 +260,7 @@ func TestCollect_DFCommandError(t *testing.T) {
 		"data_bytes":0,"degraded_ratio":0,"misplaced_ratio":0,
 		"read_bytes_sec":0,"write_bytes_sec":0,"read_op_per_sec":0,"write_op_per_sec":0}
 	}`)
-	withCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
+	withCephCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
 		if name == "which" {
 			return nil, nil, nil
 		}
@@ -316,7 +274,7 @@ func TestCollect_DFCommandError(t *testing.T) {
 		return nil, nil, nil
 	})
 
-	status, err := Collect(context.Background())
+	status, err := CollectCeph(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -328,7 +286,7 @@ func TestCollect_DFCommandError(t *testing.T) {
 	}
 }
 
-func TestCollect_DFParseError(t *testing.T) {
+func TestCollectCeph_DFParseError(t *testing.T) {
 	statusJSON := []byte(`{
 	  "fsid":"fsid-1",
 	  "health":{"status":"HEALTH_OK","checks":{}},
@@ -339,7 +297,7 @@ func TestCollect_DFParseError(t *testing.T) {
 		"data_bytes":0,"degraded_ratio":0,"misplaced_ratio":0,
 		"read_bytes_sec":0,"write_bytes_sec":0,"read_op_per_sec":0,"write_op_per_sec":0}
 	}`)
-	withCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
+	withCephCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
 		if name == "which" {
 			return nil, nil, nil
 		}
@@ -353,7 +311,7 @@ func TestCollect_DFParseError(t *testing.T) {
 		return nil, nil, nil
 	})
 
-	status, err := Collect(context.Background())
+	status, err := CollectCeph(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -365,7 +323,7 @@ func TestCollect_DFParseError(t *testing.T) {
 	}
 }
 
-func TestCollect_UsagePercentFromDF(t *testing.T) {
+func TestCollectCeph_UsagePercentFromDF(t *testing.T) {
 	statusJSON := []byte(`{
 	  "fsid":"fsid-1",
 	  "health":{"status":"HEALTH_OK","checks":{}},
@@ -380,7 +338,7 @@ func TestCollect_UsagePercentFromDF(t *testing.T) {
 	  "stats":{"total_bytes":1000,"total_used_bytes":500,"percent_used":0.5},
 	  "pools":[]
 	}`)
-	withCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
+	withCephCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
 		if name == "which" {
 			return nil, nil, nil
 		}
@@ -394,7 +352,7 @@ func TestCollect_UsagePercentFromDF(t *testing.T) {
 		return nil, nil, nil
 	})
 
-	status, err := Collect(context.Background())
+	status, err := CollectCeph(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -409,11 +367,11 @@ func TestCollect_UsagePercentFromDF(t *testing.T) {
 	}
 }
 
-func TestBoolToInt(t *testing.T) {
-	if boolToInt(true) != 1 {
-		t.Fatalf("expected boolToInt(true)=1")
+func TestCephBoolToInt(t *testing.T) {
+	if cephBoolToInt(true) != 1 {
+		t.Fatalf("expected cephBoolToInt(true)=1")
 	}
-	if boolToInt(false) != 0 {
-		t.Fatalf("expected boolToInt(false)=0")
+	if cephBoolToInt(false) != 0 {
+		t.Fatalf("expected cephBoolToInt(false)=0")
 	}
 }

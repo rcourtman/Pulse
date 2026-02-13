@@ -10,7 +10,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
-	"github.com/rcourtman/pulse-go-rewrite/internal/types"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/fsfilters"
@@ -892,7 +891,7 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 			containerIdentifier = payload.Name
 		}
 		if strings.TrimSpace(containerIdentifier) != "" {
-			metrics := types.IOMetrics{
+			metrics := models.IOMetrics{
 				NetworkIn:  clampToInt64(payload.NetworkRXBytes),
 				NetworkOut: clampToInt64(payload.NetworkTXBytes),
 				Timestamp:  timestamp,

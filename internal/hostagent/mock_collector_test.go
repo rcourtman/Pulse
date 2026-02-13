@@ -6,10 +6,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/ceph"
 	"github.com/rcourtman/pulse-go-rewrite/internal/hostmetrics"
 	"github.com/rcourtman/pulse-go-rewrite/internal/sensors"
-	"github.com/rcourtman/pulse-go-rewrite/internal/smartctl"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	gohost "github.com/shirou/gopsutil/v4/host"
 )
@@ -22,8 +20,8 @@ type mockCollector struct {
 	sensorsParseFn  func(jsonStr string) (*sensors.TemperatureData, error)
 	sensorsPowerFn  func(ctx context.Context) (*sensors.PowerData, error)
 	raidArraysFn    func(ctx context.Context) ([]agentshost.RAIDArray, error)
-	cephStatusFn    func(ctx context.Context) (*ceph.ClusterStatus, error)
-	smartLocalFn    func(ctx context.Context, exclude []string) ([]smartctl.DiskSMART, error)
+	cephStatusFn    func(ctx context.Context) (*CephClusterStatus, error)
+	smartLocalFn    func(ctx context.Context, exclude []string) ([]DiskSMART, error)
 	nowFn           func() time.Time
 	goos            string
 	readFileFn      func(name string) ([]byte, error)
@@ -88,14 +86,14 @@ func (m *mockCollector) RAIDArrays(ctx context.Context) ([]agentshost.RAIDArray,
 	return nil, nil
 }
 
-func (m *mockCollector) CephStatus(ctx context.Context) (*ceph.ClusterStatus, error) {
+func (m *mockCollector) CephStatus(ctx context.Context) (*CephClusterStatus, error) {
 	if m.cephStatusFn != nil {
 		return m.cephStatusFn(ctx)
 	}
 	return nil, nil
 }
 
-func (m *mockCollector) SMARTLocal(ctx context.Context, exclude []string) ([]smartctl.DiskSMART, error) {
+func (m *mockCollector) SMARTLocal(ctx context.Context, exclude []string) ([]DiskSMART, error) {
 	if m.smartLocalFn != nil {
 		return m.smartLocalFn(ctx, exclude)
 	}

@@ -1,4 +1,4 @@
-package buffer
+package utils
 
 import (
 	"sync"
@@ -11,8 +11,8 @@ type Queue[T any] struct {
 	capacity int
 }
 
-// New creates a new Queue with the specified capacity.
-func New[T any](capacity int) *Queue[T] {
+// NewQueue creates a new Queue with the specified capacity.
+func NewQueue[T any](capacity int) *Queue[T] {
 	return &Queue[T]{
 		data:     make([]T, 0, capacity),
 		capacity: capacity,

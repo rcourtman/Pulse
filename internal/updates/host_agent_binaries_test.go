@@ -1,4 +1,4 @@
-package agentbinaries
+package updates
 
 import (
 	"os"

@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	internalerrors "github.com/rcourtman/pulse-go-rewrite/internal/errors"
+	internalerrors "github.com/rcourtman/pulse-go-rewrite/internal/monitoring/errors"
 	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )

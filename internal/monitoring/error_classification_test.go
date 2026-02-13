@@ -4,6 +4,8 @@ import (
 	"context"
 	stderrors "errors"
 	"testing"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring/errors"
 )
 
 func TestIsTransientError(t *testing.T) {

@@ -26,7 +26,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/agentbinaries"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/adapters"
@@ -7667,7 +7666,7 @@ func (r *Router) handleDownloadHostAgent(w http.ResponseWriter, req *http.Reques
 		return
 	}
 
-	remainingMissing := agentbinaries.EnsureHostAgentBinaries(r.serverVersion)
+	remainingMissing := updates.EnsureHostAgentBinaries(r.serverVersion)
 
 	afterRestorePaths, served := r.tryServeHostAgentBinary(w, req, platformParam, archParam)
 	checkedPaths = append(checkedPaths, afterRestorePaths...)
@@ -7786,7 +7785,7 @@ func dedupeStrings(values []string) []string {
 	return result
 }
 
-func sortedHostAgentKeys(missing map[string]agentbinaries.HostAgentBinary) []string {
+func sortedHostAgentKeys(missing map[string]updates.HostAgentBinary) []string {
 	if len(missing) == 0 {
 		return nil
 	}

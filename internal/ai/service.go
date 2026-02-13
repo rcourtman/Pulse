@@ -22,13 +22,12 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/cost"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/knowledge"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/infradiscovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	"github.com/rcourtman/pulse-go-rewrite/internal/infradiscovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
-	"github.com/rcourtman/pulse-go-rewrite/internal/types"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
@@ -530,7 +529,7 @@ type MetricsHistoryProvider interface {
 }
 
 // MetricPoint is an alias for the shared metric point type
-type MetricPoint = types.MetricPoint
+type MetricPoint = models.MetricPoint
 
 // SetMetricsHistoryProvider sets the metrics history provider for enriched AI context
 // This enables the AI to see trends, anomalies, and predictions based on historical data

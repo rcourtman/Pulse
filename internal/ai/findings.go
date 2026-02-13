@@ -364,9 +364,9 @@ func (f *Finding) CanRetryInvestigation() bool {
 	return true
 }
 
-// ToCoreFinding converts to the shared finding.Finding type used by the
+// ToCoreFinding converts to the shared InvestigationFinding type used by the
 // investigation orchestrator. Centralised here so a field added to
-// finding.Finding causes a compile error in exactly one place.
+// InvestigationFinding causes a compile error in exactly one place.
 func (f *Finding) ToCoreFinding() *InvestigationFinding {
 	return &InvestigationFinding{
 		ID:                     f.ID,

@@ -45,7 +45,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/baseline"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/circuit"
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai/finding"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/investigation"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/knowledge"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/remediation"
@@ -195,10 +195,8 @@ type InvestigationStoreMaintainer interface {
 	CleanupInvestigationStore(maxAge time.Duration, maxSessions int)
 }
 
-// InvestigationFinding is the shared finding type used by the investigation
-// orchestrator. Type alias so *InvestigationFinding and *finding.Finding
-// are interchangeable, eliminating field-by-field copies at the adapter layer.
-type InvestigationFinding = finding.Finding
+// InvestigationFinding is the shared type used by patrol and investigation orchestration.
+type InvestigationFinding = investigation.Finding
 
 // InvestigationSession represents the result of an investigation (minimal interface)
 type InvestigationSession struct {

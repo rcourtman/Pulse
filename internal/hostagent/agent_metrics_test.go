@@ -6,9 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/ceph"
 	"github.com/rcourtman/pulse-go-rewrite/internal/hostmetrics"
-	"github.com/rcourtman/pulse-go-rewrite/internal/smartctl"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	gohost "github.com/shirou/gopsutil/v4/host"
 )
@@ -154,15 +152,15 @@ func TestBuildReport(t *testing.T) {
 
 	// Test case 4: Ceph collection
 	t.Run("Ceph collection", func(t *testing.T) {
-		mc.cephStatusFn = func(ctx context.Context) (*ceph.ClusterStatus, error) {
-			return &ceph.ClusterStatus{
+		mc.cephStatusFn = func(ctx context.Context) (*CephClusterStatus, error) {
+			return &CephClusterStatus{
 				FSID: "ceph-fsid-123",
-				Health: ceph.HealthStatus{
+				Health: CephHealthStatus{
 					Status: "HEALTH_OK",
 				},
-				MonMap: ceph.MonitorMap{
+				MonMap: CephMonitorMap{
 					NumMons: 1,
-					Monitors: []ceph.Monitor{
+					Monitors: []CephMonitor{
 						{Name: "a"},
 					},
 				},
@@ -187,8 +185,8 @@ func TestBuildReport(t *testing.T) {
 
 	// Test case 5: SMART collection
 	t.Run("SMART collection", func(t *testing.T) {
-		mc.smartLocalFn = func(_ context.Context, _ []string) ([]smartctl.DiskSMART, error) {
-			return []smartctl.DiskSMART{
+		mc.smartLocalFn = func(_ context.Context, _ []string) ([]DiskSMART, error) {
+			return []DiskSMART{
 				{
 					Device:      "/dev/sda",
 					Model:       "TestDisk",

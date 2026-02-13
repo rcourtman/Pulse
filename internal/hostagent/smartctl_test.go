@@ -1,4 +1,4 @@
-package smartctl
+package hostagent
 
 import (
 	"testing"

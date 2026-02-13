@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentupdate"
-	"github.com/rcourtman/pulse-go-rewrite/internal/buffer"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rs/zerolog"
@@ -75,7 +74,7 @@ type Agent struct {
 	reportIP        string // User-specified IP to report (for multi-NIC systems)
 	interval        time.Duration
 	trimmedPulseURL string
-	reportBuffer    *buffer.Queue[agentshost.Report]
+	reportBuffer    *utils.Queue[agentshost.Report]
 	commandClient   *CommandClient
 	collector       SystemCollector
 }
@@ -231,7 +230,7 @@ func New(cfg Config) (*Agent, error) {
 		reportIP:        strings.TrimSpace(cfg.ReportIP),
 		interval:        cfg.Interval,
 		trimmedPulseURL: pulseURL,
-		reportBuffer:    buffer.New[agentshost.Report](bufferCapacity),
+		reportBuffer:    utils.NewQueue[agentshost.Report](bufferCapacity),
 		collector:       collector,
 	}
 

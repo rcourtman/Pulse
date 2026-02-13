@@ -17,7 +17,6 @@ import (
 
 	systemtypes "github.com/docker/docker/api/types/system"
 	"github.com/docker/docker/client"
-	"github.com/rcourtman/pulse-go-rewrite/internal/buffer"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 	"github.com/rs/zerolog"
@@ -120,7 +119,7 @@ type Agent struct {
 	prevContainerCPU    map[string]cpuSample
 	cpuMu               sync.Mutex // protects prevContainerCPU and preCPUStatsFailures
 	preCPUStatsFailures int
-	reportBuffer        *buffer.Queue[agentsdocker.Report]
+	reportBuffer        *utils.Queue[agentsdocker.Report]
 	registryChecker     *RegistryChecker // For checking container image updates
 }
 
@@ -273,7 +272,7 @@ func New(cfg Config) (*Agent, error) {
 		allowedStates:    make(map[string]struct{}, len(stateFilters)),
 		stateFilters:     stateFilters,
 		prevContainerCPU: make(map[string]cpuSample),
-		reportBuffer:     buffer.New[agentsdocker.Report](bufferCapacity),
+		reportBuffer:     utils.NewQueue[agentsdocker.Report](bufferCapacity),
 		registryChecker:  newRegistryCheckerWithConfig(*logger, !cfg.DisableUpdateChecks),
 	}
 
