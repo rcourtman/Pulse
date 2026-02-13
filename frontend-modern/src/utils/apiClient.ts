@@ -9,6 +9,7 @@ const ORG_STORAGE_KEY = STORAGE_KEYS.ORG_ID;
 const ORG_HEADER_NAME = 'X-Pulse-Org-ID';
 const ORG_COOKIE_NAME = 'pulse_org_id';
 
+
 const getSessionStorage = (): Storage | undefined => {
   if (typeof window === 'undefined') {
     return undefined;
@@ -480,6 +481,7 @@ class ApiClient {
         });
         return response;
       }
+
 
       const waitTime = parseRetryAfterMs(response.headers.get('Retry-After'));
       logger.warn(`Rate limit hit, retrying ${method} after ${waitTime}ms`);

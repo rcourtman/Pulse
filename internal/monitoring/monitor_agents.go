@@ -1795,15 +1795,13 @@ func (m *Monitor) cleanupRemovedDockerHosts(now time.Time) {
 	}
 }
 
-// cleanupGuestMetadataCache removes stale guest metadata entries.
+// cleanupGuestMetadataCache removes stale guest metadata cache and limiter entries.
 // Entries older than 2x the cache TTL (10 minutes) are removed to prevent unbounded growth
 // when VMs are deleted or moved.
 func (m *Monitor) cleanupGuestMetadataCache(now time.Time) {
 	const maxAge = 2 * guestMetadataCacheTTL // 10 minutes
 
 	m.guestMetadataMu.Lock()
-	defer m.guestMetadataMu.Unlock()
-
 	for key, entry := range m.guestMetadataCache {
 		if now.Sub(entry.fetchedAt) > maxAge {
 			delete(m.guestMetadataCache, key)
@@ -1811,6 +1809,20 @@ func (m *Monitor) cleanupGuestMetadataCache(now time.Time) {
 				Str("key", key).
 				Time("fetchedAt", entry.fetchedAt).
 				Msg("Cleaned up stale guest metadata cache entry")
+		}
+	}
+	m.guestMetadataMu.Unlock()
+
+	m.guestMetadataLimiterMu.Lock()
+	defer m.guestMetadataLimiterMu.Unlock()
+	for key, nextAllowed := range m.guestMetadataLimiter {
+		// Keep near-term limiter state; remove long-idle keys.
+		if now.Sub(nextAllowed) > maxAge {
+			delete(m.guestMetadataLimiter, key)
+			log.Debug().
+				Str("key", key).
+				Time("nextAllowed", nextAllowed).
+				Msg("Cleaned up stale guest metadata limiter entry")
 		}
 	}
 }

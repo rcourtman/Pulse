@@ -175,13 +175,17 @@ func TestMonitor_ConsolidateDuplicateClusters_Extra(t *testing.T) {
 
 func TestMonitor_CleanupGuestMetadataCache_Extra(t *testing.T) {
 	m := &Monitor{
-		guestMetadataCache: make(map[string]guestMetadataCacheEntry),
+		guestMetadataCache:   make(map[string]guestMetadataCacheEntry),
+		guestMetadataLimiter: make(map[string]time.Time),
 	}
 
 	now := time.Now()
 	stale := now.Add(-2 * time.Hour)
 	m.guestMetadataCache["stale"] = guestMetadataCacheEntry{fetchedAt: stale}
 	m.guestMetadataCache["fresh"] = guestMetadataCacheEntry{fetchedAt: now}
+	m.guestMetadataLimiter["stale"] = stale
+	m.guestMetadataLimiter["fresh"] = now.Add(-2 * time.Minute)
+	m.guestMetadataLimiter["future"] = now.Add(1 * time.Minute)
 
 	m.cleanupGuestMetadataCache(now)
 
@@ -190,6 +194,15 @@ func TestMonitor_CleanupGuestMetadataCache_Extra(t *testing.T) {
 	}
 	if _, ok := m.guestMetadataCache["fresh"]; !ok {
 		t.Error("Fresh metadata cache entry removed")
+	}
+	if _, ok := m.guestMetadataLimiter["stale"]; ok {
+		t.Error("Stale metadata limiter entry not removed")
+	}
+	if _, ok := m.guestMetadataLimiter["fresh"]; !ok {
+		t.Error("Fresh metadata limiter entry removed")
+	}
+	if _, ok := m.guestMetadataLimiter["future"]; !ok {
+		t.Error("Future metadata limiter entry removed")
 	}
 }
 
