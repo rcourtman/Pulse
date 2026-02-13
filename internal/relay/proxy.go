@@ -331,6 +331,18 @@ func (p *HTTPProxy) HandleStreamRequest(ctx context.Context, payload []byte, api
 				sendFrame(chunkData)
 			}
 		} else {
+			// Bound total buffered event size, not just per-line scanner token size.
+			// Without this, many small lines before a blank separator can grow
+			// eventBuf unbounded and exhaust memory.
+			added := len(line)
+			if eventBuf.Len() > 0 {
+				added++ // newline separator inserted between lines
+			}
+			if eventBuf.Len()+added > maxProxyBodySize {
+				sendFrame(p.errorResponse(req.ID, http.StatusRequestEntityTooLarge, "stream event exceeds 47KB limit"))
+				return nil
+			}
+
 			if eventBuf.Len() > 0 {
 				eventBuf.WriteByte('\n')
 			}

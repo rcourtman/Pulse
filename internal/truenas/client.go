@@ -20,6 +20,8 @@ import (
 
 const defaultHTTPTimeout = 30 * time.Second
 
+const maxResponseBodyBytes int64 = 4 * 1024 * 1024
+
 // ClientConfig configures the TrueNAS REST API client.
 type ClientConfig struct {
 	Host               string
@@ -361,18 +363,7 @@ func (c *Client) getJSON(ctx context.Context, method string, path string, destin
 		}
 	}
 
-	decoder := json.NewDecoder(response.Body)
-	decoder.UseNumber()
-	if err := decoder.Decode(destination); err != nil {
-		return fmt.Errorf("decode truenas response for %s %s: %w", method, path, err)
-	}
-
-	var trailing json.RawMessage
-	if err := decoder.Decode(&trailing); err != io.EOF {
-		return fmt.Errorf("decode truenas response for %s %s: unexpected trailing data", method, path)
-	}
-
-	return nil
+	return decodeJSONResponseWithLimit(response.Body, method, path, destination)
 }
 
 func (c *Client) newRequest(ctx context.Context, method string, path string) (*http.Request, error) {
@@ -412,6 +403,18 @@ func resolveEndpoint(host string, useHTTPS bool, port int) (bool, string, error)
 		}
 		if parsed.Host == "" {
 			return false, "", fmt.Errorf("parse truenas host %q: missing host", host)
+		}
+		if parsed.User != nil {
+			return false, "", fmt.Errorf("parse truenas host %q: credentials are not supported", host)
+		}
+		if parsed.Path != "" && parsed.Path != "/" {
+			return false, "", fmt.Errorf("parse truenas host %q: path is not supported", host)
+		}
+		if parsed.RawQuery != "" || parsed.ForceQuery {
+			return false, "", fmt.Errorf("parse truenas host %q: query is not supported", host)
+		}
+		if parsed.Fragment != "" {
+			return false, "", fmt.Errorf("parse truenas host %q: fragment is not supported", host)
 		}
 		switch strings.ToLower(parsed.Scheme) {
 		case "https":
@@ -481,6 +484,29 @@ func splitHostPort(rawHost string) (string, string, error) {
 	}
 
 	return "", "", fmt.Errorf("invalid truenas host %q: %w", rawHost, err)
+}
+
+func decodeJSONResponseWithLimit(body io.Reader, method string, path string, destination any) error {
+	responseBody, err := io.ReadAll(io.LimitReader(body, maxResponseBodyBytes+1))
+	if err != nil {
+		return fmt.Errorf("read truenas response for %s %s: %w", method, path, err)
+	}
+	if int64(len(responseBody)) > maxResponseBodyBytes {
+		return fmt.Errorf("decode truenas response for %s %s: response body exceeds %d bytes", method, path, maxResponseBodyBytes)
+	}
+
+	decoder := json.NewDecoder(bytes.NewReader(responseBody))
+	decoder.UseNumber()
+	if err := decoder.Decode(destination); err != nil {
+		return fmt.Errorf("decode truenas response for %s %s: %w", method, path, err)
+	}
+
+	var trailing json.RawMessage
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		return fmt.Errorf("decode truenas response for %s %s: unexpected trailing data", method, path)
+	}
+
+	return nil
 }
 
 func buildTLSConfig(insecureSkipVerify bool, fingerprint string) (*tls.Config, error) {

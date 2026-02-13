@@ -16,6 +16,19 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+const maxResponseBodyBytes int64 = 8 << 20 // 8 MiB
+
+func readResponseBodyLimited(r io.Reader) ([]byte, error) {
+	body, err := io.ReadAll(io.LimitReader(r, maxResponseBodyBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(body)) > maxResponseBodyBytes {
+		return nil, fmt.Errorf("response body exceeds %d bytes", maxResponseBodyBytes)
+	}
+	return body, nil
+}
+
 type Client struct {
 	baseURL    string
 	httpClient *http.Client
@@ -262,7 +275,10 @@ func (c *Client) authenticateForm(ctx context.Context, username, password string
 
 func (c *Client) handleAuthResponse(resp *http.Response) error {
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, err := readResponseBodyLimited(resp.Body)
+		if err != nil {
+			return &authHTTPError{status: resp.StatusCode, body: err.Error()}
+		}
 		return &authHTTPError{status: resp.StatusCode, body: string(body)}
 	}
 
@@ -378,7 +394,10 @@ func (c *Client) request(ctx context.Context, method, path string, params url.Va
 
 	if resp.StatusCode >= 400 {
 		defer resp.Body.Close()
-		body, _ := io.ReadAll(resp.Body)
+		body, err := readResponseBodyLimited(resp.Body)
+		if err != nil {
+			return nil, err
+		}
 		apiErr := fmt.Errorf("API error %d: %s", resp.StatusCode, string(body))
 		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
 			return nil, fmt.Errorf("authentication error: %w", apiErr)

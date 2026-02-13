@@ -17,8 +17,12 @@ import (
 )
 
 const (
-	ProvisionStatusCreated  ProvisionStatus = "created"
-	ProvisionStatusExisting ProvisionStatus = "existing"
+	ProvisionStatusCreated  = "created"
+	ProvisionStatusExisting = "existing"
+
+	maxHostedOrganizationIDLength = 64
+	maxHostedSignupEmailLength    = 254
+	maxHostedSignupPasswordLength = 1024
 )
 
 type ProvisionStatus string
@@ -36,6 +40,10 @@ type AuthProvider interface {
 
 type AuthManager interface {
 	UpdateUserRoles(userID string, roles []string) error
+}
+
+type orgRollbackDeleter interface {
+	DeleteOrganization(orgID string) error
 }
 
 type Provisioner struct {
@@ -203,26 +211,68 @@ func (p *Provisioner) cleanupOrgDirectory(orgID, dataDir string) {
 		Str("data_dir", dataDir).
 		Msg("Hosted tenant provisioning failed; attempting rollback cleanup")
 
-	if dataDir == "" {
+	if !isValidOrganizationID(orgID) || orgID == "default" {
 		log.Warn().
 			Str("org_id", orgID).
-			Msg("Skipping rollback cleanup because data directory is empty")
+			Msg("Skipping rollback cleanup because organization ID is invalid for deletion")
 		return
 	}
 
-	if err := os.RemoveAll(dataDir); err != nil {
+	if deleter, ok := p.persistence.(orgRollbackDeleter); ok && deleter != nil {
+		if err := deleter.DeleteOrganization(orgID); err != nil && !errors.Is(err, os.ErrNotExist) {
+			log.Error().
+				Err(err).
+				Str("org_id", orgID).
+				Msg("Rollback cleanup failed via organization deleter")
+			return
+		}
+		log.Info().
+			Str("org_id", orgID).
+			Msg("Rollback cleanup completed via organization deleter")
+		return
+	}
+
+	if !isSafeTenantDataDir(dataDir, orgID) {
+		log.Warn().
+			Str("org_id", orgID).
+			Str("data_dir", dataDir).
+			Msg("Skipping rollback cleanup because data directory does not match expected tenant path")
+		return
+	}
+
+	cleanDataDir := filepath.Clean(dataDir)
+	if err := os.RemoveAll(cleanDataDir); err != nil {
 		log.Error().
 			Err(err).
 			Str("org_id", orgID).
-			Str("data_dir", dataDir).
+			Str("data_dir", cleanDataDir).
 			Msg("Rollback cleanup failed")
 		return
 	}
 
 	log.Info().
 		Str("org_id", orgID).
-		Str("data_dir", dataDir).
+		Str("data_dir", cleanDataDir).
 		Msg("Rollback cleanup completed")
+}
+
+func isSafeTenantDataDir(dataDir, orgID string) bool {
+	if dataDir == "" || !isValidOrganizationID(orgID) || orgID == "default" {
+		return false
+	}
+
+	cleanDataDir := filepath.Clean(dataDir)
+	if cleanDataDir == "." || cleanDataDir == string(os.PathSeparator) {
+		return false
+	}
+	if filepath.Base(cleanDataDir) != orgID {
+		return false
+	}
+	if filepath.Base(filepath.Dir(cleanDataDir)) != "orgs" {
+		return false
+	}
+
+	return true
 }
 
 func validateProvisionRequest(req ProvisionRequest) error {
@@ -232,6 +282,9 @@ func validateProvisionRequest(req ProvisionRequest) error {
 	if len(req.Password) < 8 {
 		return &ValidationError{Field: "password", Message: "password must be at least 8 characters"}
 	}
+	if len(req.Password) > maxHostedSignupPasswordLength {
+		return &ValidationError{Field: "password", Message: "password exceeds maximum length"}
+	}
 	if !isValidHostedOrgName(req.OrgName) {
 		return &ValidationError{Field: "org_name", Message: "invalid organization name"}
 	}
@@ -239,8 +292,13 @@ func validateProvisionRequest(req ProvisionRequest) error {
 }
 
 func isValidSignupEmail(email string) bool {
-	if email == "" || strings.Contains(email, " ") {
+	if email == "" || len(email) > maxHostedSignupEmailLength || strings.TrimSpace(email) != email {
 		return false
+	}
+	for _, r := range email {
+		if r < 0x20 || r == 0x7f {
+			return false
+		}
 	}
 	at := strings.Index(email, "@")
 	if at <= 0 || at >= len(email)-1 {
@@ -258,7 +316,7 @@ func isValidSignupEmail(email string) bool {
 }
 
 func isValidHostedOrgName(orgName string) bool {
-	if len(orgName) < 3 || len(orgName) > 64 {
+	if len(orgName) < 3 || len(orgName) > maxHostedOrganizationIDLength {
 		return false
 	}
 	return isValidOrganizationID(orgName)
@@ -268,10 +326,24 @@ func isValidOrganizationID(orgID string) bool {
 	if orgID == "" || orgID == "." || orgID == ".." {
 		return false
 	}
+	if len(orgID) > maxHostedOrganizationIDLength {
+		return false
+	}
+	if strings.TrimSpace(orgID) != orgID {
+		return false
+	}
+	if strings.ContainsAny(orgID, `/\`) {
+		return false
+	}
 	if filepath.Base(orgID) != orgID {
 		return false
 	}
-	return len(orgID) <= 64
+	for _, r := range orgID {
+		if r < 0x20 || r == 0x7f {
+			return false
+		}
+	}
+	return true
 }
 
 func contextErr(ctx context.Context) error {

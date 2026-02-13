@@ -239,7 +239,7 @@ func TestReadLoopCommandResultBranches(t *testing.T) {
 
 	s.mu.Lock()
 	s.agents["a1"] = ac
-	s.pendingRequests["req-full"] = make(chan CommandResultPayload)
+	s.pendingReqs[pendingRequestKey("a1", "req-full")] = make(chan CommandResultPayload)
 	s.mu.Unlock()
 
 	done := make(chan struct{})
@@ -262,8 +262,48 @@ func TestReadLoopCommandResultBranches(t *testing.T) {
 	}
 
 	s.mu.Lock()
-	delete(s.pendingRequests, "req-full")
+	delete(s.pendingReqs, pendingRequestKey("a1", "req-full"))
 	s.mu.Unlock()
+}
+
+func TestReadLoopCommandResultWrongAgentIsolation(t *testing.T) {
+	s := NewServer(nil)
+	serverConn, clientConn, cleanup := newConnPair(t)
+	defer cleanup()
+
+	ac := &agentConn{
+		conn:  serverConn,
+		agent: ConnectedAgent{AgentID: "a1"},
+		done:  make(chan struct{}),
+	}
+
+	foreignCh := make(chan CommandResultPayload, 1)
+
+	s.mu.Lock()
+	s.agents["a1"] = ac
+	s.pendingReqs[pendingRequestKey("a2", "req-shared")] = foreignCh
+	s.mu.Unlock()
+
+	done := make(chan struct{})
+	go func() {
+		s.readLoop(ac)
+		close(done)
+	}()
+
+	_ = clientConn.WriteMessage(websocket.TextMessage, []byte(`{"type":"command_result","payload":{"request_id":"req-shared","success":true}}`))
+	clientConn.Close()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatalf("readLoop did not exit")
+	}
+
+	select {
+	case <-foreignCh:
+		t.Fatalf("expected result not to be delivered across agents")
+	default:
+	}
 }
 
 func TestPingLoopSuccessAndStop(t *testing.T) {
@@ -352,7 +392,11 @@ func TestExecuteCommandSendError(t *testing.T) {
 	s.agents["a1"] = ac
 	s.mu.Unlock()
 
-	_, err := s.ExecuteCommand(context.Background(), "a1", ExecuteCommandPayload{RequestID: "r1", Timeout: 1})
+	_, err := s.ExecuteCommand(context.Background(), "a1", ExecuteCommandPayload{
+		RequestID: "r1",
+		Command:   "echo ok",
+		Timeout:   1,
+	})
 	if err == nil {
 		t.Fatalf("expected send error")
 	}
@@ -372,14 +416,22 @@ func TestExecuteCommandTimeoutAndCancel(t *testing.T) {
 	s.agents["a1"] = ac
 	s.mu.Unlock()
 
-	_, err := s.ExecuteCommand(context.Background(), "a1", ExecuteCommandPayload{RequestID: "r-timeout", Timeout: 1})
+	_, err := s.ExecuteCommand(context.Background(), "a1", ExecuteCommandPayload{
+		RequestID: "r-timeout",
+		Command:   "echo ok",
+		Timeout:   1,
+	})
 	if err == nil || !strings.Contains(err.Error(), "timed out") {
 		t.Fatalf("expected timeout error, got %v", err)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	_, err = s.ExecuteCommand(ctx, "a1", ExecuteCommandPayload{RequestID: "r-cancel", Timeout: 1})
+	_, err = s.ExecuteCommand(ctx, "a1", ExecuteCommandPayload{
+		RequestID: "r-cancel",
+		Command:   "echo ok",
+		Timeout:   1,
+	})
 	if err == nil {
 		t.Fatalf("expected cancel error")
 	}
@@ -402,7 +454,7 @@ func TestExecuteCommandDefaultTimeout(t *testing.T) {
 	go func() {
 		for {
 			s.mu.RLock()
-			ch := s.pendingRequests["r-default"]
+			ch := s.pendingReqs[pendingRequestKey("a1", "r-default")]
 			s.mu.RUnlock()
 			if ch != nil {
 				ch <- CommandResultPayload{RequestID: "r-default", Success: true}
@@ -412,7 +464,10 @@ func TestExecuteCommandDefaultTimeout(t *testing.T) {
 		}
 	}()
 
-	result, err := s.ExecuteCommand(context.Background(), "a1", ExecuteCommandPayload{RequestID: "r-default"})
+	result, err := s.ExecuteCommand(context.Background(), "a1", ExecuteCommandPayload{
+		RequestID: "r-default",
+		Command:   "echo ok",
+	})
 	if err != nil || result == nil || !result.Success {
 		t.Fatalf("expected success, got result=%v err=%v", result, err)
 	}
@@ -493,18 +548,27 @@ func TestReadFileTimeoutCancelAndSendError(t *testing.T) {
 	s.agents["a1"] = ac
 	s.mu.Unlock()
 
-	if _, err := s.ReadFile(context.Background(), "a1", ReadFilePayload{RequestID: "read-timeout"}); err == nil {
+	if _, err := s.ReadFile(context.Background(), "a1", ReadFilePayload{
+		RequestID: "read-timeout",
+		Path:      "/etc/hosts",
+	}); err == nil {
 		t.Fatalf("expected timeout error")
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err := s.ReadFile(ctx, "a1", ReadFilePayload{RequestID: "read-cancel"}); err == nil {
+	if _, err := s.ReadFile(ctx, "a1", ReadFilePayload{
+		RequestID: "read-cancel",
+		Path:      "/etc/hosts",
+	}); err == nil {
 		t.Fatalf("expected cancel error")
 	}
 
 	serverConn.Close()
-	if _, err := s.ReadFile(context.Background(), "a1", ReadFilePayload{RequestID: "read-send"}); err == nil {
+	if _, err := s.ReadFile(context.Background(), "a1", ReadFilePayload{
+		RequestID: "read-send",
+		Path:      "/etc/hosts",
+	}); err == nil {
 		t.Fatalf("expected send error")
 	}
 }

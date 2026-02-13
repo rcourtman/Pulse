@@ -460,21 +460,28 @@ func TestLoadHistory_FromBackupFile(t *testing.T) {
 	}
 }
 
-func TestLoadHistory_CorruptMainFallsBackToBackup(t *testing.T) {
+func TestLoadHistory_OversizedMainFallsBackToBackup(t *testing.T) {
 	hm := newTestHistoryManager(t)
 
-	if err := os.WriteFile(hm.historyFile, []byte("not valid json{"), 0644); err != nil {
-		t.Fatalf("Failed to create corrupt main history file: %v", err)
+	main, err := os.Create(hm.historyFile)
+	if err != nil {
+		t.Fatalf("Failed to create oversized main file: %v", err)
+	}
+	if err := main.Close(); err != nil {
+		t.Fatalf("Failed to close oversized main file: %v", err)
+	}
+	if err := os.Truncate(hm.historyFile, maxAlertHistoryFileSizeBytes+1); err != nil {
+		t.Fatalf("Failed to expand oversized main file: %v", err)
 	}
 
-	recentTime := time.Now().Add(-24 * time.Hour).Format(time.RFC3339)
-	content := `[{"alert":{"id":"backup-fallback","type":"memory"},"timestamp":"` + recentTime + `"}]`
-	if err := os.WriteFile(hm.backupFile, []byte(content), 0644); err != nil {
-		t.Fatalf("Failed to create backup history file: %v", err)
+	recentTime := time.Now().Add(-1 * time.Hour).Format(time.RFC3339)
+	backupContent := `[{"alert":{"id":"backup-ok","type":"memory"},"timestamp":"` + recentTime + `"}]`
+	if err := os.WriteFile(hm.backupFile, []byte(backupContent), 0o644); err != nil {
+		t.Fatalf("Failed to create backup file: %v", err)
 	}
 
 	if err := hm.loadHistory(); err != nil {
-		t.Fatalf("loadHistory should fallback to backup file, got error: %v", err)
+		t.Fatalf("loadHistory should fall back to backup when main is oversized, got: %v", err)
 	}
 
 	if len(hm.history) != 1 {
@@ -746,6 +753,51 @@ func TestNewHistoryManager_DefaultDir(t *testing.T) {
 
 	if hm.dataDir != tempDir {
 		t.Errorf("dataDir = %v, want %v", hm.dataDir, tempDir)
+	}
+}
+
+func TestNewHistoryManager_HardensDirectoryPermissions(t *testing.T) {
+	tempDir := t.TempDir()
+	if err := os.Chmod(tempDir, 0o755); err != nil {
+		t.Fatalf("failed to set initial permissions: %v", err)
+	}
+
+	hm := NewHistoryManager(tempDir)
+	defer hm.Stop()
+
+	info, err := os.Stat(tempDir)
+	if err != nil {
+		t.Fatalf("failed to stat data dir: %v", err)
+	}
+	if info.Mode().Perm() != alertsDirPerm {
+		t.Fatalf("data dir permissions = %o, want %o", info.Mode().Perm(), alertsDirPerm)
+	}
+}
+
+func TestSaveHistory_HardensFilePermissions(t *testing.T) {
+	hm := newTestHistoryManager(t)
+	hm.history = []HistoryEntry{
+		{
+			Alert: Alert{
+				ID:        "perm-test",
+				Type:      "cpu",
+				StartTime: time.Now().Add(-1 * time.Minute),
+				LastSeen:  time.Now(),
+			},
+			Timestamp: time.Now(),
+		},
+	}
+
+	if err := hm.saveHistory(); err != nil {
+		t.Fatalf("saveHistory failed: %v", err)
+	}
+
+	info, err := os.Stat(hm.historyFile)
+	if err != nil {
+		t.Fatalf("failed to stat history file: %v", err)
+	}
+	if info.Mode().Perm() != alertsFilePerm {
+		t.Fatalf("history file permissions = %o, want %o", info.Mode().Perm(), alertsFilePerm)
 	}
 }
 

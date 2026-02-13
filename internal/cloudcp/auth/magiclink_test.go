@@ -193,3 +193,42 @@ func TestKeyPersistence(t *testing.T) {
 		t.Errorf("email = %q, want eve@example.com", result.Email)
 	}
 }
+
+func TestNewService_SecuresDataDirPermissions(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "cp-data")
+
+	svc, err := NewService(dir)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	svc.Close()
+
+	info, err := os.Stat(dir)
+	if err != nil {
+		t.Fatalf("stat data dir: %v", err)
+	}
+	if got := info.Mode().Perm(); got != privateDirPerm {
+		t.Fatalf("data dir perms = %o, want %o", got, privateDirPerm)
+	}
+}
+
+func TestNewService_HardensExistingPermissiveDataDir(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "cp-data")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("create data dir: %v", err)
+	}
+
+	svc, err := NewService(dir)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	svc.Close()
+
+	info, err := os.Stat(dir)
+	if err != nil {
+		t.Fatalf("stat data dir: %v", err)
+	}
+	if got := info.Mode().Perm(); got != privateDirPerm {
+		t.Fatalf("data dir perms = %o, want %o", got, privateDirPerm)
+	}
+}

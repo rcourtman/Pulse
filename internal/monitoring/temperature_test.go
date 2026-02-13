@@ -3,6 +3,7 @@ package monitoring
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"strings"
@@ -177,28 +178,29 @@ func TestTemperatureCollector_HelperMethods(t *testing.T) {
 	// I will assume same package for now based on file declaration.
 }
 
-func TestTemperatureCollector_RejectsInsecureSSHKeyPermissions(t *testing.T) {
-	tmpKey := t.TempDir() + "/id_rsa"
-	require.NoError(t, os.WriteFile(tmpKey, []byte("dummy key"), 0644))
+func TestDefaultCommandRunner_RejectsOversizedStdout(t *testing.T) {
+	runner := &defaultCommandRunner{}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
-	tc := NewTemperatureCollectorWithPort("root", tmpKey, 22)
-	tc.hostKeys = nil
-	runner := &mockCommandRunner{
-		outputs: map[string]string{
-			"sensors -j": `{"coretemp-isa-0000":{"Package id 0":{"temp1_input":45.0}}}`,
-		},
-		errs: make(map[string]error),
-	}
-	tc.runner = runner
-
-	temp, err := tc.CollectTemperature(context.Background(), "node1", "node1")
-	require.NoError(t, err)
-	require.NotNil(t, temp)
-	assert.False(t, temp.Available)
-	assert.Equal(t, 0, runner.callCount, "ssh command should not run when key permissions are insecure")
+	cmd := fmt.Sprintf("head -c %d /dev/zero", maxTemperatureCommandOutputSize+1)
+	_, err := runner.Run(ctx, "sh", "-c", cmd)
+	require.Error(t, err)
+	require.ErrorIs(t, err, errTemperatureCommandOutputTooLarge)
 }
 
-func TestRunSSHCommand_SanitizesAuthenticationError(t *testing.T) {
+func TestDefaultCommandRunner_RejectsOversizedStderr(t *testing.T) {
+	runner := &defaultCommandRunner{}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	cmd := fmt.Sprintf("head -c %d /dev/zero 1>&2; exit 1", maxTemperatureCommandOutputSize+1)
+	_, err := runner.Run(ctx, "sh", "-c", cmd)
+	require.Error(t, err)
+	require.ErrorIs(t, err, errTemperatureCommandOutputTooLarge)
+}
+
+func TestTemperatureCollector_RunSSHCommand_OversizedOutput(t *testing.T) {
 	tmpKey := t.TempDir() + "/id_rsa"
 	require.NoError(t, os.WriteFile(tmpKey, []byte("dummy key"), 0600))
 

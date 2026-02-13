@@ -7,15 +7,24 @@ import (
 	"testing"
 )
 
-func withCephCommandRunner(t *testing.T, fn func(ctx context.Context, name string, args ...string) ([]byte, []byte, error)) {
+const fakeCephBinary = "/usr/bin/ceph"
+
+func withCommandRunner(t *testing.T, fn func(ctx context.Context, name string, args ...string) ([]byte, []byte, error)) {
 	t.Helper()
 	orig := cephCommandRunner
 	cephCommandRunner = fn
 	t.Cleanup(func() { cephCommandRunner = orig })
 }
 
-func TestCephCommandRunner_Default(t *testing.T) {
-	stdout, stderr, err := cephCommandRunner(context.Background(), "sh", "-c", "true")
+func withLookPath(t *testing.T, fn func(file string) (string, error)) {
+	t.Helper()
+	orig := lookPath
+	lookPath = fn
+	t.Cleanup(func() { lookPath = orig })
+}
+
+func TestCommandRunner_Default(t *testing.T) {
+	stdout, stderr, err := commandRunner(context.Background(), "sh", "-c", "true")
 	if err != nil {
 		t.Fatalf("cephCommandRunner error: %v", err)
 	}
@@ -27,7 +36,20 @@ func TestCephCommandRunner_Default(t *testing.T) {
 	}
 }
 
-func TestParseCephStatus(t *testing.T) {
+func TestCommandRunner_DefaultOutputLimit(t *testing.T) {
+	stdout, stderr, err := commandRunner(context.Background(), "sh", "-c", "head -c 5000000 /dev/zero")
+	if !errors.Is(err, errCephCommandOutputTooLarge) {
+		t.Fatalf("expected output limit error, got: %v", err)
+	}
+	if len(stdout) != maxCephCommandOutputSize {
+		t.Fatalf("expected stdout capped at %d bytes, got %d", maxCephCommandOutputSize, len(stdout))
+	}
+	if len(stderr) != 0 {
+		t.Fatalf("unexpected stderr: %q", string(stderr))
+	}
+}
+
+func TestParseStatus(t *testing.T) {
 	data := []byte(`{
 	  "fsid":"fsid-123",
 	  "health":{
@@ -98,11 +120,11 @@ func TestParseCephStatus(t *testing.T) {
 
 func TestIsCephAvailable(t *testing.T) {
 	t.Run("available", func(t *testing.T) {
-		withCephCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
-			if name != "which" || len(args) != 1 || args[0] != "ceph" {
-				t.Fatalf("unexpected command: %s %v", name, args)
+		withLookPath(t, func(file string) (string, error) {
+			if file != "ceph" {
+				t.Fatalf("unexpected lookup: %s", file)
 			}
-			return nil, nil, nil
+			return fakeCephBinary, nil
 		})
 
 		if !IsCephAvailable(context.Background()) {
@@ -111,8 +133,8 @@ func TestIsCephAvailable(t *testing.T) {
 	})
 
 	t.Run("missing", func(t *testing.T) {
-		withCephCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
-			return nil, nil, errors.New("missing")
+		withLookPath(t, func(file string) (string, error) {
+			return "", errors.New("missing")
 		})
 
 		if IsCephAvailable(context.Background()) {
@@ -122,8 +144,15 @@ func TestIsCephAvailable(t *testing.T) {
 }
 
 func TestRunCephCommand(t *testing.T) {
-	withCephCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
-		if name != "ceph" {
+	withLookPath(t, func(file string) (string, error) {
+		if file != "ceph" {
+			t.Fatalf("unexpected lookup: %s", file)
+		}
+		return fakeCephBinary, nil
+	})
+
+	withCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
+		if name != fakeCephBinary {
 			t.Fatalf("unexpected command name: %s", name)
 		}
 		if len(args) < 1 || args[0] != "status" {
@@ -142,7 +171,14 @@ func TestRunCephCommand(t *testing.T) {
 }
 
 func TestRunCephCommandError(t *testing.T) {
-	withCephCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
+	withLookPath(t, func(file string) (string, error) {
+		if file != "ceph" {
+			t.Fatalf("unexpected lookup: %s", file)
+		}
+		return fakeCephBinary, nil
+	})
+
+	withCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
 		return nil, []byte("bad"), errors.New("boom")
 	})
 
@@ -158,8 +194,32 @@ func TestRunCephCommandError(t *testing.T) {
 	}
 }
 
-func TestParseCephStatusInvalidJSON(t *testing.T) {
-	_, err := parseCephStatus([]byte(`{not-json}`))
+func TestRunCephCommandOutputTooLarge(t *testing.T) {
+	withLookPath(t, func(file string) (string, error) {
+		if file != "ceph" {
+			t.Fatalf("unexpected lookup: %s", file)
+		}
+		return fakeCephBinary, nil
+	})
+
+	withCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
+		return make([]byte, maxCephCommandOutputSize), nil, errCephCommandOutputTooLarge
+	})
+
+	_, err := runCephCommand(context.Background(), "status", "--format", "json")
+	if err == nil {
+		t.Fatalf("expected error")
+	}
+	if !strings.Contains(err.Error(), "output exceeded") {
+		t.Fatalf("expected output limit error, got: %v", err)
+	}
+	if strings.Contains(err.Error(), "stderr:") {
+		t.Fatalf("unexpected stderr in output limit error: %v", err)
+	}
+}
+
+func TestParseStatusInvalidJSON(t *testing.T) {
+	_, err := parseStatus([]byte(`{not-json}`))
 	if err == nil {
 		t.Fatalf("expected error for invalid JSON")
 	}
@@ -212,11 +272,12 @@ func TestParseCephDFInvalidJSON(t *testing.T) {
 	}
 }
 
-func TestCollectCeph_NotAvailable(t *testing.T) {
-	withCephCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
-		if name == "which" {
-			return nil, nil, errors.New("missing")
-		}
+func TestCollect_NotAvailable(t *testing.T) {
+	withLookPath(t, func(file string) (string, error) {
+		return "", errors.New("missing")
+	})
+
+	withCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
 		t.Fatalf("unexpected command: %s %v", name, args)
 		return nil, nil, nil
 	})
@@ -230,12 +291,16 @@ func TestCollectCeph_NotAvailable(t *testing.T) {
 	}
 }
 
-func TestCollectCeph_StatusError(t *testing.T) {
-	withCephCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
-		if name == "which" {
-			return nil, nil, nil
+func TestCollect_StatusError(t *testing.T) {
+	withLookPath(t, func(file string) (string, error) {
+		if file != "ceph" {
+			t.Fatalf("unexpected lookup: %s", file)
 		}
-		if name == "ceph" && len(args) > 0 && args[0] == "status" {
+		return fakeCephBinary, nil
+	})
+
+	withCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
+		if name == fakeCephBinary && len(args) > 0 && args[0] == "status" {
 			return nil, []byte("boom"), errors.New("status failed")
 		}
 		t.Fatalf("unexpected command: %s %v", name, args)
@@ -251,12 +316,16 @@ func TestCollectCeph_StatusError(t *testing.T) {
 	}
 }
 
-func TestCollectCeph_ParseStatusError(t *testing.T) {
-	withCephCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
-		if name == "which" {
-			return nil, nil, nil
+func TestCollect_ParseStatusError(t *testing.T) {
+	withLookPath(t, func(file string) (string, error) {
+		if file != "ceph" {
+			t.Fatalf("unexpected lookup: %s", file)
 		}
-		if name == "ceph" && len(args) > 0 && args[0] == "status" {
+		return fakeCephBinary, nil
+	})
+
+	withCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
+		if name == fakeCephBinary && len(args) > 0 && args[0] == "status" {
 			return []byte(`{not-json}`), nil, nil
 		}
 		t.Fatalf("unexpected command: %s %v", name, args)
@@ -280,14 +349,18 @@ func TestCollectCeph_DFCommandError(t *testing.T) {
 		"data_bytes":0,"degraded_ratio":0,"misplaced_ratio":0,
 		"read_bytes_sec":0,"write_bytes_sec":0,"read_op_per_sec":0,"write_op_per_sec":0}
 	}`)
-	withCephCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
-		if name == "which" {
-			return nil, nil, nil
+	withLookPath(t, func(file string) (string, error) {
+		if file != "ceph" {
+			t.Fatalf("unexpected lookup: %s", file)
 		}
-		if name == "ceph" && len(args) > 0 && args[0] == "status" {
+		return fakeCephBinary, nil
+	})
+
+	withCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
+		if name == fakeCephBinary && len(args) > 0 && args[0] == "status" {
 			return statusJSON, nil, nil
 		}
-		if name == "ceph" && len(args) > 0 && args[0] == "df" {
+		if name == fakeCephBinary && len(args) > 0 && args[0] == "df" {
 			return nil, []byte("df failed"), errors.New("df error")
 		}
 		t.Fatalf("unexpected command: %s %v", name, args)
@@ -317,14 +390,18 @@ func TestCollectCeph_DFParseError(t *testing.T) {
 		"data_bytes":0,"degraded_ratio":0,"misplaced_ratio":0,
 		"read_bytes_sec":0,"write_bytes_sec":0,"read_op_per_sec":0,"write_op_per_sec":0}
 	}`)
-	withCephCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
-		if name == "which" {
-			return nil, nil, nil
+	withLookPath(t, func(file string) (string, error) {
+		if file != "ceph" {
+			t.Fatalf("unexpected lookup: %s", file)
 		}
-		if name == "ceph" && len(args) > 0 && args[0] == "status" {
+		return fakeCephBinary, nil
+	})
+
+	withCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
+		if name == fakeCephBinary && len(args) > 0 && args[0] == "status" {
 			return statusJSON, nil, nil
 		}
-		if name == "ceph" && len(args) > 0 && args[0] == "df" {
+		if name == fakeCephBinary && len(args) > 0 && args[0] == "df" {
 			return []byte(`{not-json}`), nil, nil
 		}
 		t.Fatalf("unexpected command: %s %v", name, args)
@@ -358,14 +435,18 @@ func TestCollectCeph_UsagePercentFromDF(t *testing.T) {
 	  "stats":{"total_bytes":1000,"total_used_bytes":500,"percent_used":0.5},
 	  "pools":[]
 	}`)
-	withCephCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
-		if name == "which" {
-			return nil, nil, nil
+	withLookPath(t, func(file string) (string, error) {
+		if file != "ceph" {
+			t.Fatalf("unexpected lookup: %s", file)
 		}
-		if name == "ceph" && len(args) > 0 && args[0] == "status" {
+		return fakeCephBinary, nil
+	})
+
+	withCommandRunner(t, func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
+		if name == fakeCephBinary && len(args) > 0 && args[0] == "status" {
 			return statusJSON, nil, nil
 		}
-		if name == "ceph" && len(args) > 0 && args[0] == "df" {
+		if name == fakeCephBinary && len(args) > 0 && args[0] == "df" {
 			return dfJSON, nil, nil
 		}
 		t.Fatalf("unexpected command: %s %v", name, args)

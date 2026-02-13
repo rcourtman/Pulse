@@ -4,32 +4,70 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os/exec"
 	"strings"
 	"time"
 )
 
-var cephCommandRunner = func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
+const (
+	cephCommandTimeout       = 10 * time.Second
+	maxCephCommandOutputSize = 4 << 20 // 4 MiB
+)
+
+var errCephCommandOutputTooLarge = errors.New("ceph command output exceeded limit")
+
+type limitedBuffer struct {
+	buf      bytes.Buffer
+	maxBytes int
+	exceeded bool
+}
+
+func (b *limitedBuffer) Write(p []byte) (int, error) {
+	remaining := b.maxBytes - b.buf.Len()
+	if remaining <= 0 {
+		b.exceeded = true
+		return 0, errCephCommandOutputTooLarge
+	}
+	if len(p) > remaining {
+		b.exceeded = true
+		written, _ := b.buf.Write(p[:remaining])
+		return written, errCephCommandOutputTooLarge
+	}
+	return b.buf.Write(p)
+}
+
+func (b *limitedBuffer) Bytes() []byte {
+	return b.buf.Bytes()
+}
+
+var commandRunner = func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
-	var stdout, stderr bytes.Buffer
+	stdout := limitedBuffer{maxBytes: maxCephCommandOutputSize}
+	stderr := limitedBuffer{maxBytes: maxCephCommandOutputSize}
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	err := cmd.Run()
+	if stdout.exceeded || stderr.exceeded {
+		return stdout.Bytes(), stderr.Bytes(), errCephCommandOutputTooLarge
+	}
 	return stdout.Bytes(), stderr.Bytes(), err
 }
 
-// CephClusterStatus represents the complete Ceph cluster status as collected by the agent.
-type CephClusterStatus struct {
-	FSID        string            `json:"fsid"`
-	Health      CephHealthStatus  `json:"health"`
-	MonMap      CephMonitorMap    `json:"monMap,omitempty"`
-	MgrMap      CephManagerMap    `json:"mgrMap,omitempty"`
-	OSDMap      CephOSDMap        `json:"osdMap"`
-	PGMap       CephPGMap         `json:"pgMap"`
-	Pools       []CephPool        `json:"pools,omitempty"`
-	Services    []CephServiceInfo `json:"services,omitempty"`
-	CollectedAt time.Time         `json:"collectedAt"`
+var lookPath = exec.LookPath
+
+// ClusterStatus represents the complete Ceph cluster status as collected by the agent.
+type ClusterStatus struct {
+	FSID        string        `json:"fsid"`
+	Health      HealthStatus  `json:"health"`
+	MonMap      MonitorMap    `json:"monMap,omitempty"`
+	MgrMap      ManagerMap    `json:"mgrMap,omitempty"`
+	OSDMap      OSDMap        `json:"osdMap"`
+	PGMap       PGMap         `json:"pgMap"`
+	Pools       []Pool        `json:"pools,omitempty"`
+	Services    []ServiceInfo `json:"services,omitempty"`
+	CollectedAt time.Time     `json:"collectedAt"`
 }
 
 // CephHealthStatus represents Ceph cluster health.
@@ -119,9 +157,10 @@ type CephServiceInfo struct {
 	Daemons []string `json:"daemons,omitempty"`
 }
 
-// IsCephAvailable checks if the ceph CLI is available on the system.
-func IsCephAvailable(ctx context.Context) bool {
-	_, _, err := cephCommandRunner(ctx, "which", "ceph")
+// IsAvailable checks if the ceph CLI is available on the system.
+func IsAvailable(ctx context.Context) bool {
+	_ = ctx
+	_, err := lookPath("ceph")
 	return err == nil
 }
 
@@ -163,12 +202,21 @@ func CollectCeph(ctx context.Context) (*CephClusterStatus, error) {
 
 // runCephCommand executes a ceph command and returns the output.
 func runCephCommand(ctx context.Context, args ...string) ([]byte, error) {
+	cephPath, err := lookPath("ceph")
+	if err != nil {
+		return nil, fmt.Errorf("ceph binary not found: %w", err)
+	}
+
 	// Use a reasonable timeout for each command
-	cmdCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	cmdCtx, cancel := context.WithTimeout(ctx, cephCommandTimeout)
 	defer cancel()
 
-	stdout, stderr, err := cephCommandRunner(cmdCtx, "ceph", args...)
+	stdout, stderr, err := commandRunner(cmdCtx, cephPath, args...)
 	if err != nil {
+		if errors.Is(err, errCephCommandOutputTooLarge) {
+			return nil, fmt.Errorf("ceph %s output exceeded %d bytes",
+				strings.Join(args, " "), maxCephCommandOutputSize)
+		}
 		return nil, fmt.Errorf("ceph %s failed: %w (stderr: %s)",
 			strings.Join(args, " "), err, string(stderr))
 	}

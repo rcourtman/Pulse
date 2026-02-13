@@ -7,8 +7,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"strings"
@@ -292,34 +293,85 @@ func normalizeTargets(raw []TargetConfig) ([]TargetConfig, error) {
 	seen := make(map[string]struct{}, len(raw))
 
 	for _, target := range raw {
-		url := strings.TrimSpace(target.URL)
+		targetURL := strings.TrimSpace(target.URL)
 		token := strings.TrimSpace(target.Token)
-		if url == "" && token == "" {
+		if targetURL == "" && token == "" {
 			continue
 		}
 
-		if url == "" {
+		if targetURL == "" {
 			return nil, errors.New("pulse target URL is required")
 		}
 		if token == "" {
-			return nil, fmt.Errorf("pulse target %s is missing API token", url)
+			return nil, fmt.Errorf("pulse target %s is missing API token", targetURL)
 		}
 
-		url = strings.TrimRight(url, "/")
-		key := fmt.Sprintf("%s|%s|%t", url, token, target.InsecureSkipVerify)
+		normalizedURL, err := normalizeTargetURL(targetURL)
+		if err != nil {
+			return nil, err
+		}
+
+		key := fmt.Sprintf("%s|%s|%t", normalizedURL, token, target.InsecureSkipVerify)
 		if _, exists := seen[key]; exists {
 			continue
 		}
 		seen[key] = struct{}{}
 
 		normalized = append(normalized, TargetConfig{
-			URL:                url,
+			URL:                normalizedURL,
 			Token:              token,
 			InsecureSkipVerify: target.InsecureSkipVerify,
 		})
 	}
 
 	return normalized, nil
+}
+
+func normalizeTargetURL(rawURL string) (string, error) {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return "", fmt.Errorf("pulse target URL %q is invalid: %w", rawURL, err)
+	}
+
+	if parsed.Scheme == "" {
+		return "", fmt.Errorf("pulse target URL %q must include scheme (https:// or loopback http://)", rawURL)
+	}
+	if parsed.Host == "" {
+		return "", fmt.Errorf("pulse target URL %q must include host", rawURL)
+	}
+	if parsed.User != nil {
+		return "", fmt.Errorf("pulse target URL %q must not include user credentials", rawURL)
+	}
+	if parsed.RawQuery != "" || parsed.Fragment != "" {
+		return "", fmt.Errorf("pulse target URL %q must not include query or fragment", rawURL)
+	}
+
+	scheme := strings.ToLower(parsed.Scheme)
+	switch scheme {
+	case "https":
+		// Always allowed.
+	case "http":
+		if !isLoopbackTargetHost(parsed.Hostname()) {
+			return "", fmt.Errorf("pulse target URL %q must use https unless host is loopback", rawURL)
+		}
+	default:
+		return "", fmt.Errorf("pulse target URL %q has unsupported scheme %q", rawURL, parsed.Scheme)
+	}
+
+	parsed.Scheme = scheme
+	parsed.Path = strings.TrimRight(parsed.Path, "/")
+	parsed.RawPath = strings.TrimRight(parsed.RawPath, "/")
+
+	return parsed.String(), nil
+}
+
+func isLoopbackTargetHost(host string) bool {
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 func normalizeContainerStates(raw []string) ([]string, error) {
@@ -756,7 +808,7 @@ func (a *Agent) sendReportToTarget(ctx context.Context, target TargetConfig, pay
 	}()
 
 	if resp.StatusCode >= 300 {
-		bodyBytes, readErr := io.ReadAll(resp.Body)
+		bodyBytes, readErr := readBodyWithLimit(resp.Body, maxPulseResponseBodyBytes)
 		if readErr != nil {
 			return fmt.Errorf("target %s: read error response: %w", target.URL, readErr)
 		}
@@ -783,7 +835,7 @@ func (a *Agent) sendReportToTarget(ctx context.Context, target TargetConfig, pay
 		return fmt.Errorf("target %s: pulse responded %s: %s", target.URL, resp.Status, errMsg)
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := readBodyWithLimit(resp.Body, maxPulseResponseBodyBytes)
 	if err != nil {
 		return fmt.Errorf("target %s: read response: %w", target.URL, err)
 	}
@@ -1002,7 +1054,7 @@ func (a *Agent) sendCommandAck(ctx context.Context, target TargetConfig, command
 	}()
 
 	if resp.StatusCode >= 300 {
-		bodyBytes, err := io.ReadAll(resp.Body)
+		bodyBytes, err := readBodyWithLimit(resp.Body, maxPulseResponseBodyBytes)
 		if err != nil {
 			return fmt.Errorf("read acknowledgement error response: %w", err)
 		}

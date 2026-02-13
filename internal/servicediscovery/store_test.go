@@ -544,3 +544,128 @@ func TestStore_DeleteError(t *testing.T) {
 		t.Fatalf("expected delete error for non-empty dir")
 	}
 }
+
+func TestStore_GetRejectsOversizedDiscoveryFile(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore error: %v", err)
+	}
+	store.crypto = nil
+
+	origLimit := maxDiscoveryFileReadBytes
+	maxDiscoveryFileReadBytes = 64
+	t.Cleanup(func() {
+		maxDiscoveryFileReadBytes = origLimit
+	})
+
+	id := MakeResourceID(ResourceTypeDocker, "host1", "oversized")
+	if err := os.WriteFile(store.getFilePath(id), []byte(strings.Repeat("x", 128)), 0600); err != nil {
+		t.Fatalf("WriteFile error: %v", err)
+	}
+
+	if _, err := store.Get(id); err == nil || !strings.Contains(err.Error(), "exceeds max size") {
+		t.Fatalf("expected max size error, got: %v", err)
+	}
+}
+
+func TestStore_GetRejectsNonRegularDiscoveryFile(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore error: %v", err)
+	}
+	store.crypto = nil
+
+	id := MakeResourceID(ResourceTypeDocker, "host1", "dir")
+	if err := os.MkdirAll(store.getFilePath(id), 0700); err != nil {
+		t.Fatalf("MkdirAll error: %v", err)
+	}
+
+	if _, err := store.Get(id); err == nil || !strings.Contains(err.Error(), "not a regular file") {
+		t.Fatalf("expected non-regular file error, got: %v", err)
+	}
+}
+
+func TestStore_ListSkipsOversizedAndSymlinkDiscoveries(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore error: %v", err)
+	}
+	store.crypto = nil
+
+	origLimit := maxDiscoveryFileReadBytes
+	maxDiscoveryFileReadBytes = 4096
+	t.Cleanup(func() {
+		maxDiscoveryFileReadBytes = origLimit
+	})
+
+	valid := &ResourceDiscovery{
+		ID:           MakeResourceID(ResourceTypeDocker, "host1", "valid"),
+		ResourceType: ResourceTypeDocker,
+		ResourceID:   "valid",
+		HostID:       "host1",
+		ServiceName:  "Valid",
+	}
+	if err := store.Save(valid); err != nil {
+		t.Fatalf("Save error: %v", err)
+	}
+
+	oversizedPath := filepath.Join(store.dataDir, "oversized.enc")
+	if err := os.WriteFile(oversizedPath, []byte(strings.Repeat("x", 8192)), 0600); err != nil {
+		t.Fatalf("WriteFile error: %v", err)
+	}
+
+	symlinkPath := filepath.Join(store.dataDir, "symlink.enc")
+	if err := os.Symlink(store.getFilePath(valid.ID), symlinkPath); err != nil {
+		t.Skipf("symlink not supported in this environment: %v", err)
+	}
+
+	list, err := store.List()
+	if err != nil {
+		t.Fatalf("List error: %v", err)
+	}
+	if len(list) != 1 || list[0].ID != valid.ID {
+		t.Fatalf("expected only valid discovery, got: %#v", list)
+	}
+}
+
+func TestStore_LoadFingerprintsSkipsOversizedFiles(t *testing.T) {
+	dir := t.TempDir()
+	fingerprintDir := filepath.Join(dir, "discovery", "fingerprints")
+	if err := os.MkdirAll(fingerprintDir, 0700); err != nil {
+		t.Fatalf("MkdirAll error: %v", err)
+	}
+
+	origLimit := maxFingerprintFileReadBytes
+	maxFingerprintFileReadBytes = 256
+	t.Cleanup(func() {
+		maxFingerprintFileReadBytes = origLimit
+	})
+
+	valid := &ContainerFingerprint{
+		ResourceID: "docker:host1:nginx",
+		HostID:     "host1",
+		Hash:       "abc123",
+	}
+	validData, err := json.Marshal(valid)
+	if err != nil {
+		t.Fatalf("Marshal error: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(fingerprintDir, "valid.json"), validData, 0600); err != nil {
+		t.Fatalf("WriteFile valid fingerprint error: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(fingerprintDir, "oversized.json"), []byte(strings.Repeat("x", 512)), 0600); err != nil {
+		t.Fatalf("WriteFile oversized fingerprint error: %v", err)
+	}
+
+	store, err := NewStore(dir)
+	if err != nil {
+		t.Fatalf("NewStore error: %v", err)
+	}
+
+	if count := store.GetFingerprintCount(); count != 1 {
+		t.Fatalf("expected 1 loaded fingerprint, got %d", count)
+	}
+	if fp, err := store.GetFingerprint("docker:host1:nginx"); err != nil || fp == nil {
+		t.Fatalf("expected valid fingerprint to load, got fp=%#v err=%v", fp, err)
+	}
+}

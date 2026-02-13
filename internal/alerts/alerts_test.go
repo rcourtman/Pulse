@@ -18,18 +18,15 @@ import (
 )
 
 // testEnvMu protects concurrent access to PULSE_DATA_DIR during parallel tests.
-// Tests using newTestManager are effectively serialized because the Manager
-// calls GetDataDir() repeatedly (not just at creation time).
+// newTestManager updates process-wide env vars, so tests using it are serialized.
 var testEnvMu sync.Mutex
 
 // newTestManager creates a Manager with an isolated temp directory for testing.
 // It uses os.Setenv with a mutex to safely handle parallel tests that call // t.Parallel()
 // before invoking this function (t.Setenv cannot be used after t.Parallel).
 //
-// IMPORTANT: The mutex is held for the entire duration of the test because the
-// Manager calls GetDataDir() not just at creation time, but also during operations
-// like SaveActiveAlerts() and LoadActiveAlerts(). This effectively serializes
-// tests that use newTestManager, but ensures correct isolation.
+// IMPORTANT: The mutex is held for the entire duration of the test to avoid
+// environment races with other tests that also rely on PULSE_DATA_DIR.
 func newTestManager(t *testing.T) *Manager {
 	t.Helper()
 
@@ -16407,6 +16404,36 @@ func TestLoadActiveAlerts(t *testing.T) {
 		}
 	})
 
+	t.Run("oversized file returns error", func(t *testing.T) {
+		m := newTestManager(t)
+		m.ClearActiveAlerts()
+
+		alertsDir := filepath.Join(utils.GetDataDir(), "alerts")
+		if err := os.MkdirAll(alertsDir, 0o755); err != nil {
+			t.Fatalf("failed to create alerts dir: %v", err)
+		}
+
+		alertsFile := filepath.Join(alertsDir, "active-alerts.json")
+		f, err := os.Create(alertsFile)
+		if err != nil {
+			t.Fatalf("failed to create oversized alerts file: %v", err)
+		}
+		if err := f.Close(); err != nil {
+			t.Fatalf("failed to close oversized alerts file: %v", err)
+		}
+		if err := os.Truncate(alertsFile, maxActiveAlertsFileSizeBytes+1); err != nil {
+			t.Fatalf("failed to expand oversized alerts file: %v", err)
+		}
+
+		err = m.LoadActiveAlerts()
+		if err == nil {
+			t.Fatal("expected error for oversized active alerts file")
+		}
+		if !strings.Contains(err.Error(), "exceeds max size") {
+			t.Fatalf("expected max-size error, got: %v", err)
+		}
+	})
+
 	t.Run("skips duplicate alerts", func(t *testing.T) {
 		m := newTestManager(t)
 		m.ClearActiveAlerts()
@@ -16448,26 +16475,39 @@ func TestLoadActiveAlerts(t *testing.T) {
 	})
 }
 
-func TestActiveAlertPersistenceUsesManagerDataDir(t *testing.T) {
-	managerDir := t.TempDir()
-	otherDir := t.TempDir()
-	t.Setenv("PULSE_DATA_DIR", otherDir)
+func TestSaveAndLoadActiveAlerts_UsesManagerDataDirAndSecurePermissions(t *testing.T) {
+	globalDataDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", globalDataDir)
 
-	m := NewManagerWithDataDir(managerDir)
+	tenantDataDir := t.TempDir()
+	m := NewManagerWithDataDir(tenantDataDir)
 	t.Cleanup(func() {
-		m.Stop()
+		m.historyManager.Stop()
+		select {
+		case <-m.escalationStop:
+		default:
+			close(m.escalationStop)
+		}
+		select {
+		case <-m.cleanupStop:
+		default:
+			close(m.cleanupStop)
+		}
+		time.Sleep(10 * time.Millisecond)
 	})
 
-	startTime := time.Now().Add(-5 * time.Minute)
+	now := time.Now()
 	m.mu.Lock()
-	m.activeAlerts["scoped-alert"] = &Alert{
-		ID:           "scoped-alert",
-		Type:         "cpu",
-		Level:        AlertLevelWarning,
-		ResourceID:   "scoped-resource",
-		ResourceName: "scoped-vm",
-		StartTime:    startTime,
-		LastSeen:     time.Now(),
+	m.activeAlerts = map[string]*Alert{
+		"tenant-alert": {
+			ID:           "tenant-alert",
+			Type:         "cpu",
+			Level:        AlertLevelWarning,
+			ResourceID:   "tenant-res",
+			ResourceName: "tenant-resource",
+			StartTime:    now.Add(-1 * time.Minute),
+			LastSeen:     now,
+		},
 	}
 	m.mu.Unlock()
 
@@ -16475,14 +16515,46 @@ func TestActiveAlertPersistenceUsesManagerDataDir(t *testing.T) {
 		t.Fatalf("SaveActiveAlerts failed: %v", err)
 	}
 
-	managerAlertsFile := filepath.Join(managerDir, "alerts", "active-alerts.json")
-	if _, err := os.Stat(managerAlertsFile); err != nil {
-		t.Fatalf("expected manager-scoped alerts file %s: %v", managerAlertsFile, err)
+	tenantAlertsDir := filepath.Join(tenantDataDir, "alerts")
+	tenantAlertsFile := filepath.Join(tenantAlertsDir, "active-alerts.json")
+
+	dirInfo, err := os.Stat(tenantAlertsDir)
+	if err != nil {
+		t.Fatalf("failed to stat tenant alerts dir: %v", err)
+	}
+	if dirInfo.Mode().Perm() != alertsDirPerm {
+		t.Fatalf("tenant alerts dir permissions = %o, want %o", dirInfo.Mode().Perm(), alertsDirPerm)
 	}
 
-	otherAlertsFile := filepath.Join(otherDir, "alerts", "active-alerts.json")
-	if _, err := os.Stat(otherAlertsFile); !os.IsNotExist(err) {
-		t.Fatalf("expected no active alerts in env dir %s, got err=%v", otherAlertsFile, err)
+	fileInfo, err := os.Stat(tenantAlertsFile)
+	if err != nil {
+		t.Fatalf("failed to stat tenant alerts file: %v", err)
+	}
+	if fileInfo.Mode().Perm() != alertsFilePerm {
+		t.Fatalf("tenant alerts file permissions = %o, want %o", fileInfo.Mode().Perm(), alertsFilePerm)
+	}
+
+	// Seed a conflicting global file to ensure manager-scoped paths are respected.
+	globalAlertsDir := filepath.Join(globalDataDir, "alerts")
+	if err := os.MkdirAll(globalAlertsDir, 0o755); err != nil {
+		t.Fatalf("failed to create global alerts dir: %v", err)
+	}
+	globalPayload, err := json.Marshal([]Alert{
+		{
+			ID:           "global-alert",
+			Type:         "memory",
+			Level:        AlertLevelWarning,
+			ResourceID:   "global-res",
+			ResourceName: "global-resource",
+			StartTime:    now.Add(-1 * time.Minute),
+			LastSeen:     now,
+		},
+	})
+	if err != nil {
+		t.Fatalf("failed to marshal global payload: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(globalAlertsDir, "active-alerts.json"), globalPayload, 0o644); err != nil {
+		t.Fatalf("failed to seed global alerts file: %v", err)
 	}
 
 	m.mu.Lock()
@@ -16494,11 +16566,15 @@ func TestActiveAlertPersistenceUsesManagerDataDir(t *testing.T) {
 	}
 
 	m.mu.RLock()
-	_, exists := m.activeAlerts["scoped-alert"]
+	_, tenantLoaded := m.activeAlerts["tenant-alert"]
+	_, globalLoaded := m.activeAlerts["global-alert"]
 	m.mu.RUnlock()
 
-	if !exists {
-		t.Fatal("expected scoped-alert to be restored from manager-scoped data dir")
+	if !tenantLoaded {
+		t.Fatal("expected tenant alert to be loaded from tenant data directory")
+	}
+	if globalLoaded {
+		t.Fatal("global alert should not be loaded when manager uses custom data directory")
 	}
 }
 

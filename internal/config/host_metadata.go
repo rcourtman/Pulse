@@ -57,7 +57,7 @@ func (s *HostMetadataStore) Load() error {
 	log.Debug().Str("path", filePath).Msg("Loading host metadata from disk")
 
 	// Use configured FS
-	data, err := s.fs.ReadFile(filePath)
+	data, err := readLimitedRegularFileFS(s.fs, filePath, maxHostMetadataFileSizeBytes)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// File doesn't exist yet, not an error
@@ -92,30 +92,14 @@ func (s *HostMetadataStore) save() error {
 		return fmt.Errorf("failed to marshal metadata: %w", err)
 	}
 
-	// Ensure directory exists - FS interface doesn't have MkdirAll?
-	// Make fs interface usually has simple ops.
-	// But persistence.go calls c.EnsureConfigDir which calls os.MkdirAll.
-	// We need MkdirAll in FS interface?
-	// Or just ignore for now if mocking?
-	// For testing "read error", I don't need Save to work perfectly with mock.
-	// But real code needs it.
-	// I should add MkdirAll to FileSystem logic?
-	// Or just use os.MkdirAll since it's directory creation?
-	// If I want to permit test without real FS, I need MkdirAll.
-
-	// Let's add MkdirAll to FileSystem interface later. For now use os.MkdirAll?
-	// But wait, if I use os.MkdirAll in "save", and "save" is called in test with mock FS...
-	// If mock FS doesn't support writing, "save" might fail or behave weirdly if I don't mock MkdirAll.
-	// But I am focusing on LOAD.
-
-	// I'll leave os.MkdirAll for now, assuming tests won't fail on it (test temp dir exists).
-	if err := os.MkdirAll(s.dataPath, 0755); err != nil {
+	// Restrict metadata persistence to owner-only access.
+	if err := s.fs.MkdirAll(s.dataPath, 0o700); err != nil {
 		return fmt.Errorf("failed to create data directory: %w", err)
 	}
 
 	// Write to temp file first for atomic operation
 	tempFile := filePath + ".tmp"
-	if err := s.fs.WriteFile(tempFile, data, 0644); err != nil {
+	if err := s.fs.WriteFile(tempFile, data, 0o600); err != nil {
 		return fmt.Errorf("failed to write metadata file: %w", err)
 	}
 
@@ -203,5 +187,3 @@ func (s *HostMetadataStore) ReplaceAll(metadata map[string]*HostMetadata) error 
 
 	return s.save()
 }
-
-// Load reads metadata from disk

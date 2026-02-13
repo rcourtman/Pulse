@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/rs/zerolog"
@@ -82,7 +83,7 @@ func TestNew_WithKubeconfig(t *testing.T) {
 	writeTestKubeconfig(t, kubeconfigPath, server.URL, "ctx-test")
 
 	agent, err := New(Config{
-		PulseURL:       "http://pulse.local",
+		PulseURL:       "https://pulse.local",
 		APIToken:       "token",
 		KubeconfigPath: kubeconfigPath,
 		KubeContext:    "ctx-test",
@@ -102,5 +103,80 @@ func TestNew_WithKubeconfig(t *testing.T) {
 	}
 	if agent.agentID == "" || agent.clusterID == "" {
 		t.Fatalf("expected non-empty agent and cluster IDs")
+	}
+}
+
+func TestNormalizePulseURL(t *testing.T) {
+	tests := []struct {
+		name    string
+		rawURL  string
+		want    string
+		wantErr string
+	}{
+		{
+			name:   "https canonicalized",
+			rawURL: "HTTPS://pulse.example.com///",
+			want:   "https://pulse.example.com",
+		},
+		{
+			name:   "loopback http allowed",
+			rawURL: "http://127.0.0.1:7655/",
+			want:   "http://127.0.0.1:7655",
+		},
+		{
+			name:    "non-loopback http rejected",
+			rawURL:  "http://pulse.example.com",
+			wantErr: "must use https unless host is loopback",
+		},
+		{
+			name:    "credentials rejected",
+			rawURL:  "https://user:pass@pulse.example.com",
+			wantErr: "must not include user credentials",
+		},
+		{
+			name:    "query rejected",
+			rawURL:  "https://pulse.example.com?token=abc",
+			wantErr: "must not include query or fragment",
+		},
+		{
+			name:    "unsupported scheme rejected",
+			rawURL:  "ws://pulse.example.com",
+			wantErr: "unsupported scheme",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := normalizePulseURL(tt.rawURL)
+			if tt.wantErr != "" {
+				if err == nil {
+					t.Fatalf("normalizePulseURL(%q) expected error containing %q", tt.rawURL, tt.wantErr)
+				}
+				if !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("normalizePulseURL(%q) error = %v, want contains %q", tt.rawURL, err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("normalizePulseURL(%q) returned error: %v", tt.rawURL, err)
+			}
+			if got != tt.want {
+				t.Fatalf("normalizePulseURL(%q) = %q, want %q", tt.rawURL, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestNew_RejectsUnsafePulseURL(t *testing.T) {
+	_, err := New(Config{
+		PulseURL: "http://pulse.example.com",
+		APIToken: "token",
+		LogLevel: zerolog.Disabled,
+	})
+	if err == nil {
+		t.Fatal("expected New to reject non-loopback http Pulse URL")
+	}
+	if !strings.Contains(err.Error(), "must use https unless host is loopback") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }

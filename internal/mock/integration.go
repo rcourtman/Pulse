@@ -198,7 +198,7 @@ func LoadMockConfig() MockConfig {
 	config.RandomMetrics = parseBoolEnv("PULSE_MOCK_RANDOM_METRICS", config.RandomMetrics)
 	config.StoppedPercent = parsePercentEnv("PULSE_MOCK_STOPPED_PERCENT", config.StoppedPercent)
 
-	return config
+	return normalizeMockConfig(config)
 }
 
 func parseIntEnv(envName string, defaultValue int, minValue int) int {
@@ -273,6 +273,8 @@ func parsePercentEnv(envName string, defaultValue float64) float64 {
 
 // SetMockConfig updates the mock configuration dynamically and regenerates data when enabled.
 func SetMockConfig(cfg MockConfig) {
+	cfg = normalizeMockConfig(cfg)
+
 	dataMu.Lock()
 	mockConfig = cfg
 	if enabled.Load() {

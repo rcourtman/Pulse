@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -199,4 +200,59 @@ func TestPersistence(t *testing.T) {
 			t.Errorf("Expected license key %s, got %s", testKey, loaded.LicenseKey)
 		}
 	})
+}
+
+func TestPersistenceEnforcesOwnerOnlyPermissions(t *testing.T) {
+	tmpDir := t.TempDir()
+	if err := os.Chmod(tmpDir, 0755); err != nil {
+		t.Fatalf("failed to relax temp dir perms: %v", err)
+	}
+
+	p, err := NewPersistence(tmpDir)
+	if err != nil {
+		t.Fatalf("Failed to create persistence: %v", err)
+	}
+	if err := p.Save("owner-only-perm-test"); err != nil {
+		t.Fatalf("Save failed: %v", err)
+	}
+
+	dirInfo, err := os.Stat(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to stat config dir: %v", err)
+	}
+	if got := dirInfo.Mode().Perm(); got != 0700 {
+		t.Fatalf("config dir perms = %o, want 700", got)
+	}
+
+	for _, file := range []string{LicenseFileName, PersistentKeyFileName} {
+		path := filepath.Join(tmpDir, file)
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatalf("failed to stat %s: %v", file, err)
+		}
+		if got := info.Mode().Perm(); got != 0600 {
+			t.Fatalf("%s perms = %o, want 600", file, got)
+		}
+	}
+}
+
+func TestNewPersistenceRejectsSymlinkPersistentKey(t *testing.T) {
+	tmpDir := t.TempDir()
+	target := filepath.Join(tmpDir, "key-target")
+	if err := os.WriteFile(target, []byte("test-key"), 0600); err != nil {
+		t.Fatalf("failed to write target file: %v", err)
+	}
+
+	keyPath := filepath.Join(tmpDir, PersistentKeyFileName)
+	if err := os.Symlink(target, keyPath); err != nil {
+		t.Skipf("symlink unsupported on this platform: %v", err)
+	}
+
+	_, err := NewPersistence(tmpDir)
+	if err == nil {
+		t.Fatal("expected error for symlink persistent key path")
+	}
+	if !strings.Contains(err.Error(), "symlink") {
+		t.Fatalf("expected symlink error, got: %v", err)
+	}
 }

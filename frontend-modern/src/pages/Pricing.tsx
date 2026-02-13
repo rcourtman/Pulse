@@ -156,7 +156,7 @@ export default function Pricing() {
           class="w-full inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
           href={getUpgradeActionUrlOrFallback('upgrade')}
           target="_blank"
-          rel="noreferrer"
+          rel="noopener noreferrer"
         >
           Upgrade to Pro
         </a>
@@ -250,7 +250,7 @@ export default function Pricing() {
               class="w-full inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-800 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700/60"
               href={getUpgradeActionUrlOrFallback('cloud')}
               target="_blank"
-              rel="noreferrer"
+              rel="noopener noreferrer"
             >
               Contact Us
             </a>

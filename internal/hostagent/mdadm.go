@@ -4,7 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -15,16 +18,46 @@ import (
 
 // Pre-compiled regexes for performance (avoid recompilation on each call)
 var (
-	mdDeviceRe         = regexp.MustCompile(`^(md\d+)\s*:`)
-	slotRe             = regexp.MustCompile(`^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(.+?)\s+(/dev/.+)$`)
-	speedRe            = regexp.MustCompile(`speed=(\S+)`)
-	mdadmCommandRunner = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	mdDeviceRe      = regexp.MustCompile(`^(md\d+)\s*:`)
+	mdArrayPathRe   = regexp.MustCompile(`^/dev/md\d+$`)
+	slotRe          = regexp.MustCompile(`^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(.+?)\s+(/dev/.+)$`)
+	speedRe         = regexp.MustCompile(`speed=(\S+)`)
+	mdadmLookPath   = exec.LookPath
+	mdadmStat       = os.Stat
+	openFileForRead = func(name string) (io.ReadCloser, error) { return os.Open(name) }
+	readFile        = func(name string) ([]byte, error) {
+		file, err := openFileForRead(name)
+		if err != nil {
+			return nil, err
+		}
+		defer file.Close()
+
+		// Enforce the size cap while reading to avoid allocating arbitrarily
+		// large buffers before validation.
+		return io.ReadAll(io.LimitReader(file, maxMDStatBytes+1))
+	}
+	resolveMdadmBinary = resolveMdadmPath
+	runCommandOutput   = func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		cmd := exec.CommandContext(ctx, name, args...)
 		return cmd.Output()
 	}
 )
 
-// CollectRAIDArrays discovers and collects status for all mdadm RAID arrays on the system.
+const (
+	mdstatPath     = "/proc/mdstat"
+	maxMDStatBytes = 1 << 20 // 1 MiB hard limit for /proc/mdstat reads.
+)
+
+// commonMdadmPaths lists common mdadm locations to avoid relying on PATH order.
+var commonMdadmPaths = []string{
+	"/usr/sbin/mdadm",
+	"/sbin/mdadm",
+	"/usr/local/sbin/mdadm",
+	"/usr/bin/mdadm",
+	"/bin/mdadm",
+}
+
+// CollectArrays discovers and collects status for all mdadm RAID arrays on the system.
 // Returns an empty slice if mdadm is not available or no arrays are found.
 func CollectRAIDArrays(ctx context.Context) ([]agentshost.RAIDArray, error) {
 	// Check if mdadm is available
@@ -63,10 +96,15 @@ func CollectRAIDArrays(ctx context.Context) ([]agentshost.RAIDArray, error) {
 
 // isMdadmAvailable checks if mdadm binary is accessible
 func isMdadmAvailable(ctx context.Context) bool {
+	mdadmPath, err := resolveMdadmBinary()
+	if err != nil {
+		return false
+	}
+
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 
-	_, err := mdadmCommandRunner(ctx, "mdadm", "--version")
+	_, err = runCommandOutput(ctx, mdadmPath, "--version")
 	return err == nil
 }
 
@@ -77,7 +115,7 @@ func listArrayDevices(ctx context.Context) ([]string, error) {
 
 	output, err := mdadmCommandRunner(ctx, "cat", "/proc/mdstat")
 	if err != nil {
-		return nil, fmt.Errorf("read /proc/mdstat: %w", err)
+		return nil, err
 	}
 
 	// Parse /proc/mdstat to find device names
@@ -94,11 +132,20 @@ func listArrayDevices(ctx context.Context) ([]string, error) {
 }
 
 // collectArrayDetail runs mdadm --detail on a specific device and parses the output
-func collectArrayDetail(ctx context.Context, device string) (agentshost.RAIDArray, error) {
+func collectArrayDetail(ctx context.Context, device string) (host.RAIDArray, error) {
+	if !mdArrayPathRe.MatchString(device) {
+		return host.RAIDArray{}, fmt.Errorf("invalid md device path %q", device)
+	}
+
+	mdadmPath, err := resolveMdadmBinary()
+	if err != nil {
+		return host.RAIDArray{}, fmt.Errorf("resolve mdadm binary: %w", err)
+	}
+
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	output, err := mdadmCommandRunner(ctx, "mdadm", "--detail", device)
+	output, err := runCommandOutput(ctx, mdadmPath, "--detail", device)
 	if err != nil {
 		return agentshost.RAIDArray{}, fmt.Errorf("mdadm --detail %s: %w", device, err)
 	}
@@ -285,4 +332,45 @@ func getRebuildSpeed(device string) string {
 	}
 
 	return ""
+}
+
+// readProcMDStat reads /proc/mdstat directly (without shelling out)
+// and bounds input size to avoid unbounded memory growth.
+func readProcMDStat() ([]byte, error) {
+	output, err := readFile(mdstatPath)
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", mdstatPath, err)
+	}
+	if len(output) > maxMDStatBytes {
+		return nil, fmt.Errorf("%s exceeds max size (%d bytes)", mdstatPath, maxMDStatBytes)
+	}
+	return output, nil
+}
+
+// resolveMdadmPath resolves a trusted mdadm executable path.
+// It prefers known absolute paths before falling back to PATH lookup.
+func resolveMdadmPath() (string, error) {
+	for _, candidate := range commonMdadmPaths {
+		candidate = filepath.Clean(candidate)
+		if !filepath.IsAbs(candidate) {
+			continue
+		}
+		if _, err := mdadmStat(candidate); err == nil {
+			return candidate, nil
+		}
+	}
+
+	path, err := mdadmLookPath("mdadm")
+	if err != nil {
+		return "", fmt.Errorf("mdadm binary not found in PATH or common locations")
+	}
+	path = filepath.Clean(path)
+	if !filepath.IsAbs(path) {
+		return "", fmt.Errorf("mdadm path is not absolute: %q", path)
+	}
+	if _, err := mdadmStat(path); err != nil {
+		return "", fmt.Errorf("mdadm path unavailable: %w", err)
+	}
+
+	return path, nil
 }

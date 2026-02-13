@@ -23,6 +23,14 @@ var (
 )
 
 const storeCleanupInterval = 5 * time.Minute
+const privateDirPerm = 0o700
+
+func ensureOwnerOnlyDir(dir string) error {
+	if err := os.MkdirAll(dir, privateDirPerm); err != nil {
+		return err
+	}
+	return os.Chmod(dir, privateDirPerm)
+}
 
 // TokenRecord holds the data associated with a stored magic link token.
 type TokenRecord struct {
@@ -46,7 +54,7 @@ func NewStore(dir string) (*Store, error) {
 	if strings.TrimSpace(dir) == "" {
 		return nil, fmt.Errorf("dir is required")
 	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := ensureOwnerOnlyDir(dir); err != nil {
 		return nil, fmt.Errorf("create magic link store dir: %w", err)
 	}
 

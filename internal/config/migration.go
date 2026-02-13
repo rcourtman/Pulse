@@ -60,8 +60,11 @@ func MigrateToMultiTenant(dataDir string) error {
 	log.Info().Str("data_dir", dataDir).Msg("Starting multi-tenant data migration")
 
 	// Create the default org directory
-	if err := os.MkdirAll(defaultOrgDir, 0755); err != nil {
+	if err := os.MkdirAll(defaultOrgDir, 0o700); err != nil {
 		return fmt.Errorf("failed to create default org directory: %w", err)
+	}
+	if err := os.Chmod(defaultOrgDir, 0o700); err != nil {
+		log.Warn().Err(err).Str("dir", defaultOrgDir).Msg("Failed to enforce secure permissions on default org directory")
 	}
 
 	migratedFiles := []string{}
@@ -110,6 +113,9 @@ func MigrateToMultiTenant(dataDir string) error {
 				log.Warn().Err(err).Str("file", filename).Msg("Failed to remove original file after copy")
 			}
 		}
+		if err := os.Chmod(dstPath, 0o600); err != nil {
+			log.Warn().Err(err).Str("file", filename).Msg("Failed to enforce secure permissions on migrated file")
+		}
 
 		log.Info().Str("file", filename).Msg("Migrated file to default org directory")
 		migratedFiles = append(migratedFiles, filename)
@@ -130,7 +136,7 @@ func MigrateToMultiTenant(dataDir string) error {
 	// Create migration marker
 	markerContent := fmt.Sprintf("migrated_at=%s\nversion=1.0\nmigrated_files=%d\nskipped_files=%d\n",
 		time.Now().Format(time.RFC3339), len(migratedFiles), len(skippedFiles))
-	if err := os.WriteFile(migrationMarker, []byte(markerContent), 0644); err != nil {
+	if err := os.WriteFile(migrationMarker, []byte(markerContent), 0o600); err != nil {
 		log.Warn().Err(err).Msg("Failed to write migration marker")
 	}
 

@@ -852,25 +852,39 @@ func (p *ProxmoxSetup) stateFileForType(ptype proxmoxProductType) string {
 
 // markAsRegistered creates a state file to indicate setup is complete.
 func (p *ProxmoxSetup) markAsRegistered() {
-	if err := p.collector.MkdirAll(stateFileDir, 0755); err != nil {
+	if err := p.collector.MkdirAll(stateFileDir, proxmoxStateDirPerm); err != nil {
 		p.logger.Warn().Err(err).Msg("Failed to create state directory")
 		return
 	}
+	if err := p.collector.Chmod(stateFileDir, proxmoxStateDirPerm); err != nil {
+		p.logger.Warn().Err(err).Msg("Failed to enforce state directory permissions")
+	}
 
-	if err := p.collector.WriteFile(stateFilePath, []byte(time.Now().Format(time.RFC3339)), 0644); err != nil {
+	if err := p.collector.WriteFile(stateFilePath, []byte(time.Now().Format(time.RFC3339)), proxmoxStateFilePerm); err != nil {
 		p.logger.Warn().Err(err).Msg("Failed to write state file")
+		return
+	}
+	if err := p.collector.Chmod(stateFilePath, proxmoxStateFilePerm); err != nil {
+		p.logger.Warn().Err(err).Msg("Failed to enforce state file permissions")
 	}
 }
 
 // markTypeAsRegistered creates a state file for a specific Proxmox type.
-func (p *ProxmoxSetup) markTypeAsRegistered(ptype proxmoxProductType) {
-	if err := p.collector.MkdirAll(stateFileDir, 0755); err != nil {
+func (p *ProxmoxSetup) markTypeAsRegistered(ptype string) {
+	if err := p.collector.MkdirAll(stateFileDir, proxmoxStateDirPerm); err != nil {
 		p.logger.Warn().Err(err).Msg("Failed to create state directory")
 		return
 	}
+	if err := p.collector.Chmod(stateFileDir, proxmoxStateDirPerm); err != nil {
+		p.logger.Warn().Err(err).Msg("Failed to enforce state directory permissions")
+	}
 
 	stateFile := p.stateFileForType(ptype)
-	if err := p.collector.WriteFile(stateFile, []byte(time.Now().Format(time.RFC3339)), 0644); err != nil {
-		p.logger.Warn().Err(err).Str("type", string(ptype)).Msg("Failed to write type state file")
+	if err := p.collector.WriteFile(stateFile, []byte(time.Now().Format(time.RFC3339)), proxmoxStateFilePerm); err != nil {
+		p.logger.Warn().Err(err).Str("type", ptype).Msg("Failed to write type state file")
+		return
+	}
+	if err := p.collector.Chmod(stateFile, proxmoxStateFilePerm); err != nil {
+		p.logger.Warn().Err(err).Str("type", ptype).Msg("Failed to enforce type state file permissions")
 	}
 }

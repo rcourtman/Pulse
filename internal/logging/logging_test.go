@@ -32,15 +32,18 @@ func resetLoggingState() {
 	nowFn = time.Now
 	isTerminalFn = term.IsTerminal
 	mkdirAllFn = os.MkdirAll
+	chmodFn = os.Chmod
 	openFileFn = os.OpenFile
 	openFn = os.Open
 	statFn = os.Stat
+	lstatFn = os.Lstat
 	readDirFn = os.ReadDir
 	renameFn = os.Rename
 	removeFn = os.Remove
 	copyFn = io.Copy
 	gzipNewWriterFn = gzip.NewWriter
 	statFileFn = defaultStatFileFn
+	chmodFileFn = func(file *os.File, mode os.FileMode) error { return file.Chmod(mode) }
 	closeFileFn = defaultCloseFileFn
 	compressFn = compressAndRemove
 }
@@ -357,6 +360,66 @@ func TestNewRollingFileWriter_MkdirError(t *testing.T) {
 	}
 }
 
+func TestNewRollingFileWriter_HardensDirectoryPermissions(t *testing.T) {
+	t.Cleanup(resetLoggingState)
+
+	root := t.TempDir()
+	logDir := filepath.Join(root, "logs")
+	if err := os.MkdirAll(logDir, 0o755); err != nil {
+		t.Fatalf("failed to create log dir: %v", err)
+	}
+
+	writer, err := newRollingFileWriter(Config{FilePath: filepath.Join(logDir, "app.log")})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	w, ok := writer.(*rollingFileWriter)
+	if !ok {
+		t.Fatalf("expected rollingFileWriter, got %#v", writer)
+	}
+	defer func() { _ = w.closeLocked() }()
+
+	info, err := os.Stat(logDir)
+	if err != nil {
+		t.Fatalf("failed to stat log dir: %v", err)
+	}
+	if got := info.Mode().Perm(); got != logDirPerm {
+		t.Fatalf("expected log dir mode %o, got %o", logDirPerm, got)
+	}
+}
+
+func TestNewRollingFileWriter_RejectsSymlinkFile(t *testing.T) {
+	t.Cleanup(resetLoggingState)
+
+	root := t.TempDir()
+	target := filepath.Join(root, "target.log")
+	if err := os.WriteFile(target, []byte("data"), 0o600); err != nil {
+		t.Fatalf("failed to create target file: %v", err)
+	}
+	link := filepath.Join(root, "symlink.log")
+	requireSymlinkOrSkip(t, target, link)
+
+	if _, err := newRollingFileWriter(Config{FilePath: link}); err == nil {
+		t.Fatal("expected error for symlink log file path")
+	}
+}
+
+func TestNewRollingFileWriter_RejectsSymlinkDir(t *testing.T) {
+	t.Cleanup(resetLoggingState)
+
+	root := t.TempDir()
+	realDir := filepath.Join(root, "real-logs")
+	if err := os.MkdirAll(realDir, 0o755); err != nil {
+		t.Fatalf("failed to create real log dir: %v", err)
+	}
+	linkDir := filepath.Join(root, "logs-link")
+	requireSymlinkOrSkip(t, realDir, linkDir)
+
+	if _, err := newRollingFileWriter(Config{FilePath: filepath.Join(linkDir, "app.log")}); err == nil {
+		t.Fatal("expected error for symlink log directory path")
+	}
+}
+
 func TestInitFileWriterError(t *testing.T) {
 	t.Cleanup(resetLoggingState)
 
@@ -433,6 +496,29 @@ func TestOpenOrCreateLocked_AlreadyOpen(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	_ = w.closeLocked()
+}
+
+func TestOpenOrCreateLocked_HardensFilePermissions(t *testing.T) {
+	t.Cleanup(resetLoggingState)
+
+	path := filepath.Join(t.TempDir(), "app.log")
+	if err := os.WriteFile(path, []byte("existing"), 0o644); err != nil {
+		t.Fatalf("failed to create log file: %v", err)
+	}
+
+	w := &rollingFileWriter{path: path}
+	if err := w.openOrCreateLocked(); err != nil {
+		t.Fatalf("openOrCreateLocked error: %v", err)
+	}
+	defer func() { _ = w.closeLocked() }()
+
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("failed to stat log file: %v", err)
+	}
+	if got := info.Mode().Perm(); got != logFilePerm {
+		t.Fatalf("expected log file mode %o, got %o", logFilePerm, got)
+	}
 }
 
 func TestRollingFileWriter_WriteOpenError(t *testing.T) {
@@ -690,6 +776,46 @@ func TestCompressAndRemove(t *testing.T) {
 			t.Fatalf("expected gzip file to exist: %v", err)
 		}
 	})
+
+	t.Run("RejectsSymlinkSource", func(t *testing.T) {
+		t.Cleanup(resetLoggingState)
+		dir := t.TempDir()
+		target := filepath.Join(dir, "target.log")
+		if err := os.WriteFile(target, []byte("data"), 0o600); err != nil {
+			t.Fatalf("failed to write target file: %v", err)
+		}
+		symlinkPath := filepath.Join(dir, "app.log")
+		requireSymlinkOrSkip(t, target, symlinkPath)
+
+		compressAndRemove(symlinkPath)
+
+		if _, err := os.Stat(symlinkPath + ".gz"); err == nil {
+			t.Fatal("expected no gzip output for symlink source path")
+		}
+	})
+
+	t.Run("RejectsSymlinkDestination", func(t *testing.T) {
+		t.Cleanup(resetLoggingState)
+		dir := t.TempDir()
+		path := filepath.Join(dir, "app.log")
+		if err := os.WriteFile(path, []byte("data"), 0o600); err != nil {
+			t.Fatalf("failed to write source file: %v", err)
+		}
+		target := filepath.Join(dir, "target.gz")
+		if err := os.WriteFile(target, []byte("target"), 0o600); err != nil {
+			t.Fatalf("failed to write destination target file: %v", err)
+		}
+		requireSymlinkOrSkip(t, target, path+".gz")
+
+		compressAndRemove(path)
+
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("expected source file to remain when destination path is unsafe: %v", err)
+		}
+		if _, err := os.Stat(path + ".gz"); err != nil {
+			t.Fatalf("expected symlink destination path to remain: %v", err)
+		}
+	})
 }
 
 // Test that the logging package doesn't panic under concurrent use
@@ -737,4 +863,11 @@ type errWriteCloser struct {
 
 func (e errWriteCloser) Write(p []byte) (int, error) {
 	return 0, e.err
+}
+
+func requireSymlinkOrSkip(t *testing.T, target, link string) {
+	t.Helper()
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlink not supported in this environment: %v", err)
+	}
 }

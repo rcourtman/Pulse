@@ -2,6 +2,7 @@ package websocket
 
 import (
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -163,7 +164,7 @@ func TestHandleWebSocketPingPong(t *testing.T) {
 	t.Fatal("expected pong response")
 }
 
-func TestHandleWebSocketNegotiatesCompression(t *testing.T) {
+func TestHandleWebSocket_ReadLimitExceededClosesConnection(t *testing.T) {
 	hub := NewHub(nil)
 	go hub.Run()
 	t.Cleanup(hub.Stop)
@@ -182,10 +183,33 @@ func TestHandleWebSocketNegotiatesCompression(t *testing.T) {
 	}
 	defer conn.Close()
 
-	if resp == nil {
-		t.Fatal("expected handshake response")
+	oversizedPayload, err := json.Marshal(Message{
+		Type: "ping",
+		Data: strings.Repeat("x", maxWebSocketInboundMessageSize),
+	})
+	if err != nil {
+		t.Fatalf("marshal oversized payload: %v", err)
 	}
-	if !strings.Contains(strings.ToLower(resp.Header.Get("Sec-WebSocket-Extensions")), "permessage-deflate") {
-		t.Fatalf("expected permessage-deflate extension, got %q", resp.Header.Get("Sec-WebSocket-Extensions"))
+	if len(oversizedPayload) <= maxWebSocketInboundMessageSize {
+		t.Fatalf("test payload must exceed read limit, got %d bytes", len(oversizedPayload))
 	}
+
+	if err := conn.WriteMessage(websocket.TextMessage, oversizedPayload); err != nil {
+		t.Fatalf("write oversized payload: %v", err)
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if err := conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond)); err != nil {
+			t.Fatalf("set read deadline: %v", err)
+		}
+		if _, _, err := conn.ReadMessage(); err != nil {
+			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+				continue
+			}
+			return
+		}
+	}
+
+	t.Fatal("expected websocket connection to close after oversized inbound message")
 }

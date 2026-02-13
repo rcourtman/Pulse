@@ -462,6 +462,21 @@ func TestRegistryChecker_FetchAuthToken(t *testing.T) {
 		}
 	})
 
+	t.Run("oversized body", func(t *testing.T) {
+		checker := &RegistryChecker{
+			httpClient: &http.Client{
+				Transport: roundTripFunc(func(_ *http.Request) (*http.Response, error) {
+					return newStringResponse(http.StatusOK, nil, strings.Repeat("x", maxRegistryTokenBodyBytes+1)), nil
+				}),
+			},
+		}
+
+		_, err := checker.fetchAuthToken(context.Background(), "https://auth.example.test/token")
+		if err == nil || !strings.Contains(err.Error(), "response body exceeds") {
+			t.Fatalf("Expected oversized body error, got %v", err)
+		}
+	})
+
 	t.Run("invalid json", func(t *testing.T) {
 		checker := &RegistryChecker{
 			httpClient: &http.Client{

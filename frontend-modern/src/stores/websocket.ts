@@ -20,6 +20,8 @@ import { eventBus } from './events';
 import { ALERTS_ACTIVATION_EVENT, isAlertsActivationEnabled } from '@/utils/alertsActivation';
 import { syncWithHostCommand } from './containerUpdates';
 
+const MAX_INBOUND_WEBSOCKET_MESSAGE_BYTES = 8 * 1024 * 1024; // 8 MiB
+
 // --- Helpers to avoid repeating the same logic for dockerHosts / hosts / k8s ---
 
 /** Normalize tags from comma-separated string, array, or null → clean string array. */
@@ -373,7 +375,20 @@ export function createWebSocketStore(url: string) {
 
 
     ws.onmessage = (event) => {
-      lastServerActivityAt = Date.now();
+      if (typeof event.data !== 'string') {
+        logger.warn('Ignoring non-text WebSocket payload');
+        return;
+      }
+
+      const payloadSizeBytes = new Blob([event.data]).size;
+      if (payloadSizeBytes > MAX_INBOUND_WEBSOCKET_MESSAGE_BYTES) {
+        logger.warn('Ignoring oversized WebSocket payload', {
+          sizeBytes: payloadSizeBytes,
+          maxBytes: MAX_INBOUND_WEBSOCKET_MESSAGE_BYTES,
+        });
+        return;
+      }
+
       let data;
       try {
         data = JSON.parse(event.data);

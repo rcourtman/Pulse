@@ -26,14 +26,13 @@ const (
 	reconnectJitter    = 0.1
 
 	// WebSocket parameters
-	wsPingInterval        = 25 * time.Second
-	wsPongWait            = 70 * time.Second
-	wsWriteWait           = 10 * time.Second
-	wsHandshakeWait       = 15 * time.Second
-	sendChBufferSize      = 256
-	wsMaxMessageSize      = HeaderSize + MaxPayloadSize
-	proxyStreamTimeout    = 15 * time.Minute
-	relayOverloadedReason = "relay overloaded, retry request"
+	wsPingInterval   = 25 * time.Second
+	wsWriteWait      = 10 * time.Second
+	wsHandshakeWait  = 15 * time.Second
+	sendChBufferSize = 256
+
+	// wsReadLimit bounds inbound WebSocket message size to a single relay frame.
+	wsReadLimit = HeaderSize + MaxPayloadSize
 )
 
 // maxConcurrentDataHandlers limits active DATA stream handlers per connection.
@@ -236,6 +235,7 @@ func (c *Client) connectAndHandle(ctx context.Context) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("dial relay: %w", err)
 	}
+	conn.SetReadLimit(wsReadLimit)
 
 	// Per-connection send channel — no races because each writePump gets its own
 	sendCh := make(chan []byte, sendChBufferSize)

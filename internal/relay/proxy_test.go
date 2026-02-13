@@ -480,4 +480,58 @@ func TestHTTPProxy_HandleStreamRequest(t *testing.T) {
 			t.Errorf("error body: got %q, expected to contain 'stream read error'", string(bodyBytes))
 		}
 	})
+
+	t.Run("oversized multi-line SSE event is rejected", func(t *testing.T) {
+		sseServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/event-stream")
+			w.WriteHeader(http.StatusOK)
+			flusher, _ := w.(http.Flusher)
+
+			// Build one event composed of many small lines. This bypasses scanner's
+			// per-line token cap unless we also bound cumulative event size.
+			line := "data: 1234567890"
+			lineLenWithNewline := len(line) + 1 // '\n'
+			lines := (maxProxyBodySize / lineLenWithNewline) + 50
+			for i := 0; i < lines; i++ {
+				fmt.Fprintf(w, "%s\n", line)
+			}
+			// Event terminator
+			fmt.Fprint(w, "\n")
+			flusher.Flush()
+		}))
+		defer sseServer.Close()
+
+		addr := strings.TrimPrefix(sseServer.URL, "http://")
+		proxy := NewHTTPProxy(addr, logger)
+
+		req := ProxyRequest{ID: "big_event_1", Method: "POST", Path: "/api/ai/chat"}
+		payload, _ := json.Marshal(req)
+
+		var frames []ProxyResponse
+		err := proxy.HandleStreamRequest(context.Background(), payload, "test-token", func(data []byte) {
+			var resp ProxyResponse
+			json.Unmarshal(data, &resp)
+			frames = append(frames, resp)
+		})
+		if err != nil {
+			t.Fatalf("HandleStreamRequest() error = %v", err)
+		}
+
+		if len(frames) < 2 {
+			t.Fatalf("expected at least init + error frames, got %d", len(frames))
+		}
+
+		lastFrame := frames[len(frames)-1]
+		if lastFrame.StreamDone {
+			t.Fatal("expected error frame, got stream_done")
+		}
+		if lastFrame.Status != http.StatusRequestEntityTooLarge {
+			t.Fatalf("status: got %d, want %d", lastFrame.Status, http.StatusRequestEntityTooLarge)
+		}
+
+		bodyBytes, _ := base64.StdEncoding.DecodeString(lastFrame.Body)
+		if !strings.Contains(string(bodyBytes), "stream event exceeds 47KB limit") {
+			t.Fatalf("error body: got %q", string(bodyBytes))
+		}
+	})
 }

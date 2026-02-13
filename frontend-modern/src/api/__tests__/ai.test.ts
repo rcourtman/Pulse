@@ -53,6 +53,28 @@ describe('AIAPI', () => {
     expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/ai/cost/summary?days=7');
   });
 
+  it('encodes dynamic provider, approval, finding, and plan identifiers', async () => {
+    apiFetchJSONMock.mockResolvedValue({} as any);
+
+    await AIAPI.testProvider('openai/internal');
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/ai/test/openai%2Finternal', {
+      method: 'POST',
+    });
+
+    await AIAPI.getRemediationPlan('plan/1?x=1');
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/ai/remediation/plan?plan_id=plan%2F1%3Fx%3D1');
+
+    await AIAPI.approveInvestigationFix('approval/root');
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/ai/approvals/approval%2Froot/approve', {
+      method: 'POST',
+    });
+
+    await AIAPI.reapproveInvestigationFix('finding/root');
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/ai/findings/finding%2Froot/reapprove', {
+      method: 'POST',
+    });
+  });
+
   it('sanitizes runCommand payload consistently', async () => {
     apiFetchJSONMock.mockResolvedValueOnce({ output: 'ok', success: true } as any);
     await AIAPI.runCommand({

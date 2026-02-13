@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode"
 )
 
 // Base error types
@@ -30,6 +31,12 @@ const (
 	ErrorTypeTimeout    ErrorType = "timeout"
 )
 
+const (
+	maxErrorContextLength = 128
+	maxErrorMessageLength = 512
+	maxAuthMatchLength    = 2048
+)
+
 // MonitorError is a structured error for monitoring operations
 type MonitorError struct {
 	Type       ErrorType
@@ -49,10 +56,25 @@ func (e *MonitorError) Error() string {
 	if e.Node != "" {
 		return fmt.Sprintf("%s failed on %s/%s: %v", e.Op, e.Instance, e.Node, e.Err)
 	}
-	if e.Instance != "" {
-		return fmt.Sprintf("%s failed on %s: %v", e.Op, e.Instance, e.Err)
+
+	instance := sanitizeErrorText(e.Instance, maxErrorContextLength)
+	node := sanitizeErrorText(e.Node, maxErrorContextLength)
+	errMsg := "<nil>"
+	if e.Err != nil {
+		errMsg = sanitizeErrorText(e.Err.Error(), maxErrorMessageLength)
+		if errMsg == "" {
+			errMsg = "unknown error"
+		}
 	}
-	return fmt.Sprintf("%s failed: %v", e.Op, e.Err)
+
+	if node != "" {
+		return fmt.Sprintf("%s failed on %s/%s: %s", op, instance, node, errMsg)
+	}
+	if instance != "" {
+		return fmt.Sprintf("%s failed on %s: %s", op, instance, errMsg)
+	}
+
+	return fmt.Sprintf("%s failed: %s", op, errMsg)
 }
 
 func (e *MonitorError) Unwrap() error {
@@ -88,8 +110,8 @@ func (e *MonitorError) Is(target error) bool {
 func NewMonitorError(errorType ErrorType, op, instance string, err error) *MonitorError {
 	return &MonitorError{
 		Type:      errorType,
-		Op:        op,
-		Instance:  instance,
+		Op:        sanitizeErrorText(op, maxErrorContextLength),
+		Instance:  sanitizeErrorText(instance, maxErrorContextLength),
 		Err:       err,
 		Timestamp: time.Now(),
 		Retryable: isRetryable(errorType, err),
@@ -187,12 +209,84 @@ func IsAuthError(err error) bool {
 		return true
 	}
 
-	// Check error message for authentication indicators
-	errMsg := err.Error()
+	// Check error message for authentication indicators using a bounded prefix to
+	// avoid large memory amplification from oversized upstream error bodies.
+	errMsg := normalizeForAuthMatch(err.Error())
 	return strings.Contains(errMsg, "authentication error") ||
 		strings.Contains(errMsg, "authentication failed") ||
-		strings.Contains(errMsg, "401") ||
-		strings.Contains(errMsg, "403") ||
+		containsStandaloneCode(errMsg, "401") ||
+		containsStandaloneCode(errMsg, "403") ||
 		strings.Contains(errMsg, "unauthorized") ||
 		strings.Contains(errMsg, "forbidden")
+}
+
+func normalizeForAuthMatch(msg string) string {
+	if msg == "" {
+		return ""
+	}
+
+	if len(msg) > maxAuthMatchLength {
+		msg = msg[:maxAuthMatchLength]
+	}
+
+	return strings.ToLower(sanitizeErrorText(msg, maxAuthMatchLength))
+}
+
+func sanitizeErrorText(input string, maxLen int) string {
+	if input == "" || maxLen <= 0 {
+		return ""
+	}
+	if len(input) > maxLen {
+		input = input[:maxLen]
+	}
+
+	var b strings.Builder
+	b.Grow(len(input))
+	spacePending := false
+	for _, r := range input {
+		if r < 0x20 || r == 0x7f || unicode.IsSpace(r) {
+			spacePending = true
+			continue
+		}
+		if spacePending && b.Len() > 0 {
+			b.WriteByte(' ')
+		}
+		b.WriteRune(r)
+		spacePending = false
+	}
+
+	return strings.TrimSpace(b.String())
+}
+
+func containsStandaloneCode(msg, code string) bool {
+	if msg == "" || code == "" {
+		return false
+	}
+
+	start := 0
+	for {
+		idx := strings.Index(msg[start:], code)
+		if idx == -1 {
+			return false
+		}
+
+		pos := start + idx
+		end := pos + len(code)
+		leftOk := pos == 0 || !isASCIIAlphaNumeric(msg[pos-1])
+		rightOk := end == len(msg) || !isASCIIAlphaNumeric(msg[end])
+		if leftOk && rightOk {
+			return true
+		}
+
+		start = pos + 1
+		if start >= len(msg) {
+			return false
+		}
+	}
+}
+
+func isASCIIAlphaNumeric(ch byte) bool {
+	return (ch >= 'a' && ch <= 'z') ||
+		(ch >= 'A' && ch <= 'Z') ||
+		(ch >= '0' && ch <= '9')
 }

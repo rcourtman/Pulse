@@ -31,12 +31,45 @@ var execCommandContext = exec.CommandContext
 // Package var so tests can override to avoid long sleeps.
 var reconnectDelay = 10 * time.Second
 
-// Reconnect backoff tuning. Package vars so tests can override deterministically.
-var (
-	reconnectMaxDelay    = 5 * time.Minute
-	reconnectJitterRatio = 0.20
-	reconnectRandFloat64 = rand.Float64
+const (
+	maxCommandOutputSize = 1024 * 1024
+	outputTruncatedMsg   = "\n... (output truncated)"
 )
+
+type cappedBuffer struct {
+	maxBytes  int
+	buf       bytes.Buffer
+	truncated bool
+}
+
+func newCappedBuffer(maxBytes int) *cappedBuffer {
+	return &cappedBuffer{maxBytes: maxBytes}
+}
+
+func (b *cappedBuffer) Write(p []byte) (int, error) {
+	remaining := b.maxBytes - b.buf.Len()
+	if remaining <= 0 {
+		b.truncated = true
+		return len(p), nil
+	}
+
+	if len(p) <= remaining {
+		_, _ = b.buf.Write(p)
+		return len(p), nil
+	}
+
+	_, _ = b.buf.Write(p[:remaining])
+	b.truncated = true
+	return len(p), nil
+}
+
+func (b *cappedBuffer) String() string {
+	out := b.buf.String()
+	if b.truncated {
+		return out + outputTruncatedMsg
+	}
+	return out
+}
 
 // CommandClient handles WebSocket connection to Pulse for AI command execution
 type CommandClient struct {
@@ -248,22 +281,43 @@ func (c *CommandClient) connectAndHandle(ctx context.Context) error {
 func (c *CommandClient) buildWebSocketURL() (string, error) {
 	parsed, err := url.Parse(c.pulseURL)
 	if err != nil {
-		return "", fmt.Errorf("parse pulse url %q: %w", c.pulseURL, err)
+		return "", fmt.Errorf("pulse URL is invalid: %w", err)
 	}
 
-	// Convert http(s) to ws(s)
-	switch parsed.Scheme {
+	if parsed.Scheme == "" {
+		return "", fmt.Errorf("pulse URL %q must include scheme", c.pulseURL)
+	}
+	if parsed.Host == "" {
+		return "", fmt.Errorf("pulse URL %q must include host", c.pulseURL)
+	}
+	if parsed.User != nil {
+		return "", fmt.Errorf("pulse URL %q must not include user credentials", c.pulseURL)
+	}
+	if parsed.RawQuery != "" || parsed.Fragment != "" {
+		return "", fmt.Errorf("pulse URL %q must not include query or fragment", c.pulseURL)
+	}
+
+	switch strings.ToLower(parsed.Scheme) {
 	case "https":
 		parsed.Scheme = "wss"
 	case "http":
+		if !isLoopbackPulseHost(parsed.Hostname()) {
+			return "", fmt.Errorf("pulse URL %q must use https/wss unless host is loopback", c.pulseURL)
+		}
 		parsed.Scheme = "ws"
-	case "wss", "ws":
-		// Already WebSocket scheme
+	case "wss":
+		parsed.Scheme = "wss"
+	case "ws":
+		if !isLoopbackPulseHost(parsed.Hostname()) {
+			return "", fmt.Errorf("pulse URL %q must use https/wss unless host is loopback", c.pulseURL)
+		}
+		parsed.Scheme = "ws"
 	default:
-		parsed.Scheme = "ws"
+		return "", fmt.Errorf("pulse URL %q has unsupported scheme %q", c.pulseURL, parsed.Scheme)
 	}
 
 	parsed.Path = "/api/agent/ws"
+	parsed.RawPath = ""
 	return parsed.String(), nil
 }
 
@@ -517,9 +571,10 @@ func (c *CommandClient) executeCommand(ctx context.Context, payload executeComma
 		cmd.Env = append(os.Environ(), "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:"+os.Getenv("PATH"))
 	}
 
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	stdout := newCappedBuffer(maxCommandOutputSize)
+	stderr := newCappedBuffer(maxCommandOutputSize)
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
 
 	err := cmd.Run()
 
@@ -542,15 +597,6 @@ func (c *CommandClient) executeCommand(ctx context.Context, payload executeComma
 	} else {
 		result.ExitCode = 0
 		result.Success = true
-	}
-
-	// Truncate output if too large (1MB limit)
-	const maxOutputSize = 1024 * 1024
-	if len(result.Stdout) > maxOutputSize {
-		result.Stdout = result.Stdout[:maxOutputSize] + "\n... (output truncated)"
-	}
-	if len(result.Stderr) > maxOutputSize {
-		result.Stderr = result.Stderr[:maxOutputSize] + "\n... (output truncated)"
 	}
 
 	return result

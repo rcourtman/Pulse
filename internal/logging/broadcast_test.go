@@ -1,38 +1,77 @@
 package logging
 
 import (
-	"container/ring"
+	"strings"
+	"sync"
 	"testing"
 )
 
-func TestRingHistorySnapshot_SkipsUnexpectedTypes(t *testing.T) {
-	buffer := ring.New(3)
-	buffer.Value = "first"
-	buffer.Next().Value = 42
-	buffer.Next().Next().Value = "third"
-
-	history := ringHistorySnapshot(buffer)
-	if len(history) != 2 {
-		t.Fatalf("len(history) = %d, want 2 (history=%v)", len(history), history)
-	}
-	if history[0] != "first" || history[1] != "third" {
-		t.Fatalf("unexpected history order/content: %v", history)
-	}
+func resetBroadcasterState() {
+	broadcaster = nil
+	broadcastMu = sync.Once{}
 }
 
-func TestLogBroadcasterGetHistory_IgnoresCorruptRingValues(t *testing.T) {
-	buffer := ring.New(2)
-	buffer.Value = "ok"
-	buffer = buffer.Next()
-	buffer.Value = struct{}{}
+func TestLogBroadcasterWriteTruncatesOversizedMessages(t *testing.T) {
+	resetBroadcasterState()
+	t.Cleanup(resetBroadcasterState)
 
-	b := &LogBroadcaster{
-		buffer:      buffer,
-		subscribers: make(map[string]chan string),
+	b := GetBroadcaster()
+	id, ch, _ := b.Subscribe()
+	t.Cleanup(func() { b.Unsubscribe(id) })
+
+	payload := strings.Repeat("a", maxBroadcastMessageBytes+64)
+	n, err := b.Write([]byte(payload))
+	if err != nil {
+		t.Fatalf("write failed: %v", err)
+	}
+	if n != len(payload) {
+		t.Fatalf("expected write size %d, got %d", len(payload), n)
+	}
+
+	msg := <-ch
+	if len(msg) > maxBroadcastMessageBytes {
+		t.Fatalf("expected truncated message <= %d bytes, got %d", maxBroadcastMessageBytes, len(msg))
+	}
+	if !strings.HasSuffix(msg, broadcastTruncationTag) {
+		t.Fatalf("expected truncation tag suffix, got %q", msg[len(msg)-len(broadcastTruncationTag):])
 	}
 
 	history := b.GetHistory()
-	if len(history) != 1 || history[0] != "ok" {
-		t.Fatalf("unexpected history: %v", history)
+	if len(history) != 1 {
+		t.Fatalf("expected one history entry, got %d", len(history))
+	}
+	if history[0] != msg {
+		t.Fatal("expected history to store the truncated message")
+	}
+}
+
+func TestLogBroadcasterWriteDoesNotTruncateSmallMessages(t *testing.T) {
+	resetBroadcasterState()
+	t.Cleanup(resetBroadcasterState)
+
+	b := GetBroadcaster()
+	id, ch, _ := b.Subscribe()
+	t.Cleanup(func() { b.Unsubscribe(id) })
+
+	payload := "small-message"
+	n, err := b.Write([]byte(payload))
+	if err != nil {
+		t.Fatalf("write failed: %v", err)
+	}
+	if n != len(payload) {
+		t.Fatalf("expected write size %d, got %d", len(payload), n)
+	}
+
+	msg := <-ch
+	if msg != payload {
+		t.Fatalf("expected %q, got %q", payload, msg)
+	}
+
+	history := b.GetHistory()
+	if len(history) != 1 {
+		t.Fatalf("expected one history entry, got %d", len(history))
+	}
+	if history[0] != payload {
+		t.Fatalf("expected history payload %q, got %q", payload, history[0])
 	}
 }

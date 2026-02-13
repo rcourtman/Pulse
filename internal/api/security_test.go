@@ -1,6 +1,7 @@
 package api
 
 import (
+	"crypto/tls"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -911,6 +912,68 @@ func TestSecurityHeadersWithConfig_EmbeddingDisabled(t *testing.T) {
 	}
 	if got := rec.Header().Get("Referrer-Policy"); got != "strict-origin-when-cross-origin" {
 		t.Errorf("Referrer-Policy = %q, want strict-origin-when-cross-origin", got)
+	}
+	if got := rec.Header().Get("Strict-Transport-Security"); got != "" {
+		t.Errorf("Strict-Transport-Security = %q, want empty for non-HTTPS request", got)
+	}
+}
+
+func TestSecurityHeadersWithConfig_SetsHSTSForTLSRequest(t *testing.T) {
+	t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "")
+	resetTrustedProxyConfig()
+
+	handler := SecurityHeadersWithConfig(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}), false, "")
+
+	req := httptest.NewRequest(http.MethodGet, "https://example.com/test", nil)
+	req.TLS = &tls.ConnectionState{}
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if got := rec.Header().Get("Strict-Transport-Security"); got != "max-age=31536000; includeSubDomains" {
+		t.Fatalf("Strict-Transport-Security = %q, want max-age=31536000; includeSubDomains", got)
+	}
+}
+
+func TestSecurityHeadersWithConfig_DoesNotTrustForwardedProtoFromUntrustedPeer(t *testing.T) {
+	t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "")
+	resetTrustedProxyConfig()
+
+	handler := SecurityHeadersWithConfig(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}), false, "")
+
+	req := httptest.NewRequest(http.MethodGet, "http://example.com/test", nil)
+	req.RemoteAddr = "198.51.100.20:44321"
+	req.Header.Set("X-Forwarded-Proto", "https")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if got := rec.Header().Get("Strict-Transport-Security"); got != "" {
+		t.Fatalf("Strict-Transport-Security = %q, want empty for untrusted forwarded proto", got)
+	}
+}
+
+func TestSecurityHeadersWithConfig_SetsHSTSForTrustedProxyHTTPS(t *testing.T) {
+	t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "127.0.0.1/32")
+	resetTrustedProxyConfig()
+
+	handler := SecurityHeadersWithConfig(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}), false, "")
+
+	req := httptest.NewRequest(http.MethodGet, "http://example.com/test", nil)
+	req.RemoteAddr = "127.0.0.1:54321"
+	req.Header.Set("X-Forwarded-Proto", "https")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if got := rec.Header().Get("Strict-Transport-Security"); got != "max-age=31536000; includeSubDomains" {
+		t.Fatalf("Strict-Transport-Security = %q, want max-age=31536000; includeSubDomains", got)
 	}
 }
 

@@ -138,6 +138,116 @@ func TestUnameCommandDefault(t *testing.T) {
 	}
 }
 
+func TestNormalizeAgentName(t *testing.T) {
+	t.Run("valid", func(t *testing.T) {
+		got, err := normalizeAgentName("pulse-agent_1.2")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != "pulse-agent_1.2" {
+			t.Fatalf("unexpected normalized name: %q", got)
+		}
+	})
+
+	t.Run("invalid", func(t *testing.T) {
+		cases := []string{"", "  ", "../pulse-agent", "pulse/agent", "pulse\\agent", "pulse agent", "pulse@agent"}
+		for _, tc := range cases {
+			if _, err := normalizeAgentName(tc); err == nil {
+				t.Fatalf("expected invalid agent name for %q", tc)
+			}
+		}
+	})
+}
+
+func TestIsLoopbackHost(t *testing.T) {
+	t.Run("true", func(t *testing.T) {
+		cases := []string{"localhost", "LOCALHOST", "agent.localhost", "127.0.0.1", "::1"}
+		for _, tc := range cases {
+			if !isLoopbackHost(tc) {
+				t.Fatalf("expected loopback host for %q", tc)
+			}
+		}
+	})
+
+	t.Run("false", func(t *testing.T) {
+		cases := []string{"", "example.com", "192.168.1.10", "10.0.0.5"}
+		for _, tc := range cases {
+			if isLoopbackHost(tc) {
+				t.Fatalf("expected non-loopback host for %q", tc)
+			}
+		}
+	})
+}
+
+func TestValidatePulseURL(t *testing.T) {
+	t.Run("AllowHTTPS", func(t *testing.T) {
+		u := newUpdaterForTest("https://pulse.example.com")
+		if err := u.validatePulseURL(); err != nil {
+			t.Fatalf("expected https URL to be valid, got %v", err)
+		}
+	})
+
+	t.Run("AllowLoopbackHTTP", func(t *testing.T) {
+		u := newUpdaterForTest("http://127.0.0.1:7655")
+		if err := u.validatePulseURL(); err != nil {
+			t.Fatalf("expected loopback http URL to be valid, got %v", err)
+		}
+	})
+
+	t.Run("RejectRemoteHTTP", func(t *testing.T) {
+		u := newUpdaterForTest("http://pulse.example.com")
+		if err := u.validatePulseURL(); err == nil {
+			t.Fatalf("expected remote http URL to be rejected")
+		}
+	})
+
+	t.Run("AllowRemoteHTTPInInsecureMode", func(t *testing.T) {
+		u := newUpdaterForTest("http://pulse.example.com")
+		u.cfg.InsecureSkipVerify = true
+		if err := u.validatePulseURL(); err != nil {
+			t.Fatalf("expected remote http URL in insecure mode to be valid, got %v", err)
+		}
+	})
+
+	t.Run("RejectUnsupportedScheme", func(t *testing.T) {
+		u := newUpdaterForTest("ftp://pulse.example.com")
+		if err := u.validatePulseURL(); err == nil {
+			t.Fatalf("expected unsupported scheme to be rejected")
+		}
+	})
+
+	t.Run("RejectUserCredentials", func(t *testing.T) {
+		u := newUpdaterForTest("https://user:pass@pulse.example.com")
+		if err := u.validatePulseURL(); err == nil {
+			t.Fatalf("expected URL with credentials to be rejected")
+		}
+	})
+
+	t.Run("RejectQuery", func(t *testing.T) {
+		u := newUpdaterForTest("https://pulse.example.com?redirect=1")
+		if err := u.validatePulseURL(); err == nil {
+			t.Fatalf("expected URL with query to be rejected")
+		}
+	})
+
+	t.Run("RejectFragment", func(t *testing.T) {
+		u := newUpdaterForTest("https://pulse.example.com#frag")
+		if err := u.validatePulseURL(); err == nil {
+			t.Fatalf("expected URL with fragment to be rejected")
+		}
+	})
+}
+
+func TestPerformUpdateWithExecPathInvalidAgentName(t *testing.T) {
+	u := newUpdaterForTest("http://localhost")
+	u.cfg.AgentName = "../pulse-agent"
+
+	_, execPath := writeTempExec(t)
+	if err := u.performUpdateWithExecPath(context.Background(), execPath); err == nil {
+		t.Fatalf("expected invalid agent name error")
+	}
+}
+
 func TestVerifyBinaryMagicOverrides(t *testing.T) {
 	origOS := runtimeGOOS
 	t.Cleanup(func() { runtimeGOOS = origOS })
@@ -241,7 +351,7 @@ func TestGetServerVersion(t *testing.T) {
 	})
 
 	t.Run("RequestError", func(t *testing.T) {
-		u := newUpdaterForTest("http://example")
+		u := newUpdaterForTest("https://example")
 		u.client = &http.Client{
 			Transport: roundTripperFunc(func(*http.Request) (*http.Response, error) {
 				return nil, errors.New("boom")
@@ -281,7 +391,7 @@ func TestGetServerVersion(t *testing.T) {
 
 func TestCheckAndUpdateBranches(t *testing.T) {
 	t.Run("Disabled", func(t *testing.T) {
-		u := newUpdaterForTest("http://example")
+		u := newUpdaterForTest("https://example")
 		u.cfg.Disabled = true
 		u.performUpdateFn = func(context.Context) error {
 			t.Fatalf("should not update when disabled")
@@ -291,7 +401,7 @@ func TestCheckAndUpdateBranches(t *testing.T) {
 	})
 
 	t.Run("DevCurrent", func(t *testing.T) {
-		u := newUpdaterForTest("http://example")
+		u := newUpdaterForTest("https://example")
 		u.cfg.CurrentVersion = "dev"
 		u.performUpdateFn = func(context.Context) error {
 			t.Fatalf("should not update in dev mode")
@@ -304,6 +414,15 @@ func TestCheckAndUpdateBranches(t *testing.T) {
 		u := newUpdaterForTest("")
 		u.performUpdateFn = func(context.Context) error {
 			t.Fatalf("should not update without URL")
+			return nil
+		}
+		u.CheckAndUpdate(context.Background())
+	})
+
+	t.Run("InsecureHTTPURL", func(t *testing.T) {
+		u := newUpdaterForTest("http://pulse.example.com")
+		u.performUpdateFn = func(context.Context) error {
+			t.Fatalf("should not update with insecure Pulse URL")
 			return nil
 		}
 		u.CheckAndUpdate(context.Background())
@@ -453,7 +572,7 @@ func TestRunLoopEarlyExit(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	u := newUpdaterForTest("http://example")
+	u := newUpdaterForTest("https://example")
 	u.cfg.Disabled = true
 
 	done := make(chan struct{})
@@ -468,7 +587,7 @@ func TestRunLoopEarlyExit(t *testing.T) {
 		t.Fatalf("expected RunLoop to exit quickly")
 	}
 
-	u2 := newUpdaterForTest("http://example")
+	u2 := newUpdaterForTest("https://example")
 	u2.cfg.CurrentVersion = "dev"
 
 	done2 := make(chan struct{})
@@ -488,7 +607,7 @@ func TestRunLoopInitialCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	u := newUpdaterForTest("http://example")
+	u := newUpdaterForTest("https://example")
 	u.initialDelay = 5 * time.Second
 
 	done := make(chan struct{})
@@ -549,7 +668,7 @@ func TestPerformUpdateWrapper(t *testing.T) {
 		t.Cleanup(func() { osExecutableFn = origExec })
 		osExecutableFn = func() (string, error) { return "", errors.New("fail") }
 
-		u := newUpdaterForTest("http://example")
+		u := newUpdaterForTest("https://example")
 		if err := u.performUpdate(context.Background()); err == nil {
 			t.Fatalf("expected exec path error")
 		}
@@ -593,7 +712,7 @@ func TestPerformUpdateInvalidRequest(t *testing.T) {
 
 func TestPerformUpdateDownloadErrorAndHeaders(t *testing.T) {
 	_, execPath := writeTempExec(t)
-	u := newUpdaterForTest("http://example")
+	u := newUpdaterForTest("https://example")
 	u.cfg.APIToken = "token"
 
 	var sawToken bool
@@ -758,7 +877,7 @@ func TestPerformUpdateErrors(t *testing.T) {
 
 	t.Run("CopyError", func(t *testing.T) {
 		_, execPath := writeTempExec(t)
-		u := newUpdaterForTest("http://example")
+		u := newUpdaterForTest("https://example")
 
 		u.client = &http.Client{
 			Transport: roundTripperFunc(func(r *http.Request) (*http.Response, error) {
@@ -779,7 +898,7 @@ func TestPerformUpdateErrors(t *testing.T) {
 
 	t.Run("TooLarge", func(t *testing.T) {
 		_, execPath := writeTempExec(t)
-		u := newUpdaterForTest("http://example")
+		u := newUpdaterForTest("https://example")
 
 		origMax := maxBinarySizeBytes
 		t.Cleanup(func() { maxBinarySizeBytes = origMax })
@@ -802,9 +921,35 @@ func TestPerformUpdateErrors(t *testing.T) {
 		}
 	})
 
+	t.Run("TooLargeContentLength", func(t *testing.T) {
+		_, execPath := writeTempExec(t)
+		u := newUpdaterForTest("https://example")
+		data := testBinary()
+
+		origMax := maxBinarySizeBytes
+		t.Cleanup(func() { maxBinarySizeBytes = origMax })
+		maxBinarySizeBytes = 8
+
+		u.client = &http.Client{
+			Transport: roundTripperFunc(func(r *http.Request) (*http.Response, error) {
+				return &http.Response{
+					StatusCode:    http.StatusOK,
+					Status:        "200 OK",
+					Body:          io.NopCloser(bytes.NewReader(data)),
+					ContentLength: maxBinarySizeBytes + 1,
+					Header:        http.Header{"X-Checksum-Sha256": []string{checksum(data)}},
+				}, nil
+			}),
+		}
+
+		if err := u.performUpdateWithExecPath(context.Background(), execPath); err == nil {
+			t.Fatalf("expected size error from content length")
+		}
+	})
+
 	t.Run("CloseError", func(t *testing.T) {
 		data := testBinary()
-		u := newUpdaterForTest("http://example")
+		u := newUpdaterForTest("https://example")
 		_, execPath := writeTempExec(t)
 
 		origClose := closeFileFn
@@ -833,7 +978,7 @@ func TestPerformUpdateErrors(t *testing.T) {
 	})
 
 	t.Run("InvalidBinary", func(t *testing.T) {
-		u := newUpdaterForTest("http://example")
+		u := newUpdaterForTest("https://example")
 		_, execPath := writeTempExec(t)
 
 		data := []byte{0x00, 0x00, 0x00, 0x00}
@@ -854,7 +999,7 @@ func TestPerformUpdateErrors(t *testing.T) {
 	})
 
 	t.Run("MissingChecksum", func(t *testing.T) {
-		u := newUpdaterForTest("http://example")
+		u := newUpdaterForTest("https://example")
 		_, execPath := writeTempExec(t)
 
 		data := testBinary()
@@ -875,7 +1020,7 @@ func TestPerformUpdateErrors(t *testing.T) {
 	})
 
 	t.Run("ChecksumMismatch", func(t *testing.T) {
-		u := newUpdaterForTest("http://example")
+		u := newUpdaterForTest("https://example")
 		_, execPath := writeTempExec(t)
 
 		data := testBinary()
@@ -896,7 +1041,7 @@ func TestPerformUpdateErrors(t *testing.T) {
 	})
 
 	t.Run("ChmodError", func(t *testing.T) {
-		u := newUpdaterForTest("http://example")
+		u := newUpdaterForTest("https://example")
 		_, execPath := writeTempExec(t)
 		data := testBinary()
 
@@ -926,7 +1071,7 @@ func TestPerformUpdateErrors(t *testing.T) {
 	})
 
 	t.Run("BackupRenameError", func(t *testing.T) {
-		u := newUpdaterForTest("http://example")
+		u := newUpdaterForTest("https://example")
 		_, execPath := writeTempExec(t)
 		data := testBinary()
 
@@ -961,7 +1106,7 @@ func TestPerformUpdateErrors(t *testing.T) {
 	})
 
 	t.Run("ReplaceRenameError", func(t *testing.T) {
-		u := newUpdaterForTest("http://example")
+		u := newUpdaterForTest("https://example")
 		_, execPath := writeTempExec(t)
 		data := testBinary()
 

@@ -1,15 +1,18 @@
 package crypto
 
 import (
+	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"syscall"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog/log"
@@ -25,6 +28,117 @@ var randReader = rand.Reader
 var newCipher = aes.NewCipher
 
 var newGCM = cipher.NewGCM
+
+const (
+	encryptionKeyFileName    = ".encryption.key"
+	encryptionKeyLength      = 32 // AES-256 key length in bytes
+	encryptionKeyFilePerm    = 0o600
+	encryptionKeyDirPerm     = 0o700
+	maxEncryptionKeyFileSize = 4096
+)
+
+var errInvalidKeyMaterial = errors.New("invalid encryption key material")
+var errUnsafeKeyPath = errors.New("unsafe encryption key path")
+
+func ensureOwnerOnlyDir(dir string) error {
+	if err := os.MkdirAll(dir, encryptionKeyDirPerm); err != nil {
+		return err
+	}
+	return os.Chmod(dir, encryptionKeyDirPerm)
+}
+
+func decodeEncryptionKey(data []byte) ([]byte, error) {
+	trimmed := bytes.TrimSpace(data)
+	decoded := make([]byte, base64.StdEncoding.DecodedLen(len(trimmed)))
+	n, err := base64.StdEncoding.Decode(decoded, trimmed)
+	if err != nil {
+		return nil, fmt.Errorf("%w: decode base64: %v", errInvalidKeyMaterial, err)
+	}
+	if n != encryptionKeyLength {
+		return nil, fmt.Errorf("%w: decoded %d bytes, expected %d", errInvalidKeyMaterial, n, encryptionKeyLength)
+	}
+	return decoded[:n], nil
+}
+
+func validateEncryptionKeyFile(path string, info os.FileInfo) error {
+	if info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("%w: refusing symlink key path %q", errUnsafeKeyPath, path)
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("%w: non-regular key path %q", errInvalidKeyMaterial, path)
+	}
+	if info.Size() > maxEncryptionKeyFileSize {
+		return fmt.Errorf("%w: key file %q is too large (%d bytes)", errUnsafeKeyPath, path, info.Size())
+	}
+	return nil
+}
+
+func loadKeyFromFile(path string) ([]byte, error) {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateEncryptionKeyFile(path, info); err != nil {
+		return nil, err
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > maxEncryptionKeyFileSize {
+		return nil, fmt.Errorf("%w: key file %q exceeded size limit while reading", errUnsafeKeyPath, path)
+	}
+	return decodeEncryptionKey(data)
+}
+
+func isMissingPathError(err error) bool {
+	return errors.Is(err, os.ErrNotExist) || errors.Is(err, syscall.ENOTDIR)
+}
+
+func writeKeyFile(path string, key []byte) error {
+	if len(key) != encryptionKeyLength {
+		return fmt.Errorf("refusing to write invalid key length %d", len(key))
+	}
+
+	dir := filepath.Dir(path)
+	if err := ensureOwnerOnlyDir(dir); err != nil {
+		return err
+	}
+
+	tmpFile, err := os.CreateTemp(dir, ".encryption.key.*.tmp")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmpFile.Name()
+	cleanup := true
+	defer func() {
+		if cleanup {
+			_ = os.Remove(tmpPath)
+		}
+	}()
+
+	if err := tmpFile.Chmod(encryptionKeyFilePerm); err != nil {
+		_ = tmpFile.Close()
+		return err
+	}
+
+	encoded := base64.StdEncoding.EncodeToString(key)
+	if _, err := tmpFile.WriteString(encoded); err != nil {
+		_ = tmpFile.Close()
+		return err
+	}
+	if err := tmpFile.Close(); err != nil {
+		return err
+	}
+
+	if err := os.Rename(tmpPath, path); err != nil {
+		return err
+	}
+	cleanup = false
+
+	return os.Chmod(path, encryptionKeyFilePerm)
+}
 
 // CryptoManager handles encryption/decryption of sensitive data
 type CryptoManager struct {
@@ -58,7 +172,7 @@ func NewCryptoManagerAt(dataDir string) (*CryptoManager, error) {
 	if dataDir == "" {
 		dataDir = defaultDataDirFn()
 	}
-	keyPath := filepath.Join(dataDir, ".encryption.key")
+	keyPath := filepath.Join(dataDir, encryptionKeyFileName)
 
 	key, err := getOrCreateKeyAt(dataDir)
 	if err != nil {
@@ -77,7 +191,7 @@ func getOrCreateKeyAt(dataDir string) ([]byte, error) {
 		dataDir = defaultDataDirFn()
 	}
 
-	keyPath := filepath.Join(dataDir, ".encryption.key")
+	keyPath := filepath.Join(dataDir, encryptionKeyFileName)
 	oldKeyPath := legacyKeyPath
 	// Test/ops hook: allow overriding the legacy key location to avoid touching /etc/pulse in unit tests.
 	// This is only used during migration checks and has no effect unless explicitly set.
@@ -93,36 +207,27 @@ func getOrCreateKeyAt(dataDir string) ([]byte, error) {
 
 	var keyReadErr error
 
-	// Try to read existing key from new location
-	if data, err := os.ReadFile(keyPath); err == nil {
-		// Use DecodedLen to allocate sufficient space, then slice to actual length
-		// This prevents panics if the file contains more data than expected
-		decoded := make([]byte, base64.StdEncoding.DecodedLen(len(data)))
-		n, err := base64.StdEncoding.Decode(decoded, data)
-		if err == nil {
-			if n == 32 {
-				log.Debug().
-					Str("keyPath", keyPath).
-					Msg("loaded existing encryption key")
-				return decoded[:n], nil
-			}
-			log.Warn().
-				Str("keyPath", keyPath).
-				Int("decodedBytes", n).
-				Msg("encryption key has invalid length (expected 32 bytes)")
-		} else {
-			log.Warn().
-				Err(err).
-				Str("keyPath", keyPath).
-				Msg("failed to decode encryption key")
+	// Try to read existing key from new location.
+	if key, err := loadKeyFromFile(keyPath); err == nil {
+		if err := ensureOwnerOnlyDir(filepath.Dir(keyPath)); err != nil {
+			return nil, fmt.Errorf("failed to harden encryption key directory: %w", err)
 		}
+		if err := os.Chmod(keyPath, encryptionKeyFilePerm); err != nil {
+			return nil, fmt.Errorf("failed to harden encryption key file: %w", err)
+		}
+		log.Debug().Msg("Found and loaded existing encryption key")
+		return key, nil
+	} else if isMissingPathError(err) {
+		log.Debug().Err(err).Str("path", keyPath).Msg("Could not read encryption key file")
+	} else if errors.Is(err, errInvalidKeyMaterial) {
+		log.Warn().
+			Err(err).
+			Str("path", keyPath).
+			Msg("Found invalid encryption key file contents, generating a replacement key")
+	} else if errors.Is(err, errUnsafeKeyPath) {
+		return nil, fmt.Errorf("unsafe encryption key path %q: %w", keyPath, err)
 	} else {
-		if os.IsNotExist(err) {
-			log.Debug().Err(err).Str("path", keyPath).Msg("could not read encryption key file")
-		} else {
-			keyReadErr = fmt.Errorf("crypto.getOrCreateKeyAt: read encryption key file %q: %w", keyPath, err)
-			log.Warn().Err(keyReadErr).Str("path", keyPath).Msg("Failed to read encryption key file")
-		}
+		return nil, fmt.Errorf("failed to read encryption key file %q: %w", keyPath, err)
 	}
 
 	// Check for key in old location and migrate if found (only if paths differ)
@@ -257,7 +362,7 @@ func getOrCreateKeyAt(dataDir string) ([]byte, error) {
 	}
 
 	// Generate new key (only if no encrypted data exists)
-	key := make([]byte, 32) // AES-256
+	key := make([]byte, encryptionKeyLength) // AES-256
 	if _, err := io.ReadFull(randReader, key); err != nil {
 		return nil, fmt.Errorf("crypto.getOrCreateKeyAt: generate key bytes: %w", err)
 	}
@@ -296,6 +401,10 @@ func (c *CryptoManager) newAEAD() (cipher.AEAD, error) {
 // SAFETY: Verifies the encryption key file still exists on disk before encrypting.
 // This prevents orphaned encrypted data if the key was deleted while Pulse was running.
 func (c *CryptoManager) Encrypt(plaintext []byte) ([]byte, error) {
+	if c == nil {
+		return nil, fmt.Errorf("crypto manager not initialized")
+	}
+
 	// CRITICAL: Verify the key file still exists on disk before encrypting
 	// This prevents creating orphaned encrypted data that can never be decrypted
 	if c.keyPath != "" {
@@ -307,6 +416,12 @@ func (c *CryptoManager) Encrypt(plaintext []byte) ([]byte, error) {
 				return nil, fmt.Errorf("encryption key file deleted - cannot encrypt (would create orphaned data)")
 			}
 			return nil, fmt.Errorf("crypto.Encrypt: verify key file %q exists: %w", c.keyPath, err)
+		}
+		if err != nil {
+			return nil, fmt.Errorf("encryption key file validation failed: %w", err)
+		}
+		if !bytes.Equal(diskKey, c.key) {
+			return nil, fmt.Errorf("encryption key file changed on disk - refusing to encrypt with stale in-memory key")
 		}
 	}
 
@@ -326,7 +441,11 @@ func (c *CryptoManager) Encrypt(plaintext []byte) ([]byte, error) {
 
 // Decrypt decrypts data using AES-GCM
 func (c *CryptoManager) Decrypt(ciphertext []byte) ([]byte, error) {
-	gcm, err := c.newAEAD()
+	if c == nil {
+		return nil, fmt.Errorf("crypto manager not initialized")
+	}
+
+	block, err := newCipher(c.key)
 	if err != nil {
 		return nil, fmt.Errorf("crypto.Decrypt: %w", err)
 	}

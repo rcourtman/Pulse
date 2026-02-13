@@ -18,6 +18,19 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+const maxResponseBodyBytes int64 = 8 << 20 // 8 MiB
+
+func readResponseBodyLimited(r io.Reader) ([]byte, error) {
+	body, err := io.ReadAll(io.LimitReader(r, maxResponseBodyBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(body)) > maxResponseBodyBytes {
+		return nil, fmt.Errorf("response body exceeds %d bytes", maxResponseBodyBytes)
+	}
+	return body, nil
+}
+
 // FlexInt handles JSON fields that can be int, float, or string (for cpulimit support)
 type FlexInt int
 
@@ -293,7 +306,10 @@ func (c *Client) authenticateForm(ctx context.Context, username, password string
 
 func (c *Client) handleAuthResponse(resp *http.Response) error {
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, err := readResponseBodyLimited(resp.Body)
+		if err != nil {
+			return &authHTTPError{status: resp.StatusCode, body: err.Error()}
+		}
 		return &authHTTPError{status: resp.StatusCode, body: string(body)}
 	}
 
@@ -406,23 +422,23 @@ func (c *Client) requestWithRetry(ctx context.Context, method, path string, data
 		}
 
 		// Create base error with helpful guidance for common issues
-		var err error
+		var apiErr error
 		if resp.StatusCode == 403 && c.config.TokenName != "" {
 			// Special case for 403 with API token - this is usually a permission issue
-			err = fmt.Errorf("API error 403 (Forbidden): The API token does not have sufficient permissions. Note: In Proxmox GUI, permissions must be set on the USER (not just the token). Please verify the user '%s@%s' has the required permissions", c.auth.user, c.auth.realm)
+			apiErr = fmt.Errorf("API error 403 (Forbidden): The API token does not have sufficient permissions. Note: In Proxmox GUI, permissions must be set on the USER (not just the token). Please verify the user '%s@%s' has the required permissions", c.auth.user, c.auth.realm)
 		} else if resp.StatusCode == 595 {
 			// 595 can mean authentication failed OR trying to access an offline node in a cluster
 			// Check if this is a node-specific endpoint
 			if strings.Contains(req.URL.Path, "/nodes/") && strings.Count(req.URL.Path, "/") > 3 {
 				// This looks like a node-specific resource request
-				err = fmt.Errorf("API error 595: Cannot access node resource - node may be offline or credentials may be invalid")
+				apiErr = fmt.Errorf("API error 595: Cannot access node resource - node may be offline or credentials may be invalid")
 			} else {
-				err = fmt.Errorf("API error 595: Authentication failed - please check your credentials")
+				apiErr = fmt.Errorf("API error 595: Authentication failed - please check your credentials")
 			}
 		} else if resp.StatusCode == 401 {
-			err = fmt.Errorf("API error 401 (Unauthorized): Invalid credentials or token")
+			apiErr = fmt.Errorf("API error 401 (Unauthorized): Invalid credentials or token")
 		} else {
-			err = fmt.Errorf("API error %d: %s", resp.StatusCode, string(body))
+			apiErr = fmt.Errorf("API error %d: %s", resp.StatusCode, string(body))
 		}
 
 		// Log auth issues for debugging (595 is Proxmox "no ticket" error)
@@ -448,10 +464,10 @@ func (c *Client) requestWithRetry(ctx context.Context, method, path string, data
 		// Wrap with appropriate error type
 		if resp.StatusCode == 401 || resp.StatusCode == 403 || resp.StatusCode == 595 {
 			// Import errors package at top of file
-			return nil, fmt.Errorf("authentication error: %w", err)
+			return nil, fmt.Errorf("authentication error: %w", apiErr)
 		}
 
-		return nil, err
+		return nil, apiErr
 	}
 
 	return resp, nil
@@ -886,7 +902,10 @@ func (c *Client) GetNodeNetworkInterfaces(ctx context.Context, node string) ([]N
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, err := readResponseBodyLimited(resp.Body)
+		if err != nil {
+			return nil, err
+		}
 		return nil, fmt.Errorf("failed to get node network interfaces (status %d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 
@@ -1135,7 +1154,10 @@ func (c *Client) GetContainerInterfaces(ctx context.Context, node string, vmid i
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, err := readResponseBodyLimited(resp.Body)
+		if err != nil {
+			return nil, err
+		}
 		return nil, fmt.Errorf("failed to get container interfaces (status %d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 
@@ -1514,7 +1536,7 @@ func (c *Client) GetVMFSInfo(ctx context.Context, node string, vmid int) ([]VMFi
 	defer resp.Body.Close()
 
 	// First, read the response body into bytes so we can try multiple unmarshal attempts
-	bodyBytes, err := io.ReadAll(resp.Body)
+	bodyBytes, err := readResponseBodyLimited(resp.Body)
 	if err != nil {
 		return nil, err
 	}

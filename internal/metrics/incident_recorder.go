@@ -5,9 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -35,7 +38,15 @@ const (
 	IncidentWindowStatusRecording IncidentWindowStatus = "recording"
 	IncidentWindowStatusComplete  IncidentWindowStatus = "complete"
 	IncidentWindowStatusTruncated IncidentWindowStatus = "truncated" // Stopped due to limits
+
+	incidentRecorderDirPerm      = 0o700
+	incidentRecorderFilePerm     = 0o600
+	maxIncidentWindowsFileSize   = 16 << 20 // 16 MiB
+	maxWindowIDResourceSegment   = 64
+	unknownWindowResourceSegment = "unknown"
 )
+
+var errUnsafeIncidentPersistencePath = errors.New("unsafe incident recorder persistence path")
 
 // IncidentDataPoint represents a single data point in an incident window
 type IncidentDataPoint struct {
@@ -133,17 +144,22 @@ func NewIncidentRecorder(cfg IncidentRecorderConfig) *IncidentRecorder {
 		cfg.RetentionDuration = 24 * time.Hour
 	}
 
+	dataDir := strings.TrimSpace(cfg.DataDir)
+	if dataDir != "" {
+		dataDir = filepath.Clean(dataDir)
+	}
+
 	recorder := &IncidentRecorder{
 		config:            cfg,
 		activeWindows:     make(map[string]*IncidentWindow),
 		completedWindows:  make([]*IncidentWindow, 0),
 		preIncidentBuffer: make(map[string][]IncidentDataPoint),
-		dataDir:           cfg.DataDir,
+		dataDir:           dataDir,
 		stopCh:            make(chan struct{}),
 	}
 
-	if cfg.DataDir != "" {
-		recorder.filePath = filepath.Join(cfg.DataDir, "incident_windows.json")
+	if dataDir != "" {
+		recorder.filePath = filepath.Join(dataDir, "incident_windows.json")
 		if err := recorder.loadFromDisk(); err != nil {
 			log.Warn().Err(err).Str("file_path", recorder.filePath).Msg("failed to load incident windows from disk")
 		}
@@ -250,7 +266,7 @@ func (r *IncidentRecorder) recordSample() {
 
 		window.DataPoints = append(window.DataPoints, IncidentDataPoint{
 			Timestamp: now,
-			Metrics:   metrics,
+			Metrics:   cloneFloatMap(metrics),
 		})
 	}
 
@@ -273,7 +289,7 @@ func (r *IncidentRecorder) recordSample() {
 		buffer := r.preIncidentBuffer[resourceID]
 		buffer = append(buffer, IncidentDataPoint{
 			Timestamp: now,
-			Metrics:   metrics,
+			Metrics:   cloneFloatMap(metrics),
 		})
 
 		// Keep only last PreIncidentWindow duration
@@ -333,7 +349,7 @@ func (r *IncidentRecorder) StartRecording(resourceID, resourceName, resourceType
 
 	// Copy pre-incident buffer if available
 	if preBuffer, ok := r.preIncidentBuffer[resourceID]; ok {
-		window.DataPoints = append(window.DataPoints, preBuffer...)
+		window.DataPoints = append(window.DataPoints, copyDataPoints(preBuffer)...)
 	}
 
 	r.activeWindows[windowID] = window
@@ -536,36 +552,63 @@ func (r *IncidentRecorder) saveToDisk() error {
 	}
 
 	r.mu.RLock()
+	completed := make([]*IncidentWindow, len(r.completedWindows))
+	for i, window := range r.completedWindows {
+		completed[i] = copyWindow(window)
+	}
+	r.mu.RUnlock()
+
 	data := struct {
 		CompletedWindows []*IncidentWindow `json:"completed_windows"`
 	}{
-		CompletedWindows: r.completedWindows,
+		CompletedWindows: completed,
 	}
-	r.mu.RUnlock()
 
 	jsonData, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
 		return fmt.Errorf("incident recorder save: marshal completed windows: %w", err)
 	}
 
-	if err := os.MkdirAll(r.dataDir, 0755); err != nil {
-		return fmt.Errorf("incident recorder save: ensure data directory %q: %w", r.dataDir, err)
+	if err := ensureOwnerOnlyDir(r.dataDir); err != nil {
+		return err
 	}
 
-	tmpPath := r.filePath + ".tmp"
-	if err := os.WriteFile(tmpPath, jsonData, 0600); err != nil {
-		return fmt.Errorf("incident recorder save: write temp file %q: %w", tmpPath, err)
-	}
-
-	if err := os.Rename(tmpPath, r.filePath); err != nil {
-		renameErr := fmt.Errorf("incident recorder save: commit temp file %q to %q: %w", tmpPath, r.filePath, err)
-		if removeErr := os.Remove(tmpPath); removeErr != nil && !os.IsNotExist(removeErr) {
-			return errors.Join(renameErr, fmt.Errorf("incident recorder save: cleanup temp file %q: %w", tmpPath, removeErr))
+	if info, err := os.Lstat(r.filePath); err == nil {
+		if err := validateRegularFilePath(r.filePath, info); err != nil {
+			return err
 		}
-		return renameErr
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
 	}
 
-	return nil
+	tmpFile, err := os.CreateTemp(r.dataDir, filepath.Base(r.filePath)+".*.tmp")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmpFile.Name()
+	cleanup := true
+	defer func() {
+		if cleanup {
+			_ = os.Remove(tmpPath)
+		}
+	}()
+
+	if err := tmpFile.Chmod(incidentRecorderFilePerm); err != nil {
+		_ = tmpFile.Close()
+		return err
+	}
+	if _, err := tmpFile.Write(jsonData); err != nil {
+		_ = tmpFile.Close()
+		return err
+	}
+	if err := tmpFile.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(tmpPath, r.filePath); err != nil {
+		return err
+	}
+	cleanup = false
+	return os.Chmod(r.filePath, incidentRecorderFilePerm)
 }
 
 // loadFromDisk loads completed windows
@@ -574,9 +617,9 @@ func (r *IncidentRecorder) loadFromDisk() error {
 		return nil
 	}
 
-	jsonData, err := os.ReadFile(r.filePath)
+	jsonData, err := readBoundedRegularFile(r.filePath, maxIncidentWindowsFileSize)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			return nil
 		}
 		return fmt.Errorf("incident recorder load: read file %q: %w", r.filePath, err)
@@ -590,13 +633,119 @@ func (r *IncidentRecorder) loadFromDisk() error {
 		return fmt.Errorf("incident recorder load: parse file %q: %w", r.filePath, err)
 	}
 
-	r.completedWindows = data.CompletedWindows
+	r.completedWindows = make([]*IncidentWindow, 0, len(data.CompletedWindows))
+	for _, window := range data.CompletedWindows {
+		if window == nil {
+			continue
+		}
+		r.completedWindows = append(r.completedWindows, window)
+	}
 	r.trimCompletedWindows()
 
-	return nil
+	return os.Chmod(r.filePath, incidentRecorderFilePerm)
 }
 
 // Helper functions
+
+func ensureOwnerOnlyDir(dir string) error {
+	if err := os.MkdirAll(dir, incidentRecorderDirPerm); err != nil {
+		return err
+	}
+	return os.Chmod(dir, incidentRecorderDirPerm)
+}
+
+func validateRegularFilePath(path string, info os.FileInfo) error {
+	if info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("%w: refusing symlink path %q", errUnsafeIncidentPersistencePath, path)
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("%w: non-regular path %q", errUnsafeIncidentPersistencePath, path)
+	}
+	return nil
+}
+
+func readBoundedRegularFile(path string, maxSize int64) ([]byte, error) {
+	initialInfo, err := os.Lstat(path)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateRegularFilePath(path, initialInfo); err != nil {
+		return nil, err
+	}
+	if maxSize > 0 && initialInfo.Size() > maxSize {
+		return nil, fmt.Errorf("%w: file %q exceeds size limit (%d bytes)", errUnsafeIncidentPersistencePath, path, initialInfo.Size())
+	}
+
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = file.Close()
+	}()
+
+	openInfo, err := file.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if err := validateRegularFilePath(path, openInfo); err != nil {
+		return nil, err
+	}
+	if !os.SameFile(initialInfo, openInfo) {
+		return nil, fmt.Errorf("%w: file %q changed during read", errUnsafeIncidentPersistencePath, path)
+	}
+
+	reader := io.Reader(file)
+	if maxSize > 0 {
+		reader = io.LimitReader(file, maxSize+1)
+	}
+
+	data, err := io.ReadAll(reader)
+	if err != nil {
+		return nil, err
+	}
+	if maxSize > 0 && int64(len(data)) > maxSize {
+		return nil, fmt.Errorf("%w: file %q exceeded size limit while reading", errUnsafeIncidentPersistencePath, path)
+	}
+	return data, nil
+}
+
+func cloneFloatMap(in map[string]float64) map[string]float64 {
+	if in == nil {
+		return nil
+	}
+	out := make(map[string]float64, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
+}
+
+func cloneAnyMap(in map[string]interface{}) map[string]interface{} {
+	if in == nil {
+		return nil
+	}
+	out := make(map[string]interface{}, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
+}
+
+func copyDataPoints(dataPoints []IncidentDataPoint) []IncidentDataPoint {
+	if dataPoints == nil {
+		return nil
+	}
+	out := make([]IncidentDataPoint, len(dataPoints))
+	for i, dp := range dataPoints {
+		out[i] = IncidentDataPoint{
+			Timestamp: dp.Timestamp,
+			Metrics:   cloneFloatMap(dp.Metrics),
+			Metadata:  cloneAnyMap(dp.Metadata),
+		}
+	}
+	return out
+}
 
 func copyWindow(w *IncidentWindow) *IncidentWindow {
 	if w == nil {
@@ -607,21 +756,17 @@ func copyWindow(w *IncidentWindow) *IncidentWindow {
 		t := *w.EndTime
 		windowCopy.EndTime = &t
 	}
-	if w.DataPoints != nil {
-		windowCopy.DataPoints = make([]IncidentDataPoint, len(w.DataPoints))
-		for i, dp := range w.DataPoints {
-			windowCopy.DataPoints[i] = dp
-			if dp.Metrics != nil {
-				windowCopy.DataPoints[i].Metrics = make(map[string]float64)
-				for k, v := range dp.Metrics {
-					windowCopy.DataPoints[i].Metrics[k] = v
-				}
-			}
-		}
-	}
+	copy.DataPoints = copyDataPoints(w.DataPoints)
 	if w.Summary != nil {
 		s := *w.Summary
-		windowCopy.Summary = &s
+		s.Peaks = cloneFloatMap(w.Summary.Peaks)
+		s.Lows = cloneFloatMap(w.Summary.Lows)
+		s.Averages = cloneFloatMap(w.Summary.Averages)
+		s.Changes = cloneFloatMap(w.Summary.Changes)
+		if w.Summary.Anomalies != nil {
+			s.Anomalies = append([]string(nil), w.Summary.Anomalies...)
+		}
+		copy.Summary = &s
 	}
 	return &windowCopy
 }
@@ -629,8 +774,47 @@ func copyWindow(w *IncidentWindow) *IncidentWindow {
 var windowCounter int64
 
 func generateWindowID(resourceID string) string {
-	windowCounter++
-	return "iw-" + resourceID + "-" + time.Now().Format("20060102150405") + "-" + intToString(int(windowCounter%1000))
+	segment := sanitizeResourceIDSegment(resourceID)
+	seq := atomic.AddInt64(&windowCounter, 1)
+	return "iw-" + segment + "-" + time.Now().Format("20060102150405") + "-" + intToString(int(seq%1000))
+}
+
+func sanitizeResourceIDSegment(resourceID string) string {
+	resourceID = strings.TrimSpace(resourceID)
+	if resourceID == "" {
+		return unknownWindowResourceSegment
+	}
+
+	var builder strings.Builder
+	builder.Grow(min(len(resourceID), maxWindowIDResourceSegment))
+	for i := 0; i < len(resourceID) && builder.Len() < maxWindowIDResourceSegment; i++ {
+		ch := resourceID[i]
+		switch {
+		case ch >= 'a' && ch <= 'z':
+			builder.WriteByte(ch)
+		case ch >= 'A' && ch <= 'Z':
+			builder.WriteByte(ch)
+		case ch >= '0' && ch <= '9':
+			builder.WriteByte(ch)
+		case ch == '-' || ch == '_':
+			builder.WriteByte(ch)
+		default:
+			builder.WriteByte('-')
+		}
+	}
+
+	cleaned := strings.Trim(builder.String(), "-")
+	if cleaned == "" {
+		return unknownWindowResourceSegment
+	}
+	return cleaned
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func intToString(n int) string {

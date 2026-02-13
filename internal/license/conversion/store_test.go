@@ -2,7 +2,9 @@ package conversion
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -277,5 +279,76 @@ func TestConversionStoreConcurrentWrites(t *testing.T) {
 	want := goroutines * perG
 	if len(got) != want {
 		t.Fatalf("len(Query()) = %d, want %d", len(got), want)
+	}
+}
+
+func TestConversionStoreEnforcesOwnerOnlyPermissions(t *testing.T) {
+	tmp := t.TempDir()
+	if err := os.Chmod(tmp, 0755); err != nil {
+		t.Fatalf("failed to relax temp dir perms: %v", err)
+	}
+
+	dbPath := filepath.Join(tmp, "conversion.db")
+	store, err := NewConversionStore(dbPath)
+	if err != nil {
+		t.Fatalf("NewConversionStore() error = %v", err)
+	}
+	defer store.Close()
+
+	if err := store.Record(StoredConversionEvent{
+		OrgID:          "org-a",
+		EventType:      EventPaywallViewed,
+		Surface:        "s",
+		Capability:     "c",
+		IdempotencyKey: "perm-check",
+		CreatedAt:      time.Now().UTC(),
+	}); err != nil {
+		t.Fatalf("Record() error = %v", err)
+	}
+
+	dirInfo, err := os.Stat(tmp)
+	if err != nil {
+		t.Fatalf("failed to stat dir: %v", err)
+	}
+	if got := dirInfo.Mode().Perm(); got != 0700 {
+		t.Fatalf("dir perms = %o, want 700", got)
+	}
+
+	dbInfo, err := os.Stat(dbPath)
+	if err != nil {
+		t.Fatalf("failed to stat db: %v", err)
+	}
+	if got := dbInfo.Mode().Perm(); got != 0600 {
+		t.Fatalf("db perms = %o, want 600", got)
+	}
+
+	for _, sidecar := range []string{"-wal", "-shm"} {
+		path := dbPath + sidecar
+		if info, err := os.Stat(path); err == nil {
+			if got := info.Mode().Perm(); got != 0600 {
+				t.Fatalf("%s perms = %o, want 600", sidecar, got)
+			}
+		}
+	}
+}
+
+func TestConversionStoreRejectsSymlinkDBPath(t *testing.T) {
+	tmp := t.TempDir()
+	target := filepath.Join(tmp, "real.db")
+	if err := os.WriteFile(target, []byte(""), 0600); err != nil {
+		t.Fatalf("failed to create target db file: %v", err)
+	}
+
+	linkPath := filepath.Join(tmp, "conversion.db")
+	if err := os.Symlink(target, linkPath); err != nil {
+		t.Skipf("symlink unsupported on this platform: %v", err)
+	}
+
+	_, err := NewConversionStore(linkPath)
+	if err == nil {
+		t.Fatal("expected NewConversionStore to reject symlink db path")
+	}
+	if !strings.Contains(err.Error(), "symlink") {
+		t.Fatalf("expected symlink error, got: %v", err)
 	}
 }

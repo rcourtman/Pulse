@@ -152,14 +152,14 @@ export class NotificationsAPI {
   }
 
   static async updateWebhook(id: string, webhook: Partial<Webhook>): Promise<Webhook> {
-    return apiFetchJSON(`${this.baseUrl}/webhooks/${id}`, {
+    return apiFetchJSON(`${this.baseUrl}/webhooks/${encodeURIComponent(id)}`, {
       method: 'PUT',
       body: JSON.stringify(webhook),
     });
   }
 
   static async deleteWebhook(id: string): Promise<{ success: boolean }> {
-    return apiFetchJSON(`${this.baseUrl}/webhooks/${id}`, {
+    return apiFetchJSON(`${this.baseUrl}/webhooks/${encodeURIComponent(id)}`, {
       method: 'DELETE',
     });
   }

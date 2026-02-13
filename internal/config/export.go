@@ -88,14 +88,8 @@ func (c *ConfigPersistence) ExportConfig(passphrase string) (string, error) {
 		apiTokens = []APITokenRecord{}
 	}
 
-	// Load guest metadata (stored in data directory)
-	// Use PULSE_DATA_DIR if set, otherwise use /etc/pulse for backwards compatibility
-	dataPath := os.Getenv("PULSE_DATA_DIR")
-	if dataPath == "" {
-		dataPath = "/etc/pulse"
-	}
-	guestMetadataStore := NewGuestMetadataStore(dataPath, c.fs)
-	guestMetadata := guestMetadataStore.GetAll()
+	// Load guest metadata from the active persistence scope.
+	guestMetadata := c.GetGuestMetadataStore().GetAll()
 
 	// Create export data
 	exportData := ExportData{
@@ -232,14 +226,8 @@ func (c *ConfigPersistence) ImportConfig(encryptedData string, passphrase string
 		}
 	}
 
-	// Import guest metadata if present
-	// Use PULSE_DATA_DIR if set, otherwise use /etc/pulse for backwards compatibility
-	dataPath := os.Getenv("PULSE_DATA_DIR")
-	if dataPath == "" {
-		dataPath = "/etc/pulse"
-	}
-	guestMetadataStore := NewGuestMetadataStore(dataPath, c.fs)
-	if err := guestMetadataStore.ReplaceAll(exportData.GuestMetadata); err != nil {
+	// Import guest metadata into the active persistence scope.
+	if err := c.GetGuestMetadataStore().ReplaceAll(exportData.GuestMetadata); err != nil {
 		log.Warn().Err(err).Msg("Failed to import guest metadata")
 	}
 

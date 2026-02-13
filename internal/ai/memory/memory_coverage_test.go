@@ -688,6 +688,13 @@ func TestIncidentStore_SaveToDisk_Scenarios(t *testing.T) {
 		if _, err := os.Stat(store.filePath); err != nil {
 			t.Fatalf("expected file to exist: %v", err)
 		}
+		info, err := os.Stat(store.filePath)
+		if err != nil {
+			t.Fatalf("stat failed: %v", err)
+		}
+		if got := info.Mode().Perm(); got != 0600 {
+			t.Fatalf("expected mode 0600, got %o", got)
+		}
 	})
 }
 

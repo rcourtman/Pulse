@@ -386,23 +386,7 @@ func GenerateMockData(config MockConfig) models.StateSnapshot {
 		}
 
 		// Calculate VM count based on node role
-		var vmCount, lxcCount int
-
-		switch nodeRole {
-		case "vm-heavy":
-			vmCount = config.VMsPerNode + rand.Intn(config.VMsPerNode)        // 100-200% of base
-			lxcCount = config.LXCsPerNode/2 + rand.Intn(config.LXCsPerNode/2) // 50-75% of base
-		case "container-heavy":
-			vmCount = rand.Intn(config.VMsPerNode/2 + 1)                    // 0-50% of base
-			lxcCount = config.LXCsPerNode*2 + rand.Intn(config.LXCsPerNode) // 200-300% of base
-		case "light":
-			vmCount = rand.Intn(config.VMsPerNode/2 + 1)   // 0-50% of base
-			lxcCount = rand.Intn(config.LXCsPerNode/2 + 1) // 0-50% of base
-		default: // mixed
-			// Add some variation
-			vmCount = config.VMsPerNode + rand.Intn(5) - 2   // +/- 2
-			lxcCount = config.LXCsPerNode + rand.Intn(7) - 3 // +/- 3
-		}
+		vmCount, lxcCount := computeGuestCounts(config, nodeRole)
 
 		// Ensure at least some activity on most nodes
 		if nodeIdx < 3 && vmCount == 0 && lxcCount == 0 {
@@ -523,6 +507,49 @@ func GenerateMockData(config MockConfig) models.StateSnapshot {
 	data.Stats.Version = "v4.9.0-mock"
 
 	return data
+}
+
+func computeGuestCounts(config MockConfig, nodeRole string) (int, int) {
+	vmBase := config.VMsPerNode
+	if vmBase < 0 {
+		vmBase = 0
+	}
+	lxcBase := config.LXCsPerNode
+	if lxcBase < 0 {
+		lxcBase = 0
+	}
+
+	var vmCount, lxcCount int
+	switch nodeRole {
+	case "vm-heavy":
+		vmCount = vmBase + randIntnSafe(vmBase) // 100-200% of base
+		lxcHalf := lxcBase / 2
+		lxcCount = lxcHalf + randIntnSafe(lxcHalf) // 50-75% of base
+	case "container-heavy":
+		vmCount = randIntnSafe(vmBase/2 + 1)         // 0-50% of base
+		lxcCount = lxcBase*2 + randIntnSafe(lxcBase) // 200-300% of base
+	case "light":
+		vmCount = randIntnSafe(vmBase/2 + 1)   // 0-50% of base
+		lxcCount = randIntnSafe(lxcBase/2 + 1) // 0-50% of base
+	default: // mixed
+		vmCount = vmBase + randIntnSafe(5) - 2   // +/- 2
+		lxcCount = lxcBase + randIntnSafe(7) - 3 // +/- 3
+	}
+
+	if vmCount < 0 {
+		vmCount = 0
+	}
+	if lxcCount < 0 {
+		lxcCount = 0
+	}
+	return vmCount, lxcCount
+}
+
+func randIntnSafe(n int) int {
+	if n <= 0 {
+		return 0
+	}
+	return rand.Intn(n)
 }
 
 func generateReplicationJobs(nodes []models.Node, vms []models.VM) []models.ReplicationJob {

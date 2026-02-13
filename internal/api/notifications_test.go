@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -668,6 +670,14 @@ func TestNotificationHandlers(t *testing.T) {
 		assert.Equal(t, 400, w.Code)
 	})
 
+	t.Run("TestNotification_RequestBodyTooLarge", func(t *testing.T) {
+		oversized := `{"method":"email","config":{"smtpHost":"` + strings.Repeat("a", notificationTestRequestBodyLimit) + `"}}`
+		req := httptest.NewRequest("POST", "/api/notifications/test", bytes.NewReader([]byte(oversized)))
+		w := httptest.NewRecorder()
+		h.TestNotification(w, req)
+		assert.Equal(t, http.StatusRequestEntityTooLarge, w.Code)
+	})
+
 	t.Run("TestNotification_WebhookNotFound", func(t *testing.T) {
 		mockMonitor.On("GetState").Return(models.StateSnapshot{}).Once()
 		mockManager.On("GetWebhooks").Return([]notifications.WebhookConfig{}).Once()
@@ -676,5 +686,13 @@ func TestNotificationHandlers(t *testing.T) {
 		w := httptest.NewRecorder()
 		h.TestNotification(w, req)
 		assert.Equal(t, 404, w.Code)
+	})
+
+	t.Run("TestWebhook_RequestBodyTooLarge", func(t *testing.T) {
+		oversized := `{"url":"https://example.com/` + strings.Repeat("a", webhookTestRequestBodyLimit) + `","service":"generic"}`
+		req := httptest.NewRequest("POST", "/api/notifications/webhooks/test", bytes.NewReader([]byte(oversized)))
+		w := httptest.NewRecorder()
+		h.TestWebhook(w, req)
+		assert.Equal(t, http.StatusRequestEntityTooLarge, w.Code)
 	})
 }

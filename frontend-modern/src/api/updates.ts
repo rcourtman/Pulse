@@ -66,9 +66,12 @@ const withQueryParams = (path: string, params: Record<string, string | undefined
 
 export class UpdatesAPI {
   static async checkForUpdates(channel?: string): Promise<UpdateInfo> {
-    const url = withQueryParams('/api/updates/check', {
-      channel: normalizeOptionalParam(channel),
-    });
+    const search = new URLSearchParams();
+    if (channel) {
+      search.set('channel', channel);
+    }
+    const query = search.toString();
+    const url = query ? `/api/updates/check?${query}` : '/api/updates/check';
     return apiFetchJSON(url);
   }
 
@@ -89,10 +92,11 @@ export class UpdatesAPI {
   }
 
   static async getUpdatePlan(version: string, channel?: string): Promise<UpdatePlan> {
-    const url = withQueryParams('/api/updates/plan', {
-      version: requireNonEmpty(version, 'Version'),
-      channel: normalizeOptionalParam(channel),
-    });
+    const search = new URLSearchParams({ version });
+    if (channel) {
+      search.set('channel', channel);
+    }
+    const url = `/api/updates/plan?${search.toString()}`;
     return apiFetchJSON(url);
   }
 }

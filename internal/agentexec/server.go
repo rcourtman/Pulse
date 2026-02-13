@@ -4,7 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
+	"net/url"
+	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -16,7 +20,7 @@ var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
 	CheckOrigin: func(r *http.Request) bool {
-		return true // Agents can connect from anywhere
+		return isAllowedWebSocketOrigin(r)
 	},
 }
 
@@ -26,12 +30,27 @@ var (
 	readFileTimeout = 30 * time.Second
 )
 
+const maxWebSocketMessageBytes int64 = 1 << 20 // 1 MiB
+
+const (
+	maxAgentIDLength                      = 128
+	maxRequestIDLength                    = 128
+	maxExecuteCommandLength               = 32 * 1024
+	maxTargetIDLength                     = 256
+	maxExecuteCommandTimeoutSeconds       = 3600
+	defaultReadFileMaxBytes         int64 = 1 << 20  // 1 MiB
+	maxReadFileMaxBytes             int64 = 10 << 20 // 10 MiB
+	maxReadFilePathLength                 = 4096
+)
+
+var safeTargetIDPattern = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
+
 // Server manages WebSocket connections from agents
 type Server struct {
-	mu              sync.RWMutex
-	agents          map[string]*agentConn                // agentID -> connection
-	pendingRequests map[string]chan CommandResultPayload // requestID -> response channel
-	validateToken   func(token string, agentID string) bool
+	mu            sync.RWMutex
+	agents        map[string]*agentConn                // agentID -> connection
+	pendingReqs   map[string]chan CommandResultPayload // scoped request key -> response channel
+	validateToken func(token string, agentID string) bool
 }
 
 type agentConn struct {
@@ -48,6 +67,146 @@ func NewServer(validateToken func(token string, agentID string) bool) *Server {
 		pendingRequests: make(map[string]chan CommandResultPayload),
 		validateToken:   validateToken,
 	}
+}
+
+func pendingRequestKey(agentID, requestID string) string {
+	return agentID + "\x00" + requestID
+}
+
+func validateRequestID(requestID string) error {
+	if requestID == "" {
+		return fmt.Errorf("request id is required")
+	}
+	if len(requestID) > maxRequestIDLength {
+		return fmt.Errorf("request id exceeds %d characters", maxRequestIDLength)
+	}
+	return nil
+}
+
+func normalizeTarget(targetType, targetID string) (string, string, error) {
+	normalizedType := strings.ToLower(strings.TrimSpace(targetType))
+	if normalizedType == "" {
+		normalizedType = "host"
+	}
+
+	normalizedTargetID := strings.TrimSpace(targetID)
+	switch normalizedType {
+	case "host":
+		// Host-level execution ignores target ID.
+		return normalizedType, "", nil
+	case "container", "vm":
+		if normalizedTargetID == "" {
+			return "", "", fmt.Errorf("target id is required for target type %q", normalizedType)
+		}
+		if len(normalizedTargetID) > maxTargetIDLength {
+			return "", "", fmt.Errorf("target id exceeds %d characters", maxTargetIDLength)
+		}
+		if !safeTargetIDPattern.MatchString(normalizedTargetID) {
+			return "", "", fmt.Errorf("target id contains invalid characters")
+		}
+		return normalizedType, normalizedTargetID, nil
+	default:
+		return "", "", fmt.Errorf("invalid target type %q", targetType)
+	}
+}
+
+func validateExecuteCommandPayload(cmd *ExecuteCommandPayload) error {
+	if cmd == nil {
+		return fmt.Errorf("command payload is required")
+	}
+
+	if strings.TrimSpace(cmd.Command) == "" {
+		return fmt.Errorf("command is required")
+	}
+	if len(cmd.Command) > maxExecuteCommandLength {
+		return fmt.Errorf("command exceeds %d characters", maxExecuteCommandLength)
+	}
+
+	targetType, targetID, err := normalizeTarget(cmd.TargetType, cmd.TargetID)
+	if err != nil {
+		return err
+	}
+	cmd.TargetType = targetType
+	cmd.TargetID = targetID
+
+	if cmd.Timeout < 0 {
+		return fmt.Errorf("timeout cannot be negative")
+	}
+	if cmd.Timeout > maxExecuteCommandTimeoutSeconds {
+		return fmt.Errorf("timeout cannot exceed %d seconds", maxExecuteCommandTimeoutSeconds)
+	}
+
+	return nil
+}
+
+func validateReadFilePayload(req *ReadFilePayload) error {
+	if req == nil {
+		return fmt.Errorf("read file payload is required")
+	}
+
+	req.Path = strings.TrimSpace(req.Path)
+	if req.Path == "" {
+		return fmt.Errorf("path is required")
+	}
+	if len(req.Path) > maxReadFilePathLength {
+		return fmt.Errorf("path exceeds %d characters", maxReadFilePathLength)
+	}
+	if strings.ContainsAny(req.Path, "\x00\r\n") {
+		return fmt.Errorf("path contains invalid control characters")
+	}
+
+	targetType, targetID, err := normalizeTarget(req.TargetType, req.TargetID)
+	if err != nil {
+		return err
+	}
+	req.TargetType = targetType
+	req.TargetID = targetID
+
+	if req.MaxBytes < 0 {
+		return fmt.Errorf("max bytes cannot be negative")
+	}
+	if req.MaxBytes == 0 {
+		req.MaxBytes = defaultReadFileMaxBytes
+	}
+	if req.MaxBytes > maxReadFileMaxBytes {
+		return fmt.Errorf("max bytes cannot exceed %d", maxReadFileMaxBytes)
+	}
+
+	return nil
+}
+
+func isAllowedWebSocketOrigin(r *http.Request) bool {
+	origin := strings.TrimSpace(r.Header.Get("Origin"))
+	if origin == "" {
+		// Non-browser clients (expected for agents) usually omit Origin.
+		return true
+	}
+
+	parsed, err := url.Parse(origin)
+	if err != nil || parsed.Host == "" {
+		return false
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return false
+	}
+
+	return normalizeOriginHost(parsed.Host) == normalizeOriginHost(r.Host)
+}
+
+func normalizeOriginHost(host string) string {
+	normalized := strings.TrimSpace(strings.ToLower(host))
+	if normalized == "" {
+		return normalized
+	}
+
+	parsedHost, parsedPort, err := net.SplitHostPort(normalized)
+	if err != nil {
+		return normalized
+	}
+	if parsedPort == "80" || parsedPort == "443" {
+		return parsedHost
+	}
+	return net.JoinHostPort(parsedHost, parsedPort)
 }
 
 // HandleWebSocket handles incoming WebSocket connections from agents
@@ -130,6 +289,33 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	if err := msg.DecodePayload(&reg); err != nil {
 		log.Error().Err(err).Str("remote_addr", remoteAddr).Msg("Failed to parse registration payload")
 		closeConn("Failed to close connection after registration payload parse error")
+		return
+	}
+	reg.AgentID = strings.TrimSpace(reg.AgentID)
+	if reg.AgentID == "" {
+		log.Warn().Msg("Agent registration rejected: missing agent_id")
+		if err := s.sendMessage(conn, Message{
+			Type:      MsgTypeRegistered,
+			Timestamp: time.Now(),
+			Payload:   RegisteredPayload{Success: false, Message: "Invalid agent_id"},
+		}); err != nil {
+			log.Warn().Err(err).Msg("Failed to send rejection to agent with missing agent_id")
+		}
+		conn.Close()
+		return
+	}
+	if len(reg.AgentID) > maxAgentIDLength {
+		log.Warn().
+			Int("agent_id_length", len(reg.AgentID)).
+			Msg("Agent registration rejected: agent_id exceeds maximum length")
+		if err := s.sendMessage(conn, Message{
+			Type:      MsgTypeRegistered,
+			Timestamp: time.Now(),
+			Payload:   RegisteredPayload{Success: false, Message: "Invalid agent_id"},
+		}); err != nil {
+			log.Warn().Err(err).Msg("Failed to send rejection to agent with oversized agent_id")
+		}
+		conn.Close()
 		return
 	}
 
@@ -295,9 +481,21 @@ func (s *Server) readLoop(ac *agentConn) {
 				log.Error().Err(err).Str("agent_id", ac.agent.AgentID).Msg("Failed to parse command result")
 				continue
 			}
+			result.RequestID = strings.TrimSpace(result.RequestID)
+			if result.RequestID == "" {
+				log.Warn().Str("agent_id", ac.agent.AgentID).Msg("Dropping command result with empty request_id")
+				continue
+			}
+			if len(result.RequestID) > maxRequestIDLength {
+				log.Warn().
+					Str("agent_id", ac.agent.AgentID).
+					Int("request_id_length", len(result.RequestID)).
+					Msg("Dropping command result with oversized request_id")
+				continue
+			}
 
 			s.mu.RLock()
-			ch, ok := s.pendingRequests[result.RequestID]
+			ch, ok := s.pendingReqs[pendingRequestKey(ac.agent.AgentID, result.RequestID)]
 			s.mu.RUnlock()
 
 			if ok {
@@ -305,14 +503,14 @@ func (s *Server) readLoop(ac *agentConn) {
 				case ch <- result:
 				default:
 					log.Warn().
-						Str("request_id", result.RequestID).
 						Str("agent_id", ac.agent.AgentID).
+						Str("request_id", result.RequestID).
 						Msg("Result channel full, dropping")
 				}
 			} else {
 				log.Warn().
-					Str("request_id", result.RequestID).
 					Str("agent_id", ac.agent.AgentID).
+					Str("request_id", result.RequestID).
 					Msg("No pending request for result")
 			}
 		}
@@ -379,8 +577,20 @@ func (s *Server) sendMessage(conn *websocket.Conn, msg Message) error {
 	return nil
 }
 
-// sendRequestAndWait is a generic helper for sending a request to an agent and waiting for the result
-func (s *Server) sendRequestAndWait(ctx context.Context, agentID string, msgType MessageType, requestID string, payload interface{}, timeout time.Duration) (*CommandResultPayload, error) {
+// ExecuteCommand sends a command to an agent and waits for the result
+func (s *Server) ExecuteCommand(ctx context.Context, agentID string, cmd ExecuteCommandPayload) (*CommandResultPayload, error) {
+	agentID = strings.TrimSpace(agentID)
+	if agentID == "" {
+		return nil, fmt.Errorf("agent id is required")
+	}
+	cmd.RequestID = strings.TrimSpace(cmd.RequestID)
+	if err := validateRequestID(cmd.RequestID); err != nil {
+		return nil, err
+	}
+	if err := validateExecuteCommandPayload(&cmd); err != nil {
+		return nil, err
+	}
+
 	s.mu.RLock()
 	ac, ok := s.agents[agentID]
 	s.mu.RUnlock()
@@ -391,13 +601,83 @@ func (s *Server) sendRequestAndWait(ctx context.Context, agentID string, msgType
 
 	// Create response channel
 	respCh := make(chan CommandResultPayload, 1)
+	reqKey := pendingRequestKey(agentID, cmd.RequestID)
 	s.mu.Lock()
-	s.pendingRequests[requestID] = respCh
+	s.pendingReqs[reqKey] = respCh
 	s.mu.Unlock()
 
 	defer func() {
 		s.mu.Lock()
-		delete(s.pendingRequests, requestID)
+		delete(s.pendingReqs, reqKey)
+		s.mu.Unlock()
+	}()
+
+	// Send command
+	msg := Message{
+		Type:      MsgTypeExecuteCmd,
+		ID:        cmd.RequestID,
+		Timestamp: time.Now(),
+		Payload:   cmd,
+	}
+
+	ac.writeMu.Lock()
+	err := s.sendMessage(ac.conn, msg)
+	ac.writeMu.Unlock()
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to send command: %w", err)
+	}
+
+	// Wait for result
+	timeout := time.Duration(cmd.Timeout) * time.Second
+	if timeout <= 0 {
+		timeout = 60 * time.Second
+	}
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+
+	select {
+	case result := <-respCh:
+		return &result, nil
+	case <-timer.C:
+		return nil, fmt.Errorf("command timed out after %v", timeout)
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+// ReadFile reads a file from an agent
+func (s *Server) ReadFile(ctx context.Context, agentID string, req ReadFilePayload) (*CommandResultPayload, error) {
+	agentID = strings.TrimSpace(agentID)
+	if agentID == "" {
+		return nil, fmt.Errorf("agent id is required")
+	}
+	req.RequestID = strings.TrimSpace(req.RequestID)
+	if err := validateRequestID(req.RequestID); err != nil {
+		return nil, err
+	}
+	if err := validateReadFilePayload(&req); err != nil {
+		return nil, err
+	}
+
+	s.mu.RLock()
+	ac, ok := s.agents[agentID]
+	s.mu.RUnlock()
+
+	if !ok {
+		return nil, fmt.Errorf("agent %s not connected", agentID)
+	}
+
+	// Create response channel
+	respCh := make(chan CommandResultPayload, 1)
+	reqKey := pendingRequestKey(agentID, req.RequestID)
+	s.mu.Lock()
+	s.pendingReqs[reqKey] = respCh
+	s.mu.Unlock()
+
+	defer func() {
+		s.mu.Lock()
+		delete(s.pendingReqs, reqKey)
 		s.mu.Unlock()
 	}()
 
@@ -416,11 +696,18 @@ func (s *Server) sendRequestAndWait(ctx context.Context, agentID string, msgType
 	}
 
 	// Wait for result
+	timeout := readFileTimeout
+	if timeout <= 0 {
+		timeout = 30 * time.Second
+	}
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+
 	select {
 	case result := <-respCh:
 		return &result, nil
-	case <-time.After(timeout):
-		return nil, fmt.Errorf("%s timed out after %v", msgType, timeout)
+	case <-timer.C:
+		return nil, fmt.Errorf("read_file timed out after %v", timeout)
 	case <-ctx.Done():
 		return nil, fmt.Errorf("execute command %q on agent %q canceled: %w", cmd.RequestID, agentID, ctx.Err())
 	}

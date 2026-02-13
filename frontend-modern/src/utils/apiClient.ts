@@ -8,30 +8,31 @@ const AUTH_STORAGE_KEY = STORAGE_KEYS.AUTH;
 const ORG_STORAGE_KEY = STORAGE_KEYS.ORG_ID;
 const ORG_HEADER_NAME = 'X-Pulse-Org-ID';
 const ORG_COOKIE_NAME = 'pulse_org_id';
-const DEFAULT_RATE_LIMIT_RETRY_MS = 2000;
-const MAX_RATE_LIMIT_RETRY_MS = 60000;
+const CONTROL_CHAR_PATTERN = /[\u0000-\u001F\u007F]/;
+const MAX_ORG_ID_LENGTH = 128;
+const MAX_API_TOKEN_LENGTH = 8 * 1024;
+const MAX_AUTH_STORAGE_CHARS = 16 * 1024;
 
-const resolveRetryAfterMs = (retryAfter: string | null): number => {
-  if (!retryAfter) {
-    return DEFAULT_RATE_LIMIT_RETRY_MS;
+const sanitizeBoundedText = (value: unknown, maxLength: number): string | null => {
+  if (typeof value !== 'string') {
+    return null;
   }
 
-  const seconds = Number(retryAfter);
-  if (Number.isFinite(seconds) && seconds >= 0) {
-    return Math.min(seconds * 1000, MAX_RATE_LIMIT_RETRY_MS);
+  const normalized = value.trim();
+  if (!normalized || normalized.length > maxLength || CONTROL_CHAR_PATTERN.test(normalized)) {
+    return null;
   }
 
-  const retryAtMs = Date.parse(retryAfter);
-  if (!Number.isNaN(retryAtMs)) {
-    const deltaMs = retryAtMs - Date.now();
-    if (deltaMs > 0) {
-      return Math.min(deltaMs, MAX_RATE_LIMIT_RETRY_MS);
-    }
-  }
-
-  return DEFAULT_RATE_LIMIT_RETRY_MS;
+  return normalized;
 };
 
+const sanitizeOrgID = (value: unknown): string | null => {
+  return sanitizeBoundedText(value, MAX_ORG_ID_LENGTH);
+};
+
+const sanitizeApiToken = (value: unknown): string | null => {
+  return sanitizeBoundedText(value, MAX_API_TOKEN_LENGTH);
+};
 
 const getSessionStorage = (): Storage | undefined => {
   if (typeof window === 'undefined') {
@@ -92,7 +93,15 @@ class ApiClient {
   }
 
   private persistToken(token: string) {
+    const sanitizedToken = sanitizeApiToken(token);
+    if (!sanitizedToken) {
+      this.apiToken = null;
+      this.removeStoredToken();
+      return;
+    }
+
     const storage = getSessionStorage();
+    this.apiToken = sanitizedToken;
     if (!storage) return;
 
     try {
@@ -100,7 +109,7 @@ class ApiClient {
         STORAGE_KEYS.AUTH,
         JSON.stringify({
           type: 'token',
-          value: token,
+          value: sanitizedToken,
         }),
       );
     } catch {
@@ -127,7 +136,11 @@ class ApiClient {
       const [name, ...rest] = cookie.trim().split('=');
       if (name !== 'pulse_csrf') continue;
       const value = rest.join('=');
-      this.csrfToken = decodeURIComponent(value || '');
+      try {
+        this.csrfToken = decodeURIComponent(value || '');
+      } catch {
+        this.csrfToken = null;
+      }
       return this.csrfToken;
     }
     this.csrfToken = null;
@@ -141,14 +154,18 @@ class ApiClient {
       if (typeof window !== 'undefined' && window.location?.search) {
         const params = new URLSearchParams(window.location.search);
         const urlToken = params.get('token');
-        if (urlToken) {
-          this.apiToken = urlToken;
-          this.persistToken(urlToken);
-          // Clean the token from URL for security (don't expose in browser history)
+        if (urlToken !== null) {
+          const sanitizedToken = sanitizeApiToken(urlToken);
+          // Clean the token from URL for security (don't expose in browser history),
+          // regardless of whether the provided token is valid.
           params.delete('token');
           const newQuery = params.toString();
           const newUrl = `${window.location.pathname}${newQuery ? `?${newQuery}` : ''}`;
           window.history.replaceState({}, document.title, newUrl);
+          if (sanitizedToken) {
+            this.apiToken = sanitizedToken;
+            this.persistToken(sanitizedToken);
+          }
           return;
         }
       }
@@ -158,18 +175,29 @@ class ApiClient {
 
       const stored = storage.getItem(AUTH_STORAGE_KEY);
       if (stored) {
-        const { type, value } = JSON.parse(stored);
-        if (type === 'token') {
-          this.apiToken = value;
+        if (stored.length > MAX_AUTH_STORAGE_CHARS) {
+          storage.removeItem(AUTH_STORAGE_KEY);
+          return;
+        }
+
+        const parsed = JSON.parse(stored);
+        const token = parsed?.type === 'token' ? sanitizeApiToken(parsed?.value) : null;
+        if (token) {
+          this.apiToken = token;
+        } else {
+          storage.removeItem(AUTH_STORAGE_KEY);
         }
         return;
       }
 
       // Legacy storage key used before apiClient refactor
       const legacyToken = storage.getItem(STORAGE_KEYS.LEGACY_TOKEN);
-      if (legacyToken) {
-        this.apiToken = legacyToken;
-        this.persistToken(legacyToken);
+      const sanitizedLegacyToken = sanitizeApiToken(legacyToken);
+      if (sanitizedLegacyToken) {
+        this.apiToken = sanitizedLegacyToken;
+        this.persistToken(sanitizedLegacyToken);
+        storage.removeItem(STORAGE_KEYS.LEGACY_TOKEN);
+      } else if (legacyToken) {
         storage.removeItem(STORAGE_KEYS.LEGACY_TOKEN);
       }
     } catch (_err) {
@@ -183,10 +211,12 @@ class ApiClient {
 
     try {
       const stored = storage.getItem(ORG_STORAGE_KEY);
-      if (stored && stored.trim() !== '') {
-        this.orgID = stored.trim();
-      } else {
-        this.orgID = null;
+      const normalizedOrgID = sanitizeOrgID(stored);
+      this.orgID = normalizedOrgID;
+      if (stored && !normalizedOrgID) {
+        storage.removeItem(ORG_STORAGE_KEY);
+      } else if (normalizedOrgID && stored !== normalizedOrgID) {
+        storage.setItem(ORG_STORAGE_KEY, normalizedOrgID);
       }
       this.syncOrgCookie(this.orgID);
     } catch {
@@ -199,23 +229,25 @@ class ApiClient {
       return;
     }
 
-    if (!orgID) {
+    const normalizedOrgID = sanitizeOrgID(orgID);
+    if (!normalizedOrgID) {
       document.cookie = `${ORG_COOKIE_NAME}=; Path=/; Max-Age=0; SameSite=Lax`;
       return;
     }
 
     const secureSuffix =
       typeof window !== 'undefined' && window.location?.protocol === 'https:' ? '; Secure' : '';
-    document.cookie = `${ORG_COOKIE_NAME}=${encodeURIComponent(orgID)}; Path=/; SameSite=Lax${secureSuffix}`;
+    document.cookie = `${ORG_COOKIE_NAME}=${encodeURIComponent(normalizedOrgID)}; Path=/; SameSite=Lax${secureSuffix}`;
   }
 
   private persistOrgContext(orgID: string | null) {
+    const normalizedOrgID = sanitizeOrgID(orgID);
     const storage = getSessionStorage();
 
     if (storage) {
       try {
-        if (orgID) {
-          storage.setItem(ORG_STORAGE_KEY, orgID);
+        if (normalizedOrgID) {
+          storage.setItem(ORG_STORAGE_KEY, normalizedOrgID);
         } else {
           storage.removeItem(ORG_STORAGE_KEY);
         }
@@ -224,19 +256,22 @@ class ApiClient {
       }
     }
 
-    this.syncOrgCookie(orgID);
+    this.syncOrgCookie(normalizedOrgID);
   }
 
   setOrgID(orgID: string | null) {
-    const normalized = orgID?.trim() || null;
+    const normalized = sanitizeOrgID(orgID);
     this.orgID = normalized;
     this.persistOrgContext(normalized);
   }
 
   getOrgID(): string | null {
-    if (this.orgID && this.orgID.trim() !== '') {
-      return this.orgID;
+    const inMemoryOrgID = sanitizeOrgID(this.orgID);
+    if (inMemoryOrgID) {
+      this.orgID = inMemoryOrgID;
+      return inMemoryOrgID;
     }
+    this.orgID = null;
 
     const storage = getSessionStorage();
     if (!storage) {
@@ -244,9 +279,16 @@ class ApiClient {
     }
     try {
       const stored = storage.getItem(ORG_STORAGE_KEY);
-      if (stored && stored.trim() !== '') {
-        this.orgID = stored.trim();
+      const normalizedOrgID = sanitizeOrgID(stored);
+      if (normalizedOrgID) {
+        this.orgID = normalizedOrgID;
+        if (stored !== normalizedOrgID) {
+          storage.setItem(ORG_STORAGE_KEY, normalizedOrgID);
+        }
         return this.orgID;
+      }
+      if (stored) {
+        storage.removeItem(ORG_STORAGE_KEY);
       }
     } catch {
       // Ignore storage errors
@@ -256,9 +298,14 @@ class ApiClient {
 
   // Set API token
   setApiToken(token: string) {
-    this.apiToken = token;
+    const sanitizedToken = sanitizeApiToken(token);
+    if (!sanitizedToken) {
+      this.clearApiToken();
+      return;
+    }
 
-    this.persistToken(token);
+    this.apiToken = sanitizedToken;
+    this.persistToken(sanitizedToken);
   }
 
   getApiToken(): string | null {
@@ -274,19 +321,29 @@ class ApiClient {
     try {
       const stored = storage.getItem(AUTH_STORAGE_KEY);
       if (stored) {
-        const parsed = JSON.parse(stored);
-        if (parsed?.type === 'token' && typeof parsed.value === 'string') {
-          this.apiToken = parsed.value;
-          return parsed.value;
+        if (stored.length > MAX_AUTH_STORAGE_CHARS) {
+          storage.removeItem(AUTH_STORAGE_KEY);
+          return null;
         }
+        const parsed = JSON.parse(stored);
+        const token = parsed?.type === 'token' ? sanitizeApiToken(parsed?.value) : null;
+        if (token) {
+          this.apiToken = token;
+          return token;
+        }
+        storage.removeItem(AUTH_STORAGE_KEY);
       }
 
       const legacyToken = storage.getItem(STORAGE_KEYS.LEGACY_TOKEN);
-      if (legacyToken) {
-        this.apiToken = legacyToken;
-        this.persistToken(legacyToken);
+      const sanitizedLegacyToken = sanitizeApiToken(legacyToken);
+      if (sanitizedLegacyToken) {
+        this.apiToken = sanitizedLegacyToken;
+        this.persistToken(sanitizedLegacyToken);
         storage.removeItem(STORAGE_KEYS.LEGACY_TOKEN);
-        return legacyToken;
+        return sanitizedLegacyToken;
+      }
+      if (legacyToken) {
+        storage.removeItem(STORAGE_KEYS.LEGACY_TOKEN);
       }
     } catch {
       // Ignore parsing/storage errors

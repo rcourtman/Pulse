@@ -1,6 +1,8 @@
 package investigation
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -30,6 +32,13 @@ func TestStore_CreateGetAndLoad(t *testing.T) {
 
 	if err := store.ForceSave(); err != nil {
 		t.Fatalf("unexpected save error: %v", err)
+	}
+	info, err := os.Stat(filepath.Join(dir, "investigations.json"))
+	if err != nil {
+		t.Fatalf("stat failed: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0600 {
+		t.Fatalf("expected mode 0600, got %o", got)
 	}
 
 	loaded := NewStore(dir)

@@ -4,6 +4,8 @@ import (
 	"sync"
 )
 
+const minQueueCapacity = 1
+
 // Queue is a thread-safe bounded FIFO queue. When full, the oldest item is dropped.
 type Queue[T any] struct {
 	mu       sync.Mutex
@@ -34,7 +36,8 @@ func (q *Queue[T]) Push(item T) {
 	}
 
 	if len(q.data) >= q.capacity {
-		// Drop oldest (shift left)
+		var zero T
+		q.data[0] = zero
 		q.data = q.data[1:]
 	}
 	q.data = append(q.data, item)
@@ -52,6 +55,8 @@ func (q *Queue[T]) Pop() (T, bool) {
 	}
 
 	item := q.data[0]
+	var zero T
+	q.data[0] = zero
 	q.data = q.data[1:]
 	return item, true
 }
@@ -80,4 +85,11 @@ func (q *Queue[T]) IsEmpty() bool {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	return len(q.data) == 0
+}
+
+func sanitizeCapacity(capacity int) int {
+	if capacity < minQueueCapacity {
+		return minQueueCapacity
+	}
+	return capacity
 }

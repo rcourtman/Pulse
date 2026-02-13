@@ -1,17 +1,26 @@
 package system
 
 import (
+	"errors"
+	"io"
 	"os"
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 )
 
+const maxProcReadBytes int64 = 64 * 1024
+
 var (
 	envGetFn   = os.Getenv
 	statFn     = os.Stat
-	readFileFn = os.ReadFile
+	readFileFn = boundedReadFile
 	hostnameFn = os.Hostname
+)
+
+var (
+	errFileTooLarge   = errors.New("file exceeds size limit")
+	errInvalidReadMax = errors.New("max read limit must be positive")
 )
 
 var containerMarkers = []string{
@@ -146,4 +155,30 @@ func isTruthy(value string) bool {
 	default:
 		return false
 	}
+}
+
+func boundedReadFile(path string) ([]byte, error) {
+	return readFileWithLimit(path, maxProcReadBytes)
+}
+
+func readFileWithLimit(path string, maxBytes int64) ([]byte, error) {
+	if maxBytes <= 0 {
+		return nil, errInvalidReadMax
+	}
+
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	data, err := io.ReadAll(io.LimitReader(file, maxBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > maxBytes {
+		return nil, errFileTooLarge
+	}
+
+	return data, nil
 }

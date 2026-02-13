@@ -49,12 +49,13 @@ func TestExtractHostAgentBinaries_ExtractsAndSymlinks(t *testing.T) {
 	}
 
 	// Relevant binary under bin/
-	writeFile("bin/pulse-host-agent-linux-amd64", 0o644, content)
+	writeFile("bin/pulse-host-agent-windows-amd64", 0o644, content)
 	// Irrelevant entries should be ignored
 	writeFile("bin/not-a-host-agent", 0o644, []byte("ignore"))
+	writeFile("bin/pulse-host-agent-malicious", 0o644, []byte("ignore"))
 	writeFile("docs/readme.txt", 0o644, []byte("ignore"))
 	// Symlink entry should be created as-is
-	writeSymlink("bin/pulse-host-agent-linux-amd64-link", "pulse-host-agent-linux-amd64")
+	writeSymlink("bin/pulse-host-agent-windows-amd64.exe", "pulse-host-agent-windows-amd64")
 
 	if err := tw.Close(); err != nil {
 		t.Fatalf("tar close: %v", err)
@@ -70,7 +71,7 @@ func TestExtractHostAgentBinaries_ExtractsAndSymlinks(t *testing.T) {
 		t.Fatalf("extractHostAgentBinaries: %v", err)
 	}
 
-	extracted := filepath.Join(targetDir, "pulse-host-agent-linux-amd64")
+	extracted := filepath.Join(targetDir, "pulse-host-agent-windows-amd64")
 	info, err := os.Stat(extracted)
 	if err != nil {
 		t.Fatalf("stat extracted: %v", err)
@@ -87,12 +88,16 @@ func TestExtractHostAgentBinaries_ExtractsAndSymlinks(t *testing.T) {
 		t.Fatalf("content mismatch")
 	}
 
-	linkPath := filepath.Join(targetDir, "pulse-host-agent-linux-amd64-link")
+	linkPath := filepath.Join(targetDir, "pulse-host-agent-windows-amd64.exe")
 	target, err := os.Readlink(linkPath)
 	if err != nil {
 		t.Fatalf("readlink: %v", err)
 	}
-	if target != "pulse-host-agent-linux-amd64" {
+	if target != "pulse-host-agent-windows-amd64" {
 		t.Fatalf("link target = %q", target)
+	}
+
+	if _, err := os.Stat(filepath.Join(targetDir, "pulse-host-agent-malicious")); !os.IsNotExist(err) {
+		t.Fatalf("unexpected extraction of disallowed host agent filename")
 	}
 }

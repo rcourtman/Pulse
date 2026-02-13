@@ -7,6 +7,7 @@ import (
 	"os"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -324,6 +325,31 @@ func TestValidateLicenseMalformed(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestValidateLicenseRejectsOversizedInput(t *testing.T) {
+	t.Run("license key too large", func(t *testing.T) {
+		oversized := strings.Repeat("a", maxLicenseKeyLength+1)
+		_, err := ValidateLicense(oversized)
+		if err == nil {
+			t.Fatal("expected error for oversized license key")
+		}
+		if !strings.Contains(err.Error(), "size limit") {
+			t.Fatalf("expected size limit error, got %v", err)
+		}
+	})
+
+	t.Run("jwt segment too large", func(t *testing.T) {
+		oversizedPayload := strings.Repeat("a", maxLicenseSegmentLength+1)
+		key := "a." + oversizedPayload + ".b"
+		_, err := ValidateLicense(key)
+		if err == nil {
+			t.Fatal("expected error for oversized jwt segment")
+		}
+		if !strings.Contains(err.Error(), "size limit") {
+			t.Fatalf("expected size limit error, got %v", err)
+		}
+	})
 }
 
 func TestValidateLicense_RequiredFields(t *testing.T) {

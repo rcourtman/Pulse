@@ -163,6 +163,26 @@ func TestSendReportToTarget(t *testing.T) {
 		}
 	})
 
+	t.Run("status error body too large", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = w.Write([]byte(strings.Repeat("x", maxPulseResponseBodyBytes+1)))
+		}))
+		defer server.Close()
+
+		agent := &Agent{
+			logger: zerolog.Nop(),
+			httpClients: map[bool]*http.Client{
+				false: server.Client(),
+			},
+		}
+
+		err := agent.sendReportToTarget(context.Background(), TargetConfig{URL: server.URL, Token: "token"}, []byte(`{}`), 0)
+		if err == nil || !strings.Contains(err.Error(), "read error response") {
+			t.Fatalf("expected oversized error response failure, got %v", err)
+		}
+	})
+
 	t.Run("status error with empty body", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
@@ -201,6 +221,26 @@ func TestSendReportToTarget(t *testing.T) {
 
 		if err := agent.sendReportToTarget(context.Background(), TargetConfig{URL: "http://example", Token: "token"}, []byte(`{}`), 0); err == nil {
 			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("success body too large", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(strings.Repeat("x", maxPulseResponseBodyBytes+1)))
+		}))
+		defer server.Close()
+
+		agent := &Agent{
+			logger: zerolog.Nop(),
+			httpClients: map[bool]*http.Client{
+				false: server.Client(),
+			},
+		}
+
+		err := agent.sendReportToTarget(context.Background(), TargetConfig{URL: server.URL, Token: "token"}, []byte(`{}`), 0)
+		if err == nil || !strings.Contains(err.Error(), "read response") {
+			t.Fatalf("expected oversized response failure, got %v", err)
 		}
 	})
 
@@ -371,6 +411,26 @@ func TestSendCommandAck(t *testing.T) {
 
 		if err := agent.sendCommandAck(context.Background(), TargetConfig{URL: server.URL, Token: "token"}, "cmd", "status", "msg"); err == nil {
 			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("status error body too large", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte(strings.Repeat("x", maxPulseResponseBodyBytes+1)))
+		}))
+		defer server.Close()
+
+		agent := &Agent{
+			hostID: "host1",
+			httpClients: map[bool]*http.Client{
+				false: server.Client(),
+			},
+		}
+
+		err := agent.sendCommandAck(context.Background(), TargetConfig{URL: server.URL, Token: "token"}, "cmd", "status", "msg")
+		if err == nil || !strings.Contains(err.Error(), "read acknowledgement error response") {
+			t.Fatalf("expected oversized acknowledgement response failure, got %v", err)
 		}
 	})
 

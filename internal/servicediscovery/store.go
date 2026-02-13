@@ -3,6 +3,7 @@ package servicediscovery
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -40,6 +41,11 @@ var newCryptoManagerAt = crypto.NewCryptoManagerAt
 
 // For testing - allows injecting a mock marshaler.
 var marshalDiscovery = json.Marshal
+
+// File read limits for persisted discovery data.
+// These are variables (not constants) so tests can temporarily override them.
+var maxDiscoveryFileReadBytes int64 = 16 * 1024 * 1024  // 16 MiB
+var maxFingerprintFileReadBytes int64 = 1 * 1024 * 1024 // 1 MiB
 
 // NewStore creates a new discovery store with automatic encryption.
 func NewStore(dataDir string) (*Store, error) {
@@ -82,6 +88,50 @@ func (s *Store) getFilePath(id string) string {
 	safeID := strings.ReplaceAll(id, ":", "_")
 	safeID = strings.ReplaceAll(safeID, "/", "_")
 	return filepath.Join(s.dataDir, safeID+".enc")
+}
+
+// readRegularFileWithLimit reads a file with a strict size cap and rejects non-regular files.
+func readRegularFileWithLimit(path string, maxBytes int64) ([]byte, error) {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("not a regular file")
+	}
+	if maxBytes > 0 && info.Size() > maxBytes {
+		return nil, fmt.Errorf("file exceeds max size (%d bytes)", maxBytes)
+	}
+
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	openedInfo, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if !openedInfo.Mode().IsRegular() {
+		return nil, fmt.Errorf("not a regular file")
+	}
+	if maxBytes > 0 && openedInfo.Size() > maxBytes {
+		return nil, fmt.Errorf("file exceeds max size (%d bytes)", maxBytes)
+	}
+
+	if maxBytes <= 0 {
+		return io.ReadAll(f)
+	}
+
+	data, err := io.ReadAll(io.LimitReader(f, maxBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > maxBytes {
+		return nil, fmt.Errorf("file exceeds max size (%d bytes)", maxBytes)
+	}
+	return data, nil
 }
 
 // Save persists a discovery to encrypted storage.
@@ -154,7 +204,7 @@ func (s *Store) Get(id string) (*ResourceDiscovery, error) {
 	defer s.mu.Unlock()
 
 	filePath := s.getFilePath(id)
-	data, err := os.ReadFile(filePath)
+	data, err := readRegularFileWithLimit(filePath, maxDiscoveryFileReadBytes)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil // Not found is not an error
@@ -233,7 +283,7 @@ func (s *Store) List() ([]*ResourceDiscovery, error) {
 			continue
 		}
 
-		data, err := os.ReadFile(filepath.Join(s.dataDir, entry.Name()))
+		data, err := readRegularFileWithLimit(filepath.Join(s.dataDir, entry.Name()), maxDiscoveryFileReadBytes)
 		if err != nil {
 			log.Warn().Err(err).Str("file", entry.Name()).Msg("failed to read discovery file")
 			continue
@@ -401,7 +451,7 @@ func (s *Store) loadFingerprints() {
 			continue
 		}
 
-		data, err := os.ReadFile(filepath.Join(s.fingerprintDir, entry.Name()))
+		data, err := readRegularFileWithLimit(filepath.Join(s.fingerprintDir, entry.Name()), maxFingerprintFileReadBytes)
 		if err != nil {
 			log.Warn().Err(err).Str("file", entry.Name()).Msg("failed to read fingerprint file")
 			continue

@@ -23,6 +23,13 @@ func TestFilePersistence_SaveLoad(t *testing.T) {
 	if err := p.SaveFindings(findings); err != nil {
 		t.Fatalf("unexpected save error: %v", err)
 	}
+	info, err := os.Stat(filepath.Join(dir, "unified_findings.json"))
+	if err != nil {
+		t.Fatalf("stat failed: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0600 {
+		t.Fatalf("expected mode 0600, got %o", got)
+	}
 
 	loaded, err := p.LoadFindings()
 	if err != nil {
@@ -69,6 +76,13 @@ func TestVersionedPersistence_SaveLoad(t *testing.T) {
 
 	if err := p.SaveFindings(findings); err != nil {
 		t.Fatalf("unexpected save error: %v", err)
+	}
+	info, err := os.Stat(filepath.Join(dir, "unified_findings.json"))
+	if err != nil {
+		t.Fatalf("stat failed: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0600 {
+		t.Fatalf("expected mode 0600, got %o", got)
 	}
 
 	loaded, err := p.LoadFindings()

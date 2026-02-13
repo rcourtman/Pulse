@@ -114,10 +114,21 @@ func (s *Store) saveToDisk(sessions []*InvestigationSession) error {
 		return fmt.Errorf("marshal investigation sessions: %w", err)
 	}
 
-	filePath := filepath.Join(s.dataDir, "investigations.json")
-	if err := os.WriteFile(filePath, data, 0644); err != nil {
-		return fmt.Errorf("write investigation store file %q: %w", filePath, err)
+	if err := os.MkdirAll(s.dataDir, 0700); err != nil {
+		return err
 	}
+
+	filePath := filepath.Join(s.dataDir, "investigations.json")
+	tempPath := filePath + ".tmp"
+
+	if err := os.WriteFile(tempPath, data, 0600); err != nil {
+		return err
+	}
+	if err := os.Rename(tempPath, filePath); err != nil {
+		_ = os.Remove(tempPath)
+		return err
+	}
+
 	return nil
 }
 

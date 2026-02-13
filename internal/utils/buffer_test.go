@@ -15,6 +15,28 @@ func TestNewQueue(t *testing.T) {
 	}
 }
 
+func TestNewSanitizesNonPositiveCapacity(t *testing.T) {
+	tests := []int{0, -5}
+
+	for _, capacity := range tests {
+		q := New[int](capacity)
+		if q.capacity != 1 {
+			t.Fatalf("expected sanitized capacity 1 for input %d, got %d", capacity, q.capacity)
+		}
+
+		q.Push(1)
+		q.Push(2)
+		if q.Len() != 1 {
+			t.Fatalf("expected len 1 for sanitized queue, got %d", q.Len())
+		}
+
+		val, ok := q.Pop()
+		if !ok || val != 2 {
+			t.Fatalf("expected (2, true) after overwrite, got (%d, %v)", val, ok)
+		}
+	}
+}
+
 func TestPushPop(t *testing.T) {
 	q := NewQueue[int](3)
 
@@ -164,8 +186,8 @@ func TestCapacityOne(t *testing.T) {
 	}
 }
 
-func TestZeroCapacityDoesNotPanicAndDropsItems(t *testing.T) {
-	q := New[int](0)
+func TestPushSanitizesInvalidManualQueueCapacity(t *testing.T) {
+	q := &Queue[int]{capacity: 0}
 
 	q.Push(1)
 	q.Push(2)

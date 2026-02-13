@@ -48,6 +48,45 @@ export interface PatrolStreamState {
 const MAX_RECONNECT_ATTEMPTS = 5;
 const INITIAL_RECONNECT_DELAY_MS = 1000;
 const MAX_RECONNECT_DELAY_MS = 15000;
+const MAX_SSE_EVENT_DATA_CHARS = 64 * 1024;
+const MAX_STREAM_TEXT_CHARS = 4096;
+const MAX_RUN_ID_CHARS = 256;
+const MAX_LAST_EVENT_ID_CHARS = 20;
+const MAX_TOKEN_COUNT = 10_000_000;
+
+const clampStreamText = (value: unknown): string | undefined => {
+    if (typeof value !== 'string') {
+        return undefined;
+    }
+    if (value.length <= MAX_STREAM_TEXT_CHARS) {
+        return value;
+    }
+    return value.slice(0, MAX_STREAM_TEXT_CHARS);
+};
+
+const normalizeRunId = (value: unknown): string => {
+    if (typeof value !== 'string') {
+        return '';
+    }
+    if (value.length === 0 || value.length > MAX_RUN_ID_CHARS) {
+        return '';
+    }
+    return value;
+};
+
+const normalizeTokenCount = (value: unknown): number | undefined => {
+    if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+        return undefined;
+    }
+    return Math.min(Math.floor(value), MAX_TOKEN_COUNT);
+};
+
+const normalizeResyncReason = (value: unknown): '' | 'late_joiner' | 'stale_last_event_id' | 'buffer_rotated' => {
+    if (value === 'late_joiner' || value === 'stale_last_event_id' || value === 'buffer_rotated') {
+        return value;
+    }
+    return '';
+};
 
 export function usePatrolStream(opts: UsePatrolStreamOptions): PatrolStreamState {
     const [phase, setPhase] = createSignal('');
@@ -149,9 +188,26 @@ export function usePatrolStream(opts: UsePatrolStreamOptions): PatrolStreamState
             source.onmessage = (msg) => {
                 if (es !== source) return;
                 try {
-                    const event: PatrolStreamEvent = JSON.parse(msg.data);
-                    const hasTokens = typeof event.tokens === 'number';
-                    const runId = event.run_id;
+                    const rawEventData = msg.data;
+                    if (typeof rawEventData !== 'string') {
+                        logger.warn('[PatrolStream] Ignoring non-string SSE event payload');
+                        return;
+                    }
+                    if (rawEventData.length > MAX_SSE_EVENT_DATA_CHARS) {
+                        logger.warn('[PatrolStream] Dropping oversized SSE event payload');
+                        return;
+                    }
+
+                    const parsed = JSON.parse(rawEventData) as unknown;
+                    if (!parsed || typeof parsed !== 'object') {
+                        logger.warn('[PatrolStream] Ignoring malformed SSE event payload');
+                        return;
+                    }
+
+                    const event = parsed as PatrolStreamEvent;
+                    const normalizedTokens = normalizeTokenCount(event.tokens);
+                    const hasTokens = normalizedTokens !== undefined;
+                    const runId = normalizeRunId(event.run_id);
                     const isNewRun = !!runId && runId !== activeRunId();
                     if (isNewRun) {
                         // New run; reset reconnect/resync indicators.
@@ -167,29 +223,39 @@ export function usePatrolStream(opts: UsePatrolStreamOptions): PatrolStreamState
 
                     // Update lastEventId after any new-run reset so it never leaks across runs.
                     const msgLastId = (msg as MessageEvent).lastEventId;
-                    if (typeof msgLastId === 'string' && msgLastId.trim() !== '') {
+                    if (
+                        typeof msgLastId === 'string' &&
+                        msgLastId.trim() !== '' &&
+                        msgLastId.length <= MAX_LAST_EVENT_ID_CHARS
+                    ) {
                         const parsed = Number.parseInt(msgLastId, 10);
-                        if (Number.isFinite(parsed) && parsed > 0) setLastEventId(parsed);
-                    } else if (typeof event.seq === 'number' && Number.isFinite(event.seq) && event.seq > 0) {
-                        setLastEventId(event.seq);
+                        if (Number.isSafeInteger(parsed) && parsed > 0) setLastEventId(parsed);
+                    } else {
+                        const seq = event.seq;
+                        if (typeof seq === 'number' && Number.isSafeInteger(seq) && seq > 0) {
+                            setLastEventId(seq);
+                        }
                     }
 
                     switch (event.type) {
                         case 'snapshot':
                             // Late-joiner state: initialize phase/tokens (UI does not render content here).
-                            if (event.phase) setPhase(event.phase);
-                            if (hasTokens) setTokens(event.tokens!);
-                            if (event.tool_name) setCurrentTool(event.tool_name);
+                            if (event.phase) setPhase(clampStreamText(event.phase) || '');
+                            if (hasTokens) setTokens(normalizedTokens!);
+                            if (event.tool_name) setCurrentTool(clampStreamText(event.tool_name) || '');
                             setErrorMessage('');
-                            setResyncReason(event.resync_reason || '');
-                            if (typeof event.buffer_start_seq === 'number' && Number.isFinite(event.buffer_start_seq)) {
-                                setBufferStartSeq(event.buffer_start_seq);
+                            const nextResyncReason = normalizeResyncReason(event.resync_reason);
+                            setResyncReason(nextResyncReason);
+                            const bufferStartSeq = event.buffer_start_seq;
+                            if (typeof bufferStartSeq === 'number' && Number.isSafeInteger(bufferStartSeq) && bufferStartSeq >= 0) {
+                                setBufferStartSeq(bufferStartSeq);
                             }
-                            if (typeof event.buffer_end_seq === 'number' && Number.isFinite(event.buffer_end_seq)) {
-                                setBufferEndSeq(event.buffer_end_seq);
+                            const bufferEndSeq = event.buffer_end_seq;
+                            if (typeof bufferEndSeq === 'number' && Number.isSafeInteger(bufferEndSeq) && bufferEndSeq >= 0) {
+                                setBufferEndSeq(bufferEndSeq);
                             }
                             setOutputTruncated(event.content_truncated === true);
-                            if (event.resync_reason && event.resync_reason !== 'late_joiner') setResynced(true);
+                            if (nextResyncReason && nextResyncReason !== 'late_joiner') setResynced(true);
                             break;
                         case 'start':
                             setPhase('Starting patrol…');
@@ -198,13 +264,13 @@ export function usePatrolStream(opts: UsePatrolStreamOptions): PatrolStreamState
                             setErrorMessage('');
                             setResynced(false);
                             setResyncReason('');
-                            if (event.run_id) setActiveRunId(event.run_id);
+                            if (runId) setActiveRunId(runId);
                             setBufferStartSeq(0);
                             setBufferEndSeq(0);
                             setOutputTruncated(false);
                             break;
                         case 'phase':
-                            if (event.phase) setPhase(event.phase);
+                            if (event.phase) setPhase(clampStreamText(event.phase) || '');
                             break;
                         case 'content':
                             // Content events carry incremental text; phase stays as-is
@@ -213,7 +279,7 @@ export function usePatrolStream(opts: UsePatrolStreamOptions): PatrolStreamState
                             // Intentionally ignored for now (kept for future UI enhancements).
                             break;
                         case 'tool_start':
-                            if (event.tool_name) setCurrentTool(event.tool_name);
+                            if (event.tool_name) setCurrentTool(clampStreamText(event.tool_name) || '');
                             break;
                         case 'tool_end':
                             setCurrentTool('');
@@ -222,7 +288,7 @@ export function usePatrolStream(opts: UsePatrolStreamOptions): PatrolStreamState
                             setPhase('');
                             setCurrentTool('');
                             setErrorMessage('');
-                            if (hasTokens) setTokens(event.tokens!);
+                            if (hasTokens) setTokens(normalizedTokens!);
                             setActiveRunId('');
                             setLastEventId(0);
                             setResyncReason('');
@@ -235,7 +301,7 @@ export function usePatrolStream(opts: UsePatrolStreamOptions): PatrolStreamState
                         case 'error':
                             setPhase('');
                             setCurrentTool('');
-                            setErrorMessage(event.content || 'Patrol encountered an error');
+                            setErrorMessage(clampStreamText(event.content) || 'Patrol encountered an error');
                             setActiveRunId('');
                             setLastEventId(0);
                             setResyncReason('');
@@ -245,10 +311,13 @@ export function usePatrolStream(opts: UsePatrolStreamOptions): PatrolStreamState
                             close();
                             opts.onError?.();
                             break;
+                        default:
+                            logger.warn('[PatrolStream] Ignoring unknown SSE event type');
+                            return;
                     }
 
                     if (hasTokens && event.type !== 'complete') {
-                        setTokens(event.tokens!);
+                        setTokens(normalizedTokens!);
                     }
                 } catch {
                     logger.warn('[PatrolStream] Failed to parse SSE event');

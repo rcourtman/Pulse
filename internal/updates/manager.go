@@ -70,6 +70,12 @@ var (
 	updateHTTPMaxBackoff = 2 * time.Second
 )
 
+const (
+	maxReleaseFeedBytes    int64 = 1 << 20   // 1 MiB
+	maxChecksumFileBytes   int64 = 1 << 20   // 1 MiB
+	maxUpdateDownloadBytes int64 = 512 << 20 // 512 MiB
+)
+
 // Manager handles update operations
 type Manager struct {
 	config         *config.Config
@@ -802,9 +808,16 @@ func (m *Manager) getLatestReleaseFromFeed(ctx context.Context, channel string) 
 		return nil, fmt.Errorf("feed returned status %d", resp.StatusCode)
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	if resp.ContentLength > maxReleaseFeedBytes {
+		return nil, fmt.Errorf("feed response exceeds %d bytes", maxReleaseFeedBytes)
+	}
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxReleaseFeedBytes+1))
 	if err != nil {
 		return nil, fmt.Errorf("failed to read feed: %w", err)
+	}
+	if int64(len(body)) > maxReleaseFeedBytes {
+		return nil, fmt.Errorf("feed response exceeds %d bytes", maxReleaseFeedBytes)
 	}
 
 	// Parse the Atom feed to extract version tags
@@ -1076,6 +1089,9 @@ func (m *Manager) downloadFile(ctx context.Context, url, dest string) (int64, er
 	if updateHTTPAttempts < 1 {
 		updateHTTPAttempts = 1
 	}
+	if resp.ContentLength > maxUpdateDownloadBytes {
+		return 0, fmt.Errorf("download exceeds maximum size of %d bytes", maxUpdateDownloadBytes)
+	}
 
 	out, err := os.Create(dest)
 	if err != nil {
@@ -1088,9 +1104,14 @@ func (m *Manager) downloadFile(ctx context.Context, url, dest string) (int64, er
 	}()
 
 	// Copy with progress updates
-	written, err := io.Copy(out, resp.Body)
+	written, err := io.Copy(out, io.LimitReader(resp.Body, maxUpdateDownloadBytes+1))
 	if err != nil {
 		return 0, fmt.Errorf("copy download response to %q: %w", dest, err)
+	}
+	if written > maxUpdateDownloadBytes {
+		_ = out.Close()
+		_ = os.Remove(dest)
+		return 0, fmt.Errorf("download exceeds maximum size of %d bytes", maxUpdateDownloadBytes)
 	}
 
 	return 0, fmt.Errorf("download failed after retries")
@@ -1126,11 +1147,27 @@ func (m *Manager) verifyChecksum(ctx context.Context, tarballURL, tarballPath st
 			log.Debug().Err(err).Str("url", checksumURL).Msg("Failed to fetch checksum file")
 			continue
 		}
-		if resp.StatusCode != http.StatusOK {
-			if closeErr := resp.Body.Close(); closeErr != nil {
-				log.Debug().Err(closeErr).Str("url", checksumURL).Msg("Failed to close checksum response body")
+		defer resp.Body.Close()
+
+		if resp.StatusCode == http.StatusOK {
+			if resp.ContentLength > maxChecksumFileBytes {
+				checksumErr = fmt.Errorf("checksum file %s exceeds %d bytes", name, maxChecksumFileBytes)
+				continue
 			}
-			continue
+
+			body, err := io.ReadAll(io.LimitReader(resp.Body, maxChecksumFileBytes+1))
+			if err != nil {
+				checksumErr = fmt.Errorf("failed to read checksum file %s: %w", name, err)
+				continue
+			}
+			if int64(len(body)) > maxChecksumFileBytes {
+				checksumErr = fmt.Errorf("checksum file %s exceeds %d bytes", name, maxChecksumFileBytes)
+				continue
+			}
+
+			checksumContent = string(body)
+			log.Info().Str("file", name).Msg("Found checksum file")
+			break
 		}
 
 		body, readErr := io.ReadAll(resp.Body)
@@ -1148,6 +1185,9 @@ func (m *Manager) verifyChecksum(ctx context.Context, tarballURL, tarballPath st
 	}
 
 	if checksumContent == "" {
+		if checksumErr != nil {
+			return checksumErr
+		}
 		return fmt.Errorf("no checksum file found")
 	}
 

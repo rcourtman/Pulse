@@ -59,6 +59,51 @@ func TestNormalizeTargetsInvalid(t *testing.T) {
 	}
 }
 
+func TestNormalizeTargetsRejectsInsecureOrInvalidURLs(t *testing.T) {
+	tests := []struct {
+		name string
+		url  string
+	}{
+		{name: "non-loopback http", url: "http://pulse.example.com"},
+		{name: "unsupported scheme", url: "ftp://pulse.example.com"},
+		{name: "missing scheme", url: "pulse.example.com"},
+		{name: "query string", url: "https://pulse.example.com?x=1"},
+		{name: "fragment", url: "https://pulse.example.com#frag"},
+		{name: "userinfo", url: "https://user:pass@pulse.example.com"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := normalizeTargets([]TargetConfig{{URL: tt.url, Token: "token"}}); err == nil {
+				t.Fatalf("expected error for URL %q", tt.url)
+			}
+		})
+	}
+}
+
+func TestNormalizeTargetsAllowsLoopbackHTTP(t *testing.T) {
+	targets, err := normalizeTargets([]TargetConfig{
+		{URL: "http://localhost:7655/", Token: "token"},
+		{URL: "http://127.0.0.1:7655", Token: "token2"},
+		{URL: "http://[::1]:7655", Token: "token3"},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(targets) != 3 {
+		t.Fatalf("expected 3 targets, got %d", len(targets))
+	}
+	if targets[0].URL != "http://localhost:7655" {
+		t.Fatalf("unexpected localhost URL: %q", targets[0].URL)
+	}
+	if targets[1].URL != "http://127.0.0.1:7655" {
+		t.Fatalf("unexpected IPv4 loopback URL: %q", targets[1].URL)
+	}
+	if targets[2].URL != "http://[::1]:7655" {
+		t.Fatalf("unexpected IPv6 loopback URL: %q", targets[2].URL)
+	}
+}
+
 func TestNormalizeContainerStates(t *testing.T) {
 	states, err := normalizeContainerStates([]string{"running", "Exited", "running", "stopped"})
 	if err != nil {

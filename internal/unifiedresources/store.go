@@ -50,6 +50,8 @@ type SQLiteResourceStore struct {
 	mu     sync.Mutex
 }
 
+const maxOrgIDLength = 64
+
 // NewSQLiteResourceStore opens or creates the SQLite store.
 func NewSQLiteResourceStore(dataDir, orgID string) (*SQLiteResourceStore, error) {
 	if dataDir == "" {
@@ -356,8 +358,39 @@ func normalizePair(a, b string) (string, string) {
 
 func sanitizeOrgID(orgID string) string {
 	orgID = strings.TrimSpace(orgID)
-	orgID = strings.ReplaceAll(orgID, "..", "")
-	orgID = strings.ReplaceAll(orgID, "/", "_")
-	orgID = strings.ReplaceAll(orgID, "\\", "_")
-	return orgID
+	if orgID == "" {
+		return ""
+	}
+
+	var b strings.Builder
+	b.Grow(len(orgID))
+	lastWasUnderscore := false
+	for _, r := range orgID {
+		if (r >= 'a' && r <= 'z') ||
+			(r >= 'A' && r <= 'Z') ||
+			(r >= '0' && r <= '9') ||
+			r == '-' ||
+			r == '_' {
+			if b.Len() >= maxOrgIDLength {
+				break
+			}
+			b.WriteRune(r)
+			lastWasUnderscore = false
+			continue
+		}
+
+		if !lastWasUnderscore {
+			if b.Len() >= maxOrgIDLength {
+				break
+			}
+			b.WriteByte('_')
+			lastWasUnderscore = true
+		}
+	}
+
+	sanitized := strings.Trim(b.String(), "_-")
+	if len(sanitized) > maxOrgIDLength {
+		sanitized = sanitized[:maxOrgIDLength]
+	}
+	return sanitized
 }

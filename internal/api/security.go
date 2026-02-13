@@ -465,8 +465,34 @@ func SecurityHeadersWithConfig(next http.Handler, allowEmbedding bool, allowedOr
 		// Permissions Policy (formerly Feature Policy)
 		w.Header().Set("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
 
+		// Enable HSTS only for requests known to be HTTPS.
+		// Forwarded proto is trusted only when the direct peer is a trusted proxy.
+		if shouldSetHSTS(r) {
+			w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+		}
+
 		next.ServeHTTP(w, r)
 	})
+}
+
+func shouldSetHSTS(r *http.Request) bool {
+	if r == nil {
+		return false
+	}
+	if r.TLS != nil {
+		return true
+	}
+
+	peerIP := extractRemoteIP(r.RemoteAddr)
+	if !isTrustedProxyIP(peerIP) {
+		return false
+	}
+
+	proto := strings.ToLower(firstForwardedValue(r.Header.Get("X-Forwarded-Proto")))
+	if proto == "" {
+		proto = strings.ToLower(firstForwardedValue(r.Header.Get("X-Forwarded-Scheme")))
+	}
+	return proto == "https"
 }
 
 // LogAuditEvent logs security-relevant events using the audit package.

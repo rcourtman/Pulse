@@ -1,6 +1,8 @@
 package kubernetesagent
 
 import (
+	"bytes"
+	"strings"
 	"testing"
 
 	agentsk8s "github.com/rcourtman/pulse-go-rewrite/pkg/agents/kubernetes"
@@ -176,38 +178,22 @@ func TestHasPodUsage(t *testing.T) {
 	}
 }
 
-func TestSummaryNodeNames_DedupesAndCaps(t *testing.T) {
-	nodes := []agentsk8s.Node{
-		{Name: " node-a "},
-		{Name: ""},
-		{Name: "node-b"},
-		{Name: "node-a"},
-		{Name: "node-c"},
+func TestReadBoundedBody(t *testing.T) {
+	body, err := readBoundedBody(strings.NewReader("hello"), 8)
+	if err != nil {
+		t.Fatalf("readBoundedBody: %v", err)
 	}
-
-	names, total := summaryNodeNames(nodes, 2)
-	if total != 3 {
-		t.Fatalf("total = %d, want 3", total)
-	}
-	if len(names) != 2 {
-		t.Fatalf("len(names) = %d, want 2", len(names))
-	}
-	if names[0] != "node-a" || names[1] != "node-b" {
-		t.Fatalf("unexpected node selection order: %+v", names)
+	if string(body) != "hello" {
+		t.Fatalf("unexpected body %q", string(body))
 	}
 }
 
-func TestSummaryNodeNames_UnboundedWhenMaxNonPositive(t *testing.T) {
-	nodes := []agentsk8s.Node{
-		{Name: "node-a"},
-		{Name: "node-b"},
+func TestReadBoundedBody_RejectsOversizedPayload(t *testing.T) {
+	_, err := readBoundedBody(bytes.NewReader(bytes.Repeat([]byte("a"), 9)), 8)
+	if err == nil {
+		t.Fatal("expected oversized payload error")
 	}
-
-	names, total := summaryNodeNames(nodes, 0)
-	if total != 2 {
-		t.Fatalf("total = %d, want 2", total)
-	}
-	if len(names) != 2 {
-		t.Fatalf("len(names) = %d, want 2", len(names))
+	if !strings.Contains(err.Error(), "exceeds") {
+		t.Fatalf("expected size limit error, got %v", err)
 	}
 }

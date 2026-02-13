@@ -17,6 +17,11 @@ import (
 	"github.com/rs/zerolog"
 )
 
+const (
+	maxConfigResponseBodyBytes     int64 = 1 * 1024 * 1024
+	maxHostLookupResponseBodyBytes int64 = 64 * 1024
+)
+
 // Config holds configuration for the remote config client.
 type Config struct {
 	PulseURL           string
@@ -99,8 +104,8 @@ func (c *Client) Fetch(ctx context.Context) (map[string]interface{}, *bool, erro
 		hostID = resolved
 	}
 
-	endpointURL := fmt.Sprintf("%s/api/agents/host/%s/config", c.cfg.PulseURL, url.PathEscape(hostID))
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpointURL, nil)
+	requestURL := fmt.Sprintf("%s/api/agents/host/%s/config", c.cfg.PulseURL, url.PathEscape(hostID))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("create request: %w", err)
 	}
@@ -124,7 +129,7 @@ func (c *Client) Fetch(ctx context.Context) (map[string]interface{}, *bool, erro
 	}
 
 	var configResp Response
-	if err := json.NewDecoder(resp.Body).Decode(&configResp); err != nil {
+	if err := decodeJSONResponseWithLimit(resp.Body, maxConfigResponseBodyBytes, &configResp); err != nil {
 		return nil, nil, fmt.Errorf("decode response: %w", err)
 	}
 
@@ -176,8 +181,8 @@ func (c *Client) resolveHostID(ctx context.Context) (string, error) {
 		return "", nil
 	}
 
-	endpointURL := fmt.Sprintf("%s/api/agents/host/lookup?hostname=%s", c.cfg.PulseURL, url.QueryEscape(hostname))
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpointURL, nil)
+	requestURL := fmt.Sprintf("%s/api/agents/host/lookup?hostname=%s", c.cfg.PulseURL, url.QueryEscape(hostname))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
 	if err != nil {
 		return "", fmt.Errorf("create host lookup request: %w", err)
 	}
@@ -209,7 +214,7 @@ func (c *Client) resolveHostID(ctx context.Context) (string, error) {
 			ID string `json:"id"`
 		} `json:"host"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+	if err := decodeJSONResponseWithLimit(resp.Body, maxHostLookupResponseBodyBytes, &payload); err != nil {
 		return "", fmt.Errorf("decode host lookup response: %w", err)
 	}
 	if !payload.Success {

@@ -70,7 +70,7 @@ func (s *DockerMetadataStore) Load() error {
 
 	log.Debug().Str("path", filePath).Msg("Loading Docker metadata from disk")
 
-	data, err := s.fs.ReadFile(filePath)
+	data, err := readLimitedRegularFileFS(s.fs, filePath, maxDockerMetadataFileSizeBytes)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// File doesn't exist yet, not an error
@@ -137,14 +137,14 @@ func (s *DockerMetadataStore) save() error {
 		return fmt.Errorf("failed to marshal metadata: %w", err)
 	}
 
-	// Ensure directory exists
-	if err := os.MkdirAll(s.dataPath, 0755); err != nil {
+	// Restrict metadata persistence to owner-only access.
+	if err := s.fs.MkdirAll(s.dataPath, 0o700); err != nil {
 		return fmt.Errorf("failed to create data directory: %w", err)
 	}
 
 	// Write to temp file first for atomic operation
 	tempFile := filePath + ".tmp"
-	if err := s.fs.WriteFile(tempFile, data, 0644); err != nil {
+	if err := s.fs.WriteFile(tempFile, data, 0o600); err != nil {
 		return fmt.Errorf("failed to write metadata file: %w", err)
 	}
 

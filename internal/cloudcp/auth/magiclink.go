@@ -42,7 +42,7 @@ type Service struct {
 // NewService creates a Service backed by a SQLite store in cpDataDir.
 // It loads (or generates) an HMAC key from {cpDataDir}/.cp_magic_link_key.
 func NewService(cpDataDir string) (*Service, error) {
-	if err := os.MkdirAll(cpDataDir, 0o755); err != nil {
+	if err := ensureOwnerOnlyDir(cpDataDir); err != nil {
 		return nil, fmt.Errorf("ensure cp data dir: %w", err)
 	}
 

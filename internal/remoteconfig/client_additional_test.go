@@ -359,10 +359,34 @@ func TestClientFetchEscapesAgentIDPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Fetch error: %v", err)
 	}
+	if !lookupHit || !configHit {
+		t.Fatalf("expected lookup and escaped config requests to be hit")
+	}
 	if settings["mode"] != "ok" {
 		t.Fatalf("unexpected settings: %#v", settings)
 	}
-	if gotEscapedPath != "/api/agents/host/agent%2F1/config" {
-		t.Fatalf("unexpected escaped path: %q", gotEscapedPath)
+}
+
+func TestClientResolveHostIDEscapesHostnameQuery(t *testing.T) {
+	const hostname = "known&admin=true"
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/agents/host/lookup" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		if got := r.URL.Query().Get("hostname"); got != hostname {
+			t.Fatalf("expected hostname %q, got %q", hostname, got)
+		}
+		if got := r.URL.Query().Get("admin"); got != "" {
+			t.Fatalf("expected no injected admin query, got %q", got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"success":false}`))
+	}))
+	defer ts.Close()
+
+	client := New(Config{PulseURL: ts.URL, APIToken: "t", Hostname: hostname})
+	if got, err := client.resolveHostID(context.Background()); err != nil || got != "" {
+		t.Fatalf("expected empty host ID, got %q err=%v", got, err)
 	}
 }

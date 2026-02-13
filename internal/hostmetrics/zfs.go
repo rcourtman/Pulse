@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -15,6 +16,10 @@ import (
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rs/zerolog/log"
 )
+
+const maxZpoolCommandOutputSize = 1 << 20 // 1 MiB
+
+var errZpoolCommandOutputTooLarge = errors.New("zpool command output exceeded limit")
 
 // zpoolStats represents capacity data reported by `zpool list`.
 type zpoolStats struct {
@@ -34,6 +39,33 @@ type zfsDatasetUsage struct {
 }
 
 var queryZpoolStats = fetchZpoolStats
+var zpoolLookPath = exec.LookPath
+var zpoolStat = os.Stat
+var zpoolCommandRunner = runZpoolCommand
+
+type limitedBuffer struct {
+	buf      bytes.Buffer
+	maxBytes int
+	exceeded bool
+}
+
+func (b *limitedBuffer) Write(p []byte) (int, error) {
+	remaining := b.maxBytes - b.buf.Len()
+	if remaining <= 0 {
+		b.exceeded = true
+		return 0, errZpoolCommandOutputTooLarge
+	}
+	if len(p) > remaining {
+		b.exceeded = true
+		written, _ := b.buf.Write(p[:remaining])
+		return written, errZpoolCommandOutputTooLarge
+	}
+	return b.buf.Write(p)
+}
+
+func (b *limitedBuffer) Bytes() []byte {
+	return b.buf.Bytes()
+}
 
 func summarizeZFSPools(ctx context.Context, datasets []zfsDatasetUsage) []agentshost.Disk {
 	if len(datasets) == 0 {
@@ -186,32 +218,44 @@ var commonZpoolPaths = []string{
 	"/usr/bin/zpool",        // Some distributions
 }
 
-// findZpool returns the path to the zpool binary by first trying exec.LookPath,
-// then falling back to common hardcoded paths for TrueNAS/FreeBSD/Linux systems.
+// findZpool returns the path to the zpool binary by preferring known absolute
+// locations first, then falling back to PATH lookup.
 func findZpool() (string, error) {
-	// First, try the standard PATH lookup
-	if path, err := exec.LookPath("zpool"); err == nil {
-		log.Debug().Str("path", path).Msg("zfs: found zpool via PATH")
-		return path, nil
-	}
-
-	// If that fails, try common absolute paths
+	// Prefer common absolute paths so execution does not depend on PATH order.
 	// This is especially important for TrueNAS SCALE where the agent
 	// might run with a restricted PATH that doesn't include /usr/sbin
 	for _, path := range commonZpoolPaths {
-		if _, err := os.Stat(path); err == nil {
+		if _, err := zpoolStat(path); err == nil {
 			log.Debug().Str("path", path).Msg("zfs: found zpool at hardcoded path")
 			return path, nil
 		}
 	}
 
-	log.Debug().Msg("zfs: zpool binary not found in PATH or common locations")
-	return "", fmt.Errorf("zpool binary not found in PATH or common locations")
+	// Fall back to PATH lookup for non-standard installations.
+	path, err := zpoolLookPath("zpool")
+	if err != nil {
+		log.Debug().Msg("zfs: zpool binary not found in PATH or common locations")
+		return "", fmt.Errorf("zpool binary not found in PATH or common locations")
+	}
+	path = filepath.Clean(path)
+	if !filepath.IsAbs(path) {
+		return "", fmt.Errorf("zpool path is not absolute: %q", path)
+	}
+	if _, err := zpoolStat(path); err != nil {
+		return "", fmt.Errorf("zpool path unavailable: %w", err)
+	}
+
+	log.Debug().Str("path", path).Msg("zfs: found zpool via PATH")
+	return path, nil
 }
 
 func fetchZpoolStats(ctx context.Context, pools []string) (map[string]zpoolStats, error) {
 	if len(pools) == 0 {
 		return nil, nil
+	}
+	pools = filterValidZFSPoolNames(pools)
+	if len(pools) == 0 {
+		return nil, fmt.Errorf("no valid zfs pool names to query")
 	}
 
 	path, err := findZpool()
@@ -222,12 +266,14 @@ func fetchZpoolStats(ctx context.Context, pools []string) (map[string]zpoolStats
 	args := []string{"list", "-Hp", "-o", "name,size,allocated,free"}
 	args = append(args, pools...)
 
-	cmd := exec.CommandContext(ctx, path, args...)
-	log.Debug().Str("cmd", cmd.String()).Msg("zfs: executing zpool list")
-	output, err := cmd.Output()
+	log.Debug().Str("path", path).Strs("args", args).Msg("zfs: executing zpool list")
+	output, stderr, err := zpoolCommandRunner(ctx, path, args...)
 	if err != nil {
-		log.Debug().Err(err).Str("cmd", cmd.String()).Msg("zfs: zpool list failed")
-		return nil, fmt.Errorf("zfs: execute %q: %w", cmd.String(), err)
+		if errors.Is(err, errZpoolCommandOutputTooLarge) {
+			return nil, fmt.Errorf("zpool list output exceeded %d bytes", maxZpoolCommandOutputSize)
+		}
+		log.Debug().Err(err).Str("path", path).Strs("args", args).Int("stderrBytes", len(stderr)).Msg("zfs: zpool list failed")
+		return nil, err
 	}
 	log.Debug().Int("outputBytes", len(output)).Msg("zfs: zpool list succeeded")
 
@@ -236,6 +282,19 @@ func fetchZpoolStats(ctx context.Context, pools []string) (map[string]zpoolStats
 		return nil, fmt.Errorf("zfs: parse zpool list output: %w", err)
 	}
 	return stats, nil
+}
+
+func runZpoolCommand(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
+	cmd := exec.CommandContext(ctx, name, args...)
+	stdout := limitedBuffer{maxBytes: maxZpoolCommandOutputSize}
+	stderr := limitedBuffer{maxBytes: maxZpoolCommandOutputSize}
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	if stdout.exceeded || stderr.exceeded {
+		return stdout.Bytes(), stderr.Bytes(), errZpoolCommandOutputTooLarge
+	}
+	return stdout.Bytes(), stderr.Bytes(), err
 }
 
 func parseZpoolList(output []byte) (map[string]zpoolStats, error) {
@@ -257,6 +316,10 @@ func parseZpoolList(output []byte) (map[string]zpoolStats, error) {
 			if firstParseErr == nil {
 				firstParseErr = fmt.Errorf("line %d: expected at least 4 tab-separated fields", lineNumber)
 			}
+			continue
+		}
+		pool, ok := normalizeZFSPoolName(fields[0])
+		if !ok {
 			continue
 		}
 
@@ -285,7 +348,7 @@ func parseZpoolList(output []byte) (map[string]zpoolStats, error) {
 			continue
 		}
 
-		stats[fields[0]] = zpoolStats{
+		stats[pool] = zpoolStats{
 			Size:  size,
 			Alloc: alloc,
 			Free:  free,
@@ -313,9 +376,11 @@ func parseZpoolList(output []byte) (map[string]zpoolStats, error) {
 func uniqueZFSPools(datasets []zfsDatasetUsage) []string {
 	set := make(map[string]struct{}, len(datasets))
 	for _, ds := range datasets {
-		if ds.Pool != "" {
-			set[ds.Pool] = struct{}{}
+		pool, ok := normalizeZFSPoolName(ds.Pool)
+		if !ok {
+			continue
 		}
+		set[pool] = struct{}{}
 	}
 	if len(set) == 0 {
 		return nil
@@ -327,6 +392,46 @@ func uniqueZFSPools(datasets []zfsDatasetUsage) []string {
 	}
 	sort.Strings(pools)
 	return pools
+}
+
+func filterValidZFSPoolNames(pools []string) []string {
+	filtered := make([]string, 0, len(pools))
+	seen := make(map[string]struct{}, len(pools))
+	for _, pool := range pools {
+		normalized, ok := normalizeZFSPoolName(pool)
+		if !ok {
+			continue
+		}
+		if _, exists := seen[normalized]; exists {
+			continue
+		}
+		seen[normalized] = struct{}{}
+		filtered = append(filtered, normalized)
+	}
+	return filtered
+}
+
+func normalizeZFSPoolName(pool string) (string, bool) {
+	pool = strings.TrimSpace(pool)
+	if pool == "" || len(pool) > 255 {
+		return "", false
+	}
+	if strings.HasPrefix(pool, "-") {
+		return "", false
+	}
+
+	for _, r := range pool {
+		switch {
+		case r >= 'a' && r <= 'z':
+		case r >= 'A' && r <= 'Z':
+		case r >= '0' && r <= '9':
+		case r == '_' || r == '-' || r == '.' || r == ':':
+		default:
+			return "", false
+		}
+	}
+
+	return pool, true
 }
 
 func bestZFSMountpoints(datasets []zfsDatasetUsage) map[string]string {

@@ -585,6 +585,43 @@ func TestProxmoxSetup_MarkAsRegistered_Errors(t *testing.T) {
 	})
 }
 
+func TestProxmoxSetup_MarkAsRegistered_EnforcesPrivatePermissions(t *testing.T) {
+	mc := &mockCollector{}
+	p := &ProxmoxSetup{collector: mc, logger: zerolog.Nop()}
+
+	var gotDirPerm os.FileMode
+	var gotFilePerm os.FileMode
+	chmodPerms := make(map[string]os.FileMode)
+
+	mc.mkdirAllFn = func(path string, perm os.FileMode) error {
+		gotDirPerm = perm
+		return nil
+	}
+	mc.writeFileFn = func(filename string, data []byte, perm os.FileMode) error {
+		gotFilePerm = perm
+		return nil
+	}
+	mc.chmodFn = func(name string, mode os.FileMode) error {
+		chmodPerms[name] = mode
+		return nil
+	}
+
+	p.markAsRegistered()
+
+	if gotDirPerm != proxmoxStateDirPerm {
+		t.Fatalf("MkdirAll perm = %o, want %o", gotDirPerm, proxmoxStateDirPerm)
+	}
+	if gotFilePerm != proxmoxStateFilePerm {
+		t.Fatalf("WriteFile perm = %o, want %o", gotFilePerm, proxmoxStateFilePerm)
+	}
+	if chmodPerms[stateFileDir] != proxmoxStateDirPerm {
+		t.Fatalf("Chmod(%q) = %o, want %o", stateFileDir, chmodPerms[stateFileDir], proxmoxStateDirPerm)
+	}
+	if chmodPerms[stateFilePath] != proxmoxStateFilePerm {
+		t.Fatalf("Chmod(%q) = %o, want %o", stateFilePath, chmodPerms[stateFilePath], proxmoxStateFilePerm)
+	}
+}
+
 func TestProxmoxSetup_MarkTypeAsRegistered_Errors(t *testing.T) {
 	mc := &mockCollector{}
 	p := &ProxmoxSetup{collector: mc, logger: zerolog.Nop()}
@@ -599,6 +636,47 @@ func TestProxmoxSetup_MarkTypeAsRegistered_Errors(t *testing.T) {
 		mc.writeFileFn = func(f string, d []byte, m os.FileMode) error { return fmt.Errorf("fail") }
 		p.markTypeAsRegistered("pve")
 	})
+}
+
+func TestProxmoxSetup_MarkTypeAsRegistered_EnforcesPrivatePermissions(t *testing.T) {
+	mc := &mockCollector{}
+	p := &ProxmoxSetup{collector: mc, logger: zerolog.Nop()}
+
+	var gotDirPerm os.FileMode
+	var gotFilePerm os.FileMode
+	chmodPerms := make(map[string]os.FileMode)
+	targetFile := p.stateFileForType("pve")
+
+	mc.mkdirAllFn = func(path string, perm os.FileMode) error {
+		gotDirPerm = perm
+		return nil
+	}
+	mc.writeFileFn = func(filename string, data []byte, perm os.FileMode) error {
+		if filename != targetFile {
+			t.Fatalf("write target file = %q, want %q", filename, targetFile)
+		}
+		gotFilePerm = perm
+		return nil
+	}
+	mc.chmodFn = func(name string, mode os.FileMode) error {
+		chmodPerms[name] = mode
+		return nil
+	}
+
+	p.markTypeAsRegistered("pve")
+
+	if gotDirPerm != proxmoxStateDirPerm {
+		t.Fatalf("MkdirAll perm = %o, want %o", gotDirPerm, proxmoxStateDirPerm)
+	}
+	if gotFilePerm != proxmoxStateFilePerm {
+		t.Fatalf("WriteFile perm = %o, want %o", gotFilePerm, proxmoxStateFilePerm)
+	}
+	if chmodPerms[stateFileDir] != proxmoxStateDirPerm {
+		t.Fatalf("Chmod(%q) = %o, want %o", stateFileDir, chmodPerms[stateFileDir], proxmoxStateDirPerm)
+	}
+	if chmodPerms[targetFile] != proxmoxStateFilePerm {
+		t.Fatalf("Chmod(%q) = %o, want %o", targetFile, chmodPerms[targetFile], proxmoxStateFilePerm)
+	}
 }
 
 func TestProxmoxSetup_Run_TopLevel(t *testing.T) {

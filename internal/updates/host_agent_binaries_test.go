@@ -51,7 +51,7 @@ func TestNormalizeExecutableMode(t *testing.T) {
 		{
 			name:     "partial executable",
 			input:    0o744,
-			expected: 0o744, // already has execute bit
+			expected: 0o755,
 		},
 		{
 			name:     "read only",

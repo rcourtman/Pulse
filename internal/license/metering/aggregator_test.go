@@ -106,6 +106,54 @@ func TestAggregatorIdempotency(t *testing.T) {
 	}
 }
 
+func TestAggregatorIdempotencyKeyLimit(t *testing.T) {
+	agg := NewWindowedAggregator()
+
+	for i := 0; i < MaxIdempotencyKeysPerWindow; i++ {
+		err := agg.Record(Event{
+			Type:           EventAgentSeen,
+			TenantID:       "tenant-a",
+			Key:            "agent-1",
+			Value:          1,
+			IdempotencyKey: fmt.Sprintf("idem-%d", i),
+		})
+		if err != nil {
+			t.Fatalf("record at i=%d failed: %v", i, err)
+		}
+	}
+
+	if err := agg.Record(Event{
+		Type:           EventAgentSeen,
+		TenantID:       "tenant-a",
+		Key:            "agent-1",
+		Value:          1,
+		IdempotencyKey: "idem-overflow",
+	}); !errors.Is(err, ErrIdempotencyKeyLimitExceeded) {
+		t.Fatalf("overflow idempotency key error = %v, want %v", err, ErrIdempotencyKeyLimitExceeded)
+	}
+
+	if err := agg.Record(Event{
+		Type:           EventAgentSeen,
+		TenantID:       "tenant-a",
+		Key:            "agent-1",
+		Value:          1,
+		IdempotencyKey: "idem-1",
+	}); !errors.Is(err, ErrDuplicateEvent) {
+		t.Fatalf("duplicate idempotency key error = %v, want %v", err, ErrDuplicateEvent)
+	}
+
+	_ = agg.Flush()
+	if err := agg.Record(Event{
+		Type:           EventAgentSeen,
+		TenantID:       "tenant-a",
+		Key:            "agent-1",
+		Value:          1,
+		IdempotencyKey: "idem-after-flush",
+	}); err != nil {
+		t.Fatalf("record after flush failed: %v", err)
+	}
+}
+
 func TestAggregatorCardinalityLimit(t *testing.T) {
 	agg := NewWindowedAggregator()
 

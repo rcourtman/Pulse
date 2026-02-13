@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"math"
 	"strconv"
 	"strings"
@@ -107,7 +106,7 @@ func (c *Client) enrichReplicationJobStatus(ctx context.Context, job *Replicatio
 	defer resp.Body.Close()
 
 	// Read body for debugging/parsing
-	bodyBytes, err := io.ReadAll(resp.Body)
+	bodyBytes, err := readResponseBodyLimited(resp.Body)
 	if err != nil {
 		log.Debug().
 			Str("jobID", jobID).

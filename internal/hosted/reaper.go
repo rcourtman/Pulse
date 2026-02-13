@@ -98,6 +98,12 @@ func (r *Reaper) scan() []ReapResult {
 		if org == nil {
 			continue
 		}
+		if !isValidOrganizationID(org.ID) {
+			log.Warn().
+				Str("org_id", org.ID).
+				Msg("Hosted reaper skipping organization with invalid ID")
+			continue
+		}
 		if org.ID == "default" {
 			continue
 		}

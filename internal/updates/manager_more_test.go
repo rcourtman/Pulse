@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -145,6 +146,30 @@ func TestGetLatestReleaseFromFeedMocked(t *testing.T) {
 	}
 }
 
+func TestGetLatestReleaseFromFeedMocked_OversizedFeed(t *testing.T) {
+	oversizedFeed := strings.Repeat("a", int(maxReleaseFeedBytes)+1)
+
+	origTransport := http.DefaultTransport
+	http.DefaultTransport = roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+		body := io.NopCloser(strings.NewReader(oversizedFeed))
+		return &http.Response{
+			StatusCode:    http.StatusOK,
+			Status:        "200 OK",
+			Body:          body,
+			ContentLength: int64(len(oversizedFeed)),
+			Header:        http.Header{"Content-Type": []string{"application/atom+xml"}},
+			Request:       req,
+		}, nil
+	})
+	t.Cleanup(func() { http.DefaultTransport = origTransport })
+
+	manager := NewManager(&config.Config{})
+	_, err := manager.getLatestReleaseFromFeed(context.Background(), "stable")
+	if err == nil || !strings.Contains(err.Error(), "feed response exceeds") {
+		t.Fatalf("expected oversized feed error, got: %v", err)
+	}
+}
+
 func TestManagerDownloadFile(t *testing.T) {
 	content := "payload"
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -169,5 +194,24 @@ func TestManagerDownloadFile(t *testing.T) {
 	}
 	if string(data) != content {
 		t.Fatalf("unexpected file content: %s", string(data))
+	}
+}
+
+func TestManagerDownloadFileRejectsOversizedContentLength(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Length", strconv.FormatInt(maxUpdateDownloadBytes+1, 10))
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	manager := NewManager(&config.Config{})
+	dest := filepath.Join(t.TempDir(), "file.bin")
+
+	_, err := manager.downloadFile(context.Background(), server.URL, dest)
+	if err == nil || !strings.Contains(err.Error(), "download exceeds maximum size") {
+		t.Fatalf("expected oversized download error, got: %v", err)
+	}
+	if _, statErr := os.Stat(dest); !os.IsNotExist(statErr) {
+		t.Fatalf("expected no destination file to be created, stat err: %v", statErr)
 	}
 }

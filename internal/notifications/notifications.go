@@ -57,6 +57,11 @@ const (
 
 // createSecureWebhookClient creates an HTTP client with security controls
 func (n *NotificationManager) createSecureWebhookClient(timeout time.Duration) *http.Client {
+	return n.createSecureWebhookClientWithTLS(timeout, false)
+}
+
+// createSecureWebhookClientWithTLS creates a secure HTTP client with optional TLS verification override.
+func (n *NotificationManager) createSecureWebhookClientWithTLS(timeout time.Duration, skipTLSVerify bool) *http.Client {
 	// dedicated transport that pins DNS resolution to prevent rebinding
 	transport := &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
@@ -113,6 +118,9 @@ func (n *NotificationManager) createSecureWebhookClient(timeout time.Duration) *
 		IdleConnTimeout:       90 * time.Second,
 		TLSHandshakeTimeout:   10 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
+	}
+	if skipTLSVerify {
+		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 	}
 
 	return &http.Client{
@@ -1402,16 +1410,10 @@ func (n *NotificationManager) sendAppriseViaHTTP(cfg AppriseConfig, title, body,
 		}
 	}
 
-	client := &http.Client{
-		Timeout: time.Duration(cfg.TimeoutSeconds) * time.Second,
-	}
-
-	if strings.HasPrefix(lowerURL, "https://") && cfg.SkipTLSVerify {
-		client.Transport = &http.Transport{
-			Proxy:           http.ProxyFromEnvironment,
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		}
-	}
+	client := n.createSecureWebhookClientWithTLS(
+		time.Duration(cfg.TimeoutSeconds)*time.Second,
+		strings.HasPrefix(lowerURL, "https://") && cfg.SkipTLSVerify,
+	)
 
 	resp, err := client.Do(req)
 	if err != nil {

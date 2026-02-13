@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,6 +15,11 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog/log"
+)
+
+const (
+	notificationTestRequestBodyLimit = 64 * 1024
+	webhookTestRequestBodyLimit      = 64 * 1024
 )
 
 // NotificationManager defines the interface for notification management operations.
@@ -445,9 +451,16 @@ func (h *NotificationHandlers) DeleteWebhook(w http.ResponseWriter, r *http.Requ
 
 // TestNotification sends a test notification
 func (h *NotificationHandlers) TestNotification(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, notificationTestRequestBodyLimit)
+
 	// Read body for debugging
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			http.Error(w, "Request body too large", http.StatusRequestEntityTooLarge)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -661,8 +674,15 @@ func (h *NotificationHandlers) GetEmailProviders(w http.ResponseWriter, r *http.
 func (h *NotificationHandlers) TestWebhook(w http.ResponseWriter, r *http.Request) {
 	// First try to decode as basic webhook config
 	var basicWebhook notifications.WebhookConfig
+
+	r.Body = http.MaxBytesReader(w, r.Body, webhookTestRequestBodyLimit)
 	bodyBytes, err := io.ReadAll(r.Body)
 	if err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			http.Error(w, "Request body too large", http.StatusRequestEntityTooLarge)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}

@@ -451,36 +451,32 @@ func TestClient_SessionTokenReuse(t *testing.T) {
 	<-errCh
 }
 
-func TestClient_CancelUnblocksIdleConnection(t *testing.T) {
+func TestClient_RejectsOversizedWebSocketMessage(t *testing.T) {
 	logger := zerolog.New(zerolog.NewTestWriter(t))
-
-	holdConn := make(chan struct{})
-	connected := make(chan struct{})
 
 	relayServer := mockRelayServer(t, func(conn *websocket.Conn) {
 		// Read REGISTER
-		_, msg, err := conn.ReadMessage()
-		if err != nil {
-			return
-		}
-		frame, err := DecodeFrame(msg)
-		if err != nil || frame.Type != FrameRegister {
+		_, msg, _ := conn.ReadMessage()
+		frame, _ := DecodeFrame(msg)
+		if frame.Type != FrameRegister {
 			return
 		}
 
-		// Send REGISTER_ACK and then keep the socket open without reading
+		// Send REGISTER_ACK
 		ack, _ := NewControlFrame(FrameRegisterAck, 0, RegisterAckPayload{
-			InstanceID:   "inst_idle",
-			SessionToken: "sess_idle",
+			InstanceID:   "inst_oversized",
+			SessionToken: "sess_oversized",
 			ExpiresAt:    time.Now().Add(time.Hour).Unix(),
 		})
 		ackBytes, _ := EncodeFrame(ack)
-		if err := conn.WriteMessage(websocket.BinaryMessage, ackBytes); err != nil {
-			return
-		}
-		close(connected)
+		conn.WriteMessage(websocket.BinaryMessage, ackBytes)
 
-		<-holdConn
+		// Send one oversized websocket binary message. This should trip
+		// conn.SetReadLimit and force the client to drop/reconnect.
+		oversized := make([]byte, wsReadLimit+1)
+		conn.WriteMessage(websocket.BinaryMessage, oversized)
+
+		time.Sleep(200 * time.Millisecond)
 	})
 	defer relayServer.Close()
 
@@ -498,26 +494,24 @@ func TestClient_CancelUnblocksIdleConnection(t *testing.T) {
 	}
 
 	client := NewClient(cfg, deps, logger)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
 	errCh := make(chan error, 1)
 	go func() { errCh <- client.Run(ctx) }()
 
-	select {
-	case <-connected:
-	case <-time.After(3 * time.Second):
-		t.Fatal("timed out waiting for REGISTER_ACK")
-	}
-
-	// Wait until the client reports connected before cancelling.
-	waitDeadline := time.After(2 * time.Second)
-	for {
-		if client.Status().Connected {
+	deadline := time.After(3 * time.Second)
+	observed := false
+	for !observed {
+		status := client.Status()
+		if strings.Contains(status.LastError, "read limit exceeded") {
+			observed = true
 			break
 		}
 		select {
-		case <-waitDeadline:
-			t.Fatal("client did not reach connected state")
-		case <-time.After(25 * time.Millisecond):
+		case <-deadline:
+			t.Fatalf("timed out waiting for read-limit error, last error=%q", status.LastError)
+		case <-time.After(50 * time.Millisecond):
 		}
 	}
 

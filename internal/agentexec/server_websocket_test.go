@@ -163,6 +163,41 @@ func TestHandleWebSocket_InvalidTokenRejected(t *testing.T) {
 	}
 }
 
+func TestHandleWebSocket_MissingAgentIDRejected(t *testing.T) {
+	s := NewServer(nil)
+	ts := newWSServer(t, s)
+	defer ts.Close()
+
+	conn, _, err := websocket.DefaultDialer.Dial(wsURLForHTTP(ts.URL), nil)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	defer conn.Close()
+
+	wsWriteMessage(t, conn, Message{
+		Type:      MsgTypeAgentRegister,
+		Timestamp: time.Now(),
+		Payload: AgentRegisterPayload{
+			AgentID:  "   ",
+			Hostname: "host1",
+			Version:  "1.2.3",
+			Platform: "linux",
+			Token:    "any",
+		},
+	})
+
+	reg := wsReadRegisteredPayload(t, conn)
+	if reg.Success {
+		t.Fatalf("expected registration to be rejected")
+	}
+
+	conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
+	_, _, err = conn.ReadMessage()
+	if err == nil {
+		t.Fatalf("expected connection to be closed by server")
+	}
+}
+
 func TestHandleWebSocket_FirstMessageMustBeRegister(t *testing.T) {
 	s := NewServer(nil)
 	ts := newWSServer(t, s)

@@ -1727,7 +1727,7 @@ export const AISettings: Component = () => {
                 </p>
                 <Show when={form.controlLevel === 'autonomous'}>
                   <div class="p-2 bg-amber-100/50 dark:bg-amber-900/30 rounded border border-amber-200 dark:border-amber-800 text-[10px] text-amber-800 dark:text-amber-200">
-                    <strong>Legal Disclaimer:</strong> Model-driven systems can hallucinate. You are responsible for any damage caused by autonomous actions. See <a href="https://github.com/rcourtman/Pulse/blob/main/TERMS.md" target="_blank" class="underline">Terms of Service</a>.
+                    <strong>Legal Disclaimer:</strong> Model-driven systems can hallucinate. You are responsible for any damage caused by autonomous actions. See <a href="https://github.com/rcourtman/Pulse/blob/main/TERMS.md" target="_blank" rel="noopener noreferrer" class="underline">Terms of Service</a>.
                   </div>
                 </Show>
                 <Show when={form.controlLevel === 'autonomous' && autoFixLocked()}>

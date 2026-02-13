@@ -3,6 +3,9 @@ package discovery
 import (
 	"context"
 	"errors"
+	"fmt"
+	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -205,8 +208,13 @@ func NewService(wsHub *websocket.Hub, interval time.Duration, subnet string, cfg
 	if interval == 0 {
 		interval = 5 * time.Minute // Default to 5 minutes
 	}
-	if subnet == "" {
-		subnet = "auto"
+	normalizedSubnet, err := normalizeDiscoverySubnet(subnet)
+	if err != nil {
+		log.Warn().
+			Err(err).
+			Str("subnet", subnet).
+			Msg("Invalid discovery subnet configuration; defaulting to auto")
+		normalizedSubnet = "auto"
 	}
 
 	if cfgProvider == nil {
@@ -218,7 +226,7 @@ func NewService(wsHub *websocket.Hub, interval time.Duration, subnet string, cfg
 		wsHub:        wsHub,
 		cache:        &DiscoveryCache{},
 		interval:     interval,
-		subnet:       subnet,
+		subnet:       normalizedSubnet,
 		stopChan:     make(chan struct{}),
 		cfgProvider:  cfgProvider,
 		history:      make([]historyEntry, 0, defaultHistoryLimit),
@@ -229,19 +237,47 @@ func NewService(wsHub *websocket.Hub, interval time.Duration, subnet string, cfg
 	}
 }
 
-// goRecover launches fn in a goroutine with panic recovery logging.
-func goRecover(label string, fn func()) {
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				log.Error().
-					Interface("panic", r).
-					Stack().
-					Msgf("Recovered from panic in %s", label)
-			}
-		}()
-		fn()
-	}()
+func normalizeDiscoverySubnet(subnet string) (string, error) {
+	trimmed := strings.TrimSpace(subnet)
+	if trimmed == "" || strings.EqualFold(trimmed, "auto") {
+		return "auto", nil
+	}
+	if len(trimmed) > maxManualSubnetInputLength {
+		return "", fmt.Errorf("subnet input exceeds max length (%d)", maxManualSubnetInputLength)
+	}
+
+	tokens := strings.Split(trimmed, ",")
+	normalized := make([]string, 0, len(tokens))
+	seen := make(map[string]struct{}, len(tokens))
+
+	for _, token := range tokens {
+		token = strings.TrimSpace(token)
+		if token == "" {
+			continue
+		}
+
+		_, parsedSubnet, err := net.ParseCIDR(token)
+		if err != nil {
+			return "", fmt.Errorf("invalid subnet %q: %w", token, err)
+		}
+
+		canonical := parsedSubnet.String()
+		if _, exists := seen[canonical]; exists {
+			continue
+		}
+		seen[canonical] = struct{}{}
+		normalized = append(normalized, canonical)
+
+		if len(normalized) > maxManualSubnetCount {
+			return "", fmt.Errorf("subnet input exceeds max subnet count (%d)", maxManualSubnetCount)
+		}
+	}
+
+	if len(normalized) == 0 {
+		return "", fmt.Errorf("no valid subnets provided")
+	}
+
+	return strings.Join(normalized, ","), nil
 }
 
 // Start begins the background discovery service
@@ -581,13 +617,27 @@ func (s *Service) SetInterval(interval time.Duration) {
 
 // SetSubnet updates the subnet to scan
 func (s *Service) SetSubnet(subnet string) {
+	normalizedSubnet, err := normalizeDiscoverySubnet(subnet)
+	if err != nil {
+		log.Warn().
+			Err(err).
+			Str("subnet", subnet).
+			Msg("Rejected discovery subnet update")
+		return
+	}
+
 	s.mu.Lock()
-	s.subnet = subnet
+	if s.subnet == normalizedSubnet {
+		s.mu.Unlock()
+		log.Debug().Str("subnet", normalizedSubnet).Msg("Discovery subnet unchanged; skipping rescan")
+		return
+	}
+	s.subnet = normalizedSubnet
 	// Check if scan is already in progress to prevent goroutine leak
 	alreadyScanning := s.isScanning
 	s.mu.Unlock()
 
-	log.Info().Str("subnet", subnet).Msg("Updated discovery subnet")
+	log.Info().Str("subnet", normalizedSubnet).Msg("Updated discovery subnet")
 
 	// Trigger immediate rescan with new subnet if not already scanning
 	if !alreadyScanning {

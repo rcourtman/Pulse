@@ -191,3 +191,31 @@ func TestHandleWebSocket_OrgAuthorizationDenied(t *testing.T) {
 		t.Fatalf("expected org ID in audit details, got %q", events[0].Details)
 	}
 }
+
+func TestHandleWebSocket_InvalidOrgIDRejected(t *testing.T) {
+	hub := NewHub(nil)
+
+	req := httptest.NewRequest(http.MethodGet, "http://example.com/ws", nil)
+	req.Header.Set("X-Pulse-Org-ID", "../tenant-a")
+	rec := httptest.NewRecorder()
+
+	hub.HandleWebSocket(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+}
+
+func TestHandleWebSocket_OversizedOrgIDRejected(t *testing.T) {
+	hub := NewHub(nil)
+
+	req := httptest.NewRequest(http.MethodGet, "http://example.com/ws", nil)
+	req.Header.Set("X-Pulse-Org-ID", strings.Repeat("a", maxWebSocketOrgIDLength+1))
+	rec := httptest.NewRecorder()
+
+	hub.HandleWebSocket(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+}

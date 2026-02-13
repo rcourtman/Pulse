@@ -122,10 +122,16 @@ func New(cfg Config) (*Agent, error) {
 		return nil, fmt.Errorf("api token is required")
 	}
 
-	pulseURL := strings.TrimRight(strings.TrimSpace(cfg.PulseURL), "/")
+	pulseURL := strings.TrimSpace(cfg.PulseURL)
 	if pulseURL == "" {
 		pulseURL = "http://localhost:7655"
 	}
+	normalizedPulseURL, err := normalizePulseURL(pulseURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid pulse url: %w", err)
+	}
+	pulseURL = normalizedPulseURL
+	cfg.PulseURL = pulseURL
 
 	restCfg, contextName, err := buildRESTConfig(cfg.KubeconfigPath, cfg.KubeContext)
 	if err != nil {
@@ -205,6 +211,53 @@ func New(cfg Config) (*Agent, error) {
 		Msg("kubernetes agent initialized")
 
 	return agent, nil
+}
+
+func normalizePulseURL(rawURL string) (string, error) {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return "", fmt.Errorf("pulse URL %q is invalid: %w", rawURL, err)
+	}
+
+	if parsed.Scheme == "" {
+		return "", fmt.Errorf("pulse URL %q must include scheme (https:// or loopback http://)", rawURL)
+	}
+	if parsed.Host == "" {
+		return "", fmt.Errorf("pulse URL %q must include host", rawURL)
+	}
+	if parsed.User != nil {
+		return "", fmt.Errorf("pulse URL %q must not include user credentials", rawURL)
+	}
+	if parsed.RawQuery != "" || parsed.Fragment != "" {
+		return "", fmt.Errorf("pulse URL %q must not include query or fragment", rawURL)
+	}
+
+	scheme := strings.ToLower(parsed.Scheme)
+	switch scheme {
+	case "https":
+		// Always allowed.
+	case "http":
+		if !isLoopbackPulseHost(parsed.Hostname()) {
+			return "", fmt.Errorf("pulse URL %q must use https unless host is loopback", rawURL)
+		}
+	default:
+		return "", fmt.Errorf("pulse URL %q has unsupported scheme %q", rawURL, parsed.Scheme)
+	}
+
+	parsed.Scheme = scheme
+	parsed.Path = strings.TrimRight(parsed.Path, "/")
+	parsed.RawPath = strings.TrimRight(parsed.RawPath, "/")
+
+	return parsed.String(), nil
+}
+
+func isLoopbackPulseHost(host string) bool {
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 func buildRESTConfig(kubeconfigPath, kubeContext string) (*rest.Config, string, error) {
@@ -417,8 +470,10 @@ func (a *Agent) collectUsageMetrics(ctx context.Context, nodes []agentsk8s.Node)
 		return nil, nil, nil
 	}
 
-	nodeRaw, nodeErr := a.doRawPathWithRetry(ctx, restClient, "fetch node usage metrics", "/apis/metrics.k8s.io/v1beta1/nodes")
-	podRaw, podErr := a.doRawPathWithRetry(ctx, restClient, "fetch pod usage metrics", "/apis/metrics.k8s.io/v1beta1/pods")
+	restClient := discovery.RESTClient()
+
+	nodeRaw, nodeErr := readKubernetesResponseBody(ctx, restClient, "/apis/metrics.k8s.io/v1beta1/nodes", maxMetricsResponseBodyBytes)
+	podRaw, podErr := readKubernetesResponseBody(ctx, restClient, "/apis/metrics.k8s.io/v1beta1/pods", maxMetricsResponseBodyBytes)
 
 	if nodeErr != nil && podErr != nil {
 		return nil, nil, fmt.Errorf("metrics.k8s.io unavailable (nodes: %w; pods: %v)", nodeErr, podErr)
@@ -480,7 +535,11 @@ func summaryNodeNames(nodes []agentsk8s.Node, max int) ([]string, int) {
 		if nodeName == "" {
 			continue
 		}
-		if _, ok := seen[nodeName]; ok {
+
+		path := "/api/v1/nodes/" + url.PathEscape(nodeName) + "/proxy/stats/summary"
+		raw, err := readKubernetesResponseBody(ctx, restClient, path, maxMetricsResponseBodyBytes)
+		if err != nil {
+			failed++
 			continue
 		}
 		seen[nodeName] = struct{}{}
@@ -588,6 +647,35 @@ dispatchLoop:
 		return nil, fmt.Errorf("no node summary metrics endpoints available")
 	}
 	return result, nil
+}
+
+func readKubernetesResponseBody(ctx context.Context, restClient rest.Interface, path string, maxBytes int64) ([]byte, error) {
+	stream, err := restClient.Get().AbsPath(path).Stream(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer stream.Close()
+
+	body, err := readBoundedBody(stream, maxBytes)
+	if err != nil {
+		return nil, fmt.Errorf("read %s response: %w", path, err)
+	}
+	return body, nil
+}
+
+func readBoundedBody(reader io.Reader, maxBytes int64) ([]byte, error) {
+	if maxBytes <= 0 {
+		return nil, fmt.Errorf("invalid max bytes %d", maxBytes)
+	}
+
+	body, err := io.ReadAll(io.LimitReader(reader, maxBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(body)) > maxBytes {
+		return nil, fmt.Errorf("response body exceeds %d bytes", maxBytes)
+	}
+	return body, nil
 }
 
 func parseNodeMetricsPayload(raw []byte) (map[string]agentsk8s.NodeUsage, error) {

@@ -12,7 +12,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -27,6 +29,9 @@ import (
 const (
 	// maxBinarySize is the maximum allowed size for downloaded binaries (100 MB)
 	maxBinarySize = 100 * 1024 * 1024
+
+	// maxVersionResponseSize is the maximum allowed size for version endpoint responses.
+	maxVersionResponseSize = 16 * 1024
 
 	// downloadTimeout is the maximum time allowed for downloading a binary
 	downloadTimeout = 5 * time.Minute
@@ -140,6 +145,10 @@ func New(cfg Config) *Updater {
 		client: &http.Client{
 			Transport: transport,
 			Timeout:   downloadTimeout,
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				// Prevent credential leakage (X-API-Token / Authorization) on redirects.
+				return fmt.Errorf("server returned redirect to %s", req.URL.Redacted())
+			},
 		},
 		logger: logger,
 	}
@@ -195,6 +204,10 @@ func (u *Updater) CheckAndUpdate(ctx context.Context) {
 
 	if u.cfg.PulseURL == "" {
 		u.logger.Debug().Msg("skipping update check - no pulse URL configured")
+		return
+	}
+	if err := u.validatePulseURL(); err != nil {
+		u.logger.Warn().Err(err).Msg("Skipping update check - insecure or invalid Pulse URL")
 		return
 	}
 
@@ -256,7 +269,11 @@ func (u *Updater) setAuthHeaders(req *http.Request) {
 
 // getServerVersion fetches the current version from the Pulse server.
 func (u *Updater) getServerVersion(ctx context.Context) (string, error) {
-	versionURL := fmt.Sprintf("%s/api/agent/version", strings.TrimRight(u.cfg.PulseURL, "/"))
+	if err := u.validatePulseURL(); err != nil {
+		return "", fmt.Errorf("invalid Pulse URL: %w", err)
+	}
+
+	url := fmt.Sprintf("%s/api/agent/version", strings.TrimRight(u.cfg.PulseURL, "/"))
 
 	resp, err := u.getWithRetry(ctx, versionURL, "version check")
 	if err != nil {
@@ -388,7 +405,11 @@ func (u *Updater) getWithRetry(ctx context.Context, requestURL, operation string
 		lastErr = fmt.Errorf("%s request failed", operation)
 	}
 
-	return nil, lastErr
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxVersionResponseSize)).Decode(&versionResp); err != nil {
+		return "", fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return versionResp.Version, nil
 }
 
 // isUnraid checks if we're running on Unraid by looking for /etc/unraid-version
@@ -458,6 +479,74 @@ func unraidPersistentPath(agentName string) string {
 	return fmt.Sprintf("/boot/config/plugins/%s/%s", agentName, agentName)
 }
 
+func normalizeAgentName(agentName string) (string, error) {
+	name := strings.TrimSpace(agentName)
+	if name == "" {
+		return "", fmt.Errorf("agent name is required")
+	}
+	if strings.Contains(name, "..") {
+		return "", fmt.Errorf("agent name must not contain path traversal")
+	}
+	for _, r := range name {
+		if (r >= 'a' && r <= 'z') ||
+			(r >= 'A' && r <= 'Z') ||
+			(r >= '0' && r <= '9') ||
+			r == '-' || r == '_' || r == '.' {
+			continue
+		}
+		return "", fmt.Errorf("agent name contains invalid character %q", r)
+	}
+	return name, nil
+}
+
+func isLoopbackHost(host string) bool {
+	if host == "" {
+		return false
+	}
+
+	normalized := strings.ToLower(strings.Trim(host, "[]"))
+	if normalized == "localhost" || strings.HasSuffix(normalized, ".localhost") {
+		return true
+	}
+
+	ip := net.ParseIP(normalized)
+	return ip != nil && ip.IsLoopback()
+}
+
+func (u *Updater) validatePulseURL() error {
+	pulseURL := strings.TrimSpace(u.cfg.PulseURL)
+	if pulseURL == "" {
+		return fmt.Errorf("Pulse URL is empty")
+	}
+
+	parsed, err := url.Parse(pulseURL)
+	if err != nil {
+		return fmt.Errorf("failed to parse Pulse URL: %w", err)
+	}
+	if parsed.Scheme == "" || parsed.Host == "" {
+		return fmt.Errorf("Pulse URL must include scheme and host")
+	}
+	if parsed.User != nil {
+		return fmt.Errorf("Pulse URL must not include user credentials")
+	}
+	if parsed.RawQuery != "" || parsed.Fragment != "" {
+		return fmt.Errorf("Pulse URL must not include query or fragment")
+	}
+
+	scheme := strings.ToLower(parsed.Scheme)
+	switch scheme {
+	case "https":
+		return nil
+	case "http":
+		if u.cfg.InsecureSkipVerify || isLoopbackHost(parsed.Hostname()) {
+			return nil
+		}
+		return fmt.Errorf("HTTP Pulse URL is only allowed for localhost/loopback or when insecure mode is enabled")
+	default:
+		return fmt.Errorf("unsupported Pulse URL scheme %q", parsed.Scheme)
+	}
+}
+
 // performUpdate downloads and installs the new agent binary.
 func (u *Updater) performUpdate(ctx context.Context) error {
 	execPath, err := osExecutableFn()
@@ -468,9 +557,16 @@ func (u *Updater) performUpdate(ctx context.Context) error {
 }
 
 func (u *Updater) performUpdateWithExecPath(ctx context.Context, execPath string) error {
+	agentName, err := normalizeAgentName(u.cfg.AgentName)
+	if err != nil {
+		return fmt.Errorf("invalid agent name: %w", err)
+	}
+	if err := u.validatePulseURL(); err != nil {
+		return fmt.Errorf("invalid Pulse URL: %w", err)
+	}
 
 	// Build download URL
-	downloadBase := fmt.Sprintf("%s/download/%s", strings.TrimRight(u.cfg.PulseURL, "/"), u.cfg.AgentName)
+	downloadBase := fmt.Sprintf("%s/download/%s", strings.TrimRight(u.cfg.PulseURL, "/"), agentName)
 	archParam := determineArch()
 
 	// Try architecture-specific binary first, then fall back to default
@@ -498,11 +594,10 @@ func (u *Updater) performUpdateWithExecPath(ctx context.Context, execPath string
 	if resp == nil {
 		return lastErr
 	}
-	defer func() {
-		if closeErr := resp.Body.Close(); closeErr != nil {
-			u.logger.Warn().Err(closeErr).Msg("agentupdate.performUpdateWithExecPath: failed to close download response body")
-		}
-	}()
+	defer resp.Body.Close()
+	if resp.ContentLength > maxBinarySizeBytes {
+		return fmt.Errorf("downloaded binary exceeds maximum size (%d bytes)", maxBinarySizeBytes)
+	}
 
 	// Verify checksum if provided
 	checksumHeader := strings.TrimSpace(resp.Header.Get(checksumSHA256Header))
@@ -517,7 +612,7 @@ func (u *Updater) performUpdateWithExecPath(ctx context.Context, execPath string
 	// Create temporary file in the same directory as the target binary
 	// to ensure atomic rename works (os.Rename fails across filesystems)
 	targetDir := filepath.Dir(realExecPath)
-	tmpFile, err := createTempFn(targetDir, u.cfg.AgentName+"-*.tmp")
+	tmpFile, err := createTempFn(targetDir, agentName+"-*.tmp")
 	if err != nil {
 		return fmt.Errorf("failed to create temp file: %w", err)
 	}
@@ -604,7 +699,7 @@ func (u *Updater) performUpdateWithExecPath(ctx context.Context, execPath string
 	// On Unraid, also update the persistent copy on the flash drive
 	// This ensures the update survives reboots
 	if isUnraid() {
-		persistPath := unraidPersistentPathFn(u.cfg.AgentName)
+		persistPath := unraidPersistentPathFn(agentName)
 		if _, err := os.Stat(persistPath); err == nil {
 			// Persistent path exists, update it
 			u.logger.Debug().Str("path", persistPath).Msg("updating unraid persistent binary")

@@ -25,6 +25,8 @@ var (
 	forceImport bool
 )
 
+const maxConfigImportBytes int64 = 16 << 20 // 16 MiB
+
 var configCmd = &cobra.Command{
 	Use:   "config",
 	Short: "Configuration management commands",
@@ -118,7 +120,7 @@ var configImportCmd = &cobra.Command{
 		}
 
 		// Read import file
-		data, err := os.ReadFile(importFile)
+		data, err := readBoundedRegularFile(importFile, maxConfigImportBytes)
 		if err != nil {
 			return fmt.Errorf("failed to read import file: %w", err)
 		}
@@ -165,6 +167,61 @@ var configImportCmd = &cobra.Command{
 }
 
 var readPassword = term.ReadPassword
+
+func readBoundedRegularFile(path string, maxBytes int64) ([]byte, error) {
+	if maxBytes <= 0 {
+		return nil, fmt.Errorf("invalid max bytes %d", maxBytes)
+	}
+
+	info, err := os.Lstat(path)
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("path is not a regular file")
+	}
+	if info.Size() > maxBytes {
+		return nil, fmt.Errorf("file exceeds %d bytes", maxBytes)
+	}
+
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	data, err := io.ReadAll(io.LimitReader(f, maxBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > maxBytes {
+		return nil, fmt.Errorf("file exceeds %d bytes", maxBytes)
+	}
+
+	return data, nil
+}
+
+func readBoundedHTTPBody(reader io.Reader, declaredLength, maxBytes int64, source string) ([]byte, error) {
+	if maxBytes <= 0 {
+		return nil, fmt.Errorf("invalid max bytes %d", maxBytes)
+	}
+	if source == "" {
+		source = "response body"
+	}
+	if declaredLength > maxBytes {
+		return nil, fmt.Errorf("%s exceeds %d bytes", source, maxBytes)
+	}
+
+	data, err := io.ReadAll(io.LimitReader(reader, maxBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > maxBytes {
+		return nil, fmt.Errorf("%s exceeds %d bytes", source, maxBytes)
+	}
+
+	return data, nil
+}
 
 func getPassphrase(prompt string, confirm bool) string {
 	// Check environment variable first
@@ -252,7 +309,7 @@ var configAutoImportCmd = &cobra.Command{
 				return fmt.Errorf("failed to fetch configuration from URL: %s", resp.Status)
 			}
 
-			body, err := io.ReadAll(resp.Body)
+			body, err := readBoundedHTTPBody(resp.Body, resp.ContentLength, maxConfigImportBytes, "configuration response")
 			if err != nil {
 				if closeErr := resp.Body.Close(); closeErr != nil {
 					return errors.Join(

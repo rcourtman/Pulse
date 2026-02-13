@@ -48,6 +48,8 @@ type sessionData struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+const maxSessionIDLength = 128
+
 // NewSessionStore creates a new session store
 func NewSessionStore(dataDir string) (*SessionStore, error) {
 	sessionsDir := filepath.Join(dataDir, "ai_sessions")
@@ -65,8 +67,11 @@ func NewSessionStore(dataDir string) (*SessionStore, error) {
 }
 
 // sessionPath returns the file path for a session
-func (s *SessionStore) sessionPath(id string) string {
-	return filepath.Join(s.dataDir, id+".json")
+func (s *SessionStore) sessionPath(id string) (string, error) {
+	if err := validateSessionID(id); err != nil {
+		return "", err
+	}
+	return filepath.Join(s.dataDir, id+".json"), nil
 }
 
 // List returns all sessions, sorted by updated_at descending
@@ -158,7 +163,10 @@ func (s *SessionStore) Delete(id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	path := s.sessionPath(id)
+	path, err := s.sessionPath(id)
+	if err != nil {
+		return err
+	}
 	if err := os.Remove(path); err != nil {
 		if os.IsNotExist(err) {
 			return fmt.Errorf("session not found: %s", id)
@@ -239,7 +247,10 @@ func (s *SessionStore) UpdateLastMessage(id string, msg Message) error {
 
 // readSession reads a session from disk (caller must hold lock)
 func (s *SessionStore) readSession(id string) (*sessionData, error) {
-	path := s.sessionPath(id)
+	path, err := s.sessionPath(id)
+	if err != nil {
+		return nil, err
+	}
 	file, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -258,12 +269,19 @@ func (s *SessionStore) readSession(id string) (*sessionData, error) {
 
 // writeSession writes a session to disk (caller must hold lock)
 func (s *SessionStore) writeSession(data sessionData) error {
+	if err := validateSessionID(data.ID); err != nil {
+		return err
+	}
+
 	file, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal session: %w", err)
 	}
 
-	path := s.sessionPath(data.ID)
+	path, err := s.sessionPath(data.ID)
+	if err != nil {
+		return err
+	}
 	if err := os.WriteFile(path, file, 0600); err != nil {
 		return fmt.Errorf("failed to write session: %w", err)
 	}
@@ -306,6 +324,9 @@ func (s *SessionStore) EnsureSession(id string) (*Session, error) {
 	if id == "" {
 		return s.Create()
 	}
+	if err := validateSessionID(id); err != nil {
+		return nil, err
+	}
 
 	session, err := s.Get(id)
 	if err != nil {
@@ -334,6 +355,25 @@ func (s *SessionStore) EnsureSession(id string) (*Session, error) {
 	}
 
 	return session, nil
+}
+
+func validateSessionID(id string) error {
+	if id == "" {
+		return fmt.Errorf("invalid session id: cannot be empty")
+	}
+	if len(id) > maxSessionIDLength {
+		return fmt.Errorf("invalid session id: too long")
+	}
+	for _, r := range id {
+		isLower := r >= 'a' && r <= 'z'
+		isUpper := r >= 'A' && r <= 'Z'
+		isDigit := r >= '0' && r <= '9'
+		if isLower || isUpper || isDigit || r == '-' || r == '_' {
+			continue
+		}
+		return fmt.Errorf("invalid session id: only letters, numbers, '-' and '_' are allowed")
+	}
+	return nil
 }
 
 // GetResolvedContext returns the resolved context for a session, creating one if needed

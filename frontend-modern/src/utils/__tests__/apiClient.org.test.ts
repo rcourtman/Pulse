@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { apiFetch, getOrgID, setOrgID } from '@/utils/apiClient';
+import { apiFetch, clearApiToken, getApiToken, getOrgID, setApiToken, setOrgID } from '@/utils/apiClient';
 
 const mockFetch = vi.fn();
 
@@ -9,11 +9,12 @@ describe('apiClient org context', () => {
     mockFetch.mockReset();
     global.fetch = mockFetch as unknown as typeof fetch;
     window.sessionStorage.clear();
+    clearApiToken();
     setOrgID(null);
   });
 
   afterEach(() => {
-    vi.useRealTimers();
+    clearApiToken();
     setOrgID(null);
   });
 
@@ -39,6 +40,32 @@ describe('apiClient org context', () => {
     const [, options] = mockFetch.mock.calls[0] as [string, RequestInit];
     const headers = options.headers as Record<string, string>;
     expect(headers['X-Pulse-Org-ID']).toBe('default');
+  });
+
+  it('rejects malformed org IDs from storage and does not forward them to headers', async () => {
+    mockFetch.mockResolvedValue(new Response('{}', { status: 200 }));
+    window.sessionStorage.setItem('pulse_org_id', 'bad\norg');
+
+    await apiFetch('/api/state');
+
+    const [, options] = mockFetch.mock.calls[0] as [string, RequestInit];
+    const headers = options.headers as Record<string, string>;
+    expect(headers['X-Pulse-Org-ID']).toBeUndefined();
+    expect(getOrgID()).toBeNull();
+    expect(window.sessionStorage.getItem('pulse_org_id')).toBeNull();
+  });
+
+  it('rejects malformed API tokens before attaching auth headers', async () => {
+    mockFetch.mockResolvedValue(new Response('{}', { status: 200 }));
+
+    setApiToken('bad\ntoken');
+    await apiFetch('/api/state');
+
+    const [, options] = mockFetch.mock.calls[0] as [string, RequestInit];
+    const headers = options.headers as Record<string, string>;
+    expect(headers['X-API-Token']).toBeUndefined();
+    expect(getApiToken()).toBeNull();
+    expect(window.sessionStorage.getItem('pulse_auth')).toBeNull();
   });
 
   it('clears stale org context and retries when backend returns invalid_org', async () => {
