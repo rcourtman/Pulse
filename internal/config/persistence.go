@@ -81,6 +81,14 @@ func (dfs defaultFileSystem) MkdirAll(path string, perm os.FileMode) error {
 	return os.MkdirAll(path, perm)
 }
 
+type alertSchedulePresence struct {
+	Schedule *alertScheduleFieldPresence `json:"schedule"`
+}
+
+type alertScheduleFieldPresence struct {
+	NotifyOnResolve *bool `json:"notifyOnResolve"`
+}
+
 // NewConfigPersistence creates a new config persistence manager.
 // The process terminates if encryption cannot be initialized to avoid
 // writing secrets to disk in plaintext.
@@ -657,13 +665,10 @@ func (c *ConfigPersistence) LoadAlertConfig() (*alerts.AlertConfig, error) {
 	// Since bool zero-value is false, we check raw JSON to distinguish
 	// "missing field" (old configs) from "explicitly set to false".
 	if !config.Schedule.NotifyOnResolve {
-		var raw map[string]interface{}
-		if json.Unmarshal(data, &raw) == nil {
-			if schedule, ok := raw["schedule"].(map[string]interface{}); ok {
-				if _, exists := schedule["notifyOnResolve"]; !exists {
-					config.Schedule.NotifyOnResolve = true
-				}
-			} else {
+		var presence alertSchedulePresence
+		// Ignore error here as we've already unmarshaled successfully above.
+		if json.Unmarshal(data, &presence) == nil {
+			if presence.Schedule == nil || presence.Schedule.NotifyOnResolve == nil {
 				config.Schedule.NotifyOnResolve = true
 			}
 		}

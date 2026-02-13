@@ -57,8 +57,8 @@ func TestReaperDetectsExpiredOrg(t *testing.T) {
 	if len(results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(results))
 	}
-	if results[0].Action != "dry_run" {
-		t.Fatalf("expected action dry_run, got %q", results[0].Action)
+	if results[0].Action != ReapActionDryRun {
+		t.Fatalf("expected action %q, got %q", ReapActionDryRun, results[0].Action)
 	}
 	if deleter.calls != 0 {
 		t.Fatalf("expected no delete calls in dry-run mode, got %d", deleter.calls)
@@ -165,8 +165,8 @@ func TestReaperLiveModeDeletes(t *testing.T) {
 	if len(results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(results))
 	}
-	if results[0].Action != "deleted" {
-		t.Fatalf("expected action deleted, got %q", results[0].Action)
+	if results[0].Action != ReapActionDeleted {
+		t.Fatalf("expected action %q, got %q", ReapActionDeleted, results[0].Action)
 	}
 	if results[0].Error != nil {
 		t.Fatalf("expected nil result error, got %v", results[0].Error)
@@ -289,8 +289,8 @@ func TestReaperDryRunDoesNotDelete(t *testing.T) {
 	if len(results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(results))
 	}
-	if results[0].Action != "dry_run" {
-		t.Fatalf("expected action dry_run, got %q", results[0].Action)
+	if results[0].Action != ReapActionDryRun {
+		t.Fatalf("expected action %q, got %q", ReapActionDryRun, results[0].Action)
 	}
 	if deleter.calls != 0 {
 		t.Fatalf("expected no delete calls in dry-run mode, got %d", deleter.calls)

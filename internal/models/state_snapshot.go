@@ -1,6 +1,9 @@
 package models
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 // StateSnapshot represents a snapshot of the state without mutex
 type StateSnapshot struct {
@@ -376,11 +379,11 @@ func (s StateSnapshot) ToFrontend() StateFrontend {
 		Backups:                      s.Backups,
 		ReplicationJobs:              replicationJobs,
 		ActiveAlerts:                 s.ActiveAlerts,
-		Metrics:                      make(map[string]any),
+		Metrics:                      make(map[string]json.RawMessage),
 		PVEBackups:                   s.PVEBackups,
-		Performance:                  make(map[string]any),
+		Performance:                  make(map[string]json.RawMessage),
 		ConnectionHealth:             s.ConnectionHealth,
-		Stats:                        make(map[string]any),
+		Stats:                        make(map[string]json.RawMessage),
 		LastUpdate:                   s.LastUpdate.Unix() * 1000, // JavaScript timestamp
 		TemperatureMonitoringEnabled: s.TemperatureMonitoringEnabled,
 	}

@@ -17,6 +17,24 @@ import (
 
 const handoffTTL = 60 * time.Second
 
+type adminGenerateMagicLinkRequest struct {
+	Email     string `json:"email"`
+	TenantID  string `json:"tenant_id"`
+	SendEmail bool   `json:"send_email"`
+}
+
+type adminGenerateMagicLinkResponse struct {
+	URL       string `json:"url"`
+	Email     string `json:"email"`
+	TenantID  string `json:"tenant_id"`
+	EmailSent bool   `json:"email_sent"`
+}
+
+type errorResponse struct {
+	Error   string `json:"error"`
+	Message string `json:"message"`
+}
+
 // HandleMagicLinkVerify returns an http.HandlerFunc that validates a control-plane
 // magic link token, generates a short-lived handoff token, and redirects the user
 // to the tenant container.
@@ -96,11 +114,7 @@ func HandleAdminGenerateMagicLink(svc *Service, baseURL string, emailSender emai
 			return
 		}
 
-		var req struct {
-			Email     string `json:"email"`
-			TenantID  string `json:"tenant_id"`
-			SendEmail bool   `json:"send_email"`
-		}
+		var req adminGenerateMagicLinkRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			writeError(w, http.StatusBadRequest, "bad_request", "Invalid JSON body")
 			return
@@ -144,11 +158,11 @@ func HandleAdminGenerateMagicLink(svc *Service, baseURL string, emailSender emai
 			Msg("Admin generated magic link")
 
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"url":        magicURL,
-			"email":      req.Email,
-			"tenant_id":  req.TenantID,
-			"email_sent": emailSent,
+		_ = json.NewEncoder(w).Encode(adminGenerateMagicLinkResponse{
+			URL:       magicURL,
+			Email:     req.Email,
+			TenantID:  req.TenantID,
+			EmailSent: emailSent,
 		})
 	}
 }
@@ -156,8 +170,8 @@ func HandleAdminGenerateMagicLink(svc *Service, baseURL string, emailSender emai
 func writeError(w http.ResponseWriter, status int, code, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(map[string]string{
-		"error":   code,
-		"message": message,
+	_ = json.NewEncoder(w).Encode(errorResponse{
+		Error:   code,
+		Message: message,
 	})
 }

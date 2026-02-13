@@ -8,6 +8,15 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
 )
 
+type listTenantsResponse struct {
+	Tenants []*registry.Tenant `json:"tenants"`
+	Count   int                `json:"count"`
+}
+
+type unauthorizedResponse struct {
+	Error string `json:"error"`
+}
+
 // HandleListTenants returns an authenticated handler that lists all tenants.
 func HandleListTenants(reg *registry.TenantRegistry) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -37,9 +46,9 @@ func HandleListTenants(reg *registry.TenantRegistry) http.HandlerFunc {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"tenants": tenants,
-			"count":   len(tenants),
+		_ = json.NewEncoder(w).Encode(listTenantsResponse{
+			Tenants: tenants,
+			Count:   len(tenants),
 		})
 	}
 }
@@ -59,9 +68,7 @@ func AdminKeyMiddleware(adminKey string, next http.Handler) http.Handler {
 		if key == "" || key != adminKey {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusUnauthorized)
-			_ = json.NewEncoder(w).Encode(map[string]string{
-				"error": "unauthorized",
-			})
+			_ = json.NewEncoder(w).Encode(unauthorizedResponse{Error: "unauthorized"})
 			return
 		}
 

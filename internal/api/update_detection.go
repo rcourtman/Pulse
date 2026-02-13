@@ -23,17 +23,51 @@ func NewUpdateDetectionHandlers(monitor *monitoring.Monitor) *UpdateDetectionHan
 
 // ContainerUpdateInfo represents a container with an available update
 type ContainerUpdateInfo struct {
-	HostID          string `json:"hostId"`
-	HostName        string `json:"hostName"`
-	ContainerID     string `json:"containerId"`
-	ContainerName   string `json:"containerName"`
-	Image           string `json:"image"`
-	CurrentDigest   string `json:"currentDigest,omitempty"`
-	LatestDigest    string `json:"latestDigest,omitempty"`
-	UpdateAvailable bool   `json:"updateAvailable"`
-	LastChecked     int64  `json:"lastChecked,omitempty"`
-	Error           string `json:"error,omitempty"`
-	ResourceType    string `json:"resourceType"`
+	HostID          string                  `json:"hostId"`
+	HostName        string                  `json:"hostName"`
+	ContainerID     string                  `json:"containerId"`
+	ContainerName   string                  `json:"containerName"`
+	Image           string                  `json:"image"`
+	CurrentDigest   string                  `json:"currentDigest,omitempty"`
+	LatestDigest    string                  `json:"latestDigest,omitempty"`
+	UpdateAvailable bool                    `json:"updateAvailable"`
+	LastChecked     int64                   `json:"lastChecked,omitempty"`
+	Error           string                  `json:"error,omitempty"`
+	ResourceType    InfraUpdateResourceType `json:"resourceType"`
+}
+
+type InfraUpdateResourceType string
+
+const infraUpdateResourceTypeDocker InfraUpdateResourceType = "docker"
+
+type infraUpdatesResponse struct {
+	Updates []ContainerUpdateInfo `json:"updates"`
+	Total   int                   `json:"total"`
+}
+
+type infraUpdateHostSummary struct {
+	HostID     string `json:"hostId"`
+	HostName   string `json:"hostName"`
+	TotalCount int    `json:"totalCount"`
+	Containers int    `json:"containers"`
+}
+
+type infraUpdatesSummaryResponse struct {
+	Summaries    map[string]infraUpdateHostSummary `json:"summaries"`
+	TotalUpdates int                               `json:"totalUpdates"`
+}
+
+type infraUpdatesForHostResponse struct {
+	Updates []ContainerUpdateInfo `json:"updates"`
+	Total   int                   `json:"total"`
+	HostID  string                `json:"hostId"`
+}
+
+type triggerInfraUpdateCheckResponse struct {
+	Success   bool   `json:"success"`
+	CommandID string `json:"commandId"`
+	HostID    string `json:"hostId"`
+	Message   string `json:"message"`
 }
 
 // HandleGetInfraUpdates returns all tracked infrastructure updates with optional filtering.
@@ -48,9 +82,9 @@ func (h *UpdateDetectionHandlers) HandleGetInfraUpdates(w http.ResponseWriter, r
 	}
 
 	if h.monitor == nil {
-		if err := utils.WriteJSONResponse(w, map[string]any{
-			"updates": []any{},
-			"total":   0,
+		if err := utils.WriteJSONResponse(w, infraUpdatesResponse{
+			Updates: []ContainerUpdateInfo{},
+			Total:   0,
 		}); err != nil {
 			log.Error().Err(err).Msg("Failed to serialize empty updates response")
 		}
@@ -66,13 +100,13 @@ func (h *UpdateDetectionHandlers) HandleGetInfraUpdates(w http.ResponseWriter, r
 	updates := h.collectDockerUpdates(hostIDFilter)
 
 	// Filter by resource type if specified
-	if resourceTypeFilter != "" && resourceTypeFilter != "docker" {
+	if resourceTypeFilter != "" && resourceTypeFilter != string(infraUpdateResourceTypeDocker) {
 		updates = []ContainerUpdateInfo{} // Only docker supported currently
 	}
 
-	response := map[string]any{
-		"updates": updates,
-		"total":   len(updates),
+	response := infraUpdatesResponse{
+		Updates: updates,
+		Total:   len(updates),
 	}
 
 	if err := utils.WriteJSONResponse(w, response); err != nil {
@@ -117,9 +151,9 @@ func (h *UpdateDetectionHandlers) HandleGetInfraUpdatesSummary(w http.ResponseWr
 	}
 
 	if h.monitor == nil {
-		if err := utils.WriteJSONResponse(w, map[string]any{
-			"summaries":    map[string]any{},
-			"totalUpdates": 0,
+		if err := utils.WriteJSONResponse(w, infraUpdatesSummaryResponse{
+			Summaries:    map[string]infraUpdateHostSummary{},
+			TotalUpdates: 0,
 		}); err != nil {
 			log.Error().Err(err).Msg("Failed to serialize empty summary response")
 		}
@@ -129,23 +163,23 @@ func (h *UpdateDetectionHandlers) HandleGetInfraUpdatesSummary(w http.ResponseWr
 	updates := h.collectDockerUpdates("")
 
 	// Aggregate by host
-	summaries := make(map[string]map[string]any)
+	summaries := make(map[string]infraUpdateHostSummary)
 	for _, update := range updates {
-		if _, ok := summaries[update.HostID]; !ok {
-			summaries[update.HostID] = map[string]any{
-				"hostId":     update.HostID,
-				"hostName":   update.HostName,
-				"totalCount": 0,
-				"containers": 0,
+		summary, ok := summaries[update.HostID]
+		if !ok {
+			summary = infraUpdateHostSummary{
+				HostID:   update.HostID,
+				HostName: update.HostName,
 			}
 		}
-		summaries[update.HostID]["totalCount"] = summaries[update.HostID]["totalCount"].(int) + 1
-		summaries[update.HostID]["containers"] = summaries[update.HostID]["containers"].(int) + 1
+		summary.TotalCount++
+		summary.Containers++
+		summaries[update.HostID] = summary
 	}
 
-	response := map[string]any{
-		"summaries":    summaries,
-		"totalUpdates": len(updates),
+	response := infraUpdatesSummaryResponse{
+		Summaries:    summaries,
+		TotalUpdates: len(updates),
 	}
 
 	if err := utils.WriteJSONResponse(w, response); err != nil {
@@ -190,11 +224,11 @@ func (h *UpdateDetectionHandlers) HandleTriggerInfraUpdateCheck(w http.ResponseW
 			return
 		}
 
-		if err := utils.WriteJSONResponse(w, map[string]any{
-			"success":   true,
-			"commandId": commandStatus.ID,
-			"hostId":    req.HostID,
-			"message":   "Update check command queued for host",
+		if err := utils.WriteJSONResponse(w, triggerInfraUpdateCheckResponse{
+			Success:   true,
+			CommandID: commandStatus.ID,
+			HostID:    req.HostID,
+			Message:   "Update check command queued for host",
 		}); err != nil {
 			log.Error().Err(err).Msg("Failed to serialize check response")
 		}
@@ -224,11 +258,11 @@ func (h *UpdateDetectionHandlers) HandleTriggerInfraUpdateCheck(w http.ResponseW
 			return
 		}
 
-		if err := utils.WriteJSONResponse(w, map[string]any{
-			"success":   true,
-			"commandId": commandStatus.ID,
-			"hostId":    hostID,
-			"message":   "Update check command queued for host",
+		if err := utils.WriteJSONResponse(w, triggerInfraUpdateCheckResponse{
+			Success:   true,
+			CommandID: commandStatus.ID,
+			HostID:    hostID,
+			Message:   "Update check command queued for host",
 		}); err != nil {
 			log.Error().Err(err).Msg("Failed to serialize check response")
 		}
@@ -247,10 +281,10 @@ func (h *UpdateDetectionHandlers) HandleGetInfraUpdatesForHost(w http.ResponseWr
 	}
 
 	if h.monitor == nil {
-		if err := utils.WriteJSONResponse(w, map[string]any{
-			"updates": []any{},
-			"total":   0,
-			"hostId":  hostID,
+		if err := utils.WriteJSONResponse(w, infraUpdatesForHostResponse{
+			Updates: []ContainerUpdateInfo{},
+			Total:   0,
+			HostID:  hostID,
 		}); err != nil {
 			log.Error().Err(err).Msg("Failed to serialize empty host updates response")
 		}
@@ -259,10 +293,10 @@ func (h *UpdateDetectionHandlers) HandleGetInfraUpdatesForHost(w http.ResponseWr
 
 	updates := h.collectDockerUpdates(hostID)
 
-	response := map[string]any{
-		"updates": updates,
-		"total":   len(updates),
-		"hostId":  hostID,
+	response := infraUpdatesForHostResponse{
+		Updates: updates,
+		Total:   len(updates),
+		HostID:  hostID,
 	}
 
 	if err := utils.WriteJSONResponse(w, response); err != nil {
@@ -299,7 +333,7 @@ func (h *UpdateDetectionHandlers) collectDockerUpdates(hostIDFilter string) []Co
 				ContainerName:   strings.TrimPrefix(container.Name, "/"),
 				Image:           container.Image,
 				UpdateAvailable: container.UpdateStatus.UpdateAvailable,
-				ResourceType:    "docker",
+				ResourceType:    infraUpdateResourceTypeDocker,
 			}
 
 			if container.UpdateStatus.CurrentDigest != "" {

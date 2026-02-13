@@ -67,3 +67,84 @@ func TestHostedMetricsGaugeSet(t *testing.T) {
 		t.Fatalf("expected active tenants gauge to be 42, got %v", got)
 	}
 }
+
+func TestParseProvisionMetricStatus(t *testing.T) {
+	testCases := []struct {
+		name  string
+		input string
+		want  ProvisionMetricStatus
+	}{
+		{name: "success canonical", input: "success", want: ProvisionMetricStatusSuccess},
+		{name: "success normalized", input: " SUCCESS ", want: ProvisionMetricStatusSuccess},
+		{name: "unknown defaults to failure", input: "unknown", want: ProvisionMetricStatusFailure},
+		{name: "empty defaults to failure", input: "", want: ProvisionMetricStatusFailure},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := ParseProvisionMetricStatus(tc.input); got != tc.want {
+				t.Fatalf("expected %q, got %q", tc.want, got)
+			}
+		})
+	}
+}
+
+func TestParseLifecycleMetricStatus(t *testing.T) {
+	testCases := []struct {
+		name  string
+		input string
+		want  LifecycleMetricStatus
+	}{
+		{name: "active canonical", input: "active", want: LifecycleMetricStatusActive},
+		{name: "active default empty", input: "", want: LifecycleMetricStatusActive},
+		{name: "active normalized", input: " ACTIVE ", want: LifecycleMetricStatusActive},
+		{name: "suspended", input: "suspended", want: LifecycleMetricStatusSuspended},
+		{name: "pending deletion", input: "pending_deletion", want: LifecycleMetricStatusPendingDeletion},
+		{name: "unknown defaults to active", input: "unknown", want: LifecycleMetricStatusActive},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := ParseLifecycleMetricStatus(tc.input); got != tc.want {
+				t.Fatalf("expected %q, got %q", tc.want, got)
+			}
+		})
+	}
+}
+
+func TestHostedMetricsRecordProvisionStatus(t *testing.T) {
+	resetHostedMetricsForTest(t)
+
+	m := GetHostedMetrics()
+	m.RecordProvisionStatus(ProvisionMetricStatusSuccess)
+	m.RecordProvision("unknown")
+
+	if got := testutil.ToFloat64(m.provisionsTotal.WithLabelValues(string(ProvisionMetricStatusSuccess))); got != 1 {
+		t.Fatalf("expected success provision count 1, got %v", got)
+	}
+	if got := testutil.ToFloat64(m.provisionsTotal.WithLabelValues(string(ProvisionMetricStatusFailure))); got != 1 {
+		t.Fatalf("expected failure provision count 1, got %v", got)
+	}
+}
+
+func TestHostedMetricsRecordLifecycleTransitionStatus(t *testing.T) {
+	resetHostedMetricsForTest(t)
+
+	m := GetHostedMetrics()
+	m.RecordLifecycleTransitionStatus(LifecycleMetricStatusSuspended, LifecycleMetricStatusPendingDeletion)
+	m.RecordLifecycleTransition("unknown", "")
+
+	if got := testutil.ToFloat64(m.lifecycleTransitionsTotal.WithLabelValues(
+		string(LifecycleMetricStatusSuspended),
+		string(LifecycleMetricStatusPendingDeletion),
+	)); got != 1 {
+		t.Fatalf("expected suspended->pending_deletion transition count 1, got %v", got)
+	}
+
+	if got := testutil.ToFloat64(m.lifecycleTransitionsTotal.WithLabelValues(
+		string(LifecycleMetricStatusActive),
+		string(LifecycleMetricStatusActive),
+	)); got != 1 {
+		t.Fatalf("expected active->active transition count 1, got %v", got)
+	}
+}

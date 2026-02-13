@@ -239,8 +239,8 @@ type Service struct {
 	evaluator *entitlements.Evaluator
 
 	// Optional subscription state machine hook.
-	// Stored for lifecycle integration; current derivation remains claim/license based.
-	stateMachine any
+	// Only tracks whether a hook is configured; current derivation remains claim/license based.
+	stateMachineConfigured bool
 }
 
 // DefaultGracePeriod is the duration after license expiration during which
@@ -284,7 +284,7 @@ func (s *Service) SetEvaluator(eval *entitlements.Evaluator) {
 func (s *Service) SetStateMachine(sm any) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.stateMachine = sm
+	s.stateMachineConfigured = sm != nil
 }
 
 // Evaluator returns the current evaluator, or nil if not set.
@@ -448,7 +448,7 @@ func (s *Service) SubscriptionState() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.stateMachine != nil && s.license != nil && s.license.Claims.SubState != "" {
+	if s.stateMachineConfigured && s.license != nil && s.license.Claims.SubState != "" {
 		return string(s.license.Claims.SubState)
 	}
 	if s.license == nil && s.evaluator != nil {

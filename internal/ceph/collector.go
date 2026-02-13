@@ -12,6 +12,36 @@ import (
 	"time"
 )
 
+// HealthState represents Ceph cluster health values.
+type HealthState string
+
+const (
+	HealthStateOK      HealthState = "HEALTH_OK"
+	HealthStateWarn    HealthState = "HEALTH_WARN"
+	HealthStateErr     HealthState = "HEALTH_ERR"
+	HealthStateUnknown HealthState = "HEALTH_UNKNOWN"
+)
+
+// HealthSeverity represents severity values used in Ceph health checks.
+type HealthSeverity string
+
+const (
+	HealthSeverityWarn    HealthSeverity = "HEALTH_WARN"
+	HealthSeverityErr     HealthSeverity = "HEALTH_ERR"
+	HealthSeverityUnknown HealthSeverity = "HEALTH_UNKNOWN"
+)
+
+// ServiceType represents Ceph daemon service categories.
+type ServiceType string
+
+const (
+	ServiceTypeMonitor ServiceType = "mon"
+	ServiceTypeManager ServiceType = "mgr"
+	ServiceTypeOSD     ServiceType = "osd"
+	ServiceTypeMDS     ServiceType = "mds"
+	ServiceTypeRGW     ServiceType = "rgw"
+)
+
 var commandRunner = func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
 	var stdout, stderr bytes.Buffer
@@ -36,22 +66,22 @@ type ClusterStatus struct {
 
 // HealthStatus represents Ceph cluster health.
 type HealthStatus struct {
-	Status  string           `json:"status"` // HEALTH_OK, HEALTH_WARN, HEALTH_ERR
+	Status  HealthState      `json:"status"` // HEALTH_OK, HEALTH_WARN, HEALTH_ERR
 	Checks  map[string]Check `json:"checks,omitempty"`
 	Summary []HealthSummary  `json:"summary,omitempty"`
 }
 
 // Check represents a health check detail.
 type Check struct {
-	Severity string   `json:"severity"`
-	Message  string   `json:"message,omitempty"`
-	Detail   []string `json:"detail,omitempty"`
+	Severity HealthSeverity `json:"severity"`
+	Message  string         `json:"message,omitempty"`
+	Detail   []string       `json:"detail,omitempty"`
 }
 
 // HealthSummary represents a health summary message.
 type HealthSummary struct {
-	Severity string `json:"severity"`
-	Message  string `json:"message"`
+	Severity HealthSeverity `json:"severity"`
+	Message  string         `json:"message"`
 }
 
 // MonitorMap represents Ceph monitor information.
@@ -115,10 +145,10 @@ type Pool struct {
 
 // ServiceInfo represents a Ceph service summary.
 type ServiceInfo struct {
-	Type    string   `json:"type"` // mon, mgr, osd, mds, rgw
-	Running int      `json:"running"`
-	Total   int      `json:"total"`
-	Daemons []string `json:"daemons,omitempty"`
+	Type    ServiceType `json:"type"` // mon, mgr, osd, mds, rgw
+	Running int         `json:"running"`
+	Total   int         `json:"total"`
+	Daemons []string    `json:"daemons,omitempty"`
 }
 
 // IsAvailable checks if the ceph CLI is available on the system.
@@ -238,7 +268,7 @@ func parseStatus(data []byte) (*ClusterStatus, error) {
 	status := &ClusterStatus{
 		FSID: raw.FSID,
 		Health: HealthStatus{
-			Status: raw.Health.Status,
+			Status: normalizeHealthState(raw.Health.Status),
 			Checks: make(map[string]Check),
 		},
 		MonMap: MonitorMap{
@@ -295,7 +325,7 @@ func parseStatus(data []byte) (*ClusterStatus, error) {
 			details = append(details, d.Message)
 		}
 		status.Health.Checks[name] = Check{
-			Severity: check.Severity,
+			Severity: normalizeHealthSeverity(check.Severity),
 			Message:  check.Summary.Message,
 			Detail:   details,
 		}
@@ -303,9 +333,9 @@ func parseStatus(data []byte) (*ClusterStatus, error) {
 
 	// Build service summary
 	status.Services = []ServiceInfo{
-		{Type: "mon", Running: len(raw.MonMap.Mons), Total: len(raw.MonMap.Mons)},
-		{Type: "mgr", Running: boolToInt(raw.MgrMap.Available), Total: status.MgrMap.NumMgrs},
-		{Type: "osd", Running: raw.OSDMap.NumUp, Total: raw.OSDMap.NumOSDs},
+		{Type: ServiceTypeMonitor, Running: len(raw.MonMap.Mons), Total: len(raw.MonMap.Mons)},
+		{Type: ServiceTypeManager, Running: boolToInt(raw.MgrMap.Available), Total: status.MgrMap.NumMgrs},
+		{Type: ServiceTypeOSD, Running: raw.OSDMap.NumUp, Total: raw.OSDMap.NumOSDs},
 	}
 
 	return status, nil
@@ -355,4 +385,34 @@ func boolToInt(b bool) int {
 		return 1
 	}
 	return 0
+}
+
+func normalizeHealthState(value string) HealthState {
+	normalized := strings.TrimSpace(strings.ToUpper(value))
+	switch normalized {
+	case string(HealthStateOK):
+		return HealthStateOK
+	case string(HealthStateWarn):
+		return HealthStateWarn
+	case string(HealthStateErr):
+		return HealthStateErr
+	case "":
+		return HealthStateUnknown
+	default:
+		return HealthState(normalized)
+	}
+}
+
+func normalizeHealthSeverity(value string) HealthSeverity {
+	normalized := strings.TrimSpace(strings.ToUpper(value))
+	switch normalized {
+	case string(HealthSeverityWarn):
+		return HealthSeverityWarn
+	case string(HealthSeverityErr):
+		return HealthSeverityErr
+	case "":
+		return HealthSeverityUnknown
+	default:
+		return HealthSeverity(normalized)
+	}
 }

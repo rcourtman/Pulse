@@ -1879,7 +1879,7 @@ func (m *Monitor) rescheduleTask(task ScheduledTask) {
 			desc.LastSuccess = snap.LastSuccess
 			desc.LastFailure = snap.LastError
 			if snap.ChangeHash != "" {
-				desc.Metadata = map[string]any{"changeHash": snap.ChangeHash}
+				desc.Metadata = TaskMetadata{ChangeHash: snap.ChangeHash}
 			}
 		}
 	}

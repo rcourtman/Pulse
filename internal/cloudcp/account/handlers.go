@@ -309,7 +309,7 @@ func parseMemberRole(s string) (registry.MemberRole, bool) {
 	}
 }
 
-func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) error {
+func decodeJSON[T any](w http.ResponseWriter, r *http.Request, dst *T) error {
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1 MiB
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()

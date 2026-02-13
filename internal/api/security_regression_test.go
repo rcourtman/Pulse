@@ -605,17 +605,18 @@ func TestAgentExecTokenBindingEnforced(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Dial: %v", err)
 	}
-	if err := conn.WriteJSON(agentexec.Message{
-		Type:      agentexec.MsgTypeAgentRegister,
-		Timestamp: time.Now(),
-		Payload: agentexec.AgentRegisterPayload{
-			AgentID:  "agent-2",
-			Hostname: "host-2",
-			Version:  "1.0.0",
-			Platform: "linux",
-			Token:    rawToken,
-		},
-	}); err != nil {
+	regMsg, err := agentexec.NewMessage(agentexec.MsgTypeAgentRegister, "", agentexec.AgentRegisterPayload{
+		AgentID:  "agent-2",
+		Hostname: "host-2",
+		Version:  "1.0.0",
+		Platform: "linux",
+		Token:    rawToken,
+	})
+	if err != nil {
+		conn.Close()
+		t.Fatalf("NewMessage: %v", err)
+	}
+	if err := conn.WriteJSON(regMsg); err != nil {
 		conn.Close()
 		t.Fatalf("WriteJSON: %v", err)
 	}
@@ -631,17 +632,18 @@ func TestAgentExecTokenBindingEnforced(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Dial: %v", err)
 	}
-	if err := conn.WriteJSON(agentexec.Message{
-		Type:      agentexec.MsgTypeAgentRegister,
-		Timestamp: time.Now(),
-		Payload: agentexec.AgentRegisterPayload{
-			AgentID:  "agent-1",
-			Hostname: "host-1",
-			Version:  "1.0.0",
-			Platform: "linux",
-			Token:    rawToken,
-		},
-	}); err != nil {
+	regMsg, err = agentexec.NewMessage(agentexec.MsgTypeAgentRegister, "", agentexec.AgentRegisterPayload{
+		AgentID:  "agent-1",
+		Hostname: "host-1",
+		Version:  "1.0.0",
+		Platform: "linux",
+		Token:    rawToken,
+	})
+	if err != nil {
+		conn.Close()
+		t.Fatalf("NewMessage: %v", err)
+	}
+	if err := conn.WriteJSON(regMsg); err != nil {
 		conn.Close()
 		t.Fatalf("WriteJSON: %v", err)
 	}
@@ -667,17 +669,18 @@ func TestAgentExecRequiresAgentExecScope(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Dial: %v", err)
 	}
-	if err := conn.WriteJSON(agentexec.Message{
-		Type:      agentexec.MsgTypeAgentRegister,
-		Timestamp: time.Now(),
-		Payload: agentexec.AgentRegisterPayload{
-			AgentID:  "agent-1",
-			Hostname: "host-1",
-			Version:  "1.0.0",
-			Platform: "linux",
-			Token:    rawToken,
-		},
-	}); err != nil {
+	regMsg, err := agentexec.NewMessage(agentexec.MsgTypeAgentRegister, "", agentexec.AgentRegisterPayload{
+		AgentID:  "agent-1",
+		Hostname: "host-1",
+		Version:  "1.0.0",
+		Platform: "linux",
+		Token:    rawToken,
+	})
+	if err != nil {
+		conn.Close()
+		t.Fatalf("NewMessage: %v", err)
+	}
+	if err := conn.WriteJSON(regMsg); err != nil {
 		conn.Close()
 		t.Fatalf("WriteJSON: %v", err)
 	}

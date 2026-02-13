@@ -2,6 +2,7 @@ package hostagent
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -13,6 +14,81 @@ import (
 
 	"github.com/rs/zerolog"
 )
+
+func TestParseProxmoxProductType(t *testing.T) {
+	tests := []struct {
+		name     string
+		rawType  string
+		expected proxmoxProductType
+	}{
+		{name: "pve", rawType: "pve", expected: proxmoxProductPVE},
+		{name: "pbs uppercase", rawType: "PBS", expected: proxmoxProductPBS},
+		{name: "trimmed", rawType: "  pve  ", expected: proxmoxProductPVE},
+		{name: "invalid", rawType: "invalid", expected: proxmoxProductUnknown},
+		{name: "empty", rawType: "", expected: proxmoxProductUnknown},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := parseProxmoxProductType(tt.rawType); got != tt.expected {
+				t.Fatalf("parseProxmoxProductType(%q) = %q, want %q", tt.rawType, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestRegisterWithPulse_Payload(t *testing.T) {
+	var gotPayload autoRegisterRequest
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("unexpected method %s", r.Method)
+		}
+		if r.URL.Path != "/api/auto-register" {
+			t.Fatalf("unexpected path %s", r.URL.Path)
+		}
+		if gotToken := r.Header.Get("X-API-Token"); gotToken != "pulse-token" {
+			t.Fatalf("unexpected X-API-Token header %q", gotToken)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&gotPayload); err != nil {
+			t.Fatalf("decode payload: %v", err)
+		}
+
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	p := &ProxmoxSetup{
+		logger:     zerolog.Nop(),
+		httpClient: server.Client(),
+		pulseURL:   server.URL,
+		apiToken:   "pulse-token",
+		hostname:   "node-1",
+	}
+
+	err := p.registerWithPulse(context.Background(), proxmoxProductPVE, "https://10.0.0.4:8006", "token-id", "token-value")
+	if err != nil {
+		t.Fatalf("registerWithPulse failed: %v", err)
+	}
+
+	if gotPayload.Type != proxmoxProductPVE {
+		t.Fatalf("unexpected type %q", gotPayload.Type)
+	}
+	if gotPayload.Host != "https://10.0.0.4:8006" {
+		t.Fatalf("unexpected host %q", gotPayload.Host)
+	}
+	if gotPayload.ServerName != "node-1" {
+		t.Fatalf("unexpected serverName %q", gotPayload.ServerName)
+	}
+	if gotPayload.TokenID != "token-id" {
+		t.Fatalf("unexpected tokenId %q", gotPayload.TokenID)
+	}
+	if gotPayload.TokenValue != "token-value" {
+		t.Fatalf("unexpected tokenValue %q", gotPayload.TokenValue)
+	}
+	if gotPayload.Source != autoRegisterSourceAgent {
+		t.Fatalf("unexpected source %q", gotPayload.Source)
+	}
+}
 
 func TestParseTokenValue_RegexFallback(t *testing.T) {
 	p := &ProxmoxSetup{logger: zerolog.Nop()}

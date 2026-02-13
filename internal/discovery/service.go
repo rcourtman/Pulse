@@ -47,7 +47,7 @@ type historyEntry struct {
 	errorCount      int
 	duration        time.Duration
 	blocklistLength int
-	status          string
+	status          scanResultStatus
 }
 
 func (h historyEntry) StartedAt() time.Time {
@@ -79,10 +79,66 @@ func (h historyEntry) BlocklistLength() int {
 }
 
 func (h historyEntry) Status() string {
-	return h.status
+	return string(h.status)
 }
 
 const defaultHistoryLimit = 20
+
+type scanResultStatus string
+
+const (
+	scanResultStatusSuccess scanResultStatus = "success"
+	scanResultStatusFailure scanResultStatus = "failure"
+	scanResultStatusPartial scanResultStatus = "partial"
+)
+
+type discoveryStartedPayload struct {
+	Scanning  bool   `json:"scanning"`
+	Subnet    string `json:"subnet"`
+	Timestamp int64  `json:"timestamp"`
+}
+
+type discoveryServerFoundPayload struct {
+	Server    pkgdiscovery.DiscoveredServer `json:"server"`
+	Phase     string                        `json:"phase"`
+	Timestamp int64                         `json:"timestamp"`
+}
+
+type discoveryProgressPayload struct {
+	Progress  pkgdiscovery.ScanProgress `json:"progress"`
+	Timestamp int64                     `json:"timestamp"`
+}
+
+type discoveryCompletePayload struct {
+	Scanning    bool                          `json:"scanning"`
+	Timestamp   int64                         `json:"timestamp"`
+	Environment *pkgdiscovery.EnvironmentInfo `json:"environment,omitempty"`
+}
+
+type discoveryUpdatePayload struct {
+	Servers          []pkgdiscovery.DiscoveredServer `json:"servers"`
+	Errors           []string                        `json:"errors"`
+	StructuredErrors []pkgdiscovery.DiscoveryError   `json:"structured_errors"`
+	Scanning         bool                            `json:"scanning"`
+	Timestamp        int64                           `json:"timestamp"`
+	Environment      *pkgdiscovery.EnvironmentInfo   `json:"environment,omitempty"`
+}
+
+type ServiceStatus struct {
+	IsScanning bool
+	LastScan   time.Time
+	Interval   time.Duration
+	Subnet     string
+}
+
+func (s ServiceStatus) ToMap() map[string]interface{} {
+	return map[string]interface{}{
+		"is_scanning": s.IsScanning,
+		"last_scan":   s.LastScan,
+		"interval":    s.Interval.String(),
+		"subnet":      s.Subnet,
+	}
+}
 
 type discoveryScanner interface {
 	DiscoverServersWithCallbacks(ctx context.Context, subnet string, serverCallback pkgdiscovery.ServerCallback, progressCallback pkgdiscovery.ProgressCallback) (*pkgdiscovery.DiscoveryResult, error)
@@ -275,7 +331,7 @@ func (s *Service) performScan() {
 		completedAt := time.Now()
 		serverCount := 0
 		errorCount := 0
-		status := "success"
+		status := scanResultStatusSuccess
 		if result != nil {
 			serverCount = len(result.Servers)
 			if len(result.StructuredErrors) > 0 {
@@ -287,16 +343,16 @@ func (s *Service) performScan() {
 
 		if scanErr != nil {
 			if result == nil || serverCount == 0 {
-				status = "failure"
+				status = scanResultStatusFailure
 			} else {
-				status = "partial"
+				status = scanResultStatusPartial
 			}
 		}
 
 		discoveryScanDuration.Observe(duration.Seconds())
 		discoveryScanServers.Set(float64(serverCount))
 		discoveryScanErrors.Set(float64(errorCount))
-		discoveryScanResults.WithLabelValues(status).Inc()
+		discoveryScanResults.WithLabelValues(string(status)).Inc()
 
 		s.appendHistory(historyEntry{
 			startedAt:       startTime,
@@ -316,16 +372,16 @@ func (s *Service) performScan() {
 
 		// Send scan complete notification
 		if s.wsHub != nil {
-			data := map[string]interface{}{
-				"scanning":  false,
-				"timestamp": completedAt.Unix(),
+			payload := discoveryCompletePayload{
+				Scanning:  false,
+				Timestamp: completedAt.Unix(),
 			}
 			if result != nil && result.Environment != nil {
-				data["environment"] = result.Environment
+				payload.Environment = result.Environment
 			}
 			s.wsHub.Broadcast(websocket.Message{
 				Type: "discovery_complete",
-				Data: data,
+				Data: payload,
 			})
 		}
 	}()
@@ -336,10 +392,10 @@ func (s *Service) performScan() {
 	if s.wsHub != nil {
 		s.wsHub.Broadcast(websocket.Message{
 			Type: "discovery_started",
-			Data: map[string]interface{}{
-				"scanning":  true,
-				"subnet":    s.subnet,
-				"timestamp": time.Now().Unix(),
+			Data: discoveryStartedPayload{
+				Scanning:  true,
+				Subnet:    s.subnet,
+				Timestamp: time.Now().Unix(),
 			},
 		})
 	}
@@ -386,10 +442,10 @@ func (s *Service) performScan() {
 		if s.wsHub != nil {
 			s.wsHub.Broadcast(websocket.Message{
 				Type: "discovery_server_found",
-				Data: map[string]interface{}{
-					"server":    server,
-					"phase":     phase,
-					"timestamp": time.Now().Unix(),
+				Data: discoveryServerFoundPayload{
+					Server:    server,
+					Phase:     phase,
+					Timestamp: time.Now().Unix(),
 				},
 			})
 			log.Debug().
@@ -405,9 +461,9 @@ func (s *Service) performScan() {
 		if s.wsHub != nil {
 			s.wsHub.Broadcast(websocket.Message{
 				Type: "discovery_progress",
-				Data: map[string]interface{}{
-					"progress":  progress,
-					"timestamp": time.Now().Unix(),
+				Data: discoveryProgressPayload{
+					Progress:  progress,
+					Timestamp: time.Now().Unix(),
 				},
 			})
 		}
@@ -449,19 +505,17 @@ func (s *Service) performScan() {
 
 		// Send final update via WebSocket with all servers
 		if s.wsHub != nil {
-			data := map[string]interface{}{
-				"servers":           result.Servers,
-				"errors":            result.Errors,           // Legacy format (deprecated)
-				"structured_errors": result.StructuredErrors, // New structured format
-				"scanning":          false,
-				"timestamp":         time.Now().Unix(),
-			}
-			if result.Environment != nil {
-				data["environment"] = result.Environment
+			payload := discoveryUpdatePayload{
+				Servers:          result.Servers,
+				Errors:           result.Errors, // Legacy format (deprecated)
+				StructuredErrors: result.StructuredErrors,
+				Scanning:         false,
+				Timestamp:        time.Now().Unix(),
+				Environment:      result.Environment,
 			}
 			s.wsHub.Broadcast(websocket.Message{
 				Type: "discovery_update",
-				Data: data,
+				Data: payload,
 			})
 		}
 	}
@@ -524,13 +578,18 @@ func (s *Service) SetSubnet(subnet string) {
 
 // GetStatus returns the current service status
 func (s *Service) GetStatus() map[string]interface{} {
+	return s.GetStatusSnapshot().ToMap()
+}
+
+// GetStatusSnapshot returns the current service status using strong typing.
+func (s *Service) GetStatusSnapshot() ServiceStatus {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	return map[string]interface{}{
-		"is_scanning": s.isScanning,
-		"last_scan":   s.lastScan,
-		"interval":    s.interval.String(),
-		"subnet":      s.subnet,
+	return ServiceStatus{
+		IsScanning: s.isScanning,
+		LastScan:   s.lastScan,
+		Interval:   s.interval,
+		Subnet:     s.subnet,
 	}
 }

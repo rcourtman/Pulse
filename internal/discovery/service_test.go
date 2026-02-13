@@ -309,6 +309,57 @@ func TestGetStatus(t *testing.T) {
 	}
 }
 
+func TestGetStatusSnapshot(t *testing.T) {
+	service := NewService(nil, time.Minute, "auto", func() config.DiscoveryConfig {
+		return config.DefaultDiscoveryConfig()
+	})
+
+	lastScan := time.Unix(42, 0)
+	service.mu.Lock()
+	service.isScanning = true
+	service.lastScan = lastScan
+	service.interval = 3 * time.Minute
+	service.subnet = "10.0.0.0/24"
+	service.mu.Unlock()
+
+	status := service.GetStatusSnapshot()
+	if !status.IsScanning {
+		t.Fatalf("expected IsScanning true")
+	}
+	if !status.LastScan.Equal(lastScan) {
+		t.Fatalf("expected LastScan %v, got %v", lastScan, status.LastScan)
+	}
+	if status.Interval != 3*time.Minute {
+		t.Fatalf("expected Interval 3m, got %v", status.Interval)
+	}
+	if status.Subnet != "10.0.0.0/24" {
+		t.Fatalf("expected Subnet 10.0.0.0/24, got %s", status.Subnet)
+	}
+}
+
+func TestServiceStatusToMap(t *testing.T) {
+	status := ServiceStatus{
+		IsScanning: true,
+		LastScan:   time.Unix(100, 0),
+		Interval:   30 * time.Second,
+		Subnet:     "auto",
+	}
+
+	asMap := status.ToMap()
+	if val, ok := asMap["is_scanning"].(bool); !ok || !val {
+		t.Fatalf("expected is_scanning=true")
+	}
+	if val, ok := asMap["last_scan"].(time.Time); !ok || !val.Equal(status.LastScan) {
+		t.Fatalf("expected last_scan=%v", status.LastScan)
+	}
+	if val, ok := asMap["interval"].(string); !ok || val != "30s" {
+		t.Fatalf("expected interval=30s, got %v", asMap["interval"])
+	}
+	if val, ok := asMap["subnet"].(string); !ok || val != "auto" {
+		t.Fatalf("expected subnet=auto, got %v", asMap["subnet"])
+	}
+}
+
 func TestForceRefresh(t *testing.T) {
 	scanner := &countingScanner{
 		result: &pkgdiscovery.DiscoveryResult{},

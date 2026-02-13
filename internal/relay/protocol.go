@@ -199,13 +199,13 @@ type PushNotificationPayload struct {
 }
 
 // MarshalControlPayload encodes a control frame payload as JSON bytes.
-func MarshalControlPayload(v any) ([]byte, error) {
+func MarshalControlPayload[T any](v T) ([]byte, error) {
 	return json.Marshal(v)
 }
 
 // UnmarshalControlPayload decodes a JSON payload into the target struct.
-func UnmarshalControlPayload(data []byte, v any) error {
-	return json.Unmarshal(data, v)
+func UnmarshalControlPayload[T any](data []byte, out *T) error {
+	return json.Unmarshal(data, out)
 }
 
 // NewFrame creates a frame with the current protocol version.
@@ -219,7 +219,7 @@ func NewFrame(frameType byte, channel uint32, payload []byte) Frame {
 }
 
 // NewControlFrame creates a frame with a JSON-encoded control payload.
-func NewControlFrame(frameType byte, channel uint32, payload any) (Frame, error) {
+func NewControlFrame[T any](frameType byte, channel uint32, payload T) (Frame, error) {
 	data, err := MarshalControlPayload(payload)
 	if err != nil {
 		return Frame{}, fmt.Errorf("marshal control payload: %w", err)

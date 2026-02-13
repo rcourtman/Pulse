@@ -328,21 +328,26 @@ func TestGetStatus(t *testing.T) {
 	provider := &mockStateProvider{}
 	service := NewService(provider, nil, DefaultConfig())
 
-	status := service.GetStatus()
+	status := service.GetStatusSnapshot()
 
-	if status["running"] != false {
-		t.Errorf("status['running'] = %v, want false", status["running"])
+	if status.Running {
+		t.Errorf("status.Running = %v, want false", status.Running)
 	}
-	if status["ai_analyzer_set"] != false {
-		t.Errorf("status['ai_analyzer_set'] = %v, want false", status["ai_analyzer_set"])
+	if status.AIAnalyzerSet {
+		t.Errorf("status.AIAnalyzerSet = %v, want false", status.AIAnalyzerSet)
 	}
 
 	// Set analyzer
 	service.SetAIAnalyzer(&mockAIAnalyzer{})
-	status = service.GetStatus()
+	status = service.GetStatusSnapshot()
 
-	if status["ai_analyzer_set"] != true {
-		t.Errorf("status['ai_analyzer_set'] = %v, want true after setting analyzer", status["ai_analyzer_set"])
+	if !status.AIAnalyzerSet {
+		t.Errorf("status.AIAnalyzerSet = %v, want true after setting analyzer", status.AIAnalyzerSet)
+	}
+
+	compatStatus := service.GetStatus()
+	if compatStatus["ai_analyzer_set"] != true {
+		t.Errorf("GetStatus()['ai_analyzer_set'] = %v, want true after setting analyzer", compatStatus["ai_analyzer_set"])
 	}
 }
 

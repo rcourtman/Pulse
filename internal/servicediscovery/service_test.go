@@ -481,6 +481,10 @@ func TestService_formatCLIAccessAndStatus(t *testing.T) {
 	if status["running"] != true || status["cache_size"] != 1 {
 		t.Fatalf("unexpected status: %#v", status)
 	}
+	snapshot := service.GetStatusSnapshot()
+	if !snapshot.Running || snapshot.CacheSize != 1 {
+		t.Fatalf("unexpected typed status snapshot: %+v", snapshot)
+	}
 
 	service.ClearCache()
 	if len(service.analysisCache) != 0 {

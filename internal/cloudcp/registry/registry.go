@@ -2,6 +2,7 @@ package registry
 
 import (
 	"database/sql"
+	"database/sql/driver"
 	"fmt"
 	"net/url"
 	"os"
@@ -898,21 +899,21 @@ func scanMemberships(rows *sql.Rows) ([]*AccountMembership, error) {
 	return memberships, rows.Err()
 }
 
-func nullableTimeUnix(t *time.Time) any {
+func nullableTimeUnix(t *time.Time) driver.Value {
 	if t == nil {
 		return nil
 	}
 	return t.Unix()
 }
 
-func nullableInt64Ptr(v *int64) any {
+func nullableInt64Ptr(v *int64) driver.Value {
 	if v == nil {
 		return nil
 	}
 	return *v
 }
 
-func nullableString(s string) any {
+func nullableString(s string) driver.Value {
 	if strings.TrimSpace(s) == "" {
 		return nil
 	}

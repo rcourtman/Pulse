@@ -23,7 +23,7 @@ func TestUpdater_getServerVersion_SetsAuthHeaders(t *testing.T) {
 			t.Fatalf("Authorization = %q", r.Header.Get("Authorization"))
 		}
 		sawAuth = true
-		_ = json.NewEncoder(w).Encode(map[string]string{"version": "1.2.3"})
+		_ = json.NewEncoder(w).Encode(serverVersionResponse{Version: "1.2.3"})
 	}))
 	defer srv.Close()
 
@@ -111,7 +111,7 @@ func TestUpdater_CheckAndUpdate_VersionComparePaths(t *testing.T) {
 			var called bool
 
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				_ = json.NewEncoder(w).Encode(map[string]string{"version": tc.server})
+				_ = json.NewEncoder(w).Encode(serverVersionResponse{Version: tc.server})
 			}))
 			defer srv.Close()
 

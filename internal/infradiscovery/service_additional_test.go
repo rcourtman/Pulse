@@ -34,9 +34,9 @@ func TestStartStopUpdatesStatus(t *testing.T) {
 	defer cancel()
 
 	service.Start(ctx)
-	status := service.GetStatus()
-	if running, ok := status["running"].(bool); !ok || !running {
-		t.Fatalf("expected running status true, got %v", status["running"])
+	status := service.GetStatusSnapshot()
+	if !status.Running {
+		t.Fatalf("expected running status true, got %v", status.Running)
 	}
 
 	waitFor(t, 500*time.Millisecond, func() bool {
@@ -44,9 +44,9 @@ func TestStartStopUpdatesStatus(t *testing.T) {
 	})
 
 	service.Stop()
-	status = service.GetStatus()
-	if running, ok := status["running"].(bool); !ok || running {
-		t.Fatalf("expected running status false, got %v", status["running"])
+	status = service.GetStatusSnapshot()
+	if status.Running {
+		t.Fatalf("expected running status false, got %v", status.Running)
 	}
 }
 

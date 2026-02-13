@@ -259,6 +259,38 @@ type AIAnalysisRequest struct {
 	Metadata       map[string]any    `json:"metadata,omitempty"` // Image, labels, etc.
 }
 
+// ServiceStatus is a typed snapshot of service runtime status.
+type ServiceStatus struct {
+	Running             bool
+	LastRun             time.Time
+	Interval            string
+	CacheSize           int
+	AIAnalyzerSet       bool
+	ScannerSet          bool
+	StoreSet            bool
+	DeepScanTimeout     string
+	MaxDiscoveryAge     string
+	FingerprintCount    int
+	LastFingerprintScan time.Time
+}
+
+// ToMap converts the status snapshot to a legacy map representation.
+func (s ServiceStatus) ToMap() map[string]any {
+	return map[string]any{
+		"running":               s.Running,
+		"last_run":              s.LastRun,
+		"interval":              s.Interval,
+		"cache_size":            s.CacheSize,
+		"ai_analyzer_set":       s.AIAnalyzerSet,
+		"scanner_set":           s.ScannerSet,
+		"store_set":             s.StoreSet,
+		"deep_scan_timeout":     s.DeepScanTimeout,
+		"max_discovery_age":     s.MaxDiscoveryAge,
+		"fingerprint_count":     s.FingerprintCount,
+		"last_fingerprint_scan": s.LastFingerprintScan,
+	}
+}
+
 // AIAnalysisResponse is returned by the AI.
 type AIAnalysisResponse struct {
 	ServiceType    string          `json:"service_type"`

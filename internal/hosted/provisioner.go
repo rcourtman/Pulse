@@ -17,9 +17,11 @@ import (
 )
 
 const (
-	ProvisionStatusCreated  = "created"
-	ProvisionStatusExisting = "existing"
+	ProvisionStatusCreated  ProvisionStatus = "created"
+	ProvisionStatusExisting ProvisionStatus = "existing"
 )
+
+type ProvisionStatus string
 
 type OrgPersistence interface {
 	GetPersistence(orgID string) (*config.ConfigPersistence, error)
@@ -52,7 +54,7 @@ type ProvisionRequest struct {
 type ProvisionResult struct {
 	OrgID  string
 	UserID string
-	Status string
+	Status ProvisionStatus
 }
 
 type ValidationError struct {

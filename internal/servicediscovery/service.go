@@ -2382,6 +2382,11 @@ func (s *Service) GetProgress(resourceID string) *DiscoveryProgress {
 
 // GetStatus returns the service status including fingerprint statistics.
 func (s *Service) GetStatus() map[string]any {
+	return s.GetStatusSnapshot().ToMap()
+}
+
+// GetStatusSnapshot returns the typed status snapshot including fingerprint statistics.
+func (s *Service) GetStatusSnapshot() ServiceStatus {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -2397,18 +2402,18 @@ func (s *Service) GetStatus() map[string]any {
 		lastFingerprintScan = s.store.GetLastFingerprintScan()
 	}
 
-	return map[string]any{
-		"running":               s.running,
-		"last_run":              s.lastRun,
-		"interval":              s.interval.String(),
-		"cache_size":            cacheSize,
-		"ai_analyzer_set":       s.aiAnalyzer != nil,
-		"scanner_set":           s.scanner != nil,
-		"store_set":             s.store != nil,
-		"deep_scan_timeout":     s.deepScanTimeout.String(),
-		"max_discovery_age":     s.maxDiscoveryAge.String(),
-		"fingerprint_count":     fingerprintCount,
-		"last_fingerprint_scan": lastFingerprintScan,
+	return ServiceStatus{
+		Running:             s.running,
+		LastRun:             s.lastRun,
+		Interval:            s.interval.String(),
+		CacheSize:           cacheSize,
+		AIAnalyzerSet:       s.aiAnalyzer != nil,
+		ScannerSet:          s.scanner != nil,
+		StoreSet:            s.store != nil,
+		DeepScanTimeout:     s.deepScanTimeout.String(),
+		MaxDiscoveryAge:     s.maxDiscoveryAge.String(),
+		FingerprintCount:    fingerprintCount,
+		LastFingerprintScan: lastFingerprintScan,
 	}
 }
 

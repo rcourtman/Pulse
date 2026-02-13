@@ -113,7 +113,7 @@ func (h *HostedSignupHandlers) HandlePublicSignup(w http.ResponseWriter, r *http
 	var cleanupOnce sync.Once
 	cleanupProvisioning := func() {
 		cleanupOnce.Do(func() {
-			hosted.GetHostedMetrics().RecordProvision("failure")
+			hosted.GetHostedMetrics().RecordProvisionStatus(hosted.ProvisionMetricStatusFailure)
 
 			// Best-effort cleanup: close/remove RBAC manager first to avoid lingering DB handles.
 			if err := h.rbacProvider.RemoveTenant(orgID); err != nil {
@@ -216,7 +216,7 @@ func (h *HostedSignupHandlers) HandlePublicSignup(w http.ResponseWriter, r *http
 	}
 
 	hosted.GetHostedMetrics().RecordSignup()
-	hosted.GetHostedMetrics().RecordProvision("success")
+	hosted.GetHostedMetrics().RecordProvisionStatus(hosted.ProvisionMetricStatusSuccess)
 	writeJSON(w, http.StatusCreated, hostedSignupResponse{
 		OrgID:   orgID,
 		UserID:  userID,

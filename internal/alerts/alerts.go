@@ -1945,7 +1945,7 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 
 // ReevaluateGuestAlert reevaluates a specific guest's alerts with full threshold resolution including custom rules
 // This should be called by the monitor with the current guest state
-func (m *Manager) ReevaluateGuestAlert(guest interface{}, guestID string) {
+func (m *Manager) ReevaluateGuestAlert(guest any, guestID string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -2224,7 +2224,7 @@ func (m *Manager) GetConfig() AlertConfig {
 }
 
 // CheckGuest checks a guest (VM or container) against thresholds
-func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
+func (m *Manager) CheckGuest(guest any, instanceName string) {
 	m.mu.RLock()
 	enabled := m.config.Enabled
 	disableAllGuests := m.config.DisableAllGuests
@@ -2243,62 +2243,36 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 		return
 	}
 
-	var guestID, name, node, guestType, status string
-	var cpu, memUsage, diskUsage float64
-	var diskRead, diskWrite, netIn, netOut int64
-	var disks []models.Disk
-	var tags []string
-
-	// Extract data based on guest type
-	switch g := guest.(type) {
-	case models.VM:
-		guestID = g.ID
-		name = g.Name
-		node = g.Node
-		status = g.Status
-		guestType = "VM"
-		cpu = g.CPU * 100 // Convert to percentage
-		memUsage = g.Memory.Usage
-		diskUsage = g.Disk.Usage
-		diskRead = g.DiskRead
-		diskWrite = g.DiskWrite
-		netIn = g.NetworkIn
-		netOut = g.NetworkOut
-		disks = g.Disks
-		if len(g.Tags) > 0 {
-			tags = append(tags, g.Tags...)
-		}
-
-		// Debug logging for high memory VMs
-		if memUsage > 85 {
-			log.Debug().
-				Str("vm", name).
-				Float64("memUsage", memUsage).
-				Str("status", status).
-				Msg("VM with high memory detected in CheckGuest")
-		}
-	case models.Container:
-		guestID = g.ID
-		name = g.Name
-		node = g.Node
-		status = g.Status
-		guestType = "Container"
-		cpu = g.CPU * 100 // Convert to percentage
-		memUsage = g.Memory.Usage
-		diskUsage = g.Disk.Usage
-		diskRead = g.DiskRead
-		diskWrite = g.DiskWrite
-		netIn = g.NetworkIn
-		netOut = g.NetworkOut
-		disks = g.Disks
-		if len(g.Tags) > 0 {
-			tags = append(tags, g.Tags...)
-		}
-	default:
+	snapshot, ok := extractGuestSnapshot(guest)
+	if !ok {
 		log.Debug().
 			Str("type", fmt.Sprintf("%T", guest)).
 			Msg("CheckGuest: unsupported guest type")
 		return
+	}
+
+	guestID := snapshot.ID
+	name := snapshot.Name
+	node := snapshot.Node
+	guestType := snapshot.displayType()
+	status := snapshot.Status
+	cpu := snapshot.CPUPercent
+	memUsage := snapshot.MemUsage
+	diskUsage := snapshot.DiskUsage
+	diskRead := snapshot.DiskRead
+	diskWrite := snapshot.DiskWrite
+	netIn := snapshot.NetworkIn
+	netOut := snapshot.NetworkOut
+	disks := snapshot.Disks
+	tags := snapshot.Tags
+
+	// Debug logging for high memory VMs
+	if snapshot.Kind == guestKindVM && memUsage > 85 {
+		log.Debug().
+			Str("vm", name).
+			Float64("memUsage", memUsage).
+			Str("status", status).
+			Msg("VM with high memory detected in CheckGuest")
 	}
 
 	// Check ignored prefixes
@@ -2462,7 +2436,7 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 	}
 	m.evaluateUnifiedMetrics(&UnifiedResourceInput{
 		ID:         guestID,
-		Type:       strings.ToLower(guestType),
+		Type:       snapshot.resourceType(),
 		Name:       name,
 		Node:       node,
 		Instance:   instanceName,

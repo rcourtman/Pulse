@@ -2,6 +2,8 @@ package dockeragent
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -25,16 +27,41 @@ type ContainerUpdateResult struct {
 	Error           string `json:"error,omitempty"`
 }
 
+type updateContainerCommandPayload struct {
+	ContainerID string `json:"containerId"`
+}
+
+func decodeUpdateContainerPayload(payload map[string]any) (updateContainerCommandPayload, error) {
+	var commandPayload updateContainerCommandPayload
+
+	body, err := jsonMarshalFn(payload)
+	if err != nil {
+		return commandPayload, fmt.Errorf("marshal update command payload: %w", err)
+	}
+
+	if err := json.Unmarshal(body, &commandPayload); err != nil {
+		return commandPayload, fmt.Errorf("decode update command payload: %w", err)
+	}
+
+	commandPayload.ContainerID = strings.TrimSpace(commandPayload.ContainerID)
+	if commandPayload.ContainerID == "" {
+		return commandPayload, errors.New("missing containerId in payload")
+	}
+
+	return commandPayload, nil
+}
+
 // handleUpdateContainerCommand handles the update_container command from Pulse.
 func (a *Agent) handleUpdateContainerCommand(ctx context.Context, target TargetConfig, command agentsdocker.Command) error {
-	containerID, ok := command.Payload["containerId"].(string)
-	if !ok || containerID == "" {
-		a.logger.Error().Msg("Update command missing containerId in payload")
+	commandPayload, err := decodeUpdateContainerPayload(command.Payload)
+	if err != nil {
+		a.logger.Error().Err(err).Msg("Update command missing or invalid containerId in payload")
 		if err := a.sendCommandAck(ctx, target, command.ID, agentsdocker.CommandStatusFailed, "Missing containerId in payload"); err != nil {
 			a.logger.Error().Err(err).Msg("Failed to send failure acknowledgement")
 		}
 		return nil
 	}
+	containerID := commandPayload.ContainerID
 
 	a.logger.Info().
 		Str("commandID", command.ID).
