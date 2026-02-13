@@ -4,7 +4,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+
+	"github.com/rcourtman/pulse-go-rewrite/pkg/audit"
+	authpkg "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
 func TestRotateAPIToken(t *testing.T) {
@@ -16,6 +20,16 @@ func TestRotateAPIToken(t *testing.T) {
 	t.Setenv("NODE_ENV", "")
 	resetAdminBypassState()
 
+	capture := &auditCaptureLogger{}
+	prevLogger := audit.GetLogger()
+	prevManager := GetTenantAuditManager()
+	audit.SetLogger(capture)
+	SetTenantAuditManager(nil)
+	t.Cleanup(func() {
+		audit.SetLogger(prevLogger)
+		SetTenantAuditManager(prevManager)
+	})
+
 	old := newTokenRecord(t, "rotate-test-token-123.12345678", []string{"*"}, map[string]string{
 		"bound_agent_id": "agent-1",
 	})
@@ -26,6 +40,7 @@ func TestRotateAPIToken(t *testing.T) {
 	router.authorizer = &adminOnlyAuthorizer{}
 
 	req := httptest.NewRequest(http.MethodPost, "/api/security/tokens/"+old.ID+"/rotate", nil)
+	req = req.WithContext(authpkg.WithUser(req.Context(), "rotator"))
 	rec := httptest.NewRecorder()
 	router.Handler().ServeHTTP(rec, req)
 
@@ -60,5 +75,27 @@ func TestRotateAPIToken(t *testing.T) {
 	}
 	if got := cfg.APITokens[0].Metadata["bound_agent_id"]; got != "agent-1" {
 		t.Fatalf("stored metadata bound_agent_id = %q, want %q", got, "agent-1")
+	}
+
+	events, err := capture.Query(audit.QueryFilter{})
+	if err != nil {
+		t.Fatalf("query audit events: %v", err)
+	}
+
+	var rotateEvent *audit.Event
+	for i := range events {
+		if events[i].EventType == "token_rotated" && events[i].Success {
+			rotateEvent = &events[i]
+			break
+		}
+	}
+	if rotateEvent == nil {
+		t.Fatalf("expected successful token_rotated audit event")
+	}
+	if rotateEvent.User == "" {
+		t.Fatalf("expected token_rotated audit event to include user")
+	}
+	if strings.Contains(rotateEvent.Details, resp.Token) {
+		t.Fatalf("token_rotated audit details leaked raw token")
 	}
 }

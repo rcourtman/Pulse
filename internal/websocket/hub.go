@@ -18,6 +18,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/audit"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rs/zerolog/log"
 )
@@ -664,6 +665,16 @@ func (h *Hub) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		if mtChecker != nil {
 			result := mtChecker.CheckMultiTenant(r.Context(), orgID)
 			if !result.Allowed {
+				userID := getUserFromContext(r.Context())
+				audit.Log(
+					"websocket_multitenant_access_denied",
+					userID,
+					extractPeerIP(r.RemoteAddr),
+					r.URL.Path,
+					false,
+					fmt.Sprintf("org_id=%s reason=%s feature_enabled=%t licensed=%t", orgID, result.Reason, result.FeatureEnabled, result.Licensed),
+				)
+
 				log.Warn().
 					Str("org_id", orgID).
 					Bool("feature_enabled", result.FeatureEnabled).
@@ -689,6 +700,15 @@ func (h *Hub) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 			token := getAPITokenFromContext(r.Context())
 
 			if !authChecker.CanAccessOrg(userID, token, orgID) {
+				audit.Log(
+					"websocket_org_access_denied",
+					userID,
+					extractPeerIP(r.RemoteAddr),
+					r.URL.Path,
+					false,
+					fmt.Sprintf("org_id=%s", orgID),
+				)
+
 				log.Warn().
 					Str("org_id", orgID).
 					Str("user_id", userID).

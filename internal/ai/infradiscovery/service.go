@@ -314,23 +314,15 @@ func (s *Service) RunDiscovery(ctx context.Context) []DiscoveredApp {
 }
 
 // analyzeContainer uses AI to analyze a single container.
-<<<<<<< HEAD:internal/ai/infradiscovery/service.go
 func (s *Service) analyzeContainer(ctx context.Context, analyzer AIAnalyzer, container models.DockerContainer, host models.DockerHost) *DiscoveredApp {
-	// Check cache first
-	s.cacheMu.RLock()
-	cached, found := s.analysisCache[container.Image]
-	cacheValid := time.Since(s.lastCacheUpdate) < s.cacheExpiry
-=======
-func (s *Service) analyzeContainer(ctx context.Context, analyzer AIAnalyzer, c models.DockerContainer, host models.DockerHost) *DiscoveredApp {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 
 	// Check cache first
 	s.cacheMu.RLock()
-	entry, found := s.analysisCache[c.Image]
+	entry, found := s.analysisCache[container.Image]
 	cacheValid := found && time.Since(entry.cachedAt) < s.cacheExpiry
->>>>>>> refactor/parallel-27-service-discovery:internal/infradiscovery/service.go
 	s.cacheMu.RUnlock()
 
 	var result *DiscoveryResult
@@ -357,8 +349,8 @@ func (s *Service) analyzeContainer(ctx context.Context, analyzer AIAnalyzer, c m
 			if errors.Is(err, context.DeadlineExceeded) {
 				log.Warn().
 					Err(err).
-					Str("container", c.Name).
-					Str("image", c.Image).
+					Str("container", container.Name).
+					Str("image", container.Image).
 					Dur("timeout", s.aiAnalysisTimeout).
 					Msg("AI analysis timed out for container")
 				return nil
@@ -383,15 +375,10 @@ func (s *Service) analyzeContainer(ctx context.Context, analyzer AIAnalyzer, c m
 
 		// Cache the result
 		s.cacheMu.Lock()
-<<<<<<< HEAD:internal/ai/infradiscovery/service.go
-		s.analysisCache[container.Image] = result
-		s.lastCacheUpdate = time.Now()
-=======
-		s.analysisCache[c.Image] = &analysisCacheEntry{
+		s.analysisCache[container.Image] = &analysisCacheEntry{
 			result:   result,
 			cachedAt: time.Now(),
 		}
->>>>>>> refactor/parallel-27-service-discovery:internal/infradiscovery/service.go
 		s.cacheMu.Unlock()
 
 		log.Debug().
@@ -650,7 +637,6 @@ func (s *Service) GetStatusSnapshot() ServiceStatus {
 	cacheSize := len(s.analysisCache)
 	s.cacheMu.RUnlock()
 
-<<<<<<< HEAD:internal/ai/infradiscovery/service.go
 	return ServiceStatus{
 		Running:        s.running,
 		LastRun:        s.lastRun,
@@ -658,16 +644,6 @@ func (s *Service) GetStatusSnapshot() ServiceStatus {
 		DiscoveredApps: len(s.discoveries),
 		CacheSize:      cacheSize,
 		AIAnalyzerSet:  s.aiAnalyzer != nil,
-=======
-	return map[string]interface{}{
-		"running":             s.running,
-		"last_run":            s.lastRun,
-		"interval":            s.interval.String(),
-		"discovered_apps":     len(s.discoveries),
-		"cache_size":          cacheSize,
-		"ai_analyzer_set":     s.aiAnalyzer != nil,
-		"ai_analysis_timeout": s.aiAnalysisTimeout.String(),
->>>>>>> refactor/parallel-27-service-discovery:internal/infradiscovery/service.go
 	}
 }
 

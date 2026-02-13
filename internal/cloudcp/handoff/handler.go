@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/auditlog"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
 	"github.com/rs/zerolog/log"
 )
@@ -51,6 +52,14 @@ func HandleHandoff(reg *registry.TenantRegistry, tenantsDir string) http.Handler
 		accountID := strings.TrimSpace(r.PathValue("account_id"))
 		tenantID := strings.TrimSpace(r.PathValue("tenant_id"))
 		if accountID == "" || tenantID == "" {
+			log.Warn().
+				Str("audit_event", "cp_handoff").
+				Str("outcome", "failure").
+				Str("reason", "missing_account_id_or_tenant_id").
+				Str("client_ip", auditlog.ClientIP(r)).
+				Str("method", r.Method).
+				Str("path", auditlog.RequestPath(r)).
+				Msg("Tenant handoff denied")
 			http.Error(w, "missing account_id or tenant_id", http.StatusBadRequest)
 			return
 		}
@@ -72,11 +81,14 @@ func HandleHandoff(reg *registry.TenantRegistry, tenantsDir string) http.Handler
 		}
 		if t == nil {
 			log.Info().
-				Str("audit_event", "handoff_denied").
+				Str("audit_event", "cp_handoff").
+				Str("outcome", "failure").
 				Str("reason", "tenant_not_found").
 				Str("account_id", accountID).
 				Str("tenant_id", tenantID).
-				Str("client_ip", r.RemoteAddr).
+				Str("client_ip", auditlog.ClientIP(r)).
+				Str("method", r.Method).
+				Str("path", auditlog.RequestPath(r)).
 				Msg("Tenant handoff denied")
 			http.Error(w, "tenant not found", http.StatusNotFound)
 			return
@@ -88,6 +100,16 @@ func HandleHandoff(reg *registry.TenantRegistry, tenantsDir string) http.Handler
 			userID = strings.TrimSpace(r.Header.Get("X-User-Id"))
 		}
 		if userID == "" {
+			log.Warn().
+				Str("audit_event", "cp_handoff").
+				Str("outcome", "failure").
+				Str("reason", "missing_user_identity").
+				Str("account_id", accountID).
+				Str("tenant_id", tenantID).
+				Str("client_ip", auditlog.ClientIP(r)).
+				Str("method", r.Method).
+				Str("path", auditlog.RequestPath(r)).
+				Msg("Tenant handoff denied")
 			http.Error(w, "missing user identity", http.StatusBadRequest)
 			return
 		}
@@ -99,12 +121,15 @@ func HandleHandoff(reg *registry.TenantRegistry, tenantsDir string) http.Handler
 		}
 		if m == nil {
 			log.Info().
-				Str("audit_event", "handoff_denied").
+				Str("audit_event", "cp_handoff").
+				Str("outcome", "failure").
 				Str("reason", "forbidden").
 				Str("account_id", accountID).
 				Str("tenant_id", tenantID).
 				Str("user_id", userID).
-				Str("client_ip", r.RemoteAddr).
+				Str("client_ip", auditlog.ClientIP(r)).
+				Str("method", r.Method).
+				Str("path", auditlog.RequestPath(r)).
 				Msg("Tenant handoff denied")
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
@@ -143,13 +168,16 @@ func HandleHandoff(reg *registry.TenantRegistry, tenantsDir string) http.Handler
 		}
 
 		log.Info().
-			Str("audit_event", "handoff_granted").
+			Str("audit_event", "cp_handoff").
+			Str("outcome", "success").
 			Str("account_id", accountID).
 			Str("tenant_id", tenantID).
 			Str("user_id", userID).
 			Str("email", u.Email).
 			Str("role", string(m.Role)).
-			Str("client_ip", r.RemoteAddr).
+			Str("client_ip", auditlog.ClientIP(r)).
+			Str("method", r.Method).
+			Str("path", auditlog.RequestPath(r)).
 			Msg("Tenant handoff token minted")
 
 		baseDomain := deriveBaseDomain(r)

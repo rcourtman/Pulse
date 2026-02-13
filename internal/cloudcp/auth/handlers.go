@@ -9,9 +9,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/auditlog"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/email"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/cloudauth"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
@@ -47,13 +49,19 @@ func HandleMagicLinkVerify(svc *Service, reg *registry.TenantRegistry, tenantsDi
 
 		tokenStr := strings.TrimSpace(r.URL.Query().Get("token"))
 		if tokenStr == "" {
+			auditEvent(r, "cp_magic_link_verify", "failure").
+				Str("reason", "missing_token").
+				Msg("Magic link verification failed")
 			writeError(w, http.StatusBadRequest, "missing_token", "Token parameter is required")
 			return
 		}
 
 		token, err := svc.ValidateToken(tokenStr)
 		if err != nil {
-			log.Warn().Err(err).Msg("Magic link verification failed")
+			auditEvent(r, "cp_magic_link_verify", "failure").
+				Err(err).
+				Str("reason", "invalid_or_expired_token").
+				Msg("Magic link verification failed")
 			// Browser redirect on failure.
 			if !strings.Contains(r.Header.Get("Accept"), "application/json") {
 				http.Redirect(w, r, "/login?error=magic_link_invalid", http.StatusTemporaryRedirect)
@@ -66,7 +74,11 @@ func HandleMagicLinkVerify(svc *Service, reg *registry.TenantRegistry, tenantsDi
 		// Look up tenant to confirm it exists and is active.
 		tenant, err := reg.Get(token.TenantID)
 		if err != nil || tenant == nil {
-			log.Error().Err(err).Str("tenant_id", token.TenantID).Msg("Tenant not found for magic link")
+			auditEvent(r, "cp_magic_link_verify", "failure").
+				Err(err).
+				Str("tenant_id", token.TenantID).
+				Str("reason", "tenant_not_found").
+				Msg("Magic link verification failed")
 			writeError(w, http.StatusNotFound, "tenant_not_found", "Tenant not found")
 			return
 		}
@@ -76,7 +88,11 @@ func HandleMagicLinkVerify(svc *Service, reg *registry.TenantRegistry, tenantsDi
 		handoffKeyPath := filepath.Join(tenantDataDir, cloudauth.HandoffKeyFile)
 		handoffKey, err := os.ReadFile(handoffKeyPath)
 		if err != nil {
-			log.Error().Err(err).Str("tenant_id", tenant.ID).Msg("Failed to read handoff key")
+			auditEvent(r, "cp_magic_link_verify", "failure").
+				Err(err).
+				Str("tenant_id", tenant.ID).
+				Str("reason", "handoff_key_read_failed").
+				Msg("Magic link verification failed")
 			writeError(w, http.StatusInternalServerError, "handoff_error", "Unable to generate handoff")
 			return
 		}
@@ -84,7 +100,11 @@ func HandleMagicLinkVerify(svc *Service, reg *registry.TenantRegistry, tenantsDi
 		// Sign a short-lived handoff token.
 		handoffToken, err := cloudauth.Sign(handoffKey, token.Email, tenant.ID, handoffTTL)
 		if err != nil {
-			log.Error().Err(err).Str("tenant_id", tenant.ID).Msg("Failed to sign handoff token")
+			auditEvent(r, "cp_magic_link_verify", "failure").
+				Err(err).
+				Str("tenant_id", tenant.ID).
+				Str("reason", "handoff_sign_failed").
+				Msg("Magic link verification failed")
 			writeError(w, http.StatusInternalServerError, "handoff_error", "Unable to generate handoff")
 			return
 		}
@@ -93,7 +113,7 @@ func HandleMagicLinkVerify(svc *Service, reg *registry.TenantRegistry, tenantsDi
 		redirectURL := fmt.Sprintf("https://%s.%s/auth/cloud-handoff?token=%s",
 			tenant.ID, baseDomain, handoffToken)
 
-		log.Info().
+		auditEvent(r, "cp_magic_link_verify", "success").
 			Str("tenant_id", tenant.ID).
 			Str("email", token.Email).
 			Msg("Magic link verified, redirecting to tenant handoff")
@@ -116,17 +136,28 @@ func HandleAdminGenerateMagicLink(svc *Service, baseURL string, emailSender emai
 
 		var req adminGenerateMagicLinkRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			auditEvent(r, "cp_magic_link_admin_generate", "failure").
+				Str("reason", "bad_request").
+				Msg("Admin magic link generation failed")
 			writeError(w, http.StatusBadRequest, "bad_request", "Invalid JSON body")
 			return
 		}
 		if req.Email == "" || req.TenantID == "" {
+			auditEvent(r, "cp_magic_link_admin_generate", "failure").
+				Str("reason", "missing_email_or_tenant_id").
+				Msg("Admin magic link generation failed")
 			writeError(w, http.StatusBadRequest, "bad_request", "email and tenant_id are required")
 			return
 		}
 
 		token, err := svc.GenerateToken(req.Email, req.TenantID)
 		if err != nil {
-			log.Error().Err(err).Str("email", req.Email).Str("tenant_id", req.TenantID).Msg("Failed to generate magic link")
+			auditEvent(r, "cp_magic_link_admin_generate", "failure").
+				Err(err).
+				Str("email", req.Email).
+				Str("tenant_id", req.TenantID).
+				Str("reason", "token_generation_failed").
+				Msg("Admin magic link generation failed")
 			writeError(w, http.StatusInternalServerError, "generate_error", "Failed to generate magic link")
 			return
 		}
@@ -151,7 +182,7 @@ func HandleAdminGenerateMagicLink(svc *Service, baseURL string, emailSender emai
 			}
 		}
 
-		log.Info().
+		auditEvent(r, "cp_magic_link_admin_generate", "success").
 			Str("email", req.Email).
 			Str("tenant_id", req.TenantID).
 			Bool("email_sent", emailSent).
@@ -165,6 +196,26 @@ func HandleAdminGenerateMagicLink(svc *Service, baseURL string, emailSender emai
 			EmailSent: emailSent,
 		})
 	}
+}
+
+func auditEvent(r *http.Request, eventName, outcome string) *zerolog.Event {
+	e := log.Info()
+	if outcome != "success" {
+		e = log.Warn()
+	}
+
+	actorID := auditlog.ActorID(r)
+	if actorID == "" {
+		actorID = "admin_key"
+	}
+
+	return e.
+		Str("audit_event", eventName).
+		Str("outcome", outcome).
+		Str("actor_id", actorID).
+		Str("client_ip", auditlog.ClientIP(r)).
+		Str("method", r.Method).
+		Str("path", auditlog.RequestPath(r))
 }
 
 func writeError(w http.ResponseWriter, status int, code, message string) {
