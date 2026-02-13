@@ -3,11 +3,12 @@ package monitoring
 import (
 	stdErrors "errors"
 	"strings"
+
+	internalerrors "github.com/rcourtman/pulse-go-rewrite/internal/errors"
 	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	internalerrors "github.com/rcourtman/pulse-go-rewrite/internal/errors"
 )
 
 // PollMetrics manages Prometheus instrumentation for polling activity.

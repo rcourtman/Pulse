@@ -130,7 +130,7 @@ func (s *GuestMetadataStore) Get(guestID string) *GuestMetadata {
 // 1. instance-node-vmid (e.g., "delly-minipc-201") - most specific legacy format
 // 2. instance-vmid (e.g., "delly-201") - old cluster format without node
 // 3. node-vmid (e.g., "minipc-201") - standalone format
-func (s *GuestMetadataStore) GetWithLegacyMigration(guestID, instance, node string, vmid int) *GuestMetadata {
+func (s *GuestMetadataStore) GetWithLegacyMigration(guestID, instance, node string, vmID int) *GuestMetadata {
 	s.mu.RLock()
 	meta, exists := s.metadata[guestID]
 	s.mu.RUnlock()
@@ -171,21 +171,21 @@ func (s *GuestMetadataStore) GetWithLegacyMigration(guestID, instance, node stri
 
 	// Try legacy format 1: instance-node-vmid (most specific)
 	if instance != node {
-		if result := migrate(fmt.Sprintf("%s-%s-%d", instance, node, vmid)); result != nil {
+		if result := migrate(fmt.Sprintf("%s-%s-%d", instance, node, vmID)); result != nil {
 			return result
 		}
 	}
 
 	// Try legacy format 2: instance-vmid (old cluster format)
 	// This was used when cluster name was used without node differentiation
-	if result := migrate(fmt.Sprintf("%s-%d", instance, vmid)); result != nil {
+	if result := migrate(fmt.Sprintf("%s-%d", instance, vmID)); result != nil {
 		return result
 	}
 
 	// Try legacy format 3: node-vmid (standalone format or node-only reference)
 	// Only try if instance != node to avoid duplicate check
 	if instance != node {
-		if result := migrate(fmt.Sprintf("%s-%d", node, vmid)); result != nil {
+		if result := migrate(fmt.Sprintf("%s-%d", node, vmID)); result != nil {
 			return result
 		}
 	}

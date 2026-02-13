@@ -8,11 +8,6 @@ type MetricPoint struct {
 	Timestamp time.Time `json:"timestamp"`
 }
 
-// GetTimestamp returns the timestamp for the metric point
-func (m MetricPoint) GetTimestamp() time.Time {
-	return m.Timestamp
-}
-
 // IOMetrics represents I/O metrics at a point in time
 type IOMetrics struct {
 	DiskRead   int64

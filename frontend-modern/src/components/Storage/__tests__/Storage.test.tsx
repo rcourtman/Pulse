@@ -4,6 +4,27 @@ import type { Alert } from '@/types/api';
 import type { Resource, ResourceType } from '@/types/resource';
 import Storage from '@/components/Storage/Storage';
 
+// Stub ResizeObserver for jsdom (used by HistoryChart in pool detail panels)
+if (typeof globalThis.ResizeObserver === 'undefined') {
+  globalThis.ResizeObserver = class ResizeObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  } as unknown as typeof ResizeObserver;
+}
+
+// Stub HTMLCanvasElement.getContext for jsdom (used by HistoryChart canvas rendering)
+if (typeof HTMLCanvasElement.prototype.getContext === 'function') {
+  const original = HTMLCanvasElement.prototype.getContext;
+  HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement, ...args: unknown[]) {
+    try {
+      return original.apply(this, args as Parameters<typeof original>);
+    } catch {
+      return null;
+    }
+  } as typeof HTMLCanvasElement.prototype.getContext;
+}
+
 let mockLocationSearch = '';
 let mockLocationPath = '/storage';
 const navigateSpy = vi.fn();
@@ -232,7 +253,7 @@ describe('Storage', () => {
     expect(screen.queryByText('Local-LVM-PVE2')).not.toBeInTheDocument();
   });
 
-  it('renders parity table columns and supports sort/group controls', async () => {
+  it('renders compact table columns and supports sort/group controls', async () => {
     hookResources = [
       buildStorageResource('storage-1', 'Alpha-Store', 'pve1', {
         current: 20,
@@ -254,15 +275,11 @@ describe('Storage', () => {
 
     render(() => <Storage />);
 
-    expect(screen.getByRole('columnheader', { name: 'Node' })).toBeInTheDocument();
+    // New compact columns: Name, Type, Capacity, Trend, Health
+    expect(screen.getByRole('columnheader', { name: 'Name' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Type' })).toBeInTheDocument();
-    expect(screen.getByRole('columnheader', { name: 'Content' })).toBeInTheDocument();
-    expect(screen.getByRole('columnheader', { name: 'Status' })).toBeInTheDocument();
-    expect(screen.getByRole('columnheader', { name: 'Shared' })).toBeInTheDocument();
-    expect(screen.getByRole('columnheader', { name: 'Used' })).toBeInTheDocument();
-    expect(screen.getByRole('columnheader', { name: 'Free' })).toBeInTheDocument();
-    expect(screen.getByRole('columnheader', { name: 'Total' })).toBeInTheDocument();
-    expect(screen.getByRole('columnheader', { name: 'Usage' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Capacity' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Health' })).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('Sort By'), {
       target: { value: 'usage' },
@@ -277,8 +294,9 @@ describe('Storage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'By Status' }));
 
-    expect(screen.getByText('Status: degraded')).toBeInTheDocument();
-    expect(screen.getByText('Status: online')).toBeInTheDocument();
+    // Group headers now show just the key name (without prefix)
+    expect(screen.getByText('degraded')).toBeInTheDocument();
+    expect(screen.getByText('online')).toBeInTheDocument();
   });
 
   it('round-trips managed storage query params through canonical URL state', async () => {
@@ -336,7 +354,7 @@ describe('Storage', () => {
     expect(screen.getByRole('button', { name: 'PVE' })).toHaveAttribute('aria-pressed', 'true');
   });
 
-  it('shows ceph summary and expandable ceph drawer details', async () => {
+  it('shows ceph summary card and pool expand chevron', async () => {
     hookResources = [
       buildStorageResource('storage-ceph', 'Ceph-Pool-1', 'pve1', {
         storageType: 'cephfs',
@@ -392,12 +410,10 @@ describe('Storage', () => {
     expect(screen.getByText('Ceph Summary')).toBeInTheDocument();
     expect(screen.getByText('Primary Ceph')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Toggle Ceph details for Ceph-Pool-1' }));
-
-    await waitFor(() => {
-      expect(screen.getAllByText('Ceph Cluster').length).toBeGreaterThan(0);
-    });
-    expect(screen.getByText(/rbd:/i)).toBeInTheDocument();
+    // All pools now have a toggle details button (not just Ceph)
+    const toggleBtn = screen.getByRole('button', { name: 'Toggle details for Ceph-Pool-1' });
+    expect(toggleBtn).toBeInTheDocument();
+    fireEvent.click(toggleBtn);
   });
 
   it('applies alert highlight styling for rows with active unacknowledged alerts', async () => {
@@ -432,7 +448,7 @@ describe('Storage', () => {
     });
   });
 
-  it('supports resource deep-links by highlighting and auto-expanding ceph rows', async () => {
+  it('supports resource deep-links by highlighting rows', async () => {
     hookResources = [
       buildStorageResource('storage-ceph-link', 'Ceph-Link-Store', 'pve1', {
         storageType: 'cephfs',
@@ -449,9 +465,6 @@ describe('Storage', () => {
       expect(document.querySelector('tr[data-row-id="storage-other"]')).toHaveAttribute(
         'data-resource-highlighted',
         'false',
-      );
-      expect(screen.getByRole('button', { name: 'Toggle Ceph details for Ceph-Link-Store' })).toHaveTextContent(
-        'Hide',
       );
     });
   });
@@ -494,8 +507,8 @@ describe('Storage', () => {
     await waitFor(() => {
       expect(screen.getAllByText('DEGRADED').length).toBeGreaterThan(0);
     });
+    // ZFS badges (DEGRADED, ERRORS) are now shown inline in pool rows
     expect(screen.getByText('ERRORS')).toBeInTheDocument();
-    expect(screen.getByText('ZFS Pool Status:')).toBeInTheDocument();
   });
 
   it('shows disconnected waiting state while loading with no initial data', () => {

@@ -9,8 +9,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	internalerrors "github.com/rcourtman/pulse-go-rewrite/internal/errors"
 )
 
 type fakeExecutor struct {

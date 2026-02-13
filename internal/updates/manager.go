@@ -68,16 +68,17 @@ var (
 
 // Manager handles update operations
 type Manager struct {
-	config        *config.Config
-	history       *UpdateHistory
-	status        UpdateStatus
-	statusMu      sync.RWMutex
-	checkCache    map[string]*UpdateInfo // keyed by channel
-	cacheTime     map[string]time.Time   // keyed by channel
-	cacheDuration time.Duration
-	progressChan  chan UpdateStatus
-	queue         *UpdateQueue
-	sseBroadcast  *SSEBroadcaster
+	config         *config.Config
+	history        *UpdateHistory
+	status         UpdateStatus
+	statusMu       sync.RWMutex
+	updateMu       sync.Mutex
+	updateInFlight bool
+	checkCache     map[string]*UpdateInfo // keyed by channel
+	cacheTime      map[string]time.Time   // keyed by channel
+	cacheDuration  time.Duration
+	progressChan   chan UpdateStatus
+	sseBroadcast   *SSEBroadcaster
 }
 
 // ApplyUpdateRequest describes an update request initiated via the API/UI.
@@ -97,7 +98,6 @@ func NewManager(cfg *config.Config) *Manager {
 		cacheTime:     make(map[string]time.Time),
 		cacheDuration: 5 * time.Minute, // Cache update checks for 5 minutes
 		progressChan:  make(chan UpdateStatus, 100),
-		queue:         NewUpdateQueue(),
 		sseBroadcast:  NewSSEBroadcaster(),
 		status: UpdateStatus{
 			Status:    "idle",
@@ -135,11 +135,6 @@ func (m *Manager) Close() {
 // GetSSEBroadcaster returns the SSE broadcaster
 func (m *Manager) GetSSEBroadcaster() *SSEBroadcaster {
 	return m.sseBroadcast
-}
-
-// GetQueue returns the update queue
-func (m *Manager) GetQueue() *UpdateQueue {
-	return m.queue
 }
 
 // AddSSEClient adds a new SSE client for update progress streaming
@@ -382,17 +377,19 @@ func (m *Manager) ApplyUpdate(ctx context.Context, req ApplyUpdateRequest) error
 		return fmt.Errorf("manual migration required: Pulse v4 is a complete rewrite. Please create a fresh installation. See https://github.com/rcourtman/Pulse/releases/v4.0.0")
 	}
 
-	// Enqueue the update job
-	job, accepted := m.queue.Enqueue(req.DownloadURL)
-	if !accepted {
+	// Ensure only one update runs at a time.
+	m.updateMu.Lock()
+	if m.updateInFlight {
+		m.updateMu.Unlock()
 		return fmt.Errorf("update already in progress")
 	}
-
-	// Mark job as running
-	m.queue.MarkRunning(job.ID)
-
-	// Use job context instead of passed context
-	ctx = job.Context
+	m.updateInFlight = true
+	m.updateMu.Unlock()
+	defer func() {
+		m.updateMu.Lock()
+		m.updateInFlight = false
+		m.updateMu.Unlock()
+	}()
 
 	m.updateStatus("downloading", 10, "Downloading update...")
 
@@ -409,7 +406,7 @@ func (m *Manager) ApplyUpdate(ctx context.Context, req ApplyUpdateRequest) error
 
 	start := time.Now()
 	eventID := m.createHistoryEntry(ctx, UpdateHistoryEntry{
-		Action:         ActionUpdate,
+		Action:         "update",
 		Channel:        channel,
 		VersionFrom:    currentInfo.Version,
 		VersionTo:      targetVersion,
@@ -455,7 +452,6 @@ func (m *Manager) ApplyUpdate(ctx context.Context, req ApplyUpdateRequest) error
 				tempErr := fmt.Errorf("failed to create temp directory in any location: %w", err)
 				m.updateStatus("error", 10, "Failed to create temp directory", tempErr)
 				runErr = tempErr
-				m.queue.MarkCompleted(job.ID, tempErr)
 				return tempErr
 			}
 		}
@@ -468,7 +464,6 @@ func (m *Manager) ApplyUpdate(ctx context.Context, req ApplyUpdateRequest) error
 	if err != nil {
 		downloadErr := fmt.Errorf("failed to download update: %w", err)
 		m.updateStatus("error", 20, "Failed to download update", downloadErr)
-		m.queue.MarkCompleted(job.ID, downloadErr)
 		runErr = downloadErr
 		return runErr
 	}
@@ -483,7 +478,6 @@ func (m *Manager) ApplyUpdate(ctx context.Context, req ApplyUpdateRequest) error
 	if err := m.verifyChecksum(ctx, req.DownloadURL, tarballPath); err != nil {
 		checksumErr := fmt.Errorf("checksum verification failed: %w", err)
 		m.updateStatus("error", 30, "Failed to verify update checksum", checksumErr)
-		m.queue.MarkCompleted(job.ID, checksumErr)
 		runErr = checksumErr
 		return runErr
 	}
@@ -496,7 +490,6 @@ func (m *Manager) ApplyUpdate(ctx context.Context, req ApplyUpdateRequest) error
 	if err := m.extractTarball(tarballPath, extractDir); err != nil {
 		extractErr := fmt.Errorf("failed to extract update: %w", err)
 		m.updateStatus("error", 40, "Failed to extract update", extractErr)
-		m.queue.MarkCompleted(job.ID, extractErr)
 		runErr = extractErr
 		return runErr
 	}
@@ -508,7 +501,6 @@ func (m *Manager) ApplyUpdate(ctx context.Context, req ApplyUpdateRequest) error
 	if err != nil {
 		backupErr := fmt.Errorf("failed to create backup: %w", err)
 		m.updateStatus("error", 60, "Failed to create backup", backupErr)
-		m.queue.MarkCompleted(job.ID, backupErr)
 		runErr = backupErr
 		return runErr
 	}
@@ -526,7 +518,6 @@ func (m *Manager) ApplyUpdate(ctx context.Context, req ApplyUpdateRequest) error
 	if err := m.applyUpdateFiles(extractDir); err != nil {
 		applyErr := fmt.Errorf("failed to apply update: %w", err)
 		m.updateStatus("error", 80, "Failed to apply update", applyErr)
-		m.queue.MarkCompleted(job.ID, applyErr)
 		runErr = applyErr
 		// Attempt to restore backup
 		if restoreErr := m.restoreBackup(backupPath); restoreErr != nil {
@@ -536,9 +527,6 @@ func (m *Manager) ApplyUpdate(ctx context.Context, req ApplyUpdateRequest) error
 	}
 
 	m.updateStatus("restarting", 95, "Restarting service...")
-
-	// Mark job as completed
-	m.queue.MarkCompleted(job.ID, nil)
 
 	// Schedule a clean exit after a short delay - systemd will restart us
 	if !dockerUpdatesAllowed() {

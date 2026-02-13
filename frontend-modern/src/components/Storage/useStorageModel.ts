@@ -11,9 +11,17 @@ export type StorageNodeOption = {
   instance?: string;
 };
 
+export interface StorageGroupStats {
+  totalBytes: number;
+  usedBytes: number;
+  usagePercent: number;
+  byHealth: Record<NormalizedHealth, number>;
+}
+
 export type StorageGroupedRecords = {
   key: string;
   items: StorageRecord[];
+  stats: StorageGroupStats;
 };
 
 export type StorageSummary = {
@@ -107,6 +115,28 @@ const toZfsPool = (value: unknown): ZFSPool | null => {
 export const getRecordZfsPool = (record: StorageRecord): ZFSPool | null =>
   toZfsPool(getRecordDetails(record).zfsPool);
 
+const computeGroupStats = (items: StorageRecord[]): StorageGroupStats => {
+  const totals = items.reduce(
+    (acc, record) => {
+      acc.total += record.capacity.totalBytes || 0;
+      acc.used += record.capacity.usedBytes || 0;
+      acc.byHealth[record.health] = (acc.byHealth[record.health] || 0) + 1;
+      return acc;
+    },
+    {
+      total: 0,
+      used: 0,
+      byHealth: { healthy: 0, warning: 0, critical: 0, offline: 0, unknown: 0 } as Record<NormalizedHealth, number>,
+    },
+  );
+  return {
+    totalBytes: totals.total,
+    usedBytes: totals.used,
+    usagePercent: totals.total > 0 ? (totals.used / totals.total) * 100 : 0,
+    byHealth: totals.byHealth,
+  };
+};
+
 export const useStorageModel = (options: UseStorageModelOptions) => {
   const selectedNode = createMemo(() => {
     if (options.selectedNodeId() === 'all') return null;
@@ -183,7 +213,8 @@ export const useStorageModel = (options: UseStorageModelOptions) => {
 
   const groupedRecords = createMemo<StorageGroupedRecords[]>(() => {
     if (options.groupBy() === 'none') {
-      return [{ key: 'All', items: sortedRecords() }];
+      const items = sortedRecords();
+      return [{ key: 'All', items, stats: computeGroupStats(items) }];
     }
 
     const groups = new Map<string, StorageRecord[]>();
@@ -202,7 +233,7 @@ export const useStorageModel = (options: UseStorageModelOptions) => {
 
     return Array.from(groups.entries())
       .sort(([keyA], [keyB]) => keyA.localeCompare(keyB, undefined, { sensitivity: 'base' }))
-      .map(([key, items]) => ({ key, items }));
+      .map(([key, items]) => ({ key, items, stats: computeGroupStats(items) }));
   });
 
   const summary = createMemo<StorageSummary>(() => {

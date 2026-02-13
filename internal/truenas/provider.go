@@ -11,12 +11,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
-const (
-	// FeatureTrueNAS gates fixture-first TrueNAS ingestion.
-	FeatureTrueNAS = "PULSE_ENABLE_TRUENAS"
-)
-
-var featureTrueNASEnabled = parseBool(os.Getenv(FeatureTrueNAS))
+var featureTrueNASEnabled = parseBool(os.Getenv("PULSE_ENABLE_TRUENAS"))
 
 // IsFeatureEnabled returns whether fixture-driven TrueNAS ingestion is enabled.
 func IsFeatureEnabled() bool {

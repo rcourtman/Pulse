@@ -65,7 +65,7 @@ type SAMLProviderConfig struct {
 	IDPMetadataURL string `json:"idpMetadataUrl,omitempty"` // URL to fetch IdP metadata (preferred)
 	IDPMetadataXML string `json:"idpMetadataXml,omitempty"` // Raw XML metadata (alternative to URL)
 	IDPSSOURL      string `json:"idpSsoUrl,omitempty"`      // SSO URL (extracted from metadata or manual)
-	IDPSLOUrl      string `json:"idpSloUrl,omitempty"`      // Single Logout URL (optional)
+	IDPSLOURL      string `json:"idpSloUrl,omitempty"`      // Single Logout URL (optional)
 	IDPCertificate string `json:"idpCertificate,omitempty"` // IdP signing certificate (PEM format)
 	IDPCertFile    string `json:"idpCertFile,omitempty"`    // Path to IdP certificate file (alternative)
 	IDPEntityID    string `json:"idpEntityId,omitempty"`    // IdP Entity ID (extracted from metadata or manual)

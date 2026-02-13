@@ -248,13 +248,16 @@ func (c *CommandClient) buildWebSocketURL() (string, error) {
 }
 
 func (c *CommandClient) sendRegistration(conn *websocket.Conn) error {
-	payload, _ := json.Marshal(registerPayload{
+	payload, err := json.Marshal(registerPayload{
 		AgentID:  c.agentID,
 		Hostname: c.hostname,
 		Version:  c.version,
 		Platform: c.platform,
 		Token:    c.apiToken,
 	})
+	if err != nil {
+		return fmt.Errorf("marshal registration payload: %w", err)
+	}
 
 	msg := wsMessage{
 		Type:      msgTypeAgentRegister,
@@ -372,7 +375,14 @@ func (c *CommandClient) handleExecuteCommand(ctx context.Context, conn *websocke
 	result.Duration = time.Since(startTime).Milliseconds()
 
 	// Send result back
-	resultPayload, _ := json.Marshal(result)
+	resultPayload, err := json.Marshal(result)
+	if err != nil {
+		c.logger.Error().
+			Err(err).
+			Str("request_id", payload.RequestID).
+			Msg("Failed to marshal command result")
+		return
+	}
 	msg := wsMessage{
 		Type:      msgTypeCommandResult,
 		ID:        payload.RequestID,
@@ -381,7 +391,7 @@ func (c *CommandClient) handleExecuteCommand(ctx context.Context, conn *websocke
 	}
 
 	c.connMu.Lock()
-	err := conn.WriteJSON(msg)
+	err = conn.WriteJSON(msg)
 	c.connMu.Unlock()
 
 	if err != nil {

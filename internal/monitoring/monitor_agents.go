@@ -1162,16 +1162,16 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 				diskWriteRate = *container.BlockIO.WriteRateBytesPerSecond
 			}
 		}
-		if container.NetInRate > 0 {
+		if container.NetInRate >= 0 {
 			m.metricsHistory.AddGuestMetric(metricKey, "netin", container.NetInRate, now)
 		}
-		if container.NetOutRate > 0 {
+		if container.NetOutRate >= 0 {
 			m.metricsHistory.AddGuestMetric(metricKey, "netout", container.NetOutRate, now)
 		}
-		if diskReadRate > 0 {
+		if diskReadRate >= 0 {
 			m.metricsHistory.AddGuestMetric(metricKey, "diskread", diskReadRate, now)
 		}
-		if diskWriteRate > 0 {
+		if diskWriteRate >= 0 {
 			m.metricsHistory.AddGuestMetric(metricKey, "diskwrite", diskWriteRate, now)
 		}
 
@@ -1180,16 +1180,16 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 			m.metricsStore.Write("dockerContainer", container.ID, "cpu", container.CPUPercent, now)
 			m.metricsStore.Write("dockerContainer", container.ID, "memory", container.MemoryPercent, now)
 			m.metricsStore.Write("dockerContainer", container.ID, "disk", diskPercent, now)
-			if container.NetInRate > 0 {
+			if container.NetInRate >= 0 {
 				m.metricsStore.Write("dockerContainer", container.ID, "netin", container.NetInRate, now)
 			}
-			if container.NetOutRate > 0 {
+			if container.NetOutRate >= 0 {
 				m.metricsStore.Write("dockerContainer", container.ID, "netout", container.NetOutRate, now)
 			}
-			if diskReadRate > 0 {
+			if diskReadRate >= 0 {
 				m.metricsStore.Write("dockerContainer", container.ID, "diskread", diskReadRate, now)
 			}
-			if diskWriteRate > 0 {
+			if diskWriteRate >= 0 {
 				m.metricsStore.Write("dockerContainer", container.ID, "diskwrite", diskWriteRate, now)
 			}
 		}

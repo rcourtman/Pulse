@@ -209,6 +209,9 @@ scripts/auto-backup.sh
 scripts/safe-checkout.sh
 BACKUP_SYSTEM.md
 
+# Overnight refactor scripts and artifacts (local only)
+scripts/overnight-refactor/
+
 # Generated artifacts
 /eval
 test_output.txt

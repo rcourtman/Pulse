@@ -25,6 +25,23 @@ const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
   ollama: 'Ollama',
 };
 
+const AI_PROVIDERS: AIProvider[] = ['anthropic', 'openai', 'deepseek', 'gemini', 'ollama'];
+
+type ProviderHealthStatus = 'not_configured' | 'checking' | 'ok' | 'error';
+
+type ProviderHealthState = {
+  status: ProviderHealthStatus;
+  message: string;
+};
+
+const createInitialProviderHealth = (): Record<AIProvider, ProviderHealthState> => ({
+  anthropic: { status: 'not_configured', message: '' },
+  openai: { status: 'not_configured', message: '' },
+  deepseek: { status: 'not_configured', message: '' },
+  gemini: { status: 'not_configured', message: '' },
+  ollama: { status: 'not_configured', message: '' },
+});
+
 type ControlLevel = 'read_only' | 'controlled' | 'autonomous';
 
 const normalizeControlLevel = (value?: string): ControlLevel => {
@@ -120,8 +137,12 @@ export const AISettings: Component = () => {
   // Per-provider test state
   const [testingProvider, setTestingProvider] = createSignal<string | null>(null);
   const [providerTestResult, setProviderTestResult] = createSignal<{ provider: string; success: boolean; message: string } | null>(null);
+  const [providerHealth, setProviderHealth] = createStore<Record<AIProvider, ProviderHealthState>>(createInitialProviderHealth());
+  const [preflightRunning, setPreflightRunning] = createSignal(false);
+  const [preflightLastCheckedAt, setPreflightLastCheckedAt] = createSignal<number | null>(null);
   const hasAutoFixFeature = createMemo(() => hasFeature('ai_autofix'));
   const autoFixLocked = createMemo(() => !hasAutoFixFeature());
+  const providerIssueCount = createMemo(() => AI_PROVIDERS.filter((provider) => providerHealth[provider].status === 'error').length);
 
   createEffect((wasPaywallVisible) => {
     const isPaywallVisible = form.controlLevel === 'autonomous' && autoFixLocked();
@@ -420,13 +441,111 @@ export const AISettings: Component = () => {
       if (data.configured) {
         loadModels();
       }
+      void runProviderPreflight(data);
     } catch (error) {
       logger.error('[AISettings] Failed to load settings:', error);
       notificationStore.error('Failed to load Pulse Assistant settings');
       setSettings(null);
       resetForm(null);
+      setProviderHealth(createInitialProviderHealth());
+      setPreflightLastCheckedAt(null);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const getProviderHealthBadgeClass = (provider: AIProvider): string => {
+    switch (providerHealth[provider].status) {
+      case 'ok':
+        return 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300';
+      case 'error':
+        return 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300';
+      case 'checking':
+        return 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300';
+      default:
+        return 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-300';
+    }
+  };
+
+  const getProviderHealthLabel = (provider: AIProvider): string => {
+    switch (providerHealth[provider].status) {
+      case 'ok':
+        return 'Healthy';
+      case 'error':
+        return 'Issue';
+      case 'checking':
+        return 'Checking...';
+      default:
+        return 'Not checked';
+    }
+  };
+
+  const checkProviderHealth = async (
+    provider: AIProvider,
+    opts: { notify?: boolean; storeManualResult?: boolean } = {}
+  ): Promise<{ success: boolean; message: string; provider: string }> => {
+    try {
+      const result = await AIAPI.testProvider(provider);
+      setProviderHealth(provider, {
+        status: result.success ? 'ok' : 'error',
+        message: result.message || '',
+      });
+      if (opts.storeManualResult) {
+        setProviderTestResult(result);
+      }
+      if (opts.notify) {
+        if (result.success) {
+          notificationStore.success(`${provider}: ${result.message}`);
+        } else {
+          notificationStore.error(`${provider}: ${result.message}`);
+        }
+      }
+      return result;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Connection test failed';
+      const result = { provider, success: false, message };
+      setProviderHealth(provider, {
+        status: 'error',
+        message,
+      });
+      if (opts.storeManualResult) {
+        setProviderTestResult(result);
+      }
+      if (opts.notify) {
+        notificationStore.error(`${provider}: ${message}`);
+      }
+      return result;
+    }
+  };
+
+  const runProviderPreflight = async (settingsSnapshot?: AISettingsType | null) => {
+    const current = settingsSnapshot ?? settings();
+    if (!current) {
+      return;
+    }
+
+    const configuredProviders = AI_PROVIDERS.filter((provider) => isProviderConfigured(provider, current));
+    for (const provider of AI_PROVIDERS) {
+      if (!configuredProviders.includes(provider)) {
+        setProviderHealth(provider, { status: 'not_configured', message: '' });
+      }
+    }
+    if (configuredProviders.length === 0) {
+      setPreflightLastCheckedAt(Date.now());
+      return;
+    }
+
+    setPreflightRunning(true);
+    try {
+      await Promise.all(
+        configuredProviders.map(async (provider) => {
+          setProviderHealth(provider, { status: 'checking', message: '' });
+          await checkProviderHealth(provider, { notify: false, storeManualResult: false });
+        })
+      );
+      setPreflightLastCheckedAt(Date.now());
+    } finally {
+      setPreflightRunning(false);
     }
   };
 
@@ -613,6 +732,7 @@ export const AISettings: Component = () => {
       const updated = await AIAPI.updateSettings(payload);
       setSettings(updated);
       resetForm(updated);
+      void runProviderPreflight(updated);
       notificationStore.success('Pulse Assistant settings saved');
       // Notify other components (like AIChat) that settings changed so they can refresh models
       aiChatStore.notifySettingsChanged();
@@ -644,16 +764,11 @@ export const AISettings: Component = () => {
   };
 
   const handleTestProvider = async (provider: string) => {
-    setTestingProvider(provider);
+    const typedProvider = provider as AIProvider;
+    setTestingProvider(typedProvider);
     setProviderTestResult(null);
     try {
-      const result = await AIAPI.testProvider(provider);
-      setProviderTestResult(result);
-      if (result.success) {
-        notificationStore.success(`${provider}: ${result.message}`);
-      } else {
-        notificationStore.error(`${provider}: ${result.message}`);
-      }
+      await checkProviderHealth(typedProvider, { notify: true, storeManualResult: true });
     } catch (error) {
       logger.error(`[AISettings] Test ${provider} failed:`, error);
       const message = error instanceof Error ? error.message : 'Connection test failed';
@@ -701,6 +816,7 @@ export const AISettings: Component = () => {
       // Reload settings to reflect the change
       const newSettings = await AIAPI.getSettings();
       setSettings(newSettings);
+      void runProviderPreflight(newSettings);
 
       // Clear the local form field
       if (provider === 'anthropic') setForm('anthropicApiKey', '');
@@ -767,6 +883,7 @@ export const AISettings: Component = () => {
                   try {
                     const updated = await AIAPI.updateSettings({ enabled: newValue });
                     setSettings(updated);
+                    void runProviderPreflight(updated);
                     notificationStore.success(newValue ? 'Pulse Assistant enabled' : 'Pulse Assistant disabled');
                     aiChatStore.notifySettingsChanged();
                   } catch (error) {
@@ -1006,16 +1123,45 @@ export const AISettings: Component = () => {
 
               {/* Provider Configuration - Configure API keys for all providers */}
               <div class={`${formField} p-5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40`}>
-                <div class="mb-3">
-                  <h4 class="font-medium text-gray-900 dark:text-white flex items-center gap-2">
-                    <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                    </svg>
-                    Provider Configuration
-                  </h4>
+                <div class="mb-3 space-y-1.5">
+                  <div class="flex items-center justify-between gap-2">
+                    <h4 class="font-medium text-gray-900 dark:text-white flex items-center gap-2">
+                      <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                      </svg>
+                      Provider Configuration
+                    </h4>
+                    <button
+                      type="button"
+                      onClick={() => void runProviderPreflight()}
+                      disabled={preflightRunning() || saving()}
+                      class="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50"
+                    >
+                      {preflightRunning() ? 'Checking...' : 'Run Preflight'}
+                    </button>
+                  </div>
                   <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">
                     Configure API keys for each provider you want to use. Models from all configured providers will appear in the model selectors.
                   </p>
+                  <Show when={preflightLastCheckedAt()}>
+                    <p class="text-[11px] text-gray-500 dark:text-gray-400">
+                      Last checked: {new Date(preflightLastCheckedAt()!).toLocaleTimeString()}
+                    </p>
+                  </Show>
+                  <Show when={providerIssueCount() > 0}>
+                    <div class="rounded border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 px-2 py-1.5">
+                      <p class="text-xs text-red-700 dark:text-red-300">
+                        {providerIssueCount()} provider{providerIssueCount() === 1 ? '' : 's'} configured but currently not usable.
+                      </p>
+                      <For each={AI_PROVIDERS.filter((provider) => providerHealth[provider].status === 'error')}>
+                        {(provider) => (
+                          <p class="text-[11px] text-red-600 dark:text-red-300">
+                            <span class="font-medium">{PROVIDER_DISPLAY_NAMES[provider] || provider}:</span> {providerHealth[provider].message}
+                          </p>
+                        )}
+                      </For>
+                    </div>
+                  </Show>
                 </div>
 
                 {/* Provider Accordions */}
@@ -1037,6 +1183,11 @@ export const AISettings: Component = () => {
                         <span class="font-medium text-sm">Anthropic</span>
                         <Show when={settings()?.anthropic_configured}>
                           <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">Configured</span>
+                        </Show>
+                        <Show when={settings()?.anthropic_configured}>
+                          <span class={`px-1.5 py-0.5 text-[10px] font-semibold rounded ${getProviderHealthBadgeClass('anthropic')}`}>
+                            {getProviderHealthLabel('anthropic')}
+                          </span>
                         </Show>
                       </div>
                       <svg class={`w-4 h-4 transition-transform ${expandedProviders().has('anthropic') ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1105,6 +1256,11 @@ export const AISettings: Component = () => {
                         <span class="font-medium text-sm">OpenAI</span>
                         <Show when={settings()?.openai_configured}>
                           <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">Configured</span>
+                        </Show>
+                        <Show when={settings()?.openai_configured}>
+                          <span class={`px-1.5 py-0.5 text-[10px] font-semibold rounded ${getProviderHealthBadgeClass('openai')}`}>
+                            {getProviderHealthLabel('openai')}
+                          </span>
                         </Show>
                       </div>
                       <svg class={`w-4 h-4 transition-transform ${expandedProviders().has('openai') ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1188,6 +1344,11 @@ export const AISettings: Component = () => {
                         <Show when={settings()?.deepseek_configured}>
                           <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">Configured</span>
                         </Show>
+                        <Show when={settings()?.deepseek_configured}>
+                          <span class={`px-1.5 py-0.5 text-[10px] font-semibold rounded ${getProviderHealthBadgeClass('deepseek')}`}>
+                            {getProviderHealthLabel('deepseek')}
+                          </span>
+                        </Show>
                       </div>
                       <svg class={`w-4 h-4 transition-transform ${expandedProviders().has('deepseek') ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
@@ -1256,6 +1417,11 @@ export const AISettings: Component = () => {
                         <Show when={settings()?.gemini_configured}>
                           <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">Configured</span>
                         </Show>
+                        <Show when={settings()?.gemini_configured}>
+                          <span class={`px-1.5 py-0.5 text-[10px] font-semibold rounded ${getProviderHealthBadgeClass('gemini')}`}>
+                            {getProviderHealthLabel('gemini')}
+                          </span>
+                        </Show>
                       </div>
                       <svg class={`w-4 h-4 transition-transform ${expandedProviders().has('gemini') ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
@@ -1323,6 +1489,11 @@ export const AISettings: Component = () => {
                         <span class="font-medium text-sm">Ollama</span>
                         <Show when={settings()?.ollama_configured}>
                           <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">Available</span>
+                        </Show>
+                        <Show when={settings()?.ollama_configured}>
+                          <span class={`px-1.5 py-0.5 text-[10px] font-semibold rounded ${getProviderHealthBadgeClass('ollama')}`}>
+                            {getProviderHealthLabel('ollama')}
+                          </span>
                         </Show>
                       </div>
                       <svg class={`w-4 h-4 transition-transform ${expandedProviders().has('ollama') ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2005,6 +2176,7 @@ export const AISettings: Component = () => {
                     setSettings(updated);
                     setForm('enabled', true);
                     resetForm(updated);
+                    void runProviderPreflight(updated);
                     setShowSetupModal(false);
                     setSetupApiKey('');
                     notificationStore.success('Pulse Assistant enabled! You can customize settings below.');

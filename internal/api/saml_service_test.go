@@ -83,7 +83,7 @@ func TestBuildManualMetadataAndCertificate(t *testing.T) {
 	}
 
 	cfg.IDPSSOURL = "http://idp/sso"
-	cfg.IDPSLOUrl = "http://idp/slo"
+	cfg.IDPSLOURL = "http://idp/slo"
 	cfg.IDPIssuer = "issuer"
 	certPEM, _, _ := generateTestCert(t)
 	cfg.IDPCertificate = string(certPEM)

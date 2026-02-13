@@ -5,19 +5,6 @@ import (
 	"time"
 )
 
-func TestMetricPoint_GetTimestamp(t *testing.T) {
-	now := time.Now()
-	point := MetricPoint{
-		Value:     42.5,
-		Timestamp: now,
-	}
-
-	result := point.GetTimestamp()
-	if !result.Equal(now) {
-		t.Errorf("GetTimestamp() = %v, want %v", result, now)
-	}
-}
-
 func TestMetricPoint_ZeroValue(t *testing.T) {
 	var point MetricPoint
 

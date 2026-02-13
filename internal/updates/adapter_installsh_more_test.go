@@ -35,7 +35,7 @@ func TestInstallShAdapter_RollbackErrors(t *testing.T) {
 	}
 
 	eventNoBackup, err := history.CreateEntry(ctx, UpdateHistoryEntry{
-		Action:      ActionUpdate,
+		Action:      "update",
 		Status:      StatusSuccess,
 		VersionFrom: "v1.0.0",
 		VersionTo:   "v1.1.0",
@@ -48,7 +48,7 @@ func TestInstallShAdapter_RollbackErrors(t *testing.T) {
 	}
 
 	eventMissingBackup, err := history.CreateEntry(ctx, UpdateHistoryEntry{
-		Action:      ActionUpdate,
+		Action:      "update",
 		Status:      StatusSuccess,
 		VersionFrom: "v1.0.0",
 		VersionTo:   "v1.1.0",
@@ -63,7 +63,7 @@ func TestInstallShAdapter_RollbackErrors(t *testing.T) {
 
 	backupDir := t.TempDir()
 	eventNoTarget, err := history.CreateEntry(ctx, UpdateHistoryEntry{
-		Action:      ActionUpdate,
+		Action:      "update",
 		Status:      StatusSuccess,
 		VersionFrom: "",
 		VersionTo:   "v1.1.0",

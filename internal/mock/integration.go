@@ -28,7 +28,7 @@ const updateInterval = 2 * time.Second
 func init() {
 	initialEnabled := os.Getenv("PULSE_MOCK_MODE") == "true"
 	if initialEnabled {
-		log.Info().Msg("Mock mode enabled at startup")
+		log.Info().Msg("mock mode enabled at startup")
 	}
 	setEnabled(initialEnabled, true)
 }
@@ -97,7 +97,7 @@ func enableMockMode(fromInit bool) {
 		Int("k8s_deployments_per_cluster", config.K8sDeploymentsPerCluster).
 		Bool("random_metrics", config.RandomMetrics).
 		Float64("stopped_percent", config.StoppedPercent).
-		Msg("Mock mode enabled")
+		Msg("mock mode enabled")
 
 	if !fromInit {
 		log.Info().Msg("Mock data generator started")

@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
-	"github.com/rcourtman/pulse-go-rewrite/internal/ssh/knownhosts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/system"
 	"github.com/rs/zerolog/log"
 )
@@ -37,7 +36,7 @@ type TemperatureCollector struct {
 	sshUser          string // SSH user (typically "root" or "pulse-monitor")
 	sshKeyPath       string // Path to SSH private key
 	sshPort          int    // SSH port (default 22)
-	hostKeys         knownhosts.Manager
+	hostKeys         KnownHostsManager
 	missingKeyWarned atomic.Bool
 	runner           CommandRunner
 }
@@ -60,7 +59,7 @@ func NewTemperatureCollectorWithPort(sshUser, sshKeyPath string, sshPort int) *T
 		homeDir = "/home/pulse"
 	}
 	knownHostsPath := filepath.Join(homeDir, ".ssh", "known_hosts_sensors")
-	if manager, err := knownhosts.NewManager(knownHostsPath); err != nil {
+	if manager, err := NewKnownHostsManager(knownHostsPath); err != nil {
 		log.Warn().Err(err).Str("path", knownHostsPath).Msg("Failed to initialize temperature known_hosts manager")
 	} else {
 		tc.hostKeys = manager

@@ -242,7 +242,7 @@ func (a *InstallShAdapter) Rollback(ctx context.Context, eventID string) error {
 
 	// Create rollback history entry
 	rollbackEventID, err := a.history.CreateEntry(ctx, UpdateHistoryEntry{
-		Action:         ActionRollback,
+		Action:         "rollback",
 		VersionFrom:    entry.VersionTo,
 		VersionTo:      targetVersion,
 		DeploymentType: a.GetDeploymentType(),

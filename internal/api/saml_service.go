@@ -202,8 +202,8 @@ func (s *SAMLService) buildManualMetadata() (*saml.EntityDescriptor, error) {
 	}
 
 	// Add SLO endpoint if configured
-	if s.config.IDPSLOUrl != "" {
-		sloURL, err := url.Parse(s.config.IDPSLOUrl)
+	if s.config.IDPSLOURL != "" {
+		sloURL, err := url.Parse(s.config.IDPSLOURL)
 		if err == nil {
 			metadata.IDPSSODescriptors[0].SingleLogoutServices = []saml.Endpoint{
 				{

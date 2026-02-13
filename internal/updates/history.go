@@ -14,14 +14,6 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// UpdateAction represents the type of update action
-type UpdateAction string
-
-const (
-	ActionUpdate   UpdateAction = "update"
-	ActionRollback UpdateAction = "rollback"
-)
-
 // UpdateStatus represents the outcome of an update
 type UpdateStatusType string
 
@@ -57,7 +49,7 @@ const (
 type UpdateHistoryEntry struct {
 	EventID        string           `json:"event_id"`
 	Timestamp      time.Time        `json:"timestamp"`
-	Action         UpdateAction     `json:"action"`
+	Action         string           `json:"action"`
 	Channel        string           `json:"channel"`
 	VersionFrom    string           `json:"version_from"`
 	VersionTo      string           `json:"version_to"`
@@ -84,7 +76,7 @@ type UpdateError struct {
 // HistoryFilter represents filters for querying update history
 type HistoryFilter struct {
 	Status         UpdateStatusType
-	Action         UpdateAction
+	Action         string
 	DeploymentType string
 	Limit          int
 }

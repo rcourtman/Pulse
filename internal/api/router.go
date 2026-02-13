@@ -4980,6 +4980,8 @@ func (r *Router) handleWorkloadCharts(w http.ResponseWriter, req *http.Request) 
 					}
 				}
 				series["disk"] = []MetricPoint{{Timestamp: currentTime, Value: diskPercent}}
+				series["netin"] = []MetricPoint{{Timestamp: currentTime, Value: container.NetInRate}}
+				series["netout"] = []MetricPoint{{Timestamp: currentTime, Value: container.NetOutRate}}
 			}
 			updateOldestTimestampFromSeries(series, &oldestTimestamp)
 			dockerData[container.ID] = series
