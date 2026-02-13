@@ -56,6 +56,9 @@ func TestNewService(t *testing.T) {
 	if service.cacheExpiry != 1*time.Hour {
 		t.Errorf("cacheExpiry = %v, want 1h", service.cacheExpiry)
 	}
+	if service.aiAnalysisTimeout != 45*time.Second {
+		t.Errorf("aiAnalysisTimeout = %v, want 45s", service.aiAnalysisTimeout)
+	}
 }
 
 func TestParseAIResponse(t *testing.T) {

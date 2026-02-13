@@ -269,6 +269,7 @@ type ServiceStatus struct {
 	ScannerSet          bool
 	StoreSet            bool
 	DeepScanTimeout     string
+	AIAnalysisTimeout   string
 	MaxDiscoveryAge     string
 	FingerprintCount    int
 	LastFingerprintScan time.Time
@@ -285,6 +286,7 @@ func (s ServiceStatus) ToMap() map[string]any {
 		"scanner_set":           s.ScannerSet,
 		"store_set":             s.StoreSet,
 		"deep_scan_timeout":     s.DeepScanTimeout,
+		"ai_analysis_timeout":   s.AIAnalysisTimeout,
 		"max_discovery_age":     s.MaxDiscoveryAge,
 		"fingerprint_count":     s.FingerprintCount,
 		"last_fingerprint_scan": s.LastFingerprintScan,

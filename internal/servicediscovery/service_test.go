@@ -29,6 +29,13 @@ func (errorAnalyzer) AnalyzeForDiscovery(ctx context.Context, prompt string) (st
 	return "", context.Canceled
 }
 
+type blockingAnalyzer struct{}
+
+func (blockingAnalyzer) AnalyzeForDiscovery(ctx context.Context, prompt string) (string, error) {
+	<-ctx.Done()
+	return "", ctx.Err()
+}
+
 func TestFilterSensitiveLabels(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -494,7 +501,7 @@ func TestService_formatCLIAccessAndStatus(t *testing.T) {
 
 func TestService_DefaultsAndSetAnalyzer(t *testing.T) {
 	service := NewService(nil, nil, nil, Config{})
-	if service.interval == 0 || service.cacheExpiry == 0 {
+	if service.interval == 0 || service.cacheExpiry == 0 || service.aiAnalysisTimeout == 0 {
 		t.Fatalf("expected defaults for interval and cache expiry")
 	}
 
@@ -508,6 +515,35 @@ func TestService_DefaultsAndSetAnalyzer(t *testing.T) {
 	}
 	if service.getResourceMetadata(DiscoveryRequest{}) != nil {
 		t.Fatalf("expected nil metadata without state provider")
+	}
+}
+
+func TestService_AnalyzeDockerContainer_AITimeout(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore error: %v", err)
+	}
+	store.crypto = nil
+
+	service := NewService(store, nil, nil, Config{
+		CacheExpiry:       time.Hour,
+		AIAnalysisTimeout: 20 * time.Millisecond,
+	})
+
+	start := time.Now()
+	discovery := service.analyzeDockerContainer(
+		context.Background(),
+		blockingAnalyzer{},
+		DockerContainer{Name: "slow", Image: "slow:latest"},
+		DockerHost{AgentID: "host1", Hostname: "host1"},
+	)
+	elapsed := time.Since(start)
+
+	if discovery != nil {
+		t.Fatalf("expected nil discovery when AI analysis times out")
+	}
+	if elapsed > 500*time.Millisecond {
+		t.Fatalf("expected metadata analysis timeout to bound execution, took %v", elapsed)
 	}
 }
 
@@ -829,6 +865,40 @@ func TestService_DiscoverResource_SaveError(t *testing.T) {
 	})
 	if err == nil || !strings.Contains(err.Error(), "failed to save discovery") {
 		t.Fatalf("expected save error, got %v", err)
+	}
+}
+
+func TestService_DiscoverResource_AITimeout(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore error: %v", err)
+	}
+	store.crypto = nil
+
+	service := NewService(store, nil, nil, Config{
+		Interval:          time.Minute,
+		CacheExpiry:       time.Hour,
+		DeepScanTimeout:   time.Minute,
+		AIAnalysisTimeout: 20 * time.Millisecond,
+		MaxDiscoveryAge:   30 * 24 * time.Hour,
+	})
+	service.SetAIAnalyzer(blockingAnalyzer{})
+
+	start := time.Now()
+	_, err = service.DiscoverResource(context.Background(), DiscoveryRequest{
+		ResourceType: ResourceTypeDocker,
+		ResourceID:   "web",
+		HostID:       "host1",
+		Hostname:     "host1",
+		Force:        true,
+	})
+	elapsed := time.Since(start)
+
+	if err == nil || !strings.Contains(err.Error(), "timed out") {
+		t.Fatalf("expected timeout error, got %v", err)
+	}
+	if elapsed > 500*time.Millisecond {
+		t.Fatalf("expected discovery timeout to bound execution, took %v", elapsed)
 	}
 }
 

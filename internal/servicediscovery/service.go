@@ -6,6 +6,7 @@ package servicediscovery
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -224,15 +225,16 @@ type Service struct {
 	aiAnalyzer    AIAnalyzer
 	wsHub         WSBroadcaster // WebSocket hub for broadcasting progress
 
-	mu              sync.RWMutex
-	running         bool
-	stopCh          chan struct{}
-	intervalCh      chan time.Duration // Channel for live interval updates
-	interval        time.Duration
-	initialDelay    time.Duration
-	lastRun         time.Time
-	deepScanTimeout time.Duration // Timeout for individual deep scans
-	maxDiscoveryAge time.Duration // Max age before rediscovery (default 30 days)
+	mu                sync.RWMutex
+	running           bool
+	stopCh            chan struct{}
+	intervalCh        chan time.Duration // Channel for live interval updates
+	interval          time.Duration
+	initialDelay      time.Duration
+	lastRun           time.Time
+	deepScanTimeout   time.Duration // Timeout for individual deep scans
+	aiAnalysisTimeout time.Duration // Timeout for individual AI analysis calls
+	maxDiscoveryAge   time.Duration // Max age before rediscovery (default 30 days)
 
 	// Cache for AI analysis results (by image name)
 	analysisCache map[string]*analysisCacheEntry
@@ -260,10 +262,11 @@ type analysisCacheEntry struct {
 
 // Config holds discovery service configuration.
 type Config struct {
-	DataDir         string
-	Interval        time.Duration // How often to run fingerprint collection (default 5 min)
-	CacheExpiry     time.Duration // How long to cache AI analysis results
-	DeepScanTimeout time.Duration // Timeout for individual deep scans (default 60s)
+	DataDir           string
+	Interval          time.Duration // How often to run fingerprint collection (default 5 min)
+	CacheExpiry       time.Duration // How long to cache AI analysis results
+	DeepScanTimeout   time.Duration // Timeout for individual deep scans (default 60s)
+	AIAnalysisTimeout time.Duration // Timeout for individual AI analysis calls (default 45s)
 
 	// Fingerprint-based discovery settings
 	MaxDiscoveryAge     time.Duration // Rediscover after this duration (default 30 days)
@@ -276,6 +279,7 @@ func DefaultConfig() Config {
 		Interval:            5 * time.Minute, // Fingerprint collection interval
 		CacheExpiry:         1 * time.Hour,
 		DeepScanTimeout:     60 * time.Second,
+		AIAnalysisTimeout:   45 * time.Second,
 		MaxDiscoveryAge:     30 * 24 * time.Hour, // 30 days
 		FingerprintInterval: 5 * time.Minute,
 	}
@@ -292,23 +296,27 @@ func NewService(store *Store, scanner *DeepScanner, stateProvider StateProvider,
 	if cfg.DeepScanTimeout == 0 {
 		cfg.DeepScanTimeout = 60 * time.Second
 	}
+	if cfg.AIAnalysisTimeout <= 0 {
+		cfg.AIAnalysisTimeout = 45 * time.Second
+	}
 	if cfg.MaxDiscoveryAge == 0 {
 		cfg.MaxDiscoveryAge = 30 * 24 * time.Hour // 30 days
 	}
 
 	return &Service{
-		store:           store,
-		scanner:         scanner,
-		stateProvider:   stateProvider,
-		interval:        cfg.Interval,
-		initialDelay:    30 * time.Second,
-		cacheExpiry:     cfg.CacheExpiry,
-		deepScanTimeout: cfg.DeepScanTimeout,
-		maxDiscoveryAge: cfg.MaxDiscoveryAge,
-		stopCh:          make(chan struct{}),
-		intervalCh:      make(chan time.Duration, 1), // Buffered to prevent blocking
-		analysisCache:   make(map[string]*analysisCacheEntry),
-		inProgress:      make(map[string]*discoveryInProgress),
+		store:             store,
+		scanner:           scanner,
+		stateProvider:     stateProvider,
+		interval:          cfg.Interval,
+		initialDelay:      30 * time.Second,
+		cacheExpiry:       cfg.CacheExpiry,
+		deepScanTimeout:   cfg.DeepScanTimeout,
+		aiAnalysisTimeout: cfg.AIAnalysisTimeout,
+		maxDiscoveryAge:   cfg.MaxDiscoveryAge,
+		stopCh:            make(chan struct{}),
+		intervalCh:        make(chan time.Duration, 1), // Buffered to prevent blocking
+		analysisCache:     make(map[string]*analysisCacheEntry),
+		inProgress:        make(map[string]*discoveryInProgress),
 	}
 }
 
@@ -1066,6 +1074,10 @@ func (s *Service) enhanceWithDeepScan(ctx context.Context, discovery *ResourceDi
 
 // analyzeDockerContainer analyzes a Docker container using AI.
 func (s *Service) analyzeDockerContainer(ctx context.Context, analyzer AIAnalyzer, c DockerContainer, host DockerHost) *ResourceDiscovery {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
 	// Check cache first (per-image timestamp)
 	s.cacheMu.RLock()
 	entry, found := s.analysisCache[c.Image]
@@ -1080,8 +1092,19 @@ func (s *Service) analyzeDockerContainer(ctx context.Context, analyzer AIAnalyze
 		// Build prompt for AI analysis
 		prompt := s.buildMetadataAnalysisPrompt(c, host)
 
-		response, err := analyzer.AnalyzeForDiscovery(ctx, prompt)
+		analyzeCtx, cancel := context.WithTimeout(ctx, s.aiAnalysisTimeout)
+		defer cancel()
+
+		response, err := analyzer.AnalyzeForDiscovery(analyzeCtx, prompt)
 		if err != nil {
+			if errors.Is(err, context.DeadlineExceeded) {
+				log.Warn().
+					Err(err).
+					Str("container", c.Name).
+					Dur("timeout", s.aiAnalysisTimeout).
+					Msg("AI metadata analysis timed out")
+				return nil
+			}
 			log.Warn().Err(err).Str("container", c.Name).Msg("AI analysis failed")
 			return nil
 		}
@@ -1151,6 +1174,10 @@ func (s *Service) analyzeDockerContainer(ctx context.Context, analyzer AIAnalyze
 // - Runs discovery only when fingerprint changed or discovery is too old
 // - Prevents duplicate concurrent discoveries for the same resource
 func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*ResourceDiscovery, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
 	originalReq := req
 	aliasIDs := []string{MakeResourceID(req.ResourceType, req.HostID, req.ResourceID)}
 	req = s.normalizeDiscoveryRequest(req, &aliasIDs)
@@ -1283,8 +1310,15 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 		CurrentStep: "Analyzing with Pulse Assistant...",
 	})
 
-	response, err := analyzer.AnalyzeForDiscovery(ctx, prompt)
+	analyzeCtx, cancel := context.WithTimeout(ctx, s.aiAnalysisTimeout)
+	defer cancel()
+
+	response, err := analyzer.AnalyzeForDiscovery(analyzeCtx, prompt)
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			inProg.err = fmt.Errorf("AI analysis timed out after %s", s.aiAnalysisTimeout)
+			return nil, inProg.err
+		}
 		inProg.err = fmt.Errorf("AI analysis failed: %w", err)
 		return nil, inProg.err
 	}
@@ -2411,6 +2445,7 @@ func (s *Service) GetStatusSnapshot() ServiceStatus {
 		ScannerSet:          s.scanner != nil,
 		StoreSet:            s.store != nil,
 		DeepScanTimeout:     s.deepScanTimeout.String(),
+		AIAnalysisTimeout:   s.aiAnalysisTimeout.String(),
 		MaxDiscoveryAge:     s.maxDiscoveryAge.String(),
 		FingerprintCount:    fingerprintCount,
 		LastFingerprintScan: lastFingerprintScan,

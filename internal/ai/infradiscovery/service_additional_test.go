@@ -10,6 +10,13 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
+type blockingAIAnalyzer struct{}
+
+func (blockingAIAnalyzer) AnalyzeForDiscovery(ctx context.Context, prompt string) (string, error) {
+	<-ctx.Done()
+	return "", ctx.Err()
+}
+
 func waitFor(t *testing.T, timeout time.Duration, check func() bool) {
 	t.Helper()
 	deadline := time.Now().Add(timeout)
@@ -48,6 +55,36 @@ func TestStartStopUpdatesStatus(t *testing.T) {
 	if status.Running {
 		t.Fatalf("expected running status false, got %v", status.Running)
 	}
+}
+
+func TestStartStopCanRestartSafely(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("expected restart to be panic-free, got panic: %v", r)
+		}
+	}()
+
+	provider := &mockStateProvider{state: models.StateSnapshot{}}
+	service := NewService(provider, nil, Config{
+		Interval:    10 * time.Millisecond,
+		CacheExpiry: time.Millisecond,
+	})
+	service.SetAIAnalyzer(&mockAIAnalyzer{})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	service.Start(ctx)
+	waitFor(t, 500*time.Millisecond, func() bool {
+		return !service.GetLastRun().IsZero()
+	})
+	service.Stop()
+
+	service.Start(ctx)
+	waitFor(t, 500*time.Millisecond, func() bool {
+		return service.GetStatus()["running"] == true
+	})
+	service.Stop()
 }
 
 func TestForceRefreshUpdatesLastRun(t *testing.T) {
@@ -149,5 +186,93 @@ func TestGetDiscoveriesReturnsCopy(t *testing.T) {
 	}
 	if second[0].Name == "changed" {
 		t.Fatalf("expected discoveries to be immutable copy, got %v", second[0].Name)
+	}
+}
+
+func TestAnalyzeContainer_StaleCacheEntryExpiresPerImage(t *testing.T) {
+	service := NewService(&mockStateProvider{}, nil, Config{
+		Interval:          time.Minute,
+		CacheExpiry:       time.Minute,
+		AIAnalysisTimeout: time.Second,
+	})
+
+	analyzer := &mockAIAnalyzer{
+		responses: map[string]string{
+			"postgres:16": `{"service_type":"postgres","service_name":"PostgreSQL","category":"database","cli_command":"docker exec {container} psql","confidence":0.95,"reasoning":"fresh result"}`,
+		},
+	}
+	service.SetAIAnalyzer(analyzer)
+
+	service.analysisCache["postgres:16"] = &analysisCacheEntry{
+		result: &DiscoveryResult{
+			ServiceType: "redis",
+			ServiceName: "Redis",
+			Category:    "cache",
+			Confidence:  0.9,
+			Reasoning:   "stale cache",
+		},
+		cachedAt: time.Now().Add(-2 * time.Minute),
+	}
+	service.analysisCache["nginx:latest"] = &analysisCacheEntry{
+		result: &DiscoveryResult{
+			ServiceType: "nginx",
+			ServiceName: "Nginx",
+			Category:    "web",
+			Confidence:  0.9,
+			Reasoning:   "fresh cache",
+		},
+		cachedAt: time.Now(),
+	}
+
+	app := service.analyzeContainer(context.Background(), analyzer, models.DockerContainer{
+		ID:    "1",
+		Name:  "db",
+		Image: "postgres:16",
+	}, models.DockerHost{
+		AgentID:  "agent-1",
+		Hostname: "docker-host",
+	})
+	if app == nil {
+		t.Fatalf("expected discovery from refreshed AI analysis")
+	}
+	if app.Type != "postgres" {
+		t.Fatalf("expected refreshed service type postgres, got %q", app.Type)
+	}
+	if analyzer.callCount != 1 {
+		t.Fatalf("expected analyzer call for stale entry, got %d", analyzer.callCount)
+	}
+}
+
+func TestRunDiscovery_AIAnalysisTimeout(t *testing.T) {
+	provider := &mockStateProvider{
+		state: models.StateSnapshot{
+			DockerHosts: []models.DockerHost{
+				{
+					AgentID:  "agent-1",
+					Hostname: "docker-host",
+					Containers: []models.DockerContainer{
+						{ID: "1", Name: "slow-service", Image: "slow:latest"},
+					},
+				},
+			},
+		},
+	}
+
+	service := NewService(provider, nil, Config{
+		Interval:          time.Minute,
+		CacheExpiry:       time.Hour,
+		AIAnalysisTimeout: 20 * time.Millisecond,
+	})
+	service.SetAIAnalyzer(blockingAIAnalyzer{})
+
+	start := time.Now()
+	apps := service.RunDiscovery(context.Background())
+	elapsed := time.Since(start)
+
+	if len(apps) != 0 {
+		t.Fatalf("expected timeout to skip discovery, got %d apps", len(apps))
+	}
+	if elapsed > 500*time.Millisecond {
+		t.Fatalf("expected run to be bounded by AI timeout, took %v", elapsed)
 	}
 }
