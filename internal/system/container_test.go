@@ -141,6 +141,29 @@ func TestContainerMarkers(t *testing.T) {
 			t.Errorf("Expected container marker %q not found", expected)
 		}
 	}
+
+	// Verify docker-runtime marker subset used for name detection is present
+	expectedDockerRuntimeMarkers := []string{
+		"docker",
+		"containerd",
+		"kubepods",
+		"podman",
+		"crio",
+		"libpod",
+	}
+
+	for _, expected := range expectedDockerRuntimeMarkers {
+		found := false
+		for _, marker := range dockerRuntimeMarkers {
+			if marker == expected {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Expected docker runtime marker %q not found", expected)
+		}
+	}
 }
 
 func TestReadFileWithLimit(t *testing.T) {
@@ -321,6 +344,14 @@ func TestInContainer(t *testing.T) {
 func TestDetectDockerContainerName(t *testing.T) {
 	t.Run("HostnameName", func(t *testing.T) {
 		t.Cleanup(resetSystemFns)
+		envGetFn = func(string) string { return "" }
+		statFn = func(path string) (os.FileInfo, error) {
+			if path == "/.dockerenv" {
+				return nil, nil
+			}
+			return nil, errors.New("missing")
+		}
+		readFileFn = func(string) ([]byte, error) { return nil, errors.New("missing") }
 		hostnameFn = func() (string, error) { return "my-container", nil }
 
 		if got := DetectDockerContainerName(); got != "my-container" {
@@ -330,8 +361,15 @@ func TestDetectDockerContainerName(t *testing.T) {
 
 	t.Run("HostnameHexShort", func(t *testing.T) {
 		t.Cleanup(resetSystemFns)
+		envGetFn = func(string) string { return "" }
+		statFn = func(path string) (os.FileInfo, error) {
+			if path == "/.dockerenv" {
+				return nil, nil
+			}
+			return nil, errors.New("missing")
+		}
+		readFileFn = func(string) ([]byte, error) { return nil, errors.New("missing") }
 		hostnameFn = func() (string, error) { return "abcdef123456", nil }
-		readFileFn = func(string) ([]byte, error) { return []byte("0::/docker/abcdef"), nil }
 
 		if got := DetectDockerContainerName(); got != "" {
 			t.Fatalf("expected empty name, got %q", got)
@@ -340,20 +378,69 @@ func TestDetectDockerContainerName(t *testing.T) {
 
 	t.Run("HostnameHexLong", func(t *testing.T) {
 		t.Cleanup(resetSystemFns)
+		envGetFn = func(string) string { return "" }
+		statFn = func(path string) (os.FileInfo, error) {
+			if path == "/.dockerenv" {
+				return nil, nil
+			}
+			return nil, errors.New("missing")
+		}
+		readFileFn = func(string) ([]byte, error) { return nil, errors.New("missing") }
 		hostnameFn = func() (string, error) { return "abcdef1234567890abcdef1234567890", nil }
 
-		if got := DetectDockerContainerName(); got == "" {
-			t.Fatal("expected hostname for long hex")
+		if got := DetectDockerContainerName(); got != "abcdef1234567890abcdef1234567890" {
+			t.Fatalf("expected long hostname, got %q", got)
 		}
 	})
 
 	t.Run("HostnameError", func(t *testing.T) {
 		t.Cleanup(resetSystemFns)
+		envGetFn = func(string) string { return "" }
+		statFn = func(path string) (os.FileInfo, error) {
+			if path == "/.dockerenv" {
+				return nil, nil
+			}
+			return nil, errors.New("missing")
+		}
+		readFileFn = func(string) ([]byte, error) { return nil, errors.New("missing") }
 		hostnameFn = func() (string, error) { return "", errors.New("fail") }
-		readFileFn = func(string) ([]byte, error) { return []byte("0::/docker/abcdef"), nil }
 
 		if got := DetectDockerContainerName(); got != "" {
 			t.Fatalf("expected empty name, got %q", got)
+		}
+	})
+
+	t.Run("NotDockerRuntime", func(t *testing.T) {
+		t.Cleanup(resetSystemFns)
+		envGetFn = func(string) string { return "" }
+		statFn = func(string) (os.FileInfo, error) { return nil, errors.New("missing") }
+		readFileFn = func(path string) ([]byte, error) {
+			if path == "/proc/1/cgroup" || path == "/proc/self/cgroup" {
+				return []byte("0::/user.slice"), nil
+			}
+			return nil, errors.New("missing")
+		}
+		hostnameFn = func() (string, error) { return "host-machine", nil }
+
+		if got := DetectDockerContainerName(); got != "" {
+			t.Fatalf("expected empty name outside docker runtime, got %q", got)
+		}
+	})
+
+	t.Run("LXCContainer", func(t *testing.T) {
+		t.Cleanup(resetSystemFns)
+		envGetFn = func(key string) string {
+			if key == "container" {
+				return "lxc"
+			}
+			return ""
+		}
+		statFn = func(string) (os.FileInfo, error) { return nil, errors.New("missing") }
+		readFileFn = func(string) ([]byte, error) { return nil, errors.New("missing") }
+		hostnameFn = func() (string, error) { return "my-lxc", nil }
+
+		if got := DetectDockerContainerName(); got != "" {
+			t.Fatalf("expected empty name for non-docker container, got %q", got)
 		}
 	})
 }

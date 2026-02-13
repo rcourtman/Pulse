@@ -17,11 +17,11 @@ import (
 
 // trustedConfigPublicKeysPEM contains trusted Ed25519 public keys for config verification.
 // In production builds, inject keys via ldflags to support rotation.
-var trustedConfigPublicKeysPEM = []string{
-	`-----BEGIN PUBLIC KEY-----
+var trustedConfigPublicKeysPEM = strings.TrimSpace(`
+-----BEGIN PUBLIC KEY-----
 MCowBQYDK2VwAyEAlbXZQRx8jgMzwpXbbjOGcnA+9TG0lms/auxbPzY+Tdo=
------END PUBLIC KEY-----`,
-}
+-----END PUBLIC KEY-----
+`)
 
 // SignedConfigPayload is the canonical payload used for config signing.
 type SignedConfigPayload struct {
@@ -135,7 +135,7 @@ func canonicalConfigPayload(payload SignedConfigPayload) ([]byte, error) {
 func trustedConfigPublicKeys() ([]ed25519.PublicKey, error) {
 	raw := utils.GetenvTrim("PULSE_AGENT_CONFIG_PUBLIC_KEYS")
 	if raw == "" {
-		raw = strings.Join(trustedConfigPublicKeysPEM, "\n")
+		raw = strings.TrimSpace(trustedConfigPublicKeysPEM)
 	}
 
 	var keys []ed25519.PublicKey

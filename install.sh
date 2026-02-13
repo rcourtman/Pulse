@@ -2670,6 +2670,8 @@ EOF
 
 download_auto_update_script() {
     local url="https://github.com/$GITHUB_REPO/releases/latest/download/pulse-auto-update.sh"
+    local checksums_url="https://github.com/$GITHUB_REPO/releases/latest/download/checksums.txt"
+    local legacy_checksum_url="${url}.sha256"
     local dest="/usr/local/bin/pulse-auto-update.sh"
     local attempts=0
     local max_attempts=3
@@ -2682,17 +2684,67 @@ download_auto_update_script() {
 
         if command -v timeout >/dev/null 2>&1; then
             if timeout $((max_time + 10)) curl -fsSL --connect-timeout "$connect_timeout" --max-time "$max_time" -o "$dest" "$url"; then
-                chmod +x "$dest"
-                return 0
+                :
             else
                 curl_status=$?
             fi
         else
             if curl -fsSL --connect-timeout "$connect_timeout" --max-time "$max_time" -o "$dest" "$url"; then
-                chmod +x "$dest"
-                return 0
+                :
             else
                 curl_status=$?
+            fi
+        fi
+
+        if [[ $curl_status -eq 0 ]]; then
+            if ! command -v sha256sum >/dev/null 2>&1; then
+                print_warn "sha256sum is unavailable; cannot verify auto-update script integrity"
+                rm -f "$dest"
+                return 1
+            fi
+
+            local checksum_file expected_checksum actual_checksum
+            checksum_file=$(mktemp /tmp/pulse-auto-update-checksum.XXXXXX)
+            expected_checksum=""
+
+            if command -v timeout >/dev/null 2>&1; then
+                timeout $((max_time + 10)) curl -fsSL --connect-timeout "$connect_timeout" --max-time "$max_time" -o "$checksum_file" "$checksums_url" || true
+            else
+                curl -fsSL --connect-timeout "$connect_timeout" --max-time "$max_time" -o "$checksum_file" "$checksums_url" || true
+            fi
+
+            if [[ -s "$checksum_file" ]]; then
+                expected_checksum=$(grep -w "pulse-auto-update.sh" "$checksum_file" 2>/dev/null | awk '{print $1}' | head -1)
+            fi
+
+            if [[ -z "$expected_checksum" ]]; then
+                if command -v timeout >/dev/null 2>&1; then
+                    timeout $((max_time + 10)) curl -fsSL --connect-timeout "$connect_timeout" --max-time "$max_time" -o "$checksum_file" "$legacy_checksum_url" || true
+                else
+                    curl -fsSL --connect-timeout "$connect_timeout" --max-time "$max_time" -o "$checksum_file" "$legacy_checksum_url" || true
+                fi
+
+                if [[ -s "$checksum_file" ]]; then
+                    expected_checksum=$(awk '{print $1}' "$checksum_file" | head -1)
+                fi
+            fi
+
+            rm -f "$checksum_file"
+
+            if [[ -z "$expected_checksum" ]]; then
+                print_warn "Failed to download checksum for pulse-auto-update.sh"
+                rm -f "$dest"
+                curl_status=1
+            else
+                actual_checksum=$(sha256sum "$dest" | awk '{print $1}')
+                if [[ "$actual_checksum" != "$expected_checksum" ]]; then
+                    print_warn "pulse-auto-update.sh checksum verification failed"
+                    rm -f "$dest"
+                    curl_status=1
+                else
+                    chmod +x "$dest"
+                    return 0
+                fi
             fi
         fi
 
@@ -2736,6 +2788,8 @@ Wants=network-online.target
 Type=oneshot
 User=root
 Group=root
+# Skip auto-update run unless a supported Pulse service is active
+ExecCondition=/bin/sh -c 'systemctl is-active --quiet pulse || systemctl is-active --quiet pulse-backend'
 ExecStart=/usr/local/bin/pulse-auto-update.sh
 Restart=no
 TimeoutStartSec=600

@@ -195,7 +195,7 @@ func (u *Updater) RunLoop(ctx context.Context) {
 	select {
 	case <-ctx.Done():
 		return
-	case <-initialTimer.C:
+	case <-initialDelayTimer.C:
 		u.CheckAndUpdate(ctx)
 	}
 
@@ -320,14 +320,14 @@ func (u *Updater) getServerVersion(ctx context.Context) (string, error) {
 
 	url := fmt.Sprintf("%s/api/agent/version", strings.TrimRight(u.cfg.PulseURL, "/"))
 
-	resp, err := u.getWithRetry(ctx, versionURL, "version check")
+	resp, err := u.getWithRetry(ctx, url, "version check")
 	if err != nil {
 		return "", err
 	}
 	defer resp.Body.Close()
 
 	var versionResp serverVersionResponse
-	if err := json.NewDecoder(resp.Body).Decode(&versionResp); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxVersionResponseSize)).Decode(&versionResp); err != nil {
 		return "", fmt.Errorf("failed to decode response: %w", err)
 	}
 
@@ -450,11 +450,7 @@ func (u *Updater) getWithRetry(ctx context.Context, requestURL, operation string
 		lastErr = fmt.Errorf("%s request failed", operation)
 	}
 
-	if err := json.NewDecoder(io.LimitReader(resp.Body, maxVersionResponseSize)).Decode(&versionResp); err != nil {
-		return "", fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	return versionResp.Version, nil
+	return nil, lastErr
 }
 
 // isUnraid checks if we're running on Unraid by looking for /etc/unraid-version
@@ -815,7 +811,7 @@ func determineArch() string {
 
 	// For known OS/arch combinations, return directly
 	switch goos {
-	case goOSLinux, goOSDarwin, goOSWindows:
+	case goOSLinux, goOSDarwin, goOSWindows, "freebsd":
 		return fmt.Sprintf("%s-%s", goos, arch)
 	}
 

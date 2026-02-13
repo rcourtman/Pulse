@@ -57,7 +57,8 @@ func NewSQLiteResourceStore(dataDir, orgID string) (*SQLiteResourceStore, error)
 	if dataDir == "" {
 		dataDir = filepath.Join(utils.GetDataDir(), "resources")
 	}
-	if err := os.MkdirAll(dataDir, 0755); err != nil {
+	// Resource-store metadata can include user-authored links/exclusions; keep directory owner-only.
+	if err := os.MkdirAll(dataDir, 0700); err != nil {
 		return nil, fmt.Errorf("failed to create resources directory: %w", err)
 	}
 

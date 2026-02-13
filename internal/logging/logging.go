@@ -239,7 +239,7 @@ func newRollingFileWriter(cfg Config) (io.Writer, error) {
 	path = filepath.Clean(path)
 
 	dir := filepath.Dir(path)
-	if err := ensureOwnerOnlyDir(dir); err != nil {
+	if err := mkdirAllFn(dir, 0o700); err != nil {
 		return nil, fmt.Errorf("create log directory: %w", err)
 	}
 	if err := validateExistingRegularFile(path); err != nil {

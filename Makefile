@@ -71,17 +71,18 @@ format-frontend:
 
 # Build control plane binary
 control-plane:
-	go build -o pulse-control-plane ./cmd/pulse-control-plane
+	@VERSION=$$(cat VERSION | tr -d '\n') && \
+	go build -ldflags="-s -w -X main.Version=v$$VERSION" -trimpath -o pulse-control-plane ./cmd/pulse-control-plane
 
 test:
 	@./scripts/ensure_test_assets.sh
 	@echo "Running backend tests (excluding tmp tooling)..."
 	go test $$(go list ./... | grep -v '/tmp$$')
 
-# Run integration tests (requires Ollama at OLLAMA_URL or 192.168.0.124:11434)
+# Run integration tests (requires Ollama at OLLAMA_URL or 127.0.0.1:11434)
 test-integration:
 	@echo "Running AI integration tests against Ollama..."
-	@echo "Set OLLAMA_URL to override default (http://192.168.0.124:11434)"
+	@echo "Set OLLAMA_URL to override default (http://127.0.0.1:11434)"
 	go test -tags=integration -v ./internal/ai/providers/... -run "TestIntegration"
 
 # Run both unit and integration tests
@@ -94,12 +95,12 @@ build-agents:
 	@VERSION=$$(cat VERSION | tr -d '\n') && \
 
 	echo "Building host agent binaries..." && \
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -trimpath -o bin/pulse-host-agent-linux-amd64 ./cmd/pulse-host-agent && \
-	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -trimpath -o bin/pulse-host-agent-linux-arm64 ./cmd/pulse-host-agent && \
-	CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -ldflags="-s -w" -trimpath -o bin/pulse-host-agent-linux-armv7 ./cmd/pulse-host-agent && \
-	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -trimpath -o bin/pulse-host-agent-darwin-amd64 ./cmd/pulse-host-agent && \
-	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -trimpath -o bin/pulse-host-agent-darwin-arm64 ./cmd/pulse-host-agent && \
-	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -trimpath -o bin/pulse-host-agent-windows-amd64.exe ./cmd/pulse-host-agent && \
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X github.com/rcourtman/pulse-go-rewrite/internal/hostagent.Version=v$$VERSION" -trimpath -o bin/pulse-host-agent-linux-amd64 ./cmd/pulse-host-agent && \
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w -X github.com/rcourtman/pulse-go-rewrite/internal/hostagent.Version=v$$VERSION" -trimpath -o bin/pulse-host-agent-linux-arm64 ./cmd/pulse-host-agent && \
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -ldflags="-s -w -X github.com/rcourtman/pulse-go-rewrite/internal/hostagent.Version=v$$VERSION" -trimpath -o bin/pulse-host-agent-linux-armv7 ./cmd/pulse-host-agent && \
+	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w -X github.com/rcourtman/pulse-go-rewrite/internal/hostagent.Version=v$$VERSION" -trimpath -o bin/pulse-host-agent-darwin-amd64 ./cmd/pulse-host-agent && \
+	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w -X github.com/rcourtman/pulse-go-rewrite/internal/hostagent.Version=v$$VERSION" -trimpath -o bin/pulse-host-agent-darwin-arm64 ./cmd/pulse-host-agent && \
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -X github.com/rcourtman/pulse-go-rewrite/internal/hostagent.Version=v$$VERSION" -trimpath -o bin/pulse-host-agent-windows-amd64.exe ./cmd/pulse-host-agent && \
 	echo "Building unified agent binaries..." && \
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X main.Version=v$$VERSION" -trimpath -o bin/pulse-agent-linux-amd64 ./cmd/pulse-agent && \
 	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w -X main.Version=v$$VERSION" -trimpath -o bin/pulse-agent-linux-arm64 ./cmd/pulse-agent && \

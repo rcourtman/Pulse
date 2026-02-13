@@ -4,8 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -85,6 +86,83 @@ func TestListBlockDevicesError(t *testing.T) {
 
 	if _, err := listBlockDevices(context.Background(), nil); err == nil {
 		t.Fatalf("expected error")
+	}
+}
+
+func TestListBlockDevicesLinuxFallbackSysfs(t *testing.T) {
+	origRun := runCommandOutput
+	origReadDir := readDir
+	origStat := osStat
+	t.Cleanup(func() {
+		runCommandOutput = origRun
+		readDir = origReadDir
+		osStat = origStat
+	})
+
+	tempDir := t.TempDir()
+	sysBlockDir := filepath.Join(tempDir, "sys", "block")
+	mkdirAll := func(path string) {
+		t.Helper()
+		if err := os.MkdirAll(path, 0o755); err != nil {
+			t.Fatalf("mkdir %s: %v", path, err)
+		}
+	}
+
+	mkdirAll(filepath.Join(sysBlockDir, "sda", "device"))
+	mkdirAll(filepath.Join(sysBlockDir, "nvme0n1", "device"))
+	mkdirAll(filepath.Join(sysBlockDir, "loop0")) // filtered as virtual
+	mkdirAll(filepath.Join(sysBlockDir, "sr0"))   // filtered as optical
+
+	runCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		if name != "lsblk" {
+			return nil, errors.New("unexpected command")
+		}
+		return nil, errors.New("lsblk not found")
+	}
+
+	readDir = func(path string) ([]os.DirEntry, error) {
+		if path == "/sys/block" {
+			return os.ReadDir(sysBlockDir)
+		}
+		return os.ReadDir(path)
+	}
+	osStat = func(name string) (os.FileInfo, error) {
+		if strings.HasPrefix(name, "/sys/block/") {
+			name = filepath.Join(sysBlockDir, strings.TrimPrefix(name, "/sys/block/"))
+		}
+		return os.Stat(name)
+	}
+
+	devices, err := listBlockDevicesLinux(context.Background(), []string{"nvme*"})
+	if err != nil {
+		t.Fatalf("listBlockDevicesLinux fallback error: %v", err)
+	}
+	if len(devices) != 1 || devices[0] != "/dev/sda" {
+		t.Fatalf("unexpected fallback devices: %#v", devices)
+	}
+}
+
+func TestListBlockDevicesLinuxFallbackError(t *testing.T) {
+	origRun := runCommandOutput
+	origReadDir := readDir
+	origStat := osStat
+	t.Cleanup(func() {
+		runCommandOutput = origRun
+		readDir = origReadDir
+		osStat = origStat
+	})
+
+	runCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		return nil, errors.New("lsblk failed")
+	}
+	readDir = func(path string) ([]os.DirEntry, error) {
+		return nil, errors.New("sysfs unavailable")
+	}
+
+	if _, err := listBlockDevicesLinux(context.Background(), nil); err == nil {
+		t.Fatalf("expected fallback error")
+	} else if !strings.Contains(err.Error(), "lsblk error") || !strings.Contains(err.Error(), "fallback error") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

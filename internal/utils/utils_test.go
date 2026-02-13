@@ -238,6 +238,13 @@ func TestGetDataDir(t *testing.T) {
 		t.Errorf("GetDataDir() with env = %q, want /custom/data/dir", result)
 	}
 
+	// Test with whitespace around env var value
+	os.Setenv(envKey, " \t/custom/trimmed/dir \n")
+	result = GetDataDir()
+	if result != "/custom/trimmed/dir" {
+		t.Errorf("GetDataDir() with whitespace env = %q, want /custom/trimmed/dir", result)
+	}
+
 	// Test with env var unset (default)
 	os.Unsetenv(envKey)
 	result = GetDataDir()
@@ -250,6 +257,13 @@ func TestGetDataDir(t *testing.T) {
 	result = GetDataDir()
 	if result != "/etc/pulse" {
 		t.Errorf("GetDataDir() with empty env = %q, want /etc/pulse", result)
+	}
+
+	// Test with whitespace-only env var (should use default)
+	os.Setenv(envKey, " \t\n ")
+	result = GetDataDir()
+	if result != "/etc/pulse" {
+		t.Errorf("GetDataDir() with whitespace-only env = %q, want /etc/pulse", result)
 	}
 }
 

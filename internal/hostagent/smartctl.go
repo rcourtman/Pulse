@@ -24,6 +24,9 @@ var (
 	runCommandOutput         = func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		return runCommandOutputLimited(ctx, maxCommandOutputBytes, name, args...)
 	}
+	readDir = os.ReadDir
+	osStat  = os.Stat
+
 	timeNow     = time.Now
 	runtimeGOOS = runtime.GOOS
 )
@@ -181,6 +184,16 @@ func listBlockDevicesLinux(ctx context.Context, diskExclude []string) ([]string,
 		return nil, fmt.Errorf("run lsblk for block devices: %w", err)
 	}
 
+	// Fall back to sysfs enumeration for minimal hosts/images where lsblk is unavailable.
+	log.Debug().Err(err).Msg("lsblk device discovery failed, falling back to /sys/block")
+	devices, fallbackErr := listBlockDevicesLinuxSysfs(diskExclude)
+	if fallbackErr != nil {
+		return nil, fmt.Errorf("linux block-device discovery failed: lsblk error: %w; /sys/block fallback error: %v", err, fallbackErr)
+	}
+	return devices, nil
+}
+
+func parseLSBLKDevices(output []byte, diskExclude []string) []string {
 	var devices []string
 	for _, line := range strings.Split(string(output), "\n") {
 		fields := strings.Fields(line)
@@ -201,9 +214,52 @@ func listBlockDevicesLinux(ctx context.Context, diskExclude []string) ([]string,
 			}
 			devices = append(devices, devicePath)
 		}
+		devicePath := "/dev/" + name
+		if matchesDeviceExclude(name, devicePath, diskExclude) {
+			log.Debug().Str("device", devicePath).Msg("Skipping excluded device for SMART collection")
+			continue
+		}
+		devices = append(devices, devicePath)
+	}
+
+	return devices
+}
+
+func listBlockDevicesLinuxSysfs(diskExclude []string) ([]string, error) {
+	entries, err := readDir("/sys/block")
+	if err != nil {
+		return nil, err
+	}
+
+	var devices []string
+	for _, entry := range entries {
+		name := strings.TrimSpace(entry.Name())
+		if name == "" || isVirtualLinuxBlockDevice(name) {
+			continue
+		}
+
+		// Keep only concrete device-backed entries and skip synthetic block devices.
+		if _, err := osStat(filepath.Join("/sys/block", name, "device")); err != nil {
+			continue
+		}
+
+		devicePath := "/dev/" + name
+		if matchesDeviceExclude(name, devicePath, diskExclude) {
+			log.Debug().Str("device", devicePath).Msg("Skipping excluded device for SMART collection")
+			continue
+		}
+		devices = append(devices, devicePath)
 	}
 
 	return devices, nil
+}
+
+func isVirtualLinuxBlockDevice(name string) bool {
+	return strings.HasPrefix(name, "loop") ||
+		strings.HasPrefix(name, "ram") ||
+		strings.HasPrefix(name, "zram") ||
+		strings.HasPrefix(name, "fd") ||
+		strings.HasPrefix(name, "sr")
 }
 
 // listBlockDevicesFreeBSD uses sysctl kern.disks to find disks on FreeBSD.

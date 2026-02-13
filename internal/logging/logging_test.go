@@ -580,16 +580,30 @@ func TestNewRollingFileWriter_DefaultMaxSize(t *testing.T) {
 	_ = w.closeLocked()
 }
 
-func TestNewRollingFileWriter_NegativeMaxSizeUsesDefault(t *testing.T) {
+func TestNewRollingFileWriter_SecureDirectoryPermissions(t *testing.T) {
 	t.Cleanup(resetLoggingState)
 
-	dir := t.TempDir()
-	writer, err := newRollingFileWriter(Config{
-		FilePath:  filepath.Join(dir, "app.log"),
-		MaxSizeMB: -1,
-	})
+	var (
+		called bool
+		mode   os.FileMode
+	)
+	origMkdirAll := mkdirAllFn
+	mkdirAllFn = func(path string, perm os.FileMode) error {
+		called = true
+		mode = perm
+		return origMkdirAll(path, perm)
+	}
+
+	logFile := filepath.Join(t.TempDir(), "logs", "app.log")
+	writer, err := newRollingFileWriter(Config{FilePath: logFile})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+	if !called {
+		t.Fatal("expected mkdirAllFn to be called")
+	}
+	if mode != 0o700 {
+		t.Fatalf("expected log directory mode 0700, got %#o", mode)
 	}
 	w, ok := writer.(*rollingFileWriter)
 	if !ok {

@@ -3,6 +3,7 @@ package mdadm
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"regexp"
 	"strconv"
@@ -17,9 +18,16 @@ type commandRunner func(ctx context.Context, name string, args ...string) ([]byt
 
 // Pre-compiled regexes for performance (avoid recompilation on each call)
 var (
-	mdDeviceRe = regexp.MustCompile(`^(md\d+)\s*:`)
-	slotRe     = regexp.MustCompile(`^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(.+?)\s+(/dev/.+)$`)
-	speedRe    = regexp.MustCompile(`speed=(\S+)`)
+	mdDeviceRe       = regexp.MustCompile(`^(md\d+)\s*:`)
+	slotRe           = regexp.MustCompile(`^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(.+?)\s+(/dev/.+)$`)
+	speedRe          = regexp.MustCompile(`speed=(\S+)`)
+	runCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		cmd := exec.CommandContext(ctx, name, args...)
+		return cmd.Output()
+	}
+	readProcMDStat = func() ([]byte, error) {
+		return os.ReadFile("/proc/mdstat")
+	}
 )
 
 // CollectArrays discovers and collects status for all mdadm RAID arrays on the system.
