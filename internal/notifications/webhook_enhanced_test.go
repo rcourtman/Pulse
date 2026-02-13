@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
@@ -191,6 +192,43 @@ func TestSendWebhookWithRetry_429RetryAfter(t *testing.T) {
 
 	err := nm.sendWebhookWithRetry(webhook, []byte(`{"test":true}`))
 	assert.NoError(t, err)
+	assert.Equal(t, 2, attempts)
+}
+
+func TestSendWebhookWithRetry_StopsOnNonRetryableAfterRetry(t *testing.T) {
+	nm := NewNotificationManager("http://pulse.local")
+	nm.UpdateAllowedPrivateCIDRs("127.0.0.1")
+
+	attempts := 0
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		switch attempts {
+		case 1:
+			// Retryable first failure with zero-delay retry.
+			w.Header().Set("Retry-After", "0")
+			w.WriteHeader(http.StatusTooManyRequests)
+		case 2:
+			// Permanent client-side error should terminate retries immediately.
+			w.WriteHeader(http.StatusBadRequest)
+		default:
+			// Should not be reached if retries stop correctly.
+			w.WriteHeader(http.StatusOK)
+		}
+	}))
+	defer server.Close()
+
+	webhook := EnhancedWebhookConfig{
+		WebhookConfig: WebhookConfig{
+			Name: "Test Webhook",
+			URL:  server.URL,
+		},
+		RetryEnabled: true,
+		RetryCount:   3,
+	}
+
+	err := nm.sendWebhookWithRetry(webhook, []byte(`{"test":true}`))
+	assert.Error(t, err)
+	assert.True(t, strings.Contains(err.Error(), "status 400"), "expected final error to include status 400, got %v", err)
 	assert.Equal(t, 2, attempts)
 }
 

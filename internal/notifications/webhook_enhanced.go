@@ -319,8 +319,10 @@ func (n *NotificationManager) sendWebhookWithRetry(webhook EnhancedWebhookConfig
 			Bool("retryable", isRetryable).
 			Msg("Webhook attempt failed")
 
-		// If error is not retryable, break early
-		if !isRetryable && attempt == 0 {
+		// If error is not retryable, stop immediately.
+		// Continuing would waste attempts and can mask permanent misconfiguration
+		// (for example, a 400-level payload/schema error).
+		if !isRetryable {
 			log.Error().
 				Err(err).
 				Str("webhook", webhook.Name).
