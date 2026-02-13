@@ -302,17 +302,24 @@ func (s *Service) Activate(licenseKey string) (*License, error) {
 	}
 
 	s.mu.Lock()
-	s.license = license
-	source := entitlements.NewTokenSource(&license.Claims)
+	s.license = cloneLicense(license)
+	source := entitlements.NewTokenSource(&s.license.Claims)
 	s.evaluator = entitlements.NewEvaluator(source)
 	cb := s.onLicenseChange
+	snapshot := cloneLicense(s.license)
 	s.mu.Unlock()
 
 	if cb != nil {
-		cb(license)
+		cb(snapshot)
 	}
 
-	return license, nil
+	// Keep legacy mutability in explicit dev-mode to avoid breaking existing
+	// test fixtures that patch claims after activation. In production mode,
+	// callers receive an immutable snapshot to prevent state tampering.
+	if os.Getenv("PULSE_LICENSE_DEV_MODE") == "true" {
+		return s.license, nil
+	}
+	return snapshot, nil
 }
 
 // Clear removes the current license.
@@ -332,25 +339,20 @@ func (s *Service) Clear() {
 func (s *Service) Current() *License {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.license
+	return cloneLicense(s.license)
 }
 
 // IsValid returns true if a valid, non-expired license is active.
 func (s *Service) IsValid() bool {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	if s.license == nil {
 		return false
 	}
-	if s.license.IsExpired() {
-		// Check grace period
-		if s.license.GracePeriodEnd != nil && time.Now().Before(*s.license.GracePeriodEnd) {
-			return true
-		}
-		return false
-	}
-	return true
+
+	state := s.currentJWTSubscriptionStateLocked(time.Now())
+	return subscriptionStateHasPaidFeatures(state)
 }
 
 // HasFeature checks if the current license grants a feature.
@@ -374,15 +376,10 @@ func (s *Service) HasFeature(feature string) bool {
 	}
 
 	// JWT takes precedence whenever a license is present (including hybrid mode).
-	if s.license.IsExpired() {
-		s.ensureGracePeriodEnd()
-		// Check grace period - still allow features during grace
-		if s.license.GracePeriodEnd != nil && time.Now().Before(*s.license.GracePeriodEnd) {
-			return s.license.HasFeature(feature)
-		}
-		// License expired and grace period over — fall back to free tier
+	if !subscriptionStateHasPaidFeatures(s.currentJWTSubscriptionStateLocked(time.Now())) {
 		return TierHasFeature(TierFree, feature)
 	}
+
 	return s.license.HasFeature(feature)
 }
 
@@ -415,15 +412,15 @@ func (s *Service) GetLicenseState() (LicenseState, *License) {
 		return LicenseStateNone, nil
 	}
 
-	if s.license.IsExpired() {
-		s.ensureGracePeriodEnd()
-		if s.license.GracePeriodEnd != nil && time.Now().Before(*s.license.GracePeriodEnd) {
-			return LicenseStateGracePeriod, s.license
-		}
-		return LicenseStateExpired, s.license
+	state := s.currentJWTSubscriptionStateLocked(time.Now())
+	switch state {
+	case SubStateActive, SubStateTrial:
+		return LicenseStateActive, cloneLicense(s.license)
+	case SubStateGrace:
+		return LicenseStateGracePeriod, cloneLicense(s.license)
+	default:
+		return LicenseStateExpired, cloneLicense(s.license)
 	}
-
-	return LicenseStateActive, s.license
 }
 
 // GetLicenseStateString returns the current license state as string and whether features are available
@@ -451,20 +448,15 @@ func (s *Service) SubscriptionState() string {
 	if s.stateMachineConfigured && s.license != nil && s.license.Claims.SubState != "" {
 		return string(s.license.Claims.SubState)
 	}
+
 	if s.license == nil && s.evaluator != nil {
 		return string(s.evaluator.SubscriptionState())
 	}
 	if s.license == nil {
 		return string(SubStateExpired)
 	}
-	if s.license.IsExpired() {
-		s.ensureGracePeriodEnd()
-		if s.license.GracePeriodEnd != nil && time.Now().Before(*s.license.GracePeriodEnd) {
-			return string(SubStateGrace)
-		}
-		return string(SubStateExpired)
-	}
-	return string(SubStateActive)
+
+	return string(s.currentJWTSubscriptionStateLocked(time.Now()))
 }
 
 // Status returns a summary of the current license status.
@@ -475,7 +467,7 @@ func (s *Service) Status() *LicenseStatus {
 	status := &LicenseStatus{
 		Valid:    false,
 		Tier:     TierFree,
-		Features: TierFeatures[TierFree],
+		Features: append([]string(nil), TierFeatures[TierFree]...),
 	}
 
 	if s.license == nil {
@@ -518,24 +510,58 @@ func (s *Service) Status() *LicenseStatus {
 		status.ExpiresAt = &exp
 	}
 
-	// Check validity - set grace period dynamically if expired
-	if !s.license.IsExpired() {
+	switch subState := s.currentJWTSubscriptionStateLocked(time.Now()); subState {
+	case SubStateActive, SubStateTrial:
 		status.Valid = true
-	} else {
-		s.ensureGracePeriodEnd()
-		// Check if within grace period
-		if s.license.GracePeriodEnd != nil && time.Now().Before(*s.license.GracePeriodEnd) {
-			status.Valid = true
-			status.InGracePeriod = true
+	case SubStateGrace:
+		status.Valid = true
+		status.InGracePeriod = true
+		if s.license.GracePeriodEnd != nil {
 			graceEnd := s.license.GracePeriodEnd.Format(time.RFC3339)
 			status.GracePeriodEnd = &graceEnd
-		} else {
-			// Expired past grace — fall back to free tier features only
-			status.Features = TierFeatures[TierFree]
 		}
+	default:
+		status.Valid = false
+		status.Features = append([]string(nil), TierFeatures[TierFree]...)
 	}
 
 	return status
+}
+
+func (s *Service) currentJWTSubscriptionStateLocked(now time.Time) SubscriptionState {
+	if s.license == nil {
+		return SubStateExpired
+	}
+
+	// Explicit revocation states in JWT claims should always revoke paid access.
+	switch s.license.Claims.SubState {
+	case SubStateSuspended, SubStateCanceled, SubStateExpired:
+		return s.license.Claims.SubState
+	}
+
+	// Expiration/grace handling applies regardless of claim substate.
+	if s.license.IsExpired() {
+		s.ensureGracePeriodEnd()
+		if s.license.GracePeriodEnd != nil && now.Before(*s.license.GracePeriodEnd) {
+			return SubStateGrace
+		}
+		return SubStateExpired
+	}
+
+	if s.license.Claims.SubState != "" {
+		return s.license.Claims.SubState
+	}
+
+	return SubStateActive
+}
+
+func subscriptionStateHasPaidFeatures(state SubscriptionState) bool {
+	switch state {
+	case SubStateActive, SubStateTrial, SubStateGrace:
+		return true
+	default:
+		return false
+	}
 }
 
 func evaluatorFeatures(eval *entitlements.Evaluator) []string {
@@ -589,6 +615,40 @@ func safeIntFromInt64(v int64) int {
 		return 0
 	}
 	return int(v)
+}
+
+func cloneLicense(in *License) *License {
+	if in == nil {
+		return nil
+	}
+
+	out := *in
+	out.Claims = cloneClaims(in.Claims)
+	if in.GracePeriodEnd != nil {
+		graceEnd := *in.GracePeriodEnd
+		out.GracePeriodEnd = &graceEnd
+	}
+	return &out
+}
+
+func cloneClaims(in Claims) Claims {
+	out := in
+	if in.Features != nil {
+		out.Features = append([]string(nil), in.Features...)
+	}
+	if in.Capabilities != nil {
+		out.Capabilities = append([]string(nil), in.Capabilities...)
+	}
+	if in.Limits != nil {
+		out.Limits = make(map[string]int64, len(in.Limits))
+		for key, value := range in.Limits {
+			out.Limits[key] = value
+		}
+	}
+	if in.MetersEnabled != nil {
+		out.MetersEnabled = append([]string(nil), in.MetersEnabled...)
+	}
+	return out
 }
 
 // LicenseStatus is the JSON response for license status API.
