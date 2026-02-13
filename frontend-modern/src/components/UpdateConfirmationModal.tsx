@@ -1,4 +1,4 @@
-import { createSignal, Show, For } from 'solid-js';
+import { createEffect, createSignal, Show, For } from 'solid-js';
 import type { UpdatePlan } from '@/api/updates';
 
 interface UpdateConfirmationModalProps {
@@ -13,6 +13,12 @@ interface UpdateConfirmationModalProps {
 
 export function UpdateConfirmationModal(props: UpdateConfirmationModalProps) {
   const [acknowledged, setAcknowledged] = createSignal(false);
+
+  createEffect(() => {
+    if (!props.isOpen) {
+      setAcknowledged(false);
+    }
+  });
 
   const handleConfirm = () => {
     if (acknowledged() && !props.isApplying) {

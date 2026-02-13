@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 type roundTripperFunc func(*http.Request) (*http.Response, error)
@@ -95,6 +96,9 @@ func saveHostAgentHooks() func() {
 	origCopy := copyFn
 	origChmod := chmodFileFn
 	origClose := closeFileFn
+	origRetrySleep := retrySleepFn
+
+	retrySleepFn = func(time.Duration) {}
 
 	return func() {
 		requiredHostAgentBinaries = origRequired
@@ -113,6 +117,7 @@ func saveHostAgentHooks() func() {
 		copyFn = origCopy
 		chmodFileFn = origChmod
 		closeFileFn = origClose
+		retrySleepFn = origRetrySleep
 	}
 }
 
@@ -442,6 +447,58 @@ func TestDownloadAndInstallHostAgentBinariesSuccess(t *testing.T) {
 	}
 }
 
+func TestDownloadAndInstallHostAgentBinariesRetriesTransientFailures(t *testing.T) {
+	restore := saveHostAgentHooks()
+	t.Cleanup(restore)
+
+	tmpDir := t.TempDir()
+	payload := buildTarGz(t, []tarEntry{
+		{name: "bin/pulse-host-agent-linux-amd64", body: []byte("binary"), mode: 0o644},
+	})
+	checksum := sha256.Sum256(payload)
+	checksumLine := fmt.Sprintf("%x  bundle.tar.gz\n", checksum)
+
+	bundleAttempts := 0
+	checksumAttempts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/bundle.tar.gz":
+			bundleAttempts++
+			if bundleAttempts == 1 {
+				w.WriteHeader(http.StatusServiceUnavailable)
+				_, _ = w.Write([]byte("retry later"))
+				return
+			}
+			_, _ = w.Write(payload)
+		case "/bundle.tar.gz.sha256":
+			checksumAttempts++
+			if checksumAttempts == 1 {
+				w.WriteHeader(http.StatusBadGateway)
+				_, _ = w.Write([]byte("upstream failure"))
+				return
+			}
+			_, _ = w.Write([]byte(checksumLine))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	httpClient = server.Client()
+	downloadURLForVersion = func(string) string { return server.URL + "/bundle.tar.gz" }
+
+	if err := DownloadAndInstallHostAgentBinaries("v1.0.0", tmpDir); err != nil {
+		t.Fatalf("expected success after retries, got %v", err)
+	}
+
+	if bundleAttempts < 2 {
+		t.Fatalf("expected bundle download retry, attempts=%d", bundleAttempts)
+	}
+	if checksumAttempts < 2 {
+		t.Fatalf("expected checksum download retry, attempts=%d", checksumAttempts)
+	}
+}
+
 func TestExtractHostAgentBinariesErrors(t *testing.T) {
 	t.Run("OpenError", func(t *testing.T) {
 		restore := saveHostAgentHooks()
@@ -530,6 +587,25 @@ func TestExtractHostAgentBinariesSymlinkCopyError(t *testing.T) {
 
 	if err := extractHostAgentBinaries(archive, tmpDir); err == nil {
 		t.Fatalf("expected symlink fallback error")
+	}
+}
+
+func TestExtractHostAgentBinariesInvalidSymlinkTarget(t *testing.T) {
+	restore := saveHostAgentHooks()
+	t.Cleanup(restore)
+
+	tmpDir := t.TempDir()
+	payload := buildTarGz(t, []tarEntry{
+		{name: "bin/pulse-host-agent-linux-amd64", body: []byte("binary"), mode: 0o644},
+		{name: "bin/pulse-host-agent-linux-amd64.exe", typeflag: tar.TypeSymlink, linkname: "../etc/passwd"},
+	})
+	archive := filepath.Join(t.TempDir(), "bundle.tar.gz")
+	if err := os.WriteFile(archive, payload, 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	if err := extractHostAgentBinaries(archive, tmpDir); err == nil {
+		t.Fatalf("expected invalid symlink target error")
 	}
 }
 

@@ -7,6 +7,10 @@ import ArrowRight from 'lucide-solid/icons/arrow-right';
 import Package from 'lucide-solid/icons/package';
 import Download from 'lucide-solid/icons/download';
 import type { UpdateInfo, VersionInfo, UpdatePlan } from '@/api/updates';
+import {
+  buildDockerImageTag,
+  buildLinuxAmd64DownloadCommand,
+} from '@/components/updateVersion';
 
 interface UpdatesSettingsPanelProps {
   versionInfo: Accessor<VersionInfo | null>;
@@ -29,6 +33,10 @@ interface UpdatesSettingsPanelProps {
 }
 
 export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props) => {
+  const latestVersion = () => props.updateInfo()?.latestVersion;
+  const dockerImageTag = () => buildDockerImageTag(latestVersion());
+  const systemdDownloadCommand = () => buildLinuxAmd64DownloadCommand(latestVersion());
+
   return (
     <div class="space-y-6">
       <SettingsPanel
@@ -326,11 +334,11 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                       </div>
                       <div class="ml-8 relative group">
                         <code class="block p-3 bg-gray-900 dark:bg-gray-950 rounded-lg text-sm font-mono text-green-400 border border-gray-700">
-                          docker pull rcourtman/pulse:{props.updateInfo()?.latestVersion.replace(/^v/, '')}
+                          docker pull rcourtman/pulse:{dockerImageTag()}
                         </code>
                         <button
                           type="button"
-                          onClick={() => navigator.clipboard.writeText(`docker pull rcourtman/pulse:${props.updateInfo()?.latestVersion.replace(/^v/, '')}`)}
+                          onClick={() => navigator.clipboard.writeText(`docker pull rcourtman/pulse:${dockerImageTag()}`)}
                           class="absolute top-2 right-2 p-1.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 opacity-60 hover:opacity-100 transition-opacity"
                           title="Copy to clipboard"
                         >
@@ -394,12 +402,11 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                       </div>
                       <div class="ml-8 relative group">
                         <code class="block p-3 bg-gray-900 dark:bg-gray-950 rounded-lg text-sm font-mono text-green-400 border border-gray-700 whitespace-pre-wrap break-all">
-                          {`curl -LO https://github.com/rcourtman/Pulse/releases/download/v${props.updateInfo()?.latestVersion}/pulse-v${props.updateInfo()?.latestVersion}-linux-amd64.tar.gz
-sudo tar -xzf pulse-v${props.updateInfo()?.latestVersion}-linux-amd64.tar.gz -C /usr/local/bin pulse`}
+                          {systemdDownloadCommand()}
                         </code>
                         <button
                           type="button"
-                          onClick={() => navigator.clipboard.writeText(`curl -LO https://github.com/rcourtman/Pulse/releases/download/v${props.updateInfo()?.latestVersion}/pulse-v${props.updateInfo()?.latestVersion}-linux-amd64.tar.gz\nsudo tar -xzf pulse-v${props.updateInfo()?.latestVersion}-linux-amd64.tar.gz -C /usr/local/bin pulse`)}
+                          onClick={() => navigator.clipboard.writeText(systemdDownloadCommand())}
                           class="absolute top-2 right-2 p-1.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 opacity-60 hover:opacity-100 transition-opacity"
                           title="Copy to clipboard"
                         >

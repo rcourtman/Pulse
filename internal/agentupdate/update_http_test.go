@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -66,6 +67,34 @@ func TestUpdater_getServerVersion_BadJSON(t *testing.T) {
 	_, err := u.getServerVersion(context.Background())
 	if err == nil || !strings.Contains(err.Error(), "decode") {
 		t.Fatalf("expected decode error, got: %v", err)
+	}
+}
+
+func TestUpdater_getServerVersion_RetriesTransientStatus(t *testing.T) {
+	origRetrySleep := retrySleepFn
+	t.Cleanup(func() { retrySleepFn = origRetrySleep })
+	retrySleepFn = func(context.Context, time.Duration) error { return nil }
+
+	var attempts int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if atomic.AddInt32(&attempts, 1) < 3 {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]string{"version": "1.2.3"})
+	}))
+	defer srv.Close()
+
+	u := New(Config{PulseURL: srv.URL, CurrentVersion: "1.0.0"})
+	v, err := u.getServerVersion(context.Background())
+	if err != nil {
+		t.Fatalf("getServerVersion: %v", err)
+	}
+	if v != "1.2.3" {
+		t.Fatalf("expected recovered version, got %q", v)
+	}
+	if got := atomic.LoadInt32(&attempts); got != 3 {
+		t.Fatalf("expected 3 attempts, got %d", got)
 	}
 }
 

@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rs/zerolog"
 )
@@ -144,6 +145,8 @@ func TestVerifyELFMagic(t *testing.T) {
 }
 
 func TestCheckForUpdates(t *testing.T) {
+	swap(t, &selfUpdateRetrySleepFn, func(context.Context, time.Duration) error { return nil })
+
 	t.Run("dev version skips", func(t *testing.T) {
 		swap(t, &Version, "dev")
 		agent := &Agent{logger: zerolog.Nop()}
@@ -251,6 +254,104 @@ func TestCheckForUpdates(t *testing.T) {
 		agent.checkForUpdates(context.Background())
 	})
 
+	t.Run("server older version skips downgrade", func(t *testing.T) {
+		swap(t, &Version, "1.2.4")
+		called := false
+		swap(t, &selfUpdateFunc, func(*Agent, context.Context) error {
+			called = true
+			return nil
+		})
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"version":"1.2.3"}`))
+		}))
+		defer server.Close()
+
+		agent := &Agent{
+			logger:  zerolog.Nop(),
+			targets: []TargetConfig{{URL: server.URL, Token: "token"}},
+			httpClients: map[bool]*http.Client{
+				false: server.Client(),
+			},
+		}
+		agent.checkForUpdates(context.Background())
+		if called {
+			t.Fatal("expected selfUpdate not to be called for older server version")
+		}
+	})
+
+	t.Run("version check retries transient request failures", func(t *testing.T) {
+		swap(t, &Version, "1.2.3")
+		called := false
+		swap(t, &selfUpdateFunc, func(*Agent, context.Context) error {
+			called = true
+			return nil
+		})
+
+		attempts := 0
+		client := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+			attempts++
+			if attempts < 3 {
+				return nil, errors.New("transient network error")
+			}
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader(`{"version":"1.2.4"}`)),
+				Header:     make(http.Header),
+			}, nil
+		})}
+
+		agent := &Agent{
+			logger:  zerolog.Nop(),
+			targets: []TargetConfig{{URL: "http://example.com", Token: "token"}},
+			httpClients: map[bool]*http.Client{
+				false: client,
+			},
+		}
+		agent.checkForUpdates(context.Background())
+		if attempts != 3 {
+			t.Fatalf("expected 3 version-check attempts, got %d", attempts)
+		}
+		if !called {
+			t.Fatal("expected selfUpdate to be called after retry recovery")
+		}
+	})
+
+	t.Run("version check does not retry non-retryable status", func(t *testing.T) {
+		swap(t, &Version, "1.2.3")
+		called := false
+		swap(t, &selfUpdateFunc, func(*Agent, context.Context) error {
+			called = true
+			return nil
+		})
+
+		attempts := 0
+		client := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+			attempts++
+			return &http.Response{
+				StatusCode: http.StatusBadRequest,
+				Status:     "400 Bad Request",
+				Body:       io.NopCloser(strings.NewReader(`bad`)),
+				Header:     make(http.Header),
+			}, nil
+		})}
+
+		agent := &Agent{
+			logger:  zerolog.Nop(),
+			targets: []TargetConfig{{URL: "http://example.com", Token: "token"}},
+			httpClients: map[bool]*http.Client{
+				false: client,
+			},
+		}
+		agent.checkForUpdates(context.Background())
+		if attempts != 1 {
+			t.Fatalf("expected 1 version-check attempt for non-retryable status, got %d", attempts)
+		}
+		if called {
+			t.Fatal("expected selfUpdate not to be called")
+		}
+	})
+
 	t.Run("update success", func(t *testing.T) {
 		swap(t, &Version, "1.2.3")
 		called := false
@@ -331,6 +432,8 @@ func sha256Hex(data []byte) string {
 }
 
 func TestSelfUpdate(t *testing.T) {
+	swap(t, &selfUpdateRetrySleepFn, func(context.Context, time.Duration) error { return nil })
+
 	t.Run("no target", func(t *testing.T) {
 		agent := &Agent{logger: zerolog.Nop()}
 		if err := agent.selfUpdate(context.Background()); err == nil {
@@ -392,6 +495,52 @@ func TestSelfUpdate(t *testing.T) {
 
 		if err := agent.selfUpdate(context.Background()); err == nil {
 			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("download retries transient request failures", func(t *testing.T) {
+		body := elfBytes()
+		attempts := 0
+		client := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+			attempts++
+			if attempts < 3 {
+				return nil, errors.New("temporary transport failure")
+			}
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(bytes.NewReader(body)),
+				Header:     http.Header{"X-Checksum-Sha256": []string{sha256Hex(body)}},
+			}, nil
+		})}
+
+		agent := &Agent{
+			logger:  zerolog.Nop(),
+			targets: []TargetConfig{{URL: "http://example.com", Token: "token"}},
+			httpClients: map[bool]*http.Client{
+				false: client,
+			},
+		}
+
+		dir := t.TempDir()
+		execPath := filepath.Join(dir, "exec")
+		if err := os.WriteFile(execPath, elfBytes(), 0700); err != nil {
+			t.Fatalf("write exec: %v", err)
+		}
+		swap(t, &osExecutableFn, func() (string, error) {
+			return execPath, nil
+		})
+		swap(t, &syscallExecFn, func(string, []string, []string) error {
+			return errors.New("exec failed")
+		})
+		swap(t, &execCommandContextFn, func(ctx context.Context, name string, arg ...string) *exec.Cmd {
+			return exec.Command("echo", "ok")
+		})
+
+		if err := agent.selfUpdate(context.Background()); err == nil {
+			t.Fatal("expected error from exec failure after successful retry")
+		}
+		if attempts != 3 {
+			t.Fatalf("expected 3 download attempts, got %d", attempts)
 		}
 	})
 

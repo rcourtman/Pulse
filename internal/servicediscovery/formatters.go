@@ -492,7 +492,6 @@ func discoveryTokens(d *ResourceDiscovery) []string {
 	return tokens
 }
 
-
 // GetCLIExample returns an example CLI command for the resource.
 func GetCLIExample(d *ResourceDiscovery, exampleCmd string) string {
 	if d == nil || d.CLIAccess == "" {

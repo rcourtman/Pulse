@@ -1,9 +1,10 @@
-import { Show, createSignal, createEffect, For } from 'solid-js';
+import { Show, createSignal, createEffect, createMemo, For } from 'solid-js';
 import { updateStore } from '@/stores/updates';
 import { UpdatesAPI, type UpdatePlan } from '@/api/updates';
 import { UpdateConfirmationModal } from './UpdateConfirmationModal';
 import { copyToClipboard } from '@/utils/clipboard';
 import { logger } from '@/utils/logger';
+import { buildReleaseNotesUrl } from '@/components/updateVersion';
 
 export function UpdateBanner() {
   const [isExpanded, setIsExpanded] = createSignal(false);
@@ -11,19 +12,34 @@ export function UpdateBanner() {
   const [showConfirmModal, setShowConfirmModal] = createSignal(false);
   const [isApplying, setIsApplying] = createSignal(false);
   const [copiedIndex, setCopiedIndex] = createSignal<number | null>(null);
+  let latestPlanRequestID = 0;
 
   // Fetch update plan when update info is available
-  createEffect(async () => {
+  createEffect(() => {
     const info = updateStore.updateInfo();
-    if (info?.available && info.latestVersion) {
-      try {
-        const plan = await UpdatesAPI.getUpdatePlan(info.latestVersion);
-        setUpdatePlan(plan);
-      } catch (error) {
-        logger.error('Failed to fetch update plan', error);
-      }
+    const version = info?.available ? info.latestVersion?.trim() : '';
+    const requestID = ++latestPlanRequestID;
+    setUpdatePlan(null);
+
+    if (!version) {
+      return;
     }
+
+    void UpdatesAPI.getUpdatePlan(version)
+      .then((plan) => {
+        if (requestID === latestPlanRequestID) {
+          setUpdatePlan(plan);
+        }
+      })
+      .catch((error) => {
+        if (requestID === latestPlanRequestID) {
+          setUpdatePlan(null);
+        }
+        logger.error('Failed to fetch update plan', error);
+      });
   });
+
+  const releaseNotesUrl = createMemo(() => buildReleaseNotesUrl(updateStore.updateInfo()?.latestVersion));
 
   const handleApplyUpdate = () => {
     setShowConfirmModal(true);
@@ -137,7 +153,7 @@ export function UpdateBanner() {
                 )}
                 {!isExpanded() && (
                   <a
-                    href={`https://github.com/rcourtman/Pulse/releases/tag/v${updateStore.updateInfo()?.latestVersion}`}
+                    href={releaseNotesUrl()}
                     target="_blank"
                     rel="noopener noreferrer"
                     class="text-blue-600 dark:text-blue-400 underline text-sm hidden sm:inline hover:text-blue-700 dark:hover:text-blue-300"
@@ -256,7 +272,7 @@ export function UpdateBanner() {
 
                 <div class="flex gap-3 mt-2">
                   <a
-                    href={`https://github.com/rcourtman/Pulse/releases/tag/v${updateStore.updateInfo()?.latestVersion}`}
+                    href={releaseNotesUrl()}
                     target="_blank"
                     rel="noopener noreferrer"
                     class="text-blue-600 dark:text-blue-400 underline hover:text-blue-700 dark:hover:text-blue-300 text-xs"

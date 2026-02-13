@@ -134,6 +134,75 @@ func TestHandleApplyUpdate_Success(t *testing.T) {
 	// Note: ApplyUpdate runs in background, so we just check it was accepted
 }
 
+func TestHandleApplyUpdate_AlreadyInProgress(t *testing.T) {
+	mockManager := &MockUpdateManager{
+		ApplyUpdateFunc: func(ctx context.Context, req updates.ApplyUpdateRequest) error {
+			return errors.New("update already in progress")
+		},
+	}
+
+	h := NewUpdateHandlers(mockManager, nil)
+	w := httptest.NewRecorder()
+	body := `{"downloadUrl": "https://example.com/update.tar.gz"}`
+	r := httptest.NewRequest(http.MethodPost, "/updates/apply", strings.NewReader(body))
+
+	h.HandleApplyUpdate(w, r)
+
+	if w.Code != http.StatusConflict {
+		t.Fatalf("Expected status %d, got %d", http.StatusConflict, w.Code)
+	}
+	if !strings.Contains(strings.ToLower(w.Body.String()), "already in progress") {
+		t.Fatalf("expected conflict message, got %q", w.Body.String())
+	}
+}
+
+func TestHandleApplyUpdate_InvalidRequestBody(t *testing.T) {
+	mockManager := &MockUpdateManager{
+		ApplyUpdateFunc: func(ctx context.Context, req updates.ApplyUpdateRequest) error {
+			t.Fatalf("ApplyUpdate should not be called for invalid request bodies")
+			return nil
+		},
+	}
+
+	h := NewUpdateHandlers(mockManager, nil)
+
+	t.Run("rejects unknown fields", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		body := `{"downloadUrl":"https://example.com/update.tar.gz","unexpected":"x"}`
+		r := httptest.NewRequest(http.MethodPost, "/updates/apply", strings.NewReader(body))
+
+		h.HandleApplyUpdate(w, r)
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("Expected status %d, got %d", http.StatusBadRequest, w.Code)
+		}
+	})
+
+	t.Run("rejects trailing json", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		body := `{"downloadUrl":"https://example.com/update.tar.gz"} {"extra":true}`
+		r := httptest.NewRequest(http.MethodPost, "/updates/apply", strings.NewReader(body))
+
+		h.HandleApplyUpdate(w, r)
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("Expected status %d, got %d", http.StatusBadRequest, w.Code)
+		}
+	})
+
+	t.Run("rejects whitespace download url", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		body := `{"downloadUrl":"   "}`
+		r := httptest.NewRequest(http.MethodPost, "/updates/apply", strings.NewReader(body))
+
+		h.HandleApplyUpdate(w, r)
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("Expected status %d, got %d", http.StatusBadRequest, w.Code)
+		}
+		if !strings.Contains(strings.ToLower(w.Body.String()), "download url is required") {
+			t.Fatalf("expected missing URL error, got %q", w.Body.String())
+		}
+	})
+}
+
 func TestHandleUpdateStatus_Fresh(t *testing.T) {
 	mockManager := &MockUpdateManager{
 		GetStatusFunc: func() updates.UpdateStatus {

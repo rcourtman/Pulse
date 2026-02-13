@@ -87,7 +87,6 @@ func DetectDockerContainerName() string {
 	return ""
 }
 
-
 // DetectLXCCTID attempts to detect the Proxmox LXC container ID.
 // Returns empty string if not in an LXC container or CTID cannot be determined.
 func DetectLXCCTID() string {

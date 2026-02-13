@@ -26,6 +26,34 @@ interface FetchOptions extends Omit<RequestInit, 'headers'> {
   skipOrgContext?: boolean;
 }
 
+const RATE_LIMIT_DEFAULT_DELAY_MS = 2000;
+const RATE_LIMIT_MAX_DELAY_MS = 10000;
+
+const parseRetryAfterMs = (retryAfter: string | null): number => {
+  if (!retryAfter) {
+    return RATE_LIMIT_DEFAULT_DELAY_MS;
+  }
+
+  const seconds = Number(retryAfter);
+  if (Number.isFinite(seconds) && seconds >= 0) {
+    return Math.min(Math.round(seconds * 1000), RATE_LIMIT_MAX_DELAY_MS);
+  }
+
+  const retryAt = Date.parse(retryAfter);
+  if (Number.isFinite(retryAt)) {
+    const delta = retryAt - Date.now();
+    if (delta <= 0) {
+      return 0;
+    }
+    return Math.min(delta, RATE_LIMIT_MAX_DELAY_MS);
+  }
+
+  return RATE_LIMIT_DEFAULT_DELAY_MS;
+};
+
+const isRateLimitRetryableMethod = (method: string): boolean =>
+  method === 'GET' || method === 'HEAD' || method === 'OPTIONS';
+
 class ApiClient {
   private apiToken: string | null = null;
   private csrfToken: string | null = null;
@@ -443,23 +471,26 @@ class ApiClient {
       }
     }
 
-    // Handle rate limiting with automatic retry
+    // Handle rate limiting with automatic retry for idempotent requests only.
     if (response.status === 429) {
-      const retryAfter = response.headers.get('Retry-After');
-      const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : 2000; // Default 2 seconds
+      if (!isRateLimitRetryableMethod(method)) {
+        logger.warn(`Rate limit hit for non-idempotent ${method} request; skipping auto-retry`, {
+          method,
+          url,
+        });
+        return response;
+      }
 
-      logger.warn(`Rate limit hit, retrying after ${waitTime}ms`);
+      const waitTime = parseRetryAfterMs(response.headers.get('Retry-After'));
+      logger.warn(`Rate limit hit, retrying ${method} after ${waitTime}ms`);
 
-      // Wait and retry once
       await new Promise((resolve) => setTimeout(resolve, waitTime));
 
-      const retryResponse = await fetch(url, {
+      return fetch(url, {
         ...fetchOptions,
         headers: finalHeaders,
         credentials: 'include',
       });
-
-      return retryResponse;
     }
 
     return response;

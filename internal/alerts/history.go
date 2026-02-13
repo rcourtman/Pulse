@@ -175,42 +175,72 @@ func (hm *HistoryManager) GetAllHistory(limit int) []Alert {
 
 // loadHistory loads history from disk
 func (hm *HistoryManager) loadHistory() error {
-	// Try loading from main file first
-	data, err := os.ReadFile(hm.historyFile)
-	if err != nil {
-		if !os.IsNotExist(err) {
-			log.Warn().Err(err).Str("file", hm.historyFile).Msg("Failed to read history file")
-		}
+	type historySource struct {
+		path   string
+		isMain bool
+	}
 
-		// Try backup file
-		data, err = os.ReadFile(hm.backupFile)
+	sources := []historySource{
+		{path: hm.historyFile, isMain: true},
+		{path: hm.backupFile, isMain: false},
+	}
+
+	var firstErr error
+	hadPermissionError := false
+
+	for _, source := range sources {
+		data, err := os.ReadFile(source.path)
 		if err != nil {
 			if os.IsNotExist(err) {
-				// Both files don't exist - this is normal on first startup
-				log.Debug().Msg("No alert history files found, starting fresh")
-				return nil
+				continue
 			}
-			// Check if it's a permission error
 			if os.IsPermission(err) {
-				log.Warn().Err(err).Str("file", hm.backupFile).Msg("Permission denied reading backup history file - check file ownership")
-				return nil // Continue without history rather than failing
+				hadPermissionError = true
+				log.Warn().
+					Err(err).
+					Str("file", source.path).
+					Msg("Permission denied reading history file - check file ownership")
+				continue
 			}
-			return fmt.Errorf("failed to load backup history: %w", err)
+			log.Warn().Err(err).Str("file", source.path).Msg("Failed to read history file")
+			if firstErr == nil {
+				firstErr = fmt.Errorf("failed to read history file %q: %w", source.path, err)
+			}
+			continue
 		}
-		log.Info().Msg("Loaded alert history from backup file")
+
+		var history []HistoryEntry
+		if err := json.Unmarshal(data, &history); err != nil {
+			log.Warn().
+				Err(err).
+				Str("file", source.path).
+				Msg("Failed to parse history file")
+			if firstErr == nil {
+				firstErr = fmt.Errorf("failed to unmarshal history from %q: %w", source.path, err)
+			}
+			continue
+		}
+
+		hm.history = history
+		if !source.isMain {
+			log.Info().Msg("Loaded alert history from backup file")
+		}
+		log.Info().Int("count", len(history)).Msg("Loaded alert history")
+
+		// Clean old entries immediately
+		hm.cleanOldEntries()
+		return nil
 	}
 
-	var history []HistoryEntry
-	if err := json.Unmarshal(data, &history); err != nil {
-		return fmt.Errorf("failed to unmarshal history: %w", err)
+	if firstErr != nil {
+		return firstErr
+	}
+	if hadPermissionError {
+		return nil
 	}
 
-	hm.history = history
-	log.Info().Int("count", len(history)).Msg("Loaded alert history")
-
-	// Clean old entries immediately
-	hm.cleanOldEntries()
-
+	// Both files don't exist - this is normal on first startup
+	log.Debug().Msg("No alert history files found, starting fresh")
 	return nil
 }
 
@@ -221,6 +251,10 @@ func (hm *HistoryManager) saveHistory() error {
 
 // saveHistoryWithRetry saves history with exponential backoff retry
 func (hm *HistoryManager) saveHistoryWithRetry(maxRetries int) error {
+	if maxRetries < 1 {
+		maxRetries = 1
+	}
+
 	// Serialize all disk writes to prevent concurrent saves from overwriting each other
 	hm.saveMu.Lock()
 	defer hm.saveMu.Unlock()
@@ -242,6 +276,9 @@ func (hm *HistoryManager) saveHistoryWithRetry(maxRetries int) error {
 	// This ensures we don't lose data if all retries fail.
 	backupCreated := false
 	if _, err := os.Stat(historyFile); err == nil {
+		if err := os.Remove(backupFile); err != nil && !os.IsNotExist(err) {
+			log.Warn().Err(err).Str("file", backupFile).Msg("Failed to remove existing backup file before save")
+		}
 		if err := os.Rename(historyFile, backupFile); err != nil {
 			log.Warn().Err(err).Msg("Failed to create backup file")
 		} else {
@@ -251,11 +288,13 @@ func (hm *HistoryManager) saveHistoryWithRetry(maxRetries int) error {
 
 	var lastErr error
 	for attempt := 1; attempt <= maxRetries; attempt++ {
-		// Write new file
-		if err := os.WriteFile(historyFile, data, 0644); err != nil {
-			lastErr = err
+		tempFile := fmt.Sprintf("%s.tmp-%d-%d", historyFile, os.Getpid(), time.Now().UnixNano())
+
+		if err := writeFileSynced(tempFile, data, 0644); err != nil {
+			lastErr = fmt.Errorf("failed to write temp history file: %w", err)
+			_ = os.Remove(tempFile)
 			log.Warn().
-				Err(err).
+				Err(lastErr).
 				Int("attempt", attempt).
 				Int("maxRetries", maxRetries).
 				Msg("Failed to write history file, will retry")
@@ -266,6 +305,27 @@ func (hm *HistoryManager) saveHistoryWithRetry(maxRetries int) error {
 				time.Sleep(backoff)
 			}
 			continue
+		}
+
+		if err := os.Rename(tempFile, historyFile); err != nil {
+			lastErr = fmt.Errorf("failed to replace history file with temp file: %w", err)
+			_ = os.Remove(tempFile)
+			log.Warn().
+				Err(lastErr).
+				Int("attempt", attempt).
+				Int("maxRetries", maxRetries).
+				Msg("Failed to write history file, will retry")
+
+			// Exponential backoff: 100ms, 200ms, 400ms
+			if attempt < maxRetries {
+				backoff := time.Duration(100*(1<<uint(attempt-1))) * time.Millisecond
+				time.Sleep(backoff)
+			}
+			continue
+		}
+
+		if err := syncDir(filepath.Dir(historyFile)); err != nil {
+			log.Warn().Err(err).Str("dir", filepath.Dir(historyFile)).Msg("Failed to sync history directory")
 		}
 
 		// Success - remove backup file now that we've successfully written
@@ -283,11 +343,43 @@ func (hm *HistoryManager) saveHistoryWithRetry(maxRetries int) error {
 		if restoreErr := os.Rename(backupFile, historyFile); restoreErr != nil {
 			log.Error().Err(restoreErr).Msg("Failed to restore backup after all write attempts failed")
 		} else {
+			if err := syncDir(filepath.Dir(historyFile)); err != nil {
+				log.Warn().Err(err).Str("dir", filepath.Dir(historyFile)).Msg("Failed to sync history directory after restore")
+			}
 			log.Info().Msg("Restored backup after history save failure")
 		}
 	}
 
 	return fmt.Errorf("failed to write history file after %d attempts: %w", maxRetries, lastErr)
+}
+
+func writeFileSynced(path string, data []byte, perm os.FileMode) error {
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, perm)
+	if err != nil {
+		return err
+	}
+
+	if _, err := file.Write(data); err != nil {
+		_ = file.Close()
+		return err
+	}
+
+	if err := file.Sync(); err != nil {
+		_ = file.Close()
+		return err
+	}
+
+	return file.Close()
+}
+
+func syncDir(dirPath string) error {
+	dir, err := os.Open(dirPath)
+	if err != nil {
+		return err
+	}
+	defer dir.Close()
+
+	return dir.Sync()
 }
 
 // startPeriodicSave starts the periodic save routine

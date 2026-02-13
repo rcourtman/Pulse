@@ -3,6 +3,7 @@ package agentbinaries
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -272,6 +273,55 @@ func TestWindowsBinaryFilenames(t *testing.T) {
 		if !hasExe || !hasNoExe {
 			t.Errorf("Windows binary %s-%s should have both .exe and non-.exe filenames", binary.Platform, binary.Arch)
 		}
+	}
+}
+
+func TestNormalizeHostAgentSymlinkTarget(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		want    string
+		wantErr bool
+	}{
+		{name: "valid", input: "pulse-host-agent-linux-amd64", want: "pulse-host-agent-linux-amd64"},
+		{name: "trim spaces", input: " pulse-host-agent-windows-amd64.exe ", want: "pulse-host-agent-windows-amd64.exe"},
+		{name: "absolute path", input: "/tmp/pulse-host-agent-linux-amd64", wantErr: true},
+		{name: "path traversal", input: "../pulse-host-agent-linux-amd64", wantErr: true},
+		{name: "nested path", input: "bin/pulse-host-agent-linux-amd64", wantErr: true},
+		{name: "unexpected prefix", input: "not-agent", wantErr: true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := normalizeHostAgentSymlinkTarget(tc.input)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("expected error for %q", tc.input)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error for %q: %v", tc.input, err)
+			}
+			if got != tc.want {
+				t.Fatalf("normalizeHostAgentSymlinkTarget(%q) = %q, want %q", tc.input, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestParseHostAgentChecksumPayload_WithAsteriskFilename(t *testing.T) {
+	payload := []byte(strings.Repeat("a", 64) + " *bundle.tar.gz\n")
+
+	checksum, filename, err := parseHostAgentChecksumPayload(payload)
+	if err != nil {
+		t.Fatalf("expected successful parse, got %v", err)
+	}
+	if checksum != strings.Repeat("a", 64) {
+		t.Fatalf("checksum = %q, want %q", checksum, strings.Repeat("a", 64))
+	}
+	if filename != "bundle.tar.gz" {
+		t.Fatalf("filename = %q, want bundle.tar.gz", filename)
 	}
 }
 
