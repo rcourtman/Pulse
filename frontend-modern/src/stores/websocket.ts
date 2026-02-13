@@ -217,24 +217,23 @@ export function createWebSocketStore(url: string) {
     setState('activeAlerts', Object.values(alertsMap));
   };
 
+  const handleAlertsActivationEvent: EventListener = (event) => {
+    const detail = (event as CustomEvent<ActivationStateType | null>).detail;
+    alertsEnabled = detail === 'active';
+    applyActiveAlerts(alertsEnabled ? lastActiveAlertsPayload : {});
+  };
+
   if (typeof window !== 'undefined') {
-    window.addEventListener(
-      ALERTS_ACTIVATION_EVENT,
-      (event: Event) => {
-        const detail = (event as CustomEvent<ActivationStateType | null>).detail;
-        alertsEnabled = detail === 'active';
-        applyActiveAlerts(alertsEnabled ? lastActiveAlertsPayload : {});
-      },
-      { passive: true },
-    );
+    window.addEventListener(ALERTS_ACTIVATION_EVENT, handleAlertsActivationEvent, { passive: true });
   }
 
   let ws: WebSocket | null = null;
   let reconnectTimeout = 0;
   let heartbeatInterval = 0;
+  let connectDelayTimeout = 0;
   let reconnectAttempt = 0;
   let isReconnecting = false;
-  let shouldReconnect = true;
+  let isDisposed = false;
   let lastServerActivityAt = 0;
   const maxReconnectDelay = POLLING_INTERVALS.RECONNECT_MAX;
   const initialReconnectDelay = POLLING_INTERVALS.RECONNECT_BASE;
@@ -267,10 +266,15 @@ export function createWebSocketStore(url: string) {
     return Math.min(maxReconnectDelay, Math.max(0, baseDelay + jitter));
   };
 
+  const clearConnectDelayTimeout = () => {
+    if (!connectDelayTimeout) return;
+    window.clearTimeout(connectDelayTimeout);
+    connectDelayTimeout = 0;
+  };
+
   const connect = () => {
-    if (!shouldReconnect) {
-      return;
-    }
+    if (isDisposed) return;
+    clearConnectDelayTimeout();
 
     try {
       // Close existing connection if any
@@ -279,6 +283,18 @@ export function createWebSocketStore(url: string) {
           ws.close(1000, 'Reconnecting');
         }
         ws = null;
+      }
+
+      // Add a small delay before reconnecting to avoid rapid reconnect loops
+      if (reconnectAttempt > 0) {
+        const delay = Math.min(100 * reconnectAttempt, 1000);
+        connectDelayTimeout = window.setTimeout(() => {
+          connectDelayTimeout = 0;
+          if (isDisposed) return;
+          ws = new WebSocket(wsUrl);
+          setupWebSocket();
+        }, delay);
+        return;
       }
 
       ws = new WebSocket(wsUrl);
@@ -290,7 +306,7 @@ export function createWebSocketStore(url: string) {
   };
 
   const handleReconnect = () => {
-    if (isReconnecting) return;
+    if (isReconnecting || isDisposed) return;
 
     isReconnecting = true;
     setReconnecting(true);
@@ -305,7 +321,8 @@ export function createWebSocketStore(url: string) {
     reconnectAttempt++;
 
     reconnectTimeout = window.setTimeout(() => {
-      if (!shouldReconnect) {
+      if (isDisposed) {
+        isReconnecting = false;
         return;
       }
       isReconnecting = false;
@@ -618,9 +635,9 @@ export function createWebSocketStore(url: string) {
             scanning: false,
             timestamp: message.data?.timestamp,
           });
-        } else if ((message as {type: string}).type === 'ai_discovery_progress') {
+        } else if ((message as { type: string }).type === 'ai_discovery_progress') {
           // AI-powered discovery progress update
-          eventBus.emit('ai_discovery_progress', (message as {data: unknown}).data as import('../types/discovery').DiscoveryProgress);
+          eventBus.emit('ai_discovery_progress', (message as { data: unknown }).data as import('../types/discovery').DiscoveryProgress);
         } else if (message.type === 'settingsUpdate') {
           // Settings have been updated (e.g., theme change)
           if (message.data?.theme) {
@@ -647,7 +664,7 @@ export function createWebSocketStore(url: string) {
       // Clear heartbeat interval
       clearHeartbeatTimer();
 
-      if (!shouldReconnect) {
+      if (isDisposed) {
         return;
       }
 
@@ -685,10 +702,12 @@ export function createWebSocketStore(url: string) {
 
   // Cleanup on unmount
   onCleanup(() => {
-    shouldReconnect = false;
+    isDisposed = true;
+    clearConnectDelayTimeout();
     clearReconnectTimer();
     clearHeartbeatTimer();
     isReconnecting = false;
+    window.removeEventListener(ALERTS_ACTIVATION_EVENT, handleAlertsActivationEvent);
     if (ws) {
       ws.close(1000, 'Component unmounting');
       ws = null;
@@ -720,6 +739,7 @@ export function createWebSocketStore(url: string) {
     updateProgress,
     reconnect: () => {
       ws?.close(1000, 'Reconnecting');
+      clearConnectDelayTimeout();
       clearReconnectTimer();
       clearHeartbeatTimer();
       reconnectAttempt = 0; // Reset attempts for manual reconnect
@@ -745,6 +765,7 @@ export function createWebSocketStore(url: string) {
 
       clearReconnectTimer();
       clearHeartbeatTimer();
+      clearConnectDelayTimeout();
       reconnectAttempt = 0;
       isReconnecting = false;
       ws?.close(1000, 'Reconnecting');

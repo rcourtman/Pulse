@@ -136,7 +136,7 @@ export const useWebSocket = () => {
 };
 
 // Dark mode context for reactive theme switching
-export const DarkModeContext = createContext<() => boolean>(() => false);
+export const DarkModeContext = createContext<() => boolean>();
 export const useDarkMode = () => {
   const context = useContext(DarkModeContext);
   if (!context) {
@@ -420,7 +420,7 @@ function App() {
 
   // Data update indicator
   const [dataUpdated, setDataUpdated] = createSignal(false);
-  let updateTimeout: number;
+  let updateTimeout: number | undefined;
 
   // Last update time formatting
   const [lastUpdateText, setLastUpdateText] = createSignal('');
@@ -519,8 +519,16 @@ function App() {
     if (updateTime && updateTime !== '') {
       setDataUpdated(true);
       setLastUpdateText(formatLastUpdate(updateTime));
-      window.clearTimeout(updateTimeout);
+      if (updateTimeout !== undefined) {
+        window.clearTimeout(updateTimeout);
+      }
       updateTimeout = window.setTimeout(() => setDataUpdated(false), POLLING_INTERVALS.DATA_FLASH);
+    }
+  });
+
+  onCleanup(() => {
+    if (updateTimeout !== undefined) {
+      window.clearTimeout(updateTimeout);
     }
   });
 

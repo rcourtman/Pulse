@@ -1,4 +1,4 @@
-import { Component, createSignal, For, Show } from 'solid-js';
+import { Component, createSignal, For, Show, onCleanup, onMount } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { POLLING_INTERVALS } from '@/constants';
 
@@ -19,6 +19,8 @@ interface ToastProps {
 
 const Toast: Component<ToastProps> = (props) => {
   const [show, setShow] = createSignal(true);
+  let autoCloseTimer: number | undefined;
+  let removeTimer: number | undefined;
 
   const icons = {
     success: (
@@ -83,14 +85,29 @@ const Toast: Component<ToastProps> = (props) => {
   };
 
   const handleClose = () => {
+    if (!show()) {
+      return;
+    }
+
     setShow(false);
-    window.setTimeout(() => props.onRemove(props.toast.id), 300);
+    if (removeTimer !== undefined) {
+      window.clearTimeout(removeTimer);
+    }
+    removeTimer = window.setTimeout(() => props.onRemove(props.toast.id), 300);
   };
 
-  // Auto-remove after duration
-  window.setTimeout(() => {
-    handleClose();
-  }, props.toast.duration || POLLING_INTERVALS.TOAST_DURATION);
+  onMount(() => {
+    autoCloseTimer = window.setTimeout(handleClose, props.toast.duration || POLLING_INTERVALS.TOAST_DURATION);
+  });
+
+  onCleanup(() => {
+    if (autoCloseTimer !== undefined) {
+      window.clearTimeout(autoCloseTimer);
+    }
+    if (removeTimer !== undefined) {
+      window.clearTimeout(removeTimer);
+    }
+  });
 
   return (
     <div
@@ -152,13 +169,13 @@ export const ToastContainer: Component = () => {
   const [toasts, setToasts] = createSignal<ToastMessage[]>([]);
 
   const removeToast = (id: string) => {
-    setToasts(toasts().filter((t) => t.id !== id));
+    setToasts((current) => current.filter((t) => t.id !== id));
   };
 
   // Expose global toast function
   window.showToast = (type: ToastType, title: string, message?: string, duration?: number) => {
     const id = (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString());
-    setToasts([...toasts(), { id, type, title, message, duration }]);
+    setToasts((current) => [...current, { id, type, title, message, duration }]);
     return id;
   };
 

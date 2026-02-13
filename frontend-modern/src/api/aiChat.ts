@@ -218,6 +218,22 @@ export class AIChatAPI {
     let lastEventTime = Date.now();
     const STREAM_TIMEOUT_MS = 300000; // 5 minutes
 
+    const readWithTimeout = async (): Promise<ReadableStreamReadResult<Uint8Array>> => {
+      let timeoutId: ReturnType<typeof setTimeout> | undefined;
+      const readPromise = reader.read();
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error('Read timeout')), STREAM_TIMEOUT_MS);
+      });
+
+      try {
+        return await Promise.race([readPromise, timeoutPromise]);
+      } finally {
+        if (timeoutId !== undefined) {
+          clearTimeout(timeoutId);
+        }
+      }
+    };
+
     try {
       for (; ;) {
         if (Date.now() - lastEventTime > STREAM_TIMEOUT_MS) {
@@ -225,14 +241,9 @@ export class AIChatAPI {
           break;
         }
 
-        const readPromise = reader.read();
-        const timeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error('Read timeout')), STREAM_TIMEOUT_MS);
-        });
-
         let result: ReadableStreamReadResult<Uint8Array>;
         try {
-          result = await Promise.race([readPromise, timeoutPromise]);
+          result = await readWithTimeout();
         } catch (e) {
           if ((e as Error).message === 'Read timeout') break;
           throw e;
