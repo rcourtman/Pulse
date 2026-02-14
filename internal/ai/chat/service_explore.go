@@ -3,6 +3,7 @@ package chat
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -16,15 +17,16 @@ import (
 const (
 	exploreEnabledEnvVar    = "PULSE_EXPLORE_ENABLED"
 	exploreMaxTurns         = 3
-	exploreTimeout          = 20 * time.Second
+	exploreTimeout          = 30 * time.Second
 	exploreSummaryCharLimit = 2400
 )
 
 const (
-	exploreOutcomeSuccess      = "success"
-	exploreOutcomeFailed       = "failed"
-	exploreOutcomeSkippedModel = "skipped_no_model"
-	exploreOutcomeSkippedTools = "skipped_no_tools"
+	exploreOutcomeSuccess               = "success"
+	exploreOutcomeFailed                = "failed"
+	exploreOutcomeSkippedModel          = "skipped_no_model"
+	exploreOutcomeSkippedTools          = "skipped_no_tools"
+	exploreOutcomeSkippedConversational = "skipped_conversational"
 )
 
 type ExplorePrepassResult struct {
@@ -54,11 +56,106 @@ func isExploreEnabled() bool {
 	return enabled
 }
 
-func (s *Service) shouldRunExplore(autonomousMode bool) bool {
+func (s *Service) shouldRunExplore(autonomousMode bool, prompt string) bool {
 	if autonomousMode {
 		return false
 	}
-	return isExploreEnabled()
+	if !isExploreEnabled() {
+		return false
+	}
+	if isConversationalMessage(prompt) {
+		return false
+	}
+	return true
+}
+
+// isConversationalMessage returns true when a message is a short conversational
+// reply (acknowledgment, confirmation, thanks, etc.) that doesn't warrant a
+// full explore pre-pass. This avoids wasting an LLM call + tool execution for
+// messages like "ah i see", "thanks", "ok", "got it", etc.
+func isConversationalMessage(prompt string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(prompt))
+	// Remove trailing punctuation for matching
+	normalized = strings.TrimRight(normalized, "!?.,:;")
+	normalized = strings.TrimSpace(normalized)
+
+	if normalized == "" {
+		return true
+	}
+
+	// Exact-match short phrases that are clearly conversational
+	exactConversational := map[string]bool{
+		"ok":           true,
+		"okay":         true,
+		"k":            true,
+		"yes":          true,
+		"no":           true,
+		"yep":          true,
+		"nope":         true,
+		"yeah":         true,
+		"nah":          true,
+		"sure":         true,
+		"thanks":       true,
+		"thank you":    true,
+		"ty":           true,
+		"thx":          true,
+		"cool":         true,
+		"nice":         true,
+		"great":        true,
+		"perfect":      true,
+		"awesome":      true,
+		"got it":       true,
+		"understood":   true,
+		"makes sense":  true,
+		"i see":        true,
+		"ah i see":     true,
+		"ah ok":        true,
+		"oh i see":     true,
+		"oh ok":        true,
+		"ah":           true,
+		"oh":           true,
+		"hmm":          true,
+		"hm":           true,
+		"interesting":  true,
+		"right":        true,
+		"alright":      true,
+		"sounds good":  true,
+		"good to know": true,
+		"noted":        true,
+		"lol":          true,
+		"haha":         true,
+		"lgtm":         true,
+		"nevermind":    true,
+		"never mind":   true,
+		"nvm":          true,
+	}
+	if exactConversational[normalized] {
+		return true
+	}
+
+	// For very short messages (under 60 chars), check prefix patterns
+	// These catch things like "ah i see so the socat is sharing..." or "oh ok thanks"
+	if len(normalized) <= 60 {
+		conversationalPrefixes := []string{
+			"ah i see", "oh i see", "ah ok", "oh ok", "ok so",
+			"i see so", "ah so", "oh so", "right so",
+			"got it", "makes sense", "thanks for",
+			"good to know", "that makes sense",
+			"i dont need", "i don't need",
+			"i dont use", "i don't use",
+			"i dont think", "i don't think",
+		}
+		for _, prefix := range conversationalPrefixes {
+			if strings.HasPrefix(normalized, prefix) {
+				// But NOT if it contains a question — that signals a new query
+				if !strings.Contains(normalized, "?") {
+					return true
+				}
+			}
+		}
+	}
+
+	return false
 }
 
 func isProviderModelString(model string) bool {
@@ -97,6 +194,62 @@ func (s *Service) exploreModelCandidates(overrideModel string) []string {
 	return candidates
 }
 
+// exploreHTTPTimeout is the per-request HTTP client timeout for explore providers.
+// This is deliberately short so that unresponsive models (cold-start, overloaded,
+// or deprecated) fail fast within the explore context deadline rather than hanging
+// for the default 5-minute provider timeout.
+const exploreHTTPTimeout = 10 * time.Second
+
+// createProviderForExplore creates a provider with a short HTTP timeout suitable
+// for the explore pre-pass. This ensures that if a model is unresponsive, the
+// HTTP call fails quickly and we can either retry or abort gracefully.
+func (s *Service) createProviderForExplore(modelStr string) (providers.StreamingProvider, error) {
+	if s.providerFactory != nil {
+		return s.providerFactory(modelStr)
+	}
+	if s.cfg == nil {
+		return nil, fmt.Errorf("no Pulse Assistant config")
+	}
+
+	parts := strings.SplitN(modelStr, ":", 2)
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("invalid model format: %s (expected provider:model)", modelStr)
+	}
+	providerName := parts[0]
+	modelName := parts[1]
+
+	switch providerName {
+	case "anthropic":
+		if s.cfg.AnthropicAPIKey == "" {
+			return nil, fmt.Errorf("Anthropic API key not configured")
+		}
+		return providers.NewAnthropicClient(s.cfg.AnthropicAPIKey, modelName, exploreHTTPTimeout), nil
+	case "openai":
+		if s.cfg.OpenAIAPIKey == "" {
+			return nil, fmt.Errorf("OpenAI API key not configured")
+		}
+		return providers.NewOpenAIClient(s.cfg.OpenAIAPIKey, modelName, s.cfg.OpenAIBaseURL, exploreHTTPTimeout), nil
+	case "deepseek":
+		if s.cfg.DeepSeekAPIKey == "" {
+			return nil, fmt.Errorf("DeepSeek API key not configured")
+		}
+		return providers.NewOpenAIClient(s.cfg.DeepSeekAPIKey, modelName, "https://api.deepseek.com", exploreHTTPTimeout), nil
+	case "gemini":
+		if s.cfg.GeminiAPIKey == "" {
+			return nil, fmt.Errorf("Gemini API key not configured")
+		}
+		return providers.NewGeminiClient(s.cfg.GeminiAPIKey, modelName, "", exploreHTTPTimeout), nil
+	case "ollama":
+		baseURL := s.cfg.OllamaBaseURL
+		if baseURL == "" {
+			baseURL = "http://localhost:11434"
+		}
+		return providers.NewOllamaClient(modelName, baseURL, exploreHTTPTimeout), nil
+	default:
+		return nil, fmt.Errorf("unsupported provider: %s", providerName)
+	}
+}
+
 func (s *Service) resolveExploreProvider(
 	overrideModel string,
 	selectedModel string,
@@ -111,12 +264,9 @@ func (s *Service) resolveExploreProvider(
 			continue
 		}
 
-		// Reuse already-constructed provider when possible.
-		if candidate == selectedModel && defaultProvider != nil {
-			return defaultProvider, candidate
-		}
-
-		p, err := s.createProviderForModel(candidate)
+		// For explore, always create a dedicated provider with short timeout
+		// rather than reusing the default provider (which has a 5-min timeout).
+		p, err := s.createProviderForExplore(candidate)
 		if err != nil {
 			log.Warn().
 				Str("model", candidate).

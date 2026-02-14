@@ -466,7 +466,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 
 	// Explore pre-pass (interactive chat only): run a short read-only scout step
 	// and inject its findings into the main loop context.
-	if s.shouldRunExplore(autonomousMode) {
+	if s.shouldRunExplore(autonomousMode, req.Prompt) {
 		exploreResult := s.runExplorePrepass(
 			ctx,
 			session.ID,

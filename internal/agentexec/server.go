@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/rs/zerolog/log"
 )
@@ -101,16 +102,6 @@ func (s *Server) isShuttingDown() bool {
 
 func pendingRequestKey(agentID, requestID string) string {
 	return agentID + "\x00" + requestID
-}
-
-func validateRequestID(requestID string) error {
-	if requestID == "" {
-		return fmt.Errorf("request id is required")
-	}
-	if len(requestID) > maxRequestIDLength {
-		return fmt.Errorf("request id exceeds %d characters", maxRequestIDLength)
-	}
-	return nil
 }
 
 func normalizeTarget(targetType, targetID string) (string, string, error) {
@@ -646,8 +637,8 @@ func (s *Server) ExecuteCommand(ctx context.Context, agentID string, cmd Execute
 		return nil, fmt.Errorf("agent id is required")
 	}
 	cmd.RequestID = strings.TrimSpace(cmd.RequestID)
-	if err := validateRequestID(cmd.RequestID); err != nil {
-		return nil, err
+	if cmd.RequestID == "" {
+		cmd.RequestID = uuid.New().String()
 	}
 	if err := validateExecuteCommandPayload(&cmd); err != nil {
 		return nil, err
@@ -753,8 +744,8 @@ func (s *Server) ReadFile(ctx context.Context, agentID string, req ReadFilePaylo
 		return nil, fmt.Errorf("agent id is required")
 	}
 	req.RequestID = strings.TrimSpace(req.RequestID)
-	if err := validateRequestID(req.RequestID); err != nil {
-		return nil, err
+	if req.RequestID == "" {
+		req.RequestID = uuid.New().String()
 	}
 	if err := validateReadFilePayload(&req); err != nil {
 		return nil, err
