@@ -401,11 +401,25 @@ func collectDeviceSMART(ctx context.Context, device string) (*DiskSMART, error) 
 		result.WWN = formatWWN(smartData.WWN.NAA, smartData.WWN.OUI, smartData.WWN.ID)
 	}
 
-	// Get temperature (different location for NVMe vs SATA)
+	// Get temperature (different location for NVMe vs SATA).
+	// Try top-level fields first, then fall back to ATA attributes 194/190.
 	if smartData.Temperature.Current > 0 {
 		result.Temperature = smartData.Temperature.Current
 	} else if smartData.NVMeSmartHealthInformationLog != nil && smartData.NVMeSmartHealthInformationLog.Temperature > 0 {
 		result.Temperature = smartData.NVMeSmartHealthInformationLog.Temperature
+	} else {
+		// Fallback: extract from ATA SMART attributes 194 (Temperature_Celsius)
+		// or 190 (Airflow_Temperature_Cel). Some drives don't populate the
+		// top-level temperature field.
+		for _, attr := range smartData.ATASmartAttributes.Table {
+			if attr.ID == 194 || attr.ID == 190 {
+				temp := int(parseRawValue(attr.Raw.String, attr.Raw.Value))
+				if temp > 0 && temp < 150 { // sanity: valid operating range
+					result.Temperature = temp
+					break
+				}
+			}
+		}
 	}
 
 	// Get health status
@@ -459,7 +473,7 @@ func parseSMARTAttributes(data *smartctlJSON, diskType string) *SMARTAttributes 
 		// SATA / SAS — iterate the ATA attributes table
 		for _, attr := range data.ATASmartAttributes.Table {
 			hasData = true
-			raw := attr.Raw.Value
+			raw := parseRawValue(attr.Raw.String, attr.Raw.Value)
 			switch attr.ID {
 			case 5: // Reallocated Sector Count
 				v := raw
@@ -487,6 +501,30 @@ func parseSMARTAttributes(data *smartctlJSON, diskType string) *SMARTAttributes 
 		return nil
 	}
 	return attrs
+}
+
+// parseRawValue extracts the primary integer from a SMART attribute's raw string.
+// Some drives (notably Seagate) pack vendor-specific data in the upper bytes of
+// the 48-bit raw value, making raw.value unreliable. For example, Power_On_Hours
+// may report raw.value=150323855943 while raw.string="16951 (223 173 0)" where
+// only 16951 is the actual hours. Falls back to rawValue if string parsing fails.
+func parseRawValue(rawString string, rawValue int64) int64 {
+	s := strings.TrimSpace(rawString)
+	if s == "" {
+		return rawValue
+	}
+	end := 0
+	for end < len(s) && s[end] >= '0' && s[end] <= '9' {
+		end++
+	}
+	if end == 0 {
+		return rawValue
+	}
+	v, err := strconv.ParseInt(s[:end], 10, 64)
+	if err != nil {
+		return rawValue
+	}
+	return v
 }
 
 // detectDiskType determines the disk transport type from smartctl output.

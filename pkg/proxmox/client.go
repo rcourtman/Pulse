@@ -1351,7 +1351,7 @@ func (c *Client) GetVMAgentInfo(ctx context.Context, node string, vmid int) (map
 	resp, err := c.get(ctx, fmt.Sprintf("/nodes/%s/qemu/%d/agent/get-osinfo", node, vmid))
 	if err != nil {
 		// Guest agent might not be installed or running
-		return nil, err
+		return nil, fmt.Errorf("guest agent get-osinfo: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -1370,7 +1370,7 @@ func (c *Client) GetVMAgentInfo(ctx context.Context, node string, vmid int) (map
 func (c *Client) GetVMAgentVersion(ctx context.Context, node string, vmid int) (string, error) {
 	resp, err := c.get(ctx, fmt.Sprintf("/nodes/%s/qemu/%d/agent/info", node, vmid))
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("guest agent info: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -1531,7 +1531,7 @@ func (c *Client) GetVMFSInfo(ctx context.Context, node string, vmid int) ([]VMFi
 	resp, err := c.get(ctx, fmt.Sprintf("/nodes/%s/qemu/%d/agent/get-fsinfo", node, vmid))
 	if err != nil {
 		// Guest agent might not be installed or running
-		return nil, err
+		return nil, fmt.Errorf("guest agent get-fsinfo: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -1637,7 +1637,7 @@ func (c *Client) GetVMFSInfo(ctx context.Context, node string, vmid int) ([]VMFi
 func (c *Client) GetVMNetworkInterfaces(ctx context.Context, node string, vmid int) ([]VMNetworkInterface, error) {
 	resp, err := c.get(ctx, fmt.Sprintf("/nodes/%s/qemu/%d/agent/network-get-interfaces", node, vmid))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("guest agent network-get-interfaces: %w", err)
 	}
 	defer resp.Body.Close()
 

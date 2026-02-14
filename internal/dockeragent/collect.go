@@ -612,24 +612,11 @@ func (a *Agent) calculateContainerCPUPercent(containerID string, stats container
 		read:        stats.Read,
 	}
 
-	// Try to use PreCPUStats if available
-	percent := calculateCPUPercent(stats, a.cpuCount)
-	if percent > 0 {
-		a.prevContainerCPU[containerID] = current
-		a.logger.Debug().
-			Str("container_id", containerID[:12]).
-			Float64("cpu_percent", percent).
-			Msg("CPU calculated from PreCPUStats")
-		return percent
-	}
-
-	// PreCPUStats not available or invalid, use manual tracking
-	a.preCPUStatsFailures++
-	if a.preCPUStatsFailures == 10 {
-		a.logger.Warn().
-			Str("runtime", string(a.runtime)).
-			Msg("PreCPUStats consistently unavailable from Docker API - using manual CPU tracking (this is normal for one-shot stats)")
-	}
+	// Always use manual delta tracking. Docker's PreCPUStats is unreliable for
+	// one-shot stats because many Docker versions don't update their internal
+	// cache between non-streaming reads, causing PreCPUStats to remain stale
+	// (from container start) and producing a constant lifetime-average CPU%
+	// instead of a current value.
 	prev, ok := a.prevContainerCPU[containerID]
 	if !ok {
 		// First time seeing this container - store current sample and return 0

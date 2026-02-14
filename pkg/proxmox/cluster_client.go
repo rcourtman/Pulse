@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
 	"github.com/rs/zerolog/log"
 )
 
@@ -65,6 +66,44 @@ func isVMSpecificError(errStr string) bool {
 	}
 
 	if strings.Contains(lower, "guest-get-") {
+		return true
+	}
+
+	return false
+}
+
+// isEndpointConnectivityError reports whether an error indicates the endpoint
+// itself is unreachable (TCP, DNS, TLS failures). Application-level errors
+// (HTTP responses, parsing errors) mean the endpoint IS reachable.
+func isEndpointConnectivityError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := strings.ToLower(err.Error())
+
+	// If we received an HTTP response from Proxmox (any status code),
+	// the endpoint is reachable.
+	if strings.Contains(errStr, "api error") {
+		return false
+	}
+
+	// TCP/DNS connectivity failures
+	if strings.Contains(errStr, "connection refused") ||
+		strings.Contains(errStr, "connection reset") ||
+		strings.Contains(errStr, "no such host") ||
+		strings.Contains(errStr, "network is unreachable") ||
+		strings.Contains(errStr, "no route to host") ||
+		strings.Contains(errStr, "i/o timeout") ||
+		strings.Contains(errStr, "dial tcp") ||
+		strings.Contains(errStr, "dial:") {
+		return true
+	}
+
+	// TLS failures
+	if strings.Contains(errStr, "tls handshake") ||
+		strings.Contains(errStr, "tls:") ||
+		strings.Contains(errStr, "certificate") ||
+		strings.Contains(errStr, "fingerprint mismatch") {
 		return true
 	}
 
@@ -162,10 +201,70 @@ func NewClusterClient(name string, config ClientConfig, endpoints []string, endp
 // getEndpointFingerprint returns the TLS fingerprint to use for a specific endpoint.
 // It prefers the per-endpoint fingerprint (TOFU) over the base config fingerprint.
 func (cc *ClusterClient) getEndpointFingerprint(endpoint string) string {
+	cc.mu.RLock()
+	defer cc.mu.RUnlock()
+	return cc.getEndpointFingerprintLocked(endpoint)
+}
+
+func (cc *ClusterClient) getEndpointFingerprintLocked(endpoint string) string {
 	if fp, ok := cc.endpointFingerprints[endpoint]; ok && fp != "" {
 		return fp
 	}
 	return cc.config.Fingerprint
+}
+
+func isFingerprintMismatchError(err error) bool {
+	return err != nil && strings.Contains(strings.ToLower(err.Error()), "fingerprint mismatch")
+}
+
+// refreshTOFUFingerprintAndRetry refreshes a per-endpoint TOFU fingerprint after a mismatch and retries connectivity.
+// Returns (client, err, refreshed) where refreshed indicates whether TOFU refresh logic was applied.
+func (cc *ClusterClient) refreshTOFUFingerprintAndRetry(ctx context.Context, endpoint string, timeout time.Duration, lastErr error) (*Client, error, bool) {
+	if !isFingerprintMismatchError(lastErr) {
+		return nil, lastErr, false
+	}
+
+	cc.mu.RLock()
+	_, hasTOFU := cc.endpointFingerprints[endpoint]
+	cc.mu.RUnlock()
+	if !hasTOFU {
+		return nil, lastErr, false
+	}
+
+	newFingerprint, err := tlsutil.FetchFingerprint(endpoint)
+	if err != nil {
+		log.Warn().
+			Str("cluster", cc.name).
+			Str("endpoint", endpoint).
+			Err(err).
+			Msg("Failed to refresh TOFU fingerprint after mismatch")
+		return nil, lastErr, false
+	}
+
+	cc.mu.Lock()
+	cc.endpointFingerprints[endpoint] = newFingerprint
+	cc.mu.Unlock()
+
+	log.Warn().
+		Str("cluster", cc.name).
+		Str("endpoint", endpoint).
+		Msg("Detected TLS certificate change; refreshed TOFU fingerprint")
+
+	cfg := cc.config
+	cfg.Host = endpoint
+	cfg.Fingerprint = newFingerprint
+	cfg.Timeout = timeout
+
+	retryClient, err := NewClient(cfg)
+	if err != nil {
+		return nil, err, true
+	}
+
+	retryCtx, cancel := context.WithTimeout(ctx, timeout)
+	_, err = retryClient.GetNodes(retryCtx)
+	cancel()
+
+	return retryClient, err, true
 }
 
 // initialHealthCheck performs a quick parallel health check on all endpoints
@@ -215,7 +314,9 @@ func (cc *ClusterClient) initialHealthCheck() {
 			_, err = testClient.GetNodes(ctx)
 			cancel()
 
-			cc.mu.Lock()
+			if _, retryErr, refreshed := cc.refreshTOFUFingerprintAndRetry(context.Background(), ep, 5*time.Second, err); refreshed {
+				err = retryErr
+			}
 
 			// Check if error is VM-specific (shouldn't affect health)
 			vmSpecificErr := err != nil && isVMSpecificError(err.Error())
@@ -226,10 +327,13 @@ func (cc *ClusterClient) initialHealthCheck() {
 				fullCfg.Host = ep
 				fullCfg.Fingerprint = cc.getEndpointFingerprint(ep)
 				fullClient, clientErr := NewClient(fullCfg)
+
+				cc.mu.Lock()
 				if clientErr != nil {
 					cc.nodeHealth[ep] = false
 					cc.lastError[ep] = sanitizeEndpointError(clientErr.Error())
 					cc.lastHealthCheck[ep] = time.Now()
+					cc.mu.Unlock()
 					log.Warn().
 						Str("cluster", cc.name).
 						Str("endpoint", ep).
@@ -240,6 +344,7 @@ func (cc *ClusterClient) initialHealthCheck() {
 					delete(cc.lastError, ep)
 					cc.lastHealthCheck[ep] = time.Now()
 					cc.clients[ep] = fullClient // Store the full client, not test client
+					cc.mu.Unlock()
 					if vmSpecificErr {
 						log.Debug().
 							Str("cluster", cc.name).
@@ -254,16 +359,17 @@ func (cc *ClusterClient) initialHealthCheck() {
 				}
 			} else {
 				// Real connectivity issue
+				cc.mu.Lock()
 				cc.nodeHealth[ep] = false
 				cc.lastError[ep] = sanitizeEndpointError(err.Error())
 				cc.lastHealthCheck[ep] = time.Now()
+				cc.mu.Unlock()
 				log.Info().
 					Str("cluster", cc.name).
 					Str("endpoint", ep).
 					Err(err).
 					Msg("Cluster endpoint failed initial health check")
 			}
-			cc.mu.Unlock()
 		}(endpoint)
 	}
 
@@ -399,7 +505,7 @@ func (cc *ClusterClient) getHealthyClient(ctx context.Context) (*Client, error) 
 		// Create new client with shorter timeout for initial test
 		cfg := cc.config
 		cfg.Host = selectedEndpoint
-		cfg.Fingerprint = cc.getEndpointFingerprint(selectedEndpoint)
+		cfg.Fingerprint = cc.getEndpointFingerprintLocked(selectedEndpoint)
 
 		// First try with a short timeout to quickly detect offline nodes
 		testCfg := cfg
@@ -587,6 +693,11 @@ func (cc *ClusterClient) recoverUnhealthyNodes(ctx context.Context) {
 			_, err = testClient.GetNodes(testCtx)
 			cancel()
 
+			if _, retryErr, refreshed := cc.refreshTOFUFingerprintAndRetry(ctx, ep, 5*time.Second, err); refreshed {
+				err = retryErr
+				cfg.Fingerprint = cc.getEndpointFingerprint(ep)
+			}
+
 			// Check if error is VM-specific (shouldn't prevent recovery)
 			vmSpecificErr := err != nil && isVMSpecificError(err.Error())
 
@@ -595,6 +706,7 @@ func (cc *ClusterClient) recoverUnhealthyNodes(ctx context.Context) {
 
 				// Store the client with original timeout
 				cfg.Timeout = cc.config.Timeout
+				cfg.Fingerprint = cc.getEndpointFingerprint(ep)
 				fullClient, _ := NewClient(cfg)
 
 				cc.mu.Lock()
@@ -695,62 +807,7 @@ func (cc *ClusterClient) executeWithFailover(ctx context.Context, fn func(*Clien
 		}
 		lastErr = err
 
-		// Check error type and content
-		errStr := err.Error()
-
-		// Check if it's a node-specific or transient failure that shouldn't mark endpoint unhealthy
-		// Error 595 in Proxmox means "no ticket" but in cluster context often means target node unreachable
-		// Error 500 with hostname lookup failure means a node reference issue, not endpoint failure
-		// Error 403 for storage operations means permission issue, not node health issue
-		// Error 500 with "No QEMU guest agent configured" means VM-specific issue, not node failure
-		// Error 500 with "QEMU guest agent is not running" means VM-specific issue, not node failure
-		// Error 500 with any guest agent/QMP message means VM-specific issue, not node failure
-		// Error 400 with "ds" parameter error means Proxmox 9.x doesn't support RRD data source filtering
-		// JSON unmarshal errors are data format issues, not connectivity problems
-		// Context deadline/timeout errors on storage endpoints mean storage issues, not node unreachability
-		// PBS (Proxmox Backup Server) errors are upstream storage issues, not node connectivity problems
-		// RRD data timeouts are secondary data fetch failures, not node unreachability
-		if isVMSpecificError(errStr) ||
-			strings.Contains(errStr, "595") ||
-			(strings.Contains(errStr, "500") && strings.Contains(errStr, "hostname lookup")) ||
-			(strings.Contains(errStr, "500") && strings.Contains(errStr, "Name or service not known")) ||
-			(strings.Contains(errStr, "403") && (strings.Contains(errStr, "storage") || strings.Contains(errStr, "datastore"))) ||
-			strings.Contains(errStr, "permission denied") ||
-			(strings.Contains(errStr, "400") && strings.Contains(errStr, "\"ds\"") && strings.Contains(errStr, "property is not defined in schema")) ||
-			strings.Contains(errStr, "json: cannot unmarshal") ||
-			(strings.Contains(errStr, "storage '") && strings.Contains(errStr, "is not available on node")) ||
-			strings.Contains(errStr, "unexpected response format") ||
-			(strings.Contains(errStr, "context deadline exceeded") && strings.Contains(errStr, "/storage")) ||
-			(strings.Contains(errStr, "Client.Timeout exceeded") && strings.Contains(errStr, "/storage")) ||
-			// PBS storage errors - Proxmox can't reach PBS, but node is still reachable
-			(strings.Contains(errStr, "500") && strings.Contains(errStr, "pbs-") && strings.Contains(errStr, "error fetching datastores")) ||
-			(strings.Contains(errStr, "500") && strings.Contains(errStr, "Can't connect to") && strings.Contains(errStr, ":8007")) ||
-			// External Ceph errors - Ceph not managed by Proxmox, but node is still reachable
-			(strings.Contains(errStr, "500") && strings.Contains(errStr, "binary not installed")) ||
-			// RRD data timeouts - secondary metric fetch failures, node is still working
-			(strings.Contains(errStr, "context deadline exceeded") && strings.Contains(errStr, "/rrddata")) ||
-			(strings.Contains(errStr, "context deadline exceeded") && strings.Contains(errStr, "/lxc/") && strings.Contains(errStr, "rrd")) ||
-			(strings.Contains(errStr, "context deadline exceeded") && strings.Contains(errStr, "/qemu/") && strings.Contains(errStr, "rrd")) {
-			// This is likely a node-specific failure, not an endpoint failure
-			// Return the error but don't mark the endpoint as unhealthy
-			log.Debug().
-				Str("cluster", cc.name).
-				Str("endpoint", clientEndpoint).
-				Err(err).
-				Msg("Node-specific or configuration error, not marking endpoint unhealthy")
-			return err
-		}
-
-		if isNotImplementedError(errStr) {
-			// Endpoint not implemented on this node/version; bubble up without marking it unhealthy
-			log.Debug().
-				Str("cluster", cc.name).
-				Str("endpoint", clientEndpoint).
-				Err(err).
-				Msg("Endpoint not implemented, not marking cluster node unhealthy")
-			return err
-		}
-
+		// Rate limit - retry with backoff (must check first)
 		if isRateLimited, statusCode := isTransientRateLimitError(err); isRateLimited {
 			backoff := calculateRateLimitBackoff(i)
 			cc.applyRateLimitCooldown(clientEndpoint, backoff)
@@ -779,21 +836,34 @@ func (cc *ClusterClient) executeWithFailover(ctx context.Context, fn func(*Clien
 			continue
 		}
 
-		// Check if it's an auth error - don't retry on auth errors
+		// Auth errors - return immediately without retry
 		if isAuthError(err) {
 			return err
 		}
 
-		// Mark endpoint as unhealthy and try next
-		errMsg := err.Error()
-		cc.markUnhealthyWithError(clientEndpoint, errMsg)
+		// Only mark endpoint unhealthy for actual connectivity failures
+		// (connection refused, TLS errors, DNS failures, etc.).
+		// Any HTTP response from Proxmox - even a 500 - means the endpoint
+		// is reachable and the request just failed at the application level.
+		if isEndpointConnectivityError(err) {
+			cc.markUnhealthyWithError(clientEndpoint, err.Error())
+			log.Warn().
+				Str("cluster", cc.name).
+				Str("endpoint", clientEndpoint).
+				Err(err).
+				Int("attempt", i+1).
+				Msg("Connectivity error, trying next cluster endpoint")
+			continue
+		}
 
-		log.Warn().
+		// Endpoint is reachable but the specific request failed
+		// (HTTP 4xx/5xx, parsing error, VM-specific error, etc.)
+		log.Debug().
 			Str("cluster", cc.name).
 			Str("endpoint", clientEndpoint).
 			Err(err).
-			Int("attempt", i+1).
-			Msg("Failed on cluster node, trying next")
+			Msg("Request-level error, endpoint reachable - not marking unhealthy")
+		return err
 	}
 
 	if lastErr != nil {

@@ -100,6 +100,30 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 		}
 		r.handleSSOProvider(w, req)
 	}))
+
+	// SAML login flow routes (unauthenticated - these are login/callback endpoints)
+	r.mux.HandleFunc("/api/saml/", func(w http.ResponseWriter, req *http.Request) {
+		parts := strings.Split(strings.TrimPrefix(req.URL.Path, "/"), "/")
+		if len(parts) < 4 {
+			http.NotFound(w, req)
+			return
+		}
+		switch parts[3] {
+		case "login":
+			r.handleSAMLLogin(w, req)
+		case "acs":
+			r.handleSAMLACS(w, req)
+		case "metadata":
+			r.handleSAMLMetadata(w, req)
+		case "logout":
+			r.handleSAMLLogout(w, req)
+		case "slo":
+			r.handleSAMLSLO(w, req)
+		default:
+			http.NotFound(w, req)
+		}
+	})
+
 	r.mux.HandleFunc("/api/security/tokens", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
 		case http.MethodGet:
@@ -133,6 +157,7 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 			// Check for basic auth configuration
 			// Check both environment variables and loaded config
 			oidcCfg := r.ensureOIDCConfig()
+			ssoCfg := r.ensureSSOConfig()
 			hasAuthentication := os.Getenv("PULSE_AUTH_USER") != "" ||
 				os.Getenv("REQUIRE_AUTH") == "true" ||
 				r.config.AuthUser != "" ||
@@ -141,7 +166,7 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 				r.config.HasAPITokens() ||
 				r.config.ProxyAuthSecret != "" ||
 				r.hostedMode ||
-				(r.ssoConfig != nil && r.ssoConfig.HasEnabledProviders())
+				(ssoCfg != nil && ssoCfg.HasEnabledProviders())
 
 			// Check if .env file exists but hasn't been loaded yet (pending restart)
 			configuredButPendingRestart := false
@@ -224,7 +249,7 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 				(r.config.AuthUser != "" && r.config.AuthPass != "") ||
 				(r.config.OIDC != nil && r.config.OIDC.Enabled) ||
 				r.config.ProxyAuthSecret != "" ||
-				(r.ssoConfig != nil && r.ssoConfig.HasEnabledProviders())
+				(ssoCfg != nil && ssoCfg.HasEnabledProviders())
 
 			// Resolve the public URL for agent install commands
 			// If PULSE_PUBLIC_URL is configured, use that; otherwise derive from request
@@ -277,8 +302,8 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 			}
 
 			// Include SSO providers for login page discovery
-			if r.ssoConfig != nil {
-				enabledProviders := r.ssoConfig.GetEnabledProviders()
+			if ssoConfig := r.ensureSSOConfig(); ssoConfig != nil {
+				enabledProviders := ssoConfig.GetEnabledProviders()
 				if len(enabledProviders) > 0 {
 					baseURL := r.config.PublicURL
 					if baseURL == "" {

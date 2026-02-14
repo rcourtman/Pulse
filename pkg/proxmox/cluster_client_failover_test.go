@@ -72,7 +72,9 @@ func TestExecuteWithFailoverMovesToAnotherEndpoint(t *testing.T) {
 		usedEndpoints = append(usedEndpoints, endpoint)
 		attempts++
 		if attempts == 1 {
-			return fmt.Errorf("boom")
+			// Must be a connectivity error to trigger failover to next endpoint.
+			// Application-level errors (HTTP 4xx/5xx) no longer mark endpoints unhealthy.
+			return fmt.Errorf("dial tcp node1:8006: connect: connection refused")
 		}
 		return nil
 	})

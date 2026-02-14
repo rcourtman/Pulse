@@ -399,10 +399,10 @@ func (m *Monitor) fetchVMFSInfo(ctx context.Context, instanceName string, res pr
 func (m *Monitor) summarizeVMFSInfo(instanceName string, res proxmox.ClusterResource, fsInfo []proxmox.VMFileSystem) vmFSInfoSummary {
 	summary := vmFSInfoSummary{}
 
-	// Track seen filesystems to dedupe btrfs/zfs subvolumes that share the same pool.
-	// These filesystems mount multiple subvolumes from one storage pool, each reporting
-	// the same TotalBytes. Without deduplication, we'd sum 11 × 77GB = 851GB instead of 77GB.
-	// Key: "fstype:device:totalBytes" or "fstype::totalBytes" if device unknown.
+	// Track seen filesystems to deduplicate mounts that share the same device:
+	// 1. btrfs/zfs mount multiple subvolumes from a shared pool
+	// 2. Kubernetes bind-mounts volumes at both pod and plugin paths
+	// In both cases, only count the device's capacity once.
 	seenFilesystems := make(map[string]bool)
 
 	// Log all filesystems received for debugging
@@ -440,22 +440,16 @@ func (m *Monitor) summarizeVMFSInfo(instanceName string, res proxmox.ClusterReso
 		// Only count real filesystems with valid data
 		// Some filesystems report 0 bytes (like unformatted or system partitions)
 		if fs.TotalBytes > 0 {
-			// Deduplication for COW filesystems (btrfs, zfs) that mount multiple
-			// subvolumes from the same pool. Each subvolume reports identical TotalBytes
-			// because they share the underlying storage pool.
-			// Key format: "fstype:device:totalBytes" - if multiple mounts have the same
-			// key, they're subvolumes of the same pool and should only be counted once.
+			// Deduplication: the same device can appear multiple times when:
+			// 1. btrfs/zfs mount multiple subvolumes from a shared pool
+			// 2. Kubernetes bind-mounts volumes at both pod and plugin paths
+			// In both cases, only count the device's capacity once.
 			fsTypeLower := strings.ToLower(fs.Type)
-			needsDedupe := fsTypeLower == "btrfs" || fsTypeLower == "zfs" ||
-				strings.HasPrefix(fsTypeLower, "zfs")
-
 			countThisFS := true
-			if needsDedupe {
-				// Use device if available, otherwise fall back to just type+size
-				dedupeKey := fmt.Sprintf("%s:%s:%d", fsTypeLower, fs.Disk, fs.TotalBytes)
+			if fs.Disk != "" {
+				// Same device at multiple mount paths → count once
+				dedupeKey := fmt.Sprintf("%s:%d", fs.Disk, fs.TotalBytes)
 				if seenFilesystems[dedupeKey] {
-					// Already counted this pool - skip adding to totals but still add to
-					// individual disks for display purposes
 					countThisFS = false
 					log.Debug().
 						Str("instance", instanceName).
@@ -464,6 +458,24 @@ func (m *Monitor) summarizeVMFSInfo(instanceName string, res proxmox.ClusterReso
 						Str("mountpoint", fs.Mountpoint).
 						Str("type", fs.Type).
 						Str("device", fs.Disk).
+						Uint64("total", fs.TotalBytes).
+						Str("dedupe_key", dedupeKey).
+						Msg("Skipping duplicate device mount in total calculation")
+				} else {
+					seenFilesystems[dedupeKey] = true
+				}
+			} else if fsTypeLower == "btrfs" || fsTypeLower == "zfs" ||
+				strings.HasPrefix(fsTypeLower, "zfs") {
+				// No device info — fall back to type+size dedup for COW filesystems
+				dedupeKey := fmt.Sprintf("%s::%d", fsTypeLower, fs.TotalBytes)
+				if seenFilesystems[dedupeKey] {
+					countThisFS = false
+					log.Debug().
+						Str("instance", instanceName).
+						Str("vm", res.Name).
+						Int("vmid", res.VMID).
+						Str("mountpoint", fs.Mountpoint).
+						Str("type", fs.Type).
 						Uint64("total", fs.TotalBytes).
 						Str("dedupe_key", dedupeKey).
 						Msg("Skipping duplicate btrfs/zfs subvolume in total calculation")

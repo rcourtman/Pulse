@@ -1383,6 +1383,12 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		settings.DiscoveryIntervalHours = *req.DiscoveryIntervalHours
 	}
 
+	// Auto-default discovery interval to 24h when enabled with no interval set.
+	// Without this, enabling discovery with interval=0 silently stays in manual-only mode.
+	if settings.DiscoveryEnabled && settings.DiscoveryIntervalHours == 0 {
+		settings.DiscoveryIntervalHours = 24
+	}
+
 	// Save settings
 	if err := h.getPersistence(r.Context()).SaveAIConfig(*settings); err != nil {
 		log.Error().Err(err).Msg("Failed to save AI settings")

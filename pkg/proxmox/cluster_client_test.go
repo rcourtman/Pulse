@@ -254,6 +254,91 @@ func TestIsVMSpecificError(t *testing.T) {
 	}
 }
 
+func TestIsEndpointConnectivityError(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      error
+		expected bool
+	}{
+		{"nil error", nil, false},
+		// Application-level errors - endpoint IS reachable
+		{"API error 500", fmt.Errorf("API error 500: {\"data\":null}"), false},
+		{"API error 403", fmt.Errorf("API error 403: forbidden"), false},
+		{"wrapped API error", fmt.Errorf("guest agent get-fsinfo: API error 500: {\"data\":null}"), false},
+		{"json unmarshal", fmt.Errorf("json: cannot unmarshal string into Go value"), false},
+		{"unexpected format", fmt.Errorf("unexpected response format from guest agent"), false},
+		// Connectivity errors - endpoint is NOT reachable
+		{"connection refused", fmt.Errorf("dial tcp 192.168.1.1:8006: connect: connection refused"), true},
+		{"connection reset", fmt.Errorf("read tcp 192.168.1.1:8006: read: connection reset by peer"), true},
+		{"no such host", fmt.Errorf("dial tcp: lookup foo.example.com: no such host"), true},
+		{"network unreachable", fmt.Errorf("dial tcp 10.0.0.1:8006: connect: network is unreachable"), true},
+		{"no route to host", fmt.Errorf("dial tcp 10.0.0.1:8006: connect: no route to host"), true},
+		{"i/o timeout", fmt.Errorf("dial tcp 192.168.1.1:8006: i/o timeout"), true},
+		{"tls handshake timeout", fmt.Errorf("net/http: TLS handshake timeout"), true},
+		{"tls error", fmt.Errorf("tls: handshake failure"), true},
+		{"certificate error", fmt.Errorf("x509: certificate signed by unknown authority"), true},
+		{"fingerprint mismatch", fmt.Errorf("certificate fingerprint mismatch: expected abc, got def"), true},
+		// Edge cases
+		{"context deadline exceeded", fmt.Errorf("context deadline exceeded"), false},
+		{"client timeout", fmt.Errorf("Client.Timeout exceeded while awaiting headers"), false},
+		{"empty error message", fmt.Errorf(""), false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isEndpointConnectivityError(tt.err)
+			if result != tt.expected {
+				t.Errorf("isEndpointConnectivityError(%v) = %v, want %v", tt.err, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestClusterClientIgnoresPlainGuestAgent500ForHealth(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api2/json/nodes":
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, `{"data":[{"node":"test","status":"online","cpu":0,"maxcpu":1,"mem":0,"maxmem":1,"disk":0,"maxdisk":1,"uptime":1,"level":"normal"}]}`)
+		case "/api2/json/nodes/test/qemu/100/agent/get-fsinfo":
+			// Plain 500 with {"data":null} - no guest agent keywords in body.
+			// This is what Proxmox returns when the guest agent is not running.
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprint(w, `{"data":null}`)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	cfg := ClientConfig{
+		Host:       server.URL,
+		TokenName:  "pulse@pve!token",
+		TokenValue: "sometokenvalue",
+		VerifySSL:  false,
+		Timeout:    2 * time.Second,
+	}
+
+	cc := NewClusterClient("test-cluster", cfg, []string{server.URL}, nil)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	_, err := cc.GetVMFSInfo(ctx, "test", 100)
+	if err == nil {
+		t.Fatalf("expected guest agent error, got nil")
+	}
+
+	health := cc.GetHealthStatusWithErrors()
+	endpointHealth, ok := health[server.URL]
+	if !ok {
+		t.Fatalf("expected health entry for endpoint %s", server.URL)
+	}
+	if !endpointHealth.Healthy {
+		t.Fatalf("expected endpoint to remain healthy after plain 500 guest agent error, got unhealthy with error: %s", endpointHealth.LastError)
+	}
+}
+
 func TestSanitizeEndpointError(t *testing.T) {
 	tests := []struct {
 		name     string

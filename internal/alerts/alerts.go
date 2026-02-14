@@ -294,7 +294,7 @@ type DockerThresholdConfig struct {
 	ServiceCritGapPct        int                 `json:"serviceCriticalGapPercent"`          // % of desired tasks missing to trigger critical (default: 50)
 	StateDisableConnectivity bool                `json:"stateDisableConnectivity,omitempty"` // Disable container offline/state alerts globally
 	StatePoweredOffSeverity  AlertLevel          `json:"statePoweredOffSeverity,omitempty"`  // Default severity for container state/offline alerts
-	UpdateAlertDelayHours    int                 `json:"updateAlertDelayHours,omitempty"`    // Hours to wait before alerting on available image updates (default: 24, 0 = disabled)
+	UpdateAlertDelayHours    int                 `json:"updateAlertDelayHours,omitempty"`    // Hours to wait before alerting on available image updates (default: 24, -1 = disabled)
 }
 
 // PMGThresholdConfig represents Proxmox Mail Gateway-specific alert thresholds

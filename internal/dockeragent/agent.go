@@ -100,38 +100,37 @@ func setAgentHeaders(req *http.Request, token string) {
 
 // Agent collects Docker metrics and posts them to Pulse.
 type Agent struct {
-	cfg                 Config
-	docker              dockerClient
-	daemonHost          string
-	daemonID            string // Cached at init; Podman can return unstable IDs across calls
-	runtime             RuntimeKind
-	runtimeVer          string
-	agentVersion        string
-	supportsSwarm       bool
-	httpClients         map[bool]*http.Client
-	logger              zerolog.Logger
-	machineID           string
-	hostName            string
-	cpuCount            int
-	targets             []TargetConfig
-	allowedStates       map[string]struct{}
-	stateFilters        []string
-	hostID              string
-	prevContainerCPU    map[string]cpuSample
-	cpuMu               sync.Mutex // protects prevContainerCPU and preCPUStatsFailures
-	preCPUStatsFailures int
-	reportBuffer        *utils.Queue[agentsdocker.Report]
-	registryChecker     *RegistryChecker // For checking container image updates
-	collectMu           sync.Mutex       // serializes collectOnce calls
-	backgroundMu        sync.Mutex       // protects updateCheckRunning, cleanupTaskRunning
-	updateCheckRunning  bool
-	cleanupTaskRunning  bool
-	asyncOnce           sync.Once
-	asyncCtx            context.Context
-	asyncCancel         context.CancelFunc
-	asyncWG             sync.WaitGroup
-	closeOnce           sync.Once
-	closeErr            error
+	cfg                Config
+	docker             dockerClient
+	daemonHost         string
+	daemonID           string // Cached at init; Podman can return unstable IDs across calls
+	runtime            RuntimeKind
+	runtimeVer         string
+	agentVersion       string
+	supportsSwarm      bool
+	httpClients        map[bool]*http.Client
+	logger             zerolog.Logger
+	machineID          string
+	hostName           string
+	cpuCount           int
+	targets            []TargetConfig
+	allowedStates      map[string]struct{}
+	stateFilters       []string
+	hostID             string
+	prevContainerCPU   map[string]cpuSample
+	cpuMu              sync.Mutex // protects prevContainerCPU
+	reportBuffer       *utils.Queue[agentsdocker.Report]
+	registryChecker    *RegistryChecker // For checking container image updates
+	collectMu          sync.Mutex       // serializes collectOnce calls
+	backgroundMu       sync.Mutex       // protects updateCheckRunning, cleanupTaskRunning
+	updateCheckRunning bool
+	cleanupTaskRunning bool
+	asyncOnce          sync.Once
+	asyncCtx           context.Context
+	asyncCancel        context.CancelFunc
+	asyncWG            sync.WaitGroup
+	closeOnce          sync.Once
+	closeErr           error
 }
 
 // ErrStopRequested indicates the agent should terminate gracefully after acknowledging a stop command.

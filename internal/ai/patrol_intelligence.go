@@ -104,12 +104,16 @@ func (p *PatrolService) gatherGuestIntelligence(ctx context.Context, state model
 
 		intel[vm.ID] = gi
 
-		// Collect for reachability (only running guests with known IPs)
+		// Collect for reachability (only running guests with known IPs).
+		// Probe ALL IPs — the first IP may not be the primary interface (common with
+		// Windows VMs that have IPv6 or multi-adapter setups).
 		if vm.Status == "running" && len(vm.IPAddresses) > 0 {
-			nodeGuests[vm.Node] = append(nodeGuests[vm.Node], guestIPInfo{
-				guestID: vm.ID,
-				ip:      vm.IPAddresses[0],
-			})
+			for _, ip := range vm.IPAddresses {
+				nodeGuests[vm.Node] = append(nodeGuests[vm.Node], guestIPInfo{
+					guestID: vm.ID,
+					ip:      ip,
+				})
+			}
 		}
 	}
 
@@ -138,10 +142,12 @@ func (p *PatrolService) gatherGuestIntelligence(ctx context.Context, state model
 		intel[ct.ID] = gi
 
 		if ct.Status == "running" && len(ct.IPAddresses) > 0 {
-			nodeGuests[ct.Node] = append(nodeGuests[ct.Node], guestIPInfo{
-				guestID: ct.ID,
-				ip:      ct.IPAddresses[0],
-			})
+			for _, ip := range ct.IPAddresses {
+				nodeGuests[ct.Node] = append(nodeGuests[ct.Node], guestIPInfo{
+					guestID: ct.ID,
+					ip:      ip,
+				})
+			}
 		}
 	}
 
@@ -189,6 +195,11 @@ func (p *PatrolService) gatherGuestIntelligence(ctx context.Context, state model
 				if result, ok := results[g.ip]; ok {
 					gi := intel[g.guestID]
 					if gi != nil {
+						// A guest with multiple IPs is reachable if ANY IP responds.
+						// Never overwrite reachable=true with false from a different IP.
+						if gi.Reachable != nil && *gi.Reachable {
+							continue
+						}
 						reachable := result.Reachable
 						gi.Reachable = &reachable
 					}

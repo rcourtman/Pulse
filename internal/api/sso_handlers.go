@@ -152,10 +152,27 @@ func (r *Router) handleSSOProvider(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (r *Router) handleListSSOProviders(w http.ResponseWriter, req *http.Request) {
+// ensureSSOConfig loads the SSO configuration from persistence on first access,
+// falling back to an empty config if nothing is persisted.
+func (r *Router) ensureSSOConfig() *config.SSOConfig {
 	if r.ssoConfig == nil {
+		if r.persistence != nil {
+			cfg, err := r.persistence.LoadSSOConfig()
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to load SSO config from persistence")
+			}
+			if cfg != nil {
+				r.ssoConfig = cfg
+				return r.ssoConfig
+			}
+		}
 		r.ssoConfig = config.NewSSOConfig()
 	}
+	return r.ssoConfig
+}
+
+func (r *Router) handleListSSOProviders(w http.ResponseWriter, req *http.Request) {
+	r.ensureSSOConfig()
 
 	response := SSOProvidersListResponse{
 		Providers:              make([]SSOProviderResponse, 0),
@@ -172,10 +189,7 @@ func (r *Router) handleListSSOProviders(w http.ResponseWriter, req *http.Request
 }
 
 func (r *Router) handleGetSSOProvider(w http.ResponseWriter, req *http.Request, providerID string) {
-	if r.ssoConfig == nil {
-		writeErrorResponse(w, http.StatusNotFound, "not_found", "Provider not found", nil)
-		return
-	}
+	r.ensureSSOConfig()
 
 	provider := r.ssoConfig.GetProvider(providerID)
 	if provider == nil {
@@ -273,9 +287,7 @@ func (r *Router) handleCreateSSOProvider(w http.ResponseWriter, req *http.Reques
 		return
 	}
 
-	if r.ssoConfig == nil {
-		r.ssoConfig = config.NewSSOConfig()
-	}
+	r.ensureSSOConfig()
 
 	// Check for duplicate ID
 	if r.ssoConfig.GetProvider(provider.ID) != nil {
@@ -320,10 +332,7 @@ func (r *Router) handleCreateSSOProvider(w http.ResponseWriter, req *http.Reques
 }
 
 func (r *Router) handleUpdateSSOProvider(w http.ResponseWriter, req *http.Request, providerID string) {
-	if r.ssoConfig == nil {
-		writeErrorResponse(w, http.StatusNotFound, "not_found", "Provider not found", nil)
-		return
-	}
+	r.ensureSSOConfig()
 
 	existing := r.ssoConfig.GetProvider(providerID)
 	if existing == nil {
@@ -394,6 +403,30 @@ func (r *Router) handleUpdateSSOProvider(w http.ResponseWriter, req *http.Reques
 		return
 	}
 
+	// Preserve existing config when not provided in update (e.g., toggle enabled/disabled
+	// sends the flat list response format, which doesn't include nested OIDC/SAML objects)
+	if updated.Type == config.SSOProviderTypeOIDC && updated.OIDC == nil && existing.OIDC != nil {
+		updated.OIDC = existing.OIDC
+	}
+	if updated.Type == config.SSOProviderTypeSAML && updated.SAML == nil && existing.SAML != nil {
+		updated.SAML = existing.SAML
+	}
+	if updated.GroupsClaim == "" && existing.GroupsClaim != "" {
+		updated.GroupsClaim = existing.GroupsClaim
+	}
+	if len(updated.GroupRoleMappings) == 0 && len(existing.GroupRoleMappings) > 0 {
+		updated.GroupRoleMappings = existing.GroupRoleMappings
+	}
+	if len(updated.AllowedGroups) == 0 && len(existing.AllowedGroups) > 0 {
+		updated.AllowedGroups = existing.AllowedGroups
+	}
+	if len(updated.AllowedDomains) == 0 && len(existing.AllowedDomains) > 0 {
+		updated.AllowedDomains = existing.AllowedDomains
+	}
+	if len(updated.AllowedEmails) == 0 && len(existing.AllowedEmails) > 0 {
+		updated.AllowedEmails = existing.AllowedEmails
+	}
+
 	// Preserve secrets if not provided in update
 	if updated.Type == config.SSOProviderTypeOIDC && updated.OIDC != nil && existing.OIDC != nil {
 		if updated.OIDC.ClientSecret == "" && existing.OIDC.ClientSecretSet {
@@ -456,10 +489,7 @@ func (r *Router) handleUpdateSSOProvider(w http.ResponseWriter, req *http.Reques
 }
 
 func (r *Router) handleDeleteSSOProvider(w http.ResponseWriter, req *http.Request, providerID string) {
-	if r.ssoConfig == nil {
-		writeErrorResponse(w, http.StatusNotFound, "not_found", "Provider not found", nil)
-		return
-	}
+	r.ensureSSOConfig()
 
 	existing := r.ssoConfig.GetProvider(providerID)
 	if existing == nil {
