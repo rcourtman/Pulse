@@ -160,6 +160,11 @@ func TestDefaultModelForProvider(t *testing.T) {
 			want:     FormatModelString(AIProviderOpenAI, DefaultAIModelOpenAI),
 		},
 		{
+			name:     "openrouter",
+			provider: AIProviderOpenRouter,
+			want:     FormatModelString(AIProviderOpenRouter, DefaultAIModelOpenRouter),
+		},
+		{
 			name:     "deepseek",
 			provider: AIProviderDeepSeek,
 			want:     FormatModelString(AIProviderDeepSeek, DefaultAIModelDeepSeek),

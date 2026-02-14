@@ -956,14 +956,15 @@ type AISettingsResponse struct {
 	UseProactiveThresholds bool                  `json:"use_proactive_thresholds"` // true if patrol warns before thresholds (false = use exact thresholds)
 	AvailableModels        []providers.ModelInfo `json:"available_models"`         // List of models for current provider
 	// Multi-provider credentials - shows which providers are configured
-	AnthropicConfigured bool     `json:"anthropic_configured"`      // true if Anthropic API key or OAuth is set
-	OpenAIConfigured    bool     `json:"openai_configured"`         // true if OpenAI API key is set
-	DeepSeekConfigured  bool     `json:"deepseek_configured"`       // true if DeepSeek API key is set
-	GeminiConfigured    bool     `json:"gemini_configured"`         // true if Gemini API key is set
-	OllamaConfigured    bool     `json:"ollama_configured"`         // true (always available for attempt)
-	OllamaBaseURL       string   `json:"ollama_base_url"`           // Ollama server URL
-	OpenAIBaseURL       string   `json:"openai_base_url,omitempty"` // Custom OpenAI base URL
-	ConfiguredProviders []string `json:"configured_providers"`      // List of provider names with credentials
+	AnthropicConfigured  bool     `json:"anthropic_configured"`      // true if Anthropic API key or OAuth is set
+	OpenAIConfigured     bool     `json:"openai_configured"`         // true if OpenAI API key is set
+	OpenRouterConfigured bool     `json:"openrouter_configured"`     // true if OpenRouter API key is set
+	DeepSeekConfigured   bool     `json:"deepseek_configured"`       // true if DeepSeek API key is set
+	GeminiConfigured     bool     `json:"gemini_configured"`         // true if Gemini API key is set
+	OllamaConfigured     bool     `json:"ollama_configured"`         // true (always available for attempt)
+	OllamaBaseURL        string   `json:"ollama_base_url"`           // Ollama server URL
+	OpenAIBaseURL        string   `json:"openai_base_url,omitempty"` // Custom OpenAI base URL
+	ConfiguredProviders  []string `json:"configured_providers"`      // List of provider names with credentials
 	// Cost controls
 	CostBudgetUSD30d float64 `json:"cost_budget_usd_30d,omitempty"`
 	// Request timeout (seconds) - for slow hardware running local models
@@ -997,18 +998,20 @@ type AISettingsUpdateRequest struct {
 	AlertTriggeredAnalysis *bool   `json:"alert_triggered_analysis,omitempty"` // true if AI analyzes when alerts fire
 	UseProactiveThresholds *bool   `json:"use_proactive_thresholds,omitempty"` // true if patrol warns before thresholds (default: false = exact thresholds)
 	// Multi-provider credentials
-	AnthropicAPIKey *string `json:"anthropic_api_key,omitempty"` // Set Anthropic API key
-	OpenAIAPIKey    *string `json:"openai_api_key,omitempty"`    // Set OpenAI API key
-	DeepSeekAPIKey  *string `json:"deepseek_api_key,omitempty"`  // Set DeepSeek API key
-	GeminiAPIKey    *string `json:"gemini_api_key,omitempty"`    // Set Gemini API key
-	OllamaBaseURL   *string `json:"ollama_base_url,omitempty"`   // Set Ollama server URL
-	OpenAIBaseURL   *string `json:"openai_base_url,omitempty"`   // Set custom OpenAI base URL
+	AnthropicAPIKey  *string `json:"anthropic_api_key,omitempty"`  // Set Anthropic API key
+	OpenAIAPIKey     *string `json:"openai_api_key,omitempty"`     // Set OpenAI API key
+	OpenRouterAPIKey *string `json:"openrouter_api_key,omitempty"` // Set OpenRouter API key
+	DeepSeekAPIKey   *string `json:"deepseek_api_key,omitempty"`   // Set DeepSeek API key
+	GeminiAPIKey     *string `json:"gemini_api_key,omitempty"`     // Set Gemini API key
+	OllamaBaseURL    *string `json:"ollama_base_url,omitempty"`    // Set Ollama server URL
+	OpenAIBaseURL    *string `json:"openai_base_url,omitempty"`    // Set custom OpenAI base URL
 	// Clear flags for removing credentials
-	ClearAnthropicKey *bool `json:"clear_anthropic_key,omitempty"` // Clear Anthropic API key
-	ClearOpenAIKey    *bool `json:"clear_openai_key,omitempty"`    // Clear OpenAI API key
-	ClearDeepSeekKey  *bool `json:"clear_deepseek_key,omitempty"`  // Clear DeepSeek API key
-	ClearGeminiKey    *bool `json:"clear_gemini_key,omitempty"`    // Clear Gemini API key
-	ClearOllamaURL    *bool `json:"clear_ollama_url,omitempty"`    // Clear Ollama URL
+	ClearAnthropicKey  *bool `json:"clear_anthropic_key,omitempty"`  // Clear Anthropic API key
+	ClearOpenAIKey     *bool `json:"clear_openai_key,omitempty"`     // Clear OpenAI API key
+	ClearOpenRouterKey *bool `json:"clear_openrouter_key,omitempty"` // Clear OpenRouter API key
+	ClearDeepSeekKey   *bool `json:"clear_deepseek_key,omitempty"`   // Clear DeepSeek API key
+	ClearGeminiKey     *bool `json:"clear_gemini_key,omitempty"`     // Clear Gemini API key
+	ClearOllamaURL     *bool `json:"clear_ollama_url,omitempty"`     // Clear Ollama URL
 	// Cost controls
 	CostBudgetUSD30d *float64 `json:"cost_budget_usd_30d,omitempty"`
 	// Request timeout (seconds) - for slow hardware running local models
@@ -1075,6 +1078,7 @@ func (h *AISettingsHandler) HandleGetAISettings(w http.ResponseWriter, r *http.R
 		// Multi-provider configuration
 		AnthropicConfigured:    settings.HasProvider(config.AIProviderAnthropic),
 		OpenAIConfigured:       settings.HasProvider(config.AIProviderOpenAI),
+		OpenRouterConfigured:   settings.HasProvider(config.AIProviderOpenRouter),
 		DeepSeekConfigured:     settings.HasProvider(config.AIProviderDeepSeek),
 		GeminiConfigured:       settings.HasProvider(config.AIProviderGemini),
 		OllamaConfigured:       settings.HasProvider(config.AIProviderOllama),
@@ -1144,10 +1148,10 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 	if req.Provider != nil {
 		provider := strings.ToLower(strings.TrimSpace(*req.Provider))
 		switch provider {
-		case config.AIProviderAnthropic, config.AIProviderOpenAI, config.AIProviderOllama, config.AIProviderDeepSeek, config.AIProviderGemini:
+		case config.AIProviderAnthropic, config.AIProviderOpenAI, config.AIProviderOpenRouter, config.AIProviderOllama, config.AIProviderDeepSeek, config.AIProviderGemini:
 			settings.Provider = provider
 		default:
-			http.Error(w, "Invalid provider. Must be 'anthropic', 'openai', 'ollama', 'deepseek', or 'gemini'", http.StatusBadRequest)
+			http.Error(w, "Invalid provider. Must be 'anthropic', 'openai', 'openrouter', 'ollama', 'deepseek', or 'gemini'", http.StatusBadRequest)
 			return
 		}
 	}
@@ -1224,6 +1228,11 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		settings.OpenAIAPIKey = ""
 	} else if req.OpenAIAPIKey != nil {
 		settings.OpenAIAPIKey = strings.TrimSpace(*req.OpenAIAPIKey)
+	}
+	if req.ClearOpenRouterKey != nil && *req.ClearOpenRouterKey {
+		settings.OpenRouterAPIKey = ""
+	} else if req.OpenRouterAPIKey != nil {
+		settings.OpenRouterAPIKey = strings.TrimSpace(*req.OpenRouterAPIKey)
 	}
 	if req.ClearDeepSeekKey != nil && *req.ClearDeepSeekKey {
 		settings.DeepSeekAPIKey = ""
@@ -1465,6 +1474,7 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		// Multi-provider configuration
 		AnthropicConfigured:    settings.HasProvider(config.AIProviderAnthropic),
 		OpenAIConfigured:       settings.HasProvider(config.AIProviderOpenAI),
+		OpenRouterConfigured:   settings.HasProvider(config.AIProviderOpenRouter),
 		DeepSeekConfigured:     settings.HasProvider(config.AIProviderDeepSeek),
 		GeminiConfigured:       settings.HasProvider(config.AIProviderGemini),
 		OllamaConfigured:       settings.HasProvider(config.AIProviderOllama),

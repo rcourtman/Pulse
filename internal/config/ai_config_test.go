@@ -34,6 +34,14 @@ func TestAIConfig_IsConfigured(t *testing.T) {
 			expected: true,
 		},
 		{
+			name: "enabled with openrouter key",
+			config: AIConfig{
+				Enabled:          true,
+				OpenRouterAPIKey: "sk-or-123",
+			},
+			expected: true,
+		},
+		{
 			name: "enabled with gemini key",
 			config: AIConfig{
 				Enabled:      true,
@@ -170,6 +178,12 @@ func TestAIConfig_HasProvider(t *testing.T) {
 			expected: true,
 		},
 		{
+			name:     "openrouter configured",
+			config:   AIConfig{OpenRouterAPIKey: "key"},
+			provider: AIProviderOpenRouter,
+			expected: true,
+		},
+		{
 			name:     "deepseek configured",
 			config:   AIConfig{DeepSeekAPIKey: "key"},
 			provider: AIProviderDeepSeek,
@@ -246,10 +260,11 @@ func TestAIConfig_GetConfiguredProviders(t *testing.T) {
 
 func TestAIConfig_GetAPIKeyForProvider(t *testing.T) {
 	config := AIConfig{
-		AnthropicAPIKey: "anthropic-key",
-		OpenAIAPIKey:    "openai-key",
-		DeepSeekAPIKey:  "deepseek-key",
-		GeminiAPIKey:    "gemini-key",
+		AnthropicAPIKey:  "anthropic-key",
+		OpenAIAPIKey:     "openai-key",
+		OpenRouterAPIKey: "openrouter-key",
+		DeepSeekAPIKey:   "deepseek-key",
+		GeminiAPIKey:     "gemini-key",
 	}
 
 	tests := []struct {
@@ -258,6 +273,7 @@ func TestAIConfig_GetAPIKeyForProvider(t *testing.T) {
 	}{
 		{AIProviderAnthropic, "anthropic-key"},
 		{AIProviderOpenAI, "openai-key"},
+		{AIProviderOpenRouter, "openrouter-key"},
 		{AIProviderDeepSeek, "deepseek-key"},
 		{AIProviderGemini, "gemini-key"},
 		{AIProviderOllama, ""},
@@ -294,6 +310,13 @@ func TestAIConfig_GetAPIKeyForProvider(t *testing.T) {
 		}
 	})
 
+	t.Run("legacy fallback openrouter", func(t *testing.T) {
+		cfg := AIConfig{APIKey: "legacy", Provider: AIProviderOpenRouter}
+		if key := cfg.GetAPIKeyForProvider(AIProviderOpenRouter); key != "legacy" {
+			t.Errorf("want legacy, got %q", key)
+		}
+	})
+
 	t.Run("legacy fallback gemini", func(t *testing.T) {
 		cfg := AIConfig{APIKey: "legacy", Provider: AIProviderGemini}
 		if key := cfg.GetAPIKeyForProvider(AIProviderGemini); key != "legacy" {
@@ -314,6 +337,7 @@ func TestAIConfig_GetBaseURLForProvider(t *testing.T) {
 	}{
 		{AIProviderOllama, "http://custom:11434"},
 		{AIProviderOpenAI, "https://custom-openai.com"},
+		{AIProviderOpenRouter, DefaultOpenRouterBaseURL},
 		{AIProviderDeepSeek, DefaultDeepSeekBaseURL},
 		{AIProviderGemini, DefaultGeminiBaseURL},
 		{AIProviderAnthropic, ""},
@@ -397,6 +421,7 @@ func TestParseModelString(t *testing.T) {
 		// Explicit prefixes
 		{"anthropic:claude-3-opus", AIProviderAnthropic, "claude-3-opus"},
 		{"openai:gpt-4o", AIProviderOpenAI, "gpt-4o"},
+		{"openrouter:openai/gpt-4o-mini", AIProviderOpenRouter, "openai/gpt-4o-mini"},
 		{"ollama:llama3", AIProviderOllama, "llama3"},
 		{"deepseek:deepseek-chat", AIProviderDeepSeek, "deepseek-chat"},
 		{"gemini:gemini-1.5-pro", AIProviderGemini, "gemini-1.5-pro"},
@@ -406,6 +431,7 @@ func TestParseModelString(t *testing.T) {
 		{"o1-preview", AIProviderOpenAI, "o1-preview"},
 		{"deepseek-chat", AIProviderDeepSeek, "deepseek-chat"},
 		{"gemini-1.5-pro", AIProviderGemini, "gemini-1.5-pro"},
+		{"anthropic/claude-sonnet-4.5", AIProviderOpenRouter, "anthropic/claude-sonnet-4.5"},
 		// Unknown models default to Ollama
 		{"llama3", AIProviderOllama, "llama3"},
 		{"mistral", AIProviderOllama, "mistral"},
@@ -450,6 +476,13 @@ func TestAIConfig_GetBaseURL(t *testing.T) {
 				Provider: AIProviderOllama,
 			},
 			expected: DefaultOllamaBaseURL,
+		},
+		{
+			name: "openrouter default",
+			config: AIConfig{
+				Provider: AIProviderOpenRouter,
+			},
+			expected: DefaultOpenRouterBaseURL,
 		},
 		{
 			name: "deepseek default",
@@ -510,6 +543,13 @@ func TestAIConfig_GetModel(t *testing.T) {
 			expected: DefaultAIModelOpenAI,
 		},
 		{
+			name: "single provider configured - openrouter",
+			config: AIConfig{
+				OpenRouterAPIKey: "key",
+			},
+			expected: DefaultAIModelOpenRouter,
+		},
+		{
 			name: "single provider configured - deepseek",
 			config: AIConfig{
 				DeepSeekAPIKey: "key",
@@ -554,6 +594,13 @@ func TestAIConfig_GetModel(t *testing.T) {
 				Provider: AIProviderAnthropic,
 			},
 			expected: DefaultAIModelAnthropic,
+		},
+		{
+			name: "legacy provider fallback - openrouter",
+			config: AIConfig{
+				Provider: AIProviderOpenRouter,
+			},
+			expected: DefaultAIModelOpenRouter,
 		},
 		{
 			name: "legacy provider fallback - deepseek",

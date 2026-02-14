@@ -676,11 +676,12 @@ func parseProviderFilterWithDefault(raw string) map[string]bool {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return map[string]bool{
-			"openai":    true,
-			"anthropic": true,
-			"deepseek":  true,
-			"gemini":    true,
-			"ollama":    true,
+			"openai":     true,
+			"openrouter": true,
+			"anthropic":  true,
+			"deepseek":   true,
+			"gemini":     true,
+			"ollama":     true,
 		}
 	}
 	return parseProviderFilter(raw)

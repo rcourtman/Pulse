@@ -6,6 +6,7 @@ import type { ModelInfo } from '@/types/ai';
 export const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
   anthropic: 'Anthropic',
   openai: 'OpenAI',
+  openrouter: 'OpenRouter',
   deepseek: 'DeepSeek',
   gemini: 'Google Gemini',
   ollama: 'Ollama',
@@ -16,6 +17,9 @@ export function getProviderFromModelId(modelId: string): string {
   const colonIndex = modelId.indexOf(':');
   if (colonIndex > 0) {
     return modelId.substring(0, colonIndex);
+  }
+  if (/^(openai|anthropic|google|deepseek|meta-llama|mistralai|x-ai|xai|cohere|qwen)\//.test(modelId)) {
+    return 'openrouter';
   }
   // Default detection for models without prefix
   if (modelId.includes('claude') || modelId.includes('opus') || modelId.includes('sonnet') || modelId.includes('haiku')) {

@@ -104,6 +104,60 @@ func TestAISettingsHandler_GetAndUpdateSettings_RoundTrip(t *testing.T) {
 	}
 }
 
+func TestAISettingsHandler_UpdateSettings_OpenRouterKeySetAndClear(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
+
+	// Set OpenRouter key.
+	{
+		body, _ := json.Marshal(AISettingsUpdateRequest{
+			OpenRouterAPIKey: ptr("  sk-or-test-key  "),
+			Model:            ptr("openrouter:openai/gpt-4o-mini"),
+		})
+		req := httptest.NewRequest(http.MethodPut, "/api/settings/ai/update", bytes.NewReader(body))
+		rec := httptest.NewRecorder()
+		handler.HandleUpdateAISettings(rec, req)
+
+		require.Equal(t, http.StatusOK, rec.Code, "body=%s", rec.Body.String())
+
+		var resp AISettingsResponse
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+		assert.True(t, resp.OpenRouterConfigured)
+		assert.Contains(t, resp.ConfiguredProviders, config.AIProviderOpenRouter)
+
+		saved, err := persistence.LoadAIConfig()
+		require.NoError(t, err)
+		require.NotNil(t, saved)
+		assert.Equal(t, "sk-or-test-key", saved.OpenRouterAPIKey)
+	}
+
+	// Clear OpenRouter key.
+	{
+		body, _ := json.Marshal(AISettingsUpdateRequest{
+			ClearOpenRouterKey: ptr(true),
+		})
+		req := httptest.NewRequest(http.MethodPut, "/api/settings/ai/update", bytes.NewReader(body))
+		rec := httptest.NewRecorder()
+		handler.HandleUpdateAISettings(rec, req)
+
+		require.Equal(t, http.StatusOK, rec.Code, "body=%s", rec.Body.String())
+
+		var resp AISettingsResponse
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+		assert.False(t, resp.OpenRouterConfigured)
+		assert.NotContains(t, resp.ConfiguredProviders, config.AIProviderOpenRouter)
+
+		saved, err := persistence.LoadAIConfig()
+		require.NoError(t, err)
+		require.NotNil(t, saved)
+		assert.Empty(t, saved.OpenRouterAPIKey)
+	}
+}
+
 func TestAISettingsHandler_ListModels_Ollama(t *testing.T) {
 	t.Parallel()
 

@@ -11,6 +11,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rs/zerolog/log"
 )
 
@@ -229,6 +230,11 @@ func (s *Service) createProviderForExplore(modelStr string) (providers.Streaming
 			return nil, fmt.Errorf("OpenAI API key not configured")
 		}
 		return providers.NewOpenAIClient(s.cfg.OpenAIAPIKey, modelName, s.cfg.OpenAIBaseURL, exploreHTTPTimeout), nil
+	case "openrouter":
+		if s.cfg.OpenRouterAPIKey == "" {
+			return nil, fmt.Errorf("OpenRouter API key not configured")
+		}
+		return providers.NewOpenAIClient(s.cfg.OpenRouterAPIKey, modelName, s.cfg.GetBaseURLForProvider(config.AIProviderOpenRouter), exploreHTTPTimeout), nil
 	case "deepseek":
 		if s.cfg.DeepSeekAPIKey == "" {
 			return nil, fmt.Errorf("DeepSeek API key not configured")

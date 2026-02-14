@@ -76,6 +76,8 @@ func (h *DiscoveryHandlers) getAIProviderInfo() *servicediscovery.AIProviderInfo
 		label = "Cloud (Anthropic)"
 	case config.AIProviderOpenAI:
 		label = "Cloud (OpenAI)"
+	case config.AIProviderOpenRouter:
+		label = "Cloud (OpenRouter)"
 	case config.AIProviderDeepSeek:
 		label = "Cloud (DeepSeek)"
 	case config.AIProviderGemini:

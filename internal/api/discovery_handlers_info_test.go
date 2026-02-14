@@ -89,6 +89,21 @@ func TestDiscoveryHandlersGetAIProviderInfo(t *testing.T) {
 				Label:    "Cloud (OpenAI)",
 			},
 		},
+		{
+			name: "openrouter discovery model",
+			provider: staticAIConfigProvider{
+				cfg: &config.AIConfig{
+					Enabled:        true,
+					DiscoveryModel: "openrouter:openai/gpt-4o-mini",
+				},
+			},
+			want: &servicediscovery.AIProviderInfo{
+				Provider: config.AIProviderOpenRouter,
+				Model:    "openai/gpt-4o-mini",
+				IsLocal:  false,
+				Label:    "Cloud (OpenRouter)",
+			},
+		},
 	}
 
 	for _, tt := range tests {

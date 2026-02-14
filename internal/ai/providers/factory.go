@@ -52,6 +52,12 @@ func NewFromConfig(cfg *config.AIConfig) (Provider, error) {
 		}
 		return NewOpenAIClient(cfg.APIKey, cfg.GetModel(), cfg.GetBaseURL(), timeout), nil
 
+	case config.AIProviderOpenRouter:
+		if cfg.APIKey == "" {
+			return nil, fmt.Errorf("OpenRouter API key is required")
+		}
+		return NewOpenAIClient(cfg.APIKey, cfg.GetModel(), cfg.GetBaseURL(), timeout), nil
+
 	case config.AIProviderOllama:
 		return NewOllamaClient(cfg.GetModel(), cfg.GetBaseURL(), timeout), nil
 
@@ -107,6 +113,14 @@ func NewForProvider(cfg *config.AIConfig, provider, model string) (Provider, err
 			return nil, fmt.Errorf("OpenAI API key not configured")
 		}
 		baseURL := cfg.GetBaseURLForProvider(config.AIProviderOpenAI)
+		return NewOpenAIClient(apiKey, model, baseURL, timeout), nil
+
+	case config.AIProviderOpenRouter:
+		apiKey := cfg.GetAPIKeyForProvider(config.AIProviderOpenRouter)
+		if apiKey == "" {
+			return nil, fmt.Errorf("OpenRouter API key not configured")
+		}
+		baseURL := cfg.GetBaseURLForProvider(config.AIProviderOpenRouter)
 		return NewOpenAIClient(apiKey, model, baseURL, timeout), nil
 
 	case config.AIProviderDeepSeek:

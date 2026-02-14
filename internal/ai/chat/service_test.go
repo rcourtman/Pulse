@@ -152,6 +152,14 @@ func TestService_CreateProvider(t *testing.T) {
 			expectErr: false,
 		},
 		{
+			name: "OpenRouter",
+			config: &config.AIConfig{
+				OpenRouterAPIKey: "sk-or-test",
+				ChatModel:        "openrouter:openai/gpt-4o-mini",
+			},
+			expectErr: false,
+		},
+		{
 			name: "Anthropic",
 			config: &config.AIConfig{
 				AnthropicAPIKey: "chk-test",

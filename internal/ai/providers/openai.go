@@ -18,6 +18,8 @@ const (
 	openaiAPIURL         = "https://api.openai.com/v1/chat/completions"
 	openaiMaxRetries     = 3
 	openaiInitialBackoff = 2 * time.Second
+	openrouterRefererURL = "https://pulse.app"
+	openrouterAppTitle   = "Pulse"
 )
 
 // OpenAIClient implements the Provider interface for OpenAI's API
@@ -55,6 +57,8 @@ func NewOpenAIClient(apiKey, model, baseURL string, timeout time.Duration) *Open
 	// Strip provider prefix if present - the model should be just the model name
 	if strings.HasPrefix(model, "openai:") {
 		model = strings.TrimPrefix(model, "openai:")
+	} else if strings.HasPrefix(model, "openrouter:") {
+		model = strings.TrimPrefix(model, "openrouter:")
 	} else if strings.HasPrefix(model, "deepseek:") {
 		model = strings.TrimPrefix(model, "deepseek:")
 	}
@@ -162,9 +166,21 @@ func (c *OpenAIClient) isDeepSeek() bool {
 	return strings.Contains(c.baseURL, "deepseek.com")
 }
 
+func (c *OpenAIClient) isOpenRouter() bool {
+	return strings.Contains(c.baseURL, "openrouter.ai")
+}
+
 // isDeepSeekReasoner returns true if using DeepSeek's reasoning model
 func (c *OpenAIClient) isDeepSeekReasoner() bool {
 	return c.isDeepSeek() && strings.Contains(c.model, "reasoner")
+}
+
+func (c *OpenAIClient) applyProviderHeaders(req *http.Request) {
+	if !c.isOpenRouter() {
+		return
+	}
+	req.Header.Set("HTTP-Referer", openrouterRefererURL)
+	req.Header.Set("X-Title", openrouterAppTitle)
 }
 
 // requiresMaxCompletionTokens returns true for models that need max_completion_tokens instead of max_tokens
@@ -264,6 +280,8 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 	// Strip provider prefix if present - callers may pass the full "provider:model" string
 	if strings.HasPrefix(model, "openai:") {
 		model = strings.TrimPrefix(model, "openai:")
+	} else if strings.HasPrefix(model, "openrouter:") {
+		model = strings.TrimPrefix(model, "openrouter:")
 	} else if strings.HasPrefix(model, "deepseek:") {
 		model = strings.TrimPrefix(model, "deepseek:")
 	}
@@ -362,6 +380,7 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 
 		httpReq.Header.Set("Content-Type", "application/json")
 		httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
+		c.applyProviderHeaders(httpReq)
 
 		resp, err := c.client.Do(httpReq)
 		if err != nil {
@@ -618,6 +637,8 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback
 	model := req.Model
 	if strings.HasPrefix(model, "openai:") {
 		model = strings.TrimPrefix(model, "openai:")
+	} else if strings.HasPrefix(model, "openrouter:") {
+		model = strings.TrimPrefix(model, "openrouter:")
 	} else if strings.HasPrefix(model, "deepseek:") {
 		model = strings.TrimPrefix(model, "deepseek:")
 	}
@@ -680,6 +701,7 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
 	httpReq.Header.Set("Accept", "text/event-stream")
+	c.applyProviderHeaders(httpReq)
 
 	resp, err := c.client.Do(httpReq)
 	if err != nil {
@@ -850,6 +872,7 @@ func (c *OpenAIClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	}
 
 	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	c.applyProviderHeaders(req)
 
 	resp, err := c.client.Do(req)
 	if err != nil {
@@ -865,10 +888,12 @@ func (c *OpenAIClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 
 	var result struct {
 		Data []struct {
-			ID      string `json:"id"`
-			Object  string `json:"object"`
-			Created int64  `json:"created"`
-			OwnedBy string `json:"owned_by"`
+			ID          string `json:"id"`
+			Name        string `json:"name"`
+			Description string `json:"description"`
+			Object      string `json:"object"`
+			Created     int64  `json:"created"`
+			OwnedBy     string `json:"owned_by"`
 		} `json:"data"`
 	}
 
@@ -879,6 +904,25 @@ func (c *OpenAIClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	models := make([]ModelInfo, 0, len(result.Data))
 	cache := GetNotableCache()
 	for _, m := range result.Data {
+		if strings.TrimSpace(m.ID) == "" {
+			continue
+		}
+
+		if c.isOpenRouter() {
+			modelName := strings.TrimSpace(m.Name)
+			if modelName == "" {
+				modelName = m.ID
+			}
+			models = append(models, ModelInfo{
+				ID:          m.ID,
+				Name:        modelName,
+				Description: strings.TrimSpace(m.Description),
+				CreatedAt:   m.Created,
+				Notable:     cache.IsNotable(notableProviderForOpenRouterModel(m.ID), m.ID, m.Created),
+			})
+			continue
+		}
+
 		// Filter to only chat-capable models
 		if strings.Contains(m.ID, "gpt") || strings.Contains(m.ID, "o1") ||
 			strings.Contains(m.ID, "o3") || strings.Contains(m.ID, "o4") ||
@@ -898,4 +942,17 @@ func (c *OpenAIClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	}
 
 	return models, nil
+}
+
+func notableProviderForOpenRouterModel(modelID string) string {
+	parts := strings.SplitN(strings.TrimSpace(modelID), "/", 2)
+	if len(parts) != 2 {
+		return "openai"
+	}
+
+	provider := strings.ToLower(strings.TrimSpace(parts[0]))
+	if provider == "" {
+		return "openai"
+	}
+	return provider
 }

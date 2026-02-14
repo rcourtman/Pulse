@@ -131,6 +131,39 @@ func TestNewFromConfig_OpenAINoAPIKey(t *testing.T) {
 	}
 }
 
+func TestNewFromConfig_OpenRouterWithAPIKey(t *testing.T) {
+	cfg := &config.AIConfig{
+		Enabled:  true,
+		Provider: config.AIProviderOpenRouter,
+		APIKey:   "test-api-key",
+		Model:    "openai/gpt-4o-mini",
+	}
+	provider, err := NewFromConfig(cfg)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if provider == nil {
+		t.Fatal("Provider should not be nil")
+	}
+	// OpenRouter uses OpenAI-compatible client
+	if provider.Name() != "openai" {
+		t.Errorf("Expected provider name 'openai' (OpenRouter uses OpenAI client), got '%s'", provider.Name())
+	}
+}
+
+func TestNewFromConfig_OpenRouterNoAPIKey(t *testing.T) {
+	cfg := &config.AIConfig{
+		Enabled:  true,
+		Provider: config.AIProviderOpenRouter,
+		APIKey:   "",
+		Model:    "openai/gpt-4o-mini",
+	}
+	_, err := NewFromConfig(cfg)
+	if err == nil {
+		t.Error("Expected error for OpenRouter without API key")
+	}
+}
+
 func TestNewFromConfig_Ollama(t *testing.T) {
 	cfg := &config.AIConfig{
 		Enabled:  true,
@@ -297,6 +330,31 @@ func TestNewForProvider_OpenAINoAPIKey(t *testing.T) {
 	_, err := NewForProvider(cfg, config.AIProviderOpenAI, "gpt-4o")
 	if err == nil {
 		t.Error("Expected error for OpenAI without API key")
+	}
+}
+
+func TestNewForProvider_OpenRouter(t *testing.T) {
+	cfg := &config.AIConfig{
+		Enabled:          true,
+		OpenRouterAPIKey: "test-key",
+	}
+	provider, err := NewForProvider(cfg, config.AIProviderOpenRouter, "openai/gpt-4o-mini")
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	// OpenRouter uses OpenAI-compatible client
+	if provider.Name() != "openai" {
+		t.Errorf("Expected provider name 'openai', got '%s'", provider.Name())
+	}
+}
+
+func TestNewForProvider_OpenRouterNoAPIKey(t *testing.T) {
+	cfg := &config.AIConfig{
+		Enabled: true,
+	}
+	_, err := NewForProvider(cfg, config.AIProviderOpenRouter, "openai/gpt-4o-mini")
+	if err == nil {
+		t.Error("Expected error for OpenRouter without API key")
 	}
 }
 

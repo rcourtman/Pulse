@@ -1207,6 +1207,8 @@ func (s *Service) LoadConfig() error {
 					fallbackModel = config.AIProviderAnthropic + ":" + config.DefaultAIModelAnthropic
 				case config.AIProviderOpenAI:
 					fallbackModel = config.AIProviderOpenAI + ":" + config.DefaultAIModelOpenAI
+				case config.AIProviderOpenRouter:
+					fallbackModel = config.AIProviderOpenRouter + ":" + config.DefaultAIModelOpenRouter
 				case config.AIProviderDeepSeek:
 					fallbackModel = config.AIProviderDeepSeek + ":" + config.DefaultAIModelDeepSeek
 				case config.AIProviderGemini:
@@ -3047,8 +3049,12 @@ func (s *Service) AnalyzeForDiscovery(ctx context.Context, prompt string) (strin
 
 	// Track cost if cost store is available
 	if costStore != nil {
+		providerName, _ := config.ParseModelString(model)
+		if providerName == "" {
+			providerName = provider.Name()
+		}
 		costStore.Record(cost.UsageEvent{
-			Provider:     provider.Name(),
+			Provider:     providerName,
 			RequestModel: model,
 			UseCase:      "discovery",
 			InputTokens:  resp.InputTokens,
@@ -3830,7 +3836,7 @@ func (s *Service) ListModelsWithCache(ctx context.Context) ([]providers.ModelInf
 	}
 	s.modelsCache.mu.Unlock()
 
-	providersList := []string{config.AIProviderAnthropic, config.AIProviderOpenAI, config.AIProviderDeepSeek, config.AIProviderGemini, config.AIProviderOllama}
+	providersList := []string{config.AIProviderAnthropic, config.AIProviderOpenAI, config.AIProviderOpenRouter, config.AIProviderDeepSeek, config.AIProviderGemini, config.AIProviderOllama}
 
 	allCached := true
 
@@ -3926,6 +3932,8 @@ func providerDisplayName(provider string) string {
 		return "Anthropic"
 	case config.AIProviderOpenAI:
 		return "OpenAI"
+	case config.AIProviderOpenRouter:
+		return "OpenRouter"
 	case config.AIProviderDeepSeek:
 		return "DeepSeek"
 	case config.AIProviderGemini:

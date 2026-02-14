@@ -294,6 +294,7 @@ Configure in the UI: **Settings → System → AI Assistant**
 
 - **Anthropic** (API key or OAuth)
 - **OpenAI**
+- **OpenRouter**
 - **DeepSeek**
 - **Google Gemini**
 - **Ollama** (self-hosted, with tool/function calling support)

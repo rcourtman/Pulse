@@ -1,6 +1,6 @@
 // AI feature types
 
-export type AIProvider = 'anthropic' | 'openai' | 'ollama' | 'deepseek' | 'gemini';
+export type AIProvider = 'anthropic' | 'openai' | 'openrouter' | 'ollama' | 'deepseek' | 'gemini';
 export type AuthMethod = 'api_key' | 'oauth';
 
 export interface ModelInfo {
@@ -35,6 +35,7 @@ export interface AISettings {
   // Multi-provider configuration
   anthropic_configured: boolean; // true if Anthropic API key or OAuth is set
   openai_configured: boolean; // true if OpenAI API key is set
+  openrouter_configured: boolean; // true if OpenRouter API key is set
   deepseek_configured: boolean; // true if DeepSeek API key is set
   gemini_configured: boolean; // true if Gemini API key is set
   ollama_configured: boolean; // true (always available for attempt)
@@ -78,6 +79,7 @@ export interface AISettingsUpdateRequest {
   // Multi-provider credentials
   anthropic_api_key?: string; // Set Anthropic API key
   openai_api_key?: string; // Set OpenAI API key
+  openrouter_api_key?: string; // Set OpenRouter API key
   deepseek_api_key?: string; // Set DeepSeek API key
   gemini_api_key?: string; // Set Gemini API key
   ollama_base_url?: string; // Set Ollama server URL
@@ -85,6 +87,7 @@ export interface AISettingsUpdateRequest {
   // Clear flags for removing credentials
   clear_anthropic_key?: boolean; // Clear Anthropic API key
   clear_openai_key?: boolean; // Clear OpenAI API key
+  clear_openrouter_key?: boolean; // Clear OpenRouter API key
   clear_deepseek_key?: boolean; // Clear DeepSeek API key
   clear_gemini_key?: boolean; // Clear Gemini API key
   clear_ollama_url?: boolean; // Clear Ollama URL
@@ -115,6 +118,7 @@ export interface AITestResult {
 export const DEFAULT_MODELS: Record<AIProvider, string> = {
   anthropic: 'claude-haiku-4-5',
   openai: 'gpt-4o',
+  openrouter: 'openai/gpt-4o-mini',
   ollama: 'llama3',
   deepseek: 'deepseek-chat',
   gemini: 'gemini-2.5-flash',
@@ -124,6 +128,7 @@ export const DEFAULT_MODELS: Record<AIProvider, string> = {
 export const PROVIDER_NAMES: Record<AIProvider, string> = {
   anthropic: 'Anthropic',
   openai: 'OpenAI',
+  openrouter: 'OpenRouter',
   ollama: 'Ollama',
   deepseek: 'DeepSeek',
   gemini: 'Google Gemini',
@@ -133,6 +138,7 @@ export const PROVIDER_NAMES: Record<AIProvider, string> = {
 export const PROVIDER_DESCRIPTIONS: Record<AIProvider, string> = {
   anthropic: 'Claude models from Anthropic',
   openai: 'GPT models from OpenAI',
+  openrouter: 'Unified gateway for OpenAI-compatible models',
   ollama: 'Local models via Ollama',
   deepseek: 'DeepSeek reasoning models',
   gemini: 'Gemini models from Google',

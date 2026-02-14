@@ -8,12 +8,14 @@ describe('aiChatUtils', () => {
   describe('getProviderFromModelId', () => {
     it('uses explicit provider prefix when present', () => {
       expect(utils.getProviderFromModelId('openai:gpt-4o')).toBe('openai');
+      expect(utils.getProviderFromModelId('openrouter:openai/gpt-4o-mini')).toBe('openrouter');
       expect(utils.getProviderFromModelId('anthropic:claude-3-5-sonnet')).toBe('anthropic');
     });
 
     it('detects provider from known model naming', () => {
       expect(utils.getProviderFromModelId('claude-3-5-sonnet')).toBe('anthropic');
       expect(utils.getProviderFromModelId('o3-mini')).toBe('openai');
+      expect(utils.getProviderFromModelId('anthropic/claude-sonnet-4.5')).toBe('openrouter');
       expect(utils.getProviderFromModelId('deepseek-r1')).toBe('deepseek');
       expect(utils.getProviderFromModelId('llama3.1')).toBe('ollama');
     });

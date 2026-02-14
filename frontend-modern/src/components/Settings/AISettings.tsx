@@ -20,12 +20,13 @@ import type { AISettings as AISettingsType, AIProvider, AuthMethod } from '@/typ
 const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
   anthropic: 'Anthropic',
   openai: 'OpenAI',
+  openrouter: 'OpenRouter',
   deepseek: 'DeepSeek',
   gemini: 'Google Gemini',
   ollama: 'Ollama',
 };
 
-const AI_PROVIDERS: AIProvider[] = ['anthropic', 'openai', 'deepseek', 'gemini', 'ollama'];
+const AI_PROVIDERS: AIProvider[] = ['anthropic', 'openai', 'openrouter', 'deepseek', 'gemini', 'ollama'];
 
 type ProviderHealthStatus = 'not_configured' | 'checking' | 'ok' | 'error';
 
@@ -37,6 +38,7 @@ type ProviderHealthState = {
 const createInitialProviderHealth = (): Record<AIProvider, ProviderHealthState> => ({
   anthropic: { status: 'not_configured', message: '' },
   openai: { status: 'not_configured', message: '' },
+  openrouter: { status: 'not_configured', message: '' },
   deepseek: { status: 'not_configured', message: '' },
   gemini: { status: 'not_configured', message: '' },
   ollama: { status: 'not_configured', message: '' },
@@ -60,6 +62,9 @@ function getProviderFromModelId(modelId: string): string {
   if (colonIndex > 0) {
     return modelId.substring(0, colonIndex);
   }
+  if (/^(openai|anthropic|google|deepseek|meta-llama|mistralai|x-ai|xai|cohere|qwen)\//.test(modelId)) {
+    return 'openrouter';
+  }
   // Default detection for models without prefix
   if (modelId.includes('claude') || modelId.includes('opus') || modelId.includes('sonnet') || modelId.includes('haiku')) {
     return 'anthropic';
@@ -82,6 +87,7 @@ function isProviderConfigured(provider: string, settings: AISettingsType | null)
   switch (provider) {
     case 'anthropic': return settings.anthropic_configured;
     case 'openai': return settings.openai_configured;
+    case 'openrouter': return settings.openrouter_configured;
     case 'deepseek': return settings.deepseek_configured;
     case 'gemini': return settings.gemini_configured;
     case 'ollama': return settings.ollama_configured;
@@ -157,7 +163,7 @@ export const AISettings: Component = () => {
 
   // First-time setup modal state
   const [showSetupModal, setShowSetupModal] = createSignal(false);
-  const [setupProvider, setSetupProvider] = createSignal<'anthropic' | 'openai' | 'deepseek' | 'gemini' | 'ollama'>('anthropic');
+  const [setupProvider, setSetupProvider] = createSignal<'anthropic' | 'openai' | 'openrouter' | 'deepseek' | 'gemini' | 'ollama'>('anthropic');
   const [setupApiKey, setSetupApiKey] = createSignal('');
   const [setupOllamaUrl, setSetupOllamaUrl] = createSignal('http://localhost:11434');
   const [setupSaving, setSetupSaving] = createSignal(false);
@@ -186,6 +192,7 @@ export const AISettings: Component = () => {
     // Multi-provider credentials
     anthropicApiKey: '',
     openaiApiKey: '',
+    openrouterApiKey: '',
     deepseekApiKey: '',
     geminiApiKey: '',
     ollamaBaseUrl: 'http://localhost:11434',
@@ -221,6 +228,7 @@ export const AISettings: Component = () => {
         // Multi-provider - empty by default
         anthropicApiKey: '',
         openaiApiKey: '',
+        openrouterApiKey: '',
         deepseekApiKey: '',
         geminiApiKey: '',
         ollamaBaseUrl: 'http://localhost:11434',
@@ -252,6 +260,7 @@ export const AISettings: Component = () => {
       // Multi-provider - never load actual keys from server (security), just track if configured
       anthropicApiKey: '', // Always empty - we only show if configured
       openaiApiKey: '',
+      openrouterApiKey: '',
       deepseekApiKey: '',
       geminiApiKey: '',
       ollamaBaseUrl: data.ollama_base_url || 'http://localhost:11434',
@@ -271,6 +280,7 @@ export const AISettings: Component = () => {
     const configured = new Set<AIProvider>();
     if (data.anthropic_configured) configured.add('anthropic');
     if (data.openai_configured) configured.add('openai');
+    if (data.openrouter_configured) configured.add('openrouter');
     if (data.deepseek_configured) configured.add('deepseek');
     if (data.gemini_configured) configured.add('gemini');
     if (data.ollama_configured) configured.add('ollama');
@@ -592,6 +602,7 @@ export const AISettings: Component = () => {
         const isAddingCredential =
           (modelProvider === 'anthropic' && form.anthropicApiKey.trim()) ||
           (modelProvider === 'openai' && form.openaiApiKey.trim()) ||
+          (modelProvider === 'openrouter' && form.openrouterApiKey.trim()) ||
           (modelProvider === 'deepseek' && form.deepseekApiKey.trim()) ||
           (modelProvider === 'gemini' && form.geminiApiKey.trim()) ||
           (modelProvider === 'ollama' && form.ollamaBaseUrl.trim());
@@ -668,6 +679,9 @@ export const AISettings: Component = () => {
       }
       if (form.openaiApiKey.trim()) {
         payload.openai_api_key = form.openaiApiKey.trim();
+      }
+      if (form.openrouterApiKey.trim()) {
+        payload.openrouter_api_key = form.openrouterApiKey.trim();
       }
       if (form.deepseekApiKey.trim()) {
         payload.deepseek_api_key = form.deepseekApiKey.trim();
@@ -782,7 +796,7 @@ export const AISettings: Component = () => {
   const handleClearProvider = async (provider: string) => {
     // Check if this is the last configured provider
     const s = settings();
-    const configuredCount = [s?.anthropic_configured, s?.openai_configured, s?.deepseek_configured, s?.gemini_configured, s?.ollama_configured].filter(Boolean).length;
+    const configuredCount = [s?.anthropic_configured, s?.openai_configured, s?.openrouter_configured, s?.deepseek_configured, s?.gemini_configured, s?.ollama_configured].filter(Boolean).length;
     const isLastProvider = configuredCount === 1 && isProviderConfigured(provider, s);
 
     // Check if current model uses this provider
@@ -807,6 +821,7 @@ export const AISettings: Component = () => {
       const clearPayload: Record<string, boolean> = {};
       if (provider === 'anthropic') clearPayload.clear_anthropic_key = true;
       if (provider === 'openai') clearPayload.clear_openai_key = true;
+      if (provider === 'openrouter') clearPayload.clear_openrouter_key = true;
       if (provider === 'deepseek') clearPayload.clear_deepseek_key = true;
       if (provider === 'gemini') clearPayload.clear_gemini_key = true;
       if (provider === 'ollama') clearPayload.clear_ollama_url = true;
@@ -821,6 +836,7 @@ export const AISettings: Component = () => {
       // Clear the local form field
       if (provider === 'anthropic') setForm('anthropicApiKey', '');
       if (provider === 'openai') setForm('openaiApiKey', '');
+      if (provider === 'openrouter') setForm('openrouterApiKey', '');
       if (provider === 'deepseek') setForm('deepseekApiKey', '');
       if (provider === 'gemini') setForm('geminiApiKey', '');
       if (provider === 'ollama') setForm('ollamaBaseUrl', '');
@@ -865,7 +881,7 @@ export const AISettings: Component = () => {
         action={
           (() => {
             const s = settings();
-            const hasConfiguredProvider = s && (s.anthropic_configured || s.openai_configured || s.deepseek_configured || s.ollama_configured);
+            const hasConfiguredProvider = s && (s.anthropic_configured || s.openai_configured || s.openrouter_configured || s.deepseek_configured || s.gemini_configured || s.ollama_configured);
 
             return (
               <Toggle
@@ -1286,7 +1302,7 @@ export const AISettings: Component = () => {
                             type="url"
                             value={form.openaiBaseUrl}
                             onInput={(e) => setForm('openaiBaseUrl', e.currentTarget.value)}
-                            placeholder="https://openrouter.ai/api/v1 (optional)"
+                            placeholder="https://api.together.xyz/v1 (optional)"
                             class={controlClass()}
                             disabled={saving()}
                           />
@@ -1318,6 +1334,82 @@ export const AISettings: Component = () => {
                           </Show>
                         </div>
                         <Show when={providerTestResult()?.provider === 'openai'}>
+                          <p class={`text-xs ${providerTestResult()?.success ? 'text-green-600' : 'text-red-600'}`}>
+                            {providerTestResult()?.message}
+                          </p>
+                        </Show>
+                      </div>
+                    </Show>
+                  </div>
+
+                  {/* OpenRouter */}
+                  <div class={`border rounded-lg overflow-hidden ${settings()?.openrouter_configured ? 'border-green-300 dark:border-green-700' : 'border-gray-200 dark:border-gray-700'}`}>
+                    <button
+                      type="button"
+                      class="w-full px-3 py-2 flex items-center justify-between bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                      onClick={() => {
+                        const current = expandedProviders();
+                        const next = new Set(current);
+                        if (next.has('openrouter')) next.delete('openrouter');
+                        else next.add('openrouter');
+                        setExpandedProviders(next);
+                      }}
+                    >
+                      <div class="flex items-center gap-2">
+                        <span class="font-medium text-sm">OpenRouter</span>
+                        <Show when={settings()?.openrouter_configured}>
+                          <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">Configured</span>
+                        </Show>
+                        <Show when={settings()?.openrouter_configured}>
+                          <span class={`px-1.5 py-0.5 text-[10px] font-semibold rounded ${getProviderHealthBadgeClass('openrouter')}`}>
+                            {getProviderHealthLabel('openrouter')}
+                          </span>
+                        </Show>
+                      </div>
+                      <svg class={`w-4 h-4 transition-transform ${expandedProviders().has('openrouter') ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                    <Show when={expandedProviders().has('openrouter')}>
+                      <div class="px-3 py-3 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700 space-y-2">
+                        <input
+                          type="password"
+                          value={form.openrouterApiKey}
+                          onInput={(e) => setForm('openrouterApiKey', e.currentTarget.value)}
+                          placeholder={settings()?.openrouter_configured ? '••••••••••• (configured)' : 'sk-or-...'}
+                          class={controlClass()}
+                          disabled={saving()}
+                        />
+                        <p class="text-xs text-gray-500">
+                          Uses <code>https://openrouter.ai/api/v1</code> automatically.
+                        </p>
+                        <div class="flex items-center justify-between">
+                          <p class="text-xs text-gray-500">
+                            <a href="https://openrouter.ai/keys" target="_blank" rel="noopener" class="text-blue-600 dark:text-blue-400 hover:underline">Get API key →</a>
+                          </p>
+                          <Show when={settings()?.openrouter_configured}>
+                            <div class="flex gap-1">
+                              <button
+                                type="button"
+                                onClick={() => handleTestProvider('openrouter')}
+                                disabled={testingProvider() === 'openrouter' || saving()}
+                                class="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50"
+                              >
+                                {testingProvider() === 'openrouter' ? 'Testing...' : 'Test'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleClearProvider('openrouter')}
+                                disabled={saving()}
+                                class="px-2 py-1 text-xs bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded hover:bg-red-200 dark:hover:bg-red-800 disabled:opacity-50"
+                                title="Clear API key"
+                              >
+                                Clear
+                              </button>
+                            </div>
+                          </Show>
+                        </div>
+                        <Show when={providerTestResult()?.provider === 'openrouter'}>
                           <p class={`text-xs ${providerTestResult()?.success ? 'text-green-600' : 'text-red-600'}`}>
                             {providerTestResult()?.message}
                           </p>
@@ -2032,6 +2124,17 @@ export const AISettings: Component = () => {
                 </button>
                 <button
                   type="button"
+                  onClick={() => setSetupProvider('openrouter')}
+                  class={`p-3 rounded-lg border-2 transition-all text-center ${setupProvider() === 'openrouter'
+                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
+                    : 'border-gray-200 dark:border-gray-700 hover:border-blue-300'
+                    }`}
+                >
+                  <div class="text-sm font-medium">OpenRouter</div>
+                  <div class="text-xs text-gray-500 mt-0.5">Gateway</div>
+                </button>
+                <button
+                  type="button"
                   onClick={() => setSetupProvider('deepseek')}
                   class={`p-3 rounded-lg border-2 transition-all text-center ${setupProvider() === 'deepseek'
                     ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
@@ -2069,13 +2172,21 @@ export const AISettings: Component = () => {
               <Show when={setupProvider() === 'ollama'} fallback={
                 <div>
                   <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                    {setupProvider() === 'anthropic' ? 'Anthropic' : setupProvider() === 'openai' ? 'OpenAI' : setupProvider() === 'gemini' ? 'Google Gemini' : 'DeepSeek'} API Key
+                    {setupProvider() === 'anthropic'
+                      ? 'Anthropic'
+                      : setupProvider() === 'openai'
+                        ? 'OpenAI'
+                        : setupProvider() === 'openrouter'
+                          ? 'OpenRouter'
+                          : setupProvider() === 'gemini'
+                            ? 'Google Gemini'
+                            : 'DeepSeek'} API Key
                   </label>
                   <input
                     type="password"
                     value={setupApiKey()}
                     onInput={(e) => setSetupApiKey(e.currentTarget.value)}
-                    placeholder={setupProvider() === 'anthropic' ? 'sk-ant-...' : setupProvider() === 'gemini' ? 'AIza...' : 'sk-...'}
+                    placeholder={setupProvider() === 'anthropic' ? 'sk-ant-...' : setupProvider() === 'gemini' ? 'AIza...' : setupProvider() === 'openrouter' ? 'sk-or-...' : 'sk-...'}
                     class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                   <p class="text-xs text-gray-500 mt-1.5">
@@ -2084,6 +2195,8 @@ export const AISettings: Component = () => {
                         ? 'https://console.anthropic.com/settings/keys'
                         : setupProvider() === 'openai'
                           ? 'https://platform.openai.com/api-keys'
+                          : setupProvider() === 'openrouter'
+                            ? 'https://openrouter.ai/keys'
                           : setupProvider() === 'gemini'
                             ? 'https://aistudio.google.com/app/apikey'
                             : 'https://platform.deepseek.com/api_keys'
@@ -2149,6 +2262,13 @@ export const AISettings: Component = () => {
                       }
                       payload.openai_api_key = setupApiKey().trim();
                       payload.model = 'openai:gpt-4o';
+                    } else if (setupProvider() === 'openrouter') {
+                      if (!setupApiKey().trim()) {
+                        notificationStore.error('Please enter your OpenRouter API key');
+                        return;
+                      }
+                      payload.openrouter_api_key = setupApiKey().trim();
+                      payload.model = 'openrouter:openai/gpt-4o-mini';
                     } else if (setupProvider() === 'deepseek') {
                       if (!setupApiKey().trim()) {
                         notificationStore.error('Please enter your DeepSeek API key');

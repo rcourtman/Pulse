@@ -507,6 +507,7 @@ func TestProviderDisplayName(t *testing.T) {
 	}{
 		{config.AIProviderAnthropic, "Anthropic"},
 		{config.AIProviderOpenAI, "OpenAI"},
+		{config.AIProviderOpenRouter, "OpenRouter"},
 		{"unknown", "unknown"},
 	}
 
@@ -1270,6 +1271,7 @@ func TestProviderDisplayName_AllProviders(t *testing.T) {
 	}{
 		{config.AIProviderAnthropic, "Anthropic"},
 		{config.AIProviderOpenAI, "OpenAI"},
+		{config.AIProviderOpenRouter, "OpenRouter"},
 		{config.AIProviderDeepSeek, "DeepSeek"},
 		{config.AIProviderGemini, "Google Gemini"},
 		{config.AIProviderOllama, "Ollama"},
@@ -2117,6 +2119,7 @@ func TestService_LoadConfig_SmartFallback_Variants(t *testing.T) {
 		expect string
 	}{
 		{"anthropic", "AnthropicAPIKey", "anthropic"},
+		{"openrouter", "OpenRouterAPIKey", "openai"}, // OpenRouter uses OpenAI client
 		{"gemini", "GeminiAPIKey", "gemini"},
 		{"deepseek", "DeepSeekAPIKey", "openai"}, // DeepSeek uses OpenAI client
 		{"ollama", "OllamaBaseURL", "ollama"},
@@ -2133,6 +2136,8 @@ func TestService_LoadConfig_SmartFallback_Variants(t *testing.T) {
 			switch p.name {
 			case "anthropic":
 				cfg.AnthropicAPIKey = "key"
+			case "openrouter":
+				cfg.OpenRouterAPIKey = "key"
 			case "gemini":
 				cfg.GeminiAPIKey = "key"
 			case "deepseek":

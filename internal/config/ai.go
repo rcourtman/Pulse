@@ -1,6 +1,9 @@
 package config
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 // AuthMethod represents how Anthropic authentication is performed
 type AuthMethod string
@@ -27,12 +30,13 @@ type AIConfig struct {
 	CustomContext  string `json:"custom_context"`            // user-provided context about their infrastructure
 
 	// Multi-provider credentials - each provider can be configured independently
-	AnthropicAPIKey string `json:"anthropic_api_key,omitempty"` // Anthropic API key
-	OpenAIAPIKey    string `json:"openai_api_key,omitempty"`    // OpenAI API key
-	DeepSeekAPIKey  string `json:"deepseek_api_key,omitempty"`  // DeepSeek API key
-	GeminiAPIKey    string `json:"gemini_api_key,omitempty"`    // Google Gemini API key
-	OllamaBaseURL   string `json:"ollama_base_url,omitempty"`   // Ollama server URL (default: http://localhost:11434)
-	OpenAIBaseURL   string `json:"openai_base_url,omitempty"`   // Custom OpenAI-compatible base URL (optional)
+	AnthropicAPIKey  string `json:"anthropic_api_key,omitempty"`  // Anthropic API key
+	OpenAIAPIKey     string `json:"openai_api_key,omitempty"`     // OpenAI API key
+	OpenRouterAPIKey string `json:"openrouter_api_key,omitempty"` // OpenRouter API key
+	DeepSeekAPIKey   string `json:"deepseek_api_key,omitempty"`   // DeepSeek API key
+	GeminiAPIKey     string `json:"gemini_api_key,omitempty"`     // Google Gemini API key
+	OllamaBaseURL    string `json:"ollama_base_url,omitempty"`    // Ollama server URL (default: http://localhost:11434)
+	OpenAIBaseURL    string `json:"openai_base_url,omitempty"`    // Custom OpenAI-compatible base URL (optional)
 
 	// OAuth fields for Claude Pro/Max subscription authentication
 	AuthMethod        AuthMethod `json:"auth_method,omitempty"`         // "api_key" or "oauth" (for anthropic only)
@@ -81,11 +85,12 @@ type AIConfig struct {
 
 // AIProvider constants
 const (
-	AIProviderAnthropic = "anthropic"
-	AIProviderOpenAI    = "openai"
-	AIProviderOllama    = "ollama"
-	AIProviderDeepSeek  = "deepseek"
-	AIProviderGemini    = "gemini"
+	AIProviderAnthropic  = "anthropic"
+	AIProviderOpenAI     = "openai"
+	AIProviderOpenRouter = "openrouter"
+	AIProviderOllama     = "ollama"
+	AIProviderDeepSeek   = "deepseek"
+	AIProviderGemini     = "gemini"
 )
 
 // AI Control Level constants
@@ -121,14 +126,16 @@ const (
 
 // Default models per provider
 const (
-	DefaultAIModelAnthropic = "claude-haiku-4-5"
-	DefaultAIModelOpenAI    = "gpt-4o"
-	DefaultAIModelOllama    = "llama3"
-	DefaultAIModelDeepSeek  = "deepseek-chat"    // V3.2 with tool-use support
-	DefaultAIModelGemini    = "gemini-2.5-flash" // Latest stable Gemini model
-	DefaultOllamaBaseURL    = "http://localhost:11434"
-	DefaultDeepSeekBaseURL  = "https://api.deepseek.com/chat/completions"
-	DefaultGeminiBaseURL    = "https://generativelanguage.googleapis.com/v1beta"
+	DefaultAIModelAnthropic  = "claude-haiku-4-5"
+	DefaultAIModelOpenAI     = "gpt-4o"
+	DefaultAIModelOpenRouter = "openai/gpt-4o-mini"
+	DefaultAIModelOllama     = "llama3"
+	DefaultAIModelDeepSeek   = "deepseek-chat"    // V3.2 with tool-use support
+	DefaultAIModelGemini     = "gemini-2.5-flash" // Latest stable Gemini model
+	DefaultOllamaBaseURL     = "http://localhost:11434"
+	DefaultOpenRouterBaseURL = "https://openrouter.ai/api/v1/chat/completions"
+	DefaultDeepSeekBaseURL   = "https://api.deepseek.com/chat/completions"
+	DefaultGeminiBaseURL     = "https://generativelanguage.googleapis.com/v1beta"
 )
 
 // NewDefaultAIConfig returns an AIConfig with sensible defaults
@@ -161,7 +168,7 @@ func (c *AIConfig) IsConfigured() bool {
 
 	// Check multi-provider credentials first (new format)
 	if c.HasProvider(AIProviderAnthropic) || c.HasProvider(AIProviderOpenAI) ||
-		c.HasProvider(AIProviderDeepSeek) || c.HasProvider(AIProviderOllama) ||
+		c.HasProvider(AIProviderOpenRouter) || c.HasProvider(AIProviderDeepSeek) || c.HasProvider(AIProviderOllama) ||
 		c.HasProvider(AIProviderGemini) {
 		return true
 	}
@@ -173,7 +180,7 @@ func (c *AIConfig) IsConfigured() bool {
 			return c.OAuthAccessToken != ""
 		}
 		return c.APIKey != ""
-	case AIProviderOpenAI, AIProviderDeepSeek:
+	case AIProviderOpenAI, AIProviderOpenRouter, AIProviderDeepSeek:
 		return c.APIKey != ""
 	case AIProviderOllama:
 		return true
@@ -193,6 +200,8 @@ func (c *AIConfig) HasProvider(provider string) bool {
 		return c.AnthropicAPIKey != ""
 	case AIProviderOpenAI:
 		return c.OpenAIAPIKey != ""
+	case AIProviderOpenRouter:
+		return c.OpenRouterAPIKey != ""
 	case AIProviderDeepSeek:
 		return c.DeepSeekAPIKey != ""
 	case AIProviderGemini:
@@ -213,6 +222,9 @@ func (c *AIConfig) GetConfiguredProviders() []string {
 	}
 	if c.HasProvider(AIProviderOpenAI) {
 		providers = append(providers, AIProviderOpenAI)
+	}
+	if c.HasProvider(AIProviderOpenRouter) {
+		providers = append(providers, AIProviderOpenRouter)
 	}
 	if c.HasProvider(AIProviderDeepSeek) {
 		providers = append(providers, AIProviderDeepSeek)
@@ -242,6 +254,13 @@ func (c *AIConfig) GetAPIKeyForProvider(provider string) string {
 			return c.OpenAIAPIKey
 		}
 		if c.Provider == AIProviderOpenAI {
+			return c.APIKey
+		}
+	case AIProviderOpenRouter:
+		if c.OpenRouterAPIKey != "" {
+			return c.OpenRouterAPIKey
+		}
+		if c.Provider == AIProviderOpenRouter {
 			return c.APIKey
 		}
 	case AIProviderDeepSeek:
@@ -279,6 +298,8 @@ func (c *AIConfig) GetBaseURLForProvider(provider string) string {
 			return c.OpenAIBaseURL
 		}
 		return "" // Uses default OpenAI URL
+	case AIProviderOpenRouter:
+		return DefaultOpenRouterBaseURL
 	case AIProviderDeepSeek:
 		return DefaultDeepSeekBaseURL
 	case AIProviderGemini:
@@ -296,7 +317,7 @@ func (c *AIConfig) IsUsingOAuth() bool {
 // Returns the provider and model name. If no provider prefix, attempts to detect.
 func ParseModelString(model string) (provider, modelName string) {
 	// Check for explicit provider prefix
-	for _, p := range []string{AIProviderAnthropic, AIProviderOpenAI, AIProviderDeepSeek, AIProviderGemini, AIProviderOllama} {
+	for _, p := range []string{AIProviderAnthropic, AIProviderOpenAI, AIProviderOpenRouter, AIProviderDeepSeek, AIProviderGemini, AIProviderOllama} {
 		prefix := p + ":"
 		if len(model) > len(prefix) && model[:len(prefix)] == prefix {
 			return p, model[len(prefix):]
@@ -313,6 +334,11 @@ func ParseModelString(model string) (provider, modelName string) {
 		return AIProviderDeepSeek, model
 	case len(model) >= 6 && model[:6] == "gemini":
 		return AIProviderGemini, model
+	case strings.HasPrefix(model, "openai/"), strings.HasPrefix(model, "anthropic/"), strings.HasPrefix(model, "google/"),
+		strings.HasPrefix(model, "deepseek/"), strings.HasPrefix(model, "meta-llama/"), strings.HasPrefix(model, "mistralai/"),
+		strings.HasPrefix(model, "x-ai/"), strings.HasPrefix(model, "xai/"), strings.HasPrefix(model, "cohere/"),
+		strings.HasPrefix(model, "qwen/"):
+		return AIProviderOpenRouter, model
 	default:
 		// Assume Ollama for unrecognized models (local models have varied names)
 		return AIProviderOllama, model
@@ -332,6 +358,8 @@ func DefaultModelForProvider(provider string) string {
 		return FormatModelString(AIProviderAnthropic, DefaultAIModelAnthropic)
 	case AIProviderOpenAI:
 		return FormatModelString(AIProviderOpenAI, DefaultAIModelOpenAI)
+	case AIProviderOpenRouter:
+		return FormatModelString(AIProviderOpenRouter, DefaultAIModelOpenRouter)
 	case AIProviderDeepSeek:
 		return FormatModelString(AIProviderDeepSeek, DefaultAIModelDeepSeek)
 	case AIProviderGemini:
@@ -352,6 +380,8 @@ func (c *AIConfig) GetBaseURL() string {
 	switch c.Provider {
 	case AIProviderOllama:
 		return DefaultOllamaBaseURL
+	case AIProviderOpenRouter:
+		return DefaultOpenRouterBaseURL
 	case AIProviderDeepSeek:
 		return DefaultDeepSeekBaseURL
 	case AIProviderGemini:
@@ -375,6 +405,8 @@ func (c *AIConfig) GetModel() string {
 			return DefaultAIModelAnthropic
 		case AIProviderOpenAI:
 			return DefaultAIModelOpenAI
+		case AIProviderOpenRouter:
+			return DefaultAIModelOpenRouter
 		case AIProviderOllama:
 			return DefaultAIModelOllama
 		case AIProviderDeepSeek:
@@ -390,6 +422,8 @@ func (c *AIConfig) GetModel() string {
 		return DefaultAIModelAnthropic
 	case AIProviderOpenAI:
 		return DefaultAIModelOpenAI
+	case AIProviderOpenRouter:
+		return DefaultAIModelOpenRouter
 	case AIProviderOllama:
 		return DefaultAIModelOllama
 	case AIProviderDeepSeek:

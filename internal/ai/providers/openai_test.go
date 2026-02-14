@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -189,6 +190,11 @@ func TestOpenAIClient_Configuration(t *testing.T) {
 	}
 }
 
+func TestNewOpenAIClient_StripsOpenRouterPrefix(t *testing.T) {
+	client := NewOpenAIClient("key", "openrouter:openai/gpt-4o-mini", "https://openrouter.ai/api/v1", 0)
+	assert.Equal(t, "openai/gpt-4o-mini", client.model)
+}
+
 func TestOpenAIClient_ListModels(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -212,6 +218,37 @@ func TestOpenAIClient_ListModels(t *testing.T) {
 	assert.Len(t, models, 2)
 	assert.Equal(t, "gpt-4", models[0].ID)
 	assert.Equal(t, "gpt-3.5-turbo", models[1].ID)
+}
+
+func TestOpenAIClient_ListModels_OpenRouterReturnsCatalog(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/api/v1/models", r.URL.Path)
+		assert.Equal(t, "Bearer sk-test", r.Header.Get("Authorization"))
+		assert.Equal(t, "https://pulse.app", r.Header.Get("HTTP-Referer"))
+		assert.Equal(t, "Pulse", r.Header.Get("X-Title"))
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"data": []map[string]interface{}{
+				{"id": "anthropic/claude-sonnet-4.5", "name": "Claude Sonnet 4.5"},
+				{"id": "openai/gpt-4o-mini", "name": "GPT-4o mini", "description": "Fast and cheap"},
+				{"id": "meta-llama/llama-3.3-70b-instruct", "name": "Llama 3.3 70B Instruct"},
+			},
+		})
+	}))
+	defer server.Close()
+
+	client := NewOpenAIClient("sk-test", "openai/gpt-4o-mini", server.URL, 0)
+	client.baseURL = strings.TrimSuffix(server.URL, "/") + "/api/v1/chat/completions#openrouter.ai"
+
+	models, err := client.ListModels(context.Background())
+	require.NoError(t, err)
+	assert.Len(t, models, 3)
+	assert.Equal(t, "anthropic/claude-sonnet-4.5", models[0].ID)
+	assert.Equal(t, "Claude Sonnet 4.5", models[0].Name)
+	assert.Equal(t, "Fast and cheap", models[1].Description)
+	assert.Equal(t, "meta-llama/llama-3.3-70b-instruct", models[2].ID)
 }
 
 func TestOpenAIClient_Chat_Success(t *testing.T) {
