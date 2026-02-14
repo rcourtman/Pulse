@@ -7,7 +7,7 @@ import type { TimeRange } from '@/api/charts';
 import { __resetInfrastructureSummaryFetchesForTests } from '@/utils/infrastructureSummaryCache';
 
 const mockGetCharts = vi.fn();
-const INFRA_SUMMARY_CACHE_KEY_PREFIX = 'pulse.infrastructureSummaryCharts.';
+const INFRA_SUMMARY_CACHE_KEY_PREFIX = 'pulse.infrastructureSummaryCharts.default::';
 
 vi.mock('@/api/charts', async () => {
   const actual = await vi.importActual<typeof import('@/api/charts')>('@/api/charts');

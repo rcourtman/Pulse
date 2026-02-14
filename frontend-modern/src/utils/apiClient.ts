@@ -12,6 +12,7 @@ const CONTROL_CHAR_PATTERN = /[\u0000-\u001F\u007F]/; // eslint-disable-line no-
 const MAX_ORG_ID_LENGTH = 128;
 const MAX_API_TOKEN_LENGTH = 8 * 1024;
 const MAX_AUTH_STORAGE_CHARS = 16 * 1024;
+const IDEMPOTENT_METHODS = new Set(['GET', 'HEAD', 'OPTIONS', 'PUT', 'DELETE']);
 
 const sanitizeBoundedText = (value: unknown, maxLength: number): string | null => {
   if (typeof value !== 'string') {
@@ -581,17 +582,40 @@ class ApiClient {
 
     // Handle rate limiting with automatic retry for idempotent requests only.
     if (response.status === 429) {
+      if (!IDEMPOTENT_METHODS.has(method)) {
+        return response;
+      }
+
       const retryAfterHeader = response.headers.get('Retry-After');
       let waitTime = 1000; // Default: 1 second
       if (retryAfterHeader) {
-        const parsed = Number(retryAfterHeader);
-        if (!Number.isNaN(parsed) && parsed > 0 && parsed <= 120) {
-          waitTime = parsed * 1000;
+        const normalized = retryAfterHeader.trim();
+        if (normalized) {
+          const parsed = Number(normalized);
+          if (!Number.isNaN(parsed) && parsed > 0 && parsed <= 120) {
+            waitTime = parsed * 1000;
+          } else {
+            const retryAt = Date.parse(normalized);
+            if (!Number.isNaN(retryAt)) {
+              const waitMs = retryAt - Date.now();
+              if (waitMs > 0 && waitMs <= 120_000) {
+                waitTime = waitMs;
+              }
+            }
+          }
         }
       }
       logger.warn(`Rate limit hit, retrying ${method} after ${waitTime}ms`);
 
-      await new Promise((resolve) => setTimeout(resolve, waitTime));
+      try {
+        await waitWithSignal(waitTime, fetchOptions.signal);
+      } catch (err) {
+        // If the caller aborts during the Retry-After delay, reject with AbortError and do not retry.
+        if (err instanceof Error && err.name === 'AbortError') {
+          throw err;
+        }
+        throw err;
+      }
 
       return fetch(url, {
         ...fetchOptions,
