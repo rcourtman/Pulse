@@ -66,6 +66,12 @@ function stopRefreshTimer(): void {
     }
 }
 
+function clearAnomalyState(): void {
+    setAnomalyStore(new Map());
+    setError(null);
+    setLastUpdate(null);
+}
+
 function trackConsumerLifecycle(): void {
     activeConsumers += 1;
     startRefreshTimer();
@@ -75,13 +81,6 @@ function trackConsumerLifecycle(): void {
         if (activeConsumers === 0) {
             stopRefreshTimer();
         }
-    });
-}
-
-function useAnomalyRefreshSubscription(): void {
-    createEffect(() => {
-        const release = retainAnomalyRefreshSubscription();
-        onCleanup(() => release());
     });
 }
 
@@ -185,7 +184,7 @@ export function useHasAnomalies(resourceId: () => string | undefined): () => boo
 // Cleanup when the module is unloaded (for HMR)
 if (import.meta.hot) {
     import.meta.hot.dispose(() => {
-        activeSubscribers = 0;
+        activeConsumers = 0;
         stopRefreshTimer();
     });
 }

@@ -59,13 +59,6 @@ const emitMessage = (payload: unknown) => {
   mockWsInstance.onmessage({ data: JSON.stringify(payload) } as MessageEvent);
 };
 
-const emitRawMessage = (rawData: unknown) => {
-  if (!mockWsInstance?.onmessage) {
-    throw new Error('WebSocket onmessage handler is not initialized');
-  }
-  mockWsInstance.onmessage({ data: rawData } as MessageEvent);
-};
-
 const createStoreHarness = async () => {
   const { createWebSocketStore } = await import('@/stores/websocket');
   let dispose = () => {};
@@ -77,8 +70,6 @@ const createStoreHarness = async () => {
 };
 
 describe('websocket store unified resource contract', () => {
-  const MAX_INBOUND_WEBSOCKET_MESSAGE_BYTES = 8 * 1024 * 1024;
-
   beforeEach(() => {
     vi.useFakeTimers();
     vi.resetModules();

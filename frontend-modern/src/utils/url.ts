@@ -1,7 +1,5 @@
 const FALLBACK_BASE_URL = 'http://localhost:7655';
 const KIOSK_MODE_KEY = 'pulse_kiosk_mode';
-const CONTROL_CHAR_PATTERN = /[\u0000-\u001F\u007F]/;
-const MAX_API_TOKEN_LENGTH = 8 * 1024;
 const MAX_AUTH_STORAGE_CHARS = 16 * 1024;
 
 // Reactive kiosk mode tracking - listeners are notified when kiosk mode changes
@@ -132,27 +130,6 @@ function getPulseOriginUrl(): URL | null {
   }
 }
 
-function getStoredSessionAuthToken(storage: Storage): string | null {
-  const stored = storage.getItem('pulse_auth');
-  if (!stored) {
-    return null;
-  }
-
-  try {
-    const parsed = JSON.parse(stored) as unknown;
-    if (!parsed || typeof parsed !== 'object') {
-      return null;
-    }
-    const auth = parsed as { type?: unknown; value?: unknown };
-    if (auth.type !== 'token' || typeof auth.value !== 'string' || auth.value === '') {
-      return null;
-    }
-    return auth.value;
-  } catch {
-    return null;
-  }
-}
-
 export function getPulseHostname(): string {
   const origin = getPulseOriginUrl();
   return origin?.hostname || 'localhost';
@@ -161,6 +138,15 @@ export function getPulseHostname(): string {
 export function isPulseHttps(): boolean {
   const origin = getPulseOriginUrl();
   return origin?.protocol === 'https:';
+}
+
+function sanitizeApiToken(token: string): string {
+  // Remove control characters and trim
+  const cleaned = token.replace(/[\x00-\x1f\x7f]/g, '').trim(); // eslint-disable-line no-control-regex -- intentional sanitization
+  if (cleaned.length > 256) {
+    return cleaned.slice(0, 256);
+  }
+  return cleaned;
 }
 
 export function getPulseWebSocketUrl(path = '/ws'): string {

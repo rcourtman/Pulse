@@ -10,7 +10,6 @@ import X from 'lucide-solid/icons/x';
 import ShieldAlert from 'lucide-solid/icons/shield-alert';
 import { showTooltip, hideTooltip } from '@/components/shared/Tooltip';
 import Toggle from '@/components/shared/Toggle';
-import { apiFetchJSON } from '@/utils/apiClient';
 import {
     createLocalStorageBooleanSignal,
     createLocalStorageNumberSignal,

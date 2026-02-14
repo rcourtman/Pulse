@@ -100,8 +100,8 @@ describe('updateStore', () => {
 
     await updateStore.checkForUpdates();
 
-    expect(getVersionMock).toHaveBeenCalledTimes(1);
-    expect(checkForUpdatesMock).toHaveBeenCalledTimes(1);
+    expect(mockGetVersion).toHaveBeenCalledTimes(1);
+    expect(mockCheckForUpdates).toHaveBeenCalledTimes(1);
     expect(updateStore.updateAvailable()).toBe(true);
     expect(updateStore.updateInfo()).toEqual({
       available: true,

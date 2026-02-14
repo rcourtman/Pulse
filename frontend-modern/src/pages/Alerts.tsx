@@ -2390,7 +2390,6 @@ function OverviewTab(props: {
   licenseLoading: () => boolean;
 }) {
   const location = useLocation();
-  const pendingProcessingClearTimers = new Set<ReturnType<typeof setTimeout>>();
   let hashScrollRafId: number | undefined;
   const pendingProcessingResetTimeouts = new Set<number>();
   // Loading states for buttons
@@ -2522,18 +2521,6 @@ function OverviewTab(props: {
     }
     target.scrollIntoView({ behavior: 'smooth', block: 'start' });
     setLastHashScrolled(hash);
-  };
-
-  const scheduleProcessingReset = (alertId: string) => {
-    const timeoutId = window.setTimeout(() => {
-      pendingProcessingResetTimeouts.delete(timeoutId);
-      setProcessingAlerts((prev) => {
-        const next = new Set(prev);
-        next.delete(alertId);
-        return next;
-      });
-    }, 1500); // Allow server processing + WebSocket sync before re-enabling actions
-    pendingProcessingResetTimeouts.add(timeoutId);
   };
 
   createEffect(() => {

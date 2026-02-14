@@ -262,13 +262,6 @@ export function createWebSocketStore(url: string) {
   const heartbeatTimeoutMs = heartbeatIntervalMs * 3;
   const reconnectJitterRatio = 0.2;
 
-  const clearReconnectTimer = () => {
-    if (reconnectTimeout) {
-      window.clearTimeout(reconnectTimeout);
-      reconnectTimeout = 0;
-    }
-  };
-
   const clearHeartbeatTimer = () => {
     if (heartbeatInterval) {
       window.clearInterval(heartbeatInterval);

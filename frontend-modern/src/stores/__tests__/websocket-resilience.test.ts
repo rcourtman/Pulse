@@ -36,7 +36,7 @@ class MockWebSocketClass implements MockWebSocketInstance {
     this.readyState = autoOpenSockets ? MockWebSocketClass.OPEN : MockWebSocketClass.CONNECTING;
 
     instances.push(this);
-    currentInstance = this;
+    currentInstance = this; // eslint-disable-line @typescript-eslint/no-this-alias -- test mock needs instance capture
 
     if (autoOpenSockets) {
       setTimeout(() => {

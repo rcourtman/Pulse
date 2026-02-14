@@ -74,7 +74,7 @@ export function stopContainerUpdateCleanup(options?: { clearStates?: boolean }):
  * Get the update state for a specific container
  */
 export function getContainerUpdateState(hostId: string, containerId: string): UpdateEntry | undefined {
-    const key = getUpdateKey(hostId, containerId);
+    const key = `${hostId}:${containerId}`;
     return updateStates()[key];
 }
 
@@ -121,7 +121,7 @@ export function syncWithHostCommand(hostId: string, command: DockerHostCommand |
     if (command.type !== 'update_container') return;
 
     const containerId = command.id.split(':')[1] || ''; // Extract containerId if encoded in commandID
-    const key = getUpdateKey(hostId, containerId);
+    const key = `${hostId}:${containerId}`;
 
     // Check if we're tracking this update
     const existing = updateStates()[key];
@@ -134,7 +134,7 @@ export function syncWithHostCommand(hostId: string, command: DockerHostCommand |
         markContainerUpdateError(hostId, containerId, command.failureReason || command.message);
     } else if (command.status === 'in_progress' || command.acknowledgedAt) {
         // Agent is actively working on the update - show the current step
-        clearAutoClearTimer(key);
+        clearPendingAutoClearTimer(key);
         setUpdateStates(prev => ({
             ...prev,
             [key]: {
@@ -152,9 +152,8 @@ export function syncWithHostCommand(hostId: string, command: DockerHostCommand |
  * Mark a container update as successful
  */
 export function markContainerUpdateSuccess(hostId: string, containerId: string): void {
-    const key = getUpdateKey(hostId, containerId);
-    const version = bumpStateVersion(key);
-    cancelScheduledClear(key);
+    const key = `${hostId}:${containerId}`;
+    clearPendingAutoClearTimer(key);
     setUpdateStates(prev => ({
         ...prev,
         [key]: {
@@ -171,9 +170,8 @@ export function markContainerUpdateSuccess(hostId: string, containerId: string):
  * Mark a container update as failed
  */
 export function markContainerUpdateError(hostId: string, containerId: string, message?: string): void {
-    const key = getUpdateKey(hostId, containerId);
-    const version = bumpStateVersion(key);
-    cancelScheduledClear(key);
+    const key = `${hostId}:${containerId}`;
+    clearPendingAutoClearTimer(key);
     setUpdateStates(prev => ({
         ...prev,
         [key]: {
@@ -191,10 +189,8 @@ export function markContainerUpdateError(hostId: string, containerId: string, me
  * Clear the update state for a container
  */
 export function clearContainerUpdateState(hostId: string, containerId: string): void {
-    const key = getUpdateKey(hostId, containerId);
-    bumpStateVersion(key);
-    cancelScheduledClear(key);
-    stateVersions.delete(key);
+    const key = `${hostId}:${containerId}`;
+    clearPendingAutoClearTimer(key);
     setUpdateStates(prev => {
         const next = { ...prev };
         delete next[key];
@@ -214,8 +210,7 @@ export function cleanupStaleUpdates(): void {
             if (now - entry.startedAt < STALE_THRESHOLD_MS) {
                 next[key] = entry;
             } else {
-                cancelScheduledClear(key);
-                stateVersions.delete(key);
+                clearPendingAutoClearTimer(key);
             }
         }
         return next;

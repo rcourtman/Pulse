@@ -40,28 +40,12 @@ export interface UpdatePlan {
   downloadUrl?: string;
 }
 
-const normalizeOptionalParam = (value?: string): string | undefined => {
-  const trimmed = value?.trim();
-  return trimmed ? trimmed : undefined;
-};
-
 const requireNonEmpty = (value: string, fieldName: string): string => {
   const trimmed = value.trim();
   if (!trimmed) {
     throw new Error(`${fieldName} is required`);
   }
   return trimmed;
-};
-
-const withQueryParams = (path: string, params: Record<string, string | undefined>): string => {
-  const query = new URLSearchParams();
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined) {
-      query.set(key, value);
-    }
-  }
-  const queryString = query.toString();
-  return queryString ? `${path}?${queryString}` : path;
 };
 
 export class UpdatesAPI {

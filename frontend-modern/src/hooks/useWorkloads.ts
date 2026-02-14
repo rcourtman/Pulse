@@ -2,7 +2,6 @@ import { createMemo, createResource, onCleanup, createEffect, createSignal, type
 import { apiFetchJSON, getOrgID } from '@/utils/apiClient';
 import { eventBus } from '@/stores/events';
 import type { WorkloadGuest, WorkloadType } from '@/types/workloads';
-import { logger } from '@/utils/logger';
 
 const WORKLOADS_URL = '/api/resources?type=vm,lxc,docker_container,pod';
 const WORKLOADS_PAGE_LIMIT = 200;

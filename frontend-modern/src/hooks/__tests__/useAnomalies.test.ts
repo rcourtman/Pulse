@@ -1,6 +1,8 @@
 import { createRoot } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+type UseAnomaliesModule = typeof import('@/hooks/useAnomalies');
+
 const { getAnomaliesMock } = vi.hoisted(() => ({
   getAnomaliesMock: vi.fn(),
 }));
@@ -11,8 +13,6 @@ vi.mock('@/api/ai', () => ({
   },
 }));
 
-import { useAllAnomalies } from '@/hooks/useAnomalies';
-
 const flushMicrotasks = async () => {
   await Promise.resolve();
   await Promise.resolve();
@@ -21,7 +21,6 @@ const flushMicrotasks = async () => {
 describe('useAnomalies', () => {
   let getAnomaliesMock: ReturnType<typeof vi.fn>;
   let useAllAnomalies: UseAnomaliesModule['useAllAnomalies'];
-  let useAnomalyForMetric: UseAnomaliesModule['useAnomalyForMetric'];
 
   beforeEach(async () => {
     vi.useFakeTimers();
@@ -37,7 +36,6 @@ describe('useAnomalies', () => {
 
     ({
       useAllAnomalies,
-      useAnomalyForMetric,
     } = await import('@/hooks/useAnomalies'));
   });
 
@@ -97,11 +95,11 @@ describe('useAnomalies', () => {
       useAllAnomalies();
     });
 
-    await flushAsync();
+    await flushMicrotasks();
     expect(getAnomaliesMock).toHaveBeenCalledTimes(2);
 
     vi.advanceTimersByTime(30_000);
-    await flushAsync();
+    await flushMicrotasks();
     expect(getAnomaliesMock).toHaveBeenCalledTimes(3);
 
     dispose();

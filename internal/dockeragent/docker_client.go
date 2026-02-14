@@ -9,7 +9,7 @@ import (
 	"github.com/docker/docker/api/types/network"
 	swarmtypes "github.com/docker/docker/api/types/swarm"
 	systemtypes "github.com/docker/docker/api/types/system"
-	"github.com/opencontainers/image-spec/specs-go/v1"
+	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
 type dockerClient interface {

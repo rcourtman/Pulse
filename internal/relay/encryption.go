@@ -13,8 +13,9 @@ import (
 	"sync"
 
 	"crypto/sha256"
-	"golang.org/x/crypto/hkdf"
 	"io"
+
+	"golang.org/x/crypto/hkdf"
 )
 
 const (
