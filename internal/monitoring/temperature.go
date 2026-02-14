@@ -21,6 +21,7 @@ import (
 )
 
 const maxTemperatureCommandOutputSize = 1 << 20 // 1 MiB
+const defaultSSHCommandTimeout = 15 * time.Second
 
 var errTemperatureCommandOutputTooLarge = errors.New("temperature command output exceeded limit")
 

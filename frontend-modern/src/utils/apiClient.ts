@@ -191,6 +191,7 @@ class ApiClient {
     const storage = getSessionStorage();
     if (!storage) return;
 
+    try {
       const stored = storage.getItem(AUTH_STORAGE_KEY);
       if (stored) {
         if (stored.length > MAX_AUTH_STORAGE_CHARS) {
@@ -202,18 +203,13 @@ class ApiClient {
         const token = parsed?.type === 'token' ? sanitizeApiToken(parsed?.value) : null;
         if (token) {
           this.apiToken = token;
+          return;
         } else {
           storage.removeItem(AUTH_STORAGE_KEY);
         }
-      } catch {
-        // Ignore parse failures and fall back to legacy key if present.
       }
-
-      try {
-        storage.removeItem(AUTH_STORAGE_KEY);
-      } catch {
-        // Ignore storage errors.
-      }
+    } catch {
+      // Ignore parse failures and fall back to legacy key if present.
     }
 
     // Legacy storage key used before apiClient refactor
@@ -345,10 +341,13 @@ class ApiClient {
     const stored = storage.getItem(AUTH_STORAGE_KEY);
     if (stored) {
       try {
-        const token = extractStoredToken(JSON.parse(stored));
-        if (token) {
-          this.apiToken = token;
-          return token;
+        if (stored.length <= MAX_AUTH_STORAGE_CHARS) {
+          const parsed = JSON.parse(stored);
+          const token = parsed?.type === 'token' ? sanitizeApiToken(parsed?.value) : null;
+          if (token) {
+            this.apiToken = token;
+            return token;
+          }
         }
       } catch {
         // Ignore parse failures and continue to fallback.
@@ -582,10 +581,14 @@ class ApiClient {
 
     // Handle rate limiting with automatic retry for idempotent requests only.
     if (response.status === 429) {
-      const waitTime = resolveRetryAfterMs(response.headers.get('Retry-After'));
-
-
-      const waitTime = parseRetryAfterMs(response.headers.get('Retry-After'));
+      const retryAfterHeader = response.headers.get('Retry-After');
+      let waitTime = 1000; // Default: 1 second
+      if (retryAfterHeader) {
+        const parsed = Number(retryAfterHeader);
+        if (!Number.isNaN(parsed) && parsed > 0 && parsed <= 120) {
+          waitTime = parsed * 1000;
+        }
+      }
       logger.warn(`Rate limit hit, retrying ${method} after ${waitTime}ms`);
 
       await new Promise((resolve) => setTimeout(resolve, waitTime));

@@ -67,6 +67,8 @@ func (e *MonitorError) Error() string {
 		}
 	}
 
+	op := sanitizeErrorText(e.Op, maxErrorContextLength)
+
 	if node != "" {
 		return fmt.Sprintf("%s failed on %s/%s: %s", op, instance, node, errMsg)
 	}

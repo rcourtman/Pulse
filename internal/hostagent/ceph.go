@@ -57,17 +57,17 @@ var commandRunner = func(ctx context.Context, name string, args ...string) ([]by
 
 var lookPath = exec.LookPath
 
-// ClusterStatus represents the complete Ceph cluster status as collected by the agent.
-type ClusterStatus struct {
-	FSID        string        `json:"fsid"`
-	Health      HealthStatus  `json:"health"`
-	MonMap      MonitorMap    `json:"monMap,omitempty"`
-	MgrMap      ManagerMap    `json:"mgrMap,omitempty"`
-	OSDMap      OSDMap        `json:"osdMap"`
-	PGMap       PGMap         `json:"pgMap"`
-	Pools       []Pool        `json:"pools,omitempty"`
-	Services    []ServiceInfo `json:"services,omitempty"`
-	CollectedAt time.Time     `json:"collectedAt"`
+// CephClusterStatus represents the complete Ceph cluster status as collected by the agent.
+type CephClusterStatus struct {
+	FSID        string            `json:"fsid"`
+	Health      CephHealthStatus  `json:"health"`
+	MonMap      CephMonitorMap    `json:"monMap,omitempty"`
+	MgrMap      CephManagerMap    `json:"mgrMap,omitempty"`
+	OSDMap      CephOSDMap        `json:"osdMap"`
+	PGMap       CephPGMap         `json:"pgMap"`
+	Pools       []CephPool        `json:"pools,omitempty"`
+	Services    []CephServiceInfo `json:"services,omitempty"`
+	CollectedAt time.Time         `json:"collectedAt"`
 }
 
 // CephHealthStatus represents Ceph cluster health.
@@ -157,8 +157,8 @@ type CephServiceInfo struct {
 	Daemons []string `json:"daemons,omitempty"`
 }
 
-// IsAvailable checks if the ceph CLI is available on the system.
-func IsAvailable(ctx context.Context) bool {
+// IsCephAvailable checks if the ceph CLI is available on the system.
+func IsCephAvailable(ctx context.Context) bool {
 	_ = ctx
 	_, err := lookPath("ceph")
 	return err == nil

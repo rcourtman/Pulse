@@ -28,6 +28,7 @@ const (
 	maxWebSocketInboundMessageSize = 64 * 1024
 	// maxWebSocketOrgIDLength keeps org IDs bounded to prevent oversized header/query abuse.
 	maxWebSocketOrgIDLength = 64
+	websocketHubComponent   = "websocket_hub"
 )
 
 // extractPeerIP extracts just the IP part from a RemoteAddr (host:port format)
@@ -407,7 +408,6 @@ type Hub struct {
 	// Per-tenant coalescing
 	tenantCoalescePending map[string]*Message
 	tenantCoalesceTimers  map[string]*time.Timer
-	stopOnce              sync.Once
 }
 
 // Message represents a WebSocket message

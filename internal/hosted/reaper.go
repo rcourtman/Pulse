@@ -194,7 +194,7 @@ func (r *Reaper) scan() []ReapResult {
 			if r.deleter == nil {
 				result.Error = errors.New("org deleter is nil")
 				orgLog.Error().
-					Str("action", result.Action).
+					Str("action", string(result.Action)).
 					Msg("Hosted reaper is in live mode but deleter is nil")
 			} else {
 				if r.OnBeforeDelete != nil {
@@ -202,7 +202,7 @@ func (r *Reaper) scan() []ReapResult {
 						result.Error = err
 						orgLog.Error().
 							Err(err).
-							Str("action", result.Action).
+							Str("action", string(result.Action)).
 							Msg("Hosted reaper OnBeforeDelete hook failed")
 						results = append(results, result)
 						continue
@@ -212,18 +212,18 @@ func (r *Reaper) scan() []ReapResult {
 				if result.Error != nil {
 					orgLog.Error().
 						Err(result.Error).
-						Str("action", result.Action).
+						Str("action", string(result.Action)).
 						Msg("Hosted reaper failed to delete expired organization")
 				} else {
 					orgLog.Info().
-						Str("action", result.Action).
+						Str("action", string(result.Action)).
 						Msg("Hosted reaper deleted expired organization")
 				}
 			}
 		} else {
 			result.Action = "dry_run"
 			orgLog.Info().
-				Str("action", result.Action).
+				Str("action", string(result.Action)).
 				Msg("Hosted reaper dry-run would delete expired organization")
 		}
 

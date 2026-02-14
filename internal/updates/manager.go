@@ -78,21 +78,24 @@ const (
 
 // Manager handles update operations
 type Manager struct {
-	config        *config.Config
-	history       *UpdateHistory
-	status        UpdateStatus
-	statusMu      sync.RWMutex
-	progressMu    sync.RWMutex
-	checkCache    map[string]*UpdateInfo // keyed by channel
-	cacheTime     map[string]time.Time   // keyed by channel
-	cacheDuration time.Duration
-	progressChan  chan UpdateStatus
-	queue         *UpdateQueue
-	sseBroadcast  *SSEBroadcaster
-	shutdownCh    chan struct{}
-	closeOnce     sync.Once
-	heartbeatWg   sync.WaitGroup
-	closed        bool
+	config         *config.Config
+	history        *UpdateHistory
+	status         UpdateStatus
+	statusMu       sync.RWMutex
+	progressMu     sync.RWMutex
+	updateMu       sync.Mutex
+	updateInFlight bool
+	checkCache     map[string]*UpdateInfo // keyed by channel
+	cacheTime      map[string]time.Time   // keyed by channel
+	cacheDuration  time.Duration
+	progressChan   chan UpdateStatus
+	queue          *UpdateQueue
+	sseBroadcast   *SSEBroadcaster
+	lifecycleMu    sync.RWMutex
+	shutdownCh     chan struct{}
+	closeOnce      sync.Once
+	heartbeatWg    sync.WaitGroup
+	closed         bool
 }
 
 // ApplyUpdateRequest describes an update request initiated via the API/UI.
@@ -1165,13 +1168,6 @@ func (m *Manager) verifyChecksum(ctx context.Context, tarballURL, tarballPath st
 			log.Debug().Err(err).Str("url", checksumURL).Msg("Failed to create checksum request")
 			continue
 		}
-
-		client := &http.Client{Timeout: 30 * time.Second}
-		resp, err := client.Do(req)
-		if err != nil {
-			log.Debug().Err(err).Str("url", checksumURL).Msg("Failed to fetch checksum file")
-			continue
-		}
 		defer resp.Body.Close()
 
 		if resp.StatusCode == http.StatusOK {
@@ -1704,7 +1700,7 @@ func (m *Manager) sseHeartbeatLoop() {
 
 	for {
 		select {
-		case <-m.heartbeatStopC:
+		case <-m.shutdownCh:
 			return
 		case <-ticker.C:
 			m.lifecycleMu.RLock()

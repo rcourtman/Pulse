@@ -57,11 +57,7 @@ type NotificationQueue struct {
 	db              *sql.DB
 	dbPath          string
 	stopChan        chan struct{}
-	stopOnce        sync.Once
-	stopErr         error
 	wg              sync.WaitGroup
-	stopOnce        sync.Once
-	stopErr         error
 	processorTicker *time.Ticker
 	cleanupTicker   *time.Ticker
 	notifyChan      chan struct{}                   // Signal when new notifications are added

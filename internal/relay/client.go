@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand/v2"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -38,6 +39,13 @@ const (
 // maxConcurrentDataHandlers limits active DATA stream handlers per connection.
 // This prevents unbounded goroutine growth if the relay floods DATA frames.
 var maxConcurrentDataHandlers = 64
+
+const (
+	wsMaxMessageSize      = wsReadLimit
+	wsPongWait            = 60 * time.Second
+	proxyStreamTimeout    = 15 * time.Minute
+	relayOverloadedReason = "relay proxy overloaded"
+)
 
 // TokenValidator validates an API token and returns the raw token if valid.
 type TokenValidator func(token string) bool
@@ -351,6 +359,9 @@ func (c *Client) connectAndHandle(ctx context.Context) (bool, error) {
 	go c.writePump(connCtx, conn, sendCh)
 
 	// Read pump (blocking) — passes connCtx so handleData streams inherit it
+	// Rate-limit concurrent DATA stream handlers per connection.
+	dataLimiter := make(chan struct{}, maxConcurrentDataHandlers)
+
 	return true, c.readPump(connCtx, conn, sendCh, dataLimiter)
 }
 

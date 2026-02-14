@@ -648,7 +648,7 @@ func (n *NotificationManager) UpdateWebhook(webhookID string, webhook WebhookCon
 	defer n.mu.Unlock()
 
 	for i, w := range n.webhooks {
-		if w.ID == id {
+		if w.ID == webhookID {
 			n.webhooks[i] = copyWebhookConfig(webhook)
 			return nil
 		}
@@ -3261,7 +3261,6 @@ func (n *NotificationManager) Stop() {
 		n.mu.Lock()
 		n.enabled = false
 		queue := n.queue
-		stopCleanup := n.stopCleanup
 		cleanupDone := n.cleanupDone
 		client := n.webhookClient
 
@@ -3271,14 +3270,9 @@ func (n *NotificationManager) Stop() {
 			n.stopCleanup = nil
 		}
 
-		// Get queue reference before unlocking
-		queue := n.queue
+		// Nil out queue before unlocking
 		n.queue = nil
 
-		// Stop cleanup goroutine and wait for exit before returning
-		if stopCleanup != nil {
-			close(stopCleanup)
-		}
 		if cleanupDone != nil {
 			<-cleanupDone
 		}

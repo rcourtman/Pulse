@@ -15,7 +15,6 @@ import (
 	"net/url"
 	"os"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -84,18 +83,19 @@ type Agent struct {
 }
 
 const (
-	defaultInterval             = 30 * time.Second
-	defaultMaxPods              = 200
-	defaultMaxDeployments       = 1000
-	requestTimeout              = 20 * time.Second
-	collectReportTimeout        = 45 * time.Second
-	listPageSize          int64 = 250
-	maxKubeAPIRetries           = 3
-	initialRetryBackoff         = 300 * time.Millisecond
-	maxRetryBackoff             = 3 * time.Second
-	maxSummaryMetricNodes       = 200
-	summaryMetricsWorkers       = 8
-	reportUserAgent             = "pulse-kubernetes-agent/"
+	defaultInterval                   = 30 * time.Second
+	defaultMaxPods                    = 200
+	defaultMaxDeployments             = 1000
+	requestTimeout                    = 20 * time.Second
+	collectReportTimeout              = 45 * time.Second
+	listPageSize                int64 = 250
+	maxKubeAPIRetries                 = 3
+	initialRetryBackoff               = 300 * time.Millisecond
+	maxRetryBackoff                   = 3 * time.Second
+	maxSummaryMetricNodes             = 200
+	summaryMetricsWorkers             = 8
+	reportUserAgent                   = "pulse-kubernetes-agent/"
+	maxMetricsResponseBodyBytes int64 = 32 * 1024 * 1024 // 32 MB
 )
 
 func New(cfg Config) (*Agent, error) {
@@ -196,7 +196,7 @@ func New(cfg Config) (*Agent, error) {
 		clusterContext:    clusterContext,
 		includeNamespaces: cfg.IncludeNamespaces,
 		excludeNamespaces: cfg.ExcludeNamespaces,
-		reportBuffer:      utils.NewQueue[agentsk8s.Report](60),
+		reportBuffer:      utils.New[agentsk8s.Report](60),
 	}
 
 	if err := agent.discoverClusterMetadata(context.Background()); err != nil {
@@ -324,59 +324,6 @@ func computeClusterID(server, context, name string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func normalizePulseURL(raw string) (string, error) {
-	raw = strings.TrimSpace(raw)
-
-	parsed, err := url.Parse(raw)
-	if err != nil {
-		return "", err
-	}
-
-	if parsed.Scheme == "" || parsed.Host == "" {
-		return "", errors.New("must include http:// or https:// with a valid host")
-	}
-
-	scheme := strings.ToLower(parsed.Scheme)
-	if scheme != "http" && scheme != "https" {
-		return "", fmt.Errorf("unsupported scheme %q", parsed.Scheme)
-	}
-
-	if parsed.User != nil {
-		return "", errors.New("userinfo is not supported")
-	}
-
-	if parsed.RawQuery != "" {
-		return "", errors.New("query parameters are not supported")
-	}
-
-	if parsed.Fragment != "" {
-		return "", errors.New("fragments are not supported")
-	}
-
-	if parsed.Hostname() == "" {
-		return "", errors.New("host is required")
-	}
-
-	if port := parsed.Port(); port != "" {
-		portNum, err := strconv.Atoi(port)
-		if err != nil || portNum < 1 || portNum > 65535 {
-			return "", fmt.Errorf("invalid port %q: must be between 1 and 65535", port)
-		}
-	}
-
-	parsed.Scheme = scheme
-	parsed.Host = strings.ToLower(parsed.Host)
-	parsed.Path = strings.TrimRight(parsed.Path, "/")
-	parsed.RawPath = ""
-
-	normalized := strings.TrimRight(parsed.String(), "/")
-	if normalized == "" {
-		return "", errors.New("URL is empty after normalization")
-	}
-
-	return normalized, nil
-}
-
 func (a *Agent) discoverClusterMetadata(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
@@ -389,6 +336,12 @@ func (a *Agent) discoverClusterMetadata(ctx context.Context) error {
 		a.clusterVersion = strings.TrimSpace(version.GitVersion)
 	}
 	return nil
+}
+
+func (a *Agent) closeIdleConnections() {
+	if a.httpClient != nil {
+		a.httpClient.CloseIdleConnections()
+	}
 }
 
 func (a *Agent) Run(ctx context.Context) error {
@@ -571,8 +524,6 @@ func (a *Agent) collectUsageMetrics(ctx context.Context, nodes []agentsk8s.Node)
 		return nil, nil, nil
 	}
 
-	restClient := discovery.RESTClient()
-
 	nodeRaw, nodeErr := readKubernetesResponseBody(ctx, restClient, "/apis/metrics.k8s.io/v1beta1/nodes", maxMetricsResponseBodyBytes)
 	podRaw, podErr := readKubernetesResponseBody(ctx, restClient, "/apis/metrics.k8s.io/v1beta1/pods", maxMetricsResponseBodyBytes)
 
@@ -641,16 +592,7 @@ func summaryNodeNames(nodes []agentsk8s.Node, max int) ([]string, int) {
 		if nodeName == "" {
 			continue
 		}
-
-		path := "/api/v1/nodes/" + url.PathEscape(nodeName) + "/proxy/stats/summary"
-		raw, err := readKubernetesResponseBody(ctx, restClient, path, maxMetricsResponseBodyBytes)
-		if err != nil {
-			failed++
-			a.logger.Debug().
-				Err(err).
-				Str("node", nodeName).
-				Str("path", path).
-				Msg("Failed to fetch Kubernetes pod summary metrics")
+		if _, ok := seen[nodeName]; ok {
 			continue
 		}
 		seen[nodeName] = struct{}{}
@@ -710,7 +652,8 @@ func (a *Agent) collectPodSummaryMetrics(ctx context.Context, nodes []agentsk8s.
 				Str("node", nodeName).
 				Int("payload_bytes", len(raw)).
 				Msg("Failed to parse Kubernetes pod summary metrics payload")
-			continue
+			lock.Unlock()
+			return
 		}
 
 		lock.Lock()
@@ -1689,7 +1632,7 @@ func (a *Agent) sendReport(ctx context.Context, report agentsk8s.Report) (retErr
 	reportURL := fmt.Sprintf("%s/api/agents/kubernetes/report", a.pulseURL)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reportURL, bytes.NewReader(payload))
 	if err != nil {
-		return fmt.Errorf("create request for %s: %w", url, err)
+		return fmt.Errorf("create request for %s: %w", reportURL, err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -1699,7 +1642,7 @@ func (a *Agent) sendReport(ctx context.Context, report agentsk8s.Report) (retErr
 
 	resp, err := a.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("send request to %s: %w", url, err)
+		return fmt.Errorf("send request to %s: %w", reportURL, err)
 	}
 	defer func() {
 		if closeErr := resp.Body.Close(); closeErr != nil {
@@ -1719,9 +1662,9 @@ func (a *Agent) sendReport(ctx context.Context, report agentsk8s.Report) (retErr
 		}
 		msg := strings.TrimSpace(string(body))
 		if msg != "" {
-			return fmt.Errorf("pulse responded with status %s for %s: %s", resp.Status, url, msg)
+			return fmt.Errorf("pulse responded with status %s for %s: %s", resp.Status, reportURL, msg)
 		}
-		return fmt.Errorf("pulse responded with status %s for %s", resp.Status, url)
+		return fmt.Errorf("pulse responded with status %s for %s", resp.Status, reportURL)
 	}
 
 	return nil

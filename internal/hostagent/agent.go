@@ -13,7 +13,6 @@ import (
 	"net/url"
 	"runtime"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -63,27 +62,27 @@ type Agent struct {
 	logger     zerolog.Logger
 	httpClient *http.Client
 
-	hostInfo        *gohost.InfoStat
-	hostname        string
-	displayName     string
-	platform        string
-	osName          string
-	osVersion       string
-	kernelVersion   string
-	architecture    string
-	machineID       string
-	agentID         string
-	agentVersion    string
-	updatedFrom     string // Previous version if recently auto-updated (reported once)
-	reportIP        string // User-specified IP to report (for multi-NIC systems)
-	interval        time.Duration
-	trimmedPulseURL string
-	reportBuffer    *buffer.Queue[agentshost.Report]
-	commandClient   *CommandClient
-	runCtx          context.Context
-	commandCancel   context.CancelFunc
-	commandDone     chan struct{}
-	collector       SystemCollector
+	hostInfo               *gohost.InfoStat
+	hostname               string
+	displayName            string
+	platform               string
+	osName                 string
+	osVersion              string
+	kernelVersion          string
+	architecture           string
+	machineID              string
+	agentID                string
+	agentVersion           string
+	updatedFrom            string // Previous version if recently auto-updated (reported once)
+	reportIP               string // User-specified IP to report (for multi-NIC systems)
+	interval               time.Duration
+	trimmedPulseURL        string
+	reportBuffer           *utils.Queue[agentshost.Report]
+	commandClient          *CommandClient
+	commandClientMu        sync.Mutex
+	commandClientRunCancel context.CancelFunc
+	commandClientParentCtx context.Context
+	collector              SystemCollector
 }
 
 const defaultInterval = 30 * time.Second
@@ -267,7 +266,7 @@ func New(cfg Config) (*Agent, error) {
 		reportIP:        cfg.ReportIP,
 		interval:        cfg.Interval,
 		trimmedPulseURL: pulseURL,
-		reportBuffer:    utils.NewQueue[agentshost.Report](bufferCapacity),
+		reportBuffer:    utils.New[agentshost.Report](bufferCapacity),
 		collector:       collector,
 	}
 
@@ -280,59 +279,6 @@ func New(cfg Config) (*Agent, error) {
 	}
 
 	return agent, nil
-}
-
-func normalizePulseURL(raw string) (string, error) {
-	raw = strings.TrimSpace(raw)
-
-	parsed, err := url.Parse(raw)
-	if err != nil {
-		return "", err
-	}
-
-	if parsed.Scheme == "" || parsed.Host == "" {
-		return "", errors.New("must include http:// or https:// with a valid host")
-	}
-
-	scheme := strings.ToLower(parsed.Scheme)
-	if scheme != "http" && scheme != "https" {
-		return "", fmt.Errorf("unsupported scheme %q", parsed.Scheme)
-	}
-
-	if parsed.User != nil {
-		return "", errors.New("userinfo is not supported")
-	}
-
-	if parsed.RawQuery != "" {
-		return "", errors.New("query parameters are not supported")
-	}
-
-	if parsed.Fragment != "" {
-		return "", errors.New("fragments are not supported")
-	}
-
-	if parsed.Hostname() == "" {
-		return "", errors.New("host is required")
-	}
-
-	if port := parsed.Port(); port != "" {
-		portNum, err := strconv.Atoi(port)
-		if err != nil || portNum < 1 || portNum > 65535 {
-			return "", fmt.Errorf("invalid port %q: must be between 1 and 65535", port)
-		}
-	}
-
-	parsed.Scheme = scheme
-	parsed.Host = strings.ToLower(parsed.Host)
-	parsed.Path = strings.TrimRight(parsed.Path, "/")
-	parsed.RawPath = ""
-
-	normalized := strings.TrimRight(parsed.String(), "/")
-	if normalized == "" {
-		return "", errors.New("URL is empty after normalization")
-	}
-
-	return normalized, nil
 }
 
 func normalizeProxmoxType(raw string) (string, error) {
@@ -366,16 +312,6 @@ func normalizeReportIP(raw string) (string, error) {
 
 // Run executes the agent until the context is cancelled.
 func (a *Agent) Run(ctx context.Context) error {
-	a.commandMu.Lock()
-	a.runCtx = ctx
-	a.commandMu.Unlock()
-	defer func() {
-		a.stopCommandClient(false)
-		a.commandMu.Lock()
-		a.runCtx = nil
-		a.commandMu.Unlock()
-	}()
-
 	if a.cfg.RunOnce {
 		return a.runOnce(ctx)
 	}
@@ -397,8 +333,8 @@ func (a *Agent) Run(ctx context.Context) error {
 	}
 
 	// Start command client in background for AI command execution
-	if a.commandClient != nil {
-		a.startCommandClient()
+	if commandClient != nil {
+		a.startCommandClient(commandClient)
 	}
 
 	ticker := time.NewTicker(a.interval)
@@ -697,63 +633,11 @@ func (a *Agent) applyRemoteConfig(commandsEnabled bool) {
 	a.commandClientMu.Unlock()
 
 	if clientToStart != nil {
-		// Server enabled commands, but we don't have a command client.
 		a.logger.Info().Msg("Server enabled command execution - starting command client")
-		client := newCommandClient(a.cfg, a.agentID, a.hostname, a.platform, a.agentVersion)
-		a.commandMu.Lock()
-		if a.commandClient != nil {
-			a.commandMu.Unlock()
-			return
-		}
-		a.commandClient = client
-		a.startCommandClient()
-	} else if !commandsEnabled && currentlyEnabled {
-		// Server disabled commands, but we have a command client running
+		a.startCommandClient(clientToStart)
+	} else if shouldStop {
 		a.logger.Info().Msg("Server disabled command execution - stopping command client")
-		a.stopCommandClient()
-		a.commandClient = nil
-	}
-}
-
-func (a *Agent) startCommandClient() {
-	if a.commandClient == nil || a.runCtx == nil || a.commandCancel != nil {
-		return
-	}
-
-	clientCtx, cancel := context.WithCancel(a.runCtx)
-	a.commandCancel = cancel
-
-	done := make(chan struct{})
-	a.commandDone = done
-	client := a.commandClient
-
-	go func() {
-		defer close(done)
-		if err := client.Run(clientCtx); err != nil && !errors.Is(err, context.Canceled) {
-			a.logger.Error().Err(err).Msg("Command client stopped with error")
-		}
-	}()
-}
-
-func (a *Agent) stopCommandClient() {
-	if a.commandCancel != nil {
-		a.commandCancel()
-		a.commandCancel = nil
-	}
-
-	if a.commandClient != nil {
-		if err := a.commandClient.Close(); err != nil {
-			a.logger.Debug().Err(err).Msg("Error closing command client connection")
-		}
-	}
-
-	if a.commandDone != nil {
-		select {
-		case <-a.commandDone:
-		case <-time.After(2 * time.Second):
-			a.logger.Warn().Msg("Timed out waiting for command client shutdown")
-		}
-		a.commandDone = nil
+		a.stopCommandClient(true)
 	}
 }
 

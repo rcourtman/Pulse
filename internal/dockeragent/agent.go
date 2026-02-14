@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -123,6 +122,10 @@ type Agent struct {
 	preCPUStatsFailures int
 	reportBuffer        *utils.Queue[agentsdocker.Report]
 	registryChecker     *RegistryChecker // For checking container image updates
+	collectMu           sync.Mutex       // serializes collectOnce calls
+	backgroundMu        sync.Mutex       // protects updateCheckRunning, cleanupTaskRunning
+	updateCheckRunning  bool
+	cleanupTaskRunning  bool
 	asyncOnce           sync.Once
 	asyncCtx            context.Context
 	asyncCancel         context.CancelFunc
@@ -280,7 +283,7 @@ func New(cfg Config) (*Agent, error) {
 		allowedStates:    make(map[string]struct{}, len(stateFilters)),
 		stateFilters:     stateFilters,
 		prevContainerCPU: make(map[string]cpuSample),
-		reportBuffer:     utils.NewQueue[agentsdocker.Report](bufferCapacity),
+		reportBuffer:     utils.New[agentsdocker.Report](bufferCapacity),
 		registryChecker:  newRegistryCheckerWithConfig(*logger, !cfg.DisableUpdateChecks),
 	}
 
@@ -315,9 +318,9 @@ func normalizeTargets(raw []TargetConfig) ([]TargetConfig, error) {
 			return nil, fmt.Errorf("pulse target %s is missing API token", targetURL)
 		}
 
-		normalizedURL, err := normalizeTargetURL(url)
+		normalizedURL, err := normalizeTargetURL(targetURL)
 		if err != nil {
-			return nil, fmt.Errorf("invalid pulse target URL %q: %w", url, err)
+			return nil, fmt.Errorf("invalid pulse target URL %q: %w", targetURL, err)
 		}
 
 		key := fmt.Sprintf("%s|%s|%t", normalizedURL, token, target.InsecureSkipVerify)

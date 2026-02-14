@@ -13,12 +13,12 @@ import (
 )
 
 func TestListBlockDevices(t *testing.T) {
-	origRun := runCommandOutput
+	origRun := smartRunCommandOutput
 	origGOOS := runtimeGOOS
-	t.Cleanup(func() { runCommandOutput = origRun; runtimeGOOS = origGOOS })
+	t.Cleanup(func() { smartRunCommandOutput = origRun; runtimeGOOS = origGOOS })
 
 	runtimeGOOS = "linux"
-	runCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		if name != "lsblk" {
 			return nil, errors.New("unexpected command")
 		}
@@ -36,12 +36,12 @@ func TestListBlockDevices(t *testing.T) {
 }
 
 func TestListBlockDevicesFreeBSD(t *testing.T) {
-	origRun := runCommandOutput
+	origRun := smartRunCommandOutput
 	origGOOS := runtimeGOOS
-	t.Cleanup(func() { runCommandOutput = origRun; runtimeGOOS = origGOOS })
+	t.Cleanup(func() { smartRunCommandOutput = origRun; runtimeGOOS = origGOOS })
 
 	runtimeGOOS = "freebsd"
-	runCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		if name != "sysctl" {
 			return nil, errors.New("unexpected command: " + name)
 		}
@@ -58,12 +58,12 @@ func TestListBlockDevicesFreeBSD(t *testing.T) {
 }
 
 func TestListBlockDevicesFreeBSDWithExcludes(t *testing.T) {
-	origRun := runCommandOutput
+	origRun := smartRunCommandOutput
 	origGOOS := runtimeGOOS
-	t.Cleanup(func() { runCommandOutput = origRun; runtimeGOOS = origGOOS })
+	t.Cleanup(func() { smartRunCommandOutput = origRun; runtimeGOOS = origGOOS })
 
 	runtimeGOOS = "freebsd"
-	runCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		return []byte("ada0 da0 nvd0\n"), nil
 	}
 
@@ -77,10 +77,10 @@ func TestListBlockDevicesFreeBSDWithExcludes(t *testing.T) {
 }
 
 func TestListBlockDevicesError(t *testing.T) {
-	origRun := runCommandOutput
-	t.Cleanup(func() { runCommandOutput = origRun })
+	origRun := smartRunCommandOutput
+	t.Cleanup(func() { smartRunCommandOutput = origRun })
 
-	runCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		return nil, errors.New("boom")
 	}
 
@@ -90,11 +90,11 @@ func TestListBlockDevicesError(t *testing.T) {
 }
 
 func TestListBlockDevicesLinuxFallbackSysfs(t *testing.T) {
-	origRun := runCommandOutput
+	origRun := smartRunCommandOutput
 	origReadDir := readDir
 	origStat := osStat
 	t.Cleanup(func() {
-		runCommandOutput = origRun
+		smartRunCommandOutput = origRun
 		readDir = origReadDir
 		osStat = origStat
 	})
@@ -113,7 +113,7 @@ func TestListBlockDevicesLinuxFallbackSysfs(t *testing.T) {
 	mkdirAll(filepath.Join(sysBlockDir, "loop0")) // filtered as virtual
 	mkdirAll(filepath.Join(sysBlockDir, "sr0"))   // filtered as optical
 
-	runCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		if name != "lsblk" {
 			return nil, errors.New("unexpected command")
 		}
@@ -143,16 +143,16 @@ func TestListBlockDevicesLinuxFallbackSysfs(t *testing.T) {
 }
 
 func TestListBlockDevicesLinuxFallbackError(t *testing.T) {
-	origRun := runCommandOutput
+	origRun := smartRunCommandOutput
 	origReadDir := readDir
 	origStat := osStat
 	t.Cleanup(func() {
-		runCommandOutput = origRun
+		smartRunCommandOutput = origRun
 		readDir = origReadDir
 		osStat = origStat
 	})
 
-	runCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		return nil, errors.New("lsblk failed")
 	}
 	readDir = func(path string) ([]os.DirEntry, error) {
@@ -167,12 +167,12 @@ func TestListBlockDevicesLinuxFallbackError(t *testing.T) {
 }
 
 func TestDefaultRunCommandOutput(t *testing.T) {
-	origRun := runCommandOutput
-	t.Cleanup(func() { runCommandOutput = origRun })
-	runCommandOutput = origRun
+	origRun := smartRunCommandOutput
+	t.Cleanup(func() { smartRunCommandOutput = origRun })
+	smartRunCommandOutput = origRun
 
-	if _, err := runCommandOutput(context.Background(), "sh", "-c", "printf ''"); err != nil {
-		t.Fatalf("expected default runCommandOutput to work, got %v", err)
+	if _, err := smartRunCommandOutput(context.Background(), "sh", "-c", "printf ''"); err != nil {
+		t.Fatalf("expected default smartRunCommandOutput to work, got %v", err)
 	}
 }
 
@@ -181,12 +181,12 @@ func TestDefaultRunCommandOutputRejectsOversizedOutput(t *testing.T) {
 		t.Skip("sh not available")
 	}
 
-	origRun := runCommandOutput
-	t.Cleanup(func() { runCommandOutput = origRun })
-	runCommandOutput = origRun
+	origRun := smartRunCommandOutput
+	t.Cleanup(func() { smartRunCommandOutput = origRun })
+	smartRunCommandOutput = origRun
 
 	cmd := fmt.Sprintf("head -c %d /dev/zero", maxCommandOutputBytes+1)
-	_, err := runCommandOutput(context.Background(), "sh", "-c", cmd)
+	_, err := smartRunCommandOutput(context.Background(), "sh", "-c", cmd)
 	if err == nil {
 		t.Fatal("expected oversized output error")
 	}
@@ -196,10 +196,10 @@ func TestDefaultRunCommandOutputRejectsOversizedOutput(t *testing.T) {
 }
 
 func TestCollectLocalNoDevices(t *testing.T) {
-	origRun := runCommandOutput
-	t.Cleanup(func() { runCommandOutput = origRun })
+	origRun := smartRunCommandOutput
+	t.Cleanup(func() { smartRunCommandOutput = origRun })
 
-	runCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		if name == "lsblk" {
 			return []byte(""), nil
 		}
@@ -216,10 +216,10 @@ func TestCollectLocalNoDevices(t *testing.T) {
 }
 
 func TestCollectSMARTLocalListDevicesError(t *testing.T) {
-	origRun := runCommandOutput
-	t.Cleanup(func() { runCommandOutput = origRun })
+	origRun := smartRunCommandOutput
+	t.Cleanup(func() { smartRunCommandOutput = origRun })
 
-	runCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		return nil, errors.New("lsblk failed")
 	}
 
@@ -229,11 +229,11 @@ func TestCollectSMARTLocalListDevicesError(t *testing.T) {
 }
 
 func TestCollectSMARTLocalSkipsErrors(t *testing.T) {
-	origRun := runCommandOutput
+	origRun := smartRunCommandOutput
 	origLook := execLookPath
 	origNow := timeNow
 	t.Cleanup(func() {
-		runCommandOutput = origRun
+		smartRunCommandOutput = origRun
 		execLookPath = origLook
 		timeNow = origNow
 	})
@@ -242,7 +242,7 @@ func TestCollectSMARTLocalSkipsErrors(t *testing.T) {
 	timeNow = func() time.Time { return fixed }
 	execLookPath = func(string) (string, error) { return "smartctl", nil }
 
-	runCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		if name == "lsblk" {
 			return []byte("sda disk\nsdb disk\n"), nil
 		}
@@ -289,15 +289,15 @@ func TestCollectDeviceSMARTLookPathError(t *testing.T) {
 }
 
 func TestCollectDeviceSMARTOversizedOutput(t *testing.T) {
-	origRun := runCommandOutput
+	origRun := smartRunCommandOutput
 	origLook := execLookPath
 	t.Cleanup(func() {
-		runCommandOutput = origRun
+		smartRunCommandOutput = origRun
 		execLookPath = origLook
 	})
 
 	execLookPath = func(string) (string, error) { return "smartctl", nil }
-	runCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		return nil, fmt.Errorf("%w (%d bytes)", errCommandOutputTooLarge, maxCommandOutputBytes)
 	}
 
@@ -311,11 +311,11 @@ func TestCollectDeviceSMARTStandby(t *testing.T) {
 		t.Skip("sh not available")
 	}
 
-	origRun := runCommandOutput
+	origRun := smartRunCommandOutput
 	origLook := execLookPath
 	origNow := timeNow
 	t.Cleanup(func() {
-		runCommandOutput = origRun
+		smartRunCommandOutput = origRun
 		execLookPath = origLook
 		timeNow = origNow
 	})
@@ -323,7 +323,7 @@ func TestCollectDeviceSMARTStandby(t *testing.T) {
 	fixed := time.Date(2024, 2, 3, 4, 5, 6, 0, time.UTC)
 	timeNow = func() time.Time { return fixed }
 	execLookPath = func(string) (string, error) { return "smartctl", nil }
-	runCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		return exec.CommandContext(ctx, "sh", "-c", "exit 2").Output()
 	}
 
@@ -341,15 +341,15 @@ func TestCollectDeviceSMARTExitErrorNoOutput(t *testing.T) {
 		t.Skip("sh not available")
 	}
 
-	origRun := runCommandOutput
+	origRun := smartRunCommandOutput
 	origLook := execLookPath
 	t.Cleanup(func() {
-		runCommandOutput = origRun
+		smartRunCommandOutput = origRun
 		execLookPath = origLook
 	})
 
 	execLookPath = func(string) (string, error) { return "smartctl", nil }
-	runCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		return exec.CommandContext(ctx, "sh", "-c", "exit 1").Output()
 	}
 
@@ -363,15 +363,15 @@ func TestCollectDeviceSMARTExitErrorWithOutput(t *testing.T) {
 		t.Skip("sh not available")
 	}
 
-	origRun := runCommandOutput
+	origRun := smartRunCommandOutput
 	origLook := execLookPath
 	t.Cleanup(func() {
-		runCommandOutput = origRun
+		smartRunCommandOutput = origRun
 		execLookPath = origLook
 	})
 
 	execLookPath = func(string) (string, error) { return "smartctl", nil }
-	runCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		payload := `{"model_name":"Model","serial_number":"Serial","device":{"protocol":"ATA"},"smart_status":{"passed":false},"temperature":{"current":45}}`
 		return exec.CommandContext(ctx, "sh", "-c", "echo '"+payload+"'; exit 1").Output()
 	}
@@ -386,15 +386,15 @@ func TestCollectDeviceSMARTExitErrorWithOutput(t *testing.T) {
 }
 
 func TestCollectDeviceSMARTJSONError(t *testing.T) {
-	origRun := runCommandOutput
+	origRun := smartRunCommandOutput
 	origLook := execLookPath
 	t.Cleanup(func() {
-		runCommandOutput = origRun
+		smartRunCommandOutput = origRun
 		execLookPath = origLook
 	})
 
 	execLookPath = func(string) (string, error) { return "smartctl", nil }
-	runCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		return []byte("{"), nil
 	}
 
@@ -404,15 +404,15 @@ func TestCollectDeviceSMARTJSONError(t *testing.T) {
 }
 
 func TestCollectDeviceSMARTMissingSmartStatusUsesUnknownHealth(t *testing.T) {
-	origRun := runCommandOutput
+	origRun := smartRunCommandOutput
 	origLook := execLookPath
 	t.Cleanup(func() {
-		runCommandOutput = origRun
+		smartRunCommandOutput = origRun
 		execLookPath = origLook
 	})
 
 	execLookPath = func(string) (string, error) { return "smartctl", nil }
-	runCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		payload := `{"model_name":"Model","serial_number":"Serial","device":{"protocol":"ATA"},"temperature":{"current":40}}`
 		return []byte(payload), nil
 	}
@@ -427,11 +427,11 @@ func TestCollectDeviceSMARTMissingSmartStatusUsesUnknownHealth(t *testing.T) {
 }
 
 func TestCollectDeviceSMARTNVMeTempFallback(t *testing.T) {
-	origRun := runCommandOutput
+	origRun := smartRunCommandOutput
 	origLook := execLookPath
 	origNow := timeNow
 	t.Cleanup(func() {
-		runCommandOutput = origRun
+		smartRunCommandOutput = origRun
 		execLookPath = origLook
 		timeNow = origNow
 	})
@@ -439,7 +439,7 @@ func TestCollectDeviceSMARTNVMeTempFallback(t *testing.T) {
 	fixed := time.Date(2024, 4, 5, 6, 7, 8, 0, time.UTC)
 	timeNow = func() time.Time { return fixed }
 	execLookPath = func(string) (string, error) { return "smartctl", nil }
-	runCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		payload := smartctlJSON{}
 		payload.Device.Protocol = "NVMe"
 		payload.NVMeSmartHealthInformationLog.Temperature = 55
@@ -460,15 +460,15 @@ func TestCollectDeviceSMARTNVMeTempFallback(t *testing.T) {
 }
 
 func TestCollectDeviceSMARTWWN(t *testing.T) {
-	origRun := runCommandOutput
+	origRun := smartRunCommandOutput
 	origLook := execLookPath
 	t.Cleanup(func() {
-		runCommandOutput = origRun
+		smartRunCommandOutput = origRun
 		execLookPath = origLook
 	})
 
 	execLookPath = func(string) (string, error) { return "smartctl", nil }
-	runCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		payload := smartctlJSON{}
 		payload.WWN.NAA = 5
 		payload.WWN.OUI = 0xabc
@@ -491,10 +491,10 @@ func TestCollectDeviceSMARTWWN(t *testing.T) {
 }
 
 func TestListBlockDevicesLinuxWithExcludes(t *testing.T) {
-	origRun := runCommandOutput
-	t.Cleanup(func() { runCommandOutput = origRun })
+	origRun := smartRunCommandOutput
+	t.Cleanup(func() { smartRunCommandOutput = origRun })
 
-	runCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		if name != "lsblk" {
 			return nil, errors.New("unexpected command")
 		}
@@ -512,10 +512,10 @@ func TestListBlockDevicesLinuxWithExcludes(t *testing.T) {
 }
 
 func TestListBlockDevicesFreeBSDError(t *testing.T) {
-	origRun := runCommandOutput
-	t.Cleanup(func() { runCommandOutput = origRun })
+	origRun := smartRunCommandOutput
+	t.Cleanup(func() { smartRunCommandOutput = origRun })
 
-	runCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		if name != "sysctl" {
 			return nil, errors.New("unexpected command")
 		}

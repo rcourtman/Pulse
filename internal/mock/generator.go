@@ -72,67 +72,6 @@ var DefaultConfig = MockConfig{
 	StoppedPercent:           0.2,
 }
 
-func normalizeMockConfig(config MockConfig) MockConfig {
-	normalized := config
-
-	if normalized.NodeCount < 0 {
-		normalized.NodeCount = DefaultConfig.NodeCount
-	}
-	if normalized.VMsPerNode < 0 {
-		normalized.VMsPerNode = DefaultConfig.VMsPerNode
-	}
-	if normalized.LXCsPerNode < 0 {
-		normalized.LXCsPerNode = DefaultConfig.LXCsPerNode
-	}
-	if normalized.DockerHostCount < 0 {
-		normalized.DockerHostCount = DefaultConfig.DockerHostCount
-	}
-	if normalized.DockerContainersPerHost < 0 {
-		normalized.DockerContainersPerHost = DefaultConfig.DockerContainersPerHost
-	}
-	if normalized.GenericHostCount < 0 {
-		normalized.GenericHostCount = DefaultConfig.GenericHostCount
-	}
-	if normalized.K8sClusterCount < 0 {
-		normalized.K8sClusterCount = DefaultConfig.K8sClusterCount
-	}
-	if normalized.K8sNodesPerCluster < 0 {
-		normalized.K8sNodesPerCluster = DefaultConfig.K8sNodesPerCluster
-	}
-	if normalized.K8sPodsPerCluster < 0 {
-		normalized.K8sPodsPerCluster = DefaultConfig.K8sPodsPerCluster
-	}
-	if normalized.K8sDeploymentsPerCluster < 0 {
-		normalized.K8sDeploymentsPerCluster = DefaultConfig.K8sDeploymentsPerCluster
-	}
-
-	if len(normalized.HighLoadNodes) > 0 {
-		seen := make(map[string]struct{}, len(normalized.HighLoadNodes))
-		cleaned := make([]string, 0, len(normalized.HighLoadNodes))
-		for _, node := range normalized.HighLoadNodes {
-			canonical := strings.ToLower(strings.TrimSpace(node))
-			if canonical == "" {
-				continue
-			}
-			if _, exists := seen[canonical]; exists {
-				continue
-			}
-			seen[canonical] = struct{}{}
-			cleaned = append(cleaned, canonical)
-		}
-		normalized.HighLoadNodes = cleaned
-	}
-
-	if math.IsNaN(normalized.StoppedPercent) || math.IsInf(normalized.StoppedPercent, 0) {
-		normalized.StoppedPercent = DefaultConfig.StoppedPercent
-	}
-	if normalized.StoppedPercent < 0 || normalized.StoppedPercent > 1 {
-		normalized.StoppedPercent = DefaultConfig.StoppedPercent
-	}
-
-	return normalized
-}
-
 var appNames = []string{
 	"jellyfin", "plex", "nextcloud", "pihole", "homeassistant",
 	"gitlab", "postgres", "mysql", "redis", "nginx",

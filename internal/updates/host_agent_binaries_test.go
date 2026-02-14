@@ -277,6 +277,14 @@ func TestWindowsBinaryFilenames(t *testing.T) {
 }
 
 func TestNormalizeHostAgentSymlinkTarget(t *testing.T) {
+	// Build allowed names from the real binary list
+	allowedNames := make(map[string]struct{})
+	for _, b := range requiredHostAgentBinaries {
+		for _, fn := range b.Filenames {
+			allowedNames[fn] = struct{}{}
+		}
+	}
+
 	tests := []struct {
 		name    string
 		input   string
@@ -293,7 +301,7 @@ func TestNormalizeHostAgentSymlinkTarget(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := normalizeHostAgentSymlinkTarget(tc.input)
+			got, err := normalizeHostAgentSymlinkTarget(tc.input, allowedNames)
 			if tc.wantErr {
 				if err == nil {
 					t.Fatalf("expected error for %q", tc.input)

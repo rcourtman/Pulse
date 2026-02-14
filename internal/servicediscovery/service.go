@@ -225,18 +225,19 @@ type Service struct {
 	aiAnalyzer    AIAnalyzer
 	wsHub         WSBroadcaster // WebSocket hub for broadcasting progress
 
-	mu              sync.RWMutex
-	running         bool
-	stopping        bool
-	stopCh          chan struct{}
-	loopDone        chan struct{}
-	runCancel       context.CancelFunc
-	intervalCh      chan time.Duration // Channel for live interval updates
-	interval        time.Duration
-	initialDelay    time.Duration
-	lastRun         time.Time
-	deepScanTimeout time.Duration // Timeout for individual deep scans
-	maxDiscoveryAge time.Duration // Max age before rediscovery (default 30 days)
+	mu                sync.RWMutex
+	running           bool
+	stopping          bool
+	stopCh            chan struct{}
+	loopDone          chan struct{}
+	runCancel         context.CancelFunc
+	intervalCh        chan time.Duration // Channel for live interval updates
+	interval          time.Duration
+	initialDelay      time.Duration
+	lastRun           time.Time
+	deepScanTimeout   time.Duration // Timeout for individual deep scans
+	aiAnalysisTimeout time.Duration // Timeout for individual AI analysis calls
+	maxDiscoveryAge   time.Duration // Max age before rediscovery (default 30 days)
 
 	// Cache for AI analysis results (by image name)
 	analysisCache map[string]*analysisCacheEntry

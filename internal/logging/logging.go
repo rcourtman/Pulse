@@ -30,6 +30,9 @@ const (
 	defaultMaxAgeDays       = 30
 	maxDurationDays         = int((1<<63 - 1) / int64(24*time.Hour))
 	maxSafeSizeMB     int64 = (1<<63 - 1) / bytesPerMB
+
+	logFilePerm os.FileMode = 0600
+	logDirPerm  os.FileMode = 0700
 )
 
 // Config controls logger initialization.

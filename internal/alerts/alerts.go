@@ -475,6 +475,7 @@ type Manager struct {
 	mu               sync.RWMutex
 	saveMu           sync.Mutex
 	callbackMu       sync.RWMutex
+	alertsDir        string
 	config           AlertConfig
 	activeAlerts     map[string]*Alert
 	historyManager   *HistoryManager

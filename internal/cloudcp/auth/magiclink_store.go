@@ -241,7 +241,7 @@ func (s *Store) DeleteExpired(now time.Time) error {
 	db := s.db
 	if db == nil {
 		s.mu.Unlock()
-		return
+		return nil
 	}
 	defer s.mu.Unlock()
 	if _, err := s.db.Exec(`DELETE FROM magic_link_tokens WHERE expires_at < ?`, now.UTC().Unix()); err != nil {

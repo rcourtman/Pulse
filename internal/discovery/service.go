@@ -87,9 +87,11 @@ func (h historyEntry) Status() string {
 }
 
 const (
-	defaultHistoryLimit = 20
-	defaultScanInterval = 5 * time.Minute
-	defaultSubnet       = "auto"
+	defaultHistoryLimit        = 20
+	defaultScanInterval        = 5 * time.Minute
+	defaultSubnet              = "auto"
+	maxManualSubnetInputLength = 4096
+	maxManualSubnetCount       = 50
 )
 
 type scanResultStatus string
@@ -303,8 +305,8 @@ func (s *Service) Start(ctx context.Context) {
 	s.mu.Unlock()
 
 	log.Info().
-		Dur("interval", interval).
-		Str("subnet", subnet).
+		Dur("interval", s.interval).
+		Str("subnet", s.subnet).
 		Msg("Starting background discovery service")
 
 	// Do initial scan immediately
@@ -761,38 +763,25 @@ func normalizeScanInterval(interval time.Duration) time.Duration {
 	return interval
 }
 
-func normalizeDiscoverySubnet(subnet string) string {
-	trimmed := strings.TrimSpace(subnet)
-	if trimmed == "" || strings.EqualFold(trimmed, defaultSubnet) {
-		return defaultSubnet
-	}
+// getSubnet returns the current subnet under lock.
+func (s *Service) getSubnet() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.subnet
+}
 
-	var (
-		normalized []string
-		seen       = make(map[string]struct{})
-	)
-	for _, token := range strings.Split(trimmed, ",") {
-		token = strings.TrimSpace(token)
-		if token == "" {
-			continue
-		}
-
-		_, parsedNet, err := net.ParseCIDR(token)
-		if err != nil {
-			continue
-		}
-
-		canonical := parsedNet.String()
-		if _, exists := seen[canonical]; exists {
-			continue
-		}
-		seen[canonical] = struct{}{}
-		normalized = append(normalized, canonical)
-	}
-
-	if len(normalized) == 0 {
-		return defaultSubnet
-	}
-
-	return strings.Join(normalized, ",")
+// goRecover runs fn in a new goroutine with panic recovery.
+func goRecover(label string, fn func()) {
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Error().
+					Interface("panic", r).
+					Str("label", label).
+					Stack().
+					Msg("Recovered from panic in goroutine")
+			}
+		}()
+		fn()
+	}()
 }

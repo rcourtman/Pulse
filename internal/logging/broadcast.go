@@ -75,7 +75,7 @@ func (b *LogBroadcaster) Write(p []byte) (n int, err error) {
 			fmt.Fprintf(
 				broadcastWarnWriter,
 				"logging: subscriber_blocked subscriber_id=%s action=drop_message\n",
-				id,
+				subscriberID,
 			)
 		}
 	}

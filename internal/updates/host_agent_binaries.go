@@ -247,7 +247,7 @@ func DownloadAndInstallHostAgentBinaries(version string, targetDir string) (retE
 	tempFileNeedsClose = false
 
 	checksumURL := checksumURLForVersion(normalizedVersion)
-	if err := verifyHostAgentBundleChecksum(tempFile.Name(), bundleURL, checksumURL); err != nil {
+	if err := verifyHostAgentBundleChecksum(tempFile.Name(), url, checksumURL); err != nil {
 		return fmt.Errorf("agentbinaries.DownloadAndInstallHostAgentBinaries: %w", err)
 	}
 
@@ -399,7 +399,7 @@ func parseHostAgentChecksumPayload(payload []byte) (string, string, error) {
 		return "", "", fmt.Errorf("checksum file is empty")
 	}
 
-	checksum = strings.ToLower(strings.TrimSpace(fields[0]))
+	checksum := strings.ToLower(strings.TrimSpace(fields[0]))
 	if len(checksum) != 64 {
 		return "", "", fmt.Errorf("checksum file has invalid hash (wrong length)")
 	}
@@ -407,7 +407,7 @@ func parseHostAgentChecksumPayload(payload []byte) (string, string, error) {
 		return "", "", fmt.Errorf("checksum file has invalid hash (bad hex): %w", err)
 	}
 
-	filename = ""
+	filename := ""
 	if len(fields) > 1 {
 		filename = strings.TrimPrefix(path.Base(fields[1]), "*")
 	}
@@ -552,7 +552,7 @@ func extractHostAgentBinaries(archivePath, targetDir string) (retErr error) {
 				return err
 			}
 		case tar.TypeSymlink:
-			target, err := normalizeHostAgentSymlinkTarget(header.Linkname)
+			target, err := normalizeHostAgentSymlinkTarget(header.Linkname, allowedNames)
 			if err != nil {
 				return fmt.Errorf("agentbinaries.extractHostAgentBinaries: %w", err)
 			}
@@ -619,7 +619,7 @@ func writeHostAgentFile(destination string, reader io.Reader, mode os.FileMode) 
 	if err != nil {
 		return fmt.Errorf("failed to create temporary file for %s: %w", destination, err)
 	}
-	defer removeFileWithContext(&retErr, tmpFile.Name(), fmt.Sprintf("failed to remove temporary file for %s", destination))
+	defer func() { _ = removeFn(tmpFile.Name()) }()
 
 	if _, err := copyFn(tmpFile, reader); err != nil {
 		if closeErr := closeFileFn(tmpFile); closeErr != nil {
@@ -663,6 +663,11 @@ func copyHostAgentFile(source, destination string) (retErr error) {
 	if err != nil {
 		return fmt.Errorf("failed to stat %s for fallback copy: %w", source, err)
 	}
+
+	dst, err := os.OpenFile(destination, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, normalizeExecutableMode(info.Mode()))
+	if err != nil {
+		return fmt.Errorf("failed to create %s for fallback copy: %w", destination, err)
+	}
 	defer closeFileWithContext(&retErr, dst, fmt.Sprintf("failed to close fallback copy %s", destination))
 
 	if _, err := copyFn(dst, src); err != nil {
@@ -682,5 +687,29 @@ func isRetryableHTTPStatus(statusCode int) bool {
 		return true
 	default:
 		return statusCode >= http.StatusInternalServerError && statusCode <= 599
+	}
+}
+
+// closeFileWithContext closes a file and joins any error into the named return error.
+func closeFileWithContext(retErr *error, f *os.File, msg string) {
+	if err := f.Close(); err != nil {
+		closeErr := fmt.Errorf("%s: %w", msg, err)
+		if *retErr == nil {
+			*retErr = closeErr
+		} else {
+			*retErr = errors.Join(*retErr, closeErr)
+		}
+	}
+}
+
+// closeCloserWithContext closes an io.Closer and joins any error into the named return error.
+func closeCloserWithContext(retErr *error, c io.Closer, msg string) {
+	if err := c.Close(); err != nil {
+		closeErr := fmt.Errorf("%s: %w", msg, err)
+		if *retErr == nil {
+			*retErr = closeErr
+		} else {
+			*retErr = errors.Join(*retErr, closeErr)
+		}
 	}
 }

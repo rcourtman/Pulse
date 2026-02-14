@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 )
 
@@ -36,8 +37,8 @@ var (
 		// large buffers before validation.
 		return io.ReadAll(io.LimitReader(file, maxMDStatBytes+1))
 	}
-	resolveMdadmBinary = resolveMdadmPath
-	runCommandOutput   = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	resolveMdadmBinary    = resolveMdadmPath
+	mdadmRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		cmd := exec.CommandContext(ctx, name, args...)
 		return cmd.Output()
 	}
@@ -77,6 +78,7 @@ func CollectRAIDArrays(ctx context.Context) ([]agentshost.RAIDArray, error) {
 
 	// Collect detailed info for each array
 	var arrays []agentshost.RAIDArray
+	var detailErrs []error
 	for _, device := range devices {
 		array, err := collectArrayDetail(ctx, device)
 		if err != nil {
@@ -104,7 +106,7 @@ func isMdadmAvailable(ctx context.Context) bool {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 
-	_, err = runCommandOutput(ctx, mdadmPath, "--version")
+	_, err = mdadmRunCommandOutput(ctx, mdadmPath, "--version")
 	return err == nil
 }
 
@@ -113,7 +115,7 @@ func listArrayDevices(ctx context.Context) ([]string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 
-	output, err := mdadmCommandRunner(ctx, "cat", "/proc/mdstat")
+	output, err := mdadmRunCommandOutput(ctx, "cat", "/proc/mdstat")
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +147,7 @@ func collectArrayDetail(ctx context.Context, device string) (host.RAIDArray, err
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	output, err := runCommandOutput(ctx, mdadmPath, "--detail", device)
+	output, err := mdadmRunCommandOutput(ctx, mdadmPath, "--detail", device)
 	if err != nil {
 		return agentshost.RAIDArray{}, fmt.Errorf("mdadm --detail %s: %w", device, err)
 	}
@@ -289,6 +291,15 @@ func parsePercentValue(value string) float64 {
 	return 0
 }
 
+// parseIntField parses an integer field from mdadm --detail output.
+func parseIntField(device, key, value string) (int, error) {
+	n, err := strconv.Atoi(strings.TrimSpace(value))
+	if err != nil {
+		return 0, fmt.Errorf("parse %s for %s from %q: %w", key, device, value, err)
+	}
+	return n, nil
+}
+
 // getRebuildSpeed extracts rebuild speed from /proc/mdstat
 func getRebuildSpeed(device string) string {
 	// Remove /dev/ prefix for /proc/mdstat lookup
@@ -297,7 +308,7 @@ func getRebuildSpeed(device string) string {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	output, err := mdadmCommandRunner(ctx, "cat", "/proc/mdstat")
+	output, err := mdadmRunCommandOutput(ctx, "cat", "/proc/mdstat")
 	if err != nil {
 		return ""
 	}

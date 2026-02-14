@@ -130,17 +130,17 @@ func (p *PatrolService) patrolLoop(ctx context.Context) {
 			p.runPatrolWithTrigger(ctx, TriggerReasonStartup, nil)
 		}
 	case <-p.stopCh:
-		if !initialDelayTimer.Stop() {
+		if !initialTimer.Stop() {
 			select {
-			case <-initialDelayTimer.C:
+			case <-initialTimer.C:
 			default:
 			}
 		}
 		return
 	case <-ctx.Done():
-		if !initialDelayTimer.Stop() {
+		if !initialTimer.Stop() {
 			select {
-			case <-initialDelayTimer.C:
+			case <-initialTimer.C:
 			default:
 			}
 		}

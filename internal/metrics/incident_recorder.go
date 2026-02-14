@@ -206,13 +206,11 @@ func (r *IncidentRecorder) Start() {
 	stopCh := make(chan struct{})
 	loopDone := make(chan struct{})
 	r.running = true
-	stopCh := make(chan struct{})
-	loopDone := make(chan struct{})
 	r.stopCh = stopCh
 	r.loopDone = loopDone
 	r.mu.Unlock()
 
-	go r.recordingLoop()
+	go r.recordingLoop(stopCh, loopDone)
 	log.Info().
 		Dur("sample_interval", r.config.SampleInterval).
 		Dur("pre_incident_window", r.config.PreIncidentWindow).
@@ -229,10 +227,8 @@ func (r *IncidentRecorder) Stop() {
 		return
 	}
 	r.running = false
-	stopCh := r.stopCh
+	close(r.stopCh)
 	loopDone := r.loopDone
-	r.stopCh = nil
-	r.loopDone = nil
 	r.mu.Unlock()
 
 	if loopDone != nil {
@@ -298,7 +294,7 @@ func (r *IncidentRecorder) recordSample() {
 				Str("resource_id", window.ResourceID).
 				Int("max_data_points_per_window", r.config.MaxDataPointsPerWindow).
 				Msg("Truncating incident window after reaching max data points")
-			r.completeWindow(window)
+			r.completeWindowLocked(window)
 			continue
 		}
 
@@ -308,7 +304,6 @@ func (r *IncidentRecorder) recordSample() {
 			log.Debug().
 				Str("window_id", window.ID).
 				Str("resource_id", window.ResourceID).
-				Str("window_id", window.ID).
 				Err(err).
 				Msg("failed to get metrics for incident window")
 			continue
@@ -465,7 +460,6 @@ func (r *IncidentRecorder) completeWindowLocked(window *IncidentWindow) {
 		Str("resource_id", window.ResourceID).
 		Str("status", string(window.Status)).
 		Int("data_points", len(window.DataPoints)).
-		Str("status", string(window.Status)).
 		Msg("completed incident recording")
 
 	// Save asynchronously
@@ -626,12 +620,6 @@ func (r *IncidentRecorder) saveToDisk() error {
 		CompletedWindows []*IncidentWindow `json:"completed_windows"`
 	}{
 		CompletedWindows: r.snapshotCompletedWindows(),
-	}
-
-	data := struct {
-		CompletedWindows []*IncidentWindow `json:"completed_windows"`
-	}{
-		CompletedWindows: completed,
 	}
 
 	jsonData, err := json.MarshalIndent(data, "", "  ")
@@ -838,43 +826,6 @@ func readBoundedRegularFile(path string, maxSize int64) ([]byte, error) {
 	return data, nil
 }
 
-func cloneFloatMap(in map[string]float64) map[string]float64 {
-	if in == nil {
-		return nil
-	}
-	out := make(map[string]float64, len(in))
-	for k, v := range in {
-		out[k] = v
-	}
-	return out
-}
-
-func cloneAnyMap(in map[string]interface{}) map[string]interface{} {
-	if in == nil {
-		return nil
-	}
-	out := make(map[string]interface{}, len(in))
-	for k, v := range in {
-		out[k] = v
-	}
-	return out
-}
-
-func copyDataPoints(dataPoints []IncidentDataPoint) []IncidentDataPoint {
-	if dataPoints == nil {
-		return nil
-	}
-	out := make([]IncidentDataPoint, len(dataPoints))
-	for i, dp := range dataPoints {
-		out[i] = IncidentDataPoint{
-			Timestamp: dp.Timestamp,
-			Metrics:   cloneFloatMap(dp.Metrics),
-			Metadata:  cloneAnyMap(dp.Metadata),
-		}
-	}
-	return out
-}
-
 func copyWindow(w *IncidentWindow) *IncidentWindow {
 	if w == nil {
 		return nil
@@ -882,12 +833,9 @@ func copyWindow(w *IncidentWindow) *IncidentWindow {
 	windowCopy := *w
 	if w.EndTime != nil {
 		t := *w.EndTime
-		copy.EndTime = &t
+		windowCopy.EndTime = &t
 	}
-	if w.DataPoints != nil {
-		copy.DataPoints = copyDataPoints(w.DataPoints)
-	}
-	copy.DataPoints = copyDataPoints(w.DataPoints)
+	windowCopy.DataPoints = copyDataPoints(w.DataPoints)
 	if w.Summary != nil {
 		s := *w.Summary
 		s.Peaks = copyMetrics(w.Summary.Peaks)
@@ -897,7 +845,7 @@ func copyWindow(w *IncidentWindow) *IncidentWindow {
 		if w.Summary.Anomalies != nil {
 			s.Anomalies = append([]string(nil), w.Summary.Anomalies...)
 		}
-		copy.Summary = &s
+		windowCopy.Summary = &s
 	}
 	return &windowCopy
 }

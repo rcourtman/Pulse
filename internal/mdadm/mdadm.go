@@ -261,7 +261,7 @@ func getRebuildSpeedWithContext(parentCtx context.Context, device string) string
 	ctx, cancel := context.WithTimeout(parentCtx, 2*time.Second)
 	defer cancel()
 
-	output, err := run(ctx, "cat", "/proc/mdstat")
+	output, err := runCommandOutput(ctx, "cat", "/proc/mdstat")
 	if err != nil {
 		log.Debug().
 			Err(err).

@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog/log"
@@ -223,7 +224,6 @@ func getOrCreateKeyAt(dataDir string) ([]byte, error) {
 	}
 
 	keyPath := filepath.Join(dataDir, encryptionKeyFileName)
-	oldKeyPath := legacyKeyPath
 	// Test/ops hook: allow overriding the legacy key location to avoid touching /etc/pulse in unit tests.
 	// Invalid overrides are ignored to avoid accidentally reading from relative CWD paths.
 	oldKeyPath := resolveLegacyKeyPath()
@@ -438,20 +438,14 @@ func (c *CryptoManager) Encrypt(plaintext []byte) ([]byte, error) {
 	// CRITICAL: Verify the key file still exists on disk before encrypting
 	// This prevents creating orphaned encrypted data that can never be decrypted
 	if c.keyPath != "" {
-		if _, err := os.Stat(c.keyPath); err != nil {
-			if os.IsNotExist(err) {
+		if _, statErr := os.Stat(c.keyPath); statErr != nil {
+			if os.IsNotExist(statErr) {
 				log.Error().
 					Str("keyPath", c.keyPath).
 					Msg("CRITICAL: Encryption key file has been deleted - refusing to encrypt to prevent orphaned data")
 				return nil, fmt.Errorf("encryption key file deleted - cannot encrypt (would create orphaned data)")
 			}
-			return nil, fmt.Errorf("crypto.Encrypt: verify key file %q exists: %w", c.keyPath, err)
-		}
-		if err != nil {
-			return nil, fmt.Errorf("encryption key file validation failed: %w", err)
-		}
-		if !bytes.Equal(diskKey, c.key) {
-			return nil, fmt.Errorf("encryption key file changed on disk - refusing to encrypt with stale in-memory key")
+			return nil, fmt.Errorf("crypto.Encrypt: verify key file %q exists: %w", c.keyPath, statErr)
 		}
 	}
 
@@ -480,9 +474,9 @@ func (c *CryptoManager) Decrypt(ciphertext []byte) ([]byte, error) {
 		return nil, fmt.Errorf("crypto.Decrypt: create AES cipher: %w", err)
 	}
 
-	block, err := newCipher(c.key)
+	gcm, err := newGCM(block)
 	if err != nil {
-		return nil, fmt.Errorf("crypto.Decrypt: %w", err)
+		return nil, fmt.Errorf("crypto.Decrypt: create GCM: %w", err)
 	}
 
 	nonceSize := gcm.NonceSize()

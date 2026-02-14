@@ -54,7 +54,6 @@ type HistoryManager struct {
 	stopChan     chan struct{}
 	saveTicker   *time.Ticker
 	callbacks    []AlertCallback // Called when alerts are added
-	stopOnce     sync.Once
 }
 
 // NewHistoryManager creates a new history manager
@@ -190,55 +189,32 @@ func (hm *HistoryManager) loadHistory() error {
 		data, err = readLimitedRegularFile(hm.backupFile, maxAlertHistoryFileSizeBytes)
 		if err != nil {
 			if os.IsNotExist(err) {
-				continue
+				// Both files don't exist - this is normal on first startup
+				log.Debug().Msg("No alert history files found, starting fresh")
+				return nil
 			}
 			if os.IsPermission(err) {
-				hadPermissionError = true
 				log.Warn().
 					Err(err).
-					Str("file", source.path).
-					Msg("Permission denied reading history file - check file ownership")
-				continue
+					Str("file", hm.backupFile).
+					Msg("Permission denied reading backup history file - check file ownership")
+				return nil
 			}
-			log.Warn().Err(err).Str("file", source.path).Msg("Failed to read history file")
-			if firstErr == nil {
-				firstErr = fmt.Errorf("failed to read history file %q: %w", source.path, err)
-			}
-			continue
+			return fmt.Errorf("failed to read history backup file %q: %w", hm.backupFile, err)
 		}
-
-		var history []HistoryEntry
-		if err := json.Unmarshal(data, &history); err != nil {
-			log.Warn().
-				Err(err).
-				Str("file", source.path).
-				Msg("Failed to parse history file")
-			if firstErr == nil {
-				firstErr = fmt.Errorf("failed to unmarshal history from %q: %w", source.path, err)
-			}
-			continue
-		}
-
-		hm.history = history
-		if !source.isMain {
-			log.Info().Msg("loaded alert history from backup file")
-		}
-		log.Info().Int("count", len(history)).Msg("Loaded alert history")
-
-		// Clean old entries immediately
-		hm.cleanOldEntries()
-		return nil
+		log.Info().Msg("loaded alert history from backup file")
 	}
 
-	if firstErr != nil {
-		return firstErr
-	}
-	if hadPermissionError {
-		return nil
+	var history []HistoryEntry
+	if err := json.Unmarshal(data, &history); err != nil {
+		return fmt.Errorf("failed to unmarshal history: %w", err)
 	}
 
-	// Both files don't exist - this is normal on first startup
-	log.Debug().Msg("No alert history files found, starting fresh")
+	hm.history = history
+	log.Info().Int("count", len(history)).Msg("Loaded alert history")
+
+	// Clean old entries immediately
+	hm.cleanOldEntries()
 	return nil
 }
 

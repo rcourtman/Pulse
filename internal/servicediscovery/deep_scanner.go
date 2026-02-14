@@ -220,6 +220,9 @@ func (s *DeepScanner) Scan(ctx context.Context, req DiscoveryRequest) (*ScanResu
 		s.mu.Unlock()
 	}
 
+	// Get runtime settings for parallelism and timeouts
+	maxParallel, timeout := s.runtimeSettings()
+
 	// Run commands with limited parallelism
 	semaphore := make(chan struct{}, maxParallel)
 	var wg sync.WaitGroup

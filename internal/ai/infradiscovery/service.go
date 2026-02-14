@@ -97,6 +97,7 @@ type Service struct {
 	lifecycleStop  context.CancelFunc
 	workerWG       sync.WaitGroup
 	running        bool
+	stopped        bool
 	discoveryMu    sync.Mutex
 	discoveryRun   bool
 	discoveries    []DiscoveredApp
@@ -372,7 +373,7 @@ func (s *Service) discoveryLoop(ctx context.Context) {
 		select {
 		case <-ticker.C:
 			s.RunDiscovery(ctx)
-		case <-stopCh:
+		case <-s.stopCh:
 			log.Info().Msg("Stopping infrastructure discovery service")
 			return
 		case <-ctx.Done():
@@ -491,7 +492,7 @@ func (s *Service) analyzeContainer(ctx context.Context, analyzer AIAnalyzer, c m
 
 	// Check cache first
 	s.cacheMu.RLock()
-	entry, found := s.analysisCache[container.Image]
+	entry, found := s.analysisCache[c.Image]
 	cacheValid := found && time.Since(entry.cachedAt) < s.cacheExpiry
 	s.cacheMu.RUnlock()
 
@@ -508,7 +509,7 @@ func (s *Service) analyzeContainer(ctx context.Context, analyzer AIAnalyzer, c m
 			Msg("Using cached analysis result")
 	} else {
 		// Build container info for AI analysis
-		info := s.buildContainerInfo(container)
+		info := s.buildContainerInfo(c)
 
 		// Create analysis prompt
 		prompt, err := s.buildAnalysisPrompt(info)
@@ -541,16 +542,16 @@ func (s *Service) analyzeContainer(ctx context.Context, analyzer AIAnalyzer, c m
 			if errors.Is(err, context.DeadlineExceeded) {
 				log.Warn().
 					Err(err).
-					Str("container", container.Name).
-					Str("image", container.Image).
+					Str("container", c.Name).
+					Str("image", c.Image).
 					Dur("timeout", s.aiAnalysisTimeout).
 					Msg("AI analysis timed out for container")
 				return nil
 			}
 			log.Warn().
 				Err(err).
-				Str("container", container.Name).
-				Str("image", container.Image).
+				Str("container", c.Name).
+				Str("image", c.Image).
 				Msg("AI analysis failed for container")
 			return nil
 		}
@@ -576,10 +577,9 @@ func (s *Service) analyzeContainer(ctx context.Context, analyzer AIAnalyzer, c m
 				Int("cache_entries", len(s.analysisCache)).
 				Int("cache_limit", maxAnalysisCacheEntries).
 				Msg("Discovery analysis cache reached size limit; clearing cache")
-			s.analysisCache = make(map[string]*DiscoveryResult)
+			s.analysisCache = make(map[string]*analysisCacheEntry)
 		}
-		s.analysisCache[c.Image] = result
-		s.lastCacheUpdate = time.Now()
+		s.analysisCache[c.Image] = &analysisCacheEntry{result: result, cachedAt: time.Now()}
 		s.cacheMu.Unlock()
 
 		log.Debug().
@@ -658,13 +658,13 @@ func (s *Service) analyzeContainer(ctx context.Context, analyzer AIAnalyzer, c m
 // buildContainerInfo extracts relevant information from a container for AI analysis.
 func (s *Service) buildContainerInfo(container models.DockerContainer) ContainerInfo {
 	info := ContainerInfo{
-		Name:   sanitizeText(c.Name, maxPromptFieldLength),
-		Image:  sanitizeText(c.Image, maxPromptFieldLength),
-		Status: sanitizeText(c.Status, maxPromptFieldLength),
+		Name:   sanitizeText(container.Name, maxPromptFieldLength),
+		Image:  sanitizeText(container.Image, maxPromptFieldLength),
+		Status: sanitizeText(container.Status, maxPromptFieldLength),
 	}
 
 	// Extract ports
-	for _, p := range c.Ports {
+	for _, p := range container.Ports {
 		if len(info.Ports) >= maxPromptPortCount {
 			break
 		}
@@ -683,9 +683,9 @@ func (s *Service) buildContainerInfo(container models.DockerContainer) Container
 	}
 
 	// Extract labels
-	if len(c.Labels) > 0 {
+	if len(container.Labels) > 0 {
 		info.Labels = make(map[string]string)
-		for key, value := range c.Labels {
+		for key, value := range container.Labels {
 			if len(info.Labels) >= maxPromptLabelCount {
 				break
 			}
@@ -701,7 +701,7 @@ func (s *Service) buildContainerInfo(container models.DockerContainer) Container
 	}
 
 	// Extract mount destinations
-	for _, m := range c.Mounts {
+	for _, m := range container.Mounts {
 		if len(info.Mounts) >= maxPromptMountCount {
 			break
 		}
@@ -711,7 +711,7 @@ func (s *Service) buildContainerInfo(container models.DockerContainer) Container
 	}
 
 	// Extract network names
-	for _, n := range c.Networks {
+	for _, n := range container.Networks {
 		if len(info.Networks) >= maxPromptNetworkCount {
 			break
 		}

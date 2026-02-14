@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -17,11 +18,12 @@ import (
 )
 
 const smartctlComponent = "smartctl_collector"
+const maxCommandOutputBytes = 1 << 20 // 1 MiB
 
 var (
 	errCommandOutputTooLarge = errors.New("command output exceeds size limit")
 	execLookPath             = exec.LookPath
-	runCommandOutput         = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	smartRunCommandOutput    = func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		return runCommandOutputLimited(ctx, maxCommandOutputBytes, name, args...)
 	}
 	readDir = os.ReadDir
@@ -179,18 +181,18 @@ func listBlockDevices(ctx context.Context, diskExclude []string) ([]string, erro
 
 // listBlockDevicesLinux uses lsblk to find disks on Linux.
 func listBlockDevicesLinux(ctx context.Context, diskExclude []string) ([]string, error) {
-	output, err := runCommandOutput(ctx, "lsblk", "-d", "-n", "-o", "NAME,TYPE")
+	output, err := smartRunCommandOutput(ctx, "lsblk", "-d", "-n", "-o", "NAME,TYPE")
 	if err != nil {
-		return nil, fmt.Errorf("run lsblk for block devices: %w", err)
+		// Fall back to sysfs enumeration for minimal hosts/images where lsblk is unavailable.
+		log.Debug().Err(err).Msg("lsblk device discovery failed, falling back to /sys/block")
+		devices, fallbackErr := listBlockDevicesLinuxSysfs(diskExclude)
+		if fallbackErr != nil {
+			return nil, fmt.Errorf("linux block-device discovery failed: lsblk error: %w; /sys/block fallback error: %v", err, fallbackErr)
+		}
+		return devices, nil
 	}
 
-	// Fall back to sysfs enumeration for minimal hosts/images where lsblk is unavailable.
-	log.Debug().Err(err).Msg("lsblk device discovery failed, falling back to /sys/block")
-	devices, fallbackErr := listBlockDevicesLinuxSysfs(diskExclude)
-	if fallbackErr != nil {
-		return nil, fmt.Errorf("linux block-device discovery failed: lsblk error: %w; /sys/block fallback error: %v", err, fallbackErr)
-	}
-	return devices, nil
+	return parseLSBLKDevices(output, diskExclude), nil
 }
 
 func parseLSBLKDevices(output []byte, diskExclude []string) []string {
@@ -214,12 +216,6 @@ func parseLSBLKDevices(output []byte, diskExclude []string) []string {
 			}
 			devices = append(devices, devicePath)
 		}
-		devicePath := "/dev/" + name
-		if matchesDeviceExclude(name, devicePath, diskExclude) {
-			log.Debug().Str("device", devicePath).Msg("Skipping excluded device for SMART collection")
-			continue
-		}
-		devices = append(devices, devicePath)
 	}
 
 	return devices
@@ -264,7 +260,7 @@ func isVirtualLinuxBlockDevice(name string) bool {
 
 // listBlockDevicesFreeBSD uses sysctl kern.disks to find disks on FreeBSD.
 func listBlockDevicesFreeBSD(ctx context.Context, diskExclude []string) ([]string, error) {
-	output, err := runCommandOutput(ctx, "sysctl", "-n", "kern.disks")
+	output, err := smartRunCommandOutput(ctx, "sysctl", "-n", "kern.disks")
 	if err != nil {
 		return nil, fmt.Errorf("run sysctl kern.disks: %w", err)
 	}
@@ -350,7 +346,7 @@ func collectDeviceSMART(ctx context.Context, device string) (*DiskSMART, error) 
 	// -i: device info
 	// -A: attributes (for temperature)
 	// --json=o: output original smartctl JSON format
-	output, err := runCommandOutput(cmdCtx, smartctlPath, "-n", "standby", "-i", "-A", "-H", "--json=o", device)
+	output, err := smartRunCommandOutput(cmdCtx, smartctlPath, "-n", "standby", "-i", "-A", "-H", "--json=o", device)
 
 	// smartctl returns non-zero exit codes for various conditions
 	// Exit code 2 means drive is in standby - that's okay

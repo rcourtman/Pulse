@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
+	"math/rand"
 	"net"
 	"net/url"
 	"os"
@@ -34,6 +36,12 @@ var reconnectDelay = 10 * time.Second
 const (
 	maxCommandOutputSize = 1024 * 1024
 	outputTruncatedMsg   = "\n... (output truncated)"
+)
+
+var (
+	reconnectMaxDelay    = 5 * time.Minute
+	reconnectJitterRatio = 0.1
+	reconnectRandFloat64 = rand.Float64
 )
 
 type cappedBuffer struct {
@@ -205,7 +213,7 @@ func (c *CommandClient) Run(ctx context.Context) error {
 				c.logger.Debug().Err(err).Dur("retry_in", delay).Msg("WebSocket connection interrupted, reconnecting")
 			}
 
-			timer := time.NewTimer(reconnectDelay)
+			timer := time.NewTimer(delay)
 			select {
 			case <-ctx.Done():
 				if !timer.Stop() {
@@ -216,8 +224,14 @@ func (c *CommandClient) Run(ctx context.Context) error {
 				}
 				return ctx.Err()
 			case <-stopCh:
+				if !timer.Stop() {
+					select {
+					case <-timer.C:
+					default:
+					}
+				}
 				return nil
-			case <-time.After(reconnectDelay):
+			case <-timer.C:
 			}
 		} else {
 			// Connection closed cleanly (shouldn't happen in normal operation)

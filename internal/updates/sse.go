@@ -138,10 +138,9 @@ func (b *SSEBroadcaster) Broadcast(status UpdateStatus) {
 
 	// Send to message channel (non-blocking)
 	select {
-	case <-b.closeCh:
+	case <-b.stopCh:
 		return
 	case b.messageChan <- status:
-	case <-b.stopCh:
 	default:
 		log.Warn().Msg("SSE message channel full, dropping message")
 	}
@@ -312,7 +311,8 @@ func (b *SSEBroadcaster) SendHeartbeat() {
 // Close closes the broadcaster and disconnects all clients
 func (b *SSEBroadcaster) Close() {
 	b.closeOnce.Do(func() {
-		close(b.closeCh)
+		b.closed.Store(true)
+		close(b.stopCh)
 
 		b.mu.Lock()
 		for id, client := range b.clients {
@@ -357,12 +357,7 @@ func (b *SSEBroadcaster) sendHeartbeatToClient(c *SSEClient) {
 }
 
 func (b *SSEBroadcaster) isClosed() bool {
-	select {
-	case <-b.closeCh:
-		return true
-	default:
-		return false
-	}
+	return b.closed.Load()
 }
 
 func closeDone(ch chan bool) {

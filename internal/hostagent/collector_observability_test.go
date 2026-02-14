@@ -1,4 +1,4 @@
-package smartctl
+package hostagent
 
 import (
 	"bytes"
@@ -13,18 +13,18 @@ import (
 )
 
 func TestCollectLocal_LogsStructuredContextOnDeviceCollectionFailure(t *testing.T) {
-	origRun := runCommandOutput
+	origRun := smartRunCommandOutput
 	origLook := execLookPath
 	origGOOS := runtimeGOOS
 	t.Cleanup(func() {
-		runCommandOutput = origRun
+		smartRunCommandOutput = origRun
 		execLookPath = origLook
 		runtimeGOOS = origGOOS
 	})
 
 	runtimeGOOS = "linux"
 	execLookPath = func(string) (string, error) { return "smartctl", nil }
-	runCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		if name == "lsblk" {
 			return []byte("sda disk\n"), nil
 		}
@@ -35,12 +35,12 @@ func TestCollectLocal_LogsStructuredContextOnDeviceCollectionFailure(t *testing.
 	}
 
 	logOutput := captureSmartctlLogs(t)
-	results, err := CollectLocal(context.Background(), nil)
+	results, err := CollectSMARTLocal(context.Background(), nil)
 	if err != nil {
-		t.Fatalf("CollectLocal returned unexpected error: %v", err)
+		t.Fatalf("CollectSMARTLocal returned unexpected error: %v", err)
 	}
 	if len(results) != 0 {
-		t.Fatalf("CollectLocal returned results despite command failure: %#v", results)
+		t.Fatalf("CollectSMARTLocal returned results despite command failure: %#v", results)
 	}
 
 	for _, expected := range []string{
@@ -56,12 +56,12 @@ func TestCollectLocal_LogsStructuredContextOnDeviceCollectionFailure(t *testing.
 }
 
 func TestListBlockDevicesLinux_LogsStructuredContextForExcludedDevice(t *testing.T) {
-	origRun := runCommandOutput
+	origRun := smartRunCommandOutput
 	t.Cleanup(func() {
-		runCommandOutput = origRun
+		smartRunCommandOutput = origRun
 	})
 
-	runCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		return []byte("sda disk\n"), nil
 	}
 
@@ -90,15 +90,15 @@ func TestCollectDeviceSMART_LogsStructuredContextWhenDeviceInStandby(t *testing.
 		t.Skip("sh not available")
 	}
 
-	origRun := runCommandOutput
+	origRun := smartRunCommandOutput
 	origLook := execLookPath
 	t.Cleanup(func() {
-		runCommandOutput = origRun
+		smartRunCommandOutput = origRun
 		execLookPath = origLook
 	})
 
 	execLookPath = func(string) (string, error) { return "smartctl", nil }
-	runCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		return exec.CommandContext(ctx, "sh", "-c", "exit 2").Output()
 	}
 

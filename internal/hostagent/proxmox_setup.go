@@ -144,6 +144,11 @@ var (
 	stateFilePBS = "/var/lib/pulse-agent/proxmox-pbs-registered"
 )
 
+const (
+	proxmoxStateDirPerm  = 0700
+	proxmoxStateFilePerm = 0600
+)
+
 func parseProxmoxProductType(rawType string) proxmoxProductType {
 	switch strings.ToLower(strings.TrimSpace(rawType)) {
 	case string(proxmoxProductPVE):
@@ -203,10 +208,11 @@ func (p *ProxmoxSetup) Run(ctx context.Context) (*ProxmoxSetupResult, error) {
 	}
 	p.pulseURL = pulseURL
 
-	ptype, err := normalizeProxmoxType(p.proxmoxType)
+	ptypeStr, err := normalizeProxmoxType(string(p.proxmoxType))
 	if err != nil {
 		return nil, err
 	}
+	ptype := proxmoxProductType(ptypeStr)
 
 	// Check if already registered (idempotency)
 	if p.isAlreadyRegistered() {
@@ -215,7 +221,6 @@ func (p *ProxmoxSetup) Run(ctx context.Context) (*ProxmoxSetupResult, error) {
 	}
 
 	// Detect Proxmox type
-	ptype := p.proxmoxType
 	if ptype == proxmoxProductUnknown {
 		detected := p.detectProxmoxType()
 		if detected == proxmoxProductUnknown {
@@ -271,10 +276,11 @@ func (p *ProxmoxSetup) RunAll(ctx context.Context) ([]*ProxmoxSetupResult, error
 	}
 	p.pulseURL = pulseURL
 
-	forcedType, err := normalizeProxmoxType(p.proxmoxType)
+	forcedTypeStr, err := normalizeProxmoxType(string(p.proxmoxType))
 	if err != nil {
 		return nil, err
 	}
+	forcedType := proxmoxProductType(forcedTypeStr)
 
 	var results []*ProxmoxSetupResult
 
@@ -314,12 +320,12 @@ func (p *ProxmoxSetup) RunAll(ctx context.Context) ([]*ProxmoxSetupResult, error
 }
 
 // runForType executes setup for a specific Proxmox type.
-func (p *ProxmoxSetup) runForType(ctx context.Context, ptype string) (*ProxmoxSetupResult, error) {
-	normalizedType, err := normalizeProxmoxType(ptype)
-	if err != nil || normalizedType == "" {
+func (p *ProxmoxSetup) runForType(ctx context.Context, ptype proxmoxProductType) (*ProxmoxSetupResult, error) {
+	normalizedTypeStr, err := normalizeProxmoxType(string(ptype))
+	if err != nil || normalizedTypeStr == "" {
 		return nil, fmt.Errorf("invalid proxmox type %q: must be pve or pbs", ptype)
 	}
-	ptype = normalizedType
+	ptype = proxmoxProductType(normalizedTypeStr)
 
 	// Check if this type is already registered
 	if p.isTypeRegistered(ptype) {
@@ -595,14 +601,14 @@ func (p *ProxmoxSetup) getIPThatReachesPulse() string {
 		return ""
 	}
 
-	host := u.Hostname()
+	host := pulseServerURL.Hostname()
 	if host == "" {
 		return ""
 	}
 
-	port := u.Port()
+	port := pulseServerURL.Port()
 	if port == "" {
-		switch u.Scheme {
+		switch pulseServerURL.Scheme {
 		case "https":
 			port = "443"
 		case "http":
@@ -915,7 +921,7 @@ func (p *ProxmoxSetup) markAsRegistered() {
 }
 
 // markTypeAsRegistered creates a state file for a specific Proxmox type.
-func (p *ProxmoxSetup) markTypeAsRegistered(ptype string) {
+func (p *ProxmoxSetup) markTypeAsRegistered(ptype proxmoxProductType) {
 	if err := p.collector.MkdirAll(stateFileDir, proxmoxStateDirPerm); err != nil {
 		p.logger.Warn().Err(err).Msg("Failed to create state directory")
 		return
@@ -926,10 +932,10 @@ func (p *ProxmoxSetup) markTypeAsRegistered(ptype string) {
 
 	stateFile := p.stateFileForType(ptype)
 	if err := p.collector.WriteFile(stateFile, []byte(time.Now().Format(time.RFC3339)), proxmoxStateFilePerm); err != nil {
-		p.logger.Warn().Err(err).Str("type", ptype).Msg("Failed to write type state file")
+		p.logger.Warn().Err(err).Str("type", string(ptype)).Msg("Failed to write type state file")
 		return
 	}
 	if err := p.collector.Chmod(stateFile, proxmoxStateFilePerm); err != nil {
-		p.logger.Warn().Err(err).Str("type", ptype).Msg("Failed to enforce type state file permissions")
+		p.logger.Warn().Err(err).Str("type", string(ptype)).Msg("Failed to enforce type state file permissions")
 	}
 }

@@ -16,7 +16,7 @@ import (
 
 var (
 	dataMu        sync.RWMutex
-	modeMu        sync.Mutex
+	setEnabledMu  sync.Mutex
 	updateLoopMu  sync.Mutex
 	mockData      models.StateSnapshot
 	mockAlerts    []models.Alert
