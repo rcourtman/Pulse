@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -498,6 +499,34 @@ func buildRuntimeCandidates(preference RuntimeKind) []runtimeCandidate {
 			host:  "unix:///var/run/podman/podman.sock",
 			label: "podman system socket (var/run)",
 		})
+	}
+
+	// Docker rootless: $XDG_RUNTIME_DIR/docker.sock (typically /run/user/{uid}/docker.sock)
+	if preference == RuntimeDocker || preference == RuntimeAuto {
+		xdgRuntime := utils.GetenvTrim("XDG_RUNTIME_DIR")
+		if xdgRuntime != "" {
+			add(runtimeCandidate{
+				host:  "unix://" + filepath.Join(xdgRuntime, "docker.sock"),
+				label: "docker rootless socket (XDG)",
+			})
+		} else {
+			rootless := fmt.Sprintf("unix:///run/user/%d/docker.sock", os.Getuid())
+			add(runtimeCandidate{
+				host:  rootless,
+				label: "docker rootless socket",
+			})
+		}
+	}
+
+	// macOS Docker Desktop socket
+	if home := os.Getenv("HOME"); home != "" {
+		macSocket := "unix://" + filepath.Join(home, ".docker", "run", "docker.sock")
+		if preference == RuntimeDocker || preference == RuntimeAuto {
+			add(runtimeCandidate{
+				host:  macSocket,
+				label: "docker desktop socket",
+			})
+		}
 	}
 
 	if preference == RuntimeDocker || preference == RuntimeAuto {
