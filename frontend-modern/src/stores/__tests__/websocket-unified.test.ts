@@ -191,12 +191,10 @@ describe('websocket store unified resource contract', () => {
 
       mockWsInstance?.onclose?.({ code: 1011, reason: 'test disconnect' } as CloseEvent);
 
-      vi.advanceTimersByTime(1000);
-      await Promise.resolve();
-
+      // Dispose before the reconnect timer fires — should cancel reconnection
       dispose();
 
-      vi.advanceTimersByTime(1000);
+      vi.advanceTimersByTime(60000);
       await Promise.resolve();
 
       expect(MockWebSocket).toHaveBeenCalledTimes(1);

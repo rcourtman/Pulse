@@ -51,8 +51,9 @@ const requireNonEmpty = (value: string, fieldName: string): string => {
 export class UpdatesAPI {
   static async checkForUpdates(channel?: string): Promise<UpdateInfo> {
     const search = new URLSearchParams();
-    if (channel) {
-      search.set('channel', channel);
+    const trimmedChannel = channel?.trim();
+    if (trimmedChannel) {
+      search.set('channel', trimmedChannel);
     }
     const query = search.toString();
     const url = query ? `/api/updates/check?${query}` : '/api/updates/check';
@@ -76,7 +77,8 @@ export class UpdatesAPI {
   }
 
   static async getUpdatePlan(version: string, channel?: string): Promise<UpdatePlan> {
-    const search = new URLSearchParams({ version });
+    const validatedVersion = requireNonEmpty(version, 'Version');
+    const search = new URLSearchParams({ version: validatedVersion });
     if (channel) {
       search.set('channel', channel);
     }

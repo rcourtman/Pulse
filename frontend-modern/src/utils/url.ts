@@ -141,12 +141,15 @@ export function isPulseHttps(): boolean {
 }
 
 function sanitizeApiToken(token: string): string {
-  // Remove control characters and trim
-  const cleaned = token.replace(/[\x00-\x1f\x7f]/g, '').trim(); // eslint-disable-line no-control-regex -- intentional sanitization
-  if (cleaned.length > 256) {
-    return cleaned.slice(0, 256);
+  // Reject tokens containing control characters (potential injection)
+  if (/[\x00-\x1f\x7f]/.test(token)) { // eslint-disable-line no-control-regex -- intentional sanitization
+    return '';
   }
-  return cleaned;
+  const trimmed = token.trim();
+  if (trimmed.length > 256) {
+    return '';
+  }
+  return trimmed;
 }
 
 export function getPulseWebSocketUrl(path = '/ws'): string {

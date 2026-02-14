@@ -342,19 +342,6 @@ export function createWebSocketStore(url: string) {
         ws = null;
       }
 
-      // Add a small delay before reconnecting to avoid rapid reconnect loops
-      if (reconnectAttempt > 0) {
-        const delay = Math.min(100 * reconnectAttempt, 1000);
-        clearReconnectDelayTimeout();
-        reconnectDelayTimeout = window.setTimeout(() => {
-          reconnectDelayTimeout = 0;
-          if (isDisposed) return;
-          ws = new WebSocket(wsUrl);
-          setupWebSocket();
-        }, delay);
-        return;
-      }
-
       ws = new WebSocket(wsUrl);
       setupWebSocket();
     } catch (err) {
@@ -780,6 +767,8 @@ export function createWebSocketStore(url: string) {
 
   // Cleanup on unmount
   onCleanup(() => {
+    isDisposed = true;
+    isReconnecting = false;
     window.clearTimeout(reconnectDelayTimeout);
     window.clearTimeout(reconnectTimeout);
     window.clearInterval(heartbeatInterval);
