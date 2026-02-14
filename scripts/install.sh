@@ -78,6 +78,7 @@ KUBECONFIG_PATH=""  # Path to kubeconfig file for Kubernetes monitoring
 KUBE_INCLUDE_ALL_PODS="false"
 KUBE_INCLUDE_ALL_DEPLOYMENTS="false"
 DISK_EXCLUDES=()  # Array for multiple --disk-exclude values
+CURL_CA_BUNDLE="" # Path to CA bundle to supply to curl
 
 # Track if flags were explicitly set (to override auto-detection)
 DOCKER_EXPLICIT="false"
@@ -120,6 +121,7 @@ Options:
   --agent-id <id>         Custom agent identifier
   --hostname <name>       Override hostname reported to Pulse
   --disk-exclude <path>   Exclude mount point (repeatable)
+  --cacert <path>         Provide path to custom CA bundle for curl
   --insecure              Skip TLS verification
   --enable-commands       Enable AI command execution
   --uninstall             Remove the agent
@@ -270,6 +272,7 @@ build_exec_args() {
     if [[ "$ENABLE_PROXMOX" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --enable-proxmox"; fi
     if [[ -n "$PROXMOX_TYPE" ]]; then EXEC_ARGS="$EXEC_ARGS --proxmox-type ${PROXMOX_TYPE}"; fi
     if [[ "$INSECURE" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --insecure"; fi
+    if [[ -n "$CURL_CA_BUNDLE" ]]; then EXEC_ARGS="$EXEC_ARGS --cacert ${CURL_CA_BUNDLE}"; fi
     if [[ "$ENABLE_COMMANDS" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --enable-commands"; fi
     if [[ "$KUBE_INCLUDE_ALL_PODS" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --kube-include-all-pods"; fi
     if [[ "$KUBE_INCLUDE_ALL_DEPLOYMENTS" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --kube-include-all-deployments"; fi
@@ -299,6 +302,7 @@ build_exec_args_array() {
     if [[ "$ENABLE_PROXMOX" == "true" ]]; then EXEC_ARGS_ARRAY+=(--enable-proxmox); fi
     if [[ -n "$PROXMOX_TYPE" ]]; then EXEC_ARGS_ARRAY+=(--proxmox-type "$PROXMOX_TYPE"); fi
     if [[ "$INSECURE" == "true" ]]; then EXEC_ARGS_ARRAY+=(--insecure); fi
+    if [[ -n "$CURL_CA_BUNDLE" ]]; then EXEC_ARGS_ARRAY+=(--cacert "$CURL_CA_BUNDLE"); fi
     if [[ "$ENABLE_COMMANDS" == "true" ]]; then EXEC_ARGS_ARRAY+=(--enable-commands); fi
     if [[ "$KUBE_INCLUDE_ALL_PODS" == "true" ]]; then EXEC_ARGS_ARRAY+=(--kube-include-all-pods); fi
     if [[ "$KUBE_INCLUDE_ALL_DEPLOYMENTS" == "true" ]]; then EXEC_ARGS_ARRAY+=(--kube-include-all-deployments); fi
@@ -328,6 +332,7 @@ while [[ $# -gt 0 ]]; do
         --disable-proxmox) ENABLE_PROXMOX="false"; PROXMOX_EXPLICIT="true"; shift ;;
         --proxmox-type) PROXMOX_TYPE="$2"; shift 2 ;;
         --insecure) INSECURE="true"; shift ;;
+        --cacert) CURL_CA_BUNDLE="$2"; shift 2 ;;
         --enable-commands) ENABLE_COMMANDS="true"; shift ;;
         --uninstall) UNINSTALL="true"; shift ;;
         --agent-id) AGENT_ID="$2"; shift 2 ;;
@@ -413,7 +418,8 @@ if [[ "$UNINSTALL" == "true" ]]; then
             log_info "Notifying Pulse server to unregister agent ID: ${AGENT_ID}..."
             CURL_ARGS=(-fsSL --connect-timeout 5 -X POST -H "Content-Type: application/json" -H "X-API-Token: ${PULSE_TOKEN}")
             if [[ "$INSECURE" == "true" ]]; then CURL_ARGS+=(-k); fi
-            
+            if [[ "$CURL_CA_BUNDLE" ]]; then CURL_ARGS+=(--cacert "$CURL_CA_BUNDLE"); fi
+
             # Send unregistration request (ignore errors as we are uninstalling anyway)
             curl "${CURL_ARGS[@]}" -d "{\"hostId\": \"${AGENT_ID}\"}" "${PULSE_URL}/api/agents/host/uninstall" >/dev/null 2>&1 || true
         fi
@@ -683,6 +689,7 @@ TMP_FILES+=("$TMP_BIN")
 # Build curl arguments as array for proper quoting
 CURL_ARGS=(-fsSL --connect-timeout 30 --max-time 300)
 if [[ "$INSECURE" == "true" ]]; then CURL_ARGS+=(-k); fi
+if [[ "$CURL_CA_BUNDLE" ]]; then CURL_ARGS+=(--cacert "$CURL_CA_BUNDLE"); fi
 
 if ! curl "${CURL_ARGS[@]}" -o "$TMP_BIN" "$DOWNLOAD_URL"; then
     fail "Download failed. Check URL and connectivity."
@@ -859,6 +866,11 @@ if [[ "$OS" == "darwin" ]]; then
     if [[ "$INSECURE" == "true" ]]; then
         PLIST_ARGS="${PLIST_ARGS}
         <string>--insecure</string>"
+    fi
+    if [[ -n "$CURL_CA_BUNDLE" ]]; then
+        PLIST_ARGS="${PLIST_ARGS}
+        <string>--cacert</string>
+        <string>${CURL_CA_BUNDLE}</string>"
     fi
     if [[ "$ENABLE_COMMANDS" == "true" ]]; then
         PLIST_ARGS="${PLIST_ARGS}
@@ -1652,6 +1664,7 @@ if command -v systemctl >/dev/null 2>&1; then
     if [[ "$ENABLE_PROXMOX" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --enable-proxmox"; fi
     if [[ -n "$PROXMOX_TYPE" ]]; then EXEC_ARGS="$EXEC_ARGS --proxmox-type ${PROXMOX_TYPE}"; fi
     if [[ "$INSECURE" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --insecure"; fi
+    if [[ -n "$CURL_CA_BUNDLE" ]]; then EXEC_ARGS="$EXEC_ARGS --cacert ${CURL_CA_BUNDLE}"; fi
     if [[ "$ENABLE_COMMANDS" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --enable-commands"; fi
     if [[ -n "$AGENT_ID" ]]; then EXEC_ARGS="$EXEC_ARGS --agent-id ${AGENT_ID}"; fi
     if [[ -n "$HOSTNAME_OVERRIDE" ]]; then EXEC_ARGS="$EXEC_ARGS --hostname ${HOSTNAME_OVERRIDE}"; fi
