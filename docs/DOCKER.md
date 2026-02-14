@@ -180,6 +180,24 @@ You can also toggle "Hide Docker Update Buttons" from the UI: **Settings → Age
 
 ---
 
+## 🐧 Docker Rootless
+
+Pulse auto-detects Docker rootless sockets when `--enable-docker` is used:
+
+- **Linux rootless**: `/run/user/{uid}/docker.sock` (or `$XDG_RUNTIME_DIR/docker.sock`)
+- **macOS Docker Desktop**: `~/.docker/run/docker.sock`
+
+No extra configuration is needed — the agent probes these paths automatically before falling back to the default `/var/run/docker.sock`.
+
+To override socket detection, set the `DOCKER_HOST` environment variable:
+
+```bash
+export DOCKER_HOST=unix:///run/user/1000/docker.sock
+pulse-agent --enable-docker
+```
+
+---
+
 ## 🛠️ Troubleshooting
 
 - **Forgot Password?**

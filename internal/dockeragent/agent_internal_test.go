@@ -927,12 +927,12 @@ func TestBuildRuntimeCandidates(t *testing.T) {
 		{
 			name:       "auto includes both podman and docker sockets",
 			preference: RuntimeAuto,
-			wantMin:    3, // at least env defaults + podman rootless + docker default
+			wantMin:    5, // at least env defaults + podman rootless + docker rootless + docker desktop + docker default
 		},
 		{
 			name:       "docker preference includes docker socket",
 			preference: RuntimeDocker,
-			wantMin:    2, // at least env defaults + docker default
+			wantMin:    4, // at least env defaults + docker rootless + docker desktop + docker default
 		},
 		{
 			name:       "podman preference includes podman sockets",
@@ -1015,6 +1015,108 @@ func TestBuildRuntimeCandidatesContent(t *testing.T) {
 		}
 		if !hasPodman {
 			t.Error("auto preference should include podman sockets")
+		}
+	})
+
+	// Test that docker/auto include docker rootless socket
+	t.Run("docker includes docker rootless socket", func(t *testing.T) {
+		candidates := buildRuntimeCandidates(RuntimeDocker)
+		hasRootless := false
+		for _, c := range candidates {
+			if c.label == "docker rootless socket" || c.label == "docker rootless socket (XDG)" {
+				hasRootless = true
+			}
+		}
+		if !hasRootless {
+			t.Error("docker preference should include docker rootless socket")
+		}
+	})
+
+	t.Run("auto includes docker rootless socket", func(t *testing.T) {
+		candidates := buildRuntimeCandidates(RuntimeAuto)
+		hasRootless := false
+		for _, c := range candidates {
+			if c.label == "docker rootless socket" || c.label == "docker rootless socket (XDG)" {
+				hasRootless = true
+			}
+		}
+		if !hasRootless {
+			t.Error("auto preference should include docker rootless socket")
+		}
+	})
+
+	// Test that podman does NOT include docker rootless socket
+	t.Run("podman excludes docker rootless socket", func(t *testing.T) {
+		candidates := buildRuntimeCandidates(RuntimePodman)
+		for _, c := range candidates {
+			if c.label == "docker rootless socket" || c.label == "docker rootless socket (XDG)" {
+				t.Errorf("podman preference should not include %q", c.label)
+			}
+		}
+	})
+}
+
+func TestBuildRuntimeCandidatesDockerRootless(t *testing.T) {
+	t.Setenv("XDG_RUNTIME_DIR", "/run/user/1234")
+
+	candidates := buildRuntimeCandidates(RuntimeDocker)
+	found := false
+	for _, c := range candidates {
+		if c.label == "docker rootless socket (XDG)" {
+			if c.host != "unix:///run/user/1234/docker.sock" {
+				t.Errorf("expected host unix:///run/user/1234/docker.sock, got %q", c.host)
+			}
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected docker rootless socket (XDG) candidate when XDG_RUNTIME_DIR is set")
+	}
+
+	// Verify the non-XDG fallback label is NOT present when XDG_RUNTIME_DIR is set
+	for _, c := range candidates {
+		if c.label == "docker rootless socket" {
+			t.Error("should not have non-XDG docker rootless socket when XDG_RUNTIME_DIR is set")
+		}
+	}
+}
+
+func TestBuildRuntimeCandidatesDockerDesktop(t *testing.T) {
+	t.Run("docker includes docker desktop socket", func(t *testing.T) {
+		candidates := buildRuntimeCandidates(RuntimeDocker)
+		found := false
+		for _, c := range candidates {
+			if c.label == "docker desktop socket" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Error("docker preference should include docker desktop socket")
+		}
+	})
+
+	t.Run("auto includes docker desktop socket", func(t *testing.T) {
+		candidates := buildRuntimeCandidates(RuntimeAuto)
+		found := false
+		for _, c := range candidates {
+			if c.label == "docker desktop socket" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Error("auto preference should include docker desktop socket")
+		}
+	})
+
+	t.Run("podman excludes docker desktop socket", func(t *testing.T) {
+		candidates := buildRuntimeCandidates(RuntimePodman)
+		for _, c := range candidates {
+			if c.label == "docker desktop socket" {
+				t.Error("podman preference should not include docker desktop socket")
+			}
 		}
 	})
 }
