@@ -137,7 +137,7 @@ export function UpdateBanner() {
                 )}
                 {!isExpanded() && (
                   <a
-                    href={`https://github.com/rcourtman/Pulse/releases/tag/${updateStore.updateInfo()?.latestVersion}`}
+                    href={`https://github.com/rcourtman/Pulse/releases/tag/v${updateStore.updateInfo()?.latestVersion}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     class="text-blue-600 dark:text-blue-400 underline text-sm hidden sm:inline hover:text-blue-700 dark:hover:text-blue-300"
