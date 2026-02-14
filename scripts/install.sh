@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Pulse Unified Agent Installer
-# Supports: Linux (systemd, OpenRC, SysV init), macOS (launchd), FreeBSD (rc.d), Synology DSM (6.x/7+), Unraid
+# Supports: Linux (systemd, OpenRC, SysV init), macOS (launchd), FreeBSD (rc.d), Synology DSM (6.x/7+), Unraid, TrueNAS
 #
 # Usage:
 #   curl -fsSL http://pulse/install.sh | bash -s -- --url http://pulse --token <token> [options]
@@ -53,7 +53,7 @@ BINARY_NAME="pulse-agent"
 INSTALL_DIR="/usr/local/bin"
 LOG_FILE="/var/log/${AGENT_NAME}.log"
 
-# TrueNAS SCALE configuration (immutable root filesystem)
+# TrueNAS SCALE/CORE configuration (immutable root filesystem)
 TRUENAS=false
 TRUENAS_STATE_DIR="/data/pulse-agent"
 TRUENAS_LOG_DIR="$TRUENAS_STATE_DIR/logs"
@@ -78,6 +78,7 @@ KUBECONFIG_PATH=""  # Path to kubeconfig file for Kubernetes monitoring
 KUBE_INCLUDE_ALL_PODS="false"
 KUBE_INCLUDE_ALL_DEPLOYMENTS="false"
 DISK_EXCLUDES=()  # Array for multiple --disk-exclude values
+CURL_CA_BUNDLE="" # Path to CA bundle to supply to curl
 
 # Track if flags were explicitly set (to override auto-detection)
 DOCKER_EXPLICIT="false"
@@ -120,6 +121,7 @@ Options:
   --agent-id <id>         Custom agent identifier
   --hostname <name>       Override hostname reported to Pulse
   --disk-exclude <path>   Exclude mount point (repeatable)
+  --cacert <path>         Provide path to custom CA bundle for curl
   --insecure              Skip TLS verification
   --enable-commands       Enable AI command execution
   --uninstall             Remove the agent
@@ -270,6 +272,7 @@ build_exec_args() {
     if [[ "$ENABLE_PROXMOX" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --enable-proxmox"; fi
     if [[ -n "$PROXMOX_TYPE" ]]; then EXEC_ARGS="$EXEC_ARGS --proxmox-type ${PROXMOX_TYPE}"; fi
     if [[ "$INSECURE" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --insecure"; fi
+    if [[ -n "$CURL_CA_BUNDLE" ]]; then EXEC_ARGS="$EXEC_ARGS --insecure"; fi
     if [[ "$ENABLE_COMMANDS" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --enable-commands"; fi
     if [[ "$KUBE_INCLUDE_ALL_PODS" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --kube-include-all-pods"; fi
     if [[ "$KUBE_INCLUDE_ALL_DEPLOYMENTS" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --kube-include-all-deployments"; fi
@@ -299,6 +302,7 @@ build_exec_args_array() {
     if [[ "$ENABLE_PROXMOX" == "true" ]]; then EXEC_ARGS_ARRAY+=(--enable-proxmox); fi
     if [[ -n "$PROXMOX_TYPE" ]]; then EXEC_ARGS_ARRAY+=(--proxmox-type "$PROXMOX_TYPE"); fi
     if [[ "$INSECURE" == "true" ]]; then EXEC_ARGS_ARRAY+=(--insecure); fi
+    if [[ -n "$CURL_CA_BUNDLE" ]]; then EXEC_ARGS_ARRAY+=(--insecure); fi
     if [[ "$ENABLE_COMMANDS" == "true" ]]; then EXEC_ARGS_ARRAY+=(--enable-commands); fi
     if [[ "$KUBE_INCLUDE_ALL_PODS" == "true" ]]; then EXEC_ARGS_ARRAY+=(--kube-include-all-pods); fi
     if [[ "$KUBE_INCLUDE_ALL_DEPLOYMENTS" == "true" ]]; then EXEC_ARGS_ARRAY+=(--kube-include-all-deployments); fi
@@ -328,6 +332,7 @@ while [[ $# -gt 0 ]]; do
         --disable-proxmox) ENABLE_PROXMOX="false"; PROXMOX_EXPLICIT="true"; shift ;;
         --proxmox-type) PROXMOX_TYPE="$2"; shift 2 ;;
         --insecure) INSECURE="true"; shift ;;
+        --cacert) CURL_CA_BUNDLE="$2"; shift 2 ;;
         --enable-commands) ENABLE_COMMANDS="true"; shift ;;
         --uninstall) UNINSTALL="true"; shift ;;
         --agent-id) AGENT_ID="$2"; shift 2 ;;
@@ -413,7 +418,8 @@ if [[ "$UNINSTALL" == "true" ]]; then
             log_info "Notifying Pulse server to unregister agent ID: ${AGENT_ID}..."
             CURL_ARGS=(-fsSL --connect-timeout 5 -X POST -H "Content-Type: application/json" -H "X-API-Token: ${PULSE_TOKEN}")
             if [[ "$INSECURE" == "true" ]]; then CURL_ARGS+=(-k); fi
-            
+            if [[ "$CURL_CA_BUNDLE" ]]; then CURL_ARGS+=(--cacert "$CURL_CA_BUNDLE"); fi
+
             # Send unregistration request (ignore errors as we are uninstalling anyway)
             curl "${CURL_ARGS[@]}" -d "{\"hostId\": \"${AGENT_ID}\"}" "${PULSE_URL}/api/agents/host/uninstall" >/dev/null 2>&1 || true
         fi
@@ -520,15 +526,27 @@ if [[ "$UNINSTALL" == "true" ]]; then
         rm -rf /var/log/pulse
     fi
 
-    # TrueNAS SCALE
-    if [[ -d "$TRUENAS_STATE_DIR" ]] || [[ -f /etc/truenas-version ]]; then
-        log_info "Removing TrueNAS SCALE installation..."
-        # Stop and disable service
-        systemctl stop "${AGENT_NAME}" 2>/dev/null || true
-        systemctl disable "${AGENT_NAME}" 2>/dev/null || true
-        # Remove systemd symlink
-        rm -f "/etc/systemd/system/${AGENT_NAME}.service"
-        systemctl daemon-reload 2>/dev/null || true
+    # TrueNAS SCALE/CORE
+    if [[ -d "$TRUENAS_STATE_DIR" ]] || [[ -f /etc/truenas-version ]] || [[ -f /etc/version ]]; then
+        if [[ "$(uname -s)" == "Linux" ]]; then
+            log_info "Removing TrueNAS SCALE installation..."
+            # Stop and disable service
+            systemctl stop "${AGENT_NAME}" 2>/dev/null || true
+            systemctl disable "${AGENT_NAME}" 2>/dev/null || true
+            # Remove systemd symlink
+            rm -f "/etc/systemd/system/${AGENT_NAME}.service"
+            systemctl daemon-reload 2>/dev/null || true
+        elif [[ "$(uname -s)" == "FreeBSD" ]]; then
+            log_info "Removing TrueNAS CORE installation..."
+            # Stop service
+            if [[ -f /usr/local/etc/rc.d/pulse-agent ]]; then
+                service "${AGENT_NAME}" stop 2>/dev/null || true
+                rm -f /usr/local/etc/rc.d/pulse-agent
+            else
+                STARTSCRIPT="${TRUENAS_STATE_DIR}/${AGENT_NAME}.service"
+                "$STARTSCRIPT" stop 2>/dev/null || true
+            fi
+        fi
         # Remove Init/Shutdown task
         if command -v midclt >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
             TASK_ID=$(midclt call initshutdownscript.query '[["script","=","'"$TRUENAS_BOOTSTRAP_SCRIPT"'"]]' 2>/dev/null | python3 -c "import json,sys; d=json.load(sys.stdin); print(d[0]['id'] if d else '')" 2>/dev/null || echo "")
@@ -593,17 +611,17 @@ if [[ ! "$INTERVAL" =~ ^[0-9]+[smh]?$ ]]; then
     fail "Invalid interval format. Use format like '30s', '5m', or '1h'."
 fi
 
-# --- TrueNAS SCALE Detection ---
-# TrueNAS SCALE has an immutable root filesystem; /usr/local/bin is read-only.
+# --- TrueNAS SCALE/CORE Detection ---
+# TrueNAS SCALE & CORE have an immutable root filesystem; /usr/local/bin is read-only.
 # We store everything in /data which persists across reboots and upgrades.
-is_truenas_scale() {
+is_truenas() {
     if [[ -f /etc/truenas-version ]]; then
         return 0
     fi
     if [[ -f /etc/version ]] && grep -qi "truenas" /etc/version 2>/dev/null; then
         return 0
     fi
-    if [[ -d /data/ix-applications ]] || [[ -d /etc/ix-apps.d ]]; then
+    if [[ -d /data/ix-applications ]] || [[ -d /etc/ix-apps.d ]] || [[ -d /etc/ix.rc.d ]]; then
         return 0
     fi
     # Fallback: check if hostname contains "truenas" (common default hostname)
@@ -623,16 +641,25 @@ is_install_dir_writable() {
     return 1
 }
 
-if [[ "$(uname -s)" == "Linux" ]] && is_truenas_scale; then
+if [[ "$(uname -s)" == "Linux" ]] && is_truenas; then
     TRUENAS=true
     INSTALL_DIR="$TRUENAS_STATE_DIR"
-    LOG_FILE="$TRUENAS_LOG_DIR/${AGENT_NAME}.log"
+    TRUENAS_LOG_FILE="$TRUENAS_LOG_DIR/${AGENT_NAME}.log"
     log_info "TrueNAS SCALE detected (immutable root). Using $TRUENAS_STATE_DIR for installation."
 elif [[ "$(uname -s)" == "Linux" ]] && [[ -d /data ]] && ! is_install_dir_writable; then
     # /usr/local/bin is read-only but /data exists - likely TrueNAS or similar immutable system
     TRUENAS=true
     INSTALL_DIR="$TRUENAS_STATE_DIR"
-    LOG_FILE="$TRUENAS_LOG_DIR/${AGENT_NAME}.log"
+    TRUENAS_LOG_FILE="$TRUENAS_LOG_DIR/${AGENT_NAME}.log"
+    log_info "Immutable filesystem detected (read-only /usr/local/bin). Using $TRUENAS_STATE_DIR for installation."
+elif [[ "$(uname -s)" == "FreeBSD" ]] && is_truenas; then
+    TRUENAS=true
+    INSTALL_DIR="$TRUENAS_STATE_DIR"
+    log_info "TrueNAS CORE detected (immutable root). Using $TRUENAS_STATE_DIR for installation."
+elif [[ "$(uname -s)" == "FreeBSD" ]] && [[ -d /data ]] && ! is_install_dir_writable; then
+    # /usr/local/bin is read-only but /data exists - likely TrueNAS or similar immutable system
+    TRUENAS=true
+    INSTALL_DIR="$TRUENAS_STATE_DIR"
     log_info "Immutable filesystem detected (read-only /usr/local/bin). Using $TRUENAS_STATE_DIR for installation."
 fi
 
@@ -662,6 +689,7 @@ TMP_FILES+=("$TMP_BIN")
 # Build curl arguments as array for proper quoting
 CURL_ARGS=(-fsSL --connect-timeout 30 --max-time 300)
 if [[ "$INSECURE" == "true" ]]; then CURL_ARGS+=(-k); fi
+if [[ "$CURL_CA_BUNDLE" ]]; then CURL_ARGS+=(--cacert "$CURL_CA_BUNDLE"); fi
 
 if ! curl "${CURL_ARGS[@]}" -o "$TMP_BIN" "$DOWNLOAD_URL"; then
     fail "Download failed. Check URL and connectivity."
@@ -712,6 +740,12 @@ if [[ -x "${INSTALL_DIR}/${BINARY_NAME}" ]]; then
             if rc-service "${AGENT_NAME}" status >/dev/null 2>&1; then
                 log_info "Stopping existing ${AGENT_NAME} service..."
                 rc-service "${AGENT_NAME}" stop 2>/dev/null || true
+                sleep 2
+            fi
+        elif command -v service >/dev/null 2>&1; then
+            if service "${AGENT_NAME}" status >/dev/null 2>&1; then
+                log_info "Stopping existing ${AGENT_NAME} service..."
+                service "${AGENT_NAME}" stop 2>/dev/null || true
                 sleep 2
             fi
         fi
@@ -830,6 +864,10 @@ if [[ "$OS" == "darwin" ]]; then
         <string>${KUBECONFIG_PATH}</string>"
     fi
     if [[ "$INSECURE" == "true" ]]; then
+        PLIST_ARGS="${PLIST_ARGS}
+        <string>--insecure</string>"
+    fi
+    if [[ -n "$CURL_CA_BUNDLE" ]]; then
         PLIST_ARGS="${PLIST_ARGS}
         <string>--insecure</string>"
     fi
@@ -1057,20 +1095,29 @@ EOF
     exit 0
 fi
 
-# 4. TrueNAS SCALE (immutable root, uses systemd but needs special persistence)
-# TrueNAS SCALE wipes /etc/systemd/system on upgrades, so we store the service
+# 4. TrueNAS SCALE & CORE (immutable root, SCALE uses systemd but needs special persistence)
+# TrueNAS SCALE wipes /etc/systemd/system on upgrades, so we store the services for both
 # in /data and create an Init/Shutdown task to recreate the symlink on boot.
 # Note: /data may have exec=off on some TrueNAS systems. On TrueNAS SCALE 24.04+,
 # /usr/local/bin is also read-only. We try multiple runtime locations.
 if [[ "$TRUENAS" == true ]]; then
-    log_info "Configuring TrueNAS SCALE installation..."
+    log_info "Configuring TrueNAS SCALE or CORE installation..."
 
     # Stop any existing agent before we modify binaries
     # The runtime binary may be in /root/bin or /var/tmp, not just INSTALL_DIR
-    if systemctl is-active --quiet "${AGENT_NAME}" 2>/dev/null; then
-        log_info "Stopping existing ${AGENT_NAME} service..."
-        systemctl stop "${AGENT_NAME}" 2>/dev/null || true
-        sleep 2
+    if [[ "$(uname -s)" == "Linux" ]]; then
+        if systemctl is-active --quiet "${AGENT_NAME}" 2>/dev/null; then
+            log_info "Stopping existing ${AGENT_NAME} service..."
+            systemctl stop "${AGENT_NAME}" 2>/dev/null || true
+            sleep 2
+        fi
+    elif [[ "$(uname -s)" == "FreeBSD" ]]; then
+        if [[ -f /usr/local/etc/rc.d/pulse-agent ]]; then
+            service "${AGENT_NAME}" stop 2>/dev/null || true
+        else
+            STOPSCRIPT="${INSTALL_DIR}/${AGENT_NAME}.service"
+            "$STOPSCRIPT" stop 2>/dev/null || true
+        fi
     fi
     # Kill any remaining pulse-agent processes (may be running from different paths)
     pkill -9 -f "pulse-agent" 2>/dev/null || true
@@ -1113,8 +1160,8 @@ if [[ "$TRUENAS" == true ]]; then
             # Test if we can write and execute from this location
             TEST_FILE="${RUNTIME_DIR}/.pulse-exec-test-$$"
             if cp "$TRUENAS_STORED_BINARY" "$TEST_FILE" 2>/dev/null && \
-               chmod +x "$TEST_FILE" 2>/dev/null && \
-               "$TEST_FILE" --version >/dev/null 2>&1; then
+                chmod +x "$TEST_FILE" 2>/dev/null && \
+                "$TEST_FILE" --version >/dev/null 2>&1; then
                 rm -f "$TEST_FILE"
                 TRUENAS_RUNTIME_BINARY="${RUNTIME_DIR}/${BINARY_NAME}"
                 log_info "Using ${RUNTIME_DIR} for binary execution."
@@ -1142,7 +1189,8 @@ if [[ "$TRUENAS" == true ]]; then
     # Store service file in /data (persists across upgrades)
     # Service uses /usr/local/bin path (runtime location)
     TRUENAS_SERVICE_STORAGE="$TRUENAS_STATE_DIR/${AGENT_NAME}.service"
-    cat > "$TRUENAS_SERVICE_STORAGE" <<EOF
+    if [[ "$(uname -s)" == "Linux" ]]; then
+        cat > "$TRUENAS_SERVICE_STORAGE" <<EOF
 [Unit]
 Description=Pulse Unified Agent
 After=network-online.target docker.service
@@ -1155,12 +1203,76 @@ ExecStart=${TRUENAS_RUNTIME_BINARY} ${EXEC_ARGS}
 Restart=always
 RestartSec=5s
 User=root
-StandardOutput=append:${LOG_FILE}
-StandardError=append:${LOG_FILE}
+StandardOutput=append:${TRUENAS_LOG_FILE}
+StandardError=append:${TRUENAS_LOG_FILE}
 
 [Install]
 WantedBy=multi-user.target
 EOF
+    elif [[ "$(uname -s)" == "FreeBSD" ]]; then
+        cat > "$TRUENAS_SERVICE_STORAGE" <<'RCEOF'
+#!/bin/sh
+
+# PROVIDE: pulse_agent
+# REQUIRE: LOGIN NETWORKING
+# KEYWORD: shutdown
+
+. /etc/rc.subr
+
+name="pulse_agent"
+rcvar="pulse_agent_enable"
+pidfile="/var/run/${name}.pid"
+
+# These placeholders are replaced by sed below
+command="INSTALL_DIR_PLACEHOLDER/BINARY_NAME_PLACEHOLDER"
+command_args="EXEC_ARGS_PLACEHOLDER"
+
+start_cmd="${name}_start"
+stop_cmd="${name}_stop"
+status_cmd="${name}_status"
+
+pulse_agent_start()
+{
+    if checkyesno ${rcvar}; then
+        echo "Starting ${name}."
+        /usr/sbin/daemon -r -p ${pidfile} -f ${command} ${command_args}
+    fi
+}
+
+pulse_agent_stop()
+{
+    if [ -f ${pidfile} ]; then
+        echo "Stopping ${name}."
+        kill $(cat ${pidfile}) 2>/dev/null
+        rm -f ${pidfile}
+    else
+        echo "${name} is not running."
+    fi
+}
+
+pulse_agent_status()
+{
+    if [ -f ${pidfile} ] && kill -0 $(cat ${pidfile}) 2>/dev/null; then
+        echo "${name} is running as pid $(cat ${pidfile})."
+    else
+        echo "${name} is not running."
+        return 1
+    fi
+}
+
+load_rc_config $name
+run_rc_command "$1"
+RCEOF
+    # Replace placeholders with actual values
+    sed -i '' "s|INSTALL_DIR_PLACEHOLDER|${INSTALL_DIR}|g" "$TRUENAS_SERVICE_STORAGE" 2>/dev/null || \
+        sed -i "s|INSTALL_DIR_PLACEHOLDER|${INSTALL_DIR}|g" "$TRUENAS_SERVICE_STORAGE"
+    sed -i '' "s|BINARY_NAME_PLACEHOLDER|${BINARY_NAME}|g" "$TRUENAS_SERVICE_STORAGE" 2>/dev/null || \
+        sed -i "s|BINARY_NAME_PLACEHOLDER|${BINARY_NAME}|g" "$TRUENAS_SERVICE_STORAGE"
+    sed -i '' "s|EXEC_ARGS_PLACEHOLDER|${EXEC_ARGS}|g" "$TRUENAS_SERVICE_STORAGE" 2>/dev/null || \
+        sed -i "s|EXEC_ARGS_PLACEHOLDER|${EXEC_ARGS}|g" "$TRUENAS_SERVICE_STORAGE"
+    fi
+
+    chmod +x "$TRUENAS_SERVICE_STORAGE"
 
     # Store environment/config for reference
     cat > "$TRUENAS_ENV_FILE" <<EOF
@@ -1178,7 +1290,8 @@ EOF
 
     # Create bootstrap script that runs on boot
     # This script handles the runtime binary location and recreates the systemd symlink
-    cat > "$TRUENAS_BOOTSTRAP_SCRIPT" <<'BOOTSTRAP'
+    if [[ "$(uname -s)" == "Linux" ]]; then
+        cat > "$TRUENAS_BOOTSTRAP_SCRIPT" <<'BOOTSTRAP'
 #!/bin/bash
 # Pulse Agent Bootstrap for TrueNAS SCALE
 # This script is called by TrueNAS Init/Shutdown task on boot.
@@ -1191,7 +1304,7 @@ SERVICE_NAME="pulse-agent"
 STATE_DIR="STATE_DIR_PLACEHOLDER"
 STORED_BINARY="${STATE_DIR}/pulse-agent"
 RUNTIME_BINARY="RUNTIME_BINARY_PLACEHOLDER"
-SERVICE_STORAGE="${STATE_DIR}/pulse-agent.service"
+TRUENAS_SERVICE_STORAGE="${STATE_DIR}/pulse-agent.service"
 SYSTEMD_LINK="/etc/systemd/system/${SERVICE_NAME}.service"
 
 if [[ ! -f "$STORED_BINARY" ]]; then
@@ -1199,8 +1312,8 @@ if [[ ! -f "$STORED_BINARY" ]]; then
     exit 1
 fi
 
-if [[ ! -f "$SERVICE_STORAGE" ]]; then
-    echo "ERROR: Service file not found at $SERVICE_STORAGE"
+if [[ ! -f "$TRUENAS_SERVICE_STORAGE" ]]; then
+    echo "ERROR: Service file not found at $TRUENAS_SERVICE_STORAGE"
     exit 1
 fi
 
@@ -1213,7 +1326,7 @@ if [[ "$RUNTIME_BINARY" != "$STORED_BINARY" ]]; then
 fi
 
 # Create symlink (or update if exists)
-ln -sf "$SERVICE_STORAGE" "$SYSTEMD_LINK"
+ln -sf "$TRUENAS_SERVICE_STORAGE" "$SYSTEMD_LINK"
 
 # Reload and start
 systemctl daemon-reload
@@ -1222,15 +1335,78 @@ systemctl restart "$SERVICE_NAME"
 
 echo "Pulse agent started successfully"
 BOOTSTRAP
+    elif [[ "$(uname -s)" == "FreeBSD" ]]; then
+        cat > "$TRUENAS_BOOTSTRAP_SCRIPT" <<'BOOTSTRAP'
+#!/bin/bash
+# Pulse Agent Bootstrap for TrueNAS CORE
+# This script is called by TrueNAS Init/Shutdown task on boot.
+# It ensures the binary is in an executable location and recreates the
+# systemd symlink (which is wiped on TrueNAS upgrades).
 
+set -e
+
+SERVICE_NAME="pulse-agent"
+STATE_DIR="STATE_DIR_PLACEHOLDER"
+STORED_BINARY="${STATE_DIR}/pulse-agent"
+RUNTIME_BINARY="RUNTIME_BINARY_PLACEHOLDER"
+TRUENAS_SERVICE_STORAGE="${STATE_DIR}/pulse-agent.service"
+RCSCRIPT_LINK="/usr/local/etc/rc.d/${SERVICE_NAME}
+
+if [[ ! -f "$STORED_BINARY" ]]; then
+    echo "ERROR: Binary not found at $STORED_BINARY"
+    exit 1
+fi
+
+if [[ ! -f "$TRUENAS_SERVICE_STORAGE" ]]; then
+    echo "ERROR: Service file not found at $TRUENAS_SERVICE_STORAGE"
+    exit 1
+fi
+
+# If runtime binary is different from stored binary, copy it
+if [[ "$RUNTIME_BINARY" != "$STORED_BINARY" ]]; then
+    # Ensure parent directory exists (e.g., /root/bin)
+    mkdir -p "$(dirname "$RUNTIME_BINARY")" 2>/dev/null || true
+    cp "$STORED_BINARY" "$RUNTIME_BINARY"
+    chmod +x "$RUNTIME_BINARY"
+fi
+
+# Create symlink (or update if exists)
+ln -sf "$TRUENAS_SERVICE_STORAGE" "$RCSCRIPT_LINK"
+
+# Enable the service in rc.conf
+if ! grep -q "pulse_agent_enable" /etc/rc.conf 2>/dev/null; then
+    echo 'pulse_agent_enable="YES"' >> /etc/rc.conf
+else
+    sed -i '' 's/pulse_agent_enable=.*/pulse_agent_enable="YES"/' /etc/rc.conf 2>/dev/null || \
+        sed -i 's/pulse_agent_enable=.*/pulse_agent_enable="YES"/' /etc/rc.conf
+fi
+# Stop existing agent if running
+service "${SERVICE_NAME}" stop 2>/dev/null || true
+sleep 1
+
+# Start the agent
+service "${SERVICE_NAME}" start 2>/dev/null || true
+exit 0
+
+echo "Pulse agent started successfully"
+BOOTSTRAP
+    fi
     # Replace placeholders
+    sed -i '' "s|STATE_DIR_PLACEHOLDER|${TRUENAS_STATE_DIR}|g" "$TRUENAS_BOOTSTRAP_SCRIPT" 2>/dev/null || \
     sed -i "s|STATE_DIR_PLACEHOLDER|${TRUENAS_STATE_DIR}|g" "$TRUENAS_BOOTSTRAP_SCRIPT"
+    sed -i '' "s|RUNTIME_BINARY_PLACEHOLDER|${TRUENAS_RUNTIME_BINARY}|g" "$TRUENAS_BOOTSTRAP_SCRIPT" 2>/dev/null || \
     sed -i "s|RUNTIME_BINARY_PLACEHOLDER|${TRUENAS_RUNTIME_BINARY}|g" "$TRUENAS_BOOTSTRAP_SCRIPT"
     chmod +x "$TRUENAS_BOOTSTRAP_SCRIPT"
 
-    # Create systemd symlink now
-    SYSTEMD_LINK="/etc/systemd/system/${AGENT_NAME}.service"
-    ln -sf "$TRUENAS_SERVICE_STORAGE" "$SYSTEMD_LINK"
+    if [[ "$(uname -s)" == "Linux" ]]; then
+        # Create systemd symlink now
+        SYSTEMD_LINK="/etc/systemd/system/${AGENT_NAME}.service"
+        ln -sf "$TRUENAS_SERVICE_STORAGE" "$SYSTEMD_LINK"
+    elif [[ "$(uname -s)" == "FreeBSD" ]]; then
+        # Create symlink (or update if exists)
+        RCSCRIPT_LINK="/usr/local/etc/rc.d/${AGENT_NAME}"
+        ln -sf "$TRUENAS_SERVICE_STORAGE" "$RCSCRIPT_LINK"
+    fi
 
     # Register Init/Shutdown task using midclt
     if command -v midclt >/dev/null 2>&1; then
@@ -1252,16 +1428,39 @@ BOOTSTRAP
         log_warn "  When: Post Init"
     fi
 
-    # Enable and start service
-    systemctl daemon-reload
-    systemctl enable "${AGENT_NAME}" 2>/dev/null || true
-    systemctl restart "${AGENT_NAME}"
+    if [[ "$(uname -s)" == "Linux" ]]; then
+        # Enable and start service
+        systemctl daemon-reload
+        systemctl enable "${AGENT_NAME}" 2>/dev/null || true
+        systemctl restart "${AGENT_NAME}"
+    elif [[ "$(uname -s)" == "FreeBSD" ]]; then
+        if ! grep -q "pulse_agent_enable" /etc/rc.conf 2>/dev/null; then
+            echo 'pulse_agent_enable="YES"' >> /etc/rc.conf
+        else
+            sed -i '' 's/pulse_agent_enable=.*/pulse_agent_enable="YES"/' /etc/rc.conf 2>/dev/null || \
+                sed -i 's/pulse_agent_enable=.*/pulse_agent_enable="YES"/' /etc/rc.conf
+        fi
+        # Stop existing agent if running
+        service "${AGENT_NAME}" stop 2>/dev/null || true
+        sleep 1
+
+        # Start the agent
+        service "${AGENT_NAME}" start 2>/dev/null || true
+        if [[ "$UPGRADE_MODE" == "true" ]]; then
+            log_info "Upgrade complete! Agent restarted with new configuration."
+        else
+            log_info "Installation complete! Agent service started."
+        fi
+        log_info "To check status: service "${AGENT_NAME}" status"
+    fi
 
     log_info "Installation complete!"
     log_info "Binary: $TRUENAS_STORED_BINARY (persistent)"
     log_info "Runtime: $TRUENAS_RUNTIME_BINARY (for execution)"
-    log_info "Service: $TRUENAS_SERVICE_STORAGE (symlinked to systemd)"
-    log_info "Logs: tail -f ${LOG_FILE}"
+    log_info "Service: $TRUENAS_SERVICE_STORAGE (symlinked to systemd or "$RCSCRIPT_LINK")"
+    if [[ "$(uname -s)" == "Linux" ]]; then
+        log_info "Logs: tail -f ${TRUENAS_LOG_FILE}"
+    fi
     log_info ""
     log_info "The Init/Shutdown task ensures the agent survives TrueNAS upgrades."
     exit 0
@@ -1464,6 +1663,7 @@ if command -v systemctl >/dev/null 2>&1; then
     if [[ "$ENABLE_PROXMOX" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --enable-proxmox"; fi
     if [[ -n "$PROXMOX_TYPE" ]]; then EXEC_ARGS="$EXEC_ARGS --proxmox-type ${PROXMOX_TYPE}"; fi
     if [[ "$INSECURE" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --insecure"; fi
+    if [[ -n "$CURL_CA_BUNDLE" ]]; then EXEC_ARGS="$EXEC_ARGS --insecure"; fi
     if [[ "$ENABLE_COMMANDS" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --enable-commands"; fi
     if [[ -n "$AGENT_ID" ]]; then EXEC_ARGS="$EXEC_ARGS --agent-id ${AGENT_ID}"; fi
     if [[ -n "$HOSTNAME_OVERRIDE" ]]; then EXEC_ARGS="$EXEC_ARGS --hostname ${HOSTNAME_OVERRIDE}"; fi
