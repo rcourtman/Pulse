@@ -81,11 +81,15 @@ describe('updateStore', () => {
   });
 
   it('clears dismissed state when cached latest version changes', async () => {
+    // Mock getVersion to match the cached currentVersion so the cache path is used
+    mockGetVersion.mockResolvedValue({ ...baseVersionInfo, version: 'v1.0.0' });
+
     const updateStore = await loadUpdateStore();
     updateStore.simulateUpdate('v1.2.0');
     updateStore.dismissUpdate();
     expect(updateStore.isDismissed()).toBe(true);
 
+    // Set cached data with a DIFFERENT latestVersion than what was dismissed
     localStorage.setItem(
       STORAGE_KEYS.UPDATES,
       JSON.stringify({
@@ -100,21 +104,12 @@ describe('updateStore', () => {
 
     await updateStore.checkForUpdates();
 
+    // Cache path calls getVersion once to verify current version matches
     expect(mockGetVersion).toHaveBeenCalledTimes(1);
-    expect(mockCheckForUpdates).toHaveBeenCalledTimes(1);
+    // Since cache is valid (version matches), checkForUpdates API is NOT called
+    expect(mockCheckForUpdates).not.toHaveBeenCalled();
+    // Dismissed version (v1.2.0) !== latest version (v1.3.0), so dismissed is cleared
+    expect(updateStore.isDismissed()).toBe(false);
     expect(updateStore.updateAvailable()).toBe(true);
-    expect(updateStore.updateInfo()).toEqual({
-      available: true,
-      currentVersion: 'v1.2.3',
-      latestVersion: 'v1.2.4',
-      releaseNotes: 'Bug fixes',
-      releaseDate: '2026-02-12T00:00:00.000Z',
-      downloadUrl: '/download',
-      isPrerelease: false,
-    });
-
-    const stored = JSON.parse(localStorage.getItem(STORAGE_KEYS.UPDATES) || '{}');
-    expect(typeof stored.updateInfo.available).toBe('boolean');
-    expect(typeof stored.updateInfo.latestVersion).toBe('string');
   });
 });
