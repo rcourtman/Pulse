@@ -170,7 +170,7 @@ func TestClientRegister_TrimsLicenseToken(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	_ = client.connectAndHandle(ctx)
+	_, _ = client.connectAndHandle(ctx)
 
 	select {
 	case got := <-registerTokenCh:

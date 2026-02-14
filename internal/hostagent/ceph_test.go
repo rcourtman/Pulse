@@ -11,9 +11,9 @@ const fakeCephBinary = "/usr/bin/ceph"
 
 func withCommandRunner(t *testing.T, fn func(ctx context.Context, name string, args ...string) ([]byte, []byte, error)) {
 	t.Helper()
-	orig := cephCommandRunner
-	cephCommandRunner = fn
-	t.Cleanup(func() { cephCommandRunner = orig })
+	orig := commandRunner
+	commandRunner = fn
+	t.Cleanup(func() { commandRunner = orig })
 }
 
 func withLookPath(t *testing.T, fn func(file string) (string, error)) {
@@ -26,7 +26,7 @@ func withLookPath(t *testing.T, fn func(file string) (string, error)) {
 func TestCommandRunner_Default(t *testing.T) {
 	stdout, stderr, err := commandRunner(context.Background(), "sh", "-c", "true")
 	if err != nil {
-		t.Fatalf("cephCommandRunner error: %v", err)
+		t.Fatalf("commandRunner error: %v", err)
 	}
 	if len(stdout) != 0 {
 		t.Fatalf("unexpected stdout: %q", string(stdout))
@@ -219,7 +219,7 @@ func TestRunCephCommandOutputTooLarge(t *testing.T) {
 }
 
 func TestParseStatusInvalidJSON(t *testing.T) {
-	_, err := parseStatus([]byte(`{not-json}`))
+	_, err := parseCephStatus([]byte(`{not-json}`))
 	if err == nil {
 		t.Fatalf("expected error for invalid JSON")
 	}

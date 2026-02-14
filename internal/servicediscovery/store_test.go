@@ -918,6 +918,24 @@ func TestStore_GetStaleResources(t *testing.T) {
 		}
 	}
 
+	// Save() sets UpdatedAt to time.Now(), so overwrite the on-disk files
+	// (which List() reads) to simulate genuinely stale/fresh entries.
+	for _, d := range []*ResourceDiscovery{old, fresh} {
+		switch d.ResourceID {
+		case "old":
+			d.UpdatedAt = time.Now().Add(-2 * time.Hour)
+		case "fresh":
+			d.UpdatedAt = time.Now().Add(-5 * time.Minute)
+		}
+		data, err := json.Marshal(d)
+		if err != nil {
+			t.Fatalf("marshal error: %v", err)
+		}
+		if err := os.WriteFile(store.getFilePath(d.ID), data, 0600); err != nil {
+			t.Fatalf("write error: %v", err)
+		}
+	}
+
 	stale, err := store.GetStaleResources(time.Hour)
 	if err != nil {
 		t.Fatalf("GetStaleResources error: %v", err)

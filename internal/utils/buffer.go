@@ -19,7 +19,7 @@ const minCapacity = 1
 // Capacity must be greater than zero.
 func New[T any](capacity int) *Queue[T] {
 	if capacity <= 0 {
-		panic("buffer queue capacity must be > 0")
+		capacity = minCapacity
 	}
 
 	return &Queue[T]{

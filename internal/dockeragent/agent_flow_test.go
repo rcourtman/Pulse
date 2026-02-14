@@ -253,7 +253,7 @@ func TestCollectOnce(t *testing.T) {
 			httpClients: map[bool]*http.Client{false: {Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
 				return nil, errors.New("send failed")
 			})}},
-			reportBuffer: utils.NewQueue[agentsdocker.Report](10),
+			reportBuffer: utils.New[agentsdocker.Report](10),
 		}
 
 		if err := agent.collectOnce(context.Background()); err != nil {
@@ -285,7 +285,7 @@ func TestCollectOnce(t *testing.T) {
 			logger:       logger,
 			targets:      []TargetConfig{{URL: server.URL, Token: "token"}},
 			httpClients:  map[bool]*http.Client{false: server.Client()},
-			reportBuffer: utils.NewQueue[agentsdocker.Report](10),
+			reportBuffer: utils.New[agentsdocker.Report](10),
 		}
 
 		if err := agent.collectOnce(context.Background()); err != nil {
@@ -318,7 +318,7 @@ func TestCollectOnce(t *testing.T) {
 			logger:       zerolog.New(&buf),
 			targets:      []TargetConfig{{URL: server.URL, Token: "token"}},
 			httpClients:  map[bool]*http.Client{false: server.Client()},
-			reportBuffer: utils.NewQueue[agentsdocker.Report](10),
+			reportBuffer: utils.New[agentsdocker.Report](10),
 		}
 
 		agent.reportBuffer.Push(agentsdocker.Report{Agent: agentsdocker.AgentInfo{ID: "queued"}})
@@ -416,7 +416,7 @@ func TestRun(t *testing.T) {
 			logger:       zerolog.Nop(),
 			targets:      []TargetConfig{{URL: server.URL, Token: "token"}},
 			httpClients:  map[bool]*http.Client{false: server.Client()},
-			reportBuffer: utils.NewQueue[agentsdocker.Report](10),
+			reportBuffer: utils.New[agentsdocker.Report](10),
 		}
 
 		ctx, cancel := context.WithCancel(context.Background())
@@ -459,7 +459,7 @@ func TestRun(t *testing.T) {
 			logger:       zerolog.Nop(),
 			targets:      []TargetConfig{{URL: server.URL, Token: "token"}},
 			httpClients:  map[bool]*http.Client{false: server.Client()},
-			reportBuffer: utils.NewQueue[agentsdocker.Report](10),
+			reportBuffer: utils.New[agentsdocker.Report](10),
 		}
 
 		ctx, cancel := context.WithCancel(context.Background())
@@ -507,7 +507,7 @@ func TestRun(t *testing.T) {
 			logger:       zerolog.Nop(),
 			targets:      []TargetConfig{{URL: server.URL, Token: "token"}},
 			httpClients:  map[bool]*http.Client{false: server.Client()},
-			reportBuffer: utils.NewQueue[agentsdocker.Report](10),
+			reportBuffer: utils.New[agentsdocker.Report](10),
 		}
 
 		done := make(chan error, 1)
@@ -556,7 +556,7 @@ func TestRun(t *testing.T) {
 			logger:       zerolog.Nop(),
 			targets:      []TargetConfig{{URL: server.URL, Token: "token"}},
 			httpClients:  map[bool]*http.Client{false: server.Client()},
-			reportBuffer: utils.NewQueue[agentsdocker.Report](10),
+			reportBuffer: utils.New[agentsdocker.Report](10),
 		}
 
 		ctx, cancel := context.WithCancel(context.Background())

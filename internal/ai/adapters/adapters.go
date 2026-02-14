@@ -409,7 +409,7 @@ func (s *KnowledgeStore) saveToDisk() {
 	path := filepath.Join(s.dataDir, "knowledge_store.json")
 	// Use atomic write (temp file + rename) to prevent corruption from concurrent saves.
 	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0644); err != nil {
+	if err := os.WriteFile(tmp, data, 0600); err != nil {
 		log.Warn().Err(err).Str("path", tmp).Msg("ai.adapters.KnowledgeStore.saveToDisk: failed to write temp store file")
 		return
 	}

@@ -61,7 +61,7 @@ func TestRun_StopsOnContextCancel(t *testing.T) {
 		agentVersion: "v1",
 		interval:     10 * time.Millisecond,
 		kubeClient:   fake.NewSimpleClientset(),
-		reportBuffer: utils.NewQueue[agentsk8s.Report](5),
+		reportBuffer: utils.New[agentsk8s.Report](5),
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -109,7 +109,7 @@ func TestRun_ClosesIdleHTTPConnectionsOnShutdown(t *testing.T) {
 		httpClient:   &http.Client{Transport: transport},
 		interval:     10 * time.Millisecond,
 		kubeClient:   fake.NewSimpleClientset(),
-		reportBuffer: buffer.New[agentsk8s.Report](1),
+		reportBuffer: utils.New[agentsk8s.Report](1),
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())

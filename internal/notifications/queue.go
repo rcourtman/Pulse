@@ -787,6 +787,18 @@ func (nq *NotificationQueue) performCleanup() {
 	completedCutoff := time.Now().Add(-7 * 24 * time.Hour).Unix()
 	dlqCutoff := time.Now().Add(-30 * 24 * time.Hour).Unix()
 
+	// Delete audit records for notifications about to be cleaned up (FK constraint)
+	auditCleanup := `DELETE FROM notification_audit WHERE notification_id IN (
+		SELECT id FROM notification_queue WHERE status IN ('sent', 'failed', 'cancelled') AND completed_at < ?
+	)`
+	if _, err := nq.db.Exec(auditCleanup, completedCutoff); err != nil {
+		log.Error().
+			Err(err).
+			Str("component", "notification_queue").
+			Str("action", "cleanup_audit_for_completed").
+			Msg("Failed to cleanup audit records for completed notifications")
+	}
+
 	// Clean completed/sent/failed/cancelled
 	query := `DELETE FROM notification_queue WHERE status IN ('sent', 'failed', 'cancelled') AND completed_at < ?`
 	result, err := nq.db.Exec(query, completedCutoff)
@@ -806,6 +818,18 @@ func (nq *NotificationQueue) performCleanup() {
 				Int64("completedCutoff", completedCutoff).
 				Msg("Cleaned up old completed notifications")
 		}
+	}
+
+	// Delete audit records for DLQ notifications about to be cleaned up (FK constraint)
+	auditCleanup = `DELETE FROM notification_audit WHERE notification_id IN (
+		SELECT id FROM notification_queue WHERE status = 'dlq' AND completed_at < ?
+	)`
+	if _, err = nq.db.Exec(auditCleanup, dlqCutoff); err != nil {
+		log.Error().
+			Err(err).
+			Str("component", "notification_queue").
+			Str("action", "cleanup_audit_for_dlq").
+			Msg("Failed to cleanup audit records for DLQ notifications")
 	}
 
 	// Clean old DLQ entries
@@ -959,11 +983,11 @@ func (nq *NotificationQueue) CancelByAlertIDs(alertIDs []string) error {
 		now := time.Now().Unix()
 		updateQuery := `
 			UPDATE notification_queue
-			SET status = ?, last_attempt = ?, last_error = ?
+			SET status = ?, last_attempt = ?, last_error = ?, completed_at = ?, next_retry_at = NULL
 			WHERE id = ?
 		`
 		for _, notifID := range toCancelIDs {
-			if _, err := nq.db.Exec(updateQuery, QueueStatusCancelled, now, "Alert resolved", notifID); err != nil {
+			if _, err := nq.db.Exec(updateQuery, QueueStatusCancelled, now, "Alert resolved", now, notifID); err != nil {
 				log.Error().
 					Err(err).
 					Str("component", "notification_queue").

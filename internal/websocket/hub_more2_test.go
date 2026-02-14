@@ -2,7 +2,6 @@ package websocket
 
 import (
 	"encoding/json"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -168,7 +167,7 @@ func TestHandleWebSocketPingPong(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(hub.HandleWebSocket))
 	defer server.Close()
 
-	wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "?org_id=default"
 	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	if err != nil {
 		t.Fatalf("dial websocket: %v", err)
@@ -208,12 +207,14 @@ func TestHandleWebSocket_ReadLimitExceededClosesConnection(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(hub.HandleWebSocket))
 	defer server.Close()
 
-	wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "?org_id=default"
 	dialer := websocket.Dialer{
-		EnableCompression: true,
+		// Disable compression so the oversized payload hits the server's
+		// read limit on the wire (repeated bytes compress too well).
+		EnableCompression: false,
 	}
 
-	conn, resp, err := dialer.Dial(wsURL, nil)
+	conn, _, err := dialer.Dial(wsURL, nil)
 	if err != nil {
 		t.Fatalf("dial websocket: %v", err)
 	}
@@ -234,18 +235,26 @@ func TestHandleWebSocket_ReadLimitExceededClosesConnection(t *testing.T) {
 		t.Fatalf("write oversized payload: %v", err)
 	}
 
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		if err := conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond)); err != nil {
-			t.Fatalf("set read deadline: %v", err)
-		}
-		if _, _, err := conn.ReadMessage(); err != nil {
-			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-				continue
-			}
-			return
-		}
+	// Drain messages until the server closes the connection. The goroutine
+	// approach avoids gorilla/websocket's panic on retry after a timeout-induced
+	// fatal error — we set a long deadline so the only "fatal" read would be
+	// the close frame itself, after which we exit the loop immediately.
+	if err := conn.SetReadDeadline(time.Now().Add(5 * time.Second)); err != nil {
+		t.Fatalf("set read deadline: %v", err)
 	}
-
-	t.Fatal("expected websocket connection to close after oversized inbound message")
+	closed := make(chan struct{})
+	go func() {
+		defer close(closed)
+		for {
+			if _, _, err := conn.ReadMessage(); err != nil {
+				return
+			}
+		}
+	}()
+	select {
+	case <-closed:
+		// Server closed the connection as expected
+	case <-time.After(5 * time.Second):
+		t.Fatal("expected websocket connection to close after oversized inbound message")
+	}
 }

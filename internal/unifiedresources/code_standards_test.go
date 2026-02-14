@@ -170,8 +170,8 @@ type legacyStateRatchet struct {
 var legacyStateRatchets = []legacyStateRatchet{
 	{regexp.MustCompile(`state\.VMs\b`), "state.VMs", 49, "ReadState.VMs()"},
 	{regexp.MustCompile(`state\.Containers\b`), "state.Containers", 49, "ReadState.Containers()"},
-	{regexp.MustCompile(`state\.Nodes\b`), "state.Nodes", 43, "ReadState.Nodes()"},
-	{regexp.MustCompile(`state\.DockerHosts\b`), "state.DockerHosts", 45, "ReadState.DockerHosts()"},
+	{regexp.MustCompile(`state\.Nodes\b`), "state.Nodes", 42, "ReadState.Nodes()"},
+	{regexp.MustCompile(`state\.DockerHosts\b`), "state.DockerHosts", 48, "ReadState.DockerHosts()"},
 	{regexp.MustCompile(`state\.Hosts\b`), "state.Hosts", 26, "ReadState.Hosts()"},
 	{regexp.MustCompile(`state\.Storage\b`), "state.Storage", 21, "ReadState.StoragePools()"},
 	{regexp.MustCompile(`state\.KubernetesClusters\b`), "state.KubernetesClusters", 19, "ReadState.K8sClusters()"},

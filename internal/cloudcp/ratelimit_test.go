@@ -73,7 +73,7 @@ func TestClientIP(t *testing.T) {
 	t.Run("x-forwarded-for-single-value", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
 		req.Header.Set("X-Forwarded-For", "203.0.113.9")
-		req.RemoteAddr = "198.51.100.1:9999"
+		req.RemoteAddr = "127.0.0.1:9999"
 
 		if got := clientIP(req); got != "203.0.113.9" {
 			t.Fatalf("clientIP = %q, want %q", got, "203.0.113.9")
@@ -83,7 +83,7 @@ func TestClientIP(t *testing.T) {
 	t.Run("x-forwarded-for-first-value", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
 		req.Header.Set("X-Forwarded-For", " 203.0.113.1 , 10.0.0.1 ")
-		req.RemoteAddr = "198.51.100.1:9999"
+		req.RemoteAddr = "127.0.0.1:9999"
 
 		if got := clientIP(req); got != "203.0.113.1" {
 			t.Fatalf("clientIP = %q, want %q", got, "203.0.113.1")

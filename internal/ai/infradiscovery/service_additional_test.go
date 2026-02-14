@@ -82,7 +82,7 @@ func TestStartStopCanRestartSafely(t *testing.T) {
 
 	service.Start(ctx)
 	waitFor(t, 500*time.Millisecond, func() bool {
-		return service.GetStatus()["running"] == true
+		return service.GetStatusSnapshot().Running
 	})
 	service.Stop()
 }

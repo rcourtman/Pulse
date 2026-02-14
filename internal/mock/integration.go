@@ -140,10 +140,7 @@ func disableMockMode() {
 		return
 	}
 	enabled.Store(false)
-	stopUpdateLoopSignalLocked()
-	dataMu.Unlock()
-
-	waitForUpdateLoopStop()
+	stopUpdateLoop()
 
 	dataMu.Lock()
 	mockData = models.StateSnapshot{}
@@ -350,9 +347,10 @@ func LoadMockConfig() MockConfig {
 		percent, err := strconv.ParseFloat(raw, 64)
 		if err != nil {
 			log.Warn().Err(err).Str("env", "PULSE_MOCK_STOPPED_PERCENT").Str("value", raw).Msg("Invalid mock config value, using default")
-		} else if math.IsNaN(percent) || math.IsInf(percent, 0) || percent < 0 || percent > 100 {
+		} else if math.IsNaN(percent) || math.IsInf(percent, 0) || percent < 0 {
 			log.Warn().Str("env", "PULSE_MOCK_STOPPED_PERCENT").Str("value", raw).Msg("Invalid mock config value, expected percentage in range 0..100")
 		} else {
+			// Convert percentage to ratio; normalizeStoppedPercent will clamp >1 to 1.
 			config.StoppedPercent = percent / 100.0
 		}
 	}

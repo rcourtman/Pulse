@@ -62,19 +62,21 @@ func CollectLocal(ctx context.Context) (string, error) {
 			Msg("lm-sensors returned empty output, attempting Raspberry Pi thermal fallback")
 
 		// Try Raspberry Pi temperature method as fallback
-		cmd = exec.CommandContext(cmdCtx, "cat", "/sys/class/thermal/thermal_zone0/temp")
+		cmd = exec.CommandContext(cmdCtx, "cat", rpiThermalZonePath)
 		rpiOutput, rpiErr := cmd.Output()
 		if rpiErr == nil {
 			rpiTemp := strings.TrimSpace(string(rpiOutput))
 			if rpiTemp != "" {
-				if parsed, parseErr := strconv.ParseFloat(rpiTemp, 64); parseErr == nil {
-					// Linux thermal_zone values are commonly millidegrees (e.g. 42000).
-					// Convert only when magnitude indicates millidegrees to keep degree inputs intact.
-					if parsed >= 1000 || parsed <= -1000 {
-						parsed = parsed / 1000.0
-					}
-					rpiTemp = strconv.FormatFloat(parsed, 'f', 3, 64)
+				parsed, parseErr := strconv.ParseFloat(rpiTemp, 64)
+				if parseErr != nil {
+					return "", fmt.Errorf("invalid thermal value %q: %w", rpiTemp, parseErr)
 				}
+				// Linux thermal_zone values are commonly millidegrees (e.g. 42000).
+				// Convert only when magnitude indicates millidegrees to keep degree inputs intact.
+				if parsed >= 1000 || parsed <= -1000 {
+					parsed = parsed / 1000.0
+				}
+				rpiTemp = strconv.FormatFloat(parsed, 'f', 3, 64)
 				// Convert to pseudo-sensors format for compatibility
 				return fmt.Sprintf(`{"cpu_thermal-virtual-0":{"temp1":{"temp1_input":%s}}}`, rpiTemp), nil
 			}

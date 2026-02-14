@@ -526,6 +526,9 @@ func TestHandleCommand(t *testing.T) {
 
 	t.Run("check updates command", func(t *testing.T) {
 		swap(t, &sleepFn, func(time.Duration) {})
+		swap(t, &newTimerFn, func(time.Duration) *time.Timer {
+			return time.NewTimer(0)
+		})
 
 		collectAttempted := make(chan struct{}, 1)
 		ackPath := make(chan string, 1)

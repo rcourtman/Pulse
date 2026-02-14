@@ -435,17 +435,22 @@ func (c *CryptoManager) Encrypt(plaintext []byte) ([]byte, error) {
 		return nil, fmt.Errorf("crypto.Encrypt: crypto manager not initialized")
 	}
 
-	// CRITICAL: Verify the key file still exists on disk before encrypting
-	// This prevents creating orphaned encrypted data that can never be decrypted
+	// CRITICAL: Verify the key file still exists on disk, is not a symlink,
+	// and contains the same key material we loaded at startup.
+	// This prevents creating orphaned encrypted data that can never be decrypted.
 	if c.keyPath != "" {
-		if _, statErr := os.Stat(c.keyPath); statErr != nil {
-			if os.IsNotExist(statErr) {
+		diskKey, loadErr := loadKeyFromFile(c.keyPath)
+		if loadErr != nil {
+			if os.IsNotExist(loadErr) {
 				log.Error().
 					Str("keyPath", c.keyPath).
 					Msg("CRITICAL: Encryption key file has been deleted - refusing to encrypt to prevent orphaned data")
 				return nil, fmt.Errorf("encryption key file deleted - cannot encrypt (would create orphaned data)")
 			}
-			return nil, fmt.Errorf("crypto.Encrypt: verify key file %q exists: %w", c.keyPath, statErr)
+			return nil, fmt.Errorf("crypto.Encrypt: verify key file %q: %w", c.keyPath, loadErr)
+		}
+		if !bytes.Equal(diskKey, c.key) {
+			return nil, fmt.Errorf("crypto.Encrypt: key file %q contents changed since load - refusing to encrypt", c.keyPath)
 		}
 	}
 

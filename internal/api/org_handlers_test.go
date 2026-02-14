@@ -183,8 +183,8 @@ func TestOrgHandlersTokenListAllowedButWriteForbidden(t *testing.T) {
 	if err := json.Unmarshal(listRec.Body.Bytes(), &listed); err != nil {
 		t.Fatalf("decode token list: %v", err)
 	}
-	if len(listed) != 2 {
-		t.Fatalf("expected 2 visible orgs for token (default + acme), got %d", len(listed))
+	if len(listed) != 1 {
+		t.Fatalf("expected 1 visible org for token scoped to acme, got %d", len(listed))
 	}
 
 	writeReq := httptest.NewRequest(http.MethodPost, "/api/orgs", bytes.NewBufferString(`{"id":"x","displayName":"X"}`))

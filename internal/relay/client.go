@@ -112,11 +112,12 @@ func NewClient(cfg Config, deps ClientDeps, logger zerolog.Logger) *Client {
 	}
 
 	return &Client{
-		config:   cfg,
-		deps:     deps,
-		proxy:    NewHTTPProxy(deps.LocalAddr, logger),
-		logger:   logger,
-		channels: make(map[uint32]*channelState),
+		config:     cfg,
+		deps:       deps,
+		proxy:      NewHTTPProxy(deps.LocalAddr, logger),
+		logger:     logger,
+		channels:   make(map[uint32]*channelState),
+		startupErr: startupErr,
 	}
 }
 
@@ -369,7 +370,7 @@ func (c *Client) register(conn *websocket.Conn) error {
 	if c.deps.LicenseTokenFunc == nil {
 		return fmt.Errorf("license token provider not configured")
 	}
-	token := c.deps.LicenseTokenFunc()
+	token := strings.TrimSpace(c.deps.LicenseTokenFunc())
 	if token == "" {
 		return fmt.Errorf("no license token available")
 	}

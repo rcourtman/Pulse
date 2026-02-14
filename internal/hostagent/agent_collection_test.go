@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/ceph"
 	"github.com/rcourtman/pulse-go-rewrite/internal/sensors"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rs/zerolog"
@@ -120,9 +119,9 @@ func TestAgent_collectCephStatus_GuardsAndConversion(t *testing.T) {
 		called := false
 		mc := &mockCollector{
 			goos: "linux",
-			cephStatusFn: func(context.Context) (*ceph.ClusterStatus, error) {
+			cephStatusFn: func(context.Context) (*CephClusterStatus, error) {
 				called = true
-				return &ceph.ClusterStatus{}, nil
+				return &CephClusterStatus{}, nil
 			},
 		}
 		a := &Agent{
@@ -143,9 +142,9 @@ func TestAgent_collectCephStatus_GuardsAndConversion(t *testing.T) {
 		called := false
 		mc := &mockCollector{
 			goos: "windows",
-			cephStatusFn: func(context.Context) (*ceph.ClusterStatus, error) {
+			cephStatusFn: func(context.Context) (*CephClusterStatus, error) {
 				called = true
-				return &ceph.ClusterStatus{}, nil
+				return &CephClusterStatus{}, nil
 			},
 		}
 		a := &Agent{logger: zerolog.Nop(), collector: mc}
@@ -161,7 +160,7 @@ func TestAgent_collectCephStatus_GuardsAndConversion(t *testing.T) {
 	t.Run("collector error returns nil", func(t *testing.T) {
 		mc := &mockCollector{
 			goos:         "linux",
-			cephStatusFn: func(context.Context) (*ceph.ClusterStatus, error) { return nil, errors.New("ceph not available") },
+			cephStatusFn: func(context.Context) (*CephClusterStatus, error) { return nil, errors.New("ceph not available") },
 		}
 		a := &Agent{logger: zerolog.Nop(), collector: mc}
 
@@ -173,7 +172,7 @@ func TestAgent_collectCephStatus_GuardsAndConversion(t *testing.T) {
 	t.Run("nil collector status returns nil", func(t *testing.T) {
 		mc := &mockCollector{
 			goos:         "linux",
-			cephStatusFn: func(context.Context) (*ceph.ClusterStatus, error) { return nil, nil },
+			cephStatusFn: func(context.Context) (*CephClusterStatus, error) { return nil, nil },
 		}
 		a := &Agent{logger: zerolog.Nop(), collector: mc}
 
@@ -187,36 +186,36 @@ func TestAgent_collectCephStatus_GuardsAndConversion(t *testing.T) {
 
 		mc := &mockCollector{
 			goos: "linux",
-			cephStatusFn: func(context.Context) (*ceph.ClusterStatus, error) {
-				return &ceph.ClusterStatus{
+			cephStatusFn: func(context.Context) (*CephClusterStatus, error) {
+				return &CephClusterStatus{
 					FSID: "ceph-fsid-1",
-					Health: ceph.HealthStatus{
+					Health: CephHealthStatus{
 						Status: "HEALTH_WARN",
-						Checks: map[string]ceph.Check{
+						Checks: map[string]CephCheck{
 							"OSD_DOWN": {
 								Severity: "HEALTH_WARN",
 								Message:  "1 osd down",
 								Detail:   []string{"osd.3 down"},
 							},
 						},
-						Summary: []ceph.HealthSummary{
+						Summary: []CephHealthSummary{
 							{Severity: "HEALTH_WARN", Message: "Reduced data availability"},
 						},
 					},
-					MonMap: ceph.MonitorMap{
+					MonMap: CephMonitorMap{
 						Epoch:   9,
 						NumMons: 1,
-						Monitors: []ceph.Monitor{
+						Monitors: []CephMonitor{
 							{Name: "mon.a", Rank: 0, Addr: "10.0.0.11:6789", Status: "leader"},
 						},
 					},
-					MgrMap: ceph.ManagerMap{
+					MgrMap: CephManagerMap{
 						Available: true,
 						NumMgrs:   2,
 						ActiveMgr: "mgr.x",
 						Standbys:  1,
 					},
-					OSDMap: ceph.OSDMap{
+					OSDMap: CephOSDMap{
 						Epoch:   12,
 						NumOSDs: 3,
 						NumUp:   2,
@@ -224,17 +223,17 @@ func TestAgent_collectCephStatus_GuardsAndConversion(t *testing.T) {
 						NumDown: 1,
 						NumOut:  1,
 					},
-					PGMap: ceph.PGMap{
+					PGMap: CephPGMap{
 						NumPGs:         128,
 						BytesTotal:     1000,
 						BytesUsed:      500,
 						BytesAvailable: 500,
 						UsagePercent:   50,
 					},
-					Pools: []ceph.Pool{
+					Pools: []CephPool{
 						{ID: 7, Name: "rbd", BytesUsed: 10, BytesAvailable: 90, Objects: 42, PercentUsed: 10},
 					},
-					Services: []ceph.ServiceInfo{
+					Services: []CephServiceInfo{
 						{Type: "mgr", Running: 1, Total: 2, Daemons: []string{"mgr.x"}},
 					},
 					CollectedAt: collectedAt,

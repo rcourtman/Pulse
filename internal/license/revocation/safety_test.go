@@ -1,9 +1,6 @@
 package revocation
 
 import (
-	"bytes"
-	"log"
-	"strings"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/license"

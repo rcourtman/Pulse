@@ -1136,7 +1136,7 @@ func applyRemoteSettings(cfg *Config, settings map[string]interface{}, logger *z
 			}
 		}
 	}
-	if d, ok := remoteDurationSetting(settings, "interval"); ok {
+	if d, ok := remoteDurationSetting(settings, "interval"); ok && d > 0 {
 		cfg.Interval = d
 		logger.Info().Dur("val", d).Msg("Remote config: interval")
 	}

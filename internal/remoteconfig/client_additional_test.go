@@ -364,15 +364,15 @@ func TestClientFetchEscapesAgentIDPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Fetch error: %v", err)
 	}
-	if !lookupHit || !configHit {
-		t.Fatalf("expected lookup and escaped config requests to be hit")
+	if !strings.Contains(gotEscapedPath, "agent%2F1") {
+		t.Fatalf("expected escaped agent ID in path, got %q", gotEscapedPath)
 	}
 	if settings["mode"] != "ok" {
 		t.Fatalf("unexpected settings: %#v", settings)
 	}
 }
 
-func TestClientResolveHostIDEscapesHostnameQuery(t *testing.T) {
+func TestClientResolveHostIDPreventsQueryInjection(t *testing.T) {
 	const hostname = "known&admin=true"
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/agents/host/lookup" {

@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -220,16 +221,19 @@ func normalizePulseURL(rawURL string) (string, error) {
 	}
 
 	if parsed.Scheme == "" {
-		return "", fmt.Errorf("pulse URL %q must include scheme (https:// or loopback http://)", rawURL)
+		return "", fmt.Errorf("pulse URL %q must include http:// or https:// scheme", rawURL)
 	}
 	if parsed.Host == "" {
 		return "", fmt.Errorf("pulse URL %q must include host", rawURL)
 	}
 	if parsed.User != nil {
-		return "", fmt.Errorf("pulse URL %q must not include user credentials", rawURL)
+		return "", fmt.Errorf("pulse URL %q: userinfo is not supported", rawURL)
 	}
-	if parsed.RawQuery != "" || parsed.Fragment != "" {
-		return "", fmt.Errorf("pulse URL %q must not include query or fragment", rawURL)
+	if parsed.RawQuery != "" {
+		return "", fmt.Errorf("pulse URL %q: query parameters are not supported", rawURL)
+	}
+	if parsed.Fragment != "" {
+		return "", fmt.Errorf("pulse URL %q: fragments are not supported", rawURL)
 	}
 
 	scheme := strings.ToLower(parsed.Scheme)
@@ -244,7 +248,15 @@ func normalizePulseURL(rawURL string) (string, error) {
 		return "", fmt.Errorf("pulse URL %q has unsupported scheme %q", rawURL, parsed.Scheme)
 	}
 
+	if port := parsed.Port(); port != "" {
+		portNum, err := strconv.Atoi(port)
+		if err != nil || portNum < 1 || portNum > 65535 {
+			return "", fmt.Errorf("invalid port %q: must be between 1 and 65535", port)
+		}
+	}
+
 	parsed.Scheme = scheme
+	parsed.Host = strings.ToLower(parsed.Host)
 	parsed.Path = strings.TrimRight(parsed.Path, "/")
 	parsed.RawPath = strings.TrimRight(parsed.RawPath, "/")
 

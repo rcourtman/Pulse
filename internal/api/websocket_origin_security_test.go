@@ -38,7 +38,7 @@ func TestWebSocketOriginRejectedWhenNotAllowed(t *testing.T) {
 	server, cleanup := newWebSocketRouter(t, []string{"https://allowed.example.com"}, record)
 	defer cleanup()
 
-	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws"
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws?org_id=default"
 	headers := http.Header{}
 	headers.Set("X-API-Token", rawToken)
 	headers.Set("Origin", "https://evil.example.com")
@@ -63,7 +63,7 @@ func TestWebSocketOriginAllowedWhenConfigured(t *testing.T) {
 	server, cleanup := newWebSocketRouter(t, []string{"https://allowed.example.com"}, record)
 	defer cleanup()
 
-	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws"
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws?org_id=default"
 	headers := http.Header{}
 	headers.Set("X-API-Token", rawToken)
 	headers.Set("Origin", "https://allowed.example.com")
@@ -85,7 +85,7 @@ func TestSocketIOWebSocketOriginRejected(t *testing.T) {
 	server, cleanup := newWebSocketRouter(t, []string{"https://allowed.example.com"}, record)
 	defer cleanup()
 
-	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/socket.io/?transport=websocket"
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/socket.io/?transport=websocket&org_id=default"
 	headers := http.Header{}
 	headers.Set("X-API-Token", rawToken)
 	headers.Set("Origin", "https://evil.example.com")
@@ -110,7 +110,7 @@ func TestWebSocketOriginRejectedWhenNoAllowedOriginsAndPublicOrigin(t *testing.T
 	server, cleanup := newWebSocketRouter(t, []string{}, record)
 	defer cleanup()
 
-	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws"
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws?org_id=default"
 	headers := http.Header{}
 	headers.Set("X-API-Token", rawToken)
 	headers.Set("Origin", "https://evil.example.com")
@@ -135,7 +135,7 @@ func TestWebSocketOriginAllowsPrivateWhenNoAllowedOrigins(t *testing.T) {
 	server, cleanup := newWebSocketRouter(t, []string{}, record)
 	defer cleanup()
 
-	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws"
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws?org_id=default"
 	headers := http.Header{}
 	headers.Set("X-API-Token", rawToken)
 	headers.Set("Origin", "http://localhost:3000")

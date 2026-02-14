@@ -17,7 +17,7 @@ func TestAgent_ApplyRemoteConfig_Direct(t *testing.T) {
 	logger := zerolog.Nop()
 	a, _ := New(Config{
 		APIToken:  "token",
-		PulseURL:  "http://pulse",
+		PulseURL:  "https://pulse",
 		Collector: mc,
 		Logger:    &logger,
 	})
@@ -34,7 +34,7 @@ func TestAgent_Run_ImmediateCancel(t *testing.T) {
 	logger := zerolog.Nop()
 	a, _ := New(Config{
 		APIToken:  "token",
-		PulseURL:  "http://pulse",
+		PulseURL:  "https://pulse",
 		Interval:  1 * time.Second,
 		Collector: mc,
 		Logger:    &logger,
@@ -55,7 +55,7 @@ func TestAgent_Run_ProcessError(t *testing.T) {
 	logger := zerolog.Nop()
 	a, _ := New(Config{
 		APIToken:  "token",
-		PulseURL:  "http://pulse",
+		PulseURL:  "https://pulse",
 		Interval:  1 * time.Millisecond,
 		Collector: mc,
 		Logger:    &logger,
@@ -74,7 +74,7 @@ func TestAgent_RunOnce_Coverage(t *testing.T) {
 	logger := zerolog.Nop()
 	a, _ := New(Config{
 		APIToken:  "token",
-		PulseURL:  "http://pulse",
+		PulseURL:  "https://pulse",
 		RunOnce:   true,
 		Collector: mc,
 		Logger:    &logger,
@@ -99,7 +99,7 @@ func TestAgent_RunProxmoxSetup(t *testing.T) {
 	logger := zerolog.Nop()
 	a, _ := New(Config{
 		APIToken:  "token",
-		PulseURL:  "http://pulse",
+		PulseURL:  "https://pulse",
 		Collector: mc,
 		Logger:    &logger,
 	})
@@ -124,7 +124,7 @@ func TestAgent_ApplyRemoteConfig_DefersCommandStartWithoutRunContext(t *testing.
 	logger := zerolog.Nop()
 	a, _ := New(Config{
 		APIToken:  "token",
-		PulseURL:  "http://pulse",
+		PulseURL:  "https://pulse",
 		Collector: mc,
 		Logger:    &logger,
 	})
@@ -144,7 +144,8 @@ func TestAgent_ApplyRemoteConfig_DefersCommandStartWithoutRunContext(t *testing.
 	}
 
 	parentCtx, cancel := context.WithCancel(context.Background())
-	a.startCommandClient(parentCtx)
+	_ = parentCtx
+	a.startCommandClient(a.commandClient)
 	select {
 	case <-started:
 	case <-time.After(100 * time.Millisecond):
@@ -172,7 +173,7 @@ func TestAgent_CommandClientLifecycle_StopCancelsContext(t *testing.T) {
 	logger := zerolog.Nop()
 	a, _ := New(Config{
 		APIToken:       "token",
-		PulseURL:       "http://pulse",
+		PulseURL:       "https://pulse",
 		EnableCommands: true,
 		Collector:      mc,
 		Logger:         &logger,
@@ -186,7 +187,8 @@ func TestAgent_CommandClientLifecycle_StopCancelsContext(t *testing.T) {
 
 	parentCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	a.startCommandClient(parentCtx)
+	_ = parentCtx
+	a.startCommandClient(a.commandClient)
 
 	select {
 	case <-started:

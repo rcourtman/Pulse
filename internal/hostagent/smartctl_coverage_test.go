@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -442,7 +443,7 @@ func TestCollectDeviceSMARTNVMeTempFallback(t *testing.T) {
 	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		payload := smartctlJSON{}
 		payload.Device.Protocol = "NVMe"
-		payload.NVMeSmartHealthInformationLog.Temperature = 55
+		payload.NVMeSmartHealthInformationLog = &nvmeSmartHealthInformationLogJSON{Temperature: 55}
 		payload.SmartStatus = &struct {
 			Passed bool `json:"passed"`
 		}{Passed: true}

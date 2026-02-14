@@ -35,15 +35,16 @@ func dialAndRegisterAgent(t *testing.T, wsURL, agentID, hostname string) *websoc
 		t.Fatalf("Dial: %v", err)
 	}
 
+	regPayload, _ := json.Marshal(agentexec.AgentRegisterPayload{
+		AgentID:  agentID,
+		Hostname: hostname,
+		Token:    "any",
+	})
 	conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
 	if err := conn.WriteJSON(agentexec.Message{
 		Type:      agentexec.MsgTypeAgentRegister,
 		Timestamp: time.Now(),
-		Payload: agentexec.AgentRegisterPayload{
-			AgentID:  agentID,
-			Hostname: hostname,
-			Token:    "any",
-		},
+		Payload:   regPayload,
 	}); err != nil {
 		conn.Close()
 		t.Fatalf("WriteJSON register: %v", err)
@@ -128,16 +129,17 @@ func TestAgentExecProber_RoundTripViaAgentExecServer(t *testing.T) {
 			return
 		}
 
+		cmdResult, _ := json.Marshal(agentexec.CommandResultPayload{
+			RequestID: payload.RequestID,
+			Success:   true,
+			Stdout:    "REACH:10.0.0.1:UP\nREACH:10.0.0.2:DOWN\n",
+			ExitCode:  0,
+		})
 		conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
 		err := conn.WriteJSON(agentexec.Message{
 			Type:      agentexec.MsgTypeCommandResult,
 			Timestamp: time.Now(),
-			Payload: agentexec.CommandResultPayload{
-				RequestID: payload.RequestID,
-				Success:   true,
-				Stdout:    "REACH:10.0.0.1:UP\nREACH:10.0.0.2:DOWN\n",
-				ExitCode:  0,
-			},
+			Payload:   cmdResult,
 		})
 		done <- pingAgentResult{command: payload.Command, err: err}
 	}()

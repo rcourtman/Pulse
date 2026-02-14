@@ -89,7 +89,7 @@ func TestCollectRALP_ContextCanceledBeforeSecondSample(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	_, err := collectRALP(ctx)
+	_, err := collectRAPL(ctx)
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("expected context canceled error, got %v", err)
 	}

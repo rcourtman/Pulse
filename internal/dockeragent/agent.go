@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -353,6 +354,15 @@ func normalizeTargetURL(raw string) (string, error) {
 	scheme := strings.ToLower(parsed.Scheme)
 	if scheme != "http" && scheme != "https" {
 		return "", fmt.Errorf("unsupported scheme %q", parsed.Scheme)
+	}
+
+	if scheme == "http" {
+		host := parsed.Hostname()
+		ip := net.ParseIP(host)
+		isLoopback := strings.EqualFold(host, "localhost") || (ip != nil && ip.IsLoopback())
+		if !isLoopback {
+			return "", fmt.Errorf("http is only allowed for loopback addresses, use https for %s", host)
+		}
 	}
 
 	if parsed.User != nil {

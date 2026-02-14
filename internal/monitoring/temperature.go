@@ -251,11 +251,7 @@ func (tc *TemperatureCollector) runSSHCommand(ctx context.Context, host, command
 		if errors.Is(err, errTemperatureCommandOutputTooLarge) {
 			return "", fmt.Errorf("ssh command output exceeded %d bytes", maxTemperatureCommandOutputSize)
 		}
-		// On error, try to get stderr for debugging
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			return "", fmt.Errorf("ssh command failed: %w (stderr: %s)", err, string(exitErr.Stderr))
-		}
-		return "", fmt.Errorf("ssh command failed: %w", err)
+		return "", sanitizeSSHCommandError(err)
 	}
 
 	outputStr := strings.TrimSpace(string(output))

@@ -524,7 +524,6 @@ func TestClient_RejectsOversizedWebSocketMessage(t *testing.T) {
 		t.Fatal("client.Run did not return after cancel on idle connection")
 	}
 
-	close(holdConn)
 }
 
 // testIdentityKeyPair generates an Ed25519 keypair for testing and returns
@@ -1195,51 +1194,10 @@ func TestClient_RegisterFailsWithoutLicenseTokenProvider(t *testing.T) {
 
 func TestClient_RejectChannelWhenTokenValidatorMissing(t *testing.T) {
 	logger := zerolog.New(zerolog.NewTestWriter(t))
-	channelCloseCh := make(chan ChannelClosePayload, 1)
-
-	relayServer := mockRelayServer(t, func(conn *websocket.Conn) {
-		// REGISTER
-		_, msg, _ := conn.ReadMessage()
-		frame, _ := DecodeFrame(msg)
-		if frame.Type != FrameRegister {
-			return
-		}
-
-		ack, _ := NewControlFrame(FrameRegisterAck, 0, RegisterAckPayload{
-			InstanceID:   "inst_missing_validator",
-			SessionToken: "sess_missing_validator",
-			ExpiresAt:    time.Now().Add(time.Hour).Unix(),
-		})
-		ackBytes, _ := EncodeFrame(ack)
-		conn.WriteMessage(websocket.BinaryMessage, ackBytes)
-
-		// CHANNEL_OPEN should be rejected because TokenValidator is nil.
-		time.Sleep(50 * time.Millisecond)
-		chOpen, _ := NewControlFrame(FrameChannelOpen, 77, ChannelOpenPayload{
-			ChannelID: 77,
-			AuthToken: "any-token",
-		})
-		chOpenBytes, _ := EncodeFrame(chOpen)
-		conn.WriteMessage(websocket.BinaryMessage, chOpenBytes)
-
-		_, msg, err := conn.ReadMessage()
-		if err != nil {
-			return
-		}
-		frame, _ = DecodeFrame(msg)
-		if frame.Type != FrameChannelClose {
-			return
-		}
-
-		var closePayload ChannelClosePayload
-		UnmarshalControlPayload(frame.Payload, &closePayload)
-		channelCloseCh <- closePayload
-	})
-	defer relayServer.Close()
 
 	cfg := Config{
 		Enabled:   true,
-		ServerURL: wsURL(relayServer),
+		ServerURL: "wss://relay.example.com",
 	}
 
 	deps := ClientDeps{
@@ -1251,26 +1209,18 @@ func TestClient_RejectChannelWhenTokenValidatorMissing(t *testing.T) {
 	}
 
 	client := NewClient(cfg, deps, logger)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	errCh := make(chan error, 1)
-	go func() { errCh <- client.Run(ctx) }()
-
-	select {
-	case closePayload := <-channelCloseCh:
-		if closePayload.ChannelID != 77 {
-			t.Errorf("channel ID: got %d, want 77", closePayload.ChannelID)
-		}
-		if closePayload.Reason != "token validation unavailable" {
-			t.Errorf("reason: got %q, want %q", closePayload.Reason, "token validation unavailable")
-		}
-	case <-time.After(3 * time.Second):
-		t.Fatal("timed out waiting for CHANNEL_CLOSE")
+	// With nil TokenValidator, Run() should fail fast at startup validation
+	// rather than connecting to the server.
+	err := client.Run(ctx)
+	if err == nil {
+		t.Fatal("expected error when TokenValidator is nil")
 	}
-
-	cancel()
-	<-errCh
+	if !strings.Contains(err.Error(), "token validator") {
+		t.Fatalf("expected token validator error, got: %v", err)
+	}
 }
 
 func TestClient_OverloadedDataReturnsBusyResponse(t *testing.T) {

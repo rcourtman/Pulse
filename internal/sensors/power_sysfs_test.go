@@ -226,7 +226,7 @@ func TestCollectRALP_CanceledDuringSampleWait(t *testing.T) {
 	}()
 
 	start := time.Now()
-	data, err := collectRALP(ctx)
+	data, err := collectRAPL(ctx)
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("expected context canceled error, got %v", err)
 	}

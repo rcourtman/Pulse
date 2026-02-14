@@ -20,8 +20,9 @@ func TestLoadMockConfigRejectsInvalidValues(t *testing.T) {
 	if cfg.RandomMetrics != DefaultConfig.RandomMetrics {
 		t.Fatalf("expected default RandomMetrics=%t, got %t", DefaultConfig.RandomMetrics, cfg.RandomMetrics)
 	}
-	if cfg.StoppedPercent != DefaultConfig.StoppedPercent {
-		t.Fatalf("expected default StoppedPercent=%f, got %f", DefaultConfig.StoppedPercent, cfg.StoppedPercent)
+	// 150% parses successfully as 150/100=1.5, then normalizeStoppedPercent clamps to 1.0.
+	if cfg.StoppedPercent != 1.0 {
+		t.Fatalf("expected clamped StoppedPercent=1.0, got %f", cfg.StoppedPercent)
 	}
 	if cfg.DockerHostCount != 0 {
 		t.Fatalf("expected DockerHostCount=0 from valid env override, got %d", cfg.DockerHostCount)
@@ -50,17 +51,17 @@ func TestSetMockConfigNormalizesInvalidValues(t *testing.T) {
 	})
 
 	cfg := GetConfig()
-	if cfg.NodeCount != DefaultConfig.NodeCount {
-		t.Fatalf("expected default NodeCount=%d, got %d", DefaultConfig.NodeCount, cfg.NodeCount)
+	if cfg.NodeCount != 1 {
+		t.Fatalf("expected clamped NodeCount=1, got %d", cfg.NodeCount)
 	}
-	if cfg.VMsPerNode != DefaultConfig.VMsPerNode {
-		t.Fatalf("expected default VMsPerNode=%d, got %d", DefaultConfig.VMsPerNode, cfg.VMsPerNode)
+	if cfg.VMsPerNode != 0 {
+		t.Fatalf("expected clamped VMsPerNode=0, got %d", cfg.VMsPerNode)
 	}
-	if cfg.LXCsPerNode != DefaultConfig.LXCsPerNode {
-		t.Fatalf("expected default LXCsPerNode=%d, got %d", DefaultConfig.LXCsPerNode, cfg.LXCsPerNode)
+	if cfg.LXCsPerNode != 0 {
+		t.Fatalf("expected clamped LXCsPerNode=0, got %d", cfg.LXCsPerNode)
 	}
-	if cfg.StoppedPercent != DefaultConfig.StoppedPercent {
-		t.Fatalf("expected default StoppedPercent=%f, got %f", DefaultConfig.StoppedPercent, cfg.StoppedPercent)
+	if cfg.StoppedPercent != 1.0 {
+		t.Fatalf("expected clamped StoppedPercent=1.0, got %f", cfg.StoppedPercent)
 	}
 }
 

@@ -36,6 +36,9 @@ type blockingAnalyzer struct {
 
 func (b *blockingAnalyzer) AnalyzeForDiscovery(ctx context.Context, prompt string) (string, error) {
 	b.once.Do(func() {
+		if b.started == nil {
+			return
+		}
 		close(b.started)
 	})
 	<-ctx.Done()
@@ -539,7 +542,7 @@ func TestService_AnalyzeDockerContainer_AITimeout(t *testing.T) {
 	start := time.Now()
 	discovery := service.analyzeDockerContainer(
 		context.Background(),
-		blockingAnalyzer{},
+		&blockingAnalyzer{started: make(chan struct{})},
 		DockerContainer{Name: "slow", Image: "slow:latest"},
 		DockerHost{AgentID: "host1", Hostname: "host1"},
 	)
@@ -783,11 +786,6 @@ func TestService_FingerprintLoop_StopAndCancel(t *testing.T) {
 }
 
 func TestService_StartDuringStopDoesNotStartNewLoop(t *testing.T) {
-	provider := &blockingStateProvider{
-		started: make(chan struct{}),
-		release: make(chan struct{}),
-	}
-
 	store, err := NewStore(t.TempDir())
 	if err != nil {
 		t.Fatalf("NewStore error: %v", err)
@@ -939,7 +937,7 @@ func TestService_DiscoverResource_AITimeout(t *testing.T) {
 		AIAnalysisTimeout: 20 * time.Millisecond,
 		MaxDiscoveryAge:   30 * 24 * time.Hour,
 	})
-	service.SetAIAnalyzer(blockingAnalyzer{})
+	service.SetAIAnalyzer(&blockingAnalyzer{})
 
 	start := time.Now()
 	_, err = service.DiscoverResource(context.Background(), DiscoveryRequest{

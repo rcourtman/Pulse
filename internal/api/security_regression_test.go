@@ -233,7 +233,7 @@ func TestSocketIOWebSocketRequiresAuthInAPIMode(t *testing.T) {
 	ts := newIPv4HTTPServer(t, router.Handler())
 	defer ts.Close()
 
-	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/socket.io/?transport=websocket"
+	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/socket.io/?transport=websocket&org_id=default"
 
 	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	if err == nil {
@@ -272,7 +272,7 @@ func TestSocketIOWebSocketAllowsQueryToken(t *testing.T) {
 	ts := newIPv4HTTPServer(t, router.Handler())
 	defer ts.Close()
 
-	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/socket.io/?transport=websocket&token=" + rawToken
+	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/socket.io/?transport=websocket&org_id=default&token=" + rawToken
 	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	if err != nil {
 		t.Fatalf("expected websocket connection with query token, got %v", err)
@@ -724,7 +724,7 @@ func TestWebSocketAllowsMonitoringReadScope(t *testing.T) {
 	ts := newIPv4HTTPServer(t, router.Handler())
 	defer ts.Close()
 
-	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws"
+	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws?org_id=default"
 	headers := http.Header{}
 	headers.Set("X-API-Token", rawToken)
 	conn, _, err := websocket.DefaultDialer.Dial(wsURL, headers)
@@ -747,7 +747,7 @@ func TestWebSocketAllowsBearerToken(t *testing.T) {
 	ts := newIPv4HTTPServer(t, router.Handler())
 	defer ts.Close()
 
-	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws"
+	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws?org_id=default"
 	headers := http.Header{}
 	headers.Set("Authorization", "Bearer "+rawToken)
 	conn, _, err := websocket.DefaultDialer.Dial(wsURL, headers)
@@ -770,7 +770,7 @@ func TestWebSocketAllowsTokenQueryParam(t *testing.T) {
 	ts := newIPv4HTTPServer(t, router.Handler())
 	defer ts.Close()
 
-	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws?token=" + rawToken
+	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws?org_id=default&token=" + rawToken
 	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	if err != nil {
 		t.Fatalf("Dial: %v", err)

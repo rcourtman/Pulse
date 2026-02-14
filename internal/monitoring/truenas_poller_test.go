@@ -730,7 +730,7 @@ func TestTrueNASPollerPollAllLogsStructuredContextOnRefreshFailure(t *testing.T)
 		`"component":"truenas_poller"`,
 		`"action":"refresh_connection"`,
 		`"connection_id":"conn-refresh-fail"`,
-		`"error":"refresh exploded"`,
+		`"error":"refresh truenas snapshot: refresh exploded"`,
 		`"message":"TrueNAS poller refresh failed"`,
 	} {
 		if !strings.Contains(logOutput.String(), expected) {

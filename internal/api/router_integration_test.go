@@ -699,7 +699,7 @@ func TestRecoveryEndpointRequiresDirectLoopback(t *testing.T) {
 func TestWebSocketSendsInitialState(t *testing.T) {
 	srv := newIntegrationServer(t)
 
-	wsURL := "ws" + strings.TrimPrefix(srv.server.URL, "http") + "/ws"
+	wsURL := "ws" + strings.TrimPrefix(srv.server.URL, "http") + "/ws?org_id=default"
 
 	conn, _, err := gorillaws.DefaultDialer.Dial(wsURL, nil)
 	if err != nil {
@@ -777,7 +777,7 @@ func TestWebSocketSendsInitialState(t *testing.T) {
 func TestWebsocketPayloadContractShape(t *testing.T) {
 	srv := newIntegrationServer(t)
 
-	wsURL := "ws" + strings.TrimPrefix(srv.server.URL, "http") + "/ws"
+	wsURL := "ws" + strings.TrimPrefix(srv.server.URL, "http") + "/ws?org_id=default"
 
 	conn, _, err := gorillaws.DefaultDialer.Dial(wsURL, nil)
 	if err != nil {
@@ -896,7 +896,7 @@ func TestWebsocketPayloadContractShape(t *testing.T) {
 func TestWebsocketLegacyCompatMode(t *testing.T) {
 	srv := newIntegrationServer(t)
 
-	wsURL := "ws" + strings.TrimPrefix(srv.server.URL, "http") + "/ws"
+	wsURL := "ws" + strings.TrimPrefix(srv.server.URL, "http") + "/ws?org_id=default"
 
 	conn, _, err := gorillaws.DefaultDialer.Dial(wsURL, nil)
 	if err != nil {

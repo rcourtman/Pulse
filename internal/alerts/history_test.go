@@ -475,7 +475,7 @@ func TestLoadHistory_OversizedMainFallsBackToBackup(t *testing.T) {
 	}
 
 	recentTime := time.Now().Add(-1 * time.Hour).Format(time.RFC3339)
-	backupContent := `[{"alert":{"id":"backup-ok","type":"memory"},"timestamp":"` + recentTime + `"}]`
+	backupContent := `[{"alert":{"id":"backup-fallback","type":"memory"},"timestamp":"` + recentTime + `"}]`
 	if err := os.WriteFile(hm.backupFile, []byte(backupContent), 0o644); err != nil {
 		t.Fatalf("Failed to create backup file: %v", err)
 	}

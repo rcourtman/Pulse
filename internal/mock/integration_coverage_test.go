@@ -265,9 +265,9 @@ func TestUpdateMetricsGuardAndTimestamp(t *testing.T) {
 func TestUpdateLoopStartStopLifecycle(t *testing.T) {
 	resetMockIntegrationState(t)
 
-	startUpdateLoopLocked()
+	startUpdateLoop()
 	firstTicker := updateTicker
-	startUpdateLoopLocked()
+	startUpdateLoop()
 	secondTicker := updateTicker
 	stopUpdateLoopLocked()
 	finalTicker := updateTicker

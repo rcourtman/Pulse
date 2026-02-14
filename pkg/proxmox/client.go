@@ -409,8 +409,11 @@ func (c *Client) requestWithRetry(ctx context.Context, method, path string, data
 
 	// Check for errors
 	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
+		body, err := readResponseBodyLimited(resp.Body)
 		_ = resp.Body.Close()
+		if err != nil {
+			return nil, fmt.Errorf("API error %d: %w", resp.StatusCode, err)
+		}
 
 		// Password sessions can be invalidated server-side before local expiry.
 		// Retry once after forcing re-authentication on 401.

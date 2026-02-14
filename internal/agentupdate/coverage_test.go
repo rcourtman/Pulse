@@ -765,6 +765,7 @@ func TestPerformUpdateDownloadErrorAndHeaders(t *testing.T) {
 func TestPerformUpdateDownloadRetriesTransientError(t *testing.T) {
 	_, execPath := writeTempExec(t)
 	u := newUpdaterForTest("http://example")
+	u.cfg.InsecureSkipVerify = true
 	u.cfg.APIToken = "token"
 
 	data := testBinary()

@@ -46,8 +46,8 @@ func TestLoadMockConfigLogsInvalidOverridesAndKeepsLegacyFallbacks(t *testing.T)
 	if cfg.VMsPerNode != DefaultConfig.VMsPerNode {
 		t.Fatalf("expected VMsPerNode default %d, got %d", DefaultConfig.VMsPerNode, cfg.VMsPerNode)
 	}
-	if cfg.RandomMetrics {
-		t.Fatalf("expected RandomMetrics=false for invalid legacy override, got %t", cfg.RandomMetrics)
+	if cfg.RandomMetrics != DefaultConfig.RandomMetrics {
+		t.Fatalf("expected RandomMetrics=%t (default) for invalid legacy override, got %t", DefaultConfig.RandomMetrics, cfg.RandomMetrics)
 	}
 	if cfg.StoppedPercent != DefaultConfig.StoppedPercent {
 		t.Fatalf("expected StoppedPercent default %f, got %f", DefaultConfig.StoppedPercent, cfg.StoppedPercent)
@@ -55,10 +55,10 @@ func TestLoadMockConfigLogsInvalidOverridesAndKeepsLegacyFallbacks(t *testing.T)
 
 	logOutput := buf.String()
 	for _, envKey := range []string{
-		`"env_var":"PULSE_MOCK_NODES"`,
-		`"env_var":"PULSE_MOCK_VMS_PER_NODE"`,
-		`"env_var":"PULSE_MOCK_RANDOM_METRICS"`,
-		`"env_var":"PULSE_MOCK_STOPPED_PERCENT"`,
+		`"env":"PULSE_MOCK_NODES"`,
+		`"env":"PULSE_MOCK_VMS_PER_NODE"`,
+		`"env":"PULSE_MOCK_RANDOM_METRICS"`,
+		`"env":"PULSE_MOCK_STOPPED_PERCENT"`,
 	} {
 		if !strings.Contains(logOutput, envKey) {
 			t.Fatalf("expected warning log to include %s, got %q", envKey, logOutput)

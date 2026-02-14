@@ -10,7 +10,7 @@ import (
 
 	containertypes "github.com/docker/docker/api/types/container"
 	systemtypes "github.com/docker/docker/api/types/system"
-	"github.com/rcourtman/pulse-go-rewrite/internal/buffer"
+	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rcourtman/pulse-go-rewrite/internal/hostmetrics"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 	"github.com/rs/zerolog"
@@ -50,7 +50,7 @@ func TestCollectOnceSerializesConcurrentRuns(t *testing.T) {
 			},
 		},
 		logger:       zerolog.Nop(),
-		reportBuffer: buffer.New[agentsdocker.Report](10),
+		reportBuffer: utils.New[agentsdocker.Report](10),
 	}
 
 	errCh := make(chan error, 2)

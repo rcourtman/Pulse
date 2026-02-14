@@ -111,11 +111,8 @@ func isMdadmAvailable(ctx context.Context) bool {
 }
 
 // listArrayDevices scans /proc/mdstat to find all md devices
-func listArrayDevices(ctx context.Context) ([]string, error) {
-	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
-	defer cancel()
-
-	output, err := mdadmRunCommandOutput(ctx, "cat", "/proc/mdstat")
+func listArrayDevices(_ context.Context) ([]string, error) {
+	output, err := readProcMDStat()
 	if err != nil {
 		return nil, err
 	}
@@ -305,10 +302,7 @@ func getRebuildSpeed(device string) string {
 	// Remove /dev/ prefix for /proc/mdstat lookup
 	deviceName := strings.TrimPrefix(device, "/dev/")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-
-	output, err := mdadmRunCommandOutput(ctx, "cat", "/proc/mdstat")
+	output, err := readProcMDStat()
 	if err != nil {
 		return ""
 	}
@@ -347,7 +341,7 @@ func getRebuildSpeed(device string) string {
 
 // readProcMDStat reads /proc/mdstat directly (without shelling out)
 // and bounds input size to avoid unbounded memory growth.
-func readProcMDStat() ([]byte, error) {
+var readProcMDStat = func() ([]byte, error) {
 	output, err := readFile(mdstatPath)
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", mdstatPath, err)

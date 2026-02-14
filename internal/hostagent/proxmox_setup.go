@@ -175,18 +175,13 @@ func proxmoxProductTypesToStrings(types []proxmoxProductType) []string {
 
 // NewProxmoxSetup creates a new ProxmoxSetup instance.
 func NewProxmoxSetup(logger zerolog.Logger, httpClient *http.Client, collector SystemCollector, pulseURL, apiToken, proxmoxType, hostname, reportIP string, insecure bool) *ProxmoxSetup {
-	parsedType := parseProxmoxProductType(proxmoxType)
-	if strings.TrimSpace(proxmoxType) != "" && parsedType == proxmoxProductUnknown {
-		logger.Warn().Str("proxmoxType", proxmoxType).Msg("Invalid Proxmox type override, falling back to auto-detect")
-	}
-
 	return &ProxmoxSetup{
 		logger:             logger,
 		httpClient:         httpClient,
 		collector:          collector,
 		pulseURL:           strings.TrimRight(pulseURL, "/"),
 		apiToken:           apiToken,
-		proxmoxType:        parsedType,
+		proxmoxType:        proxmoxProductType(proxmoxType),
 		hostname:           hostname,
 		reportIP:           reportIP,
 		insecureSkipVerify: insecure,

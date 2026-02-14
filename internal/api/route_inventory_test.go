@@ -307,6 +307,7 @@ var bareRouteAllowlist = []string{
 	"/uninstall-host-agent.ps1",
 	"/uninstall-host-agent.sh",
 	"/ws",
+	"/api/saml/",
 }
 
 var allRouteAllowlist = []string{
@@ -431,6 +432,7 @@ var allRouteAllowlist = []string{
 	"/api/public/magic-link/request",
 	"/api/public/magic-link/verify",
 	"/auth/cloud-handoff",
+	"/api/saml/",
 	"/api/admin/roles",
 	"/api/admin/roles/",
 	"/api/admin/users",

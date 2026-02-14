@@ -169,17 +169,17 @@ func TestControlPlaneDir(t *testing.T) {
 func TestEnvOrDefaultInt64(t *testing.T) {
 	const key = "TEST_CP_ENV_OR_DEFAULT_INT64"
 	t.Setenv(key, "")
-	if got := envOrDefaultInt64(key, 99); got != 99 {
+	if got, _ := envOrDefaultInt64(key, 99); got != 99 {
 		t.Fatalf("envOrDefaultInt64 unset = %d, want 99", got)
 	}
 
 	t.Setenv(key, " 1234 ")
-	if got := envOrDefaultInt64(key, 99); got != 1234 {
+	if got, _ := envOrDefaultInt64(key, 99); got != 1234 {
 		t.Fatalf("envOrDefaultInt64 valid = %d, want 1234", got)
 	}
 
 	t.Setenv(key, "not-an-int")
-	if got := envOrDefaultInt64(key, 99); got != 99 {
+	if got, _ := envOrDefaultInt64(key, 99); got != 99 {
 		t.Fatalf("envOrDefaultInt64 invalid = %d, want 99", got)
 	}
 }

@@ -34,7 +34,7 @@ func TestFlushReportsStopsOnError(t *testing.T) {
 	defer server.Close()
 
 	logger := zerolog.New(io.Discard)
-	reportBuffer := utils.NewQueue[agentsk8s.Report](10)
+	reportBuffer := utils.New[agentsk8s.Report](10)
 	reportBuffer.Push(agentsk8s.Report{Timestamp: time.Now().UTC()})
 
 	agent := &Agent{
@@ -59,7 +59,7 @@ func TestFlushReportsSuccess(t *testing.T) {
 	defer server.Close()
 
 	logger := zerolog.New(io.Discard)
-	reportBuffer := utils.NewQueue[agentsk8s.Report](10)
+	reportBuffer := utils.New[agentsk8s.Report](10)
 	reportBuffer.Push(agentsk8s.Report{Timestamp: time.Now().UTC()})
 	reportBuffer.Push(agentsk8s.Report{Timestamp: time.Now().UTC()})
 
@@ -85,7 +85,7 @@ func TestRunOnceBuffersOnSendError(t *testing.T) {
 	defer server.Close()
 
 	logger := zerolog.New(io.Discard)
-	reportBuffer := utils.NewQueue[agentsk8s.Report](10)
+	reportBuffer := utils.New[agentsk8s.Report](10)
 	agent := &Agent{
 		cfg:               Config{APIToken: "token"},
 		logger:            logger,

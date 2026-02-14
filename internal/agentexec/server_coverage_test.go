@@ -3,6 +3,7 @@ package agentexec
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -159,15 +160,11 @@ func TestHandleWebSocket_InvalidTokenRejectionSendFailure(t *testing.T) {
 	}
 	defer conn.Close()
 
-	wsWriteMessage(t, conn, Message{
-		Type:      MsgTypeAgentRegister,
-		Timestamp: time.Now(),
-		Payload: AgentRegisterPayload{
-			AgentID:  "a1",
-			Hostname: "host1",
-			Token:    "bad",
-		},
-	})
+	wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{
+		AgentID:  "a1",
+		Hostname: "host1",
+		Token:    "bad",
+	}))
 
 	conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
 	if _, _, err := conn.ReadMessage(); err == nil {
@@ -193,15 +190,11 @@ func TestHandleWebSocket_RegistrationAckSendFailure(t *testing.T) {
 	}
 	defer conn.Close()
 
-	wsWriteMessage(t, conn, Message{
-		Type:      MsgTypeAgentRegister,
-		Timestamp: time.Now(),
-		Payload: AgentRegisterPayload{
-			AgentID:  "a1",
-			Hostname: "host1",
-			Token:    "any",
-		},
-	})
+	wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{
+		AgentID:  "a1",
+		Hostname: "host1",
+		Token:    "any",
+	}))
 
 	waitFor(t, 2*time.Second, func() bool { return s.IsAgentConnected("a1") })
 
@@ -687,15 +680,11 @@ func TestShutdownClosesActiveConnectionsAndIsIdempotent(t *testing.T) {
 	}
 	defer conn.Close()
 
-	wsWriteMessage(t, conn, Message{
-		Type:      MsgTypeAgentRegister,
-		Timestamp: time.Now(),
-		Payload: AgentRegisterPayload{
-			AgentID:  "a1",
-			Hostname: "host1",
-			Token:    "any",
-		},
-	})
+	wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{
+		AgentID:  "a1",
+		Hostname: "host1",
+		Token:    "any",
+	}))
 	_ = wsReadRegisteredPayload(t, conn)
 
 	if !s.IsAgentConnected("a1") {
@@ -730,7 +719,7 @@ func TestExecuteCommandAndReadFileReturnShutdownError(t *testing.T) {
 
 		errCh := make(chan error, 1)
 		go func() {
-			_, err := s.ExecuteCommand(context.Background(), "a1", ExecuteCommandPayload{RequestID: "r-shutdown", Timeout: 60})
+			_, err := s.ExecuteCommand(context.Background(), "a1", ExecuteCommandPayload{RequestID: "r-shutdown", Command: "echo test", Timeout: 60})
 			errCh <- err
 		}()
 
@@ -763,7 +752,7 @@ func TestExecuteCommandAndReadFileReturnShutdownError(t *testing.T) {
 
 		errCh := make(chan error, 1)
 		go func() {
-			_, err := s.ReadFile(context.Background(), "a1", ReadFilePayload{RequestID: "read-shutdown"})
+			_, err := s.ReadFile(context.Background(), "a1", ReadFilePayload{RequestID: "read-shutdown", Path: "/tmp/test"})
 			errCh <- err
 		}()
 

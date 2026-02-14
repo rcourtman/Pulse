@@ -16,6 +16,7 @@ import (
 func resetKnownHostsFns() {
 	mkdirAllFn = defaultMkdirAllFn
 	statFn = defaultStatFn
+	lstatFn = defaultLstatFn
 	chmodFn = defaultChmodFn
 	openFileFn = defaultOpenFileFn
 	openFn = defaultOpenFn
@@ -475,7 +476,7 @@ func TestEnsureKnownHostsFileMkdirError(t *testing.T) {
 
 func TestEnsureKnownHostsFileStatError(t *testing.T) {
 	t.Cleanup(resetKnownHostsFns)
-	statFn = func(string) (os.FileInfo, error) {
+	lstatFn = func(string) (os.FileInfo, error) {
 		return nil, errors.New("stat failed")
 	}
 
@@ -491,7 +492,7 @@ func TestEnsureKnownHostsFileStatError(t *testing.T) {
 
 func TestEnsureKnownHostsFileCreateError(t *testing.T) {
 	t.Cleanup(resetKnownHostsFns)
-	statFn = func(string) (os.FileInfo, error) {
+	lstatFn = func(string) (os.FileInfo, error) {
 		return nil, os.ErrNotExist
 	}
 	openFileFn = func(string, int, os.FileMode) (*os.File, error) {

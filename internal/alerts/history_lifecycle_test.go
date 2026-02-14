@@ -20,7 +20,7 @@ func TestLoadHistory_BackupReadErrorReturnsError(t *testing.T) {
 	if err == nil {
 		t.Fatal("loadHistory should fail when backup path cannot be read as a file")
 	}
-	if !strings.Contains(err.Error(), "failed to load backup history") {
+	if !strings.Contains(err.Error(), "failed to read history backup file") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

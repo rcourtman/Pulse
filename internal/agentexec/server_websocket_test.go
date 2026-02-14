@@ -174,17 +174,13 @@ func TestHandleWebSocket_MissingAgentIDRejected(t *testing.T) {
 	}
 	defer conn.Close()
 
-	wsWriteMessage(t, conn, Message{
-		Type:      MsgTypeAgentRegister,
-		Timestamp: time.Now(),
-		Payload: AgentRegisterPayload{
-			AgentID:  "   ",
-			Hostname: "host1",
-			Version:  "1.2.3",
-			Platform: "linux",
-			Token:    "any",
-		},
-	})
+	wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{
+		AgentID:  "   ",
+		Hostname: "host1",
+		Version:  "1.2.3",
+		Platform: "linux",
+		Token:    "any",
+	}))
 
 	reg := wsReadRegisteredPayload(t, conn)
 	if reg.Success {

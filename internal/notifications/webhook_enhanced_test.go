@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"

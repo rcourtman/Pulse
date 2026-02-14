@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/buffer"
+	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	agentsk8s "github.com/rcourtman/pulse-go-rewrite/pkg/agents/kubernetes"
 	"github.com/rs/zerolog"
 	corev1 "k8s.io/api/core/v1"
@@ -108,7 +108,7 @@ func TestRunOnce_CollectReportErrorSkipsBuffering(t *testing.T) {
 	agent := &Agent{
 		logger:       zerolog.New(io.Discard),
 		kubeClient:   clientset,
-		reportBuffer: buffer.New[agentsk8s.Report](3),
+		reportBuffer: utils.New[agentsk8s.Report](3),
 	}
 
 	agent.runOnce(context.Background())

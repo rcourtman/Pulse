@@ -66,7 +66,7 @@ func CollectPower(ctx context.Context) (*PowerData, error) {
 	ctx = normalizeCollectionContext(ctx)
 
 	// Try Intel RAPL first (most common on Intel)
-	raplData, raplErr := collectRALP(ctx)
+	raplData, raplErr := collectRAPL(ctx)
 	if raplErr == nil && raplData != nil && raplData.Available {
 		return raplData, nil
 	}
@@ -99,7 +99,7 @@ func CollectPower(ctx context.Context) (*PowerData, error) {
 // collectRAPL reads power data from Intel RAPL sysfs interface.
 // RAPL provides energy counters in microjoules that we sample twice
 // to calculate instantaneous power in watts.
-func collectRALP(ctx context.Context) (*PowerData, error) {
+func collectRAPL(ctx context.Context) (*PowerData, error) {
 	ctx = normalizeCollectionContext(ctx)
 
 	// Check if RAPL is available

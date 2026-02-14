@@ -603,7 +603,7 @@ func (s *Server) sendMessage(conn *websocket.Conn, msg Message) error {
 	if err != nil {
 		return fmt.Errorf("marshal websocket message: %w", err)
 	}
-	if err := conn.WriteMessage(websocket.TextMessage, msgBytes); err != nil {
+	if err := writeTextMessage(conn, msgBytes); err != nil {
 		return fmt.Errorf("write websocket message: %w", err)
 	}
 	return nil
@@ -639,6 +639,9 @@ func (s *Server) ExecuteCommand(ctx context.Context, agentID string, cmd Execute
 	cmd.RequestID = strings.TrimSpace(cmd.RequestID)
 	if cmd.RequestID == "" {
 		cmd.RequestID = uuid.New().String()
+	}
+	if len(cmd.RequestID) > maxRequestIDLength {
+		return nil, fmt.Errorf("request id exceeds %d characters", maxRequestIDLength)
 	}
 	if err := validateExecuteCommandPayload(&cmd); err != nil {
 		return nil, err
@@ -836,6 +839,8 @@ func (s *Server) ReadFile(ctx context.Context, agentID string, req ReadFilePaylo
 		return nil, fmt.Errorf("read_file timed out after %v", timeout)
 	case <-ctx.Done():
 		return nil, fmt.Errorf("read_file %q on agent %q canceled: %w", req.RequestID, agentID, ctx.Err())
+	case <-s.shutdown:
+		return nil, errServerShuttingDown
 	}
 }
 

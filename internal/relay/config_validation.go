@@ -33,11 +33,9 @@ func normalizeClientInputs(cfg Config, deps ClientDeps) (Config, ClientDeps, []s
 
 	if deps.LicenseTokenFunc == nil {
 		issues = append(issues, "license token function is required")
-		deps.LicenseTokenFunc = func() string { return "" }
 	}
 	if deps.TokenValidator == nil {
 		issues = append(issues, "token validator function is required")
-		deps.TokenValidator = func(string) bool { return false }
 	}
 
 	if deps.LocalAddr == "" {

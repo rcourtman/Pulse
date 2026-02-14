@@ -78,6 +78,27 @@ func (s *State) GetSnapshot() StateSnapshot {
 		TemperatureMonitoringEnabled: s.TemperatureMonitoringEnabled,
 	}
 
+	// Preserve non-nil slice semantics from NewState() — cloneX functions return nil
+	// for empty input, but callers rely on non-nil to distinguish "empty" from "never set".
+	if snapshot.Nodes == nil {
+		snapshot.Nodes = []Node{}
+	}
+	if snapshot.VMs == nil {
+		snapshot.VMs = []VM{}
+	}
+	if snapshot.Containers == nil {
+		snapshot.Containers = []Container{}
+	}
+	if snapshot.DockerHosts == nil {
+		snapshot.DockerHosts = []DockerHost{}
+	}
+	if snapshot.Storage == nil {
+		snapshot.Storage = []Storage{}
+	}
+	if snapshot.ActiveAlerts == nil {
+		snapshot.ActiveAlerts = []Alert{}
+	}
+
 	// Copy map
 	for k, v := range s.ConnectionHealth {
 		snapshot.ConnectionHealth[k] = v

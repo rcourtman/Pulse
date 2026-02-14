@@ -237,7 +237,7 @@ func NewService(wsHub *websocket.Hub, interval time.Duration, subnet string, cfg
 		scanner:      newScannerFn(),
 		wsHub:        wsHub,
 		cache:        &DiscoveryCache{},
-		interval:     interval,
+		interval:     normalizedInterval,
 		subnet:       normalizedSubnet,
 		stopChan:     make(chan struct{}),
 		cfgProvider:  cfgProvider,
@@ -270,7 +270,8 @@ func normalizeDiscoverySubnet(subnet string) (string, error) {
 
 		_, parsedSubnet, err := net.ParseCIDR(token)
 		if err != nil {
-			return "", fmt.Errorf("invalid subnet %q: %w", token, err)
+			log.Warn().Str("token", token).Err(err).Msg("Skipping invalid subnet token")
+			continue
 		}
 
 		canonical := parsedSubnet.String()

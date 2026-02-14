@@ -52,6 +52,7 @@ const (
 var (
 	mkdirAllFn       = os.MkdirAll
 	statFn           = os.Stat
+	lstatFn          = os.Lstat
 	chmodFn          = os.Chmod
 	openFileFn       = os.OpenFile
 	openFn           = os.Open
@@ -72,6 +73,7 @@ var (
 var (
 	defaultMkdirAllFn       = mkdirAllFn
 	defaultStatFn           = statFn
+	defaultLstatFn          = lstatFn
 	defaultChmodFn          = chmodFn
 	defaultOpenFileFn       = openFileFn
 	defaultOpenFn           = openFn
@@ -269,7 +271,10 @@ func (m *manager) ensureKnownHostsFile() error {
 		return fmt.Errorf("knownhosts: chmod %s: %w", dir, err)
 	}
 
-	if _, err := statFn(m.path); err == nil {
+	if info, err := lstatFn(m.path); err == nil {
+		if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+			return fmt.Errorf("knownhosts: %s: not a regular file", m.path)
+		}
 		if err := chmodFn(m.path, 0o600); err != nil {
 			return fmt.Errorf("knownhosts: chmod %s: %w", m.path, err)
 		}

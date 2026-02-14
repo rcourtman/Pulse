@@ -1331,11 +1331,16 @@ func (s *State) syncBackupsLocked() {
 	}
 }
 
-// UpdateActiveAlerts updates the active alerts in the state
+// UpdateActiveAlerts updates the active alerts in the state.
+// Always sets a non-nil slice so callers can distinguish "synced with zero alerts" from "never synced".
 func (s *State) UpdateActiveAlerts(alerts []Alert) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.ActiveAlerts = cloneAlerts(alerts)
+	cloned := cloneAlerts(alerts)
+	if cloned == nil {
+		cloned = []Alert{}
+	}
+	s.ActiveAlerts = cloned
 }
 
 // UpdateRecentlyResolved updates the recently resolved alerts in the state

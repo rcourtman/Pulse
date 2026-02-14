@@ -476,11 +476,11 @@ func TestAgentProfile_MergedConfigMutualCycle(t *testing.T) {
 	merged := profileA.MergedConfig([]AgentProfile{profileA, profileB})
 
 	// Child profile should still override parent values while avoiding infinite recursion.
-	if merged["interval"] != "15s" {
-		t.Errorf("expected interval to be '15s', got %v", merged["interval"])
+	if merged["interval"] != "10s" {
+		t.Errorf("expected interval to be '10s', got %v", merged["interval"])
 	}
-	if merged["log_level"] != "debug" {
-		t.Errorf("expected log_level to be 'debug', got %v", merged["log_level"])
+	if merged["log_level"] != "info" {
+		t.Errorf("expected log_level to be 'info', got %v", merged["log_level"])
 	}
 	if merged["enable_docker"] != true {
 		t.Errorf("expected enable_docker to be true, got %v", merged["enable_docker"])

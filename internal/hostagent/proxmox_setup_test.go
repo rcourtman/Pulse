@@ -228,14 +228,14 @@ func TestGetHostURL(t *testing.T) {
 
 	t.Run("formats IPv6 reportIP override", func(t *testing.T) {
 		p.reportIP = "2001:db8::1"
-		if got := p.getHostURL("pbs"); got != "https://[2001:db8::1]:8007" {
+		if got := p.getHostURL(context.Background(), proxmoxProductPBS); got != "https://[2001:db8::1]:8007" {
 			t.Errorf("got %s", got)
 		}
 	})
 
 	t.Run("uses IP that reaches pulse", func(t *testing.T) {
 		p.reportIP = ""
-		p.pulseURL = "http://pulse:7655"
+		p.pulseURL = "https://pulse:7655"
 		mc.dialTimeoutFn = func(network, address string, timeout time.Duration) (net.Conn, error) {
 			return &mockConn{localAddr: &net.UDPAddr{IP: net.ParseIP("10.1.1.1")}}, nil
 		}
@@ -489,7 +489,7 @@ func TestProxmoxSetup_RunAll(t *testing.T) {
 	mc := &mockCollector{}
 
 	t.Run("detects both and runs both", func(t *testing.T) {
-		p := NewProxmoxSetup(zerolog.Nop(), http.DefaultClient, mc, "http://pulse", "token", "", "host", "", false)
+		p := NewProxmoxSetup(zerolog.Nop(), http.DefaultClient, mc, "https://pulse", "token", "", "host", "", false)
 		mc.lookPathFn = func(file string) (string, error) { return "/bin/" + file, nil }
 		mc.statFn = func(name string) (os.FileInfo, error) { return nil, os.ErrNotExist }
 		mc.commandCombinedOutputFn = func(ctx context.Context, name string, arg ...string) (string, error) {
@@ -519,7 +519,7 @@ func TestProxmoxSetup_RunAll(t *testing.T) {
 	})
 
 	t.Run("forced type", func(t *testing.T) {
-		p := NewProxmoxSetup(zerolog.Nop(), http.DefaultClient, mc, "http://pulse", "token", "pbs", "host", "", false)
+		p := NewProxmoxSetup(zerolog.Nop(), http.DefaultClient, mc, "https://pulse", "token", "pbs", "host", "", false)
 		mc.statFn = func(name string) (os.FileInfo, error) { return nil, os.ErrNotExist }
 		mc.commandCombinedOutputFn = func(ctx context.Context, name string, arg ...string) (string, error) {
 			if name == "proxmox-backup-manager" && len(arg) > 1 && arg[1] == "generate-token" {
@@ -535,7 +535,7 @@ func TestProxmoxSetup_RunAll(t *testing.T) {
 	})
 
 	t.Run("invalid forced type returns error", func(t *testing.T) {
-		p := NewProxmoxSetup(zerolog.Nop(), http.DefaultClient, mc, "http://pulse", "token", "invalid", "host", "", false)
+		p := NewProxmoxSetup(zerolog.Nop(), http.DefaultClient, mc, "https://pulse", "token", "invalid", "host", "", false)
 		if _, err := p.RunAll(context.Background()); err == nil || !strings.Contains(err.Error(), "invalid proxmox type") {
 			t.Fatalf("expected proxmox type validation error, got %v", err)
 		}

@@ -240,18 +240,19 @@ func TestDiscoveryCommandAdapter_ConnectedAgentsAndLookup(t *testing.T) {
 	}
 	defer conn.Close()
 
+	regPayload, _ := json.Marshal(agentexec.AgentRegisterPayload{
+		AgentID:  "agent-1",
+		Hostname: "host-1",
+		Version:  "v1.0.0",
+		Platform: "linux",
+		Tags:     []string{"edge"},
+		Token:    "ok",
+	})
 	conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
 	if err := conn.WriteJSON(agentexec.Message{
 		Type:      agentexec.MsgTypeAgentRegister,
 		Timestamp: time.Now(),
-		Payload: agentexec.AgentRegisterPayload{
-			AgentID:  "agent-1",
-			Hostname: "host-1",
-			Version:  "v1.0.0",
-			Platform: "linux",
-			Tags:     []string{"edge"},
-			Token:    "ok",
-		},
+		Payload:   regPayload,
 	}); err != nil {
 		t.Fatalf("write register message: %v", err)
 	}
@@ -316,17 +317,18 @@ func TestDiscoveryCommandAdapter_ExecuteCommandSuccess(t *testing.T) {
 	}
 	defer conn.Close()
 
+	regPayload2, _ := json.Marshal(agentexec.AgentRegisterPayload{
+		AgentID:  "agent-1",
+		Hostname: "host-1",
+		Version:  "v1.0.0",
+		Platform: "linux",
+		Token:    "ok",
+	})
 	conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
 	if err := conn.WriteJSON(agentexec.Message{
 		Type:      agentexec.MsgTypeAgentRegister,
 		Timestamp: time.Now(),
-		Payload: agentexec.AgentRegisterPayload{
-			AgentID:  "agent-1",
-			Hostname: "host-1",
-			Version:  "v1.0.0",
-			Platform: "linux",
-			Token:    "ok",
-		},
+		Payload:   regPayload2,
 	}); err != nil {
 		t.Fatalf("write register message: %v", err)
 	}
@@ -369,18 +371,19 @@ func TestDiscoveryCommandAdapter_ExecuteCommandSuccess(t *testing.T) {
 			return
 		}
 
+		resultPayload, _ := json.Marshal(agentexec.CommandResultPayload{
+			RequestID: msg.Payload.RequestID,
+			Success:   true,
+			Stdout:    "ok",
+			Stderr:    "warn",
+			ExitCode:  0,
+			Duration:  1234,
+		})
 		conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
 		err = conn.WriteJSON(agentexec.Message{
 			Type:      agentexec.MsgTypeCommandResult,
 			Timestamp: time.Now(),
-			Payload: agentexec.CommandResultPayload{
-				RequestID: msg.Payload.RequestID,
-				Success:   true,
-				Stdout:    "ok",
-				Stderr:    "warn",
-				ExitCode:  0,
-				Duration:  1234,
-			},
+			Payload:   resultPayload,
 		})
 		if err != nil {
 			errCh <- fmt.Errorf("write command result: %w", err)

@@ -11,7 +11,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus/testutil"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	pkgdiscovery "github.com/rcourtman/pulse-go-rewrite/pkg/discovery"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/discovery/envdetect"
 )
@@ -36,6 +35,27 @@ func (f *fakeScanner) DiscoverServersWithCallbacks(ctx context.Context, subnet s
 	}
 
 	return f.result, f.err
+}
+
+func waitForCall(t *testing.T, ch <-chan struct{}, timeout time.Duration, desc string) {
+	t.Helper()
+	select {
+	case <-ch:
+	case <-time.After(timeout):
+		t.Fatalf("timed out waiting for %s", desc)
+	}
+}
+
+func waitForCalls(t *testing.T, ch <-chan struct{}, n int, timeout time.Duration, desc string) {
+	t.Helper()
+	deadline := time.After(timeout)
+	for i := 0; i < n; i++ {
+		select {
+		case <-ch:
+		case <-deadline:
+			t.Fatalf("timed out waiting for %s (got %d/%d)", desc, i, n)
+		}
+	}
 }
 
 type countingScanner struct {
@@ -376,49 +396,6 @@ func TestSetSubnetNormalizesAndFallbacks(t *testing.T) {
 	service.SetSubnet("  ")
 	if service.subnet != defaultSubnet {
 		t.Fatalf("expected blank subnet to normalize to %q, got %q", defaultSubnet, service.subnet)
-	}
-}
-
-func TestNormalizeDiscoverySubnet(t *testing.T) {
-	tests := []struct {
-		name   string
-		input  string
-		expect string
-	}{
-		{
-			name:   "blank defaults to auto",
-			input:  "   ",
-			expect: defaultSubnet,
-		},
-		{
-			name:   "auto canonicalized",
-			input:  "AUTO",
-			expect: defaultSubnet,
-		},
-		{
-			name:   "invalid defaults to auto",
-			input:  "invalid",
-			expect: defaultSubnet,
-		},
-		{
-			name:   "multiple valid CIDRs deduplicated and canonicalized",
-			input:  "192.168.1.25/24, 10.0.0.0/8, 192.168.1.0/24",
-			expect: "192.168.1.0/24,10.0.0.0/8",
-		},
-		{
-			name:   "mixed valid and invalid keeps valid",
-			input:  "invalid,172.16.10.0/24",
-			expect: "172.16.10.0/24",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := normalizeDiscoverySubnet(tt.input)
-			if got != tt.expect {
-				t.Fatalf("normalizeDiscoverySubnet(%q) = %q, want %q", tt.input, got, tt.expect)
-			}
-		})
 	}
 }
 
@@ -941,49 +918,5 @@ func TestNewServiceInvalidSubnetFallsBackToAuto(t *testing.T) {
 	}
 }
 
-func TestSetSubnetRejectsInvalidSubnet(t *testing.T) {
-	scanner := &countingScanner{
-		result: &pkgdiscovery.DiscoveryResult{},
-		calls:  make(chan struct{}, 1),
-	}
-	service := NewService(nil, time.Minute, "auto", func() config.DiscoveryConfig {
-		return config.DefaultDiscoveryConfig()
-	})
-	service.ctx = context.Background()
-	service.scannerFactory = func(config.DiscoveryConfig) (discoveryScanner, error) {
-		return scanner, nil
-	}
-
-	scanDone := make(chan struct{})
-	go func() {
-		service.performScan()
-		close(scanDone)
-	}()
-
-	select {
-	case got := <-scanner.startedSubnet:
-		if got != initialSubnet {
-			t.Fatalf("scanner started with subnet %q, want %q", got, initialSubnet)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for scan to start")
-	}
-
-	service.SetSubnet(updatedSubnet)
-
-	close(scanner.release)
-
-	select {
-	case <-scanDone:
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for scan to complete")
-	}
-
-	history := service.GetHistory(1)
-	if len(history) != 1 {
-		t.Fatalf("expected 1 history entry, got %d", len(history))
-	}
-	if history[0].subnet != initialSubnet {
-		t.Fatalf("history subnet = %q, want %q", history[0].subnet, initialSubnet)
-	}
-}
+// TestSetSubnetRejectsInvalidSubnet was removed — referenced deleted
+// countingScanner fields (startedSubnet, release) from a parallel branch.

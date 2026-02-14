@@ -553,7 +553,7 @@ func (n *NotificationManager) GetPublicURL() string {
 func (n *NotificationManager) SetEmailConfig(config EmailConfig) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
-	config = copyEmailConfig(config)
+	config = normalizeEmailConfig(copyEmailConfig(config))
 	n.emailConfig = config
 
 	// Recreate email manager with new config to preserve rate limiting state
@@ -3264,15 +3264,19 @@ func (n *NotificationManager) Stop() {
 		cleanupDone := n.cleanupDone
 		client := n.webhookClient
 
-		// Stop cleanup goroutine.
+		// Stop cleanup goroutine. Do not nil out the channel — the cleanup
+		// goroutine reads n.stopCleanup in its select loop, and nilling it
+		// between close and the goroutine re-entering select causes a race
+		// where the goroutine blocks on a nil channel forever.
 		if n.stopCleanup != nil {
 			close(n.stopCleanup)
-			n.stopCleanup = nil
 		}
 
 		// Nil out queue before unlocking
 		n.queue = nil
+		n.mu.Unlock()
 
+		// Wait for cleanup goroutine outside the lock to avoid deadlock.
 		if cleanupDone != nil {
 			<-cleanupDone
 		}

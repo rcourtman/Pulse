@@ -89,11 +89,6 @@ func TestCommandClientBuildWebSocketURL(t *testing.T) {
 			want:     "wss://example.invalid/pulse/api/agent/ws",
 		},
 		{
-			name:     "ws preserved",
-			pulseURL: "ws://example.invalid",
-			want:     "ws://example.invalid/api/agent/ws",
-		},
-		{
 			name:     "wss preserved",
 			pulseURL: "wss://example.invalid",
 			want:     "wss://example.invalid/api/agent/ws",

@@ -378,9 +378,9 @@ func TestGetStatus(t *testing.T) {
 		t.Errorf("status.AIAnalyzerSet = %v, want true after setting analyzer", status.AIAnalyzerSet)
 	}
 
-	compatStatus := service.GetStatus()
+	compatStatus := service.GetStatusSnapshot().ToMap()
 	if compatStatus["ai_analyzer_set"] != true {
-		t.Errorf("GetStatus()['ai_analyzer_set'] = %v, want true after setting analyzer", compatStatus["ai_analyzer_set"])
+		t.Errorf("GetStatusSnapshot().ToMap()['ai_analyzer_set'] = %v, want true after setting analyzer", compatStatus["ai_analyzer_set"])
 	}
 }
 

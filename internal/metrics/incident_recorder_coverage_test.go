@@ -178,7 +178,7 @@ func TestCompleteWindowNoopForNonRecordingStatus(t *testing.T) {
 	}
 	recorder.activeWindows[window.ID] = window
 
-	recorder.completeWindow(window)
+	recorder.completeWindowLocked(window)
 
 	if len(recorder.completedWindows) != 0 {
 		t.Fatalf("expected no completed windows to be appended, got %d", len(recorder.completedWindows))
@@ -290,7 +290,7 @@ func TestCompleteWindowAsyncSaveErrorPath(t *testing.T) {
 	}
 	recorder.activeWindows[window.ID] = window
 
-	recorder.completeWindow(window)
+	recorder.completeWindowLocked(window)
 
 	deadline := time.Now().Add(500 * time.Millisecond)
 	for !writer.hit.Load() && time.Now().Before(deadline) {

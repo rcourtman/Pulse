@@ -385,7 +385,7 @@ func (a *Agent) startCommandClient(client *CommandClient) {
 	a.commandClientMu.Unlock()
 
 	go func() {
-		if err := client.Run(runCtx); err != nil && !errors.Is(err, context.Canceled) {
+		if err := runCommandClient(client, runCtx); err != nil && !errors.Is(err, context.Canceled) {
 			a.logger.Error().Err(err).Msg("Command client stopped with error")
 		}
 	}()

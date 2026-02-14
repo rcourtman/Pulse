@@ -139,7 +139,7 @@ func envOrDefaultInt64(key string, fallback int64) (int64, error) {
 	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
 		n, err := strconv.ParseInt(v, 10, 64)
 		if err != nil {
-			return 0, fmt.Errorf("%s must be a valid integer: %w", key, err)
+			return fallback, fmt.Errorf("%s must be a valid integer: %w", key, err)
 		}
 		return n, nil
 	}

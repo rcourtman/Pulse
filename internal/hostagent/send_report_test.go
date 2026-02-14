@@ -9,7 +9,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/buffer"
+	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rs/zerolog"
 )
@@ -145,7 +145,7 @@ func TestAgentProcess_ForbiddenResponseDoesNotBuffer(t *testing.T) {
 		logger:          zerolog.Nop(),
 		httpClient:      server.Client(),
 		trimmedPulseURL: server.URL,
-		reportBuffer:    buffer.New[agentshost.Report](8),
+		reportBuffer:    utils.New[agentshost.Report](8),
 		collector:       &mockCollector{},
 	}
 

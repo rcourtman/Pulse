@@ -155,7 +155,7 @@ func TestClientReadPump_ReturnsLicenseError(t *testing.T) {
 	}
 	defer conn.Close()
 
-	err = client.readPump(context.Background(), conn, make(chan []byte, 1))
+	err = client.readPump(context.Background(), conn, make(chan []byte, 1), make(chan struct{}, 1))
 	if err == nil {
 		t.Fatal("expected readPump() to return license error")
 	}

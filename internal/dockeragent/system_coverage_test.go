@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 )
 
 func TestReadProcUptime(t *testing.T) {
@@ -175,13 +177,13 @@ func TestIsHexString(t *testing.T) {
 		{name: "uppercase", value: "ABCDEF012345", want: true},
 		{name: "mixed case", value: "aBcDeF012345", want: true},
 		{name: "invalid character", value: "abcdxef0zz", want: false},
-		{name: "empty string", value: "", want: true},
+		{name: "empty string", value: "", want: false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := isHexString(tt.value); got != tt.want {
-				t.Fatalf("isHexString(%q) = %v, want %v", tt.value, got, tt.want)
+			if got := utils.IsHexString(tt.value); got != tt.want {
+				t.Fatalf("utils.IsHexString(%q) = %v, want %v", tt.value, got, tt.want)
 			}
 		})
 	}

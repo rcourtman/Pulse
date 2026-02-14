@@ -16,7 +16,7 @@ func TestFlushBuffer(t *testing.T) {
 	t.Run("empty buffer", func(t *testing.T) {
 		agent := &Agent{
 			logger:       zerolog.Nop(),
-			reportBuffer: utils.NewQueue[agentsdocker.Report](5),
+			reportBuffer: utils.New[agentsdocker.Report](5),
 		}
 		agent.flushBuffer(context.Background())
 	})
@@ -30,7 +30,7 @@ func TestFlushBuffer(t *testing.T) {
 					return nil, errors.New("send failed")
 				})},
 			},
-			reportBuffer: utils.NewQueue[agentsdocker.Report](5),
+			reportBuffer: utils.New[agentsdocker.Report](5),
 		}
 		agent.reportBuffer.Push(agentsdocker.Report{Agent: agentsdocker.AgentInfo{ID: "queued"}})
 
@@ -54,7 +54,7 @@ func TestFlushBuffer(t *testing.T) {
 			httpClients: map[bool]*http.Client{
 				false: server.Client(),
 			},
-			reportBuffer: utils.NewQueue[agentsdocker.Report](5),
+			reportBuffer: utils.New[agentsdocker.Report](5),
 		}
 		agent.reportBuffer.Push(agentsdocker.Report{Agent: agentsdocker.AgentInfo{ID: "queued"}})
 
@@ -77,7 +77,7 @@ func TestFlushBuffer(t *testing.T) {
 			httpClients: map[bool]*http.Client{
 				false: server.Client(),
 			},
-			reportBuffer: utils.NewQueue[agentsdocker.Report](5),
+			reportBuffer: utils.New[agentsdocker.Report](5),
 		}
 		agent.reportBuffer.Push(agentsdocker.Report{Agent: agentsdocker.AgentInfo{ID: "queued"}})
 		agent.reportBuffer.Push(agentsdocker.Report{Agent: agentsdocker.AgentInfo{ID: "queued2"}})
