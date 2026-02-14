@@ -52,7 +52,7 @@ func (p *FilePersistence) SaveFindings(findings map[string]*UnifiedFinding) erro
 	tempPath := filePath + ".tmp"
 
 	// Write to temp file first
-	if err := os.WriteFile(tempPath, data, 0644); err != nil {
+	if err := os.WriteFile(tempPath, data, 0600); err != nil {
 		return fmt.Errorf("unified.FilePersistence.SaveFindings: write temp file %q: %w", tempPath, err)
 	}
 
@@ -156,7 +156,7 @@ func (p *VersionedPersistence) SaveFindings(findings map[string]*UnifiedFinding)
 	filePath := filepath.Join(p.dataDir, p.filename)
 	tempPath := filePath + ".tmp"
 
-	if err := os.WriteFile(tempPath, data, 0644); err != nil {
+	if err := os.WriteFile(tempPath, data, 0600); err != nil {
 		return fmt.Errorf("unified.VersionedPersistence.SaveFindings: write temp file %q: %w", tempPath, err)
 	}
 

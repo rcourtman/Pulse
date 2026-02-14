@@ -217,28 +217,8 @@ func DownloadAndInstallHostAgentBinaries(version string, targetDir string) (retE
 		_ = removeFn(tempFile.Name())
 	}()
 
-	resp, err := httpClient.Get(url)
-	if err != nil {
-		return fmt.Errorf("failed to download host agent bundle from %s: %w", url, err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
-		return fmt.Errorf("unexpected status %d downloading %s: %s", resp.StatusCode, url, strings.TrimSpace(string(body)))
-	}
-
-	if resp.ContentLength > maxHostAgentBundleSize {
-		return fmt.Errorf("host agent bundle exceeds max size %d bytes", maxHostAgentBundleSize)
-	}
-
-	limitedReader := io.LimitReader(resp.Body, maxHostAgentBundleSize+1)
-	written, err := io.Copy(tempFile, limitedReader)
-	if err != nil {
-		return fmt.Errorf("failed to save host agent bundle: %w", err)
-	}
-	if written > maxHostAgentBundleSize {
-		return fmt.Errorf("host agent bundle exceeds max size %d bytes", maxHostAgentBundleSize)
+	if err := downloadHostAgentBundle(url, tempFile); err != nil {
+		return err
 	}
 
 	if err := closeFileFn(tempFile); err != nil {
@@ -297,7 +277,13 @@ func downloadHostAgentBundle(url string, tempFile *os.File) error {
 			continue
 		}
 
-		if _, err := copyFn(tempFile, resp.Body); err != nil {
+		if resp.ContentLength > maxHostAgentBundleSize {
+			resp.Body.Close()
+			return fmt.Errorf("host agent bundle exceeds max size %d bytes", maxHostAgentBundleSize)
+		}
+
+		written, err := copyFn(tempFile, io.LimitReader(resp.Body, maxHostAgentBundleSize+1))
+		if err != nil {
 			resp.Body.Close()
 			if attempt == hostAgentDownloadAttempts {
 				return fmt.Errorf("failed to save host agent bundle: %w", err)
@@ -305,6 +291,11 @@ func downloadHostAgentBundle(url string, tempFile *os.File) error {
 			retrySleepFn(backoff)
 			backoff *= 2
 			continue
+		}
+
+		if written > maxHostAgentBundleSize {
+			resp.Body.Close()
+			return fmt.Errorf("host agent bundle exceeds max size %d bytes", maxHostAgentBundleSize)
 		}
 
 		if err := resp.Body.Close(); err != nil {
@@ -662,6 +653,10 @@ func copyHostAgentFile(source, destination string) (retErr error) {
 	info, err := src.Stat()
 	if err != nil {
 		return fmt.Errorf("failed to stat %s for fallback copy: %w", source, err)
+	}
+
+	if err := mkdirAllFn(filepath.Dir(destination), 0o755); err != nil {
+		return fmt.Errorf("failed to create directory for %s: %w", destination, err)
 	}
 
 	dst, err := os.OpenFile(destination, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, normalizeExecutableMode(info.Mode()))

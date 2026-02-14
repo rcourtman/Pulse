@@ -251,6 +251,7 @@ export function createWebSocketStore(url: string) {
   let ws: WebSocket | null = null;
   let reconnectTimeout = 0;
   let reconnectDelayTimeout = 0;
+  let lastServerActivityAt = Date.now();
   let heartbeatInterval = 0;
   let reconnectAttempt = 0;
   let isReconnecting = false;
@@ -286,11 +287,7 @@ export function createWebSocketStore(url: string) {
     return Math.min(maxReconnectDelay, Math.max(0, baseDelay + jitter));
   };
 
-  const clearConnectDelayTimeout = () => {
-    if (!connectDelayTimeout) return;
-    window.clearTimeout(connectDelayTimeout);
-    connectDelayTimeout = 0;
-  };
+
 
   const clearReconnectTimeout = () => {
     if (reconnectTimeout) {
@@ -341,7 +338,7 @@ export function createWebSocketStore(url: string) {
 
   const connect = () => {
     if (isDisposed) return;
-    clearConnectDelayTimeout();
+    clearReconnectDelayTimeout();
 
     try {
       // Close existing connection if any
@@ -790,7 +787,7 @@ export function createWebSocketStore(url: string) {
 
   // Cleanup on unmount
   onCleanup(() => {
-    window.clearTimeout(connectDelayTimeout);
+    window.clearTimeout(reconnectDelayTimeout);
     window.clearTimeout(reconnectTimeout);
     window.clearInterval(heartbeatInterval);
     if (typeof window !== 'undefined') {

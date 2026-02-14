@@ -100,6 +100,7 @@ export function AIIntelligence() {
   // Safety timer ref — hoisted so onStart can clear it when SSE connects
   let safetyTimerRef: ReturnType<typeof setTimeout> | undefined;
   let scrollToFindingTimerRef: ReturnType<typeof setTimeout> | undefined;
+  let findingScrollTimerRef: ReturnType<typeof setTimeout> | undefined;
 
   const clearSafetyTimer = () => {
     if (safetyTimerRef !== undefined) {
@@ -849,130 +850,130 @@ export function AIIntelligence() {
 
             {/* Advanced Settings Gear — visible to all users with gentle Pro upgrade hints */}
             <div class="relative" ref={advancedSettingsRef}>
-                <button
-                  onClick={() => setShowAdvancedSettings(!showAdvancedSettings())}
-                  disabled={!patrolEnabledLocal()}
-                  class={`p-1 rounded transition-colors ${showAdvancedSettings()
-                    ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30'
-                    : 'text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300'
-                    } ${!patrolEnabledLocal() ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  title="Advanced investigation settings"
-                >
-                  <SettingsIcon class="w-4 h-4" />
-                </button>
+              <button
+                onClick={() => setShowAdvancedSettings(!showAdvancedSettings())}
+                disabled={!patrolEnabledLocal()}
+                class={`p-1 rounded transition-colors ${showAdvancedSettings()
+                  ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30'
+                  : 'text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300'
+                  } ${!patrolEnabledLocal() ? 'opacity-50 cursor-not-allowed' : ''}`}
+                title="Advanced investigation settings"
+              >
+                <SettingsIcon class="w-4 h-4" />
+              </button>
 
-                {/* Advanced Settings Popover */}
-                <Show when={showAdvancedSettings()}>
-                  <div class="absolute right-0 top-8 z-50 w-72 p-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
-                    <div class="flex items-center justify-between mb-3">
-                      <h4 class="text-sm font-semibold text-gray-900 dark:text-white">Advanced Settings</h4>
-                      <button
-                        onClick={() => setShowAdvancedSettings(false)}
-                        class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                      >
-                        <XIcon class="w-4 h-4" />
-                      </button>
-                    </div>
-
-                    <div class="space-y-4">
-                      {/* Auto-fix critical issues toggle */}
-                      <div>
-                        <div class="flex items-start justify-between gap-3">
-                          <div class="flex-1">
-                            <label class="text-xs font-medium text-red-600 dark:text-red-400">Auto-fix critical issues</label>
-                            <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">
-                              When enabled, Patrol will automatically fix critical issues without requiring your approval.
-                            </p>
-                          </div>
-                          <Toggle
-                            checked={!autoFixLocked() && fullModeUnlocked()}
-                            onChange={(e) => setFullModeUnlocked(e.currentTarget.checked)}
-                            disabled={autoFixLocked() || !(autonomyLevel() === 'assisted' || autonomyLevel() === 'full')}
-                          />
-                        </div>
-                        <Show when={autoFixLocked()}>
-                          <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
-                            <a class="text-indigo-600 dark:text-indigo-400 font-medium hover:underline" href={getUpgradeActionUrlOrFallback('ai_autofix')} target="_blank" rel="noopener noreferrer" onClick={() => trackUpgradeClicked('ai_intelligence', 'ai_autofix')}>Upgrade to Pro</a>
-                            {' '}to unlock auto-fix.
-                            <Show when={canStartTrial()}>
-                              {' '}
-                              <button
-                                type="button"
-                                class="text-indigo-600 dark:text-indigo-400 font-medium hover:underline disabled:opacity-60"
-                                disabled={startingTrial()}
-                                onClick={handleStartTrial}
-                              >
-                                Or start a free 14-day trial
-                              </button>
-                            </Show>
-                          </p>
-                        </Show>
-                        <Show when={!autoFixLocked() && !(autonomyLevel() === 'assisted' || autonomyLevel() === 'full')}>
-                          <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
-                            Select Auto-fix mode to configure this setting.
-                          </p>
-                        </Show>
-                        <Show when={!autoFixLocked() && fullModeUnlocked() && (autonomyLevel() === 'assisted' || autonomyLevel() === 'full')}>
-                          <p class="text-[10px] text-amber-600 dark:text-amber-400 mt-2 flex items-center gap-1">
-                            <ShieldAlertIcon class="w-3 h-3 flex-shrink-0" />
-                            Critical issues will be auto-fixed without approval. Click Save to apply.
-                          </p>
-                        </Show>
-                      </div>
-
-                      {/* Alert-Triggered Analysis */}
-                      <div class="pt-3 border-t border-gray-200 dark:border-gray-700">
-                        <div class="flex items-center justify-between gap-3">
-                          <div class="flex-1">
-                            <label class="text-xs font-medium text-gray-700 dark:text-gray-300">
-                              Alert-Triggered Analysis
-                            </label>
-                            <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">
-                              Analyze infrastructure when alerts fire.
-                            </p>
-                          </div>
-                          <Toggle
-                            checked={alertTriggeredAnalysis()}
-                            onChange={(e) => handleAlertTriggeredAnalysisChange(e.currentTarget.checked)}
-                            disabled={isUpdatingSettings() || alertAnalysisLocked()}
-                          />
-                        </div>
-                        <Show when={alertAnalysisLocked()}>
-                          <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
-                            <a class="text-indigo-600 dark:text-indigo-400 font-medium hover:underline" href={getUpgradeActionUrlOrFallback('ai_alerts')} target="_blank" rel="noopener noreferrer" onClick={() => trackUpgradeClicked('ai_intelligence', 'ai_alerts')}>Upgrade to Pro</a>
-                            {' '}to enable alert-triggered analysis.
-                            <Show when={canStartTrial()}>
-                              {' '}
-                              <button
-                                type="button"
-                                class="text-indigo-600 dark:text-indigo-400 font-medium hover:underline disabled:opacity-60"
-                                disabled={startingTrial()}
-                                onClick={handleStartTrial}
-                              >
-                                Or start a free 14-day trial
-                              </button>
-                            </Show>
-                          </p>
-                        </Show>
-                      </div>
-
-
-
-                      {/* Save Button (for investigation limits + full mode unlock) */}
-                      <button
-                        onClick={saveAdvancedSettings}
-                        disabled={isSavingAdvanced()}
-                        class="w-full px-3 py-2 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 rounded-lg transition-colors flex items-center justify-center gap-2"
-                      >
-                        <Show when={isSavingAdvanced()}>
-                          <div class="animate-spin h-3 w-3 border-2 border-white border-t-transparent rounded-full"></div>
-                        </Show>
-                        <Show when={!isSavingAdvanced()}>Save</Show>
-                      </button>
-                    </div>
+              {/* Advanced Settings Popover */}
+              <Show when={showAdvancedSettings()}>
+                <div class="absolute right-0 top-8 z-50 w-72 p-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
+                  <div class="flex items-center justify-between mb-3">
+                    <h4 class="text-sm font-semibold text-gray-900 dark:text-white">Advanced Settings</h4>
+                    <button
+                      onClick={() => setShowAdvancedSettings(false)}
+                      class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                    >
+                      <XIcon class="w-4 h-4" />
+                    </button>
                   </div>
-                </Show>
-              </div>
+
+                  <div class="space-y-4">
+                    {/* Auto-fix critical issues toggle */}
+                    <div>
+                      <div class="flex items-start justify-between gap-3">
+                        <div class="flex-1">
+                          <label class="text-xs font-medium text-red-600 dark:text-red-400">Auto-fix critical issues</label>
+                          <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">
+                            When enabled, Patrol will automatically fix critical issues without requiring your approval.
+                          </p>
+                        </div>
+                        <Toggle
+                          checked={!autoFixLocked() && fullModeUnlocked()}
+                          onChange={(e) => setFullModeUnlocked(e.currentTarget.checked)}
+                          disabled={autoFixLocked() || !(autonomyLevel() === 'assisted' || autonomyLevel() === 'full')}
+                        />
+                      </div>
+                      <Show when={autoFixLocked()}>
+                        <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
+                          <a class="text-indigo-600 dark:text-indigo-400 font-medium hover:underline" href={getUpgradeActionUrlOrFallback('ai_autofix')} target="_blank" rel="noopener noreferrer" onClick={() => trackUpgradeClicked('ai_intelligence', 'ai_autofix')}>Upgrade to Pro</a>
+                          {' '}to unlock auto-fix.
+                          <Show when={canStartTrial()}>
+                            {' '}
+                            <button
+                              type="button"
+                              class="text-indigo-600 dark:text-indigo-400 font-medium hover:underline disabled:opacity-60"
+                              disabled={startingTrial()}
+                              onClick={handleStartTrial}
+                            >
+                              Or start a free 14-day trial
+                            </button>
+                          </Show>
+                        </p>
+                      </Show>
+                      <Show when={!autoFixLocked() && !(autonomyLevel() === 'assisted' || autonomyLevel() === 'full')}>
+                        <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
+                          Select Auto-fix mode to configure this setting.
+                        </p>
+                      </Show>
+                      <Show when={!autoFixLocked() && fullModeUnlocked() && (autonomyLevel() === 'assisted' || autonomyLevel() === 'full')}>
+                        <p class="text-[10px] text-amber-600 dark:text-amber-400 mt-2 flex items-center gap-1">
+                          <ShieldAlertIcon class="w-3 h-3 flex-shrink-0" />
+                          Critical issues will be auto-fixed without approval. Click Save to apply.
+                        </p>
+                      </Show>
+                    </div>
+
+                    {/* Alert-Triggered Analysis */}
+                    <div class="pt-3 border-t border-gray-200 dark:border-gray-700">
+                      <div class="flex items-center justify-between gap-3">
+                        <div class="flex-1">
+                          <label class="text-xs font-medium text-gray-700 dark:text-gray-300">
+                            Alert-Triggered Analysis
+                          </label>
+                          <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">
+                            Analyze infrastructure when alerts fire.
+                          </p>
+                        </div>
+                        <Toggle
+                          checked={alertTriggeredAnalysis()}
+                          onChange={(e) => handleAlertTriggeredAnalysisChange(e.currentTarget.checked)}
+                          disabled={isUpdatingSettings() || alertAnalysisLocked()}
+                        />
+                      </div>
+                      <Show when={alertAnalysisLocked()}>
+                        <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
+                          <a class="text-indigo-600 dark:text-indigo-400 font-medium hover:underline" href={getUpgradeActionUrlOrFallback('ai_alerts')} target="_blank" rel="noopener noreferrer" onClick={() => trackUpgradeClicked('ai_intelligence', 'ai_alerts')}>Upgrade to Pro</a>
+                          {' '}to enable alert-triggered analysis.
+                          <Show when={canStartTrial()}>
+                            {' '}
+                            <button
+                              type="button"
+                              class="text-indigo-600 dark:text-indigo-400 font-medium hover:underline disabled:opacity-60"
+                              disabled={startingTrial()}
+                              onClick={handleStartTrial}
+                            >
+                              Or start a free 14-day trial
+                            </button>
+                          </Show>
+                        </p>
+                      </Show>
+                    </div>
+
+
+
+                    {/* Save Button (for investigation limits + full mode unlock) */}
+                    <button
+                      onClick={saveAdvancedSettings}
+                      disabled={isSavingAdvanced()}
+                      class="w-full px-3 py-2 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 rounded-lg transition-colors flex items-center justify-center gap-2"
+                    >
+                      <Show when={isSavingAdvanced()}>
+                        <div class="animate-spin h-3 w-3 border-2 border-white border-t-transparent rounded-full"></div>
+                      </Show>
+                      <Show when={!isSavingAdvanced()}>Save</Show>
+                    </button>
+                  </div>
+                </div>
+              </Show>
+            </div>
           </div>
         </div>
       </div>

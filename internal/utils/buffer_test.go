@@ -208,4 +208,3 @@ func TestPushNormalizesInvalidCapacityState(t *testing.T) {
 		t.Error("expected pop on zero-capacity queue to return false")
 	}
 }
-

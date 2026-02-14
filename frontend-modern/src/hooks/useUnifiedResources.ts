@@ -1,10 +1,11 @@
 import { batch, createEffect, createSignal, onCleanup } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { readAPIErrorMessage } from '@/api/responseUtils';
-import { apiFetch } from '@/utils/apiClient';
+import { apiFetch, getOrgID } from '@/utils/apiClient';
 import { getGlobalWebSocketStore } from '@/stores/websocket-global';
 import type { Resource, PlatformType, SourceType, ResourceStatus, ResourceType } from '@/types/resource';
 import { logger } from '@/utils/logger';
+import { eventBus } from '@/stores/events';
 
 const UNIFIED_RESOURCES_BASE_URL = '/api/resources';
 const DEFAULT_UNIFIED_RESOURCES_QUERY = 'type=host,pbs,pmg,k8s_cluster,k8s_node';
@@ -339,7 +340,7 @@ const metricToResourceMetric = (metric?: APIMetricValue) => {
 };
 
 const toResource = (v2: APIResource): Resource => {
-  const sources = sanitizeSources(v2.sources);
+  const sources = (v2.sources || []).filter((s): s is string => typeof s === 'string' && s.trim().length > 0);
   const sourceFlags = readSourceFlags(sources);
   const lastSeen = v2.lastSeen ? Date.parse(v2.lastSeen) : NaN;
   const name = v2.name || v2.id;
@@ -352,8 +353,8 @@ const toResource = (v2: APIResource): Resource => {
 
   const discoveryTarget =
     v2.discoveryTarget?.resourceType &&
-    v2.discoveryTarget?.hostId &&
-    v2.discoveryTarget?.resourceId
+      v2.discoveryTarget?.hostId &&
+      v2.discoveryTarget?.resourceId
       ? {
         resourceType: v2.discoveryTarget.resourceType as 'host' | 'vm' | 'lxc' | 'docker' | 'k8s' | 'disk' | 'ceph',
         hostId: v2.discoveryTarget.hostId,
@@ -699,7 +700,7 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
     scheduleRefetch();
   });
 
-  const unsubscribeOrgSwitch = eventBus.on('org_switched', (nextOrgID) => {
+  const unsubscribeOrgSwitch = eventBus.on('org_switched', (nextOrgID?: string) => {
     const nextOrgScope = normalizeOrgScope(nextOrgID);
     if (nextOrgScope === orgScope()) {
       return;

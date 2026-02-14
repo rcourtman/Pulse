@@ -181,6 +181,13 @@ func (q *UpdateQueue) Cancel(jobID string) bool {
 			Str("previous_state", string(previousState)).
 			Str("job_state", string(q.currentJob.State)).
 			Msg("Update job cancelled")
+
+		// Add to history
+		q.addToHistory(q.currentJob)
+
+		// Clear current job after a short delay (allow status polling to see cancellation).
+		q.scheduleClearCurrentJobLocked(jobID)
+
 		return true
 	}
 

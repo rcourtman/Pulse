@@ -156,6 +156,7 @@ mock.env.backup
 secrets.env
 *secret*.env
 docs/PULSE_PRO_IMPLEMENTATION.md
+.encryption.key
 
 # Browser/session artifacts
 **/cookies.txt

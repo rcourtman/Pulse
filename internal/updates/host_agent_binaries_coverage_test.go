@@ -669,7 +669,7 @@ func TestExtractHostAgentBinariesInvalidSymlinkTarget(t *testing.T) {
 	tmpDir := t.TempDir()
 	payload := buildTarGz(t, []tarEntry{
 		{name: "bin/pulse-host-agent-linux-amd64", body: []byte("binary"), mode: 0o644},
-		{name: "bin/pulse-host-agent-linux-amd64.exe", typeflag: tar.TypeSymlink, linkname: "../etc/passwd"},
+		{name: "bin/pulse-host-agent-windows-amd64.exe", typeflag: tar.TypeSymlink, linkname: "../etc/passwd"},
 	})
 	archive := filepath.Join(t.TempDir(), "bundle.tar.gz")
 	if err := os.WriteFile(archive, payload, 0o644); err != nil {

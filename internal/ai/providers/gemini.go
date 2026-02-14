@@ -840,22 +840,87 @@ func (c *GeminiClient) ChatStream(ctx context.Context, req ChatRequest, callback
 	// Use streamGenerateContent endpoint for streaming
 	streamGenerateContentURL := fmt.Sprintf("%s/models/%s:streamGenerateContent?key=%s&alt=sse", c.baseURL, model, c.apiKey)
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", streamGenerateContentURL, bytes.NewReader(body))
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
+	// Retry loop for transient errors (matching non-streaming Chat behavior)
+	var resp *http.Response
+	var lastErr error
+
+	for attempt := 0; attempt <= geminiMaxRetries; attempt++ {
+		// Bail out early if the parent context is already cancelled
+		if ctx.Err() != nil {
+			if lastErr != nil {
+				return fmt.Errorf("request failed (context cancelled after %d attempts): %w", attempt, lastErr)
+			}
+			return ctx.Err()
+		}
+
+		if attempt > 0 {
+			backoff := geminiInitialBackoff * time.Duration(1<<(attempt-1))
+			log.Warn().
+				Int("attempt", attempt).
+				Dur("backoff", backoff).
+				Str("last_error", lastErr.Error()).
+				Msg("Retrying Gemini stream request after transient error")
+
+			backoffTimer := time.NewTimer(backoff)
+			select {
+			case <-ctx.Done():
+				if !backoffTimer.Stop() {
+					select {
+					case <-backoffTimer.C:
+					default:
+					}
+				}
+				return ctx.Err()
+			case <-backoffTimer.C:
+			}
+		}
+
+		httpReq, err := http.NewRequestWithContext(ctx, "POST", streamGenerateContentURL, bytes.NewReader(body))
+		if err != nil {
+			return fmt.Errorf("failed to create request: %w", err)
+		}
+
+		httpReq.Header.Set("Content-Type", "application/json")
+		httpReq.Header.Set("Accept", "text/event-stream")
+
+		resp, err = c.client.Do(httpReq)
+		if err != nil {
+			errStr := err.Error()
+			if strings.Contains(errStr, "connection reset") ||
+				strings.Contains(errStr, "connection refused") ||
+				strings.Contains(errStr, "EOF") ||
+				strings.Contains(errStr, "timeout") ||
+				strings.Contains(errStr, "deadline exceeded") {
+				lastErr = fmt.Errorf("connection error: %w", err)
+				continue
+			}
+			return fmt.Errorf("request failed: %w", err)
+		}
+
+		if resp.StatusCode == 429 || resp.StatusCode == 503 || resp.StatusCode >= 500 {
+			respBody, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			var errResp geminiError
+			errMsg := string(respBody)
+			if err := json.Unmarshal(respBody, &errResp); err == nil && errResp.Error.Message != "" {
+				errMsg = errResp.Error.Message
+			}
+			errMsg = appendRateLimitInfo(errMsg, resp)
+			lastErr = fmt.Errorf("API error (%d): %s", resp.StatusCode, errMsg)
+			continue
+		}
+
+		lastErr = nil
+		break
 	}
 
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Accept", "text/event-stream")
-
-	resp, err := c.client.Do(httpReq)
-	if err != nil {
-		return fmt.Errorf("request failed: %w", err)
+	if lastErr != nil {
+		return fmt.Errorf("request failed after %d retries: %w", geminiMaxRetries, lastErr)
 	}
-	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		respBody, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
 		var errResp geminiError
 		if err := json.Unmarshal(respBody, &errResp); err == nil && errResp.Error.Message != "" {
 			errMsg := appendRateLimitInfo(errResp.Error.Message, resp)
@@ -864,6 +929,7 @@ func (c *GeminiClient) ChatStream(ctx context.Context, req ChatRequest, callback
 		errMsg := appendRateLimitInfo(string(respBody), resp)
 		return fmt.Errorf("API error (%d): %s", resp.StatusCode, errMsg)
 	}
+	defer resp.Body.Close()
 
 	// Parse SSE stream
 	reader := resp.Body

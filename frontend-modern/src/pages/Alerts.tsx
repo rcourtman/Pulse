@@ -2391,6 +2391,8 @@ function OverviewTab(props: {
 }) {
   const location = useLocation();
   const pendingProcessingClearTimers = new Set<ReturnType<typeof setTimeout>>();
+  let hashScrollRafId: number | undefined;
+  const pendingProcessingResetTimeouts = new Set<number>();
   // Loading states for buttons
   const [processingAlerts, setProcessingAlerts] = createSignal<Set<string>>(new Set());
   const [incidentTimelines, setIncidentTimelines] = createSignal<Record<string, Incident | null>>({});

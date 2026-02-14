@@ -53,9 +53,6 @@ func (e *MonitorError) Error() string {
 	if e == nil {
 		return "<nil>"
 	}
-	if e.Node != "" {
-		return fmt.Sprintf("%s failed on %s/%s: %v", e.Op, e.Instance, e.Node, e.Err)
-	}
 
 	instance := sanitizeErrorText(e.Instance, maxErrorContextLength)
 	node := sanitizeErrorText(e.Node, maxErrorContextLength)
@@ -125,7 +122,7 @@ func (e *MonitorError) WithNode(node string) *MonitorError {
 	if e == nil {
 		return nil
 	}
-	e.Node = node
+	e.Node = sanitizeErrorText(node, maxErrorContextLength)
 	return e
 }
 

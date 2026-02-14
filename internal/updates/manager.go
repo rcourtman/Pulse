@@ -1098,13 +1098,8 @@ func (m *Manager) getWithRetry(ctx context.Context, client *http.Client, url str
 
 // downloadFile downloads a file from URL to dest
 func (m *Manager) downloadFile(ctx context.Context, url, dest string) (int64, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
-	if err != nil {
-		return 0, fmt.Errorf("build download request for %q: %w", url, err)
-	}
-
 	client := &http.Client{Timeout: 5 * time.Minute}
-	resp, err := client.Do(req)
+	resp, err := m.getWithRetry(ctx, client, url, nil, "download file")
 	if err != nil {
 		return 0, fmt.Errorf("download %q: %w", url, err)
 	}
@@ -1114,6 +1109,9 @@ func (m *Manager) downloadFile(ctx context.Context, url, dest string) (int64, er
 		}
 	}()
 
+	if resp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("download %q: status %d", url, resp.StatusCode)
+	}
 	if updateHTTPAttempts < 1 {
 		updateHTTPAttempts = 1
 	}
@@ -1142,7 +1140,7 @@ func (m *Manager) downloadFile(ctx context.Context, url, dest string) (int64, er
 		return 0, fmt.Errorf("download exceeds maximum size of %d bytes", maxUpdateDownloadBytes)
 	}
 
-	return 0, fmt.Errorf("download failed after retries")
+	return written, nil
 }
 
 // verifyChecksum downloads and verifies the SHA256 checksum of a file
@@ -1191,18 +1189,8 @@ func (m *Manager) verifyChecksum(ctx context.Context, tarballURL, tarballPath st
 			break
 		}
 
-		body, readErr := io.ReadAll(resp.Body)
-		if closeErr := resp.Body.Close(); closeErr != nil {
-			log.Debug().Err(closeErr).Str("url", checksumURL).Msg("Failed to close checksum response body")
-		}
-		if readErr != nil {
-			log.Debug().Err(readErr).Str("url", checksumURL).Msg("Failed to read checksum response body")
-			continue
-		}
-
-		checksumContent = string(body)
-		log.Info().Str("file", name).Msg("Found checksum file")
-		break
+		log.Debug().Int("status", resp.StatusCode).Str("url", checksumURL).Msg("Non-OK checksum response, trying next")
+		resp.Body.Close()
 	}
 
 	if checksumContent == "" {
