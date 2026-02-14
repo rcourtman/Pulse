@@ -218,3 +218,4 @@ scripts/overnight-refactor/
 test_output.txt
 coverage_summary.txt
 CHANGELOG-DRAFT.md
+.aider*
