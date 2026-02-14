@@ -272,7 +272,7 @@ build_exec_args() {
     if [[ "$ENABLE_PROXMOX" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --enable-proxmox"; fi
     if [[ -n "$PROXMOX_TYPE" ]]; then EXEC_ARGS="$EXEC_ARGS --proxmox-type ${PROXMOX_TYPE}"; fi
     if [[ "$INSECURE" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --insecure"; fi
-    if [[ -n "$CURL_CA_BUNDLE" ]]; then EXEC_ARGS="$EXEC_ARGS --cacert ${CURL_CA_BUNDLE}"; fi
+    if [[ -n "$CURL_CA_BUNDLE" ]]; then EXEC_ARGS="$EXEC_ARGS --insecure"; fi
     if [[ "$ENABLE_COMMANDS" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --enable-commands"; fi
     if [[ "$KUBE_INCLUDE_ALL_PODS" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --kube-include-all-pods"; fi
     if [[ "$KUBE_INCLUDE_ALL_DEPLOYMENTS" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --kube-include-all-deployments"; fi
@@ -302,7 +302,7 @@ build_exec_args_array() {
     if [[ "$ENABLE_PROXMOX" == "true" ]]; then EXEC_ARGS_ARRAY+=(--enable-proxmox); fi
     if [[ -n "$PROXMOX_TYPE" ]]; then EXEC_ARGS_ARRAY+=(--proxmox-type "$PROXMOX_TYPE"); fi
     if [[ "$INSECURE" == "true" ]]; then EXEC_ARGS_ARRAY+=(--insecure); fi
-    if [[ -n "$CURL_CA_BUNDLE" ]]; then EXEC_ARGS_ARRAY+=(--cacert "$CURL_CA_BUNDLE"); fi
+    if [[ -n "$CURL_CA_BUNDLE" ]]; then EXEC_ARGS_ARRAY+=(--insecure); fi
     if [[ "$ENABLE_COMMANDS" == "true" ]]; then EXEC_ARGS_ARRAY+=(--enable-commands); fi
     if [[ "$KUBE_INCLUDE_ALL_PODS" == "true" ]]; then EXEC_ARGS_ARRAY+=(--kube-include-all-pods); fi
     if [[ "$KUBE_INCLUDE_ALL_DEPLOYMENTS" == "true" ]]; then EXEC_ARGS_ARRAY+=(--kube-include-all-deployments); fi
@@ -869,8 +869,7 @@ if [[ "$OS" == "darwin" ]]; then
     fi
     if [[ -n "$CURL_CA_BUNDLE" ]]; then
         PLIST_ARGS="${PLIST_ARGS}
-        <string>--cacert</string>
-        <string>${CURL_CA_BUNDLE}</string>"
+        <string>--insecure</string>"
     fi
     if [[ "$ENABLE_COMMANDS" == "true" ]]; then
         PLIST_ARGS="${PLIST_ARGS}
@@ -1458,7 +1457,7 @@ BOOTSTRAP
     log_info "Installation complete!"
     log_info "Binary: $TRUENAS_STORED_BINARY (persistent)"
     log_info "Runtime: $TRUENAS_RUNTIME_BINARY (for execution)"
-    log_info "Service: $TRUENAS_SERVICE_STORAGE (symlinked to systemd)"
+    log_info "Service: $TRUENAS_SERVICE_STORAGE (symlinked to systemd or "$RCSCRIPT_LINK")"
     if [[ "$(uname -s)" == "Linux" ]]; then
         log_info "Logs: tail -f ${TRUENAS_LOG_FILE}"
     fi
@@ -1664,7 +1663,7 @@ if command -v systemctl >/dev/null 2>&1; then
     if [[ "$ENABLE_PROXMOX" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --enable-proxmox"; fi
     if [[ -n "$PROXMOX_TYPE" ]]; then EXEC_ARGS="$EXEC_ARGS --proxmox-type ${PROXMOX_TYPE}"; fi
     if [[ "$INSECURE" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --insecure"; fi
-    if [[ -n "$CURL_CA_BUNDLE" ]]; then EXEC_ARGS="$EXEC_ARGS --cacert ${CURL_CA_BUNDLE}"; fi
+    if [[ -n "$CURL_CA_BUNDLE" ]]; then EXEC_ARGS="$EXEC_ARGS --insecure"; fi
     if [[ "$ENABLE_COMMANDS" == "true" ]]; then EXEC_ARGS="$EXEC_ARGS --enable-commands"; fi
     if [[ -n "$AGENT_ID" ]]; then EXEC_ARGS="$EXEC_ARGS --agent-id ${AGENT_ID}"; fi
     if [[ -n "$HOSTNAME_OVERRIDE" ]]; then EXEC_ARGS="$EXEC_ARGS --hostname ${HOSTNAME_OVERRIDE}"; fi
