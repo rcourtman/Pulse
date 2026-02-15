@@ -249,7 +249,9 @@ func TestHandleVerifyAuditEvent_Failed(t *testing.T) {
 
 		assert.Equal(t, http.StatusNotFound, rec.Code)
 		var resp APIError
-		json.Unmarshal(rec.Body.Bytes(), &resp)
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("failed to unmarshal response: %v", err)
+		}
 		assert.Equal(t, "Audit event not found", resp.ErrorMessage)
 	})
 
