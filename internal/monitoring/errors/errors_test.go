@@ -214,7 +214,7 @@ func TestMonitorError_WithNode(t *testing.T) {
 
 func TestMonitorError_WithNode_SanitizesInput(t *testing.T) {
 	err := NewMonitorError(ErrorTypeConnection, "poll", "instance1", nil)
-	err.WithNode("node\t1\r\nprod")
+	_ = err.WithNode("node\t1\r\nprod")
 
 	if err.Node != "node 1 prod" {
 		t.Errorf("Node = %q, want %q", err.Node, "node 1 prod")
