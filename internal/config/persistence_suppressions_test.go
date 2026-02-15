@@ -22,13 +22,13 @@ func TestLoadEnvTokenSuppressions_Branches(t *testing.T) {
 	mfs.readError = nil
 
 	// 2. Empty data
-	os.WriteFile(suppFile, []byte(""), 0600)
+	_ = os.WriteFile(suppFile, []byte(""), 0600)
 	hashes, err := cp.LoadEnvTokenSuppressions()
 	assert.NoError(t, err)
 	assert.Empty(t, hashes)
 
 	// 3. Unmarshal error
-	os.WriteFile(suppFile, []byte("not-json"), 0600)
+	_ = os.WriteFile(suppFile, []byte("not-json"), 0600)
 	_, err = cp.LoadEnvTokenSuppressions()
 	assert.Error(t, err)
 }
