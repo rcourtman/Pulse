@@ -54,7 +54,7 @@ func TestIsMigrationNeeded(t *testing.T) {
 	require.False(t, IsMigrationNeeded(dataDir))
 
 	// With files - migration needed
-	os.WriteFile(filepath.Join(dataDir, "system.json"), []byte("{}"), 0644)
+	_ = os.WriteFile(filepath.Join(dataDir, "system.json"), []byte("{}"), 0644)
 	require.True(t, IsMigrationNeeded(dataDir))
 
 	// After migration - not needed
@@ -69,7 +69,7 @@ func TestMigrateToMultiTenant_SetsOwnerOnlyPermissions(t *testing.T) {
 
 	dataDir := t.TempDir()
 	legacyPath := filepath.Join(dataDir, "system.json")
-	require.NoError(t, os.WriteFile(legacyPath, []byte("{}"), 0o644))
+	_ = os.WriteFile(legacyPath, []byte("{}"), 0o644)
 
 	require.NoError(t, MigrateToMultiTenant(dataDir))
 
