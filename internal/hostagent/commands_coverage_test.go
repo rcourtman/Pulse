@@ -25,37 +25,37 @@ func TestCommandClient_LoopsCoverage(t *testing.T) {
 
 		// 1. Receive registration
 		var msg wsMessage
-		conn.ReadJSON(&msg)
+		_ = conn.ReadJSON(&msg)
 
 		// 2. Send registered success
 		payload, _ := json.Marshal(registeredPayload{Success: true})
-		conn.WriteJSON(wsMessage{Type: msgTypeRegistered, Payload: payload})
+		_ = conn.WriteJSON(wsMessage{Type: msgTypeRegistered, Payload: payload})
 
 		// 3. Send a pong (will be ignored)
-		conn.WriteJSON(wsMessage{Type: msgTypePong})
+		_ = conn.WriteJSON(wsMessage{Type: msgTypePong})
 
 		// 4. Send an execute_command
 		cmdPayload, _ := json.Marshal(executeCommandPayload{
 			RequestID: "req-1",
 			Command:   "echo hi",
 		})
-		conn.WriteJSON(wsMessage{Type: msgTypeExecuteCmd, Payload: cmdPayload})
+		_ = conn.WriteJSON(wsMessage{Type: msgTypeExecuteCmd, Payload: cmdPayload})
 
 		// 5. Send a read_file
 		readPayload, _ := json.Marshal(executeCommandPayload{
 			RequestID: "req-2",
 			Command:   "cat /etc/hostname",
 		})
-		conn.WriteJSON(wsMessage{Type: msgTypeReadFile, Payload: readPayload})
+		_ = conn.WriteJSON(wsMessage{Type: msgTypeReadFile, Payload: readPayload})
 
 		// 6. Send unknown message type
-		conn.WriteJSON(wsMessage{Type: "unknown_type"})
+		_ = conn.WriteJSON(wsMessage{Type: "unknown_type"})
 
 		// 7. Send invalid JSON for execute_command
-		conn.WriteJSON(wsMessage{Type: msgTypeExecuteCmd, Payload: json.RawMessage(`{invalid}`)})
+		_ = conn.WriteJSON(wsMessage{Type: msgTypeExecuteCmd, Payload: json.RawMessage(`{invalid}`)})
 
 		// 8. Send invalid JSON for read_file
-		conn.WriteJSON(wsMessage{Type: msgTypeReadFile, Payload: json.RawMessage(`{invalid}`)})
+		_ = conn.WriteJSON(wsMessage{Type: msgTypeReadFile, Payload: json.RawMessage(`{invalid}`)})
 	}))
 	defer server.Close()
 
@@ -119,11 +119,11 @@ func TestCommandClient_RegistrationFailure(t *testing.T) {
 
 		// Receive registration
 		var msg wsMessage
-		conn.ReadJSON(&msg)
+		_ = conn.ReadJSON(&msg)
 
 		// Send registered FAILURE
 		payload, _ := json.Marshal(registeredPayload{Success: false, Message: "registration rejected"})
-		conn.WriteJSON(wsMessage{Type: msgTypeRegistered, Payload: payload})
+		_ = conn.WriteJSON(wsMessage{Type: msgTypeRegistered, Payload: payload})
 	}))
 	defer server.Close()
 
