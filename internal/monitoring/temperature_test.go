@@ -54,7 +54,7 @@ func (m *mockCommandRunner) Run(ctx context.Context, name string, args ...string
 func TestTemperatureCollector_Parsing(t *testing.T) {
 	// Create dummy key file
 	tmpKey := t.TempDir() + "/id_rsa"
-	os.WriteFile(tmpKey, []byte("dummy key"), 0600)
+	_ = os.WriteFile(tmpKey, []byte("dummy key"), 0600)
 
 	tc := NewTemperatureCollectorWithPort("root", tmpKey, 22)
 	tc.hostKeys = nil // Disable real network calls for host key verification
