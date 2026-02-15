@@ -687,7 +687,7 @@ func TestHandleStatus_NotRunning(t *testing.T) {
 	h.HandleStatus(w, req)
 	assert.Equal(t, http.StatusOK, w.Code) // HandleStatus returns 200 even if not running
 	var resp map[string]interface{}
-	json.NewDecoder(w.Body).Decode(&resp)
+	_ = json.NewDecoder(w.Body).Decode(&resp)
 	assert.False(t, resp["running"].(bool))
 }
 
@@ -825,7 +825,7 @@ func TestHandleStatus_NoService(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	var resp map[string]interface{}
-	json.NewDecoder(w.Body).Decode(&resp)
+	_ = json.NewDecoder(w.Body).Decode(&resp)
 	assert.False(t, resp["running"].(bool))
 }
 
