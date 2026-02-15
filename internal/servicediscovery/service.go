@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -704,66 +705,6 @@ func (s *Service) collectFingerprints(ctx context.Context) {
 	changedCount := 0
 	newCount := 0
 
-	processFingerprint := func(
-		fingerprintFunc func() *ContainerFingerprint,
-		fpType string,
-		name string,
-		vmid int,
-	) {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-		}
-
-		newFP := fingerprintFunc()
-		fpKey := fpType + ":" + newFP.HostID + ":" + newFP.ResourceID
-
-		oldFP, err := s.store.GetFingerprint(fpKey)
-		if err != nil {
-			log.Warn().
-				Err(err).
-				Str("resource_id", fpKey).
-				Str(fpType, name).
-				Int("vmid", vmid).
-				Msg("Failed to load previous " + fpType + " fingerprint")
-		}
-
-		newFP.ResourceID = fpKey
-
-		if err := s.store.SaveFingerprint(newFP); err != nil {
-			log.Warn().Err(err).Str(fpType, name).Msg("failed to save " + fpType + " fingerprint")
-			return
-		}
-
-		if oldFP == nil {
-			newCount++
-			log.Debug().
-				Str("type", fpType).
-				Str("name", name).
-				Int("vmid", vmid).
-				Str("hash", newFP.Hash).
-				Msg("New fingerprint captured")
-		} else if newFP.HasSchemaChanged(oldFP) {
-			log.Debug().
-				Str("type", fpType).
-				Str("name", name).
-				Int("vmid", vmid).
-				Int("old_schema", oldFP.SchemaVersion).
-				Int("new_schema", newFP.SchemaVersion).
-				Msg("Fingerprint schema updated")
-		} else if oldFP.Hash != newFP.Hash {
-			changedCount++
-			log.Info().
-				Str("type", fpType).
-				Str("name", name).
-				Int("vmid", vmid).
-				Str("old_hash", oldFP.Hash).
-				Str("new_hash", newFP.Hash).
-				Msg("Fingerprint changed - discovery will run on next request")
-		}
-	}
-
 	// Process Docker containers
 	for _, host := range state.DockerHosts {
 		for _, container := range host.Containers {
@@ -825,28 +766,14 @@ func (s *Service) collectFingerprints(ctx context.Context) {
 	}
 
 	// Process LXC containers
-	for _, lxc := range state.Containers {
-		processFingerprint(
-			func() *ContainerFingerprint {
-				return GenerateLXCFingerprint(lxc.Node, &lxc)
-			},
-			"lxc",
-			lxc.Name,
-			lxc.VMID,
-		)
-	}
+	lxcNew, lxcChanged := s.processFingerprint(ctx, GenerateLXCFingerprint, "lxc", "lxc:", state.Containers)
+	newCount += lxcNew
+	changedCount += lxcChanged
 
 	// Process VMs
-	for _, vm := range state.VMs {
-		processFingerprint(
-			func() *ContainerFingerprint {
-				return GenerateVMFingerprint(vm.Node, &vm)
-			},
-			"vm",
-			vm.Name,
-			vm.VMID,
-		)
-	}
+	vmNew, vmChanged := s.processFingerprint(ctx, GenerateVMFingerprint, "vm", "vm:", state.VMs)
+	newCount += vmNew
+	changedCount += vmChanged
 
 	// Process Kubernetes pods
 	for _, cluster := range state.KubernetesClusters {
@@ -931,6 +858,92 @@ func (s *Service) collectFingerprints(ctx context.Context) {
 
 	// Cleanup orphaned data (fingerprints/discoveries for removed resources)
 	s.cleanupOrphanedData(state)
+}
+
+// processOrphanedDataFingerprint processes fingerprints for LXC containers and VMs.
+func (s *Service) processFingerprint(
+	ctx context.Context,
+	generateFP interface{},
+	resourceType string,
+	prefix string,
+	items interface{},
+) (int, int) {
+	var changedCount, newCount int
+
+	fpFuncVal := reflect.ValueOf(generateFP)
+	if fpFuncVal.Kind() != reflect.Func {
+		return 0, 0
+	}
+
+	v := reflect.ValueOf(items)
+	if v.Kind() != reflect.Slice {
+		return 0, 0
+	}
+
+	for i := 0; i < v.Len(); i++ {
+		select {
+		case <-ctx.Done():
+			return newCount, changedCount
+		default:
+		}
+
+		item := v.Index(i).Interface()
+		itemVal := reflect.ValueOf(item)
+
+		node := itemVal.FieldByName("Node").String()
+		name := itemVal.FieldByName("Name").String()
+		vmid := itemVal.FieldByName("VMID").Int()
+
+		args := []reflect.Value{reflect.ValueOf(node), reflect.ValueOf(item)}
+		newFP := fpFuncVal.Call(args)[0].Interface().(*ContainerFingerprint)
+		fpKey := prefix + node + ":" + newFP.ResourceID
+
+		oldFP, err := s.store.GetFingerprint(fpKey)
+		if err != nil {
+			log.Warn().
+				Err(err).
+				Str("resource_id", fpKey).
+				Str(resourceType, name).
+				Int("vmid", int(vmid)).
+				Msg("Failed to load previous " + resourceType + " fingerprint")
+		}
+
+		newFP.ResourceID = fpKey
+
+		if err := s.store.SaveFingerprint(newFP); err != nil {
+			log.Warn().Err(err).Str(resourceType, name).Msg("failed to save " + resourceType + " fingerprint")
+			continue
+		}
+
+		if oldFP == nil {
+			newCount++
+			log.Debug().
+				Str("type", resourceType).
+				Str("name", name).
+				Int("vmid", int(vmid)).
+				Str("hash", newFP.Hash).
+				Msg("New fingerprint captured")
+		} else if newFP.HasSchemaChanged(oldFP) {
+			log.Debug().
+				Str("type", resourceType).
+				Str("name", name).
+				Int("vmid", int(vmid)).
+				Int("old_schema", oldFP.SchemaVersion).
+				Int("new_schema", newFP.SchemaVersion).
+				Msg("Fingerprint schema updated")
+		} else if oldFP.Hash != newFP.Hash {
+			changedCount++
+			log.Info().
+				Str("type", resourceType).
+				Str("name", name).
+				Int("vmid", int(vmid)).
+				Str("old_hash", oldFP.Hash).
+				Str("new_hash", newFP.Hash).
+				Msg("Fingerprint changed - discovery will run on next request")
+		}
+	}
+
+	return newCount, changedCount
 }
 
 // cleanupOrphanedData removes fingerprints and discoveries for resources that no longer exist.

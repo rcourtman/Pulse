@@ -97,7 +97,7 @@ func TestHandleWebSocket_RegistrationMessageJSONError(t *testing.T) {
 		t.Fatalf("WriteMessage: %v", err)
 	}
 
-	conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+	_ = conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
 	if _, _, err := conn.ReadMessage(); err == nil {
 		t.Fatalf("expected server to close on invalid JSON")
 	}
@@ -116,7 +116,7 @@ func TestHandleWebSocket_RegistrationPayloadMissing(t *testing.T) {
 
 	wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentRegister, "", nil))
 
-	conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+	_ = conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
 	if _, _, err := conn.ReadMessage(); err == nil {
 		t.Fatalf("expected server to close on missing payload")
 	}
@@ -137,7 +137,7 @@ func TestHandleWebSocket_RegistrationPayloadUnmarshalError(t *testing.T) {
 		t.Fatalf("WriteMessage: %v", err)
 	}
 
-	conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+	_ = conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
 	if _, _, err := conn.ReadMessage(); err == nil {
 		t.Fatalf("expected server to close on invalid payload")
 	}
@@ -166,7 +166,7 @@ func TestHandleWebSocket_InvalidTokenRejectionSendFailure(t *testing.T) {
 		Token:    "bad",
 	}))
 
-	conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+	_ = conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
 	if _, _, err := conn.ReadMessage(); err == nil {
 		t.Fatalf("expected server to close connection after rejection send failure")
 	}
@@ -198,7 +198,7 @@ func TestHandleWebSocket_RegistrationAckSendFailure(t *testing.T) {
 
 	waitFor(t, 2*time.Second, func() bool { return s.IsAgentConnected("a1") })
 
-	conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+	_ = conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
 	if _, _, err := conn.ReadMessage(); err == nil {
 		t.Fatalf("expected no registration ack when send fails")
 	}
@@ -696,7 +696,7 @@ func TestShutdownClosesActiveConnectionsAndIsIdempotent(t *testing.T) {
 
 	waitFor(t, 2*time.Second, func() bool { return !s.IsAgentConnected("a1") })
 
-	conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+	_ = conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
 	if _, _, err := conn.ReadMessage(); err == nil {
 		t.Fatalf("expected connection to be closed after shutdown")
 	}
