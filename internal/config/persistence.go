@@ -343,6 +343,30 @@ func loadJSON[T any](c *ConfigPersistence, filePath string, decrypt bool, target
 	return nil
 }
 
+// persistMetadata writes metadata to disk atomically (temp file + rename).
+// Caller must hold the lock. The data should already be marshaled to JSON.
+// This is used by both GuestMetadataStore and HostMetadataStore to avoid code duplication.
+func persistMetadata(fs FileSystem, dataPath, fileName string, data []byte) error {
+	filePath := filepath.Join(dataPath, fileName)
+
+	log.Debug().Str("path", filePath).Msg("Saving metadata to disk")
+
+	if err := fs.MkdirAll(dataPath, 0o700); err != nil {
+		return fmt.Errorf("failed to create data directory: %w", err)
+	}
+
+	tempFile := filePath + ".tmp"
+	if err := fs.WriteFile(tempFile, data, 0o600); err != nil {
+		return fmt.Errorf("failed to write metadata file: %w", err)
+	}
+
+	if err := fs.Rename(tempFile, filePath); err != nil {
+		return fmt.Errorf("failed to rename metadata file: %w", err)
+	}
+
+	return nil
+}
+
 // LoadAPITokens loads API token metadata from disk.
 func (c *ConfigPersistence) LoadAPITokens() ([]APITokenRecord, error) {
 	c.mu.RLock()

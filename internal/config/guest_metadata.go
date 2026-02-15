@@ -90,20 +90,8 @@ func (s *GuestMetadataStore) save() error {
 		return fmt.Errorf("failed to marshal metadata: %w", err)
 	}
 
-	// Restrict metadata persistence to owner-only access.
-	if err := s.fs.MkdirAll(s.dataPath, 0o700); err != nil {
-		return fmt.Errorf("failed to create data directory: %w", err)
-	}
-
-	// Write to temp file first for atomic operation
-	tempFile := filePath + ".tmp"
-	if err := s.fs.WriteFile(tempFile, data, 0o600); err != nil {
-		return fmt.Errorf("failed to write metadata file: %w", err)
-	}
-
-	// Rename temp file to actual file (atomic on most systems)
-	if err := s.fs.Rename(tempFile, filePath); err != nil {
-		return fmt.Errorf("failed to rename metadata file: %w", err)
+	if err := persistMetadata(s.fs, s.dataPath, "guest_metadata.json", data); err != nil {
+		return err
 	}
 
 	log.Debug().Str("path", filePath).Int("entries", len(s.metadata)).Msg("Guest metadata saved successfully")
