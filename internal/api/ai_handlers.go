@@ -5333,7 +5333,9 @@ func (h *AISettingsHandler) HandleDenyCommand(w http.ResponseWriter, r *http.Req
 		Reason string `json:"reason"`
 	}
 	if r.Body != nil {
-		json.NewDecoder(r.Body).Decode(&body)
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			log.Warn().Err(err).Msg("Failed to decode deny request body")
+		}
 	}
 
 	store := approval.GetStore()
