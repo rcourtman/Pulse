@@ -119,7 +119,7 @@ func TestClient_RegisterAndChannelLifecycle(t *testing.T) {
 		proxyReqBytes, _ := json.Marshal(proxyReq)
 		dataFrame := NewFrame(FrameData, 1, proxyReqBytes)
 		dataBytes, _ := EncodeFrame(dataFrame)
-		conn.WriteMessage(websocket.BinaryMessage, dataBytes)
+		_ = conn.WriteMessage(websocket.BinaryMessage, dataBytes)
 
 		// 6. Read DATA response
 		_, msg, err = conn.ReadMessage()
@@ -1297,9 +1297,9 @@ func TestClient_OverloadedDataReturnsBusyResponse(t *testing.T) {
 		secondReqBytes, _ := json.Marshal(secondReq)
 		secondFrame := NewFrame(FrameData, 1, secondReqBytes)
 		secondData, _ := EncodeFrame(secondFrame)
-		conn.WriteMessage(websocket.BinaryMessage, secondData)
+		_ = conn.WriteMessage(websocket.BinaryMessage, secondData)
 
-		conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+		_ = conn.SetReadDeadline(time.Now().Add(3 * time.Second))
 		_, msg, err = conn.ReadMessage()
 		if err != nil {
 			return
