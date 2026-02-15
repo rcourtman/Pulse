@@ -30,24 +30,24 @@ func TestDefaultCollector_Smoke(t *testing.T) {
 	}
 
 	// HostUptime
-	c.HostUptime(ctx)
+	_, _ = c.HostUptime(ctx)
 
 	// Metrics
-	c.Metrics(ctx, nil)
+	_, _ = c.Metrics(ctx, nil)
 
 	// Sensors (will return error/empty on Mac but it's fine)
-	c.SensorsLocal(ctx)
-	c.SensorsParse("{}")
-	c.SensorsPower(ctx)
+	_, _ = c.SensorsLocal(ctx)
+	_, _ = c.SensorsParse("{}")
+	_, _ = c.SensorsPower(ctx)
 
 	// RAID
-	c.RAIDArrays(ctx)
+	_, _ = c.RAIDArrays(ctx)
 
 	// Ceph
-	c.CephStatus(ctx)
+	_, _ = c.CephStatus(ctx)
 
 	// SMART
-	c.SMARTLocal(ctx, nil)
+	_, _ = c.SMARTLocal(ctx, nil)
 
 	// Now
 	if c.Now().IsZero() {
@@ -60,21 +60,21 @@ func TestDefaultCollector_Smoke(t *testing.T) {
 	}
 
 	// ReadFile (test with non-existent file to avoid impact)
-	c.ReadFile("/non-existent-file-pulse-test")
+	_, _ = c.ReadFile("/non-existent-file-pulse-test")
 
 	// NetInterfaces
-	c.NetInterfaces()
+	_, _ = c.NetInterfaces()
 
 	// New methods:
-	c.Hostname()
-	c.LookupIP("localhost")
-	c.DialTimeout("udp", "8.8.8.8:53", 10*time.Millisecond)
-	c.Stat("/tmp")
-	c.MkdirAll("/tmp/pulse-test-dir", 0755)
-	c.WriteFile("/tmp/pulse-test-file", []byte("test"), 0644)
-	c.Chmod("/tmp/pulse-test-file", 0600)
-	c.CommandCombinedOutput(ctx, "echo", "hi")
-	c.LookPath("ls")
+	_, _ = c.Hostname()
+	_, _ = c.LookupIP("localhost")
+	_, _ = c.DialTimeout("udp", "8.8.8.8:53", 10*time.Millisecond)
+	_, _ = c.Stat("/tmp")
+	_ = c.MkdirAll("/tmp/pulse-test-dir", 0755)
+	_ = c.WriteFile("/tmp/pulse-test-file", []byte("test"), 0644)
+	_ = c.Chmod("/tmp/pulse-test-file", 0600)
+	_, _ = c.CommandCombinedOutput(ctx, "echo", "hi")
+	_, _ = c.LookPath("ls")
 
 	// Cleanup if possible (best effort)
 	os.Remove("/tmp/pulse-test-file")

@@ -2159,6 +2159,13 @@ func (c *ConfigPersistence) SaveAIUsageHistory(events []AIUsageEventRecord) erro
 	return nil
 }
 
+func newEmptyAIUsageHistoryData() *AIUsageHistoryData {
+	return &AIUsageHistoryData{
+		Version: 1,
+		Events:  make([]AIUsageEventRecord, 0),
+	}
+}
+
 // LoadAIUsageHistory loads AI usage events from disk.
 func (c *ConfigPersistence) LoadAIUsageHistory() (*AIUsageHistoryData, error) {
 	c.mu.RLock()
@@ -2167,10 +2174,7 @@ func (c *ConfigPersistence) LoadAIUsageHistory() (*AIUsageHistoryData, error) {
 	data, err := c.fs.ReadFile(c.aiUsageHistoryFile)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return &AIUsageHistoryData{
-				Version: 1,
-				Events:  make([]AIUsageEventRecord, 0),
-			}, nil
+			return newEmptyAIUsageHistoryData(), nil
 		}
 		return nil, err
 	}
@@ -2178,10 +2182,7 @@ func (c *ConfigPersistence) LoadAIUsageHistory() (*AIUsageHistoryData, error) {
 	var usageData AIUsageHistoryData
 	if err := json.Unmarshal(data, &usageData); err != nil {
 		log.Error().Err(err).Str("file", c.aiUsageHistoryFile).Msg("Failed to parse AI usage history file")
-		return &AIUsageHistoryData{
-			Version: 1,
-			Events:  make([]AIUsageEventRecord, 0),
-		}, nil
+		return newEmptyAIUsageHistoryData(), nil
 	}
 
 	if usageData.Events == nil {
@@ -2227,6 +2228,13 @@ func (c *ConfigPersistence) SavePatrolRunHistory(runs []PatrolRunRecord) error {
 	return nil
 }
 
+func newEmptyPatrolRunHistoryData() *PatrolRunHistoryData {
+	return &PatrolRunHistoryData{
+		Version: 1,
+		Runs:    make([]PatrolRunRecord, 0),
+	}
+}
+
 // LoadPatrolRunHistory loads patrol run history from disk
 func (c *ConfigPersistence) LoadPatrolRunHistory() (*PatrolRunHistoryData, error) {
 	c.mu.RLock()
@@ -2235,11 +2243,7 @@ func (c *ConfigPersistence) LoadPatrolRunHistory() (*PatrolRunHistoryData, error
 	data, err := c.fs.ReadFile(c.aiPatrolRunsFile)
 	if err != nil {
 		if os.IsNotExist(err) {
-			// Return empty data if file doesn't exist
-			return &PatrolRunHistoryData{
-				Version: 1,
-				Runs:    make([]PatrolRunRecord, 0),
-			}, nil
+			return newEmptyPatrolRunHistoryData(), nil
 		}
 		return nil, err
 	}
@@ -2247,11 +2251,7 @@ func (c *ConfigPersistence) LoadPatrolRunHistory() (*PatrolRunHistoryData, error
 	var historyData PatrolRunHistoryData
 	if err := json.Unmarshal(data, &historyData); err != nil {
 		log.Error().Err(err).Str("file", c.aiPatrolRunsFile).Msg("Failed to parse patrol run history file")
-		// Return empty data on parse error rather than failing
-		return &PatrolRunHistoryData{
-			Version: 1,
-			Runs:    make([]PatrolRunRecord, 0),
-		}, nil
+		return newEmptyPatrolRunHistoryData(), nil
 	}
 
 	if historyData.Runs == nil {
