@@ -2622,39 +2622,49 @@ func (s *State) UpdateStorage(storage []Storage) {
 	s.LastUpdate = time.Now()
 }
 
+func updateSliceByInstance[T any](
+	existing []T,
+	newItems []T,
+	instanceName string,
+	getID func(T) string,
+	getInstance func(T) string,
+	clone func(T) T,
+	less func([]T, int, int) bool,
+) []T {
+	itemMap := make(map[string]T)
+	for _, item := range existing {
+		if getInstance(item) != instanceName {
+			itemMap[getID(item)] = item
+		}
+	}
+	for _, item := range newItems {
+		itemMap[getID(item)] = clone(item)
+	}
+	result := make([]T, 0, len(itemMap))
+	for _, item := range itemMap {
+		result = append(result, item)
+	}
+	sort.Slice(result, func(i, j int) bool { return less(result, i, j) })
+	return result
+}
+
 // UpdatePhysicalDisks updates physical disks for a specific instance
 func (s *State) UpdatePhysicalDisks(instanceName string, disks []PhysicalDisk) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Create a map of existing disks, excluding those from this instance
-	diskMap := make(map[string]PhysicalDisk)
-	for _, disk := range s.PhysicalDisks {
-		if disk.Instance != instanceName {
-			diskMap[disk.ID] = disk
-		}
-	}
-
-	// Add or update disks from this instance
-	for _, disk := range disks {
-		diskMap[disk.ID] = clonePhysicalDisk(disk)
-	}
-
-	// Convert map back to slice
-	newDisks := make([]PhysicalDisk, 0, len(diskMap))
-	for _, disk := range diskMap {
-		newDisks = append(newDisks, disk)
-	}
-
-	// Sort by node and dev path for consistent ordering
-	sort.Slice(newDisks, func(i, j int) bool {
-		if newDisks[i].Node != newDisks[j].Node {
-			return newDisks[i].Node < newDisks[j].Node
-		}
-		return newDisks[i].DevPath < newDisks[j].DevPath
-	})
-
-	s.PhysicalDisks = newDisks
+	s.PhysicalDisks = updateSliceByInstance(
+		s.PhysicalDisks, disks, instanceName,
+		func(d PhysicalDisk) string { return d.ID },
+		func(d PhysicalDisk) string { return d.Instance },
+		clonePhysicalDisk,
+		func(items []PhysicalDisk, i, j int) bool {
+			if items[i].Node != items[j].Node {
+				return items[i].Node < items[j].Node
+			}
+			return items[i].DevPath < items[j].DevPath
+		},
+	)
 	s.LastUpdate = time.Now()
 }
 
