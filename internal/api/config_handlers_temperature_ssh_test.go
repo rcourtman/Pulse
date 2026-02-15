@@ -64,7 +64,7 @@ func TestHandleVerifyTemperatureSSH(t *testing.T) {
 
 	t.Run("connection_failure", func(t *testing.T) {
 		// Ensure .ssh dir exists so key generation works (it might create it, but safe to ensure)
-		os.MkdirAll(tempDir+"/.ssh", 0700)
+		_ = os.MkdirAll(tempDir+"/.ssh", 0700)
 
 		reqBody := map[string]interface{}{
 			"nodes": "invalid-host-name-for-test",
