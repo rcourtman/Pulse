@@ -10,6 +10,11 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+type metadataLoader interface {
+	Load() error
+	save() error
+}
+
 // GuestMetadata holds additional metadata for a guest (VM/container)
 type GuestMetadata struct {
 	ID          string   `json:"id"`          // Guest ID (e.g., "node:vmid" format)
@@ -28,6 +33,18 @@ type GuestMetadataStore struct {
 	metadata map[string]*GuestMetadata // keyed by guest ID
 	dataPath string
 	fs       FileSystem
+}
+
+func (s *GuestMetadataStore) fileName() string {
+	return "guest_metadata.json"
+}
+
+func (s *GuestMetadataStore) maxFileSize() int64 {
+	return maxGuestMetadataFileSizeBytes
+}
+
+func (s *GuestMetadataStore) logContext() string {
+	return "guest"
 }
 
 // NewGuestMetadataStore creates a new metadata store
@@ -54,61 +71,12 @@ func NewGuestMetadataStore(dataPath string, fs FileSystem) *GuestMetadataStore {
 
 // Load reads metadata from disk
 func (s *GuestMetadataStore) Load() error {
-	filePath := filepath.Join(s.dataPath, "guest_metadata.json")
-
-	log.Debug().Str("path", filePath).Msg("Loading guest metadata from disk")
-
-	data, err := readLimitedRegularFileFS(s.fs, filePath, maxGuestMetadataFileSizeBytes)
-	if err != nil {
-		if os.IsNotExist(err) {
-			// File doesn't exist yet, not an error
-			log.Debug().Str("path", filePath).Msg("Guest metadata file does not exist yet")
-			return nil
-		}
-		return fmt.Errorf("failed to read metadata file: %w", err)
-	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if err := json.Unmarshal(data, &s.metadata); err != nil {
-		return fmt.Errorf("failed to unmarshal metadata: %w", err)
-	}
-
-	log.Info().Int("count", len(s.metadata)).Msg("Loaded guest metadata")
-	return nil
+	return loadMetadata(s, s.fileName(), s.maxFileSize(), s.logContext())
 }
 
 // save writes metadata to disk (must be called with lock held)
 func (s *GuestMetadataStore) save() error {
-	filePath := filepath.Join(s.dataPath, "guest_metadata.json")
-
-	log.Debug().Str("path", filePath).Msg("Saving guest metadata to disk")
-
-	data, err := json.Marshal(s.metadata)
-	if err != nil {
-		return fmt.Errorf("failed to marshal metadata: %w", err)
-	}
-
-	// Restrict metadata persistence to owner-only access.
-	if err := s.fs.MkdirAll(s.dataPath, 0o700); err != nil {
-		return fmt.Errorf("failed to create data directory: %w", err)
-	}
-
-	// Write to temp file first for atomic operation
-	tempFile := filePath + ".tmp"
-	if err := s.fs.WriteFile(tempFile, data, 0o600); err != nil {
-		return fmt.Errorf("failed to write metadata file: %w", err)
-	}
-
-	// Rename temp file to actual file (atomic on most systems)
-	if err := s.fs.Rename(tempFile, filePath); err != nil {
-		return fmt.Errorf("failed to rename metadata file: %w", err)
-	}
-
-	log.Debug().Str("path", filePath).Int("entries", len(s.metadata)).Msg("Guest metadata saved successfully")
-
-	return nil
+	return saveMetadata(s, s.fileName(), s.logContext())
 }
 
 // Get retrieves metadata for a guest
