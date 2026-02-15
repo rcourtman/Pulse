@@ -170,10 +170,10 @@ func TestPersistence(t *testing.T) {
 		}
 
 		// Write directly to simulate old installation
-		os.MkdirAll(tmpDirCompat, 0700)
+		_ = os.MkdirAll(tmpDirCompat, 0700)
 		licensePath := filepath.Join(tmpDirCompat, LicenseFileName)
 		encoded := base64.StdEncoding.EncodeToString(encrypted)
-		os.WriteFile(licensePath, []byte(encoded), 0600)
+		_ = os.WriteFile(licensePath, []byte(encoded), 0600)
 
 		// Verify no persistent key file exists (simulating old installation)
 		keyPath := filepath.Join(tmpDirCompat, PersistentKeyFileName)
