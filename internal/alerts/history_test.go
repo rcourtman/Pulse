@@ -818,7 +818,7 @@ func TestLoadHistory_PermissionError(t *testing.T) {
 	if err := os.WriteFile(hm.backupFile, []byte("[]"), 0000); err != nil {
 		t.Fatalf("Failed to create file: %v", err)
 	}
-	defer os.Chmod(hm.backupFile, 0644)
+	defer func() { _ = os.Chmod(hm.backupFile, 0644) }()
 
 	// loadHistory should return nil (continue without history) for permission errors on backup
 	err := hm.loadHistory()
