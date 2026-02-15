@@ -7,19 +7,15 @@ set -euo pipefail
 # OpenCode provides autonomous code editing with built-in verification.
 #
 # Usage:
-#   export OPENROUTER_API_KEY="sk-or-v1-..."
 #   ./scripts/lint-fixer/run.sh
 #
 # Options:
-#   --model MODEL       OpenRouter model (default: minimax/minimax-m2.5)
+#   --model MODEL       OpenCode model (default: opencode/minimax-m2.5-free)
 #   --lint LINTERS      Comma-separated linters to fix (default: errcheck,dupl)
 #   --packages PKGS     Comma-separated packages to target (default: all with warnings)
 #   --max-iters N       Max iterations (default: 100)
 #   --branch NAME       Branch name (default: lint-fixes/TIMESTAMP, use "current" for current branch)
 #   --no-worktree       Work directly on current branch (DANGEROUS — no isolation)
-#
-# Environment:
-#   OPENROUTER_API_KEY  Required. Get one at https://openrouter.ai/keys
 #
 # Overnight execution:
 #   nohup ./scripts/lint-fixer/run.sh > /tmp/lint-fixer.log 2>&1 &
@@ -66,13 +62,6 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Validate environment
-if [ -z "${OPENROUTER_API_KEY:-}" ]; then
-  echo "Error: OPENROUTER_API_KEY not set"
-  echo "  Get one at: https://openrouter.ai/keys"
-  echo "  Then: export OPENROUTER_API_KEY='sk-or-v1-...'"
-  exit 1
-fi
-
 if ! command -v opencode >/dev/null 2>&1; then
   echo "Error: opencode not found"
   echo "  Install with: brew install opencode"
