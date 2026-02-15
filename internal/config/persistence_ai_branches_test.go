@@ -21,14 +21,14 @@ func TestLoadAIConfig_Branches(t *testing.T) {
 	cp.crypto = cm
 
 	// Write too short data for AES-GCM
-	os.WriteFile(aiFile, []byte("too short"), 0600)
+	_ = os.WriteFile(aiFile, []byte("too short"), 0600)
 
 	_, err := cp.LoadAIConfig()
 	assert.Error(t, err)
 
 	// 2. Unmarshal error (valid crypto but invalid JSON)
 	validCipher, _ := cm.Encrypt([]byte("not json"))
-	os.WriteFile(aiFile, validCipher, 0600)
+	_ = os.WriteFile(aiFile, validCipher, 0600)
 
 	_, err = cp.LoadAIConfig()
 	assert.Error(t, err)
@@ -41,7 +41,7 @@ func TestLoadAIConfig_Branches(t *testing.T) {
 	}
 	configData, _ := json.Marshal(validConfig)
 	encryptedConfig, _ := cm.Encrypt(configData)
-	os.WriteFile(aiFile, encryptedConfig, 0600)
+	_ = os.WriteFile(aiFile, encryptedConfig, 0600)
 
 	settings, err := cp.LoadAIConfig()
 	assert.NoError(t, err)
@@ -61,7 +61,7 @@ func TestLoadAIFindings_Branches(t *testing.T) {
 	assert.Empty(t, data.Findings)
 
 	// 2. Unmarshal Error
-	os.WriteFile(findingsFile, []byte("not json"), 0600)
+	_ = os.WriteFile(findingsFile, []byte("not json"), 0600)
 	data, err = cp.LoadAIFindings()
 	assert.NoError(t, err)
 	assert.Empty(t, data.Findings)
@@ -87,7 +87,7 @@ func TestLoadAIUsageHistory_Branches(t *testing.T) {
 	assert.Empty(t, data.Events)
 
 	// 2. Unmarshal Error
-	os.WriteFile(usageFile, []byte("not json"), 0600)
+	_ = os.WriteFile(usageFile, []byte("not json"), 0600)
 	data, err = cp.LoadAIUsageHistory()
 	assert.NoError(t, err)
 	assert.Empty(t, data.Events)
@@ -113,7 +113,7 @@ func TestLoadPatrolRunHistory_Branches(t *testing.T) {
 	assert.Empty(t, data.Runs)
 
 	// 2. Unmarshal Error
-	os.WriteFile(patrolFile, []byte("not json"), 0600)
+	_ = os.WriteFile(patrolFile, []byte("not json"), 0600)
 	data, err = cp.LoadPatrolRunHistory()
 	assert.NoError(t, err)
 	assert.Empty(t, data.Runs)

@@ -768,7 +768,7 @@ func TestServiceGetLicenseStateString(t *testing.T) {
 		os.Setenv("PULSE_LICENSE_DEV_MODE", "true")
 
 		testKey, _ := GenerateLicenseForTesting("test@example.com", TierPro, 30*24*time.Hour)
-		service.Activate(testKey)
+		_, _ = service.Activate(testKey)
 
 		stateStr, hasFeatures := service.GetLicenseStateString()
 		if stateStr != "active" {

@@ -1221,6 +1221,29 @@ func (c *ConfigPersistence) saveNodesConfig(pveInstances []PVEInstance, pbsInsta
 	return nil
 }
 
+// persistEmptyRecoveryConfig writes an empty NodesConfig to the nodes file.
+// Used during recovery scenarios when the existing config is corrupted.
+func (c *ConfigPersistence) persistEmptyRecoveryConfig(config *NodesConfig) {
+	emptyData, marshalErr := json.Marshal(config)
+	if marshalErr != nil {
+		log.Error().Err(marshalErr).Msg("Failed to marshal empty recovery nodes config")
+		return
+	}
+
+	if c.crypto != nil {
+		encryptedData, encryptErr := c.crypto.Encrypt(emptyData)
+		if encryptErr != nil {
+			log.Error().Err(encryptErr).Msg("Failed to encrypt empty recovery nodes config")
+			return
+		}
+		emptyData = encryptedData
+	}
+
+	if writeErr := c.fs.WriteFile(c.nodesFile, emptyData, 0600); writeErr != nil {
+		log.Error().Err(writeErr).Str("file", c.nodesFile).Msg("Failed to persist empty recovery nodes config")
+	}
+}
+
 // LoadNodesConfig loads nodes configuration from file (decrypts if encrypted)
 func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 	c.mu.RLock()
@@ -1243,27 +1266,6 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 			}, nil
 		}
 		return nil, fmt.Errorf("read nodes config: %w", err)
-	}
-
-	persistEmptyRecoveryConfig := func(config *NodesConfig) {
-		emptyData, marshalErr := json.Marshal(config)
-		if marshalErr != nil {
-			log.Error().Err(marshalErr).Msg("Failed to marshal empty recovery nodes config")
-			return
-		}
-
-		if c.crypto != nil {
-			encryptedData, encryptErr := c.crypto.Encrypt(emptyData)
-			if encryptErr != nil {
-				log.Error().Err(encryptErr).Msg("Failed to encrypt empty recovery nodes config")
-				return
-			}
-			emptyData = encryptedData
-		}
-
-		if writeErr := c.fs.WriteFile(c.nodesFile, emptyData, 0600); writeErr != nil {
-			log.Error().Err(writeErr).Str("file", c.nodesFile).Msg("Failed to persist empty recovery nodes config")
-		}
 	}
 
 	// Decrypt if crypto manager is available
@@ -1315,7 +1317,7 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 
 					// Create empty but valid config so system can start
 					emptyConfig := NodesConfig{PVEInstances: []PVEInstance{}, PBSInstances: []PBSInstance{}, PMGInstances: []PMGInstance{}}
-					persistEmptyRecoveryConfig(&emptyConfig)
+					c.persistEmptyRecoveryConfig(&emptyConfig)
 
 					return &emptyConfig, nil
 				}
@@ -1337,7 +1339,7 @@ func (c *ConfigPersistence) LoadNodesConfig() (*NodesConfig, error) {
 
 				// Create empty but valid config so system can start
 				emptyConfig := NodesConfig{PVEInstances: []PVEInstance{}, PBSInstances: []PBSInstance{}, PMGInstances: []PMGInstance{}}
-				persistEmptyRecoveryConfig(&emptyConfig)
+				c.persistEmptyRecoveryConfig(&emptyConfig)
 
 				return &emptyConfig, nil
 			}

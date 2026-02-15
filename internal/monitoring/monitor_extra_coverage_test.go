@@ -465,8 +465,8 @@ func TestMonitor_GuestMetadata_Extra(t *testing.T) {
 	store := config.NewGuestMetadataStore(tempDir, nil)
 
 	// Use store.Set directly to avoid race of async persistGuestIdentity
-	store.Set("pve1:node1:100", &config.GuestMetadata{LastKnownName: "vm100", LastKnownType: "qemu"})
-	store.Set("pve1:node1:101", &config.GuestMetadata{LastKnownName: "ct101", LastKnownType: "oci"})
+	_ = store.Set("pve1:node1:100", &config.GuestMetadata{LastKnownName: "vm100", LastKnownType: "qemu"})
+	_ = store.Set("pve1:node1:101", &config.GuestMetadata{LastKnownName: "ct101", LastKnownType: "oci"})
 
 	// Test persistGuestIdentity separately for coverage
 	persistGuestIdentity(store, "pve1:node1:101", "ct101", "lxc") // Should not downgrade oci

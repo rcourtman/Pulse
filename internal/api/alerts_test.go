@@ -135,7 +135,7 @@ func TestGetAlertConfig(t *testing.T) {
 
 	assert.Equal(t, 200, w.Code)
 	var resp alerts.AlertConfig
-	json.NewDecoder(w.Body).Decode(&resp)
+	_ = json.NewDecoder(w.Body).Decode(&resp)
 	assert.True(t, resp.Enabled)
 }
 
@@ -180,7 +180,7 @@ func TestGetActiveAlerts(t *testing.T) {
 
 	assert.Equal(t, 200, w.Code)
 	var resp []alerts.Alert
-	json.NewDecoder(w.Body).Decode(&resp)
+	_ = json.NewDecoder(w.Body).Decode(&resp)
 	assert.Len(t, resp, 1)
 	assert.Equal(t, "a1", resp[0].ID)
 }
@@ -268,7 +268,7 @@ func TestGetAlertHistory(t *testing.T) {
 
 	assert.Equal(t, 200, w.Code)
 	var resp []alerts.Alert
-	json.NewDecoder(w.Body).Decode(&resp)
+	_ = json.NewDecoder(w.Body).Decode(&resp)
 	assert.Len(t, resp, 1)
 }
 
@@ -389,7 +389,7 @@ func TestBulkAcknowledgeAlerts(t *testing.T) {
 	var resp struct {
 		Results []map[string]interface{} `json:"results"`
 	}
-	json.NewDecoder(w.Body).Decode(&resp)
+	_ = json.NewDecoder(w.Body).Decode(&resp)
 	assert.Len(t, resp.Results, 2)
 }
 

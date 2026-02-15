@@ -627,9 +627,9 @@ func TestCountLegacySSHKeys(t *testing.T) {
 			name: "directory with no matching files returns 0",
 			setup: func(t *testing.T) string {
 				dir := t.TempDir()
-				os.WriteFile(dir+"/known_hosts", []byte("test"), 0600)
-				os.WriteFile(dir+"/authorized_keys", []byte("test"), 0600)
-				os.WriteFile(dir+"/config", []byte("test"), 0600)
+				_ = os.WriteFile(dir+"/known_hosts", []byte("test"), 0600)
+				_ = os.WriteFile(dir+"/authorized_keys", []byte("test"), 0600)
+				_ = os.WriteFile(dir+"/config", []byte("test"), 0600)
 				return dir
 			},
 			wantCount: 0,
@@ -639,7 +639,7 @@ func TestCountLegacySSHKeys(t *testing.T) {
 			name: "directory with id_rsa counts as 1",
 			setup: func(t *testing.T) string {
 				dir := t.TempDir()
-				os.WriteFile(dir+"/id_rsa", []byte("test"), 0600)
+				_ = os.WriteFile(dir+"/id_rsa", []byte("test"), 0600)
 				return dir
 			},
 			wantCount: 1,
@@ -649,8 +649,8 @@ func TestCountLegacySSHKeys(t *testing.T) {
 			name: "directory with id_rsa and id_rsa.pub counts as 2",
 			setup: func(t *testing.T) string {
 				dir := t.TempDir()
-				os.WriteFile(dir+"/id_rsa", []byte("test"), 0600)
-				os.WriteFile(dir+"/id_rsa.pub", []byte("test"), 0600)
+				_ = os.WriteFile(dir+"/id_rsa", []byte("test"), 0600)
+				_ = os.WriteFile(dir+"/id_rsa.pub", []byte("test"), 0600)
 				return dir
 			},
 			wantCount: 2,
@@ -660,11 +660,11 @@ func TestCountLegacySSHKeys(t *testing.T) {
 			name: "directory with multiple key types",
 			setup: func(t *testing.T) string {
 				dir := t.TempDir()
-				os.WriteFile(dir+"/id_rsa", []byte("test"), 0600)
-				os.WriteFile(dir+"/id_rsa.pub", []byte("test"), 0600)
-				os.WriteFile(dir+"/id_ed25519", []byte("test"), 0600)
-				os.WriteFile(dir+"/id_ed25519.pub", []byte("test"), 0600)
-				os.WriteFile(dir+"/id_ecdsa", []byte("test"), 0600)
+				_ = os.WriteFile(dir+"/id_rsa", []byte("test"), 0600)
+				_ = os.WriteFile(dir+"/id_rsa.pub", []byte("test"), 0600)
+				_ = os.WriteFile(dir+"/id_ed25519", []byte("test"), 0600)
+				_ = os.WriteFile(dir+"/id_ed25519.pub", []byte("test"), 0600)
+				_ = os.WriteFile(dir+"/id_ecdsa", []byte("test"), 0600)
 				return dir
 			},
 			wantCount: 5,
@@ -674,8 +674,8 @@ func TestCountLegacySSHKeys(t *testing.T) {
 			name: "subdirectories named id_* are not counted",
 			setup: func(t *testing.T) string {
 				dir := t.TempDir()
-				os.Mkdir(dir+"/id_subdirectory", 0755)
-				os.WriteFile(dir+"/id_rsa", []byte("test"), 0600)
+				_ = os.Mkdir(dir+"/id_subdirectory", 0755)
+				_ = os.WriteFile(dir+"/id_rsa", []byte("test"), 0600)
 				return dir
 			},
 			wantCount: 1,
@@ -685,11 +685,11 @@ func TestCountLegacySSHKeys(t *testing.T) {
 			name: "mixed files and directories",
 			setup: func(t *testing.T) string {
 				dir := t.TempDir()
-				os.Mkdir(dir+"/id_subdir", 0755)
-				os.WriteFile(dir+"/id_rsa", []byte("test"), 0600)
-				os.WriteFile(dir+"/id_ed25519", []byte("test"), 0600)
-				os.WriteFile(dir+"/known_hosts", []byte("test"), 0600)
-				os.WriteFile(dir+"/authorized_keys", []byte("test"), 0600)
+				_ = os.Mkdir(dir+"/id_subdir", 0755)
+				_ = os.WriteFile(dir+"/id_rsa", []byte("test"), 0600)
+				_ = os.WriteFile(dir+"/id_ed25519", []byte("test"), 0600)
+				_ = os.WriteFile(dir+"/known_hosts", []byte("test"), 0600)
+				_ = os.WriteFile(dir+"/authorized_keys", []byte("test"), 0600)
 				return dir
 			},
 			wantCount: 2,

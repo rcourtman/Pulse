@@ -33,7 +33,7 @@ func TestMigrateWebhooksIfNeeded_Scenarios(t *testing.T) {
 	// 1. Encrypted file exists
 	t.Run("EncryptedExists", func(t *testing.T) {
 		cp.webhookFile = filepath.Join(tempDir, "webhooks.enc")
-		os.WriteFile(cp.webhookFile, []byte("exists"), 0600)
+		_ = os.WriteFile(cp.webhookFile, []byte("exists"), 0600)
 		err := cp.MigrateWebhooksIfNeeded()
 		assert.NoError(t, err)
 	})
@@ -48,7 +48,7 @@ func TestMigrateWebhooksIfNeeded_Scenarios(t *testing.T) {
 	// 3. Legacy file Read error
 	t.Run("LegacyReadError", func(t *testing.T) {
 		legacyFile := filepath.Join(tempDir, "webhooks.json")
-		os.WriteFile(legacyFile, []byte("[]"), 0600)
+		_ = os.WriteFile(legacyFile, []byte("[]"), 0600)
 
 		mfs.readError = errors.New("read error")
 		err := cp.MigrateWebhooksIfNeeded()
@@ -60,7 +60,7 @@ func TestMigrateWebhooksIfNeeded_Scenarios(t *testing.T) {
 	// 4. Legacy file Unmarshal error
 	t.Run("LegacyUnmarshalError", func(t *testing.T) {
 		legacyFile := filepath.Join(tempDir, "webhooks.json")
-		os.WriteFile(legacyFile, []byte("not-json"), 0600)
+		_ = os.WriteFile(legacyFile, []byte("not-json"), 0600)
 
 		err := cp.MigrateWebhooksIfNeeded()
 		assert.Error(t, err)
@@ -70,7 +70,7 @@ func TestMigrateWebhooksIfNeeded_Scenarios(t *testing.T) {
 	// 5. Success with Rename error for backup
 	t.Run("RenameBackupError", func(t *testing.T) {
 		legacyFile := filepath.Join(tempDir, "webhooks.json")
-		os.WriteFile(legacyFile, []byte("[]"), 0600)
+		_ = os.WriteFile(legacyFile, []byte("[]"), 0600)
 
 		// Use specific rename mock to let SaveWebhooks succeed but fail the backup rename
 		mfsSpec := &mockFSRenameSpecific{FileSystem: defaultFileSystem{}, failPattern: ".json.backup"}

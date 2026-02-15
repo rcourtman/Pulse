@@ -48,7 +48,7 @@ func TestPersistGuestIdentity_Concurrent(t *testing.T) {
 		LastKnownName: "VM 100",
 		LastKnownType: "oci",
 	}
-	store.Set(guestKey, ociMeta)
+	_ = store.Set(guestKey, ociMeta)
 
 	// Try to update to "lxc"
 	persistGuestIdentity(store, guestKey, "VM 100", "lxc")
@@ -74,10 +74,10 @@ func TestEnrichWithPersistedMetadata_Detail(t *testing.T) {
 	store := config.NewGuestMetadataStore(tmpDir, nil)
 
 	// 1. Add some metadata
-	store.Set("pve1:node1:100", &config.GuestMetadata{ID: "pve1:node1:100", LastKnownName: "PersistedVM", LastKnownType: "qemu"})
-	store.Set("pve1:node1:101", &config.GuestMetadata{ID: "pve1:node1:101", LastKnownName: "LiveVM", LastKnownType: "qemu"})
-	store.Set("invalid:key", &config.GuestMetadata{ID: "invalid:key", LastKnownName: "BadKey", LastKnownType: "qemu"})          // coverage for bad key
-	store.Set("pve1:node1:badid", &config.GuestMetadata{ID: "pve1:node1:badid", LastKnownName: "BadID", LastKnownType: "qemu"}) // coverage for atoi error
+	_ = store.Set("pve1:node1:100", &config.GuestMetadata{ID: "pve1:node1:100", LastKnownName: "PersistedVM", LastKnownType: "qemu"})
+	_ = store.Set("pve1:node1:101", &config.GuestMetadata{ID: "pve1:node1:101", LastKnownName: "LiveVM", LastKnownType: "qemu"})
+	_ = store.Set("invalid:key", &config.GuestMetadata{ID: "invalid:key", LastKnownName: "BadKey", LastKnownType: "qemu"})          // coverage for bad key
+	_ = store.Set("pve1:node1:badid", &config.GuestMetadata{ID: "pve1:node1:badid", LastKnownName: "BadID", LastKnownType: "qemu"}) // coverage for atoi error
 
 	// 2. Setup existing lookup
 	lookup := make(map[string][]alerts.GuestLookup)

@@ -82,7 +82,7 @@ func TestConfigProfileHandlers(t *testing.T) {
 		handler.ServeHTTP(rec, req)
 
 		var profiles []models.AgentProfile
-		json.NewDecoder(rec.Body).Decode(&profiles)
+		_ = json.NewDecoder(rec.Body).Decode(&profiles)
 		if len(profiles) != 1 {
 			t.Errorf("expected 1 profile, got %d", len(profiles))
 		}
@@ -109,7 +109,7 @@ func TestConfigProfileHandlers(t *testing.T) {
 		}
 
 		var updated models.AgentProfile
-		json.NewDecoder(rec.Body).Decode(&updated)
+		_ = json.NewDecoder(rec.Body).Decode(&updated)
 		if updated.Name != "Updated Profile" {
 			t.Errorf("expected updated name, got %q", updated.Name)
 		}
@@ -122,7 +122,7 @@ func TestConfigProfileHandlers(t *testing.T) {
 		handler.ServeHTTP(rec, req)
 
 		var assignments []models.AgentProfileAssignment
-		json.NewDecoder(rec.Body).Decode(&assignments)
+		_ = json.NewDecoder(rec.Body).Decode(&assignments)
 		if len(assignments) != 0 {
 			t.Errorf("expected 0 assignments, got %d", len(assignments))
 		}
@@ -144,7 +144,7 @@ func TestConfigProfileHandlers(t *testing.T) {
 		}
 
 		var created models.AgentProfileAssignment
-		json.NewDecoder(rec.Body).Decode(&created)
+		_ = json.NewDecoder(rec.Body).Decode(&created)
 		if created.AgentID != "test-agent" || created.ProfileID != profileID {
 			t.Errorf("assignment mismatch: %+v", created)
 		}
@@ -219,7 +219,7 @@ func TestConfigProfileHandlers(t *testing.T) {
 		rec = httptest.NewRecorder()
 		handler.ServeHTTP(rec, req)
 		var profiles []models.AgentProfile
-		json.NewDecoder(rec.Body).Decode(&profiles)
+		_ = json.NewDecoder(rec.Body).Decode(&profiles)
 		if len(profiles) != 0 {
 			t.Errorf("expected 0 profiles after delete, got %d", len(profiles))
 		}

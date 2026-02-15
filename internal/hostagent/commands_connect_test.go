@@ -31,7 +31,7 @@ func TestCommandClient_connectAndHandle_ExecutesCommandAndReturnsResult(t *testi
 		}
 		defer conn.Close()
 
-		conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+		_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 
 		var regMsg wsMessage
 		if err := conn.ReadJSON(&regMsg); err != nil {
@@ -43,7 +43,7 @@ func TestCommandClient_connectAndHandle_ExecutesCommandAndReturnsResult(t *testi
 			return
 		}
 
-		conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
+		_ = conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
 		registeredBytes, _ := json.Marshal(registeredPayload{Success: true, Message: "Registered"})
 		if err := conn.WriteJSON(wsMessage{Type: msgTypeRegistered, Timestamp: time.Now(), Payload: registeredBytes}); err != nil {
 			t.Errorf("write registered: %v", err)
@@ -61,7 +61,7 @@ func TestCommandClient_connectAndHandle_ExecutesCommandAndReturnsResult(t *testi
 			return
 		}
 
-		conn.SetReadDeadline(time.Now().Add(10 * time.Second))
+		_ = conn.SetReadDeadline(time.Now().Add(10 * time.Second))
 		var resultMsg wsMessage
 		if err := conn.ReadJSON(&resultMsg); err != nil {
 			t.Errorf("read command_result: %v", err)
@@ -144,7 +144,7 @@ func TestCommandClient_connectAndHandle_StopsOnContextCancel(t *testing.T) {
 		}
 		defer conn.Close()
 
-		conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+		_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 		var regMsg wsMessage
 		if err := conn.ReadJSON(&regMsg); err != nil {
 			t.Errorf("read registration: %v", err)
@@ -152,7 +152,7 @@ func TestCommandClient_connectAndHandle_StopsOnContextCancel(t *testing.T) {
 		}
 
 		registeredBytes, _ := json.Marshal(registeredPayload{Success: true, Message: "Registered"})
-		conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
+		_ = conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
 		if err := conn.WriteJSON(wsMessage{Type: msgTypeRegistered, Timestamp: time.Now(), Payload: registeredBytes}); err != nil {
 			t.Errorf("write registered: %v", err)
 			return

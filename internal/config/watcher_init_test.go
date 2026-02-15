@@ -72,7 +72,7 @@ func TestNewConfigWatcher_Scenarios(t *testing.T) {
 func TestConfigWatcher_Start_Options(t *testing.T) {
 	tempDir := t.TempDir()
 	envPath := filepath.Join(tempDir, ".env")
-	os.WriteFile(envPath, []byte(""), 0644)
+	_ = os.WriteFile(envPath, []byte(""), 0644)
 
 	cfg := &Config{ConfigPath: tempDir}
 	t.Setenv("PULSE_DATA_DIR", tempDir)
@@ -83,7 +83,7 @@ func TestConfigWatcher_Start_Options(t *testing.T) {
 
 	cw.envPath = envPath
 	cw.mockEnvPath = filepath.Join(tempDir, "mock.env")
-	os.WriteFile(cw.mockEnvPath, []byte(""), 0644)
+	_ = os.WriteFile(cw.mockEnvPath, []byte(""), 0644)
 
 	err = cw.Start()
 	assert.NoError(t, err)
@@ -92,7 +92,7 @@ func TestConfigWatcher_Start_Options(t *testing.T) {
 func TestConfigWatcher_PollForChanges_Coverage(t *testing.T) {
 	tempDir := t.TempDir()
 	envPath := filepath.Join(tempDir, ".env")
-	os.WriteFile(envPath, []byte("V1"), 0644)
+	_ = os.WriteFile(envPath, []byte("V1"), 0644)
 
 	cw := &ConfigWatcher{
 		config:       &Config{},
@@ -108,7 +108,7 @@ func TestConfigWatcher_PollForChanges_Coverage(t *testing.T) {
 	time.Sleep(20 * time.Millisecond)
 
 	// change file
-	os.WriteFile(envPath, []byte("V2"), 0644)
+	_ = os.WriteFile(envPath, []byte("V2"), 0644)
 
 	time.Sleep(50 * time.Millisecond)
 	close(cw.stopChan)

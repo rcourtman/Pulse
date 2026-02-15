@@ -25,7 +25,7 @@ func TestChatServiceAdapter_CreateSession(t *testing.T) {
 	}
 	realSvc := chat.NewService(cfg)
 	require.NoError(t, realSvc.Start(context.Background()))
-	defer realSvc.Stop(context.Background())
+	defer func() { _ = realSvc.Stop(context.Background()) }()
 
 	// Create adapter
 	adapter := &chatServiceAdapter{svc: realSvc}
@@ -46,7 +46,7 @@ func TestChatServiceAdapter_GetMessages(t *testing.T) {
 	}
 	realSvc := chat.NewService(cfg)
 	require.NoError(t, realSvc.Start(context.Background()))
-	defer realSvc.Stop(context.Background())
+	defer func() { _ = realSvc.Stop(context.Background()) }()
 
 	// Seed a session and message directly into the real service's store?
 	// Since we can't easily inject into the private store, we'll use the public API of the real service

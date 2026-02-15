@@ -893,6 +893,48 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, state models.
 	log.Debug().Msg("mock seeding: completed")
 }
 
+// recordTrueNASFixturesMetrics records disk usage metrics for TrueNAS pools and datasets.
+func recordTrueNASFixturesMetrics(mh *MetricsHistory, ms *metrics.Store, ts time.Time) {
+	fixtures := truenas.DefaultFixtures()
+
+	totalCap, totalUsed := int64(0), int64(0)
+	for _, pool := range fixtures.Pools {
+		totalCap += pool.TotalBytes
+		totalUsed += pool.UsedBytes
+	}
+	if totalCap > 0 {
+		systemKey := "system:" + fixtures.System.Hostname
+		systemDisk := float64(totalUsed) / float64(totalCap) * 100
+		mh.AddGuestMetric(systemKey, "disk", systemDisk, ts)
+		if ms != nil {
+			ms.Write("truenas", fixtures.System.Hostname, "disk", systemDisk, ts)
+		}
+	}
+
+	for _, pool := range fixtures.Pools {
+		if pool.TotalBytes > 0 {
+			poolKey := "pool:" + pool.Name
+			diskPct := float64(pool.UsedBytes) / float64(pool.TotalBytes) * 100
+			mh.AddGuestMetric(poolKey, "disk", diskPct, ts)
+			if ms != nil {
+				ms.Write("pool", pool.Name, "disk", diskPct, ts)
+			}
+		}
+	}
+
+	for _, dataset := range fixtures.Datasets {
+		totalBytes := dataset.UsedBytes + dataset.AvailBytes
+		if totalBytes > 0 {
+			dsKey := "dataset:" + dataset.Name
+			diskPct := float64(dataset.UsedBytes) / float64(totalBytes) * 100
+			mh.AddGuestMetric(dsKey, "disk", diskPct, ts)
+			if ms != nil {
+				ms.Write("dataset", dataset.Name, "disk", diskPct, ts)
+			}
+		}
+	}
+}
+
 func recordMockStateToMetricsHistory(mh *MetricsHistory, ms *metrics.Store, state models.StateSnapshot, ts time.Time) {
 	if mh == nil {
 		return
@@ -1137,44 +1179,7 @@ func recordMockStateToMetricsHistory(mh *MetricsHistory, ms *metrics.Store, stat
 	}
 
 	// Record TrueNAS pool/dataset disk-usage live ticks
-	fixtures := truenas.DefaultFixtures()
-
-	totalCap, totalUsed := int64(0), int64(0)
-	for _, pool := range fixtures.Pools {
-		totalCap += pool.TotalBytes
-		totalUsed += pool.UsedBytes
-	}
-	if totalCap > 0 {
-		systemKey := "system:" + fixtures.System.Hostname
-		systemDisk := float64(totalUsed) / float64(totalCap) * 100
-		mh.AddGuestMetric(systemKey, "disk", systemDisk, ts)
-		if ms != nil {
-			ms.Write("truenas", fixtures.System.Hostname, "disk", systemDisk, ts)
-		}
-	}
-
-	for _, pool := range fixtures.Pools {
-		if pool.TotalBytes > 0 {
-			poolKey := "pool:" + pool.Name
-			diskPct := float64(pool.UsedBytes) / float64(pool.TotalBytes) * 100
-			mh.AddGuestMetric(poolKey, "disk", diskPct, ts)
-			if ms != nil {
-				ms.Write("pool", pool.Name, "disk", diskPct, ts)
-			}
-		}
-	}
-
-	for _, dataset := range fixtures.Datasets {
-		totalBytes := dataset.UsedBytes + dataset.AvailBytes
-		if totalBytes > 0 {
-			dsKey := "dataset:" + dataset.Name
-			diskPct := float64(dataset.UsedBytes) / float64(totalBytes) * 100
-			mh.AddGuestMetric(dsKey, "disk", diskPct, ts)
-			if ms != nil {
-				ms.Write("dataset", dataset.Name, "disk", diskPct, ts)
-			}
-		}
-	}
+	recordTrueNASFixturesMetrics(mh, ms, ts)
 }
 
 func diskMetricsResourceID(disk models.PhysicalDisk) string {

@@ -3193,7 +3193,7 @@ func TestSendResolvedAlert(t *testing.T) {
 	}))
 	defer server.Close()
 
-	nm.UpdateAllowedPrivateCIDRs("127.0.0.1")
+	_ = nm.UpdateAllowedPrivateCIDRs("127.0.0.1")
 	nm.AddWebhook(WebhookConfig{
 		ID:      "test-webhook",
 		Name:    "Test",
@@ -3235,7 +3235,7 @@ func TestSendResolvedAlert(t *testing.T) {
 
 func TestSendResolvedWebhook(t *testing.T) {
 	nm := NewNotificationManager("https://pulse.local")
-	nm.UpdateAllowedPrivateCIDRs("127.0.0.1")
+	_ = nm.UpdateAllowedPrivateCIDRs("127.0.0.1")
 
 	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -3274,7 +3274,7 @@ func TestGetQueueStatsNotifications(t *testing.T) {
 
 func TestSendTestWebhook(t *testing.T) {
 	nm := NewNotificationManager("https://pulse.local")
-	nm.UpdateAllowedPrivateCIDRs("127.0.0.1")
+	_ = nm.UpdateAllowedPrivateCIDRs("127.0.0.1")
 
 	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -3393,9 +3393,7 @@ func TestSendGroupedAlertsQueueEnqueueFailureDoesNotDeadlock(t *testing.T) {
 	if queue == nil {
 		t.Skip("queue unavailable in this environment")
 	}
-	if err := queue.Stop(); err != nil {
-		t.Fatalf("failed to stop queue before enqueue fallback test: %v", err)
-	}
+	_ = queue.Stop()
 
 	alert := &alerts.Alert{
 		ID:           "deadlock-check",

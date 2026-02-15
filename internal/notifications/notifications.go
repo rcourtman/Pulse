@@ -2064,7 +2064,14 @@ func (n *NotificationManager) sendResolvedWebhookNtfy(webhook WebhookConfig, ale
 	// Read response with size limit
 	limitedReader := io.LimitReader(resp.Body, WebhookMaxResponseSize)
 	var respBody bytes.Buffer
-	respBody.ReadFrom(limitedReader)
+	if _, err := respBody.ReadFrom(limitedReader); err != nil {
+		log.Warn().
+			Err(err).
+			Str("webhook", webhook.Name).
+			Str("service", "ntfy").
+			Msg("failed to read resolved ntfy webhook response body")
+		return fmt.Errorf("failed to read ntfy webhook response: %w", err)
+	}
 
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		log.Info().
@@ -2420,7 +2427,13 @@ func (n *NotificationManager) sendWebhook(webhook WebhookConfig, alert *alerts.A
 	}
 
 	// Send using common request logic
-	n.sendWebhookRequest(webhook, jsonData, fmt.Sprintf("alert-%s", alert.ID))
+	if err := n.sendWebhookRequest(webhook, jsonData, fmt.Sprintf("alert-%s", alert.ID)); err != nil {
+		log.Error().
+			Err(err).
+			Str("webhook", webhook.Name).
+			Str("alertID", alert.ID).
+			Msg("failed to send webhook notification")
+	}
 }
 
 func convertWebhookCustomFields(fields map[string]string) map[string]interface{} {

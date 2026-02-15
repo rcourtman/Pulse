@@ -98,7 +98,7 @@ func TestLoadOrCreateBootstrapToken_WriteFileFailure(t *testing.T) {
 	}
 	// Restore permissions for cleanup
 	t.Cleanup(func() {
-		os.Chmod(readOnlyDir, 0o700)
+		_ = os.Chmod(readOnlyDir, 0o700)
 	})
 
 	token, created, fullPath, err := loadOrCreateBootstrapToken(readOnlyDir)
@@ -188,7 +188,7 @@ func TestLoadOrCreateBootstrapToken_ReadFileFailure(t *testing.T) {
 		t.Fatalf("failed to create unreadable token file: %v", err)
 	}
 	t.Cleanup(func() {
-		os.Chmod(tokenPath, 0o600)
+		_ = os.Chmod(tokenPath, 0o600)
 	})
 
 	token, created, fullPath, err := loadOrCreateBootstrapToken(tmpDir)

@@ -23,7 +23,7 @@ func TestLoadNodesConfig_Recovery_RealCrypto(t *testing.T) {
 	cp.crypto = cm
 
 	// 1. Decryption failure (invalid data) with NO backup
-	os.WriteFile(nodesFile, []byte("too short"), 0600)
+	_ = os.WriteFile(nodesFile, []byte("too short"), 0600)
 
 	nodes, err := cp.LoadNodesConfig()
 	assert.NoError(t, err) // Returns empty config on critical failure
@@ -33,8 +33,8 @@ func TestLoadNodesConfig_Recovery_RealCrypto(t *testing.T) {
 	assert.NotEmpty(t, matches)
 
 	// 2. Decryption failure (invalid data) with corrupted backup
-	os.WriteFile(nodesFile, []byte("too short data"), 0600)
-	os.WriteFile(backupFile, []byte("too short backup"), 0600)
+	_ = os.WriteFile(nodesFile, []byte("too short data"), 0600)
+	_ = os.WriteFile(backupFile, []byte("too short backup"), 0600)
 
 	nodes, err = cp.LoadNodesConfig()
 	assert.NoError(t, err)
@@ -45,8 +45,8 @@ func TestLoadNodesConfig_Recovery_RealCrypto(t *testing.T) {
 	validData, _ := json.Marshal(validConfig)
 	encryptedValid, _ := cm.Encrypt(validData)
 
-	os.WriteFile(nodesFile, []byte("too short again"), 0600)
-	os.WriteFile(backupFile, encryptedValid, 0600)
+	_ = os.WriteFile(nodesFile, []byte("too short again"), 0600)
+	_ = os.WriteFile(backupFile, encryptedValid, 0600)
 
 	nodes, err = cp.LoadNodesConfig()
 	assert.NoError(t, err)

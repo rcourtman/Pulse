@@ -85,7 +85,9 @@ func (h *LogHandlers) HandleDownloadBundle(w http.ResponseWriter, r *http.Reques
 		if f, err := os.Open(h.config.LogFile); err == nil {
 			defer f.Close()
 			if wr, err := zipWriter.Create("pulse.log"); err == nil {
-				io.Copy(wr, f)
+				if _, err := io.Copy(wr, f); err != nil {
+					log.Warn().Err(err).Msg("failed to copy log file to zip")
+				}
 				addedLogFile = true
 			}
 		}
