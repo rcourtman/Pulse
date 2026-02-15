@@ -3,15 +3,15 @@ set -euo pipefail
 
 # ── Overnight Lint Fixer — errcheck + dupl ─────────────────────────────
 #
-# Fixes golangci-lint errcheck and dupl warnings using OpenCode + MiniMax M2.5.
-# OpenCode provides autonomous code editing with built-in verification.
+# Fixes golangci-lint errcheck and dupl warnings using aider + MiniMax M2.5.
+# Uses OpenRouter for API access with configurable model.
 #
 # Usage:
 #   export OPENROUTER_API_KEY="sk-or-v1-..."
 #   ./scripts/lint-fixer/run.sh
 #
 # Options:
-#   --model MODEL       OpenCode model (default: opencode/minimax-m2.5-free)
+#   --model MODEL       OpenRouter model (default: minimax/minimax-m2.5)
 #   --lint LINTERS      Comma-separated linters to fix (default: errcheck,dupl)
 #   --packages PKGS     Comma-separated packages to target (default: all with warnings)
 #   --max-iters N       Max iterations (default: 100)
@@ -38,7 +38,7 @@ WORKTREE_BASE="$REPO_DIR/../pulse-lint-fixes"
 trap '' HUP
 
 # Defaults
-MODEL="opencode/minimax-m2.5-free"
+MODEL="minimax/minimax-m2.5"
 LINTERS="errcheck,dupl"
 PACKAGES=""
 MAX_ITERS=100
@@ -73,9 +73,9 @@ if [ -z "${OPENROUTER_API_KEY:-}" ]; then
   exit 1
 fi
 
-if ! command -v opencode >/dev/null 2>&1; then
-  echo "Error: opencode not found"
-  echo "  Install with: brew install opencode"
+if ! command -v aider >/dev/null 2>&1; then
+  echo "Error: aider not found"
+  echo "  Install with: pip install aider-chat"
   exit 1
 fi
 
@@ -430,15 +430,13 @@ Keep changes minimal and focused. Do not change function signatures or add unnec
 
       echo "    Calling AI model..."
 
-      # Run OpenCode with MiniMax M2.5
-      # OpenCode automatically applies changes and verifies builds
-      if run_with_timeout "$AIDER_TIMEOUT_SECS" opencode run \
-        --model "$MODEL" \
-        "$PROMPT
-
-File to fix: $file
-
-After making changes, run 'go test ./internal/$pkg/...' to verify the code compiles and tests pass." >> "$LOG_FILE" 2>&1; then
+      # Run aider with MiniMax M2.5 via OpenRouter
+      if run_with_timeout "$AIDER_TIMEOUT_SECS" aider \
+        --model "openrouter/$MODEL" \
+        --message "$PROMPT" \
+        --yes-always \
+        --no-auto-commits \
+        "$file" >> "$LOG_FILE" 2>&1; then
         echo "    ✓ AI completed successfully"
       else
         AI_EXIT_CODE=$?
