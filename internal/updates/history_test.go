@@ -261,7 +261,7 @@ func TestUpdateHistory_UpdateEntry(t *testing.T) {
 		}
 		eventID, _ := h.CreateEntry(ctx, entry)
 
-		h.UpdateEntry(ctx, eventID, func(e *UpdateHistoryEntry) error {
+		_ = h.UpdateEntry(ctx, eventID, func(e *UpdateHistoryEntry) error {
 			e.Status = StatusFailed
 			e.Error = &UpdateError{Message: "test error"}
 			return nil
@@ -296,7 +296,7 @@ func TestUpdateHistory_GetEntry(t *testing.T) {
 			VersionTo:   "2.0.0",
 			Status:      StatusSuccess,
 		}
-		h.CreateEntry(ctx, entry)
+		_, _ = h.CreateEntry(ctx, entry)
 
 		retrieved, err := h.GetEntry("get-test")
 		if err != nil {
@@ -324,7 +324,7 @@ func TestUpdateHistory_GetEntry(t *testing.T) {
 		tmpDir := t.TempDir()
 		h, _ := NewUpdateHistory(tmpDir)
 
-		h.CreateEntry(ctx, UpdateHistoryEntry{
+		_, _ = h.CreateEntry(ctx, UpdateHistoryEntry{
 			EventID: "immutable",
 			Status:  StatusSuccess,
 			Error:   &UpdateError{Message: "original"},
@@ -364,7 +364,7 @@ func TestUpdateHistory_ListEntries(t *testing.T) {
 				Action:  "update",
 				Status:  StatusSuccess,
 			}
-			h.CreateEntry(ctx, entry)
+			_, _ = h.CreateEntry(ctx, entry)
 		}
 
 		entries := h.ListEntries(HistoryFilter{})
@@ -386,9 +386,9 @@ func TestUpdateHistory_ListEntries(t *testing.T) {
 		h, _ := NewUpdateHistory(tmpDir)
 
 		// Create entries with different statuses
-		h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "e1", Status: StatusSuccess})
-		h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "e2", Status: StatusFailed})
-		h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "e3", Status: StatusSuccess})
+		_, _ = h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "e1", Status: StatusSuccess})
+		_, _ = h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "e2", Status: StatusFailed})
+		_, _ = h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "e3", Status: StatusSuccess})
 
 		entries := h.ListEntries(HistoryFilter{Status: StatusSuccess})
 		if len(entries) != 2 {
@@ -405,9 +405,9 @@ func TestUpdateHistory_ListEntries(t *testing.T) {
 		tmpDir := t.TempDir()
 		h, _ := NewUpdateHistory(tmpDir)
 
-		h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "e1", Action: "update"})
-		h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "e2", Action: "rollback"})
-		h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "e3", Action: "update"})
+		_, _ = h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "e1", Action: "update"})
+		_, _ = h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "e2", Action: "rollback"})
+		_, _ = h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "e3", Action: "update"})
 
 		entries := h.ListEntries(HistoryFilter{Action: "rollback"})
 		if len(entries) != 1 {
@@ -422,9 +422,9 @@ func TestUpdateHistory_ListEntries(t *testing.T) {
 		tmpDir := t.TempDir()
 		h, _ := NewUpdateHistory(tmpDir)
 
-		h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "e1", DeploymentType: "docker"})
-		h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "e2", DeploymentType: "bare-metal"})
-		h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "e3", DeploymentType: "docker"})
+		_, _ = h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "e1", DeploymentType: "docker"})
+		_, _ = h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "e2", DeploymentType: "bare-metal"})
+		_, _ = h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "e3", DeploymentType: "docker"})
 
 		entries := h.ListEntries(HistoryFilter{DeploymentType: "docker"})
 		if len(entries) != 2 {
@@ -437,7 +437,7 @@ func TestUpdateHistory_ListEntries(t *testing.T) {
 		h, _ := NewUpdateHistory(tmpDir)
 
 		for i := 0; i < 10; i++ {
-			h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "event"})
+			_, _ = h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "event"})
 		}
 
 		entries := h.ListEntries(HistoryFilter{Limit: 5})
@@ -450,10 +450,10 @@ func TestUpdateHistory_ListEntries(t *testing.T) {
 		tmpDir := t.TempDir()
 		h, _ := NewUpdateHistory(tmpDir)
 
-		h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "e1", Action: "update", Status: StatusSuccess})
-		h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "e2", Action: "update", Status: StatusFailed})
-		h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "e3", Action: "rollback", Status: StatusSuccess})
-		h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "e4", Action: "update", Status: StatusSuccess})
+		_, _ = h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "e1", Action: "update", Status: StatusSuccess})
+		_, _ = h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "e2", Action: "update", Status: StatusFailed})
+		_, _ = h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "e3", Action: "rollback", Status: StatusSuccess})
+		_, _ = h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "e4", Action: "update", Status: StatusSuccess})
 
 		entries := h.ListEntries(HistoryFilter{Action: "update", Status: StatusSuccess})
 		if len(entries) != 2 {
@@ -469,9 +469,9 @@ func TestUpdateHistory_GetLatestSuccessful(t *testing.T) {
 		tmpDir := t.TempDir()
 		h, _ := NewUpdateHistory(tmpDir)
 
-		h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "e1", Status: StatusSuccess})
-		h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "e2", Status: StatusFailed})
-		h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "e3", Status: StatusSuccess})
+		_, _ = h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "e1", Status: StatusSuccess})
+		_, _ = h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "e2", Status: StatusFailed})
+		_, _ = h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "e3", Status: StatusSuccess})
 
 		entry, err := h.GetLatestSuccessful()
 		if err != nil {
@@ -486,8 +486,8 @@ func TestUpdateHistory_GetLatestSuccessful(t *testing.T) {
 		tmpDir := t.TempDir()
 		h, _ := NewUpdateHistory(tmpDir)
 
-		h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "e1", Status: StatusFailed})
-		h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "e2", Status: StatusInProgress})
+		_, _ = h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "e1", Status: StatusFailed})
+		_, _ = h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "e2", Status: StatusInProgress})
 
 		_, err := h.GetLatestSuccessful()
 		if err == nil {
@@ -509,8 +509,8 @@ func TestUpdateHistory_GetLatestSuccessful(t *testing.T) {
 		tmpDir := t.TempDir()
 		h, _ := NewUpdateHistory(tmpDir)
 
-		h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "e1", Status: StatusSuccess})
-		h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "e2", Status: StatusSuccess})
+		_, _ = h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "e1", Status: StatusSuccess})
+		_, _ = h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "e2", Status: StatusSuccess})
 
 		entry, err := h.GetLatestSuccessful()
 		if err != nil {
@@ -537,7 +537,7 @@ func TestUpdateHistory_CacheManagement(t *testing.T) {
 
 		// h.maxCache is 100, add more than that
 		for i := 0; i < 110; i++ {
-			h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "event"})
+			_, _ = h.CreateEntry(ctx, UpdateHistoryEntry{EventID: "event"})
 		}
 
 		entries := h.ListEntries(HistoryFilter{})
@@ -556,7 +556,7 @@ func TestUpdateHistory_LoadCache(t *testing.T) {
 		validEntry := UpdateHistoryEntry{EventID: "valid", Status: StatusSuccess}
 		validData, _ := json.Marshal(validEntry)
 		content := string(validData) + "\n{invalid json}\n"
-		os.WriteFile(logPath, []byte(content), 0644)
+		_ = os.WriteFile(logPath, []byte(content), 0644)
 
 		// Should load without error, skipping invalid line
 		h, err := NewUpdateHistory(tmpDir)
@@ -577,7 +577,7 @@ func TestUpdateHistory_LoadCache(t *testing.T) {
 		entry := UpdateHistoryEntry{EventID: "test", Status: StatusSuccess}
 		data, _ := json.Marshal(entry)
 		content := "\n" + string(data) + "\n\n"
-		os.WriteFile(logPath, []byte(content), 0644)
+		_ = os.WriteFile(logPath, []byte(content), 0644)
 
 		h, _ := NewUpdateHistory(tmpDir)
 		entries := h.ListEntries(HistoryFilter{})
@@ -597,7 +597,7 @@ func TestUpdateHistory_LoadCache(t *testing.T) {
 			data, _ := json.Marshal(entry)
 			content += string(data) + "\n"
 		}
-		os.WriteFile(logPath, []byte(content), 0644)
+		_ = os.WriteFile(logPath, []byte(content), 0644)
 
 		h, _ := NewUpdateHistory(tmpDir)
 		entries := h.ListEntries(HistoryFilter{})
@@ -669,7 +669,7 @@ func TestUpdateHistoryEntry_Fields(t *testing.T) {
 
 		data, _ := json.Marshal(entry)
 		var parsed UpdateHistoryEntry
-		json.Unmarshal(data, &parsed)
+		_ = json.Unmarshal(data, &parsed)
 
 		if parsed.Error == nil {
 			t.Fatal("Error should not be nil")
@@ -791,7 +791,7 @@ func TestUpdateError(t *testing.T) {
 
 		data, _ := json.Marshal(err)
 		var parsed UpdateError
-		json.Unmarshal(data, &parsed)
+		_ = json.Unmarshal(data, &parsed)
 
 		if parsed.Message != err.Message {
 			t.Errorf("Message mismatch")
