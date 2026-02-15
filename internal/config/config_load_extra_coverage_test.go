@@ -21,8 +21,8 @@ func TestLoad_EnvLoadErrors(t *testing.T) {
 	// 2. Mock env load errors
 	// We need to be in a temp dir for mock.env
 	cwd, _ := os.Getwd()
-	os.Chdir(tempDir)
-	defer os.Chdir(cwd)
+	_ = os.Chdir(tempDir)
+	defer func() { _ = os.Chdir(cwd) }()
 
 	err = os.Mkdir("mock.env", 0755)
 	require.NoError(t, err)
