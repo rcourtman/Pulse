@@ -935,6 +935,93 @@ func recordTrueNASFixturesMetrics(mh *MetricsHistory, ms *metrics.Store, ts time
 	}
 }
 
+type guestMetricSource interface {
+	GetID() string
+	GetStatus() string
+	GetCPU() float64
+	GetMemory() models.Memory
+	GetDisk() models.Disk
+	GetDiskRead() int64
+	GetDiskWrite() int64
+	GetNetworkIn() int64
+	GetNetworkOut() int64
+}
+
+type vmAdapter struct{ *models.VM }
+
+func (v vmAdapter) GetID() string            { return v.VM.ID }
+func (v vmAdapter) GetStatus() string        { return v.VM.Status }
+func (v vmAdapter) GetCPU() float64          { return v.VM.CPU }
+func (v vmAdapter) GetMemory() models.Memory { return v.VM.Memory }
+func (v vmAdapter) GetDisk() models.Disk     { return v.VM.Disk }
+func (v vmAdapter) GetDiskRead() int64       { return v.VM.DiskRead }
+func (v vmAdapter) GetDiskWrite() int64      { return v.VM.DiskWrite }
+func (v vmAdapter) GetNetworkIn() int64      { return v.VM.NetworkIn }
+func (v vmAdapter) GetNetworkOut() int64     { return v.VM.NetworkOut }
+
+type containerAdapter struct{ *models.Container }
+
+func (c containerAdapter) GetID() string            { return c.Container.ID }
+func (c containerAdapter) GetStatus() string        { return c.Container.Status }
+func (c containerAdapter) GetCPU() float64          { return c.Container.CPU }
+func (c containerAdapter) GetMemory() models.Memory { return c.Container.Memory }
+func (c containerAdapter) GetDisk() models.Disk     { return c.Container.Disk }
+func (c containerAdapter) GetDiskRead() int64       { return c.Container.DiskRead }
+func (c containerAdapter) GetDiskWrite() int64      { return c.Container.DiskWrite }
+func (c containerAdapter) GetNetworkIn() int64      { return c.Container.NetworkIn }
+func (c containerAdapter) GetNetworkOut() int64     { return c.Container.NetworkOut }
+
+func recordGuestMetrics[T guestMetricSource](mh *MetricsHistory, ms *metrics.Store, guests []T, prefix string, ts time.Time) {
+	for _, guest := range guests {
+		if guest.GetID() == "" || guest.GetStatus() != "running" {
+			continue
+		}
+
+		id := guest.GetID()
+		cpu := guest.GetCPU() * 100
+		memory := guest.GetMemory().Usage
+		disk := guest.GetDisk().Usage
+		diskread := float64(guest.GetDiskRead())
+		diskwrite := float64(guest.GetDiskWrite())
+		netin := float64(guest.GetNetworkIn())
+		netout := float64(guest.GetNetworkOut())
+
+		mh.AddGuestMetric(id, "cpu", cpu, ts)
+		mh.AddGuestMetric(id, "memory", memory, ts)
+		mh.AddGuestMetric(id, "disk", disk, ts)
+		mh.AddGuestMetric(id, "diskread", diskread, ts)
+		mh.AddGuestMetric(id, "diskwrite", diskwrite, ts)
+		mh.AddGuestMetric(id, "netin", netin, ts)
+		mh.AddGuestMetric(id, "netout", netout, ts)
+
+		if ms != nil {
+			ms.Write(prefix, id, "cpu", cpu, ts)
+			ms.Write(prefix, id, "memory", memory, ts)
+			ms.Write(prefix, id, "disk", disk, ts)
+			ms.Write(prefix, id, "diskread", diskread, ts)
+			ms.Write(prefix, id, "diskwrite", diskwrite, ts)
+			ms.Write(prefix, id, "netin", netin, ts)
+			ms.Write(prefix, id, "netout", netout, ts)
+		}
+	}
+}
+
+func adaptVMs(vms []models.VM) []vmAdapter {
+	result := make([]vmAdapter, len(vms))
+	for i := range vms {
+		result[i] = vmAdapter{&vms[i]}
+	}
+	return result
+}
+
+func adaptContainers(cts []models.Container) []containerAdapter {
+	result := make([]containerAdapter, len(cts))
+	for i := range cts {
+		result[i] = containerAdapter{&cts[i]}
+	}
+	return result
+}
+
 func recordMockStateToMetricsHistory(mh *MetricsHistory, ms *metrics.Store, state models.StateSnapshot, ts time.Time) {
 	if mh == nil {
 		return
@@ -944,6 +1031,7 @@ func recordMockStateToMetricsHistory(mh *MetricsHistory, ms *metrics.Store, stat
 		if node.ID == "" || node.Status != "online" {
 			continue
 		}
+
 		mh.AddNodeMetric(node.ID, "cpu", node.CPU*100, ts)
 		mh.AddNodeMetric(node.ID, "memory", node.Memory.Usage, ts)
 		mh.AddNodeMetric(node.ID, "disk", node.Disk.Usage, ts)
@@ -955,51 +1043,8 @@ func recordMockStateToMetricsHistory(mh *MetricsHistory, ms *metrics.Store, stat
 		}
 	}
 
-	for _, vm := range state.VMs {
-		if vm.ID == "" || vm.Status != "running" {
-			continue
-		}
-		mh.AddGuestMetric(vm.ID, "cpu", vm.CPU*100, ts)
-		mh.AddGuestMetric(vm.ID, "memory", vm.Memory.Usage, ts)
-		mh.AddGuestMetric(vm.ID, "disk", vm.Disk.Usage, ts)
-		mh.AddGuestMetric(vm.ID, "diskread", float64(vm.DiskRead), ts)
-		mh.AddGuestMetric(vm.ID, "diskwrite", float64(vm.DiskWrite), ts)
-		mh.AddGuestMetric(vm.ID, "netin", float64(vm.NetworkIn), ts)
-		mh.AddGuestMetric(vm.ID, "netout", float64(vm.NetworkOut), ts)
-
-		if ms != nil {
-			ms.Write("vm", vm.ID, "cpu", vm.CPU*100, ts)
-			ms.Write("vm", vm.ID, "memory", vm.Memory.Usage, ts)
-			ms.Write("vm", vm.ID, "disk", vm.Disk.Usage, ts)
-			ms.Write("vm", vm.ID, "diskread", float64(vm.DiskRead), ts)
-			ms.Write("vm", vm.ID, "diskwrite", float64(vm.DiskWrite), ts)
-			ms.Write("vm", vm.ID, "netin", float64(vm.NetworkIn), ts)
-			ms.Write("vm", vm.ID, "netout", float64(vm.NetworkOut), ts)
-		}
-	}
-
-	for _, ct := range state.Containers {
-		if ct.ID == "" || ct.Status != "running" {
-			continue
-		}
-		mh.AddGuestMetric(ct.ID, "cpu", ct.CPU*100, ts)
-		mh.AddGuestMetric(ct.ID, "memory", ct.Memory.Usage, ts)
-		mh.AddGuestMetric(ct.ID, "disk", ct.Disk.Usage, ts)
-		mh.AddGuestMetric(ct.ID, "diskread", float64(ct.DiskRead), ts)
-		mh.AddGuestMetric(ct.ID, "diskwrite", float64(ct.DiskWrite), ts)
-		mh.AddGuestMetric(ct.ID, "netin", float64(ct.NetworkIn), ts)
-		mh.AddGuestMetric(ct.ID, "netout", float64(ct.NetworkOut), ts)
-
-		if ms != nil {
-			ms.Write("container", ct.ID, "cpu", ct.CPU*100, ts)
-			ms.Write("container", ct.ID, "memory", ct.Memory.Usage, ts)
-			ms.Write("container", ct.ID, "disk", ct.Disk.Usage, ts)
-			ms.Write("container", ct.ID, "diskread", float64(ct.DiskRead), ts)
-			ms.Write("container", ct.ID, "diskwrite", float64(ct.DiskWrite), ts)
-			ms.Write("container", ct.ID, "netin", float64(ct.NetworkIn), ts)
-			ms.Write("container", ct.ID, "netout", float64(ct.NetworkOut), ts)
-		}
-	}
+	recordGuestMetrics(mh, ms, adaptVMs(state.VMs), "vm", ts)
+	recordGuestMetrics(mh, ms, adaptContainers(state.Containers), "container", ts)
 
 	for _, cluster := range state.KubernetesClusters {
 		if cluster.Hidden {
