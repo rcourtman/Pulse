@@ -387,7 +387,7 @@ func TestNewNotificationQueueCreatesSecureDirectory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create notification queue: %v", err)
 	}
-	defer nq.Stop()
+	defer func() { _ = nq.Stop() }()
 
 	info, err := os.Stat(queueDir)
 	if err != nil {
@@ -456,7 +456,7 @@ func TestCancelByAlertIDs_MultipleAlertsPartialMatch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create notification queue: %v", err)
 	}
-	defer nq.Stop()
+	defer func() { _ = nq.Stop() }()
 
 	// Enqueue a notification with multiple alerts (far future NextRetryAt so background processor doesn't pick it up)
 	futureRetry := time.Now().Add(1 * time.Hour)
@@ -713,7 +713,7 @@ func TestIncrementAttempt(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create notification queue: %v", err)
 		}
-		defer nq.Stop()
+		defer func() { _ = nq.Stop() }()
 
 		// Set next_retry_at far in the future so background processor doesn't pick it up
 		futureRetry := time.Now().Add(1 * time.Hour)
@@ -763,7 +763,7 @@ func TestIncrementAttempt(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create notification queue: %v", err)
 		}
-		defer nq.Stop()
+		defer func() { _ = nq.Stop() }()
 
 		// Calling IncrementAttempt on non-existent ID should not error
 		// (the SQL UPDATE just affects 0 rows)
@@ -781,7 +781,7 @@ func TestGetQueueStats(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create notification queue: %v", err)
 		}
-		defer nq.Stop()
+		defer func() { _ = nq.Stop() }()
 
 		stats, err := nq.GetQueueStats()
 		if err != nil {
@@ -800,7 +800,7 @@ func TestGetQueueStats(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create notification queue: %v", err)
 		}
-		defer nq.Stop()
+		defer func() { _ = nq.Stop() }()
 
 		// Enqueue notifications with different statuses
 		notifications := []*QueuedNotification{
@@ -848,7 +848,7 @@ func TestGetQueueStats(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create notification queue: %v", err)
 		}
-		defer nq.Stop()
+		defer func() { _ = nq.Stop() }()
 
 		err = nq.UpdateStatus("non-existent-id", QueueStatusSent, "")
 		if err == nil {
@@ -864,7 +864,7 @@ func TestPerformCleanup(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create notification queue: %v", err)
 		}
-		defer nq.Stop()
+		defer func() { _ = nq.Stop() }()
 
 		// Insert a notification directly with old completed_at timestamp
 		oldTime := time.Now().Add(-10 * 24 * time.Hour).Unix() // 10 days ago
@@ -918,7 +918,7 @@ func TestPerformCleanup(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create notification queue: %v", err)
 		}
-		defer nq.Stop()
+		defer func() { _ = nq.Stop() }()
 
 		oldTime := time.Now().Add(-10 * 24 * time.Hour).Unix() // 10 days ago
 		recentAuditTime := time.Now().Add(-1 * time.Hour).Unix()
@@ -966,7 +966,7 @@ func TestPerformCleanup(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create notification queue: %v", err)
 		}
-		defer nq.Stop()
+		defer func() { _ = nq.Stop() }()
 
 		// Insert old DLQ entry (> 30 days)
 		oldTime := time.Now().Add(-35 * 24 * time.Hour).Unix()
@@ -1019,7 +1019,7 @@ func TestPerformCleanup(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create notification queue: %v", err)
 		}
-		defer nq.Stop()
+		defer func() { _ = nq.Stop() }()
 
 		// Insert parent notifications first (foreign key constraint)
 		oldTime := time.Now().Add(-35 * 24 * time.Hour).Unix()
@@ -1090,7 +1090,7 @@ func TestPerformCleanup(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create notification queue: %v", err)
 		}
-		defer nq.Stop()
+		defer func() { _ = nq.Stop() }()
 
 		// Should not panic or error
 		nq.performCleanup()
