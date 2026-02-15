@@ -1645,85 +1645,9 @@ func (h *ConfigHandlers) handleTestNodeConfig(w http.ResponseWriter, r *http.Req
 			}
 		}
 	} else if req.Type == "pbs" {
-		// Create a temporary client to test connection
-		verifySSL := false
-		if req.VerifySSL != nil {
-			verifySSL = *req.VerifySSL
-		}
-		clientConfig := pbs.ClientConfig{
-			Host:        req.Host,
-			User:        req.User,
-			Password:    req.Password,
-			TokenName:   req.TokenName,
-			TokenValue:  req.TokenValue,
-			VerifySSL:   verifySSL,
-			Fingerprint: req.Fingerprint,
-		}
-		client, err := pbs.NewClient(clientConfig)
-		if err != nil {
-			testResult = map[string]interface{}{
-				"status":  "error",
-				"message": sanitizeErrorMessage(err, "create_client"),
-			}
-		} else {
-			// Test connection by getting datastores
-			startTime := time.Now()
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-
-			if _, err := client.GetDatastores(ctx); err != nil {
-				testResult = map[string]interface{}{
-					"status":  "error",
-					"message": sanitizeErrorMessage(err, "connection"),
-				}
-			} else {
-				latency := time.Since(startTime).Milliseconds()
-				testResult = map[string]interface{}{
-					"status":  "success",
-					"message": "Connected to PBS instance",
-					"latency": latency,
-				}
-			}
-		}
+		testResult = testProxmoxBackupConnection(req)
 	} else if req.Type == "pmg" {
-		verifySSL := false
-		if req.VerifySSL != nil {
-			verifySSL = *req.VerifySSL
-		}
-		clientConfig := pmg.ClientConfig{
-			Host:        req.Host,
-			User:        req.User,
-			Password:    req.Password,
-			TokenName:   req.TokenName,
-			TokenValue:  req.TokenValue,
-			VerifySSL:   verifySSL,
-			Fingerprint: req.Fingerprint,
-		}
-		client, err := pmg.NewClient(clientConfig)
-		if err != nil {
-			testResult = map[string]interface{}{
-				"status":  "error",
-				"message": sanitizeErrorMessage(err, "create_client"),
-			}
-		} else {
-			startTime := time.Now()
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-
-			if _, err := client.GetVersion(ctx); err != nil {
-				testResult = map[string]interface{}{
-					"status":  "error",
-					"message": sanitizeErrorMessage(err, "connection"),
-				}
-			} else {
-				latency := time.Since(startTime).Milliseconds()
-				testResult = map[string]interface{}{
-					"status":  "success",
-					"message": "Connected to PMG instance",
-					"latency": latency,
-				}
-			}
-		}
+		testResult = testProxmoxMailGatewayConnection(req)
 	} else {
 		http.Error(w, "Invalid node type", http.StatusBadRequest)
 		return
@@ -1920,4 +1844,82 @@ func (h *ConfigHandlers) handleTestNode(w http.ResponseWriter, r *http.Request) 
 	json.NewEncoder(w).Encode(testResult)
 }
 
-// getNodeStatus returns the connection status for a node
+func testProxmoxBackupConnection(req NodeConfigRequest) map[string]interface{} {
+	verifySSL := false
+	if req.VerifySSL != nil {
+		verifySSL = *req.VerifySSL
+	}
+	clientConfig := pbs.ClientConfig{
+		Host:        req.Host,
+		User:        req.User,
+		Password:    req.Password,
+		TokenName:   req.TokenName,
+		TokenValue:  req.TokenValue,
+		VerifySSL:   verifySSL,
+		Fingerprint: req.Fingerprint,
+	}
+	client, err := pbs.NewClient(clientConfig)
+	if err != nil {
+		return map[string]interface{}{
+			"status":  "error",
+			"message": sanitizeErrorMessage(err, "create_client"),
+		}
+	}
+
+	startTime := time.Now()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if _, err := client.GetDatastores(ctx); err != nil {
+		return map[string]interface{}{
+			"status":  "error",
+			"message": sanitizeErrorMessage(err, "connection"),
+		}
+	}
+	latency := time.Since(startTime).Milliseconds()
+	return map[string]interface{}{
+		"status":  "success",
+		"message": "Connected to PBS instance",
+		"latency": latency,
+	}
+}
+
+func testProxmoxMailGatewayConnection(req NodeConfigRequest) map[string]interface{} {
+	verifySSL := false
+	if req.VerifySSL != nil {
+		verifySSL = *req.VerifySSL
+	}
+	clientConfig := pmg.ClientConfig{
+		Host:        req.Host,
+		User:        req.User,
+		Password:    req.Password,
+		TokenName:   req.TokenName,
+		TokenValue:  req.TokenValue,
+		VerifySSL:   verifySSL,
+		Fingerprint: req.Fingerprint,
+	}
+	client, err := pmg.NewClient(clientConfig)
+	if err != nil {
+		return map[string]interface{}{
+			"status":  "error",
+			"message": sanitizeErrorMessage(err, "create_client"),
+		}
+	}
+
+	startTime := time.Now()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if _, err := client.GetVersion(ctx); err != nil {
+		return map[string]interface{}{
+			"status":  "error",
+			"message": sanitizeErrorMessage(err, "connection"),
+		}
+	}
+	latency := time.Since(startTime).Milliseconds()
+	return map[string]interface{}{
+		"status":  "success",
+		"message": "Connected to PMG instance",
+		"latency": latency,
+	}
+}
