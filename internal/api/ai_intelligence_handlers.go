@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/baseline"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/remediation"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/unified"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license"
@@ -19,6 +20,73 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog/log"
 )
+
+type proxmoxWorkload interface {
+	ID() string
+	Name() string
+	Status() unifiedresources.ResourceStatus
+	Template() bool
+	MemoryPercent() float64
+	CPUPercent() float64
+	DiskPercent() float64
+}
+
+func checkWorkloadAnomalies(
+	workload proxmoxWorkload,
+	resourceID string,
+	resourceMetrics map[string]map[string]float64,
+	baselineStore *baseline.Store,
+	result *[]map[string]interface{},
+	resourceInfo map[string]struct{ name, rtype string },
+	resourceType string,
+) {
+	if workload == nil {
+		return
+	}
+	if workload.Template() {
+		return
+	}
+	if workload.Status() != unifiedresources.StatusOnline {
+		return
+	}
+
+	if _, ok := resourceMetrics[workload.ID()]; !ok {
+		if resourceID == "" {
+			return
+		}
+		if workload.ID() != resourceID {
+			return
+		}
+	}
+
+	metrics := map[string]float64{
+		"memory": workload.MemoryPercent(),
+	}
+	if cpu := workload.CPUPercent(); cpu > 0 {
+		metrics["cpu"] = cpu
+	}
+	if disk := workload.DiskPercent(); disk > 0 {
+		metrics["disk"] = disk
+	}
+
+	anomalies := baselineStore.CheckResourceAnomaliesReadOnly(workload.ID(), metrics)
+	for _, anomaly := range anomalies {
+		*result = append(*result, map[string]interface{}{
+			"resource_id":      anomaly.ResourceID,
+			"resource_name":    workload.Name(),
+			"resource_type":    resourceType,
+			"metric":           anomaly.Metric,
+			"current_value":    anomaly.CurrentValue,
+			"baseline_mean":    anomaly.BaselineMean,
+			"baseline_std_dev": anomaly.BaselineStdDev,
+			"z_score":          anomaly.ZScore,
+			"severity":         anomaly.Severity,
+			"description":      anomaly.Description,
+		})
+	}
+
+	resourceInfo[workload.ID()] = struct{ name, rtype string }{workload.Name(), resourceType}
+}
 
 func aiIntelligenceUpgradeURL() string {
 	return conversion.UpgradeURLForFeature(license.FeatureAIPatrol)
@@ -679,110 +747,12 @@ func (h *AISettingsHandler) HandleGetAnomalies(w http.ResponseWriter, r *http.Re
 
 	// Check VMs
 	for _, vm := range rs.VMs() {
-		if vm == nil {
-			continue
-		}
-		if vm.Template() {
-			continue // Skip templates
-		}
-
-		// Skip VMs that aren't running - stopped VMs with 0% usage is expected, not an anomaly
-		if vm.Status() != unifiedresources.StatusOnline {
-			continue
-		}
-
-		// Skip if we don't have baselines for this resource
-		if _, ok := resourceMetrics[vm.ID()]; !ok {
-			if resourceID == "" {
-				continue
-			}
-			if vm.ID() != resourceID {
-				continue
-			}
-		}
-
-		metrics := map[string]float64{
-			"memory": vm.MemoryPercent(),
-		}
-		if cpu := vm.CPUPercent(); cpu > 0 {
-			metrics["cpu"] = cpu
-		}
-		if disk := vm.DiskPercent(); disk > 0 {
-			metrics["disk"] = disk
-		}
-
-		anomalies := baselineStore.CheckResourceAnomaliesReadOnly(vm.ID(), metrics)
-		for _, anomaly := range anomalies {
-			result = append(result, map[string]interface{}{
-				"resource_id":      anomaly.ResourceID,
-				"resource_name":    vm.Name(),
-				"resource_type":    "vm",
-				"metric":           anomaly.Metric,
-				"current_value":    anomaly.CurrentValue,
-				"baseline_mean":    anomaly.BaselineMean,
-				"baseline_std_dev": anomaly.BaselineStdDev,
-				"z_score":          anomaly.ZScore,
-				"severity":         anomaly.Severity,
-				"description":      anomaly.Description,
-			})
-		}
-
-		// Store info for any additional processing
-		resourceInfo[vm.ID()] = struct{ name, rtype string }{vm.Name(), "vm"}
+		checkWorkloadAnomalies(vm, resourceID, resourceMetrics, baselineStore, &result, resourceInfo, "vm")
 	}
 
 	// Check Containers
 	for _, ct := range rs.Containers() {
-		if ct == nil {
-			continue
-		}
-		if ct.Template() {
-			continue // Skip templates
-		}
-
-		// Skip containers that aren't running - stopped containers with 0% usage is expected, not an anomaly
-		if ct.Status() != unifiedresources.StatusOnline {
-			continue
-		}
-
-		// Skip if we don't have baselines for this resource
-		if _, ok := resourceMetrics[ct.ID()]; !ok {
-			if resourceID == "" {
-				continue
-			}
-			if ct.ID() != resourceID {
-				continue
-			}
-		}
-
-		metrics := map[string]float64{
-			"memory": ct.MemoryPercent(),
-		}
-		if cpu := ct.CPUPercent(); cpu > 0 {
-			metrics["cpu"] = cpu
-		}
-		if disk := ct.DiskPercent(); disk > 0 {
-			metrics["disk"] = disk
-		}
-
-		anomalies := baselineStore.CheckResourceAnomaliesReadOnly(ct.ID(), metrics)
-		for _, anomaly := range anomalies {
-			result = append(result, map[string]interface{}{
-				"resource_id":      anomaly.ResourceID,
-				"resource_name":    ct.Name(),
-				"resource_type":    "container",
-				"metric":           anomaly.Metric,
-				"current_value":    anomaly.CurrentValue,
-				"baseline_mean":    anomaly.BaselineMean,
-				"baseline_std_dev": anomaly.BaselineStdDev,
-				"z_score":          anomaly.ZScore,
-				"severity":         anomaly.Severity,
-				"description":      anomaly.Description,
-			})
-		}
-
-		// Store info for any additional processing
-		resourceInfo[ct.ID()] = struct{ name, rtype string }{ct.Name(), "container"}
+		checkWorkloadAnomalies(ct, resourceID, resourceMetrics, baselineStore, &result, resourceInfo, "container")
 	}
 
 	// Check nodes
