@@ -1598,7 +1598,9 @@ func (h *AISettingsHandler) HandleTestProvider(w http.ResponseWriter, r *http.Re
 	if cfg == nil {
 		testResult.Success = false
 		testResult.Message = "Pulse Assistant not configured"
-		utils.WriteJSONResponse(w, testResult)
+		if err := utils.WriteJSONResponse(w, testResult); err != nil {
+			log.Error().Err(err).Msg("failed to write JSON response")
+		}
 		return
 	}
 
@@ -1606,7 +1608,9 @@ func (h *AISettingsHandler) HandleTestProvider(w http.ResponseWriter, r *http.Re
 	if !cfg.HasProvider(provider) {
 		testResult.Success = false
 		testResult.Message = "Provider not configured"
-		utils.WriteJSONResponse(w, testResult)
+		if err := utils.WriteJSONResponse(w, testResult); err != nil {
+			log.Error().Err(err).Msg("failed to write JSON response")
+		}
 		return
 	}
 
@@ -1615,7 +1619,9 @@ func (h *AISettingsHandler) HandleTestProvider(w http.ResponseWriter, r *http.Re
 	if err != nil {
 		testResult.Success = false
 		testResult.Message = fmt.Sprintf("Failed to create provider: %v", err)
-		utils.WriteJSONResponse(w, testResult)
+		if err := utils.WriteJSONResponse(w, testResult); err != nil {
+			log.Error().Err(err).Msg("failed to write JSON response")
+		}
 		return
 	}
 
