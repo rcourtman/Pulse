@@ -414,7 +414,11 @@ func (a *Agent) selfUpdate(ctx context.Context) error {
 		return fmt.Errorf("failed to create temp file in %s: %w", targetDir, err)
 	}
 	tmpPath := tmpFile.Name()
-	defer osRemoveFn(tmpPath) // Clean up if something goes wrong
+	defer func() {
+		if err := osRemoveFn(tmpPath); err != nil {
+			a.logger.Warn().Err(err).Msg("Self-update: failed to clean up temp file")
+		}
+	}()
 
 	// Write downloaded binary to temp file with size limit (100 MB max)
 	const maxBinarySize = 100 * 1024 * 1024
