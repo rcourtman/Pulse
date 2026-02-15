@@ -746,8 +746,12 @@ func scoreIPv4(ip string) int {
 	// Parse first two octets
 	first := 0
 	second := 0
-	fmt.Sscanf(parts[0], "%d", &first)
-	fmt.Sscanf(parts[1], "%d", &second)
+	if _, err := fmt.Sscanf(parts[0], "%d", &first); err != nil {
+		return 0
+	}
+	if _, err := fmt.Sscanf(parts[1], "%d", &second); err != nil {
+		return 0
+	}
 
 	// Scoring logic:
 	// - 192.168.x.x: Very common home/office LAN, highest priority (score 100)
