@@ -119,7 +119,7 @@ func TestHandleTestConnection(t *testing.T) {
 
 			if tt.verifyResponse != nil {
 				var response map[string]interface{}
-				json.NewDecoder(w.Body).Decode(&response)
+				_ = json.NewDecoder(w.Body).Decode(&response)
 				tt.verifyResponse(t, response)
 			}
 		})
