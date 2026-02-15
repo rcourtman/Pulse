@@ -32,7 +32,7 @@ func wsURLForHTTP(serverURL string) string {
 
 func wsWriteMessage(t *testing.T, conn *websocket.Conn, msg Message) {
 	t.Helper()
-	conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
+	_ = conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
 	if err := conn.WriteJSON(msg); err != nil {
 		t.Fatalf("WriteJSON: %v", err)
 	}
@@ -73,7 +73,7 @@ func wsReadRegisteredPayload(t *testing.T, conn *websocket.Conn) RegisteredPaylo
 }
 
 func wsReadRawMessageWithTimeout(conn *websocket.Conn, timeout time.Duration) (wsRawMessage, error) {
-	conn.SetReadDeadline(time.Now().Add(timeout))
+	_ = conn.SetReadDeadline(time.Now().Add(timeout))
 	_, data, err := conn.ReadMessage()
 	if err != nil {
 		return wsRawMessage{}, err
@@ -156,7 +156,7 @@ func TestHandleWebSocket_InvalidTokenRejected(t *testing.T) {
 
 	waitFor(t, 2*time.Second, func() bool { return !s.IsAgentConnected("a1") })
 
-	conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
+	_ = conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
 	_, _, err = conn.ReadMessage()
 	if err == nil {
 		t.Fatalf("expected connection to be closed by server")
@@ -187,7 +187,7 @@ func TestHandleWebSocket_MissingAgentIDRejected(t *testing.T) {
 		t.Fatalf("expected registration to be rejected")
 	}
 
-	conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
+	_ = conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
 	_, _, err = conn.ReadMessage()
 	if err == nil {
 		t.Fatalf("expected connection to be closed by server")
@@ -207,7 +207,7 @@ func TestHandleWebSocket_FirstMessageMustBeRegister(t *testing.T) {
 
 	wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentPing, "", nil))
 
-	conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+	_ = conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
 	_, _, err = conn.ReadMessage()
 	if err == nil {
 		t.Fatalf("expected server to close connection")
@@ -284,7 +284,7 @@ func TestExecuteCommand_RoundTripViaWebSocket(t *testing.T) {
 				agentErr <- err
 				return
 			}
-			conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
+			_ = conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
 			if err := conn.WriteJSON(mustNewMessage(t, MsgTypeCommandResult, "", CommandResultPayload{
 				RequestID: payload.RequestID,
 				Success:   true,
@@ -362,7 +362,7 @@ func TestHandleWebSocket_ReconnectSameAgentIDClosesOldConnection(t *testing.T) {
 	}))
 	_ = wsReadRegisteredPayload(t, c2)
 
-	c1.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+	_ = c1.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
 	_, _, err := c1.ReadMessage()
 	if err == nil {
 		t.Fatalf("expected old connection to be closed")
