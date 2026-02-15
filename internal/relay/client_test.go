@@ -75,7 +75,7 @@ func TestClient_RegisterAndChannelLifecycle(t *testing.T) {
 		}
 
 		var regPayload RegisterPayload
-		UnmarshalControlPayload(frame.Payload, &regPayload)
+		_ = UnmarshalControlPayload(frame.Payload, &regPayload)
 		mu.Lock()
 		registerReceived = regPayload.LicenseToken == "test-license-jwt" &&
 			regPayload.IdentityPubKey == "test-identity-pub-key"
@@ -88,7 +88,7 @@ func TestClient_RegisterAndChannelLifecycle(t *testing.T) {
 			ExpiresAt:    time.Now().Add(time.Hour).Unix(),
 		})
 		ackBytes, _ := EncodeFrame(ack)
-		conn.WriteMessage(websocket.BinaryMessage, ackBytes)
+		_ = conn.WriteMessage(websocket.BinaryMessage, ackBytes)
 
 		// 3. Send CHANNEL_OPEN
 		chOpen, _ := NewControlFrame(FrameChannelOpen, 1, ChannelOpenPayload{
@@ -97,7 +97,7 @@ func TestClient_RegisterAndChannelLifecycle(t *testing.T) {
 		})
 		chOpenBytes, _ := EncodeFrame(chOpen)
 		time.Sleep(50 * time.Millisecond) // let client set up
-		conn.WriteMessage(websocket.BinaryMessage, chOpenBytes)
+		_ = conn.WriteMessage(websocket.BinaryMessage, chOpenBytes)
 
 		// 4. Read CHANNEL_OPEN ack from instance
 		_, msg, err = conn.ReadMessage()
@@ -130,7 +130,7 @@ func TestClient_RegisterAndChannelLifecycle(t *testing.T) {
 		frame, _ = DecodeFrame(msg)
 		if frame.Type == FrameData {
 			var resp ProxyResponse
-			json.Unmarshal(frame.Payload, &resp)
+			_ = json.Unmarshal(frame.Payload, &resp)
 			dataResponseCh <- resp
 		}
 
@@ -140,7 +140,7 @@ func TestClient_RegisterAndChannelLifecycle(t *testing.T) {
 			Reason:    "test done",
 		})
 		chCloseBytes, _ := EncodeFrame(chClose)
-		conn.WriteMessage(websocket.BinaryMessage, chCloseBytes)
+		_ = conn.WriteMessage(websocket.BinaryMessage, chCloseBytes)
 
 		// Keep connection open so the client stays connected during assertions
 		time.Sleep(2 * time.Second)
@@ -232,7 +232,7 @@ func TestClient_RejectInvalidToken(t *testing.T) {
 			ExpiresAt:    time.Now().Add(time.Hour).Unix(),
 		})
 		ackBytes, _ := EncodeFrame(ack)
-		conn.WriteMessage(websocket.BinaryMessage, ackBytes)
+		_ = conn.WriteMessage(websocket.BinaryMessage, ackBytes)
 
 		// Send CHANNEL_OPEN with bad token
 		time.Sleep(50 * time.Millisecond)
@@ -241,7 +241,7 @@ func TestClient_RejectInvalidToken(t *testing.T) {
 			AuthToken: "INVALID-TOKEN",
 		})
 		chOpenBytes, _ := EncodeFrame(chOpen)
-		conn.WriteMessage(websocket.BinaryMessage, chOpenBytes)
+		_ = conn.WriteMessage(websocket.BinaryMessage, chOpenBytes)
 
 		// Read CHANNEL_CLOSE (reject)
 		_, msg, err := conn.ReadMessage()
@@ -251,7 +251,7 @@ func TestClient_RejectInvalidToken(t *testing.T) {
 		frame, _ = DecodeFrame(msg)
 		if frame.Type == FrameChannelClose {
 			var closePayload ChannelClosePayload
-			UnmarshalControlPayload(frame.Payload, &closePayload)
+			_ = UnmarshalControlPayload(frame.Payload, &closePayload)
 			channelCloseCh <- closePayload
 		}
 
@@ -321,7 +321,7 @@ func TestClient_DrainTriggersReconnect(t *testing.T) {
 			ExpiresAt:    time.Now().Add(time.Hour).Unix(),
 		})
 		ackBytes, _ := EncodeFrame(ack)
-		conn.WriteMessage(websocket.BinaryMessage, ackBytes)
+		_ = conn.WriteMessage(websocket.BinaryMessage, ackBytes)
 
 		if count == 1 {
 			// First connection: send DRAIN after a short delay
@@ -330,7 +330,7 @@ func TestClient_DrainTriggersReconnect(t *testing.T) {
 				Reason: "server shutting down",
 			})
 			drainBytes, _ := EncodeFrame(drain)
-			conn.WriteMessage(websocket.BinaryMessage, drainBytes)
+			_ = conn.WriteMessage(websocket.BinaryMessage, drainBytes)
 		} else {
 			// Second connection: keep alive briefly
 			time.Sleep(500 * time.Millisecond)
@@ -391,7 +391,7 @@ func TestClient_SessionTokenReuse(t *testing.T) {
 		}
 
 		var regPayload RegisterPayload
-		UnmarshalControlPayload(frame.Payload, &regPayload)
+		_ = UnmarshalControlPayload(frame.Payload, &regPayload)
 		sessionTokens <- regPayload.SessionToken
 
 		ack, _ := NewControlFrame(FrameRegisterAck, 0, RegisterAckPayload{
@@ -400,7 +400,7 @@ func TestClient_SessionTokenReuse(t *testing.T) {
 			ExpiresAt:    time.Now().Add(time.Hour).Unix(),
 		})
 		ackBytes, _ := EncodeFrame(ack)
-		conn.WriteMessage(websocket.BinaryMessage, ackBytes)
+		_ = conn.WriteMessage(websocket.BinaryMessage, ackBytes)
 
 		// Close after a short delay to trigger reconnect
 		time.Sleep(100 * time.Millisecond)
@@ -470,12 +470,12 @@ func TestClient_RejectsOversizedWebSocketMessage(t *testing.T) {
 			ExpiresAt:    time.Now().Add(time.Hour).Unix(),
 		})
 		ackBytes, _ := EncodeFrame(ack)
-		conn.WriteMessage(websocket.BinaryMessage, ackBytes)
+		_ = conn.WriteMessage(websocket.BinaryMessage, ackBytes)
 
 		// Send one oversized websocket binary message. This should trip
 		// conn.SetReadLimit and force the client to drop/reconnect.
 		oversized := make([]byte, wsReadLimit+1)
-		conn.WriteMessage(websocket.BinaryMessage, oversized)
+		_ = conn.WriteMessage(websocket.BinaryMessage, oversized)
 
 		time.Sleep(200 * time.Millisecond)
 	})
@@ -572,7 +572,7 @@ func TestClient_EncryptedChannelLifecycle(t *testing.T) {
 			ExpiresAt:    time.Now().Add(time.Hour).Unix(),
 		})
 		ackBytes, _ := EncodeFrame(ack)
-		conn.WriteMessage(websocket.BinaryMessage, ackBytes)
+		_ = conn.WriteMessage(websocket.BinaryMessage, ackBytes)
 
 		// 3. Send CHANNEL_OPEN
 		chOpen, _ := NewControlFrame(FrameChannelOpen, 10, ChannelOpenPayload{
@@ -581,7 +581,7 @@ func TestClient_EncryptedChannelLifecycle(t *testing.T) {
 		})
 		chOpenBytes, _ := EncodeFrame(chOpen)
 		time.Sleep(50 * time.Millisecond)
-		conn.WriteMessage(websocket.BinaryMessage, chOpenBytes)
+		_ = conn.WriteMessage(websocket.BinaryMessage, chOpenBytes)
 
 		// 4. Read CHANNEL_OPEN ack
 		_, msg, _ = conn.ReadMessage()
@@ -602,7 +602,7 @@ func TestClient_EncryptedChannelLifecycle(t *testing.T) {
 		kexPayload := MarshalKeyExchangePayload(appPriv.PublicKey().Bytes(), nil)
 		kexFrame := NewFrame(FrameKeyExchange, 10, kexPayload)
 		kexBytes, _ := EncodeFrame(kexFrame)
-		conn.WriteMessage(websocket.BinaryMessage, kexBytes)
+		_ = conn.WriteMessage(websocket.BinaryMessage, kexBytes)
 
 		// 6. Read instance's KEY_EXCHANGE response
 		_, msg, err = conn.ReadMessage()
@@ -654,7 +654,7 @@ func TestClient_EncryptedChannelLifecycle(t *testing.T) {
 		}
 		dataFrame := NewFrame(FrameData, 10, encryptedReq)
 		dataBytes, _ := EncodeFrame(dataFrame)
-		conn.WriteMessage(websocket.BinaryMessage, dataBytes)
+		_ = conn.WriteMessage(websocket.BinaryMessage, dataBytes)
 
 		// 8. Read encrypted DATA response
 		_, msg, err = conn.ReadMessage()
@@ -670,7 +670,7 @@ func TestClient_EncryptedChannelLifecycle(t *testing.T) {
 				return
 			}
 			var resp ProxyResponse
-			json.Unmarshal(decrypted, &resp)
+			_ = json.Unmarshal(decrypted, &resp)
 			dataResponseCh <- resp
 		}
 
@@ -750,7 +750,7 @@ func TestClient_DataWithoutKeyExchange(t *testing.T) {
 			ExpiresAt:    time.Now().Add(time.Hour).Unix(),
 		})
 		ackBytes, _ := EncodeFrame(ack)
-		conn.WriteMessage(websocket.BinaryMessage, ackBytes)
+		_ = conn.WriteMessage(websocket.BinaryMessage, ackBytes)
 
 		// CHANNEL_OPEN (no KEY_EXCHANGE follows)
 		chOpen, _ := NewControlFrame(FrameChannelOpen, 5, ChannelOpenPayload{
@@ -759,7 +759,7 @@ func TestClient_DataWithoutKeyExchange(t *testing.T) {
 		})
 		chOpenBytes, _ := EncodeFrame(chOpen)
 		time.Sleep(50 * time.Millisecond)
-		conn.WriteMessage(websocket.BinaryMessage, chOpenBytes)
+		_ = conn.WriteMessage(websocket.BinaryMessage, chOpenBytes)
 
 		// Read CHANNEL_OPEN ack
 		_, msg, _ = conn.ReadMessage()
@@ -777,7 +777,7 @@ func TestClient_DataWithoutKeyExchange(t *testing.T) {
 		proxyReqBytes, _ := json.Marshal(proxyReq)
 		dataFrame := NewFrame(FrameData, 5, proxyReqBytes)
 		dataBytes, _ := EncodeFrame(dataFrame)
-		conn.WriteMessage(websocket.BinaryMessage, dataBytes)
+		_ = conn.WriteMessage(websocket.BinaryMessage, dataBytes)
 
 		// Read unencrypted DATA response
 		_, msg, _ = conn.ReadMessage()
@@ -858,7 +858,7 @@ func TestClient_KeyExchangeRejectedWithoutIdentityKey(t *testing.T) {
 			ExpiresAt:    time.Now().Add(time.Hour).Unix(),
 		})
 		ackBytes, _ := EncodeFrame(ack)
-		conn.WriteMessage(websocket.BinaryMessage, ackBytes)
+		_ = conn.WriteMessage(websocket.BinaryMessage, ackBytes)
 
 		// CHANNEL_OPEN
 		chOpen, _ := NewControlFrame(FrameChannelOpen, 20, ChannelOpenPayload{
@@ -867,7 +867,7 @@ func TestClient_KeyExchangeRejectedWithoutIdentityKey(t *testing.T) {
 		})
 		chOpenBytes, _ := EncodeFrame(chOpen)
 		time.Sleep(50 * time.Millisecond)
-		conn.WriteMessage(websocket.BinaryMessage, chOpenBytes)
+		_ = conn.WriteMessage(websocket.BinaryMessage, chOpenBytes)
 
 		// Read CHANNEL_OPEN ack
 		_, msg, _ = conn.ReadMessage()
@@ -881,7 +881,7 @@ func TestClient_KeyExchangeRejectedWithoutIdentityKey(t *testing.T) {
 		kexPayload := MarshalKeyExchangePayload(appPriv.PublicKey().Bytes(), nil)
 		kexFrame := NewFrame(FrameKeyExchange, 20, kexPayload)
 		kexBytes, _ := EncodeFrame(kexFrame)
-		conn.WriteMessage(websocket.BinaryMessage, kexBytes)
+		_ = conn.WriteMessage(websocket.BinaryMessage, kexBytes)
 
 		// Should receive CHANNEL_CLOSE (not KEY_EXCHANGE response)
 		_, msg, err := conn.ReadMessage()
@@ -891,7 +891,7 @@ func TestClient_KeyExchangeRejectedWithoutIdentityKey(t *testing.T) {
 		frame, _ = DecodeFrame(msg)
 		if frame.Type == FrameChannelClose {
 			var closePayload ChannelClosePayload
-			UnmarshalControlPayload(frame.Payload, &closePayload)
+			_ = UnmarshalControlPayload(frame.Payload, &closePayload)
 			channelCloseCh <- closePayload
 		} else {
 			t.Logf("expected CHANNEL_CLOSE, got %s", FrameTypeName(frame.Type))
@@ -909,16 +909,16 @@ func TestClient_KeyExchangeRejectedWithoutIdentityKey(t *testing.T) {
 		proxyReqBytes, _ := json.Marshal(proxyReq)
 		dataFrame := NewFrame(FrameData, 20, proxyReqBytes)
 		dataBytes, _ := EncodeFrame(dataFrame)
-		conn.WriteMessage(websocket.BinaryMessage, dataBytes)
+		_ = conn.WriteMessage(websocket.BinaryMessage, dataBytes)
 
 		// Wait briefly for any response — there should be none.
-		conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+		_ = conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
 		_, _, readErr := conn.ReadMessage()
 		if readErr == nil {
 			// Got a response — the channel wasn't properly removed
 			dataResponseCh <- struct{}{}
 		}
-		conn.SetReadDeadline(time.Time{})
+		_ = conn.SetReadDeadline(time.Time{})
 
 		time.Sleep(100 * time.Millisecond)
 	})
@@ -1043,7 +1043,7 @@ func TestClient_SendPushNotification(t *testing.T) {
 			ExpiresAt:    time.Now().Add(time.Hour).Unix(),
 		})
 		ackBytes, _ := EncodeFrame(ack)
-		conn.WriteMessage(websocket.BinaryMessage, ackBytes)
+		_ = conn.WriteMessage(websocket.BinaryMessage, ackBytes)
 
 		// Read frames from the instance; expect PUSH_NOTIFICATION
 		for {
@@ -1256,7 +1256,7 @@ func TestClient_OverloadedDataReturnsBusyResponse(t *testing.T) {
 			ExpiresAt:    time.Now().Add(time.Hour).Unix(),
 		})
 		ackBytes, _ := EncodeFrame(ack)
-		conn.WriteMessage(websocket.BinaryMessage, ackBytes)
+		_ = conn.WriteMessage(websocket.BinaryMessage, ackBytes)
 
 		// Open channel
 		time.Sleep(50 * time.Millisecond)
@@ -1265,7 +1265,7 @@ func TestClient_OverloadedDataReturnsBusyResponse(t *testing.T) {
 			AuthToken: "valid-token",
 		})
 		chOpenBytes, _ := EncodeFrame(chOpen)
-		conn.WriteMessage(websocket.BinaryMessage, chOpenBytes)
+		_ = conn.WriteMessage(websocket.BinaryMessage, chOpenBytes)
 
 		// Read CHANNEL_OPEN ack
 		_, msg, err := conn.ReadMessage()
@@ -1286,7 +1286,7 @@ func TestClient_OverloadedDataReturnsBusyResponse(t *testing.T) {
 		firstReqBytes, _ := json.Marshal(firstReq)
 		firstFrame := NewFrame(FrameData, 1, firstReqBytes)
 		firstData, _ := EncodeFrame(firstFrame)
-		conn.WriteMessage(websocket.BinaryMessage, firstData)
+		_ = conn.WriteMessage(websocket.BinaryMessage, firstData)
 
 		// Second request should get immediate 503 overload response.
 		secondReq := ProxyRequest{

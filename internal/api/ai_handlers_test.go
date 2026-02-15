@@ -1092,7 +1092,7 @@ func TestAISettingsHandler_Approvals(t *testing.T) {
 	approval.SetStore(approvalStore)
 
 	appID := "app-123"
-	approvalStore.CreateApproval(&approval.ApprovalRequest{
+	_ = approvalStore.CreateApproval(&approval.ApprovalRequest{
 		ID:      appID,
 		Command: "ls -la",
 		Status:  approval.StatusPending,
@@ -1122,7 +1122,7 @@ func TestAISettingsHandler_Approvals(t *testing.T) {
 
 	t.Run("HandleDenyCommand", func(t *testing.T) {
 		appID2 := "app-456"
-		approvalStore.CreateApproval(&approval.ApprovalRequest{
+		_ = approvalStore.CreateApproval(&approval.ApprovalRequest{
 			ID:      appID2,
 			Command: "rm -rf /",
 			Status:  approval.StatusPending,
