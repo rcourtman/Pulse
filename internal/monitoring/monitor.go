@@ -3206,41 +3206,9 @@ func monitorPlatformData(resource unifiedresources.Resource, resourceType string
 			}
 		}
 	case "vm":
-		if resource.Proxmox != nil {
-			payload = map[string]interface{}{
-				"vmid":       resource.Proxmox.VMID,
-				"node":       resource.Proxmox.NodeName,
-				"instance":   resource.Proxmox.Instance,
-				"cpus":       resource.Proxmox.CPUs,
-				"template":   resource.Proxmox.Template,
-				"networkIn":  monitorMetricInt64(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue { return metrics.NetIn }),
-				"networkOut": monitorMetricInt64(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue { return metrics.NetOut }),
-				"diskRead":   monitorMetricInt64(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue { return metrics.DiskRead }),
-				"diskWrite": monitorMetricInt64(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue {
-					return metrics.DiskWrite
-				}),
-				"lastBackup":  resource.Proxmox.LastBackup,
-				"ipAddresses": append([]string(nil), resource.Identity.IPAddresses...),
-			}
-		}
+		payload = buildProxmoxVMPayload(resource)
 	case "container", "oci-container":
-		if resource.Proxmox != nil {
-			payload = map[string]interface{}{
-				"vmid":       resource.Proxmox.VMID,
-				"node":       resource.Proxmox.NodeName,
-				"instance":   resource.Proxmox.Instance,
-				"cpus":       resource.Proxmox.CPUs,
-				"template":   resource.Proxmox.Template,
-				"networkIn":  monitorMetricInt64(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue { return metrics.NetIn }),
-				"networkOut": monitorMetricInt64(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue { return metrics.NetOut }),
-				"diskRead":   monitorMetricInt64(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue { return metrics.DiskRead }),
-				"diskWrite": monitorMetricInt64(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue {
-					return metrics.DiskWrite
-				}),
-				"lastBackup":  resource.Proxmox.LastBackup,
-				"ipAddresses": append([]string(nil), resource.Identity.IPAddresses...),
-			}
-		}
+		payload = buildProxmoxVMPayload(resource)
 	case "host":
 		if resource.Agent != nil {
 			payload = map[string]interface{}{
@@ -3388,6 +3356,27 @@ func monitorPlatformData(resource unifiedresources.Resource, resourceType string
 		return nil
 	}
 	return encoded
+}
+
+func buildProxmoxVMPayload(resource unifiedresources.Resource) map[string]interface{} {
+	if resource.Proxmox == nil {
+		return nil
+	}
+	return map[string]interface{}{
+		"vmid":       resource.Proxmox.VMID,
+		"node":       resource.Proxmox.NodeName,
+		"instance":   resource.Proxmox.Instance,
+		"cpus":       resource.Proxmox.CPUs,
+		"template":   resource.Proxmox.Template,
+		"networkIn":  monitorMetricInt64(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue { return metrics.NetIn }),
+		"networkOut": monitorMetricInt64(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue { return metrics.NetOut }),
+		"diskRead":   monitorMetricInt64(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue { return metrics.DiskRead }),
+		"diskWrite": monitorMetricInt64(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue {
+			return metrics.DiskWrite
+		}),
+		"lastBackup":  resource.Proxmox.LastBackup,
+		"ipAddresses": append([]string(nil), resource.Identity.IPAddresses...),
+	}
 }
 
 func monitorMetricValue(metrics *unifiedresources.ResourceMetrics, pick func(*unifiedresources.ResourceMetrics) *unifiedresources.MetricValue) *unifiedresources.MetricValue {
