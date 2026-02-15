@@ -397,18 +397,24 @@ func (c *Client) register(conn *websocket.Conn) error {
 		return fmt.Errorf("encode register frame: %w", err)
 	}
 
-	conn.SetWriteDeadline(time.Now().Add(wsWriteWait))
+	if err := conn.SetWriteDeadline(time.Now().Add(wsWriteWait)); err != nil {
+		return fmt.Errorf("set write deadline: %w", err)
+	}
 	if err := conn.WriteMessage(websocket.BinaryMessage, data); err != nil {
 		return fmt.Errorf("send register: %w", err)
 	}
 
 	// Wait for REGISTER_ACK or ERROR
-	conn.SetReadDeadline(time.Now().Add(wsHandshakeWait))
+	if err := conn.SetReadDeadline(time.Now().Add(wsHandshakeWait)); err != nil {
+		return fmt.Errorf("set read deadline: %w", err)
+	}
 	_, msg, err := conn.ReadMessage()
 	if err != nil {
 		return fmt.Errorf("read register response: %w", err)
 	}
-	conn.SetReadDeadline(time.Time{})
+	if err := conn.SetReadDeadline(time.Time{}); err != nil {
+		return fmt.Errorf("clear read deadline: %w", err)
+	}
 
 	frame, err = DecodeFrame(msg)
 	if err != nil {
@@ -512,7 +518,9 @@ func (c *Client) writePump(ctx context.Context, conn *websocket.Conn, sendCh <-c
 		select {
 		case <-ctx.Done():
 			// Send close message
-			conn.SetWriteDeadline(time.Now().Add(wsWriteWait))
+			if err := conn.SetWriteDeadline(time.Now().Add(wsWriteWait)); err != nil {
+				c.logger.Debug().Err(err).Msg("set write deadline failed")
+			}
 			if err := conn.WriteMessage(websocket.CloseMessage,
 				websocket.FormatCloseMessage(websocket.CloseNormalClosure, "")); err != nil {
 				c.logger.Debug().Err(err).Msg("WS close frame write failed")
@@ -523,14 +531,18 @@ func (c *Client) writePump(ctx context.Context, conn *websocket.Conn, sendCh <-c
 			if !ok {
 				return
 			}
-			conn.SetWriteDeadline(time.Now().Add(wsWriteWait))
+			if err := conn.SetWriteDeadline(time.Now().Add(wsWriteWait)); err != nil {
+				c.logger.Debug().Err(err).Msg("set write deadline failed")
+			}
 			if err := conn.WriteMessage(websocket.BinaryMessage, data); err != nil {
 				c.logger.Debug().Err(err).Msg("write failed")
 				return
 			}
 
 		case <-ticker.C:
-			conn.SetWriteDeadline(time.Now().Add(wsWriteWait))
+			if err := conn.SetWriteDeadline(time.Now().Add(wsWriteWait)); err != nil {
+				c.logger.Debug().Err(err).Msg("set write deadline failed")
+			}
 			if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				c.logger.Debug().Err(err).Msg("WS ping failed")
 				return

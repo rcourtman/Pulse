@@ -75,7 +75,7 @@ func TestHTTPProxy_HandleRequest(t *testing.T) {
 		// Decode body
 		bodyBytes, _ := base64.StdEncoding.DecodeString(resp.Body)
 		var body map[string]string
-		json.Unmarshal(bodyBytes, &body)
+		_ = json.Unmarshal(bodyBytes, &body)
 		if body["status"] != "ok" {
 			t.Errorf("Body status: got %q, want %q", body["status"], "ok")
 		}
@@ -100,7 +100,7 @@ func TestHTTPProxy_HandleRequest(t *testing.T) {
 		}
 
 		var resp ProxyResponse
-		json.Unmarshal(respPayload, &resp)
+		_ = json.Unmarshal(respPayload, &resp)
 
 		if resp.Status != 200 {
 			t.Errorf("Status: got %d, want 200", resp.Status)
@@ -135,7 +135,7 @@ func TestHTTPProxy_HandleRequest(t *testing.T) {
 		}
 
 		var resp ProxyResponse
-		json.Unmarshal(respPayload, &resp)
+		_ = json.Unmarshal(respPayload, &resp)
 
 		if resp.Status != 200 {
 			t.Errorf("Status: got %d, want 200 (headers should have been stripped)", resp.Status)
@@ -149,7 +149,7 @@ func TestHTTPProxy_HandleRequest(t *testing.T) {
 		}
 
 		var resp ProxyResponse
-		json.Unmarshal(respPayload, &resp)
+		_ = json.Unmarshal(respPayload, &resp)
 
 		if resp.Status != http.StatusBadRequest {
 			t.Errorf("Status: got %d, want %d", resp.Status, http.StatusBadRequest)
@@ -166,7 +166,7 @@ func TestHTTPProxy_HandleRequest(t *testing.T) {
 		}
 
 		var resp ProxyResponse
-		json.Unmarshal(respPayload, &resp)
+		_ = json.Unmarshal(respPayload, &resp)
 
 		if resp.Status != http.StatusBadRequest {
 			t.Errorf("Status: got %d, want %d", resp.Status, http.StatusBadRequest)
@@ -187,7 +187,7 @@ func TestHTTPProxy_HandleRequest(t *testing.T) {
 		}
 
 		var resp ProxyResponse
-		json.Unmarshal(respPayload, &resp)
+		_ = json.Unmarshal(respPayload, &resp)
 
 		if resp.Status != http.StatusNotFound {
 			t.Errorf("Status: got %d, want %d", resp.Status, http.StatusNotFound)
@@ -319,7 +319,7 @@ func TestHTTPProxy_HandleStreamRequest(t *testing.T) {
 		var frames []ProxyResponse
 		err := proxy.HandleStreamRequest(context.Background(), payload, "test-token", func(data []byte) {
 			var resp ProxyResponse
-			json.Unmarshal(data, &resp)
+			_ = json.Unmarshal(data, &resp)
 			frames = append(frames, resp)
 		})
 
@@ -403,11 +403,14 @@ func TestHTTPProxy_HandleStreamRequest(t *testing.T) {
 		payload, _ := json.Marshal(req)
 
 		var frames []ProxyResponse
-		proxy.HandleStreamRequest(context.Background(), payload, "test-token", func(data []byte) {
+		err := proxy.HandleStreamRequest(context.Background(), payload, "test-token", func(data []byte) {
 			var resp ProxyResponse
-			json.Unmarshal(data, &resp)
+			_ = json.Unmarshal(data, &resp)
 			frames = append(frames, resp)
 		})
+		if err != nil {
+			t.Fatalf("HandleStreamRequest() error = %v", err)
+		}
 
 		// init + heartbeat (": heartbeat") + done event + stream_done = 4 frames
 		// The heartbeat comment IS a valid SSE line, it gets forwarded as a chunk.
@@ -450,13 +453,16 @@ func TestHTTPProxy_HandleStreamRequest(t *testing.T) {
 
 		var mu sync.Mutex
 		var frames []ProxyResponse
-		proxy.HandleStreamRequest(context.Background(), payload, "test-token", func(data []byte) {
+		err := proxy.HandleStreamRequest(context.Background(), payload, "test-token", func(data []byte) {
 			var resp ProxyResponse
-			json.Unmarshal(data, &resp)
+			_ = json.Unmarshal(data, &resp)
 			mu.Lock()
 			frames = append(frames, resp)
 			mu.Unlock()
 		})
+		if err != nil {
+			t.Fatalf("HandleStreamRequest() error = %v", err)
+		}
 
 		mu.Lock()
 		defer mu.Unlock()
@@ -510,7 +516,7 @@ func TestHTTPProxy_HandleStreamRequest(t *testing.T) {
 		var frames []ProxyResponse
 		err := proxy.HandleStreamRequest(context.Background(), payload, "test-token", func(data []byte) {
 			var resp ProxyResponse
-			json.Unmarshal(data, &resp)
+			_ = json.Unmarshal(data, &resp)
 			frames = append(frames, resp)
 		})
 		if err != nil {
