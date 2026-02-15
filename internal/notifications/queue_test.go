@@ -95,7 +95,7 @@ func TestNewNotificationQueue_WhitespaceDataDirUsesDefault(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create notification queue with whitespace data dir: %v", err)
 	}
-	defer nq.Stop()
+	defer func() { _ = nq.Stop() }()
 
 	expectedDBPath := filepath.Join(utils.GetDataDir(), "notifications", "notification_queue.db")
 	if nq.dbPath != expectedDBPath {
@@ -109,7 +109,7 @@ func TestEnqueue_ValidatesAndNormalizesInput(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create notification queue: %v", err)
 	}
-	defer nq.Stop()
+	defer func() { _ = nq.Stop() }()
 
 	t.Run("rejects nil notification", func(t *testing.T) {
 		err := nq.Enqueue(nil)
@@ -339,7 +339,7 @@ func TestCancelByAlertIDs_NoMatchingNotifications(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create notification queue: %v", err)
 	}
-	defer nq.Stop()
+	defer func() { _ = nq.Stop() }()
 
 	// Enqueue a notification with alert-1 (far future NextRetryAt so background processor doesn't pick it up)
 	futureRetry := time.Now().Add(1 * time.Hour)
@@ -405,7 +405,7 @@ func TestCancelByAlertIDs_MatchingNotificationCancelled(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create notification queue: %v", err)
 	}
-	defer nq.Stop()
+	defer func() { _ = nq.Stop() }()
 
 	// Enqueue a notification with alert-1 (far future NextRetryAt so background processor doesn't pick it up)
 	futureRetry := time.Now().Add(1 * time.Hour)
@@ -501,7 +501,7 @@ func TestCancelByAlertIDs_SetsCompletedAtAndClearsNextRetry(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create notification queue: %v", err)
 	}
-	defer nq.Stop()
+	defer func() { _ = nq.Stop() }()
 
 	futureRetry := time.Now().Add(1 * time.Hour)
 	notif := &QueuedNotification{
@@ -548,6 +548,7 @@ func TestProcessNotification_CancelledNotification(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create notification queue: %v", err)
 	}
+	defer func() { _ = nq.Stop() }()
 
 	// Create a cancelled notification
 	notif := &QueuedNotification{
@@ -570,6 +571,7 @@ func TestProcessNotification_NoProcessor(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create notification queue: %v", err)
 	}
+	defer func() { _ = nq.Stop() }()
 
 	// Enqueue a notification first so IncrementAttemptAndSetStatus works
 	notif := &QueuedNotification{
@@ -597,6 +599,7 @@ func TestProcessNotification_ProcessorSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create notification queue: %v", err)
 	}
+	defer func() { _ = nq.Stop() }()
 
 	// Enqueue a notification
 	notif := &QueuedNotification{
