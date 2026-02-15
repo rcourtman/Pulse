@@ -305,7 +305,9 @@ func (r *Router) handleCreateSSOProvider(w http.ResponseWriter, req *http.Reques
 	if err := r.saveSSOConfig(); err != nil {
 		log.Error().Err(err).Msg("Failed to persist SSO configuration")
 		// Remove the provider we just added since persistence failed
-		r.ssoConfig.RemoveProvider(provider.ID)
+		if err := r.ssoConfig.RemoveProvider(provider.ID); err != nil {
+			log.Warn().Err(err).Str("provider_id", provider.ID).Msg("Failed to remove provider during rollback")
+		}
 		writeErrorResponse(w, http.StatusInternalServerError, "save_error", "Failed to save configuration", nil)
 		return
 	}
@@ -445,7 +447,9 @@ func (r *Router) handleUpdateSSOProvider(w http.ResponseWriter, req *http.Reques
 	if err := r.saveSSOConfig(); err != nil {
 		log.Error().Err(err).Msg("Failed to persist SSO configuration")
 		// Revert to existing provider
-		r.ssoConfig.UpdateProvider(*existing)
+		if err := r.ssoConfig.UpdateProvider(*existing); err != nil {
+			log.Warn().Err(err).Str("provider_id", existing.ID).Msg("Failed to revert provider during rollback")
+		}
 		writeErrorResponse(w, http.StatusInternalServerError, "save_error", "Failed to save configuration", nil)
 		return
 	}
@@ -507,7 +511,9 @@ func (r *Router) handleDeleteSSOProvider(w http.ResponseWriter, req *http.Reques
 	if err := r.saveSSOConfig(); err != nil {
 		log.Error().Err(err).Msg("Failed to persist SSO configuration")
 		// Re-add the provider since persistence failed
-		r.ssoConfig.AddProvider(*existing)
+		if err := r.ssoConfig.AddProvider(*existing); err != nil {
+			log.Warn().Err(err).Str("provider_id", existing.ID).Msg("Failed to re-add provider during rollback")
+		}
 		writeErrorResponse(w, http.StatusInternalServerError, "save_error", "Failed to save configuration", nil)
 		return
 	}

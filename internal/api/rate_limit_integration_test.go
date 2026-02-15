@@ -46,7 +46,7 @@ func TestRateLimitPersistence_FullRoundTrip(t *testing.T) {
 		assert.Equal(t, 200, w.Code)
 
 		var resp map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 
 		// Verify rateLimit is returned (password should be empty for security)
 		assert.Equal(t, float64(120), resp["rateLimit"])

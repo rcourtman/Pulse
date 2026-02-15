@@ -78,7 +78,7 @@ func TestHandleRoles(t *testing.T) {
 			t.Errorf("Expected status OK, got %d", rr.Code)
 		}
 		var roles []auth.Role
-		json.Unmarshal(rr.Body.Bytes(), &roles)
+		_ = json.Unmarshal(rr.Body.Bytes(), &roles)
 		if len(roles) != 1 || roles[0].ID != "admin" {
 			t.Errorf("Unexpected roles: %+v", roles)
 		}
@@ -119,7 +119,7 @@ func TestHandleRoles(t *testing.T) {
 			t.Errorf("Expected status OK, got %d", rr.Code)
 		}
 		var role auth.Role
-		json.Unmarshal(rr.Body.Bytes(), &role)
+		_ = json.Unmarshal(rr.Body.Bytes(), &role)
 		if role.ID != "admin" {
 			t.Errorf("Expected admin role, got %s", role.ID)
 		}
@@ -174,7 +174,7 @@ func TestHandleUserRoleActions(t *testing.T) {
 			t.Errorf("Expected status OK, got %d", rr.Code)
 		}
 		var perms []auth.Permission
-		json.Unmarshal(rr.Body.Bytes(), &perms)
+		_ = json.Unmarshal(rr.Body.Bytes(), &perms)
 		if len(perms) != 1 || perms[0].Action != "read" {
 			t.Errorf("Unexpected permissions: %+v", perms)
 		}

@@ -142,7 +142,7 @@ func TestSSOProviderCRUD(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, w.Code)
 	var updated SSOProviderResponse
-	json.Unmarshal(w.Body.Bytes(), &updated)
+	_ = json.Unmarshal(w.Body.Bytes(), &updated)
 	assert.Equal(t, "Updated Name", updated.Name)
 
 	// Verify persistence
@@ -238,7 +238,7 @@ func TestHandleListSSOProviders(t *testing.T) {
 		ID: "p1", Name: "P1", Type: config.SSOProviderTypeOIDC,
 		OIDC: &config.OIDCProviderConfig{IssuerURL: "https://a.com", ClientID: "c"},
 	}
-	router.ssoConfig.AddProvider(p)
+	_ = router.ssoConfig.AddProvider(p)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/security/sso/providers", nil)
 	w := httptest.NewRecorder()

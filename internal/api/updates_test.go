@@ -86,7 +86,7 @@ func TestHandleCheckUpdates_Success(t *testing.T) {
 	}
 
 	var info updates.UpdateInfo
-	json.NewDecoder(w.Body).Decode(&info)
+	_ = json.NewDecoder(w.Body).Decode(&info)
 	if !info.Available || info.LatestVersion != "v1.2.3" {
 		t.Errorf("Unexpected response: %+v", info)
 	}
@@ -257,7 +257,7 @@ func TestHandleUpdateStatus_Cached(t *testing.T) {
 	}
 
 	var status updates.UpdateStatus
-	json.NewDecoder(w2.Body).Decode(&status)
+	_ = json.NewDecoder(w2.Body).Decode(&status)
 	if status.Status != "cached" {
 		t.Errorf("Expected cached status, got %s", status.Status)
 	}
@@ -331,11 +331,13 @@ func TestHandleListUpdateHistory(t *testing.T) {
 	history, _ := updates.NewUpdateHistory(tmp)
 
 	// Pre-populate history
-	history.CreateEntry(context.Background(), updates.UpdateHistoryEntry{
+	if _, err := history.CreateEntry(context.Background(), updates.UpdateHistoryEntry{
 		EventID:   "test-entry",
 		Status:    updates.StatusSuccess,
 		VersionTo: "v1.2.3",
-	})
+	}); err != nil {
+		t.Fatalf("Failed to create history entry: %v", err)
+	}
 
 	h := NewUpdateHandlers(&MockUpdateManager{}, history)
 	w := httptest.NewRecorder()
@@ -348,7 +350,7 @@ func TestHandleListUpdateHistory(t *testing.T) {
 	}
 
 	var entries []updates.UpdateHistoryEntry
-	json.NewDecoder(w.Body).Decode(&entries)
+	_ = json.NewDecoder(w.Body).Decode(&entries)
 	if len(entries) != 1 {
 		t.Errorf("Expected 1 entry, got %d", len(entries))
 	}
@@ -381,11 +383,13 @@ func TestHandleGetUpdateHistoryEntry(t *testing.T) {
 	history, _ := updates.NewUpdateHistory(tmp)
 
 	// Pre-populate history
-	history.CreateEntry(context.Background(), updates.UpdateHistoryEntry{
+	if _, err := history.CreateEntry(context.Background(), updates.UpdateHistoryEntry{
 		EventID:   "test-entry-1",
 		Status:    updates.StatusSuccess,
 		VersionTo: "v1.2.3",
-	})
+	}); err != nil {
+		t.Fatalf("Failed to create history entry: %v", err)
+	}
 
 	h := NewUpdateHandlers(&MockUpdateManager{}, history)
 	w := httptest.NewRecorder()
@@ -398,7 +402,7 @@ func TestHandleGetUpdateHistoryEntry(t *testing.T) {
 	}
 
 	var entry updates.UpdateHistoryEntry
-	json.NewDecoder(w.Body).Decode(&entry)
+	_ = json.NewDecoder(w.Body).Decode(&entry)
 	if entry.EventID != "test-entry-1" {
 		t.Errorf("Expected EventID test-entry-1, got %s", entry.EventID)
 	}
@@ -508,7 +512,7 @@ func TestHandleGetUpdatePlan(t *testing.T) {
 	}
 
 	var plan updates.UpdatePlan
-	json.NewDecoder(w.Body).Decode(&plan)
+	_ = json.NewDecoder(w.Body).Decode(&plan)
 	if len(plan.Instructions) != 1 {
 		t.Errorf("Expected 1 instruction, got %d", len(plan.Instructions))
 	}

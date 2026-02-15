@@ -691,7 +691,7 @@ func TestRecoveryTokenStore_SaveUnsafe_WriteFileError(t *testing.T) {
 		t.Fatalf("failed to make dir readonly: %v", err)
 	}
 	t.Cleanup(func() {
-		os.Chmod(readOnlyDir, 0755) // Restore for cleanup
+		_ = os.Chmod(readOnlyDir, 0755) // Restore for cleanup
 	})
 
 	// saveUnsafe should handle error gracefully (logs but doesn't panic)

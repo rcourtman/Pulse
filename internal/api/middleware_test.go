@@ -391,12 +391,16 @@ func TestResponseWriter_EdgeCases(t *testing.T) {
 		rec := httptest.NewRecorder()
 		rw := &responseWriter{ResponseWriter: rec, statusCode: http.StatusOK}
 
-		rw.Write([]byte("a"))
+		if _, err := rw.Write([]byte("a")); err != nil {
+			t.Errorf("Write failed: %v", err)
+		}
 		if !rw.written {
 			t.Error("written should be true after first Write")
 		}
 
-		rw.Write([]byte("b"))
+		if _, err := rw.Write([]byte("b")); err != nil {
+			t.Errorf("Write failed: %v", err)
+		}
 		if !rw.written {
 			t.Error("written should remain true after second Write")
 		}
@@ -406,7 +410,9 @@ func TestResponseWriter_EdgeCases(t *testing.T) {
 		rec := httptest.NewRecorder()
 		rw := &responseWriter{ResponseWriter: rec, statusCode: http.StatusOK}
 
-		rw.Write([]byte("data"))
+		if _, err := rw.Write([]byte("data")); err != nil {
+			t.Errorf("Write failed: %v", err)
+		}
 		rw.WriteHeader(http.StatusNotFound)
 
 		// Status should remain 200 since Write triggered implicit WriteHeader

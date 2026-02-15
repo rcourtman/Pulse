@@ -196,7 +196,7 @@ func TestHandleTestSSOProvider_SAMLInvalidXML(t *testing.T) {
 	}
 
 	var resp SSOTestResponse
-	json.Unmarshal(rec.Body.Bytes(), &resp)
+	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
 
 	if resp.Success {
 		t.Error("expected success=false for invalid XML")
@@ -275,7 +275,7 @@ func TestHandleTestSSOProvider_OIDCFetchError(t *testing.T) {
 	}
 
 	var resp SSOTestResponse
-	json.Unmarshal(rec.Body.Bytes(), &resp)
+	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
 
 	if resp.Success {
 		t.Error("expected success=false for unreachable server")
@@ -350,7 +350,7 @@ func TestHandleTestSSOProvider_MissingConfig(t *testing.T) {
 			}
 
 			var resp SSOTestResponse
-			json.Unmarshal(rec.Body.Bytes(), &resp)
+			_ = json.Unmarshal(rec.Body.Bytes(), &resp)
 
 			if resp.Success {
 				t.Error("expected success=false for missing config")

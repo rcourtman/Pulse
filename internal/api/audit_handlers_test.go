@@ -300,7 +300,7 @@ func TestHandleListAuditEvents(t *testing.T) {
 	}
 
 	var resp map[string]interface{}
-	json.Unmarshal(rec.Body.Bytes(), &resp)
+	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
 	if resp["total"].(float64) != 2 {
 		t.Errorf("expected total 2, got %v", resp["total"])
 	}
@@ -333,7 +333,7 @@ func TestHandleGetWebhooks(t *testing.T) {
 	}
 
 	var resp map[string]interface{}
-	json.Unmarshal(rec.Body.Bytes(), &resp)
+	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
 	if _, ok := resp["urls"]; !ok {
 		t.Error("expected urls field in response")
 	}

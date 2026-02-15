@@ -64,7 +64,7 @@ func newTokenRecord(t *testing.T, raw string, scopes []string, metadata map[stri
 
 func readRegisteredPayload(t *testing.T, conn *websocket.Conn) agentexec.RegisteredPayload {
 	t.Helper()
-	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
 	_, data, err := conn.ReadMessage()
 	if err != nil {
 		t.Fatalf("ReadMessage: %v", err)

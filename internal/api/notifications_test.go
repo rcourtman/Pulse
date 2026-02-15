@@ -309,7 +309,7 @@ func TestNotificationHandlers(t *testing.T) {
 
 		assert.Equal(t, 200, w.Code)
 		var resp notifications.EmailConfig
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		assert.Equal(t, "smtp.example.com", resp.SMTPHost)
 		assert.Empty(t, resp.Password) // Should be redacted
 	})
@@ -371,7 +371,7 @@ func TestNotificationHandlers(t *testing.T) {
 
 		assert.Equal(t, 200, w.Code)
 		var resp []map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		assert.Equal(t, 1, len(resp))
 		assert.Equal(t, "wh1", resp[0]["id"])
 		headers := resp[0]["headers"].(map[string]interface{})
@@ -425,7 +425,7 @@ func TestNotificationHandlers(t *testing.T) {
 
 		assert.Equal(t, 200, w.Code)
 		var resp map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		_ = json.Unmarshal(w.Body.Bytes(), &resp)
 		queue := resp["queue"].(map[string]interface{})
 		assert.Equal(t, float64(1), queue["pending"])
 		assert.Equal(t, true, queue["healthy"])

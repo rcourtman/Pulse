@@ -296,15 +296,17 @@ func (h *RBACHandlers) HandleRBACChangelog(w http.ResponseWriter, r *http.Reques
 	limit := 100
 	offset := 0
 	if l := r.URL.Query().Get("limit"); l != "" {
-		fmt.Sscanf(l, "%d", &limit)
-		if limit <= 0 || limit > 1000 {
-			limit = 100
+		if _, err := fmt.Sscanf(l, "%d", &limit); err == nil {
+			if limit <= 0 || limit > 1000 {
+				limit = 100
+			}
 		}
 	}
 	if o := r.URL.Query().Get("offset"); o != "" {
-		fmt.Sscanf(o, "%d", &offset)
-		if offset < 0 {
-			offset = 0
+		if _, err := fmt.Sscanf(o, "%d", &offset); err == nil {
+			if offset < 0 {
+				offset = 0
+			}
 		}
 	}
 
