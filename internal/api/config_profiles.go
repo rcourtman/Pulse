@@ -700,25 +700,45 @@ func (h *ConfigProfileHandler) GetChangeLog(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Filter by profile_id if specified
-	profileID := r.URL.Query().Get("profile_id")
-	if profileID != "" {
-		filtered := []models.ProfileChangeLog{}
-		for _, entry := range logs {
-			if entry.ProfileID == profileID {
-				filtered = append(filtered, entry)
-			}
-		}
-		logs = filtered
-	}
-
-	// Return empty array instead of null
-	if logs == nil {
-		logs = []models.ProfileChangeLog{}
-	}
+	logs = filterProfileLogsByID(logs, r.URL.Query().Get("profile_id"))
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(logs)
+}
+
+func filterProfileLogsByID[T models.ProfileChangeLog | models.ProfileDeploymentStatus](logs []T, idParam string) []T {
+	if len(logs) == 0 {
+		return logs
+	}
+
+	switch any(logs[0]).(type) {
+	case models.ProfileChangeLog:
+		if idParam != "" {
+			var filtered []T
+			for _, entry := range logs {
+				if any(entry).(models.ProfileChangeLog).ProfileID == idParam {
+					filtered = append(filtered, entry)
+				}
+			}
+			logs = filtered
+		}
+	case models.ProfileDeploymentStatus:
+		if idParam != "" {
+			var filtered []T
+			for _, entry := range logs {
+				if any(entry).(models.ProfileDeploymentStatus).AgentID == idParam {
+					filtered = append(filtered, entry)
+				}
+			}
+			logs = filtered
+		}
+	}
+
+	if logs == nil {
+		empty := make([]T, 0)
+		return empty
+	}
+	return logs
 }
 
 // GetDeploymentStatus returns deployment status for all agents
@@ -737,22 +757,7 @@ func (h *ConfigProfileHandler) GetDeploymentStatus(w http.ResponseWriter, r *htt
 		return
 	}
 
-	// Filter by agent_id if specified
-	agentID := r.URL.Query().Get("agent_id")
-	if agentID != "" {
-		filtered := []models.ProfileDeploymentStatus{}
-		for _, s := range status {
-			if s.AgentID == agentID {
-				filtered = append(filtered, s)
-			}
-		}
-		status = filtered
-	}
-
-	// Return empty array instead of null
-	if status == nil {
-		status = []models.ProfileDeploymentStatus{}
-	}
+	status = filterProfileLogsByID(status, r.URL.Query().Get("agent_id"))
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(status)

@@ -13,63 +13,38 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// handleDownloadUnifiedInstallScript serves the universal install.sh script
 func (r *Router) handleDownloadUnifiedInstallScript(w http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodGet && req.Method != http.MethodHead {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// Prevent caching - always serve the latest version
-	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
-	w.Header().Set("Pragma", "no-cache")
-	w.Header().Set("Expires", "0")
-
-	scriptPath := "/opt/pulse/scripts/install.sh"
-	if _, err := os.Stat(scriptPath); os.IsNotExist(err) {
-		// Fallback to project root (dev environment)
-		scriptPath = filepath.Join(r.projectRoot, "scripts", "install.sh")
-		if _, err := os.Stat(scriptPath); os.IsNotExist(err) {
-			// Final fallback: proxy from GitHub releases
-			// This handles LXC/barebone installations updated via web UI where
-			// only the binary is updated, not the scripts directory
-			log.Info().Msg("Local install.sh not found, proxying from GitHub releases")
-			r.proxyInstallScriptFromGitHub(w, req, "install.sh")
-			return
-		}
-	}
-
-	w.Header().Set("Content-Type", "text/x-shellscript")
-	w.Header().Set("Content-Disposition", "inline; filename=\"install.sh\"")
-	http.ServeFile(w, req, scriptPath)
+	handleDownloadInstallScriptCommon(w, req, "/opt/pulse/scripts/install.sh", filepath.Join(r.projectRoot, "scripts", "install.sh"), "install.sh", "text/x-shellscript", r.proxyInstallScriptFromGitHub)
 }
 
-// handleDownloadUnifiedInstallScriptPS serves the universal install.ps1 script
 func (r *Router) handleDownloadUnifiedInstallScriptPS(w http.ResponseWriter, req *http.Request) {
+	handleDownloadInstallScriptCommon(w, req, "/opt/pulse/scripts/install.ps1", filepath.Join(r.projectRoot, "scripts", "install.ps1"), "install.ps1", "text/plain", r.proxyInstallScriptFromGitHub)
+}
+
+type proxyFunc func(http.ResponseWriter, *http.Request, string)
+
+func handleDownloadInstallScriptCommon(w http.ResponseWriter, req *http.Request, prodPath, fallbackPath, scriptName, contentType string, fallbackProxy proxyFunc) {
 	if req.Method != http.MethodGet && req.Method != http.MethodHead {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// Prevent caching - always serve the latest version
 	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 	w.Header().Set("Pragma", "no-cache")
 	w.Header().Set("Expires", "0")
 
-	scriptPath := "/opt/pulse/scripts/install.ps1"
+	scriptPath := prodPath
 	if _, err := os.Stat(scriptPath); os.IsNotExist(err) {
-		// Fallback to project root (dev environment)
-		scriptPath = filepath.Join(r.projectRoot, "scripts", "install.ps1")
+		scriptPath = fallbackPath
 		if _, err := os.Stat(scriptPath); os.IsNotExist(err) {
-			// Final fallback: proxy from GitHub releases
-			log.Info().Msg("Local install.ps1 not found, proxying from GitHub releases")
-			r.proxyInstallScriptFromGitHub(w, req, "install.ps1")
+			log.Info().Msgf("Local %s not found, proxying from GitHub releases", scriptName)
+			fallbackProxy(w, req, scriptName)
 			return
 		}
 	}
 
-	w.Header().Set("Content-Type", "text/plain")
-	w.Header().Set("Content-Disposition", "inline; filename=\"install.ps1\"")
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Content-Disposition", "inline; filename=\""+scriptName+"\"")
 	http.ServeFile(w, req, scriptPath)
 }
 
