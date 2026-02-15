@@ -15,7 +15,7 @@ set -euo pipefail
 #   --lint LINTERS      Comma-separated linters to fix (default: errcheck,dupl)
 #   --packages PKGS     Comma-separated packages to target (default: all with warnings)
 #   --max-iters N       Max iterations (default: 100)
-#   --branch NAME       Branch name (default: lint-fixes/TIMESTAMP)
+#   --branch NAME       Branch name (default: lint-fixes/TIMESTAMP, use "current" for current branch)
 #   --no-worktree       Work directly on current branch (DANGEROUS — no isolation)
 #
 # Environment:
@@ -94,6 +94,11 @@ cd "$REPO_DIR"
 # Generate branch name if not provided
 if [ -z "$BRANCH" ]; then
   BRANCH="lint-fixes/$(date +%Y%m%d-%H%M%S)"
+fi
+
+# Special handling: if branch is "current", use the current branch
+if [ "$BRANCH" = "current" ]; then
+  BRANCH=$(git rev-parse --abbrev-ref HEAD)
 fi
 
 STOP_FILE="$SCRIPT_DIR/.stop"
@@ -179,8 +184,13 @@ else
   WORK_DIR="$REPO_DIR"
   BASE_SHA=$(git rev-parse HEAD)
 
-  git checkout -b "$BRANCH" 2>/dev/null || git checkout "$BRANCH"
-  echo "Working directly in repo (no worktree isolation)"
+  CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+  if [ "$CURRENT_BRANCH" != "$BRANCH" ]; then
+    git checkout -b "$BRANCH" 2>/dev/null || git checkout "$BRANCH"
+    echo "Working directly in repo on branch: $BRANCH"
+  else
+    echo "Working directly in repo on current branch: $BRANCH"
+  fi
   echo "Base commit: $BASE_SHA"
   echo ""
 fi
