@@ -44,7 +44,7 @@ func TestStoreConcurrentCloseAndOperations(t *testing.T) {
 		_, _ = store.Consume(signHMAC([]byte("consume-key"), string(rune('a'+i%26))), time.Now().UTC())
 	}, 4)
 	startWorker(func(_ int) {
-		store.DeleteExpired(time.Now().UTC())
+		_ = store.DeleteExpired(time.Now().UTC())
 	}, 2)
 
 	time.Sleep(50 * time.Millisecond)
