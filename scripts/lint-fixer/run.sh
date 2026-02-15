@@ -3,8 +3,8 @@ set -euo pipefail
 
 # ── Overnight Lint Fixer — errcheck + dupl ─────────────────────────────
 #
-# Fixes golangci-lint errcheck and dupl warnings using aider + MiniMax M2.5.
-# Uses OpenRouter for API access with configurable model.
+# Fixes golangci-lint errcheck and dupl warnings using OpenCode + MiniMax M2.5.
+# OpenCode provides autonomous code editing with built-in verification.
 #
 # Usage:
 #   export OPENROUTER_API_KEY="sk-or-v1-..."
@@ -38,7 +38,7 @@ WORKTREE_BASE="$REPO_DIR/../pulse-lint-fixes"
 trap '' HUP
 
 # Defaults
-MODEL="minimax/minimax-m2.5"
+MODEL="opencode/minimax-m2.5-free"
 LINTERS="errcheck,dupl"
 PACKAGES=""
 MAX_ITERS=100
@@ -73,9 +73,9 @@ if [ -z "${OPENROUTER_API_KEY:-}" ]; then
   exit 1
 fi
 
-if ! command -v aider >/dev/null 2>&1; then
-  echo "Error: aider not found"
-  echo "  Install with: pip install aider-chat"
+if ! command -v opencode >/dev/null 2>&1; then
+  echo "Error: opencode not found"
+  echo "  Install with: brew install opencode"
   exit 1
 fi
 
@@ -430,13 +430,10 @@ Keep changes minimal and focused. Do not change function signatures or add unnec
 
       echo "    Calling AI model..."
 
-      # Run aider with MiniMax M2.5 via OpenRouter
-      if run_with_timeout "$AIDER_TIMEOUT_SECS" aider \
-        --model "openrouter/$MODEL" \
-        --message "$PROMPT" \
-        --yes-always \
-        --no-auto-commits \
-        "$file" >> "$LOG_FILE" 2>&1; then
+      # Run OpenCode with MiniMax M2.5
+      if run_with_timeout "$AIDER_TIMEOUT_SECS" opencode run \
+        --model "$MODEL" \
+        "$PROMPT" >> "$LOG_FILE" 2>&1; then
         echo "    ✓ AI completed successfully"
       else
         AI_EXIT_CODE=$?
