@@ -27,40 +27,53 @@ func metricsFromProxmoxNode(node models.Node) *ResourceMetrics {
 }
 
 func metricsFromHost(host models.Host) *ResourceMetrics {
-	metrics := &ResourceMetrics{}
-	cpuPercent := percentFromUsage(host.CPUUsage)
-	metrics.CPU = &MetricValue{Value: cpuPercent, Percent: cpuPercent, Unit: "percent", Source: SourceAgent}
-	if host.Memory.Total > 0 {
-		percent := percentFromUsage(host.Memory.Usage)
-		metrics.Memory = &MetricValue{Used: &host.Memory.Used, Total: &host.Memory.Total, Percent: percent, Unit: "bytes", Source: SourceAgent}
-	}
-	if len(host.Disks) > 0 {
-		disk := host.Disks[0]
-		if disk.Total > 0 {
-			percent := percentFromUsage(disk.Usage)
-			metrics.Disk = &MetricValue{Used: &disk.Used, Total: &disk.Total, Percent: percent, Unit: "bytes", Source: SourceAgent}
-		}
-	}
-	setNetworkAndDiskIOMetricsHost(metrics, host.NetInRate, host.NetOutRate, host.DiskReadRate, host.DiskWriteRate, SourceAgent)
-	return metrics
+	return buildHostMetricPayload(
+		host.CPUUsage,
+		host.Memory,
+		host.Disks,
+		host.NetInRate,
+		host.NetOutRate,
+		host.DiskReadRate,
+		host.DiskWriteRate,
+		SourceAgent,
+	)
 }
 
 func metricsFromDockerHost(host models.DockerHost) *ResourceMetrics {
+	return buildHostMetricPayload(
+		host.CPUUsage,
+		host.Memory,
+		host.Disks,
+		host.NetInRate,
+		host.NetOutRate,
+		host.DiskReadRate,
+		host.DiskWriteRate,
+		SourceDocker,
+	)
+}
+
+func buildHostMetricPayload(
+	cpuUsage float64,
+	memory models.Memory,
+	disks []models.Disk,
+	netInRate, netOutRate, diskReadRate, diskWriteRate float64,
+	source DataSource,
+) *ResourceMetrics {
 	metrics := &ResourceMetrics{}
-	cpuPercent := percentFromUsage(host.CPUUsage)
-	metrics.CPU = &MetricValue{Value: cpuPercent, Percent: cpuPercent, Unit: "percent", Source: SourceDocker}
-	if host.Memory.Total > 0 {
-		percent := percentFromUsage(host.Memory.Usage)
-		metrics.Memory = &MetricValue{Used: &host.Memory.Used, Total: &host.Memory.Total, Percent: percent, Unit: "bytes", Source: SourceDocker}
+	cpuPercent := percentFromUsage(cpuUsage)
+	metrics.CPU = &MetricValue{Value: cpuPercent, Percent: cpuPercent, Unit: "percent", Source: source}
+	if memory.Total > 0 {
+		percent := percentFromUsage(memory.Usage)
+		metrics.Memory = &MetricValue{Used: &memory.Used, Total: &memory.Total, Percent: percent, Unit: "bytes", Source: source}
 	}
-	if len(host.Disks) > 0 {
-		disk := host.Disks[0]
+	if len(disks) > 0 {
+		disk := disks[0]
 		if disk.Total > 0 {
 			percent := percentFromUsage(disk.Usage)
-			metrics.Disk = &MetricValue{Used: &disk.Used, Total: &disk.Total, Percent: percent, Unit: "bytes", Source: SourceDocker}
+			metrics.Disk = &MetricValue{Used: &disk.Used, Total: &disk.Total, Percent: percent, Unit: "bytes", Source: source}
 		}
 	}
-	setNetworkAndDiskIOMetricsHost(metrics, host.NetInRate, host.NetOutRate, host.DiskReadRate, host.DiskWriteRate, SourceDocker)
+	setNetworkAndDiskIOMetricsHost(metrics, netInRate, netOutRate, diskReadRate, diskWriteRate, source)
 	return metrics
 }
 
@@ -89,34 +102,50 @@ func metricsFromPMGInstance(instance models.PMGInstance) *ResourceMetrics {
 }
 
 func metricsFromVM(vm models.VM) *ResourceMetrics {
-	metrics := &ResourceMetrics{}
-	cpuPercent := percentFromUsage(vm.CPU)
-	metrics.CPU = &MetricValue{Value: cpuPercent, Percent: cpuPercent, Unit: "percent", Source: SourceProxmox}
-	if vm.Memory.Total > 0 {
-		percent := percentFromUsage(vm.Memory.Usage)
-		metrics.Memory = &MetricValue{Used: &vm.Memory.Used, Total: &vm.Memory.Total, Percent: percent, Unit: "bytes", Source: SourceProxmox}
-	}
-	if vm.Disk.Total > 0 {
-		percent := percentFromUsage(vm.Disk.Usage)
-		metrics.Disk = &MetricValue{Used: &vm.Disk.Used, Total: &vm.Disk.Total, Percent: percent, Unit: "bytes", Source: SourceProxmox}
-	}
-	setNetworkAndDiskIOMetricsVM(metrics, vm.NetworkIn, vm.NetworkOut, vm.DiskRead, vm.DiskWrite, SourceProxmox)
-	return metrics
+	return buildVMMetricPayload(
+		vm.CPU,
+		vm.Memory,
+		vm.Disk,
+		vm.NetworkIn,
+		vm.NetworkOut,
+		vm.DiskRead,
+		vm.DiskWrite,
+		SourceProxmox,
+	)
 }
 
 func metricsFromContainer(ct models.Container) *ResourceMetrics {
+	return buildVMMetricPayload(
+		ct.CPU,
+		ct.Memory,
+		ct.Disk,
+		ct.NetworkIn,
+		ct.NetworkOut,
+		ct.DiskRead,
+		ct.DiskWrite,
+		SourceProxmox,
+	)
+}
+
+func buildVMMetricPayload(
+	cpu float64,
+	memory models.Memory,
+	disk models.Disk,
+	netIn, netOut, diskRead, diskWrite int64,
+	source DataSource,
+) *ResourceMetrics {
 	metrics := &ResourceMetrics{}
-	cpuPercent := percentFromUsage(ct.CPU)
-	metrics.CPU = &MetricValue{Value: cpuPercent, Percent: cpuPercent, Unit: "percent", Source: SourceProxmox}
-	if ct.Memory.Total > 0 {
-		percent := percentFromUsage(ct.Memory.Usage)
-		metrics.Memory = &MetricValue{Used: &ct.Memory.Used, Total: &ct.Memory.Total, Percent: percent, Unit: "bytes", Source: SourceProxmox}
+	cpuPercent := percentFromUsage(cpu)
+	metrics.CPU = &MetricValue{Value: cpuPercent, Percent: cpuPercent, Unit: "percent", Source: source}
+	if memory.Total > 0 {
+		percent := percentFromUsage(memory.Usage)
+		metrics.Memory = &MetricValue{Used: &memory.Used, Total: &memory.Total, Percent: percent, Unit: "bytes", Source: source}
 	}
-	if ct.Disk.Total > 0 {
-		percent := percentFromUsage(ct.Disk.Usage)
-		metrics.Disk = &MetricValue{Used: &ct.Disk.Used, Total: &ct.Disk.Total, Percent: percent, Unit: "bytes", Source: SourceProxmox}
+	if disk.Total > 0 {
+		percent := percentFromUsage(disk.Usage)
+		metrics.Disk = &MetricValue{Used: &disk.Used, Total: &disk.Total, Percent: percent, Unit: "bytes", Source: source}
 	}
-	setNetworkAndDiskIOMetricsVM(metrics, ct.NetworkIn, ct.NetworkOut, ct.DiskRead, ct.DiskWrite, SourceProxmox)
+	setNetworkAndDiskIOMetricsVM(metrics, netIn, netOut, diskRead, diskWrite, source)
 	return metrics
 }
 
