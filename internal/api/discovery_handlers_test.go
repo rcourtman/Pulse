@@ -276,8 +276,8 @@ func TestHandleListByType(t *testing.T) {
 
 	d1 := &servicediscovery.ResourceDiscovery{ID: "vm:1", ResourceType: servicediscovery.ResourceTypeVM, ResourceID: "1", HostID: "h"}
 	d2 := &servicediscovery.ResourceDiscovery{ID: "lxc:2", ResourceType: servicediscovery.ResourceTypeLXC, ResourceID: "2", HostID: "h"}
-	store.Save(d1)
-	store.Save(d2)
+	require.NoError(t, store.Save(d1))
+	require.NoError(t, store.Save(d2))
 
 	req := httptest.NewRequest("GET", "/api/discovery/type/vm", nil)
 	w := httptest.NewRecorder()
@@ -286,7 +286,7 @@ func TestHandleListByType(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	var result map[string]interface{}
-	json.NewDecoder(w.Body).Decode(&result)
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&result))
 	discoveries := result["discoveries"].([]interface{})
 	assert.Len(t, discoveries, 1) // Only VM
 }
@@ -296,8 +296,8 @@ func TestHandleListByHost(t *testing.T) {
 
 	d1 := &servicediscovery.ResourceDiscovery{ID: "vm:1", ResourceType: servicediscovery.ResourceTypeVM, ResourceID: "1", HostID: "node1"}
 	d2 := &servicediscovery.ResourceDiscovery{ID: "vm:2", ResourceType: servicediscovery.ResourceTypeVM, ResourceID: "2", HostID: "node2"}
-	store.Save(d1)
-	store.Save(d2)
+	require.NoError(t, store.Save(d1))
+	require.NoError(t, store.Save(d2))
 
 	req := httptest.NewRequest("GET", "/api/discovery/host/node1", nil)
 	w := httptest.NewRecorder()
@@ -306,7 +306,7 @@ func TestHandleListByHost(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	var result map[string]interface{}
-	json.NewDecoder(w.Body).Decode(&result)
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&result))
 	discoveries := result["discoveries"].([]interface{})
 	assert.Len(t, discoveries, 1) // Only node1
 }
@@ -320,17 +320,17 @@ func TestHandleGetProgress(t *testing.T) {
 	h.HandleGetProgress(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
 	var res1 map[string]interface{}
-	json.NewDecoder(w.Body).Decode(&res1)
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&res1))
 	assert.Equal(t, "not_started", res1["status"])
 
 	// Case 2: Completed (if discovery exists)
-	store.Save(&servicediscovery.ResourceDiscovery{ID: "vm:node1:100", ResourceType: "vm", ResourceID: "100", HostID: "node1"})
+	require.NoError(t, store.Save(&servicediscovery.ResourceDiscovery{ID: "vm:node1:100", ResourceType: "vm", ResourceID: "100", HostID: "node1"}))
 	req = httptest.NewRequest("GET", "/api/discovery/vm/node1/100/progress", nil)
 	w = httptest.NewRecorder()
 	h.HandleGetProgress(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
 	var res2 map[string]interface{}
-	json.NewDecoder(w.Body).Decode(&res2)
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&res2))
 	assert.Equal(t, "completed", res2["status"])
 }
 
