@@ -75,8 +75,8 @@ func TestCheckRateLimit_ResetsAfterMinute(t *testing.T) {
 	})
 
 	// Use up the limit
-	manager.checkRateLimit()
-	manager.checkRateLimit()
+	_ = manager.checkRateLimit()
+	_ = manager.checkRateLimit()
 
 	// Manually set lastSent to over a minute ago
 	manager.rateLimit.mu.Lock()
@@ -481,7 +481,7 @@ func TestCheckRateLimit_Concurrency(t *testing.T) {
 	done := make(chan bool, 50)
 	for i := 0; i < 50; i++ {
 		go func() {
-			manager.checkRateLimit()
+			_ = manager.checkRateLimit()
 			done <- true
 		}()
 	}
