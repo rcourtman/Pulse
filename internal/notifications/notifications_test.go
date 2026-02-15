@@ -2907,7 +2907,7 @@ func TestGetQueue_WithQueue(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create queue: %v", err)
 	}
-	defer queue.Stop()
+	defer func() { _ = queue.Stop() }()
 
 	nm := &NotificationManager{queue: queue}
 
