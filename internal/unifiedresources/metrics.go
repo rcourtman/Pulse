@@ -41,18 +41,7 @@ func metricsFromHost(host models.Host) *ResourceMetrics {
 			metrics.Disk = &MetricValue{Used: &disk.Used, Total: &disk.Total, Percent: percent, Unit: "bytes", Source: SourceAgent}
 		}
 	}
-	if host.NetInRate > 0 {
-		metrics.NetIn = &MetricValue{Value: host.NetInRate, Unit: "bytes/s", Source: SourceAgent}
-	}
-	if host.NetOutRate > 0 {
-		metrics.NetOut = &MetricValue{Value: host.NetOutRate, Unit: "bytes/s", Source: SourceAgent}
-	}
-	if host.DiskReadRate > 0 {
-		metrics.DiskRead = &MetricValue{Value: host.DiskReadRate, Unit: "bytes/s", Source: SourceAgent}
-	}
-	if host.DiskWriteRate > 0 {
-		metrics.DiskWrite = &MetricValue{Value: host.DiskWriteRate, Unit: "bytes/s", Source: SourceAgent}
-	}
+	setNetworkAndDiskIOMetricsHost(metrics, host.NetInRate, host.NetOutRate, host.DiskReadRate, host.DiskWriteRate, SourceAgent)
 	return metrics
 }
 
@@ -71,18 +60,7 @@ func metricsFromDockerHost(host models.DockerHost) *ResourceMetrics {
 			metrics.Disk = &MetricValue{Used: &disk.Used, Total: &disk.Total, Percent: percent, Unit: "bytes", Source: SourceDocker}
 		}
 	}
-	if host.NetInRate > 0 {
-		metrics.NetIn = &MetricValue{Value: host.NetInRate, Unit: "bytes/s", Source: SourceDocker}
-	}
-	if host.NetOutRate > 0 {
-		metrics.NetOut = &MetricValue{Value: host.NetOutRate, Unit: "bytes/s", Source: SourceDocker}
-	}
-	if host.DiskReadRate > 0 {
-		metrics.DiskRead = &MetricValue{Value: host.DiskReadRate, Unit: "bytes/s", Source: SourceDocker}
-	}
-	if host.DiskWriteRate > 0 {
-		metrics.DiskWrite = &MetricValue{Value: host.DiskWriteRate, Unit: "bytes/s", Source: SourceDocker}
-	}
+	setNetworkAndDiskIOMetricsHost(metrics, host.NetInRate, host.NetOutRate, host.DiskReadRate, host.DiskWriteRate, SourceDocker)
 	return metrics
 }
 
@@ -122,18 +100,7 @@ func metricsFromVM(vm models.VM) *ResourceMetrics {
 		percent := percentFromUsage(vm.Disk.Usage)
 		metrics.Disk = &MetricValue{Used: &vm.Disk.Used, Total: &vm.Disk.Total, Percent: percent, Unit: "bytes", Source: SourceProxmox}
 	}
-	if vm.NetworkIn != 0 {
-		metrics.NetIn = &MetricValue{Value: float64(vm.NetworkIn), Unit: "bytes/s", Source: SourceProxmox}
-	}
-	if vm.NetworkOut != 0 {
-		metrics.NetOut = &MetricValue{Value: float64(vm.NetworkOut), Unit: "bytes/s", Source: SourceProxmox}
-	}
-	if vm.DiskRead != 0 {
-		metrics.DiskRead = &MetricValue{Value: float64(vm.DiskRead), Unit: "bytes/s", Source: SourceProxmox}
-	}
-	if vm.DiskWrite != 0 {
-		metrics.DiskWrite = &MetricValue{Value: float64(vm.DiskWrite), Unit: "bytes/s", Source: SourceProxmox}
-	}
+	setNetworkAndDiskIOMetricsVM(metrics, vm.NetworkIn, vm.NetworkOut, vm.DiskRead, vm.DiskWrite, SourceProxmox)
 	return metrics
 }
 
@@ -149,18 +116,7 @@ func metricsFromContainer(ct models.Container) *ResourceMetrics {
 		percent := percentFromUsage(ct.Disk.Usage)
 		metrics.Disk = &MetricValue{Used: &ct.Disk.Used, Total: &ct.Disk.Total, Percent: percent, Unit: "bytes", Source: SourceProxmox}
 	}
-	if ct.NetworkIn != 0 {
-		metrics.NetIn = &MetricValue{Value: float64(ct.NetworkIn), Unit: "bytes/s", Source: SourceProxmox}
-	}
-	if ct.NetworkOut != 0 {
-		metrics.NetOut = &MetricValue{Value: float64(ct.NetworkOut), Unit: "bytes/s", Source: SourceProxmox}
-	}
-	if ct.DiskRead != 0 {
-		metrics.DiskRead = &MetricValue{Value: float64(ct.DiskRead), Unit: "bytes/s", Source: SourceProxmox}
-	}
-	if ct.DiskWrite != 0 {
-		metrics.DiskWrite = &MetricValue{Value: float64(ct.DiskWrite), Unit: "bytes/s", Source: SourceProxmox}
-	}
+	setNetworkAndDiskIOMetricsVM(metrics, ct.NetworkIn, ct.NetworkOut, ct.DiskRead, ct.DiskWrite, SourceProxmox)
 	return metrics
 }
 
@@ -660,4 +616,34 @@ func percentFromUsage(value float64) float64 {
 		return value * 100
 	}
 	return value
+}
+
+func setNetworkAndDiskIOMetricsHost(metrics *ResourceMetrics, netIn, netOut, diskRead, diskWrite float64, source DataSource) {
+	if netIn > 0 {
+		metrics.NetIn = &MetricValue{Value: netIn, Unit: "bytes/s", Source: source}
+	}
+	if netOut > 0 {
+		metrics.NetOut = &MetricValue{Value: netOut, Unit: "bytes/s", Source: source}
+	}
+	if diskRead > 0 {
+		metrics.DiskRead = &MetricValue{Value: diskRead, Unit: "bytes/s", Source: source}
+	}
+	if diskWrite > 0 {
+		metrics.DiskWrite = &MetricValue{Value: diskWrite, Unit: "bytes/s", Source: source}
+	}
+}
+
+func setNetworkAndDiskIOMetricsVM(metrics *ResourceMetrics, netIn, netOut, diskRead, diskWrite int64, source DataSource) {
+	if netIn != 0 {
+		metrics.NetIn = &MetricValue{Value: float64(netIn), Unit: "bytes/s", Source: source}
+	}
+	if netOut != 0 {
+		metrics.NetOut = &MetricValue{Value: float64(netOut), Unit: "bytes/s", Source: source}
+	}
+	if diskRead != 0 {
+		metrics.DiskRead = &MetricValue{Value: float64(diskRead), Unit: "bytes/s", Source: source}
+	}
+	if diskWrite != 0 {
+		metrics.DiskWrite = &MetricValue{Value: float64(diskWrite), Unit: "bytes/s", Source: source}
+	}
 }
