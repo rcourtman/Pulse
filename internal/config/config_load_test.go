@@ -109,11 +109,11 @@ func TestLoad_MockEnv(t *testing.T) {
 	// We need to work in a temp dir
 	cwd, _ := os.Getwd()
 	tempDir := t.TempDir()
-	os.Chdir(tempDir)
-	defer os.Chdir(cwd)
+	_ = os.Chdir(tempDir)
+	defer func() { _ = os.Chdir(cwd) }()
 
 	t.Setenv("PULSE_DATA_DIR", tempDir)
-	os.WriteFile("mock.env", []byte(`PULSE_MOCK_TEST="true"`), 0644)
+	_ = os.WriteFile("mock.env", []byte(`PULSE_MOCK_TEST="true"`), 0644)
 
 	t.Cleanup(func() {
 		os.Unsetenv("PULSE_MOCK_TEST")
@@ -222,8 +222,8 @@ func TestLoad_ReadErrors(t *testing.T) {
 	// Create unreadable mock.env
 	mockEnv := "mock.env" // Load looks in current dir
 	cwd, _ := os.Getwd()
-	os.Chdir(tempDir)
-	defer os.Chdir(cwd)
+	_ = os.Chdir(tempDir)
+	defer func() { _ = os.Chdir(cwd) }()
 	require.NoError(t, os.WriteFile(mockEnv, []byte("MOCK=true"), 0000))
 
 	// Create encryption key first (required before creating .enc files)
