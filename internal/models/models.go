@@ -1658,13 +1658,33 @@ func updateSliceByInstanceWithBackup[T any, K int | int64](
 	return result
 }
 
-// UpdateVMsForInstance updates VMs for a specific instance, merging with existing VMs
-func (s *State) UpdateVMsForInstance(instanceName string, vms []VM) {
+func updateSliceForInstance[T any, K int | int64](
+	s *State,
+	slicePtr *[]T,
+	newItems []T,
+	instanceName string,
+	getID func(T) string,
+	getInstance func(T) string,
+	getVMID func(T) K,
+	getLastBackup func(T) time.Time,
+	setLastBackup func(T, time.Time) T,
+	clone func(T) T,
+	less func([]T, int, int) bool,
+) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.VMs = updateSliceByInstanceWithBackup(
-		s.VMs, vms, instanceName,
+	*slicePtr = updateSliceByInstanceWithBackup(
+		*slicePtr, newItems, instanceName,
+		getID, getInstance, getVMID, getLastBackup, setLastBackup, clone, less,
+	)
+	s.LastUpdate = time.Now()
+}
+
+// UpdateVMsForInstance updates VMs for a specific instance, merging with existing VMs
+func (s *State) UpdateVMsForInstance(instanceName string, vms []VM) {
+	updateSliceForInstance(
+		s, &s.VMs, vms, instanceName,
 		func(vm VM) string { return vm.ID },
 		func(vm VM) string { return vm.Instance },
 		func(vm VM) int { return vm.VMID },
@@ -1673,7 +1693,6 @@ func (s *State) UpdateVMsForInstance(instanceName string, vms []VM) {
 		cloneVM,
 		func(items []VM, i, j int) bool { return items[i].VMID < items[j].VMID },
 	)
-	s.LastUpdate = time.Now()
 }
 
 // UpdateContainers updates the containers in the state
@@ -1876,11 +1895,8 @@ func (s *State) SyncGuestBackupTimes() {
 
 // UpdateContainersForInstance updates containers for a specific instance, merging with existing containers
 func (s *State) UpdateContainersForInstance(instanceName string, containers []Container) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.Containers = updateSliceByInstanceWithBackup(
-		s.Containers, containers, instanceName,
+	updateSliceForInstance(
+		s, &s.Containers, containers, instanceName,
 		func(ct Container) string { return ct.ID },
 		func(ct Container) string { return ct.Instance },
 		func(ct Container) int { return ct.VMID },
@@ -1889,7 +1905,6 @@ func (s *State) UpdateContainersForInstance(instanceName string, containers []Co
 		cloneContainer,
 		func(items []Container, i, j int) bool { return items[i].VMID < items[j].VMID },
 	)
-	s.LastUpdate = time.Now()
 }
 
 // UpsertDockerHost inserts or updates a Docker host in state.
