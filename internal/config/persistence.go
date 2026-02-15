@@ -2166,35 +2166,64 @@ func newEmptyAIUsageHistoryData() *AIUsageHistoryData {
 	}
 }
 
-// LoadAIUsageHistory loads AI usage events from disk.
-func (c *ConfigPersistence) LoadAIUsageHistory() (*AIUsageHistoryData, error) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
+// loadHistoryData generic helper for loading history data from disk
+func loadHistoryData[T any](
+	fs FileSystem,
+	mu *sync.RWMutex,
+	filePath string,
+	emptyDataFactory func() *T,
+	normalizeSlice func(*T),
+	getCount func(*T) int,
+	getLastSaved func(*T) time.Time,
+	logLabel string,
+) (*T, error) {
+	mu.RLock()
+	defer mu.RUnlock()
 
-	data, err := c.fs.ReadFile(c.aiUsageHistoryFile)
+	data, err := fs.ReadFile(filePath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return newEmptyAIUsageHistoryData(), nil
+			return emptyDataFactory(), nil
 		}
 		return nil, err
 	}
 
-	var usageData AIUsageHistoryData
-	if err := json.Unmarshal(data, &usageData); err != nil {
-		log.Error().Err(err).Str("file", c.aiUsageHistoryFile).Msg("Failed to parse AI usage history file")
-		return newEmptyAIUsageHistoryData(), nil
+	var historyData T
+	if err := json.Unmarshal(data, &historyData); err != nil {
+		log.Error().Err(err).Str("file", filePath).Msgf("Failed to parse %s file", logLabel)
+		return emptyDataFactory(), nil
 	}
 
-	if usageData.Events == nil {
-		usageData.Events = make([]AIUsageEventRecord, 0)
-	}
+	normalizeSlice(&historyData)
 
 	log.Info().
-		Str("file", c.aiUsageHistoryFile).
-		Int("count", len(usageData.Events)).
-		Time("last_saved", usageData.LastSaved).
-		Msg("AI usage history loaded")
-	return &usageData, nil
+		Str("file", filePath).
+		Int("count", getCount(&historyData)).
+		Time("last_saved", getLastSaved(&historyData)).
+		Msgf("%s loaded", logLabel)
+	return &historyData, nil
+}
+
+// LoadAIUsageHistory loads AI usage events from disk.
+func (c *ConfigPersistence) LoadAIUsageHistory() (*AIUsageHistoryData, error) {
+	return loadHistoryData(
+		c.fs,
+		&c.mu,
+		c.aiUsageHistoryFile,
+		newEmptyAIUsageHistoryData,
+		func(data *AIUsageHistoryData) {
+			if data.Events == nil {
+				data.Events = make([]AIUsageEventRecord, 0)
+			}
+		},
+		func(data *AIUsageHistoryData) int {
+			return len(data.Events)
+		},
+		func(data *AIUsageHistoryData) time.Time {
+			return data.LastSaved
+		},
+		"AI usage history",
+	)
 }
 
 // SavePatrolRunHistory persists patrol run history to disk
@@ -2237,33 +2266,24 @@ func newEmptyPatrolRunHistoryData() *PatrolRunHistoryData {
 
 // LoadPatrolRunHistory loads patrol run history from disk
 func (c *ConfigPersistence) LoadPatrolRunHistory() (*PatrolRunHistoryData, error) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	data, err := c.fs.ReadFile(c.aiPatrolRunsFile)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return newEmptyPatrolRunHistoryData(), nil
-		}
-		return nil, err
-	}
-
-	var historyData PatrolRunHistoryData
-	if err := json.Unmarshal(data, &historyData); err != nil {
-		log.Error().Err(err).Str("file", c.aiPatrolRunsFile).Msg("Failed to parse patrol run history file")
-		return newEmptyPatrolRunHistoryData(), nil
-	}
-
-	if historyData.Runs == nil {
-		historyData.Runs = make([]PatrolRunRecord, 0)
-	}
-
-	log.Info().
-		Str("file", c.aiPatrolRunsFile).
-		Int("count", len(historyData.Runs)).
-		Time("last_saved", historyData.LastSaved).
-		Msg("Patrol run history loaded")
-	return &historyData, nil
+	return loadHistoryData(
+		c.fs,
+		&c.mu,
+		c.aiPatrolRunsFile,
+		newEmptyPatrolRunHistoryData,
+		func(data *PatrolRunHistoryData) {
+			if data.Runs == nil {
+				data.Runs = make([]PatrolRunRecord, 0)
+			}
+		},
+		func(data *PatrolRunHistoryData) int {
+			return len(data.Runs)
+		},
+		func(data *PatrolRunHistoryData) time.Time {
+			return data.LastSaved
+		},
+		"Patrol run history",
+	)
 }
 
 // LoadSystemSettings loads system settings from file
