@@ -416,7 +416,7 @@ func (a *Agent) selfUpdate(ctx context.Context) error {
 	tmpPath := tmpFile.Name()
 	defer func() {
 		if err := osRemoveFn(tmpPath); err != nil {
-			a.logger.Warn().Err(err).Msg("Self-update: failed to clean up temp file")
+			a.logger.Warn().Err(err).Str("path", tmpPath).Msg("Self-update: failed to clean up temp file")
 		}
 	}()
 

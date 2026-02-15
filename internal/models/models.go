@@ -1618,48 +1618,61 @@ func (s *State) UpdateVMs(vms []VM) {
 	s.LastUpdate = time.Now()
 }
 
+func updateSliceByInstanceWithBackup[T any, K int | int64](
+	existing []T,
+	newItems []T,
+	instanceName string,
+	getID func(T) string,
+	getInstance func(T) string,
+	getVMID func(T) K,
+	getLastBackup func(T) time.Time,
+	setLastBackup func(T, time.Time) T,
+	clone func(T) T,
+	less func([]T, int, int) bool,
+) []T {
+	existingByVMID := make(map[K]T)
+	for _, item := range existing {
+		if getInstance(item) == instanceName {
+			existingByVMID[getVMID(item)] = item
+		}
+	}
+
+	itemMap := make(map[string]T)
+	for _, item := range existing {
+		if getInstance(item) != instanceName {
+			itemMap[getID(item)] = item
+		}
+	}
+	for _, item := range newItems {
+		item = clone(item)
+		if existing, ok := existingByVMID[getVMID(item)]; ok && getLastBackup(item).IsZero() {
+			item = setLastBackup(item, getLastBackup(existing))
+		}
+		itemMap[getID(item)] = item
+	}
+	result := make([]T, 0, len(itemMap))
+	for _, item := range itemMap {
+		result = append(result, item)
+	}
+	sort.Slice(result, func(i, j int) bool { return less(result, i, j) })
+	return result
+}
+
 // UpdateVMsForInstance updates VMs for a specific instance, merging with existing VMs
 func (s *State) UpdateVMsForInstance(instanceName string, vms []VM) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Build a lookup of existing VMs for this instance to preserve LastBackup
-	existingByVMID := make(map[int]VM)
-	for _, vm := range s.VMs {
-		if vm.Instance == instanceName {
-			existingByVMID[vm.VMID] = vm
-		}
-	}
-
-	// Create a map of existing VMs, excluding those from this instance
-	vmMap := make(map[string]VM)
-	for _, vm := range s.VMs {
-		if vm.Instance != instanceName {
-			vmMap[vm.ID] = vm
-		}
-	}
-
-	// Add or update VMs from this instance, preserving LastBackup from existing data
-	for _, vm := range vms {
-		vm = cloneVM(vm)
-		if existing, ok := existingByVMID[vm.VMID]; ok && vm.LastBackup.IsZero() {
-			vm.LastBackup = existing.LastBackup
-		}
-		vmMap[vm.ID] = vm
-	}
-
-	// Convert map back to slice
-	newVMs := make([]VM, 0, len(vmMap))
-	for _, vm := range vmMap {
-		newVMs = append(newVMs, vm)
-	}
-
-	// Sort VMs by VMID to ensure consistent ordering
-	sort.Slice(newVMs, func(i, j int) bool {
-		return newVMs[i].VMID < newVMs[j].VMID
-	})
-
-	s.VMs = newVMs
+	s.VMs = updateSliceByInstanceWithBackup(
+		s.VMs, vms, instanceName,
+		func(vm VM) string { return vm.ID },
+		func(vm VM) string { return vm.Instance },
+		func(vm VM) int { return vm.VMID },
+		func(vm VM) time.Time { return vm.LastBackup },
+		func(vm VM, t time.Time) VM { vm.LastBackup = t; return vm },
+		cloneVM,
+		func(items []VM, i, j int) bool { return items[i].VMID < items[j].VMID },
+	)
 	s.LastUpdate = time.Now()
 }
 
@@ -2673,34 +2686,18 @@ func (s *State) UpdateStorageForInstance(instanceName string, storage []Storage)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Create a map of existing storage, excluding those from this instance
-	storageMap := make(map[string]Storage)
-	for _, st := range s.Storage {
-		if st.Instance != instanceName {
-			storageMap[st.ID] = st
-		}
-	}
-
-	// Add or update storage from this instance
-	for _, st := range storage {
-		storageMap[st.ID] = cloneStorage(st)
-	}
-
-	// Convert map back to slice
-	newStorage := make([]Storage, 0, len(storageMap))
-	for _, st := range storageMap {
-		newStorage = append(newStorage, st)
-	}
-
-	// Sort storage by name to ensure consistent ordering
-	sort.Slice(newStorage, func(i, j int) bool {
-		if newStorage[i].Instance == newStorage[j].Instance {
-			return newStorage[i].Name < newStorage[j].Name
-		}
-		return newStorage[i].Instance < newStorage[j].Instance
-	})
-
-	s.Storage = newStorage
+	s.Storage = updateSliceByInstance(
+		s.Storage, storage, instanceName,
+		func(st Storage) string { return st.ID },
+		func(st Storage) string { return st.Instance },
+		cloneStorage,
+		func(items []Storage, i, j int) bool {
+			if items[i].Instance == items[j].Instance {
+				return items[i].Name < items[j].Name
+			}
+			return items[i].Instance < items[j].Instance
+		},
+	)
 	s.LastUpdate = time.Now()
 }
 
