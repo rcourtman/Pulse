@@ -58,7 +58,7 @@ func TestIsMigrationNeeded(t *testing.T) {
 	require.True(t, IsMigrationNeeded(dataDir))
 
 	// After migration - not needed
-	MigrateToMultiTenant(dataDir)
+	_ = MigrateToMultiTenant(dataDir)
 	require.False(t, IsMigrationNeeded(dataDir))
 }
 
