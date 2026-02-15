@@ -1879,43 +1879,16 @@ func (s *State) UpdateContainersForInstance(instanceName string, containers []Co
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Build a lookup of existing containers for this instance to preserve LastBackup
-	existingByVMID := make(map[int]Container)
-	for _, ct := range s.Containers {
-		if ct.Instance == instanceName {
-			existingByVMID[ct.VMID] = ct
-		}
-	}
-
-	// Create a map of existing containers, excluding those from this instance
-	containerMap := make(map[string]Container)
-	for _, container := range s.Containers {
-		if container.Instance != instanceName {
-			containerMap[container.ID] = container
-		}
-	}
-
-	// Add or update containers from this instance, preserving LastBackup from existing data
-	for _, container := range containers {
-		container = cloneContainer(container)
-		if existing, ok := existingByVMID[container.VMID]; ok && container.LastBackup.IsZero() {
-			container.LastBackup = existing.LastBackup
-		}
-		containerMap[container.ID] = container
-	}
-
-	// Convert map back to slice
-	newContainers := make([]Container, 0, len(containerMap))
-	for _, container := range containerMap {
-		newContainers = append(newContainers, container)
-	}
-
-	// Sort containers by VMID to ensure consistent ordering
-	sort.Slice(newContainers, func(i, j int) bool {
-		return newContainers[i].VMID < newContainers[j].VMID
-	})
-
-	s.Containers = newContainers
+	s.Containers = updateSliceByInstanceWithBackup(
+		s.Containers, containers, instanceName,
+		func(ct Container) string { return ct.ID },
+		func(ct Container) string { return ct.Instance },
+		func(ct Container) int { return ct.VMID },
+		func(ct Container) time.Time { return ct.LastBackup },
+		func(ct Container, t time.Time) Container { ct.LastBackup = t; return ct },
+		cloneContainer,
+		func(items []Container, i, j int) bool { return items[i].VMID < items[j].VMID },
+	)
 	s.LastUpdate = time.Now()
 }
 
