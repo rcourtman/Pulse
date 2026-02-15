@@ -7261,169 +7261,69 @@ func (m *Manager) checkPMGQueueDepths(pmg models.PMGInstance, defaults PMGThresh
 		}
 	}
 
-	// Check total queue depth
-	if defaults.QueueTotalWarning > 0 || defaults.QueueTotalCritical > 0 {
-		alertID := fmt.Sprintf("%s-queue-total", pmg.ID)
-		var level AlertLevel
-		var threshold int
-		var shouldAlert bool
+	m.checkPMGQueueDepth(pmg, defaults.QueueTotalWarning, defaults.QueueTotalCritical, totalQueue, "queue-total", "queue-depth",
+		"PMG %s has %d total messages in queue (threshold: %d)", "total_queue")
+	m.checkPMGQueueDepth(pmg, defaults.DeferredQueueWarn, defaults.DeferredQueueCritical, totalDeferred, "queue-deferred", "queue-deferred",
+		"PMG %s has %d deferred messages (threshold: %d)", "deferred_queue")
+	m.checkPMGQueueDepth(pmg, defaults.HoldQueueWarn, defaults.HoldQueueCritical, totalHold, "queue-hold", "queue-hold",
+		"PMG %s has %d held messages (threshold: %d)", "hold_queue")
+}
 
-		if defaults.QueueTotalCritical > 0 && totalQueue >= defaults.QueueTotalCritical {
-			level = AlertLevelCritical
-			threshold = defaults.QueueTotalCritical
-			shouldAlert = true
-		} else if defaults.QueueTotalWarning > 0 && totalQueue >= defaults.QueueTotalWarning {
-			level = AlertLevelWarning
-			threshold = defaults.QueueTotalWarning
-			shouldAlert = true
-		}
-
-		if !shouldAlert {
-			m.clearAlert(alertID)
-		} else {
-			m.mu.Lock()
-			if alert, exists := m.activeAlerts[alertID]; exists {
-				alert.LastSeen = time.Now()
-				alert.Value = float64(totalQueue)
-				alert.Threshold = float64(threshold)
-				alert.Level = level
-			} else {
-				alert := &Alert{
-					ID:              alertID,
-					Type:            "queue-depth",
-					Level:           level,
-					ResourceID:      pmg.ID,
-					ResourceName:    pmg.Name,
-					Node:            pmg.Host,
-					NodeDisplayName: m.resolveNodeDisplayName(pmg.Host),
-					Instance:        pmg.Name,
-					Message:         fmt.Sprintf("PMG %s has %d total messages in queue (threshold: %d)", pmg.Name, totalQueue, threshold),
-					Value:           float64(totalQueue),
-					Threshold:       float64(threshold),
-					StartTime:       time.Now(),
-					LastSeen:        time.Now(),
-				}
-				m.activeAlerts[alertID] = alert
-				m.dispatchAlert(alert, true)
-				log.Warn().
-					Str("pmg", pmg.Name).
-					Int("total_queue", totalQueue).
-					Int("threshold", threshold).
-					Str("level", string(level)).
-					Msg("PMG total queue depth alert triggered")
-			}
-			m.mu.Unlock()
-		}
+func (m *Manager) checkPMGQueueDepth(pmg models.PMGInstance, warningThreshold, criticalThreshold, value int, alertIDSuffix, alertType, messageFormat, logField string) {
+	if warningThreshold <= 0 && criticalThreshold <= 0 {
+		return
 	}
 
-	// Check deferred queue depth
-	if defaults.DeferredQueueWarn > 0 || defaults.DeferredQueueCritical > 0 {
-		alertID := fmt.Sprintf("%s-queue-deferred", pmg.ID)
-		var level AlertLevel
-		var threshold int
-		var shouldAlert bool
+	alertID := fmt.Sprintf("%s-%s", pmg.ID, alertIDSuffix)
+	var level AlertLevel
+	var threshold int
+	var shouldAlert bool
 
-		if defaults.DeferredQueueCritical > 0 && totalDeferred >= defaults.DeferredQueueCritical {
-			level = AlertLevelCritical
-			threshold = defaults.DeferredQueueCritical
-			shouldAlert = true
-		} else if defaults.DeferredQueueWarn > 0 && totalDeferred >= defaults.DeferredQueueWarn {
-			level = AlertLevelWarning
-			threshold = defaults.DeferredQueueWarn
-			shouldAlert = true
-		}
-
-		if !shouldAlert {
-			m.clearAlert(alertID)
-		} else {
-			m.mu.Lock()
-			if alert, exists := m.activeAlerts[alertID]; exists {
-				alert.LastSeen = time.Now()
-				alert.Value = float64(totalDeferred)
-				alert.Threshold = float64(threshold)
-				alert.Level = level
-			} else {
-				alert := &Alert{
-					ID:              alertID,
-					Type:            "queue-deferred",
-					Level:           level,
-					ResourceID:      pmg.ID,
-					ResourceName:    pmg.Name,
-					Node:            pmg.Host,
-					NodeDisplayName: m.resolveNodeDisplayName(pmg.Host),
-					Instance:        pmg.Name,
-					Message:         fmt.Sprintf("PMG %s has %d deferred messages (threshold: %d)", pmg.Name, totalDeferred, threshold),
-					Value:           float64(totalDeferred),
-					Threshold:       float64(threshold),
-					StartTime:       time.Now(),
-					LastSeen:        time.Now(),
-				}
-				m.activeAlerts[alertID] = alert
-				m.dispatchAlert(alert, true)
-				log.Warn().
-					Str("pmg", pmg.Name).
-					Int("deferred_queue", totalDeferred).
-					Int("threshold", threshold).
-					Str("level", string(level)).
-					Msg("PMG deferred queue depth alert triggered")
-			}
-			m.mu.Unlock()
-		}
+	if criticalThreshold > 0 && value >= criticalThreshold {
+		level = AlertLevelCritical
+		threshold = criticalThreshold
+		shouldAlert = true
+	} else if warningThreshold > 0 && value >= warningThreshold {
+		level = AlertLevelWarning
+		threshold = warningThreshold
+		shouldAlert = true
 	}
 
-	// Check hold queue depth
-	if defaults.HoldQueueWarn > 0 || defaults.HoldQueueCritical > 0 {
-		alertID := fmt.Sprintf("%s-queue-hold", pmg.ID)
-		var level AlertLevel
-		var threshold int
-		var shouldAlert bool
-
-		if defaults.HoldQueueCritical > 0 && totalHold >= defaults.HoldQueueCritical {
-			level = AlertLevelCritical
-			threshold = defaults.HoldQueueCritical
-			shouldAlert = true
-		} else if defaults.HoldQueueWarn > 0 && totalHold >= defaults.HoldQueueWarn {
-			level = AlertLevelWarning
-			threshold = defaults.HoldQueueWarn
-			shouldAlert = true
-		}
-
-		if !shouldAlert {
-			m.clearAlert(alertID)
+	if !shouldAlert {
+		m.clearAlert(alertID)
+	} else {
+		m.mu.Lock()
+		if alert, exists := m.activeAlerts[alertID]; exists {
+			alert.LastSeen = time.Now()
+			alert.Value = float64(value)
+			alert.Threshold = float64(threshold)
+			alert.Level = level
 		} else {
-			m.mu.Lock()
-			if alert, exists := m.activeAlerts[alertID]; exists {
-				alert.LastSeen = time.Now()
-				alert.Value = float64(totalHold)
-				alert.Threshold = float64(threshold)
-				alert.Level = level
-			} else {
-				alert := &Alert{
-					ID:              alertID,
-					Type:            "queue-hold",
-					Level:           level,
-					ResourceID:      pmg.ID,
-					ResourceName:    pmg.Name,
-					Node:            pmg.Host,
-					NodeDisplayName: m.resolveNodeDisplayName(pmg.Host),
-					Instance:        pmg.Name,
-					Message:         fmt.Sprintf("PMG %s has %d held messages (threshold: %d)", pmg.Name, totalHold, threshold),
-					Value:           float64(totalHold),
-					Threshold:       float64(threshold),
-					StartTime:       time.Now(),
-					LastSeen:        time.Now(),
-				}
-				m.activeAlerts[alertID] = alert
-				m.dispatchAlert(alert, true)
-				log.Warn().
-					Str("pmg", pmg.Name).
-					Int("hold_queue", totalHold).
-					Int("threshold", threshold).
-					Str("level", string(level)).
-					Msg("PMG hold queue depth alert triggered")
+			alert := &Alert{
+				ID:              alertID,
+				Type:            alertType,
+				Level:           level,
+				ResourceID:      pmg.ID,
+				ResourceName:    pmg.Name,
+				Node:            pmg.Host,
+				NodeDisplayName: m.resolveNodeDisplayName(pmg.Host),
+				Instance:        pmg.Name,
+				Message:         fmt.Sprintf(messageFormat, pmg.Name, value, threshold),
+				Value:           float64(value),
+				Threshold:       float64(threshold),
+				StartTime:       time.Now(),
+				LastSeen:        time.Now(),
 			}
-			m.mu.Unlock()
+			m.activeAlerts[alertID] = alert
+			m.dispatchAlert(alert, true)
+			log.Warn().
+				Str("pmg", pmg.Name).
+				Int(logField, value).
+				Int("threshold", threshold).
+				Str("level", string(level)).
+				Msg(fmt.Sprintf("PMG %s alert triggered", alertType))
 		}
+		m.mu.Unlock()
 	}
 }
 
