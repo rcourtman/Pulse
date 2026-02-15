@@ -30,7 +30,7 @@ func TestConfigPersistence_MigrateWebhooksIfNeeded(t *testing.T) {
 		{ID: "webhook-1", URL: "http://example.com/legacy"},
 	}
 	data, _ := json.Marshal(legacyWebhooks)
-	os.WriteFile(legacyFile, data, 0644)
+	_ = os.WriteFile(legacyFile, data, 0644)
 
 	// 2. Migrate
 	if err := cp.MigrateWebhooksIfNeeded(); err != nil {
@@ -96,7 +96,7 @@ func TestConfigPersistence_UpdateEnvFile(t *testing.T) {
 AUTO_UPDATE_ENABLED=false
 POLLING_INTERVAL=10
 CUSTOM_VAR=value`
-	os.WriteFile(envFile, []byte(initialContent), 0644)
+	_ = os.WriteFile(envFile, []byte(initialContent), 0644)
 
 	cp := config.NewConfigPersistence(tempDir)
 
