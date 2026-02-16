@@ -94,6 +94,15 @@ func (e *Evaluator) MeterEnabled(key string) bool {
 	return false
 }
 
+// PlanVersion returns the current plan_version from the source.
+// This is used to preserve grandfathered terms or Stripe metadata-driven plan selection.
+func (e *Evaluator) PlanVersion() string {
+	if e == nil || e.source == nil {
+		return ""
+	}
+	return e.source.PlanVersion()
+}
+
 // SubscriptionState returns the current subscription state from the source.
 func (e *Evaluator) SubscriptionState() SubscriptionState {
 	if e == nil || e.source == nil {

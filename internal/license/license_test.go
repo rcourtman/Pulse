@@ -1387,6 +1387,44 @@ func TestEvaluatorMatrix(t *testing.T) {
 		}
 	})
 
+	t.Run("license=nil evaluator!=nil expired => free-only (hosted)", func(t *testing.T) {
+		svc := NewService()
+		eval := entitlements.NewEvaluator(staticEntitlementSource{
+			capabilities: []string{
+				FeatureAIPatrol,
+				FeatureAIAutoFix,
+				FeatureRelay,
+			},
+			subscriptionState: entitlements.SubStateExpired,
+		})
+		svc.SetEvaluator(eval)
+
+		if got := svc.HasFeature(FeatureAIAutoFix); got {
+			t.Fatalf("HasFeature(%q)=%v, want false", FeatureAIAutoFix, got)
+		}
+		// Free-tier baseline should remain available.
+		if got := svc.HasFeature(FeatureAIPatrol); !got {
+			t.Fatalf("HasFeature(%q)=%v, want true", FeatureAIPatrol, got)
+		}
+		if got := svc.SubscriptionState(); got != string(SubStateExpired) {
+			t.Fatalf("SubscriptionState()=%q, want %q", got, SubStateExpired)
+		}
+
+		status := svc.Status()
+		if status.Valid {
+			t.Fatalf("Status().Valid=%v, want false", status.Valid)
+		}
+		if status.Tier != TierPro {
+			t.Fatalf("Status().Tier=%q, want %q", status.Tier, TierPro)
+		}
+		if !reflect.DeepEqual(status.Features, TierFeatures[TierFree]) {
+			t.Fatalf("Status().Features=%v, want %v", status.Features, TierFeatures[TierFree])
+		}
+		if status.MaxNodes != 0 || status.MaxGuests != 0 {
+			t.Fatalf("expected limits to be omitted for expired subscription, got MaxNodes=%d MaxGuests=%d", status.MaxNodes, status.MaxGuests)
+		}
+	})
+
 	t.Run("license!=nil evaluator=nil => JWT drives", func(t *testing.T) {
 		svc := setupTestServiceWithTier(t, TierPro)
 		svc.SetEvaluator(nil) // ensure evaluator is not in the decision path

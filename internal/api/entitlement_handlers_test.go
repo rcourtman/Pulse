@@ -238,6 +238,9 @@ func TestEntitlementHandler_UsesEvaluatorWhenNoLicense(t *testing.T) {
 	if payload.SubscriptionState != string(license.SubStateActive) {
 		t.Fatalf("subscription_state=%q, want %q", payload.SubscriptionState, license.SubStateActive)
 	}
+	if payload.PlanVersion != "pro" {
+		t.Fatalf("plan_version=%q, want %q", payload.PlanVersion, "pro")
+	}
 
 	contains := func(values []string, key string) bool {
 		for _, v := range values {

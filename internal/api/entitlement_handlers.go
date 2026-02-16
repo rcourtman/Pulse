@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"math"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/license"
@@ -13,7 +14,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/license/subscription"
 )
 
-// Keep evaluator package imported ahead of MON-08 service wiring.
+// Keep evaluator package imported to ensure it remains linked for entitlement evaluation paths.
 var _ = evaluator.NewEvaluator
 
 // EntitlementPayload is the normalized entitlement response for frontend consumption.
@@ -90,11 +91,16 @@ func (h *LicenseHandlers) HandleEntitlements(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Build payload from current license status (evaluator wiring comes in MON-08)
+	// Build payload from current license status (which is evaluator-aware when no JWT is present).
 	status := svc.Status()
 	usage := h.entitlementUsageSnapshot(r.Context())
 	trialEndsAtUnix := trialEndsAtUnixFromService(svc)
 	payload := buildEntitlementPayloadWithUsage(status, svc.SubscriptionState(), usage, trialEndsAtUnix)
+	if eval := svc.Evaluator(); eval != nil {
+		if pv := strings.TrimSpace(eval.PlanVersion()); pv != "" {
+			payload.PlanVersion = pv
+		}
+	}
 	payload.HostedMode = h != nil && h.hostedMode
 
 	w.Header().Set("Content-Type", "application/json")

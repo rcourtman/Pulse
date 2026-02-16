@@ -381,7 +381,15 @@ func (s *Service) HasFeature(feature string) bool {
 		// Hosted path: evaluator drives entitlements when no JWT is present.
 		if s.evaluator != nil {
 			// Always include free-tier features, regardless of evaluator state.
-			return TierHasFeature(TierFree, feature) || s.evaluator.HasCapability(feature)
+			if TierHasFeature(TierFree, feature) {
+				return true
+			}
+
+			// Only grant paid capabilities when the subscription state permits it.
+			if !subscriptionStateHasPaidFeatures(s.evaluator.SubscriptionState()) {
+				return false
+			}
+			return s.evaluator.HasCapability(feature)
 		}
 		// No license activated — still grant free tier features
 		return TierHasFeature(TierFree, feature)
@@ -507,15 +515,6 @@ func (s *Service) Status() *LicenseStatus {
 		// Hosted path: evaluator drives status when no JWT is present.
 		if s.evaluator != nil {
 			status.Tier = TierPro // hosted billing-backed tenants are effectively "pro" for display
-			status.Features = unionFeatures(TierFeatures[TierFree], evaluatorFeatures(s.evaluator))
-
-			if maxNodes, ok := s.evaluator.GetLimit("max_nodes"); ok {
-				status.MaxNodes = safeIntFromInt64(maxNodes)
-			}
-			if maxGuests, ok := s.evaluator.GetLimit("max_guests"); ok {
-				status.MaxGuests = safeIntFromInt64(maxGuests)
-			}
-
 			subState := s.evaluator.SubscriptionState()
 			switch subState {
 			case SubStateActive, SubStateTrial, SubStateGrace:
@@ -523,8 +522,18 @@ func (s *Service) Status() *LicenseStatus {
 				if subState == SubStateGrace {
 					status.InGracePeriod = true
 				}
+				status.Features = unionFeatures(TierFeatures[TierFree], evaluatorFeatures(s.evaluator))
+
+				if maxNodes, ok := s.evaluator.GetLimit("max_nodes"); ok {
+					status.MaxNodes = safeIntFromInt64(maxNodes)
+				}
+				if maxGuests, ok := s.evaluator.GetLimit("max_guests"); ok {
+					status.MaxGuests = safeIntFromInt64(maxGuests)
+				}
 			default:
 				status.Valid = false
+				// Keep effective capabilities free-tier only when subscription is not entitled.
+				status.Features = append([]string(nil), TierFeatures[TierFree]...)
 			}
 		}
 		return status
