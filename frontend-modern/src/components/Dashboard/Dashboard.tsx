@@ -1202,6 +1202,7 @@ export function Dashboard(props: DashboardProps) {
         when={
           connected() &&
           initialDataReceived() &&
+          !workloads.loading() &&
           props.nodes.length === 0 &&
           allGuests().length === 0
         }
