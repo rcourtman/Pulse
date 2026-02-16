@@ -14,6 +14,8 @@ Welcome to the Pulse documentation portal. Here you'll find everything you need 
   Where config lives, how updates work, and what differs per deployment.
 - **[Migration Guide](MIGRATION.md)**  
   Moving to a new server? Here's how to export and import your data safely.
+- **[Upgrade to v6](UPGRADE_v6.md)**  
+  Practical upgrade guidance and post-upgrade checks for Pulse v6.
 - **[Upgrade to v5](UPGRADE_v5.md)**  
   Practical upgrade guidance and post-upgrade checks.
 - **[FAQ](FAQ.md)**  
