@@ -212,6 +212,7 @@ BACKUP_SYSTEM.md
 
 # Overnight refactor scripts and artifacts (local only)
 scripts/overnight-refactor/
+scripts/lint-fixer/
 
 # Generated artifacts
 /eval
