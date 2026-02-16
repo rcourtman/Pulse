@@ -930,8 +930,7 @@ func initDockerWithRetry(ctx context.Context, cfg dockeragent.Config, logger *ze
 			Str("next_retry", delay.String()).
 			Msg("Docker not available, will retry")
 
-		select {
-		case <-ctx.Done():
+		if !waitForRetryDelay(ctx, delay) {
 			logger.Info().
 				Str("component", "docker_agent").
 				Str("action", "retry_cancelled").
@@ -981,8 +980,7 @@ func initKubernetesWithRetry(ctx context.Context, cfg kubernetesagent.Config, lo
 			Str("next_retry", delay.String()).
 			Msg("Kubernetes still not available, will retry")
 
-		select {
-		case <-ctx.Done():
+		if !waitForRetryDelay(ctx, delay) {
 			logger.Info().
 				Str("component", "kubernetes_agent").
 				Str("action", "retry_cancelled").
