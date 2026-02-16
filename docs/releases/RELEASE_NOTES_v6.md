@@ -1,68 +1,160 @@
 # Pulse v6.0.0 Release Notes (Draft)
 
-This release is the Unified Resources + unified navigation foundation, plus opt-in multi-tenant and hosted-mode building blocks.
+Pulse v6 is the largest release in the project's history — 1,200+ commits touching 1,490 files across the Go backend and SolidJS frontend. It introduces a unified resource model, a completely redesigned navigation and dashboard, mobile remote access via Pulse Relay, TrueNAS integration, a full entitlement and licensing framework, and opt-in multi-tenant and hosted-mode building blocks.
+
+---
 
 ## New Features
 
 ### Unified Resources + Unified Navigation
 
-- Unified Resources model (server + API + UI) with a single resource registry across Proxmox, Docker, Kubernetes, PBS/PMG, and agent sources.
-- Unified navigation redesign organized by task (Infrastructure, Workloads, Storage, Backups) with global search and keyboard shortcuts.
-- Canonical Unified Resources API endpoints for resource listing, stats, and resource-level metrics.
+The core architectural change in v6: every monitored resource — Proxmox VMs, containers, nodes, Docker hosts, Kubernetes pods, PBS/PMG services, host agents, Ceph pools, physical disks, and TrueNAS systems — is now represented in a single unified resource registry.
+
+**Backend:**
+- Single `ResourceHandlers` serving the canonical `/api/resources` endpoint with per-tenant state providers, supplemental records, and registry caching.
+- Expanded `Resource` type with source-specific payloads (Proxmox, Storage, Agent, Docker, PBS, PMG, Kubernetes, PhysicalDisk, Ceph), multi-source tracking, and identity deduplication.
+- API router decomposed from a monolith into focused route-group files: monitoring, AI/relay, hosted, org/license, auth/security, and registration.
+
+**Frontend:**
+- Navigation reorganized from platform tabs (Proxmox | Docker | Kubernetes | Hosts) to task-oriented tabs: **Dashboard | Infrastructure | Workloads | Storage | Backups**.
+- New **Infrastructure page** at `/infrastructure` — all hosts and nodes across all platforms in one unified table. Filter by source (PVE, Agent, Docker, PBS, PMG, K8s, TrueNAS), filter by status, search across name/ID/IP/tags, toggle between grouped and flat views.
+- **Resource detail drawer** with hardware cards, disk info, temperature readings, network interfaces, and platform-specific metadata.
+- **Command palette** (Cmd+K / Ctrl+K) with fuzzy-search navigation to any page, resource, or action.
+- **Keyboard shortcuts** — press `?` to see the reference. Vim-style `g` then key navigation: `g+i` Infrastructure, `g+w` Workloads, `g+s` Storage, `g+b` Backups, `g+a` Alerts, `g+t` Settings. `/` focuses search.
+- **Mobile bottom navigation bar** — fixed bottom nav for mobile and tablet with horizontally scrollable tabs and alert badge counts. Hidden on desktop.
+- Legacy routes (`/proxmox/overview`, `/docker`, `/kubernetes`, `/hosts`, `/services`, `/mail`) redirect to their new destinations with toast notifications explaining the move. See Migration Notes below.
+- **"What's New" modal** on first visit after upgrade, explaining the navigation changes with a link to the migration guide.
+- **In-app migration guide** at `/migration-guide` showing the complete old-to-new route mapping.
 
 ### Dashboard Redesign
 
-- High-density dashboard layout with sparklines and trend delta badges.
-- Alerts and findings highlights panels.
-- Prioritized action queue to surface what changed and what needs attention.
+A completely new environment-overview dashboard replaces the previous landing page.
+
+- **Status hero card** with health indicators (critical / warning / healthy counts), mini donut charts, and gauge visualizations for CPU and memory.
+- **Trend charts** showing per-host CPU and memory sparklines over configurable time ranges with interactive hover tooltips.
+- **Prioritized action items** — a ranked queue surfacing critical alerts, offline infrastructure, storage capacity warnings, and high-CPU hosts, ordered by severity (critical > high > medium > low).
+- **Composition panel** breaking down infrastructure and workload mix by platform and type.
+- **Backup status panel** with health overview.
+- **Storage panel** with capacity at-a-glance.
+- **Recent alerts panel** with severity counts.
+- **Relay onboarding card** prompting mobile device pairing (Pro feature, with trial CTA for Community users).
 
 ### Storage + Backups (Unified Views)
 
-- Storage and Backups shipped as unified, source-agnostic views (formerly the "V2" architecture).
-- Full pools/disks views, filtering, and enriched storage metadata.
+Storage and Backups are now unified, source-agnostic views — the "V2" naming has been removed.
+
+- **Storage hero section** with pool count donut, capacity gauge, disk count, and free space KPIs.
+- Per-pool detail expansion with live disk metrics.
+- Source filter options for both Storage and Backups views (filter by Proxmox, PBS, Ceph, Agent, etc.).
 - Ceph and physical disk resources integrated into the unified registry.
+- Storage sparklines for usage trends.
+- Alert state integration for storage resources.
 
 ### TrueNAS Integration
 
-- TrueNAS provider scaffold, REST client, and fixture-first testing.
-- Encrypted persistence for TrueNAS connection config plus add/list/delete/test endpoints.
-- Runtime TrueNAS poller with periodic polling and dynamic connection syncing.
-- ZFS health mapping, tags, UI source badges, and AI context enrichment for TrueNAS-backed infrastructure.
+First-class TrueNAS storage system monitoring, enabled via `PULSE_ENABLE_TRUENAS`.
+
+- **TrueNAS API client** for fetching system info, pools, datasets, disks, alerts, and snapshots.
+- **Provider architecture** supporting both live API fetching and fixture-based testing.
+- **Runtime poller** integrated into the monitoring loop with periodic polling and dynamic connection syncing.
+- **Encrypted persistence** for TrueNAS connection config with add/list/delete/test endpoints.
+- **ZFS health mapping**, source badges, and AI context enrichment for TrueNAS-backed infrastructure.
+- TrueNAS resources appear as a first-class source in the unified Infrastructure page alongside PVE, Docker, K8s, and others.
 
 ### Relay + Mobile Remote Access
 
-- Relay encryption and instance identity keys, plus Settings UI wiring.
-- Push notification pipeline (client-side) and Patrol-to-relay notification wiring (best-effort).
+A full relay protocol enabling mobile app connectivity to Pulse instances without requiring direct network access.
+
+- **Binary frame protocol** (v1) with 13 frame types: Register, Connect, ChannelOpen/Close, Data, Ping/Pong, Error, Drain, KeyExchange, PushNotification.
+- **End-to-end encryption** using X25519 key exchange, HKDF key derivation, AES-256-GCM with per-direction nonce counters and replay protection.
+- **HTTP proxy** translating relay DATA frames into local API calls, with SSE streaming support for real-time data.
+- **Push notification pipeline** — patrol findings, approval requests, and fix completions relayed as push notifications with infrastructure detail redaction (IPs and hostnames stripped for Apple/Google visibility).
+- **Instance identity and key management** for persistent relay registration.
+- **Settings UI** — Relay configuration panel with connection status indicator, enable/disable toggle, server URL config, instance fingerprint display, and QR code pairing for mobile devices.
+- WebSocket relay client with reconnect backoff, channel state management, and concurrent data handler limiting.
 
 ### Centralized Agent Profiles (Pro)
 
-- Centralized agent configuration via Agent Profiles (create/edit/assign/deploy) with API gating and UI panels.
+- CRUD interface for agent configuration profiles — create, edit, assign to agents, deploy.
+- Known settings editor with profile assignment to connected agents.
+- AI-powered profile suggestion modal that analyzes the current environment and recommends optimal settings.
+- API gating (Pro license required) with in-app paywall and trial CTA.
+
+### Entitlements + Licensing Overhaul
+
+The license system was rebuilt from simple tier checks into a full entitlement framework.
+
+- **`/api/license/entitlements` endpoint** — the canonical way for the frontend and API clients to determine feature availability. Returns capabilities, quantitative limits with usage state (ok/warning/enforced), subscription state, upgrade reasons, trial info, and hosted mode flag.
+- **Subscription state machine** with lifecycle states: `trial`, `active`, `grace`, `expired`, `suspended`, `canceled`. Each state defines full/degraded/locked operation behavior.
+- **Pluggable entitlement sources** — JWT-based for self-hosted deployments, database-backed for hosted/SaaS.
+- **Local trial lifecycle** — trial state managed locally via billing state files, no phone-home required. Trial countdown with `trial_expires_at` and `trial_days_remaining`.
+- **Quantitative limit enforcement** for nodes and users, with warning and hard-block thresholds.
+- **Capability alias and deprecation framework** — legacy feature keys are transparently mapped to canonical replacements with deprecation warnings.
+- **Certificate Revocation List** cache with fail-open semantics and 72-hour staleness TTL.
+- **Conversion tracking** — event recording (paywall_viewed, trial_started, upgrade_clicked, limit_warning_shown, limit_blocked, agent_install_*, agent_first_connected), funnel analytics API, and Prometheus metrics.
+- **Usage metering** — windowed aggregator with per-tenant cardinality limits and idempotency dedup.
+- **Upgrade reason engine** — generates actionable upgrade prompts based on current usage patterns.
+- **In-app pricing page** at `/pricing` with Community/Pro/Cloud tier comparison table, feature matrix, and "Start Free 14-day Trial" CTA.
+- **Trial banner** — global countdown banner with urgency coloring (blue > 3 days, amber 1–3 days, red < 1 day) and upgrade link.
 
 ### Organizations + Multi-Tenant (Enterprise, Opt-In)
 
-- Organizations: CRUD, member roles, and cross-org resource sharing.
-- Tenant-aware isolation for state/monitoring, WebSocket broadcasts, persistence, audit scope, and API authorization.
-- Tenant-aware rate limiting and safety-focused tenant lifecycle plumbing (reaper/cleanup cascade).
+Full multi-tenant organization support, disabled by default.
+
+- **Organization CRUD** — create, get, update, delete organizations with display names and metadata.
+- **Member management** — invite, remove, and role assignment (owner, admin, tech, read_only).
+- **Cross-org resource sharing** — share VMs, containers, hosts, and storage between organizations with viewer/editor/admin access roles.
+- **Tenant-aware isolation** across RBAC, state/monitoring, WebSocket broadcast hubs, persistence, audit scope, API authorization, and rate limiting.
+- **Per-tenant RBAC managers** with lazy initialization and file-based isolation; integrity verification and admin recovery endpoints.
+- **Org lifecycle operations** — suspend, unsuspend, soft-delete.
+- **Background reaper** for expired/deleted organizations with configurable retention and dry-run mode.
+- **Frontend org switcher** in the header — switch between organizations, with WebSocket reconnection and cache clearing on switch.
+- **Settings panels** — Organization Overview (metadata, members), Access Control, Billing, and Resource Sharing.
+- **Prometheus metrics** for RBAC operations and hosted mode.
 
 ### Hosted Mode (Opt-In)
 
-- Passwordless magic-link signup/login flows (hosted mode only).
-- Stripe webhook handlers with signature verification and org provisioning.
-- Trial subscription state end-to-end, plus server-driven entitlements and frontend gating cutover.
-- Conversion telemetry and paywall/trial UX (pricing page, trial CTAs, conversion tracking).
+Infrastructure for running Pulse as a hosted SaaS product — entirely opt-in.
+
+- **Cloud Control Plane** — new `pulse-control-plane` binary managing tenant lifecycle, Docker containers, billing, and health monitoring.
+- **Tenant registry** with lifecycle states (provisioning, active, suspended, canceled, deleting, deleted, failed) and Stripe account mapping.
+- **Passwordless magic-link signup/login** with rate limiting (3/hour), 15-minute TTL, SQLite persistence, and URL redaction in logs.
+- **Control plane → tenant auth handoff** using per-tenant HMAC keys.
+- **Stripe integration** — webhook handlers with signature verification, subscription provisioning, grace period enforcement, and a background reconciler checking billing state drift every 6 hours.
+- **Billing admin panel** — admin table showing all organizations with subscription state, trial status, Stripe customer ID, and suspend/activate actions.
+- **QR code mobile onboarding** with relay details, deep links, and connection validation diagnostics.
+- **Cloud deployment stack** — Docker Compose, Traefik config, rollout scripts, backup scripts, and operational runbook.
 
 ### Audit Logging + RBAC Operations
 
-- Per-tenant SQLite audit logging with license gating for access/query/export.
-- RBAC integrity verification and operational endpoints for admin recovery workflows, plus Prometheus metrics for RBAC manager health.
+- Per-tenant SQLite audit logging with license gating for access, query, and export.
+- RBAC integrity verification and operational endpoints for admin recovery workflows.
+- Prometheus metrics for RBAC manager health.
+- Audit log utilities for client IP and actor ID extraction.
+
+---
 
 ## Improvements
 
+### AI + Patrol Enhancements
+
+- **Explore prepass** — a fast agentic pre-analysis pass using a lightweight model before the main chat response, with configurable turn limits and timeouts.
+- **Investigation budget** for community/free-tier users — monthly investigation allowance with auto-reset, preventing runaway AI costs.
+- **LLM-powered infrastructure discovery** — detects applications and services from Docker containers with confidence scoring, category classification, and CLI access paths.
+- **Sensitive data redaction** from AI tool outputs — PEM blocks, passwords, tokens, AWS keys, JWTs, and bearer tokens are automatically stripped.
+- **Sensitive file path detection** to prevent AI from reading credential files.
+- **Fix verification improvements** with inconclusive outcome handling.
+- **Agentic loop decomposition** — the monolithic chat loop was broken into focused modules for context building, control flow, intent detection, prompt construction, recovery, summaries, tool choice, verification, and wrap-up.
+- **First-class OpenRouter provider support** for more model choices.
+
 ### Performance and UI Responsiveness
 
-- Row windowing and selector pipeline refactors for Infrastructure and Workloads to contain render costs on large inventories.
+- **Virtual table windowing** for Infrastructure and Dashboard — large resource lists render only visible rows, dramatically reducing DOM cost.
+- **Infrastructure chart prewarming** — chart data is preloaded during idle time (`requestIdleCallback`) so the Infrastructure page loads instantly. Respects `navigator.connection.saveData` and slow-connection detection.
+- **Infrastructure summary caching** with prewarm support.
 - Hook-level caching and request de-duplication for unified resources.
 - Charts endpoint optimization to fetch only sparkline-relevant metrics.
+- Replaced `metricsSampler` with a unified metrics collector store.
 
 ### Monitoring, Metrics, and Alerting Quality
 
@@ -73,43 +165,147 @@ This release is the Unified Resources + unified navigation foundation, plus opt-
 
 ### Platform and Agent Refinements
 
+- **Docker/Kubernetes init retry with exponential backoff** — agents now start successfully even if Docker or Kubernetes is temporarily unavailable, and connect later when the runtime becomes available. Backoff pattern: 5s → 10s → 20s → 40s → 80s → 160s → capped at 300s.
+- **Agent commands disabled by default** for security — the `--disable-commands` flag is now deprecated (commands are off by default). Users who want AI auto-fix must explicitly set `--enable-commands` or `PULSE_ENABLE_COMMANDS=true`.
 - Proxmox permission setup hardening, fewer false failures during apt update checks, and better behavior on empty polls.
-- Agent improvements: FreeBSD S.M.A.R.T. disk collection support and correct honoring of `--disk-exclude` for Docker disk metrics.
+- FreeBSD S.M.A.R.T. disk collection support.
+- Correct honoring of `--disk-exclude` for Docker disk metrics.
+- Config validation hardening, graceful shutdown improvements, `--disable-ceph` flag propagation.
+- Windows service shutdown flow hardening.
+- **Encrypted configuration export/import** — export and import full config with passphrase-based encryption (minimum 12 characters).
+
+### Settings Architecture
+
+- Settings page restructured with a panel registry/routing system for dynamic layout and feature-gated panels.
+- New settings panels: Relay, Organization Overview, Organization Access, Organization Billing, Organization Sharing, Billing Admin.
+
+### New Shared UI Components
+
+- **`InteractiveSparkline`** — multi-series interactive sparkline chart with hover tooltips, LTTB downsampling, and canvas/SVG rendering modes.
+- **`Dialog`** — accessible modal with focus trapping, body scroll locking, and escape handling.
+- **`ScrollToTopButton`** — floating "back to top" button that auto-discovers its scrollable ancestor.
+- **`SearchInput` / `CollapsibleSearchInput`** — search inputs with history support.
+- Hardware detail cards: Disks, Hardware, Network Interfaces, Root Disk, System Info, Temperatures.
+- Platform and workload type badge systems.
+
+### Code Quality and Refactoring
+
+- Massive lint cleanup: 200+ `errcheck` and `dupl` fixes across all backend packages.
+- Duplicate function consolidation across 20+ packages (crypto helpers, panic recovery, threshold normalization, polling interval parsing, etc.).
+- Package consolidation: `internal/types` → `internal/models`, `internal/smartctl` → `internal/hostagent`, `internal/mdadm` → `internal/hostagent`, `internal/ceph` → `internal/hostagent`, `internal/health` → `internal/cloudcp`, `internal/errors` → `internal/monitoring`, `internal/buffer` → `internal/utils`, `internal/agentbinaries` → `internal/updates`.
+- Logging consistency standardization across 30+ packages.
+- Naming consistency fixes (acronym spelling, identifier clarity).
+- Unused import and dead dependency removal.
+- `jscpd` copy/paste detection (3% threshold) and `dupl` linter (150-token threshold) enforced in CI.
 
 ### Release and Build Hygiene
 
+- **Go toolchain bumped to Go 1.25** for reproducible builds and vulnerability-baseline alignment.
+- New dependencies: `golang-jwt/jwt/v5` for license/auth JWT handling, `stripe-go/v82` for billing integration.
 - Update-check/UI version badge correctness improvements (including cached update paths).
-- Go toolchain pinned for reproducible builds and vulnerability-baseline alignment.
+- GitHub automation: issue templates, version triage workflow, stale-issue cleanup workflow.
+- Integration tests: navigation performance, multi-tenant end-to-end.
+
+---
 
 ## Breaking Changes
 
-- Unified Resources is now the canonical resource model.
-  - Canonical API is now `/api/resources`.
-  - Deprecated alias: `/api/v2/resources` (temporary compatibility shim for older clients; will be removed after the migration window).
-- Frontend routing is now canonicalized around unified navigation.
-  - Legacy routes (for example `/services` and `/kubernetes`) are transitional aliases and will be removed after the migration window.
-- Storage/Backups naming and routing were de-V2'ed.
-  - Internal and UI "V2" suffixes were removed; use canonical `/storage` and `/backups` routes.
+### API
+
+- **Unified Resources is now the canonical resource model.**
+  - Canonical API: `/api/resources`, `/api/resources/stats`, `/api/resources/{id}`.
+  - Deprecated alias: `/api/v2/resources` — returns a `Deprecation: true` HTTP header. This shim will be removed after the migration window. Migrate to `/api/resources`.
+- **New `/api/license/entitlements` endpoint** is the canonical way to determine feature availability. Replaces inferring capabilities from tier names.
+
+### Frontend Routing
+
+- **Navigation restructured around unified resources.**
+  - Legacy routes redirect with toast notifications:
+    | Legacy Route | Redirects To |
+    |---|---|
+    | `/proxmox/overview` | `/infrastructure` |
+    | `/hosts` | `/infrastructure?source=agent` |
+    | `/docker` | `/infrastructure?source=docker` |
+    | `/proxmox/mail`, `/mail`, `/services` | `/infrastructure?source=pmg` |
+    | `/kubernetes` | `/workloads?type=k8s` |
+  - These redirects are temporary and will be removed after the migration window.
+- **Storage/Backups "V2" naming removed** — use canonical `/storage` and `/backups` routes.
+
+### Agent
+
+- **Commands are now disabled by default.** The `--disable-commands` flag and `PULSE_DISABLE_COMMANDS` env var are deprecated (since the new default is already disabled). To enable AI auto-fix, explicitly set `--enable-commands` or `PULSE_ENABLE_COMMANDS=true`.
+
+### Deprecated Environment Variables
+
+| Deprecated | Replacement |
+|---|---|
+| `BACKEND_HOST` | `BIND_ADDRESS` |
+| `POLLING_INTERVAL` in `.env` | Per-service intervals in `system.json` (`PVE_POLLING_INTERVAL`, `BACKUP_POLLING_INTERVAL`, etc.) |
+| `API_TOKEN` / `API_TOKENS` in `.env` | UI-managed tokens in `api_tokens.json` (`.env` values ignored when `api_tokens.json` exists) |
+| `DISABLE_AUTH` | Removed — stripped at runtime with a warning |
+| `--disable-commands` / `PULSE_DISABLE_COMMANDS` (agent) | `--enable-commands` / `PULSE_ENABLE_COMMANDS` |
+| `GroupingWindow` (alerts config) | `Grouping.Window` (auto-migrated on config update) |
+| `QuickCheckInterval` (patrol config) | Kept for backwards compatibility but no longer preferred |
+
+### Build Requirements
+
+- **Go 1.25+ required** for building from source (up from Go 1.24).
+
+---
 
 ## Migration Notes
+
+### Before Upgrading
+
+1. **Create an encrypted config backup** via Settings → System → Backups → Create Backup.
+2. Confirm console access for rollback and bootstrap token retrieval.
+3. Review API changes if you have external integrations.
 
 ### Unified Navigation (Bookmarks and Deep Links)
 
 - Update bookmarks, documentation, and runbooks to canonical unified routes.
-- Reference: `docs/MIGRATION_UNIFIED_NAV.md`.
+- Reference: `docs/MIGRATION_UNIFIED_NAV.md` for the complete old-to-new mapping.
 - To disable all legacy route redirects (and surface stale bookmarks immediately), set `PULSE_DISABLE_LEGACY_ROUTE_REDIRECTS=true` (or `disableLegacyRouteRedirects: true` in `system.json`).
 
 ### API Clients and Integrations
 
 - Replace calls to `/api/v2/resources` with `/api/resources` (recommended).
 - If an integration depended on legacy resource arrays or legacy resource endpoints, migrate to unified resource types and unified resource IDs.
+- Use the new `/api/license/entitlements` endpoint for feature availability checks instead of inferring from tier names.
+
+### Agent Updates
+
+- If you were using `--disable-commands`, remove that flag — it is now the default behavior.
+- If you need AI auto-fix, switch to `--enable-commands` or set `PULSE_ENABLE_COMMANDS=true`.
+
+### Post-Upgrade Checklist
+
+1. Confirm version: `GET /api/version`
+2. Confirm scheduler health: `GET /api/monitoring/scheduler/health`
+3. Confirm unified resources API: `GET /api/resources`
+4. Confirm nodes are polling and no circuit breakers are stuck open.
+5. Confirm notifications still send (send a test).
+6. Confirm agents are connected (if used).
+7. Update bookmarks and automation to canonical routes (`/infrastructure`, `/workloads`, `/storage`, `/backups`).
+8. Migrate any scripts calling `/api/v2/resources` to `/api/resources`.
 
 ### Multi-Tenant Organizations (Enterprise, Opt-In)
 
-- Enablement requires both `PULSE_MULTI_TENANT_ENABLED=true` and an Enterprise license with the `multi_tenant` capability.
-- Reference: `docs/MULTI_TENANT.md` for behavior, headers/cookies for org selection, and the storage layout/migration model.
+- Disabled by default — requires both `PULSE_MULTI_TENANT_ENABLED=true` and an Enterprise license with the `multi_tenant` capability.
+- Without enablement: non-default org requests get `501 Not Implemented`.
+- Without license: non-default org requests get `402 Payment Required`.
+- The `default` organization always works regardless of feature flag.
+- Tenant selection via `X-Pulse-Org-ID` header, `pulse_org_id` cookie, or fallback to `"default"`.
+- Legacy single-tenant data is migrated into `/orgs/default/` with symlinks for compatibility.
+- Reference: `docs/MULTI_TENANT.md`.
 
 ### Hosted Mode (Opt-In)
 
 - Hosted signup/login uses passwordless magic links.
 - Stripe provisioning/trials/entitlements endpoints are only relevant when hosted mode is enabled.
+
+### Upgrade Paths
+
+- **Bare metal / LXC:** Installer script or Settings UI in-app update.
+- **Docker:** `docker pull` + `docker compose up -d`.
+- **Helm:** `helm upgrade`.
