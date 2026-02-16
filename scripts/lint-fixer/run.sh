@@ -308,7 +308,7 @@ for idx in "${!PACKAGES_TO_FIX[@]}"; do
     WARNING_COUNT=$(echo "$WARNINGS" | wc -l | tr -d ' ')
     echo "  Found $WARNING_COUNT $linter warnings"
 
-    # Extract affected files for display only
+    # Extract affected files and process one file at a time to avoid model context overflow.
     FILES=$(echo "$WARNINGS" | awk -F: '/^[^:]+\.go:/{print $1}' | sort -u || true)
     if [ -z "$FILES" ]; then
       echo "  ⚠ Could not extract file list from warnings"
@@ -317,12 +317,27 @@ for idx in "${!PACKAGES_TO_FIX[@]}"; do
 
     FILE_COUNT=$(echo "$FILES" | wc -l | tr -d ' ')
     echo "  Affected files: $FILE_COUNT"
-    echo "  Calling AI model to fix all warnings in this package..."
 
-    # Build prompt with ALL warnings for this package+linter - let AI figure out the approach
-    case "$linter" in
-      errcheck)
-        PROMPT="## Task: Fix all errcheck warnings in internal/$pkg
+    while IFS= read -r file; do
+      if should_stop; then break; fi
+      [ -n "$file" ] || continue
+
+      if [ ! -f "$file" ]; then
+        echo "  ⚠ Skipping missing file: $file"
+        continue
+      fi
+
+      FILE_WARNINGS=$(echo "$WARNINGS" | awk -v f="$file" 'index($0, f ":") == 1')
+      if [ -z "$FILE_WARNINGS" ]; then
+        continue
+      fi
+      FILE_WARNING_COUNT=$(echo "$FILE_WARNINGS" | wc -l | tr -d ' ')
+      echo "  → File: $file ($FILE_WARNING_COUNT warnings)"
+
+      # Build MiniMax M2.5 optimized prompt (purpose-driven, explain "why")
+      case "$linter" in
+        errcheck)
+          PROMPT="## Task: Fix errcheck warnings in $file (internal/$pkg)
 
 **Why this matters:** Unchecked errors can cause silent failures, data corruption, or security issues in production. We need proper error handling to make Pulse reliable for users monitoring critical infrastructure.
 
