@@ -250,7 +250,7 @@ func TestIntelligence_CheckBaselinesForResource_WithBaselines(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		points[i] = baseline.MetricPoint{Value: 20 + float64(i%3) - 1} // 19-21
 	}
-	baselineStore.Learn("vm-100", "vm", "cpu", points)
+	_ = baselineStore.Learn("vm-100", "vm", "cpu", points)
 
 	intel.SetSubsystems(nil, nil, nil, baselineStore, nil, nil, nil, nil)
 
@@ -318,7 +318,7 @@ func TestIntelligence_FormatContext_WithKnowledge(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create knowledge store: %v", err)
 	}
-	knowledgeStore.SaveNote("vm-300", "test-vm", "vm", "general", "Test Note", "This is test content")
+	_ = knowledgeStore.SaveNote("vm-300", "test-vm", "vm", "general", "Test Note", "This is test content")
 
 	intel.SetSubsystems(nil, nil, nil, nil, nil, knowledgeStore, nil, nil)
 
@@ -458,8 +458,8 @@ func TestIntelligence_GetResourceIntelligence_WithBaselines(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		points[i] = baseline.MetricPoint{Value: 30 + float64(i%5) - 2}
 	}
-	baselineStore.Learn("vm-with-baseline", "vm", "cpu", points)
-	baselineStore.Learn("vm-with-baseline", "vm", "memory", points)
+	_ = baselineStore.Learn("vm-with-baseline", "vm", "cpu", points)
+	_ = baselineStore.Learn("vm-with-baseline", "vm", "memory", points)
 
 	intel.SetSubsystems(nil, nil, nil, baselineStore, nil, nil, nil, nil)
 
@@ -624,7 +624,7 @@ func TestIntelligence_GetSummary_WithLearningBonus(t *testing.T) {
 	// Add knowledge for 6+ resources to trigger learning bonus
 	for i := 0; i < 7; i++ {
 		resourceID := "vm-" + string(rune('A'+i))
-		knowledgeStore.SaveNote(resourceID, "VM "+string(rune('A'+i)), "vm", "general", "Note", "Content")
+		_ = knowledgeStore.SaveNote(resourceID, "VM "+string(rune('A'+i)), "vm", "general", "Note", "Content")
 	}
 
 	intel.SetSubsystems(nil, nil, nil, nil, nil, knowledgeStore, nil, nil)

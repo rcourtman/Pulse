@@ -247,9 +247,9 @@ func TestStore_GetNotesByCategory(t *testing.T) {
 	}
 
 	// Save notes in different categories
-	store.SaveNote("vm-100", "web-server", "vm", "config", "Database", "PostgreSQL 15")
-	store.SaveNote("vm-100", "web-server", "vm", "service", "Web Server", "nginx")
-	store.SaveNote("vm-100", "web-server", "vm", "config", "Cache", "Redis")
+	_ = store.SaveNote("vm-100", "web-server", "vm", "config", "Database", "PostgreSQL 15")
+	_ = store.SaveNote("vm-100", "web-server", "vm", "service", "Web Server", "nginx")
+	_ = store.SaveNote("vm-100", "web-server", "vm", "config", "Cache", "Redis")
 
 	// Get config notes only
 	notes, err := store.GetNotesByCategory("vm-100", "config")
@@ -301,8 +301,8 @@ func TestStore_FormatForContext_WithData(t *testing.T) {
 	}
 
 	// Save some notes
-	store.SaveNote("vm-100", "web-server", "vm", "config", "Database", "PostgreSQL 15")
-	store.SaveNote("vm-100", "web-server", "vm", "service", "Web Server", "nginx on port 80")
+	_ = store.SaveNote("vm-100", "web-server", "vm", "config", "Database", "PostgreSQL 15")
+	_ = store.SaveNote("vm-100", "web-server", "vm", "service", "Web Server", "nginx on port 80")
 
 	// Format for context
 	result := store.FormatForContext("vm-100")
@@ -343,8 +343,8 @@ func TestStore_ListGuests(t *testing.T) {
 	}
 
 	// Add some guests
-	store.SaveNote("vm-100", "web-server", "vm", "config", "DB", "PostgreSQL")
-	store.SaveNote("vm-200", "db-server", "vm", "config", "DB", "MySQL")
+	_ = store.SaveNote("vm-100", "web-server", "vm", "config", "DB", "PostgreSQL")
+	_ = store.SaveNote("vm-200", "db-server", "vm", "config", "DB", "MySQL")
 
 	// List again
 	guests, err = store.ListGuests()
@@ -370,7 +370,7 @@ func TestStore_Persistence(t *testing.T) {
 		t.Fatalf("Failed to create store: %v", err)
 	}
 
-	store1.SaveNote("vm-100", "web-server", "vm", "config", "Database", "PostgreSQL 15")
+	_ = store1.SaveNote("vm-100", "web-server", "vm", "config", "Database", "PostgreSQL 15")
 
 	// Create new store in same dir - should load data
 	store2, err := NewStore(tmpDir)
@@ -401,9 +401,9 @@ func TestStore_MultipleNotes(t *testing.T) {
 	}
 
 	// Save multiple notes with different titles
-	store.SaveNote("vm-100", "web-server", "vm", "config", "Database", "PostgreSQL 15")
-	store.SaveNote("vm-100", "web-server", "vm", "config", "Cache", "Redis 7")
-	store.SaveNote("vm-100", "web-server", "vm", "service", "Web", "nginx")
+	_ = store.SaveNote("vm-100", "web-server", "vm", "config", "Database", "PostgreSQL 15")
+	_ = store.SaveNote("vm-100", "web-server", "vm", "config", "Cache", "Redis 7")
+	_ = store.SaveNote("vm-100", "web-server", "vm", "service", "Web", "nginx")
 
 	knowledge, err := store.GetKnowledge("vm-100")
 	if err != nil {

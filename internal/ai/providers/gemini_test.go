@@ -189,7 +189,7 @@ func TestGeminiClient_Chat_WithSystemPrompt(t *testing.T) {
 	var receivedReq geminiRequest
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewDecoder(r.Body).Decode(&receivedReq)
+		_ = json.NewDecoder(r.Body).Decode(&receivedReq)
 
 		resp := geminiResponse{
 			Candidates: []geminiCandidate{
@@ -232,7 +232,7 @@ func TestGeminiClient_Chat_WithMaxTokens(t *testing.T) {
 	var receivedReq geminiRequest
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewDecoder(r.Body).Decode(&receivedReq)
+		_ = json.NewDecoder(r.Body).Decode(&receivedReq)
 
 		resp := geminiResponse{
 			Candidates: []geminiCandidate{
@@ -553,7 +553,7 @@ func TestGeminiClient_Chat_RoleConversion(t *testing.T) {
 	var receivedReq geminiRequest
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewDecoder(r.Body).Decode(&receivedReq)
+		_ = json.NewDecoder(r.Body).Decode(&receivedReq)
 
 		resp := geminiResponse{
 			Candidates: []geminiCandidate{

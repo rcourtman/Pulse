@@ -124,7 +124,7 @@ func TestGetApproval(t *testing.T) {
 	req := &ApprovalRequest{
 		Command: "apt update",
 	}
-	store.CreateApproval(req)
+	_ = store.CreateApproval(req)
 
 	got, found := store.GetApproval(req.ID)
 	if !found {
@@ -154,7 +154,7 @@ func TestGetPendingApprovals(t *testing.T) {
 
 	// Create multiple approvals
 	for i := 0; i < 3; i++ {
-		store.CreateApproval(&ApprovalRequest{
+		_ = store.CreateApproval(&ApprovalRequest{
 			Command: "test command",
 		})
 	}
@@ -177,9 +177,9 @@ func TestGetApprovalsByExecution(t *testing.T) {
 		DefaultTimeout: 1 * time.Minute,
 	})
 
-	store.CreateApproval(&ApprovalRequest{ExecutionID: "exec-1", Command: "cmd-1"})
-	store.CreateApproval(&ApprovalRequest{ExecutionID: "exec-1", Command: "cmd-2"})
-	store.CreateApproval(&ApprovalRequest{ExecutionID: "exec-2", Command: "cmd-3"})
+	_ = store.CreateApproval(&ApprovalRequest{ExecutionID: "exec-1", Command: "cmd-1"})
+	_ = store.CreateApproval(&ApprovalRequest{ExecutionID: "exec-1", Command: "cmd-2"})
+	_ = store.CreateApproval(&ApprovalRequest{ExecutionID: "exec-2", Command: "cmd-3"})
 
 	results := store.GetApprovalsByExecution("exec-1")
 	if len(results) != 2 {
@@ -207,7 +207,7 @@ func TestApprove(t *testing.T) {
 	req := &ApprovalRequest{
 		Command: "systemctl restart nginx",
 	}
-	store.CreateApproval(req)
+	_ = store.CreateApproval(req)
 
 	got, err := store.Approve(req.ID, "admin")
 	if err != nil {
@@ -240,7 +240,7 @@ func TestDeny(t *testing.T) {
 	req := &ApprovalRequest{
 		Command: "rm -rf /tmp/data",
 	}
-	store.CreateApproval(req)
+	_ = store.CreateApproval(req)
 
 	got, err := store.Deny(req.ID, "admin", "Too dangerous")
 	if err != nil {
@@ -268,16 +268,16 @@ func TestGetStats(t *testing.T) {
 	})
 
 	pending := &ApprovalRequest{Command: "pending"}
-	store.CreateApproval(pending)
+	_ = store.CreateApproval(pending)
 
 	approved := &ApprovalRequest{Command: "approved"}
-	store.CreateApproval(approved)
+	_ = store.CreateApproval(approved)
 	if _, err := store.Approve(approved.ID, "admin"); err != nil {
 		t.Fatalf("Approve() error = %v", err)
 	}
 
 	denied := &ApprovalRequest{Command: "denied"}
-	store.CreateApproval(denied)
+	_ = store.CreateApproval(denied)
 	if _, err := store.Deny(denied.ID, "admin", "no"); err != nil {
 		t.Fatalf("Deny() error = %v", err)
 	}
@@ -286,7 +286,7 @@ func TestGetStats(t *testing.T) {
 		Command:   "expired",
 		ExpiresAt: time.Now().Add(-time.Minute),
 	}
-	store.CreateApproval(expired)
+	_ = store.CreateApproval(expired)
 	store.CleanupExpired()
 
 	if err := store.StoreExecution(&ExecutionState{ID: "exec-1"}); err != nil {
@@ -335,7 +335,7 @@ func TestApproveAlreadyDecided(t *testing.T) {
 	req := &ApprovalRequest{
 		Command: "test",
 	}
-	store.CreateApproval(req)
+	_ = store.CreateApproval(req)
 	_, _ = store.Deny(req.ID, "admin", "reason")
 
 	_, err = store.Approve(req.ID, "admin2")
@@ -400,7 +400,7 @@ func TestDeleteExecution(t *testing.T) {
 	state := &ExecutionState{
 		ID: "state-1",
 	}
-	store.StoreExecution(state)
+	_ = store.StoreExecution(state)
 
 	store.DeleteExecution(state.ID)
 
@@ -426,7 +426,7 @@ func TestCleanupExpired(t *testing.T) {
 	req := &ApprovalRequest{
 		Command: "test",
 	}
-	store.CreateApproval(req)
+	_ = store.CreateApproval(req)
 
 	// Wait for expiration
 	time.Sleep(10 * time.Millisecond)
@@ -550,7 +550,7 @@ func TestStorePersistence(t *testing.T) {
 		TargetID:   "host-1",
 		TargetName: "webserver",
 	}
-	store1.CreateApproval(req)
+	_ = store1.CreateApproval(req)
 	approvalID := req.ID
 
 	state := &ExecutionState{
@@ -559,7 +559,7 @@ func TestStorePersistence(t *testing.T) {
 			"message": "test",
 		},
 	}
-	store1.StoreExecution(state)
+	_ = store1.StoreExecution(state)
 
 	// Flush debounced writes to disk immediately
 	store1.Flush()
@@ -602,8 +602,8 @@ func TestMaxApprovals(t *testing.T) {
 	})
 
 	// Create first two approvals - should succeed
-	store.CreateApproval(&ApprovalRequest{Command: "test1"})
-	store.CreateApproval(&ApprovalRequest{Command: "test2"})
+	_ = store.CreateApproval(&ApprovalRequest{Command: "test1"})
+	_ = store.CreateApproval(&ApprovalRequest{Command: "test2"})
 
 	// Third should fail
 	err = store.CreateApproval(&ApprovalRequest{Command: "test3"})

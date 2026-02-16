@@ -226,9 +226,14 @@ func AssertDurationUnder(maxDuration string) Assertion {
 	return func(result *StepResult) AssertionResult {
 		// Parse duration - simplified, just handle seconds for now
 		var maxSec float64
-		fmt.Sscanf(maxDuration, "%fs", &maxSec)
-		if maxSec == 0 {
-			fmt.Sscanf(maxDuration, "%f", &maxSec)
+		if n, err := fmt.Sscanf(maxDuration, "%fs", &maxSec); n != 1 || err != nil {
+			if n, err := fmt.Sscanf(maxDuration, "%f", &maxSec); n != 1 || err != nil {
+				return AssertionResult{
+					Name:    fmt.Sprintf("duration_under:%s", maxDuration),
+					Passed:  false,
+					Message: fmt.Sprintf("Invalid max duration format: %s", maxDuration),
+				}
+			}
 		}
 
 		actualSec := result.Duration.Seconds()

@@ -336,7 +336,7 @@ func TestPatrolRunHistoryStore_FlushPersistence(t *testing.T) {
 	store := NewPatrolRunHistoryStore(10)
 
 	mockPersistence := &mockPatrolHistoryPersistence{}
-	store.SetPersistence(mockPersistence)
+	_ = store.SetPersistence(mockPersistence)
 
 	store.Add(PatrolRunRecord{ID: "run-1"})
 	store.Add(PatrolRunRecord{ID: "run-2"})
@@ -369,7 +369,7 @@ func TestPatrolRunHistoryStore_ScheduleSave(t *testing.T) {
 	store.saveDebounce = 50 * time.Millisecond // Short debounce for testing
 
 	mockPersistence := &mockPatrolHistoryPersistence{}
-	store.SetPersistence(mockPersistence)
+	_ = store.SetPersistence(mockPersistence)
 	mockPersistence.saveCalls.Store(0) // Reset after SetPersistence load
 
 	// Add a run (triggers scheduleSave)
@@ -388,7 +388,7 @@ func TestPatrolRunHistoryStore_ScheduleSave_StopsExistingTimer(t *testing.T) {
 	store.saveDebounce = 50 * time.Millisecond
 
 	mockPersistence := &mockPatrolHistoryPersistence{}
-	store.SetPersistence(mockPersistence)
+	_ = store.SetPersistence(mockPersistence)
 	mockPersistence.saveCalls.Store(0)
 
 	store.Add(PatrolRunRecord{ID: "run-1"})
@@ -406,7 +406,7 @@ func TestPatrolRunHistoryStore_ScheduleSave_Cancelled(t *testing.T) {
 	store.saveDebounce = 50 * time.Millisecond
 
 	mockPersistence := &mockPatrolHistoryPersistence{}
-	store.SetPersistence(mockPersistence)
+	_ = store.SetPersistence(mockPersistence)
 	mockPersistence.saveCalls.Store(0)
 
 	store.Add(PatrolRunRecord{ID: "run-1"})
@@ -427,7 +427,7 @@ func TestPatrolRunHistoryStore_ScheduleSave_Error(t *testing.T) {
 	store.saveDebounce = 50 * time.Millisecond
 
 	mockPersistence := &mockPatrolHistoryPersistence{saveErr: errors.New("save failed")}
-	store.SetPersistence(mockPersistence)
+	_ = store.SetPersistence(mockPersistence)
 	mockPersistence.saveCalls.Store(0)
 
 	store.Add(PatrolRunRecord{ID: "run-1"})

@@ -40,7 +40,7 @@ func dialAndRegisterAgent(t *testing.T, wsURL, agentID, hostname string) *websoc
 		Hostname: hostname,
 		Token:    "any",
 	})
-	conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
+	_ = conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
 	if err := conn.WriteJSON(agentexec.Message{
 		Type:      agentexec.MsgTypeAgentRegister,
 		Timestamp: time.Now(),
@@ -50,7 +50,7 @@ func dialAndRegisterAgent(t *testing.T, wsURL, agentID, hostname string) *websoc
 		t.Fatalf("WriteJSON register: %v", err)
 	}
 
-	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
 	var ack agentExecRawMessage
 	if err := conn.ReadJSON(&ack); err != nil {
 		conn.Close()
@@ -112,7 +112,7 @@ func TestAgentExecProber_RoundTripViaAgentExecServer(t *testing.T) {
 
 	done := make(chan pingAgentResult, 1)
 	go func() {
-		conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+		_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
 		var msg agentExecRawMessage
 		if err := conn.ReadJSON(&msg); err != nil {
 			done <- pingAgentResult{err: err}
@@ -135,7 +135,7 @@ func TestAgentExecProber_RoundTripViaAgentExecServer(t *testing.T) {
 			Stdout:    "REACH:10.0.0.1:UP\nREACH:10.0.0.2:DOWN\n",
 			ExitCode:  0,
 		})
-		conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
+		_ = conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
 		err := conn.WriteJSON(agentexec.Message{
 			Type:      agentexec.MsgTypeCommandResult,
 			Timestamp: time.Now(),

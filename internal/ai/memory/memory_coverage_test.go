@@ -925,15 +925,15 @@ func TestRemediationLog_SimilarAndStatsBranches(t *testing.T) {
 		t.Fatalf("expected nil for no keywords")
 	}
 
-	log.Log(RemediationRecord{Problem: "memory issue", Action: "a1", Outcome: OutcomePartial})
-	log.Log(RemediationRecord{Problem: "memory issue", Action: "a2", Outcome: OutcomeFailed})
+	_ = log.Log(RemediationRecord{Problem: "memory issue", Action: "a1", Outcome: OutcomePartial})
+	_ = log.Log(RemediationRecord{Problem: "memory issue", Action: "a2", Outcome: OutcomeFailed})
 
 	success := log.GetSuccessfulRemediations("memory issue", 5)
 	if len(success) != 1 || success[0].Outcome != OutcomePartial {
 		t.Fatalf("expected partial to be included")
 	}
 
-	log.Log(RemediationRecord{Problem: "unknown", Action: "a3", Outcome: OutcomeUnknown})
+	_ = log.Log(RemediationRecord{Problem: "unknown", Action: "a3", Outcome: OutcomeUnknown})
 	stats := log.GetRecentRemediationStats(time.Now().Add(-1 * time.Hour))
 	if stats["unknown"] == 0 {
 		t.Fatalf("expected unknown outcome to be counted")
@@ -942,8 +942,8 @@ func TestRemediationLog_SimilarAndStatsBranches(t *testing.T) {
 
 func TestRemediationLog_GetSuccessfulRemediations_Limit(t *testing.T) {
 	log := NewRemediationLog(RemediationLogConfig{})
-	log.Log(RemediationRecord{Problem: "disk full", Action: "a1", Outcome: OutcomeResolved})
-	log.Log(RemediationRecord{Problem: "disk full", Action: "a2", Outcome: OutcomePartial})
+	_ = log.Log(RemediationRecord{Problem: "disk full", Action: "a1", Outcome: OutcomeResolved})
+	_ = log.Log(RemediationRecord{Problem: "disk full", Action: "a2", Outcome: OutcomePartial})
 
 	results := log.GetSuccessfulRemediations("disk full", 1)
 	if len(results) != 1 {
@@ -953,14 +953,14 @@ func TestRemediationLog_GetSuccessfulRemediations_Limit(t *testing.T) {
 
 func TestRemediationLog_FormatAndStats(t *testing.T) {
 	log := NewRemediationLog(RemediationLogConfig{})
-	log.Log(RemediationRecord{
+	_ = log.Log(RemediationRecord{
 		ResourceID: "res-1",
 		Problem:    "issue",
 		Action:     "action",
 		Outcome:    OutcomeUnknown,
 		Note:       "note",
 	})
-	log.Log(RemediationRecord{
+	_ = log.Log(RemediationRecord{
 		ResourceID: "res-1",
 		Problem:    "issue",
 		Action:     "action",

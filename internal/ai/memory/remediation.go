@@ -128,7 +128,7 @@ func (r *RemediationLog) LogCommand(resourceID, resourceType, resourceName, find
 		outcome = OutcomeFailed
 	}
 
-	r.Log(RemediationRecord{
+	if err := r.Log(RemediationRecord{
 		ResourceID:   resourceID,
 		ResourceType: resourceType,
 		ResourceName: resourceName,
@@ -138,7 +138,9 @@ func (r *RemediationLog) LogCommand(resourceID, resourceType, resourceName, find
 		Output:       truncateOutput(output, 1000),
 		Outcome:      outcome,
 		Automatic:    automatic,
-	})
+	}); err != nil {
+		log.Warn().Err(err).Msg("failed to log remediation command")
+	}
 }
 
 // GetForResource returns remediation history for a specific resource

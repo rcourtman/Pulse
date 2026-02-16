@@ -248,7 +248,7 @@ func TestDiscoveryCommandAdapter_ConnectedAgentsAndLookup(t *testing.T) {
 		Tags:     []string{"edge"},
 		Token:    "ok",
 	})
-	conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
+	_ = conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
 	if err := conn.WriteJSON(agentexec.Message{
 		Type:      agentexec.MsgTypeAgentRegister,
 		Timestamp: time.Now(),
@@ -257,7 +257,7 @@ func TestDiscoveryCommandAdapter_ConnectedAgentsAndLookup(t *testing.T) {
 		t.Fatalf("write register message: %v", err)
 	}
 
-	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
 	_, data, err := conn.ReadMessage()
 	if err != nil {
 		t.Fatalf("read register ack: %v", err)
@@ -324,7 +324,7 @@ func TestDiscoveryCommandAdapter_ExecuteCommandSuccess(t *testing.T) {
 		Platform: "linux",
 		Token:    "ok",
 	})
-	conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
+	_ = conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
 	if err := conn.WriteJSON(agentexec.Message{
 		Type:      agentexec.MsgTypeAgentRegister,
 		Timestamp: time.Now(),
@@ -333,7 +333,7 @@ func TestDiscoveryCommandAdapter_ExecuteCommandSuccess(t *testing.T) {
 		t.Fatalf("write register message: %v", err)
 	}
 
-	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
 	_, _, err = conn.ReadMessage()
 	if err != nil {
 		t.Fatalf("read register ack: %v", err)
@@ -341,7 +341,7 @@ func TestDiscoveryCommandAdapter_ExecuteCommandSuccess(t *testing.T) {
 
 	errCh := make(chan error, 1)
 	go func() {
-		conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+		_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
 		_, data, err := conn.ReadMessage()
 		if err != nil {
 			errCh <- fmt.Errorf("read execute command: %w", err)
@@ -379,7 +379,7 @@ func TestDiscoveryCommandAdapter_ExecuteCommandSuccess(t *testing.T) {
 			ExitCode:  0,
 			Duration:  1234,
 		})
-		conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
+		_ = conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
 		err = conn.WriteJSON(agentexec.Message{
 			Type:      agentexec.MsgTypeCommandResult,
 			Timestamp: time.Now(),

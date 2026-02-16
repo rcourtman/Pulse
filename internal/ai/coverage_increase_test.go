@@ -209,8 +209,8 @@ func TestService_BuildEnrichedResourceContext(t *testing.T) {
 		cpuPoints = append(cpuPoints, baseline.MetricPoint{Value: 10, Timestamp: now.Add(time.Duration(i) * time.Minute)})
 		memPoints = append(memPoints, baseline.MetricPoint{Value: 20, Timestamp: now.Add(time.Duration(i) * time.Minute)})
 	}
-	bs.Learn("res1", "node", "cpu", cpuPoints)
-	bs.Learn("res1", "node", "memory", memPoints)
+	_ = bs.Learn("res1", "node", "cpu", cpuPoints)
+	_ = bs.Learn("res1", "node", "memory", memPoints)
 
 	metrics := map[string]interface{}{
 		"cpu_usage":    float64(50), // 5x baseline (anomaly)

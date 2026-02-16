@@ -16,7 +16,7 @@ func TestChatStream_ToolResultsConnection(t *testing.T) {
 	var capturedBody geminiRequest
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/models/gemini-pro:streamGenerateContent" {
-			json.NewDecoder(r.Body).Decode(&capturedBody)
+			_ = json.NewDecoder(r.Body).Decode(&capturedBody)
 			// Return a minimal SSE response to complete the request
 			w.Header().Set("Content-Type", "text/event-stream")
 			w.Write([]byte("data: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \"Response\"}]}}]}\n\n"))
@@ -96,7 +96,7 @@ func TestChatStream_ToolResults_MultipleMerged(t *testing.T) {
 	// Setup a mock server
 	var capturedBody geminiRequest
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewDecoder(r.Body).Decode(&capturedBody)
+		_ = json.NewDecoder(r.Body).Decode(&capturedBody)
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.Write([]byte("data: {}\n\n"))
 	}))
@@ -129,7 +129,7 @@ func TestChatStream_ToolResults_MultipleMerged(t *testing.T) {
 	}
 
 	req := ChatRequest{Messages: messages}
-	client.ChatStream(context.Background(), req, func(e StreamEvent) {})
+	_ = client.ChatStream(context.Background(), req, func(e StreamEvent) {})
 
 	// Expect merged content for the tool results
 	// Contents: [User, Model(3 calls), User(merged 3 results)]

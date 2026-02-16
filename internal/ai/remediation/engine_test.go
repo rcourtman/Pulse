@@ -102,7 +102,7 @@ func TestEngine_GetPlan(t *testing.T) {
 		Title: "Test plan",
 		Steps: []RemediationStep{{Command: "echo test"}},
 	}
-	engine.CreatePlan(plan)
+	_ = engine.CreatePlan(plan)
 
 	retrieved := engine.GetPlan(plan.ID)
 	if retrieved == nil {
@@ -131,7 +131,7 @@ func TestEngine_GetPlanForFinding(t *testing.T) {
 		Title:     "Fix for finding",
 		Steps:     []RemediationStep{{Command: "echo fix"}},
 	}
-	engine.CreatePlan(plan)
+	_ = engine.CreatePlan(plan)
 
 	retrieved := engine.GetPlanForFinding("finding-123")
 	if retrieved == nil {
@@ -150,7 +150,7 @@ func TestEngine_ApprovePlan(t *testing.T) {
 		Title: "Test plan",
 		Steps: []RemediationStep{{Command: "echo test"}},
 	}
-	engine.CreatePlan(plan)
+	_ = engine.CreatePlan(plan)
 
 	execution, err := engine.ApprovePlan(plan.ID, "admin")
 	if err != nil {
@@ -184,7 +184,7 @@ func TestEngine_ApprovePlan_Expired(t *testing.T) {
 		Steps:     []RemediationStep{{Command: "echo test"}},
 		ExpiresAt: &expired,
 	}
-	engine.CreatePlan(plan)
+	_ = engine.CreatePlan(plan)
 
 	_, err := engine.ApprovePlan(plan.ID, "admin")
 	if err == nil {
@@ -204,7 +204,7 @@ func TestEngine_Execute(t *testing.T) {
 			{Order: 2, Command: "echo step2"},
 		},
 	}
-	engine.CreatePlan(plan)
+	_ = engine.CreatePlan(plan)
 
 	execution, _ := engine.ApprovePlan(plan.ID, "admin")
 
@@ -241,7 +241,7 @@ func TestEngine_Execute_Failure(t *testing.T) {
 			{Order: 1, Command: "echo fail"},
 		},
 	}
-	engine.CreatePlan(plan)
+	_ = engine.CreatePlan(plan)
 
 	execution, _ := engine.ApprovePlan(plan.ID, "admin")
 
@@ -275,7 +275,7 @@ func TestEngine_Execute_NoExecutor(t *testing.T) {
 		Title: "Test",
 		Steps: []RemediationStep{{Command: "echo test"}},
 	}
-	engine.CreatePlan(plan)
+	_ = engine.CreatePlan(plan)
 	execution, _ := engine.ApprovePlan(plan.ID, "admin")
 
 	ctx := context.Background()
@@ -296,12 +296,12 @@ func TestEngine_Rollback(t *testing.T) {
 			{Order: 1, Command: "echo do", Rollback: "echo undo"},
 		},
 	}
-	engine.CreatePlan(plan)
+	_ = engine.CreatePlan(plan)
 
 	execution, _ := engine.ApprovePlan(plan.ID, "admin")
 
 	ctx := context.Background()
-	engine.Execute(ctx, execution.ID)
+	_ = engine.Execute(ctx, execution.ID)
 
 	// Rollback
 	err := engine.Rollback(ctx, execution.ID)
@@ -329,8 +329,8 @@ func TestEngine_ListExecutions(t *testing.T) {
 			Title: fmt.Sprintf("Plan %d", i),
 			Steps: []RemediationStep{{Command: "echo test"}},
 		}
-		engine.CreatePlan(plan)
-		engine.ApprovePlan(plan.ID, "admin")
+		_ = engine.CreatePlan(plan)
+		_, _ = engine.ApprovePlan(plan.ID, "admin")
 	}
 
 	executions := engine.ListExecutions(10)

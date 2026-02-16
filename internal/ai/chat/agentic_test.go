@@ -101,7 +101,7 @@ func TestAgenticLoop(t *testing.T) {
 		assert.Len(t, events, 1) // Only "content" is forwarded by the loop closure switch
 
 		var eventContent ContentData
-		json.Unmarshal(events[0].Data, &eventContent)
+		_ = json.Unmarshal(events[0].Data, &eventContent)
 		assert.Equal(t, "Hi there!", eventContent.Text)
 	})
 
@@ -808,7 +808,7 @@ func TestParallelToolExecution(t *testing.T) {
 		results, err := loop.Execute(ctx, sessionID, messages, func(event StreamEvent) {
 			if event.Type == "tool_end" {
 				var data ToolEndData
-				json.Unmarshal(event.Data, &data)
+				_ = json.Unmarshal(event.Data, &data)
 				toolEndEvents = append(toolEndEvents, data)
 			}
 		})

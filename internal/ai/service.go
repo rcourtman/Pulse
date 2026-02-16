@@ -2200,7 +2200,7 @@ func (s *Service) logRemediation(req ExecuteRequest, command, output string, suc
 		truncatedOutput = truncatedOutput[:maxOutputLen] + "..."
 	}
 
-	remLog.Log(RemediationRecord{
+	if err := remLog.Log(RemediationRecord{
 		ResourceID:   req.TargetID,
 		ResourceType: req.TargetType,
 		ResourceName: resourceName,
@@ -2211,7 +2211,9 @@ func (s *Service) logRemediation(req ExecuteRequest, command, output string, suc
 		Output:       truncatedOutput,
 		Outcome:      outcome,
 		Automatic:    req.UseCase == "patrol", // Patrol runs are automatic
-	})
+	}); err != nil {
+		log.Warn().Err(err).Str("resource_id", req.TargetID).Msg("Failed to log ACTION to Pulse AI Impact")
+	}
 
 	log.Info().
 		Str("resource_id", req.TargetID).
@@ -3049,9 +3051,9 @@ func (s *Service) AnalyzeForDiscovery(ctx context.Context, prompt string) (strin
 
 	// Track cost if cost store is available
 	if costStore != nil {
-		providerName, _ := config.ParseModelString(model)
+		providerName := provider.Name()
 		if providerName == "" {
-			providerName = provider.Name()
+			providerName, _ = config.ParseModelString(model)
 		}
 		costStore.Record(cost.UsageEvent{
 			Provider:     providerName,

@@ -567,7 +567,7 @@ func TestService_LoadConfig(t *testing.T) {
 
 	// 2. Disabled config
 	cfgV := config.AIConfig{Enabled: false}
-	persistence.SaveAIConfig(cfgV)
+	_ = persistence.SaveAIConfig(cfgV)
 	err = svc.LoadConfig()
 	if err != nil {
 		t.Fatalf("LoadConfig failed: %v", err)
@@ -582,7 +582,7 @@ func TestService_LoadConfig(t *testing.T) {
 		Model:        "anthropic:claude-3-opus-20240229",
 		OpenAIAPIKey: "sk-test",
 	}
-	persistence.SaveAIConfig(cfgV)
+	_ = persistence.SaveAIConfig(cfgV)
 	err = svc.LoadConfig()
 	if svc.provider == nil {
 		t.Fatal("Expected non-nil provider after smart fallback")
@@ -861,7 +861,7 @@ func TestService_BuildUserAnnotationsContext(t *testing.T) {
 		},
 	}
 	data, _ := json.Marshal(guestMeta)
-	os.WriteFile(filepath.Join(tmpDir, "guest_metadata.json"), data, 0644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "guest_metadata.json"), data, 0644)
 
 	// 3. Docker metadata
 	dockerMeta := map[string]*config.DockerMetadata{
@@ -871,7 +871,7 @@ func TestService_BuildUserAnnotationsContext(t *testing.T) {
 		},
 	}
 	data, _ = json.Marshal(dockerMeta)
-	os.WriteFile(filepath.Join(tmpDir, "docker_metadata.json"), data, 0644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "docker_metadata.json"), data, 0644)
 
 	ctx := svc.buildUserAnnotationsContext()
 	if !strings.Contains(ctx, "ServerA") || !strings.Contains(ctx, "Primary database") {
@@ -1230,7 +1230,7 @@ func TestService_ListModelsWithCache_CacheHit(t *testing.T) {
 		Enabled:      true,
 		OpenAIAPIKey: "test-key",
 	}
-	persistence.SaveAIConfig(cfg)
+	_ = persistence.SaveAIConfig(cfg)
 
 	// Get the cache key that persistence would generate
 	loadedCfg, _ := persistence.LoadAIConfig()
@@ -2000,7 +2000,7 @@ func TestService_LoadConfig_WithDisabledAI(t *testing.T) {
 	cfg := config.AIConfig{
 		Enabled: false,
 	}
-	persistence.SaveAIConfig(cfg)
+	_ = persistence.SaveAIConfig(cfg)
 
 	svc := NewService(persistence, nil)
 	err = svc.LoadConfig()
@@ -2029,7 +2029,7 @@ func TestService_LoadConfig_SmartFallback(t *testing.T) {
 		Model:        "anthropic:claude-3-opus",
 		OpenAIAPIKey: "test-openai-key",
 	}
-	persistence.SaveAIConfig(cfg)
+	_ = persistence.SaveAIConfig(cfg)
 
 	svc := NewService(persistence, nil)
 	err = svc.LoadConfig()
@@ -2061,7 +2061,7 @@ func TestService_LoadConfig_LegacyMigration(t *testing.T) {
 		APIKey:   "legacy-key",
 		Model:    "anthropic:claude-3-5-sonnet",
 	}
-	persistence.SaveAIConfig(cfg)
+	_ = persistence.SaveAIConfig(cfg)
 
 	svc := NewService(persistence, nil)
 	err = svc.LoadConfig()
@@ -2091,7 +2091,7 @@ func TestService_LoadConfig_LegacyMigration_Failure(t *testing.T) {
 		APIKey:   "key",
 		Model:    "anthropic:claude-opus",
 	}
-	persistence.SaveAIConfig(cfg)
+	_ = persistence.SaveAIConfig(cfg)
 
 	svc := NewService(persistence, nil)
 	err = svc.LoadConfig()
@@ -2146,7 +2146,7 @@ func TestService_LoadConfig_SmartFallback_Variants(t *testing.T) {
 				cfg.OllamaBaseURL = "http://localhost:11434"
 			}
 
-			persistence.SaveAIConfig(cfg)
+			_ = persistence.SaveAIConfig(cfg)
 			svc := NewService(persistence, nil)
 			err = svc.LoadConfig()
 			if err != nil {
@@ -2173,7 +2173,7 @@ func TestService_LoadConfig_NoProviders(t *testing.T) {
 	cfg := config.AIConfig{
 		Enabled: true,
 	}
-	persistence.SaveAIConfig(cfg)
+	_ = persistence.SaveAIConfig(cfg)
 
 	svc := NewService(persistence, nil)
 	err = svc.LoadConfig()
@@ -2193,7 +2193,7 @@ func TestService_LoadConfig_PersistenceError(t *testing.T) {
 	// Write invalid JSON to ai.enc (this is tricky because it's encrypted)
 	// Actually, we can just make the directory unreadable or use a non-directory for the path
 	aiFilePath := filepath.Join(tmpDir, "ai.enc")
-	os.MkdirAll(aiFilePath, 0755) // Create directory where file should be
+	_ = os.MkdirAll(aiFilePath, 0755) // Create directory where file should be
 
 	svc := NewService(persistence, nil)
 	err := svc.LoadConfig()
@@ -2217,7 +2217,7 @@ func TestService_LoadConfig_FallbackFailure(t *testing.T) {
 		Model:         "unknown:model",
 		OllamaBaseURL: "http://localhost:11434",
 	}
-	persistence.SaveAIConfig(cfg)
+	_ = persistence.SaveAIConfig(cfg)
 
 	svc := NewService(persistence, nil)
 	// We need providers.NewForModel to fail for Ollama fallback model?
@@ -2255,13 +2255,13 @@ func TestService_GetConfig_ReturnsCopy(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	persistence := config.NewConfigPersistence(tmpDir)
-	persistence.SaveAIConfig(config.AIConfig{
+	_ = persistence.SaveAIConfig(config.AIConfig{
 		Enabled: true,
 		Model:   "test:model",
 	})
 
 	svc := NewService(persistence, nil)
-	svc.LoadConfig()
+	_ = svc.LoadConfig()
 
 	cfg := svc.GetConfig()
 	if cfg == nil {
@@ -2291,10 +2291,10 @@ func TestService_IsAutonomous_Variations(t *testing.T) {
 		Enabled:        true,
 		AutonomousMode: false,
 	}
-	persistence.SaveAIConfig(cfg)
+	_ = persistence.SaveAIConfig(cfg)
 
 	svc := NewService(persistence, nil)
-	svc.LoadConfig()
+	_ = svc.LoadConfig()
 
 	if svc.IsAutonomous() {
 		t.Error("Expected not autonomous when mode is false")
@@ -2302,8 +2302,8 @@ func TestService_IsAutonomous_Variations(t *testing.T) {
 
 	// Test with AutonomousMode = true
 	cfg.AutonomousMode = true
-	persistence.SaveAIConfig(cfg)
-	svc.LoadConfig()
+	_ = persistence.SaveAIConfig(cfg)
+	_ = svc.LoadConfig()
 
 	if !svc.IsAutonomous() {
 		t.Error("Expected autonomous when mode is true")
@@ -2349,7 +2349,7 @@ func TestService_ListModelsWithCache_ProviderErrors(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	persistence := config.NewConfigPersistence(tmpDir)
-	persistence.SaveAIConfig(config.AIConfig{
+	_ = persistence.SaveAIConfig(config.AIConfig{
 		Enabled:      true,
 		OpenAIAPIKey: "test-key",
 	})
@@ -2429,7 +2429,7 @@ func TestService_ListModelsWithCache_ConfigErrors(t *testing.T) {
 
 	// Force LoadAIConfig failure
 	aiFilePath := filepath.Join(tmpDir, "ai.enc")
-	os.MkdirAll(aiFilePath, 0755)
+	_ = os.MkdirAll(aiFilePath, 0755)
 
 	svc := NewService(persistence, nil)
 	_, _, err := svc.ListModelsWithCache(context.Background())
@@ -2504,7 +2504,7 @@ func TestService_BuildUserAnnotationsContext_Variants(t *testing.T) {
 		},
 	}
 	data, _ := json.Marshal(guestMeta)
-	os.WriteFile(filepath.Join(tmpDir, "guest_metadata.json"), data, 0644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "guest_metadata.json"), data, 0644)
 
 	// Docker metadata with long ID and simple ID (no host part)
 	dockerMeta := map[string]*config.DockerMetadata{
@@ -2518,7 +2518,7 @@ func TestService_BuildUserAnnotationsContext_Variants(t *testing.T) {
 		},
 	}
 	data, _ = json.Marshal(dockerMeta)
-	os.WriteFile(filepath.Join(tmpDir, "docker_metadata.json"), data, 0644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "docker_metadata.json"), data, 0644)
 
 	ctx := svc.buildUserAnnotationsContext()
 

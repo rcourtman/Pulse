@@ -68,8 +68,8 @@ func TestResourceCount(t *testing.T) {
 		points[i] = MetricPoint{Value: 50}
 	}
 
-	store.Learn("vm-100", "vm", "cpu", points)
-	store.Learn("vm-200", "vm", "cpu", points)
+	_ = store.Learn("vm-100", "vm", "cpu", points)
+	_ = store.Learn("vm-200", "vm", "cpu", points)
 
 	if store.ResourceCount() != 2 {
 		t.Errorf("Expected 2 resources, got %d", store.ResourceCount())
@@ -170,7 +170,7 @@ func TestIsAnomaly_ZeroStdDev(t *testing.T) {
 		points[i] = MetricPoint{Value: 50}
 	}
 
-	store.Learn("test-vm", "vm", "cpu", points)
+	_ = store.Learn("test-vm", "vm", "cpu", points)
 
 	// With zero stddev, any different value should be anomaly
 	isAnomaly, _ := store.IsAnomaly("test-vm", "cpu", 50)
@@ -236,7 +236,7 @@ func TestPersistence_WithDataDir(t *testing.T) {
 		points[i] = MetricPoint{Value: 50}
 	}
 
-	store.Learn("test-vm", "vm", "cpu", points)
+	_ = store.Learn("test-vm", "vm", "cpu", points)
 
 	// Save
 	err = store.Save()
@@ -273,8 +273,8 @@ func TestGetAllBaselines_WithData(t *testing.T) {
 		points[i] = MetricPoint{Value: 50}
 	}
 
-	store.Learn("vm-100", "vm", "cpu", points)
-	store.Learn("vm-100", "vm", "memory", points)
+	_ = store.Learn("vm-100", "vm", "cpu", points)
+	_ = store.Learn("vm-100", "vm", "memory", points)
 
 	baselines := store.GetAllBaselines()
 
@@ -291,7 +291,7 @@ func TestLearn_UpdatesExistingBaseline(t *testing.T) {
 		points1[i] = MetricPoint{Value: 50}
 	}
 
-	store.Learn("test-vm", "vm", "cpu", points1)
+	_ = store.Learn("test-vm", "vm", "cpu", points1)
 	baseline1, _ := store.GetBaseline("test-vm", "cpu")
 	origMean := baseline1.Mean
 
@@ -301,7 +301,7 @@ func TestLearn_UpdatesExistingBaseline(t *testing.T) {
 		points2[i] = MetricPoint{Value: 100}
 	}
 
-	store.Learn("test-vm", "vm", "cpu", points2)
+	_ = store.Learn("test-vm", "vm", "cpu", points2)
 	baseline2, _ := store.GetBaseline("test-vm", "cpu")
 
 	// Mean should be updated

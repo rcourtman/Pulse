@@ -420,8 +420,8 @@ func TestGetNotesByCategory_All(t *testing.T) {
 	}
 	store.crypto = nil
 
-	store.SaveNote("guest", "Guest", "vm", "service", "Web", "nginx")
-	store.SaveNote("guest", "Guest", "vm", "config", "DB", "postgres")
+	_ = store.SaveNote("guest", "Guest", "vm", "service", "Web", "nginx")
+	_ = store.SaveNote("guest", "Guest", "vm", "config", "DB", "postgres")
 
 	notes, err := store.GetNotesByCategory("guest", "")
 	if err != nil {
@@ -636,8 +636,8 @@ func TestFormatAllForContext_NoTruncate(t *testing.T) {
 	}
 	store.crypto = nil
 
-	store.SaveNote("guest-1", "", "vm", "service", "Web", "nginx")
-	store.SaveNote("guest-2", "GuestTwo", "vm", "config", "DB", "postgres")
+	_ = store.SaveNote("guest-1", "", "vm", "service", "Web", "nginx")
+	_ = store.SaveNote("guest-2", "GuestTwo", "vm", "config", "DB", "postgres")
 
 	result := store.FormatAllForContext()
 	if !strings.Contains(result, "notes across") {
@@ -656,7 +656,7 @@ func TestFormatAllForContext_CredentialMasking(t *testing.T) {
 	}
 	store.crypto = nil
 
-	store.SaveNote("guest-1", "Guest", "vm", "credential", "Root", "password1234")
+	_ = store.SaveNote("guest-1", "Guest", "vm", "credential", "Root", "password1234")
 	result := store.FormatAllForContext()
 	if !strings.Contains(result, "pa****34") {
 		t.Errorf("expected masked credential, got %q", result)
@@ -688,7 +688,7 @@ func TestFormatAllForContext_TooLargeFirstNote(t *testing.T) {
 	for i := range largeContent {
 		largeContent[i] = 'x'
 	}
-	store.SaveNote("guest-1", "Guest", "vm", "service", "Big", string(largeContent))
+	_ = store.SaveNote("guest-1", "Guest", "vm", "service", "Big", string(largeContent))
 
 	if result := store.FormatAllForContext(); result != "" {
 		t.Errorf("expected empty result for oversized first note, got %q", result)

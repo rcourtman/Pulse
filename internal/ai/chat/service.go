@@ -1190,7 +1190,13 @@ func (s *Service) ExecuteCommand(ctx context.Context, command, targetHost string
 	if strings.Contains(resultText, "Command failed (exit code") {
 		// Parse exit code from message like "Command failed (exit code 1):"
 		var code int
-		fmt.Sscanf(resultText, "Command failed (exit code %d)", &code)
+		if n, err := fmt.Sscanf(resultText, "Command failed (exit code %d):", &code); n != 1 || err != nil {
+			// Some providers omit the trailing colon in this message shape.
+			if n, err := fmt.Sscanf(resultText, "Command failed (exit code %d)", &code); n != 1 || err != nil {
+				log.Debug().Str("result_text", resultText).Msg("failed to parse command exit code, defaulting to 1")
+				code = 1
+			}
+		}
 		return resultText, code, nil
 	}
 

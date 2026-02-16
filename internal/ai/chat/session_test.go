@@ -77,7 +77,7 @@ func TestSessionStore(t *testing.T) {
 
 	t.Run("UpdateLastMessage", func(t *testing.T) {
 		session, _ := store.Create()
-		store.AddMessage(session.ID, Message{Role: "assistant", Content: "Thinking..."})
+		_ = store.AddMessage(session.ID, Message{Role: "assistant", Content: "Thinking..."})
 
 		updatedMsg := Message{Role: "assistant", Content: "Resolved."}
 		err := store.UpdateLastMessage(session.ID, updatedMsg)

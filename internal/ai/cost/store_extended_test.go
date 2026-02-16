@@ -247,7 +247,7 @@ func TestClear_MultipleTimes(t *testing.T) {
 		InputTokens:  100,
 		OutputTokens: 50,
 	})
-	store.Clear()
+	_ = store.Clear()
 
 	store.Record(UsageEvent{
 		Timestamp:    time.Now(),
@@ -256,7 +256,7 @@ func TestClear_MultipleTimes(t *testing.T) {
 		InputTokens:  100,
 		OutputTokens: 50,
 	})
-	store.Clear()
+	_ = store.Clear()
 
 	summary := store.GetSummary(30)
 	if summary.Totals.TotalTokens != 0 {

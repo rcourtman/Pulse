@@ -128,7 +128,7 @@ func TestChangeDetector_GetChangesForResource(t *testing.T) {
 func TestRemediationLog_LogAndRetrieve(t *testing.T) {
 	r := NewRemediationLog(RemediationLogConfig{MaxRecords: 100})
 
-	r.Log(RemediationRecord{
+	_ = r.Log(RemediationRecord{
 		ResourceID: "vm-100",
 		Problem:    "High memory usage",
 		Action:     "systemctl restart nginx",
@@ -148,19 +148,19 @@ func TestRemediationLog_GetSimilar(t *testing.T) {
 	r := NewRemediationLog(RemediationLogConfig{MaxRecords: 100})
 
 	// Log some remediations
-	r.Log(RemediationRecord{
+	_ = r.Log(RemediationRecord{
 		ResourceID: "vm-100",
 		Problem:    "High memory usage causing OOM",
 		Action:     "Restart service",
 		Outcome:    OutcomeResolved,
 	})
-	r.Log(RemediationRecord{
+	_ = r.Log(RemediationRecord{
 		ResourceID: "vm-200",
 		Problem:    "Memory leak detected",
 		Action:     "Cleared cache",
 		Outcome:    OutcomePartial,
 	})
-	r.Log(RemediationRecord{
+	_ = r.Log(RemediationRecord{
 		ResourceID: "vm-300",
 		Problem:    "CPU spike from backup",
 		Action:     "Rescheduled backup",
@@ -177,12 +177,12 @@ func TestRemediationLog_GetSimilar(t *testing.T) {
 func TestRemediationLog_GetSuccessfulRemediations(t *testing.T) {
 	r := NewRemediationLog(RemediationLogConfig{MaxRecords: 100})
 
-	r.Log(RemediationRecord{
+	_ = r.Log(RemediationRecord{
 		Problem: "Memory usage high",
 		Action:  "Restart service",
 		Outcome: OutcomeResolved,
 	})
-	r.Log(RemediationRecord{
+	_ = r.Log(RemediationRecord{
 		Problem: "Memory usage high",
 		Action:  "Kill process",
 		Outcome: OutcomeFailed,
@@ -199,9 +199,9 @@ func TestRemediationLog_GetSuccessfulRemediations(t *testing.T) {
 func TestRemediationLog_Stats(t *testing.T) {
 	r := NewRemediationLog(RemediationLogConfig{MaxRecords: 100})
 
-	r.Log(RemediationRecord{Problem: "p1", Action: "a1", Outcome: OutcomeResolved})
-	r.Log(RemediationRecord{Problem: "p2", Action: "a2", Outcome: OutcomeResolved})
-	r.Log(RemediationRecord{Problem: "p3", Action: "a3", Outcome: OutcomeFailed})
+	_ = r.Log(RemediationRecord{Problem: "p1", Action: "a1", Outcome: OutcomeResolved})
+	_ = r.Log(RemediationRecord{Problem: "p2", Action: "a2", Outcome: OutcomeResolved})
+	_ = r.Log(RemediationRecord{Problem: "p3", Action: "a3", Outcome: OutcomeFailed})
 
 	stats := r.GetRemediationStats()
 	if stats["total"] != 3 {
@@ -237,28 +237,28 @@ func TestRemediationLog_GetRecentRemediationStats(t *testing.T) {
 	// Log some remediations with different outcomes
 	now := time.Now()
 
-	r.Log(RemediationRecord{
+	_ = r.Log(RemediationRecord{
 		Timestamp: now.Add(-1 * time.Hour),
 		Problem:   "p1",
 		Action:    "a1",
 		Outcome:   OutcomeResolved,
 		Automatic: true,
 	})
-	r.Log(RemediationRecord{
+	_ = r.Log(RemediationRecord{
 		Timestamp: now.Add(-2 * time.Hour),
 		Problem:   "p2",
 		Action:    "a2",
 		Outcome:   OutcomePartial,
 		Automatic: false,
 	})
-	r.Log(RemediationRecord{
+	_ = r.Log(RemediationRecord{
 		Timestamp: now.Add(-30 * time.Minute),
 		Problem:   "p3",
 		Action:    "a3",
 		Outcome:   OutcomeFailed,
 		Automatic: true,
 	})
-	r.Log(RemediationRecord{
+	_ = r.Log(RemediationRecord{
 		Timestamp: now.Add(-48 * time.Hour),
 		Problem:   "old",
 		Action:    "old",
@@ -293,13 +293,13 @@ func TestRemediationLog_GetRecentRemediationStats(t *testing.T) {
 func TestRemediationLog_AutomaticVsManual(t *testing.T) {
 	r := NewRemediationLog(RemediationLogConfig{MaxRecords: 100})
 
-	r.Log(RemediationRecord{
+	_ = r.Log(RemediationRecord{
 		Problem:   "auto problem",
 		Action:    "auto action",
 		Outcome:   OutcomeResolved,
 		Automatic: true,
 	})
-	r.Log(RemediationRecord{
+	_ = r.Log(RemediationRecord{
 		Problem:   "manual problem",
 		Action:    "manual action",
 		Outcome:   OutcomeResolved,
