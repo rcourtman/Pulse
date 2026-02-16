@@ -84,8 +84,8 @@ This release is the Unified Resources + unified navigation foundation, plus opt-
 ## Breaking Changes
 
 - Unified Resources is now the canonical resource model.
-  - `/api/v2/resources` has been renamed to `/api/resources`.
-  - Legacy resource plumbing and compatibility shims were removed as unified-only consumers landed (AI runtime, alerts, frontend selectors).
+  - Canonical API is now `/api/resources`.
+  - Deprecated alias: `/api/v2/resources` (temporary compatibility shim for older clients; will be removed after the migration window).
 - Frontend routing is now canonicalized around unified navigation.
   - Legacy routes (for example `/services` and `/kubernetes`) are transitional aliases and will be removed after the migration window.
 - Storage/Backups naming and routing were de-V2'ed.
@@ -101,7 +101,7 @@ This release is the Unified Resources + unified navigation foundation, plus opt-
 
 ### API Clients and Integrations
 
-- Replace calls to `/api/v2/resources` with `/api/resources`.
+- Replace calls to `/api/v2/resources` with `/api/resources` (recommended).
 - If an integration depended on legacy resource arrays or legacy resource endpoints, migrate to unified resource types and unified resource IDs.
 
 ### Multi-Tenant Organizations (Enterprise, Opt-In)

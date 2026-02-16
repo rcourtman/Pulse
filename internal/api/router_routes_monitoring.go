@@ -7,6 +7,20 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
 
+func deprecatedV2ResourceHandler(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Back-compat shim for older clients. Canonical unified resources API is /api/resources.
+		w.Header().Set("Deprecation", "true")
+
+		// Rewrite /api/v2/resources/... -> /api/resources/...
+		if strings.HasPrefix(r.URL.Path, "/api/v2/") {
+			r.URL.Path = "/api/" + strings.TrimPrefix(r.URL.Path, "/api/v2/")
+		}
+
+		next(w, r)
+	}
+}
+
 func (r *Router) registerMonitoringResourceRoutes(
 	guestMetadataHandler *GuestMetadataHandler,
 	dockerMetadataHandler *DockerMetadataHandler,
@@ -34,6 +48,10 @@ func (r *Router) registerMonitoringResourceRoutes(
 	r.mux.HandleFunc("/api/resources", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.resourceHandlers.HandleListResources)))
 	r.mux.HandleFunc("/api/resources/stats", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.resourceHandlers.HandleStats)))
 	r.mux.HandleFunc("/api/resources/", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.resourceHandlers.HandleResourceRoutes)))
+	// Deprecated v2 alias for unified resources (temporary compatibility shim).
+	r.mux.HandleFunc("/api/v2/resources", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, deprecatedV2ResourceHandler(r.resourceHandlers.HandleListResources))))
+	r.mux.HandleFunc("/api/v2/resources/stats", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, deprecatedV2ResourceHandler(r.resourceHandlers.HandleStats))))
+	r.mux.HandleFunc("/api/v2/resources/", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, deprecatedV2ResourceHandler(r.resourceHandlers.HandleResourceRoutes))))
 	// Guest metadata routes
 	r.mux.HandleFunc("/api/guests/metadata", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, guestMetadataHandler.HandleGetMetadata)))
 	r.mux.HandleFunc("/api/guests/metadata/", RequireAuth(r.config, func(w http.ResponseWriter, req *http.Request) {
