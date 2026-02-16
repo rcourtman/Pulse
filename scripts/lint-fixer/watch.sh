@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Real-time dashboard for lint-fixer progress
 
-LOG_FILE="/tmp/lint-fixer.log"
+LOG_FILE="/tmp/lint-fixer-runner.log"
 PROGRESS_FILE="scripts/lint-fixer/PROGRESS.md"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
@@ -14,22 +14,27 @@ CYAN='\033[0;36m'
 BOLD='\033[1m'
 RESET='\033[0m'
 
-# Function to get current branch (lint-fixes branch if running)
+# Function to get current branch
 get_lint_branch() {
-  git branch --list 'lint-fixes/*' --sort=-committerdate | head -1 | sed 's/^[* ]*//'
+  git rev-parse --abbrev-ref HEAD
 }
 
 # Function to calculate stats
 calculate_stats() {
   local branch="$1"
-  local base_commit="9dd606ea"  # The commit we started from
+
+  # Get base commit from log file
+  local base_commit=$(grep "Base commit:" "$LOG_FILE" 2>/dev/null | tail -1 | awk '{print $3}')
+  if [ -z "$base_commit" ]; then
+    base_commit="HEAD~10"  # Fallback
+  fi
 
   if [ -z "$branch" ]; then
     echo "0|0|0|0"
     return
   fi
 
-  # Get commit count
+  # Get commit count since base
   local commits=$(git log --oneline "${base_commit}..${branch}" 2>/dev/null | wc -l | tr -d ' ')
 
   # Get line changes (additions and deletions)
@@ -141,14 +146,19 @@ get_current_package() {
 
 # Function to get elapsed time
 get_elapsed_time() {
-  local branch="$1"
-  if [ -z "$branch" ]; then
+  if [ ! -f "$LOG_FILE" ]; then
     echo "0s"
     return
   fi
 
-  # Get first commit time on this branch
-  local start_time=$(git log --reverse --format=%ct "${branch}" 2>/dev/null | head -1)
+  # Get start time from log file
+  local start_date=$(grep "Started:" "$LOG_FILE" 2>/dev/null | tail -1 | sed 's/.*Started: *//')
+  if [ -z "$start_date" ]; then
+    echo "0s"
+    return
+  fi
+
+  local start_time=$(date -j -f "%a %d %b %Y %H:%M:%S %Z" "$start_date" +%s 2>/dev/null)
   if [ -z "$start_time" ]; then
     echo "0s"
     return
@@ -168,7 +178,7 @@ get_elapsed_time() {
 
 # Function to check if process is running
 is_running() {
-  pgrep -f 'lint-fixer/run.sh' >/dev/null 2>&1
+  pgrep -f 'lint-fixer/run-v2.sh' >/dev/null 2>&1 || pgrep -f 'opencode run' >/dev/null 2>&1
 }
 
 # Main display loop
@@ -221,11 +231,11 @@ while true; do
 
   # Progress
   echo -e "${BOLD}Package Progress:${RESET}"
-  if [ "$TOTAL" -gt 0 ]; then
-    local pct=$((COMPLETED * 100 / TOTAL))
-    local bar_width=40
-    local filled=$((pct * bar_width / 100))
-    local empty=$((bar_width - filled))
+  if [ "${TOTAL:-0}" -gt 0 ]; then
+    pct=$((COMPLETED * 100 / TOTAL))
+    bar_width=40
+    filled=$((pct * bar_width / 100))
+    empty=$((bar_width - filled))
 
     echo -n "  ["
     for ((i=0; i<filled; i++)); do echo -n "█"; done
@@ -248,14 +258,17 @@ while true; do
 
   # AI Performance
   echo -e "${BOLD}AI Performance:${RESET}"
-  local success_rate=0
+  success_rate=0
+  PASSED="${PASSED:-0}"
+  FAILED="${FAILED:-0}"
+  AI_CALLS="${AI_CALLS:-0}"
   if [ $((PASSED + FAILED)) -gt 0 ]; then
     success_rate=$((PASSED * 100 / (PASSED + FAILED)))
   fi
   echo -e "  ${CYAN}🤖${RESET} AI calls:     ${AI_CALLS}"
   echo -e "  ${GREEN}✓${RESET} Tests passed: ${PASSED}"
   echo -e "  ${RED}✗${RESET} Tests failed: ${FAILED}"
-  if [ $AI_CALLS -gt 0 ]; then
+  if [ "${AI_CALLS}" -gt 0 ]; then
     echo -e "  ${YELLOW}📊${RESET} Success rate: ${success_rate}%"
   fi
   echo ""
