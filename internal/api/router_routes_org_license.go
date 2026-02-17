@@ -17,6 +17,7 @@ func (r *Router) registerOrgLicenseRoutesGroup(orgHandlers *OrgHandlers, rbacHan
 		conversion.NewPipelineHealth(),
 		conversionConfig,
 		r.conversionStore,
+		func() bool { return r != nil && r.config != nil && r.config.DisableLocalUpgradeMetrics },
 	)
 
 	// License routes (Pulse Pro)
@@ -26,6 +27,17 @@ func (r *Router) registerOrgLicenseRoutesGroup(orgHandlers *OrgHandlers, rbacHan
 	r.mux.HandleFunc("/api/license/clear", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.licenseHandlers.HandleClearLicense)))
 	r.mux.HandleFunc("GET /api/license/entitlements", RequireAuth(r.config, r.licenseHandlers.HandleEntitlements))
 	r.mux.HandleFunc("POST /api/license/trial/start", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.licenseHandlers.HandleStartTrial)))
+
+	// Local upgrade metrics (formerly "conversion" telemetry). Canonical routes:
+	// These are local-only signals used to improve in-app upgrade flows; no external export.
+	r.mux.HandleFunc("POST /api/upgrade-metrics/events", RequireAuth(r.config, conversionHandlers.HandleRecordEvent))
+	r.mux.HandleFunc("GET /api/upgrade-metrics/stats", RequireAuth(r.config, conversionHandlers.HandleGetStats))
+	r.mux.HandleFunc("GET /api/upgrade-metrics/health", RequireAuth(r.config, conversionHandlers.HandleGetHealth))
+	r.mux.HandleFunc("GET /api/upgrade-metrics/config", RequireAuth(r.config, RequireScope(config.ScopeSettingsRead, conversionHandlers.HandleGetConfig)))
+	r.mux.HandleFunc("PUT /api/upgrade-metrics/config", RequireAuth(r.config, RequireScope(config.ScopeSettingsWrite, conversionHandlers.HandleUpdateConfig)))
+	r.mux.HandleFunc("GET /api/admin/upgrade-metrics-funnel", RequireAdmin(r.config, conversionHandlers.HandleConversionFunnel))
+
+	// Legacy compatibility aliases (deprecated).
 	r.mux.HandleFunc("POST /api/conversion/events", RequireAuth(r.config, conversionHandlers.HandleRecordEvent))
 	r.mux.HandleFunc("GET /api/conversion/stats", RequireAuth(r.config, conversionHandlers.HandleGetStats))
 	r.mux.HandleFunc("GET /api/conversion/health", RequireAuth(r.config, conversionHandlers.HandleGetHealth))

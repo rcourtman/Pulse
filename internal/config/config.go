@@ -144,6 +144,7 @@ type Config struct {
 	HideLocalLogin              bool             `envconfig:"PULSE_AUTH_HIDE_LOCAL_LOGIN" default:"false"`
 	DisableDockerUpdateActions  bool             `envconfig:"PULSE_DISABLE_DOCKER_UPDATE_ACTIONS" default:"false"`  // Hide Docker update buttons (read-only mode for containers)
 	DisableLegacyRouteRedirects bool             `envconfig:"PULSE_DISABLE_LEGACY_ROUTE_REDIRECTS" default:"false"` // Disable frontend legacy URL redirects globally
+	DisableLocalUpgradeMetrics  bool             `envconfig:"PULSE_DISABLE_LOCAL_UPGRADE_METRICS" default:"false"`  // Disable local-only upgrade UX metrics collection
 	MultiTenantEnabled          bool             `envconfig:"PULSE_MULTI_TENANT_ENABLED" default:"false"`           // Enable multi-tenant support
 
 	// Proxy authentication settings
@@ -843,6 +844,8 @@ func Load() (*Config, error) {
 			cfg.DisableDockerUpdateActions = systemSettings.DisableDockerUpdateActions
 			// Load DisableLegacyRouteRedirects (sunset legacy frontend route aliases)
 			cfg.DisableLegacyRouteRedirects = systemSettings.DisableLegacyRouteRedirects
+			// Load DisableLocalUpgradeMetrics (privacy: local-only upgrade UX metrics)
+			cfg.DisableLocalUpgradeMetrics = systemSettings.DisableLocalUpgradeMetrics
 			// Load PublicURL from settings (will be overridden by env var if set)
 			if systemSettings.PublicURL != "" {
 				cfg.PublicURL = systemSettings.PublicURL
@@ -1039,6 +1042,17 @@ func Load() (*Config, error) {
 			log.Info().Bool("disabled", disabled).Msg("Overriding legacy route redirects setting from environment")
 		} else {
 			log.Warn().Str("value", disableLegacyRouteRedirectsStr).Msg("Invalid PULSE_DISABLE_LEGACY_ROUTE_REDIRECTS value, ignoring")
+		}
+	}
+
+	if disableLocalUpgradeMetricsStr := utils.GetenvTrim("PULSE_DISABLE_LOCAL_UPGRADE_METRICS"); disableLocalUpgradeMetricsStr != "" {
+		if disabled, err := strconv.ParseBool(disableLocalUpgradeMetricsStr); err == nil {
+			cfg.DisableLocalUpgradeMetrics = disabled
+			cfg.EnvOverrides["PULSE_DISABLE_LOCAL_UPGRADE_METRICS"] = true
+			cfg.EnvOverrides["disableLocalUpgradeMetrics"] = true
+			log.Info().Bool("disabled", disabled).Msg("Overriding local upgrade metrics setting from environment")
+		} else {
+			log.Warn().Str("value", disableLocalUpgradeMetricsStr).Msg("Invalid PULSE_DISABLE_LOCAL_UPGRADE_METRICS value, ignoring")
 		}
 	}
 

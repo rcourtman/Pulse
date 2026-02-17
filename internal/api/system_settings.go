@@ -241,6 +241,30 @@ func validateSystemSettings(_ *config.SystemSettings, rawRequest map[string]inte
 		}
 	}
 
+	if val, ok := rawRequest["disableLegacyRouteRedirects"]; ok {
+		if _, ok := val.(bool); !ok {
+			return fmt.Errorf("disableLegacyRouteRedirects must be a boolean")
+		}
+	}
+
+	if val, ok := rawRequest["disableLocalUpgradeMetrics"]; ok {
+		if _, ok := val.(bool); !ok {
+			return fmt.Errorf("disableLocalUpgradeMetrics must be a boolean")
+		}
+	}
+
+	if val, ok := rawRequest["showClassicPlatformShortcuts"]; ok {
+		if _, ok := val.(bool); !ok {
+			return fmt.Errorf("showClassicPlatformShortcuts must be a boolean")
+		}
+	}
+
+	if val, ok := rawRequest["reduceProUpsellNoise"]; ok {
+		if _, ok := val.(bool); !ok {
+			return fmt.Errorf("reduceProUpsellNoise must be a boolean")
+		}
+	}
+
 	// Validate auto-update check interval (min 1 hour, max 7 days)
 	if val, ok := rawRequest["autoUpdateCheckInterval"]; ok {
 		if interval, ok := val.(float64); ok {
@@ -648,6 +672,16 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	if _, ok := rawRequest["disableLegacyRouteRedirects"]; ok {
 		settings.DisableLegacyRouteRedirects = updates.DisableLegacyRouteRedirects
 		h.config.DisableLegacyRouteRedirects = settings.DisableLegacyRouteRedirects
+	}
+	if _, ok := rawRequest["disableLocalUpgradeMetrics"]; ok {
+		settings.DisableLocalUpgradeMetrics = updates.DisableLocalUpgradeMetrics
+		h.config.DisableLocalUpgradeMetrics = settings.DisableLocalUpgradeMetrics
+	}
+	if _, ok := rawRequest["showClassicPlatformShortcuts"]; ok {
+		settings.ShowClassicPlatformShortcuts = updates.ShowClassicPlatformShortcuts
+	}
+	if _, ok := rawRequest["reduceProUpsellNoise"]; ok {
+		settings.ReduceProUpsellNoise = updates.ReduceProUpsellNoise
 	}
 	if _, ok := rawRequest["fullWidthMode"]; ok {
 		settings.FullWidthMode = updates.FullWidthMode

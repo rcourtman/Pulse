@@ -17,14 +17,18 @@ type ConversionHandlers struct {
 	health   *conversion.PipelineHealth
 	config   *conversion.CollectionConfig
 	store    *conversion.ConversionStore
+	// disableAll, when true, forces all event ingestion to be skipped for privacy.
+	// This is a hard override; runtime collection config remains mutable but is ignored.
+	disableAll func() bool
 }
 
-func NewConversionHandlers(recorder *conversion.Recorder, health *conversion.PipelineHealth, config *conversion.CollectionConfig, store *conversion.ConversionStore) *ConversionHandlers {
+func NewConversionHandlers(recorder *conversion.Recorder, health *conversion.PipelineHealth, config *conversion.CollectionConfig, store *conversion.ConversionStore, disableAll func() bool) *ConversionHandlers {
 	return &ConversionHandlers{
-		recorder: recorder,
-		health:   health,
-		config:   config,
-		store:    store,
+		recorder:   recorder,
+		health:     health,
+		config:     config,
+		store:      store,
+		disableAll: disableAll,
 	}
 }
 
@@ -44,6 +48,12 @@ func (h *ConversionHandlers) HandleRecordEvent(w http.ResponseWriter, r *http.Re
 	if err := event.Validate(); err != nil {
 		conversion.GetConversionMetrics().RecordInvalid(conversionValidationReason(err))
 		writeConversionValidationError(w, err.Error())
+		return
+	}
+
+	if h != nil && h.disableAll != nil && h.disableAll() {
+		conversion.GetConversionMetrics().RecordSkipped("system_disabled")
+		writeConversionAccepted(w)
 		return
 	}
 
