@@ -81,13 +81,11 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
         <div class="text-center">
             {/* Logo */}
             <div class="mb-8">
-                <div class="inline-flex items-center justify-center w-24 h-24 rounded-full bg-blue-500 shadow-2xl shadow-blue-500/30 mb-6">
-                    <svg width="56" height="56" viewBox="0 0 256 256" class="text-white">
-                        <circle class="fill-current opacity-20" cx="128" cy="128" r="122" />
-                        <circle class="fill-none stroke-current" stroke-width="14" cx="128" cy="128" r="84" opacity="0.9" />
-                        <circle class="fill-current" cx="128" cy="128" r="26" />
-                    </svg>
-                </div>
+                <img
+                    src="/logo.svg"
+                    alt="Pulse Logo"
+                    class="w-24 h-24 shadow-2xl shadow-blue-500/30 rounded-full mb-6"
+                />
                 <h1 class="text-4xl font-bold text-white mb-3">
                     Welcome to Pulse
                 </h1>
