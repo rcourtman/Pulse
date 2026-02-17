@@ -163,7 +163,7 @@ func (p *Provider) Records() []unifiedresources.IngestRecord {
 		collectedAt = p.now()
 	}
 	systemSourceID := systemSourceID(snapshot.System.Hostname)
-	records := make([]unifiedresources.IngestRecord, 0, 1+len(snapshot.Pools)+len(snapshot.Datasets))
+	records := make([]unifiedresources.IngestRecord, 0, 1+len(snapshot.Pools)+len(snapshot.Datasets)+len(snapshot.Disks))
 
 	totalCapacity, totalUsed := aggregatePoolUsage(snapshot.Pools)
 	records = append(records, unifiedresources.IngestRecord{
@@ -176,6 +176,11 @@ func (p *Provider) Records() []unifiedresources.IngestRecord {
 			UpdatedAt: collectedAt,
 			Metrics: &unifiedresources.ResourceMetrics{
 				Disk: diskMetric(totalCapacity, totalUsed),
+			},
+			TrueNAS: &unifiedresources.TrueNASData{
+				Hostname:      strings.TrimSpace(snapshot.System.Hostname),
+				Version:       snapshot.System.Version,
+				UptimeSeconds: snapshot.System.UptimeSeconds,
 			},
 			Tags: []string{
 				"truenas",
@@ -203,8 +208,9 @@ func (p *Provider) Records() []unifiedresources.IngestRecord {
 					Disk: diskMetric(pool.TotalBytes, pool.UsedBytes),
 				},
 				Storage: &unifiedresources.StorageMeta{
-					Type:  "zfs-pool",
-					IsZFS: true,
+					Type:         "zfs-pool",
+					IsZFS:        true,
+					ZFSPoolState: strings.ToUpper(strings.TrimSpace(pool.Status)),
 				},
 				Tags: []string{
 					"truenas",
@@ -257,6 +263,38 @@ func (p *Provider) Records() []unifiedresources.IngestRecord {
 					dataset.Name,
 				},
 			},
+		})
+	}
+
+	for _, disk := range snapshot.Disks {
+		diskIdentity := unifiedresources.ResourceIdentity{
+			Hostnames: []string{snapshot.System.Hostname},
+		}
+		if disk.Serial != "" {
+			diskIdentity.MachineID = disk.Serial
+		}
+		records = append(records, unifiedresources.IngestRecord{
+			SourceID:       diskSourceID(disk.Name),
+			ParentSourceID: poolSourceID(disk.Pool),
+			Resource: unifiedresources.Resource{
+				Type:      unifiedresources.ResourceTypePhysicalDisk,
+				Name:      disk.Name,
+				Status:    statusFromDisk(disk),
+				LastSeen:  collectedAt,
+				UpdatedAt: collectedAt,
+				PhysicalDisk: &unifiedresources.PhysicalDiskMeta{
+					DevPath:   "/dev/" + disk.Name,
+					Model:     disk.Model,
+					Serial:    disk.Serial,
+					DiskType:  disk.Transport,
+					SizeBytes: disk.SizeBytes,
+					Health:    healthFromDisk(disk),
+					Wearout:   -1,
+					RPM:       rpmFromDisk(disk),
+				},
+				Tags: []string{"truenas", "disk", disk.Transport},
+			},
+			Identity: diskIdentity,
 		})
 	}
 
@@ -339,6 +377,41 @@ func poolSourceID(pool string) string {
 
 func datasetSourceID(dataset string) string {
 	return "dataset:" + strings.TrimSpace(dataset)
+}
+
+func diskSourceID(name string) string {
+	return "disk:" + strings.TrimSpace(name)
+}
+
+func statusFromDisk(disk Disk) unifiedresources.ResourceStatus {
+	switch strings.ToUpper(strings.TrimSpace(disk.Status)) {
+	case "ONLINE":
+		return unifiedresources.StatusOnline
+	case "DEGRADED":
+		return unifiedresources.StatusWarning
+	case "FAULTED", "OFFLINE", "REMOVED", "UNAVAIL":
+		return unifiedresources.StatusOffline
+	default:
+		return unifiedresources.StatusUnknown
+	}
+}
+
+func healthFromDisk(disk Disk) string {
+	switch strings.ToUpper(strings.TrimSpace(disk.Status)) {
+	case "ONLINE":
+		return "PASSED"
+	case "DEGRADED":
+		return "UNKNOWN"
+	default:
+		return "FAILED"
+	}
+}
+
+func rpmFromDisk(disk Disk) int {
+	if disk.Rotational {
+		return 7200
+	}
+	return 0
 }
 
 func parentPoolFromDataset(datasetName string) string {

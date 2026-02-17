@@ -129,5 +129,29 @@ func DefaultFixtures() FixtureSnapshot {
 				Rotational: true,
 			},
 		},
+		Alerts: []Alert{
+			{
+				ID:       "alert-degraded-pool",
+				Level:    "WARNING",
+				Message:  "Pool archive state is DEGRADED: One or more devices has been removed by the administrator.",
+				Source:   "VolumeStatus",
+				Datetime: time.Date(2026, 2, 6, 8, 15, 0, 0, time.UTC),
+			},
+			{
+				ID:       "alert-smart",
+				Level:    "WARNING",
+				Message:  "Device /dev/sdc has SMART test failures.",
+				Source:   "SMART",
+				Datetime: time.Date(2026, 2, 7, 14, 30, 0, 0, time.UTC),
+			},
+			{
+				ID:        "alert-scrub-finished",
+				Level:     "INFO",
+				Message:   "Scrub of pool tank finished without errors.",
+				Source:    "Scrub",
+				Dismissed: true,
+				Datetime:  time.Date(2026, 2, 5, 3, 0, 0, 0, time.UTC),
+			},
+		},
 	}
 }

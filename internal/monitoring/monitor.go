@@ -3128,6 +3128,10 @@ func monitorUptime(resource unifiedresources.Resource) *int64 {
 		value := resource.PMG.UptimeSeconds
 		return &value
 	}
+	if resource.TrueNAS != nil && resource.TrueNAS.UptimeSeconds > 0 {
+		value := resource.TrueNAS.UptimeSeconds
+		return &value
+	}
 	return nil
 }
 

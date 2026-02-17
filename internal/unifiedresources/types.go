@@ -37,6 +37,7 @@ type Resource struct {
 	Kubernetes   *K8sData          `json:"kubernetes,omitempty"`
 	PhysicalDisk *PhysicalDiskMeta `json:"physicalDisk,omitempty"`
 	Ceph         *CephMeta         `json:"ceph,omitempty"`
+	TrueNAS      *TrueNASData      `json:"truenas,omitempty"`
 }
 
 // DiscoveryTarget describes the canonical discovery request coordinates
@@ -488,6 +489,13 @@ type PMGData struct {
 	MailStats        *PMGMailStatsMeta   `json:"mailStats,omitempty"`
 	Quarantine       *PMGQuarantineMeta  `json:"quarantine,omitempty"`
 	SpamDistribution []PMGSpamBucketMeta `json:"spamDistribution,omitempty"`
+}
+
+// TrueNASData contains TrueNAS-specific metadata for system host resources.
+type TrueNASData struct {
+	Hostname      string `json:"hostname,omitempty"`
+	Version       string `json:"version,omitempty"`
+	UptimeSeconds int64  `json:"uptimeSeconds,omitempty"`
 }
 
 // K8sMetricCapabilities describes which Kubernetes metric families are available

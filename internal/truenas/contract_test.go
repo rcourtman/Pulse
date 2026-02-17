@@ -40,7 +40,7 @@ func TestRegistryIngestRecordsTreatsTrueNASAsGenericDataSource(t *testing.T) {
 	registry.IngestRecords(unifiedresources.SourceTrueNAS, records)
 
 	resources := registry.List()
-	wantCount := 1 + len(fixtures.Pools) + len(fixtures.Datasets)
+	wantCount := 1 + len(fixtures.Pools) + len(fixtures.Datasets) + len(fixtures.Disks)
 	if len(resources) != wantCount {
 		t.Fatalf("expected %d resources, got %d", wantCount, len(resources))
 	}
@@ -50,11 +50,26 @@ func TestRegistryIngestRecordsTreatsTrueNASAsGenericDataSource(t *testing.T) {
 	if system.ChildCount != len(fixtures.Pools) {
 		t.Fatalf("expected system child count %d, got %d", len(fixtures.Pools), system.ChildCount)
 	}
+	if system.TrueNAS == nil {
+		t.Fatal("expected TrueNAS metadata on system record")
+	}
+	if system.TrueNAS.UptimeSeconds != fixtures.System.UptimeSeconds {
+		t.Fatalf("expected uptime %d, got %d", fixtures.System.UptimeSeconds, system.TrueNAS.UptimeSeconds)
+	}
+	if system.TrueNAS.Version != fixtures.System.Version {
+		t.Fatalf("expected version %q, got %q", fixtures.System.Version, system.TrueNAS.Version)
+	}
 
 	pool := requireResource(t, resources, unifiedresources.ResourceTypeStorage, "tank")
 	assertSourceTracking(t, *pool, unifiedresources.SourceTrueNAS)
 	if pool.ParentID == nil || *pool.ParentID != system.ID {
 		t.Fatalf("expected pool parent %q, got %+v", system.ID, pool.ParentID)
+	}
+	if pool.Storage == nil {
+		t.Fatal("expected pool storage metadata")
+	}
+	if pool.Storage.ZFSPoolState != "ONLINE" {
+		t.Fatalf("expected ZFSPoolState ONLINE, got %q", pool.Storage.ZFSPoolState)
 	}
 	assertDiskMetric(t, pool.Metrics, 30*1024*1024*1024*1024, 12*1024*1024*1024*1024)
 
@@ -64,6 +79,39 @@ func TestRegistryIngestRecordsTreatsTrueNASAsGenericDataSource(t *testing.T) {
 		t.Fatalf("expected dataset parent %q, got %+v", pool.ID, dataset.ParentID)
 	}
 	assertDiskMetric(t, dataset.Metrics, 18*1024*1024*1024*1024, 5*1024*1024*1024*1024)
+
+	disk := requireResource(t, resources, unifiedresources.ResourceTypePhysicalDisk, "sda")
+	assertSourceTracking(t, *disk, unifiedresources.SourceTrueNAS)
+	if disk.ParentID == nil || *disk.ParentID != pool.ID {
+		t.Fatalf("expected disk parent %q, got %+v", pool.ID, disk.ParentID)
+	}
+	if disk.PhysicalDisk == nil {
+		t.Fatal("expected physical disk metadata")
+	}
+	if disk.PhysicalDisk.DevPath != "/dev/sda" {
+		t.Fatalf("expected dev path /dev/sda, got %q", disk.PhysicalDisk.DevPath)
+	}
+	if disk.PhysicalDisk.Model != "Seagate Exos X18" {
+		t.Fatalf("expected model %q, got %q", "Seagate Exos X18", disk.PhysicalDisk.Model)
+	}
+	if disk.PhysicalDisk.Serial != "ZL0A1234" {
+		t.Fatalf("expected serial %q, got %q", "ZL0A1234", disk.PhysicalDisk.Serial)
+	}
+	if disk.PhysicalDisk.DiskType != "sata" {
+		t.Fatalf("expected disk type %q, got %q", "sata", disk.PhysicalDisk.DiskType)
+	}
+	if disk.PhysicalDisk.SizeBytes != 16*1024*1024*1024*1024 {
+		t.Fatalf("expected size bytes %d, got %d", int64(16*1024*1024*1024*1024), disk.PhysicalDisk.SizeBytes)
+	}
+	if disk.PhysicalDisk.Health != "PASSED" {
+		t.Fatalf("expected health PASSED, got %q", disk.PhysicalDisk.Health)
+	}
+	if disk.PhysicalDisk.Wearout != -1 {
+		t.Fatalf("expected wearout -1, got %d", disk.PhysicalDisk.Wearout)
+	}
+	if disk.PhysicalDisk.RPM != 7200 {
+		t.Fatalf("expected rpm 7200, got %d", disk.PhysicalDisk.RPM)
+	}
 
 	targets := registry.SourceTargets(dataset.ID)
 	if len(targets) == 0 {
@@ -102,7 +150,7 @@ func TestTrueNASResourcesFlowThroughUnifiedTypesWithoutSpecialCasing(t *testing.
 			t.Fatalf("expected canonical render type, got truenas-specific type for %s", resource.ID)
 		}
 		switch resource.Type {
-		case unifiedresources.ResourceTypeHost, unifiedresources.ResourceTypeStorage:
+		case unifiedresources.ResourceTypeHost, unifiedresources.ResourceTypeStorage, unifiedresources.ResourceTypePhysicalDisk:
 		default:
 			t.Fatalf("unexpected unified type for truenas fixture resource: %s (%s)", resource.Type, resource.ID)
 		}
@@ -110,6 +158,92 @@ func TestTrueNASResourcesFlowThroughUnifiedTypesWithoutSpecialCasing(t *testing.
 		frontend := models.ConvertResourceToFrontend(toFrontendInput(resource))
 		if frontend.ID == "" {
 			t.Fatalf("expected frontend conversion to preserve ID for %s", resource.ID)
+		}
+	}
+}
+
+func TestTrueNASDiskRecordsPopulatePhysicalDiskMeta(t *testing.T) {
+	previous := IsFeatureEnabled()
+	SetFeatureEnabled(true)
+	t.Cleanup(func() {
+		SetFeatureEnabled(previous)
+	})
+
+	fixtures := DefaultFixtures()
+	provider := NewProvider(fixtures)
+	records := provider.Records()
+	if len(records) == 0 {
+		t.Fatal("expected fixture records from provider")
+	}
+
+	fixtureByName := make(map[string]Disk, len(fixtures.Disks))
+	for _, disk := range fixtures.Disks {
+		fixtureByName[disk.Name] = disk
+	}
+
+	var diskRecords []unifiedresources.IngestRecord
+	for _, record := range records {
+		if record.Resource.Type == unifiedresources.ResourceTypePhysicalDisk {
+			diskRecords = append(diskRecords, record)
+		}
+	}
+	if len(diskRecords) != 4 {
+		t.Fatalf("expected 4 disk records, got %d", len(diskRecords))
+	}
+
+	for _, record := range diskRecords {
+		fixture, ok := fixtureByName[record.Resource.Name]
+		if !ok {
+			t.Fatalf("unexpected disk record %q", record.Resource.Name)
+		}
+		if record.Resource.PhysicalDisk == nil {
+			t.Fatalf("expected PhysicalDiskMeta for %q", record.Resource.Name)
+		}
+
+		meta := record.Resource.PhysicalDisk
+		if meta.DevPath != "/dev/"+fixture.Name {
+			t.Fatalf("expected dev path %q, got %q", "/dev/"+fixture.Name, meta.DevPath)
+		}
+		if meta.Model != fixture.Model {
+			t.Fatalf("expected model %q, got %q", fixture.Model, meta.Model)
+		}
+		if meta.Serial != fixture.Serial {
+			t.Fatalf("expected serial %q, got %q", fixture.Serial, meta.Serial)
+		}
+		if meta.DiskType != fixture.Transport {
+			t.Fatalf("expected disk type %q, got %q", fixture.Transport, meta.DiskType)
+		}
+		if meta.SizeBytes != fixture.SizeBytes {
+			t.Fatalf("expected size bytes %d, got %d", fixture.SizeBytes, meta.SizeBytes)
+		}
+		if meta.Wearout != -1 {
+			t.Fatalf("expected wearout -1, got %d", meta.Wearout)
+		}
+		wantRPM := 0
+		if fixture.Rotational {
+			wantRPM = 7200
+		}
+		if meta.RPM != wantRPM {
+			t.Fatalf("expected rpm %d, got %d", wantRPM, meta.RPM)
+		}
+
+		switch strings.ToUpper(strings.TrimSpace(fixture.Status)) {
+		case "ONLINE":
+			if record.Resource.Status != unifiedresources.StatusOnline {
+				t.Fatalf("expected status online for %q, got %s", fixture.Name, record.Resource.Status)
+			}
+			if meta.Health != "PASSED" {
+				t.Fatalf("expected health PASSED for %q, got %q", fixture.Name, meta.Health)
+			}
+		case "DEGRADED":
+			if record.Resource.Status != unifiedresources.StatusWarning {
+				t.Fatalf("expected status warning for %q, got %s", fixture.Name, record.Resource.Status)
+			}
+			if meta.Health != "UNKNOWN" {
+				t.Fatalf("expected health UNKNOWN for %q, got %q", fixture.Name, meta.Health)
+			}
+		default:
+			t.Fatalf("unhandled fixture status %q for %q", fixture.Status, fixture.Name)
 		}
 	}
 }
