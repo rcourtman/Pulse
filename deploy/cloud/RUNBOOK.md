@@ -6,9 +6,7 @@ This runbook is for the Phase 1 architecture: a single DigitalOcean droplet runn
 - Pulse Control Plane behind Traefik at `https://<DOMAIN>/`
 - One Docker container per tenant (`pulse-<tenant_id>`) on the `pulse-cloud` Docker network
 
-For canonical secret sources and how I store them locally, see:
-
-- `/Volumes/Development/pulse/repos/pulse-pro/OPERATIONS.md`
+Secrets and credentials are stored separately and not checked into this repository.
 
 ## Deploy From Scratch
 
