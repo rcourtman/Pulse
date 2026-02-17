@@ -47,6 +47,7 @@ import {
   WORKLOADS_PATH,
   WORKLOADS_QUERY_PARAMS,
 } from '@/routing/resourceLinks';
+import { areSearchParamsEquivalent } from '@/utils/searchParams';
 import { ScrollToTopButton } from '@/components/shared/ScrollToTopButton';
 import {
   workloadNodeScopeId,
@@ -559,7 +560,8 @@ export function Dashboard(props: DashboardProps) {
   createEffect(() => {
     if (!isWorkloadsRoute()) return;
 
-    const params = new URLSearchParams(location.search);
+    const currentParams = new URLSearchParams(location.search);
+    const nextParams = new URLSearchParams(location.search);
     const nextType = viewMode() === 'all' ? '' : viewMode();
     const nextContext = viewMode() === 'k8s' ? selectedKubernetesContext() ?? '' : '';
     const nextHost = viewMode() === 'k8s' ? '' : selectedNode() ?? selectedHostHint() ?? '';
@@ -570,17 +572,16 @@ export function Dashboard(props: DashboardProps) {
       host: nextHost || null,
     });
     const managedUrl = new URL(managedPath, 'http://pulse.local');
-    params.delete(WORKLOADS_QUERY_PARAMS.type);
-    params.delete(WORKLOADS_QUERY_PARAMS.context);
-    params.delete(WORKLOADS_QUERY_PARAMS.host);
+    nextParams.delete(WORKLOADS_QUERY_PARAMS.type);
+    nextParams.delete(WORKLOADS_QUERY_PARAMS.context);
+    nextParams.delete(WORKLOADS_QUERY_PARAMS.host);
     managedUrl.searchParams.forEach((value, key) => {
-      params.set(key, value);
+      nextParams.set(key, value);
     });
 
-    const nextSearch = params.toString();
-    const nextPath = nextSearch ? `${WORKLOADS_PATH}?${nextSearch}` : WORKLOADS_PATH;
-    const currentPath = `${location.pathname}${location.search || ''}`;
-    if (nextPath !== currentPath) {
+    if (!areSearchParamsEquivalent(currentParams, nextParams)) {
+      const nextSearch = nextParams.toString();
+      const nextPath = nextSearch ? `${WORKLOADS_PATH}?${nextSearch}` : WORKLOADS_PATH;
       navigate(nextPath, { replace: true });
     }
   });

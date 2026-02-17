@@ -34,6 +34,7 @@ import {
   INFRASTRUCTURE_QUERY_PARAMS,
   parseInfrastructureLinkSearch,
 } from '@/routing/resourceLinks';
+import { areSearchParamsEquivalent } from '@/utils/searchParams';
 
 export function Infrastructure() {
   const { resources, loading, error, refetch } = useUnifiedResources();
@@ -70,6 +71,7 @@ export function Infrastructure() {
   const [highlightedResourceId, setHighlightedResourceId] = createSignal<string | null>(null);
   const [handledResourceId, setHandledResourceId] = createSignal<string | null>(null);
   const [handledSourceParam, setHandledSourceParam] = createSignal<string | null>(null);
+  const [handledQueryParam, setHandledQueryParam] = createSignal<string>('');
   const [hideMigrationNotice, setHideMigrationNotice] = createSignal(true);
   let highlightTimer: number | undefined;
   const sourceOptions = [
@@ -121,26 +123,68 @@ export function Infrastructure() {
   });
 
   createEffect(() => {
+    const { resource: resourceId } = parseInfrastructureLinkSearch(location.search);
+    if (resourceId) return;
+    // Keep URL as source-of-truth: removing `resource` from the URL should close the drawer.
+    if (expandedResourceId() !== null) {
+      setExpandedResourceId(null);
+    }
+    if (highlightedResourceId() !== null) {
+      setHighlightedResourceId(null);
+    }
+    if (handledResourceId() !== null) {
+      setHandledResourceId(null);
+    }
+  });
+
+  createEffect(() => {
     const { source: sourceParam } = parseInfrastructureLinkSearch(location.search);
-    if (!sourceParam || sourceParam === handledSourceParam()) return;
+    if (!sourceParam) {
+      // Keep URL as source-of-truth: navigating to `/infrastructure` should clear any prior filters.
+      if (selectedSources().size > 0) {
+        setSelectedSources(new Set<string>());
+      }
+      if ((handledSourceParam() ?? '') !== '') {
+        setHandledSourceParam('');
+      }
+      return;
+    }
+    if (sourceParam === handledSourceParam()) return;
     const sources = sourceParam
       .split(',')
       .map((value) => normalizeSource(value.trim()))
       .filter((value): value is string => Boolean(value));
-    if (sources.length === 0) return;
+    if (sources.length === 0) {
+      setSelectedSources(new Set<string>());
+      setHandledSourceParam(sourceParam);
+      return;
+    }
     setSelectedSources(new Set(sources));
     setHandledSourceParam(sourceParam);
   });
 
   createEffect(() => {
     const { query: nextSearch } = parseInfrastructureLinkSearch(location.search);
-    if (nextSearch !== untrack(searchQuery)) {
-      setSearchQuery(nextSearch);
+    const normalized = nextSearch ?? '';
+    if (normalized !== handledQueryParam()) {
+      if (normalized !== untrack(searchQuery)) {
+        setSearchQuery(normalized);
+      }
+      setHandledQueryParam(normalized);
     }
   });
 
   createEffect(() => {
     if (location.pathname !== INFRASTRUCTURE_PATH) return;
+
+    // Avoid oscillation: only write managed params after we've processed the current URL.
+    const parsed = parseInfrastructureLinkSearch(location.search);
+    const urlSource = parsed.source ?? '';
+    const urlQuery = parsed.query ?? '';
+    const urlResource = parsed.resource ?? '';
+    if ((handledSourceParam() ?? '') !== urlSource) return;
+    if (handledQueryParam() !== urlQuery) return;
+    if (urlResource && handledResourceId() !== urlResource) return;
 
     const selectedSourceValues = sourceOptions
       .map((source) => source.key)
@@ -163,19 +207,19 @@ export function Infrastructure() {
       resource: nextResource || null,
     });
     const managedUrl = new URL(managedPath, 'http://pulse.local');
-    const params = new URLSearchParams(location.search);
-    params.delete(INFRASTRUCTURE_QUERY_PARAMS.source);
-    params.delete(INFRASTRUCTURE_QUERY_PARAMS.query);
-    params.delete(INFRASTRUCTURE_QUERY_PARAMS.legacyQuery);
-    params.delete(INFRASTRUCTURE_QUERY_PARAMS.resource);
+    const currentParams = new URLSearchParams(location.search);
+    const nextParams = new URLSearchParams(location.search);
+    nextParams.delete(INFRASTRUCTURE_QUERY_PARAMS.source);
+    nextParams.delete(INFRASTRUCTURE_QUERY_PARAMS.query);
+    nextParams.delete(INFRASTRUCTURE_QUERY_PARAMS.legacyQuery);
+    nextParams.delete(INFRASTRUCTURE_QUERY_PARAMS.resource);
     managedUrl.searchParams.forEach((value, key) => {
-      params.set(key, value);
+      nextParams.set(key, value);
     });
 
-    const nextSearch = params.toString();
-    const nextPath = nextSearch ? `${INFRASTRUCTURE_PATH}?${nextSearch}` : INFRASTRUCTURE_PATH;
-    const currentPath = `${location.pathname}${location.search || ''}`;
-    if (nextPath !== currentPath) {
+    if (!areSearchParamsEquivalent(currentParams, nextParams)) {
+      const nextSearch = nextParams.toString();
+      const nextPath = nextSearch ? `${INFRASTRUCTURE_PATH}?${nextSearch}` : INFRASTRUCTURE_PATH;
       navigate(nextPath, { replace: true });
     }
   });
