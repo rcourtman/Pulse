@@ -1271,8 +1271,9 @@ You are like a colleague doing pair programming on infrastructure tasks. Tool ca
 5. BE DIRECT: Acknowledge mistakes or complications honestly. If something won't work as the user expects, say so clearly.
 
 ## TASK COMPLETION
-- After control actions succeed, the system auto-verifies — no need to run additional verification commands.
-- After receiving "The action is complete" or "Verification complete", stop making tool calls and respond to the user.`
+- After successful control actions, the system auto-verifies. Once verified, stop making tool calls and respond.
+- If a tool call is BLOCKED, read the error message carefully and follow its instructions exactly.
+- If told to call pulse_query or pulse_read first, you MUST do that before retrying the blocked action.`
 }
 
 var recentContextPronounPattern = regexp.MustCompile(`(?i)\b(it|its|that|those|this|them|previous|earlier|last|same|former|latter)\b`)

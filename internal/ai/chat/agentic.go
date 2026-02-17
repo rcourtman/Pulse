@@ -229,6 +229,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 	wrapUpNudgeFired := false
 	wrapUpEscalateFired := false
 	consecutiveToolOnlyTurns := 0
+	consecutiveAllErrorTurns := 0
 
 	for turn < maxTurns {
 		// === CONTEXT COMPACTION: Compact old tool results to prevent context blowout ===
@@ -572,6 +573,9 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 
 		// If no tool calls, we're done - but first check FSM and phantom execution
 		if len(toolCalls) == 0 {
+			// No tool calls breaks the "consecutive all-error tool turns" streak.
+			consecutiveAllErrorTurns = 0
+
 			// If the user explicitly requested a tool and the model didn't comply, retry once.
 			if preferredToolName != "" && !preferredToolRetried {
 				preferredToolRetried = true
@@ -688,6 +692,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 		}
 		firstToolResultText := ""
 		budgetBlockedThisTurn := 0
+		anyToolSucceededThisTurn := false
 
 		// --- Phase 1: Pre-check all tool calls sequentially ---
 		// Pre-checks share mutable state (FSM, loop counts) so must be sequential.
@@ -735,9 +740,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 							Msg("[AgenticLoop] FSM blocked tool execution (interactive set)")
 
 						fsmBlockedErr, ok := fsmErr.(*FSMBlockedError)
-						var recoveryHint string
 						if ok && fsmBlockedErr.Recoverable {
-							recoveryHint = " Use a discovery or read tool first, then retry."
 							fsm.TrackPendingRecovery("FSM_BLOCKED", tc.Name)
 							if metrics := GetAIMetrics(); metrics != nil {
 								metrics.RecordAutoRecoveryAttempt("FSM_BLOCKED", tc.Name)
@@ -750,7 +753,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 							Name:     tc.Name,
 							Input:    inputStr,
 							RawInput: rawInput,
-							Output:   fsmErr.Error() + recoveryHint,
+							Output:   fsmErr.Error(),
 							Success:  false,
 						})
 						callback(StreamEvent{Type: "tool_end", Data: jsonData})
@@ -761,7 +764,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 							Timestamp: time.Now(),
 							ToolResult: &ToolResult{
 								ToolUseID: tc.ID,
-								Content:   fsmErr.Error() + recoveryHint,
+								Content:   fsmErr.Error(),
 								IsError:   true,
 							},
 						}
@@ -770,7 +773,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 							Role: "user",
 							ToolResult: &providers.ToolResult{
 								ToolUseID: tc.ID,
-								Content:   truncateToolResultForModel(fsmErr.Error() + recoveryHint),
+								Content:   truncateToolResultForModel(fsmErr.Error()),
 								IsError:   true,
 							},
 						})
@@ -927,9 +930,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 
 					// Return the FSM error as a tool result so the model can self-correct
 					fsmBlockedErr, ok := fsmErr.(*FSMBlockedError)
-					var recoveryHint string
 					if ok && fsmBlockedErr.Recoverable {
-						recoveryHint = " Use a discovery or read tool first, then retry."
 						// Track pending recovery for success correlation
 						fsm.TrackPendingRecovery("FSM_BLOCKED", tc.Name)
 						// Record auto-recovery attempt (model gets a chance to self-correct)
@@ -943,7 +944,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 						ID:      tc.ID,
 						Name:    tc.Name,
 						Input:   "",
-						Output:  fsmErr.Error() + recoveryHint,
+						Output:  fsmErr.Error(),
 						Success: false,
 					})
 					callback(StreamEvent{Type: "tool_end", Data: jsonData})
@@ -955,7 +956,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 						Timestamp: time.Now(),
 						ToolResult: &ToolResult{
 							ToolUseID: tc.ID,
-							Content:   fsmErr.Error() + recoveryHint,
+							Content:   fsmErr.Error(),
 							IsError:   true,
 						},
 					}
@@ -966,7 +967,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 						Role: "user",
 						ToolResult: &providers.ToolResult{
 							ToolUseID: tc.ID,
-							Content:   fsmErr.Error() + recoveryHint,
+							Content:   fsmErr.Error(),
 							IsError:   true,
 						},
 					})
@@ -1040,6 +1041,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 							}
 						}
 						cachedResult := fmt.Sprintf("Already known (from earlier investigation): %s. If you need fresh data, use a different query or approach.", strings.Join(cachedParts, "; "))
+						anyToolSucceededThisTurn = true
 
 						log.Info().
 							Str("tool", tc.Name).
@@ -1324,6 +1326,10 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				}
 			}
 
+			if !isError {
+				anyToolSucceededThisTurn = true
+			}
+
 			// Send tool_end event
 			// Convert input to JSON string for frontend display
 			inputStr, rawInput := formatToolInputForFrontend(tc.Name, tc.Input, true)
@@ -1417,6 +1423,24 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 					IsError:   isError,
 				},
 			})
+		}
+
+		// Track consecutive turns where ALL tool calls failed/were blocked.
+		// This catches stuck models that vary arguments to bypass identical-call detection.
+		{
+			if anyToolSucceededThisTurn {
+				consecutiveAllErrorTurns = 0
+			} else {
+				consecutiveAllErrorTurns++
+				if consecutiveAllErrorTurns >= 3 {
+					toolBlockedLastTurn = true
+					log.Warn().
+						Int("consecutive_all_error_turns", consecutiveAllErrorTurns).
+						Int("turn", turn).
+						Str("session_id", sessionID).
+						Msg("[AgenticLoop] All tool calls failed for 3 consecutive turns — forcing text-only response")
+				}
+			}
 		}
 
 		// If any tool call this turn was budget-blocked or loop-detected, force

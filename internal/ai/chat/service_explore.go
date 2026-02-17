@@ -196,10 +196,10 @@ func (s *Service) exploreModelCandidates(overrideModel string) []string {
 }
 
 // exploreHTTPTimeout is the per-request HTTP client timeout for explore providers.
-// This is deliberately short so that unresponsive models (cold-start, overloaded,
-// or deprecated) fail fast within the explore context deadline rather than hanging
-// for the default 5-minute provider timeout.
-const exploreHTTPTimeout = 10 * time.Second
+// This is shorter than the default 5-minute provider timeout so unresponsive
+// models fail within the explore context deadline. Set at 20s to accommodate
+// OpenRouter-routed models with cold-start or routing latency.
+const exploreHTTPTimeout = 20 * time.Second
 
 // createProviderForExplore creates a provider with a short HTTP timeout suitable
 // for the explore pre-pass. This ensures that if a model is unresponsive, the
