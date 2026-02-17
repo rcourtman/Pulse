@@ -1,5 +1,6 @@
 import { Component, Show, createMemo, onMount } from 'solid-js';
 import { getUpgradeActionUrlOrFallback, licenseStatus, loadLicenseStatus } from '@/stores/license';
+import { shouldReduceProUpsellNoise } from '@/stores/systemSettings';
 
 export const TrialBanner: Component = () => {
   onMount(() => {
@@ -35,14 +36,16 @@ export const TrialBanner: Component = () => {
               <span class="ml-2">{daysRemaining()} days remaining</span>
             </Show>
           </div>
-          <a
-            class="text-xs font-semibold underline underline-offset-2 hover:opacity-90"
-            href={getUpgradeActionUrlOrFallback('trial_banner')}
-            target="_blank"
-            rel="noreferrer"
-          >
-            Upgrade
-          </a>
+          <Show when={!shouldReduceProUpsellNoise()}>
+            <a
+              class="text-xs font-semibold underline underline-offset-2 hover:opacity-90"
+              href={getUpgradeActionUrlOrFallback('trial_banner')}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Upgrade
+            </a>
+          </Show>
         </div>
       </div>
     </Show>
@@ -50,4 +53,3 @@ export const TrialBanner: Component = () => {
 };
 
 export default TrialBanner;
-
