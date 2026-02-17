@@ -13,14 +13,14 @@ import {
   trackAgentInstallCommandCopied,
   trackAgentInstallProfileSelected,
   trackAgentInstallTokenGenerated,
-} from '@/utils/conversionEvents';
+} from '@/utils/upgradeMetrics';
 
 function getPayloadForCall(index: number) {
   const [, options] = apiFetchMock.mock.calls[index] as unknown as [string, RequestInit];
   return JSON.parse(String(options.body));
 }
 
-describe('conversionEvents unified agent telemetry wrappers', () => {
+describe('upgradeMetrics local-only UX metrics wrappers', () => {
   beforeEach(() => {
     apiFetchMock.mockClear();
   });
