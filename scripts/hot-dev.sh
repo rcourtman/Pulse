@@ -317,6 +317,15 @@ else
     log_info "Using dev config directory: ${PULSE_DATA_DIR}"
 fi
 
+# Also check for mock.env in PULSE_DATA_DIR (where `pulse mock enable` writes it)
+# This allows the CLI command to work without manually copying files to the repo root.
+if [[ -f "${PULSE_DATA_DIR}/mock.env" ]]; then
+    load_env_file "${PULSE_DATA_DIR}/mock.env"
+    if [[ -f "${PULSE_DATA_DIR}/mock.env.local" ]]; then
+        load_env_file "${PULSE_DATA_DIR}/mock.env.local"
+    fi
+fi
+
 if [[ ${PULSE_MOCK_MODE:-false} == "true" ]]; then
     log_info "Mock mode enabled: retaining shared data directory (${PULSE_DATA_DIR}) to preserve real history"
 fi
@@ -486,6 +495,20 @@ log_info "Starting backend file watcher..."
         LAST_RESTART_TIME=$now
 
         log_info "Restarting backend..."
+
+        # Re-source mock.env so that `pulse mock enable/disable` changes take
+        # effect without a full hot-dev restart.
+        if [[ -f "${PULSE_DATA_DIR}/mock.env" ]]; then
+            load_env_file "${PULSE_DATA_DIR}/mock.env"
+            if [[ -f "${PULSE_DATA_DIR}/mock.env.local" ]]; then
+                load_env_file "${PULSE_DATA_DIR}/mock.env.local"
+            fi
+        elif [[ -f "${ROOT_DIR}/mock.env" ]]; then
+            load_env_file "${ROOT_DIR}/mock.env"
+            if [[ -f "${ROOT_DIR}/mock.env.local" ]]; then
+                load_env_file "${ROOT_DIR}/mock.env.local"
+            fi
+        fi
 
         # Kill ALL pulse processes (not just one) to prevent duplicates
         pkill -f "^\./pulse$" 2>/dev/null || true
