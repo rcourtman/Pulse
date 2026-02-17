@@ -7,6 +7,7 @@ import {
   buildStoragePath,
   buildWorkloadsPath,
 } from '@/routing/resourceLinks';
+import { navigationMode } from '@/stores/navigationMode';
 
 interface CommandPaletteModalProps {
   isOpen: boolean;
@@ -30,73 +31,136 @@ export function CommandPaletteModal(props: CommandPaletteModalProps) {
   const kubernetesWorkloadsPath = buildWorkloadsPath({ type: 'k8s' });
   const storagePath = buildStoragePath();
   const backupsPath = buildBackupsPath();
+  const classicProxmoxPath = buildInfrastructurePath({ source: 'proxmox' });
+  const classicHostsPath = buildInfrastructurePath({ source: 'agent' });
+  const classicDockerHostsPath = buildInfrastructurePath({ source: 'docker' });
+  const classicServicesPath = buildInfrastructurePath({ source: 'pmg' });
+  const classicContainersPath = buildWorkloadsPath({ type: 'docker' });
 
   let inputRef: HTMLInputElement | undefined;
 
-  const commands = createMemo<Command[]>(() => [
-    {
-      id: 'nav-infrastructure',
-      label: 'Go to Infrastructure',
-      description: infrastructurePath,
-      shortcut: 'g i',
-      keywords: ['infra', 'hosts', 'nodes'],
-      action: () => navigate(infrastructurePath),
-    },
-    {
-      id: 'nav-workloads',
-      label: 'Go to Workloads',
-      description: workloadsPath,
-      shortcut: 'g w',
-      keywords: ['vm', 'lxc', 'docker', 'k8s', 'kubernetes', 'pods'],
-      action: () => navigate(workloadsPath),
-    },
-    {
-      id: 'nav-workloads-k8s',
-      label: 'Go to Kubernetes Workloads',
-      description: kubernetesWorkloadsPath,
-      keywords: ['k8s', 'kubernetes', 'pods', 'deployments', 'clusters'],
-      action: () => navigate(kubernetesWorkloadsPath),
-    },
-    {
-      id: 'nav-storage',
-      label: 'Go to Storage',
-      description: storagePath,
-      shortcut: 'g s',
-      keywords: ['ceph', 'pbs'],
-      action: () => navigate(storagePath),
-    },
-    {
-      id: 'nav-backups',
-      label: 'Go to Backups',
-      description: backupsPath,
-      shortcut: 'g b',
-      keywords: ['replication'],
-      action: () => navigate(backupsPath),
-    },
-    {
-      id: 'nav-alerts',
-      label: 'Go to Alerts',
-      description: '/alerts',
-      shortcut: 'g a',
-      keywords: ['alarms', 'notifications'],
-      action: () => navigate('/alerts'),
-    },
-    {
-      id: 'nav-settings',
-      label: 'Go to Settings',
-      description: '/settings',
-      shortcut: 'g t',
-      keywords: ['preferences', 'config'],
-      action: () => navigate('/settings'),
-    },
-    {
-      id: 'nav-migration-guide',
-      label: 'Open Migration Guide',
-      description: '/migration-guide',
-      keywords: ['migration', 'legacy', 'routes', 'navigation', 'moved'],
-      action: () => navigate('/migration-guide'),
-    },
-  ]);
+  const commands = createMemo<Command[]>(() => {
+    const base: Command[] = [
+      {
+        id: 'nav-infrastructure',
+        label: 'Go to Infrastructure',
+        description: infrastructurePath,
+        shortcut: 'g i',
+        keywords: ['infra', 'hosts', 'nodes'],
+        action: () => navigate(infrastructurePath),
+      },
+      {
+        id: 'nav-workloads',
+        label: 'Go to Workloads',
+        description: workloadsPath,
+        shortcut: 'g w',
+        keywords: ['vm', 'lxc', 'docker', 'k8s', 'kubernetes', 'pods'],
+        action: () => navigate(workloadsPath),
+      },
+      {
+        id: 'nav-workloads-k8s',
+        label: 'Go to Kubernetes Workloads',
+        description: kubernetesWorkloadsPath,
+        keywords: ['k8s', 'kubernetes', 'pods', 'deployments', 'clusters'],
+        action: () => navigate(kubernetesWorkloadsPath),
+      },
+      {
+        id: 'nav-storage',
+        label: 'Go to Storage',
+        description: storagePath,
+        shortcut: 'g s',
+        keywords: ['ceph', 'pbs'],
+        action: () => navigate(storagePath),
+      },
+      {
+        id: 'nav-backups',
+        label: 'Go to Backups',
+        description: backupsPath,
+        shortcut: 'g b',
+        keywords: ['replication'],
+        action: () => navigate(backupsPath),
+      },
+      {
+        id: 'nav-alerts',
+        label: 'Go to Alerts',
+        description: '/alerts',
+        shortcut: 'g a',
+        keywords: ['alarms', 'notifications'],
+        action: () => navigate('/alerts'),
+      },
+      {
+        id: 'nav-settings',
+        label: 'Go to Settings',
+        description: '/settings',
+        shortcut: 'g t',
+        keywords: ['preferences', 'config'],
+        action: () => navigate('/settings'),
+      },
+      {
+        id: 'nav-migration-guide',
+        label: 'Open Migration Guide',
+        description: '/migration-guide',
+        keywords: ['migration', 'legacy', 'routes', 'navigation', 'moved'],
+        action: () => navigate('/migration-guide'),
+      },
+    ];
+
+    if (navigationMode() !== 'classic') {
+      return base;
+    }
+
+    return [
+      {
+        id: 'nav-classic-proxmox',
+        label: 'Go to Proxmox (Classic)',
+        description: classicProxmoxPath,
+        shortcut: 'g p',
+        keywords: ['proxmox', 'pve', 'classic'],
+        action: () => navigate(classicProxmoxPath),
+      },
+      {
+        id: 'nav-classic-hosts',
+        label: 'Go to Hosts (Classic)',
+        description: classicHostsPath,
+        shortcut: 'g h',
+        keywords: ['hosts', 'agent', 'classic'],
+        action: () => navigate(classicHostsPath),
+      },
+      {
+        id: 'nav-classic-docker-hosts',
+        label: 'Go to Docker Hosts (Classic)',
+        description: classicDockerHostsPath,
+        shortcut: 'g d',
+        keywords: ['docker', 'hosts', 'classic'],
+        action: () => navigate(classicDockerHostsPath),
+      },
+      {
+        id: 'nav-classic-services',
+        label: 'Go to Services (Classic)',
+        description: classicServicesPath,
+        shortcut: 'g v',
+        keywords: ['services', 'pmg', 'mail', 'classic'],
+        action: () => navigate(classicServicesPath),
+      },
+      {
+        id: 'nav-classic-containers',
+        label: 'Go to Containers (Classic)',
+        description: classicContainersPath,
+        shortcut: 'g c',
+        keywords: ['containers', 'docker', 'workloads', 'classic'],
+        action: () => navigate(classicContainersPath),
+      },
+      {
+        id: 'nav-classic-kubernetes',
+        label: 'Go to Kubernetes (Classic)',
+        description: kubernetesWorkloadsPath,
+        shortcut: 'g k',
+        keywords: ['k8s', 'kubernetes', 'pods', 'classic'],
+        action: () => navigate(kubernetesWorkloadsPath),
+      },
+      ...base,
+    ];
+  });
 
   const normalizedQuery = createMemo(() =>
     query()

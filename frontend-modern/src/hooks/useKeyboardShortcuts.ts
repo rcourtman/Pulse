@@ -6,6 +6,7 @@ import {
   buildStoragePath,
   buildWorkloadsPath,
 } from '@/routing/resourceLinks';
+import { navigationMode } from '@/stores/navigationMode';
 
 type KeyboardShortcutsOptions = {
   enabled?: Accessor<boolean>;
@@ -82,13 +83,30 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions = {}) {
     options.onOpenCommandPalette?.();
   };
 
-  const routes: Record<string, string> = {
-    i: buildInfrastructurePath(),
-    w: buildWorkloadsPath(),
-    s: buildStoragePath(),
-    b: buildBackupsPath(),
-    a: '/alerts',
-    t: '/settings',
+  const getRoutes = (): Record<string, string> => {
+    const base: Record<string, string> = {
+      i: buildInfrastructurePath(),
+      w: buildWorkloadsPath(),
+      s: buildStoragePath(),
+      b: buildBackupsPath(),
+      a: '/alerts',
+      t: '/settings',
+    };
+
+    if (navigationMode() !== 'classic') {
+      return base;
+    }
+
+    return {
+      ...base,
+      // Classic (v5-like) platform shortcuts
+      p: buildInfrastructurePath({ source: 'proxmox' }),
+      h: buildInfrastructurePath({ source: 'agent' }),
+      d: buildInfrastructurePath({ source: 'docker' }),
+      v: buildInfrastructurePath({ source: 'pmg' }), // services/mail gateway
+      c: buildWorkloadsPath({ type: 'docker' }), // containers
+      k: buildWorkloadsPath({ type: 'k8s' }),
+    };
   };
 
   const handleKeyDown = (e: KeyboardEvent) => {
@@ -131,7 +149,7 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions = {}) {
 
     if (awaitingSecondKey()) {
       clearAwaiting();
-      const route = routes[key];
+      const route = getRoutes()[key];
       if (route) {
         e.preventDefault();
         navigate(route);

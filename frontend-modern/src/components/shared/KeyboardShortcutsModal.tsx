@@ -1,5 +1,6 @@
-import { For } from 'solid-js';
+import { For, createMemo } from 'solid-js';
 import { Dialog } from '@/components/shared/Dialog';
+import { navigationMode } from '@/stores/navigationMode';
 
 interface ShortcutGroup {
   title: string;
@@ -11,30 +12,48 @@ interface KeyboardShortcutsModalProps {
   onClose: () => void;
 }
 
-const SHORTCUT_GROUPS: ShortcutGroup[] = [
-  {
-    title: 'Navigation',
-    items: [
-      { keys: 'g then i', description: 'Go to Infrastructure' },
-      { keys: 'g then w', description: 'Go to Workloads' },
-      { keys: 'g then s', description: 'Go to Storage' },
-      { keys: 'g then b', description: 'Go to Backups' },
-      { keys: 'g then a', description: 'Go to Alerts' },
-      { keys: 'g then t', description: 'Go to Settings' },
-    ],
-  },
-  {
-    title: 'Search & Help',
-    items: [
-      { keys: '/', description: 'Focus search' },
-      { keys: 'Cmd+K / Ctrl+K', description: 'Open command palette' },
-      { keys: '?', description: 'Show keyboard shortcuts' },
-      { keys: 'Esc', description: 'Close dialogs / cancel' },
-    ],
-  },
-];
+const UNIFIED_NAV_SHORTCUTS: ShortcutGroup = {
+  title: 'Navigation',
+  items: [
+    { keys: 'g then i', description: 'Go to Infrastructure' },
+    { keys: 'g then w', description: 'Go to Workloads' },
+    { keys: 'g then s', description: 'Go to Storage' },
+    { keys: 'g then b', description: 'Go to Backups' },
+    { keys: 'g then a', description: 'Go to Alerts' },
+    { keys: 'g then t', description: 'Go to Settings' },
+  ],
+};
+
+const CLASSIC_NAV_SHORTCUTS: ShortcutGroup = {
+  title: 'Classic Navigation (When Enabled)',
+  items: [
+    { keys: 'g then p', description: 'Go to Proxmox (filtered Infrastructure)' },
+    { keys: 'g then h', description: 'Go to Hosts (filtered Infrastructure)' },
+    { keys: 'g then d', description: 'Go to Docker Hosts (filtered Infrastructure)' },
+    { keys: 'g then v', description: 'Go to Services (filtered Infrastructure)' },
+    { keys: 'g then c', description: 'Go to Containers (filtered Workloads)' },
+    { keys: 'g then k', description: 'Go to Kubernetes (filtered Workloads)' },
+  ],
+};
+
+const SEARCH_SHORTCUTS: ShortcutGroup = {
+  title: 'Search & Help',
+  items: [
+    { keys: '/', description: 'Focus search' },
+    { keys: 'Cmd+K / Ctrl+K', description: 'Open command palette' },
+    { keys: '?', description: 'Show keyboard shortcuts' },
+    { keys: 'Esc', description: 'Close dialogs / cancel' },
+  ],
+};
 
 export function KeyboardShortcutsModal(props: KeyboardShortcutsModalProps) {
+  const shortcutGroups = createMemo<ShortcutGroup[]>(() => {
+    if (navigationMode() === 'classic') {
+      return [UNIFIED_NAV_SHORTCUTS, CLASSIC_NAV_SHORTCUTS, SEARCH_SHORTCUTS];
+    }
+    return [UNIFIED_NAV_SHORTCUTS, SEARCH_SHORTCUTS];
+  });
+
   return (
     <Dialog
       isOpen={props.isOpen}
@@ -59,7 +78,7 @@ export function KeyboardShortcutsModal(props: KeyboardShortcutsModalProps) {
       </div>
 
       <div class="flex-1 overflow-y-auto space-y-5 px-5 py-4">
-        <For each={SHORTCUT_GROUPS}>
+        <For each={shortcutGroups()}>
           {(group) => (
             <div>
               <div class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
