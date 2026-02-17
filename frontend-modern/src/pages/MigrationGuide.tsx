@@ -59,7 +59,8 @@ export function MigrationGuide() {
           Legacy URLs still redirect for compatibility, but this guide shows the canonical destinations.
         </p>
         <p class="mt-2 text-xs text-amber-700 dark:text-amber-300">
-          Deprecation policy: legacy redirects are transitional and are planned for removal after the migration window.
+          Deprecation policy: legacy URLs exist as compatibility aliases. Update bookmarks to canonical routes.
+          If you prefer the previous tab layout, switch to Classic navigation style in Settings → System → General (stored per browser).
         </p>
       </Card>
 

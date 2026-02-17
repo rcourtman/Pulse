@@ -1,5 +1,6 @@
 import { createEffect, createSignal, Show } from 'solid-js';
 import { createLocalStorageBooleanSignal, STORAGE_KEYS } from '@/utils/localStorage';
+import { navigationMode, setNavigationMode } from '@/stores/navigationMode';
 import ServerIcon from 'lucide-solid/icons/server';
 import BoxesIcon from 'lucide-solid/icons/boxes';
 import HardDriveIcon from 'lucide-solid/icons/hard-drive';
@@ -113,6 +114,41 @@ export function WhatsNewModal() {
                   <span>Storage and Backups live at the top level for faster access.</span>
                 </li>
               </ul>
+            </div>
+
+            <div class="rounded-xl border border-gray-200 bg-white p-3 sm:p-4 dark:border-gray-700 dark:bg-gray-800/60">
+              <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div>
+                  <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                    Prefer the old tab layout?
+                  </div>
+                  <div class="mt-0.5 text-xs text-gray-600 dark:text-gray-400">
+                    You can switch between Unified and Classic navigation style anytime. This is stored per browser.
+                  </div>
+                </div>
+                <div class="flex items-center gap-1 bg-gray-100 dark:bg-gray-900 rounded-lg p-1">
+                  <button
+                    type="button"
+                    class={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${navigationMode() === 'unified'
+                      ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm'
+                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                      }`}
+                    onClick={() => setNavigationMode('unified')}
+                  >
+                    Unified
+                  </button>
+                  <button
+                    type="button"
+                    class={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${navigationMode() === 'classic'
+                      ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm'
+                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                      }`}
+                    onClick={() => setNavigationMode('classic')}
+                  >
+                    Classic
+                  </button>
+                </div>
+              </div>
             </div>
 
             <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
