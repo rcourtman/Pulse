@@ -154,6 +154,8 @@ export const STORAGE_KEYS = {
   // Feature discovery
   DISMISSED_FEATURE_TIPS: 'pulse-dismissed-feature-tips',
   WHATS_NEW_NAV_V2_SHOWN: 'pulse_whats_new_v2_shown',
+  CLASSIC_SHORTCUTS_DISMISSED: 'pulse-classic-shortcuts-dismissed',
+  NAVIGATION_MODE: 'pulse-navigation-mode', // 'unified' | 'classic'
   DEBUG_MODE: 'pulse_debug_mode',
 
   // GitHub star prompt

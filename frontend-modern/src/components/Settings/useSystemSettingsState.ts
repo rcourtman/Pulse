@@ -6,7 +6,14 @@ import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import { apiFetch } from '@/utils/apiClient';
 import { updateStore } from '@/stores/updates';
-import { updateDockerUpdateActionsSetting } from '@/stores/systemSettings';
+import {
+  updateDisableLocalUpgradeMetricsSetting,
+  updateDockerUpdateActionsSetting,
+  updateLegacyRouteRedirectsSetting,
+  updateReduceProUpsellNoiseSetting,
+  updateShowClassicPlatformShortcutsSetting,
+} from '@/stores/systemSettings';
+import { STORAGE_KEYS } from '@/utils/localStorage';
 import type { SettingsTab } from './settingsTypes';
 
 const BACKUP_INTERVAL_OPTIONS = [
@@ -187,6 +194,14 @@ export function useSystemSettingsState({
   const [savingHideLocalLogin, setSavingHideLocalLogin] = createSignal(false);
   const [disableDockerUpdateActions, setDisableDockerUpdateActions] = createSignal(false);
   const [savingDockerUpdateActions, setSavingDockerUpdateActions] = createSignal(false);
+  const [disableLegacyRouteRedirects, setDisableLegacyRouteRedirects] = createSignal(false);
+  const [savingLegacyRedirects, setSavingLegacyRedirects] = createSignal(false);
+  const [showClassicPlatformShortcuts, setShowClassicPlatformShortcuts] = createSignal(true);
+  const [savingClassicShortcuts, setSavingClassicShortcuts] = createSignal(false);
+  const [reduceProUpsellNoise, setReduceProUpsellNoise] = createSignal(false);
+  const [savingReduceUpsells, setSavingReduceUpsells] = createSignal(false);
+  const [disableLocalUpgradeMetrics, setDisableLocalUpgradeMetrics] = createSignal(false);
+  const [savingUpgradeMetrics, setSavingUpgradeMetrics] = createSignal(false);
   const [versionInfo, setVersionInfo] = createSignal<VersionInfo | null>(null);
   const [updateInfo, setUpdateInfo] = createSignal<UpdateInfo | null>(null);
   const [checkingForUpdates, setCheckingForUpdates] = createSignal(false);
@@ -212,6 +227,10 @@ export function useSystemSettingsState({
     Boolean(envOverrides().hideLocalLogin || envOverrides()['PULSE_AUTH_HIDE_LOCAL_LOGIN']);
   const disableDockerUpdateActionsLocked = () =>
     Boolean(envOverrides().disableDockerUpdateActions || envOverrides()['PULSE_DISABLE_DOCKER_UPDATE_ACTIONS']);
+  const disableLegacyRouteRedirectsLocked = () =>
+    Boolean(envOverrides().disableLegacyRouteRedirects || envOverrides()['PULSE_DISABLE_LEGACY_ROUTE_REDIRECTS']);
+  const disableLocalUpgradeMetricsLocked = () =>
+    Boolean(envOverrides().disableLocalUpgradeMetrics || envOverrides()['PULSE_DISABLE_LOCAL_UPGRADE_METRICS']);
   const pvePollingEnvLocked = () =>
     Boolean(envOverrides().pvePollingInterval || envOverrides().PVE_POLLING_INTERVAL);
   const backupPollingEnvLocked = () =>
@@ -317,6 +336,10 @@ export function useSystemSettingsState({
       );
       setHideLocalLogin(systemSettings.hideLocalLogin ?? false);
       setDisableDockerUpdateActions(systemSettings.disableDockerUpdateActions ?? false);
+      setDisableLegacyRouteRedirects(systemSettings.disableLegacyRouteRedirects ?? false);
+      setShowClassicPlatformShortcuts(systemSettings.showClassicPlatformShortcuts ?? true);
+      setReduceProUpsellNoise(systemSettings.reduceProUpsellNoise ?? false);
+      setDisableLocalUpgradeMetrics(systemSettings.disableLocalUpgradeMetrics ?? false);
 
       if (typeof systemSettings.backupPollingEnabled === 'boolean') {
         setBackupPollingEnabled(systemSettings.backupPollingEnabled);
@@ -470,6 +493,117 @@ export function useSystemSettingsState({
     }
   };
 
+  const handleDisableLegacyRouteRedirectsChange = async (disabled: boolean): Promise<void> => {
+    if (disableLegacyRouteRedirectsLocked() || savingLegacyRedirects()) {
+      return;
+    }
+
+    const previous = disableLegacyRouteRedirects();
+    setDisableLegacyRouteRedirects(disabled);
+    setSavingLegacyRedirects(true);
+
+    try {
+      await SettingsAPI.updateSystemSettings({ disableLegacyRouteRedirects: disabled });
+      updateLegacyRouteRedirectsSetting(disabled);
+      notificationStore.success(
+        disabled ? 'Legacy URL redirects disabled' : 'Legacy URL redirects enabled',
+        2000,
+      );
+    } catch (error) {
+      logger.error('Failed to update legacy route redirects setting', error);
+      notificationStore.error(
+        error instanceof Error ? error.message : 'Failed to update legacy route redirects setting',
+      );
+      setDisableLegacyRouteRedirects(previous);
+    } finally {
+      setSavingLegacyRedirects(false);
+    }
+  };
+
+  const handleShowClassicPlatformShortcutsChange = async (enabled: boolean): Promise<void> => {
+    if (savingClassicShortcuts()) {
+      return;
+    }
+
+    const previous = showClassicPlatformShortcuts();
+    setShowClassicPlatformShortcuts(enabled);
+    setSavingClassicShortcuts(true);
+
+    try {
+      await SettingsAPI.updateSystemSettings({ showClassicPlatformShortcuts: enabled });
+      updateShowClassicPlatformShortcutsSetting(enabled);
+      if (enabled) {
+        localStorage.removeItem(STORAGE_KEYS.CLASSIC_SHORTCUTS_DISMISSED);
+      }
+      notificationStore.success(
+        enabled ? 'Classic shortcuts enabled' : 'Classic shortcuts hidden',
+        2000,
+      );
+    } catch (error) {
+      logger.error('Failed to update classic shortcuts setting', error);
+      notificationStore.error(
+        error instanceof Error ? error.message : 'Failed to update classic shortcuts setting',
+      );
+      setShowClassicPlatformShortcuts(previous);
+    } finally {
+      setSavingClassicShortcuts(false);
+    }
+  };
+
+  const handleReduceProUpsellNoiseChange = async (enabled: boolean): Promise<void> => {
+    if (savingReduceUpsells()) {
+      return;
+    }
+
+    const previous = reduceProUpsellNoise();
+    setReduceProUpsellNoise(enabled);
+    setSavingReduceUpsells(true);
+
+    try {
+      await SettingsAPI.updateSystemSettings({ reduceProUpsellNoise: enabled });
+      updateReduceProUpsellNoiseSetting(enabled);
+      notificationStore.success(
+        enabled ? 'Pro prompts reduced' : 'Pro prompts restored',
+        2000,
+      );
+    } catch (error) {
+      logger.error('Failed to update reduce upsell noise setting', error);
+      notificationStore.error(
+        error instanceof Error ? error.message : 'Failed to update reduce upsell noise setting',
+      );
+      setReduceProUpsellNoise(previous);
+    } finally {
+      setSavingReduceUpsells(false);
+    }
+  };
+
+  const handleDisableLocalUpgradeMetricsChange = async (disabled: boolean): Promise<void> => {
+    if (disableLocalUpgradeMetricsLocked() || savingUpgradeMetrics()) {
+      return;
+    }
+
+    const previous = disableLocalUpgradeMetrics();
+    setDisableLocalUpgradeMetrics(disabled);
+    setSavingUpgradeMetrics(true);
+
+    try {
+      await SettingsAPI.updateSystemSettings({ disableLocalUpgradeMetrics: disabled });
+      updateDisableLocalUpgradeMetricsSetting(disabled);
+      notificationStore.success(
+        disabled ? 'Local upgrade metrics disabled' : 'Local upgrade metrics enabled',
+        2000,
+      );
+    } catch (error) {
+      logger.error('Failed to update local upgrade metrics setting', error);
+      notificationStore.error(
+        error instanceof Error ? error.message : 'Failed to update local upgrade metrics setting',
+      );
+      setDisableLocalUpgradeMetrics(previous);
+    } finally {
+      setSavingUpgradeMetrics(false);
+    }
+  };
+
   const handleTemperatureMonitoringChange = async (enabled: boolean): Promise<void> => {
     if (temperatureMonitoringLocked() || savingTemperatureSetting()) {
       return;
@@ -588,6 +722,20 @@ export function useSystemSettingsState({
     disableDockerUpdateActionsLocked,
     savingDockerUpdateActions,
     handleDisableDockerUpdateActionsChange,
+    disableLegacyRouteRedirects,
+    disableLegacyRouteRedirectsLocked,
+    savingLegacyRedirects,
+    handleDisableLegacyRouteRedirectsChange,
+    showClassicPlatformShortcuts,
+    savingClassicShortcuts,
+    handleShowClassicPlatformShortcutsChange,
+    reduceProUpsellNoise,
+    savingReduceUpsells,
+    handleReduceProUpsellNoiseChange,
+    disableLocalUpgradeMetrics,
+    disableLocalUpgradeMetricsLocked,
+    savingUpgradeMetrics,
+    handleDisableLocalUpgradeMetricsChange,
     versionInfo,
     updateInfo,
     checkingForUpdates,

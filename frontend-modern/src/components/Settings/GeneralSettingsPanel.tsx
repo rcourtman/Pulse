@@ -9,6 +9,7 @@ import Thermometer from 'lucide-solid/icons/thermometer';
 import Maximize2 from 'lucide-solid/icons/maximize-2';
 import { temperatureStore } from '@/utils/temperature';
 import { layoutStore } from '@/utils/layout';
+import { navigationMode, setNavigationMode } from '@/stores/navigationMode';
 
 const PVE_POLLING_MIN_SECONDS = 10;
 const PVE_POLLING_MAX_SECONDS = 3600;
@@ -30,6 +31,24 @@ interface GeneralSettingsPanelProps {
   setPVEPollingCustomSeconds: Setter<number>;
   pvePollingEnvLocked: () => boolean;
   setHasUnsavedChanges: Setter<boolean>;
+
+  disableLegacyRouteRedirects: Accessor<boolean>;
+  disableLegacyRouteRedirectsLocked: () => boolean;
+  savingLegacyRedirects: Accessor<boolean>;
+  handleDisableLegacyRouteRedirectsChange: (disabled: boolean) => Promise<void>;
+
+  showClassicPlatformShortcuts: Accessor<boolean>;
+  savingClassicShortcuts: Accessor<boolean>;
+  handleShowClassicPlatformShortcutsChange: (enabled: boolean) => Promise<void>;
+
+  reduceProUpsellNoise: Accessor<boolean>;
+  savingReduceUpsells: Accessor<boolean>;
+  handleReduceProUpsellNoiseChange: (enabled: boolean) => Promise<void>;
+
+  disableLocalUpgradeMetrics: Accessor<boolean>;
+  disableLocalUpgradeMetricsLocked: () => boolean;
+  savingUpgradeMetrics: Accessor<boolean>;
+  handleDisableLocalUpgradeMetricsChange: (disabled: boolean) => Promise<void>;
 }
 
 export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props) => {
@@ -136,6 +155,132 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
           <Toggle
             checked={layoutStore.isFullWidth()}
             onChange={() => layoutStore.toggle()}
+          />
+        </div>
+      </SettingsPanel>
+
+      {/* Navigation + Privacy Card */}
+      <SettingsPanel
+        title="Navigation and privacy"
+        description="Control migration helpers and local-only metrics collection."
+        icon={<Sliders class="w-5 h-5" strokeWidth={2} />}
+        bodyClass="space-y-5"
+      >
+        <div class="flex items-start justify-between gap-4">
+          <div class="flex-1 space-y-1">
+            <span class="text-sm font-medium text-gray-900 dark:text-gray-100">
+              Navigation style
+            </span>
+            <p class="text-xs text-gray-500 dark:text-gray-400">
+              Choose the v6 unified navigation or a Classic (v5-like) tab layout. This is stored per browser.
+            </p>
+          </div>
+          <div class="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
+            <button
+              type="button"
+              class={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${navigationMode() === 'unified'
+                ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                }`}
+              onClick={() => setNavigationMode('unified')}
+            >
+              Unified
+            </button>
+            <button
+              type="button"
+              class={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${navigationMode() === 'classic'
+                ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                }`}
+              onClick={() => setNavigationMode('classic')}
+            >
+              Classic
+            </button>
+          </div>
+        </div>
+
+        <div class="flex items-start justify-between gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+          <div class="flex-1 space-y-1">
+            <div class="flex items-center gap-2">
+              <span class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                Disable legacy URL redirects
+              </span>
+              <Show when={props.disableLegacyRouteRedirectsLocked()}>
+                <span
+                  class="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
+                  title="Locked by environment variable PULSE_DISABLE_LEGACY_ROUTE_REDIRECTS"
+                >
+                  ENV
+                </span>
+              </Show>
+            </div>
+            <p class="text-xs text-gray-500 dark:text-gray-400">
+              When enabled, Pulse will not redirect old bookmarks like <code class="px-1 py-0.5 rounded bg-gray-200 dark:bg-gray-700">/services</code> or <code class="px-1 py-0.5 rounded bg-gray-200 dark:bg-gray-700">/kubernetes</code>.
+              This helps surface stale bookmarks immediately.
+            </p>
+          </div>
+          <Toggle
+            checked={props.disableLegacyRouteRedirects()}
+            disabled={props.disableLegacyRouteRedirectsLocked() || props.savingLegacyRedirects()}
+            onChange={() => props.handleDisableLegacyRouteRedirectsChange(!props.disableLegacyRouteRedirects())}
+          />
+        </div>
+
+        <div class="flex items-start justify-between gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+          <div class="flex-1 space-y-1">
+            <span class="text-sm font-medium text-gray-900 dark:text-gray-100">
+              Classic platform shortcuts
+            </span>
+            <p class="text-xs text-gray-500 dark:text-gray-400">
+              Shows a small "Classic" shortcuts bar in the main navigation for Proxmox, Docker, Kubernetes, Hosts, and Services. This is a migration aid and can be hidden once you’ve updated your muscle memory.
+            </p>
+          </div>
+          <Toggle
+            checked={props.showClassicPlatformShortcuts()}
+            disabled={props.savingClassicShortcuts()}
+            onChange={() => props.handleShowClassicPlatformShortcutsChange(!props.showClassicPlatformShortcuts())}
+          />
+        </div>
+
+        <div class="flex items-start justify-between gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+          <div class="flex-1 space-y-1">
+            <span class="text-sm font-medium text-gray-900 dark:text-gray-100">
+              Reduce Pro prompts
+            </span>
+            <p class="text-xs text-gray-500 dark:text-gray-400">
+              Hides proactive upgrade prompts (for example, the relay onboarding card). Paywalls still appear if you try to use a gated feature.
+            </p>
+          </div>
+          <Toggle
+            checked={props.reduceProUpsellNoise()}
+            disabled={props.savingReduceUpsells()}
+            onChange={() => props.handleReduceProUpsellNoiseChange(!props.reduceProUpsellNoise())}
+          />
+        </div>
+
+        <div class="flex items-start justify-between gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+          <div class="flex-1 space-y-1">
+            <div class="flex items-center gap-2">
+              <span class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                Disable local upgrade metrics
+              </span>
+              <Show when={props.disableLocalUpgradeMetricsLocked()}>
+                <span
+                  class="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
+                  title="Locked by environment variable PULSE_DISABLE_LOCAL_UPGRADE_METRICS"
+                >
+                  ENV
+                </span>
+              </Show>
+            </div>
+            <p class="text-xs text-gray-500 dark:text-gray-400">
+              Records local-only events like "paywall viewed" and "trial started" to help debug and improve upgrade flows. These events are stored locally and are not exported to third parties.
+            </p>
+          </div>
+          <Toggle
+            checked={props.disableLocalUpgradeMetrics()}
+            disabled={props.disableLocalUpgradeMetricsLocked() || props.savingUpgradeMetrics()}
+            onChange={() => props.handleDisableLocalUpgradeMetricsChange(!props.disableLocalUpgradeMetrics())}
           />
         </div>
       </SettingsPanel>

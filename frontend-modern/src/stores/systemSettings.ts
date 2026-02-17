@@ -14,6 +14,12 @@ import type { SystemConfig } from '@/types/config';
 const [disableDockerUpdateActions, setDisableDockerUpdateActions] = createSignal(false);
 // Server-side setting to disable all legacy frontend route redirects
 const [disableLegacyRouteRedirects, setDisableLegacyRouteRedirects] = createSignal(false);
+// Server-side setting to show classic platform shortcuts in the main nav (migration aid)
+const [showClassicPlatformShortcuts, setShowClassicPlatformShortcuts] = createSignal(true);
+// Server-side setting to reduce proactive Pro prompts (paywalls still appear when accessing gated features)
+const [reduceProUpsellNoise, setReduceProUpsellNoise] = createSignal(false);
+// Server-side setting to disable local-only upgrade UX metrics collection
+const [disableLocalUpgradeMetrics, setDisableLocalUpgradeMetrics] = createSignal(false);
 
 // Track if settings have been loaded
 const [systemSettingsLoaded, setSystemSettingsLoaded] = createSignal(false);
@@ -25,10 +31,16 @@ const [systemSettingsLoaded, setSystemSettingsLoaded] = createSignal(false);
 export function updateSystemSettingsFromResponse(settings: SystemConfig): void {
     setDisableDockerUpdateActions(settings.disableDockerUpdateActions ?? false);
     setDisableLegacyRouteRedirects(settings.disableLegacyRouteRedirects ?? false);
+    setShowClassicPlatformShortcuts(settings.showClassicPlatformShortcuts ?? true);
+    setReduceProUpsellNoise(settings.reduceProUpsellNoise ?? false);
+    setDisableLocalUpgradeMetrics(settings.disableLocalUpgradeMetrics ?? false);
     setSystemSettingsLoaded(true);
     logger.debug('System settings updated from response', {
         disableDockerUpdateActions: settings.disableDockerUpdateActions,
         disableLegacyRouteRedirects: settings.disableLegacyRouteRedirects,
+        showClassicPlatformShortcuts: settings.showClassicPlatformShortcuts,
+        reduceProUpsellNoise: settings.reduceProUpsellNoise,
+        disableLocalUpgradeMetrics: settings.disableLocalUpgradeMetrics,
     });
 }
 
@@ -46,6 +58,9 @@ export async function loadSystemSettings(): Promise<void> {
         // Use safe defaults
         setDisableDockerUpdateActions(false);
         setDisableLegacyRouteRedirects(false);
+        setShowClassicPlatformShortcuts(true);
+        setReduceProUpsellNoise(false);
+        setDisableLocalUpgradeMetrics(false);
         setSystemSettingsLoaded(true);
     }
 }
@@ -65,6 +80,18 @@ export function shouldDisableLegacyRouteRedirects(): boolean {
     return disableLegacyRouteRedirects();
 }
 
+export function shouldShowClassicPlatformShortcuts(): boolean {
+    return showClassicPlatformShortcuts();
+}
+
+export function shouldReduceProUpsellNoise(): boolean {
+    return reduceProUpsellNoise();
+}
+
+export function shouldDisableLocalUpgradeMetrics(): boolean {
+    return disableLocalUpgradeMetrics();
+}
+
 /**
  * Check if system settings have been loaded from the server.
  */
@@ -79,6 +106,9 @@ export function areSystemSettingsLoaded(): boolean {
 export function markSystemSettingsLoadedWithDefaults(): void {
     setDisableDockerUpdateActions(false);
     setDisableLegacyRouteRedirects(false);
+    setShowClassicPlatformShortcuts(true);
+    setReduceProUpsellNoise(false);
+    setDisableLocalUpgradeMetrics(false);
     setSystemSettingsLoaded(true);
     logger.debug('System settings marked as loaded with defaults');
 }
@@ -88,4 +118,20 @@ export function markSystemSettingsLoadedWithDefaults(): void {
  */
 export function updateDockerUpdateActionsSetting(disabled: boolean): void {
     setDisableDockerUpdateActions(disabled);
+}
+
+export function updateLegacyRouteRedirectsSetting(disabled: boolean): void {
+    setDisableLegacyRouteRedirects(disabled);
+}
+
+export function updateShowClassicPlatformShortcutsSetting(enabled: boolean): void {
+    setShowClassicPlatformShortcuts(enabled);
+}
+
+export function updateReduceProUpsellNoiseSetting(enabled: boolean): void {
+    setReduceProUpsellNoise(enabled);
+}
+
+export function updateDisableLocalUpgradeMetricsSetting(disabled: boolean): void {
+    setDisableLocalUpgradeMetrics(disabled);
 }

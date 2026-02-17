@@ -50,6 +50,9 @@ export interface SystemConfig {
   publicURL?: string; // Public URL for email notifications (e.g., http://192.168.1.100:8080)
   disableDockerUpdateActions?: boolean; // Hide Docker update buttons while still detecting updates (server-wide)
   disableLegacyRouteRedirects?: boolean; // Disable legacy frontend URL redirects globally
+  showClassicPlatformShortcuts?: boolean; // Show classic platform shortcuts bar in main navigation
+  reduceProUpsellNoise?: boolean; // Hide proactive Pro prompts; paywalls still appear when accessing gated features
+  disableLocalUpgradeMetrics?: boolean; // Disable local-only upgrade UX metrics collection
 }
 
 /**
