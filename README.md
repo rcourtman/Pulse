@@ -29,7 +29,7 @@ Pulse now groups everything by task instead of data source:
 - **Workloads** for VMs, containers, and Kubernetes pods
 - **Storage** and **Backups** as top-level views
 - PMG now routes into **Infrastructure** (source filter), and Kubernetes routes into **Workloads** (K8s filter)
-- Legacy `/services` and `/kubernetes` URLs are transitional redirects and are planned for removal after the migration window
+- Legacy `/services` and `/kubernetes` URLs are compatibility redirects; update bookmarks to canonical routes
 - Admins can sunset all legacy redirects immediately with `PULSE_DISABLE_LEGACY_ROUTE_REDIRECTS=true` (or `disableLegacyRouteRedirects` in `system.json`)
 
 Power-user shortcuts:
@@ -61,7 +61,7 @@ Power-user shortcuts:
 - **Secure by Design**: Credentials encrypted at rest, strict API scoping
 - **One-Click Updates**: Easy upgrades for supported deployments
 - **OIDC/SSO**: Single sign-on authentication
-- **Privacy Focused**: No telemetry, all data stays on your server
+- **Privacy Focused**: No outbound telemetry by default. Monitoring data stays on your server.
 
 ## ⚡ Quick Start
 

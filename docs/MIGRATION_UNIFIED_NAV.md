@@ -10,11 +10,14 @@ This guide explains what changed in the unified navigation release and how to fi
   - **Infrastructure** shows Kubernetes clusters and nodes.
   - **Workloads** shows Kubernetes pods with the same filters/grouping as VMs and containers.
 
-## Deprecation Window
-- Legacy redirects are transitional and not permanent URL contracts.
-- `/services` and `/kubernetes` remain available during the migration window only.
+## Legacy Aliases and Redirects
+- Legacy redirects exist as compatibility aliases.
+- `/services` and `/kubernetes` remain available as compatibility aliases (update bookmarks to canonical routes when convenient).
+- Any future removal of legacy aliases should only happen with explicit notice in release notes.
 - To sunset all legacy aliases immediately, set `PULSE_DISABLE_LEGACY_ROUTE_REDIRECTS=true`
   (or set `disableLegacyRouteRedirects` in `system.json`).
+- If you prefer the previous top-level navigation layout, you can switch to **Classic** navigation style in
+  Settings → System → General (stored per browser).
 - Plan automation/bookmarks to use canonical routes now:
   - `/infrastructure?source=pmg`
   - `/workloads?type=k8s`

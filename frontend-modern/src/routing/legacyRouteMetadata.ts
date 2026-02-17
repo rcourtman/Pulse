@@ -11,7 +11,7 @@ export interface LegacyRouteMigrationMetadata {
   status: string;
 }
 
-const DEPRECATION_STATUS = 'Deprecated route: removal planned after migration window';
+const DEPRECATION_STATUS = 'Deprecated compatibility alias (update bookmarks)';
 
 export const LEGACY_ROUTE_MIGRATION_METADATA: Record<LegacyRouteSource, LegacyRouteMigrationMetadata> = {
   'proxmox-overview': {
@@ -20,7 +20,7 @@ export const LEGACY_ROUTE_MIGRATION_METADATA: Record<LegacyRouteSource, LegacyRo
     title: 'Overview moved to Infrastructure',
     message: 'Hosts and nodes now live in Infrastructure. VMs, containers, and pods are in Workloads.',
     rationale: 'Infrastructure now contains all hosts and nodes.',
-    status: 'Legacy redirect (temporary)',
+    status: 'Legacy compatibility alias',
   },
   hosts: {
     id: 'hosts',
@@ -28,7 +28,7 @@ export const LEGACY_ROUTE_MIGRATION_METADATA: Record<LegacyRouteSource, LegacyRo
     title: 'Hosts moved to Infrastructure',
     message: 'Agent hosts are now shown in Infrastructure under the Agent source.',
     rationale: 'Host agents are first-class infrastructure resources.',
-    status: 'Legacy redirect (temporary)',
+    status: 'Legacy compatibility alias',
   },
   docker: {
     id: 'docker',
@@ -36,7 +36,7 @@ export const LEGACY_ROUTE_MIGRATION_METADATA: Record<LegacyRouteSource, LegacyRo
     title: 'Docker moved to Infrastructure + Workloads',
     message: 'Docker hosts are in Infrastructure. Docker containers are in Workloads.',
     rationale: 'Docker hosts moved into infrastructure; containers are in workloads.',
-    status: 'Legacy redirect (temporary)',
+    status: 'Legacy compatibility alias',
   },
   mail: {
     id: 'mail',
@@ -44,14 +44,14 @@ export const LEGACY_ROUTE_MIGRATION_METADATA: Record<LegacyRouteSource, LegacyRo
     title: 'Mail Gateway moved to Infrastructure',
     message: 'Mail Gateway now appears in Infrastructure under the PMG source.',
     rationale: 'Mail Gateway moved under infrastructure sources.',
-    status: 'Legacy redirect (temporary)',
+    status: 'Legacy compatibility alias',
   },
   services: {
     id: 'services',
     target: 'infrastructure',
     title: 'Services moved to Infrastructure',
     message:
-      'Service-level PMG infrastructure now appears in Infrastructure. The legacy /services route is deprecated and will be removed after the migration window.',
+      'Service-level PMG infrastructure now appears in Infrastructure. The legacy /services route is deprecated; update bookmarks to the canonical Infrastructure URL.',
     rationale: 'Service-level PMG infrastructure now shares one infrastructure surface.',
     status: DEPRECATION_STATUS,
   },
@@ -60,10 +60,9 @@ export const LEGACY_ROUTE_MIGRATION_METADATA: Record<LegacyRouteSource, LegacyRo
     target: 'workloads',
     title: 'Kubernetes moved to Workloads',
     message:
-      'Kubernetes pods now use Workloads with unified filters and grouping. The legacy /kubernetes route is deprecated and will be removed after the migration window.',
+      'Kubernetes pods now use Workloads with unified filters and grouping. The legacy /kubernetes route is deprecated; update bookmarks to the canonical Workloads URL.',
     rationale:
       'Kubernetes pods now use the unified workload table; cluster and node health is in Infrastructure.',
     status: DEPRECATION_STATUS,
   },
 };
-

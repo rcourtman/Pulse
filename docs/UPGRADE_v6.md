@@ -52,12 +52,14 @@ helm upgrade pulse pulse/pulse -n pulse
 
 ### Unified Navigation (Bookmarks and Deep Links)
 
-Legacy pages redirect into the unified navigation during the migration window.
+Legacy pages redirect into the unified navigation as compatibility aliases.
 
 - Reference: `docs/MIGRATION_UNIFIED_NAV.md`
 - To disable all legacy route redirects (and surface stale bookmarks immediately), set:
   - `PULSE_DISABLE_LEGACY_ROUTE_REDIRECTS=true` or
   - `disableLegacyRouteRedirects: true` in `system.json`
+- Optional migration aid: enable the "Classic platform shortcuts" bar (Settings → System → General).
+- Optional preference: switch to **Classic** navigation style (Settings → System → General). This is stored per browser.
 
 ### API Changes
 
@@ -84,4 +86,3 @@ Multi-tenant mode is opt-in and additionally license-gated:
 - Capability gate: `multi_tenant`
 
 See any multi-tenant operational docs under `docs/architecture/` if you plan to run this mode.
-

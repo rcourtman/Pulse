@@ -51,7 +51,7 @@ export const LEGACY_REDIRECTS = {
     source: 'services',
     toastTitle: 'Services moved',
     toastMessage:
-      'Services are now under Infrastructure (PMG source). This legacy route is deprecated and will be removed after the migration window.',
+      'Services are now under Infrastructure (PMG source). This legacy route is deprecated; update bookmarks to the canonical Infrastructure URL.',
   },
   kubernetes: {
     path: '/kubernetes',
@@ -59,7 +59,7 @@ export const LEGACY_REDIRECTS = {
     source: 'kubernetes',
     toastTitle: 'Kubernetes moved',
     toastMessage:
-      'Kubernetes workloads are now under Workloads. This legacy route is deprecated and will be removed after the migration window.',
+      'Kubernetes workloads are now under Workloads. This legacy route is deprecated; update bookmarks to the canonical Workloads URL.',
   },
 } as const satisfies Record<string, LegacyRedirectDefinition>;
 

@@ -9,11 +9,10 @@ describe('legacy route migration metadata', () => {
     expect(LEGACY_ROUTE_MIGRATION_METADATA.kubernetes.message.toLowerCase()).toContain('deprecated');
   });
 
-  it('keeps legacy compatibility routes marked as temporary', () => {
-    expect(LEGACY_ROUTE_MIGRATION_METADATA['proxmox-overview'].status).toBe('Legacy redirect (temporary)');
-    expect(LEGACY_ROUTE_MIGRATION_METADATA.hosts.status).toBe('Legacy redirect (temporary)');
-    expect(LEGACY_ROUTE_MIGRATION_METADATA.docker.status).toBe('Legacy redirect (temporary)');
-    expect(LEGACY_ROUTE_MIGRATION_METADATA.mail.status).toBe('Legacy redirect (temporary)');
+  it('keeps legacy compatibility routes marked as compatibility aliases', () => {
+    expect(LEGACY_ROUTE_MIGRATION_METADATA['proxmox-overview'].status).toBe('Legacy compatibility alias');
+    expect(LEGACY_ROUTE_MIGRATION_METADATA.hosts.status).toBe('Legacy compatibility alias');
+    expect(LEGACY_ROUTE_MIGRATION_METADATA.docker.status).toBe('Legacy compatibility alias');
+    expect(LEGACY_ROUTE_MIGRATION_METADATA.mail.status).toBe('Legacy compatibility alias');
   });
 });
-

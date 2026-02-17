@@ -25,6 +25,8 @@ The core architectural change in v6: every monitored resource — Proxmox VMs, c
 - Legacy routes (`/proxmox/overview`, `/docker`, `/kubernetes`, `/hosts`, `/services`, `/mail`) redirect to their new destinations with toast notifications explaining the move. See Migration Notes below.
 - **"What's New" modal** on first visit after upgrade, explaining the navigation changes with a link to the migration guide.
 - **In-app migration guide** at `/migration-guide` showing the complete old-to-new route mapping.
+- Optional migration aid: **Classic platform shortcuts** bar in the main navigation (can be hidden in Settings → System → General).
+- Optional preference: **Classic navigation style** (Unified vs Classic tabs), configurable in Settings → System → General (stored per browser).
 
 ### Dashboard Redesign
 
@@ -91,7 +93,7 @@ The license system was rebuilt from simple tier checks into a full entitlement f
 - **Quantitative limit enforcement** for nodes and users, with warning and hard-block thresholds.
 - **Capability alias and deprecation framework** — legacy feature keys are transparently mapped to canonical replacements with deprecation warnings.
 - **Certificate Revocation List** cache with fail-open semantics and 72-hour staleness TTL.
-- **Conversion tracking** — event recording (paywall_viewed, trial_started, upgrade_clicked, limit_warning_shown, limit_blocked, agent_install_*, agent_first_connected), funnel analytics API, and Prometheus metrics.
+- **Local upgrade metrics** — local-only event recording (paywall_viewed, trial_started, upgrade_clicked, limit_warning_shown, limit_blocked, agent_install_*, agent_first_connected) with an admin funnel API and Prometheus metrics. No third-party export. Disable via Settings → System → General → "Disable local upgrade metrics" or `PULSE_DISABLE_LOCAL_UPGRADE_METRICS=true`.
 - **Usage metering** — windowed aggregator with per-tenant cardinality limits and idempotency dedup.
 - **Upgrade reason engine** — generates actionable upgrade prompts based on current usage patterns.
 - **In-app pricing page** at `/pricing` with Community/Pro/Cloud tier comparison table, feature matrix, and "Start Free 14-day Trial" CTA.
@@ -214,7 +216,7 @@ Infrastructure for running Pulse as a hosted SaaS product — entirely opt-in.
 
 - **Unified Resources is now the canonical resource model.**
   - Canonical API: `/api/resources`, `/api/resources/stats`, `/api/resources/{id}`.
-  - Deprecated alias: `/api/v2/resources` — returns a `Deprecation: true` HTTP header. This shim will be removed after the migration window. Migrate to `/api/resources`.
+  - Deprecated alias: `/api/v2/resources` — returns a `Deprecation: true` HTTP header. This shim exists for compatibility; migrate to `/api/resources`.
 - **New `/api/license/entitlements` endpoint** is the canonical way to determine feature availability. Replaces inferring capabilities from tier names.
 
 ### Frontend Routing
@@ -228,7 +230,7 @@ Infrastructure for running Pulse as a hosted SaaS product — entirely opt-in.
     | `/docker` | `/infrastructure?source=docker` |
     | `/proxmox/mail`, `/mail`, `/services` | `/infrastructure?source=pmg` |
     | `/kubernetes` | `/workloads?type=k8s` |
-  - These redirects are temporary and will be removed after the migration window.
+  - These redirects exist as compatibility aliases; update bookmarks to canonical routes.
 - **Storage/Backups "V2" naming removed** — use canonical `/storage` and `/backups` routes.
 
 ### Agent
