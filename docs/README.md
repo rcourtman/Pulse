@@ -31,6 +31,7 @@ Welcome to the Pulse documentation portal. Here you'll find everything you need 
 ## 🔐 Security
 
 - **[Security Policy](../SECURITY.md)** – The core security model (Encryption, Auth, API Scopes).
+- **[Privacy](PRIVACY.md)** – What leaves your network (and what doesn’t).
 - **[Proxy Auth](PROXY_AUTH.md)** – Authentik/Authelia/Cloudflare proxy authentication configuration.
 
 ## ✨ New in 5.0
