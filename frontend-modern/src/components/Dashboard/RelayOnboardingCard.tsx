@@ -13,7 +13,7 @@ import {
 import { apiFetch } from '@/utils/apiClient';
 import { showError, showSuccess } from '@/utils/toast';
 import { logger } from '@/utils/logger';
-import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/conversionEvents';
+import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
 
 const DISMISSED_KEY = 'pulse_relay_onboarding_dismissed';
 const RELAY_SETTINGS_PATH = '/settings/system-relay';

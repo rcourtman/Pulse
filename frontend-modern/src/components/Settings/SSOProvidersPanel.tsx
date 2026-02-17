@@ -6,7 +6,7 @@ import { formField, labelClass, controlClass, formHelpText } from '@/components/
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import { getUpgradeActionUrlOrFallback, hasFeature, loadLicenseStatus, licenseLoaded } from '@/stores/license';
-import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/conversionEvents';
+import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
 import Plus from 'lucide-solid/icons/plus';
 import Pencil from 'lucide-solid/icons/pencil';
 import Trash2 from 'lucide-solid/icons/trash-2';

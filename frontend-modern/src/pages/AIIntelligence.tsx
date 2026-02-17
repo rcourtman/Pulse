@@ -59,7 +59,7 @@ import {
   startProTrial,
 } from '@/stores/license';
 import { formatRelativeTime } from '@/utils/format';
-import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/conversionEvents';
+import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
 import {
   formatTriggerReason,
   groupModelsByProvider,

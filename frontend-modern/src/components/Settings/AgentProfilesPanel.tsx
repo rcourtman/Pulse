@@ -8,7 +8,7 @@ import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import { formatRelativeTime } from '@/utils/format';
 import { getUpgradeActionUrlOrFallback, hasFeature as hasEntitlement, licenseLoaded, loadLicenseStatus, licenseLoading } from '@/stores/license';
-import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/conversionEvents';
+import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
 import { SuggestProfileModal } from './SuggestProfileModal';
 import { KNOWN_SETTINGS, type SelectSetting, type StringSetting } from './agentProfileSettings';
 import Plus from 'lucide-solid/icons/plus';

@@ -13,7 +13,7 @@ import { LicenseAPI, type LicenseStatus } from '@/api/license';
 import RefreshCw from 'lucide-solid/icons/refresh-cw';
 import ShieldCheck from 'lucide-solid/icons/shield-check';
 import BadgeCheck from 'lucide-solid/icons/badge-check';
-import { trackConversionEvent } from '@/utils/conversionEvents';
+import { trackUpgradeMetricEvent } from '@/utils/upgradeMetrics';
 
 const TIER_LABELS: Record<string, string> = {
   free: 'Free',
@@ -83,7 +83,7 @@ export const ProLicensePanel: Component = () => {
     setStartingTrial(true);
     try {
       await startProTrial();
-      trackConversionEvent({ type: 'trial_started', surface: 'license_panel' });
+      trackUpgradeMetricEvent({ type: 'trial_started', surface: 'license_panel' });
       notificationStore.success('Pro trial started');
     } catch (err) {
       const statusCode = (err as { status?: number } | null)?.status;

@@ -18,7 +18,7 @@ import { Portal } from 'solid-js/web';
 import { formatBytes } from '@/utils/format';
 import { calculateOptimalPoints } from '@/utils/downsample';
 import { setupCanvasDPR } from '@/utils/canvasRenderQueue';
-import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/conversionEvents';
+import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
 import { notificationStore } from '@/stores/notifications';
 
 

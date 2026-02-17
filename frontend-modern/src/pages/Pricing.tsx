@@ -1,6 +1,6 @@
 import { For, Show, createMemo, createSignal, onMount } from 'solid-js';
 import { Card } from '@/components/shared/Card';
-import { trackPaywallViewed } from '@/utils/conversionEvents';
+import { trackPaywallViewed } from '@/utils/upgradeMetrics';
 import { getUpgradeActionUrlOrFallback, loadLicenseStatus, entitlements } from '@/stores/license';
 import { LicenseAPI } from '@/api/license';
 import { showToast } from '@/utils/toast';

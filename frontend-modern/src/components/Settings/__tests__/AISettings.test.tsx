@@ -71,7 +71,7 @@ vi.mock('@/stores/license', () => ({
   getUpgradeActionUrlOrFallback: () => '/upgrade',
 }));
 
-vi.mock('@/utils/conversionEvents', () => ({
+vi.mock('@/utils/upgradeMetrics', () => ({
   trackPaywallViewed: (...args: unknown[]) => trackPaywallViewedMock(...args),
   trackUpgradeClicked: (...args: unknown[]) => trackUpgradeClickedMock(...args),
 }));

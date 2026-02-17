@@ -24,7 +24,7 @@ import {
     trackAgentInstallCommandCopied,
     trackAgentInstallProfileSelected,
     trackAgentInstallTokenGenerated,
-} from '@/utils/conversionEvents';
+} from '@/utils/upgradeMetrics';
 import type { Resource } from '@/types/resource';
 
 const TOKEN_PLACEHOLDER = '<api-token>';

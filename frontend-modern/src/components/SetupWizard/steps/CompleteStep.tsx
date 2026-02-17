@@ -15,7 +15,7 @@ import {
     trackAgentInstallTokenGenerated,
     trackPaywallViewed,
     trackUpgradeClicked,
-} from '@/utils/conversionEvents';
+} from '@/utils/upgradeMetrics';
 import { loadLicenseStatus, entitlements, getUpgradeActionUrlOrFallback } from '@/stores/license';
 import type { WizardState } from '../SetupWizard';
 

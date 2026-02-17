@@ -111,7 +111,7 @@ vi.mock('@/stores/notifications', () => ({
   },
 }));
 
-vi.mock('@/utils/conversionEvents', () => ({
+vi.mock('@/utils/upgradeMetrics', () => ({
   trackAgentInstallTokenGenerated: (...args: unknown[]) =>
     trackAgentInstallTokenGeneratedMock(...args),
   trackAgentInstallCommandCopied: (...args: unknown[]) =>

@@ -1,5 +1,5 @@
 import type { SettingsTab } from './settingsTypes';
-import { trackPaywallViewed } from '@/utils/conversionEvents';
+import { trackPaywallViewed } from '@/utils/upgradeMetrics';
 
 export const tabFeatureRequirements: Partial<Record<SettingsTab, string[]>> = {
   'system-relay': ['relay'],

@@ -19,7 +19,7 @@ import {
 import { apiFetch } from '@/utils/apiClient';
 import { showSuccess, showWarning, showToast } from '@/utils/toast';
 import { getUpgradeActionUrlOrFallback, hasFeature, loadLicenseStatus, licenseLoaded } from '@/stores/license';
-import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/conversionEvents';
+import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
 
 interface AuditEvent {
     id: string;

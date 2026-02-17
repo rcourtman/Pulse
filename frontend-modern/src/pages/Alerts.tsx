@@ -23,7 +23,7 @@ import { AlertsAPI } from '@/api/alerts';
 import { NotificationsAPI, Webhook } from '@/api/notifications';
 import { hasFeature, licenseLoaded, licenseLoading as entitlementsLoading, loadLicenseStatus } from '@/stores/license';
 import { aiChatStore } from '@/stores/aiChat';
-import { trackPaywallViewed } from '@/utils/conversionEvents';
+import { trackPaywallViewed } from '@/utils/upgradeMetrics';
 import type { EmailConfig, AppriseConfig } from '@/api/notifications';
 import type { HysteresisThreshold } from '@/types/alerts';
 import type { Alert, Incident, IncidentEvent, State } from '@/types/api';
