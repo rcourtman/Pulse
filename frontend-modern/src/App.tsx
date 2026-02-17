@@ -22,7 +22,7 @@ import { SecurityWarning } from './components/SecurityWarning';
 import { Login } from './components/Login';
 import { logger } from './utils/logger';
 import { POLLING_INTERVALS } from './constants';
-import { STORAGE_KEYS } from '@/utils/localStorage';
+import { STORAGE_KEYS, createLocalStorageBooleanSignal } from '@/utils/localStorage';
 import { layoutStore } from '@/utils/layout';
 import { MONITORING_READ_SCOPE } from '@/constants/apiScopes';
 import { UpdatesAPI } from './api/updates';
@@ -50,6 +50,8 @@ import { startMetricsCollector } from './stores/metricsCollector';
 import BoxesIcon from 'lucide-solid/icons/boxes';
 import LayoutDashboardIcon from 'lucide-solid/icons/layout-dashboard';
 import ServerIcon from 'lucide-solid/icons/server';
+import ContainerIcon from 'lucide-solid/icons/container';
+import MailIcon from 'lucide-solid/icons/mail';
 import HardDriveIcon from 'lucide-solid/icons/hard-drive';
 import ArchiveIcon from 'lucide-solid/icons/archive';
 import BellIcon from 'lucide-solid/icons/bell';
@@ -68,7 +70,9 @@ import {
   updateSystemSettingsFromResponse,
   markSystemSettingsLoadedWithDefaults,
   shouldDisableLegacyRouteRedirects,
+  shouldShowClassicPlatformShortcuts,
 } from './stores/systemSettings';
+import { navigationMode } from '@/stores/navigationMode';
 import {
   fetchInfrastructureSummaryAndCache,
   hasFreshInfrastructureSummaryCache,
@@ -88,7 +92,7 @@ import {
   buildWorkloadsPath,
 } from './routing/resourceLinks';
 import { buildStorageBackupsTabSpecs } from './routing/platformTabs';
-import { isMultiTenantEnabled, licenseLoaded, loadLicenseStatus } from '@/stores/license';
+import { isMultiTenantEnabled, isPro, licenseLoaded, loadLicenseStatus } from '@/stores/license';
 
 import { showToast } from '@/utils/toast';
 
@@ -1273,6 +1277,55 @@ function App() {
   );
 }
 
+function ClassicShortcutsBar(props: {
+  onNavigate: (path: string) => void;
+  onDismiss: () => void;
+}) {
+  const shortcuts: Array<{ label: string; href: string; description: string }> = [
+    { label: 'Proxmox', href: buildInfrastructurePath({ source: 'pve' }), description: 'Proxmox nodes and clusters' },
+    { label: 'Hosts', href: buildInfrastructurePath({ source: 'agent' }), description: 'Unified host agents' },
+    { label: 'Docker hosts', href: buildInfrastructurePath({ source: 'docker' }), description: 'Docker and Podman hosts' },
+    { label: 'Containers', href: buildWorkloadsPath({ type: 'docker' }), description: 'Docker workloads' },
+    { label: 'Kubernetes', href: buildWorkloadsPath({ type: 'k8s' }), description: 'Kubernetes pods in Workloads' },
+    { label: 'Services (PMG)', href: buildInfrastructurePath({ source: 'pmg' }), description: 'PMG service infrastructure' },
+  ];
+
+  return (
+    <div class="hidden md:block mb-2">
+      <div class="flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 shadow-sm overflow-x-auto scrollbar-hide">
+        <span class="text-[10px] font-bold uppercase tracking-wide text-gray-400 dark:text-gray-500 select-none">
+          Classic
+        </span>
+        <For each={shortcuts}>
+          {(item) => (
+            <button
+              type="button"
+              class="inline-flex items-center gap-1 rounded-full border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40 px-3 py-1 text-xs font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors whitespace-nowrap"
+              title={item.description}
+              onClick={() => props.onNavigate(item.href)}
+            >
+              {item.label}
+            </button>
+          )}
+        </For>
+        <div class="ml-auto flex items-center">
+          <button
+            type="button"
+            class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700/60 transition-colors"
+            onClick={props.onDismiss}
+            title="Hide classic shortcuts on this browser"
+          >
+            <span>Hide</span>
+            <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ConnectionStatusBadge(props: {
   connected: () => boolean;
   reconnecting: () => boolean;
@@ -1345,6 +1398,10 @@ function AppLayout(props: {
   children?: JSX.Element;
 }) {
   const navigate = useNavigate();
+  const [classicShortcutsDismissed, setClassicShortcutsDismissed] = createLocalStorageBooleanSignal(
+    STORAGE_KEYS.CLASSIC_SHORTCUTS_DISMISSED,
+    false,
+  );
   const location = useLocation();
 
   // Reactive kiosk mode state
@@ -1379,7 +1436,10 @@ function AppLayout(props: {
   };
 
   // Determine active tab from current path
-  const getActiveTab = () => getActiveTabForPath(location.pathname);
+  const getActiveTabDesktop = () =>
+    getActiveTabForPath(`${location.pathname}${location.search || ''}`, navigationMode());
+  const getActiveTabMobile = () =>
+    getActiveTabForPath(`${location.pathname}${location.search || ''}`, 'unified');
 
   type PlatformTab = {
     id: string;
@@ -1394,7 +1454,9 @@ function AppLayout(props: {
     badge?: string;
   };
 
-  const platformTabs = createMemo(() => {
+  const platformTabsDesktop = createMemo(() => {
+    const mode = navigationMode();
+
     const allPlatforms: PlatformTab[] = [
       {
         id: 'dashboard' as const,
@@ -1409,6 +1471,151 @@ function AppLayout(props: {
         ),
         alwaysShow: true,
       },
+      ...(mode === 'classic'
+        ? [
+            {
+              id: 'infrastructure' as const,
+              label: 'Infrastructure',
+              route: ROOT_INFRASTRUCTURE_PATH,
+              settingsRoute: '/settings/infrastructure',
+              tooltip: 'All hosts and nodes across platforms',
+              enabled: true,
+              live: true,
+              icon: <ServerIcon class="w-4 h-4 shrink-0" />,
+              alwaysShow: true,
+            },
+            {
+              id: 'proxmox' as const,
+              label: 'Proxmox',
+              route: buildInfrastructurePath({ source: 'proxmox' }),
+              settingsRoute: '/settings/infrastructure',
+              tooltip: 'Proxmox VE resources (filtered)',
+              enabled: true,
+              live: true,
+              icon: <ServerIcon class="w-4 h-4 shrink-0" />,
+              alwaysShow: true,
+            },
+            {
+              id: 'hosts' as const,
+              label: 'Hosts',
+              route: buildInfrastructurePath({ source: 'agent' }),
+              settingsRoute: '/settings/infrastructure',
+              tooltip: 'Agent hosts (filtered)',
+              enabled: true,
+              live: true,
+              icon: <ServerIcon class="w-4 h-4 shrink-0" />,
+              alwaysShow: true,
+            },
+            {
+              id: 'docker' as const,
+              label: 'Docker',
+              route: buildInfrastructurePath({ source: 'docker' }),
+              settingsRoute: '/settings/infrastructure',
+              tooltip: 'Docker hosts (filtered)',
+              enabled: true,
+              live: true,
+              icon: <ContainerIcon class="w-4 h-4 shrink-0" />,
+              alwaysShow: true,
+            },
+            {
+              id: 'services' as const,
+              label: 'Services',
+              route: buildInfrastructurePath({ source: 'pmg' }),
+              settingsRoute: '/settings/infrastructure',
+              tooltip: 'Services (mail gateway) (filtered)',
+              enabled: true,
+              live: true,
+              icon: <MailIcon class="w-4 h-4 shrink-0" />,
+              alwaysShow: true,
+            },
+            {
+              id: 'workloads' as const,
+              label: 'Workloads',
+              route: ROOT_WORKLOADS_PATH,
+              settingsRoute: '/settings/workloads',
+              tooltip: 'VMs, containers, and Kubernetes workloads',
+              enabled: true,
+              live: true,
+              icon: <BoxesIcon class="w-4 h-4 shrink-0" />,
+              alwaysShow: true,
+            },
+            {
+              id: 'containers' as const,
+              label: 'Containers',
+              route: buildWorkloadsPath({ type: 'docker' }),
+              settingsRoute: '/settings/workloads',
+              tooltip: 'Docker workloads (filtered)',
+              enabled: true,
+              live: true,
+              icon: <BoxesIcon class="w-4 h-4 shrink-0" />,
+              alwaysShow: true,
+            },
+            {
+              id: 'kubernetes' as const,
+              label: 'Kubernetes',
+              route: buildWorkloadsPath({ type: 'k8s' }),
+              settingsRoute: '/settings/workloads',
+              tooltip: 'Kubernetes workloads (filtered)',
+              enabled: true,
+              live: true,
+              icon: <BoxesIcon class="w-4 h-4 shrink-0" />,
+              alwaysShow: true,
+            },
+          ]
+        : [
+            {
+              id: 'infrastructure' as const,
+              label: 'Infrastructure',
+              route: ROOT_INFRASTRUCTURE_PATH,
+              settingsRoute: '/settings/infrastructure',
+              tooltip: 'All hosts and nodes across platforms',
+              enabled: true,
+              live: true,
+              icon: <ServerIcon class="w-4 h-4 shrink-0" />,
+              alwaysShow: true,
+            },
+            {
+              id: 'workloads' as const,
+              label: 'Workloads',
+              route: ROOT_WORKLOADS_PATH,
+              settingsRoute: '/settings/workloads',
+              tooltip: 'VMs, containers, and Kubernetes workloads',
+              enabled: true,
+              live: true,
+              icon: <BoxesIcon class="w-4 h-4 shrink-0" />,
+              alwaysShow: true,
+            },
+          ]),
+      ...buildStorageBackupsTabSpecs(true).map((tab) => ({
+        ...tab,
+        enabled: true,
+        live: true,
+        icon: tab.id.startsWith('storage') ? (
+          <HardDriveIcon class="w-4 h-4 shrink-0" />
+        ) : (
+          <ArchiveIcon class="w-4 h-4 shrink-0" />
+        ),
+        alwaysShow: true,
+      })),
+    ];
+
+    // Filter out platforms that should be hidden when not configured
+    return allPlatforms.filter(p => p.alwaysShow || p.enabled);
+  });
+
+  const platformTabsMobile = createMemo(() => {
+    const allPlatforms: PlatformTab[] = [
+      {
+        id: 'dashboard' as const,
+        label: 'Dashboard',
+        route: DASHBOARD_PATH,
+        settingsRoute: '/settings',
+        tooltip: 'Environment overview and command center',
+        enabled: true,
+        live: true,
+        icon: <LayoutDashboardIcon class="w-4 h-4 shrink-0" />,
+        alwaysShow: true,
+      },
       {
         id: 'infrastructure' as const,
         label: 'Infrastructure',
@@ -1417,9 +1624,7 @@ function AppLayout(props: {
         tooltip: 'All hosts and nodes across platforms',
         enabled: true,
         live: true,
-        icon: (
-          <ServerIcon class="w-4 h-4 shrink-0" />
-        ),
+        icon: <ServerIcon class="w-4 h-4 shrink-0" />,
         alwaysShow: true,
       },
       {
@@ -1430,9 +1635,7 @@ function AppLayout(props: {
         tooltip: 'VMs, containers, and Kubernetes workloads',
         enabled: true,
         live: true,
-        icon: (
-          <BoxesIcon class="w-4 h-4 shrink-0" />
-        ),
+        icon: <BoxesIcon class="w-4 h-4 shrink-0" />,
         alwaysShow: true,
       },
       ...buildStorageBackupsTabSpecs(true).map((tab) => ({
@@ -1448,7 +1651,6 @@ function AppLayout(props: {
       })),
     ];
 
-    // Filter out platforms that should be hidden when not configured
     return allPlatforms.filter(p => p.alwaysShow || p.enabled);
   });
 
@@ -1525,7 +1727,7 @@ function AppLayout(props: {
     return tabs;
   });
 
-  const handlePlatformClick = (platform: ReturnType<typeof platformTabs>[number]) => {
+  const handlePlatformClick = (platform: PlatformTab) => {
     if (platform.enabled) {
       navigate(platform.route);
     } else {
@@ -1655,9 +1857,9 @@ function AppLayout(props: {
           aria-label="Primary navigation"
         >
           <div class="flex items-end gap-1" role="group" aria-label="Infrastructure">
-            <For each={platformTabs()}>
+            <For each={platformTabsDesktop()}>
               {(platform) => {
-                const isActive = () => getActiveTab() === platform.id;
+                const isActive = () => getActiveTabDesktop() === platform.id;
                 const disabled = () => !platform.enabled;
                 const baseClasses =
                   'tab relative px-1.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium flex items-center gap-1 sm:gap-1.5 rounded-t border border-transparent transition-colors whitespace-nowrap cursor-pointer';
@@ -1703,8 +1905,8 @@ function AppLayout(props: {
           <div class="flex items-end gap-1 ml-auto" role="group" aria-label="System">
             <div class="flex items-end gap-1 pl-1 sm:pl-4">
               <For each={utilityTabs()}>
-                {(tab) => {
-                  const isActive = () => getActiveTab() === tab.id;
+              {(tab) => {
+                  const isActive = () => getActiveTabDesktop() === tab.id;
                   const baseClasses =
                     'tab relative px-1.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium flex items-center gap-1 sm:gap-1.5 rounded-t border border-transparent transition-colors whitespace-nowrap cursor-pointer';
 
@@ -1768,6 +1970,28 @@ function AppLayout(props: {
         </div>
       </Show>
 
+      {/* Classic platform shortcuts - migration aid, dismissible per-browser */}
+      <Show
+        when={
+          !kioskMode() &&
+          shouldShowClassicPlatformShortcuts() &&
+          navigationMode() !== 'classic' &&
+          !classicShortcutsDismissed()
+        }
+      >
+        <ClassicShortcutsBar
+          onNavigate={(path) => navigate(path)}
+          onDismiss={() => {
+            setClassicShortcutsDismissed(true);
+            showToast(
+              'info',
+              'Classic shortcuts hidden',
+              'You can re-enable them in Settings → System → General.',
+            );
+          }}
+        />
+      </Show>
+
       {/* Main Content */}
       <main
         id="main"
@@ -1782,8 +2006,8 @@ function AppLayout(props: {
 
       <Show when={!kioskMode()}>
         <MobileNavBar
-          activeTab={getActiveTab}
-          platformTabs={platformTabs}
+          activeTab={getActiveTabMobile}
+          platformTabs={platformTabsMobile}
           utilityTabs={utilityTabs}
           onPlatformClick={handlePlatformClick}
           onUtilityClick={handleUtilityClick}
@@ -1807,6 +2031,15 @@ function AppLayout(props: {
           <Show when={props.lastUpdateText()}>
             <span class="mx-2">|</span>
             <span>Last refresh: {props.lastUpdateText()}</span>
+          </Show>
+          <Show when={isPro()}>
+            <span class="mx-2">|</span>
+            <a
+              href={`mailto:support@pulserelay.pro?subject=${encodeURIComponent(`Support Request - Pulse ${props.versionInfo()?.version || ''}`)}`}
+              class="text-blue-600 dark:text-blue-400 hover:underline"
+            >
+              Get Support
+            </a>
           </Show>
         </footer>
       </Show>
