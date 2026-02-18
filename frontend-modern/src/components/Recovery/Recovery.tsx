@@ -1381,7 +1381,7 @@ const Recovery: Component = () => {
                       </For>
                     </div>
 
-                    <div class="absolute inset-x-0 bottom-6 top-0 flex items-end gap-[3px]">
+                    <div class="absolute inset-x-0 bottom-6 top-0 flex items-stretch gap-[3px]">
                       <For each={timeline().points}>
                         {(point) => {
                           const total = point.total;
