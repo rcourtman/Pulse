@@ -1272,7 +1272,7 @@ export function Dashboard(props: DashboardProps) {
   return (
     <div class="space-y-3">
       <Show when={isWorkloadsRoute()}>
-        <div class="sticky-shield sticky top-0 z-20 bg-white dark:bg-gray-800">
+        <div class="hidden lg:block sticky-shield sticky top-0 z-20 bg-white dark:bg-gray-800">
           <WorkloadsSummary
             timeRange={workloadsSummaryRange()}
             onTimeRangeChange={setWorkloadsSummaryRange}

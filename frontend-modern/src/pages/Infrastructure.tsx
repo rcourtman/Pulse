@@ -411,7 +411,7 @@ export function Infrastructure() {
                 />
               </Show>
 
-              <div class="sticky-shield sticky top-0 z-20 bg-white dark:bg-gray-800">
+              <div class="hidden lg:block sticky-shield sticky top-0 z-20 bg-white dark:bg-gray-800">
                 <InfrastructureSummary
                   hosts={filteredResources()}
                   timeRange={infrastructureSummaryRange()}
