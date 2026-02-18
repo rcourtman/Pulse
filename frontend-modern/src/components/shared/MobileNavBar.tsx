@@ -141,7 +141,10 @@ export function MobileNavBar(props: MobileNavBarProps) {
   return (
     <>
       {/* Bottom navigation bar */}
-      <nav class="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white/95 backdrop-blur dark:border-gray-700 dark:bg-gray-900/95 md:hidden">
+      <nav
+        class="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white/95 backdrop-blur dark:border-gray-700 dark:bg-gray-900/95 md:hidden"
+        style="padding-bottom: env(safe-area-inset-bottom, 0px)"
+      >
         <div class="relative">
           <div
             ref={(el) => (navRef = el)}

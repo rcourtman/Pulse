@@ -415,6 +415,14 @@ body,
   display: none;
 }
 
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.pb-safe-or-20 {
+  padding-bottom: max(5rem, env(safe-area-inset-bottom, 5rem));
+}
+
 /* Login page animations */
 @keyframes fade-in {
   from {
