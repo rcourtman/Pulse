@@ -871,437 +871,161 @@ const Recovery: Component = () => {
   return (
     <div data-testid="recovery-page" class="flex flex-col gap-4">
       <Card padding="sm">
-        <div class="flex flex-col gap-3">
-          <Show
-            when={!rollupId().trim()}
-            fallback={
-              <div class="flex items-center gap-1.5 border-b border-gray-200 dark:border-gray-700 pb-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRollupId('');
-                    setView('protected');
-                  }}
-                  class="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
-                >
-                  Protected
-                </button>
-                <span class="text-gray-400 dark:text-gray-500 text-sm">›</span>
-                <span class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
-                  <Show when={selectedRollup()}>
-                    {rollupSubjectLabel(selectedRollup()!, resourcesById())}
-                  </Show>
-                </span>
-              </div>
-            }
-          >
-            <div class="flex items-center gap-0 border-b border-gray-200 dark:border-gray-700">
+        <Show
+          when={!rollupId().trim()}
+          fallback={
+            <div class="flex items-center gap-1.5">
               <button
                 type="button"
                 onClick={() => {
-                  setView('protected');
                   setRollupId('');
+                  setView('protected');
                 }}
-                class={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                  view() === 'protected'
-                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                    : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-                }`}
+                class="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
               >
                 Protected
               </button>
-              <button
-                type="button"
-                onClick={() => setView('events')}
-                class={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                  view() === 'events'
-                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                    : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-                }`}
-              >
-                Events
-              </button>
+              <span class="text-gray-400 dark:text-gray-500 text-sm">›</span>
+              <span class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                <Show when={selectedRollup()}>
+                  {rollupSubjectLabel(selectedRollup()!, resourcesById())}
+                </Show>
+              </span>
             </div>
-          </Show>
-
-          <Show when={!kioskMode()}>
-            <div class="flex flex-col gap-2">
-              <Show when={view() === 'protected'}>
-                <SearchInput
-                  value={query}
-                  onChange={(value) => setQuery(value)}
-                  placeholder="Search protected items..."
-                  class="w-full"
-                  history={{
-                    storageKey: STORAGE_KEYS.RECOVERY_SEARCH_HISTORY,
-                    emptyMessage: 'Recent searches appear here.',
-                  }}
-                />
-                <Show when={isMobile()}>
-                  <button
-                    type="button"
-                    onClick={() => setProtectedFiltersOpen((o) => !o)}
-                    class="flex items-center gap-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400"
-                  >
-                    <ListFilterIcon class="w-3.5 h-3.5" />
-                    Filters
-                    <Show when={protectedActiveFilterCount() > 0}>
-                      <span class="ml-0.5 rounded-full bg-blue-500 px-1.5 py-0.5 text-[10px] font-semibold text-white leading-none">
-                        {protectedActiveFilterCount()}
-                      </span>
-                    </Show>
-                  </button>
-                </Show>
-
-                <Show when={!isMobile() || protectedFiltersOpen()}>
-                  <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                    <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-                      <label
-                        for="recovery-provider-filter"
-                        class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
-                      >
-                        Provider
-                      </label>
-                      <select
-                        id="recovery-provider-filter"
-                        value={providerFilter()}
-                        onChange={(event) => setProviderFilter(event.currentTarget.value)}
-                        class="min-w-[10rem] max-w-[14rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
-                      >
-                        <For each={providerOptions()}>
-                          {(p) => <option value={p}>{p === 'all' ? 'All Providers' : sourceLabel(p)}</option>}
-                        </For>
-                      </select>
-                    </div>
-
-                    <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-                      <label
-                        for="recovery-protected-status-filter"
-                        class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
-                      >
-                        Status
-                      </label>
-                      <select
-                        id="recovery-protected-status-filter"
-                        value={outcomeFilter()}
-                        onChange={(event) => {
-                          const value = event.currentTarget.value as 'all' | KnownOutcome;
-                          setOutcomeFilter(value);
-                          if (value !== 'all') setVerificationFilter('all');
-                        }}
-                        class="min-w-[7rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
-                      >
-                        <For each={availableOutcomes}>
-                          {(outcome) => (
-                            <option value={outcome}>
-                              {outcome === 'all' ? 'Any' : titleize(outcome)}
-                            </option>
-                          )}
-                        </For>
-                      </select>
-                    </div>
-
-                    <button
-                      type="button"
-                      aria-pressed={protectedStaleOnly()}
-                      onClick={() => setProtectedStaleOnly((v) => !v)}
-                      class={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${
-                        protectedStaleOnly()
-                          ? 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-100'
-                          : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700'
-                      }`}
-                    >
-                      Stale only
-                    </button>
-
-                    <Show when={rollupsSummary().stale > 0}>
-                      <span class="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-100">
-                        {rollupsSummary().stale} stale
-                      </span>
-                    </Show>
-
-                    <Show when={rollupsSummary().neverSucceeded > 0}>
-                      <span class="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-medium text-rose-700 dark:bg-rose-900/40 dark:text-rose-200">
-                        {rollupsSummary().neverSucceeded} never succeeded
-                      </span>
-                    </Show>
-                  </div>
-                </Show>
-              </Show>
-
-              <Show when={view() === 'events'}>
-                <SearchInput
-                  value={query}
-                  onChange={(value) => {
-                    setQuery(value);
-                    setCurrentPage(1);
-                  }}
-                  placeholder="Search recovery events..."
-                  class="w-full"
-                  autoFocus
-                  history={{
-                    storageKey: STORAGE_KEYS.RECOVERY_SEARCH_HISTORY,
-                    emptyMessage: 'Recent searches appear here.',
-                  }}
-                />
-                <Show when={isMobile()}>
-                  <button
-                    type="button"
-                    onClick={() => setEventsFiltersOpen((o) => !o)}
-                    class="flex items-center gap-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400"
-                  >
-                    <ListFilterIcon class="w-3.5 h-3.5" />
-                    Filters
-                    <Show when={eventsActiveFilterCount() > 0}>
-                      <span class="ml-0.5 rounded-full bg-blue-500 px-1.5 py-0.5 text-[10px] font-semibold text-white leading-none">
-                        {eventsActiveFilterCount()}
-                      </span>
-                    </Show>
-                  </button>
-                </Show>
-
-                <Show when={!isMobile() || eventsFiltersOpen()}>
-                  <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                    <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-                      <label
-                        for="recovery-provider-filter-events"
-                        class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
-                      >
-                        Provider
-                      </label>
-                      <select
-                        id="recovery-provider-filter-events"
-                        value={providerFilter()}
-                        onChange={(event) => {
-                          setProviderFilter(normalizeProviderFromQuery(event.currentTarget.value));
-                          setCurrentPage(1);
-                        }}
-                        class="min-w-[10rem] max-w-[14rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
-                      >
-                        <For each={providerOptions()}>
-                          {(p) => <option value={p}>{p === 'all' ? 'All Providers' : sourceLabel(p)}</option>}
-                        </For>
-                      </select>
-                    </div>
-
-                    <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-                      <label
-                        for="recovery-status-filter"
-                        class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
-                      >
-                        Status
-                      </label>
-                      <select
-                        id="recovery-status-filter"
-                        value={outcomeFilter()}
-                        onChange={(event) => {
-                          const value = event.currentTarget.value as 'all' | KnownOutcome;
-                          setOutcomeFilter(value);
-                          if (value !== 'all') setVerificationFilter('all');
-                          setCurrentPage(1);
-                        }}
-                        class="min-w-[7rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
-                      >
-                        <For each={availableOutcomes}>
-                          {(outcome) => (
-                            <option value={outcome}>
-                              {outcome === 'all' ? 'All' : titleize(outcome)}
-                            </option>
-                          )}
-                        </For>
-                      </select>
-                    </div>
-
-                    <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-                      <span class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Scope</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setScopeFilter('all');
-                          setCurrentPage(1);
-                        }}
-                        class={segmentedButtonClass(scopeFilter() === 'all')}
-                      >
-                        All
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setScopeFilter('workload');
-                          setCurrentPage(1);
-                        }}
-                        class={segmentedButtonClass(scopeFilter() === 'workload')}
-                      >
-                        Workloads
-                      </button>
-                    </div>
-
-                    <button
-                      type="button"
-                      aria-expanded={moreFiltersOpen()}
-                      aria-controls="recovery-more-filters"
-                      onClick={() => setMoreFiltersOpen((v) => !v)}
-                      class="inline-flex items-center gap-2 rounded-md border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
-                    >
-                      <span>{moreFiltersOpen() ? 'Less filters' : 'More filters'}</span>
-                      <Show when={activeAdvancedFilterCount() > 0}>
-                        <span class="rounded-full bg-gray-200 px-1.5 py-0.5 text-[10px] font-mono text-gray-700 dark:bg-gray-700 dark:text-gray-200">
-                          {activeAdvancedFilterCount()}
-                        </span>
-                      </Show>
-                    </button>
-
-                    <Show when={artifactColumnVisibility.availableToggles().length > 0}>
-                      <ColumnPicker
-                        columns={artifactColumnVisibility.availableToggles()}
-                        isHidden={artifactColumnVisibility.isHiddenByUser}
-                        onToggle={artifactColumnVisibility.toggle}
-                        onReset={artifactColumnVisibility.resetToDefaults}
-                      />
-                    </Show>
-
-                    <Show when={hasActiveArtifactFilters()}>
-                      <button
-                        type="button"
-                        onClick={resetAllArtifactFilters}
-                        class="shrink-0 rounded-lg bg-blue-100 px-2.5 py-1.5 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:hover:bg-blue-900/60"
-                      >
-                        Clear
-                      </button>
-                    </Show>
-                  </div>
-
-                  <Show when={moreFiltersOpen()}>
-                    <div id="recovery-more-filters" class="flex flex-wrap items-center gap-2 pt-2 border-t border-gray-200 dark:border-gray-700">
-                      <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-                        <span class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Method</span>
-                        <For each={(['all', 'snapshot', 'local', 'remote'] as const)}>
-                          {(mode) => (
-                            <button
-                              type="button"
-                              aria-pressed={modeFilter() === mode}
-                              onClick={() => {
-                                setModeFilter(mode === 'all' ? 'all' : mode);
-                                setCurrentPage(1);
-                              }}
-                              class={segmentedButtonClass(modeFilter() === mode)}
-                            >
-                              {mode === 'all' ? 'All' : MODE_LABELS[mode]}
-                            </button>
-                          )}
-                        </For>
-                      </div>
-
-                      <Show when={showVerificationFilter()}>
-                        <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-                          <label
-                            for="recovery-verification-filter"
-                            class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
-                          >
-                            Verification
-                          </label>
-                          <select
-                            id="recovery-verification-filter"
-                            value={verificationFilter()}
-                            onChange={(event) => {
-                              setVerificationFilter(event.currentTarget.value as VerificationFilter);
-                              if (event.currentTarget.value !== 'all') setOutcomeFilter('all');
-                              setCurrentPage(1);
-                            }}
-                            class="min-w-[6.5rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
-                          >
-                            <option value="all">Any</option>
-                            <option value="verified">Verified</option>
-                            <option value="unverified">Unverified</option>
-                            <option value="unknown">Unknown</option>
-                          </select>
-                        </div>
-                      </Show>
-
-                      <Show when={showClusterFilter()}>
-                        <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-                          <label
-                            for="recovery-cluster-filter"
-                            class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
-                          >
-                            Cluster
-                          </label>
-                          <select
-                            id="recovery-cluster-filter"
-                            value={clusterFilter()}
-                            onChange={(event) => {
-                              setClusterFilter(event.currentTarget.value);
-                              setCurrentPage(1);
-                            }}
-                            class="min-w-[8rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
-                          >
-                            <option value="all">All</option>
-                            <For each={clusterOptions().filter((value) => value !== 'all')}>
-                              {(cluster) => <option value={cluster}>{cluster}</option>}
-                            </For>
-                          </select>
-                        </div>
-                      </Show>
-
-                      <Show when={showNodeFilter()}>
-                        <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-                          <label
-                            for="recovery-node-filter"
-                            class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
-                          >
-                            Node/Host
-                          </label>
-                          <select
-                            id="recovery-node-filter"
-                            value={nodeFilter()}
-                            onChange={(event) => {
-                              setNodeFilter(event.currentTarget.value);
-                              setCurrentPage(1);
-                            }}
-                            class="min-w-[7.5rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
-                          >
-                            <option value="all">All</option>
-                            <For each={nodeOptions().filter((value) => value !== 'all')}>
-                              {(node) => <option value={node}>{node}</option>}
-                            </For>
-                          </select>
-                        </div>
-                      </Show>
-
-                      <Show when={showNamespaceFilter()}>
-                        <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-                          <label
-                            for="recovery-namespace-filter"
-                            class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
-                          >
-                            Namespace
-                          </label>
-                          <select
-                            id="recovery-namespace-filter"
-                            value={namespaceFilter()}
-                            onChange={(event) => {
-                              setNamespaceFilter(event.currentTarget.value);
-                              setCurrentPage(1);
-                            }}
-                            class="min-w-[8rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
-                          >
-                            <option value="all">All</option>
-                            <For each={namespaceOptions().filter((value) => value !== 'all')}>
-                              {(namespace) => <option value={namespace}>{namespace}</option>}
-                            </For>
-                          </select>
-                        </div>
-                      </Show>
-                    </div>
-                  </Show>
-                </Show>
-              </Show>
-            </div>
-          </Show>
-        </div>
+          }
+        >
+          <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5" role="group" aria-label="View">
+            <button
+              type="button"
+              onClick={() => {
+                setView('protected');
+                setRollupId('');
+              }}
+              aria-pressed={view() === 'protected'}
+              class={segmentedButtonClass(view() === 'protected')}
+            >
+              Protected
+            </button>
+            <button
+              type="button"
+              onClick={() => setView('events')}
+              aria-pressed={view() === 'events'}
+              class={segmentedButtonClass(view() === 'events')}
+            >
+              Events
+            </button>
+          </div>
+        </Show>
       </Card>
 
       <Show when={view() === 'protected'}>
+        <Show when={!kioskMode()}>
+          <Card padding="sm">
+            <div class="flex flex-col gap-2">
+              <SearchInput
+                value={query}
+                onChange={(value) => setQuery(value)}
+                placeholder="Search protected items..."
+                class="w-full"
+                history={{
+                  storageKey: STORAGE_KEYS.RECOVERY_SEARCH_HISTORY,
+                  emptyMessage: 'Recent searches appear here.',
+                }}
+              />
+              <Show when={isMobile()}>
+                <button
+                  type="button"
+                  onClick={() => setProtectedFiltersOpen((o) => !o)}
+                  class="flex items-center gap-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400"
+                >
+                  <ListFilterIcon class="w-3.5 h-3.5" />
+                  Filters
+                  <Show when={protectedActiveFilterCount() > 0}>
+                    <span class="ml-0.5 rounded-full bg-blue-500 px-1.5 py-0.5 text-[10px] font-semibold text-white leading-none">
+                      {protectedActiveFilterCount()}
+                    </span>
+                  </Show>
+                </button>
+              </Show>
+
+              <Show when={!isMobile() || protectedFiltersOpen()}>
+                <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                  <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                    <label
+                      for="recovery-provider-filter"
+                      class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+                    >
+                      Provider
+                    </label>
+                    <select
+                      id="recovery-provider-filter"
+                      value={providerFilter()}
+                      onChange={(event) => setProviderFilter(event.currentTarget.value)}
+                      class="min-w-[10rem] max-w-[14rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+                    >
+                      <For each={providerOptions()}>
+                        {(p) => <option value={p}>{p === 'all' ? 'All Providers' : sourceLabel(p)}</option>}
+                      </For>
+                    </select>
+                  </div>
+
+                  <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                    <label
+                      for="recovery-protected-status-filter"
+                      class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+                    >
+                      Status
+                    </label>
+                    <select
+                      id="recovery-protected-status-filter"
+                      value={outcomeFilter()}
+                      onChange={(event) => {
+                        const value = event.currentTarget.value as 'all' | KnownOutcome;
+                        setOutcomeFilter(value);
+                        if (value !== 'all') setVerificationFilter('all');
+                      }}
+                      class="min-w-[7rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+                    >
+                      <For each={availableOutcomes}>
+                        {(outcome) => (
+                          <option value={outcome}>
+                            {outcome === 'all' ? 'Any' : titleize(outcome)}
+                          </option>
+                        )}
+                      </For>
+                    </select>
+                  </div>
+
+                  <button
+                    type="button"
+                    aria-pressed={protectedStaleOnly()}
+                    onClick={() => setProtectedStaleOnly((v) => !v)}
+                    class={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${
+                      protectedStaleOnly()
+                        ? 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-100'
+                        : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700'
+                    }`}
+                  >
+                    Stale only
+                  </button>
+
+                  <Show when={rollupsSummary().stale > 0}>
+                    <span class="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-100">
+                      {rollupsSummary().stale} stale
+                    </span>
+                  </Show>
+
+                  <Show when={rollupsSummary().neverSucceeded > 0}>
+                    <span class="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-medium text-rose-700 dark:bg-rose-900/40 dark:text-rose-200">
+                      {rollupsSummary().neverSucceeded} never succeeded
+                    </span>
+                  </Show>
+                </div>
+              </Show>
+            </div>
+          </Card>
+        </Show>
+
         <Card padding="sm">
           <Show when={recoveryRollups.rollups.loading && filteredRollups().length === 0}>
             <div class="px-3 py-6 text-sm text-gray-500 dark:text-gray-400">Loading protection rollups...</div>
@@ -1703,6 +1427,277 @@ const Recovery: Component = () => {
               </div>
             </Show>
           </Card>
+
+          <Show when={!kioskMode()}>
+            <Card padding="sm">
+              <div class="flex flex-col gap-2">
+                <SearchInput
+                  value={query}
+                  onChange={(value) => {
+                    setQuery(value);
+                    setCurrentPage(1);
+                  }}
+                  placeholder="Search recovery events..."
+                  class="w-full"
+                  history={{
+                    storageKey: STORAGE_KEYS.RECOVERY_SEARCH_HISTORY,
+                    emptyMessage: 'Recent searches appear here.',
+                  }}
+                />
+                <Show when={isMobile()}>
+                  <button
+                    type="button"
+                    onClick={() => setEventsFiltersOpen((o) => !o)}
+                    class="flex items-center gap-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400"
+                  >
+                    <ListFilterIcon class="w-3.5 h-3.5" />
+                    Filters
+                    <Show when={eventsActiveFilterCount() > 0}>
+                      <span class="ml-0.5 rounded-full bg-blue-500 px-1.5 py-0.5 text-[10px] font-semibold text-white leading-none">
+                        {eventsActiveFilterCount()}
+                      </span>
+                    </Show>
+                  </button>
+                </Show>
+
+                <Show when={!isMobile() || eventsFiltersOpen()}>
+                  <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                    <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                      <label
+                        for="recovery-provider-filter-events"
+                        class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+                      >
+                        Provider
+                      </label>
+                      <select
+                        id="recovery-provider-filter-events"
+                        value={providerFilter()}
+                        onChange={(event) => {
+                          setProviderFilter(normalizeProviderFromQuery(event.currentTarget.value));
+                          setCurrentPage(1);
+                        }}
+                        class="min-w-[10rem] max-w-[14rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+                      >
+                        <For each={providerOptions()}>
+                          {(p) => <option value={p}>{p === 'all' ? 'All Providers' : sourceLabel(p)}</option>}
+                        </For>
+                      </select>
+                    </div>
+
+                    <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                      <label
+                        for="recovery-status-filter"
+                        class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+                      >
+                        Status
+                      </label>
+                      <select
+                        id="recovery-status-filter"
+                        value={outcomeFilter()}
+                        onChange={(event) => {
+                          const value = event.currentTarget.value as 'all' | KnownOutcome;
+                          setOutcomeFilter(value);
+                          if (value !== 'all') setVerificationFilter('all');
+                          setCurrentPage(1);
+                        }}
+                        class="min-w-[7rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+                      >
+                        <For each={availableOutcomes}>
+                          {(outcome) => (
+                            <option value={outcome}>
+                              {outcome === 'all' ? 'All' : titleize(outcome)}
+                            </option>
+                          )}
+                        </For>
+                      </select>
+                    </div>
+
+                    <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                      <span class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Scope</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setScopeFilter('all');
+                          setCurrentPage(1);
+                        }}
+                        class={segmentedButtonClass(scopeFilter() === 'all')}
+                      >
+                        All
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setScopeFilter('workload');
+                          setCurrentPage(1);
+                        }}
+                        class={segmentedButtonClass(scopeFilter() === 'workload')}
+                      >
+                        Workloads
+                      </button>
+                    </div>
+
+                    <button
+                      type="button"
+                      aria-expanded={moreFiltersOpen()}
+                      aria-controls="recovery-more-filters"
+                      onClick={() => setMoreFiltersOpen((v) => !v)}
+                      class="inline-flex items-center gap-2 rounded-md border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+                    >
+                      <span>{moreFiltersOpen() ? 'Less filters' : 'More filters'}</span>
+                      <Show when={activeAdvancedFilterCount() > 0}>
+                        <span class="rounded-full bg-gray-200 px-1.5 py-0.5 text-[10px] font-mono text-gray-700 dark:bg-gray-700 dark:text-gray-200">
+                          {activeAdvancedFilterCount()}
+                        </span>
+                      </Show>
+                    </button>
+
+                    <Show when={artifactColumnVisibility.availableToggles().length > 0}>
+                      <ColumnPicker
+                        columns={artifactColumnVisibility.availableToggles()}
+                        isHidden={artifactColumnVisibility.isHiddenByUser}
+                        onToggle={artifactColumnVisibility.toggle}
+                        onReset={artifactColumnVisibility.resetToDefaults}
+                      />
+                    </Show>
+
+                    <Show when={hasActiveArtifactFilters()}>
+                      <button
+                        type="button"
+                        onClick={resetAllArtifactFilters}
+                        class="shrink-0 rounded-lg bg-blue-100 px-2.5 py-1.5 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:hover:bg-blue-900/60"
+                      >
+                        Clear
+                      </button>
+                    </Show>
+                  </div>
+
+                  <Show when={moreFiltersOpen()}>
+                    <div id="recovery-more-filters" class="flex flex-wrap items-center gap-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+                      <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                        <span class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Method</span>
+                        <For each={(['all', 'snapshot', 'local', 'remote'] as const)}>
+                          {(mode) => (
+                            <button
+                              type="button"
+                              aria-pressed={modeFilter() === mode}
+                              onClick={() => {
+                                setModeFilter(mode === 'all' ? 'all' : mode);
+                                setCurrentPage(1);
+                              }}
+                              class={segmentedButtonClass(modeFilter() === mode)}
+                            >
+                              {mode === 'all' ? 'All' : MODE_LABELS[mode]}
+                            </button>
+                          )}
+                        </For>
+                      </div>
+
+                      <Show when={showVerificationFilter()}>
+                        <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                          <label
+                            for="recovery-verification-filter"
+                            class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+                          >
+                            Verification
+                          </label>
+                          <select
+                            id="recovery-verification-filter"
+                            value={verificationFilter()}
+                            onChange={(event) => {
+                              setVerificationFilter(event.currentTarget.value as VerificationFilter);
+                              if (event.currentTarget.value !== 'all') setOutcomeFilter('all');
+                              setCurrentPage(1);
+                            }}
+                            class="min-w-[6.5rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+                          >
+                            <option value="all">Any</option>
+                            <option value="verified">Verified</option>
+                            <option value="unverified">Unverified</option>
+                            <option value="unknown">Unknown</option>
+                          </select>
+                        </div>
+                      </Show>
+
+                      <Show when={showClusterFilter()}>
+                        <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                          <label
+                            for="recovery-cluster-filter"
+                            class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+                          >
+                            Cluster
+                          </label>
+                          <select
+                            id="recovery-cluster-filter"
+                            value={clusterFilter()}
+                            onChange={(event) => {
+                              setClusterFilter(event.currentTarget.value);
+                              setCurrentPage(1);
+                            }}
+                            class="min-w-[8rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+                          >
+                            <option value="all">All</option>
+                            <For each={clusterOptions().filter((value) => value !== 'all')}>
+                              {(cluster) => <option value={cluster}>{cluster}</option>}
+                            </For>
+                          </select>
+                        </div>
+                      </Show>
+
+                      <Show when={showNodeFilter()}>
+                        <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                          <label
+                            for="recovery-node-filter"
+                            class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+                          >
+                            Node/Host
+                          </label>
+                          <select
+                            id="recovery-node-filter"
+                            value={nodeFilter()}
+                            onChange={(event) => {
+                              setNodeFilter(event.currentTarget.value);
+                              setCurrentPage(1);
+                            }}
+                            class="min-w-[7.5rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+                          >
+                            <option value="all">All</option>
+                            <For each={nodeOptions().filter((value) => value !== 'all')}>
+                              {(node) => <option value={node}>{node}</option>}
+                            </For>
+                          </select>
+                        </div>
+                      </Show>
+
+                      <Show when={showNamespaceFilter()}>
+                        <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                          <label
+                            for="recovery-namespace-filter"
+                            class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+                          >
+                            Namespace
+                          </label>
+                          <select
+                            id="recovery-namespace-filter"
+                            value={namespaceFilter()}
+                            onChange={(event) => {
+                              setNamespaceFilter(event.currentTarget.value);
+                              setCurrentPage(1);
+                            }}
+                            class="min-w-[8rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+                          >
+                            <option value="all">All</option>
+                            <For each={namespaceOptions().filter((value) => value !== 'all')}>
+                              {(namespace) => <option value={namespace}>{namespace}</option>}
+                            </For>
+                          </select>
+                        </div>
+                      </Show>
+                    </div>
+                  </Show>
+                </Show>
+              </div>
+            </Card>
+          </Show>
 
           <Card padding="none" class="overflow-hidden">
             <Show
