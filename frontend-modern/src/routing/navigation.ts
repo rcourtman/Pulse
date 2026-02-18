@@ -1,27 +1,15 @@
-import {
-  INFRASTRUCTURE_PATH,
-  INFRASTRUCTURE_QUERY_PARAMS,
-  WORKLOADS_PATH,
-  WORKLOADS_QUERY_PARAMS,
-} from './resourceLinks';
+import { INFRASTRUCTURE_PATH, WORKLOADS_PATH } from './resourceLinks';
 
 export type AppTabId =
   | 'dashboard'
   | 'infrastructure'
+  | 'pmg'
   | 'workloads'
-  | 'proxmox'
-  | 'hosts'
-  | 'docker'
-  | 'containers'
-  | 'kubernetes'
-  | 'services'
   | 'storage'
   | 'backups'
   | 'alerts'
   | 'ai'
   | 'settings';
-
-export type NavigationMode = 'unified' | 'classic';
 
 export type LegacyRouteSource =
   | 'proxmox-overview'
@@ -34,117 +22,27 @@ export type LegacyRouteSource =
 export const LEGACY_MIGRATION_PARAM = 'migrated';
 export const LEGACY_MIGRATION_FROM_PARAM = 'from';
 
-function splitPathAndSearch(path: string): { pathname: string; search: string } {
-  const [pathname, query = ''] = path.split('?');
-  const search = query ? `?${query}` : '';
-  return { pathname, search };
-}
-
-function normalizeClassicInfrastructureSource(raw: string): AppTabId | null {
-  const source = (raw || '').trim().toLowerCase();
-  switch (source) {
-    case 'pve':
-    case 'proxmox':
-    case 'proxmox-pve':
-      return 'proxmox';
-    case 'agent':
-    case 'host-agent':
-    case 'hosts':
-      return 'hosts';
-    case 'docker':
-      return 'docker';
-    case 'pmg':
-    case 'proxmox-pmg':
-    case 'services':
-    case 'mail':
-      // PMG surfaces as "services/mail" in legacy URLs. Keep it under a single classic tab.
-      return 'services';
-    case 'k8s':
-    case 'kubernetes':
-      return 'kubernetes';
-    default:
-      return null;
-  }
-}
-
-function normalizeClassicWorkloadsType(raw: string): AppTabId | null {
-  const kind = (raw || '').trim().toLowerCase();
-  switch (kind) {
-    case 'docker':
-    case 'container':
-    case 'containers':
-      return 'containers';
-    case 'k8s':
-    case 'kubernetes':
-      return 'kubernetes';
-    default:
-      return null;
-  }
-}
-
-function getActiveClassicTab(pathname: string, search: string): AppTabId | null {
-  if (pathname.startsWith(INFRASTRUCTURE_PATH)) {
-    const params = new URLSearchParams(search);
-    const source = params.get(INFRASTRUCTURE_QUERY_PARAMS.source) || '';
-    const sources = source
-      .split(',')
-      .map((token) => normalizeClassicInfrastructureSource(token))
-      .filter((value): value is AppTabId => Boolean(value));
-
-    // If a single source is selected, highlight its classic tab. Otherwise fall back to Infrastructure.
-    if (sources.length === 1) {
-      return sources[0];
-    }
-    if (sources.length > 1) {
-      return 'infrastructure';
-    }
-    return 'infrastructure';
-  }
-
-  if (pathname.startsWith(WORKLOADS_PATH)) {
-    const params = new URLSearchParams(search);
-    const type = params.get(WORKLOADS_QUERY_PARAMS.type) || '';
-    const normalized = normalizeClassicWorkloadsType(type);
-    return normalized ?? 'workloads';
-  }
-
-  // Legacy routes (when redirects are disabled).
-  if (pathname.startsWith('/kubernetes')) return 'kubernetes';
-  if (pathname.startsWith('/services') || pathname.startsWith('/mail') || pathname.startsWith('/proxmox/mail')) {
-    return 'services';
-  }
-  if (pathname.startsWith('/servers')) return 'hosts';
-  if (pathname.startsWith('/proxmox')) return 'proxmox';
-
-  return null;
-}
-
-export function getActiveTabForPath(path: string, mode: NavigationMode = 'unified'): AppTabId {
-  const { pathname, search } = splitPathAndSearch(path);
-
-  if (mode === 'classic') {
-    const classic = getActiveClassicTab(pathname, search);
-    if (classic) return classic;
-  }
-
-  if (pathname.startsWith('/dashboard')) return 'dashboard';
-  if (pathname.startsWith(INFRASTRUCTURE_PATH)) return 'infrastructure';
-  if (pathname.startsWith(WORKLOADS_PATH)) return 'workloads';
-  if (pathname.startsWith('/storage')) return 'storage';
-  if (pathname.startsWith('/ceph')) return 'storage';
-  if (pathname.startsWith('/backups')) return 'backups';
-  if (pathname.startsWith('/replication')) return 'backups';
-  if (pathname.startsWith('/services')) return 'infrastructure';
-  if (pathname.startsWith('/mail')) return 'infrastructure';
-  if (pathname.startsWith('/proxmox/ceph') || pathname.startsWith('/proxmox/storage')) return 'storage';
-  if (pathname.startsWith('/proxmox/replication') || pathname.startsWith('/proxmox/backups')) return 'backups';
-  if (pathname.startsWith('/proxmox/mail')) return 'infrastructure';
-  if (pathname.startsWith('/proxmox')) return 'infrastructure';
-  if (pathname.startsWith('/kubernetes')) return 'workloads';
-  if (pathname.startsWith('/servers')) return 'infrastructure';
-  if (pathname.startsWith('/alerts')) return 'alerts';
-  if (pathname.startsWith('/ai')) return 'ai';
-  if (pathname.startsWith('/settings')) return 'settings';
+export function getActiveTabForPath(path: string): AppTabId {
+  if (path.startsWith('/dashboard')) return 'dashboard';
+  if (path.startsWith(INFRASTRUCTURE_PATH)) return 'infrastructure';
+  if (path.startsWith(WORKLOADS_PATH)) return 'workloads';
+  if (path.startsWith('/pmg')) return 'pmg';
+  if (path.startsWith('/storage')) return 'storage';
+  if (path.startsWith('/ceph')) return 'storage';
+  if (path.startsWith('/backups')) return 'backups';
+  if (path.startsWith('/replication')) return 'backups';
+  if (path.startsWith('/services')) return 'infrastructure';
+  if (path.startsWith('/mail')) return 'infrastructure';
+  if (path.startsWith('/proxmox/mail-gateway')) return 'pmg';
+  if (path.startsWith('/proxmox/ceph') || path.startsWith('/proxmox/storage')) return 'storage';
+  if (path.startsWith('/proxmox/replication') || path.startsWith('/proxmox/backups')) return 'backups';
+  if (path.startsWith('/proxmox/mail')) return 'infrastructure';
+  if (path.startsWith('/proxmox')) return 'infrastructure';
+  if (path.startsWith('/kubernetes')) return 'workloads';
+  if (path.startsWith('/servers')) return 'infrastructure';
+  if (path.startsWith('/alerts')) return 'alerts';
+  if (path.startsWith('/ai')) return 'ai';
+  if (path.startsWith('/settings')) return 'settings';
   return 'infrastructure';
 }
 

@@ -8,36 +8,20 @@ import {
 
 describe('navigation routing helpers', () => {
   it('maps paths to the correct primary tab', () => {
-    expect(getActiveTabForPath('/dashboard', 'unified')).toBe('dashboard');
-    expect(getActiveTabForPath('/infrastructure', 'unified')).toBe('infrastructure');
-    expect(getActiveTabForPath('/workloads?type=k8s', 'unified')).toBe('workloads');
-    expect(getActiveTabForPath('/storage', 'unified')).toBe('storage');
-    expect(getActiveTabForPath('/ceph', 'unified')).toBe('storage');
-    expect(getActiveTabForPath('/backups', 'unified')).toBe('backups');
-    expect(getActiveTabForPath('/replication', 'unified')).toBe('backups');
-    expect(getActiveTabForPath('/kubernetes', 'unified')).toBe('workloads');
-    expect(getActiveTabForPath('/mail', 'unified')).toBe('infrastructure');
-    expect(getActiveTabForPath('/services', 'unified')).toBe('infrastructure');
-    expect(getActiveTabForPath('/alerts/open', 'unified')).toBe('alerts');
-    expect(getActiveTabForPath('/settings/security', 'unified')).toBe('settings');
-  });
-
-  it('maps paths to the correct primary tab in classic navigation mode', () => {
-    expect(getActiveTabForPath('/infrastructure', 'classic')).toBe('infrastructure');
-    expect(getActiveTabForPath('/infrastructure?source=proxmox', 'classic')).toBe('proxmox');
-    expect(getActiveTabForPath('/infrastructure?source=pve', 'classic')).toBe('proxmox');
-    expect(getActiveTabForPath('/infrastructure?source=agent', 'classic')).toBe('hosts');
-    expect(getActiveTabForPath('/infrastructure?source=docker', 'classic')).toBe('docker');
-    expect(getActiveTabForPath('/infrastructure?source=pmg', 'classic')).toBe('services');
-    expect(getActiveTabForPath('/infrastructure?source=proxmox,agent', 'classic')).toBe('infrastructure');
-
-    expect(getActiveTabForPath('/workloads', 'classic')).toBe('workloads');
-    expect(getActiveTabForPath('/workloads?type=docker', 'classic')).toBe('containers');
-    expect(getActiveTabForPath('/workloads?type=k8s', 'classic')).toBe('kubernetes');
-
-    expect(getActiveTabForPath('/kubernetes', 'classic')).toBe('kubernetes');
-    expect(getActiveTabForPath('/servers', 'classic')).toBe('hosts');
-    expect(getActiveTabForPath('/services', 'classic')).toBe('services');
+    expect(getActiveTabForPath('/dashboard')).toBe('dashboard');
+    expect(getActiveTabForPath('/infrastructure')).toBe('infrastructure');
+    expect(getActiveTabForPath('/workloads?type=k8s')).toBe('workloads');
+    expect(getActiveTabForPath('/pmg')).toBe('pmg');
+    expect(getActiveTabForPath('/storage')).toBe('storage');
+    expect(getActiveTabForPath('/ceph')).toBe('storage');
+    expect(getActiveTabForPath('/backups')).toBe('backups');
+    expect(getActiveTabForPath('/replication')).toBe('backups');
+    expect(getActiveTabForPath('/proxmox/mail-gateway')).toBe('pmg');
+    expect(getActiveTabForPath('/kubernetes')).toBe('workloads');
+    expect(getActiveTabForPath('/mail')).toBe('infrastructure');
+    expect(getActiveTabForPath('/services')).toBe('infrastructure');
+    expect(getActiveTabForPath('/alerts/open')).toBe('alerts');
+    expect(getActiveTabForPath('/settings/security')).toBe('settings');
   });
 
   it('appends migration metadata to legacy redirect targets', () => {

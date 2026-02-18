@@ -26,9 +26,71 @@ type APIMetricValue = {
   unit?: string;
 };
 
+type APIAgentDiskInfo = {
+  device?: string;
+  mountpoint?: string;
+  filesystem?: string;
+  type?: string;
+  total?: number;
+  used?: number;
+  free?: number;
+};
+
+type APIAgentNetworkInterface = {
+  name: string;
+  mac?: string;
+  addresses?: string[];
+  rxBytes?: number;
+  txBytes?: number;
+  speedMbps?: number;
+};
+
+type APIAgentSensorSummary = {
+  temperatureCelsius?: Record<string, number>;
+  fanRpm?: Record<string, number>;
+  additional?: Record<string, number>;
+  smart?: Array<{
+    device: string;
+    model?: string;
+    serial?: string;
+    wwn?: string;
+    type?: string;
+    temperature: number;
+    health?: string;
+    standby?: boolean;
+  }>;
+};
+
+type APIHostRAIDDevice = {
+  device: string;
+  state: string;
+  slot: number;
+};
+
+type APIHostRAIDArray = {
+  device: string;
+  name?: string;
+  level: string;
+  state: string;
+  totalDevices: number;
+  activeDevices: number;
+  workingDevices: number;
+  failedDevices: number;
+  spareDevices: number;
+  uuid?: string;
+  devices: APIHostRAIDDevice[];
+  rebuildPercent: number;
+  rebuildSpeed?: string;
+};
+
 type APIKubernetesData = {
+  clusterId?: string;
+  clusterName?: string;
+  context?: string;
+  nodeName?: string;
   uptimeSeconds?: number;
   temperature?: number;
+  pendingUninstall?: boolean;
   metricCapabilities?: {
     nodeCpuMemory?: boolean;
     nodeTelemetry?: boolean;
@@ -65,7 +127,29 @@ type APIResource = {
   parentId?: string;
   tags?: string[];
   proxmox?: { nodeName?: string; clusterName?: string; uptime?: number; temperature?: number };
-  agent?: { agentId?: string; hostname?: string; uptimeSeconds?: number; temperature?: number };
+  agent?: {
+    agentId?: string;
+    agentVersion?: string;
+    hostname?: string;
+    platform?: string;
+    osName?: string;
+    osVersion?: string;
+    kernelVersion?: string;
+    architecture?: string;
+    uptimeSeconds?: number;
+    temperature?: number;
+    cpuCount?: number;
+    memory?: { total?: number; used?: number; free?: number; usage?: number };
+    networkInterfaces?: APIAgentNetworkInterface[];
+    disks?: APIAgentDiskInfo[];
+    sensors?: APIAgentSensorSummary;
+    raid?: APIHostRAIDArray[];
+    commandsEnabled?: boolean;
+    tokenId?: string;
+    tokenName?: string;
+    tokenHint?: string;
+    tokenLastUsedAt?: number;
+  };
   docker?: { hostname?: string; temperature?: number };
   pbs?: {
     instanceId?: string;
@@ -379,6 +463,8 @@ const toResource = (v2: APIResource): Resource => {
     parentId: v2.parentId,
     clusterId: v2.identity?.clusterName || v2.proxmox?.clusterName,
     status: resolveStatus(v2.status),
+    agent: v2.agent,
+    kubernetes: v2.kubernetes,
     cpu: metricToResourceMetric(v2.metrics?.cpu),
     memory: metricToResourceMetric(v2.metrics?.memory),
     disk: metricToResourceMetric(v2.metrics?.disk),
