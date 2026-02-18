@@ -15,9 +15,10 @@ type ReportResponse struct {
 
 // CommandAck is sent by the agent to confirm the result of a control command.
 type CommandAck struct {
-	HostID  string `json:"hostId"`
-	Status  string `json:"status"`
-	Message string `json:"message,omitempty"`
+	HostID  string         `json:"hostId"`
+	Status  string         `json:"status"`
+	Message string         `json:"message,omitempty"`
+	Payload map[string]any `json:"payload,omitempty"`
 }
 
 const (

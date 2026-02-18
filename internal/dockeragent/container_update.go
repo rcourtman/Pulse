@@ -17,6 +17,8 @@ import (
 type ContainerUpdateResult struct {
 	Success         bool   `json:"success"`
 	ContainerID     string `json:"containerId"`
+	OldContainerID  string `json:"oldContainerId,omitempty"`
+	NewContainerID  string `json:"newContainerId,omitempty"`
 	ContainerName   string `json:"containerName"`
 	OldImageDigest  string `json:"oldImageDigest,omitempty"`
 	NewImageDigest  string `json:"newImageDigest,omitempty"`
@@ -66,7 +68,23 @@ func (a *Agent) handleUpdateContainerCommand(ctx context.Context, target TargetC
 		message = result.Error
 	}
 
-	if err := a.sendCommandAck(ctx, target, command.ID, status, message); err != nil {
+	var payload map[string]any
+	if result.Success && result.OldContainerID != "" && result.NewContainerID != "" && result.OldContainerID != result.NewContainerID {
+		// Provide a stable mapping so the server can migrate persisted metadata (custom URLs, notes, tags)
+		// from the old container runtime ID to the new one.
+		payload = map[string]any{
+			"oldContainerId": result.OldContainerID,
+			"newContainerId": result.NewContainerID,
+		}
+	}
+
+	var err error
+	if payload != nil {
+		err = a.sendCommandAckWithPayload(ctx, target, command.ID, status, message, payload)
+	} else {
+		err = a.sendCommandAck(ctx, target, command.ID, status, message)
+	}
+	if err != nil {
 		a.logger.Error().Err(err).Msg("Failed to send completion acknowledgement to Pulse")
 	}
 
@@ -85,7 +103,8 @@ func (a *Agent) handleUpdateContainerCommand(ctx context.Context, target TargetC
 // The progressFn callback is called at each step to report progress to Pulse.
 func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID string, progressFn func(step string)) ContainerUpdateResult {
 	result := ContainerUpdateResult{
-		ContainerID: containerID,
+		ContainerID:    containerID,
+		OldContainerID: containerID,
 	}
 
 	// Helper to report progress (handles nil progressFn)
@@ -207,6 +226,9 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 	}
 
 	newContainerID := createResp.ID
+	result.NewContainerID = newContainerID
+	// After a successful update, the resulting "current" container ID is the new container.
+	result.ContainerID = newContainerID
 	a.logger.Info().Str("newContainerId", newContainerID).Msg("New container created")
 
 	// 7. Connect to additional networks (if more than one)

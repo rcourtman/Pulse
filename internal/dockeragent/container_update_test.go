@@ -534,4 +534,88 @@ func TestHandleUpdateContainerCommand(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 	})
+
+	t.Run("success ack includes container id mapping payload", func(t *testing.T) {
+		var (
+			mu   sync.Mutex
+			acks []agentsdocker.CommandAck
+		)
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			body, _ := io.ReadAll(r.Body)
+			var ack agentsdocker.CommandAck
+			_ = json.Unmarshal(body, &ack)
+			mu.Lock()
+			acks = append(acks, ack)
+			mu.Unlock()
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer server.Close()
+
+		agent := &Agent{
+			logger: zerolog.Nop(),
+			hostID: "host1",
+			httpClients: map[bool]*http.Client{
+				false: server.Client(),
+			},
+			docker: &fakeDockerClient{
+				containerInspectFn: func(_ context.Context, id string) (containertypes.InspectResponse, error) {
+					inspect := baseInspect()
+					if id == "new123" {
+						inspect.ContainerJSONBase.Image = "sha256:new0000000000"
+					}
+					return inspect, nil
+				},
+				imagePullFn: func(context.Context, string, image.PullOptions) (io.ReadCloser, error) {
+					return io.NopCloser(strings.NewReader("{}")), nil
+				},
+				containerStopFn: func(context.Context, string, containertypes.StopOptions) error {
+					return nil
+				},
+				containerRenameFn: func(context.Context, string, string) error {
+					return nil
+				},
+				containerCreateFn: func(context.Context, *containertypes.Config, *containertypes.HostConfig, *network.NetworkingConfig, *v1.Platform, string) (containertypes.CreateResponse, error) {
+					return containertypes.CreateResponse{ID: "new123"}, nil
+				},
+				containerStartFn: func(context.Context, string, containertypes.StartOptions) error {
+					return nil
+				},
+			},
+		}
+
+		cmd := agentsdocker.Command{
+			ID:   "cmd6",
+			Type: agentsdocker.CommandTypeUpdateContainer,
+			Payload: map[string]any{
+				"containerId": "container1",
+			},
+		}
+
+		if err := agent.handleUpdateContainerCommand(context.Background(), TargetConfig{URL: server.URL, Token: "token"}, cmd); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		mu.Lock()
+		defer mu.Unlock()
+
+		var completed *agentsdocker.CommandAck
+		for i := range acks {
+			if acks[i].Status == agentsdocker.CommandStatusCompleted {
+				completed = &acks[i]
+				break
+			}
+		}
+		if completed == nil {
+			t.Fatalf("expected a completed ack, got %d total acks", len(acks))
+		}
+		if completed.Payload == nil {
+			t.Fatalf("expected completed ack payload to be set")
+		}
+		if got, _ := completed.Payload["oldContainerId"].(string); got != "container1" {
+			t.Fatalf("oldContainerId = %q, want %q", got, "container1")
+		}
+		if got, _ := completed.Payload["newContainerId"].(string); got != "new123" {
+			t.Fatalf("newContainerId = %q, want %q", got, "new123")
+		}
+	})
 }

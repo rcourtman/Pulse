@@ -935,6 +935,10 @@ func removeFileIfExists(path string) error {
 }
 
 func (a *Agent) sendCommandAck(ctx context.Context, target TargetConfig, commandID, status, message string) error {
+	return a.sendCommandAckWithPayload(ctx, target, commandID, status, message, nil)
+}
+
+func (a *Agent) sendCommandAckWithPayload(ctx context.Context, target TargetConfig, commandID, status, message string, payload map[string]any) error {
 	if a.hostID == "" {
 		return fmt.Errorf("host identifier unavailable; cannot acknowledge command")
 	}
@@ -943,6 +947,7 @@ func (a *Agent) sendCommandAck(ctx context.Context, target TargetConfig, command
 		HostID:  a.hostID,
 		Status:  status,
 		Message: message,
+		Payload: payload,
 	}
 
 	body, err := jsonMarshalFn(ackPayload)

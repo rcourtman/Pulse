@@ -25,9 +25,10 @@ type DockerAgentHandlers struct {
 }
 
 type dockerCommandAckRequest struct {
-	HostID  string `json:"hostId"`
-	Status  string `json:"status"`
-	Message string `json:"message,omitempty"`
+	HostID  string         `json:"hostId"`
+	Status  string         `json:"status"`
+	Message string         `json:"message,omitempty"`
+	Payload map[string]any `json:"payload,omitempty"`
 }
 
 // errInvalidCommandStatus is returned when an unrecognized command status is provided.
@@ -231,25 +232,45 @@ func (h *DockerAgentHandlers) HandleCommandAck(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	commandStatus, hostID, shouldRemove, err := h.getMonitor(r.Context()).AcknowledgeDockerHostCommand(commandID, req.HostID, status, req.Message)
+	mon := h.getMonitor(r.Context())
+	commandStatus, hostID, shouldRemove, err := mon.AcknowledgeDockerHostCommand(commandID, req.HostID, status, req.Message)
 	if err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "docker_command_ack_failed", err.Error(), nil)
 		return
 	}
 
+	// If a container update succeeded, migrate persisted container metadata (custom URLs, notes, tags)
+	// so the UI doesn't "lose" it when the container runtime ID changes.
+	if status == monitoring.DockerCommandStatusCompleted && commandStatus.Type == monitoring.DockerCommandTypeUpdateContainer && len(req.Payload) > 0 {
+		oldContainerID, _ := req.Payload["oldContainerId"].(string)
+		newContainerID, _ := req.Payload["newContainerId"].(string)
+		oldContainerID = strings.TrimSpace(oldContainerID)
+		newContainerID = strings.TrimSpace(newContainerID)
+		if oldContainerID != "" && newContainerID != "" && oldContainerID != newContainerID {
+			if err := mon.CopyDockerContainerMetadata(hostID, oldContainerID, newContainerID); err != nil {
+				log.Warn().
+					Err(err).
+					Str("dockerHostID", hostID).
+					Str("oldContainerID", oldContainerID).
+					Str("newContainerID", newContainerID).
+					Msg("Failed to migrate docker container metadata after update")
+			}
+		}
+	}
+
 	if shouldRemove {
-		if _, removeErr := h.getMonitor(r.Context()).RemoveDockerHost(hostID); removeErr != nil {
+		if _, removeErr := mon.RemoveDockerHost(hostID); removeErr != nil {
 			log.Error().Err(removeErr).Str("dockerHostID", hostID).Str("commandID", commandID).Msg("Failed to remove docker host after command completion")
 		} else {
 			// Clear the removal block since the agent has confirmed it stopped successfully.
 			// This allows immediate re-enrollment without waiting for the 24-hour TTL.
-			if reenrollErr := h.getMonitor(r.Context()).AllowDockerHostReenroll(hostID); reenrollErr != nil {
+			if reenrollErr := mon.AllowDockerHostReenroll(hostID); reenrollErr != nil {
 				log.Warn().Err(reenrollErr).Str("dockerHostID", hostID).Msg("Failed to clear removal block after successful stop")
 			}
 		}
 	}
 
-	go h.wsHub.BroadcastState(h.getMonitor(r.Context()).GetState().ToFrontend())
+	go h.wsHub.BroadcastState(mon.GetState().ToFrontend())
 
 	if err := utils.WriteJSONResponse(w, map[string]any{
 		"success": true,

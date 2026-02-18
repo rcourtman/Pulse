@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -109,7 +110,7 @@ func NewStore(config StoreConfig) (*Store, error) {
 			"journal_mode(WAL)",
 			"synchronous(NORMAL)",
 			"auto_vacuum(INCREMENTAL)",
-			"wal_autocheckpoint(1000)",
+			"wal_autocheckpoint(500)",
 		},
 	}.Encode()
 	db, err := sql.Open("sqlite", dsn)
@@ -198,7 +199,64 @@ func (s *Store) initSchema() error {
 		return fmt.Errorf("failed to create schema: %w", err)
 	}
 
+	// Ensure rollups (and any reprocessing after failed checkpoints) don't create duplicate rows.
+	// We enforce uniqueness on the natural key so we can use INSERT OR IGNORE for rollups.
+	if err := s.ensureMetricsUniqueIndex(); err != nil {
+		return err
+	}
+
 	log.Debug().Msg("Metrics schema initialized")
+	return nil
+}
+
+func (s *Store) ensureMetricsUniqueIndex() error {
+	const createUniqueIndex = `
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_metrics_unique
+		ON metrics(resource_type, resource_id, metric_type, timestamp, tier);
+	`
+
+	_, err := s.db.Exec(createUniqueIndex)
+	if err == nil {
+		return nil
+	}
+
+	// If the DB already contains duplicates (from older versions), creating the unique index
+	// will fail. Deduplicate and retry once.
+	lower := strings.ToLower(err.Error())
+	if !strings.Contains(lower, "unique") && !strings.Contains(lower, "constraint") && !strings.Contains(lower, "duplicate") {
+		return fmt.Errorf("failed to create unique index for metrics rollups: %w", err)
+	}
+
+	log.Warn().Err(err).Msg("Duplicate metrics detected; deduplicating before creating unique index")
+
+	tx, txErr := s.db.Begin()
+	if txErr != nil {
+		return fmt.Errorf("begin dedupe transaction: %w", txErr)
+	}
+	defer tx.Rollback()
+
+	// Keep the earliest row (lowest id) for each natural key.
+	_, txErr = tx.Exec(`
+		DELETE FROM metrics
+		WHERE id NOT IN (
+			SELECT MIN(id)
+			FROM metrics
+			GROUP BY resource_type, resource_id, metric_type, timestamp, tier
+		)
+	`)
+	if txErr != nil {
+		return fmt.Errorf("dedupe metrics: %w", txErr)
+	}
+
+	if txErr := tx.Commit(); txErr != nil {
+		return fmt.Errorf("commit dedupe: %w", txErr)
+	}
+
+	if _, err := s.db.Exec(createUniqueIndex); err != nil {
+		return fmt.Errorf("failed to create unique index after dedupe: %w", err)
+	}
+
+	log.Info().Msg("Metrics deduplicated and unique index created")
 	return nil
 }
 
@@ -739,7 +797,7 @@ func (s *Store) rollupCandidate(resourceType, resourceID, metricType string, fro
 
 	// Aggregate data into buckets
 	_, err = tx.Exec(`
-		INSERT INTO metrics (resource_type, resource_id, metric_type, value, min_value, max_value, timestamp, tier)
+		INSERT OR IGNORE INTO metrics (resource_type, resource_id, metric_type, value, min_value, max_value, timestamp, tier)
 		SELECT 
 			resource_type, 
 			resource_id, 
