@@ -1,4 +1,4 @@
-import { Component, createSignal, Show, For, onMount, createEffect, createMemo } from 'solid-js';
+import { Component, createSignal, Show, For, onMount, createEffect, createMemo, untrack } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
 import { useWebSocket } from '@/App';
 import { Card } from '@/components/shared/Card';
@@ -9,6 +9,7 @@ import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
 import { formatRelativeTime, formatAbsoluteTime } from '@/utils/format';
 import { MonitoringAPI } from '@/api/monitoring';
 import { AgentProfilesAPI, type AgentProfile, type AgentProfileAssignment } from '@/api/agentProfiles';
+import { HostMetadataAPI } from '@/api/hostMetadata';
 import { SecurityAPI } from '@/api/security';
 import { notificationStore } from '@/stores/notifications';
 import type { SecurityStatus } from '@/types/config';
@@ -172,6 +173,8 @@ export const UnifiedAgents: Component = () => {
     const [pendingCommandConfig, setPendingCommandConfig] = createSignal<Record<string, { enabled: boolean; timestamp: number }>>({});
     const [pendingScopeUpdates, setPendingScopeUpdates] = createSignal<Record<string, boolean>>({});
     const [expandedRowKey, setExpandedRowKey] = createSignal<string | null>(null);
+    const [hostCustomUrl, setHostCustomUrl] = createSignal('');
+    const [hostCustomUrlSaving, setHostCustomUrlSaving] = createSignal(false);
     const [filterType, setFilterType] = createSignal<'all' | UnifiedAgentType>('all');
     const [filterStatus, setFilterStatus] = createSignal<'all' | UnifiedAgentStatus>('all');
     const [filterScope, setFilterScope] = createSignal<'all' | Exclude<ScopeCategory, 'na'>>('all');
@@ -541,6 +544,23 @@ export const UnifiedAgents: Component = () => {
         setExpandedRowKey(prev => (prev === rowKey ? null : rowKey));
     };
 
+    const saveHostUrl = async (hostId: string) => {
+        if (hostCustomUrlSaving()) return;
+        setHostCustomUrlSaving(true);
+        const trimmed = hostCustomUrl().trim();
+
+        try {
+            await HostMetadataAPI.updateMetadata(hostId, { customUrl: trimmed });
+            setHostCustomUrl(trimmed);
+            notificationStore.success('Custom URL saved');
+        } catch (err) {
+            logger.error('Failed to save host metadata', err);
+            notificationStore.error('Failed to save custom URL');
+        } finally {
+            setHostCustomUrlSaving(false);
+        }
+    };
+
     const legacyAgents = createMemo(() => allHosts().filter(h => h.isLegacy));
     const hasLegacyAgents = createMemo(() => legacyAgents().length > 0);
 
@@ -669,6 +689,33 @@ export const UnifiedAgents: Component = () => {
         });
 
         return rows;
+    });
+
+    createEffect(() => {
+        const key = expandedRowKey();
+        if (!key) {
+            setHostCustomUrl('');
+            return;
+        }
+
+        const row = untrack(() => unifiedRows().find(r => r.rowKey === key));
+        if (!row || row.status !== 'active' || !row.types.includes('host')) {
+            setHostCustomUrl('');
+            return;
+        }
+
+        const currentKey = key;
+        void (async () => {
+            try {
+                const metadata = await HostMetadataAPI.getMetadata(row.id);
+                if (expandedRowKey() !== currentKey) return;
+                setHostCustomUrl(metadata.customUrl || '');
+            } catch (err) {
+                logger.error('Failed to load host metadata', err);
+                if (expandedRowKey() !== currentKey) return;
+                setHostCustomUrl('');
+            }
+        })();
     });
 
     const filteredRows = createMemo(() => {
@@ -1606,6 +1653,38 @@ export const UnifiedAgents: Component = () => {
                                                                 <Show when={row.linkedNodeId}>
                                                                     <div class="text-xs text-gray-500 dark:text-gray-400">
                                                                         Linked node ID: <span class="font-mono text-gray-700 dark:text-gray-200">{row.linkedNodeId}</span>
+                                                                    </div>
+                                                                </Show>
+                                                                <Show when={row.status === 'active' && row.types.includes('host')}>
+                                                                    <div class="rounded-lg border border-gray-200 bg-white px-4 py-3 dark:border-gray-700 dark:bg-gray-900/30">
+                                                                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                                                                            Custom URL
+                                                                        </label>
+                                                                        <div class="flex gap-2">
+                                                                            <input
+                                                                                type="text"
+                                                                                value={hostCustomUrl()}
+                                                                                onInput={(event) => setHostCustomUrl(event.currentTarget.value)}
+                                                                                onKeyDown={(event) => {
+                                                                                    if (event.key === 'Enter' && !hostCustomUrlSaving()) {
+                                                                                        void saveHostUrl(row.id);
+                                                                                    }
+                                                                                }}
+                                                                                placeholder="https://host.example.com"
+                                                                                class="flex-1 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-800"
+                                                                            />
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => void saveHostUrl(row.id)}
+                                                                                disabled={hostCustomUrlSaving()}
+                                                                                class="inline-flex items-center justify-center rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                                                                            >
+                                                                                {hostCustomUrlSaving() ? 'Saving…' : 'Save'}
+                                                                            </button>
+                                                                        </div>
+                                                                        <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                                                                            Optional override used when Pulse links to this host (leave blank to use the default).
+                                                                        </p>
                                                                     </div>
                                                                 </Show>
                                                                 <Show when={row.status === 'active' && row.lastSeen}>

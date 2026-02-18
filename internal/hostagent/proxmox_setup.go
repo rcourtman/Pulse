@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -169,7 +170,7 @@ func (p *ProxmoxSetup) Run(ctx context.Context) (*ProxmoxSetupResult, error) {
 	// Register with Pulse
 	registered := false
 	if err := p.registerWithPulse(ctx, ptype, hostURL, tokenID, tokenValue); err != nil {
-		p.logger.Warn().Err(err).Msg("Failed to register with Pulse (node may already exist)")
+		p.logger.Warn().Err(err).Msg("Failed to register Proxmox node with Pulse; if the node does not appear, delete /var/lib/pulse-agent/proxmox-pve-registered (or proxmox-pbs-registered) to force re-registration")
 	} else {
 		registered = true
 		p.markAsRegistered()
@@ -252,7 +253,7 @@ func (p *ProxmoxSetup) runForType(ctx context.Context, ptype string) (*ProxmoxSe
 	// Register with Pulse
 	registered := false
 	if err := p.registerWithPulse(ctx, ptype, hostURL, tokenID, tokenValue); err != nil {
-		p.logger.Warn().Err(err).Str("type", ptype).Msg("Failed to register with Pulse (node may already exist)")
+		p.logger.Warn().Err(err).Str("type", ptype).Msg("Failed to register Proxmox node with Pulse; if the node does not appear, delete /var/lib/pulse-agent/proxmox-pve-registered (or proxmox-pbs-registered) to force re-registration")
 	} else {
 		registered = true
 		p.markTypeAsRegistered(ptype)
@@ -670,7 +671,8 @@ func (p *ProxmoxSetup) registerWithPulse(ctx context.Context, ptype, hostURL, to
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
-		return fmt.Errorf("auto-register returned %d", resp.StatusCode)
+		bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return fmt.Errorf("auto-register returned HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(bodyBytes)))
 	}
 
 	return nil

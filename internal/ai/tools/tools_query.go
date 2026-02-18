@@ -2152,6 +2152,27 @@ func (e *PulseToolExecutor) executeListInfrastructure(_ context.Context, args ma
 			connectedAgentHostnames[agent.Hostname] = true
 		}
 	}
+	// Also mark Docker hosts reachable if they are VMs/containers whose Proxmox
+	// node has a connected agent (mirrors resolveDockerHostRoutingFull routing).
+	for _, host := range state.DockerHosts {
+		if connectedAgentHostnames[host.Hostname] {
+			continue // already marked reachable
+		}
+		for _, vm := range state.VMs {
+			if vm.Name == host.Hostname && connectedAgentHostnames[vm.Node] {
+				connectedAgentHostnames[host.Hostname] = true
+				break
+			}
+		}
+		if !connectedAgentHostnames[host.Hostname] {
+			for _, ct := range state.Containers {
+				if ct.Name == host.Hostname && connectedAgentHostnames[ct.Node] {
+					connectedAgentHostnames[host.Hostname] = true
+					break
+				}
+			}
+		}
+	}
 
 	response := InfrastructureResponse{
 		Total: TotalCounts{
@@ -2362,6 +2383,27 @@ func (e *PulseToolExecutor) executeGetTopology(_ context.Context, args map[strin
 	if e.agentServer != nil {
 		for _, agent := range e.agentServer.GetConnectedAgents() {
 			connectedAgentHostnames[agent.Hostname] = true
+		}
+	}
+	// Also mark Docker hosts reachable if they are VMs/containers whose Proxmox
+	// node has a connected agent (mirrors resolveDockerHostRoutingFull routing).
+	for _, host := range state.DockerHosts {
+		if connectedAgentHostnames[host.Hostname] {
+			continue // already marked reachable
+		}
+		for _, vm := range state.VMs {
+			if vm.Name == host.Hostname && connectedAgentHostnames[vm.Node] {
+				connectedAgentHostnames[host.Hostname] = true
+				break
+			}
+		}
+		if !connectedAgentHostnames[host.Hostname] {
+			for _, ct := range state.Containers {
+				if ct.Name == host.Hostname && connectedAgentHostnames[ct.Node] {
+					connectedAgentHostnames[host.Hostname] = true
+					break
+				}
+			}
 		}
 	}
 
