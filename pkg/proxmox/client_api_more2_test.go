@@ -30,6 +30,14 @@ func TestClientNodeStatusAndRRD(t *testing.T) {
 			writeJSON(t, w, map[string]interface{}{
 				"data": []GuestRRDPoint{{Time: 456}},
 			})
+		case "/api2/json/nodes/node1/qemu/101/rrddata":
+			if !strings.Contains(r.URL.RawQuery, "ds=memavailable") {
+				http.Error(w, "bad query", http.StatusBadRequest)
+				return
+			}
+			writeJSON(t, w, map[string]interface{}{
+				"data": []GuestRRDPoint{{Time: 789}},
+			})
 		case "/api2/json/nodes/node1/disks/list":
 			writeJSON(t, w, map[string]interface{}{
 				"data": []Disk{{DevPath: "/dev/sda", Model: "Disk"}},
@@ -62,6 +70,14 @@ func TestClientNodeStatusAndRRD(t *testing.T) {
 	}
 	if len(guestRRD) != 1 || guestRRD[0].Time != 456 {
 		t.Fatalf("unexpected guest rrd: %+v", guestRRD)
+	}
+
+	vmRRD, err := client.GetVMRRDData(ctx, "node1", 101, "", "", []string{"memavailable"})
+	if err != nil {
+		t.Fatalf("GetVMRRDData error: %v", err)
+	}
+	if len(vmRRD) != 1 || vmRRD[0].Time != 789 {
+		t.Fatalf("unexpected vm rrd: %+v", vmRRD)
 	}
 
 	disks, err := client.GetDisks(ctx, "node1")

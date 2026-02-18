@@ -759,6 +759,44 @@ func (c *Client) GetLXCRRDData(ctx context.Context, node string, vmid int, timef
 	return result.Data, nil
 }
 
+// GetVMRRDData retrieves RRD metrics for a QEMU VM.
+func (c *Client) GetVMRRDData(ctx context.Context, node string, vmid int, timeframe, cf string, ds []string) ([]GuestRRDPoint, error) {
+	if timeframe == "" {
+		timeframe = "hour"
+	}
+	if cf == "" {
+		cf = "AVERAGE"
+	}
+
+	params := url.Values{}
+	params.Set("timeframe", timeframe)
+	params.Set("cf", cf)
+	if len(ds) > 0 {
+		params.Set("ds", strings.Join(ds, ","))
+	}
+
+	path := fmt.Sprintf("/nodes/%s/qemu/%d/rrddata", url.PathEscape(node), vmid)
+	if query := params.Encode(); query != "" {
+		path = fmt.Sprintf("%s?%s", path, query)
+	}
+
+	resp, err := c.get(ctx, path)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Data []GuestRRDPoint `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return result.Data, nil
+}
+
 // VM represents a Proxmox VE virtual machine
 type VM struct {
 	VMID      int     `json:"vmid"`

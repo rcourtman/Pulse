@@ -299,6 +299,10 @@ func (m *mockPVEClientExtra) GetLXCRRDData(ctx context.Context, node string, vmi
 	return nil, nil
 }
 
+func (m *mockPVEClientExtra) GetVMRRDData(ctx context.Context, node string, vmid int, timeframe string, cf string, ds []string) ([]proxmox.GuestRRDPoint, error) {
+	return nil, nil
+}
+
 func (m *mockPVEClientExtra) GetNodeStatus(ctx context.Context, node string) (*proxmox.NodeStatus, error) {
 	return &proxmox.NodeStatus{CPU: 0.1}, nil
 }

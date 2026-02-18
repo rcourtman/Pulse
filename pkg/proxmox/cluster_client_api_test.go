@@ -188,6 +188,29 @@ func TestClusterClient_GetLXCRRDData(t *testing.T) {
 	}
 }
 
+func TestClusterClient_GetVMRRDData(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/api2/json/nodes" {
+			fmt.Fprint(w, `{"data":[{"node":"node1","status":"online"}]}`)
+			return
+		}
+		fmt.Fprint(w, `{"data":[{"time":12345678,"cpu":0.5}]}`)
+	}))
+	defer server.Close()
+
+	cfg := ClientConfig{Host: server.URL, TokenName: "u@p!t", TokenValue: "v"}
+	cc := NewClusterClient("test", cfg, []string{server.URL}, nil)
+
+	data, err := cc.GetVMRRDData(context.Background(), "node1", 100, "hour", "AVERAGE", []string{"cpu"})
+	if err != nil {
+		t.Fatalf("GetVMRRDData failed: %v", err)
+	}
+	if len(data) != 1 {
+		t.Errorf("expected 1 data point, got %d", len(data))
+	}
+}
+
 func TestClusterClient_GetVMs(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

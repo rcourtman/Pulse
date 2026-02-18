@@ -383,6 +383,12 @@ func (noopPVEClient) GetNodeStatus(ctx context.Context, node string) (*proxmox.N
 func (noopPVEClient) GetNodeRRDData(ctx context.Context, node string, timeframe string, cf string, ds []string) ([]proxmox.NodeRRDPoint, error) {
 	return nil, nil
 }
+func (noopPVEClient) GetLXCRRDData(ctx context.Context, node string, vmid int, timeframe string, cf string, ds []string) ([]proxmox.GuestRRDPoint, error) {
+	return nil, nil
+}
+func (noopPVEClient) GetVMRRDData(ctx context.Context, node string, vmid int, timeframe string, cf string, ds []string) ([]proxmox.GuestRRDPoint, error) {
+	return nil, nil
+}
 func (noopPVEClient) GetVMs(ctx context.Context, node string) ([]proxmox.VM, error) { return nil, nil }
 func (noopPVEClient) GetContainers(ctx context.Context, node string) ([]proxmox.Container, error) {
 	return nil, nil

@@ -3,6 +3,7 @@ package hostmetrics
 import (
 	"context"
 	"fmt"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -66,6 +67,36 @@ func Collect(ctx context.Context, diskExclude []string) (Snapshot, error) {
 		return Snapshot{}, fmt.Errorf("memory stats: %w", err)
 	}
 
+	usedBytes := memStats.Used
+	freeBytes := memStats.Free
+	usedPercent := memStats.UsedPercent
+
+	if runtime.GOOS == "freebsd" {
+		// ZFS ARC is counted as "wired" by FreeBSD but is reclaimable under pressure.
+		// Subtract it from Used to match actual memory pressure (same as how Linux
+		// classifies ZFS ARC as SReclaimable in /proc/meminfo). Refs: #1264/#1051
+		if arcSize, err := readFreeBSDARCSize(); err == nil && arcSize > 0 {
+			if arcSize < usedBytes {
+				usedBytes -= arcSize
+			} else {
+				usedBytes = 0
+			}
+			if memStats.Total > 0 {
+				usedPercent = float64(usedBytes) / float64(memStats.Total) * 100.0
+				if usedPercent < 0 {
+					usedPercent = 0
+				}
+				if usedPercent > 100 {
+					usedPercent = 100
+				}
+			}
+			if memStats.Total >= usedBytes {
+				// Keep invariants sensible for the UI (Total ~= Used+Free).
+				freeBytes = memStats.Total - usedBytes
+			}
+		}
+	}
+
 	swapUsed := int64(0)
 	if memStats.SwapTotal > memStats.SwapFree {
 		swapUsed = int64(memStats.SwapTotal - memStats.SwapFree)
@@ -73,9 +104,9 @@ func Collect(ctx context.Context, diskExclude []string) (Snapshot, error) {
 
 	snapshot.Memory = agentshost.MemoryMetric{
 		TotalBytes: int64(memStats.Total),
-		UsedBytes:  int64(memStats.Used),
-		FreeBytes:  int64(memStats.Free),
-		Usage:      memStats.UsedPercent,
+		UsedBytes:  int64(usedBytes),
+		FreeBytes:  int64(freeBytes),
+		Usage:      usedPercent,
 		SwapTotal:  int64(memStats.SwapTotal),
 		SwapUsed:   swapUsed,
 	}

@@ -61,6 +61,7 @@ type PVEClientInterface interface {
 	GetNodeStatus(ctx context.Context, node string) (*proxmox.NodeStatus, error)
 	GetNodeRRDData(ctx context.Context, node string, timeframe string, cf string, ds []string) ([]proxmox.NodeRRDPoint, error)
 	GetLXCRRDData(ctx context.Context, node string, vmid int, timeframe string, cf string, ds []string) ([]proxmox.GuestRRDPoint, error)
+	GetVMRRDData(ctx context.Context, node string, vmid int, timeframe string, cf string, ds []string) ([]proxmox.GuestRRDPoint, error)
 	GetVMs(ctx context.Context, node string) ([]proxmox.VM, error)
 	GetContainers(ctx context.Context, node string) ([]proxmox.Container, error)
 	GetStorage(ctx context.Context, node string) ([]proxmox.Storage, error)
@@ -6760,6 +6761,38 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 					// Refs: #1070
 					if detailedStatus.MaxMem > 0 {
 						memTotal = detailedStatus.MaxMem
+					}
+
+					// Fallback for Linux VMs when the guest agent doesn't provide MemInfo.Available:
+					// try Proxmox RRD's memavailable (cache-aware) before falling back to status.Mem
+					// which can include reclaimable page cache (inflating usage). Refs: #1270
+					if memAvailable == 0 {
+						rrdCtx, rrdCancel := context.WithTimeout(ctx, 5*time.Second)
+						rrdPoints, rrdErr := client.GetVMRRDData(rrdCtx, res.Node, res.VMID, "hour", "AVERAGE", []string{"memavailable"})
+						rrdCancel()
+
+						if rrdErr == nil && len(rrdPoints) > 0 {
+							point := rrdPoints[len(rrdPoints)-1]
+							if point.MemAvailable != nil && *point.MemAvailable > 0 {
+								memAvailable = uint64(*point.MemAvailable)
+								memorySource = "rrd-memavailable"
+								guestRaw.MemInfoAvailable = memAvailable
+								log.Debug().
+									Str("vm", res.Name).
+									Str("node", res.Node).
+									Int("vmid", res.VMID).
+									Uint64("total", memTotal).
+									Uint64("available", memAvailable).
+									Msg("QEMU memory: using RRD memavailable fallback (excludes reclaimable cache)")
+							}
+						} else if rrdErr != nil {
+							log.Debug().
+								Err(rrdErr).
+								Str("instance", instanceName).
+								Str("vm", res.Name).
+								Int("vmid", res.VMID).
+								Msg("RRD memory data unavailable for VM, using status/cluster resources values")
+						}
 					}
 
 					switch {

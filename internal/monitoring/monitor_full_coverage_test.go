@@ -618,6 +618,10 @@ func (m *mockPVEClientExtended) GetLXCRRDData(ctx context.Context, node string, 
 	return nil, nil
 }
 
+func (m *mockPVEClientExtended) GetVMRRDData(ctx context.Context, node string, vmid int, timeframe string, cf string, ds []string) ([]proxmox.GuestRRDPoint, error) {
+	return nil, nil
+}
+
 func (m *mockPVEClientExtended) GetVMs(ctx context.Context, node string) ([]proxmox.VM, error) {
 	return nil, nil
 }
