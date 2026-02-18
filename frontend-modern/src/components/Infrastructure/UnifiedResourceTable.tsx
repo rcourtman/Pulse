@@ -354,7 +354,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
   );
   const ioColumnStyle = createMemo(() =>
     isMobile()
-      ? { width: '110px', 'min-width': '110px', 'max-width': '130px' }
+      ? { width: '180px', 'min-width': '180px' }
       : { width: '160px', 'min-width': '160px', 'max-width': '180px' }
   );
   const sourceColumnStyle = createMemo(() =>
@@ -414,7 +414,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
 	        class="overflow-x-auto"
 	        style={{ '-webkit-overflow-scrolling': 'touch' }}
 	      >
-	        <table class="w-full border-collapse whitespace-nowrap" style={{ 'table-layout': 'fixed', 'min-width': isMobile() ? '820px' : '600px' }}>
+	        <table class="w-full border-collapse whitespace-nowrap" style={{ 'table-layout': 'fixed', 'min-width': isMobile() ? '960px' : '600px' }}>
 	          <thead>
 	            <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
 	              <th class={`${thClassBase} text-left pl-2 sm:pl-3`} style={resourceColumnStyle()} onClick={() => handleSort('name')}>

@@ -164,7 +164,7 @@
 
   @media (max-width: 640px) {
     .pulse-panel {
-      padding: clamp(0.75rem, 5vw, 1.25rem);
+      padding: 0.5rem;
     }
   }
 
