@@ -3359,9 +3359,13 @@ func monitorPlatformData(resource unifiedresources.Resource, resourceType string
 			}
 		}
 	case "storage", "pool":
+		nodeLabel := resource.ParentName
+		if nodeLabel == "" {
+			nodeLabel = monitorStringValue(resource.ParentID)
+		}
 		payload = map[string]interface{}{
 			"instance": platformID,
-			"node":     monitorStringValue(resource.ParentID),
+			"node":     nodeLabel,
 			"type":     "",
 			"content":  "",
 			"shared":   false,

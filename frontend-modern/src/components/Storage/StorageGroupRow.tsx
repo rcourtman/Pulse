@@ -42,7 +42,7 @@ export const StorageGroupRow: Component<StorageGroupRowProps> = (props) => {
           </svg>
 
           {/* Group label */}
-          <span class="text-[11px] font-semibold text-gray-800 dark:text-gray-200 min-w-0 truncate max-w-[200px]">
+          <span class="text-[11px] font-semibold text-gray-800 dark:text-gray-200 w-[140px] flex-shrink-0 truncate">
             {props.group.key}
           </span>
 
