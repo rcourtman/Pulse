@@ -8944,7 +8944,7 @@ func (m *Monitor) handleAlertResolved(alertID string) {
 		}
 	}
 
-	// Handle notifications (may be suppressed by quiet hours)
+	// Handle notifications
 	if m.notificationMgr != nil {
 		m.notificationMgr.CancelAlert(alertID)
 		if m.notificationMgr.GetNotifyOnResolve() {
@@ -8952,10 +8952,6 @@ func (m *Monitor) handleAlertResolved(alertID string) {
 				resolvedAlert = m.alertManager.GetResolvedAlert(alertID)
 			}
 			if resolvedAlert != nil {
-				// Check if recovery notification should be suppressed during quiet hours
-				if m.alertManager.ShouldSuppressResolvedNotification(resolvedAlert.Alert) {
-					return
-				}
 				go m.notificationMgr.SendResolvedAlert(resolvedAlert)
 			}
 		}
