@@ -66,6 +66,18 @@ export default defineConfig({
         ...devices['Desktop Chrome'],
       },
     },
+    {
+      name: 'mobile-chrome',
+      use: {
+        ...devices['Pixel 5'],
+      },
+    },
+    {
+      name: 'mobile-safari',
+      use: {
+        ...devices['iPhone 12'],
+      },
+    },
 
     // Uncomment to test on Firefox and WebKit
     // {
