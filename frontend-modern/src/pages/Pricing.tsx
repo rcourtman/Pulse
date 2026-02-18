@@ -209,10 +209,10 @@ export default function Pricing() {
 
           <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Pro</h2>
           <div class="mt-2 text-3xl font-semibold tracking-tight text-gray-900 dark:text-gray-100">
-            $29/month
+            $15/month
           </div>
           <div class="mt-1 text-sm text-gray-600 dark:text-gray-300">
-            Founding member price: $19/mo
+            or $129/year (save 28%)
           </div>
 
           <ul class="mt-4 space-y-2 text-sm text-gray-700 dark:text-gray-200">
@@ -237,7 +237,10 @@ export default function Pricing() {
         <Card padding="lg" class="relative">
           <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Cloud</h2>
           <div class="mt-2 text-3xl font-semibold tracking-tight text-gray-900 dark:text-gray-100">
-            Coming Soon
+            $29/month
+          </div>
+          <div class="mt-1 text-sm text-gray-600 dark:text-gray-300">
+            Founding price: $19/mo for first 100 signups
           </div>
           <ul class="mt-4 space-y-2 text-sm text-gray-700 dark:text-gray-200">
             <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>Everything in Pro</span></li>
@@ -252,7 +255,7 @@ export default function Pricing() {
               target="_blank"
               rel="noopener noreferrer"
             >
-              Contact Us
+              Coming Soon
             </a>
           </div>
         </Card>
