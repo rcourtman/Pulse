@@ -18,6 +18,7 @@ import { buildInfrastructureHrefForWorkload } from './infrastructureLink';
 import type { ColumnDef } from '@/hooks/useColumnVisibility';
 import { EnhancedCPUBar } from '@/components/Dashboard/EnhancedCPUBar';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
+import { UpdateButton } from '@/components/shared/ContainerUpdateBadge';
 
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { useAnomalyForMetric } from '@/hooks/useAnomalies';
@@ -437,6 +438,7 @@ export const GUEST_COLUMNS: ColumnDef[] = [
   { id: 'context', label: 'Context', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 6h.01M4 6a8 8 0 018-4 8 8 0 018 4M4 18a8 8 0 008 4 8 8 0 008-4" /></svg>, width: '120px', minWidth: '100px', toggleable: true, sortKey: 'contextLabel' },
   { id: 'backup', label: 'Backup', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>, width: '50px', toggleable: true },
   { id: 'tags', label: 'Tags', icon: <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" /></svg>, width: '60px', toggleable: true },
+  { id: 'update', label: 'Update', width: '60px', toggleable: true },
   { id: 'os', label: 'OS', width: '45px', toggleable: true },
   { id: 'netIo', label: 'Net I/O', width: '130px', minWidth: '120px', toggleable: true, sortKey: 'netIo' },
   { id: 'diskIo', label: 'Disk I/O', width: '130px', minWidth: '120px', toggleable: true, sortKey: 'diskIo' },
@@ -454,7 +456,7 @@ export const VIEW_MODE_COLUMNS: Record<ViewMode, Set<string> | null> = {
   all:    new Set(['name','type','info','cpu','memory','disk','ip','uptime','node','backup','tags','os','diskIo','netIo','link']),
   vm:     new Set(['name','vmid','cpu','memory','disk','ip','uptime','node','backup','tags','os','diskIo','netIo','link']),
   lxc:    new Set(['name','vmid','cpu','memory','disk','ip','uptime','node','backup','tags','os','diskIo','netIo','link']),
-  docker: new Set(['name','cpu','memory','uptime','image','context','tags','link']),
+  docker: new Set(['name','cpu','memory','uptime','image','context','tags','update','link']),
   k8s:    new Set(['name','cpu','memory','image','namespace','context','link']),
 };
 
@@ -586,6 +588,27 @@ export function GuestRow(props: GuestRowProps) {
       return getWorkloadTypeBadge('oci', {
         title: `OCI Container${ociImage() ? ` • ${ociImage()}` : ''}`,
       });
+    }
+    if (workloadType() === 'docker') {
+      const runtime = (props.guest.containerRuntime || '').trim();
+      const normalized = runtime.toLowerCase();
+      const label =
+        normalized === 'podman'
+          ? 'Podman'
+          : normalized === 'docker'
+            ? 'Docker'
+            : runtime
+              ? runtime
+              : 'Containers';
+      const title =
+        normalized === 'podman'
+          ? 'Podman Container'
+          : normalized === 'docker'
+            ? 'Docker Container'
+            : runtime
+              ? `${runtime} Container`
+              : 'Container (Docker-compatible runtime)';
+      return getWorkloadTypeBadge('docker', { label, title });
     }
     return getWorkloadTypeBadge(workloadType());
   });
@@ -1094,6 +1117,23 @@ export function GuestRow(props: GuestRowProps) {
 		            </Show>
 		          </td>
 		        </Show>
+
+        {/* Update (Docker only) */}
+        <Show when={isColVisible('update')}>
+          <td class="px-2 py-1 align-middle">
+            <div class="flex justify-center">
+              <Show when={props.guest.type === 'docker'}>
+                <UpdateButton
+                  updateStatus={props.guest.updateStatus}
+                  hostId={props.guest.dockerHostId ?? ''}
+                  containerId={props.guest.id ?? ''}
+                  containerName={props.guest.name}
+                  compact={true}
+                />
+              </Show>
+            </div>
+          </td>
+        </Show>
 
         {/* Link Column - at the end like NodeSummaryTable */}
         <Show when={isColVisible('link')}>

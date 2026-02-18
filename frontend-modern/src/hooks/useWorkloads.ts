@@ -88,6 +88,11 @@ type APIResource = {
     imageName?: string;
     imageRef?: string;
     uptimeSeconds?: number;
+    runtime?: string;
+    runtimeVersion?: string;
+    dockerVersion?: string;
+    hostSourceId?: string;
+    updateStatus?: WorkloadGuest['updateStatus'];
   };
   kubernetes?: {
     clusterId?: string;
@@ -418,6 +423,12 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
         : workloadType === 'k8s'
           ? resource.kubernetes?.clusterName || resource.kubernetes?.context
           : undefined,
+    containerRuntime:
+      workloadType === 'docker'
+        ? (resource.docker?.runtime || '').trim() || undefined
+        : undefined,
+    updateStatus: resource.docker?.updateStatus as WorkloadGuest['updateStatus'] | undefined,
+    dockerHostId: resource.docker?.hostSourceId,
     platformType: resolvePlatformType(resource.sources),
   };
 };

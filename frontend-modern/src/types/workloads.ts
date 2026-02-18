@@ -1,4 +1,4 @@
-import type { VM, Container } from './api';
+import type { VM, Container, DockerContainerUpdateStatus } from './api';
 
 export type WorkloadType = 'vm' | 'lxc' | 'docker' | 'k8s';
 export type ViewMode = 'all' | 'vm' | 'lxc' | 'docker' | 'k8s';
@@ -10,4 +10,9 @@ export type WorkloadGuest = (VM | Container) & {
   namespace?: string;
   contextLabel?: string;
   platformType?: string;
+  // For "docker" workloads, this is the underlying runtime ("docker", "podman", etc.)
+  containerRuntime?: string;
+  updateStatus?: DockerContainerUpdateStatus;
+  // Docker host ID — needed for update button (= resource.docker.hostSourceId)
+  dockerHostId?: string;
 };
