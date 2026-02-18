@@ -453,9 +453,9 @@ export function Infrastructure() {
 
                   <Show when={!isMobile() || filtersOpen()}>
                     <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400 lg:flex-nowrap">
-                      <div class="flex items-center gap-2">
-                        <span class="uppercase tracking-wide text-[9px] text-gray-400 dark:text-gray-500">Source</span>
-                        <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                      <div class="flex items-center gap-2 max-w-full overflow-x-auto scrollbar-hide">
+                        <span class="flex-shrink-0 uppercase tracking-wide text-[9px] text-gray-400 dark:text-gray-500">Source</span>
+                        <div class="flex-shrink-0 inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
                           <For each={sourceOptions}>
                             {(source) => {
                               const isSelected = () => selectedSources().has(source.key);
@@ -477,9 +477,9 @@ export function Infrastructure() {
                         </div>
                       </div>
 
-                      <div class="flex items-center gap-2">
-                        <span class="uppercase tracking-wide text-[9px] text-gray-400 dark:text-gray-500">Status</span>
-                        <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                      <div class="flex items-center gap-2 max-w-full overflow-x-auto scrollbar-hide">
+                        <span class="flex-shrink-0 uppercase tracking-wide text-[9px] text-gray-400 dark:text-gray-500">Status</span>
+                        <div class="flex-shrink-0 inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
                           <For each={statusOptions()}>
                             {(status) => {
                               const isSelected = () => selectedStatuses().has(status.key);

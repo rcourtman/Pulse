@@ -113,6 +113,7 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
 
           {/* Group By Filter */}
           <Show when={props.groupBy && props.setGroupBy}>
+            <div class="max-w-full overflow-x-auto scrollbar-hide">
             <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5" role="group" aria-label="Group By">
               <button
                 type="button"
@@ -148,11 +149,13 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
                 By Status
               </button>
             </div>
+            </div>
             <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
           </Show>
 
           {/* Source Filter */}
           <Show when={props.sourceFilter && props.setSourceFilter}>
+            <div class="max-w-full overflow-x-auto scrollbar-hide">
             <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5" role="group" aria-label="Source">
               {sourceOptions().map((option) => {
                 const active = () => props.sourceFilter!() === option.key;
@@ -171,10 +174,12 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
                 );
               })}
             </div>
+            </div>
             <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
           </Show>
 
           {/* Status Filter */}
+          <div class="max-w-full overflow-x-auto scrollbar-hide">
           <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5" role="group" aria-label="Health">
             <button
               type="button"
@@ -242,6 +247,7 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
             >
               Unknown
             </button>
+          </div>
           </div>
 
           <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
