@@ -276,6 +276,58 @@ describe('InteractiveSparkline hover behavior', () => {
     expect(paths.length).toBe(1);
   });
 
+  it('renders tiered-density data (sparse + medium + dense) as a single continuous line', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2024-01-08T00:00:00Z'));
+    const now = Date.now();
+
+    // Simulate tiered mock data: sparse (~65min), medium (~2min), dense (~1min)
+    const data: { timestamp: number; value: number }[] = [];
+    // Sparse tier: 7d–24h ago, ~65min intervals (~133 points)
+    for (let i = 0; i < 133; i++) {
+      data.push({
+        timestamp: now - 7 * 24 * 60 * 60_000 + i * 65 * 60_000,
+        value: 30 + Math.sin(i * 0.1) * 10,
+      });
+    }
+    // Medium tier: 24h–2h ago, ~2min intervals (~660 points)
+    const mediumStart = now - 24 * 60 * 60_000;
+    for (let i = 0; i < 660; i++) {
+      data.push({
+        timestamp: mediumStart + i * 2 * 60_000,
+        value: 35 + Math.sin(i * 0.05) * 8,
+      });
+    }
+    // Dense tier: last 2h, ~1min intervals (~120 points)
+    const denseStart = now - 2 * 60 * 60_000;
+    for (let i = 0; i < 120; i++) {
+      data.push({
+        timestamp: denseStart + i * 60_000,
+        value: 40 + Math.sin(i * 0.2) * 5,
+      });
+    }
+
+    const { container } = render(() => (
+      <InteractiveSparkline
+        timeRange="7d"
+        series={[
+          {
+            name: 'CPU',
+            color: '#ff0000',
+            data,
+          },
+        ]}
+      />
+    ));
+
+    await Promise.resolve();
+
+    // After LTTB downsampling + P90 gap detection, tiered data should render
+    // as a single continuous segment, not fragmented by tier transitions.
+    const paths = container.querySelectorAll('path[vector-effect="non-scaling-stroke"]');
+    expect(paths.length).toBe(1);
+  });
+
   it('can bridge the leading window-start gap when requested', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2024-01-02T00:00:00Z'));

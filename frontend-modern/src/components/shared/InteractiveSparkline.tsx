@@ -136,10 +136,11 @@ const inferGapThresholdMs = (points: MetricPoint[], rangeMs: number): number => 
   if (deltas.length < 2) return rangeMs + 1;
 
   deltas.sort((a, b) => a - b);
-  const medianDelta = deltas[Math.floor(deltas.length / 2)];
-  const minThreshold = Math.max(15_000, Math.floor(rangeMs / 240));
+  // P90 captures upper normal variation; 3x multiplier only breaks on genuine outages.
+  const p90Delta = deltas[Math.floor(deltas.length * 0.9)];
+  const minThreshold = Math.max(15_000, Math.floor(rangeMs / 120));
   const maxThreshold = Math.max(minThreshold, Math.floor(rangeMs / 2));
-  return clamp(medianDelta * 8, minThreshold, maxThreshold);
+  return clamp(p90Delta * 3, minThreshold, maxThreshold);
 };
 
 interface HoverSeriesValue {
@@ -229,8 +230,8 @@ export const InteractiveSparkline: Component<InteractiveSparklineProps> = (props
         if (inWindow.length < 2) return null;
         const renderable = ensureRenderablePoints(inWindow, windowStart);
         if (renderable.length === 0) return null;
-        // Preserve full-fidelity line shape in normal SVG mode. Only downsample in heavy canvas mode.
-        const drawData = useCanvas && renderable.length > targetPoints * 1.5
+        // Downsample to target resolution — LTTB preserves visual shape (peaks, valleys, trends).
+        const drawData = renderable.length > targetPoints * 1.5
           ? downsampleLTTB(renderable, targetPoints)
           : renderable;
         const segments = splitPointsOnGaps(
