@@ -171,6 +171,22 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monit
 		checksumCache:   make(map[string]checksumCacheEntry),
 	}
 
+	// Load SSO configuration at startup so SSO providers survive restarts.
+	// Note: LoadSSOConfig returns nil when no config exists yet (including first run).
+	if r.persistence != nil {
+		loadedSSO, err := r.persistence.LoadSSOConfig()
+		if err != nil {
+			log.Warn().Err(err).Msg("Failed to load SSO configuration; using empty config")
+			r.ssoConfig = config.NewSSOConfig()
+		} else if loadedSSO == nil {
+			r.ssoConfig = config.NewSSOConfig()
+		} else {
+			r.ssoConfig = loadedSSO
+		}
+	} else {
+		r.ssoConfig = config.NewSSOConfig()
+	}
+
 	// Sync the configured admin user to the authorizer (if supported)
 	if cfg.AuthUser != "" {
 		auth.SetAdminUser(cfg.AuthUser)
@@ -789,6 +805,35 @@ func (r *Router) setupRoutes() {
 					status["oidcEnvOverrides"] = oidcCfg.EnvOverrides
 				}
 			}
+
+			// Include enabled SSO providers so the login page can display SAML/OIDC buttons.
+			ssoProviders := make([]map[string]string, 0)
+			if r.ssoConfig != nil {
+				for _, p := range r.ssoConfig.GetEnabledProviders() {
+					loginURL := ""
+					switch p.Type {
+					case config.SSOProviderTypeSAML:
+						loginURL = "/api/saml/" + p.ID + "/login"
+					case config.SSOProviderTypeOIDC:
+						// Legacy OIDC login endpoint (single-provider).
+						loginURL = "/api/oidc/login"
+					default:
+						continue
+					}
+
+					name := strings.TrimSpace(p.DisplayName)
+					if name == "" {
+						name = strings.TrimSpace(p.Name)
+					}
+					ssoProviders = append(ssoProviders, map[string]string{
+						"id":       p.ID,
+						"name":     name,
+						"type":     string(p.Type),
+						"loginUrl": loginURL,
+					})
+				}
+			}
+			status["ssoProviders"] = ssoProviders
 
 			// Add bootstrap token location for first-run setup UI
 			if r.bootstrapTokenHash != "" {
