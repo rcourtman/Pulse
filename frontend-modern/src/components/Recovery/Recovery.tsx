@@ -21,6 +21,7 @@ import { buildRecoveryPath, parseRecoveryLinkSearch } from '@/routing/resourceLi
 import type { ProtectionRollup, RecoveryPoint } from '@/types/recovery';
 import type { Resource } from '@/types/resource';
 import { RecoveryPointDetails } from '@/components/Recovery/RecoveryPointDetails';
+import { ProtectionHero } from './ProtectionHero';
 import type { ColumnDef } from '@/hooks/useColumnVisibility';
 import ListFilterIcon from 'lucide-solid/icons/list-filter';
 import { segmentedButtonClass } from '@/utils/segmentedButton';
@@ -871,6 +872,10 @@ const Recovery: Component = () => {
   return (
     <div data-testid="recovery-page" class="flex flex-col gap-4">
       <Show when={view() === 'protected'}>
+        <Show when={rollupsSummary().total > 0}>
+          <ProtectionHero summary={rollupsSummary()} />
+        </Show>
+
         <Show when={!kioskMode()}>
           <Card padding="sm">
             <div class="flex flex-col gap-2">
