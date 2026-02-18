@@ -1,6 +1,9 @@
 import { createSignal, createEffect, onCleanup } from 'solid-js';
 import { ChartsAPI, type MetricPoint } from '@/api/charts';
 
+/** Module-level cache so remounted components immediately show previous data. */
+const sparklineCache = new Map<string, MetricPoint[]>();
+
 /**
  * Lazily fetch storage usage sparkline data for a pool.
  * Only fetches when `enabled` is true (i.e., the pool's group is expanded and visible).
@@ -10,7 +13,7 @@ export function useStorageSparkline(
   resourceId: () => string,
   enabled: () => boolean,
 ) {
-  const [data, setData] = createSignal<MetricPoint[]>([]);
+  const [data, setData] = createSignal<MetricPoint[]>(sparklineCache.get(resourceId()) ?? []);
   const [loading, setLoading] = createSignal(false);
 
   let timer: ReturnType<typeof setInterval> | undefined;
@@ -30,7 +33,9 @@ export function useStorageSparkline(
       });
 
       if ('points' in response && response.points) {
-        setData(response.points.map((p) => ({ timestamp: p.timestamp, value: p.value })));
+        const points = response.points.map((p) => ({ timestamp: p.timestamp, value: p.value }));
+        sparklineCache.set(id, points);
+        setData(points);
       }
     } catch {
       // Silently fail — sparkline just won't show data

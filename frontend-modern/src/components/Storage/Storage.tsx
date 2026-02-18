@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from '@solidjs/router';
-import { Component, For, Show, createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
+import { Component, For, Index, Show, createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
 import { useWebSocket } from '@/App';
 import { useResources } from '@/hooks/useResources';
 import { Card } from '@/components/shared/Card';
@@ -567,24 +567,32 @@ const Storage: Component = () => {
                       </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                      <For each={groupedRecords()}>
-                        {(group) => (
+                      {/* Outer <For> uses string keys — strings compare by value so DOM is stable across data updates */}
+                      <For each={groupedRecords().map((g) => g.key)}>
+                        {(groupKey) => {
+                          const group = createMemo(() =>
+                            groupedRecords().find((g) => g.key === groupKey)!,
+                          );
+                          const groupItems = createMemo(() => group().items);
+                          return (
                           <>
                             <StorageGroupRow
-                              group={group}
+                              group={group()}
                               groupBy={groupBy()}
-                              expanded={expandedGroups().has(group.key)}
-                              onToggle={() => toggleGroup(group.key)}
+                              expanded={expandedGroups().has(groupKey)}
+                              onToggle={() => toggleGroup(groupKey)}
                             />
-                            <Show when={expandedGroups().has(group.key)}>
-                            <For each={group.items}>
+                            <Show when={expandedGroups().has(groupKey)}>
+                            {/* Inner <Index> tracks by position — updates props reactively instead of recreating DOM */}
+                            <Index each={groupItems()}>
                               {(record) => {
-                                const isExpanded = () => expandedPoolId() === record.id;
-                                const alertState = createMemo(() => getRecordAlertState(record.id));
-                                const nodeLabel = getRecordNodeLabel(record).trim().toLowerCase();
+                                const isExpanded = () => expandedPoolId() === record().id;
+                                const alertState = createMemo(() => getRecordAlertState(record().id));
+                                const nodeLabel = createMemo(() => getRecordNodeLabel(record()).trim().toLowerCase());
                                 const parentNodeOnline = createMemo(() => {
-                                  if (!nodeLabel) return true;
-                                  const nodeStatus = nodeOnlineByLabel().get(nodeLabel);
+                                  const label = nodeLabel();
+                                  if (!label) return true;
+                                  const nodeStatus = nodeOnlineByLabel().get(label);
                                   return nodeStatus === undefined ? true : nodeStatus;
                                 });
                                 const showAlertHighlight = createMemo(
@@ -593,7 +601,7 @@ const Storage: Component = () => {
                                 const hasAcknowledgedOnlyAlert = createMemo(
                                   () => alertState().hasAcknowledgedOnlyAlert && parentNodeOnline(),
                                 );
-                                const isResourceHighlighted = () => highlightedRecordId() === record.id;
+                                const isResourceHighlighted = () => highlightedRecordId() === record().id;
                                 const rowClass = createMemo(() => {
                                   const classes = [
                                     'transition-all duration-200',
@@ -637,20 +645,20 @@ const Storage: Component = () => {
 
                                 return (
                                   <StoragePoolRow
-                                    record={record}
+                                    record={record()}
                                     groupBy={groupBy()}
                                     expanded={isExpanded()}
-                                    groupExpanded={expandedGroups().has(group.key)}
+                                    groupExpanded={expandedGroups().has(groupKey)}
                                     onToggleExpand={() =>
                                       setExpandedPoolId((current) =>
-                                        current === record.id ? null : record.id,
+                                        current === record().id ? null : record().id,
                                       )
                                     }
                                     rowClass={rowClass()}
                                     rowStyle={rowStyle()}
                                     physicalDisks={physicalDisks()}
                                     alertDataAttrs={{
-                                      'data-row-id': record.id,
+                                      'data-row-id': record().id,
                                       'data-alert-state': showAlertHighlight()
                                         ? 'unacknowledged'
                                         : hasAcknowledgedOnlyAlert()
@@ -662,10 +670,11 @@ const Storage: Component = () => {
                                   />
                                 );
                               }}
-                            </For>
+                            </Index>
                             </Show>
                           </>
-                        )}
+                          );
+                        }}
                       </For>
                     </tbody>
                   </table>
