@@ -155,7 +155,11 @@ export const ProtectionHero: Component<ProtectionHeroProps> = (props) => {
               </div>
               <Show
                 when={props.summary.neverSucceeded > 0}
-                fallback={<div class="text-[10px] text-gray-500 dark:text-gray-400">&gt; 7 days old</div>}
+                fallback={
+                  <div class="text-[10px] text-gray-500 dark:text-gray-400">
+                    {props.summary.stale > 0 ? '> 7 days old' : 'all current'}
+                  </div>
+                }
               >
                 <div class="text-[10px] text-rose-600 dark:text-rose-400">{props.summary.neverSucceeded} never succeeded</div>
               </Show>
