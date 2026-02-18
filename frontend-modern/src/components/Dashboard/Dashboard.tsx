@@ -308,7 +308,6 @@ export function Dashboard(props: DashboardProps) {
   const [isSearchLocked, setIsSearchLocked] = createSignal(false);
   const [selectedNode, setSelectedNode] = createSignal<string | null>(null);
   const [selectedKubernetesContext, setSelectedKubernetesContext] = createSignal<string | null>(null);
-  const [selectedNamespace, setSelectedNamespace] = createSignal<string | null>(null);
   const [selectedGuestId, setSelectedGuestIdRaw] = createSignal<string | null>(null);
   const [hoveredWorkloadId, setHoveredWorkloadId] = createSignal<string | null>(null);
   const [handledResourceId, setHandledResourceId] = createSignal<string | null>(null);
@@ -508,20 +507,6 @@ export function Dashboard(props: DashboardProps) {
     return Array.from(contexts).sort((a, b) => a.localeCompare(b));
   });
 
-  const kubernetesNamespaceOptions = createMemo(() => {
-    const namespaces = new Set<string>();
-    const context = selectedKubernetesContext();
-    for (const guest of allGuests()) {
-      if (resolveWorkloadType(guest) !== 'k8s') continue;
-      if (context && getKubernetesContextKey(guest) !== context) continue;
-      const namespace = (guest.namespace || '').trim();
-      if (namespace) {
-        namespaces.add(namespace);
-      }
-    }
-    return Array.from(namespaces).sort((a, b) => a.localeCompare(b));
-  });
-
   const containerRuntimeOptions = createMemo(() => {
     const runtimes = new Set<string>();
     for (const guest of allGuests()) {
@@ -561,16 +546,6 @@ export function Dashboard(props: DashboardProps) {
 
   createEffect(() => {
     if (!isWorkloadsRoute()) return;
-    if (viewMode() !== 'k8s') return;
-    const selected = selectedNamespace();
-    if (!selected) return;
-    if (!kubernetesNamespaceOptions().includes(selected)) {
-      setSelectedNamespace(null);
-    }
-  });
-
-  createEffect(() => {
-    if (!isWorkloadsRoute()) return;
     if (viewMode() === 'k8s') {
       if (selectedNode() !== null) {
         setSelectedNode(null);
@@ -582,9 +557,6 @@ export function Dashboard(props: DashboardProps) {
     }
     if (selectedKubernetesContext() !== null) {
       setSelectedKubernetesContext(null);
-    }
-    if (selectedNamespace() !== null) {
-      setSelectedNamespace(null);
     }
   });
 
@@ -989,7 +961,6 @@ export function Dashboard(props: DashboardProps) {
           selectedNode() !== null ||
           selectedHostHint() !== null ||
           selectedKubernetesContext() !== null ||
-          selectedNamespace() !== null ||
           containerRuntime().trim() !== '' ||
           viewMode() !== 'all' ||
           statusMode() !== 'all';
@@ -1003,7 +974,6 @@ export function Dashboard(props: DashboardProps) {
           setSelectedNode(null);
           setSelectedHostHint(null);
           setSelectedKubernetesContext(null);
-          setSelectedNamespace(null);
           setContainerRuntime('');
           setViewMode('all');
           setStatusMode('all');
@@ -1033,7 +1003,6 @@ export function Dashboard(props: DashboardProps) {
       selectedNode: selectedNode(),
       selectedHostHint: selectedHostHint(),
       selectedKubernetesContext: selectedKubernetesContext(),
-      selectedNamespace: selectedNamespace(),
       containerRuntime: containerRuntime().trim() || null,
     };
     return filterWorkloads(params);
@@ -1477,25 +1446,6 @@ export function Dashboard(props: DashboardProps) {
           isColumnHidden={columnVisibility.isHiddenByUser}
           onColumnToggle={columnVisibility.toggle}
           onColumnReset={columnVisibility.resetToDefaults}
-          kubernetesNamespaceFilter={(() => {
-            if (!isWorkloadsRoute()) return undefined;
-            if (viewMode() !== 'k8s') return undefined;
-            const options = kubernetesNamespaceOptions();
-            if (options.length === 0) return undefined;
-            return {
-              id: 'workloads-k8s-namespace-filter',
-              label: 'Namespace',
-              value: selectedNamespace() ?? '',
-              options: [
-                { value: '', label: 'All namespaces' },
-                ...options.map((namespace) => ({
-                  value: namespace,
-                  label: namespace,
-                })),
-              ],
-              onChange: (value: string) => setSelectedNamespace(value || null),
-            };
-          })()}
           containerRuntimeFilter={(() => {
             if (!isWorkloadsRoute()) return undefined;
             if (viewMode() !== 'docker') return undefined;

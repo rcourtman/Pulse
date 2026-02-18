@@ -350,7 +350,6 @@ describe('Dashboard performance contract', () => {
         selectedNode: null,
         selectedHostHint: null,
         selectedKubernetesContext: null,
-        selectedNamespace: null,
       });
       expect(result).toHaveLength(PROFILES.S);
     });
@@ -366,7 +365,6 @@ describe('Dashboard performance contract', () => {
         selectedNode: null,
         selectedHostHint: null,
         selectedKubernetesContext: null,
-        selectedNamespace: null,
       });
       expect(result).toHaveLength(vmCount);
     });

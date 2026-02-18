@@ -90,7 +90,6 @@ type APIKubernetesData = {
   nodeName?: string;
   uptimeSeconds?: number;
   temperature?: number;
-  pendingUninstall?: boolean;
   metricCapabilities?: {
     nodeCpuMemory?: boolean;
     nodeTelemetry?: boolean;

@@ -99,12 +99,6 @@ const hasAlternateName = (resource: Resource) => {
   return display !== name;
 };
 
-const isK8sClusterPendingUninstall = (resource: Resource): boolean => {
-  if (resource.type !== 'k8s-cluster') return false;
-  const platformData = resource.platformData as { kubernetes?: { pendingUninstall?: boolean } } | undefined;
-  return platformData?.kubernetes?.pendingUninstall === true;
-};
-
 const summarizeServiceHealthTone = (value?: string): ServiceSummaryTone => {
   const normalized = (value || '').trim().toLowerCase();
   if (!normalized) return 'muted';
@@ -593,11 +587,6 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                             >
                               {displayName()}
                             </span>
-                            <Show when={isK8sClusterPendingUninstall(resource)}>
-                              <span class="shrink-0 text-[9px] text-gray-400 dark:text-gray-500">
-                                (pending uninstall)
-                              </span>
-                            </Show>
                             <Show when={hasAlternateName(resource)}>
                               <span class="hidden min-w-0 max-w-[28%] shrink truncate text-[9px] text-gray-500 dark:text-gray-400 lg:inline">
                                 ({resource.name})

@@ -73,7 +73,6 @@ describe('workloadSelectors', () => {
         selectedNode: null,
         selectedHostHint: null,
         selectedKubernetesContext: null,
-        selectedNamespace: null,
       });
 
       expect(result).toBe(guests);
@@ -96,7 +95,6 @@ describe('workloadSelectors', () => {
         selectedNode: null,
         selectedHostHint: null,
         selectedKubernetesContext: null,
-        selectedNamespace: null,
       });
       expect(vmOnly).toHaveLength(4);
 
@@ -108,7 +106,6 @@ describe('workloadSelectors', () => {
         selectedNode: null,
         selectedHostHint: null,
         selectedKubernetesContext: null,
-        selectedNamespace: null,
       });
       expect(degraded.map((g) => g.status)).toEqual(['warning', 'migrating']);
 
@@ -120,7 +117,6 @@ describe('workloadSelectors', () => {
         selectedNode: null,
         selectedHostHint: null,
         selectedKubernetesContext: null,
-        selectedNamespace: null,
       });
       expect(stopped.map((g) => g.status)).toEqual(['warning', 'migrating', 'offline']);
     });
@@ -140,7 +136,6 @@ describe('workloadSelectors', () => {
         selectedNode: null,
         selectedHostHint: null,
         selectedKubernetesContext: null,
-        selectedNamespace: null,
       });
       expect(textOnly.map((g) => g.name)).toEqual(['alpha-api']);
 
@@ -152,7 +147,6 @@ describe('workloadSelectors', () => {
         selectedNode: null,
         selectedHostHint: null,
         selectedKubernetesContext: null,
-        selectedNamespace: null,
       });
       expect(metricOnly.map((g) => g.name)).toEqual(['alpha-api', 'gamma-db']);
 
@@ -164,7 +158,6 @@ describe('workloadSelectors', () => {
         selectedNode: null,
         selectedHostHint: null,
         selectedKubernetesContext: null,
-        selectedNamespace: null,
       });
       expect(combined.map((g) => g.name)).toEqual(['alpha-api']);
     });
@@ -218,7 +211,6 @@ describe('workloadSelectors', () => {
         selectedNode: null,
         selectedHostHint: 'EDGE',
         selectedKubernetesContext: null,
-        selectedNamespace: null,
       });
       expect(withHostHint.map((g) => g.name)).toEqual(['docker-a']);
 
@@ -230,7 +222,6 @@ describe('workloadSelectors', () => {
         selectedNode: workloadNodeScopeId(guests[0]),
         selectedHostHint: 'edge',
         selectedKubernetesContext: null,
-        selectedNamespace: null,
       });
       expect(withNodeScope.map((g) => g.name)).toEqual(['vm-a']);
 
@@ -242,21 +233,8 @@ describe('workloadSelectors', () => {
         selectedNode: null,
         selectedHostHint: null,
         selectedKubernetesContext: 'prod-context',
-        selectedNamespace: null,
       });
       expect(withK8sContext.map((g) => g.name)).toEqual(['k8s-a']);
-
-      const withK8sNamespace = filterWorkloads({
-        guests,
-        viewMode: 'k8s',
-        statusMode: 'all',
-        searchTerm: '',
-        selectedNode: null,
-        selectedHostHint: null,
-        selectedKubernetesContext: null,
-        selectedNamespace: 'default',
-      });
-      expect(withK8sNamespace.map((g) => g.name).sort()).toEqual(['k8s-a', 'k8s-b']);
     });
   });
 

@@ -5,45 +5,38 @@ import { ColumnPicker } from '@/components/shared/ColumnPicker';
 import type { ColumnDef } from '@/hooks/useColumnVisibility';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 
-interface DashboardFilterProps {
-  search: () => string;
-  setSearch: (value: string) => void;
-  isSearchLocked: () => boolean;
-  viewMode: () => 'all' | 'vm' | 'lxc' | 'docker' | 'k8s';
-  setViewMode: (value: 'all' | 'vm' | 'lxc' | 'docker' | 'k8s') => void;
-  statusMode: () => 'all' | 'running' | 'degraded' | 'stopped';
-  setStatusMode: (value: 'all' | 'running' | 'degraded' | 'stopped') => void;
-  groupingMode: () => 'grouped' | 'flat';
-  setGroupingMode: (value: 'grouped' | 'flat') => void;
-  setSortKey: (value: string) => void;
-  setSortDirection: (value: string) => void;
-  searchInputRef?: (el: HTMLInputElement) => void;
-  onBeforeAutoFocus?: () => boolean;
-  // Column visibility
-  availableColumns?: ColumnDef[];
-  isColumnHidden?: (id: string) => boolean;
-  onColumnToggle?: (id: string) => void;
-  onColumnReset?: () => void;
-  hostFilter?: {
-    id?: string;
-    label?: string;
-    value: string;
-    options: { value: string; label: string }[];
-    onChange: (value: string) => void;
-  };
-  kubernetesNamespaceFilter?: {
-    id?: string;
-    label?: string;
-    value: string;
-    options: { value: string; label: string }[];
-    onChange: (value: string) => void;
-  };
-  containerRuntimeFilter?: {
-    id?: string;
-    label?: string;
-    value: string;
-    options: { value: string; label: string }[];
-    onChange: (value: string) => void;
+	interface DashboardFilterProps {
+	  search: () => string;
+	  setSearch: (value: string) => void;
+	  isSearchLocked: () => boolean;
+	  viewMode: () => 'all' | 'vm' | 'lxc' | 'docker' | 'k8s';
+	  setViewMode: (value: 'all' | 'vm' | 'lxc' | 'docker' | 'k8s') => void;
+	  statusMode: () => 'all' | 'running' | 'degraded' | 'stopped';
+	  setStatusMode: (value: 'all' | 'running' | 'degraded' | 'stopped') => void;
+	  groupingMode: () => 'grouped' | 'flat';
+	  setGroupingMode: (value: 'grouped' | 'flat') => void;
+	  setSortKey: (value: string) => void;
+	  setSortDirection: (value: string) => void;
+	  searchInputRef?: (el: HTMLInputElement) => void;
+	  onBeforeAutoFocus?: () => boolean;
+	  // Column visibility
+	  availableColumns?: ColumnDef[];
+	  isColumnHidden?: (id: string) => boolean;
+	  onColumnToggle?: (id: string) => void;
+	  onColumnReset?: () => void;
+	  hostFilter?: {
+	    id?: string;
+	    label?: string;
+	    value: string;
+	    options: { value: string; label: string }[];
+	    onChange: (value: string) => void;
+	  };
+	  containerRuntimeFilter?: {
+	    id?: string;
+	    label?: string;
+	    value: string;
+	    options: { value: string; label: string }[];
+	    onChange: (value: string) => void;
   };
 }
 
@@ -88,35 +81,10 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
             )}
           </Show>
 
-          <Show when={props.viewMode() === 'k8s' ? props.kubernetesNamespaceFilter : undefined}>
-            {(namespaceFilter) => (
-              <div class="inline-flex items-center rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-                <label
-                  for={namespaceFilter().id ?? 'dashboard-k8s-namespace-filter'}
-                  class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
-                >
-                  {namespaceFilter().label ?? 'Namespace'}
-                </label>
-                <select
-                  id={namespaceFilter().id ?? 'dashboard-k8s-namespace-filter'}
-                  value={namespaceFilter().value}
-                  onChange={(e) => namespaceFilter().onChange(e.currentTarget.value)}
-                  class="min-w-[8rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
-                >
-                  <For each={namespaceFilter().options}>
-                    {(option) => (
-                      <option value={option.value}>{option.label}</option>
-                    )}
-                  </For>
-                </select>
-              </div>
-            )}
-          </Show>
-
-          <Show when={props.viewMode() === 'docker' ? props.containerRuntimeFilter : undefined}>
-            {(runtimeFilter) => (
-              <div class="inline-flex items-center rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-                <label
+	          <Show when={props.viewMode() === 'docker' ? props.containerRuntimeFilter : undefined}>
+	            {(runtimeFilter) => (
+	              <div class="inline-flex items-center rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+	                <label
                   for={runtimeFilter().id ?? 'dashboard-runtime-filter'}
                   class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
                 >
@@ -213,33 +181,29 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
             />
           </Show>
 
-          <Show when={
-            props.search().trim() !== '' ||
-            props.viewMode() !== 'all' ||
-            props.statusMode() !== 'all' ||
-            props.groupingMode() !== 'grouped' ||
-            (props.hostFilter ? props.hostFilter.value !== '' : false) ||
-            (props.kubernetesNamespaceFilter ? props.kubernetesNamespaceFilter.value !== '' : false)
-          }>
-            <button
-              onClick={() => {
-                props.setSearch('');
-                props.setSortKey('name');
+	          <Show when={
+	            props.search().trim() !== '' ||
+	            props.viewMode() !== 'all' ||
+	            props.statusMode() !== 'all' ||
+	            props.groupingMode() !== 'grouped' ||
+	            (props.hostFilter ? props.hostFilter.value !== '' : false)
+	          }>
+	            <button
+	              onClick={() => {
+	                props.setSearch('');
+	                props.setSortKey('name');
                 props.setSortDirection('asc');
                 props.setViewMode('all');
                 props.setStatusMode('all');
-                props.setGroupingMode('grouped');
-                if (props.hostFilter) {
-                  props.hostFilter.onChange('');
-                }
-                if (props.kubernetesNamespaceFilter) {
-                  props.kubernetesNamespaceFilter.onChange('');
-                }
-              }}
-              title="Reset all filters"
-              class="ml-auto flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg transition-all duration-150 active:scale-95
-                     text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/50 hover:bg-blue-200 dark:hover:bg-blue-900/70"
-            >
+	                props.setGroupingMode('grouped');
+	                if (props.hostFilter) {
+	                  props.hostFilter.onChange('');
+	                }
+	              }}
+	              title="Reset all filters"
+	              class="ml-auto flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg transition-all duration-150 active:scale-95
+	                     text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/50 hover:bg-blue-200 dark:hover:bg-blue-900/70"
+	            >
               <svg
                 width="12"
                 height="12"
