@@ -1244,7 +1244,7 @@ function App() {
           path="/proxmox/replication"
           component={() => (
             <LegacyRedirect
-              to={REPLICATION_TARGET_PATH}
+              to={RECOVERY_REMOTE_EVENTS_PATH}
               toast={{
                 type: 'info',
                 title: 'Replication moved',
@@ -1413,6 +1413,31 @@ function AppLayout(props: {
   // Reactive kiosk mode state
   const [kioskMode, setKioskModeSignal] = createSignal(isKioskMode());
 
+  // Kiosk-mode header auto-hide/reveal state
+  const [headerVisible, setHeaderVisible] = createSignal(true);
+  let headerEl: HTMLDivElement | undefined;
+  let headerHideTimeout: ReturnType<typeof setTimeout> | undefined;
+
+  const clearHeaderHideTimeout = () => {
+    if (headerHideTimeout !== undefined) {
+      clearTimeout(headerHideTimeout);
+      headerHideTimeout = undefined;
+    }
+  };
+
+  const showHeader = () => {
+    clearHeaderHideTimeout();
+    setHeaderVisible(true);
+  };
+
+  const scheduleHideHeader = (delayMs: number) => {
+    clearHeaderHideTimeout();
+    headerHideTimeout = setTimeout(() => {
+      setHeaderVisible(false);
+      headerHideTimeout = undefined;
+    }, delayMs);
+  };
+
   // Subscribe to kiosk mode changes from other sources (like URL params)
   onMount(() => {
     const unsubscribe = subscribeToKioskMode((enabled) => {
@@ -1440,6 +1465,62 @@ function AppLayout(props: {
     setKioskMode(newValue);
     setKioskModeSignal(newValue);
   };
+
+  // Kiosk-mode header behavior: visible briefly on entry, hover/touch to reveal, Escape to exit.
+  createEffect(() => {
+    if (kioskMode()) {
+      setHeaderVisible(true);
+      scheduleHideHeader(1500);
+    } else {
+      clearHeaderHideTimeout();
+      setHeaderVisible(true);
+    }
+  });
+
+  createEffect(() => {
+    if (!kioskMode()) return;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        toggleKioskMode();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    onCleanup(() => window.removeEventListener('keydown', onKeyDown));
+  });
+
+  createEffect(() => {
+    if (!kioskMode()) return;
+
+    // Touch support: tapping near the top shows header briefly.
+    const onPointerDown = (e: PointerEvent) => {
+      if (e.pointerType !== 'touch') return;
+      if (e.clientY > 60) return;
+      showHeader();
+      scheduleHideHeader(3000);
+    };
+
+    // Use capture so it works even when the header is hidden (pointer-events: none).
+    window.addEventListener('pointerdown', onPointerDown, { passive: true, capture: true });
+    onCleanup(() => window.removeEventListener('pointerdown', onPointerDown, true));
+
+    // Fallback for environments without PointerEvent support.
+    if (typeof (window as any).PointerEvent === 'undefined') {
+      const onTouchStart = (e: TouchEvent) => {
+        const t = e.touches?.[0];
+        if (!t) return;
+        if (t.clientY > 60) return;
+        showHeader();
+        scheduleHideHeader(3000);
+      };
+      window.addEventListener('touchstart', onTouchStart, { passive: true, capture: true });
+      onCleanup(() => window.removeEventListener('touchstart', onTouchStart, true));
+    }
+  });
+
+  onCleanup(() => {
+    clearHeaderHideTimeout();
+  });
 
   // Determine active tab from current path
   const getActiveTabDesktop = () => getActiveTabForPath(location.pathname);
@@ -1654,7 +1735,54 @@ function AppLayout(props: {
       class={`pulse-shell ${layoutStore.isFullWidth() || kioskMode() ? 'pulse-shell--full-width' : ''} ${!kioskMode() ? 'pb-safe-or-20 md:pb-0' : ''}`}
     >
       {/* Header - simplified in kiosk mode */}
-      <div class={`header mb-3 flex items-center gap-2 ${kioskMode() ? 'justify-end' : 'justify-between sm:grid sm:grid-cols-[1fr_auto_1fr] sm:items-center sm:gap-0'}`}>
+      <Show when={kioskMode()}>
+        <div
+          class="fixed top-0 left-0 right-0 z-40 h-4 bg-transparent"
+          aria-hidden="true"
+          onMouseEnter={() => {
+            if (!kioskMode()) return;
+            showHeader();
+          }}
+          onMouseLeave={() => {
+            if (!kioskMode()) return;
+            scheduleHideHeader(500);
+          }}
+        />
+      </Show>
+      <div
+        class={`header mb-3 flex items-center gap-2 ${kioskMode()
+          ? 'fixed top-0 left-0 right-0 z-50 justify-end bg-white/90 dark:bg-gray-900/90 backdrop-blur-sm shadow-sm'
+          : 'justify-between sm:grid sm:grid-cols-[1fr_auto_1fr] sm:items-center sm:gap-0'}`}
+        style={kioskMode()
+          ? {
+            transform: headerVisible() ? 'translateY(0)' : 'translateY(-100%)',
+            opacity: headerVisible() ? 1 : 0,
+            transition: `transform ${headerVisible() ? 200 : 300}ms ease, opacity ${headerVisible() ? 200 : 300}ms ease`,
+            'pointer-events': headerVisible() ? 'auto' : 'none',
+          }
+          : undefined}
+        ref={(el) => {
+          headerEl = el;
+        }}
+        onMouseEnter={() => {
+          if (!kioskMode()) return;
+          showHeader();
+        }}
+        onMouseLeave={() => {
+          if (!kioskMode()) return;
+          scheduleHideHeader(500);
+        }}
+        onFocusIn={() => {
+          if (!kioskMode()) return;
+          showHeader();
+        }}
+        onFocusOut={(event) => {
+          if (!kioskMode()) return;
+          const next = event.relatedTarget as Node | null;
+          if (next && headerEl?.contains(next)) return;
+          scheduleHideHeader(500);
+        }}
+      >
         <Show when={!kioskMode()}>
           <div class="flex items-center gap-2 sm:flex-initial sm:gap-2 sm:col-start-2 sm:col-end-3 sm:justify-self-center">
             <div class="flex items-center gap-2">

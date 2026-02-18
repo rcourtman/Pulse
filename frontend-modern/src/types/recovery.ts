@@ -32,6 +32,12 @@ export interface RecoveryPoint {
   mode: RecoveryMode;
   outcome: RecoveryOutcome;
 
+  // Optional dimensions used for filtering and display.
+  entityId?: string | null;
+  cluster?: string | null;
+  node?: string | null;
+  namespace?: string | null;
+
   startedAt?: string | null;
   completedAt?: string | null;
 
