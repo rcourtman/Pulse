@@ -23,6 +23,7 @@ import type { Resource } from '@/types/resource';
 import { RecoveryPointDetails } from '@/components/Recovery/RecoveryPointDetails';
 import type { ColumnDef } from '@/hooks/useColumnVisibility';
 import ListFilterIcon from 'lucide-solid/icons/list-filter';
+import { segmentedButtonClass } from '@/utils/segmentedButton';
 
 type RecoveryView = 'protected' | 'events';
 
@@ -38,14 +39,6 @@ const normalizeProviderFromQuery = (value: string): string => {
   const v = (value || '').trim().toLowerCase();
   if (!v || v === 'all') return 'all';
   return v;
-};
-
-const segmentedButtonClass = (selected: boolean): string => {
-  const base = 'rounded-md px-3 py-1.5 text-xs font-semibold transition-colors';
-  if (selected) {
-    return `${base} bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm ring-1 ring-gray-200 dark:ring-gray-600`;
-  }
-  return `${base} text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600/50`;
 };
 
 const groupHeaderRowClass = () => 'bg-gray-50 dark:bg-gray-900/40';
@@ -87,13 +80,6 @@ const titleize = (value: string): string =>
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ');
 
-const joinWithOr = (items: string[]): string => {
-  const list = items.filter((v) => (v || '').trim().length > 0);
-  if (list.length === 0) return '';
-  if (list.length === 1) return list[0]!;
-  if (list.length === 2) return `${list[0]} or ${list[1]}`;
-  return `${list.slice(0, -1).join(', ')}, or ${list[list.length - 1]}`;
-};
 
 const dateKeyFromTimestamp = (timestamp: number): string => {
   const date = new Date(timestamp);
@@ -654,11 +640,10 @@ const Recovery: Component = () => {
     });
     return items;
   });
-
-  const selectedRollup = createMemo(() => {
+  const selectedRollup = createMemo<ProtectionRollup | null>(() => {
     const rid = rollupId().trim();
     if (!rid) return null;
-    return rollups().find((r) => String(r.rollupId || '').trim() === rid) || null;
+    return rollups().find((r) => r.rollupId === rid) || null;
   });
 
   const availableOutcomes = ['all', 'success', 'warning', 'failed', 'running'] as const;
@@ -886,328 +871,566 @@ const Recovery: Component = () => {
   return (
     <div data-testid="recovery-page" class="flex flex-col gap-4">
       <Card padding="sm">
-        <div class="flex flex-col gap-1">
-          <div class="flex flex-wrap items-center justify-between gap-2">
-            <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+        <div class="flex flex-col gap-3">
+          <Show
+            when={!rollupId().trim()}
+            fallback={
+              <div class="flex items-center gap-1.5 border-b border-gray-200 dark:border-gray-700 pb-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRollupId('');
+                    setView('protected');
+                  }}
+                  class="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+                >
+                  Protected
+                </button>
+                <span class="text-gray-400 dark:text-gray-500 text-sm">›</span>
+                <span class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                  <Show when={selectedRollup()}>
+                    {rollupSubjectLabel(selectedRollup()!, resourcesById())}
+                  </Show>
+                </span>
+              </div>
+            }
+          >
+            <div class="flex items-center gap-0 border-b border-gray-200 dark:border-gray-700">
               <button
                 type="button"
-                aria-pressed={view() === 'protected'}
                 onClick={() => {
                   setView('protected');
                   setRollupId('');
                 }}
-                class={segmentedButtonClass(view() === 'protected')}
+                class={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                  view() === 'protected'
+                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                    : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                }`}
               >
                 Protected
               </button>
               <button
                 type="button"
-                aria-pressed={view() === 'events'}
                 onClick={() => setView('events')}
-                class={segmentedButtonClass(view() === 'events')}
+                class={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                  view() === 'events'
+                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                    : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                }`}
               >
                 Events
               </button>
             </div>
+          </Show>
 
-            <Show when={view() === 'events' && rollupId().trim()}>
-              <button
-                type="button"
-                onClick={() => {
-                  setRollupId('');
-                  setView('protected');
-                }}
-                class="rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
-              >
-                Back to protected
-              </button>
-            </Show>
-          </div>
+          <Show when={!kioskMode()}>
+            <div class="flex flex-col gap-2">
+              <Show when={view() === 'protected'}>
+                <SearchInput
+                  value={query}
+                  onChange={(value) => setQuery(value)}
+                  placeholder="Search protected items..."
+                  class="w-full"
+                  history={{
+                    storageKey: STORAGE_KEYS.RECOVERY_SEARCH_HISTORY,
+                    emptyMessage: 'Recent searches appear here.',
+                  }}
+                />
+                <Show when={isMobile()}>
+                  <button
+                    type="button"
+                    onClick={() => setProtectedFiltersOpen((o) => !o)}
+                    class="flex items-center gap-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400"
+                  >
+                    <ListFilterIcon class="w-3.5 h-3.5" />
+                    Filters
+                    <Show when={protectedActiveFilterCount() > 0}>
+                      <span class="ml-0.5 rounded-full bg-blue-500 px-1.5 py-0.5 text-[10px] font-semibold text-white leading-none">
+                        {protectedActiveFilterCount()}
+                      </span>
+                    </Show>
+                  </button>
+                </Show>
 
-          <div class="text-[11px] text-gray-500 dark:text-gray-400">
-            <Show
-              when={view() === 'protected'}
-              fallback={<span>Events are individual snapshot/backup/replication points across all platforms.</span>}
-            >
-              <span>Protected is one row per subject, with the latest outcome per provider.</span>
-            </Show>
-          </div>
+                <Show when={!isMobile() || protectedFiltersOpen()}>
+                  <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                    <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                      <label
+                        for="recovery-provider-filter"
+                        class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+                      >
+                        Provider
+                      </label>
+                      <select
+                        id="recovery-provider-filter"
+                        value={providerFilter()}
+                        onChange={(event) => setProviderFilter(event.currentTarget.value)}
+                        class="min-w-[10rem] max-w-[14rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+                      >
+                        <For each={providerOptions()}>
+                          {(p) => <option value={p}>{p === 'all' ? 'All Providers' : sourceLabel(p)}</option>}
+                        </For>
+                      </select>
+                    </div>
+
+                    <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                      <label
+                        for="recovery-protected-status-filter"
+                        class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+                      >
+                        Status
+                      </label>
+                      <select
+                        id="recovery-protected-status-filter"
+                        value={outcomeFilter()}
+                        onChange={(event) => {
+                          const value = event.currentTarget.value as 'all' | KnownOutcome;
+                          setOutcomeFilter(value);
+                          if (value !== 'all') setVerificationFilter('all');
+                        }}
+                        class="min-w-[7rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+                      >
+                        <For each={availableOutcomes}>
+                          {(outcome) => (
+                            <option value={outcome}>
+                              {outcome === 'all' ? 'Any' : titleize(outcome)}
+                            </option>
+                          )}
+                        </For>
+                      </select>
+                    </div>
+
+                    <button
+                      type="button"
+                      aria-pressed={protectedStaleOnly()}
+                      onClick={() => setProtectedStaleOnly((v) => !v)}
+                      class={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${
+                        protectedStaleOnly()
+                          ? 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-100'
+                          : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700'
+                      }`}
+                    >
+                      Stale only
+                    </button>
+
+                    <Show when={rollupsSummary().stale > 0}>
+                      <span class="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-100">
+                        {rollupsSummary().stale} stale
+                      </span>
+                    </Show>
+
+                    <Show when={rollupsSummary().neverSucceeded > 0}>
+                      <span class="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-medium text-rose-700 dark:bg-rose-900/40 dark:text-rose-200">
+                        {rollupsSummary().neverSucceeded} never succeeded
+                      </span>
+                    </Show>
+                  </div>
+                </Show>
+              </Show>
+
+              <Show when={view() === 'events'}>
+                <SearchInput
+                  value={query}
+                  onChange={(value) => {
+                    setQuery(value);
+                    setCurrentPage(1);
+                  }}
+                  placeholder="Search recovery events..."
+                  class="w-full"
+                  autoFocus
+                  history={{
+                    storageKey: STORAGE_KEYS.RECOVERY_SEARCH_HISTORY,
+                    emptyMessage: 'Recent searches appear here.',
+                  }}
+                />
+                <Show when={isMobile()}>
+                  <button
+                    type="button"
+                    onClick={() => setEventsFiltersOpen((o) => !o)}
+                    class="flex items-center gap-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400"
+                  >
+                    <ListFilterIcon class="w-3.5 h-3.5" />
+                    Filters
+                    <Show when={eventsActiveFilterCount() > 0}>
+                      <span class="ml-0.5 rounded-full bg-blue-500 px-1.5 py-0.5 text-[10px] font-semibold text-white leading-none">
+                        {eventsActiveFilterCount()}
+                      </span>
+                    </Show>
+                  </button>
+                </Show>
+
+                <Show when={!isMobile() || eventsFiltersOpen()}>
+                  <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                    <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                      <label
+                        for="recovery-provider-filter-events"
+                        class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+                      >
+                        Provider
+                      </label>
+                      <select
+                        id="recovery-provider-filter-events"
+                        value={providerFilter()}
+                        onChange={(event) => {
+                          setProviderFilter(normalizeProviderFromQuery(event.currentTarget.value));
+                          setCurrentPage(1);
+                        }}
+                        class="min-w-[10rem] max-w-[14rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+                      >
+                        <For each={providerOptions()}>
+                          {(p) => <option value={p}>{p === 'all' ? 'All Providers' : sourceLabel(p)}</option>}
+                        </For>
+                      </select>
+                    </div>
+
+                    <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                      <label
+                        for="recovery-status-filter"
+                        class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+                      >
+                        Status
+                      </label>
+                      <select
+                        id="recovery-status-filter"
+                        value={outcomeFilter()}
+                        onChange={(event) => {
+                          const value = event.currentTarget.value as 'all' | KnownOutcome;
+                          setOutcomeFilter(value);
+                          if (value !== 'all') setVerificationFilter('all');
+                          setCurrentPage(1);
+                        }}
+                        class="min-w-[7rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+                      >
+                        <For each={availableOutcomes}>
+                          {(outcome) => (
+                            <option value={outcome}>
+                              {outcome === 'all' ? 'All' : titleize(outcome)}
+                            </option>
+                          )}
+                        </For>
+                      </select>
+                    </div>
+
+                    <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                      <span class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Scope</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setScopeFilter('all');
+                          setCurrentPage(1);
+                        }}
+                        class={segmentedButtonClass(scopeFilter() === 'all')}
+                      >
+                        All
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setScopeFilter('workload');
+                          setCurrentPage(1);
+                        }}
+                        class={segmentedButtonClass(scopeFilter() === 'workload')}
+                      >
+                        Workloads
+                      </button>
+                    </div>
+
+                    <button
+                      type="button"
+                      aria-expanded={moreFiltersOpen()}
+                      aria-controls="recovery-more-filters"
+                      onClick={() => setMoreFiltersOpen((v) => !v)}
+                      class="inline-flex items-center gap-2 rounded-md border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+                    >
+                      <span>{moreFiltersOpen() ? 'Less filters' : 'More filters'}</span>
+                      <Show when={activeAdvancedFilterCount() > 0}>
+                        <span class="rounded-full bg-gray-200 px-1.5 py-0.5 text-[10px] font-mono text-gray-700 dark:bg-gray-700 dark:text-gray-200">
+                          {activeAdvancedFilterCount()}
+                        </span>
+                      </Show>
+                    </button>
+
+                    <Show when={artifactColumnVisibility.availableToggles().length > 0}>
+                      <ColumnPicker
+                        columns={artifactColumnVisibility.availableToggles()}
+                        isHidden={artifactColumnVisibility.isHiddenByUser}
+                        onToggle={artifactColumnVisibility.toggle}
+                        onReset={artifactColumnVisibility.resetToDefaults}
+                      />
+                    </Show>
+
+                    <Show when={hasActiveArtifactFilters()}>
+                      <button
+                        type="button"
+                        onClick={resetAllArtifactFilters}
+                        class="shrink-0 rounded-lg bg-blue-100 px-2.5 py-1.5 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:hover:bg-blue-900/60"
+                      >
+                        Clear
+                      </button>
+                    </Show>
+                  </div>
+
+                  <Show when={moreFiltersOpen()}>
+                    <div id="recovery-more-filters" class="flex flex-wrap items-center gap-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+                      <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                        <span class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Method</span>
+                        <For each={(['all', 'snapshot', 'local', 'remote'] as const)}>
+                          {(mode) => (
+                            <button
+                              type="button"
+                              aria-pressed={modeFilter() === mode}
+                              onClick={() => {
+                                setModeFilter(mode === 'all' ? 'all' : mode);
+                                setCurrentPage(1);
+                              }}
+                              class={segmentedButtonClass(modeFilter() === mode)}
+                            >
+                              {mode === 'all' ? 'All' : MODE_LABELS[mode]}
+                            </button>
+                          )}
+                        </For>
+                      </div>
+
+                      <Show when={showVerificationFilter()}>
+                        <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                          <label
+                            for="recovery-verification-filter"
+                            class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+                          >
+                            Verification
+                          </label>
+                          <select
+                            id="recovery-verification-filter"
+                            value={verificationFilter()}
+                            onChange={(event) => {
+                              setVerificationFilter(event.currentTarget.value as VerificationFilter);
+                              if (event.currentTarget.value !== 'all') setOutcomeFilter('all');
+                              setCurrentPage(1);
+                            }}
+                            class="min-w-[6.5rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+                          >
+                            <option value="all">Any</option>
+                            <option value="verified">Verified</option>
+                            <option value="unverified">Unverified</option>
+                            <option value="unknown">Unknown</option>
+                          </select>
+                        </div>
+                      </Show>
+
+                      <Show when={showClusterFilter()}>
+                        <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                          <label
+                            for="recovery-cluster-filter"
+                            class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+                          >
+                            Cluster
+                          </label>
+                          <select
+                            id="recovery-cluster-filter"
+                            value={clusterFilter()}
+                            onChange={(event) => {
+                              setClusterFilter(event.currentTarget.value);
+                              setCurrentPage(1);
+                            }}
+                            class="min-w-[8rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+                          >
+                            <option value="all">All</option>
+                            <For each={clusterOptions().filter((value) => value !== 'all')}>
+                              {(cluster) => <option value={cluster}>{cluster}</option>}
+                            </For>
+                          </select>
+                        </div>
+                      </Show>
+
+                      <Show when={showNodeFilter()}>
+                        <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                          <label
+                            for="recovery-node-filter"
+                            class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+                          >
+                            Node/Host
+                          </label>
+                          <select
+                            id="recovery-node-filter"
+                            value={nodeFilter()}
+                            onChange={(event) => {
+                              setNodeFilter(event.currentTarget.value);
+                              setCurrentPage(1);
+                            }}
+                            class="min-w-[7.5rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+                          >
+                            <option value="all">All</option>
+                            <For each={nodeOptions().filter((value) => value !== 'all')}>
+                              {(node) => <option value={node}>{node}</option>}
+                            </For>
+                          </select>
+                        </div>
+                      </Show>
+
+                      <Show when={showNamespaceFilter()}>
+                        <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                          <label
+                            for="recovery-namespace-filter"
+                            class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+                          >
+                            Namespace
+                          </label>
+                          <select
+                            id="recovery-namespace-filter"
+                            value={namespaceFilter()}
+                            onChange={(event) => {
+                              setNamespaceFilter(event.currentTarget.value);
+                              setCurrentPage(1);
+                            }}
+                            class="min-w-[8rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+                          >
+                            <option value="all">All</option>
+                            <For each={namespaceOptions().filter((value) => value !== 'all')}>
+                              {(namespace) => <option value={namespace}>{namespace}</option>}
+                            </For>
+                          </select>
+                        </div>
+                      </Show>
+                    </div>
+                  </Show>
+                </Show>
+              </Show>
+            </div>
+          </Show>
         </div>
       </Card>
 
       <Show when={view() === 'protected'}>
-        <Show when={!kioskMode()}>
-          <Card padding="sm">
-            <div class="flex flex-col gap-2">
-              <SearchInput
-                value={query}
-                onChange={(value) => setQuery(value)}
-                placeholder="Search protected items..."
-                class="w-full"
-                history={{
-                  storageKey: STORAGE_KEYS.RECOVERY_SEARCH_HISTORY,
-                  emptyMessage: 'Recent searches appear here.',
-                }}
-              />
-              <Show when={isMobile()}>
-                <button
-                  type="button"
-                  onClick={() => setProtectedFiltersOpen((o) => !o)}
-                  class="flex items-center gap-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400"
-                >
-                  <ListFilterIcon class="w-3.5 h-3.5" />
-                  Filters
-                  <Show when={protectedActiveFilterCount() > 0}>
-                    <span class="ml-0.5 rounded-full bg-blue-500 px-1.5 py-0.5 text-[10px] font-semibold text-white leading-none">
-                      {protectedActiveFilterCount()}
-                    </span>
-                  </Show>
-                </button>
-              </Show>
-
-              <Show when={!isMobile() || protectedFiltersOpen()}>
-                <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                  <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-                    <label
-                      for="recovery-provider-filter"
-                      class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
-                    >
-                      Provider
-                    </label>
-                    <select
-                      id="recovery-provider-filter"
-                      value={providerFilter()}
-                      onChange={(event) => setProviderFilter(event.currentTarget.value)}
-                      class="min-w-[10rem] max-w-[14rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
-                    >
-                      <For each={providerOptions()}>
-                        {(p) => <option value={p}>{p === 'all' ? 'All Providers' : sourceLabel(p)}</option>}
-                      </For>
-                    </select>
-                  </div>
-
-                  <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-                    <label
-                      for="recovery-protected-status-filter"
-                      class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
-                    >
-                      Status
-                    </label>
-                    <select
-                      id="recovery-protected-status-filter"
-                      value={outcomeFilter()}
-                      onChange={(event) => {
-                        const value = event.currentTarget.value as 'all' | KnownOutcome;
-                        setOutcomeFilter(value);
-                        if (value !== 'all') setVerificationFilter('all');
-                      }}
-                      class="min-w-[7rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
-                    >
-                      <For each={availableOutcomes}>
-                        {(outcome) => (
-                          <option value={outcome}>
-                            {outcome === 'all' ? 'Any' : titleize(outcome)}
-                          </option>
-                        )}
-                      </For>
-                    </select>
-                  </div>
-
-                  <button
-                    type="button"
-                    aria-pressed={protectedStaleOnly()}
-                    onClick={() => setProtectedStaleOnly((v) => !v)}
-                    class={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${
-                      protectedStaleOnly()
-                        ? 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-100'
-                        : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700'
-                    }`}
-                  >
-                    Stale only
-                  </button>
-
-                <Show when={rollupsSummary().stale > 0}>
-                  <span class="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-100">
-                    {rollupsSummary().stale} stale
-                  </span>
-                </Show>
-
-                <Show when={rollupsSummary().neverSucceeded > 0}>
-                  <span class="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-medium text-rose-700 dark:bg-rose-900/40 dark:text-rose-200">
-                    {rollupsSummary().neverSucceeded} never succeeded
-                  </span>
-                </Show>
-              </div>
-            </Show>
-
-            <Show when={recoveryRollups.rollups.loading && filteredRollups().length === 0}>
-              <div class="px-3 py-6 text-sm text-gray-500 dark:text-gray-400">Loading protection rollups...</div>
-            </Show>
-
-            <Show when={!recoveryRollups.rollups.loading && recoveryRollups.rollups.error}>
-              <EmptyState
-                title="Failed to load protected items"
-                description={String((recoveryRollups.rollups.error as Error)?.message || recoveryRollups.rollups.error)}
-              />
-            </Show>
-
-            <Show when={!recoveryRollups.rollups.loading && !recoveryRollups.rollups.error && filteredRollups().length === 0}>
-              <EmptyState
-                title="No protected items yet"
-                description="Pulse hasn’t received any recovery events for this org yet."
-              />
-            </Show>
-
-            <Show when={filteredRollups().length > 0}>
-              <div class="overflow-x-auto">
-                <table class="w-full text-xs">
-                  <thead>
-                    <tr class="border-b border-gray-200 bg-gray-50 text-left text-[10px] uppercase tracking-wide text-gray-500 dark:border-gray-700 dark:bg-gray-800/70 dark:text-gray-400">
-                      {([['subject', 'Subject'], ['source', 'Source'], ['lastBackup', 'Last Backup'], ['outcome', 'Outcome']] as const).map(([col, label]) => (
-                        <th
-                          class="px-1.5 sm:px-2 py-1 cursor-pointer select-none hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
-                          onClick={() => toggleProtectedSort(col)}
-                        >
-                          <span class="inline-flex items-center gap-1">
-                            {label}
-                            <Show when={protectedSortCol() === col}>
-                              <svg class="h-3 w-3" viewBox="0 0 12 12" fill="currentColor">
-                                {protectedSortDir() === 'asc'
-                                  ? <path d="M6 3l3.5 5h-7z" />
-                                  : <path d="M6 9l3.5-5h-7z" />}
-                              </svg>
-                            </Show>
-                          </span>
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                    <For each={sortedRollups()}>
-                      {(r) => {
-                        const resIndex = resourcesById();
-                        const label = rollupSubjectLabel(r, resIndex);
-                        const attemptMs = r.lastAttemptAt ? Date.parse(r.lastAttemptAt) : 0;
-                        const successMs = r.lastSuccessAt ? Date.parse(r.lastSuccessAt) : 0;
-                        const outcome = normalizeOutcome(r.lastOutcome);
-                        const providers = (r.providers || [])
-                          .slice()
-                          .map((p) => String(p || '').trim())
-                          .filter(Boolean)
-                          .sort((a, b) => sourceLabel(a).localeCompare(sourceLabel(b)));
-                        const nowMs = Date.now();
-                        const issueTone = deriveRollupIssueTone(r, nowMs);
-                        const issueRailClass = issueTone === 'none' ? '' : ISSUE_RAIL_CLASS[issueTone];
-                        const stale = isRollupStale(r, nowMs);
-                        const neverSucceeded = (!Number.isFinite(successMs) || successMs <= 0) && Number.isFinite(attemptMs) && attemptMs > 0;
-                        return (
-                          <tr
-                            class="cursor-pointer border-b border-gray-200 hover:bg-gray-50/70 dark:border-gray-700 dark:hover:bg-gray-800/35"
-                            onClick={() => {
-                              setView('events');
-                              setRollupId(r.rollupId);
-                            }}
-                          >
-                            <td
-                              class={`relative max-w-[420px] truncate whitespace-nowrap px-1.5 sm:px-2 py-1 text-gray-900 ${
-                                issueTone === 'rose' || issueTone === 'blue'
-                                  ? 'font-medium dark:text-slate-100'
-                                  : issueTone === 'amber'
-                                    ? 'dark:text-slate-200'
-                                    : 'dark:text-gray-300'
-                              }`}
-                              title={label}
-                            >
-                              <Show when={issueTone !== 'none'}>
-                                <span class={`absolute inset-y-0 left-0 w-0.5 ${issueRailClass}`} />
-                              </Show>
-                              <div class="flex items-center gap-2">
-                                <span class="truncate">{label}</span>
-                                <Show when={neverSucceeded}>
-                                  <span class="whitespace-nowrap rounded px-1 py-0.5 text-[10px] font-medium text-amber-700 bg-amber-50 dark:text-amber-300 dark:bg-amber-900/30">never succeeded</span>
-                                </Show>
-                                <Show when={!neverSucceeded && stale}>
-                                  <span class="whitespace-nowrap rounded px-1 py-0.5 text-[10px] font-medium text-amber-700 bg-amber-50 dark:text-amber-300 dark:bg-amber-900/30">stale</span>
-                                </Show>
-                              </div>
-                            </td>
-                            <td class="whitespace-nowrap px-1.5 sm:px-2 py-1">
-                              <div class="flex flex-wrap gap-1.5">
-                                <For each={providers}>
-                                  {(p) => {
-                                    const badge = getSourcePlatformBadge(String(p));
-                                    return <span class={badge?.classes || ''}>{badge?.label || sourceLabel(String(p))}</span>;
-                                  }}
-                                </For>
-                              </div>
-                            </td>
-                            <td
-                              class={`whitespace-nowrap px-1.5 sm:px-2 py-1 ${rollupAgeTextClass(r, nowMs)}`}
-                              title={successMs > 0 ? formatAbsoluteTime(successMs) : attemptMs > 0 ? formatAbsoluteTime(attemptMs) : undefined}
-                            >
-                              {successMs > 0 ? formatRelativeTime(successMs) : neverSucceeded ? (
-                                <span class="text-amber-600 dark:text-amber-400">never</span>
-                              ) : '—'}
-                            </td>
-                            <td class="whitespace-nowrap px-1.5 sm:px-2 py-1">
-                              <span
-                                class={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-medium ${OUTCOME_BADGE_CLASS[outcome]}`}
-                              >
-                                {titleize(outcome)}
-                              </span>
-                            </td>
-                          </tr>
-                        );
-                      }}
-                    </For>
-                  </tbody>
-                </table>
-              </div>
-            </Show>
-            </div>
-          </Card>
-        </Show>
-      </Show>
-
-      <Show when={view() === 'events'}>
         <Card padding="sm">
-          <Show when={!rollupId().trim()}>
-            <div class="flex flex-col gap-1">
-              <div class="text-sm font-semibold text-gray-900 dark:text-gray-100">All recovery events</div>
-              <div class="text-xs text-gray-500 dark:text-gray-400">
-                Filter by{' '}
-                {joinWithOr([
-                  'provider',
-                  'method',
-                  'status',
-                  showVerificationFilter() ? 'verification' : '',
-                  showClusterFilter() ? 'cluster' : '',
-                  showNodeFilter() ? 'node/host' : '',
-                  showNamespaceFilter() ? 'namespace' : '',
-                ])}
-                .
-              </div>
-            </div>
+          <Show when={recoveryRollups.rollups.loading && filteredRollups().length === 0}>
+            <div class="px-3 py-6 text-sm text-gray-500 dark:text-gray-400">Loading protection rollups...</div>
           </Show>
 
-          <Show when={rollupId().trim()}>
-            <div class="flex flex-col gap-1">
-              <div class="text-sm font-semibold text-gray-900 dark:text-gray-100">Recovery events</div>
-              <div class="text-xs text-gray-500 dark:text-gray-400">
-                <Show when={selectedRollup()}>
-                  Subject:{' '}
-                  <span class="font-medium text-gray-700 dark:text-gray-200">
-                    {rollupSubjectLabel(selectedRollup()!, resourcesById())}
-                  </span>
-                </Show>
-              </div>
-              <div class="text-xs text-gray-500 dark:text-gray-400">
-                Rollup: <span class="font-mono">{rollupId().trim()}</span>
-              </div>
+          <Show when={!recoveryRollups.rollups.loading && recoveryRollups.rollups.error}>
+            <EmptyState
+              title="Failed to load protected items"
+              description={String((recoveryRollups.rollups.error as Error)?.message || recoveryRollups.rollups.error)}
+            />
+          </Show>
+
+          <Show when={!recoveryRollups.rollups.loading && !recoveryRollups.rollups.error && filteredRollups().length === 0}>
+            <EmptyState
+              title="No protected items yet"
+              description="Pulse hasn’t received any recovery events for this org yet."
+            />
+          </Show>
+
+          <Show when={filteredRollups().length > 0}>
+            <div class="overflow-x-auto">
+              <table class="w-full text-xs">
+                <thead>
+                  <tr class="border-b border-gray-200 bg-gray-50 text-left text-[10px] uppercase tracking-wide text-gray-500 dark:border-gray-700 dark:bg-gray-800/70 dark:text-gray-400">
+                    {([['subject', 'Subject'], ['source', 'Source'], ['lastBackup', 'Last Backup'], ['outcome', 'Outcome']] as const).map(([col, label]) => (
+                      <th
+                        class="px-1.5 sm:px-2 py-1 cursor-pointer select-none hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                        onClick={() => toggleProtectedSort(col)}
+                      >
+                        <span class="inline-flex items-center gap-1">
+                          {label}
+                          <Show when={protectedSortCol() === col}>
+                            <svg class="h-3 w-3" viewBox="0 0 12 12" fill="currentColor">
+                              {protectedSortDir() === 'asc'
+                                ? <path d="M6 3l3.5 5h-7z" />
+                                : <path d="M6 9l3.5-5h-7z" />}
+                            </svg>
+                          </Show>
+                        </span>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                  <For each={sortedRollups()}>
+                    {(r) => {
+                      const resIndex = resourcesById();
+                      const label = rollupSubjectLabel(r, resIndex);
+                      const attemptMs = r.lastAttemptAt ? Date.parse(r.lastAttemptAt) : 0;
+                      const successMs = r.lastSuccessAt ? Date.parse(r.lastSuccessAt) : 0;
+                      const outcome = normalizeOutcome(r.lastOutcome);
+                      const providers = (r.providers || [])
+                        .slice()
+                        .map((p) => String(p || '').trim())
+                        .filter(Boolean)
+                        .sort((a, b) => sourceLabel(a).localeCompare(sourceLabel(b)));
+                      const nowMs = Date.now();
+                      const issueTone = deriveRollupIssueTone(r, nowMs);
+                      const issueRailClass = issueTone === 'none' ? '' : ISSUE_RAIL_CLASS[issueTone];
+                      const stale = isRollupStale(r, nowMs);
+                      const neverSucceeded = (!Number.isFinite(successMs) || successMs <= 0) && Number.isFinite(attemptMs) && attemptMs > 0;
+                      return (
+                        <tr
+                          class="cursor-pointer border-b border-gray-200 hover:bg-gray-50/70 dark:border-gray-700 dark:hover:bg-gray-800/35"
+                          onClick={() => {
+                            setView('events');
+                            setRollupId(r.rollupId);
+                          }}
+                        >
+                          <td
+                            class={`relative max-w-[420px] truncate whitespace-nowrap px-1.5 sm:px-2 py-1 text-gray-900 ${
+                              issueTone === 'rose' || issueTone === 'blue'
+                                ? 'font-medium dark:text-slate-100'
+                                : issueTone === 'amber'
+                                  ? 'dark:text-slate-200'
+                                  : 'dark:text-gray-300'
+                            }`}
+                            title={label}
+                          >
+                            <Show when={issueTone !== 'none'}>
+                              <span class={`absolute inset-y-0 left-0 w-0.5 ${issueRailClass}`} />
+                            </Show>
+                            <div class="flex items-center gap-2">
+                              <span class="truncate">{label}</span>
+                              <Show when={neverSucceeded}>
+                                <span class="whitespace-nowrap rounded px-1 py-0.5 text-[10px] font-medium text-amber-700 bg-amber-50 dark:text-amber-300 dark:bg-amber-900/30">never succeeded</span>
+                              </Show>
+                              <Show when={!neverSucceeded && stale}>
+                                <span class="whitespace-nowrap rounded px-1 py-0.5 text-[10px] font-medium text-amber-700 bg-amber-50 dark:text-amber-300 dark:bg-amber-900/30">stale</span>
+                              </Show>
+                            </div>
+                          </td>
+                          <td class="whitespace-nowrap px-1.5 sm:px-2 py-1">
+                            <div class="flex flex-wrap gap-1.5">
+                              <For each={providers}>
+                                {(p) => {
+                                  const badge = getSourcePlatformBadge(String(p));
+                                  return <span class={badge?.classes || ''}>{badge?.label || sourceLabel(String(p))}</span>;
+                                }}
+                              </For>
+                            </div>
+                          </td>
+                          <td
+                            class={`whitespace-nowrap px-1.5 sm:px-2 py-1 ${rollupAgeTextClass(r, nowMs)}`}
+                            title={successMs > 0 ? formatAbsoluteTime(successMs) : attemptMs > 0 ? formatAbsoluteTime(attemptMs) : undefined}
+                          >
+                            {successMs > 0 ? formatRelativeTime(successMs) : neverSucceeded ? (
+                              <span class="text-amber-600 dark:text-amber-400">never</span>
+                            ) : '—'}
+                          </td>
+                          <td class="whitespace-nowrap px-1.5 sm:px-2 py-1">
+                            <span
+                              class={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-medium ${OUTCOME_BADGE_CLASS[outcome]}`}
+                            >
+                              {titleize(outcome)}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    }}
+                  </For>
+                </tbody>
+              </table>
             </div>
           </Show>
         </Card>
+      </Show>
 
+      <Show when={view() === 'events'}>
         <Show when={recoveryPoints.response.loading && sortedPoints().length === 0}>
           <Card padding="sm">
             <div class="px-3 py-6 text-sm text-gray-500 dark:text-gray-400">Loading recovery points...</div>
@@ -1480,278 +1703,6 @@ const Recovery: Component = () => {
               </div>
             </Show>
           </Card>
-
-          <Show when={!kioskMode()}>
-            <Card padding="sm">
-              <div class="flex flex-col gap-2">
-                <SearchInput
-                  value={query}
-                  onChange={(value) => {
-                    setQuery(value);
-                    setCurrentPage(1);
-                  }}
-                  placeholder="Search recovery events..."
-                  class="w-full"
-                  autoFocus
-                  history={{
-                    storageKey: STORAGE_KEYS.RECOVERY_SEARCH_HISTORY,
-                    emptyMessage: 'Recent searches appear here.',
-                  }}
-                />
-                <Show when={isMobile()}>
-                  <button
-                    type="button"
-                    onClick={() => setEventsFiltersOpen((o) => !o)}
-                    class="flex items-center gap-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400"
-                  >
-                    <ListFilterIcon class="w-3.5 h-3.5" />
-                    Filters
-                    <Show when={eventsActiveFilterCount() > 0}>
-                      <span class="ml-0.5 rounded-full bg-blue-500 px-1.5 py-0.5 text-[10px] font-semibold text-white leading-none">
-                        {eventsActiveFilterCount()}
-                      </span>
-                    </Show>
-                  </button>
-                </Show>
-
-                <Show when={!isMobile() || eventsFiltersOpen()}>
-                  <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                  <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-                    <label
-                      for="recovery-provider-filter-events"
-                      class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
-                    >
-                    Provider
-                  </label>
-                  <select
-                    id="recovery-provider-filter-events"
-                    value={providerFilter()}
-                    onChange={(event) => {
-                      setProviderFilter(normalizeProviderFromQuery(event.currentTarget.value));
-                      setCurrentPage(1);
-                    }}
-                    class="min-w-[10rem] max-w-[14rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
-                  >
-                    <For each={providerOptions()}>
-                      {(p) => <option value={p}>{p === 'all' ? 'All Providers' : sourceLabel(p)}</option>}
-                    </For>
-                  </select>
-                </div>
-
-                <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-                  <label
-                    for="recovery-status-filter"
-                    class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
-                  >
-                    Status
-                  </label>
-                  <select
-                    id="recovery-status-filter"
-                    value={outcomeFilter()}
-                    onChange={(event) => {
-                      const value = event.currentTarget.value as 'all' | KnownOutcome;
-                      setOutcomeFilter(value);
-                      if (value !== 'all') setVerificationFilter('all');
-                      setCurrentPage(1);
-                    }}
-                    class="min-w-[7rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
-                  >
-                    <For each={availableOutcomes}>
-                      {(outcome) => (
-                        <option value={outcome}>
-                          {outcome === 'all' ? 'All' : titleize(outcome)}
-                        </option>
-                      )}
-                    </For>
-                  </select>
-                </div>
-
-                <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-                  <span class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Scope</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setScopeFilter('all');
-                      setCurrentPage(1);
-                    }}
-                    class={segmentedButtonClass(scopeFilter() === 'all')}
-                  >
-                    All
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setScopeFilter('workload');
-                      setCurrentPage(1);
-                    }}
-                    class={segmentedButtonClass(scopeFilter() === 'workload')}
-                  >
-                    Workloads
-                  </button>
-                </div>
-
-                <button
-                  type="button"
-                  aria-expanded={moreFiltersOpen()}
-                  aria-controls="recovery-more-filters"
-                  onClick={() => setMoreFiltersOpen((v) => !v)}
-                  class="inline-flex items-center gap-2 rounded-md border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
-                >
-                  <span>{moreFiltersOpen() ? 'Less filters' : 'More filters'}</span>
-                  <Show when={activeAdvancedFilterCount() > 0}>
-                    <span class="rounded-full bg-gray-200 px-1.5 py-0.5 text-[10px] font-mono text-gray-700 dark:bg-gray-700 dark:text-gray-200">
-                      {activeAdvancedFilterCount()}
-                    </span>
-                  </Show>
-                </button>
-
-                <Show when={artifactColumnVisibility.availableToggles().length > 0}>
-                  <ColumnPicker
-                    columns={artifactColumnVisibility.availableToggles()}
-                    isHidden={artifactColumnVisibility.isHiddenByUser}
-                    onToggle={artifactColumnVisibility.toggle}
-                    onReset={artifactColumnVisibility.resetToDefaults}
-                  />
-                </Show>
-
-                <Show when={hasActiveArtifactFilters()}>
-                  <button
-                    type="button"
-                    onClick={resetAllArtifactFilters}
-                    class="shrink-0 rounded-lg bg-blue-100 px-2.5 py-1.5 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:hover:bg-blue-900/60"
-                  >
-                    Clear
-                  </button>
-                </Show>
-                </div>
-
-                <Show when={moreFiltersOpen()}>
-                  <div id="recovery-more-filters" class="flex flex-wrap items-center gap-2 pt-2 border-t border-gray-200 dark:border-gray-700">
-                  <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-                    <span class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Method</span>
-                    <For each={(['all', 'snapshot', 'local', 'remote'] as const)}>
-                      {(mode) => (
-                        <button
-                          type="button"
-                          aria-pressed={modeFilter() === mode}
-                          onClick={() => {
-                            setModeFilter(mode === 'all' ? 'all' : mode);
-                            setCurrentPage(1);
-                          }}
-                          class={segmentedButtonClass(modeFilter() === mode)}
-                        >
-                          {mode === 'all' ? 'All' : MODE_LABELS[mode]}
-                        </button>
-                      )}
-                    </For>
-                  </div>
-
-                  <Show when={showVerificationFilter()}>
-                    <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-                      <label
-                        for="recovery-verification-filter"
-                        class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
-                      >
-                        Verification
-                      </label>
-                      <select
-                        id="recovery-verification-filter"
-                        value={verificationFilter()}
-                        onChange={(event) => {
-                          setVerificationFilter(event.currentTarget.value as VerificationFilter);
-                          if (event.currentTarget.value !== 'all') setOutcomeFilter('all');
-                          setCurrentPage(1);
-                        }}
-                        class="min-w-[6.5rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
-                      >
-                        <option value="all">Any</option>
-                        <option value="verified">Verified</option>
-                        <option value="unverified">Unverified</option>
-                        <option value="unknown">Unknown</option>
-                      </select>
-                    </div>
-                  </Show>
-
-                  <Show when={showClusterFilter()}>
-                    <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-                      <label
-                        for="recovery-cluster-filter"
-                        class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
-                      >
-                        Cluster
-                      </label>
-                      <select
-                        id="recovery-cluster-filter"
-                        value={clusterFilter()}
-                        onChange={(event) => {
-                          setClusterFilter(event.currentTarget.value);
-                          setCurrentPage(1);
-                        }}
-                        class="min-w-[8rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
-                      >
-                        <option value="all">All</option>
-                        <For each={clusterOptions().filter((value) => value !== 'all')}>
-                          {(cluster) => <option value={cluster}>{cluster}</option>}
-                        </For>
-                      </select>
-                    </div>
-                  </Show>
-
-                  <Show when={showNodeFilter()}>
-                    <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-                      <label
-                        for="recovery-node-filter"
-                        class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
-                      >
-                        Node/Host
-                      </label>
-                      <select
-                        id="recovery-node-filter"
-                        value={nodeFilter()}
-                        onChange={(event) => {
-                          setNodeFilter(event.currentTarget.value);
-                          setCurrentPage(1);
-                        }}
-                        class="min-w-[7.5rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
-                      >
-                        <option value="all">All</option>
-                        <For each={nodeOptions().filter((value) => value !== 'all')}>
-                          {(node) => <option value={node}>{node}</option>}
-                        </For>
-                      </select>
-                    </div>
-                  </Show>
-
-                  <Show when={showNamespaceFilter()}>
-                    <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-                      <label
-                        for="recovery-namespace-filter"
-                        class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
-                      >
-                        Namespace
-                      </label>
-                      <select
-                        id="recovery-namespace-filter"
-                        value={namespaceFilter()}
-                        onChange={(event) => {
-                          setNamespaceFilter(event.currentTarget.value);
-                          setCurrentPage(1);
-                        }}
-                        class="min-w-[8rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
-                      >
-                        <option value="all">All</option>
-                        <For each={namespaceOptions().filter((value) => value !== 'all')}>
-                          {(namespace) => <option value={namespace}>{namespace}</option>}
-                        </For>
-                      </select>
-                    </div>
-                  </Show>
-                  </div>
-                </Show>
-                </Show>
-              </div>
-            </Card>
-          </Show>
 
           <Card padding="none" class="overflow-hidden">
             <Show
