@@ -13,6 +13,8 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring/errors"
+	proxmoxrecoverymapper "github.com/rcourtman/pulse-go-rewrite/internal/recovery/mapper/proxmox"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 	"github.com/rs/zerolog/log"
@@ -250,25 +252,22 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 	// Update state with storage backups for this instance
 	m.state.UpdateStorageBackupsForInstance(instanceName, allBackups)
 
+	// Best-effort ingestion into recovery store (for rollups / unified backups UX).
+	guestInfo := buildProxmoxGuestInfoIndex(snapshot)
+	m.ingestRecoveryPointsAsync(proxmoxrecoverymapper.FromPVEStorageBackups(allBackups, guestInfo))
+
 	// Sync backup times to VMs/Containers for backup status indicators
 	m.state.SyncGuestBackupTimes()
 
 	if m.alertManager != nil {
 		snapshot := m.state.GetSnapshot()
 		guestsByKey, guestsByVMID := buildGuestLookups(snapshot, m.guestMetadataStore)
-		pveStorage := snapshot.Backups.PVE.StorageBackups
-		if len(pveStorage) == 0 && len(snapshot.PVEBackups.StorageBackups) > 0 {
-			pveStorage = snapshot.PVEBackups.StorageBackups
+		rollups, err := m.listBackupRollupsForAlerts(ctx)
+		if err != nil {
+			log.Warn().Err(err).Msg("Failed to list recovery rollups for backup alerts")
+		} else {
+			m.alertManager.CheckBackups(rollups, guestsByKey, guestsByVMID)
 		}
-		pbsBackups := snapshot.Backups.PBS
-		if len(pbsBackups) == 0 && len(snapshot.PBSBackups) > 0 {
-			pbsBackups = snapshot.PBSBackups
-		}
-		pmgBackups := snapshot.Backups.PMG
-		if len(pmgBackups) == 0 && len(snapshot.PMGBackups) > 0 {
-			pmgBackups = snapshot.PMGBackups
-		}
-		m.alertManager.CheckBackups(pveStorage, pbsBackups, pmgBackups, guestsByKey, guestsByVMID)
 	}
 
 	// Clear permission warning if no permission errors occurred this cycle
@@ -764,6 +763,10 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 	// Update state with guest snapshots for this instance
 	m.state.UpdateGuestSnapshotsForInstance(instanceName, allSnapshots)
 
+	// Best-effort ingestion into recovery store (for rollups / unified backups UX).
+	guestInfo := buildProxmoxGuestInfoIndex(snapshot)
+	m.ingestRecoveryPointsAsync(proxmoxrecoverymapper.FromPVEGuestSnapshots(allSnapshots, guestInfo))
+
 	if m.alertManager != nil {
 		m.alertManager.CheckSnapshotsForInstance(instanceName, allSnapshots, guestNames)
 	}
@@ -1221,25 +1224,59 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 	// Update state
 	m.state.UpdatePBSBackups(instanceName, allBackups)
 
+	// Best-effort ingestion into recovery store (for rollups / unified backups UX).
+	snapshot := m.state.GetSnapshot()
+	candidates := make(map[string][]proxmoxrecoverymapper.GuestCandidate)
+	for _, vm := range snapshot.VMs {
+		if vm.Template || vm.VMID <= 0 {
+			continue
+		}
+		key := "vm:" + strconv.Itoa(vm.VMID)
+		sourceID := strings.TrimSpace(vm.ID)
+		if sourceID == "" {
+			sourceID = makeGuestID(vm.Instance, vm.Node, vm.VMID)
+		}
+		candidates[key] = append(candidates[key], proxmoxrecoverymapper.GuestCandidate{
+			SourceID:     sourceID,
+			ResourceType: unifiedresources.ResourceTypeVM,
+			DisplayName:  strings.TrimSpace(vm.Name),
+			InstanceName: strings.TrimSpace(vm.Instance),
+			NodeName:     strings.TrimSpace(vm.Node),
+			VMID:         vm.VMID,
+		})
+	}
+	for _, ct := range snapshot.Containers {
+		if ct.Template || ct.VMID <= 0 {
+			continue
+		}
+		key := "ct:" + strconv.Itoa(ct.VMID)
+		sourceID := strings.TrimSpace(ct.ID)
+		if sourceID == "" {
+			sourceID = makeGuestID(ct.Instance, ct.Node, ct.VMID)
+		}
+		candidates[key] = append(candidates[key], proxmoxrecoverymapper.GuestCandidate{
+			SourceID:     sourceID,
+			ResourceType: unifiedresources.ResourceTypeLXC,
+			DisplayName:  strings.TrimSpace(ct.Name),
+			InstanceName: strings.TrimSpace(ct.Instance),
+			NodeName:     strings.TrimSpace(ct.Node),
+			VMID:         ct.VMID,
+		})
+	}
+	m.ingestRecoveryPointsAsync(proxmoxrecoverymapper.FromPBSBackups(allBackups, candidates))
+
 	// Sync backup times to VMs/Containers for backup status indicators
 	m.state.SyncGuestBackupTimes()
 
 	if m.alertManager != nil {
 		snapshot := m.state.GetSnapshot()
 		guestsByKey, guestsByVMID := buildGuestLookups(snapshot, m.guestMetadataStore)
-		pveStorage := snapshot.Backups.PVE.StorageBackups
-		if len(pveStorage) == 0 && len(snapshot.PVEBackups.StorageBackups) > 0 {
-			pveStorage = snapshot.PVEBackups.StorageBackups
+		rollups, err := m.listBackupRollupsForAlerts(context.Background())
+		if err != nil {
+			log.Warn().Err(err).Msg("Failed to list recovery rollups for backup alerts")
+		} else {
+			m.alertManager.CheckBackups(rollups, guestsByKey, guestsByVMID)
 		}
-		pbsBackups := snapshot.Backups.PBS
-		if len(pbsBackups) == 0 && len(snapshot.PBSBackups) > 0 {
-			pbsBackups = snapshot.PBSBackups
-		}
-		pmgBackups := snapshot.Backups.PMG
-		if len(pmgBackups) == 0 && len(snapshot.PMGBackups) > 0 {
-			pmgBackups = snapshot.PMGBackups
-		}
-		m.alertManager.CheckBackups(pveStorage, pbsBackups, pmgBackups, guestsByKey, guestsByVMID)
 	}
 
 	// Immediately broadcast the updated state so frontend sees new backups
@@ -1486,6 +1523,11 @@ func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, clie
 
 	// Update state with new backup tasks for this instance
 	m.state.UpdateBackupTasksForInstance(instanceName, backupTasks)
+
+	// Best-effort ingestion into recovery store (for rollups / unified backups UX).
+	snapshot := m.state.GetSnapshot()
+	guestInfo := buildProxmoxGuestInfoIndex(snapshot)
+	m.ingestRecoveryPointsAsync(proxmoxrecoverymapper.FromPVEBackupTasks(backupTasks, guestInfo))
 }
 
 func (m *Monitor) pollPVEBackupsAsync(

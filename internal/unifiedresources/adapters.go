@@ -737,9 +737,18 @@ func isZFSStorageType(storageType string) bool {
 	}
 }
 
-func resourceFromDockerContainer(ct models.DockerContainer) (Resource, ResourceIdentity) {
+func resourceFromDockerContainer(ct models.DockerContainer, host models.DockerHost) (Resource, ResourceIdentity) {
 	metrics := metricsFromDockerContainer(ct)
+	runtime := strings.TrimSpace(host.Runtime)
+	if runtime == "" {
+		if ct.Podman != nil {
+			runtime = "podman"
+		} else {
+			runtime = "docker"
+		}
+	}
 	docker := &DockerData{
+		HostSourceID:   host.ID,
 		ContainerID:    ct.ID,
 		Image:          ct.Image,
 		UptimeSeconds:  ct.UptimeSeconds,
@@ -748,6 +757,7 @@ func resourceFromDockerContainer(ct models.DockerContainer) (Resource, ResourceI
 		RestartCount:   ct.RestartCount,
 		ExitCode:       ct.ExitCode,
 		Labels:         cloneLabelMap(ct.Labels),
+		Runtime:        runtime,
 	}
 	if len(ct.Ports) > 0 {
 		docker.Ports = make([]DockerPortMeta, len(ct.Ports))

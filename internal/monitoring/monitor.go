@@ -24,6 +24,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring/errors"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
+	recoverymanager "github.com/rcourtman/pulse-go-rewrite/internal/recovery/manager"
 	"github.com/rcourtman/pulse-go-rewrite/internal/system"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
@@ -746,6 +747,7 @@ type Monitor struct {
 	nodeLastOnline           map[string]time.Time           // Track last time each node was seen online (for grace period)
 	nodePendingUpdatesCache  map[string]pendingUpdatesCache // Cache pending updates per node (checked every 30 min)
 	resourceStore            ResourceStoreInterface         // Optional unified resource store for polling optimization
+	recoveryManager          *recoverymanager.Manager       // Optional recovery store manager for backup rollups
 	mockMetricsCancel        context.CancelFunc
 	mockMetricsWg            sync.WaitGroup
 	dockerChecker            DockerChecker // Optional Docker checker for LXC containers
@@ -2683,6 +2685,14 @@ func (m *Monitor) SetResourceStore(store ResourceStoreInterface) {
 	log.Info().Msg("resource store set for polling optimization")
 }
 
+// SetRecoveryManager wires the recovery store manager for best-effort ingestion of
+// recovery points derived from polled backup/snapshot data.
+func (m *Monitor) SetRecoveryManager(manager *recoverymanager.Manager) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.recoveryManager = manager
+}
+
 // GetNotificationManager returns the notification manager
 func (m *Monitor) GetNotificationManager() *notifications.NotificationManager {
 	return m.notificationMgr
@@ -3025,6 +3035,15 @@ func monitorIsWorkloadType(resourceType string) bool {
 }
 
 func monitorClusterID(resource unifiedresources.Resource) string {
+	if resource.Docker != nil && resource.Docker.Swarm != nil {
+		if name := strings.TrimSpace(resource.Docker.Swarm.ClusterName); name != "" {
+			return name
+		}
+		if id := strings.TrimSpace(resource.Docker.Swarm.ClusterID); id != "" {
+			return id
+		}
+	}
+
 	clusterID := strings.TrimSpace(resource.Identity.ClusterName)
 	if clusterID == "" && resource.Proxmox != nil {
 		clusterID = strings.TrimSpace(resource.Proxmox.ClusterName)

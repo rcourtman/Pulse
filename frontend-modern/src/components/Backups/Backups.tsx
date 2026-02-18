@@ -1,66 +1,97 @@
 import { Component, For, Show, createEffect, createMemo, createSignal, untrack } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
-import { useWebSocket } from '@/App';
 import { Card } from '@/components/shared/Card';
+import { ColumnPicker } from '@/components/shared/ColumnPicker';
+import { Dialog } from '@/components/shared/Dialog';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { SearchInput } from '@/components/shared/SearchInput';
 import { getSourcePlatformBadge, getSourcePlatformLabel } from '@/components/shared/sourcePlatformBadges';
 import { hideTooltip, showTooltip } from '@/components/shared/Tooltip';
 import { getWorkloadTypeBadge } from '@/components/shared/workloadTypeBadges';
+import { useColumnVisibility } from '@/hooks/useColumnVisibility';
 import { formatAbsoluteTime, formatBytes } from '@/utils/format';
-import { STORAGE_KEYS } from '@/utils/localStorage';
-import { buildBackupRecords } from '@/features/storageBackups/backupAdapters';
-import { PLATFORM_BLUEPRINTS } from '@/features/storageBackups/platformBlueprint';
-import type { BackupOutcome, BackupRecord } from '@/features/storageBackups/models';
+import { STORAGE_KEYS, createLocalStorageBooleanSignal } from '@/utils/localStorage';
 import { useStorageBackupsResources } from '@/hooks/useUnifiedResources';
-import {
-  BACKUPS_QUERY_PARAMS,
-  buildBackupsPath,
-  parseBackupsLinkSearch,
-} from '@/routing/resourceLinks';
+import { useRecoveryRollups } from '@/hooks/useRecoveryRollups';
+import { useRecoveryPoints } from '@/hooks/useRecoveryPoints';
+import { useRecoveryPointsFacets } from '@/hooks/useRecoveryPointsFacets';
+import { useRecoveryPointsSeries } from '@/hooks/useRecoveryPointsSeries';
+import { buildBackupsPath, parseBackupsLinkSearch } from '@/routing/resourceLinks';
+import type { ProtectionRollup, RecoveryPoint } from '@/types/recovery';
+import type { Resource } from '@/types/resource';
+import { RecoveryPointDetails } from '@/components/Backups/RecoveryPointDetails';
+import type { ColumnDef } from '@/hooks/useColumnVisibility';
 
-type BackupMode = 'snapshot' | 'local' | 'remote';
+type BackupsView = 'protected' | 'events';
+
+type ArtifactMode = 'snapshot' | 'local' | 'remote';
 type VerificationFilter = 'all' | 'verified' | 'unverified' | 'unknown';
 
-const PAGE_SIZE = 100;
 const STALE_ISSUE_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000;
 const AGING_THRESHOLD_MS = 2 * 24 * 60 * 60 * 1000;
 
-const OUTCOME_BADGE_CLASS: Record<BackupOutcome, string> = {
-  success: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
-  warning: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300',
-  failed: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
-  running: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
-  offline: 'bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-200',
-  unknown: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
+const sourceLabel = (value: string): string => getSourcePlatformLabel(value);
+
+const normalizeProviderFromQuery = (value: string): string => {
+  const v = (value || '').trim().toLowerCase();
+  if (!v || v === 'all') return 'all';
+  return v;
 };
 
-const MODE_LABELS: Record<BackupMode, string> = {
+const segmentedButtonClass = (selected: boolean): string => {
+  const base = 'rounded-md px-3 py-1.5 text-xs font-semibold transition-colors';
+  if (selected) {
+    return `${base} bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm ring-1 ring-gray-200 dark:ring-gray-600`;
+  }
+  return `${base} text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600/50`;
+};
+
+const groupHeaderRowClass = () => 'bg-gray-50 dark:bg-gray-900/40';
+const groupHeaderTextClass = () =>
+  'py-1 pr-2 pl-4 text-[12px] sm:text-sm font-semibold text-slate-700 dark:text-slate-300';
+
+type KnownOutcome = 'success' | 'warning' | 'failed' | 'running' | 'unknown';
+
+const MODE_LABELS: Record<ArtifactMode, string> = {
   snapshot: 'Snapshots',
   local: 'Local',
   remote: 'Remote',
 };
 
-const MODE_BADGE_CLASS: Record<BackupMode, string> = {
+const MODE_BADGE_CLASS: Record<ArtifactMode, string> = {
   snapshot: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-300',
   local: 'bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300',
   remote: 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300',
 };
 
-const CHART_SEGMENT_CLASS: Record<BackupMode, string> = {
+const CHART_SEGMENT_CLASS: Record<ArtifactMode, string> = {
   snapshot: 'bg-yellow-500',
   local: 'bg-orange-500',
   remote: 'bg-violet-500',
 };
 
+const OUTCOME_BADGE_CLASS: Record<KnownOutcome, string> = {
+  success: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
+  warning: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300',
+  failed: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
+  running: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+  unknown: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
+};
+
 const titleize = (value: string): string =>
-  value
+  (value || '')
     .split('-')
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ');
 
-const sourceLabel = (value: string): string => getSourcePlatformLabel(value);
+const joinWithOr = (items: string[]): string => {
+  const list = items.filter((v) => (v || '').trim().length > 0);
+  if (list.length === 0) return '';
+  if (list.length === 1) return list[0]!;
+  if (list.length === 2) return `${list[0]} or ${list[1]}`;
+  return `${list.slice(0, -1).join(', ')}, or ${list[list.length - 1]}`;
+};
 
 const dateKeyFromTimestamp = (timestamp: number): string => {
   const date = new Date(timestamp);
@@ -109,34 +140,6 @@ const formatTimeOnly = (timestamp: number | null): string => {
   });
 };
 
-const isStaleIssue = (record: BackupRecord, nowMs: number): boolean => {
-  if (!record.completedAt || record.completedAt <= 0) return false;
-  return nowMs - record.completedAt >= STALE_ISSUE_THRESHOLD_MS;
-};
-
-type IssueTone = 'none' | 'amber' | 'rose' | 'blue';
-
-const deriveIssueTone = (record: BackupRecord, nowMs: number): IssueTone => {
-  if (record.outcome === 'failed' || record.outcome === 'offline') return 'rose';
-  if (record.outcome === 'running') return 'blue';
-  if (record.outcome === 'warning' || record.verified === false || isStaleIssue(record, nowMs)) return 'amber';
-  return 'none';
-};
-
-const ISSUE_RAIL_CLASS: Record<Exclude<IssueTone, 'none'>, string> = {
-  amber: 'bg-amber-500/80 dark:bg-amber-500/85',
-  rose: 'bg-rose-500/85 dark:bg-rose-500/90',
-  blue: 'bg-blue-500/80 dark:bg-blue-500/85',
-};
-
-const timeAgeTextClass = (record: BackupRecord, nowMs: number): string => {
-  if (!record.completedAt || record.completedAt <= 0) return 'text-gray-500 dark:text-gray-500';
-  const ageMs = nowMs - record.completedAt;
-  if (ageMs >= STALE_ISSUE_THRESHOLD_MS) return 'text-rose-700 dark:text-rose-300';
-  if (ageMs >= AGING_THRESHOLD_MS) return 'text-amber-700 dark:text-amber-300';
-  return 'text-gray-600 dark:text-gray-400';
-};
-
 const niceAxisMax = (value: number): number => {
   if (!Number.isFinite(value) || value <= 0) return 1;
   if (value <= 5) return Math.max(1, value);
@@ -148,252 +151,513 @@ const niceAxisMax = (value: number): number => {
   return 10 * magnitude;
 };
 
-const normalizeSourceFilterFromQuery = (value: string): string => {
-  switch ((value || '').trim().toLowerCase()) {
-    case 'pve':
-    case 'proxmox':
-    case 'proxmox-pve':
-      return 'proxmox-pve';
-    case 'pbs':
-    case 'proxmox-pbs':
-      return 'proxmox-pbs';
-    case 'pmg':
-    case 'proxmox-pmg':
-      return 'proxmox-pmg';
-    case 'all':
-    case '':
-      return 'all';
-    default:
-      return value;
+const normalizeOutcome = (value: string | null | undefined): KnownOutcome => {
+  const v = (value || '').trim().toLowerCase();
+  if (v === 'success' || v === 'warning' || v === 'failed' || v === 'running' || v === 'unknown') return v;
+  return 'unknown';
+};
+
+const rollupSubjectLabel = (rollup: ProtectionRollup, resourcesById: Map<string, Resource>): string => {
+  const subjectRID = (rollup.subjectResourceId || '').trim();
+  if (subjectRID) {
+    const res = resourcesById.get(subjectRID);
+    const name = (res?.name || '').trim();
+    if (name) return name;
   }
+
+  const ref = rollup.subjectRef || null;
+  if (ref?.namespace && ref?.name) return `${ref.namespace}/${ref.name}`;
+  if (ref?.name) return ref.name;
+  if (subjectRID) return subjectRID;
+  return rollup.rollupId;
 };
 
-const toLegacySourceValue = (value: string): string => {
-  if (value === 'proxmox-pve') return 'pve';
-  if (value === 'proxmox-pbs') return 'pbs';
-  if (value === 'proxmox-pmg') return 'pmg';
-  return value;
+const pointTimestampMs = (p: RecoveryPoint): number => {
+  const raw = String(p.completedAt || p.startedAt || '');
+  const parsed = Date.parse(raw);
+  return Number.isFinite(parsed) ? parsed : 0;
 };
 
-const normalizeMode = (value: string | null | undefined): BackupMode | 'all' => {
+const detailString = (p: RecoveryPoint, key: string): string => {
+  const value = p.details?.[key];
+  return typeof value === 'string' ? value.trim() : '';
+};
+
+const detailNumber = (p: RecoveryPoint, key: string): number | null => {
+  const value = p.details?.[key];
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+};
+
+const buildSubjectLabelForPoint = (p: RecoveryPoint, resourcesById: Map<string, Resource>): string => {
+  const subjectRID = (p.subjectResourceId || '').trim();
+  if (subjectRID) {
+    const res = resourcesById.get(subjectRID);
+    const name = (res?.name || '').trim();
+    if (name) return name;
+    return subjectRID;
+  }
+
+  const displayLabel = String(p.display?.subjectLabel || '').trim();
+  if (displayLabel) return displayLabel;
+
+  const ref = p.subjectRef || null;
+  const ns = String(ref?.namespace || '').trim();
+  const name = String(ref?.name || '').trim();
+  if (ns && name) return `${ns}/${name}`;
+  if (name) return name;
+  const id = String(ref?.id || '').trim();
+  if (id) return id;
+  return p.id;
+};
+
+const buildRepositoryLabelForPoint = (p: RecoveryPoint): string => {
+  const displayLabel = String(p.display?.repositoryLabel || '').trim();
+  if (displayLabel) return displayLabel;
+
+  const repo = p.repositoryRef || null;
+  const repoName = String(repo?.name || '').trim();
+  const repoType = String(repo?.type || '').trim();
+  const repoClass = String(repo?.class || '').trim();
+
+  if (repoType === 'proxmox-pbs-datastore') {
+    const ns = repoClass ? ` (${repoClass})` : '';
+    return repoName ? `${repoName}${ns}` : 'n/a';
+  }
+  if (repoType === 'proxmox-storage') {
+    return repoName || 'n/a';
+  }
+  if (repoType === 'velero-backup-storage-location') {
+    return repoName ? `Velero: ${repoName}` : 'n/a';
+  }
+  if (repoType === 'k8s-volume-snapshot-class') {
+    return repoName ? `SnapshotClass: ${repoName}` : 'n/a';
+  }
+  if (repoName) return repoName;
+
+  // Fallbacks for older/partial payloads.
+  const storage = detailString(p, 'storage');
+  if (storage) return storage;
+  const datastore = detailString(p, 'datastore');
+  if (datastore) return datastore;
+  const storageLocation = detailString(p, 'storageLocation');
+  if (storageLocation) return `Velero: ${storageLocation}`;
+  const targetDataset = detailString(p, 'targetDataset');
+  if (targetDataset) return targetDataset;
+
+  return 'n/a';
+};
+
+const buildDetailsSummaryForPoint = (p: RecoveryPoint): string => {
+  const displaySummary = String(p.display?.detailsSummary || '').trim();
+  if (displaySummary) return displaySummary;
+
+  // Kubernetes: prefer names/identifiers that aren't already rendered in other columns.
+  const veleroName = detailString(p, 'veleroName');
+  if (veleroName) {
+    const ns = detailString(p, 'veleroNs');
+    return ns ? `${ns}/${veleroName}` : veleroName;
+  }
+
+  const snapshotName = detailString(p, 'snapshotName');
+  if (snapshotName) return snapshotName;
+  const zfsSnapshot = detailString(p, 'snapshot');
+  if (zfsSnapshot) return zfsSnapshot;
+  const fullName = detailString(p, 'fullName');
+  if (fullName) return fullName;
+  const taskName = detailString(p, 'taskName');
+  if (taskName) {
+    const lastSnapshot = detailString(p, 'lastSnapshot');
+    return lastSnapshot ? `${taskName} (${lastSnapshot})` : taskName;
+  }
+  const volid = detailString(p, 'volid');
+  if (volid) return volid;
+  const notes = detailString(p, 'notes');
+  if (notes) return notes;
+  const comment = detailString(p, 'comment');
+  if (comment) return comment;
+  const phase = detailString(p, 'phase');
+  if (phase) return phase;
+  const errText = detailString(p, 'error');
+  if (errText) return errText;
+  return '';
+};
+
+const normalizeModeFromQuery = (value: string | null | undefined): ArtifactMode | 'all' => {
   const normalized = (value || '').trim().toLowerCase();
   if (normalized === 'snapshot' || normalized === 'local' || normalized === 'remote') return normalized;
   return 'all';
 };
 
-const isBackupOutcome = (value: string): value is BackupOutcome =>
-  value === 'success' ||
-  value === 'warning' ||
-  value === 'failed' ||
-  value === 'running' ||
-  value === 'offline' ||
-  value === 'unknown';
+const deriveMode = (p: RecoveryPoint): ArtifactMode => {
+  const raw = String(p.mode || '').trim().toLowerCase();
+  if (raw === 'snapshot' || raw === 'local' || raw === 'remote') return raw;
 
-const detailString = (record: BackupRecord, key: string): string => {
-  const details = (record.details as Record<string, unknown> | undefined) || {};
-  const value = details[key];
-  if (typeof value === 'string') return value;
-  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
-  return '';
-};
-
-const deriveMode = (record: BackupRecord): BackupMode => {
-  if (record.mode === 'snapshot' || record.mode === 'local' || record.mode === 'remote') return record.mode;
-  const detailMode = detailString(record, 'mode');
+  const detailMode = detailString(p, 'mode');
   if (detailMode === 'snapshot' || detailMode === 'local' || detailMode === 'remote') return detailMode;
-  if (record.category === 'snapshot') return 'snapshot';
+
+  if (String(p.kind || '').trim().toLowerCase() === 'snapshot') return 'snapshot';
   return 'local';
 };
 
-const deriveClusterLabel = (record: BackupRecord): string => {
-  const kubernetesCluster = (record.kubernetes?.cluster || '').trim();
-  if (kubernetesCluster) return kubernetesCluster;
-  const proxmoxInstance = (record.proxmox?.instance || '').trim();
+const deriveClusterLabelForPoint = (p: RecoveryPoint): string => {
+  const displayValue = String(p.display?.clusterLabel || '').trim();
+  if (displayValue) return displayValue;
+  const k8sClusterName = detailString(p, 'k8sClusterName');
+  if (k8sClusterName) return k8sClusterName;
+  const proxmoxInstance = detailString(p, 'instance');
   if (proxmoxInstance) return proxmoxInstance;
-  if (record.location.scope === 'cluster') return (record.location.label || '').trim() || 'n/a';
+  const truenasHost = detailString(p, 'hostname');
+  if (truenasHost) return truenasHost;
   return 'n/a';
 };
 
-const deriveNodeLabel = (record: BackupRecord): string => {
-  const typedNode =
-    (record.proxmox?.node || '').trim() ||
-    (record.kubernetes?.node || '').trim() ||
-    (record.docker?.host || '').trim();
-  if (typedNode) return typedNode;
-  const detailNode = detailString(record, 'node');
-  if (detailNode) return detailNode;
-  if (record.location.scope === 'node') return (record.location.label || '').trim() || 'n/a';
+const deriveNodeLabelForPoint = (p: RecoveryPoint): string => {
+  const displayValue = String(p.display?.nodeHostLabel || '').trim();
+  if (displayValue) return displayValue;
+  const node = detailString(p, 'node');
+  if (node) return node;
+  const k8sNode = detailString(p, 'k8sNodeName');
+  if (k8sNode) return k8sNode;
+  const host = detailString(p, 'hostname');
+  if (host) return host;
   return 'n/a';
 };
 
-const deriveNamespaceLabel = (record: BackupRecord): string => {
-  const namespace = (record.proxmox?.namespace || record.kubernetes?.namespace || detailString(record, 'namespace')).trim();
-  if (namespace) return namespace;
-  if (record.source.platform === 'proxmox-pbs') return 'root';
+const deriveNamespaceLabelForPoint = (p: RecoveryPoint): string => {
+  const displayValue = String(p.display?.namespaceLabel || '').trim();
+  if (displayValue) return displayValue;
+  // Namespace is only meaningful for Kubernetes namespaces and PBS namespaces.
+  // Proxmox instance names are stored in SubjectRef.Namespace but should be treated as "cluster", not namespace.
+  const ns = String(p.subjectRef?.namespace || '').trim();
+  if (ns && String(p.provider || '') === 'kubernetes') return ns;
+  const detailNS = detailString(p, 'namespace');
+  if (detailNS) return detailNS;
+  // PBS namespaces default to root.
+  if (String(p.provider || '') === 'proxmox-pbs') return 'root';
   return 'n/a';
 };
 
-const deriveEntityIdLabel = (record: BackupRecord): string => {
-  const proxmoxId = (record.proxmox?.vmid || '').trim();
-  if (proxmoxId) return proxmoxId;
-  const dockerContainerId = (record.docker?.containerId || '').trim();
-  if (dockerContainerId) return dockerContainerId;
-  const kubernetesWorkload = firstNonEmpty(record.kubernetes?.workloadName, record.kubernetes?.backupId, record.kubernetes?.runId);
-  if (kubernetesWorkload) return kubernetesWorkload;
-  const vmidFromDetails = detailString(record, 'vmid');
-  if (vmidFromDetails) return vmidFromDetails;
-  const match = record.scope.label.match(/VMID\s+(.+)/i);
-  if (match?.[1]) return match[1];
-  return record.refs?.platformEntityId || 'n/a';
+const deriveEntityIdLabelForPoint = (p: RecoveryPoint): string => {
+  const displayValue = String(p.display?.entityIdLabel || '').trim();
+  if (displayValue) return displayValue;
+  const vmid = detailNumber(p, 'vmid');
+  if (typeof vmid === 'number') return String(vmid);
+  const vmidStr = detailString(p, 'vmid');
+  if (vmidStr) return vmidStr;
+  const uid = String(p.subjectRef?.uid || '').trim();
+  if (uid) return uid;
+  const id = String(p.subjectRef?.id || '').trim();
+  if (id) return id;
+  return 'n/a';
 };
 
-const deriveGuestType = (record: BackupRecord): string => {
-  const workload = record.scope.workloadType || 'other';
-  if (workload === 'vm') return 'VM';
-  if (workload === 'container') {
-    if (record.source.platform === 'docker') return 'Container';
-    return 'LXC';
+const workloadBadgeKeyForPoint = (p: RecoveryPoint, resourcesById: Map<string, Resource>): string => {
+  const subjectRID = String(p.subjectResourceId || '').trim();
+  if (subjectRID) {
+    const res = resourcesById.get(subjectRID);
+    const rt = String(res?.type || '').trim();
+    // Map unified resource types to workload badge keys.
+    if (rt === 'vm') return 'vm';
+    if (rt === 'container' || rt === 'oci-container') return 'container';
+    if (rt === 'docker-container') return 'docker';
+    if (rt === 'pod') return 'pod';
+    if (rt === 'host' || rt === 'node' || rt === 'docker-host') return 'host';
+    return rt || 'other';
   }
-  if (workload === 'host') return 'Host';
-  if (workload === 'pod') return 'Pod';
-  return titleize(workload);
+
+  const subjectType = String(p.subjectRef?.type || '').trim().toLowerCase();
+  if (subjectType.includes('k8s')) return subjectType.includes('pod') ? 'pod' : 'k8s';
+  if (subjectType.includes('pvc')) return 'k8s';
+  if (subjectType.includes('vm')) return 'vm';
+  if (subjectType.includes('lxc') || subjectType.includes('ct') || subjectType.includes('container')) return 'container';
+  if (subjectType.includes('host') || subjectType.includes('node')) return 'host';
+  return subjectType || 'other';
 };
 
-const firstNonEmpty = (...values: Array<string | null | undefined>): string => {
-  for (const value of values) {
-    const normalized = (value || '').trim();
-    if (normalized) return normalized;
+const deriveTypeLabelForPoint = (p: RecoveryPoint, resourcesById: Map<string, Resource>): string => {
+  const subjectRID = String(p.subjectResourceId || '').trim();
+  if (subjectRID) {
+    const res = resourcesById.get(subjectRID);
+    const rt = String(res?.type || '').trim();
+    if (rt === 'vm') return 'VM';
+    if (rt === 'container' || rt === 'oci-container') return 'LXC';
+    if (rt === 'docker-container') return 'Container';
+    if (rt === 'pod') return 'Pod';
+    if (rt === 'host' || rt === 'node' || rt === 'docker-host') return 'Host';
+    return titleize(rt) || 'Other';
   }
-  return '';
+
+  const t = String(p.subjectRef?.type || '').trim();
+  if (t) return titleize(t);
+  return 'Other';
 };
 
-const deriveDetailsOwner = (record: BackupRecord): string =>
-  firstNonEmpty(record.proxmox?.owner, detailString(record, 'owner'));
-
-const summarizeDetails = (record: BackupRecord): string => {
-  const pieces: string[] = [];
-  const datastore = firstNonEmpty(record.proxmox?.datastore, detailString(record, 'datastore'));
-  const namespace = firstNonEmpty(record.proxmox?.namespace, record.kubernetes?.namespace, detailString(record, 'namespace'));
-  const notes = firstNonEmpty(record.proxmox?.notes, detailString(record, 'notes'));
-  const comment = firstNonEmpty(record.proxmox?.comment, detailString(record, 'comment'));
-  const repository = firstNonEmpty(record.kubernetes?.repository, record.docker?.repository);
-  const policy = firstNonEmpty(record.kubernetes?.policy, record.docker?.policy);
-  const snapshotClass = firstNonEmpty(record.kubernetes?.snapshotClass);
-  const image = firstNonEmpty(record.docker?.image);
-  const volume = firstNonEmpty(record.docker?.volume);
-  if (datastore) pieces.push(datastore);
-  if (namespace) pieces.push(namespace || 'root');
-  if (repository) pieces.push(repository);
-  if (policy) pieces.push(policy);
-  if (snapshotClass) pieces.push(snapshotClass);
-  if (image) pieces.push(image);
-  if (volume) pieces.push(volume);
-  if (notes) pieces.push(notes);
-  if (comment) pieces.push(comment);
-  return pieces.join(' | ');
+const summarizeDetailsForPoint = (p: RecoveryPoint): string => {
+  // Keep this provider-specific and avoid duplicating data shown in other columns.
+  return buildDetailsSummaryForPoint(p);
 };
 
-const segmentedButtonClass = (selected: boolean, disabled: boolean) => {
-  const base = 'px-2 py-1 text-xs font-medium rounded-md transition-all duration-150 active:scale-95';
-  if (disabled) return `${base} text-gray-400 dark:text-gray-600 cursor-not-allowed`;
-  if (selected) {
-    return `${base} bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm ring-1 ring-gray-200 dark:ring-gray-600`;
+type IssueTone = 'none' | 'amber' | 'rose' | 'blue';
+
+const isStaleIssue = (p: RecoveryPoint, nowMs: number): boolean => {
+  const completedMs = pointTimestampMs(p);
+  if (!completedMs || completedMs <= 0) return false;
+  return nowMs - completedMs >= STALE_ISSUE_THRESHOLD_MS;
+};
+
+const deriveIssueTone = (p: RecoveryPoint, nowMs: number): IssueTone => {
+  const outcome = normalizeOutcome(p.outcome);
+  if (outcome === 'failed') return 'rose';
+  if (outcome === 'running') return 'blue';
+  if (outcome === 'warning' || (p.verified ?? null) === false || isStaleIssue(p, nowMs)) return 'amber';
+  return 'none';
+};
+
+const ISSUE_RAIL_CLASS: Record<Exclude<IssueTone, 'none'>, string> = {
+  amber: 'bg-amber-500/80 dark:bg-amber-500/85',
+  rose: 'bg-rose-500/85 dark:bg-rose-500/90',
+  blue: 'bg-blue-500/80 dark:bg-blue-500/85',
+};
+
+const timeAgeTextClass = (p: RecoveryPoint, nowMs: number): string => {
+  const completedMs = pointTimestampMs(p);
+  if (!completedMs || completedMs <= 0) return 'text-gray-500 dark:text-gray-500';
+  const ageMs = nowMs - completedMs;
+  if (ageMs >= STALE_ISSUE_THRESHOLD_MS) return 'text-rose-700 dark:text-rose-300';
+  if (ageMs >= AGING_THRESHOLD_MS) return 'text-amber-700 dark:text-amber-300';
+  return 'text-gray-600 dark:text-gray-400';
+};
+
+const rollupTimestampMs = (r: ProtectionRollup): number => {
+  const raw = String(r.lastSuccessAt || r.lastAttemptAt || '');
+  const parsed = Date.parse(raw);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const isRollupStale = (r: ProtectionRollup, nowMs: number): boolean => {
+  const successMs = r.lastSuccessAt ? Date.parse(r.lastSuccessAt) : 0;
+  if (Number.isFinite(successMs) && successMs > 0) return nowMs - successMs >= STALE_ISSUE_THRESHOLD_MS;
+  const attemptMs = r.lastAttemptAt ? Date.parse(r.lastAttemptAt) : 0;
+  if (Number.isFinite(attemptMs) && attemptMs > 0) return nowMs - attemptMs >= STALE_ISSUE_THRESHOLD_MS;
+  return false;
+};
+
+const deriveRollupIssueTone = (r: ProtectionRollup, nowMs: number): IssueTone => {
+  const outcome = normalizeOutcome(r.lastOutcome);
+  if (outcome === 'failed') return 'rose';
+  if (outcome === 'running') return 'blue';
+  if (outcome === 'warning' || isRollupStale(r, nowMs)) return 'amber';
+  return 'none';
+};
+
+const rollupAgeTextClass = (r: ProtectionRollup, nowMs: number): string => {
+  const ts = rollupTimestampMs(r);
+  if (!ts || ts <= 0) return 'text-gray-500 dark:text-gray-500';
+  const ageMs = nowMs - ts;
+  if (ageMs >= STALE_ISSUE_THRESHOLD_MS) return 'text-rose-700 dark:text-rose-300';
+  if (ageMs >= AGING_THRESHOLD_MS) return 'text-amber-700 dark:text-amber-300';
+  return 'text-gray-600 dark:text-gray-400';
+};
+
+const workloadBadgeKeyForRollup = (r: ProtectionRollup, resourcesById: Map<string, Resource>): string => {
+  const subjectRID = String(r.subjectResourceId || '').trim();
+  if (subjectRID) {
+    const res = resourcesById.get(subjectRID);
+    const rt = String(res?.type || '').trim();
+    if (rt === 'vm') return 'vm';
+    if (rt === 'container' || rt === 'oci-container') return 'container';
+    if (rt === 'docker-container') return 'docker';
+    if (rt === 'pod') return 'pod';
+    if (rt === 'host' || rt === 'node' || rt === 'docker-host') return 'host';
+    return rt || 'other';
   }
-  return `${base} text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600/50`;
+
+  const subjectType = String(r.subjectRef?.type || '').trim().toLowerCase();
+  if (subjectType.includes('k8s')) return subjectType.includes('pod') ? 'pod' : 'k8s';
+  if (subjectType.includes('pvc')) return 'k8s';
+  if (subjectType.includes('vm')) return 'vm';
+  if (subjectType.includes('lxc') || subjectType.includes('ct') || subjectType.includes('container')) return 'container';
+  if (subjectType.includes('host') || subjectType.includes('node')) return 'host';
+  return subjectType || 'other';
 };
 
-const groupHeaderRowClass = () => 'bg-gray-50 dark:bg-gray-900/40';
+const typeLabelForRollup = (r: ProtectionRollup, resourcesById: Map<string, Resource>): string => {
+  const subjectRID = String(r.subjectResourceId || '').trim();
+  if (subjectRID) {
+    const res = resourcesById.get(subjectRID);
+    const rt = String(res?.type || '').trim();
+    if (rt === 'vm') return 'VM';
+    if (rt === 'container' || rt === 'oci-container') return 'LXC';
+    if (rt === 'docker-container') return 'Container';
+    if (rt === 'pod') return 'Pod';
+    if (rt === 'host' || rt === 'node' || rt === 'docker-host') return 'Host';
+    return titleize(rt) || 'Other';
+  }
 
-const groupHeaderTextClass = () =>
-  'py-1 pr-2 pl-4 text-[12px] sm:text-sm font-semibold text-slate-700 dark:text-slate-300';
+  const t = String(r.subjectRef?.type || '').trim();
+  if (t) return titleize(t);
+  return 'Other';
+};
 
 const Backups: Component = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { state, connected, initialDataReceived } = useWebSocket();
-  const storageBackupsResources = useStorageBackupsResources();
 
-  const [search, setSearch] = createSignal('');
-  const [sourceFilter, setSourceFilter] = createSignal('all');
-  const [modeFilter, setModeFilter] = createSignal<'all' | BackupMode>('all');
-  const [outcomeFilter, setOutcomeFilter] = createSignal<'all' | BackupOutcome>('all');
-  const [scopeFilter, setScopeFilter] = createSignal('all');
+  const storageBackupsResources = useStorageBackupsResources();
+  const recoveryRollups = useRecoveryRollups();
+
+  const [view, setView] = createSignal<BackupsView>('events');
+  const [rollupId, setRollupId] = createSignal('');
+  const [query, setQuery] = createSignal('');
+  const [providerFilter, setProviderFilter] = createSignal('all');
+  const [clusterFilter, setClusterFilter] = createSignal('all');
+  const [modeFilter, setModeFilter] = createSignal<'all' | ArtifactMode>('all');
+  const [outcomeFilter, setOutcomeFilter] = createSignal<'all' | KnownOutcome>('all');
+  const [verificationFilter, setVerificationFilter] = createSignal<VerificationFilter>('all');
+  const [scopeFilter, setScopeFilter] = createSignal<'all' | 'workload'>('all');
   const [nodeFilter, setNodeFilter] = createSignal('all');
   const [namespaceFilter, setNamespaceFilter] = createSignal('all');
-  const [verificationFilter, setVerificationFilter] = createSignal<VerificationFilter>('all');
+  const [protectedStaleOnly, setProtectedStaleOnly] = createSignal(false);
   const [chartRangeDays, setChartRangeDays] = createSignal<7 | 30 | 90 | 365>(30);
   const [selectedDateKey, setSelectedDateKey] = createSignal<string | null>(null);
   const [currentPage, setCurrentPage] = createSignal(1);
-  const adapterResources = createMemo(() => {
-    const unifiedResources = storageBackupsResources.resources();
-    return unifiedResources;
-  });
-  const records = createMemo<BackupRecord[]>(() =>
-    buildBackupRecords({ state, resources: adapterResources() }),
-  );
+  const [selectedPoint, setSelectedPoint] = createSignal<RecoveryPoint | null>(null);
+  const [moreFiltersOpen, setMoreFiltersOpen] = createLocalStorageBooleanSignal(STORAGE_KEYS.BACKUPS_SHOW_FILTERS, false);
 
-  const sourceOptions = createMemo(() => {
-    const values = Array.from(new Set(records().map((record) => record.source.platform))).sort((a, b) =>
-      sourceLabel(a).localeCompare(sourceLabel(b)),
-    );
-    return ['all', ...values];
-  });
+  const rollups = createMemo<ProtectionRollup[]>(() => recoveryRollups.rollups() || []);
 
-  const nodeOptions = createMemo(() => {
-    const values = Array.from(
-      new Set(
-        records()
-          .map((record) => deriveNodeLabel(record))
-          .filter((value) => value !== 'n/a'),
-      ),
-    ).sort();
-    return ['all', ...values];
+  const tzOffsetMinutes = createMemo(() => -new Date().getTimezoneOffset());
+
+  const chartWindow = createMemo(() => {
+    const days = chartRangeDays();
+    const end = new Date();
+    end.setHours(23, 59, 59, 999);
+    const start = new Date(end);
+    start.setDate(start.getDate() - (days - 1));
+    start.setHours(0, 0, 0, 0);
+    return { from: start.toISOString(), to: end.toISOString() };
   });
 
-  const namespaceOptions = createMemo(() => {
-    const values = Array.from(
-      new Set(
-        records()
-          .map((record) => deriveNamespaceLabel(record))
-          .filter((value) => value !== 'n/a'),
-      ),
-    ).sort();
-    return ['all', ...values];
+  const tableWindow = createMemo(() => {
+    const selected = selectedDateKey();
+    if (selected) {
+      const start = parseDateKey(selected);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(start);
+      end.setHours(23, 59, 59, 999);
+      return { from: start.toISOString(), to: end.toISOString() };
+    }
+    return chartWindow();
   });
 
-  const availableOutcomes = ['all', 'success', 'warning', 'failed', 'running'] as const;
-  const isActiveBackupsRoute = () => location.pathname === buildBackupsPath();
+  const recoveryPoints = useRecoveryPoints(() => {
+    if (view() !== 'events') return null;
+    const rid = rollupId().trim();
+    const window = tableWindow();
+    const vf = verificationFilter();
+    return {
+      page: currentPage(),
+      limit: 200,
+      rollupId: rid || null,
+      provider: providerFilter() === 'all' ? null : providerFilter(),
+      cluster: clusterFilter() === 'all' ? null : clusterFilter(),
+      mode: modeFilter() === 'all' ? null : modeFilter(),
+      outcome: outcomeFilter() === 'all' ? null : outcomeFilter(),
+      q: query().trim() || null,
+      node: nodeFilter() === 'all' ? null : nodeFilter(),
+      namespace: namespaceFilter() === 'all' ? null : namespaceFilter(),
+      scope: scopeFilter() === 'workload' ? 'workload' : null,
+      verification: vf === 'all' ? null : vf,
+      from: window.from,
+      to: window.to,
+    };
+  });
+
+  const recoveryFacets = useRecoveryPointsFacets(() => {
+    if (view() !== 'events') return null;
+    const rid = rollupId().trim();
+    const window = chartWindow();
+    const vf = verificationFilter();
+    return {
+      rollupId: rid || null,
+      provider: providerFilter() === 'all' ? null : providerFilter(),
+      cluster: clusterFilter() === 'all' ? null : clusterFilter(),
+      mode: modeFilter() === 'all' ? null : modeFilter(),
+      outcome: outcomeFilter() === 'all' ? null : outcomeFilter(),
+      q: query().trim() || null,
+      scope: scopeFilter() === 'workload' ? 'workload' : null,
+      verification: vf === 'all' ? null : vf,
+      from: window.from,
+      to: window.to,
+    };
+  });
+
+  const recoverySeries = useRecoveryPointsSeries(() => {
+    if (view() !== 'events') return null;
+    const rid = rollupId().trim();
+    const window = chartWindow();
+    const vf = verificationFilter();
+    return {
+      rollupId: rid || null,
+      provider: providerFilter() === 'all' ? null : providerFilter(),
+      cluster: clusterFilter() === 'all' ? null : clusterFilter(),
+      mode: modeFilter() === 'all' ? null : modeFilter(),
+      outcome: outcomeFilter() === 'all' ? null : outcomeFilter(),
+      q: query().trim() || null,
+      node: nodeFilter() === 'all' ? null : nodeFilter(),
+      namespace: namespaceFilter() === 'all' ? null : namespaceFilter(),
+      scope: scopeFilter() === 'workload' ? 'workload' : null,
+      verification: vf === 'all' ? null : vf,
+      from: window.from,
+      to: window.to,
+      tzOffsetMinutes: tzOffsetMinutes(),
+    };
+  });
+
+  const resourcesById = createMemo(() => {
+    const map = new Map<string, Resource>();
+    for (const r of storageBackupsResources.resources() || []) {
+      if (r?.id) map.set(r.id, r);
+    }
+    return map;
+  });
 
   createEffect(() => {
-    if (!isActiveBackupsRoute()) return;
-
     const parsed = parseBackupsLinkSearch(location.search);
 
-    if (parsed.query !== untrack(search)) setSearch(parsed.query);
+    const rawView = (parsed.view || '').trim().toLowerCase();
+    const nextView: BackupsView = rawView === 'protected' ? 'protected' : 'events';
+    const nextRollup = (parsed.rollupId || '').trim();
+    const nextQuery = (parsed.query || '').trim();
+    const nextProvider = normalizeProviderFromQuery(parsed.provider || '');
+    const nextCluster = (parsed.cluster || 'all').trim() || 'all';
+    const nextMode = normalizeModeFromQuery(parsed.mode);
+    const rawScope = (parsed.scope || '').trim().toLowerCase();
+    const nextScope: 'all' | 'workload' = rawScope === 'workload' ? 'workload' : 'all';
+    const nextNode = (parsed.node || 'all').trim() || 'all';
+    const nextNamespace = (parsed.namespace || 'all').trim() || 'all';
+    const verificationValue = (parsed.verification || '').trim().toLowerCase();
+    const statusValue = (parsed.status || '').trim().toLowerCase();
 
-    const sourceFromQuery = normalizeSourceFilterFromQuery(parsed.source);
-    if (sourceFromQuery !== untrack(sourceFilter)) setSourceFilter(sourceFromQuery || 'all');
+    if (nextView !== untrack(view)) setView(nextView);
+    if (nextRollup !== untrack(rollupId)) setRollupId(nextRollup);
+    if (nextQuery !== untrack(query)) setQuery(nextQuery);
+    if (nextProvider !== untrack(providerFilter)) setProviderFilter(nextProvider || 'all');
+    if (nextCluster !== untrack(clusterFilter)) setClusterFilter(nextCluster);
 
-    const modeFromQuery = normalizeMode(parsed.backupType);
-    if (modeFromQuery !== untrack(modeFilter)) setModeFilter(modeFromQuery);
+    if (nextMode !== untrack(modeFilter)) setModeFilter(nextMode);
+    if (nextScope !== untrack(scopeFilter)) setScopeFilter(nextScope);
+    if (nextNode !== untrack(nodeFilter)) setNodeFilter(nextNode);
+    if (nextNamespace !== untrack(namespaceFilter)) setNamespaceFilter(nextNamespace);
 
-    const scopeFromQuery = parsed.group === 'guest' ? 'workload' : 'all';
-    if (scopeFromQuery !== untrack(scopeFilter)) setScopeFilter(scopeFromQuery);
-
-    const nodeFromQuery = parsed.node || 'all';
-    if (nodeFromQuery !== untrack(nodeFilter)) setNodeFilter(nodeFromQuery);
-
-    const namespaceFromQuery = parsed.namespace || 'all';
-    if (namespaceFromQuery !== untrack(namespaceFilter)) setNamespaceFilter(namespaceFromQuery);
-
-    if (parsed.status === 'verified' || parsed.status === 'unverified') {
-      if (parsed.status !== untrack(verificationFilter)) setVerificationFilter(parsed.status);
+    if (verificationValue === 'verified' || verificationValue === 'unverified' || verificationValue === 'unknown') {
+      if (verificationValue !== untrack(verificationFilter)) setVerificationFilter(verificationValue as VerificationFilter);
       if (untrack(outcomeFilter) !== 'all') setOutcomeFilter('all');
     } else {
       if (untrack(verificationFilter) !== 'all') setVerificationFilter('all');
-      const statusValue = parsed.status || '';
-      if (isBackupOutcome(statusValue)) {
-        if (statusValue !== untrack(outcomeFilter)) setOutcomeFilter(statusValue);
+      const normalizedOutcome = normalizeOutcome(statusValue);
+      if (statusValue && normalizedOutcome !== 'unknown') {
+        if (normalizedOutcome !== untrack(outcomeFilter)) setOutcomeFilter(normalizedOutcome);
       } else if (untrack(outcomeFilter) !== 'all') {
         setOutcomeFilter('all');
       }
@@ -401,146 +665,243 @@ const Backups: Component = () => {
   });
 
   createEffect(() => {
-    if (!isActiveBackupsRoute()) return;
-
-    const nextStatus =
-      verificationFilter() !== 'all' ? verificationFilter() : outcomeFilter() !== 'all' ? outcomeFilter() : '';
-
-    const managedPath = buildBackupsPath({
-      source: sourceFilter() === 'all' ? null : toLegacySourceValue(sourceFilter()),
-      backupType: modeFilter() === 'all' ? null : modeFilter(),
-      status: nextStatus || null,
-      group: scopeFilter() === 'workload' ? 'guest' : null,
-      node: nodeFilter() === 'all' ? null : nodeFilter(),
-      namespace: namespaceFilter() === 'all' ? null : namespaceFilter(),
-      query: search().trim() || null,
-    });
-
-    const [, managedSearch = ''] = managedPath.split('?');
-    const managedParams = new URLSearchParams(managedSearch);
-    const params = new URLSearchParams(location.search);
-
-    Object.values(BACKUPS_QUERY_PARAMS).forEach((key) => params.delete(key));
-    managedParams.forEach((value, key) => params.set(key, value));
-
-    const basePath = location.pathname;
-    const nextSearch = params.toString();
-    const nextPath = nextSearch ? `${basePath}?${nextSearch}` : basePath;
-    const currentPath = `${location.pathname}${location.search || ''}`;
-
-    if (nextPath !== currentPath) navigate(nextPath, { replace: true });
+    // Avoid leaving modals open when switching views/filters.
+    view();
+    rollupId();
+    providerFilter();
+    clusterFilter();
+    modeFilter();
+    outcomeFilter();
+    verificationFilter();
+    nodeFilter();
+    namespaceFilter();
+    currentPage();
+    setSelectedPoint(null);
+    if (view() !== 'events' && untrack(moreFiltersOpen)) setMoreFiltersOpen(false);
   });
 
-  const baseFilteredRecords = createMemo<BackupRecord[]>(() => {
-    const query = search().trim().toLowerCase();
-    return records().filter((record) => {
-      const mode = deriveMode(record);
-      const node = deriveNodeLabel(record);
+  createEffect(() => {
+    // Keep paging stable: any filter change resets to the first page.
+    if (view() !== 'events') return;
+    rollupId();
+    query();
+    providerFilter();
+    clusterFilter();
+    modeFilter();
+    outcomeFilter();
+    verificationFilter();
+    nodeFilter();
+    namespaceFilter();
+    scopeFilter();
+    chartRangeDays();
+    selectedDateKey();
+    if (untrack(currentPage) !== 1) setCurrentPage(1);
+  });
 
-      if (sourceFilter() !== 'all' && record.source.platform !== sourceFilter()) return false;
-      if (modeFilter() !== 'all' && mode !== modeFilter()) return false;
-      if (outcomeFilter() !== 'all' && record.outcome !== outcomeFilter()) return false;
-      if (scopeFilter() !== 'all' && record.scope.scope !== scopeFilter()) return false;
-      if (nodeFilter() !== 'all' && node !== nodeFilter()) return false;
-      if (namespaceFilter() !== 'all' && deriveNamespaceLabel(record) !== namespaceFilter()) return false;
+	  createEffect(() => {
+    const rid = rollupId().trim();
+	    const v = view();
 
-      if (verificationFilter() === 'verified' && record.verified !== true) return false;
-      if (verificationFilter() === 'unverified' && record.verified !== false) return false;
-      if (verificationFilter() === 'unknown' && record.verified !== null) return false;
+    const status = outcomeFilter() !== 'all' ? outcomeFilter() : null;
+    const verification = v === 'events' && verificationFilter() !== 'all' ? verificationFilter() : null;
 
-      if (!query) return true;
+    const nextPath = buildBackupsPath({
+      // Keep view explicit for stable deep-links and predictable URL-driven state.
+      view: v,
+      rollupId: v === 'events' && rid ? rid : null,
+      query: query().trim() || null,
+      provider: providerFilter() !== 'all' ? providerFilter() : null,
+      cluster: v === 'events' && clusterFilter() !== 'all' ? clusterFilter() : null,
+      mode: v === 'events' && modeFilter() !== 'all' ? modeFilter() : null,
+      status,
+      verification,
+      scope: v === 'events' && scopeFilter() === 'workload' ? 'workload' : null,
+      node: v === 'events' && nodeFilter() !== 'all' ? nodeFilter() : null,
+      namespace: v === 'events' && namespaceFilter() !== 'all' ? namespaceFilter() : null,
+    });
 
+    const currentPath = `${location.pathname}${location.search || ''}`;
+    if (nextPath !== currentPath) {
+      navigate(nextPath, { replace: true });
+    }
+  });
+
+  const providerOptions = createMemo(() => {
+    const providers = new Set<string>();
+    for (const r of rollups()) {
+      for (const p of r.providers || []) {
+        const v = String(p || '').trim();
+        if (v) providers.add(v);
+      }
+    }
+    for (const p of recoveryPoints.points() || []) {
+      const v = String(p?.provider || '').trim();
+      if (v) providers.add(v);
+    }
+    const values = Array.from(providers).sort((a, b) => sourceLabel(a).localeCompare(sourceLabel(b)));
+    return ['all', ...values];
+  });
+
+  const baseRollups = createMemo<ProtectionRollup[]>(() => {
+    const q = query().trim().toLowerCase();
+    const provider = providerFilter() === 'all' ? '' : providerFilter();
+    const resIndex = resourcesById();
+
+    const out = rollups().filter((r) => {
+      const providers = (r.providers || []).map((p) => String(p || '').trim()).filter(Boolean);
+      if (provider && !providers.includes(provider)) return false;
+
+      if (!q) return true;
+      const label = rollupSubjectLabel(r, resIndex);
       const haystack = [
-        record.name,
-        record.scope.label,
-        record.location.label,
-        record.source.platform,
-        mode,
-        deriveClusterLabel(record),
-        deriveNodeLabel(record),
-        deriveNamespaceLabel(record),
-        deriveEntityIdLabel(record),
-        record.proxmox?.datastore,
-        record.proxmox?.owner,
-        record.proxmox?.comment,
-        record.proxmox?.notes,
-        record.kubernetes?.workloadKind,
-        record.kubernetes?.workloadName,
-        record.kubernetes?.repository,
-        record.kubernetes?.policy,
-        record.kubernetes?.snapshotClass,
-        record.docker?.containerId,
-        record.docker?.containerName,
-        record.docker?.image,
-        record.docker?.volume,
-        record.docker?.repository,
-        record.docker?.policy,
-        ...(record.capabilities || []),
+        r.rollupId,
+        r.subjectResourceId || '',
+        label,
+        r.subjectRef?.type || '',
+        r.subjectRef?.namespace || '',
+        r.subjectRef?.name || '',
+        providers.join(' '),
+        r.lastOutcome || '',
       ]
         .filter(Boolean)
         .join(' ')
         .toLowerCase();
-      return haystack.includes(query);
+      return haystack.includes(q);
     });
-  });
 
-  const rangeFilteredRecords = createMemo<BackupRecord[]>(() => {
-    const end = new Date();
-    end.setHours(23, 59, 59, 999);
-    const start = new Date(end);
-    start.setDate(start.getDate() - (chartRangeDays() - 1));
-    start.setHours(0, 0, 0, 0);
-    const startMs = start.getTime();
-    const endMs = end.getTime();
-
-    return baseFilteredRecords().filter((record) => {
-      if (!record.completedAt) return true;
-      return record.completedAt >= startMs && record.completedAt <= endMs;
-    });
-  });
-
-  const filteredRecords = createMemo<BackupRecord[]>(() => {
-    const dayKey = selectedDateKey();
-    if (!dayKey) return rangeFilteredRecords();
-    return rangeFilteredRecords().filter((record) => {
-      if (!record.completedAt) return false;
-      return dateKeyFromTimestamp(record.completedAt) === dayKey;
-    });
-  });
-
-  createEffect(() => {
-    const selected = selectedDateKey();
-    if (!selected) return;
-    const exists = rangeFilteredRecords().some((record) => {
-      if (!record.completedAt) return false;
-      return dateKeyFromTimestamp(record.completedAt) === selected;
-    });
-    if (!exists) {
-      setSelectedDateKey(null);
-    }
-  });
-
-  const sortedRecords = createMemo<BackupRecord[]>(() => {
-    return [...filteredRecords()].sort((a, b) => {
-      const aTs = a.completedAt || 0;
-      const bTs = b.completedAt || 0;
+    return [...out].sort((a, b) => {
+      const aTs = a.lastAttemptAt ? Date.parse(a.lastAttemptAt) : 0;
+      const bTs = b.lastAttemptAt ? Date.parse(b.lastAttemptAt) : 0;
       if (aTs !== bTs) return bTs - aTs;
-      return a.name.localeCompare(b.name);
+      return a.rollupId.localeCompare(b.rollupId);
+    });
+  });
+
+  const rollupsSummary = createMemo(() => {
+    const items = baseRollups();
+    const nowMs = Date.now();
+    const staleThreshold = nowMs - STALE_ISSUE_THRESHOLD_MS;
+
+    const counts: Record<KnownOutcome, number> = {
+      success: 0,
+      warning: 0,
+      failed: 0,
+      running: 0,
+      unknown: 0,
+    };
+
+    let stale = 0;
+    let neverSucceeded = 0;
+
+    for (const r of items) {
+      counts[normalizeOutcome(r.lastOutcome)] += 1;
+
+      const attemptMs = r.lastAttemptAt ? Date.parse(r.lastAttemptAt) : 0;
+      const successMs = r.lastSuccessAt ? Date.parse(r.lastSuccessAt) : 0;
+
+      if (successMs > 0) {
+        if (successMs < staleThreshold) stale += 1;
+      } else if (attemptMs > 0) {
+        neverSucceeded += 1;
+        if (attemptMs < staleThreshold) stale += 1;
+      }
+    }
+
+    return { total: items.length, counts, stale, neverSucceeded };
+  });
+
+  const filteredRollups = createMemo<ProtectionRollup[]>(() => {
+    const selectedOutcome = outcomeFilter();
+    const staleOnly = protectedStaleOnly();
+    if (selectedOutcome === 'all' && !staleOnly) return baseRollups();
+
+    const nowMs = Date.now();
+    const staleThreshold = nowMs - STALE_ISSUE_THRESHOLD_MS;
+
+    return baseRollups().filter((r) => {
+      if (selectedOutcome !== 'all' && normalizeOutcome(r.lastOutcome) !== selectedOutcome) return false;
+      if (!staleOnly) return true;
+
+      const attemptMs = r.lastAttemptAt ? Date.parse(r.lastAttemptAt) : 0;
+      const successMs = r.lastSuccessAt ? Date.parse(r.lastSuccessAt) : 0;
+      if (successMs > 0) return successMs < staleThreshold;
+      if (attemptMs > 0) return attemptMs < staleThreshold;
+      return false;
+    });
+  });
+
+  const selectedRollup = createMemo(() => {
+    const rid = rollupId().trim();
+    if (!rid) return null;
+    return rollups().find((r) => String(r.rollupId || '').trim() === rid) || null;
+  });
+
+  const availableOutcomes = ['all', 'success', 'warning', 'failed', 'running'] as const;
+
+  const facets = createMemo(() => recoveryFacets.facets() || {});
+
+  const clusterOptions = createMemo(() => {
+    const values = (facets().clusters || []).slice().map((v) => String(v || '').trim()).filter(Boolean).sort();
+    const selected = clusterFilter().trim();
+    if (selected && selected !== 'all' && !values.includes(selected)) values.unshift(selected);
+    return ['all', ...values];
+  });
+
+  const nodeOptions = createMemo(() => {
+    const values = (facets().nodesHosts || []).slice().map((v) => String(v || '').trim()).filter(Boolean).sort();
+    // Ensure current selection remains selectable (for URL-driven states).
+    const selected = nodeFilter().trim();
+    if (selected && selected !== 'all' && !values.includes(selected)) values.unshift(selected);
+    return ['all', ...values];
+  });
+
+  const namespaceOptions = createMemo(() => {
+    const values = (facets().namespaces || []).slice().map((v) => String(v || '').trim()).filter(Boolean).sort();
+    const selected = namespaceFilter().trim();
+    if (selected && selected !== 'all' && !values.includes(selected)) values.unshift(selected);
+    return ['all', ...values];
+  });
+
+  const showClusterFilter = createMemo(() => clusterOptions().length > 1 || clusterFilter() !== 'all');
+  const showNodeFilter = createMemo(() => nodeOptions().length > 1 || nodeFilter() !== 'all');
+  const showNamespaceFilter = createMemo(() => namespaceOptions().length > 1 || namespaceFilter() !== 'all');
+  const showVerificationFilter = createMemo(() => Boolean(facets().hasVerification) || verificationFilter() !== 'all');
+  const activeAdvancedFilterCount = createMemo(() => {
+    let count = 0;
+    if (modeFilter() !== 'all') count += 1;
+    if (verificationFilter() !== 'all') count += 1;
+    if (clusterFilter() !== 'all') count += 1;
+    if (nodeFilter() !== 'all') count += 1;
+    if (namespaceFilter() !== 'all') count += 1;
+    return count;
+  });
+
+  const filteredPoints = createMemo<RecoveryPoint[]>(() => recoveryPoints.points() || []);
+
+  const sortedPoints = createMemo<RecoveryPoint[]>(() => {
+    const resIndex = resourcesById();
+    return [...filteredPoints()].sort((a, b) => {
+      const aTs = pointTimestampMs(a);
+      const bTs = pointTimestampMs(b);
+      if (aTs !== bTs) return bTs - aTs;
+      const aName = buildSubjectLabelForPoint(a, resIndex);
+      const bName = buildSubjectLabelForPoint(b, resIndex);
+      return aName.localeCompare(bName);
     });
   });
 
   const groupedByDay = createMemo(() => {
-    const groups: Array<{ key: string; label: string; tone: 'recent' | 'default'; items: BackupRecord[] }> = [];
+    const groups: Array<{ key: string; label: string; tone: 'recent' | 'default'; items: RecoveryPoint[] }> = [];
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
     const yesterday = today - 24 * 60 * 60 * 1000;
 
     const groupMap = new Map<
       string,
-      { key: string; label: string; tone: 'recent' | 'default'; items: BackupRecord[] }
+      { key: string; label: string; tone: 'recent' | 'default'; items: RecoveryPoint[] }
     >();
-    for (const record of sortedRecords()) {
-      const key = record.completedAt ? dateKeyFromTimestamp(record.completedAt) : 'unknown';
+    for (const p of sortedPoints()) {
+      const key = p.completedAt ? dateKeyFromTimestamp(Date.parse(p.completedAt)) : 'unknown';
       if (!groupMap.has(key)) {
         let label = 'No Timestamp';
         let tone: 'recent' | 'default' = 'default';
@@ -557,873 +918,1310 @@ const Backups: Component = () => {
             label = fullDateLabel(key);
           }
         }
-        const group = { key, label, tone, items: [] as BackupRecord[] };
+        const group = { key, label, tone, items: [] as RecoveryPoint[] };
         groupMap.set(key, group);
         groups.push(group);
       }
-      groupMap.get(key)!.items.push(record);
+      groupMap.get(key)!.items.push(p);
     }
 
     return groups;
   });
 
-  const totalPages = createMemo(() => Math.max(1, Math.ceil(sortedRecords().length / PAGE_SIZE)));
+  const totalPages = createMemo(() => Math.max(1, recoveryPoints.meta().totalPages || 1));
 
-  const pagedGroups = createMemo(() => {
-    const start = (currentPage() - 1) * PAGE_SIZE;
-    const end = start + PAGE_SIZE;
-    const result: Array<{ key: string; label: string; tone: 'recent' | 'default'; items: BackupRecord[] }> = [];
+  const hasSizeData = createMemo(() => Boolean(facets().hasSize));
+  const hasVerificationData = createMemo(() => Boolean(facets().hasVerification));
+  const hasClusterData = createMemo(() => (facets().clusters || []).length > 0);
+  const hasNodeData = createMemo(() => (facets().nodesHosts || []).length > 0);
+  const hasNamespaceData = createMemo(() => (facets().namespaces || []).length > 0);
+  const hasEntityIDData = createMemo(() => Boolean(facets().hasEntityId));
 
-    let cursor = 0;
-    for (const group of groupedByDay()) {
-      const groupStart = cursor;
-      const groupEnd = cursor + group.items.length;
-      cursor = groupEnd;
+  const artifactColumns: ColumnDef[] = [
+    { id: 'time', label: 'Time' },
+    { id: 'subject', label: 'Subject' },
+    { id: 'entityId', label: 'ID', toggleable: true },
+    { id: 'cluster', label: 'Cluster', toggleable: true },
+    { id: 'nodeHost', label: 'Node/Host', toggleable: true },
+    { id: 'namespace', label: 'Namespace', toggleable: true },
+    { id: 'source', label: 'Source' },
+    { id: 'verified', label: 'Verified', toggleable: true },
+    { id: 'size', label: 'Size', toggleable: true },
+    { id: 'method', label: 'Method' },
+    { id: 'repository', label: 'Repository/Target' },
+    { id: 'details', label: 'Details' },
+    { id: 'outcome', label: 'Outcome' },
+  ];
 
-      if (groupEnd <= start) continue;
-      if (groupStart >= end) break;
-
-      const sliceStart = Math.max(0, start - groupStart);
-      const sliceEnd = Math.min(group.items.length, end - groupStart);
-      const items = group.items.slice(sliceStart, sliceEnd);
-      if (items.length > 0) result.push({ key: group.key, label: group.label, tone: group.tone, items });
-    }
-
-    return result;
+  const relevantArtifactColumnIDs = createMemo(() => {
+    const ids = new Set<string>(['time', 'subject', 'source', 'method', 'repository', 'details', 'outcome']);
+    if (hasVerificationData()) ids.add('verified');
+    if (hasSizeData()) ids.add('size');
+    if (hasClusterData()) ids.add('cluster');
+    if (hasNodeData()) ids.add('nodeHost');
+    if (hasNamespaceData()) ids.add('namespace');
+    if (hasEntityIDData()) ids.add('entityId');
+    return ids;
   });
 
-  const showEntityColumn = createMemo(() => sortedRecords().some((record) => deriveEntityIdLabel(record) !== 'n/a'));
-  const showTypeColumn = createMemo(() =>
-    sortedRecords().some((record) => record.scope.workloadType && record.scope.workloadType !== 'other'),
+  const artifactColumnVisibility = useColumnVisibility(
+    STORAGE_KEYS.BACKUPS_HIDDEN_COLUMNS,
+    artifactColumns,
+    // Default: keep the universal recovery-artifact contract tight.
+    ['entityId', 'cluster', 'nodeHost', 'namespace'],
+    relevantArtifactColumnIDs,
   );
-  const showClusterColumn = createMemo(() => sortedRecords().some((record) => deriveClusterLabel(record) !== 'n/a'));
-  const showNodeColumn = createMemo(() => sortedRecords().some((record) => deriveNodeLabel(record) !== 'n/a'));
-  const showNamespaceColumn = createMemo(() => sortedRecords().some((record) => deriveNamespaceLabel(record) !== 'n/a'));
-  const showSizeColumn = createMemo(() => sortedRecords().some((record) => Boolean(record.sizeBytes && record.sizeBytes > 0)));
-  const showVerificationColumn = createMemo(() => sortedRecords().some((record) => record.verified !== null));
-  const showDetailsColumn = createMemo(
-    () =>
-      sortedRecords().some((record) => {
-        const detailFlags: string[] = [];
-        if (record.protected === true) detailFlags.push('Protected');
-        if (record.encrypted === true) detailFlags.push('Encrypted');
-        return [detailFlags.join(' • '), summarizeDetails(record), deriveDetailsOwner(record)]
-          .filter((value) => value && value.trim().length > 0)
-          .join(' | ').length > 0;
-      }),
-  );
-  const tableColumnCount = createMemo(() => {
-    let count = 5; // Time, Name, Source, Mode, Outcome
-    if (showEntityColumn()) count += 1;
-    if (showTypeColumn()) count += 1;
-    if (showClusterColumn()) count += 1;
-    if (showNodeColumn()) count += 1;
-    if (showNamespaceColumn()) count += 1;
-    if (showSizeColumn()) count += 1;
-    if (showVerificationColumn()) count += 1;
-    if (showDetailsColumn()) count += 1;
-    return count;
-  });
-  const tableMinWidth = createMemo(() => `${Math.max(980, tableColumnCount() * 120)}px`);
+
+  const visibleArtifactColumns = createMemo(() => artifactColumnVisibility.visibleColumns());
+  const tableColumnCount = createMemo(() => visibleArtifactColumns().length);
+  const tableMinWidth = createMemo(() => `${Math.max(980, tableColumnCount() * 140)}px`);
 
   createEffect(() => {
     if (currentPage() > totalPages()) setCurrentPage(totalPages());
   });
 
-  const artifactCount = createMemo(() => filteredRecords().length);
-
-  const staleArtifactCount = createMemo(() => {
-    const staleThreshold = Date.now() - STALE_ISSUE_THRESHOLD_MS;
-    let count = 0;
-    for (const record of filteredRecords()) {
-      const completedAt = record.completedAt || 0;
-      if (completedAt > 0 && completedAt < staleThreshold) count += 1;
-    }
-    return count;
-  });
-
   const timeline = createMemo(() => {
-    const days = chartRangeDays();
-    const start = new Date();
-    start.setHours(0, 0, 0, 0);
-    start.setDate(start.getDate() - (days - 1));
-
-    const keyForDate = (date: Date) => {
-      const y = date.getFullYear();
-      const m = String(date.getMonth() + 1).padStart(2, '0');
-      const d = String(date.getDate()).padStart(2, '0');
-      return `${y}-${m}-${d}`;
-    };
-
-    const buckets = new Map<
-      string,
-      { key: string; label: string; total: number; snapshot: number; local: number; remote: number }
-    >();
-
-    const cursor = new Date(start);
-    for (let i = 0; i < days; i += 1) {
-      const key = keyForDate(cursor);
-      buckets.set(key, {
+    const series = recoverySeries.series() || [];
+    const points = series.map((bucket) => {
+      const key = String(bucket.day || '').trim();
+      const date = parseDateKey(key);
+      return {
         key,
-        label: cursor.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
-        total: 0,
-        snapshot: 0,
-        local: 0,
-        remote: 0,
-      });
-      cursor.setDate(cursor.getDate() + 1);
-    }
-
-    for (const record of rangeFilteredRecords()) {
-      if (!record.completedAt) continue;
-      const key = keyForDate(new Date(record.completedAt));
-      const bucket = buckets.get(key);
-      if (!bucket) continue;
-      const mode = deriveMode(record);
-      bucket.total += 1;
-      bucket[mode] += 1;
-    }
-
-    const points = Array.from(buckets.values());
+        label: date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+        total: Number(bucket.total || 0),
+        snapshot: Number(bucket.snapshot || 0),
+        local: Number(bucket.local || 0),
+        remote: Number(bucket.remote || 0),
+      };
+    });
     const maxValue = points.reduce((max, point) => Math.max(max, point.total), 0);
     const axisMax = niceAxisMax(maxValue);
     const axisTicks = [0, 1, 2, 3, 4].map((step) => Math.round((axisMax * step) / 4));
-    const labelEvery = days <= 7 ? 1 : days <= 30 ? 3 : 10;
+    const dayCount = points.length;
+    const labelEvery = dayCount <= 7 ? 1 : dayCount <= 30 ? 3 : 10;
 
     return { points, maxValue, axisMax, axisTicks, labelEvery };
   });
 
-  const timelineDiagnostics = createMemo(() => {
-    const list = baseFilteredRecords();
-    const inRangeList = rangeFilteredRecords();
-    let withCompletedAt = 0;
-    let latest: number | null = null;
-    for (const record of list) {
-      if (!record.completedAt) continue;
-      withCompletedAt += 1;
-      latest = Math.max(latest || 0, record.completedAt);
-    }
-    const inRange = inRangeList.reduce((sum, record) => (record.completedAt ? sum + 1 : sum), 0);
-    return { total: list.length, withCompletedAt, inRange, latest };
-  });
+	  const selectedDateLabel = createMemo(() => {
+	    const key = selectedDateKey();
+	    if (!key) return '';
+	    const [year, month, day] = key.split('-').map((value) => Number.parseInt(value, 10));
+	    if (!year || !month || !day) return key;
+	    const date = new Date(year, month - 1, day);
+	    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+	  });
 
-  const nextPlatforms = createMemo(() =>
-    PLATFORM_BLUEPRINTS.filter((platform) => platform.stage === 'next').map((platform) => platform.label),
-  );
+	  const activeClusterLabel = createMemo(() => (clusterFilter() === 'all' ? '' : clusterFilter()));
+	  const activeNodeLabel = createMemo(() => (nodeFilter() === 'all' ? '' : nodeFilter()));
+	  const activeNamespaceLabel = createMemo(() => (namespaceFilter() === 'all' ? '' : namespaceFilter()));
 
-  const selectedDateLabel = createMemo(() => {
-    const key = selectedDateKey();
-    if (!key) return '';
-    const [year, month, day] = key.split('-').map((value) => Number.parseInt(value, 10));
-    if (!year || !month || !day) return key;
-    const date = new Date(year, month - 1, day);
-    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-  });
-  const activeNamespaceLabel = createMemo(() => (namespaceFilter() === 'all' ? '' : namespaceFilter()));
-
-  const hasActiveFilters = createMemo(
-    () =>
-      search().trim() !== '' ||
-      sourceFilter() !== 'all' ||
-      modeFilter() !== 'all' ||
-      outcomeFilter() !== 'all' ||
-      scopeFilter() !== 'all' ||
-      nodeFilter() !== 'all' ||
-      namespaceFilter() !== 'all' ||
+	  const hasActiveArtifactFilters = createMemo(
+	    () =>
+	      query().trim() !== '' ||
+	      providerFilter() !== 'all' ||
+	      clusterFilter() !== 'all' ||
+	      modeFilter() !== 'all' ||
+	      outcomeFilter() !== 'all' ||
+	      scopeFilter() !== 'all' ||
+	      nodeFilter() !== 'all' ||
+	      namespaceFilter() !== 'all' ||
       verificationFilter() !== 'all' ||
       chartRangeDays() !== 30 ||
       selectedDateKey() !== null,
   );
 
-  const resetAllFilters = () => {
-    setSearch('');
-    setSourceFilter('all');
-    setModeFilter('all');
-    setOutcomeFilter('all');
-    setScopeFilter('all');
-    setNodeFilter('all');
-    setNamespaceFilter('all');
+	  const resetAllArtifactFilters = () => {
+	    setQuery('');
+	    setProviderFilter('all');
+	    setClusterFilter('all');
+	    setModeFilter('all');
+	    setOutcomeFilter('all');
+	    setScopeFilter('all');
+	    setNodeFilter('all');
+	    setNamespaceFilter('all');
     setVerificationFilter('all');
     setChartRangeDays(30);
     setSelectedDateKey(null);
     setCurrentPage(1);
   };
 
-  return (
-    <div data-testid="backups-page" class="flex flex-col gap-4">
-      <Card padding="sm" class="order-2">
-        <div class="flex flex-col gap-2">
-          <div class="w-full">
-            <SearchInput
-              value={search}
-              onChange={(value) => {
-                setSearch(value);
-                setCurrentPage(1);
-              }}
-              placeholder="Search backups, vmid, node, namespace, owner, notes..."
-              class="w-full"
-              autoFocus
-              history={{
-                storageKey: STORAGE_KEYS.BACKUPS_SEARCH_HISTORY,
-                emptyMessage: 'Recent backup searches appear here.',
-              }}
-            />
-          </div>
+	  return (
+	    <div data-testid="backups-page" class="flex flex-col gap-4">
+	      <Card padding="sm">
+	        <div class="flex flex-col gap-1">
+	          <div class="flex flex-wrap items-center justify-between gap-2">
+	            <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+	              <button
+	                type="button"
+	                aria-pressed={view() === 'protected'}
+	                onClick={() => {
+	                  setView('protected');
+	                  setRollupId('');
+	                }}
+	                class={segmentedButtonClass(view() === 'protected')}
+	              >
+	                Protected
+	              </button>
+	              <button
+	                type="button"
+	                aria-pressed={view() === 'events'}
+	                onClick={() => setView('events')}
+	                class={segmentedButtonClass(view() === 'events')}
+	              >
+	                Events
+	              </button>
+	            </div>
 
-          <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-            <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-              <label
-                for="backups-source-filter"
-                class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
-              >
-                Source
-              </label>
-              <select
-                id="backups-source-filter"
-                value={sourceFilter()}
-                onChange={(event) => {
-                  setSourceFilter(event.currentTarget.value);
-                  setCurrentPage(1);
-                }}
-                class="min-w-[8rem] max-w-[11rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
-              >
-                <For each={sourceOptions()}>
-                  {(source) => (
-                    <option value={source}>
-                      {source === 'all' ? 'All Sources' : sourceLabel(source)}
-                    </option>
-                  )}
-                </For>
-              </select>
-            </div>
+	            <Show when={view() === 'events' && rollupId().trim()}>
+	              <button
+	                type="button"
+	                onClick={() => {
+	                  setRollupId('');
+	                  setView('protected');
+	                }}
+	                class="rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+	              >
+	                Back to protected
+	              </button>
+	            </Show>
+	          </div>
 
-            <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-              <span class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Mode</span>
-              <button
-                type="button"
-                aria-pressed={modeFilter() === 'all'}
-                onClick={() => {
-                  setModeFilter('all');
-                  setCurrentPage(1);
-                }}
-                class={segmentedButtonClass(modeFilter() === 'all', false)}
-              >
-                All
-              </button>
-              <For each={(['snapshot', 'local', 'remote'] as BackupMode[])}>
-                {(mode) => (
-                  <button
-                    type="button"
-                    aria-pressed={modeFilter() === mode}
-                    onClick={() => {
-                      setModeFilter(mode);
-                      setCurrentPage(1);
-                    }}
-                    class={segmentedButtonClass(modeFilter() === mode, false)}
-                  >
-                    {MODE_LABELS[mode]}
-                  </button>
-                )}
-              </For>
-            </div>
+	          <div class="text-[11px] text-gray-500 dark:text-gray-400">
+	            <Show
+	              when={view() === 'protected'}
+	              fallback={<span>Events are individual snapshot/backup/replication points across all platforms.</span>}
+	            >
+	              <span>Protected is one row per subject, with the latest outcome per provider.</span>
+	            </Show>
+	          </div>
+	        </div>
+	      </Card>
 
-            <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-              <label
-                for="backups-status-filter"
-                class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
-              >
-                Status
-              </label>
-              <select
-                id="backups-status-filter"
-                value={outcomeFilter()}
-                onChange={(event) => {
-                  const value = event.currentTarget.value as 'all' | BackupOutcome;
-                  setOutcomeFilter(value);
-                  if (value !== 'all') setVerificationFilter('all');
-                  setCurrentPage(1);
-                }}
-                class="min-w-[7rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
-              >
-                <For each={availableOutcomes}>
-                  {(outcome) => (
-                    <option value={outcome}>
-                      {outcome === 'all' ? 'All' : titleize(outcome)}
-                    </option>
-                  )}
-                </For>
-              </select>
-            </div>
+      <Show when={view() === 'protected'}>
+        <Card padding="sm">
+	          <div class="flex flex-col gap-2">
+	            <div class="w-full">
+	              <SearchInput
+	                value={query}
+	                onChange={(value) => setQuery(value)}
+	                placeholder="Search protected items..."
+	                class="w-full"
+	                history={{
+	                  storageKey: STORAGE_KEYS.BACKUPS_SEARCH_HISTORY,
+	                  emptyMessage: 'Recent searches appear here.',
+	                }}
+	              />
+	            </div>
 
-            <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-              <label
-                for="backups-verification-filter"
-                class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
-              >
-                Verification
-              </label>
-              <select
-                id="backups-verification-filter"
-                value={verificationFilter()}
-                onChange={(event) => {
-                  setVerificationFilter(event.currentTarget.value as VerificationFilter);
-                  if (event.currentTarget.value !== 'all') setOutcomeFilter('all');
-                  setCurrentPage(1);
-                }}
-                class="min-w-[6.5rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
-              >
-                <option value="all">Any</option>
-                <option value="verified">Verified</option>
-                <option value="unverified">Unverified</option>
-                <option value="unknown">Unknown</option>
-              </select>
-            </div>
-
-            <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-              <label
-                for="backups-node-filter"
-                class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
-              >
-                Node
-              </label>
-              <select
-                id="backups-node-filter"
-                value={nodeFilter()}
-                onChange={(event) => {
-                  setNodeFilter(event.currentTarget.value);
-                  setCurrentPage(1);
-                }}
-                class="min-w-[7.5rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
-              >
-                <option value="all">All Nodes</option>
-                <For each={nodeOptions().filter((value) => value !== 'all')}>
-                  {(node) => <option value={node}>{node}</option>}
-                </For>
-              </select>
-            </div>
-
-            <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-              <label
-                for="backups-namespace-filter"
-                class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
-              >
-                Namespace
-              </label>
-              <select
-                id="backups-namespace-filter"
-                value={namespaceFilter()}
-                onChange={(event) => {
-                  setNamespaceFilter(event.currentTarget.value);
-                  setCurrentPage(1);
-                }}
-                class="min-w-[8rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
-              >
-                <option value="all">All Namespaces</option>
-                <For each={namespaceOptions().filter((value) => value !== 'all')}>
-                  {(namespace) => <option value={namespace}>{namespace}</option>}
-                </For>
-              </select>
-            </div>
-
-            <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-              <span class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">View</span>
-              <button
-                type="button"
-                onClick={() => {
-                  setScopeFilter('all');
-                  setCurrentPage(1);
-                }}
-                class={segmentedButtonClass(scopeFilter() === 'all', false)}
-              >
-                All
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setScopeFilter('workload');
-                  setCurrentPage(1);
-                }}
-                class={segmentedButtonClass(scopeFilter() === 'workload', false)}
-              >
-                Guest
-              </button>
-            </div>
-
-            <Show when={hasActiveFilters()}>
-              <button
-                type="button"
-                onClick={resetAllFilters}
-                class="shrink-0 rounded-lg bg-blue-100 px-2.5 py-1.5 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:hover:bg-blue-900/60"
-              >
-                Clear
-              </button>
-            </Show>
-          </div>
-        </div>
-      </Card>
-
-      <div class="order-1">
-      <Card padding="sm" class="h-full">
-          <Show when={selectedDateKey() || activeNamespaceLabel()}>
-            <div class="mb-1 flex flex-wrap items-center gap-1.5">
-              <Show when={selectedDateKey()}>
-                <div class="inline-flex max-w-full items-center gap-1 rounded border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] text-blue-700 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-200">
-                  <span class="font-medium uppercase tracking-wide">Day</span>
-                  <span class="truncate font-mono text-[10px]" title={selectedDateLabel()}>
-                    {selectedDateLabel()}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedDateKey(null)}
-                    class="rounded px-1 py-0.5 text-[10px] hover:bg-blue-100 dark:hover:bg-blue-900/50"
-                  >
-                    Clear
-                  </button>
-                </div>
-              </Show>
-              <Show when={activeNamespaceLabel()}>
-                <div
-                  data-testid="active-namespace-chip"
-                  class="inline-flex max-w-full items-center gap-1 rounded border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] text-violet-700 dark:border-violet-700 dark:bg-violet-900/30 dark:text-violet-200"
+	            <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+	              <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                <label
+                  for="backups-provider-filter"
+                  class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
                 >
-                  <span class="font-medium uppercase tracking-wide">Namespace</span>
-                  <span class="truncate font-mono text-[10px]" title={activeNamespaceLabel()}>
-                    {activeNamespaceLabel()}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setNamespaceFilter('all');
-                      setCurrentPage(1);
-                    }}
-                    class="rounded px-1 py-0.5 text-[10px] hover:bg-violet-100 dark:hover:bg-violet-900/50"
-                  >
-                    Clear
-                  </button>
+                  Provider
+                </label>
+                <select
+                  id="backups-provider-filter"
+                  value={providerFilter()}
+                  onChange={(event) => setProviderFilter(event.currentTarget.value)}
+                  class="min-w-[10rem] max-w-[14rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+                >
+                  <For each={providerOptions()}>
+                    {(p) => <option value={p}>{p === 'all' ? 'All Providers' : sourceLabel(p)}</option>}
+                  </For>
+	                </select>
+	              </div>
+
+	              <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+	                <label
+	                  for="backups-protected-status-filter"
+	                  class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+	                >
+	                  Status
+	                </label>
+	                <select
+	                  id="backups-protected-status-filter"
+	                  value={outcomeFilter()}
+	                  onChange={(event) => {
+	                    const value = event.currentTarget.value as 'all' | KnownOutcome;
+	                    setOutcomeFilter(value);
+	                    if (value !== 'all') setVerificationFilter('all');
+	                  }}
+	                  class="min-w-[7rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+	                >
+	                  <For each={availableOutcomes}>
+	                    {(outcome) => (
+	                      <option value={outcome}>
+	                        {outcome === 'all' ? 'Any' : titleize(outcome)}
+	                      </option>
+	                    )}
+	                  </For>
+	                </select>
+	              </div>
+
+	              <button
+	                type="button"
+	                aria-pressed={protectedStaleOnly()}
+	                onClick={() => setProtectedStaleOnly((v) => !v)}
+	                class={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${
+	                  protectedStaleOnly()
+	                    ? 'border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-200 dark:hover:bg-amber-900/50'
+	                    : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700'
+	                }`}
+	              >
+	                Stale
+	                <Show when={rollupsSummary().stale > 0}>
+	                  <span class="ml-1 text-[10px] text-gray-500 dark:text-gray-400">({rollupsSummary().stale})</span>
+	                </Show>
+	              </button>
+
+	              <button
+	                type="button"
+	                onClick={() => {
+	                  setQuery('');
+	                  setProviderFilter('all');
+	                  setOutcomeFilter('all');
+	                  setVerificationFilter('all');
+	                  setProtectedStaleOnly(false);
+	                }}
+	                class="rounded-md border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+	              >
+	                Reset
+	              </button>
+	            </div>
+
+	            <Show when={baseRollups().length > 0}>
+	              <div class="flex flex-wrap items-center gap-1.5 pt-1 text-[11px] text-gray-500 dark:text-gray-400">
+	                <button
+	                  type="button"
+	                  onClick={() => setOutcomeFilter('all')}
+	                  class={`rounded-full px-2 py-0.5 border ${
+	                    outcomeFilter() === 'all'
+	                      ? 'border-slate-300 bg-slate-100 text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100'
+	                      : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900/20 dark:text-gray-200 dark:hover:bg-gray-800/60'
+	                  }`}
+	                >
+	                  All <span class="ml-1 font-mono text-[10px]">{rollupsSummary().total}</span>
+	                </button>
+	                <For each={(['failed', 'warning', 'running', 'success', 'unknown'] as KnownOutcome[])}>
+	                  {(k) => (
+	                    <button
+	                      type="button"
+	                      onClick={() => setOutcomeFilter(k)}
+	                      class={`rounded-full px-2 py-0.5 border ${
+	                        outcomeFilter() === k
+	                          ? 'border-slate-300 bg-slate-100 text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100'
+	                          : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900/20 dark:text-gray-200 dark:hover:bg-gray-800/60'
+	                      }`}
+	                    >
+	                      {titleize(k)}{' '}
+	                      <span class="ml-1 font-mono text-[10px]">{rollupsSummary().counts[k] || 0}</span>
+	                    </button>
+	                  )}
+	                </For>
+	                <Show when={rollupsSummary().neverSucceeded > 0}>
+	                  <span class="ml-1 text-[10px] text-gray-400 dark:text-gray-500">
+	                    {rollupsSummary().neverSucceeded} never succeeded
+	                  </span>
+	                </Show>
+	              </div>
+	            </Show>
+	          </div>
+	        </Card>
+	      </Show>
+
+	      <Show when={view() === 'protected'}>
+	        <Card padding="sm">
+	          <Show when={recoveryRollups.rollups.loading && filteredRollups().length === 0}>
+	            <div class="px-3 py-6 text-sm text-gray-500 dark:text-gray-400">Loading protected items...</div>
+	          </Show>
+	
+	          <Show when={!recoveryRollups.rollups.loading && recoveryRollups.rollups.error}>
+	            <EmptyState
+	              title="Failed to load protected items"
+	              description={String((recoveryRollups.rollups.error as Error)?.message || recoveryRollups.rollups.error)}
+	            />
+	          </Show>
+	
+	          <Show when={!recoveryRollups.rollups.loading && !recoveryRollups.rollups.error && filteredRollups().length === 0}>
+	            <Show
+	              when={rollups().length === 0}
+	              fallback={<EmptyState title="No matches" description="No protected items matched your current filters." />}
+	            >
+	              <EmptyState title="No protected items yet" description="Pulse hasn’t received any backup events for this org yet." />
+	            </Show>
+	          </Show>
+
+	          <Show when={filteredRollups().length > 0}>
+	            <div class="overflow-x-auto">
+	              <table class="w-full text-xs">
+	                <thead>
+	                  <tr class="border-b border-gray-200 bg-gray-50 text-left text-[10px] uppercase tracking-wide text-gray-500 dark:border-gray-700 dark:bg-gray-800/70 dark:text-gray-400">
+	                    <th class="px-2 py-1.5">Subject</th>
+	                    <th class="px-2 py-1.5">Providers</th>
+	                    <th class="px-2 py-1.5">Last attempt</th>
+	                    <th class="px-2 py-1.5">Last success</th>
+	                    <th class="px-2 py-1.5">Status</th>
+	                  </tr>
+	                </thead>
+	                <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+	                  <For each={filteredRollups()}>
+	                    {(r) => {
+	                      const resIndex = resourcesById();
+	                      const label = rollupSubjectLabel(r, resIndex);
+	                      const attemptMs = r.lastAttemptAt ? Date.parse(r.lastAttemptAt) : 0;
+	                      const successMs = r.lastSuccessAt ? Date.parse(r.lastSuccessAt) : 0;
+	                      const outcome = normalizeOutcome(r.lastOutcome);
+	                      const providers = (r.providers || [])
+	                        .slice()
+	                        .map((p) => String(p || '').trim())
+	                        .filter(Boolean)
+	                        .sort((a, b) => sourceLabel(a).localeCompare(sourceLabel(b)));
+	                      const nowMs = Date.now();
+	                      const issueTone = deriveRollupIssueTone(r, nowMs);
+	                      const issueRailClass = issueTone === 'none' ? '' : ISSUE_RAIL_CLASS[issueTone];
+	                      const typeKey = workloadBadgeKeyForRollup(r, resIndex);
+	                      const typeLabel = typeLabelForRollup(r, resIndex);
+	                      const typeBadge = getWorkloadTypeBadge(typeKey, { label: typeLabel, title: typeLabel });
+	                      const stale = isRollupStale(r, nowMs);
+	                      const neverSucceeded = (!Number.isFinite(successMs) || successMs <= 0) && Number.isFinite(attemptMs) && attemptMs > 0;
+	                      return (
+	                        <tr
+	                          class="cursor-pointer border-b border-gray-200 hover:bg-gray-50/70 dark:border-gray-700 dark:hover:bg-gray-800/35"
+	                          onClick={() => {
+	                            setView('events');
+	                            setRollupId(r.rollupId);
+	                          }}
+	                        >
+	                          <td
+	                            class={`relative max-w-[420px] truncate whitespace-nowrap pl-8 pr-2 py-2 text-gray-900 ${
+	                              issueTone === 'rose' || issueTone === 'blue'
+	                                ? 'font-medium dark:text-slate-100'
+	                                : issueTone === 'amber'
+	                                  ? 'dark:text-slate-200'
+	                                  : 'dark:text-gray-300'
+	                            }`}
+	                            title={label}
+	                          >
+	                            <Show when={issueTone !== 'none'}>
+	                              <span class={`absolute inset-y-0 left-0 w-0.5 ${issueRailClass}`} />
+	                            </Show>
+	                            <div class="flex items-center gap-2">
+	                              <span
+	                                class={`inline-flex items-center whitespace-nowrap rounded px-1 py-0.5 text-[10px] font-medium ${typeBadge.className}`}
+	                                title={typeBadge.title}
+	                              >
+	                                {typeBadge.label}
+	                              </span>
+	                              <span class="truncate">{label}</span>
+	                            </div>
+	                            <div class="mt-0.5 flex items-center gap-2 text-[10px] font-normal text-gray-500 dark:text-gray-400">
+	                              <span class="font-mono">{r.rollupId}</span>
+	                              <Show when={neverSucceeded}>
+	                                <span class="text-amber-700 dark:text-amber-300">never succeeded</span>
+	                              </Show>
+	                              <Show when={!neverSucceeded && stale}>
+	                                <span class="text-amber-700 dark:text-amber-300">stale</span>
+	                              </Show>
+	                            </div>
+	                          </td>
+	                          <td class="whitespace-nowrap pl-6 pr-2 py-2 text-gray-700 dark:text-gray-200">
+		                            <div class="flex flex-wrap gap-1.5">
+		                              <For each={providers}>
+		                                {(p) => {
+		                                  const badge = getSourcePlatformBadge(String(p));
+		                                  return <span class={badge?.classes || ''}>{badge?.label || sourceLabel(String(p))}</span>;
+		                                }}
+		                              </For>
+		                            </div>
+		                          </td>
+	                          <td class={`whitespace-nowrap pl-6 pr-2 py-2 ${rollupAgeTextClass({ ...r, lastSuccessAt: null }, nowMs)}`}>
+	                            {attemptMs > 0 ? formatAbsoluteTime(attemptMs) : 'n/a'}
+	                          </td>
+	                          <td class={`whitespace-nowrap pl-6 pr-2 py-2 ${rollupAgeTextClass(r, nowMs)}`}>
+	                            {successMs > 0 ? formatAbsoluteTime(successMs) : neverSucceeded ? 'never' : 'n/a'}
+	                          </td>
+	                          <td class="whitespace-nowrap pl-6 pr-2 py-2">
+	                            <span
+	                              class={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-medium ${OUTCOME_BADGE_CLASS[outcome]}`}
+	                            >
+	                              {titleize(outcome)}
+	                            </span>
+	                          </td>
+	                        </tr>
+	                      );
+	                    }}
+	                  </For>
+	                </tbody>
+	              </table>
+	            </div>
+	          </Show>
+        </Card>
+      </Show>
+
+	      <Show when={view() === 'events'}>
+	        <Card padding="sm">
+	          <Show when={!rollupId().trim()}>
+	            <div class="flex flex-col gap-1">
+	              <div class="text-sm font-semibold text-gray-900 dark:text-gray-100">All backup events</div>
+	              <div class="text-xs text-gray-500 dark:text-gray-400">
+	                Filter by{' '}
+	                {joinWithOr([
+	                  'source',
+	                  'method',
+	                  'status',
+	                  showVerificationFilter() ? 'verification' : '',
+	                  showClusterFilter() ? 'cluster' : '',
+	                  showNodeFilter() ? 'node/host' : '',
+	                  showNamespaceFilter() ? 'namespace' : '',
+	                ])}
+	                .
+	              </div>
+	            </div>
+	          </Show>
+
+            <Show when={rollupId().trim()}>
+              <div class="flex flex-col gap-1">
+	                <div class="text-sm font-semibold text-gray-900 dark:text-gray-100">Backup events</div>
+                <div class="text-xs text-gray-500 dark:text-gray-400">
+                  <Show when={selectedRollup()}>
+                    Subject:{' '}
+                    <span class="font-medium text-gray-700 dark:text-gray-200">
+                      {rollupSubjectLabel(selectedRollup()!, resourcesById())}
+                    </span>
+                  </Show>
                 </div>
-              </Show>
-            </div>
+                <div class="text-xs text-gray-500 dark:text-gray-400">
+                  Rollup: <span class="font-mono">{rollupId().trim()}</span>
+                </div>
+              </div>
+	            </Show>
+          </Card>
+
+          <Show when={recoveryPoints.response.loading && sortedPoints().length === 0}>
+            <Card padding="sm">
+              <div class="px-3 py-6 text-sm text-gray-500 dark:text-gray-400">Loading recovery points...</div>
+            </Card>
           </Show>
 
-        <Show
-          when={timeline().points.length > 0 && timeline().maxValue > 0}
-          fallback={
-            <div class="text-sm text-gray-600 dark:text-gray-300">
-              <Show
-                when={timelineDiagnostics().withCompletedAt > 0}
-                fallback={
-                  <span>
-                    No backup timestamps available from current sources/filters ({timelineDiagnostics().total} artifacts).
-                  </span>
-                }
-              >
-                <span>
-                  No backup activity in the last {chartRangeDays()} days.
-                  <Show when={timelineDiagnostics().latest}>
-                    {(latest) => (
-                      <span class="ml-1 text-gray-500 dark:text-gray-400">
-                        Latest timestamp: {formatAbsoluteTime(latest())}
-                      </span>
-                    )}
-                  </Show>
-                </span>
-              </Show>
-            </div>
-          }
-        >
-          <div class="mb-1.5 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-600 dark:text-gray-300">
-            <div class="flex items-center gap-3">
-              <span class="flex items-center gap-1">
-                <span class={`h-2.5 w-2.5 rounded ${CHART_SEGMENT_CLASS.snapshot}`} />
-                Snapshots
-              </span>
-              <span class="flex items-center gap-1">
-                <span class={`h-2.5 w-2.5 rounded ${CHART_SEGMENT_CLASS.local}`} />
-                Local
-              </span>
-              <span class="flex items-center gap-1">
-                <span class={`h-2.5 w-2.5 rounded ${CHART_SEGMENT_CLASS.remote}`} />
-                Remote
-              </span>
-            </div>
-            <div class="inline-flex rounded border border-gray-300 bg-white p-0.5 text-xs dark:border-gray-700 dark:bg-gray-900">
-              <For each={[7, 30, 90, 365] as const}>
-                {(range) => (
-                  <button
-                    type="button"
-                    onClick={() => setChartRangeDays(range)}
-                    class={`rounded px-2 py-1 ${
-                      chartRangeDays() === range
-                        ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-200'
-                        : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700/60'
-                    }`}
-                  >
-                    {range === 365 ? '1y' : `${range}d`}
-                  </button>
-                )}
-              </For>
-            </div>
-          </div>
-
-          <div class="relative h-32 overflow-hidden rounded bg-gray-100 dark:bg-gray-800/80">
-            <div class="absolute bottom-8 left-1 top-2 w-8 text-[10px] text-gray-500 dark:text-gray-400">
-              <div class="flex h-full flex-col justify-between text-right">
-                <For each={[...timeline().axisTicks].reverse()}>{(tick) => <span>{tick}</span>}</For>
-              </div>
-            </div>
-            <div
-              class="absolute bottom-0 left-10 right-10 top-2 overflow-x-auto"
-              style="scrollbar-width: none; -ms-overflow-style: none;"
-            >
-              <div class="relative h-full min-w-[700px] px-2">
-                <div class="absolute inset-x-0 bottom-6 top-0">
-                  <For each={timeline().axisTicks}>
-                    {(tick) => {
-                      const bottom = timeline().axisMax > 0 ? (tick / timeline().axisMax) * 100 : 0;
-                      return (
-                        <div
-                          class="pointer-events-none absolute inset-x-0 border-t border-gray-200/80 dark:border-gray-700/70"
-                          style={{ bottom: `${bottom}%` }}
-                        />
-                      );
-                    }}
-                  </For>
-
-                  <div class="absolute inset-0 flex items-end gap-[3px]">
-                    <For each={timeline().points}>
-                      {(point) => {
-                        const total = point.total;
-                        const snapshotHeight = total > 0 ? (point.snapshot / total) * 100 : 0;
-                        const localHeight = total > 0 ? (point.local / total) * 100 : 0;
-                        const remoteHeight = total > 0 ? (point.remote / total) * 100 : 0;
-                        const columnHeight = timeline().axisMax > 0 ? (total / timeline().axisMax) * 100 : 0;
-                        const isSelected = selectedDateKey() === point.key;
-                        const barMinWidth =
-                          chartRangeDays() === 7 ? 'min-w-[28px]' : chartRangeDays() === 30 ? 'min-w-[14px]' : 'min-w-[8px]';
-
-                        return (
-                          <div class={`relative h-full flex-1 shrink-0 ${barMinWidth}`}>
-                            <button
-                              type="button"
-                              class={`h-full w-full rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 ${
-                                isSelected ? 'bg-blue-100/70 dark:bg-blue-900/30' : 'hover:bg-gray-200/60 dark:hover:bg-gray-700/50'
-                              }`}
-                              onClick={() => {
-                                if (selectedDateKey() === point.key) setSelectedDateKey(null);
-                                else setSelectedDateKey(point.key);
-                              }}
-                              onMouseEnter={(event) => {
-                                const rect = event.currentTarget.getBoundingClientRect();
-                                const breakdown: string[] = [];
-                                if (point.snapshot > 0) breakdown.push(`Snapshots: ${point.snapshot}`);
-                                if (point.local > 0) breakdown.push(`Local: ${point.local}`);
-                                if (point.remote > 0) breakdown.push(`Remote: ${point.remote}`);
-                                const tooltipText =
-                                  point.total > 0
-                                    ? `${prettyDateLabel(point.key)}\nAvailable: ${point.total} backup${point.total > 1 ? 's' : ''}\n${breakdown.join(' • ')}`
-                                    : `${prettyDateLabel(point.key)}\nNo backups available`;
-                                showTooltip(tooltipText, rect.left + rect.width / 2, rect.top, {
-                                  align: 'center',
-                                  direction: 'up',
-                                });
-                              }}
-                              onMouseLeave={() => hideTooltip()}
-                              onFocus={(event) => {
-                                const rect = event.currentTarget.getBoundingClientRect();
-                                const tooltipText = `${prettyDateLabel(point.key)}\nAvailable: ${point.total} backup${point.total > 1 ? 's' : ''}`;
-                                showTooltip(tooltipText, rect.left + rect.width / 2, rect.top, {
-                                  align: 'center',
-                                  direction: 'up',
-                                });
-                              }}
-                              onBlur={() => hideTooltip()}
-                            >
-                              <div class="relative h-full w-full">
-                                <Show when={total > 0}>
-                                  <div class="absolute inset-x-0 bottom-0" style={{ height: `${columnHeight}%` }}>
-                                    <Show when={remoteHeight > 0}>
-                                      <div class={`w-full ${CHART_SEGMENT_CLASS.remote}`} style={{ height: `${remoteHeight}%` }} />
-                                    </Show>
-                                    <Show when={localHeight > 0}>
-                                      <div class={`w-full ${CHART_SEGMENT_CLASS.local}`} style={{ height: `${localHeight}%` }} />
-                                    </Show>
-                                    <Show when={snapshotHeight > 0}>
-                                      <div class={`w-full ${CHART_SEGMENT_CLASS.snapshot}`} style={{ height: `${snapshotHeight}%` }} />
-                                    </Show>
-                                  </div>
-                                </Show>
-                              </div>
-                            </button>
-                          </div>
-                        );
-                      }}
-                    </For>
-                  </div>
-                </div>
-
-                <div class="pointer-events-none absolute inset-x-0 bottom-0 h-4 flex items-end gap-[3px]">
-                  <For each={timeline().points}>
-                    {(point, index) => {
-                      const showLabel = index() % timeline().labelEvery === 0 || index() === timeline().points.length - 1;
-                      const isSelected = selectedDateKey() === point.key;
-                      const barMinWidth =
-                        chartRangeDays() === 7 ? 'min-w-[28px]' : chartRangeDays() === 30 ? 'min-w-[14px]' : 'min-w-[8px]';
-                      return (
-                        <div class={`relative flex-1 shrink-0 ${barMinWidth}`}>
-                          <Show when={showLabel}>
-                            <span
-                              class={`absolute bottom-0 left-1/2 -translate-x-1/2 whitespace-nowrap text-[9px] ${
-                                isSelected ? 'font-semibold text-blue-700 dark:text-blue-300' : 'text-gray-500 dark:text-gray-400'
-                              }`}
-                            >
-                              {compactAxisLabel(point.key, chartRangeDays())}
-                            </span>
-                          </Show>
-                        </div>
-                      );
-                    }}
-                  </For>
-                </div>
-              </div>
-            </div>
-          </div>
-
-        </Show>
-      </Card>
-
-      </div>
-
-      <Card padding="none" class="order-3 overflow-hidden">
-        <Show
-          when={pagedGroups().length > 0}
-          fallback={
-            <div class="p-6">
+          <Show when={!recoveryPoints.response.loading && recoveryPoints.response.error}>
+            <Card padding="sm">
               <EmptyState
-                title="No backups match your filters"
-                description="Adjust your search, source, mode, or node filters."
-                actions={
-                  <Show when={hasActiveFilters()}>
+                title="Failed to load recovery points"
+                description={String((recoveryPoints.response.error as Error)?.message || recoveryPoints.response.error)}
+              />
+            </Card>
+          </Show>
+
+          <Show when={!recoveryPoints.response.loading && !recoveryPoints.response.error}>
+          <Card padding="sm" class="h-full">
+	            <Show when={selectedDateKey() || activeClusterLabel() || activeNodeLabel() || activeNamespaceLabel()}>
+	              <div class="mb-1 flex flex-wrap items-center gap-1.5">
+	                <Show when={selectedDateKey()}>
+	                  <div class="inline-flex max-w-full items-center gap-1 rounded border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] text-blue-700 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-200">
+	                    <span class="font-medium uppercase tracking-wide">Day</span>
+	                    <span class="truncate font-mono text-[10px]" title={selectedDateLabel()}>
+                      {selectedDateLabel()}
+                    </span>
                     <button
                       type="button"
-                      onClick={resetAllFilters}
-                      class="inline-flex items-center gap-2 rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+                      onClick={() => {
+                        setSelectedDateKey(null);
+                        setCurrentPage(1);
+                      }}
+                      class="rounded px-1 py-0.5 text-[10px] hover:bg-blue-100 dark:hover:bg-blue-900/50"
                     >
-                      Clear filters
+                      Clear
                     </button>
+	                  </div>
+	                </Show>
+	                <Show when={activeClusterLabel()}>
+	                  <div class="inline-flex max-w-full items-center gap-1 rounded border border-cyan-200 bg-cyan-50 px-2 py-0.5 text-[10px] text-cyan-700 dark:border-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-200">
+	                    <span class="font-medium uppercase tracking-wide">Cluster</span>
+	                    <span class="truncate font-mono text-[10px]" title={activeClusterLabel()}>
+	                      {activeClusterLabel()}
+	                    </span>
+	                    <button
+	                      type="button"
+	                      onClick={() => {
+	                        setClusterFilter('all');
+	                        setCurrentPage(1);
+	                      }}
+	                      class="rounded px-1 py-0.5 text-[10px] hover:bg-cyan-100 dark:hover:bg-cyan-900/50"
+	                    >
+	                      Clear
+	                    </button>
+	                  </div>
+	                </Show>
+	                <Show when={activeNodeLabel()}>
+	                  <div class="inline-flex max-w-full items-center gap-1 rounded border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] text-emerald-700 dark:border-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200">
+	                    <span class="font-medium uppercase tracking-wide">Node/Host</span>
+	                    <span class="truncate font-mono text-[10px]" title={activeNodeLabel()}>
+                      {activeNodeLabel()}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNodeFilter('all');
+                        setCurrentPage(1);
+                      }}
+                      class="rounded px-1 py-0.5 text-[10px] hover:bg-emerald-100 dark:hover:bg-emerald-900/50"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </Show>
+                <Show when={activeNamespaceLabel()}>
+                  <div
+                    data-testid="active-namespace-chip"
+                    class="inline-flex max-w-full items-center gap-1 rounded border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] text-violet-700 dark:border-violet-700 dark:bg-violet-900/30 dark:text-violet-200"
+                  >
+                    <span class="font-medium uppercase tracking-wide">Namespace</span>
+                    <span class="truncate font-mono text-[10px]" title={activeNamespaceLabel()}>
+                      {activeNamespaceLabel()}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNamespaceFilter('all');
+                        setCurrentPage(1);
+                      }}
+                      class="rounded px-1 py-0.5 text-[10px] hover:bg-violet-100 dark:hover:bg-violet-900/50"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </Show>
+              </div>
+            </Show>
+
+            <Show
+              when={timeline().points.length > 0 && timeline().maxValue > 0}
+              fallback={
+                <div class="text-sm text-gray-600 dark:text-gray-300">
+                  <Show when={recoverySeries.response.loading}>
+                    <span>Loading recovery activity...</span>
                   </Show>
-                }
-              />
-            </div>
-          }
-        >
-          <div class="overflow-x-auto">
-            <table class="w-full text-xs" style={{ 'min-width': tableMinWidth() }}>
-              <thead>
-                <tr class="border-b border-gray-200 bg-gray-50 text-left text-[10px] uppercase tracking-wide text-gray-500 dark:border-gray-700 dark:bg-gray-800/70 dark:text-gray-400">
-                  <th class="px-2 py-1.5">Time</th>
-                  <th class="px-2 py-1.5">Name</th>
-                  <Show when={showEntityColumn()}>
-                    <th class="px-2 py-1.5">Entity</th>
+                  <Show when={!recoverySeries.response.loading}>
+                    <span>No recovery activity in the selected window.</span>
                   </Show>
-                  <Show when={showTypeColumn()}>
-                    <th class="px-2 py-1.5">Type</th>
-                  </Show>
-                  <Show when={showClusterColumn()}>
-                    <th class="px-2 py-1.5">Cluster</th>
-                  </Show>
-                  <Show when={showNodeColumn()}>
-                    <th class="px-2 py-1.5">Node/Host</th>
-                  </Show>
-                  <Show when={showNamespaceColumn()}>
-                    <th class="px-2 py-1.5">Namespace</th>
-                  </Show>
-                  <th class="px-2 py-1.5">Source</th>
-                  <Show when={showSizeColumn()}>
-                    <th class="px-2 py-1.5">Size</th>
-                  </Show>
-                  <th class="px-2 py-1.5">Mode</th>
-                  <Show when={showVerificationColumn()}>
-                    <th class="px-2 py-1.5">Verified</th>
-                  </Show>
-                  <Show when={showDetailsColumn()}>
-                    <th class="px-2 py-1.5">Details</th>
-                  </Show>
-                  <th class="px-2 py-1.5">Outcome</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                <For each={pagedGroups()}>
-                  {(group) => (
-                    <>
-                      <tr
-                        class={groupHeaderRowClass()}
+                </div>
+              }
+            >
+              <div class="mb-1.5 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-600 dark:text-gray-300">
+                <div class="flex items-center gap-3">
+                  <span class="flex items-center gap-1">
+                    <span class={`h-2.5 w-2.5 rounded ${CHART_SEGMENT_CLASS.snapshot}`} />
+                    Snapshots
+                  </span>
+                  <span class="flex items-center gap-1">
+                    <span class={`h-2.5 w-2.5 rounded ${CHART_SEGMENT_CLASS.local}`} />
+                    Local
+                  </span>
+                  <span class="flex items-center gap-1">
+                    <span class={`h-2.5 w-2.5 rounded ${CHART_SEGMENT_CLASS.remote}`} />
+                    Remote
+                  </span>
+                </div>
+                <div class="inline-flex rounded border border-gray-300 bg-white p-0.5 text-xs dark:border-gray-700 dark:bg-gray-900">
+                  <For each={[7, 30, 90, 365] as const}>
+                    {(range) => (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setChartRangeDays(range);
+                          setSelectedDateKey(null);
+                          setCurrentPage(1);
+                        }}
+                        class={`rounded px-2 py-1 ${
+                          chartRangeDays() === range
+                            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-200'
+                            : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700/60'
+                        }`}
                       >
-                        <td colSpan={tableColumnCount()} class={groupHeaderTextClass()}>
-                          <div class="flex items-center gap-2">
-                            <span>{group.label}</span>
-                            <span class="text-[10px] font-normal text-slate-400 dark:text-slate-500">
-                              {group.items.length} {group.items.length === 1 ? 'artifact' : 'artifacts'}
-                            </span>
-                          </div>
-                        </td>
-                      </tr>
-                      <For each={group.items}>
-                        {(record) => {
-                          const mode = deriveMode(record);
-                          const guestType = deriveGuestType(record);
-                          const namespace = deriveNamespaceLabel(record);
-                          const guestTypeBadge = getWorkloadTypeBadge(record.scope.workloadType, {
-                            label: guestType,
-                            title: guestType,
-                          });
-                          const sourceBadge = getSourcePlatformBadge(record.source.platform);
-                          const detailsText = summarizeDetails(record);
-                          const owner = deriveDetailsOwner(record);
-                          const rowNowMs = Date.now();
-                          const issueTone = deriveIssueTone(record, rowNowMs);
-                          const issueRailClass = issueTone === 'none' ? '' : ISSUE_RAIL_CLASS[issueTone];
-                          const detailFlags: string[] = [];
-                          if (record.protected === true) detailFlags.push('Protected');
-                          if (record.encrypted === true) detailFlags.push('Encrypted');
-                          const detailInline = [detailFlags.join(' • '), detailsText || owner || '-']
-                            .filter((value) => value && value.trim().length > 0)
-                            .join(' | ');
+                        {range === 365 ? '1y' : `${range}d`}
+                      </button>
+                    )}
+                  </For>
+                </div>
+              </div>
+
+              <div class="relative h-32 overflow-hidden rounded bg-gray-100 dark:bg-gray-800/80">
+                <div class="absolute bottom-8 left-1 top-2 w-8 text-[10px] text-gray-500 dark:text-gray-400">
+                  <div class="flex h-full flex-col justify-between text-right">
+                    <For each={[...timeline().axisTicks].reverse()}>{(tick) => <span>{tick}</span>}</For>
+                  </div>
+                </div>
+                <div
+                  class="absolute bottom-0 left-10 right-10 top-2 overflow-x-auto"
+                  style="scrollbar-width: none; -ms-overflow-style: none;"
+                >
+                  <div class="relative h-full min-w-[700px] px-2">
+                    <div class="absolute inset-x-0 bottom-6 top-0">
+                      <For each={timeline().axisTicks}>
+                        {(tick) => {
+                          const bottom = timeline().axisMax > 0 ? (tick / timeline().axisMax) * 100 : 0;
                           return (
-                            <tr class="border-b border-gray-200 hover:bg-gray-50/70 dark:border-gray-700 dark:hover:bg-gray-800/35">
-                              <td class={`relative whitespace-nowrap pl-8 pr-2 py-1 ${timeAgeTextClass(record, rowNowMs)}`}>
-                                <Show when={issueTone !== 'none'}>
-                                  <span class={`absolute inset-y-0 left-0 w-0.5 ${issueRailClass}`} />
-                                </Show>
-                                {formatTimeOnly(record.completedAt)}
-                              </td>
-                              <td
-                                class={`max-w-[240px] truncate whitespace-nowrap pl-6 pr-2 py-1 text-gray-900 ${
-                                  issueTone === 'rose' || issueTone === 'blue'
-                                    ? 'font-medium dark:text-slate-100'
-                                    : issueTone === 'amber'
-                                      ? 'dark:text-slate-200'
-                                      : 'dark:text-gray-300'
-                                }`}
-                                title={record.name}
-                              >
-                                {record.name}
-                              </td>
-                              <Show when={showEntityColumn()}>
-                                <td class="whitespace-nowrap pl-6 pr-2 py-1 font-mono text-gray-700 dark:text-gray-400">{deriveEntityIdLabel(record)}</td>
-                              </Show>
-                              <Show when={showTypeColumn()}>
-                                <td class="whitespace-nowrap pl-6 pr-2 py-1 text-gray-600 dark:text-gray-400">
-                                  <span
-                                    class={`inline-flex items-center whitespace-nowrap rounded px-1 py-0.5 text-[10px] font-medium ${guestTypeBadge.className}`}
-                                    title={guestTypeBadge.title}
-                                  >
-                                    {guestTypeBadge.label}
-                                  </span>
-                                </td>
-                              </Show>
-                              <Show when={showClusterColumn()}>
-                                <td class="whitespace-nowrap pl-6 pr-2 py-1 text-gray-600 dark:text-gray-400">{deriveClusterLabel(record)}</td>
-                              </Show>
-                              <Show when={showNodeColumn()}>
-                                <td class="whitespace-nowrap pl-6 pr-2 py-1 text-gray-600 dark:text-gray-400">{deriveNodeLabel(record)}</td>
-                              </Show>
-                              <Show when={showNamespaceColumn()}>
-                                <td class="whitespace-nowrap pl-6 pr-2 py-1 text-gray-600 dark:text-gray-400">
-                                  <Show
-                                    when={namespace !== 'n/a'}
-                                    fallback={<span class="text-xs text-gray-500 dark:text-gray-400">n/a</span>}
-                                  >
-                                    <span class="inline-flex items-center whitespace-nowrap rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-medium text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">
-                                      {namespace}
-                                    </span>
-                                  </Show>
-                                </td>
-                              </Show>
-                              <td class="whitespace-nowrap pl-6 pr-2 py-1 text-gray-600 dark:text-gray-400">
-                                <Show
-                                  when={sourceBadge}
-                                  fallback={<span class="text-xs text-gray-500 dark:text-gray-400">{sourceLabel(record.source.platform)}</span>}
-                                >
-                                  <span class={sourceBadge!.classes} title={sourceBadge!.title}>
-                                    {sourceBadge!.label}
-                                  </span>
-                                </Show>
-                              </td>
-                              <Show when={showSizeColumn()}>
-                                <td class="whitespace-nowrap pl-6 pr-2 py-1 text-gray-700 dark:text-gray-400">{record.sizeBytes && record.sizeBytes > 0 ? formatBytes(record.sizeBytes) : 'n/a'}</td>
-                              </Show>
-                              <td class="whitespace-nowrap pl-6 pr-2 py-1">
-                                <span class={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-medium ${MODE_BADGE_CLASS[mode]}`}>{MODE_LABELS[mode]}</span>
-                              </td>
-                              <Show when={showVerificationColumn()}>
-                                <td class="whitespace-nowrap pl-6 pr-2 py-1 text-[11px]">
-                                  <Show when={record.verified === true}><span class="text-emerald-700 dark:text-emerald-300">Yes</span></Show>
-                                  <Show when={record.verified === false}><span class="text-rose-700 dark:text-rose-300">No</span></Show>
-                                  <Show when={record.verified === null}><span class="text-gray-500 dark:text-gray-400">n/a</span></Show>
-                                </td>
-                              </Show>
-                              <Show when={showDetailsColumn()}>
-                                <td class="max-w-[360px] truncate whitespace-nowrap pl-6 pr-2 py-1 text-[11px] leading-4 text-gray-600 dark:text-gray-400" title={detailInline}>
-                                  {detailInline}
-                                </td>
-                              </Show>
-                              <td class="whitespace-nowrap pl-6 pr-2 py-1">
-                                <span class={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-medium ${OUTCOME_BADGE_CLASS[record.outcome]}`}>{titleize(record.outcome)}</span>
-                              </td>
-                            </tr>
+                            <div
+                              class="pointer-events-none absolute inset-x-0 border-t border-gray-200/80 dark:border-gray-700/70"
+                              style={{ bottom: `${bottom}%` }}
+                            />
                           );
                         }}
                       </For>
-                    </>
-                  )}
-                </For>
-              </tbody>
-            </table>
-          </div>
 
-          <div class="flex flex-wrap items-center justify-between gap-2 border-t border-gray-200 px-3 py-2 text-xs text-gray-600 dark:border-gray-700 dark:text-gray-300">
-            <div>
-              Showing {(currentPage() - 1) * PAGE_SIZE + 1} - {Math.min(currentPage() * PAGE_SIZE, sortedRecords().length)} of {sortedRecords().length} artifacts
-            </div>
-            <div class="inline-flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => setCurrentPage((value) => Math.max(1, value - 1))}
-                disabled={currentPage() <= 1}
-                class="rounded border border-gray-300 px-2 py-1 disabled:opacity-50 dark:border-gray-700"
-              >
-                Previous
-              </button>
-              <span>Page {currentPage()} / {totalPages()}</span>
-              <button
-                type="button"
-                onClick={() => setCurrentPage((value) => Math.min(totalPages(), value + 1))}
-                disabled={currentPage() >= totalPages()}
-                class="rounded border border-gray-300 px-2 py-1 disabled:opacity-50 dark:border-gray-700"
-              >
-                Next
-              </button>
-            </div>
-          </div>
-        </Show>
-      </Card>
+                      <div class="absolute inset-0 flex items-end gap-[3px]">
+                        <For each={timeline().points}>
+                          {(point) => {
+                            const total = point.total;
+                            const snapshotHeight = total > 0 ? (point.snapshot / total) * 100 : 0;
+                            const localHeight = total > 0 ? (point.local / total) * 100 : 0;
+                            const remoteHeight = total > 0 ? (point.remote / total) * 100 : 0;
+                            const columnHeight = timeline().axisMax > 0 ? (total / timeline().axisMax) * 100 : 0;
+                            const isSelected = selectedDateKey() === point.key;
+                            const barMinWidth =
+                              chartRangeDays() === 7 ? 'min-w-[28px]' : chartRangeDays() === 30 ? 'min-w-[14px]' : 'min-w-[8px]';
 
-      <div class="order-5 flex flex-wrap items-center gap-3 px-1 text-[11px] text-gray-500 dark:text-gray-400">
-        <span class="font-medium text-gray-700 dark:text-gray-200">{artifactCount()} artifacts</span>
-        <Show when={staleArtifactCount() > 0}>
-          <span class="text-amber-600 dark:text-amber-400">{staleArtifactCount()} older than 7 days</span>
-        </Show>
-        <Show when={nextPlatforms().length > 0}>
-          <span>Next targets: {nextPlatforms().join(', ')}</span>
-        </Show>
-      </div>
+                            return (
+                              <div class={`relative h-full flex-1 shrink-0 ${barMinWidth}`}>
+                                <button
+                                  type="button"
+                                  class={`h-full w-full rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 ${
+                                    isSelected ? 'bg-blue-100/70 dark:bg-blue-900/30' : 'hover:bg-gray-200/60 dark:hover:bg-gray-700/50'
+                                  }`}
+                                  onClick={() => {
+                                    setCurrentPage(1);
+                                    if (selectedDateKey() === point.key) setSelectedDateKey(null);
+                                    else setSelectedDateKey(point.key);
+                                  }}
+                                  onMouseEnter={(event) => {
+                                    const rect = event.currentTarget.getBoundingClientRect();
+                                    const breakdown: string[] = [];
+                                    if (point.snapshot > 0) breakdown.push(`Snapshots: ${point.snapshot}`);
+                                    if (point.local > 0) breakdown.push(`Local: ${point.local}`);
+                                    if (point.remote > 0) breakdown.push(`Remote: ${point.remote}`);
+                            const tooltipText =
+                                      point.total > 0
+                                        ? `${prettyDateLabel(point.key)}\nAvailable: ${point.total} recovery point${point.total > 1 ? 's' : ''}\n${breakdown.join(' • ')}`
+                                        : `${prettyDateLabel(point.key)}\nNo recovery points available`;
+                                    showTooltip(tooltipText, rect.left + rect.width / 2, rect.top, {
+                                      align: 'center',
+                                      direction: 'up',
+                                    });
+                                  }}
+                                  onMouseLeave={() => hideTooltip()}
+                                  onFocus={(event) => {
+                                    const rect = event.currentTarget.getBoundingClientRect();
+                                    const tooltipText = `${prettyDateLabel(point.key)}\nAvailable: ${point.total} recovery point${point.total > 1 ? 's' : ''}`;
+                                    showTooltip(tooltipText, rect.left + rect.width / 2, rect.top, {
+                                      align: 'center',
+                                      direction: 'up',
+                                    });
+                                  }}
+                                  onBlur={() => hideTooltip()}
+                                >
+                                  <div class="relative h-full w-full">
+                                    <Show when={total > 0}>
+                                      <div class="absolute inset-x-0 bottom-0" style={{ height: `${columnHeight}%` }}>
+                                        <Show when={remoteHeight > 0}>
+                                          <div class={`w-full ${CHART_SEGMENT_CLASS.remote}`} style={{ height: `${remoteHeight}%` }} />
+                                        </Show>
+                                        <Show when={localHeight > 0}>
+                                          <div class={`w-full ${CHART_SEGMENT_CLASS.local}`} style={{ height: `${localHeight}%` }} />
+                                        </Show>
+                                        <Show when={snapshotHeight > 0}>
+                                          <div class={`w-full ${CHART_SEGMENT_CLASS.snapshot}`} style={{ height: `${snapshotHeight}%` }} />
+                                        </Show>
+                                      </div>
+                                    </Show>
+                                  </div>
+                                </button>
+                              </div>
+                            );
+                          }}
+                        </For>
+                      </div>
+                    </div>
 
-      <Show when={!connected() && !initialDataReceived()}>
-        <Card padding="sm" tone="warning" class="order-6">
-          <div class="text-xs text-amber-800 dark:text-amber-200">Waiting for backup data from connected platforms.</div>
-        </Card>
-      </Show>
-    </div>
+                    <div class="pointer-events-none absolute inset-x-0 bottom-0 h-4 flex items-end gap-[3px]">
+                      <For each={timeline().points}>
+                        {(point, index) => {
+                          const showLabel = index() % timeline().labelEvery === 0 || index() === timeline().points.length - 1;
+                          const isSelected = selectedDateKey() === point.key;
+                          const barMinWidth =
+                            chartRangeDays() === 7 ? 'min-w-[28px]' : chartRangeDays() === 30 ? 'min-w-[14px]' : 'min-w-[8px]';
+                          return (
+                            <div class={`relative flex-1 shrink-0 ${barMinWidth}`}>
+                              <Show when={showLabel}>
+                                <span
+                                  class={`absolute bottom-0 left-1/2 -translate-x-1/2 whitespace-nowrap text-[9px] ${
+                                    isSelected ? 'font-semibold text-blue-700 dark:text-blue-300' : 'text-gray-500 dark:text-gray-400'
+                                  }`}
+                                >
+                                  {compactAxisLabel(point.key, chartRangeDays())}
+                                </span>
+                              </Show>
+                            </div>
+                          );
+                        }}
+                      </For>
+                    </div>
+                  </div>
+                </div>
+              </div>
+	            </Show>
+	          </Card>
+
+	          <Card padding="sm">
+	            <div class="flex flex-col gap-2">
+	              <div class="w-full">
+	                <SearchInput
+	                  value={query}
+	                  onChange={(value) => {
+	                    setQuery(value);
+	                    setCurrentPage(1);
+	                  }}
+	                  placeholder="Search backup events..."
+	                  class="w-full"
+	                  autoFocus
+	                  history={{
+	                    storageKey: STORAGE_KEYS.BACKUPS_SEARCH_HISTORY,
+	                    emptyMessage: 'Recent searches appear here.',
+	                  }}
+	                />
+	              </div>
+
+	              <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+	                <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+	                  <label
+	                    for="backups-source-filter"
+	                    class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+	                  >
+	                    Provider
+	                  </label>
+	                  <select
+	                    id="backups-source-filter"
+	                    value={providerFilter()}
+	                    onChange={(event) => {
+	                      setProviderFilter(normalizeProviderFromQuery(event.currentTarget.value));
+	                      setCurrentPage(1);
+	                    }}
+	                    class="min-w-[10rem] max-w-[14rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+	                  >
+	                    <For each={providerOptions()}>
+	                      {(p) => <option value={p}>{p === 'all' ? 'All Providers' : sourceLabel(p)}</option>}
+	                    </For>
+	                  </select>
+	                </div>
+
+	                <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+	                  <label
+	                    for="backups-status-filter"
+	                    class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+	                  >
+	                    Status
+	                  </label>
+	                  <select
+	                    id="backups-status-filter"
+	                    value={outcomeFilter()}
+	                    onChange={(event) => {
+	                      const value = event.currentTarget.value as 'all' | KnownOutcome;
+	                      setOutcomeFilter(value);
+	                      if (value !== 'all') setVerificationFilter('all');
+	                      setCurrentPage(1);
+	                    }}
+	                    class="min-w-[7rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+	                  >
+	                    <For each={availableOutcomes}>
+	                      {(outcome) => (
+	                        <option value={outcome}>
+	                          {outcome === 'all' ? 'All' : titleize(outcome)}
+	                        </option>
+	                      )}
+	                    </For>
+	                  </select>
+	                </div>
+
+	                <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+	                  <span class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Scope</span>
+	                  <button
+	                    type="button"
+	                    onClick={() => {
+	                      setScopeFilter('all');
+	                      setCurrentPage(1);
+	                    }}
+	                    class={segmentedButtonClass(scopeFilter() === 'all')}
+	                  >
+	                    All
+	                  </button>
+	                  <button
+	                    type="button"
+	                    onClick={() => {
+	                      setScopeFilter('workload');
+	                      setCurrentPage(1);
+	                    }}
+	                    class={segmentedButtonClass(scopeFilter() === 'workload')}
+	                  >
+	                    Workloads
+	                  </button>
+	                </div>
+
+	                <button
+	                  type="button"
+	                  aria-expanded={moreFiltersOpen()}
+	                  aria-controls="backups-more-filters"
+	                  onClick={() => setMoreFiltersOpen((v) => !v)}
+	                  class="inline-flex items-center gap-2 rounded-md border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+	                >
+	                  <span>{moreFiltersOpen() ? 'Less filters' : 'More filters'}</span>
+	                  <Show when={activeAdvancedFilterCount() > 0}>
+	                    <span class="rounded-full bg-gray-200 px-1.5 py-0.5 text-[10px] font-mono text-gray-700 dark:bg-gray-700 dark:text-gray-200">
+	                      {activeAdvancedFilterCount()}
+	                    </span>
+	                  </Show>
+	                </button>
+
+	                <Show when={artifactColumnVisibility.availableToggles().length > 0}>
+	                  <ColumnPicker
+	                    columns={artifactColumnVisibility.availableToggles()}
+	                    isHidden={artifactColumnVisibility.isHiddenByUser}
+	                    onToggle={artifactColumnVisibility.toggle}
+	                    onReset={artifactColumnVisibility.resetToDefaults}
+	                  />
+	                </Show>
+
+	                <Show when={hasActiveArtifactFilters()}>
+	                  <button
+	                    type="button"
+	                    onClick={resetAllArtifactFilters}
+	                    class="shrink-0 rounded-lg bg-blue-100 px-2.5 py-1.5 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:hover:bg-blue-900/60"
+	                  >
+	                    Clear
+	                  </button>
+	                </Show>
+	              </div>
+
+	              <Show when={moreFiltersOpen()}>
+	                <div id="backups-more-filters" class="flex flex-wrap items-center gap-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+	                  <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+	                    <span class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Method</span>
+	                    <button
+	                      type="button"
+	                      aria-pressed={modeFilter() === 'all'}
+	                      onClick={() => {
+	                        setModeFilter('all');
+	                        setCurrentPage(1);
+	                      }}
+	                      class={segmentedButtonClass(modeFilter() === 'all')}
+	                    >
+	                      All
+	                    </button>
+	                    <For each={(['snapshot', 'local', 'remote'] as ArtifactMode[])}>
+	                      {(mode) => (
+	                        <button
+	                          type="button"
+	                          aria-pressed={modeFilter() === mode}
+	                          onClick={() => {
+	                            setModeFilter(mode);
+	                            setCurrentPage(1);
+	                          }}
+	                          class={segmentedButtonClass(modeFilter() === mode)}
+	                        >
+	                          {MODE_LABELS[mode]}
+	                        </button>
+	                      )}
+	                    </For>
+	                  </div>
+
+	                  <Show when={showVerificationFilter()}>
+	                    <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+	                      <label
+	                        for="backups-verification-filter"
+	                        class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+	                      >
+	                        Verification
+	                      </label>
+	                      <select
+	                        id="backups-verification-filter"
+	                        value={verificationFilter()}
+	                        onChange={(event) => {
+	                          setVerificationFilter(event.currentTarget.value as VerificationFilter);
+	                          if (event.currentTarget.value !== 'all') setOutcomeFilter('all');
+	                          setCurrentPage(1);
+	                        }}
+	                        class="min-w-[6.5rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+	                      >
+	                        <option value="all">Any</option>
+	                        <option value="verified">Verified</option>
+	                        <option value="unverified">Unverified</option>
+	                        <option value="unknown">Unknown</option>
+	                      </select>
+	                    </div>
+	                  </Show>
+
+	                  <Show when={showClusterFilter()}>
+	                    <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+	                      <label
+	                        for="backups-cluster-filter"
+	                        class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+	                      >
+	                        Cluster
+	                      </label>
+	                      <select
+	                        id="backups-cluster-filter"
+	                        value={clusterFilter()}
+	                        onChange={(event) => {
+	                          setClusterFilter(event.currentTarget.value);
+	                          setCurrentPage(1);
+	                        }}
+	                        class="min-w-[8rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+	                      >
+	                        <option value="all">All</option>
+	                        <For each={clusterOptions().filter((value) => value !== 'all')}>
+	                          {(cluster) => <option value={cluster}>{cluster}</option>}
+	                        </For>
+	                      </select>
+	                    </div>
+	                  </Show>
+
+	                  <Show when={showNodeFilter()}>
+	                    <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+	                      <label
+	                        for="backups-node-filter"
+	                        class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+	                      >
+	                        Node/Host
+	                      </label>
+	                      <select
+	                        id="backups-node-filter"
+	                        value={nodeFilter()}
+	                        onChange={(event) => {
+	                          setNodeFilter(event.currentTarget.value);
+	                          setCurrentPage(1);
+	                        }}
+	                        class="min-w-[7.5rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+	                      >
+	                        <option value="all">All</option>
+	                        <For each={nodeOptions().filter((value) => value !== 'all')}>
+	                          {(node) => <option value={node}>{node}</option>}
+	                        </For>
+	                      </select>
+	                    </div>
+	                  </Show>
+
+	                  <Show when={showNamespaceFilter()}>
+	                    <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+	                      <label
+	                        for="backups-namespace-filter"
+	                        class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+	                      >
+	                        Namespace
+	                      </label>
+	                      <select
+	                        id="backups-namespace-filter"
+	                        value={namespaceFilter()}
+	                        onChange={(event) => {
+	                          setNamespaceFilter(event.currentTarget.value);
+	                          setCurrentPage(1);
+	                        }}
+	                        class="min-w-[8rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+	                      >
+	                        <option value="all">All</option>
+	                        <For each={namespaceOptions().filter((value) => value !== 'all')}>
+	                          {(namespace) => <option value={namespace}>{namespace}</option>}
+	                        </For>
+	                      </select>
+	                    </div>
+	                  </Show>
+	                </div>
+	              </Show>
+	            </div>
+	          </Card>
+
+	          <Card padding="none" class="overflow-hidden">
+	            <Show
+	              when={groupedByDay().length > 0}
+	              fallback={
+                <div class="p-6">
+                  <EmptyState
+                    title="No backups match your filters"
+                    description="Adjust your search, source, method, status, or verification filters."
+                    actions={
+                      <Show when={hasActiveArtifactFilters()}>
+                        <button
+                          type="button"
+                          onClick={resetAllArtifactFilters}
+                          class="inline-flex items-center gap-2 rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+                        >
+                          Clear filters
+                        </button>
+                      </Show>
+                    }
+                  />
+                </div>
+              }
+            >
+              <div class="overflow-x-auto">
+                <table class="w-full text-xs" style={{ 'min-width': tableMinWidth() }}>
+                  <thead>
+                    <tr class="border-b border-gray-200 bg-gray-50 text-left text-[10px] uppercase tracking-wide text-gray-500 dark:border-gray-700 dark:bg-gray-800/70 dark:text-gray-400">
+                      <For each={visibleArtifactColumns()}>{(col) => <th class="px-2 py-1.5">{col.label}</th>}</For>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                    <For each={groupedByDay()}>
+                      {(group) => (
+                        <>
+                          <tr class={groupHeaderRowClass()}>
+                            <td colSpan={tableColumnCount()} class={groupHeaderTextClass()}>
+                              <div class="flex items-center gap-2">
+                                <span>{group.label}</span>
+                                <span class="text-[10px] font-normal text-slate-400 dark:text-slate-500">
+	                                  {group.items.length} {group.items.length === 1 ? 'event' : 'events'}
+	                                </span>
+	                              </div>
+	                            </td>
+	                          </tr>
+	                          <For each={group.items}>
+	                            {(p) => {
+	                              const resIndex = resourcesById();
+	                              const mode = deriveMode(p);
+	                              const typeKey = workloadBadgeKeyForPoint(p, resIndex);
+	                              const typeLabel = deriveTypeLabelForPoint(p, resIndex);
+	                              const typeBadge = getWorkloadTypeBadge(typeKey, { label: typeLabel, title: typeLabel });
+	                              const sourceBadge = getSourcePlatformBadge(String(p.provider));
+	                              const repoLabel = buildRepositoryLabelForPoint(p);
+	                              const rowNowMs = Date.now();
+	                              const issueTone = deriveIssueTone(p, rowNowMs);
+	                              const issueRailClass = issueTone === 'none' ? '' : ISSUE_RAIL_CLASS[issueTone];
+	                              const flags: string[] = [];
+	                              if (p.immutable === true) flags.push('Immutable');
+	                              if (p.encrypted === true) flags.push('Encrypted');
+	                              const detailsText = summarizeDetailsForPoint(p);
+	                              const detailInline = [flags.join(' • '), detailsText || '-']
+	                                .filter((value) => value && value.trim().length > 0)
+	                                .join(' | ');
+	                              const completedMs = p.completedAt ? Date.parse(p.completedAt) : null;
+                                const subjectLabel = buildSubjectLabelForPoint(p, resIndex);
+                                const clusterLabel = deriveClusterLabelForPoint(p);
+                                const nodeLabel = deriveNodeLabelForPoint(p);
+                                const namespaceLabel = deriveNamespaceLabelForPoint(p);
+                                const entityIdLabel = deriveEntityIdLabelForPoint(p);
+	                              return (
+	                                <tr
+	                                  class="border-b border-gray-200 hover:bg-gray-50/70 dark:border-gray-700 dark:hover:bg-gray-800/35"
+	                                  onDblClick={() => setSelectedPoint(p)}
+	                                >
+                                  <For each={visibleArtifactColumns()}>
+                                    {(col) => {
+                                      switch (col.id) {
+                                        case 'time':
+                                          return (
+                                            <td class={`relative whitespace-nowrap pl-8 pr-2 py-1 ${timeAgeTextClass(p, rowNowMs)}`}>
+                                              <Show when={issueTone !== 'none'}>
+                                                <span class={`absolute inset-y-0 left-0 w-0.5 ${issueRailClass}`} />
+                                              </Show>
+                                              {formatTimeOnly(completedMs)}
+                                            </td>
+                                          );
+                                        case 'subject':
+                                          return (
+                                            <td
+                                              class={`max-w-[320px] truncate whitespace-nowrap pl-6 pr-2 py-1 text-gray-900 ${
+                                                issueTone === 'rose' || issueTone === 'blue'
+                                                  ? 'font-medium dark:text-slate-100'
+                                                  : issueTone === 'amber'
+                                                    ? 'dark:text-slate-200'
+                                                    : 'dark:text-gray-300'
+                                              }`}
+                                              title={subjectLabel}
+                                            >
+                                              <div class="flex items-center gap-2">
+                                                <span
+                                                  class={`inline-flex items-center whitespace-nowrap rounded px-1 py-0.5 text-[10px] font-medium ${typeBadge.className}`}
+                                                  title={typeBadge.title}
+                                                >
+                                                  {typeBadge.label}
+                                                </span>
+                                                <span class="truncate">{subjectLabel}</span>
+                                              </div>
+                                            </td>
+                                          );
+                                        case 'entityId':
+                                          return (
+                                            <td class="max-w-[140px] truncate whitespace-nowrap pl-6 pr-2 py-1 text-[11px] text-gray-700 dark:text-gray-400" title={entityIdLabel}>
+                                              {entityIdLabel}
+                                            </td>
+                                          );
+                                        case 'cluster':
+                                          return (
+                                            <td class="max-w-[220px] truncate whitespace-nowrap pl-6 pr-2 py-1 text-[11px] text-gray-700 dark:text-gray-400" title={clusterLabel}>
+                                              {clusterLabel}
+                                            </td>
+                                          );
+                                        case 'nodeHost':
+                                          return (
+                                            <td class="max-w-[220px] truncate whitespace-nowrap pl-6 pr-2 py-1 text-[11px] text-gray-700 dark:text-gray-400" title={nodeLabel}>
+                                              {nodeLabel}
+                                            </td>
+                                          );
+                                        case 'namespace':
+                                          return (
+                                            <td class="max-w-[220px] truncate whitespace-nowrap pl-6 pr-2 py-1 text-[11px] text-gray-700 dark:text-gray-400" title={namespaceLabel}>
+                                              {namespaceLabel}
+                                            </td>
+                                          );
+                                        case 'source':
+                                          return (
+                                            <td class="whitespace-nowrap pl-6 pr-2 py-1 text-gray-600 dark:text-gray-400">
+                                              <Show
+                                                when={sourceBadge}
+                                                fallback={<span class="text-xs text-gray-500 dark:text-gray-400">{sourceLabel(String(p.provider))}</span>}
+                                              >
+                                                <span class={sourceBadge!.classes} title={sourceBadge!.title}>
+                                                  {sourceBadge!.label}
+                                                </span>
+                                              </Show>
+                                            </td>
+                                          );
+                                        case 'verified':
+                                          return (
+                                            <td class="whitespace-nowrap pl-6 pr-2 py-1 text-[11px]">
+                                              <Show when={(p.verified ?? null) === true}>
+                                                <span class="text-emerald-700 dark:text-emerald-300">Yes</span>
+                                              </Show>
+                                              <Show when={(p.verified ?? null) === false}>
+                                                <span class="text-rose-700 dark:text-rose-300">No</span>
+                                              </Show>
+                                              <Show when={(p.verified ?? null) === null}>
+                                                <span class="text-gray-500 dark:text-gray-400">n/a</span>
+                                              </Show>
+                                            </td>
+                                          );
+                                        case 'size':
+                                          return (
+                                            <td class="whitespace-nowrap pl-6 pr-2 py-1 text-gray-700 dark:text-gray-400">
+                                              {p.sizeBytes && p.sizeBytes > 0 ? formatBytes(p.sizeBytes) : 'n/a'}
+                                            </td>
+                                          );
+                                        case 'method':
+                                          return (
+                                            <td class="whitespace-nowrap pl-6 pr-2 py-1">
+                                              <span
+                                                class={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-medium ${MODE_BADGE_CLASS[mode]}`}
+                                              >
+                                                {MODE_LABELS[mode]}
+                                              </span>
+                                            </td>
+                                          );
+                                        case 'repository':
+                                          return (
+                                            <td
+                                              class="max-w-[220px] truncate whitespace-nowrap pl-6 pr-2 py-1 text-[11px] leading-4 text-gray-600 dark:text-gray-400"
+                                              title={repoLabel}
+                                            >
+                                              {repoLabel || 'n/a'}
+                                            </td>
+                                          );
+                                        case 'details':
+                                          return (
+                                            <td
+                                              class="max-w-[360px] truncate whitespace-nowrap pl-6 pr-2 py-1 text-[11px] leading-4 text-gray-600 dark:text-gray-400"
+                                              title={detailInline}
+                                            >
+                                              <button
+                                                type="button"
+                                                class="text-left hover:underline"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setSelectedPoint(p);
+                                                }}
+                                              >
+                                                {detailInline}
+                                              </button>
+                                            </td>
+                                          );
+                                        case 'outcome':
+                                          return (
+                                            <td class="whitespace-nowrap pl-6 pr-2 py-1">
+                                              <span
+                                                class={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                                                  OUTCOME_BADGE_CLASS[normalizeOutcome(p.outcome)]
+                                                }`}
+                                              >
+                                                {titleize(normalizeOutcome(p.outcome))}
+                                              </span>
+                                            </td>
+                                          );
+                                        default:
+                                          return (
+                                            <td class="whitespace-nowrap pl-6 pr-2 py-1 text-gray-500 dark:text-gray-400">-</td>
+                                          );
+                                      }
+                                    }}
+                                  </For>
+	                                </tr>
+	                              );
+	                            }}
+	                          </For>
+                        </>
+                      )}
+                    </For>
+                  </tbody>
+                </table>
+              </div>
+
+              <div class="flex items-center justify-between gap-2 px-3 py-2 text-xs text-gray-500 dark:text-gray-400 border-t border-gray-200 dark:border-gray-700">
+                <div>
+                  <Show
+                    when={(recoveryPoints.meta().total || 0) > 0}
+	                    fallback={<span>Showing 0 of 0 events</span>}
+                  >
+                    <span>
+                      Showing {(recoveryPoints.meta().page - 1) * recoveryPoints.meta().limit + 1} -{' '}
+                      {Math.min(recoveryPoints.meta().page * recoveryPoints.meta().limit, recoveryPoints.meta().total)} of{' '}
+	                      {recoveryPoints.meta().total} events
+	                    </span>
+	                  </Show>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={currentPage() <= 1}
+                    onClick={() => setCurrentPage(Math.max(1, currentPage() - 1))}
+                    class="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 disabled:opacity-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200"
+                  >
+                    Prev
+                  </button>
+                  <span>Page {currentPage()} / {totalPages()}</span>
+                  <button
+                    type="button"
+                    disabled={currentPage() >= totalPages()}
+                    onClick={() => setCurrentPage(Math.min(totalPages(), currentPage() + 1))}
+                    class="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 disabled:opacity-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            </Show>
+          </Card>
+
+          <Dialog
+            isOpen={Boolean(selectedPoint())}
+            onClose={() => setSelectedPoint(null)}
+            panelClass="w-[min(920px,92vw)]"
+            ariaLabel="Recovery point details"
+          >
+            <Show when={selectedPoint()}>
+              {(p) => <RecoveryPointDetails point={p()!} />}
+            </Show>
+          </Dialog>
+          </Show>
+        </Show>
+	    </div>
   );
 };
 

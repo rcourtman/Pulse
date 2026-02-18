@@ -3,15 +3,15 @@ import { Card } from '@/components/shared/Card';
 import { buildBackupsPath } from '@/routing/resourceLinks';
 import { formatRelativeTime } from '@/utils/format';
 import type { DashboardBackupSummary } from '@/hooks/useDashboardBackups';
-import type { BackupOutcome } from '@/features/storageBackups/models';
 
 interface BackupStatusPanelProps {
   backups: DashboardBackupSummary;
 }
 
-const OUTCOMES: BackupOutcome[] = ['success', 'warning', 'failed', 'running', 'offline', 'unknown'];
+type ProtectionOutcome = 'success' | 'warning' | 'failed' | 'running' | 'unknown';
+const OUTCOMES: ProtectionOutcome[] = ['success', 'warning', 'failed', 'running', 'unknown'];
 
-const outcomeBadgeClass = (outcome: BackupOutcome): string => {
+const outcomeBadgeClass = (outcome: ProtectionOutcome): string => {
   const base = 'inline-flex items-center rounded-full px-2 py-1 text-xs font-medium';
   switch (outcome) {
     case 'success':
@@ -22,8 +22,6 @@ const outcomeBadgeClass = (outcome: BackupOutcome): string => {
       return `${base} bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300`;
     case 'running':
       return `${base} bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300`;
-    case 'offline':
-      return `${base} bg-gray-100 text-gray-700 dark:bg-gray-700/60 dark:text-gray-200`;
     default:
       return `${base} bg-gray-100 text-gray-600 dark:bg-gray-700/60 dark:text-gray-300`;
   }
@@ -90,4 +88,3 @@ export function BackupStatusPanel(props: BackupStatusPanelProps) {
 }
 
 export default BackupStatusPanel;
-

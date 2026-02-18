@@ -145,15 +145,25 @@ func (p *Provider) Close() {
 	}
 }
 
+// Snapshot returns a defensive copy of the most recent cached snapshot.
+// Callers should treat the returned snapshot as immutable.
+func (p *Provider) Snapshot() *FixtureSnapshot {
+	if p == nil {
+		return nil
+	}
+	p.mu.Lock()
+	snapshot := copyFixtureSnapshot(p.lastSnapshot)
+	p.mu.Unlock()
+	return snapshot
+}
+
 // Records returns unified records if the feature flag is enabled.
 func (p *Provider) Records() []unifiedresources.IngestRecord {
 	if p == nil || !IsFeatureEnabled() {
 		return nil
 	}
 
-	p.mu.Lock()
-	snapshot := copyFixtureSnapshot(p.lastSnapshot)
-	p.mu.Unlock()
+	snapshot := p.Snapshot()
 	if snapshot == nil {
 		return nil
 	}
@@ -441,5 +451,7 @@ func copyFixtureSnapshot(snapshot *FixtureSnapshot) *FixtureSnapshot {
 	copied.Datasets = append([]Dataset(nil), snapshot.Datasets...)
 	copied.Disks = append([]Disk(nil), snapshot.Disks...)
 	copied.Alerts = append([]Alert(nil), snapshot.Alerts...)
+	copied.ZFSSnapshots = append([]ZFSSnapshot(nil), snapshot.ZFSSnapshots...)
+	copied.ReplicationTasks = append([]ReplicationTask(nil), snapshot.ReplicationTasks...)
 	return &copied
 }

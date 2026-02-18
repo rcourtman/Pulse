@@ -33,9 +33,9 @@ export const LEGACY_ROUTE_MIGRATION_METADATA: Record<LegacyRouteSource, LegacyRo
   docker: {
     id: 'docker',
     target: 'infrastructure',
-    title: 'Docker moved to Infrastructure + Workloads',
-    message: 'Docker hosts are in Infrastructure. Docker containers are in Workloads.',
-    rationale: 'Docker hosts moved into infrastructure; containers are in workloads.',
+    title: 'Containers moved to Infrastructure + Workloads',
+    message: 'Container hosts are in Infrastructure. Containers are in Workloads.',
+    rationale: 'Container hosts moved into infrastructure; containers are in workloads.',
     status: 'Legacy compatibility alias',
   },
   mail: {

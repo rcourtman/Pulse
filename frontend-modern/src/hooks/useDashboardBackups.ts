@@ -1,45 +1,56 @@
-import { createMemo, type Accessor } from 'solid-js';
-import { useWebSocket } from '@/App';
-import { buildBackupRecords } from '@/features/storageBackups/backupAdapters';
-import type { BackupOutcome } from '@/features/storageBackups/models';
-import type { Resource } from '@/types/resource';
+import { createMemo } from 'solid-js';
+import { useRecoveryRollups } from '@/hooks/useRecoveryRollups';
+import type { ProtectionRollup } from '@/types/recovery';
 
 export interface DashboardBackupSummary {
   totalBackups: number;
-  byOutcome: Partial<Record<BackupOutcome, number>>;
+  byOutcome: Partial<Record<'success' | 'warning' | 'failed' | 'running' | 'unknown', number>>;
   latestBackupTimestamp: number | null;
   hasData: boolean;
 }
 
-export function useDashboardBackups(resources: Accessor<Resource[]>) {
-  const { state } = useWebSocket();
+const parseTimestamp = (value: string | null | undefined): number | null => {
+  const parsed = Date.parse(String(value || ''));
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  return parsed;
+};
+
+const normalizeOutcome = (value: string | null | undefined): 'success' | 'warning' | 'failed' | 'running' | 'unknown' => {
+  const v = String(value || '').trim().toLowerCase();
+  if (v === 'success' || v === 'warning' || v === 'failed' || v === 'running' || v === 'unknown') return v;
+  return 'unknown';
+};
+
+export function useDashboardBackups() {
+  const rollups = useRecoveryRollups();
 
   return createMemo<DashboardBackupSummary>(() => {
-    const currentResources = resources();
-    const records = buildBackupRecords({ state: state as any, resources: currentResources });
+    const data: ProtectionRollup[] = rollups.rollups() || [];
 
-    if (records.length === 0) {
+    if (data.length === 0) {
       return { totalBackups: 0, byOutcome: {}, latestBackupTimestamp: null, hasData: false };
     }
 
-    const byOutcome: Partial<Record<BackupOutcome, number>> = {};
+    const byOutcome: Partial<Record<'success' | 'warning' | 'failed' | 'running' | 'unknown', number>> = {};
     let latestTimestamp: number | null = null;
 
-    for (const record of records) {
-      byOutcome[record.outcome] = (byOutcome[record.outcome] ?? 0) + 1;
-      if (record.completedAt !== null) {
-        if (latestTimestamp === null || record.completedAt > latestTimestamp) {
-          latestTimestamp = record.completedAt;
+    for (const rollup of data) {
+      const outcome = normalizeOutcome(rollup.lastOutcome);
+      byOutcome[outcome] = (byOutcome[outcome] ?? 0) + 1;
+
+      const ts = parseTimestamp(rollup.lastAttemptAt || null);
+      if (ts !== null) {
+        if (latestTimestamp === null || ts > latestTimestamp) {
+          latestTimestamp = ts;
         }
       }
     }
 
     return {
-      totalBackups: records.length,
+      totalBackups: data.length,
       byOutcome,
       latestBackupTimestamp: latestTimestamp,
       hasData: true,
     };
   });
 }
-

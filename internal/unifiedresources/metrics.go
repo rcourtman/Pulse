@@ -6,7 +6,7 @@ import (
 	"math/rand"
 	"strings"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
+	"github.com/rcourtman/pulse-go-rewrite/internal/mockmode"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
@@ -239,7 +239,7 @@ func metricsFromDockerContainer(ct models.DockerContainer) *ResourceMetrics {
 			metrics.DiskWrite = &MetricValue{Value: *ct.BlockIO.WriteRateBytesPerSecond, Unit: "bytes/s", Source: SourceDocker}
 		}
 	}
-	if mock.IsMockEnabled() && (metrics.NetIn == nil || metrics.NetOut == nil || metrics.DiskRead == nil || metrics.DiskWrite == nil) {
+	if mockmode.IsEnabled() && (metrics.NetIn == nil || metrics.NetOut == nil || metrics.DiskRead == nil || metrics.DiskWrite == nil) {
 		synthetic := syntheticDockerContainerIOMetrics(ct)
 		if metrics.NetIn == nil {
 			metrics.NetIn = &MetricValue{Value: synthetic.NetIn, Unit: "bytes/s", Source: SourceDocker}
@@ -435,7 +435,7 @@ func metricsFromKubernetesPod(cluster models.KubernetesCluster, pod models.Kuber
 		metrics.NetOut = &MetricValue{Value: pod.NetOutRate, Unit: "bytes/s", Source: SourceK8s}
 	}
 
-	if !mock.IsMockEnabled() {
+	if !mockmode.IsEnabled() {
 		return metrics
 	}
 

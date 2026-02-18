@@ -298,6 +298,125 @@ func (c *Client) GetAlerts(ctx context.Context) ([]Alert, error) {
 	return alerts, nil
 }
 
+// GetZFSSnapshots returns a best-effort list of ZFS snapshots.
+//
+// NOTE: TrueNAS exposes multiple snapshot APIs across versions. We intentionally parse the
+// response loosely and fall back to parsing dataset/snapshot names from the snapshot ID.
+func (c *Client) GetZFSSnapshots(ctx context.Context) ([]ZFSSnapshot, error) {
+	var response []map[string]any
+	if err := c.getJSON(ctx, http.MethodGet, "/zfs/snapshot", &response); err != nil {
+		return nil, err
+	}
+
+	snapshots := make([]ZFSSnapshot, 0, len(response))
+	for _, item := range response {
+		full := readStringAny(item, "id", "name", "snapshot", "snapshot_name", "snapshotName")
+		dataset := readStringAny(item, "dataset", "dataset_name", "datasetName")
+		snapName := readStringAny(item, "snapshot_name", "snapshotName", "name")
+
+		if dataset == "" || snapName == "" {
+			if parsedDataset, parsedSnap := splitSnapshotName(full); dataset == "" || snapName == "" {
+				if dataset == "" {
+					dataset = parsedDataset
+				}
+				if snapName == "" {
+					snapName = parsedSnap
+				}
+			}
+		}
+
+		var createdAt *time.Time
+		if t := readTimeAny(item,
+			"created_at",
+			"createdAt",
+			"creation_time",
+			"creationTime",
+			"created",
+			"creation",
+			"datetime",
+		); t != nil {
+			createdAt = t
+		} else if props, ok := item["properties"].(map[string]any); ok {
+			createdAt = readTimeAny(props, "creation", "created", "datetime")
+		}
+
+		usedBytes := readInt64PtrAny(item, "used", "used_bytes", "usedBytes")
+		referenced := readInt64PtrAny(item, "referenced", "referenced_bytes", "referencedBytes")
+
+		if full == "" && dataset != "" && snapName != "" {
+			full = dataset + "@" + snapName
+		}
+
+		snapshots = append(snapshots, ZFSSnapshot{
+			ID:         full,
+			Dataset:    dataset,
+			Name:       snapName,
+			FullName:   full,
+			CreatedAt:  createdAt,
+			UsedBytes:  usedBytes,
+			Referenced: referenced,
+		})
+	}
+
+	return snapshots, nil
+}
+
+// GetReplicationTasks returns a best-effort list of replication tasks including last-run state.
+func (c *Client) GetReplicationTasks(ctx context.Context) ([]ReplicationTask, error) {
+	var response []map[string]any
+	if err := c.getJSON(ctx, http.MethodGet, "/replication", &response); err != nil {
+		return nil, err
+	}
+
+	tasks := make([]ReplicationTask, 0, len(response))
+	for _, item := range response {
+		id := readStringAny(item, "id")
+		name := readStringAny(item, "name")
+		direction := readStringAny(item, "direction")
+		targetDataset := readStringAny(item, "target_dataset", "targetDataset", "target")
+
+		sourceDatasets := readStringSliceAny(item, "source_datasets", "sourceDatasets", "sources", "source")
+
+		var lastRun *time.Time
+		if t := readTimeAny(item, "last_run", "lastRun", "last_run_time", "lastRunTime"); t != nil {
+			lastRun = t
+		}
+		lastState := readStringAny(item, "state", "last_state", "lastState", "last_result", "lastResult")
+		lastError := readStringAny(item, "error", "last_error", "lastError", "last_failure", "lastFailure")
+		lastSnapshot := readStringAny(item, "last_snapshot", "lastSnapshot")
+
+		// Some TrueNAS versions nest state under "state".
+		if stateObj, ok := item["state"].(map[string]any); ok {
+			if lastRun == nil {
+				lastRun = readTimeAny(stateObj, "datetime", "time", "last_run", "lastRun")
+			}
+			if strings.TrimSpace(lastState) == "" {
+				lastState = readStringAny(stateObj, "state", "status", "result")
+			}
+			if strings.TrimSpace(lastError) == "" {
+				lastError = readStringAny(stateObj, "error", "message", "stderr")
+			}
+			if strings.TrimSpace(lastSnapshot) == "" {
+				lastSnapshot = readStringAny(stateObj, "last_snapshot", "lastSnapshot", "snapshot")
+			}
+		}
+
+		tasks = append(tasks, ReplicationTask{
+			ID:             strings.TrimSpace(id),
+			Name:           strings.TrimSpace(name),
+			SourceDatasets: dedupeStrings(sourceDatasets),
+			TargetDataset:  strings.TrimSpace(targetDataset),
+			Direction:      strings.TrimSpace(direction),
+			LastRun:        lastRun,
+			LastState:      strings.TrimSpace(lastState),
+			LastError:      strings.TrimSpace(lastError),
+			LastSnapshot:   strings.TrimSpace(lastSnapshot),
+		})
+	}
+
+	return tasks, nil
+}
+
 // FetchSnapshot collects a complete fixture-compatible snapshot.
 func (c *Client) FetchSnapshot(ctx context.Context) (*FixtureSnapshot, error) {
 	system, err := c.GetSystemInfo(ctx)
@@ -325,14 +444,52 @@ func (c *Client) FetchSnapshot(ctx context.Context) (*FixtureSnapshot, error) {
 		return nil, fmt.Errorf("fetch truenas alerts: %w", err)
 	}
 
+	// Recovery artifacts are best-effort: do not fail monitoring if additional endpoints are unavailable.
+	zfsSnapshots, _ := c.GetZFSSnapshots(ctx)
+	replicationTasks, _ := c.GetReplicationTasks(ctx)
+
 	return &FixtureSnapshot{
-		CollectedAt: time.Now().UTC(),
-		System:      *system,
-		Pools:       pools,
-		Datasets:    datasets,
-		Disks:       disks,
-		Alerts:      alerts,
+		CollectedAt:      time.Now().UTC(),
+		System:           *system,
+		Pools:            pools,
+		Datasets:         datasets,
+		Disks:            disks,
+		Alerts:           alerts,
+		ZFSSnapshots:     zfsSnapshots,
+		ReplicationTasks: replicationTasks,
 	}, nil
+}
+
+func splitSnapshotName(full string) (dataset string, snapshot string) {
+	full = strings.TrimSpace(full)
+	if full == "" {
+		return "", ""
+	}
+	parts := strings.SplitN(full, "@", 2)
+	if len(parts) != 2 {
+		return "", ""
+	}
+	return strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1])
+}
+
+func dedupeStrings(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(values))
+	out := make([]string, 0, len(values))
+	for _, v := range values {
+		v = strings.TrimSpace(v)
+		if v == "" {
+			continue
+		}
+		if _, ok := seen[v]; ok {
+			continue
+		}
+		seen[v] = struct{}{}
+		out = append(out, v)
+	}
+	return out
 }
 
 func (c *Client) getJSON(ctx context.Context, method string, path string, destination any) (err error) {
@@ -727,6 +884,232 @@ func parseBoolFromAny(raw json.RawMessage) (bool, error) {
 	default:
 		return false, fmt.Errorf("unsupported bool type %T", decoded)
 	}
+}
+
+func readStringAny(record map[string]any, keys ...string) string {
+	if record == nil {
+		return ""
+	}
+	for _, key := range keys {
+		value, ok := record[key]
+		if !ok || value == nil {
+			continue
+		}
+		switch typed := value.(type) {
+		case string:
+			if s := strings.TrimSpace(typed); s != "" {
+				return s
+			}
+		case json.Number:
+			if s := strings.TrimSpace(typed.String()); s != "" {
+				return s
+			}
+		case float64:
+			// JSON decoder returns float64 for numbers when not using json.Number.
+			if typed == float64(int64(typed)) {
+				return strconv.FormatInt(int64(typed), 10)
+			}
+			return strconv.FormatFloat(typed, 'f', -1, 64)
+		case int64:
+			return strconv.FormatInt(typed, 10)
+		case map[string]any:
+			// Try common wrapper shapes: { "rawvalue": "...", "parsed": ... }
+			if s := readStringAny(typed, "rawvalue", "value", "parsed"); s != "" {
+				return s
+			}
+		}
+	}
+	return ""
+}
+
+func readStringSliceAny(record map[string]any, keys ...string) []string {
+	if record == nil {
+		return nil
+	}
+	for _, key := range keys {
+		value, ok := record[key]
+		if !ok || value == nil {
+			continue
+		}
+		switch typed := value.(type) {
+		case []any:
+			out := make([]string, 0, len(typed))
+			for _, item := range typed {
+				switch v := item.(type) {
+				case string:
+					if s := strings.TrimSpace(v); s != "" {
+						out = append(out, s)
+					}
+				case json.Number:
+					if s := strings.TrimSpace(v.String()); s != "" {
+						out = append(out, s)
+					}
+				}
+			}
+			if len(out) > 0 {
+				return out
+			}
+		case []string:
+			if len(typed) > 0 {
+				return append([]string(nil), typed...)
+			}
+		case string:
+			// Comma-separated fallback.
+			parts := strings.Split(typed, ",")
+			out := make([]string, 0, len(parts))
+			for _, part := range parts {
+				if s := strings.TrimSpace(part); s != "" {
+					out = append(out, s)
+				}
+			}
+			if len(out) > 0 {
+				return out
+			}
+		}
+	}
+	return nil
+}
+
+func readInt64PtrAny(record map[string]any, keys ...string) *int64 {
+	if record == nil {
+		return nil
+	}
+	for _, key := range keys {
+		value, ok := record[key]
+		if !ok || value == nil {
+			continue
+		}
+		if v, ok := parseInt64Any(value); ok {
+			return &v
+		}
+		// Common wrapper: { rawvalue, parsed }
+		if nested, ok := value.(map[string]any); ok {
+			if v, ok := parseInt64Any(nested["parsed"]); ok {
+				return &v
+			}
+			if v, ok := parseInt64Any(nested["rawvalue"]); ok {
+				return &v
+			}
+		}
+	}
+	return nil
+}
+
+func parseInt64Any(value any) (int64, bool) {
+	switch typed := value.(type) {
+	case int64:
+		return typed, true
+	case int:
+		return int64(typed), true
+	case float64:
+		return int64(typed), true
+	case json.Number:
+		if v, err := typed.Int64(); err == nil {
+			return v, true
+		}
+		if f, err := typed.Float64(); err == nil {
+			return int64(f), true
+		}
+	case string:
+		s := strings.TrimSpace(typed)
+		if s == "" {
+			return 0, false
+		}
+		if v, err := strconv.ParseInt(s, 10, 64); err == nil {
+			return v, true
+		}
+	}
+	return 0, false
+}
+
+func readTimeAny(record map[string]any, keys ...string) *time.Time {
+	if record == nil {
+		return nil
+	}
+	for _, key := range keys {
+		value, ok := record[key]
+		if !ok || value == nil {
+			continue
+		}
+		if t := parseTimeAny(value); t != nil {
+			return t
+		}
+		// Wrapper: { "$date": ... }
+		if nested, ok := value.(map[string]any); ok {
+			if dateValue, ok := nested["$date"]; ok {
+				if t := parseTimeAny(dateValue); t != nil {
+					return t
+				}
+			}
+			if parsedValue, ok := nested["parsed"]; ok {
+				if t := parseTimeAny(parsedValue); t != nil {
+					return t
+				}
+			}
+			if rawValue, ok := nested["rawvalue"]; ok {
+				if t := parseTimeAny(rawValue); t != nil {
+					return t
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func parseTimeAny(value any) *time.Time {
+	switch typed := value.(type) {
+	case time.Time:
+		if typed.IsZero() {
+			return nil
+		}
+		t := typed.UTC()
+		return &t
+	case string:
+		s := strings.TrimSpace(typed)
+		if s == "" {
+			return nil
+		}
+		// Prefer RFC3339, but accept epoch millis/seconds as strings too.
+		if parsed, err := time.Parse(time.RFC3339, s); err == nil {
+			t := parsed.UTC()
+			return &t
+		}
+		if parsed, err := time.Parse(time.RFC3339Nano, s); err == nil {
+			t := parsed.UTC()
+			return &t
+		}
+		if n, ok := parseInt64Any(s); ok {
+			return epochToTimePtr(n)
+		}
+	case json.Number:
+		if n, err := typed.Int64(); err == nil {
+			return epochToTimePtr(n)
+		}
+		if f, err := typed.Float64(); err == nil {
+			return epochToTimePtr(int64(f))
+		}
+	case float64:
+		return epochToTimePtr(int64(typed))
+	case int64:
+		return epochToTimePtr(typed)
+	case int:
+		return epochToTimePtr(int64(typed))
+	}
+	return nil
+}
+
+func epochToTimePtr(value int64) *time.Time {
+	if value <= 0 {
+		return nil
+	}
+	// Heuristic: treat >= 1e12 as millis, otherwise seconds.
+	var t time.Time
+	if value >= 1_000_000_000_000 {
+		t = time.UnixMilli(value).UTC()
+	} else {
+		t = time.Unix(value, 0).UTC()
+	}
+	return &t
 }
 
 func rawIDToString(raw json.RawMessage) (string, error) {

@@ -28,12 +28,14 @@ describe('resource link routing contract', () => {
     const parsed = parseWorkloadsLinkSearch(href.slice('/workloads'.length));
     expect(parsed).toEqual({
       type: 'k8s',
+      runtime: '',
       context: 'cluster-a',
       host: 'worker-1',
       resource: 'cluster-a:worker-1:101',
     });
 
     expect(WORKLOADS_QUERY_PARAMS.type).toBe('type');
+    expect(WORKLOADS_QUERY_PARAMS.runtime).toBe('runtime');
     expect(WORKLOADS_QUERY_PARAMS.context).toBe('context');
     expect(WORKLOADS_QUERY_PARAMS.host).toBe('host');
     expect(WORKLOADS_QUERY_PARAMS.resource).toBe('resource');
@@ -118,48 +120,51 @@ describe('resource link routing contract', () => {
 
   it('builds and parses backups query params', () => {
     const href = buildBackupsPath({
-      guestType: 'vm',
-      source: 'pbs',
+      provider: 'proxmox-pbs',
+      cluster: 'cluster-main',
       namespace: 'tenant-a',
-      backupType: 'remote',
-      status: 'verified',
-      group: 'guest',
+      mode: 'remote',
+      status: 'failed',
+      verification: 'verified',
+      scope: 'workload',
       node: 'cluster-main-pve1',
       query: 'node:pve1',
     });
-    expect(href).toBe('/backups?type=vm&source=pbs&namespace=tenant-a&backupType=remote&status=verified&group=guest&node=cluster-main-pve1&q=node%3Apve1');
+    const url = new URL(href, 'http://localhost');
+    expect(url.pathname).toBe('/backups');
+    expect(url.searchParams.get('provider')).toBe('proxmox-pbs');
+    expect(url.searchParams.get('cluster')).toBe('cluster-main');
+    expect(url.searchParams.get('namespace')).toBe('tenant-a');
+    expect(url.searchParams.get('mode')).toBe('remote');
+    expect(url.searchParams.get('scope')).toBe('workload');
+    expect(url.searchParams.get('status')).toBe('failed');
+    expect(url.searchParams.get('verification')).toBe('verified');
+    expect(url.searchParams.get('node')).toBe('cluster-main-pve1');
+    expect(url.searchParams.get('q')).toBe('node:pve1');
 
     const parsed = parseBackupsLinkSearch(href.slice('/backups'.length));
     expect(parsed).toEqual({
-      guestType: 'vm',
-      source: 'pbs',
+      view: '',
+      rollupId: '',
+      provider: 'proxmox-pbs',
+      cluster: 'cluster-main',
       namespace: 'tenant-a',
-      backupType: 'remote',
-      status: 'verified',
-      group: 'guest',
+      mode: 'remote',
+      scope: 'workload',
+      status: 'failed',
+      verification: 'verified',
       node: 'cluster-main-pve1',
       query: 'node:pve1',
     });
 
-    expect(BACKUPS_QUERY_PARAMS.guestType).toBe('type');
-    expect(BACKUPS_QUERY_PARAMS.source).toBe('source');
+    expect(BACKUPS_QUERY_PARAMS.provider).toBe('provider');
+    expect(BACKUPS_QUERY_PARAMS.cluster).toBe('cluster');
     expect(BACKUPS_QUERY_PARAMS.namespace).toBe('namespace');
-    expect(BACKUPS_QUERY_PARAMS.backupType).toBe('backupType');
+    expect(BACKUPS_QUERY_PARAMS.mode).toBe('mode');
+    expect(BACKUPS_QUERY_PARAMS.scope).toBe('scope');
+    expect(BACKUPS_QUERY_PARAMS.verification).toBe('verification');
     expect(BACKUPS_QUERY_PARAMS.query).toBe('q');
     expect(PMG_THRESHOLDS_PATH).toBe('/alerts/thresholds/mail-gateway');
-  });
-
-  it('supports legacy backups search query param parsing', () => {
-    expect(parseBackupsLinkSearch('?search=vm-101')).toEqual({
-      guestType: '',
-      source: '',
-      namespace: '',
-      backupType: '',
-      status: '',
-      group: '',
-      node: '',
-      query: 'vm-101',
-    });
   });
 
 });

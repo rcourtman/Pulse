@@ -1,5 +1,6 @@
 export const WORKLOADS_QUERY_PARAMS = {
   type: 'type',
+  runtime: 'runtime',
   context: 'context',
   host: 'host',
   resource: 'resource',
@@ -34,21 +35,24 @@ export const STORAGE_QUERY_PARAMS = {
 } as const;
 
 export const BACKUPS_QUERY_PARAMS = {
-  guestType: 'type',
-  source: 'source',
+  view: 'view',
+  rollupId: 'rollupId',
+  provider: 'provider',
+  cluster: 'cluster',
   namespace: 'namespace',
-  backupType: 'backupType',
+  mode: 'mode',
+  scope: 'scope',
   status: 'status',
-  group: 'group',
+  verification: 'verification',
   node: 'node',
   query: 'q',
-  legacyQuery: 'search',
 } as const;
 
 const normalizeQueryValue = (value: string | null | undefined): string => (value || '').trim();
 
 type WorkloadsLinkOptions = {
   type?: string | null;
+  runtime?: string | null;
   context?: string | null;
   host?: string | null;
   resource?: string | null;
@@ -73,12 +77,15 @@ type StorageLinkOptions = {
 };
 
 type BackupsLinkOptions = {
-  guestType?: string | null;
-  source?: string | null;
+  view?: 'events' | 'protected' | null;
+  rollupId?: string | null;
+  provider?: string | null;
+  cluster?: string | null;
   namespace?: string | null;
-  backupType?: string | null;
+  mode?: string | null;
+  scope?: string | null;
   status?: string | null;
-  group?: string | null;
+  verification?: string | null;
   node?: string | null;
   query?: string | null;
 };
@@ -87,6 +94,7 @@ export const parseWorkloadsLinkSearch = (search: string) => {
   const params = new URLSearchParams(search);
   return {
     type: normalizeQueryValue(params.get(WORKLOADS_QUERY_PARAMS.type)),
+    runtime: normalizeQueryValue(params.get(WORKLOADS_QUERY_PARAMS.runtime)),
     context: normalizeQueryValue(params.get(WORKLOADS_QUERY_PARAMS.context)),
     host: normalizeQueryValue(params.get(WORKLOADS_QUERY_PARAMS.host)),
     resource: normalizeQueryValue(params.get(WORKLOADS_QUERY_PARAMS.resource)),
@@ -96,10 +104,12 @@ export const parseWorkloadsLinkSearch = (search: string) => {
 export const buildWorkloadsPath = (options: WorkloadsLinkOptions = {}): string => {
   const params = new URLSearchParams();
   const type = normalizeQueryValue(options.type);
+  const runtime = normalizeQueryValue(options.runtime);
   const context = normalizeQueryValue(options.context);
   const host = normalizeQueryValue(options.host);
   const resource = normalizeQueryValue(options.resource);
   if (type) params.set(WORKLOADS_QUERY_PARAMS.type, type);
+  if (runtime) params.set(WORKLOADS_QUERY_PARAMS.runtime, runtime);
   if (context) params.set(WORKLOADS_QUERY_PARAMS.context, context);
   if (host) params.set(WORKLOADS_QUERY_PARAMS.host, host);
   if (resource) params.set(WORKLOADS_QUERY_PARAMS.resource, resource);
@@ -177,42 +187,48 @@ export const buildStoragePath = (options: StorageLinkOptions = {}): string => {
 
 export const parseBackupsLinkSearch = (search: string) => {
   const params = new URLSearchParams(search);
-  const queryValue =
-    normalizeQueryValue(params.get(BACKUPS_QUERY_PARAMS.query)) ||
-    normalizeQueryValue(params.get(BACKUPS_QUERY_PARAMS.legacyQuery));
+
   return {
-    guestType: normalizeQueryValue(params.get(BACKUPS_QUERY_PARAMS.guestType)),
-    source: normalizeQueryValue(params.get(BACKUPS_QUERY_PARAMS.source)),
+    view: normalizeQueryValue(params.get(BACKUPS_QUERY_PARAMS.view)),
+    rollupId: normalizeQueryValue(params.get(BACKUPS_QUERY_PARAMS.rollupId)),
+    provider: normalizeQueryValue(params.get(BACKUPS_QUERY_PARAMS.provider)),
+    cluster: normalizeQueryValue(params.get(BACKUPS_QUERY_PARAMS.cluster)),
     namespace: normalizeQueryValue(params.get(BACKUPS_QUERY_PARAMS.namespace)),
-    backupType: normalizeQueryValue(params.get(BACKUPS_QUERY_PARAMS.backupType)),
+    mode: normalizeQueryValue(params.get(BACKUPS_QUERY_PARAMS.mode)),
+    scope: normalizeQueryValue(params.get(BACKUPS_QUERY_PARAMS.scope)),
     status: normalizeQueryValue(params.get(BACKUPS_QUERY_PARAMS.status)),
-    group: normalizeQueryValue(params.get(BACKUPS_QUERY_PARAMS.group)),
+    verification: normalizeQueryValue(params.get(BACKUPS_QUERY_PARAMS.verification)),
     node: normalizeQueryValue(params.get(BACKUPS_QUERY_PARAMS.node)),
-    query: queryValue,
+    query: normalizeQueryValue(params.get(BACKUPS_QUERY_PARAMS.query)),
   };
 };
 
 export const buildBackupsPath = (options: BackupsLinkOptions = {}): string => {
   const params = new URLSearchParams();
-  const guestType = normalizeQueryValue(options.guestType);
-  const source = normalizeQueryValue(options.source);
+  const view = normalizeQueryValue(options.view);
+  const rollupId = normalizeQueryValue(options.rollupId);
+  const provider = normalizeQueryValue(options.provider);
+  const cluster = normalizeQueryValue(options.cluster);
   const namespace = normalizeQueryValue(options.namespace);
-  const backupType = normalizeQueryValue(options.backupType);
+  const mode = normalizeQueryValue(options.mode);
+  const scope = normalizeQueryValue(options.scope);
   const status = normalizeQueryValue(options.status);
-  const group = normalizeQueryValue(options.group);
+  const verification = normalizeQueryValue(options.verification);
   const node = normalizeQueryValue(options.node);
   const query = normalizeQueryValue(options.query);
 
-  if (guestType) params.set(BACKUPS_QUERY_PARAMS.guestType, guestType);
-  if (source) params.set(BACKUPS_QUERY_PARAMS.source, source);
+  if (view) params.set(BACKUPS_QUERY_PARAMS.view, view);
+  if (rollupId) params.set(BACKUPS_QUERY_PARAMS.rollupId, rollupId);
+  if (provider) params.set(BACKUPS_QUERY_PARAMS.provider, provider);
+  if (cluster) params.set(BACKUPS_QUERY_PARAMS.cluster, cluster);
   if (namespace) params.set(BACKUPS_QUERY_PARAMS.namespace, namespace);
-  if (backupType) params.set(BACKUPS_QUERY_PARAMS.backupType, backupType);
+  if (mode) params.set(BACKUPS_QUERY_PARAMS.mode, mode);
+  if (scope) params.set(BACKUPS_QUERY_PARAMS.scope, scope);
   if (status) params.set(BACKUPS_QUERY_PARAMS.status, status);
-  if (group) params.set(BACKUPS_QUERY_PARAMS.group, group);
+  if (verification) params.set(BACKUPS_QUERY_PARAMS.verification, verification);
   if (node) params.set(BACKUPS_QUERY_PARAMS.node, node);
   if (query) params.set(BACKUPS_QUERY_PARAMS.query, query);
 
   const serialized = params.toString();
   return serialized ? `/backups?${serialized}` : '/backups';
 };
-

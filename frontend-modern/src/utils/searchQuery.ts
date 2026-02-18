@@ -1,5 +1,4 @@
-import type { VM, Container, PBSBackup, StorageBackup, BackupTask } from '@/types/api';
-import type { UnifiedBackup } from '@/types/backups';
+import type { VM, Container } from '@/types/api';
 
 export type ComparisonOperator = '>' | '<' | '>=' | '<=' | '=' | '==';
 export type LogicalOperator = 'AND' | 'OR';
@@ -114,7 +113,7 @@ export function parseFilterStack(searchString: string): FilterStack {
   return { filters, operators, logicalOperator };
 }
 
-type FilterableItem = VM | Container | PBSBackup | StorageBackup | BackupTask | UnifiedBackup;
+type FilterableItem = VM | Container;
 
 function evaluateMetricCondition(guest: FilterableItem, condition: MetricCondition): boolean {
   let value: number;

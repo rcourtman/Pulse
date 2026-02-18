@@ -14,10 +14,12 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/unified"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	recoverymanager "github.com/rcourtman/pulse-go-rewrite/internal/recovery/manager"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
@@ -84,6 +86,7 @@ type AIHandler struct {
 	unifiedStoreMu    sync.RWMutex
 	unifiedStore      *unified.UnifiedStore
 	readState         unifiedresources.ReadState
+	recoveryManager   *recoverymanager.Manager
 }
 
 // newChatService is the factory function for creating the AI service.
@@ -132,6 +135,14 @@ func (h *AIHandler) SetReadState(rs unifiedresources.ReadState) {
 		return
 	}
 	h.readState = rs
+}
+
+// SetRecoveryManager stores a recovery manager for injection into newly created chat services.
+func (h *AIHandler) SetRecoveryManager(manager *recoverymanager.Manager) {
+	if h == nil {
+		return
+	}
+	h.recoveryManager = manager
 }
 
 // GetService returns the AI service for the current context
@@ -216,6 +227,9 @@ func (h *AIHandler) initTenantService(ctx context.Context, orgID string) AIServi
 		DataDir:     dataDir,
 		AgentServer: h.agentServer,
 		ReadState:   h.readState,
+	}
+	if h.recoveryManager != nil {
+		chatCfg.RecoveryPointsProvider = tools.NewRecoveryPointsMCPAdapter(h.recoveryManager, orgID)
 	}
 
 	// Get monitor for state provider
@@ -313,6 +327,13 @@ func (h *AIHandler) Start(ctx context.Context, stateProvider AIStateProvider) er
 		StateProvider: stateProvider,
 		AgentServer:   h.agentServer,
 		ReadState:     h.readState,
+	}
+	if h.recoveryManager != nil {
+		orgID := GetOrgID(ctx)
+		if orgID == "" {
+			orgID = "default"
+		}
+		chatCfg.RecoveryPointsProvider = tools.NewRecoveryPointsMCPAdapter(h.recoveryManager, orgID)
 	}
 
 	h.legacyService = newChatService(chatCfg)

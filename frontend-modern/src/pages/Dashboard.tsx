@@ -27,7 +27,7 @@ export default function Dashboard() {
   const overview = useDashboardOverview(resources, alertsList);
   const [trendRange, setTrendRange] = createSignal<HistoryTimeRange>('1h');
   const trends = useDashboardTrends(overview, resources, trendRange);
-  const backups = useDashboardBackups(resources);
+  const backups = useDashboardBackups();
 
   // Loading timeout: if REST fetch takes >30s, treat as connection error.
   const [loadingTimedOut, setLoadingTimedOut] = createSignal(false);

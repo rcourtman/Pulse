@@ -4,12 +4,14 @@ import "time"
 
 // FixtureSnapshot represents a deterministic TrueNAS API snapshot used for contract testing.
 type FixtureSnapshot struct {
-	CollectedAt time.Time
-	System      SystemInfo
-	Pools       []Pool
-	Datasets    []Dataset
-	Disks       []Disk
-	Alerts      []Alert
+	CollectedAt      time.Time
+	System           SystemInfo
+	Pools            []Pool
+	Datasets         []Dataset
+	Disks            []Disk
+	Alerts           []Alert
+	ZFSSnapshots     []ZFSSnapshot
+	ReplicationTasks []ReplicationTask
 }
 
 // SystemInfo mirrors high-level TrueNAS system identity/status data.
@@ -64,4 +66,31 @@ type Alert struct {
 	Source    string
 	Dismissed bool
 	Datetime  time.Time
+}
+
+// ZFSSnapshot mirrors the subset of snapshot fields needed for recovery-point mapping.
+type ZFSSnapshot struct {
+	ID         string
+	Dataset    string
+	Name       string // snapshot name (without dataset prefix), best-effort
+	FullName   string // dataset@snapshot, best-effort
+	CreatedAt  *time.Time
+	UsedBytes  *int64
+	Referenced *int64
+}
+
+// ReplicationTask mirrors the subset of replication task fields needed for recovery-point mapping.
+type ReplicationTask struct {
+	ID             string
+	Name           string
+	SourceDatasets []string
+	TargetDataset  string
+	Direction      string
+
+	LastRun   *time.Time
+	LastState string // SUCCESS / FAILED / RUNNING / etc, best-effort
+	LastError string
+
+	// Best-effort last snapshot name/identifier if exposed by API.
+	LastSnapshot string
 }

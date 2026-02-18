@@ -14,15 +14,7 @@ const baseState = (overrides: Partial<State> = {}): State =>
     storage: [],
     pbs: [],
     pmg: [],
-    pbsBackups: [],
-    pmgBackups: [],
-    backups: {
-      pve: { backupTasks: [], storageBackups: [], guestSnapshots: [] },
-      pbs: [],
-      pmg: [],
-    },
     metrics: [],
-    pveBackups: { backupTasks: [], storageBackups: [], guestSnapshots: [] },
     performance: {
       apiCallDuration: {},
       lastPollDuration: 0,

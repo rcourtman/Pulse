@@ -13,6 +13,8 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	internalerrors "github.com/rcourtman/pulse-go-rewrite/internal/monitoring/errors"
+	recoverymanager "github.com/rcourtman/pulse-go-rewrite/internal/recovery/manager"
+	truenasmapper "github.com/rcourtman/pulse-go-rewrite/internal/recovery/mapper/truenas"
 	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
@@ -22,18 +24,21 @@ const defaultTrueNASPollInterval = 60 * time.Second
 
 // TrueNASPoller manages periodic polling of configured TrueNAS connections.
 type TrueNASPoller struct {
-	registry              *unifiedresources.ResourceRegistry
-	persistence           *config.ConfigPersistence
-	mu                    sync.Mutex
-	providers             map[string]*truenas.Provider // keyed by connection ID
-	cachedRecordsByConnID map[string][]unifiedresources.IngestRecord
-	cancel                context.CancelFunc
-	stopped               chan struct{}
-	interval              time.Duration
+	registry        *unifiedresources.ResourceRegistry
+	multiTenant     *config.MultiTenantPersistence
+	recoveryManager *recoverymanager.Manager
+	mu              sync.Mutex
+	// providersByOrg is keyed by orgID, then connection ID.
+	providersByOrg map[string]map[string]*truenas.Provider
+	// cachedRecordsByOrg is keyed by orgID, then connection ID.
+	cachedRecordsByOrg map[string]map[string][]unifiedresources.IngestRecord
+	cancel             context.CancelFunc
+	stopped            chan struct{}
+	interval           time.Duration
 }
 
 // NewTrueNASPoller builds a new TrueNAS poller with the provided poll interval.
-func NewTrueNASPoller(registry *unifiedresources.ResourceRegistry, persistence *config.ConfigPersistence, interval time.Duration) *TrueNASPoller {
+func NewTrueNASPoller(registry *unifiedresources.ResourceRegistry, multiTenant *config.MultiTenantPersistence, interval time.Duration, recoveryManager *recoverymanager.Manager) *TrueNASPoller {
 	if interval <= 0 {
 		interval = defaultTrueNASPollInterval
 	}
@@ -42,12 +47,13 @@ func NewTrueNASPoller(registry *unifiedresources.ResourceRegistry, persistence *
 	close(stopped)
 
 	return &TrueNASPoller{
-		registry:              registry,
-		persistence:           persistence,
-		providers:             make(map[string]*truenas.Provider),
-		cachedRecordsByConnID: make(map[string][]unifiedresources.IngestRecord),
-		stopped:               stopped,
-		interval:              interval,
+		registry:           registry,
+		multiTenant:        multiTenant,
+		recoveryManager:    recoveryManager,
+		providersByOrg:     make(map[string]map[string]*truenas.Provider),
+		cachedRecordsByOrg: make(map[string]map[string][]unifiedresources.IngestRecord),
+		stopped:            stopped,
+		interval:           interval,
 	}
 }
 
@@ -137,71 +143,144 @@ func (p *TrueNASPoller) syncConnections() {
 	if p == nil {
 		return
 	}
-	if p.persistence == nil {
+	if p.multiTenant == nil {
 		log.Warn().
 			Str("component", "truenas_poller").
 			Str("action", "sync_connections").
-			Msg("TrueNAS poller cannot sync connections because persistence is nil")
+			Msg("TrueNAS poller cannot sync connections because multi-tenant persistence is nil")
 		return
 	}
 
-	instances, err := p.persistence.LoadTrueNASConfig()
+	orgs, err := p.multiTenant.ListOrganizations()
 	if err != nil {
 		log.Warn().
 			Str("component", "truenas_poller").
-			Str("action", "load_truenas_config").
+			Str("action", "list_organizations").
 			Err(err).
-			Msg("TrueNAS poller failed to load TrueNAS config")
+			Msg("TrueNAS poller failed to list organizations")
 		return
 	}
 
-	activeIDs := make(map[string]struct{}, len(instances))
+	// orgID -> connID -> instance
+	active := make(map[string]map[string]config.TrueNASInstance, len(orgs))
+
+	for _, org := range orgs {
+		if org == nil {
+			continue
+		}
+		orgID := strings.TrimSpace(org.ID)
+		if orgID == "" {
+			continue
+		}
+		persistence, err := p.multiTenant.GetPersistence(orgID)
+		if err != nil || persistence == nil {
+			log.Warn().
+				Str("component", "truenas_poller").
+				Str("action", "get_persistence").
+				Str("org_id", orgID).
+				Err(err).
+				Msg("TrueNAS poller failed to open tenant persistence")
+			continue
+		}
+
+		instances, err := persistence.LoadTrueNASConfig()
+		if err != nil {
+			log.Warn().
+				Str("component", "truenas_poller").
+				Str("action", "load_truenas_config").
+				Str("org_id", orgID).
+				Err(err).
+				Msg("TrueNAS poller failed to load TrueNAS config")
+			continue
+		}
+
+		for i := range instances {
+			instance := instances[i]
+			id := strings.TrimSpace(instance.ID)
+			if id == "" || !instance.Enabled {
+				continue
+			}
+			if active[orgID] == nil {
+				active[orgID] = make(map[string]config.TrueNASInstance)
+			}
+			active[orgID][id] = instance
+		}
+	}
 
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	for i := range instances {
-		instance := instances[i]
-		id := strings.TrimSpace(instance.ID)
-		if id == "" || !instance.Enabled {
+	// Ensure providers exist for active connections.
+	for orgID, byConn := range active {
+		if len(byConn) == 0 {
 			continue
 		}
-		activeIDs[id] = struct{}{}
-
-		if _, exists := p.providers[id]; exists {
-			continue
+		if p.providersByOrg[orgID] == nil {
+			p.providersByOrg[orgID] = make(map[string]*truenas.Provider)
+		}
+		if p.cachedRecordsByOrg[orgID] == nil {
+			p.cachedRecordsByOrg[orgID] = make(map[string][]unifiedresources.IngestRecord)
 		}
 
-		client, err := truenas.NewClient(truenas.ClientConfig{
-			Host:               instance.Host,
-			Port:               instance.Port,
-			APIKey:             instance.APIKey,
-			Username:           instance.Username,
-			Password:           instance.Password,
-			UseHTTPS:           instance.UseHTTPS,
-			InsecureSkipVerify: instance.InsecureSkipVerify,
-			Fingerprint:        instance.Fingerprint,
-		})
-		if err != nil {
-			log.Warn().
-				Str("component", "truenas_poller").
-				Str("action", "initialize_client").
-				Str("connection_id", id).
-				Err(err).
-				Msg("TrueNAS poller failed to initialize client")
-			continue
-		}
+		for connID, instance := range byConn {
+			if _, exists := p.providersByOrg[orgID][connID]; exists {
+				continue
+			}
 
-		p.providers[id] = truenas.NewLiveProvider(&truenas.APIFetcher{Client: client})
+			client, err := truenas.NewClient(truenas.ClientConfig{
+				Host:               instance.Host,
+				Port:               instance.Port,
+				APIKey:             instance.APIKey,
+				Username:           instance.Username,
+				Password:           instance.Password,
+				UseHTTPS:           instance.UseHTTPS,
+				InsecureSkipVerify: instance.InsecureSkipVerify,
+				Fingerprint:        instance.Fingerprint,
+			})
+			if err != nil {
+				log.Warn().
+					Str("component", "truenas_poller").
+					Str("action", "initialize_client").
+					Str("org_id", orgID).
+					Str("connection_id", connID).
+					Err(err).
+					Msg("TrueNAS poller failed to initialize client")
+				continue
+			}
+
+			p.providersByOrg[orgID][connID] = truenas.NewLiveProvider(&truenas.APIFetcher{Client: client})
+		}
 	}
 
-	for id := range p.providers {
-		if _, ok := activeIDs[id]; !ok {
-			if provider := p.providers[id]; provider != nil {
-				provider.Close()
+	// Prune providers for removed/disabled connections and removed orgs.
+	for orgID, providers := range p.providersByOrg {
+		activeByConn := active[orgID]
+		for connID, provider := range providers {
+			if activeByConn == nil {
+				// Org no longer exists or has no active TrueNAS connections.
+				if provider != nil {
+					provider.Close()
+				}
+				delete(providers, connID)
+				if p.cachedRecordsByOrg[orgID] != nil {
+					delete(p.cachedRecordsByOrg[orgID], connID)
+				}
+				continue
 			}
-			delete(p.providers, id)
-			delete(p.cachedRecordsByConnID, id)
+			if _, ok := activeByConn[connID]; !ok {
+				if provider != nil {
+					provider.Close()
+				}
+				delete(providers, connID)
+				if p.cachedRecordsByOrg[orgID] != nil {
+					delete(p.cachedRecordsByOrg[orgID], connID)
+				}
+			}
+		}
+
+		if len(providers) == 0 {
+			delete(p.providersByOrg, orgID)
+			delete(p.cachedRecordsByOrg, orgID)
 		}
 	}
 }
@@ -214,9 +293,11 @@ func (p *TrueNASPoller) closeAllProviders() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	for _, provider := range p.providers {
-		if provider != nil {
-			provider.Close()
+	for _, providers := range p.providersByOrg {
+		for _, provider := range providers {
+			if provider != nil {
+				provider.Close()
+			}
 		}
 	}
 }
@@ -225,22 +306,17 @@ func (p *TrueNASPoller) pollAll(ctx context.Context) {
 	if p == nil {
 		return
 	}
-	if p.registry == nil {
-		log.Warn().
-			Str("component", "truenas_poller").
-			Str("action", "poll_all").
-			Msg("TrueNAS poller skipped poll because registry is nil")
-		return
-	}
-
 	p.mu.Lock()
 	type providerEntry struct {
+		orgID    string
 		id       string
 		provider *truenas.Provider
 	}
-	entries := make([]providerEntry, 0, len(p.providers))
-	for id, provider := range p.providers {
-		entries = append(entries, providerEntry{id: id, provider: provider})
+	entries := make([]providerEntry, 0)
+	for orgID, providers := range p.providersByOrg {
+		for id, provider := range providers {
+			entries = append(entries, providerEntry{orgID: orgID, id: id, provider: provider})
+		}
 	}
 	p.mu.Unlock()
 
@@ -283,39 +359,99 @@ func (p *TrueNASPoller) pollAll(ctx context.Context) {
 		records := entry.provider.Records()
 		if len(records) == 0 {
 			p.mu.Lock()
-			p.cachedRecordsByConnID[entry.id] = nil
+			if p.cachedRecordsByOrg[entry.orgID] == nil {
+				p.cachedRecordsByOrg[entry.orgID] = make(map[string][]unifiedresources.IngestRecord)
+			}
+			p.cachedRecordsByOrg[entry.orgID][entry.id] = nil
 			p.mu.Unlock()
 			continue
 		}
-		p.registry.IngestRecords(unifiedresources.SourceTrueNAS, records)
 		p.mu.Lock()
-		p.cachedRecordsByConnID[entry.id] = cloneIngestRecords(records)
+		if p.cachedRecordsByOrg[entry.orgID] == nil {
+			p.cachedRecordsByOrg[entry.orgID] = make(map[string][]unifiedresources.IngestRecord)
+		}
+		p.cachedRecordsByOrg[entry.orgID][entry.id] = cloneIngestRecords(records)
 		p.mu.Unlock()
+
+		// Legacy/global registry ingestion is default-org only to avoid cross-tenant leakage.
+		if p.registry != nil && strings.TrimSpace(entry.orgID) == "default" {
+			p.registry.IngestRecords(unifiedresources.SourceTrueNAS, records)
+		}
+
+		p.ingestRecoveryPoints(ctx, entry.orgID, entry.id, entry.provider)
+	}
+}
+
+func (p *TrueNASPoller) ingestRecoveryPoints(ctx context.Context, orgID string, connectionID string, provider *truenas.Provider) {
+	if p == nil || p.recoveryManager == nil || provider == nil {
+		return
+	}
+
+	store, err := p.recoveryManager.StoreForOrg(orgID)
+	if err != nil {
+		log.Warn().
+			Str("component", "truenas_poller").
+			Str("action", "recovery_store").
+			Err(err).
+			Msg("TrueNAS poller failed to open recovery store")
+		return
+	}
+
+	snapshot := provider.Snapshot()
+	points := truenasmapper.FromTrueNASSnapshot(connectionID, snapshot)
+	if len(points) == 0 {
+		return
+	}
+
+	// Best-effort cap in case a system has an enormous snapshot history.
+	const maxPointsPerPoll = 2000
+	if len(points) > maxPointsPerPoll {
+		points = points[:maxPointsPerPoll]
+	}
+
+	if err := store.UpsertPoints(ctx, points); err != nil {
+		log.Warn().
+			Str("component", "truenas_poller").
+			Str("action", "ingest_recovery_points").
+			Str("connection_id", strings.TrimSpace(connectionID)).
+			Err(err).
+			Msg("TrueNAS poller failed to ingest recovery points")
 	}
 }
 
 // GetCurrentRecords returns the latest known TrueNAS records across active connections.
 func (p *TrueNASPoller) GetCurrentRecords() []unifiedresources.IngestRecord {
+	return p.GetCurrentRecordsForOrg("default")
+}
+
+// GetCurrentRecordsForOrg returns the latest known TrueNAS records for the specified org.
+func (p *TrueNASPoller) GetCurrentRecordsForOrg(orgID string) []unifiedresources.IngestRecord {
 	if p == nil {
 		return nil
+	}
+
+	orgID = strings.TrimSpace(orgID)
+	if orgID == "" {
+		orgID = "default"
 	}
 
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	if len(p.cachedRecordsByConnID) == 0 {
+	recordsByConn := p.cachedRecordsByOrg[orgID]
+	if len(recordsByConn) == 0 {
 		return nil
 	}
 
-	connectionIDs := make([]string, 0, len(p.cachedRecordsByConnID))
-	for id := range p.cachedRecordsByConnID {
+	connectionIDs := make([]string, 0, len(recordsByConn))
+	for id := range recordsByConn {
 		connectionIDs = append(connectionIDs, id)
 	}
 	sort.Strings(connectionIDs)
 
 	total := 0
 	for _, id := range connectionIDs {
-		total += len(p.cachedRecordsByConnID[id])
+		total += len(recordsByConn[id])
 	}
 	if total == 0 {
 		return nil
@@ -323,7 +459,7 @@ func (p *TrueNASPoller) GetCurrentRecords() []unifiedresources.IngestRecord {
 
 	records := make([]unifiedresources.IngestRecord, 0, total)
 	for _, id := range connectionIDs {
-		records = append(records, cloneIngestRecords(p.cachedRecordsByConnID[id])...)
+		records = append(records, cloneIngestRecords(recordsByConn[id])...)
 	}
 	return records
 }

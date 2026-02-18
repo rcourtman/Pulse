@@ -246,6 +246,62 @@ func TestStateEndpointReturnsMockData(t *testing.T) {
 	}
 }
 
+func TestRecoveryRollupsEndpointReturnsMockData(t *testing.T) {
+	srv := newIntegrationServer(t)
+
+	res, err := http.Get(srv.server.URL + "/api/recovery/rollups?limit=500")
+	if err != nil {
+		t.Fatalf("rollups request failed: %v", err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(res.Body)
+		t.Fatalf("unexpected status: got %d want %d, body=%s", res.StatusCode, http.StatusOK, string(body))
+	}
+
+	var payload struct {
+		Data []map[string]any `json:"data"`
+		Meta map[string]any   `json:"meta"`
+	}
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		t.Fatalf("read rollups response: %v", err)
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		t.Fatalf("unmarshal rollups response: %v", err)
+	}
+
+	if len(payload.Data) == 0 {
+		t.Fatalf("expected rollups data, got none: %s", string(body))
+	}
+
+	hasK8s := false
+	hasTrueNAS := false
+	for _, item := range payload.Data {
+		raw, ok := item["providers"]
+		if !ok {
+			continue
+		}
+		arr, ok := raw.([]any)
+		if !ok {
+			continue
+		}
+		for _, v := range arr {
+			s, _ := v.(string)
+			if s == "kubernetes" {
+				hasK8s = true
+			}
+			if s == "truenas" {
+				hasTrueNAS = true
+			}
+		}
+	}
+	if !hasK8s || !hasTrueNAS {
+		t.Fatalf("expected rollups to include kubernetes and truenas providers, got k8s=%v truenas=%v", hasK8s, hasTrueNAS)
+	}
+}
+
 func TestProtectedEndpointsRequireAuthentication(t *testing.T) {
 	passwordHash, err := internalauth.HashPassword("supersecret")
 	if err != nil {
@@ -265,7 +321,6 @@ func TestProtectedEndpointsRequireAuthentication(t *testing.T) {
 	}{
 		{"GET", "/api/state"},
 		{"GET", "/api/storage/test-storage"},
-		{"GET", "/api/backups"},
 		{"GET", "/api/updates/status"},
 		{"POST", "/api/updates/apply"},
 		{"GET", "/api/alerts/active"},
@@ -371,6 +426,53 @@ func TestServerInfoEndpointReportsDevelopment(t *testing.T) {
 	}
 	if version == "" {
 		t.Fatalf("expected non-empty version string")
+	}
+}
+
+func TestRecoveryPointsEndpointReturnsMockData(t *testing.T) {
+	srv := newIntegrationServer(t)
+
+	res, err := http.Get(srv.server.URL + "/api/recovery/points?limit=500")
+	if err != nil {
+		t.Fatalf("recovery points request failed: %v", err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(res.Body)
+		t.Fatalf("unexpected status: got %d want %d; body=%s", res.StatusCode, http.StatusOK, string(body))
+	}
+
+	var payload struct {
+		Data []struct {
+			Provider string `json:"provider"`
+		} `json:"data"`
+		Meta struct {
+			Total int `json:"total"`
+		} `json:"meta"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode recovery points response: %v", err)
+	}
+
+	if payload.Meta.Total <= 0 {
+		t.Fatalf("expected meta.total > 0, got %d", payload.Meta.Total)
+	}
+
+	var hasK8s, hasTrueNAS bool
+	for _, p := range payload.Data {
+		switch p.Provider {
+		case "kubernetes":
+			hasK8s = true
+		case "truenas":
+			hasTrueNAS = true
+		}
+	}
+	if !hasK8s {
+		t.Fatalf("expected at least one kubernetes recovery point in response")
+	}
+	if !hasTrueNAS {
+		t.Fatalf("expected at least one truenas recovery point in response")
 	}
 }
 
@@ -831,13 +933,6 @@ func TestWebsocketPayloadContractShape(t *testing.T) {
 		Storage:            []models.StorageFrontend{{ID: "storage-1", Name: "local"}},
 		PBS:                []models.PBSInstance{{ID: "pbs-1", Name: "pbs-1"}},
 		PMG:                []models.PMGInstance{{ID: "pmg-1", Name: "pmg-1"}},
-		Backups: models.Backups{
-			PVE: models.PVEBackups{
-				BackupTasks: []models.BackupTask{{ID: "task-1"}},
-			},
-			PBS: []models.PBSBackup{{ID: "pbs-backup-1"}},
-			PMG: []models.PMGBackup{{ID: "pmg-backup-1"}},
-		},
 		Resources: []models.ResourceFrontend{
 			{
 				ID:           "resource-1",
@@ -878,18 +973,8 @@ func TestWebsocketPayloadContractShape(t *testing.T) {
 		}
 	}
 
-	backups, ok := payload["backups"].(map[string]any)
-	if !ok {
-		t.Fatalf("websocket payload missing backups map: %v", payload["backups"])
-	}
-	if _, ok := backups["pve"].(map[string]any); !ok {
-		t.Fatalf("websocket payload backups.pve must be an object, got %T (%v)", backups["pve"], backups["pve"])
-	}
-	if pbsBackups, ok := backups["pbs"].([]any); !ok || len(pbsBackups) == 0 {
-		t.Fatalf("websocket payload backups.pbs must be a non-empty array, got %T (%v)", backups["pbs"], backups["pbs"])
-	}
-	if pmgBackups, ok := backups["pmg"].([]any); !ok || len(pmgBackups) == 0 {
-		t.Fatalf("websocket payload backups.pmg must be a non-empty array, got %T (%v)", backups["pmg"], backups["pmg"])
+	if _, ok := payload["backups"]; ok {
+		t.Fatalf("websocket payload must not include legacy backups map")
 	}
 }
 
@@ -953,13 +1038,6 @@ func TestWebsocketLegacyCompatMode(t *testing.T) {
 		Storage:            []models.StorageFrontend{{ID: "storage-1", Name: "local"}},
 		PBS:                []models.PBSInstance{{ID: "pbs-1", Name: "pbs-1"}},
 		PMG:                []models.PMGInstance{{ID: "pmg-1", Name: "pmg-1"}},
-		Backups: models.Backups{
-			PVE: models.PVEBackups{
-				BackupTasks: []models.BackupTask{{ID: "task-1"}},
-			},
-			PBS: []models.PBSBackup{{ID: "pbs-backup-1"}},
-			PMG: []models.PMGBackup{{ID: "pmg-backup-1"}},
-		},
 		Resources: []models.ResourceFrontend{
 			{
 				ID:           "resource-1",
@@ -1019,15 +1097,8 @@ func TestWebsocketLegacyCompatMode(t *testing.T) {
 	if pmg, ok := strippedPayload["pmg"].([]any); !ok || len(pmg) == 0 {
 		t.Fatalf("expected pmg to remain populated in stripped payload: %v", strippedPayload["pmg"])
 	}
-	backups, ok := strippedPayload["backups"].(map[string]any)
-	if !ok {
-		t.Fatalf("expected backups map to remain present in stripped payload: %v", strippedPayload["backups"])
-	}
-	if pbsBackups, ok := backups["pbs"].([]any); !ok || len(pbsBackups) == 0 {
-		t.Fatalf("expected backups.pbs to remain populated in stripped payload: %v", backups["pbs"])
-	}
-	if pmgBackups, ok := backups["pmg"].([]any); !ok || len(pmgBackups) == 0 {
-		t.Fatalf("expected backups.pmg to remain populated in stripped payload: %v", backups["pmg"])
+	if _, ok := strippedPayload["backups"]; ok {
+		t.Fatalf("expected backups to be omitted in stripped payload")
 	}
 }
 

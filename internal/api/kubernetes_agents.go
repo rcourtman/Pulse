@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -16,11 +17,20 @@ import (
 // KubernetesAgentHandlers manages ingest from the Kubernetes agent.
 type KubernetesAgentHandlers struct {
 	baseAgentHandlers
+	recoveryIngestor interface {
+		IngestKubernetesReport(ctx context.Context, orgID string, report agentsk8s.Report) error
+	}
 }
 
 // NewKubernetesAgentHandlers constructs a new Kubernetes agent handler group.
 func NewKubernetesAgentHandlers(mtm *monitoring.MultiTenantMonitor, m *monitoring.Monitor, hub *websocket.Hub) *KubernetesAgentHandlers {
 	return &KubernetesAgentHandlers{baseAgentHandlers: newBaseAgentHandlers(mtm, m, hub)}
+}
+
+func (h *KubernetesAgentHandlers) SetRecoveryIngestor(ingestor interface {
+	IngestKubernetesReport(ctx context.Context, orgID string, report agentsk8s.Report) error
+}) {
+	h.recoveryIngestor = ingestor
 }
 
 // HandleReport accepts heartbeat payloads from the Kubernetes agent.
@@ -53,6 +63,14 @@ func (h *KubernetesAgentHandlers) HandleReport(w http.ResponseWriter, r *http.Re
 	if err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_report", err.Error(), nil)
 		return
+	}
+
+	if h.recoveryIngestor != nil {
+		orgID := GetOrgID(r.Context())
+		if ingestErr := h.recoveryIngestor.IngestKubernetesReport(r.Context(), orgID, report); ingestErr != nil {
+			// Never fail the agent ingest path because recovery ingestion is best-effort.
+			log.Warn().Err(ingestErr).Str("org_id", orgID).Msg("Failed to ingest kubernetes recovery artifacts")
+		}
 	}
 
 	log.Debug().

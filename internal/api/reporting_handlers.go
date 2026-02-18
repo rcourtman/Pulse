@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -10,6 +11,8 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
+	recoverymanager "github.com/rcourtman/pulse-go-rewrite/internal/recovery/manager"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/reporting"
 )
@@ -21,14 +24,140 @@ var validResourceID = regexp.MustCompile(`^[a-zA-Z0-9._:-]+$`)
 type ReportingHandlers struct {
 	mtMonitor        *monitoring.MultiTenantMonitor
 	resourceRegistry *unifiedresources.ResourceRegistry
+	recoveryManager  *recoverymanager.Manager
 }
 
 // NewReportingHandlers creates a new ReportingHandlers
-func NewReportingHandlers(mtMonitor *monitoring.MultiTenantMonitor, registry *unifiedresources.ResourceRegistry) *ReportingHandlers {
+func NewReportingHandlers(mtMonitor *monitoring.MultiTenantMonitor, registry *unifiedresources.ResourceRegistry, recoveryManager *recoverymanager.Manager) *ReportingHandlers {
 	return &ReportingHandlers{
 		mtMonitor:        mtMonitor,
 		resourceRegistry: registry,
+		recoveryManager:  recoveryManager,
 	}
+}
+
+func (h *ReportingHandlers) listBackupsForReport(ctx context.Context, orgID string, subjectResourceID string, start, end time.Time) []reporting.BackupInfo {
+	if h == nil || h.recoveryManager == nil {
+		return nil
+	}
+	if strings.TrimSpace(orgID) == "" {
+		orgID = "default"
+	}
+	subjectResourceID = strings.TrimSpace(subjectResourceID)
+	if subjectResourceID == "" {
+		return nil
+	}
+
+	store, err := h.recoveryManager.StoreForOrg(orgID)
+	if err != nil {
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	from := start.UTC()
+	to := end.UTC()
+
+	// Page through results to avoid silently truncating backups in reports.
+	const limit = 500
+	opts := recovery.ListPointsOptions{
+		SubjectResourceID: subjectResourceID,
+		From:              &from,
+		To:                &to,
+		Page:              1,
+		Limit:             limit,
+	}
+
+	points, total, err := store.ListPoints(ctx, opts)
+	if err != nil {
+		return nil
+	}
+
+	totalPages := 1
+	if limit > 0 {
+		totalPages = (total + limit - 1) / limit
+		if totalPages < 1 {
+			totalPages = 1
+		}
+	}
+
+	all := make([]recovery.RecoveryPoint, 0, min(total, limit*totalPages))
+	all = append(all, points...)
+
+	for page := 2; page <= totalPages; page++ {
+		opts.Page = page
+		more, _, err := store.ListPoints(ctx, opts)
+		if err != nil {
+			break
+		}
+		if len(more) == 0 {
+			break
+		}
+		all = append(all, more...)
+	}
+
+	out := make([]reporting.BackupInfo, 0, len(all))
+	for _, p := range all {
+		if p.Kind != recovery.KindBackup {
+			continue
+		}
+
+		var ts time.Time
+		if p.CompletedAt != nil && !p.CompletedAt.IsZero() {
+			ts = p.CompletedAt.UTC()
+		} else if p.StartedAt != nil && !p.StartedAt.IsZero() {
+			ts = p.StartedAt.UTC()
+		} else {
+			continue
+		}
+		if ts.Before(from) || ts.After(to) {
+			continue
+		}
+
+		typ := "backup"
+		if p.Provider == recovery.ProviderProxmoxPBS || p.Mode == recovery.ModeRemote {
+			typ = "pbs"
+		} else if p.Provider == recovery.ProviderProxmoxPVE {
+			typ = "vzdump"
+		}
+
+		getStringDetail := func(key string) string {
+			if p.Details == nil {
+				return ""
+			}
+			if v, ok := p.Details[key]; ok {
+				if s, ok := v.(string); ok {
+					return strings.TrimSpace(s)
+				}
+			}
+			return ""
+		}
+
+		storage := getStringDetail("storage")
+		if storage == "" && p.Provider == recovery.ProviderProxmoxPBS {
+			storage = getStringDetail("datastore")
+		}
+
+		var size int64
+		if p.SizeBytes != nil && *p.SizeBytes > 0 {
+			size = *p.SizeBytes
+		}
+		verified := p.Verified != nil && *p.Verified
+		protected := p.Immutable != nil && *p.Immutable
+
+		out = append(out, reporting.BackupInfo{
+			Type:      typ,
+			Storage:   storage,
+			Timestamp: ts,
+			Size:      size,
+			Verified:  verified,
+			Protected: protected,
+			VolID:     getStringDetail("volid"),
+		})
+	}
+
+	return out
 }
 
 // HandleGenerateReport generates a report
@@ -104,7 +233,7 @@ func (h *ReportingHandlers) HandleGenerateReport(w http.ResponseWriter, r *http.
 	if h.mtMonitor != nil {
 		orgID := GetOrgID(r.Context())
 		if monitor, err := h.mtMonitor.GetMonitor(orgID); err == nil && monitor != nil {
-			h.enrichReportRequest(&req, monitor.GetState(), start, end)
+			h.enrichReportRequest(r.Context(), orgID, &req, monitor.GetState(), start, end)
 		}
 	}
 
@@ -140,14 +269,14 @@ func sanitizeFilename(s string) string {
 }
 
 // enrichReportRequest populates enrichment data from the monitor state
-func (h *ReportingHandlers) enrichReportRequest(req *reporting.MetricReportRequest, state models.StateSnapshot, start, end time.Time) {
+func (h *ReportingHandlers) enrichReportRequest(ctx context.Context, orgID string, req *reporting.MetricReportRequest, state models.StateSnapshot, start, end time.Time) {
 	switch req.ResourceType {
 	case "node":
 		h.enrichNodeReport(req, state, start, end)
 	case "vm":
-		h.enrichVMReport(req, state, start, end)
+		h.enrichVMReport(ctx, orgID, req, state, start, end)
 	case "container":
-		h.enrichContainerReport(req, state, start, end)
+		h.enrichContainerReport(ctx, orgID, req, state, start, end)
 	}
 }
 
@@ -299,7 +428,7 @@ func (h *ReportingHandlers) enrichNodeReport(req *reporting.MetricReportRequest,
 }
 
 // enrichVMReport adds VM-specific data to the report request
-func (h *ReportingHandlers) enrichVMReport(req *reporting.MetricReportRequest, state models.StateSnapshot, start, end time.Time) {
+func (h *ReportingHandlers) enrichVMReport(ctx context.Context, orgID string, req *reporting.MetricReportRequest, state models.StateSnapshot, start, end time.Time) {
 	// Find the VM
 	var vm *models.VM
 	for i := range state.VMs {
@@ -357,17 +486,22 @@ func (h *ReportingHandlers) enrichVMReport(req *reporting.MetricReportRequest, s
 		}
 	}
 
-	// Find backups for this VM
-	for _, backup := range state.PVEBackups.StorageBackups {
-		if backup.VMID == vm.VMID && backup.Node == vm.Node {
-			req.Backups = append(req.Backups, reporting.BackupInfo{
-				Type:      "vzdump",
-				Storage:   backup.Storage,
-				Timestamp: backup.Time,
-				Size:      backup.Size,
-				Protected: backup.Protected,
-				VolID:     backup.Volid,
-			})
+	// Backups are sourced from the recovery store so the report stays platform-agnostic.
+	// Fall back to legacy state backups only when the recovery manager isn't configured.
+	if backups := h.listBackupsForReport(ctx, orgID, req.ResourceID, start, end); len(backups) > 0 {
+		req.Backups = append(req.Backups, backups...)
+	} else {
+		for _, backup := range state.PVEBackups.StorageBackups {
+			if backup.VMID == vm.VMID && backup.Node == vm.Node {
+				req.Backups = append(req.Backups, reporting.BackupInfo{
+					Type:      "vzdump",
+					Storage:   backup.Storage,
+					Timestamp: backup.Time,
+					Size:      backup.Size,
+					Protected: backup.Protected,
+					VolID:     backup.Volid,
+				})
+			}
 		}
 	}
 }
@@ -484,7 +618,8 @@ func (h *ReportingHandlers) HandleGenerateMultiReport(w http.ResponseWriter, r *
 
 		// Enrich with resource data
 		if hasState {
-			h.enrichReportRequest(&req, state, start, end)
+			orgID := GetOrgID(r.Context())
+			h.enrichReportRequest(r.Context(), orgID, &req, state, start, end)
 		}
 
 		multiReq.Resources = append(multiReq.Resources, req)
@@ -503,7 +638,7 @@ func (h *ReportingHandlers) HandleGenerateMultiReport(w http.ResponseWriter, r *
 }
 
 // enrichContainerReport adds container-specific data to the report request
-func (h *ReportingHandlers) enrichContainerReport(req *reporting.MetricReportRequest, state models.StateSnapshot, start, end time.Time) {
+func (h *ReportingHandlers) enrichContainerReport(ctx context.Context, orgID string, req *reporting.MetricReportRequest, state models.StateSnapshot, start, end time.Time) {
 	// Find the container
 	var ct *models.Container
 	for i := range state.Containers {
@@ -560,17 +695,22 @@ func (h *ReportingHandlers) enrichContainerReport(req *reporting.MetricReportReq
 		}
 	}
 
-	// Find backups for this container
-	for _, backup := range state.PVEBackups.StorageBackups {
-		if backup.VMID == ct.VMID && backup.Node == ct.Node {
-			req.Backups = append(req.Backups, reporting.BackupInfo{
-				Type:      "vzdump",
-				Storage:   backup.Storage,
-				Timestamp: backup.Time,
-				Size:      backup.Size,
-				Protected: backup.Protected,
-				VolID:     backup.Volid,
-			})
+	// Backups are sourced from the recovery store so the report stays platform-agnostic.
+	// Fall back to legacy state backups only when the recovery manager isn't configured.
+	if backups := h.listBackupsForReport(ctx, orgID, req.ResourceID, start, end); len(backups) > 0 {
+		req.Backups = append(req.Backups, backups...)
+	} else {
+		for _, backup := range state.PVEBackups.StorageBackups {
+			if backup.VMID == ct.VMID && backup.Node == ct.Node {
+				req.Backups = append(req.Backups, reporting.BackupInfo{
+					Type:      "vzdump",
+					Storage:   backup.Storage,
+					Timestamp: backup.Time,
+					Size:      backup.Size,
+					Protected: backup.Protected,
+					VolID:     backup.Volid,
+				})
+			}
 		}
 	}
 }

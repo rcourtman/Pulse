@@ -15,11 +15,7 @@ export interface State {
   storage: Storage[];
   pbs: PBSInstance[];
   pmg: PMGInstance[];
-  pbsBackups: PBSBackup[];
-  pmgBackups: PMGBackup[];
-  backups: Backups;
   metrics: Metric[];
-  pveBackups: PVEBackups;
   performance: Performance;
   connectionHealth: Record<string, boolean>;
   stats: Stats;
@@ -785,37 +781,6 @@ export interface PBSNamespace {
   depth: number;
 }
 
-export interface PBSBackup {
-  id: string;
-  instance: string;
-  datastore: string;
-  namespace: string;
-  backupType: string;
-  vmid: string;
-  backupTime: string;
-  size: number;
-  protected: boolean;
-  verified: boolean;
-  comment: string;
-  files: string[];
-  owner?: string;
-}
-
-export interface PMGBackup {
-  id: string;
-  instance: string;
-  node: string;
-  filename: string;
-  backupTime: string;
-  size: number;
-}
-
-export interface Backups {
-  pve: PVEBackups;
-  pbs: PBSBackup[];
-  pmg: PMGBackup[];
-}
-
 export interface PBSBackupJob {
   id: string;
   store: string;
@@ -969,58 +934,6 @@ export interface Metric {
   type: string;
   id: string;
   values: Record<string, number | string | boolean>;
-}
-
-export interface BackupTask {
-  id: string;
-  node: string;
-  type: string;
-  vmid: number;
-  status: string;
-  startTime: string;
-  endTime?: string;
-  size?: number;
-  error?: string;
-}
-
-export interface StorageBackup {
-  id: string;
-  storage: string;
-  node: string;
-  instance: string;
-  type: string;
-  vmid: number;
-  time: string;
-  ctime: number;
-  size: number;
-  format: string;
-  notes?: string;
-  protected: boolean;
-  volid: string;
-  isPBS: boolean;
-  verified: boolean;
-  verification?: string;
-  encryption?: string;
-}
-
-export interface PVEBackups {
-  backupTasks: BackupTask[];
-  storageBackups: StorageBackup[];
-  guestSnapshots: GuestSnapshot[];
-}
-
-export interface GuestSnapshot {
-  id: string;
-  name: string;
-  node: string;
-  instance: string;
-  type: string;
-  vmid: number;
-  time: string;
-  description: string;
-  parent: string;
-  vmstate: boolean;
-  sizeBytes?: number;
 }
 
 export interface Performance {

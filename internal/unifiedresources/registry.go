@@ -403,7 +403,7 @@ func (rr *ResourceRegistry) ingestCephCluster(cluster models.CephCluster) {
 }
 
 func (rr *ResourceRegistry) ingestDockerContainer(ct models.DockerContainer, host models.DockerHost) {
-	resource, identity := resourceFromDockerContainer(ct)
+	resource, identity := resourceFromDockerContainer(ct, host)
 	if parentID, ok := rr.bySource[SourceDocker][host.ID]; ok {
 		resource.ParentID = &parentID
 	}

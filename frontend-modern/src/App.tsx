@@ -103,7 +103,6 @@ const Dashboard = lazy(() =>
 );
 const StorageComponent = lazy(() => import('./components/Storage/Storage'));
 const BackupsRoute = lazy(() => import('./pages/BackupsRoute'));
-const Replication = lazy(() => import('./components/Replication/Replication'));
 const CephPage = lazy(() => import('./pages/Ceph'));
 const AlertsPage = lazy(() =>
   import('./pages/Alerts').then((module) => ({ default: module.Alerts })),
@@ -115,11 +114,13 @@ const AIIntelligencePage = lazy(() =>
   import('./pages/AIIntelligence').then((module) => ({ default: module.AIIntelligence })),
 );
 const MigrationGuidePage = lazy(() => import('./pages/MigrationGuide'));
+const NotFoundPage = lazy(() => import('./pages/NotFound'));
 const PricingPage = lazy(() => import('./pages/Pricing'));
 const ROOT_INFRASTRUCTURE_PATH = buildInfrastructurePath();
 const ROOT_WORKLOADS_PATH = buildWorkloadsPath();
 const STORAGE_PATH = buildStoragePath();
 const BACKUPS_PATH = buildBackupsPath();
+const REPLICATION_TARGET_PATH = buildBackupsPath({ view: 'events', mode: 'remote' });
 
 
 // Enhanced store type with proper typing
@@ -332,7 +333,6 @@ function App() {
     }
     hasPreloadedRoutes = true;
     const loaders: Array<() => Promise<unknown>> = [
-      () => import('./components/Replication/Replication'),
       () => import('./pages/Alerts'),
       () => import('./components/Settings/Settings'),
     ];
@@ -1135,12 +1135,12 @@ function App() {
       <Route path={STORAGE_PATH} component={StorageComponent} />
       <Route path={BACKUPS_PATH} component={BackupsRoute} />
       <Route path="/ceph" component={CephPage} />
-      <Route path="/replication" component={Replication} />
       <Route path={ROOT_INFRASTRUCTURE_PATH} component={InfrastructurePage} />
       <Route path="/migration-guide" component={MigrationGuidePage} />
 
       <Show when={!shouldDisableLegacyRouteRedirects()}>
         <Route path="/proxmox" component={() => <Navigate href={ROOT_INFRASTRUCTURE_PATH} />} />
+        <Route path="/replication" component={() => <LegacyRedirect to={REPLICATION_TARGET_PATH} />} />
         <Route
           path={LEGACY_REDIRECTS.proxmoxOverview.path}
           component={() => (
@@ -1188,7 +1188,7 @@ function App() {
         />
         <Route path="/proxmox/storage" component={() => <Navigate href={STORAGE_PATH} />} />
         <Route path="/proxmox/ceph" component={() => <Navigate href="/ceph" />} />
-        <Route path="/proxmox/replication" component={() => <Navigate href="/replication" />} />
+        <Route path="/proxmox/replication" component={() => <LegacyRedirect to={REPLICATION_TARGET_PATH} />} />
         <Route
           path={LEGACY_REDIRECTS.proxmoxMail.path}
           component={() => (
@@ -1260,6 +1260,7 @@ function App() {
       <Route path="/alerts/*" component={AlertsPage} />
       <Route path="/ai/*" component={AIIntelligencePage} />
       <Route path="/settings/*" component={SettingsRoute} />
+      <Route path="*all" component={NotFoundPage} />
     </Router>
   );
 }

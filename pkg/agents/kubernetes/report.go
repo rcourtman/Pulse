@@ -5,12 +5,13 @@ import "time"
 // Report represents a single heartbeat from the Kubernetes agent to Pulse.
 // It is designed to be useful without requiring Metrics Server (metrics.k8s.io).
 type Report struct {
-	Agent       AgentInfo    `json:"agent"`
-	Cluster     ClusterInfo  `json:"cluster"`
-	Nodes       []Node       `json:"nodes,omitempty"`
-	Pods        []Pod        `json:"pods,omitempty"`
-	Deployments []Deployment `json:"deployments,omitempty"`
-	Timestamp   time.Time    `json:"timestamp"`
+	Agent       AgentInfo       `json:"agent"`
+	Cluster     ClusterInfo     `json:"cluster"`
+	Nodes       []Node          `json:"nodes,omitempty"`
+	Pods        []Pod           `json:"pods,omitempty"`
+	Deployments []Deployment    `json:"deployments,omitempty"`
+	Recovery    *RecoveryReport `json:"recovery,omitempty"`
+	Timestamp   time.Time       `json:"timestamp"`
 }
 
 // AgentInfo describes the reporting agent instance.
@@ -111,4 +112,45 @@ type Deployment struct {
 	ReadyReplicas     int32             `json:"readyReplicas,omitempty"`
 	AvailableReplicas int32             `json:"availableReplicas,omitempty"`
 	Labels            map[string]string `json:"labels,omitempty"`
+}
+
+// RecoveryReport contains optional, best-effort "recovery point" artifacts discovered by the agent.
+// This is intentionally capped and time-bounded by the agent to keep payloads small.
+type RecoveryReport struct {
+	VolumeSnapshots []VolumeSnapshot `json:"volumeSnapshots,omitempty"`
+	VeleroBackups   []VeleroBackup   `json:"veleroBackups,omitempty"`
+}
+
+// VolumeSnapshot mirrors a subset of snapshot.storage.k8s.io/v1 VolumeSnapshot fields.
+// The agent should populate these from the live API when permissions and APIs are available.
+type VolumeSnapshot struct {
+	UID           string `json:"uid,omitempty"`
+	Name          string `json:"name"`
+	Namespace     string `json:"namespace"`
+	SnapshotClass string `json:"snapshotClass,omitempty"`
+
+	SourcePVC    string `json:"sourcePvc,omitempty"`
+	SourcePVCUID string `json:"sourcePvcUid,omitempty"`
+
+	ReadyToUse       *bool      `json:"readyToUse,omitempty"`
+	RestoreSizeBytes *int64     `json:"restoreSizeBytes,omitempty"`
+	CreationTime     *time.Time `json:"creationTime,omitempty"`
+	CompletionTime   *time.Time `json:"completionTime,omitempty"`
+	ContentName      string     `json:"contentName,omitempty"`
+	Error            string     `json:"error,omitempty"`
+}
+
+// VeleroBackup mirrors a subset of Velero Backup CRD fields (backups.velero.io).
+// The agent should only populate these when Velero is installed and RBAC allows reading it.
+type VeleroBackup struct {
+	UID       string `json:"uid,omitempty"`
+	Name      string `json:"name"`
+	Namespace string `json:"namespace,omitempty"`
+	Phase     string `json:"phase,omitempty"`
+
+	StartedAt   *time.Time `json:"startedAt,omitempty"`
+	CompletedAt *time.Time `json:"completedAt,omitempty"`
+	Expiration  *time.Time `json:"expiration,omitempty"`
+
+	StorageLocation string `json:"storageLocation,omitempty"`
 }

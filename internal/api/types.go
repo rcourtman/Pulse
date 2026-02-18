@@ -1,8 +1,6 @@
 package api
 
 import (
-	"time"
-
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
@@ -34,30 +32,6 @@ type VersionResponse struct {
 	LatestVersion   string `json:"latestVersion,omitempty"`
 	Containerized   bool   `json:"containerized"`
 	ContainerID     string `json:"containerId,omitempty"`
-}
-
-// StateResponse represents the full state response
-type StateResponse struct {
-	Nodes            []models.Node               `json:"nodes"`
-	VMs              []models.VM                 `json:"vms"`
-	Containers       []models.Container          `json:"containers"`
-	DockerHosts      []models.DockerHostFrontend `json:"dockerHosts"`
-	Hosts            []models.HostFrontend       `json:"hosts"`
-	Storage          []models.Storage            `json:"storage"`
-	CephClusters     []models.CephCluster        `json:"cephClusters"`
-	PBSInstances     []models.PBSInstance        `json:"pbs"`
-	PMGInstances     []models.PMGInstance        `json:"pmg"`
-	PBSBackups       []models.PBSBackup          `json:"pbsBackups"`
-	PMGBackups       []models.PMGBackup          `json:"pmgBackups"`
-	Backups          models.Backups              `json:"backups"`
-	Metrics          []models.Metric             `json:"metrics"`
-	PVEBackups       models.PVEBackups           `json:"pveBackups"`
-	Performance      models.Performance          `json:"performance"`
-	ConnectionHealth map[string]bool             `json:"connectionHealth"`
-	Stats            models.Stats                `json:"stats"`
-	ActiveAlerts     []models.Alert              `json:"activeAlerts"`
-	RecentlyResolved []models.ResolvedAlert      `json:"recentlyResolved"`
-	LastUpdate       time.Time                   `json:"lastUpdate"`
 }
 
 // ChartResponse represents chart data

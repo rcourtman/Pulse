@@ -28,8 +28,8 @@ export const LEGACY_REDIRECTS = {
     path: '/docker',
     destination: buildInfrastructurePath({ source: 'docker' }),
     source: 'docker',
-    toastTitle: 'Docker moved',
-    toastMessage: 'Docker hosts are in Infrastructure. Containers are in Workloads.',
+    toastTitle: 'Containers moved',
+    toastMessage: 'Container hosts are now in Infrastructure. Containers are now in Workloads.',
   },
   proxmoxMail: {
     path: '/proxmox/mail',

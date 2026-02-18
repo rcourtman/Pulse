@@ -77,12 +77,20 @@ func TestResourceFromDockerContainerIncludesContainerID(t *testing.T) {
 		CPUPercent:    12.5,
 	}
 
-	resource, _ := resourceFromDockerContainer(container)
+	host := models.DockerHost{
+		ID:       "docker-1",
+		Hostname: "docker-1",
+		Runtime:  "podman",
+	}
+	resource, _ := resourceFromDockerContainer(container, host)
 	if resource.Docker == nil {
 		t.Fatal("expected docker payload")
 	}
 	if got, want := resource.Docker.ContainerID, container.ID; got != want {
 		t.Fatalf("containerId = %q, want %q", got, want)
+	}
+	if got, want := resource.Docker.Runtime, host.Runtime; got != want {
+		t.Fatalf("runtime = %q, want %q", got, want)
 	}
 }
 
