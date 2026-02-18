@@ -83,6 +83,13 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 		Temperature:       maxCPUTemp(host.Sensors),
 		NetworkInterfaces: convertInterfaces(host.NetworkInterfaces),
 		Disks:             convertDisks(host.Disks),
+		Memory: &AgentMemoryMeta{
+			Total:     host.Memory.Total,
+			Used:      host.Memory.Used,
+			Free:      host.Memory.Free,
+			SwapUsed:  host.Memory.SwapUsed,
+			SwapTotal: host.Memory.SwapTotal,
+		},
 		LinkedNodeID:      host.LinkedNodeID,
 		LinkedVMID:        host.LinkedVMID,
 		LinkedContainerID: host.LinkedContainerID,
@@ -476,6 +483,10 @@ func resourceFromVM(vm models.VM) (Resource, ResourceIdentity) {
 		Uptime:     vm.Uptime,
 		Template:   vm.Template,
 		LastBackup: vm.LastBackup,
+		Disks:      convertDisks(vm.Disks),
+		SwapUsed:   vm.Memory.SwapUsed,
+		SwapTotal:  vm.Memory.SwapTotal,
+		Balloon:    vm.Memory.Balloon,
 	}
 	resource := Resource{
 		Type:      ResourceTypeVM,
@@ -504,6 +515,10 @@ func resourceFromContainer(ct models.Container) (Resource, ResourceIdentity) {
 		Uptime:     ct.Uptime,
 		Template:   ct.Template,
 		LastBackup: ct.LastBackup,
+		Disks:      convertDisks(ct.Disks),
+		SwapUsed:   ct.Memory.SwapUsed,
+		SwapTotal:  ct.Memory.SwapTotal,
+		Balloon:    ct.Memory.Balloon,
 	}
 	resource := Resource{
 		Type:      ResourceTypeLXC,

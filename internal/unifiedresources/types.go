@@ -159,20 +159,24 @@ type MetricValue struct {
 
 // ProxmoxData contains Proxmox-specific data for a resource.
 type ProxmoxData struct {
-	NodeName       string    `json:"nodeName,omitempty"`
-	ClusterName    string    `json:"clusterName,omitempty"`
-	Instance       string    `json:"instance,omitempty"`
-	VMID           int       `json:"vmid,omitempty"`
-	CPUs           int       `json:"cpus,omitempty"`
-	Template       bool      `json:"template,omitempty"`
-	Temperature    *float64  `json:"temperature,omitempty"` // Max node CPU temp in Celsius
-	PVEVersion     string    `json:"pveVersion,omitempty"`
-	KernelVersion  string    `json:"kernelVersion,omitempty"`
-	Uptime         int64     `json:"uptime,omitempty"`
-	LastBackup     time.Time `json:"lastBackup,omitempty"`
-	CPUInfo        *CPUInfo  `json:"cpuInfo,omitempty"`
-	LoadAverage    []float64 `json:"loadAverage,omitempty"`
-	PendingUpdates int       `json:"pendingUpdates,omitempty"`
+	NodeName       string     `json:"nodeName,omitempty"`
+	ClusterName    string     `json:"clusterName,omitempty"`
+	Instance       string     `json:"instance,omitempty"`
+	VMID           int        `json:"vmid,omitempty"`
+	CPUs           int        `json:"cpus,omitempty"`
+	Template       bool       `json:"template,omitempty"`
+	Temperature    *float64   `json:"temperature,omitempty"` // Max node CPU temp in Celsius
+	PVEVersion     string     `json:"pveVersion,omitempty"`
+	KernelVersion  string     `json:"kernelVersion,omitempty"`
+	Uptime         int64      `json:"uptime,omitempty"`
+	LastBackup     time.Time  `json:"lastBackup,omitempty"`
+	CPUInfo        *CPUInfo   `json:"cpuInfo,omitempty"`
+	LoadAverage    []float64  `json:"loadAverage,omitempty"`
+	PendingUpdates int        `json:"pendingUpdates,omitempty"`
+	Disks          []DiskInfo `json:"disks,omitempty"`
+	SwapUsed       int64      `json:"swapUsed,omitempty"`
+	SwapTotal      int64      `json:"swapTotal,omitempty"`
+	Balloon        int64      `json:"balloon,omitempty"`
 	// Internal link hint to a host agent resource.
 	LinkedHostAgentID string `json:"-"`
 }
@@ -303,6 +307,15 @@ type HostCephMeta struct {
 	UsagePercent float64 `json:"usagePercent"`
 }
 
+// AgentMemoryMeta describes agent-reported memory including swap.
+type AgentMemoryMeta struct {
+	Total     int64 `json:"total,omitempty"`
+	Used      int64 `json:"used,omitempty"`
+	Free      int64 `json:"free,omitempty"`
+	SwapUsed  int64 `json:"swapUsed,omitempty"`
+	SwapTotal int64 `json:"swapTotal,omitempty"`
+}
+
 // AgentData contains host agent-specific data.
 type AgentData struct {
 	AgentID           string             `json:"agentId,omitempty"`
@@ -317,6 +330,7 @@ type AgentData struct {
 	Temperature       *float64           `json:"temperature,omitempty"` // Max CPU temp in Celsius
 	NetworkInterfaces []NetworkInterface `json:"networkInterfaces,omitempty"`
 	Disks             []DiskInfo         `json:"disks,omitempty"`
+	Memory            *AgentMemoryMeta   `json:"memory,omitempty"`
 	Sensors           *HostSensorMeta    `json:"sensors,omitempty"`
 	RAID              []HostRAIDMeta     `json:"raid,omitempty"`
 	DiskIO            []HostDiskIOMeta   `json:"diskIo,omitempty"`

@@ -6,9 +6,12 @@ import { formatTemperature } from '@/utils/temperature';
 import { Card } from '@/components/shared/Card';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
+import { StackedDiskBar } from '@/components/Dashboard/StackedDiskBar';
+import { StackedMemoryBar } from '@/components/Dashboard/StackedMemoryBar';
 import { buildMetricKey } from '@/utils/metricsKeys';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { getHostStatusIndicator } from '@/utils/status';
+import type { Disk } from '@/types/api';
 import {
   splitHostAndServiceResources,
   sortResources,
@@ -624,29 +627,26 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
 	
 	                      <td class={tdClass}>
 	                        <Show when={memoryPercentValue() !== null} fallback={<div class="flex justify-center"><span class="text-xs text-gray-400">—</span></div>}>
-	                          <ResponsiveMetricCell
-                            class="w-full"
-                            value={memoryPercentValue() ?? 0}
-                            type="memory"
-                            sublabel={memorySublabel()}
-                            resourceId={isMobile() ? undefined : metricsKey()}
-                            isRunning={isResourceOnline(resource)}
-                            showMobile={false}
-                          />
+	                          <div class="w-full" title={memorySublabel()}>
+	                            <StackedMemoryBar
+	                              used={resource.memory?.used ?? 0}
+	                              total={resource.memory?.total ?? 0}
+	                              percentOnly={(!resource.memory?.total && resource.memory?.current != null) ? resource.memory.current : undefined}
+	                              swapUsed={resource.agent?.memory?.swapUsed ?? 0}
+	                              swapTotal={resource.agent?.memory?.swapTotal ?? 0}
+	                            />
+	                          </div>
 	                        </Show>
 	                      </td>
 	
 	                      <td class={tdClass}>
 	                        <Show when={diskPercentValue() !== null} fallback={<div class="flex justify-center"><span class="text-xs text-gray-400">—</span></div>}>
-	                          <ResponsiveMetricCell
-	                            class="w-full"
-	                            value={diskPercentValue() ?? 0}
-                            type="disk"
-                            sublabel={diskSublabel()}
-                            resourceId={isMobile() ? undefined : metricsKey()}
-                            isRunning={isResourceOnline(resource)}
-                            showMobile={false}
-                          />
+	                          <div class="w-full" title={diskSublabel()}>
+	                            <StackedDiskBar
+	                              disks={(resource.agent?.disks ?? []) as Disk[]}
+	                              aggregateDisk={resource.disk ? { total: resource.disk.total ?? 0, used: resource.disk.used ?? 0, free: resource.disk.free ?? 0, usage: resource.disk.current ?? 0 } as Disk : undefined}
+	                            />
+	                          </div>
 	                        </Show>
 	                      </td>
 	

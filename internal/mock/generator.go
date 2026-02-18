@@ -2310,7 +2310,7 @@ func generateHosts(config MockConfig) []models.Host {
 		}
 
 		disks := []models.Disk{rootDisk}
-		if rand.Float64() < 0.45 {
+		if rand.Float64() < 0.70 {
 			dataDiskTotal := int64(200+rand.Intn(1400)) << 30
 			dataDiskUsage := clampFloat(35+rand.Float64()*45, 6, 97)
 			dataDiskUsed := int64(float64(dataDiskTotal) * (dataDiskUsage / 100.0))
@@ -2332,6 +2332,28 @@ func generateHosts(config MockConfig) []models.Host {
 				Used:       dataDiskUsed,
 				Free:       dataDiskTotal - dataDiskUsed,
 				Usage:      dataDiskUsage,
+				Mountpoint: mount,
+				Type:       fsType,
+				Device:     device,
+			})
+		}
+		if len(disks) > 1 && rand.Float64() < 0.35 {
+			backupDiskTotal := int64(500+rand.Intn(3000)) << 30
+			backupDiskUsage := clampFloat(10+rand.Float64()*40, 3, 70)
+			backupDiskUsed := int64(float64(backupDiskTotal) * (backupDiskUsage / 100.0))
+			mount := "/backup"
+			device := "/dev/sdc1"
+			fsType := "btrfs"
+			if profile.Platform == "windows" {
+				mount = "E:"
+				device = `\\.\PHYSICALDRIVE2`
+				fsType = "ntfs"
+			}
+			disks = append(disks, models.Disk{
+				Total:      backupDiskTotal,
+				Used:       backupDiskUsed,
+				Free:       backupDiskTotal - backupDiskUsed,
+				Usage:      backupDiskUsage,
 				Mountpoint: mount,
 				Type:       fsType,
 				Device:     device,
@@ -2802,6 +2824,10 @@ func buildMockLinkedHostFromNode(node models.Node, hostID string, hostIndex int,
 		memory.Free = 0
 	}
 
+	// Add swap for PVE node hosts
+	memory.SwapTotal = int64(8+rand.Intn(24)) << 30
+	memory.SwapUsed = int64(float64(memory.SwapTotal) * rand.Float64() * 0.3)
+
 	disk := node.Disk
 	if disk.Total <= 0 {
 		disk.Total = int64(512) * 1024 * 1024 * 1024
@@ -2821,6 +2847,37 @@ func buildMockLinkedHostFromNode(node models.Node, hostID string, hostIndex int,
 	disk.Mountpoint = "/"
 	disk.Type = "zfs"
 	disk.Device = "rpool"
+
+	disks := []models.Disk{disk}
+	// Add a data partition for variety
+	if hostIndex%2 == 0 {
+		dataDiskTotal := int64(500+rand.Intn(1500)) << 30
+		dataDiskUsage := clampFloat(20+rand.Float64()*60, 5, 95)
+		dataDiskUsed := int64(float64(dataDiskTotal) * (dataDiskUsage / 100.0))
+		disks = append(disks, models.Disk{
+			Total:      dataDiskTotal,
+			Used:       dataDiskUsed,
+			Free:       dataDiskTotal - dataDiskUsed,
+			Usage:      dataDiskUsage,
+			Mountpoint: "/data",
+			Type:       "ext4",
+			Device:     "/dev/sdb1",
+		})
+	}
+	if hostIndex%3 == 0 {
+		logDiskTotal := int64(100+rand.Intn(400)) << 30
+		logDiskUsage := clampFloat(30+rand.Float64()*50, 10, 90)
+		logDiskUsed := int64(float64(logDiskTotal) * (logDiskUsage / 100.0))
+		disks = append(disks, models.Disk{
+			Total:      logDiskTotal,
+			Used:       logDiskUsed,
+			Free:       logDiskTotal - logDiskUsed,
+			Usage:      logDiskUsage,
+			Mountpoint: "/var/log",
+			Type:       "ext4",
+			Device:     "/dev/sdc1",
+		})
+	}
 
 	status := nodeStatusToHostStatus(node.Status)
 	lastSeen := now.Add(-time.Duration(rand.Intn(12)) * time.Second)
@@ -2850,7 +2907,7 @@ func buildMockLinkedHostFromNode(node models.Node, hostID string, hostIndex int,
 			clampFloat((cpuUsage/100.0)*float64(cpuCount)*0.6, 0.05, float64(cpuCount)*1.2),
 		},
 		Memory: memory,
-		Disks:  []models.Disk{disk},
+		Disks:  disks,
 		NetworkInterfaces: []models.HostNetworkInterface{
 			{
 				Name: "eth0",

@@ -138,7 +138,14 @@ type APIResource = {
     uptimeSeconds?: number;
     temperature?: number;
     cpuCount?: number;
-    memory?: { total?: number; used?: number; free?: number; usage?: number };
+    memory?: {
+      total?: number;
+      used?: number;
+      free?: number;
+      usage?: number;
+      swapUsed?: number;
+      swapTotal?: number;
+    };
     networkInterfaces?: APIAgentNetworkInterface[];
     disks?: APIAgentDiskInfo[];
     sensors?: APIAgentSensorSummary;

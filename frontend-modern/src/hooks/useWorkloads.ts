@@ -71,6 +71,10 @@ type APIResource = {
     uptime?: number;
     template?: boolean;
     lastBackup?: string;
+    disks?: APIDiskInfo[];
+    swapUsed?: number;
+    swapTotal?: number;
+    balloon?: number;
   };
   agent?: {
     hostname?: string;
@@ -373,9 +377,17 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
             : 'docker',
     cpu: cpuPercent / 100,
     cpus: resource.proxmox?.cpus ?? 1,
-    memory: buildMetric(resource.metrics?.memory),
+    memory: (() => {
+      const base = buildMetric(resource.metrics?.memory);
+      return {
+        ...base,
+        swapUsed: resource.proxmox?.swapUsed ?? 0,
+        swapTotal: resource.proxmox?.swapTotal ?? 0,
+        balloon: resource.proxmox?.balloon ?? 0,
+      };
+    })(),
     disk: buildMetric(resource.metrics?.disk),
-    disks: mapDisks(resource.agent?.disks),
+    disks: mapDisks(resource.proxmox?.disks ?? resource.agent?.disks),
     diskStatusReason: undefined,
     ipAddresses: resource.identity?.ipAddresses ?? [],
     osName: resource.agent?.osName,

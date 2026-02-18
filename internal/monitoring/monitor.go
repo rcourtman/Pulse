@@ -3243,6 +3243,7 @@ func monitorPlatformData(resource unifiedresources.Resource, resourceType string
 				"agentVersion":  resource.Agent.AgentVersion,
 				"interfaces":    resource.Agent.NetworkInterfaces,
 				"disks":         resource.Agent.Disks,
+				"memory":        resource.Agent.Memory,
 			}
 		}
 	case "docker-host":
@@ -3385,6 +3386,30 @@ func monitorPlatformData(resource unifiedresources.Resource, resourceType string
 	return encoded
 }
 
+func convertProxmoxDisks(disks []unifiedresources.DiskInfo) []map[string]interface{} {
+	if len(disks) == 0 {
+		return nil
+	}
+
+	out := make([]map[string]interface{}, 0, len(disks))
+	for _, d := range disks {
+		usage := float64(0)
+		if d.Total > 0 {
+			usage = float64(d.Used) / float64(d.Total) * 100
+		}
+		out = append(out, map[string]interface{}{
+			"total":      d.Total,
+			"used":       d.Used,
+			"free":       d.Free,
+			"usage":      usage,
+			"mountpoint": d.Mountpoint,
+			"type":       d.Filesystem,
+			"device":     d.Device,
+		})
+	}
+	return out
+}
+
 func buildProxmoxVMPayload(resource unifiedresources.Resource) map[string]interface{} {
 	if resource.Proxmox == nil {
 		return nil
@@ -3401,6 +3426,10 @@ func buildProxmoxVMPayload(resource unifiedresources.Resource) map[string]interf
 		"diskWrite": monitorMetricInt64(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue {
 			return metrics.DiskWrite
 		}),
+		"disks":       convertProxmoxDisks(resource.Proxmox.Disks),
+		"swapUsed":    resource.Proxmox.SwapUsed,
+		"swapTotal":   resource.Proxmox.SwapTotal,
+		"balloon":     resource.Proxmox.Balloon,
 		"lastBackup":  resource.Proxmox.LastBackup,
 		"ipAddresses": append([]string(nil), resource.Identity.IPAddresses...),
 	}

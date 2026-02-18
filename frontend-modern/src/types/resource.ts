@@ -7,7 +7,7 @@
  * The frontend receives these via WebSocket state.resources[].
  */
 
-import type { HostNetworkInterface, HostSensorSummary, HostRAIDArray, Memory } from '@/types/api';
+import type { Disk, HostNetworkInterface, HostSensorSummary, HostRAIDArray, Memory } from '@/types/api';
 
 // Resource types - what kind of entity is being monitored
 export type ResourceType =
@@ -139,6 +139,18 @@ export interface ResourceAgentMeta {
     tokenLastUsedAt?: number;
 }
 
+export interface ResourceProxmoxMeta {
+    vmid?: number;
+    node?: string;
+    instance?: string;
+    cpus?: number;
+    template?: boolean;
+    disks?: Disk[];
+    swapUsed?: number;
+    swapTotal?: number;
+    balloon?: number;
+}
+
 export interface ResourceKubernetesMetricCapabilities {
     nodeCpuMemory?: boolean;
     nodeTelemetry?: boolean;
@@ -209,6 +221,7 @@ export interface Resource {
     // Prefer these over casting `platformData` when available.
     agent?: ResourceAgentMeta;
     kubernetes?: ResourceKubernetesMeta;
+    proxmox?: ResourceProxmoxMeta;
 
     // Platform-specific data (varies by type)
     platformData?: Record<string, unknown>;
