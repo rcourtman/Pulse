@@ -18,9 +18,18 @@ export interface TimeSeriesPoint {
 }
 
 /**
- * Downsample time-series data using the LTTB algorithm
- * 
- * @param data - Array of data points with timestamp and value
+ * Downsample time-series data using a temporal LTTB algorithm.
+ *
+ * Standard LTTB divides the input into equal-count index buckets, which
+ * distorts representation when data density is non-uniform (e.g. tiered
+ * timestamps with sparse old data and dense recent data). This variant
+ * divides the *time range* into equal-duration buckets so each output
+ * point covers the same amount of wall-clock time. Within each bucket
+ * it still picks the point that maximises the triangle area (the core
+ * LTTB visual-fidelity property). Empty buckets are skipped, so the
+ * output may contain fewer than targetPoints when data is very sparse.
+ *
+ * @param data - Array of data points sorted by timestamp
  * @param targetPoints - Desired number of output points
  * @returns Downsampled array preserving visual characteristics
  */
@@ -28,63 +37,67 @@ export function downsampleLTTB<T extends TimeSeriesPoint>(
     data: T[],
     targetPoints: number
 ): T[] {
-    // If data is already small enough, return as-is
     if (data.length <= targetPoints || targetPoints < 3) {
         return data;
     }
 
     const result: T[] = [];
-
-    // Always keep the first point
     result.push(data[0]);
 
-    // Calculate bucket size (excluding first and last points)
-    const bucketSize = (data.length - 2) / (targetPoints - 2);
+    const numBuckets = targetPoints - 2;
+    const timeStart = data[0].timestamp;
+    const timeEnd = data[data.length - 1].timestamp;
+    const bucketDuration = (timeEnd - timeStart) / numBuckets;
+
+    // Build temporal bucket index ranges. Only interior points (indices
+    // 1..length-2) are bucketed; first and last are always kept.
+    const bucketRanges: [number, number][] = new Array(numBuckets);
+    let idx = 1;
+    for (let b = 0; b < numBuckets; b++) {
+        const tEnd = b === numBuckets - 1
+            ? Infinity // last bucket collects all remaining interior points
+            : timeStart + (b + 1) * bucketDuration;
+        const start = idx;
+        while (idx < data.length - 1 && data[idx].timestamp < tEnd) {
+            idx++;
+        }
+        bucketRanges[b] = [start, idx];
+    }
 
     let lastSelectedIndex = 0;
 
-    for (let i = 0; i < targetPoints - 2; i++) {
-        // Calculate bucket boundaries
-        const bucketStart = Math.floor((i + 0) * bucketSize) + 1;
-        const bucketEnd = Math.floor((i + 1) * bucketSize) + 1;
+    for (let i = 0; i < numBuckets; i++) {
+        const [bucketStart, bucketEnd] = bucketRanges[i];
+        if (bucketStart >= bucketEnd) continue; // empty bucket — no data in this time slice
 
-        // Calculate the average point of the next bucket (for triangle calculation)
-        const nextBucketStart = Math.floor((i + 1) * bucketSize) + 1;
-        const nextBucketEnd = Math.min(
-            Math.floor((i + 2) * bucketSize) + 1,
-            data.length - 1
-        );
-
-        let avgX = 0;
-        let avgY = 0;
-        let avgCount = 0;
-
-        for (let j = nextBucketStart; j < nextBucketEnd; j++) {
-            avgX += data[j].timestamp;
-            avgY += data[j].value;
-            avgCount++;
+        // Average of the next non-empty bucket (triangle vertex C).
+        let avgX = data[data.length - 1].timestamp;
+        let avgY = data[data.length - 1].value;
+        for (let nb = i + 1; nb < numBuckets; nb++) {
+            const [ns, ne] = bucketRanges[nb];
+            if (ns >= ne) continue;
+            avgX = 0;
+            avgY = 0;
+            for (let j = ns; j < ne; j++) {
+                avgX += data[j].timestamp;
+                avgY += data[j].value;
+            }
+            avgX /= (ne - ns);
+            avgY /= (ne - ns);
+            break;
         }
 
-        if (avgCount > 0) {
-            avgX /= avgCount;
-            avgY /= avgCount;
-        }
-
-        // Find the point in the current bucket that creates the largest triangle
+        // Pick the point that creates the largest triangle (LTTB core).
         const pointA = data[lastSelectedIndex];
         let maxArea = -1;
         let maxAreaIndex = bucketStart;
 
-        for (let j = bucketStart; j < bucketEnd && j < data.length - 1; j++) {
+        for (let j = bucketStart; j < bucketEnd; j++) {
             const pointB = data[j];
-
-            // Calculate triangle area using the cross product formula
-            // Area = 0.5 * |x1(y2 - y3) + x2(y3 - y1) + x3(y1 - y2)|
             const area = Math.abs(
                 (pointA.timestamp - avgX) * (pointB.value - pointA.value) -
                 (pointA.timestamp - pointB.timestamp) * (avgY - pointA.value)
             );
-
             if (area > maxArea) {
                 maxArea = area;
                 maxAreaIndex = j;
@@ -95,9 +108,7 @@ export function downsampleLTTB<T extends TimeSeriesPoint>(
         lastSelectedIndex = maxAreaIndex;
     }
 
-    // Always keep the last point
     result.push(data[data.length - 1]);
-
     return result;
 }
 

@@ -424,7 +424,7 @@ func generateFlatSeries(current float64, points int, min, max, span float64, rng
 // buildTieredTimestamps generates a sorted list of timestamps with denser
 // intervals for recent data:
 //
-//	Last 2h:   30s intervals  (~240 points)
+//	Last 2h:   1min intervals  (~120 points)
 //	2h–24h:    2min intervals  (~660 points)
 //	24h–end:   ~65min intervals (variable)
 //

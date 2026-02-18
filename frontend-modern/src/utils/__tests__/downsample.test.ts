@@ -52,6 +52,38 @@ describe('downsampleLTTB', () => {
         expect(result.length).toBe(100);
     });
 
+    it('distributes output points evenly across time for non-uniform density data', () => {
+        // Simulate tiered data: sparse first half (10 points over 6 days),
+        // dense second half (200 points over 1 day).
+        const data: TimeSeriesPoint[] = [];
+        const dayMs = 24 * 60 * 60_000;
+        const t0 = 0;
+
+        // Sparse: 10 points over 6 days
+        for (let i = 0; i < 10; i++) {
+            data.push({ timestamp: t0 + i * (6 * dayMs / 10), value: 50 + i });
+        }
+        // Dense: 200 points over 1 day
+        const denseStart = 6 * dayMs;
+        for (let i = 0; i < 200; i++) {
+            data.push({ timestamp: denseStart + i * (dayMs / 200), value: 50 + (i % 10) });
+        }
+
+        const result = downsampleLTTB(data, 20);
+
+        // Split output into first-half (0-6d) and second-half (6-7d) by timestamp.
+        const midpoint = 6 * dayMs;
+        const firstHalf = result.filter(p => p.timestamp < midpoint);
+        const secondHalf = result.filter(p => p.timestamp >= midpoint);
+
+        // With temporal bucketing, ~6/7 of buckets cover the first 6 days and
+        // ~1/7 cover the last day. The first half should get the majority.
+        // With old index-based bucketing, the 200 dense points would dominate
+        // and the first half would get only ~1-2 points.
+        expect(firstHalf.length).toBeGreaterThanOrEqual(8);
+        expect(secondHalf.length).toBeGreaterThanOrEqual(2);
+    });
+
     it('preserves peaks and valleys', () => {
         // Create data with a clear peak at index 50
         const data: TimeSeriesPoint[] = [];

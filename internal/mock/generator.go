@@ -3432,7 +3432,9 @@ func naturalMetricUpdate(current, min, max float64, resourceID, metric string, s
 	// Shifts periodically, but stays in a characteristic range for each
 	// metric type. The personality (seed) determines where in the range
 	// each resource sits, so different resources have different baselines.
-	targetWindow := int64(float64(300+seed%420) / math.Max(speed, 0.1))
+	// Window is long (15-30min for CPU) so baseline drifts slowly, matching
+	// the seeded history generator's near-constant baseline.
+	targetWindow := int64(float64(900+seed%900) / math.Max(speed, 0.1))
 	if targetWindow < 60 {
 		targetWindow = 60
 	}
@@ -3443,16 +3445,16 @@ func naturalMetricUpdate(current, min, max float64, resourceID, metric string, s
 	var baselineFraction float64
 	if isCPULike {
 		// CPU: most resources idle low. Personality determines the tier.
-		// ~75% low (5-18%), ~20% moderate (18-32%), ~5% busy (32-48%).
+		// Ranges match generateSpikySeries in mock_metrics_history.go.
 		personality := seed % 20
 		r := targetRng.Float64()
 		switch {
 		case personality == 0: // 5%: busy resource
-			baselineFraction = 0.32 + r*0.16
+			baselineFraction = 0.30 + r*0.15
 		case personality <= 4: // 20%: moderate load
-			baselineFraction = 0.18 + r*0.14
+			baselineFraction = 0.16 + r*0.14
 		default: // 75%: low/idle
-			baselineFraction = 0.05 + r*0.13
+			baselineFraction = 0.04 + r*0.12
 		}
 	} else if speed >= 0.3 {
 		// Memory: moderate stable level.
@@ -3466,17 +3468,18 @@ func naturalMetricUpdate(current, min, max float64, resourceID, metric string, s
 	// --- Spike events (CPU-like metrics only) ---
 	// Each time bucket is deterministically either a spike or not.
 	// Spikes ramp up fast and decay gradually, like real CPU bursts.
+	// Frequency and height match generateSpikySeries in mock_metrics_history.go.
 	var spikeValue float64
 	if isCPULike {
-		spikeBucket := int64(25 + seed%75) // 25-100 second spike windows
+		spikeBucket := int64(120 + seed%180) // 2-5 min spike windows
 		bucketSeed := seed ^ uint64(now.Unix()/spikeBucket)
 		bucketRng := rand.New(rand.NewSource(int64(bucketSeed)))
 
-		// ~12-22% of buckets are spike periods (varies per resource).
-		spikeFreq := 0.10 + float64(seed%12)*0.01
+		// ~1.5-4.5% of buckets are spike periods (matches seeded history).
+		spikeFreq := 0.015 + float64(seed%10)*0.003
 		if bucketRng.Float64() < spikeFreq {
-			// Spike height: 15-50% of range above baseline.
-			spikeHeight := span * (0.12 + bucketRng.Float64()*0.38)
+			// Spike height: 10-55% of range above baseline.
+			spikeHeight := span * (0.10 + bucketRng.Float64()*0.45)
 			// Position within bucket: fast rise (~12%), then power-law decay.
 			progress := float64(now.Unix()%spikeBucket) / float64(spikeBucket)
 			if progress < 0.12 {
@@ -3494,7 +3497,7 @@ func naturalMetricUpdate(current, min, max float64, resourceID, metric string, s
 	ideal := baseTarget + spikeValue
 	alpha := 0.06 * speed
 	if spikeValue > span*0.03 {
-		alpha = 0.30 // snap toward spike quickly
+		alpha = 0.15 // track spike (gentler than before to avoid jarring snaps)
 	}
 	if alpha < 0.005 {
 		alpha = 0.005
@@ -3507,14 +3510,6 @@ func naturalMetricUpdate(current, min, max float64, resourceID, metric string, s
 	// --- Per-tick noise ---
 	noiseScale := span * 0.003 * math.Min(speed, 1.0)
 	newValue += rng.NormFloat64() * noiseScale
-
-	// --- Step quantization for fast metrics ---
-	if speed >= 0.25 {
-		step := span * (0.004 + float64(seed%3)*0.001)
-		if step > 0.05 {
-			newValue = math.Round(newValue/step) * step
-		}
-	}
 
 	return clampFloat(newValue, min, max)
 }
