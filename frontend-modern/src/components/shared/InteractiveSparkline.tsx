@@ -219,7 +219,6 @@ export const InteractiveSparkline: Component<InteractiveSparklineProps> = (props
     const windowStart = windowEnd - rangeMs;
     const targetPoints = calculateOptimalPoints(vbW, 'sparkline');
     const bridgeLeadingGap = props.bridgeLeadingGap === true;
-    const useCanvas = shouldUseCanvas();
     const validSeries = props.series
       .map((series) => {
         const inWindow = series.data.filter((point) =>
