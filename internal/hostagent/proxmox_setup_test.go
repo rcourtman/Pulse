@@ -2,12 +2,14 @@ package hostagent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -234,6 +236,99 @@ func TestProxmoxSetup_RunForType(t *testing.T) {
 	})
 }
 
+func TestRegisterWithPulseRetry(t *testing.T) {
+	// Server returns 503 twice, then 200
+	var attempt int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n := atomic.AddInt32(&attempt, 1)
+		if n <= 2 {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	p := &ProxmoxSetup{
+		logger:        zerolog.Nop(),
+		httpClient:    server.Client(),
+		pulseURL:      server.URL,
+		apiToken:      "test-token",
+		hostname:      "test-host",
+		retryBackoffs: []time.Duration{10 * time.Millisecond, 10 * time.Millisecond, 10 * time.Millisecond, 10 * time.Millisecond, 10 * time.Millisecond},
+	}
+
+	err := p.registerWithPulse(context.Background(), "pve", "https://10.0.0.1:8006", "user!token", "secret")
+	if err != nil {
+		t.Fatalf("expected success after retries, got: %v", err)
+	}
+	if atomic.LoadInt32(&attempt) != 3 {
+		t.Errorf("expected 3 attempts, got %d", atomic.LoadInt32(&attempt))
+	}
+}
+
+func TestRegisterWithPulseNoRetryOn4xx(t *testing.T) {
+	// Server returns 401 - should NOT retry
+	var attempt int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&attempt, 1)
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte("invalid token"))
+	}))
+	defer server.Close()
+
+	p := &ProxmoxSetup{
+		logger:        zerolog.Nop(),
+		httpClient:    server.Client(),
+		pulseURL:      server.URL,
+		apiToken:      "bad-token",
+		hostname:      "test-host",
+		retryBackoffs: []time.Duration{10 * time.Millisecond, 10 * time.Millisecond},
+	}
+
+	err := p.registerWithPulse(context.Background(), "pve", "https://10.0.0.1:8006", "user!token", "secret")
+	if err == nil {
+		t.Fatal("expected error for 401")
+	}
+	if atomic.LoadInt32(&attempt) != 1 {
+		t.Errorf("expected exactly 1 attempt (no retry on 4xx), got %d", atomic.LoadInt32(&attempt))
+	}
+	// Verify it's a clientError
+	var ce *clientError
+	if !errors.As(err, &ce) {
+		t.Errorf("expected clientError, got %T: %v", err, err)
+	}
+}
+
+func TestRegisterWithPulseAllRetriesFail(t *testing.T) {
+	// Server always returns 503
+	var attempt int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&attempt, 1)
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = w.Write([]byte("service unavailable"))
+	}))
+	defer server.Close()
+
+	p := &ProxmoxSetup{
+		logger:        zerolog.Nop(),
+		httpClient:    server.Client(),
+		pulseURL:      server.URL,
+		apiToken:      "test-token",
+		hostname:      "test-host",
+		retryBackoffs: []time.Duration{10 * time.Millisecond, 10 * time.Millisecond},
+	}
+
+	err := p.registerWithPulse(context.Background(), "pve", "https://10.0.0.1:8006", "user!token", "secret")
+	if err == nil {
+		t.Fatal("expected error when all retries fail")
+	}
+	// 3 attempts: initial + 2 retries (len(retryBackoffs) = 2)
+	if atomic.LoadInt32(&attempt) != 3 {
+		t.Errorf("expected 3 attempts, got %d", atomic.LoadInt32(&attempt))
+	}
+}
+
 func TestProxmoxSetup_PVEPrivilegeProbe_FallsBackToGuestAgentAudit(t *testing.T) {
 	mc := &mockCollector{}
 	var pulseMonitorPrivs string
@@ -337,6 +432,8 @@ func TestProxmoxSetup_RunAll(t *testing.T) {
 			}
 			return "", nil
 		}
+
+		p.httpClient = &http.Client{Transport: &mockTransport{statusCode: 200}}
 
 		results, _ := p.RunAll(context.Background())
 		if len(results) != 1 || results[0].ProxmoxType != "pbs" {
