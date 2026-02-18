@@ -11,6 +11,8 @@ import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import type { TimeRange } from '@/api/charts';
 import ServerIcon from 'lucide-solid/icons/server';
 import RefreshCwIcon from 'lucide-solid/icons/refresh-cw';
+import ListFilterIcon from 'lucide-solid/icons/list-filter';
+import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { ScrollToTopButton } from '@/components/shared/ScrollToTopButton';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import {
@@ -73,11 +75,34 @@ export function Infrastructure() {
   const [handledSourceParam, setHandledSourceParam] = createSignal<string | null>(null);
   const [handledQueryParam, setHandledQueryParam] = createSignal<string>('');
   const [hideMigrationNotice, setHideMigrationNotice] = createSignal(true);
+  const { isMobile } = useBreakpoint();
+  const [filtersOpen, setFiltersOpen] = createSignal(false);
+  const activeFilterCount = createMemo(() => selectedSources().size + selectedStatuses().size);
   let highlightTimer: number | undefined;
+
+  // URL sync can require multiple reactive updates (canonicalizing legacy params,
+  // normalizing source aliases, preserving deep-links). Navigating synchronously
+  // for each intermediate state can trigger Solid Router's redirect protection.
+  // Coalesce URL sync into a single replace-navigation per tick.
+  let pendingUrlSyncHandle: number | null = null;
+  let pendingUrlSyncPath: string | null = null;
+  const scheduleUrlSyncNavigate = (nextPath: string) => {
+    pendingUrlSyncPath = nextPath;
+    if (pendingUrlSyncHandle !== null) return;
+    pendingUrlSyncHandle = window.setTimeout(() => {
+      pendingUrlSyncHandle = null;
+      const target = pendingUrlSyncPath;
+      pendingUrlSyncPath = null;
+      if (!target) return;
+      const current = `${untrack(() => location.pathname)}${untrack(() => location.search)}`;
+      if (current === target) return;
+      navigate(target, { replace: true });
+    }, 0);
+  };
   const sourceOptions = [
     { key: 'proxmox', label: 'PVE' },
     { key: 'agent', label: 'Agent' },
-    { key: 'docker', label: 'Docker' },
+    { key: 'docker', label: 'Containers' },
     { key: 'pbs', label: 'PBS' },
     { key: 'pmg', label: 'PMG' },
     { key: 'kubernetes', label: 'K8s' },
@@ -125,26 +150,34 @@ export function Infrastructure() {
   createEffect(() => {
     const { resource: resourceId } = parseInfrastructureLinkSearch(location.search);
     if (resourceId) return;
-    // Keep URL as source-of-truth: removing `resource` from the URL should close the drawer.
+
+    // Only treat "missing resource param" as a close signal if we've previously
+    // handled a resource deep-link or written one into the URL. Otherwise, this
+    // can fight user-driven opens before the URL-sync effect runs.
+    if (handledResourceId() === null) return;
+
     if (expandedResourceId() !== null) {
       setExpandedResourceId(null);
     }
     if (highlightedResourceId() !== null) {
       setHighlightedResourceId(null);
     }
-    if (handledResourceId() !== null) {
-      setHandledResourceId(null);
-    }
+    setHandledResourceId(null);
   });
 
   createEffect(() => {
     const { source: sourceParam } = parseInfrastructureLinkSearch(location.search);
     if (!sourceParam) {
-      // Keep URL as source-of-truth: navigating to `/infrastructure` should clear any prior filters.
-      if (selectedSources().size > 0) {
-        setSelectedSources(new Set<string>());
-      }
-      if ((handledSourceParam() ?? '') !== '') {
+      // Keep URL as source-of-truth only for real URL transitions. If the user
+      // has just clicked a filter button, selectedSources() may update before
+      // the URL-sync effect runs; don't fight that.
+      const previous = (handledSourceParam() ?? '').trim();
+      if (previous) {
+        if (selectedSources().size > 0) {
+          setSelectedSources(new Set<string>());
+        }
+        setHandledSourceParam('');
+      } else if (handledSourceParam() === null) {
         setHandledSourceParam('');
       }
       return;
@@ -184,7 +217,7 @@ export function Infrastructure() {
     const urlResource = parsed.resource ?? '';
     if ((handledSourceParam() ?? '') !== urlSource) return;
     if (handledQueryParam() !== urlQuery) return;
-    if (urlResource && handledResourceId() !== urlResource) return;
+    if (urlResource && handledResourceId() !== urlResource && !initialLoadComplete()) return;
 
     const selectedSourceValues = sourceOptions
       .map((source) => source.key)
@@ -220,11 +253,16 @@ export function Infrastructure() {
     if (!areSearchParamsEquivalent(currentParams, nextParams)) {
       const nextSearch = nextParams.toString();
       const nextPath = nextSearch ? `${INFRASTRUCTURE_PATH}?${nextSearch}` : INFRASTRUCTURE_PATH;
-      navigate(nextPath, { replace: true });
+      scheduleUrlSyncNavigate(nextPath);
     }
   });
 
   onCleanup(() => {
+    if (pendingUrlSyncHandle !== null) {
+      window.clearTimeout(pendingUrlSyncHandle);
+      pendingUrlSyncHandle = null;
+      pendingUrlSyncPath = null;
+    }
     if (highlightTimer) {
       window.clearTimeout(highlightTimer);
     }
@@ -397,95 +435,113 @@ export function Infrastructure() {
                     }}
                   />
 
-                  <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400 lg:flex-nowrap">
-                    <div class="flex items-center gap-2">
-                      <span class="uppercase tracking-wide text-[9px] text-gray-400 dark:text-gray-500">Source</span>
-                      <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-                        <For each={sourceOptions}>
-                          {(source) => {
-                            const isSelected = () => selectedSources().has(source.key);
-                            const isDisabled = () =>
-                              !availableSources().has(source.key) && !selectedSources().has(source.key);
-                            return (
-                              <button
-                                type="button"
-                                disabled={isDisabled()}
-                                aria-pressed={isSelected()}
-                                onClick={() => toggleSource(source.key)}
-                                class={segmentedButtonClass(isSelected(), isDisabled())}
-                              >
-                                {source.label}
-                              </button>
-                            );
-                          }}
-                        </For>
+                  <Show when={isMobile()}>
+                    <button
+                      type="button"
+                      onClick={() => setFiltersOpen((o) => !o)}
+                      class="flex items-center gap-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400"
+                    >
+                      <ListFilterIcon class="w-3.5 h-3.5" />
+                      Filters
+                      <Show when={activeFilterCount() > 0}>
+                        <span class="ml-0.5 rounded-full bg-blue-500 px-1.5 py-0.5 text-[10px] font-semibold text-white leading-none">
+                          {activeFilterCount()}
+                        </span>
+                      </Show>
+                    </button>
+                  </Show>
+
+                  <Show when={!isMobile() || filtersOpen()}>
+                    <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400 lg:flex-nowrap">
+                      <div class="flex items-center gap-2">
+                        <span class="uppercase tracking-wide text-[9px] text-gray-400 dark:text-gray-500">Source</span>
+                        <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                          <For each={sourceOptions}>
+                            {(source) => {
+                              const isSelected = () => selectedSources().has(source.key);
+                              const isDisabled = () =>
+                                !availableSources().has(source.key) && !selectedSources().has(source.key);
+                              return (
+                                <button
+                                  type="button"
+                                  disabled={isDisabled()}
+                                  aria-pressed={isSelected()}
+                                  onClick={() => toggleSource(source.key)}
+                                  class={segmentedButtonClass(isSelected(), isDisabled())}
+                                >
+                                  {source.label}
+                                </button>
+                              );
+                            }}
+                          </For>
+                        </div>
                       </div>
-                    </div>
 
-                    <div class="flex items-center gap-2">
-                      <span class="uppercase tracking-wide text-[9px] text-gray-400 dark:text-gray-500">Status</span>
-                      <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-                        <For each={statusOptions()}>
-                          {(status) => {
-                            const isSelected = () => selectedStatuses().has(status.key);
-                            const isDisabled = () =>
-                              !availableStatuses().has(status.key) && !selectedStatuses().has(status.key);
-                            return (
-                              <button
-                                type="button"
-                                disabled={isDisabled()}
-                                aria-pressed={isSelected()}
-                                onClick={() => toggleStatus(status.key)}
-                                class={segmentedButtonClass(isSelected(), isDisabled())}
-                              >
-                                {status.label}
-                              </button>
-                            );
-                          }}
-                        </For>
+                      <div class="flex items-center gap-2">
+                        <span class="uppercase tracking-wide text-[9px] text-gray-400 dark:text-gray-500">Status</span>
+                        <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                          <For each={statusOptions()}>
+                            {(status) => {
+                              const isSelected = () => selectedStatuses().has(status.key);
+                              const isDisabled = () =>
+                                !availableStatuses().has(status.key) && !selectedStatuses().has(status.key);
+                              return (
+                                <button
+                                  type="button"
+                                  disabled={isDisabled()}
+                                  aria-pressed={isSelected()}
+                                  onClick={() => toggleStatus(status.key)}
+                                  class={segmentedButtonClass(isSelected(), isDisabled())}
+                                >
+                                  {status.label}
+                                </button>
+                              );
+                            }}
+                          </For>
+                        </div>
                       </div>
-                    </div>
 
-                    <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-                      <button
-                        type="button"
-                        onClick={() => setGroupingMode('grouped')}
-                        class={`inline-flex items-center gap-1.5 ${segmentedButtonClass(groupingMode() === 'grouped', false)}`}
-                        title="Group by cluster"
-                      >
-                        <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2v11z" />
-                        </svg>
-                        Grouped
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setGroupingMode('flat')}
-                        class={`inline-flex items-center gap-1.5 ${segmentedButtonClass(groupingMode() === 'flat', false)}`}
-                        title="Flat list view"
-                      >
-                        <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                          <line x1="8" y1="6" x2="21" y2="6" />
-                          <line x1="8" y1="12" x2="21" y2="12" />
-                          <line x1="8" y1="18" x2="21" y2="18" />
-                          <line x1="3" y1="6" x2="3.01" y2="6" />
-                          <line x1="3" y1="12" x2="3.01" y2="12" />
-                          <line x1="3" y1="18" x2="3.01" y2="18" />
-                        </svg>
-                        List
-                      </button>
-                    </div>
+                      <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                        <button
+                          type="button"
+                          onClick={() => setGroupingMode('grouped')}
+                          class={`inline-flex items-center gap-1.5 ${segmentedButtonClass(groupingMode() === 'grouped', false)}`}
+                          title="Group by cluster"
+                        >
+                          <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2v11z" />
+                          </svg>
+                          Grouped
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setGroupingMode('flat')}
+                          class={`inline-flex items-center gap-1.5 ${segmentedButtonClass(groupingMode() === 'flat', false)}`}
+                          title="Flat list view"
+                        >
+                          <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="8" y1="6" x2="21" y2="6" />
+                            <line x1="8" y1="12" x2="21" y2="12" />
+                            <line x1="8" y1="18" x2="21" y2="18" />
+                            <line x1="3" y1="6" x2="3.01" y2="6" />
+                            <line x1="3" y1="12" x2="3.01" y2="12" />
+                            <line x1="3" y1="18" x2="3.01" y2="18" />
+                          </svg>
+                          List
+                        </button>
+                      </div>
 
-                    <Show when={hasActiveFilters()}>
-                      <button
-                        type="button"
-                        onClick={clearFilters}
-                        class="ml-auto rounded-lg bg-blue-100 px-2.5 py-1.5 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:hover:bg-blue-900/60"
-                      >
-                        Clear
-                      </button>
-                    </Show>
-                  </div>
+                      <Show when={hasActiveFilters()}>
+                        <button
+                          type="button"
+                          onClick={clearFilters}
+                          class="ml-auto rounded-lg bg-blue-100 px-2.5 py-1.5 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:hover:bg-blue-900/60"
+                        >
+                          Clear
+                        </button>
+                      </Show>
+                    </div>
+                  </Show>
                 </div>
               </Card>
 
