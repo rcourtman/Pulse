@@ -40,12 +40,12 @@ function createLayoutStore() {
 
     /**
      * Load full-width preference from server (called after auth)
-     * Only uses server preference if no local preference exists
+     * Always uses server preference after auth to keep localStorage in sync
+     * (server is the source of truth for cross-device/browser persistence).
      */
     const loadFromServer = async () => {
-        const hasLocalPreference = localStorage.getItem(STORAGE_KEYS.FULL_WIDTH_MODE) !== null;
-        if (hasLocalPreference || hasLoadedFromServer()) {
-            return; // Prefer local preference or already loaded
+        if (hasLoadedFromServer()) {
+            return; // Already loaded this session
         }
 
         try {
@@ -72,4 +72,3 @@ function createLayoutStore() {
 }
 
 export const layoutStore = createLayoutStore();
-

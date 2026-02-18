@@ -293,13 +293,16 @@ export function WebhookConfig(props: WebhookConfigProps) {
       });
       // Update header inputs when switching services
       const headers = template.headers || {};
-      setHeaderInputs(
-        Object.entries(headers).map(([key, value], index) => ({
-          id: `header-${Date.now()}-${index}`,
-          key,
-          value,
-        })),
-      );
+      // When editing an existing webhook, preserve any user-added auth headers.
+      if (!editingId()) {
+        setHeaderInputs(
+          Object.entries(headers).map(([key, value], index) => ({
+            id: `header-${Date.now()}-${index}`,
+            key,
+            value,
+          })),
+        );
+      }
     } else {
       setFormData({
         ...formData(),
