@@ -53,7 +53,6 @@ import ServerIcon from 'lucide-solid/icons/server';
 import HardDriveIcon from 'lucide-solid/icons/hard-drive';
 import ArchiveIcon from 'lucide-solid/icons/archive';
 import BellIcon from 'lucide-solid/icons/bell';
-import MailIcon from 'lucide-solid/icons/mail';
 import SettingsIcon from 'lucide-solid/icons/settings';
 import Maximize2Icon from 'lucide-solid/icons/maximize-2';
 import Minimize2Icon from 'lucide-solid/icons/minimize-2';
@@ -103,9 +102,8 @@ const Dashboard = lazy(() =>
   import('./components/Dashboard/Dashboard').then((module) => ({ default: module.Dashboard })),
 );
 const StorageComponent = lazy(() => import('./components/Storage/Storage'));
-const BackupsComponent = lazy(() => import('./components/Backups/Backups'));
+const BackupsRoute = lazy(() => import('./pages/BackupsRoute'));
 const Replication = lazy(() => import('./components/Replication/Replication'));
-const MailGateway = lazy(() => import('./components/PMG/MailGateway'));
 const CephPage = lazy(() => import('./pages/Ceph'));
 const AlertsPage = lazy(() =>
   import('./pages/Alerts').then((module) => ({ default: module.Alerts })),
@@ -1135,10 +1133,9 @@ function App() {
       <Route path="/" component={() => <Navigate href={ROOT_INFRASTRUCTURE_PATH} />} />
       <Route path={ROOT_WORKLOADS_PATH} component={WorkloadsView} />
       <Route path={STORAGE_PATH} component={StorageComponent} />
-      <Route path={BACKUPS_PATH} component={BackupsComponent} />
+      <Route path={BACKUPS_PATH} component={BackupsRoute} />
       <Route path="/ceph" component={CephPage} />
       <Route path="/replication" component={Replication} />
-      <Route path="/pmg" component={MailGateway} />
       <Route path={ROOT_INFRASTRUCTURE_PATH} component={InfrastructurePage} />
       <Route path="/migration-guide" component={MigrationGuidePage} />
 
@@ -1192,7 +1189,6 @@ function App() {
         <Route path="/proxmox/storage" component={() => <Navigate href={STORAGE_PATH} />} />
         <Route path="/proxmox/ceph" component={() => <Navigate href="/ceph" />} />
         <Route path="/proxmox/replication" component={() => <Navigate href="/replication" />} />
-        <Route path="/proxmox/mail-gateway" component={() => <Navigate href="/pmg" />} />
         <Route
           path={LEGACY_REDIRECTS.proxmoxMail.path}
           component={() => (
@@ -1208,7 +1204,14 @@ function App() {
             />
           )}
         />
-        <Route path="/proxmox/backups" component={() => <Navigate href={BACKUPS_PATH} />} />
+        <Route
+          path="/proxmox/backups"
+          component={() => (
+            <LegacyRedirect
+              to={BACKUPS_PATH}
+            />
+          )}
+        />
         <Route
           path={LEGACY_REDIRECTS.mail.path}
           component={() => (
@@ -1385,7 +1388,6 @@ function AppLayout(props: {
   };
 
   const platformTabsDesktop = createMemo(() => {
-    const hasPmg = (props.state().pmg ?? []).length > 0;
     const allPlatforms: PlatformTab[] = [
       {
         id: 'dashboard' as const,
@@ -1410,17 +1412,6 @@ function AppLayout(props: {
         live: true,
         icon: <ServerIcon class="w-4 h-4 shrink-0" />,
         alwaysShow: true,
-      },
-      {
-        id: 'pmg' as const,
-        label: 'Mail Gateway',
-        route: '/pmg',
-        settingsRoute: '/settings/infrastructure/pmg',
-        tooltip: 'Mail Gateway queue + threat metrics',
-        enabled: hasPmg,
-        live: true,
-        icon: <MailIcon class="w-4 h-4 shrink-0" />,
-        alwaysShow: false,
       },
       {
         id: 'workloads' as const,
@@ -1451,7 +1442,6 @@ function AppLayout(props: {
   });
 
   const platformTabsMobile = createMemo(() => {
-    const hasPmg = (props.state().pmg ?? []).length > 0;
     const allPlatforms: PlatformTab[] = [
       {
         id: 'dashboard' as const,
@@ -1474,17 +1464,6 @@ function AppLayout(props: {
         live: true,
         icon: <ServerIcon class="w-4 h-4 shrink-0" />,
         alwaysShow: true,
-      },
-      {
-        id: 'pmg' as const,
-        label: 'Mail Gateway',
-        route: '/pmg',
-        settingsRoute: '/settings/infrastructure/pmg',
-        tooltip: 'Mail Gateway queue + threat metrics',
-        enabled: hasPmg,
-        live: true,
-        icon: <MailIcon class="w-4 h-4 shrink-0" />,
-        alwaysShow: false,
       },
       {
         id: 'workloads' as const,

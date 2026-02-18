@@ -11,12 +11,10 @@ describe('navigation routing helpers', () => {
     expect(getActiveTabForPath('/dashboard')).toBe('dashboard');
     expect(getActiveTabForPath('/infrastructure')).toBe('infrastructure');
     expect(getActiveTabForPath('/workloads?type=k8s')).toBe('workloads');
-    expect(getActiveTabForPath('/pmg')).toBe('pmg');
     expect(getActiveTabForPath('/storage')).toBe('storage');
     expect(getActiveTabForPath('/ceph')).toBe('storage');
     expect(getActiveTabForPath('/backups')).toBe('backups');
     expect(getActiveTabForPath('/replication')).toBe('backups');
-    expect(getActiveTabForPath('/proxmox/mail-gateway')).toBe('pmg');
     expect(getActiveTabForPath('/kubernetes')).toBe('workloads');
     expect(getActiveTabForPath('/mail')).toBe('infrastructure');
     expect(getActiveTabForPath('/services')).toBe('infrastructure');

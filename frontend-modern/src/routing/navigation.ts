@@ -3,7 +3,6 @@ import { INFRASTRUCTURE_PATH, WORKLOADS_PATH } from './resourceLinks';
 export type AppTabId =
   | 'dashboard'
   | 'infrastructure'
-  | 'pmg'
   | 'workloads'
   | 'storage'
   | 'backups'
@@ -26,14 +25,12 @@ export function getActiveTabForPath(path: string): AppTabId {
   if (path.startsWith('/dashboard')) return 'dashboard';
   if (path.startsWith(INFRASTRUCTURE_PATH)) return 'infrastructure';
   if (path.startsWith(WORKLOADS_PATH)) return 'workloads';
-  if (path.startsWith('/pmg')) return 'pmg';
   if (path.startsWith('/storage')) return 'storage';
   if (path.startsWith('/ceph')) return 'storage';
   if (path.startsWith('/backups')) return 'backups';
   if (path.startsWith('/replication')) return 'backups';
   if (path.startsWith('/services')) return 'infrastructure';
   if (path.startsWith('/mail')) return 'infrastructure';
-  if (path.startsWith('/proxmox/mail-gateway')) return 'pmg';
   if (path.startsWith('/proxmox/ceph') || path.startsWith('/proxmox/storage')) return 'storage';
   if (path.startsWith('/proxmox/replication') || path.startsWith('/proxmox/backups')) return 'backups';
   if (path.startsWith('/proxmox/mail')) return 'infrastructure';
