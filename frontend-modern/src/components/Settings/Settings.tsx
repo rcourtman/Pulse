@@ -207,9 +207,6 @@ const Settings: Component<SettingsProps> = (props) => {
     disableLegacyRouteRedirectsLocked,
     savingLegacyRedirects,
     handleDisableLegacyRouteRedirectsChange,
-    showClassicPlatformShortcuts,
-    savingClassicShortcuts,
-    handleShowClassicPlatformShortcutsChange,
     reduceProUpsellNoise,
     savingReduceUpsells,
     handleReduceProUpsellNoiseChange,
@@ -405,6 +402,16 @@ const Settings: Component<SettingsProps> = (props) => {
 
   const flatTabs = createMemo(() => tabGroups().flatMap((group) => group.items));
 
+  // Which group contains the currently active tab
+  const activeGroupId = createMemo(() =>
+    tabGroups().find((g) => g.items.some((item) => item.id === activeTab()))?.id ?? null
+  );
+
+  // Tabs belonging only to the active group
+  const activeGroupTabs = createMemo(() =>
+    tabGroups().find((g) => g.id === activeGroupId())?.items ?? []
+  );
+
   createEffect(() => {
     if (!licenseLoaded()) {
       return;
@@ -552,9 +559,6 @@ const Settings: Component<SettingsProps> = (props) => {
       disableLegacyRouteRedirectsLocked,
       savingLegacyRedirects,
       handleDisableLegacyRouteRedirectsChange,
-      showClassicPlatformShortcuts,
-      savingClassicShortcuts,
-      handleShowClassicPlatformShortcutsChange,
       reduceProUpsellNoise,
       savingReduceUpsells,
       handleReduceProUpsellNoiseChange,
@@ -876,11 +880,40 @@ const Settings: Component<SettingsProps> = (props) => {
           <div class="flex-1 overflow-hidden">
             <Show when={flatTabs().length > 0}>
               <div class="lg:hidden border-b border-gray-200 dark:border-gray-700">
+                {/* Tier 1: Group selector pills */}
                 <div
-                  class="flex gap-1 px-2 py-1 w-full overflow-x-auto"
+                  class="flex gap-1 px-2 pt-2 pb-1 overflow-x-auto scrollbar-hide border-b border-gray-100 dark:border-gray-800"
                   style="-webkit-overflow-scrolling: touch;"
                 >
-                  <For each={flatTabs()}>
+                  <For each={tabGroups()}>
+                    {(group) => {
+                      const isActiveGroup = () => activeGroupId() === group.id;
+                      return (
+                        <button
+                          type="button"
+                          class={`px-3 py-1 text-[11px] font-semibold rounded-full whitespace-nowrap transition-colors ${
+                            isActiveGroup()
+                              ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+                              : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                          }`}
+                          onClick={() => {
+                            const first = group.items.find((item) => !item.disabled);
+                            if (first) handleTabSelect(first.id as SettingsTab);
+                          }}
+                        >
+                          {group.label}
+                        </button>
+                      );
+                    }}
+                  </For>
+                </div>
+
+                {/* Tier 2: Tabs within the active group, with icons */}
+                <div
+                  class="flex gap-1 px-2 py-1 overflow-x-auto scrollbar-hide"
+                  style="-webkit-overflow-scrolling: touch;"
+                >
+                  <For each={activeGroupTabs()}>
                     {(tab) => {
                       const isActive = () => activeTab() === tab.id;
                       const isHardDisabled = () => Boolean(tab.disabled);
@@ -891,18 +924,26 @@ const Settings: Component<SettingsProps> = (props) => {
                           type="button"
                           disabled={isHardDisabled()}
                           aria-disabled={disabled() ? 'true' : undefined}
-                          class={`px-3 py-2 text-xs font-medium border-b-2 transition-colors whitespace-nowrap ${disabled()
-                            ? 'opacity-60 cursor-not-allowed text-gray-400 dark:text-gray-600 border-transparent'
-                            : isActive()
-                              ? 'text-blue-600 dark:text-blue-300 border-blue-500 dark:border-blue-400'
-                              : 'text-gray-600 dark:text-gray-400 border-transparent hover:text-blue-500 dark:hover:text-blue-300 hover:border-blue-300/70 dark:hover:border-blue-500/50'
-                            }`}
+                          aria-current={isActive() ? 'page' : undefined}
+                          class={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 transition-colors whitespace-nowrap ${
+                            disabled()
+                              ? 'opacity-60 cursor-not-allowed text-gray-400 dark:text-gray-600 border-transparent'
+                              : isActive()
+                                ? 'text-blue-600 dark:text-blue-300 border-blue-500 dark:border-blue-400'
+                                : 'text-gray-600 dark:text-gray-400 border-transparent hover:text-blue-500 dark:hover:text-blue-300'
+                          }`}
                           onClick={() => {
                             if (isHardDisabled()) return;
                             handleTabSelect(tab.id as SettingsTab);
                           }}
                         >
+                          <tab.icon class="w-3.5 h-3.5" {...(tab.iconProps || {})} />
                           {tab.label}
+                          <Show when={tab.badge}>
+                            <span class="px-1 py-0.5 text-[9px] font-bold uppercase bg-gray-500 text-white rounded">
+                              {tab.badge}
+                            </span>
+                          </Show>
                         </button>
                       );
                     }}
