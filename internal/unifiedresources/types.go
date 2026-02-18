@@ -409,12 +409,12 @@ type DockerData struct {
 	UpdateStatus   *DockerUpdateStatusMeta `json:"updateStatus,omitempty"`
 
 	// Service-specific fields (populated when Resource.Type == ResourceTypeDockerService)
-	ServiceID      string                 `json:"serviceId,omitempty"`
-	Stack          string                 `json:"stack,omitempty"`
-	Mode           string                 `json:"mode,omitempty"`
-	DesiredTasks   int                    `json:"desiredTasks,omitempty"`
-	RunningTasks   int                    `json:"runningTasks,omitempty"`
-	CompletedTasks int                    `json:"completedTasks,omitempty"`
+	ServiceID      string                   `json:"serviceId,omitempty"`
+	Stack          string                   `json:"stack,omitempty"`
+	Mode           string                   `json:"mode,omitempty"`
+	DesiredTasks   int                      `json:"desiredTasks,omitempty"`
+	RunningTasks   int                      `json:"runningTasks,omitempty"`
+	CompletedTasks int                      `json:"completedTasks,omitempty"`
 	ServiceUpdate  *DockerServiceUpdateMeta `json:"serviceUpdate,omitempty"`
 	EndpointPorts  []DockerServicePortMeta  `json:"endpointPorts,omitempty"`
 
@@ -538,10 +538,10 @@ type PMGData struct {
 	ConnectionHealth string    `json:"connectionHealth,omitempty"`
 	LastUpdated      time.Time `json:"lastUpdated,omitempty"`
 
-	Nodes            []PMGNodeMeta       `json:"nodes,omitempty"`
-	MailStats        *PMGMailStatsMeta   `json:"mailStats,omitempty"`
-	Quarantine       *PMGQuarantineMeta  `json:"quarantine,omitempty"`
-	SpamDistribution []PMGSpamBucketMeta `json:"spamDistribution,omitempty"`
+	Nodes            []PMGNodeMeta        `json:"nodes,omitempty"`
+	MailStats        *PMGMailStatsMeta    `json:"mailStats,omitempty"`
+	Quarantine       *PMGQuarantineMeta   `json:"quarantine,omitempty"`
+	SpamDistribution []PMGSpamBucketMeta  `json:"spamDistribution,omitempty"`
 	RelayDomains     []PMGRelayDomainMeta `json:"relayDomains,omitempty"`
 	DomainStats      []PMGDomainStatMeta  `json:"domainStats,omitempty"`
 	DomainStatsAsOf  time.Time            `json:"domainStatsAsOf,omitempty"`

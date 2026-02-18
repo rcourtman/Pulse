@@ -497,6 +497,119 @@ func TestResourceListFiltersKubernetesNamespace(t *testing.T) {
 	}
 }
 
+func TestK8sNamespacesEndpointAggregatesPodsAndDeployments(t *testing.T) {
+	now := time.Now().UTC()
+	snapshot := models.StateSnapshot{
+		KubernetesClusters: []models.KubernetesCluster{
+			{
+				ID:       "cluster-1",
+				AgentID:  "agent-1",
+				Name:     "prod-k8s",
+				Context:  "prod",
+				Status:   "online",
+				LastSeen: now,
+				Version:  "1.31.2",
+				Hidden:   false,
+				Pods: []models.KubernetesPod{
+					{UID: "pod-1", Name: "api-1", Namespace: "default", Phase: "Running"},
+					{UID: "pod-2", Name: "api-2", Namespace: "default", Phase: "Pending"},
+					{UID: "pod-3", Name: "dns-1", Namespace: "kube-system", Phase: "Running"},
+				},
+				Deployments: []models.KubernetesDeployment{
+					{UID: "dep-1", Name: "web", Namespace: "default", DesiredReplicas: 3, ReadyReplicas: 3, AvailableReplicas: 3},
+					{UID: "dep-2", Name: "dns", Namespace: "kube-system", DesiredReplicas: 2, ReadyReplicas: 1, AvailableReplicas: 1},
+				},
+			},
+		},
+	}
+
+	cfg := &config.Config{DataPath: t.TempDir()}
+	h := NewResourceHandlers(cfg)
+	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/resources/k8s/namespaces?cluster=prod-k8s", nil)
+	h.HandleK8sNamespaces(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	var resp struct {
+		Cluster string `json:"cluster"`
+		Data    []struct {
+			Namespace string `json:"namespace"`
+			Pods      struct {
+				Total   int `json:"total"`
+				Online  int `json:"online"`
+				Warning int `json:"warning"`
+				Offline int `json:"offline"`
+				Unknown int `json:"unknown"`
+			} `json:"pods"`
+			Deployments struct {
+				Total   int `json:"total"`
+				Online  int `json:"online"`
+				Warning int `json:"warning"`
+				Offline int `json:"offline"`
+				Unknown int `json:"unknown"`
+			} `json:"deployments"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.Cluster != "prod-k8s" {
+		t.Fatalf("cluster = %q, want prod-k8s", resp.Cluster)
+	}
+
+	byNS := make(map[string]struct {
+		Namespace string `json:"namespace"`
+		Pods      struct {
+			Total   int `json:"total"`
+			Online  int `json:"online"`
+			Warning int `json:"warning"`
+			Offline int `json:"offline"`
+			Unknown int `json:"unknown"`
+		} `json:"pods"`
+		Deployments struct {
+			Total   int `json:"total"`
+			Online  int `json:"online"`
+			Warning int `json:"warning"`
+			Offline int `json:"offline"`
+			Unknown int `json:"unknown"`
+		} `json:"deployments"`
+	})
+	for _, row := range resp.Data {
+		byNS[row.Namespace] = row
+	}
+	if len(byNS) != 2 {
+		t.Fatalf("expected 2 namespaces, got %d (%+v)", len(byNS), resp.Data)
+	}
+
+	// default: 2 pods (one running=online, one pending=warning), 1 deployment (ready=online)
+	defaultRow, ok := byNS["default"]
+	if !ok {
+		t.Fatalf("expected default namespace row")
+	}
+	if defaultRow.Pods.Total != 2 || defaultRow.Pods.Online != 1 || defaultRow.Pods.Warning != 1 {
+		t.Fatalf("default pods = %+v, want total=2 online=1 warning=1", defaultRow.Pods)
+	}
+	if defaultRow.Deployments.Total != 1 || defaultRow.Deployments.Online != 1 {
+		t.Fatalf("default deployments = %+v, want total=1 online=1", defaultRow.Deployments)
+	}
+
+	kubeSystemRow, ok := byNS["kube-system"]
+	if !ok {
+		t.Fatalf("expected kube-system namespace row")
+	}
+	if kubeSystemRow.Pods.Total != 1 || kubeSystemRow.Pods.Online != 1 {
+		t.Fatalf("kube-system pods = %+v, want total=1 online=1", kubeSystemRow.Pods)
+	}
+	if kubeSystemRow.Deployments.Total != 1 || kubeSystemRow.Deployments.Warning != 1 {
+		t.Fatalf("kube-system deployments = %+v, want total=1 warning=1", kubeSystemRow.Deployments)
+	}
+}
+
 func TestResourceTypeAliasKubernetesIncludesKubernetesResources(t *testing.T) {
 	now := time.Now().UTC()
 	snapshot := models.StateSnapshot{
@@ -566,16 +679,16 @@ func TestResourceListIncludesDockerSwarmServicesAndFiltersByCluster(t *testing.T
 
 	// Two Swarm nodes reporting the same service; unified ingest should de-dupe services per swarm cluster.
 	host1 := models.DockerHost{
-		ID:              "docker-1",
-		AgentID:         "agent-1",
-		Hostname:        "swarm-1",
-		DisplayName:     "swarm-1",
-		Status:          "online",
-		CPUs:            4,
+		ID:               "docker-1",
+		AgentID:          "agent-1",
+		Hostname:         "swarm-1",
+		DisplayName:      "swarm-1",
+		Status:           "online",
+		CPUs:             4,
 		TotalMemoryBytes: 8 * 1024 * 1024 * 1024,
-		Memory:          models.Memory{Total: 8 * 1024 * 1024 * 1024, Used: 2 * 1024 * 1024 * 1024, Free: 6 * 1024 * 1024 * 1024, Usage: 0.25},
-		LastSeen:        now,
-		IntervalSeconds: 5,
+		Memory:           models.Memory{Total: 8 * 1024 * 1024 * 1024, Used: 2 * 1024 * 1024 * 1024, Free: 6 * 1024 * 1024 * 1024, Usage: 0.25},
+		LastSeen:         now,
+		IntervalSeconds:  5,
 		Swarm: &models.DockerSwarmInfo{
 			ClusterID:   "cluster-1",
 			ClusterName: "prod-swarm",
@@ -585,16 +698,16 @@ func TestResourceListIncludesDockerSwarmServicesAndFiltersByCluster(t *testing.T
 		Services: []models.DockerService{service},
 	}
 	host2 := models.DockerHost{
-		ID:              "docker-2",
-		AgentID:         "agent-2",
-		Hostname:        "swarm-2",
-		DisplayName:     "swarm-2",
-		Status:          "online",
-		CPUs:            4,
+		ID:               "docker-2",
+		AgentID:          "agent-2",
+		Hostname:         "swarm-2",
+		DisplayName:      "swarm-2",
+		Status:           "online",
+		CPUs:             4,
 		TotalMemoryBytes: 8 * 1024 * 1024 * 1024,
-		Memory:          models.Memory{Total: 8 * 1024 * 1024 * 1024, Used: 1 * 1024 * 1024 * 1024, Free: 7 * 1024 * 1024 * 1024, Usage: 0.125},
-		LastSeen:        now,
-		IntervalSeconds: 5,
+		Memory:           models.Memory{Total: 8 * 1024 * 1024 * 1024, Used: 1 * 1024 * 1024 * 1024, Free: 7 * 1024 * 1024 * 1024, Usage: 0.125},
+		LastSeen:         now,
+		IntervalSeconds:  5,
 		Swarm: &models.DockerSwarmInfo{
 			ClusterID:   "cluster-1",
 			ClusterName: "prod-swarm",

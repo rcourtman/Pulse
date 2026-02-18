@@ -350,6 +350,7 @@ var allRouteAllowlist = []string{
 	"/api/recovery/facets",
 	"/api/recovery/rollups",
 	"/api/resources",
+	"/api/resources/k8s/namespaces",
 	"/api/resources/stats",
 	"/api/resources/",
 	"/api/v2/resources",

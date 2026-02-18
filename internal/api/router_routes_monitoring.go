@@ -45,6 +45,7 @@ func (r *Router) registerMonitoringResourceRoutes(
 	// Unified resources API
 	r.mux.HandleFunc("/api/resources", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.resourceHandlers.HandleListResources)))
 	r.mux.HandleFunc("/api/resources/stats", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.resourceHandlers.HandleStats)))
+	r.mux.HandleFunc("/api/resources/k8s/namespaces", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.resourceHandlers.HandleK8sNamespaces)))
 	r.mux.HandleFunc("/api/resources/", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.resourceHandlers.HandleResourceRoutes)))
 	// Deprecated v2 alias for unified resources (temporary compatibility shim).
 	r.mux.HandleFunc("/api/v2/resources", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, deprecatedV2ResourceHandler(r.resourceHandlers.HandleListResources))))
