@@ -344,12 +344,12 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
   const tdClass = 'px-1.5 sm:px-2 py-1 align-middle';
   const resourceColumnStyle = createMemo(() =>
     isMobile()
-      ? { width: '110px', 'min-width': '110px', 'max-width': '150px' }
+      ? { 'min-width': '120px' }
       : { 'min-width': '220px' }
   );
   const metricColumnStyle = createMemo(() =>
     isMobile()
-      ? { width: '70px', 'min-width': '70px', 'max-width': '90px' }
+      ? { width: '80px', 'min-width': '80px' }
       : { 'min-width': '140px', 'max-width': '180px' }
   );
   const ioColumnStyle = createMemo(() =>
@@ -414,7 +414,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
 	        class="overflow-x-auto"
 	        style={{ '-webkit-overflow-scrolling': 'touch' }}
 	      >
-	        <table class="w-full border-collapse whitespace-nowrap" style={{ 'table-layout': 'fixed', 'min-width': isMobile() ? undefined : '600px' }}>
+	        <table class="w-full border-collapse whitespace-nowrap" style={{ 'table-layout': 'fixed', 'min-width': isMobile() ? '420px' : '600px' }}>
 	          <thead>
 	            <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
 	              <th class={`${thClassBase} text-left pl-2 sm:pl-3`} style={resourceColumnStyle()} onClick={() => handleSort('name')}>
@@ -426,7 +426,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
 	              <th class={thClass} style={metricColumnStyle()} onClick={() => handleSort('memory')}>
 	                Memory {renderSortIndicator('memory')}
 	              </th>
-	              <th class={thClass} classList={{ hidden: !isVisible('primary') }} style={metricColumnStyle()} onClick={() => handleSort('disk')}>
+	              <th class={thClass} style={metricColumnStyle()} onClick={() => handleSort('disk')}>
 	                Disk {renderSortIndicator('disk')}
 	              </th>
 	              <th class={thClass} classList={{ hidden: !isVisible('secondary') }} style={ioColumnStyle()} onClick={() => handleSort('network')}>
@@ -639,7 +639,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
 	                        </Show>
 	                      </td>
 	
-	                      <td class={tdClass} classList={{ hidden: !isVisible('primary') }}>
+	                      <td class={tdClass}>
 	                        <Show when={diskPercentValue() !== null} fallback={<div class="flex justify-center"><span class="text-xs text-gray-400">—</span></div>}>
 	                          <ResponsiveMetricCell
 	                            class="w-full"
@@ -805,7 +805,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
 	              PBS Services
 	            </div>
 	            <div class="overflow-x-auto" style={{ '-webkit-overflow-scrolling': 'touch' }}>
-	              <table class="w-full border-collapse whitespace-nowrap" style={{ 'table-layout': 'fixed', 'min-width': isMobile() ? undefined : '500px' }}>
+	              <table class="w-full border-collapse whitespace-nowrap" style={{ 'table-layout': 'fixed', 'min-width': isMobile() ? '420px' : '500px' }}>
 	                <thead>
 	                  <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
 	                    <th class={`${staticThClass} text-left pl-2 sm:pl-3`} style={resourceColumnStyle()}>
@@ -1022,7 +1022,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
 	              PMG Services
 	            </div>
 	            <div class="overflow-x-auto" style={{ '-webkit-overflow-scrolling': 'touch' }}>
-	              <table class="w-full border-collapse whitespace-nowrap" style={{ 'table-layout': 'fixed', 'min-width': '550px' }}>
+	              <table class="w-full border-collapse whitespace-nowrap" style={{ 'table-layout': 'fixed', 'min-width': isMobile() ? '420px' : '500px' }}>
 	                <thead>
 	                  <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
 	                    <th class={`${staticThClass} text-left pl-2 sm:pl-3`} style={resourceColumnStyle()}>
