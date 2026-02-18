@@ -401,9 +401,19 @@ func (s *KnowledgeStore) saveToDisk() {
 	path := filepath.Join(s.dataDir, "knowledge_store.json")
 	// Use atomic write (temp file + rename) to prevent corruption from concurrent saves.
 	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0644); err != nil {
+	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	if err != nil {
 		return
 	}
+	if _, err := f.Write(data); err != nil {
+		f.Close()
+		return
+	}
+	if err := f.Sync(); err != nil {
+		f.Close()
+		return
+	}
+	f.Close()
 	_ = os.Rename(tmp, path)
 }
 
