@@ -271,7 +271,7 @@ const mapResourceStorageRecord = (resource: Resource, adapterId: string): Storag
         ? resource.lastSeen
         : Date.now(),
     refs: {
-      resourceId: resource.id,
+      resourceId: resource.metricsTarget?.resourceId || resource.id,
       platformEntityId: resource.platformId,
     },
     details: {

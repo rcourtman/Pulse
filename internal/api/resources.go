@@ -36,6 +36,16 @@ type SupplementalRecordsProvider interface {
 	GetCurrentRecords() []unified.IngestRecord
 }
 
+// TenantSupplementalRecordsProvider is an optional interface for providers that can scope
+// supplemental records to a specific organization. This prevents cross-tenant leakage when
+// Pulse runs in multi-tenant mode.
+//
+// Providers that do not implement this interface will be treated as "global"/legacy and
+// their records will be ingested into every tenant registry.
+type TenantSupplementalRecordsProvider interface {
+	GetCurrentRecordsForOrg(orgID string) []unified.IngestRecord
+}
+
 // NewResourceHandlers creates a new ResourceHandlers.
 func NewResourceHandlers(cfg *config.Config) *ResourceHandlers {
 	return &ResourceHandlers{
@@ -519,7 +529,12 @@ func (h *ResourceHandlers) buildRegistry(orgID string) (*unified.ResourceRegistr
 		if provider == nil {
 			continue
 		}
-		records := provider.GetCurrentRecords()
+		var records []unified.IngestRecord
+		if tenantProvider, ok := any(provider).(TenantSupplementalRecordsProvider); ok {
+			records = tenantProvider.GetCurrentRecordsForOrg(orgID)
+		} else {
+			records = provider.GetCurrentRecords()
+		}
 		if len(records) == 0 {
 			continue
 		}
@@ -900,6 +915,9 @@ func buildMetricsTarget(resource unified.Resource, registry *unified.ResourceReg
 		}
 	case unified.ResourceTypeStorage, unified.ResourceTypeCeph:
 		if st, ok := bySource[unified.SourceProxmox]; ok {
+			return &unified.MetricsTarget{ResourceType: "storage", ResourceID: st.SourceID}
+		}
+		if st, ok := bySource[unified.SourceTrueNAS]; ok {
 			return &unified.MetricsTarget{ResourceType: "storage", ResourceID: st.SourceID}
 		}
 	case unified.ResourceTypePhysicalDisk:

@@ -47,6 +47,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	recoverymanager "github.com/rcourtman/pulse-go-rewrite/internal/recovery/manager"
 	"github.com/rcourtman/pulse-go-rewrite/internal/relay"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
@@ -85,6 +86,7 @@ type Router struct {
 	reportingHandlers         *ReportingHandlers
 	configProfileHandler      *ConfigProfileHandler
 	licenseHandlers           *LicenseHandlers
+	recoveryHandlers          *RecoveryHandlers
 	rbacProvider              *TenantRBACProvider
 	logHandlers               *LogHandlers
 	agentExecServer           *agentexec.Server
@@ -298,12 +300,21 @@ func (r *Router) setupRoutes() {
 		getConfig:      r.configHandlers.getConfig,
 		getMonitor:     r.configHandlers.getMonitor,
 	}
-	r.trueNASPoller = monitoring.NewTrueNASPoller(r.resourceRegistry, r.persistence, 0)
+	recoveryManager := recoverymanager.New(r.multiTenant)
+	r.recoveryHandlers = NewRecoveryHandlers(recoveryManager)
+	if r.mtMonitor != nil {
+		r.mtMonitor.SetRecoveryManager(recoveryManager)
+	}
+	if r.monitor != nil {
+		r.monitor.SetRecoveryManager(recoveryManager)
+	}
+	r.trueNASPoller = monitoring.NewTrueNASPoller(r.resourceRegistry, r.multiTenant, 0, recoveryManager)
 	r.trueNASPoller.Start(r.lifecycleCtx)
 	updateHandlers := NewUpdateHandlersWithContext(r.updateManager, r.updateHistory, r.lifecycleCtx)
 	r.dockerAgentHandlers = NewDockerAgentHandlers(r.mtMonitor, r.monitor, r.wsHub, r.config)
 	r.kubernetesAgentHandlers = NewKubernetesAgentHandlers(r.mtMonitor, r.monitor, r.wsHub)
 	r.hostAgentHandlers = NewHostAgentHandlers(r.mtMonitor, r.monitor, r.wsHub)
+	r.kubernetesAgentHandlers.SetRecoveryIngestor(r.recoveryHandlers)
 	r.resourceHandlers = NewResourceHandlers(r.config)
 	if mock.IsMockEnabled() {
 		truenas.SetFeatureEnabled(true)
@@ -319,7 +330,7 @@ func (r *Router) setupRoutes() {
 	orgHandlers := NewOrgHandlers(r.multiTenant, r.mtMonitor, rbacProvider)
 	// Wire license service provider so middleware can access per-tenant license services
 	SetLicenseServiceProvider(r.licenseHandlers)
-	r.reportingHandlers = NewReportingHandlers(r.mtMonitor, r.resourceRegistry)
+	r.reportingHandlers = NewReportingHandlers(r.mtMonitor, r.resourceRegistry, recoveryManager)
 	r.logHandlers = NewLogHandlers(r.config, r.persistence)
 	rbacHandlers := NewRBACHandlers(r.config, rbacProvider)
 	var magicLinkService *MagicLinkService
@@ -422,6 +433,7 @@ func (r *Router) setupRoutes() {
 	// AI chat handler
 	r.aiHandler = NewAIHandler(r.multiTenant, r.mtMonitor, r.agentExecServer)
 	r.aiHandler.SetReadState(r.resourceRegistry)
+	r.aiHandler.SetRecoveryManager(recoveryManager)
 
 	// AI-powered infrastructure discovery handlers
 	// Note: The actual service is wired up later via SetDiscoveryService
@@ -6332,7 +6344,10 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		queryMetric = "usage"
 	}
 
-	fallbackAllowed := duration <= 24*time.Hour
+	// Allow in-memory fallback for any requested range when the persistent store is empty.
+	// The in-memory history enforces its own retention limits, so it will naturally return
+	// whatever data is available (better than showing "Collecting data..." indefinitely).
+	fallbackAllowed := true
 	historyMaxPoints := parseWorkloadMaxPoints(query.Get("maxPoints"))
 	buildHistoryPoints := func(points []monitoring.MetricPoint, bucketSecs int64) []map[string]interface{} {
 		if len(points) == 0 {
@@ -7043,124 +7058,6 @@ func (r *Router) handleConfig(w http.ResponseWriter, req *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(config)
-}
-
-// handleBackups handles backup requests
-func (r *Router) handleBackups(w http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// Get tenant-specific monitor and current state
-	monitor := r.getTenantMonitor(req.Context())
-	state := monitor.GetState()
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(struct {
-		Backups     models.Backups         `json:"backups"`
-		PVEBackups  models.PVEBackups      `json:"pveBackups"`
-		PBSBackups  []models.PBSBackup     `json:"pbsBackups"`
-		PMGBackups  []models.PMGBackup     `json:"pmgBackups"`
-		BackupTasks []models.BackupTask    `json:"backupTasks"`
-		Storage     []models.StorageBackup `json:"storageBackups"`
-		GuestSnaps  []models.GuestSnapshot `json:"guestSnapshots"`
-	}{
-		Backups:     state.Backups,
-		PVEBackups:  state.PVEBackups,
-		PBSBackups:  state.PBSBackups,
-		PMGBackups:  state.PMGBackups,
-		BackupTasks: state.PVEBackups.BackupTasks,
-		Storage:     state.PVEBackups.StorageBackups,
-		GuestSnaps:  state.PVEBackups.GuestSnapshots,
-	})
-}
-
-// handleBackupsPVE handles PVE backup requests
-func (r *Router) handleBackupsPVE(w http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// Get tenant-specific monitor and state, then extract PVE backups
-	monitor := r.getTenantMonitor(req.Context())
-	state := monitor.GetState()
-
-	// Return PVE backup data in expected format
-	backups := state.PVEBackups.StorageBackups
-	if backups == nil {
-		backups = []models.StorageBackup{}
-	}
-
-	pveBackups := map[string]interface{}{
-		"backups": backups,
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(pveBackups); err != nil {
-		log.Error().Err(err).Msg("Failed to encode PVE backups response")
-		// Return empty array as fallback
-		w.Write([]byte(`{"backups":[]}`))
-	}
-}
-
-// handleBackupsPBS handles PBS backup requests
-func (r *Router) handleBackupsPBS(w http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// Get tenant-specific monitor and state, then extract PBS backups
-	monitor := r.getTenantMonitor(req.Context())
-	state := monitor.GetState()
-
-	// Return PBS backup data in expected format
-	instances := state.PBSInstances
-	if instances == nil {
-		instances = []models.PBSInstance{}
-	}
-
-	pbsData := map[string]interface{}{
-		"instances": instances,
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(pbsData); err != nil {
-		log.Error().Err(err).Msg("Failed to encode PBS response")
-		// Return empty array as fallback
-		w.Write([]byte(`{"instances":[]}`))
-	}
-}
-
-// handleSnapshots handles snapshot requests
-func (r *Router) handleSnapshots(w http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// Get tenant-specific monitor and state, then extract guest snapshots
-	monitor := r.getTenantMonitor(req.Context())
-	state := monitor.GetState()
-
-	// Return snapshot data
-	snaps := state.PVEBackups.GuestSnapshots
-	if snaps == nil {
-		snaps = []models.GuestSnapshot{}
-	}
-
-	snapshots := map[string]interface{}{
-		"snapshots": snaps,
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(snapshots); err != nil {
-		log.Error().Err(err).Msg("Failed to encode snapshots response")
-		// Return empty array as fallback
-		w.Write([]byte(`{"snapshots":[]}`))
-	}
 }
 
 // handleWebSocket handles WebSocket connections
@@ -8224,6 +8121,14 @@ type trueNASRecordsAdapter struct {
 }
 
 func (a trueNASRecordsAdapter) GetCurrentRecords() []unifiedresources.IngestRecord {
+	// Legacy behavior: treat this mock adapter as default-org scoped.
+	return a.GetCurrentRecordsForOrg("default")
+}
+
+func (a trueNASRecordsAdapter) GetCurrentRecordsForOrg(orgID string) []unifiedresources.IngestRecord {
+	if strings.TrimSpace(orgID) != "" && strings.TrimSpace(orgID) != "default" {
+		return nil
+	}
 	if a.provider == nil {
 		return nil
 	}
