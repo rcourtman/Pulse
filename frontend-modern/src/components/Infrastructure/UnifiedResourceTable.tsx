@@ -344,7 +344,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
   const tdClass = 'px-1.5 sm:px-2 py-1 align-middle';
   const resourceColumnStyle = createMemo(() =>
     isMobile()
-      ? { 'min-width': '120px' }
+      ? { width: '140px', 'min-width': '120px' }
       : { 'min-width': '220px' }
   );
   const metricColumnStyle = createMemo(() =>
@@ -414,7 +414,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
 	        class="overflow-x-auto"
 	        style={{ '-webkit-overflow-scrolling': 'touch' }}
 	      >
-	        <table class="w-full border-collapse whitespace-nowrap" style={{ 'table-layout': 'fixed', 'min-width': isMobile() ? '420px' : '600px' }}>
+	        <table class="w-full border-collapse whitespace-nowrap" style={{ 'table-layout': 'fixed', 'min-width': isMobile() ? '820px' : '600px' }}>
 	          <thead>
 	            <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
 	              <th class={`${thClassBase} text-left pl-2 sm:pl-3`} style={resourceColumnStyle()} onClick={() => handleSort('name')}>
@@ -429,19 +429,19 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
 	              <th class={thClass} style={metricColumnStyle()} onClick={() => handleSort('disk')}>
 	                Disk {renderSortIndicator('disk')}
 	              </th>
-	              <th class={thClass} classList={{ hidden: !isVisible('secondary') }} style={ioColumnStyle()} onClick={() => handleSort('network')}>
+	              <th class={thClass} classList={{ hidden: !isVisible('secondary') && !isMobile() }} style={ioColumnStyle()} onClick={() => handleSort('network')}>
 	                Net I/O {renderSortIndicator('network')}
 	              </th>
-	              <th class={thClass} classList={{ hidden: !isVisible('supplementary') }} style={ioColumnStyle()} onClick={() => handleSort('diskio')}>
+	              <th class={thClass} classList={{ hidden: !isVisible('supplementary') && !isMobile() }} style={ioColumnStyle()} onClick={() => handleSort('diskio')}>
 	                Disk I/O {renderSortIndicator('diskio')}
 	              </th>
-	              <th class={thClass} classList={{ hidden: !isVisible('secondary') }} style={sourceColumnStyle()} onClick={() => handleSort('source')}>
+	              <th class={thClass} classList={{ hidden: !isVisible('secondary') && !isMobile() }} style={sourceColumnStyle()} onClick={() => handleSort('source')}>
 	                Source {renderSortIndicator('source')}
 	              </th>
-	              <th class={thClass} classList={{ hidden: !isVisible('supplementary') }} style={uptimeColumnStyle()} onClick={() => handleSort('uptime')}>
+	              <th class={thClass} classList={{ hidden: !isVisible('supplementary') && !isMobile() }} style={uptimeColumnStyle()} onClick={() => handleSort('uptime')}>
 	                Uptime {renderSortIndicator('uptime')}
 	              </th>
-	              <th class={thClass} classList={{ hidden: !isVisible('supplementary') }} style={tempColumnStyle()} onClick={() => handleSort('temp')}>
+	              <th class={thClass} classList={{ hidden: !isVisible('supplementary') && !isMobile() }} style={tempColumnStyle()} onClick={() => handleSort('temp')}>
 	                Temp {renderSortIndicator('temp')}
 	              </th>
 	            </tr>
@@ -653,7 +653,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
 	                        </Show>
 	                      </td>
 	
-	                      <td class={tdClass} classList={{ hidden: !isVisible('secondary') }}>
+	                      <td class={tdClass} classList={{ hidden: !isVisible('secondary') && !isMobile() }}>
 	                        <Show when={resource.network} fallback={<div class="text-center"><span class="text-xs text-gray-400">—</span></div>}>
 	                          <div class="grid w-full grid-cols-[0.75rem_minmax(0,1fr)_0.75rem_minmax(0,1fr)] items-center gap-x-1 text-[11px] tabular-nums">
 	                            <span class="inline-flex w-3 justify-center text-emerald-500">↓</span>
@@ -674,7 +674,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
 	                        </Show>
 	                      </td>
 	
-	                      <td class={tdClass} classList={{ hidden: !isVisible('supplementary') }}>
+	                      <td class={tdClass} classList={{ hidden: !isVisible('supplementary') && !isMobile() }}>
 	                        <Show when={resource.diskIO} fallback={<div class="text-center"><span class="text-xs text-gray-400">—</span></div>}>
 	                          <div class="grid w-full grid-cols-[0.75rem_minmax(0,1fr)_0.75rem_minmax(0,1fr)] items-center gap-x-1 text-[11px] tabular-nums">
 	                            <span class="inline-flex w-3 justify-center font-mono text-blue-500">R</span>
@@ -695,7 +695,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
 	                        </Show>
 	                      </td>
 	
-	                      <td class={tdClass} classList={{ hidden: !isVisible('secondary') }}>
+	                      <td class={tdClass} classList={{ hidden: !isVisible('secondary') && !isMobile() }}>
 	                        <div class="flex flex-wrap items-center justify-center gap-1">
 	                          <Show
 	                            when={hasUnifiedSources()}
@@ -743,7 +743,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
 	                        </div>
 	                      </td>
 	
-	                      <td class={tdClass} classList={{ hidden: !isVisible('supplementary') }}>
+	                      <td class={tdClass} classList={{ hidden: !isVisible('supplementary') && !isMobile() }}>
 	                        <div class="flex justify-center">
 	                          <Show when={resource.uptime} fallback={<span class="text-xs text-gray-400">—</span>}>
 	                            <span class="text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
@@ -753,7 +753,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
 	                        </div>
 	                      </td>
 	
-	                      <td class={tdClass} classList={{ hidden: !isVisible('supplementary') }}>
+	                      <td class={tdClass} classList={{ hidden: !isVisible('supplementary') && !isMobile() }}>
 	                        <div class="flex justify-center">
 	                          <Show when={resource.temperature != null} fallback={<span class="text-xs text-gray-400">—</span>}>
 	                            <span
@@ -805,25 +805,25 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
 	              PBS Services
 	            </div>
 	            <div class="overflow-x-auto" style={{ '-webkit-overflow-scrolling': 'touch' }}>
-	              <table class="w-full border-collapse whitespace-nowrap" style={{ 'table-layout': 'fixed', 'min-width': isMobile() ? '420px' : '500px' }}>
+	              <table class="w-full border-collapse whitespace-nowrap" style={{ 'table-layout': 'fixed', 'min-width': isMobile() ? '660px' : '500px' }}>
 	                <thead>
 	                  <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
 	                    <th class={`${staticThClass} text-left pl-2 sm:pl-3`} style={resourceColumnStyle()}>
 	                      Resource
 	                    </th>
-	                    <th class={staticThClass} classList={{ hidden: !isVisible('primary') }} style={serviceCountColumnStyle()}>
+	                    <th class={staticThClass} classList={{ hidden: !isVisible('primary') && !isMobile() }} style={serviceCountColumnStyle()}>
 	                      Datastores
 	                    </th>
-	                    <th class={staticThClass} classList={{ hidden: !isVisible('secondary') }} style={serviceCountColumnStyle()}>
+	                    <th class={staticThClass} classList={{ hidden: !isVisible('secondary') && !isMobile() }} style={serviceCountColumnStyle()}>
 	                      Jobs
 	                    </th>
 	                    <th class={staticThClass} style={serviceHealthColumnStyle()}>
 	                      Health
 	                    </th>
-	                    <th class={staticThClass} classList={{ hidden: !isVisible('secondary') }} style={sourceColumnStyle()}>
+	                    <th class={staticThClass} classList={{ hidden: !isVisible('secondary') && !isMobile() }} style={sourceColumnStyle()}>
 	                      Source
 	                    </th>
-	                    <th class={staticThClass} classList={{ hidden: !isVisible('supplementary') }} style={uptimeColumnStyle()}>
+	                    <th class={staticThClass} classList={{ hidden: !isVisible('supplementary') && !isMobile() }} style={uptimeColumnStyle()}>
 	                      Uptime
 	                    </th>
 	                    <th class={staticThClass} style={serviceActionColumnStyle()}>
@@ -915,7 +915,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                               </div>
                             </td>
 
-	                            <td class={tdClass} classList={{ hidden: !isVisible('primary') }}>
+	                            <td class={tdClass} classList={{ hidden: !isVisible('primary') && !isMobile() }}>
 	                              <div class="flex justify-center">
 	                                <Show when={pbsRow()?.datastores != null} fallback={<span class="text-xs text-gray-400">—</span>}>
 	                                  <span class="text-xs text-gray-700 dark:text-gray-300">{pbsRow()!.datastores}</span>
@@ -923,7 +923,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                               </div>
                             </td>
 
-	                            <td class={tdClass} classList={{ hidden: !isVisible('secondary') }}>
+	                            <td class={tdClass} classList={{ hidden: !isVisible('secondary') && !isMobile() }}>
 	                              <div class="flex justify-center">
 	                                <Show when={pbsRow()?.jobs != null} fallback={<span class="text-xs text-gray-400">—</span>}>
 	                                  <span class="text-xs text-gray-700 dark:text-gray-300">{pbsRow()!.jobs}</span>
@@ -939,7 +939,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                               </div>
 	                            </td>
 	
-	                            <td class={tdClass} classList={{ hidden: !isVisible('secondary') }}>
+	                            <td class={tdClass} classList={{ hidden: !isVisible('secondary') && !isMobile() }}>
 	                              <div class="flex flex-wrap items-center justify-center gap-1">
 	                                <Show
 	                                  when={hasUnifiedSources()}
@@ -973,7 +973,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
 	                              </div>
 	                            </td>
 	
-	                            <td class={tdClass} classList={{ hidden: !isVisible('supplementary') }}>
+	                            <td class={tdClass} classList={{ hidden: !isVisible('supplementary') && !isMobile() }}>
 	                              <div class="flex justify-center">
 	                                <Show when={resource.uptime} fallback={<span class="text-xs text-gray-400">—</span>}>
 	                                  <span class="text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
@@ -1022,31 +1022,31 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
 	              PMG Services
 	            </div>
 	            <div class="overflow-x-auto" style={{ '-webkit-overflow-scrolling': 'touch' }}>
-	              <table class="w-full border-collapse whitespace-nowrap" style={{ 'table-layout': 'fixed', 'min-width': isMobile() ? '420px' : '500px' }}>
+	              <table class="w-full border-collapse whitespace-nowrap" style={{ 'table-layout': 'fixed', 'min-width': isMobile() ? '840px' : '500px' }}>
 	                <thead>
 	                  <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
 	                    <th class={`${staticThClass} text-left pl-2 sm:pl-3`} style={resourceColumnStyle()}>
 	                      Resource
 	                    </th>
-	                    <th class={staticThClass} classList={{ hidden: !isVisible('primary') }} style={serviceQueueColumnStyle()}>
+	                    <th class={staticThClass} classList={{ hidden: !isVisible('primary') && !isMobile() }} style={serviceQueueColumnStyle()}>
 	                      Queue
 	                    </th>
-	                    <th class={staticThClass} classList={{ hidden: !isVisible('secondary') }} style={serviceQueueColumnStyle()}>
+	                    <th class={staticThClass} classList={{ hidden: !isVisible('secondary') && !isMobile() }} style={serviceQueueColumnStyle()}>
 	                      Deferred
 	                    </th>
-	                    <th class={staticThClass} classList={{ hidden: !isVisible('supplementary') }} style={serviceQueueColumnStyle()}>
+	                    <th class={staticThClass} classList={{ hidden: !isVisible('supplementary') && !isMobile() }} style={serviceQueueColumnStyle()}>
 	                      Hold
 	                    </th>
-	                    <th class={staticThClass} classList={{ hidden: !isVisible('secondary') }} style={serviceCountColumnStyle()}>
+	                    <th class={staticThClass} classList={{ hidden: !isVisible('secondary') && !isMobile() }} style={serviceCountColumnStyle()}>
 	                      Nodes
 	                    </th>
 	                    <th class={staticThClass} style={serviceHealthColumnStyle()}>
 	                      Health
 	                    </th>
-	                    <th class={staticThClass} classList={{ hidden: !isVisible('secondary') }} style={sourceColumnStyle()}>
+	                    <th class={staticThClass} classList={{ hidden: !isVisible('secondary') && !isMobile() }} style={sourceColumnStyle()}>
 	                      Source
 	                    </th>
-	                    <th class={staticThClass} classList={{ hidden: !isVisible('supplementary') }} style={uptimeColumnStyle()}>
+	                    <th class={staticThClass} classList={{ hidden: !isVisible('supplementary') && !isMobile() }} style={uptimeColumnStyle()}>
 	                      Uptime
 	                    </th>
 	                    <th class={staticThClass} style={serviceActionColumnStyle()}>
@@ -1143,7 +1143,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                               </div>
                             </td>
 
-	                            <td class={tdClass} classList={{ hidden: !isVisible('primary') }}>
+	                            <td class={tdClass} classList={{ hidden: !isVisible('primary') && !isMobile() }}>
 	                              <div class="flex justify-center">
 	                                <Show when={pmgRow()?.queue != null} fallback={<span class="text-xs text-gray-400">—</span>}>
 	                                  <span class={`text-xs font-medium ${queueClass()}`}>{pmgRow()!.queue}</span>
@@ -1151,7 +1151,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                               </div>
                             </td>
 
-	                            <td class={tdClass} classList={{ hidden: !isVisible('secondary') }}>
+	                            <td class={tdClass} classList={{ hidden: !isVisible('secondary') && !isMobile() }}>
 	                              <div class="flex justify-center">
 	                                <Show when={pmgRow()?.deferred != null} fallback={<span class="text-xs text-gray-400">—</span>}>
 	                                  <span class="text-xs text-gray-700 dark:text-gray-300">{pmgRow()!.deferred}</span>
@@ -1159,7 +1159,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                               </div>
                             </td>
 
-	                            <td class={tdClass} classList={{ hidden: !isVisible('supplementary') }}>
+	                            <td class={tdClass} classList={{ hidden: !isVisible('supplementary') && !isMobile() }}>
 	                              <div class="flex justify-center">
 	                                <Show when={pmgRow()?.hold != null} fallback={<span class="text-xs text-gray-400">—</span>}>
 	                                  <span class="text-xs text-gray-700 dark:text-gray-300">{pmgRow()!.hold}</span>
@@ -1167,7 +1167,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                               </div>
                             </td>
 
-	                            <td class={tdClass} classList={{ hidden: !isVisible('secondary') }}>
+	                            <td class={tdClass} classList={{ hidden: !isVisible('secondary') && !isMobile() }}>
 	                              <div class="flex justify-center">
 	                                <Show when={pmgRow()?.nodes != null} fallback={<span class="text-xs text-gray-400">—</span>}>
 	                                  <span class="text-xs text-gray-700 dark:text-gray-300">{pmgRow()!.nodes}</span>
@@ -1183,7 +1183,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
 	                              </div>
 	                            </td>
 	
-	                            <td class={tdClass} classList={{ hidden: !isVisible('secondary') }}>
+	                            <td class={tdClass} classList={{ hidden: !isVisible('secondary') && !isMobile() }}>
 	                              <div class="flex flex-wrap items-center justify-center gap-1">
 	                                <Show
 	                                  when={hasUnifiedSources()}
@@ -1217,7 +1217,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
 	                              </div>
 	                            </td>
 	
-	                            <td class={tdClass} classList={{ hidden: !isVisible('supplementary') }}>
+	                            <td class={tdClass} classList={{ hidden: !isVisible('supplementary') && !isMobile() }}>
 	                              <div class="flex justify-center">
 	                                <Show when={resource.uptime} fallback={<span class="text-xs text-gray-400">—</span>}>
 	                                  <span class="text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
