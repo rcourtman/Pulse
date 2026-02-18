@@ -180,6 +180,18 @@ You can also toggle "Hide Docker Update Buttons" from the UI: **Settings → Age
 
 ---
 
+## 🍎 macOS Docker Desktop Socket
+
+On macOS, Docker Desktop exposes a socket at `~/.docker/run/docker.sock`. Pulse auto-detects this path when `--enable-docker` is used with `RuntimeDocker` or `RuntimeAuto`, so no extra configuration is needed.
+
+To override, set `DOCKER_HOST`:
+
+```bash
+export DOCKER_HOST=unix://$HOME/.docker/run/docker.sock
+```
+
+---
+
 ## 🛠️ Troubleshooting
 
 - **Forgot Password?**

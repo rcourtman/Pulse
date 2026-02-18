@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -507,6 +508,14 @@ func buildRuntimeCandidates(preference RuntimeKind) []runtimeCandidate {
 			host:  rootlessDocker,
 			label: "docker rootless socket",
 		})
+
+		// macOS Docker Desktop socket
+		if home := os.Getenv("HOME"); home != "" {
+			add(runtimeCandidate{
+				host:  "unix://" + filepath.Join(home, ".docker", "run", "docker.sock"),
+				label: "docker desktop socket",
+			})
+		}
 
 		add(runtimeCandidate{
 			host:           "unix:///var/run/docker.sock",

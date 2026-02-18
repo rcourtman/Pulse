@@ -927,12 +927,12 @@ func TestBuildRuntimeCandidates(t *testing.T) {
 		{
 			name:       "auto includes both podman and docker sockets",
 			preference: RuntimeAuto,
-			wantMin:    3, // at least env defaults + podman rootless + docker default
+			wantMin:    4, // at least env defaults + podman rootless + docker rootless + docker desktop + docker default
 		},
 		{
 			name:       "docker preference includes docker socket",
 			preference: RuntimeDocker,
-			wantMin:    2, // at least env defaults + docker default
+			wantMin:    3, // at least env defaults + docker rootless + docker desktop + docker default
 		},
 		{
 			name:       "podman preference includes podman sockets",
@@ -1048,6 +1048,68 @@ func TestBuildRuntimeCandidatesDockerRootlessOrder(t *testing.T) {
 		}
 		if rootlessIdx > systemIdx {
 			t.Fatalf("expected docker rootless socket to be tried before default docker socket; rootlessIdx=%d systemIdx=%d", rootlessIdx, systemIdx)
+		}
+	})
+}
+
+func TestBuildRuntimeCandidatesDockerDesktop(t *testing.T) {
+	t.Run("docker includes docker desktop socket", func(t *testing.T) {
+		candidates := buildRuntimeCandidates(RuntimeDocker)
+		found := false
+		for _, c := range candidates {
+			if c.label == "docker desktop socket" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Error("docker preference should include docker desktop socket")
+		}
+	})
+
+	t.Run("auto includes docker desktop socket", func(t *testing.T) {
+		candidates := buildRuntimeCandidates(RuntimeAuto)
+		found := false
+		for _, c := range candidates {
+			if c.label == "docker desktop socket" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Error("auto preference should include docker desktop socket")
+		}
+	})
+
+	t.Run("podman excludes docker desktop socket", func(t *testing.T) {
+		candidates := buildRuntimeCandidates(RuntimePodman)
+		for _, c := range candidates {
+			if c.label == "docker desktop socket" {
+				t.Error("podman preference should not include docker desktop socket")
+			}
+		}
+	})
+
+	t.Run("desktop socket comes before default socket", func(t *testing.T) {
+		candidates := buildRuntimeCandidates(RuntimeDocker)
+		desktopIdx := -1
+		defaultIdx := -1
+		for i, c := range candidates {
+			if c.label == "docker desktop socket" && desktopIdx < 0 {
+				desktopIdx = i
+			}
+			if c.label == "default docker socket" && defaultIdx < 0 {
+				defaultIdx = i
+			}
+		}
+		if desktopIdx < 0 {
+			t.Fatal("expected docker desktop socket candidate")
+		}
+		if defaultIdx < 0 {
+			t.Fatal("expected default docker socket candidate")
+		}
+		if desktopIdx > defaultIdx {
+			t.Fatalf("expected docker desktop socket before default; desktopIdx=%d defaultIdx=%d", desktopIdx, defaultIdx)
 		}
 	})
 }
