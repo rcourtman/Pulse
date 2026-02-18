@@ -1,21 +1,10 @@
 import { test, expect, devices } from '@playwright/test';
-import { ensureAuthenticated } from './helpers';
+import { dismissWhatsNewModal, ensureAuthenticated } from './helpers';
 
 const getViewportWidth = async (page: import('@playwright/test').Page): Promise<number> => {
   const size = page.viewportSize();
   if (size) return size.width;
   return await page.evaluate(() => window.innerWidth);
-};
-
-/**
- * Dismiss the WhatsNew modal that appears on first visit by marking it as seen
- * in localStorage before navigating. This prevents the "fixed inset-0 z-50"
- * overlay from blocking clicks and confusing element locators.
- */
-const dismissWhatsNewModal = async (page: import('@playwright/test').Page): Promise<void> => {
-  await page.evaluate(() => {
-    localStorage.setItem('pulse_whats_new_v2_shown', 'true');
-  });
 };
 
 test.describe('Mobile viewport flows', () => {
@@ -31,6 +20,10 @@ test.describe('Mobile viewport flows', () => {
     const bottomNav = page.locator(
       'nav.md\\:hidden, nav[class*="md:hidden"], .md\\:hidden nav, [class*="md:hidden"] nav',
     );
+
+    // Wait for the nav to mount before evaluating (evaluateAll does not auto-wait;
+    // WebKit can be slower to render SolidJS components than Chromium).
+    await bottomNav.first().waitFor({ state: 'attached', timeout: 10000 });
 
     const visibleCount = await bottomNav.evaluateAll((els) => {
       const isVisible = (el: Element) => {

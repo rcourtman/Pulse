@@ -65,6 +65,9 @@ export default defineConfig({
       use: {
         ...devices['Desktop Chrome'],
       },
+      // Mobile-specific tests are intentionally excluded from the desktop project;
+      // they rely on mobile viewports where md:hidden nav is visible, tables overflow, etc.
+      testIgnore: ['**/04-mobile.spec.ts'],
     },
     {
       name: 'mobile-chrome',
