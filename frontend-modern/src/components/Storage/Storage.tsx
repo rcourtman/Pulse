@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from '@solidjs/router';
-import { Component, For, Index, Show, createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
+import { Component, For, Index, Show, createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
 import { useWebSocket } from '@/App';
 import { useResources } from '@/hooks/useResources';
 import { Card } from '@/components/shared/Card';
@@ -20,6 +20,7 @@ import {
 } from '@/routing/resourceLinks';
 import { formatBytes, formatPercent } from '@/utils/format';
 import { getProxmoxData } from '@/utils/resourcePlatformData';
+import { isKioskMode, subscribeToKioskMode } from '@/utils/url';
 import { useStorageRouteState } from './useStorageRouteState';
 import { isCephRecord, useStorageCephModel } from './useStorageCephModel';
 import { useStorageAlertState } from './useStorageAlertState';
@@ -86,6 +87,15 @@ const Storage: Component = () => {
   const location = useLocation();
   const { state, activeAlerts, connected, initialDataReceived, reconnecting, reconnect } = useWebSocket();
   const { byType } = useResources();
+
+  const [kioskMode, setKioskMode] = createSignal(isKioskMode());
+  onMount(() => {
+    const unsubscribe = subscribeToKioskMode((enabled) => {
+      setKioskMode(enabled);
+    });
+    return unsubscribe;
+  });
+
   const nodes = createMemo(() => byType('node'));
   const physicalDisks = createMemo(() => byType('physical_disk'));
   const cephResources = createMemo(() => byType('ceph'));
@@ -423,51 +433,52 @@ const Storage: Component = () => {
         </Card>
       </Show>
 
-      <StorageFilter
-        search={search}
-        setSearch={setSearch}
-        groupBy={view() === 'pools' ? storageFilterGroupBy : undefined}
-        setGroupBy={view() === 'pools' ? ((value) => setGroupBy(value)) : undefined}
-        sortKey={sortKey}
-        setSortKey={(value) => setSortKey(normalizeSortKey(value))}
-        sortDirection={sortDirection}
-        setSortDirection={setSortDirection}
-        sortOptions={STORAGE_SORT_OPTIONS}
-        sortDisabled={view() !== 'pools'}
-        statusFilter={storageFilterStatus}
-        setStatusFilter={setStorageFilterStatus}
-        sourceFilter={sourceFilter}
-        setSourceFilter={setSourceFilter}
-        sourceOptions={sourceFilterOptions()}
-        leadingFilters={
-          <>
-            <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5" role="group" aria-label="View">
-              <button
-                type="button"
-                onClick={() => setView('pools')}
-                aria-pressed={view() === 'pools'}
-                class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${view() === 'pools'
-                  ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                  }`}
-              >
-                Pools
-              </button>
-              <button
-                type="button"
-                onClick={() => setView('disks')}
-                aria-pressed={view() === 'disks'}
-                class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${view() === 'disks'
-                  ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                  }`}
-              >
-                Physical Disks
-              </button>
-            </div>
-            <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
-            <select
-              value={selectedNodeId()}
+      <Show when={!kioskMode()}>
+        <StorageFilter
+          search={search}
+          setSearch={setSearch}
+          groupBy={view() === 'pools' ? storageFilterGroupBy : undefined}
+          setGroupBy={view() === 'pools' ? ((value) => setGroupBy(value)) : undefined}
+          sortKey={sortKey}
+          setSortKey={(value) => setSortKey(normalizeSortKey(value))}
+          sortDirection={sortDirection}
+          setSortDirection={setSortDirection}
+          sortOptions={STORAGE_SORT_OPTIONS}
+          sortDisabled={view() !== 'pools'}
+          statusFilter={storageFilterStatus}
+          setStatusFilter={setStorageFilterStatus}
+          sourceFilter={sourceFilter}
+          setSourceFilter={setSourceFilter}
+          sourceOptions={sourceFilterOptions()}
+          leadingFilters={
+            <>
+              <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5" role="group" aria-label="View">
+                <button
+                  type="button"
+                  onClick={() => setView('pools')}
+                  aria-pressed={view() === 'pools'}
+                  class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${view() === 'pools'
+                    ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                    }`}
+                >
+                  Pools
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setView('disks')}
+                  aria-pressed={view() === 'disks'}
+                  class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${view() === 'disks'
+                    ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                    }`}
+                >
+                  Physical Disks
+                </button>
+              </div>
+              <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
+              <select
+                value={selectedNodeId()}
               onChange={(event) => setSelectedNodeId(event.currentTarget.value)}
               class="px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
               aria-label="Node"
@@ -479,6 +490,7 @@ const Storage: Component = () => {
           </>
         }
       />
+      </Show>
 
       <Show when={reconnecting()}>
         <Card padding="sm" tone="warning">

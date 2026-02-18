@@ -1,4 +1,4 @@
-import { Component, For, Show, createEffect, createMemo, createSignal, untrack } from 'solid-js';
+import { Component, For, Show, createEffect, createMemo, createSignal, onMount, untrack } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 import { Card } from '@/components/shared/Card';
 import { ColumnPicker } from '@/components/shared/ColumnPicker';
@@ -11,6 +11,7 @@ import { useColumnVisibility } from '@/hooks/useColumnVisibility';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { formatAbsoluteTime, formatBytes, formatRelativeTime } from '@/utils/format';
 import { STORAGE_KEYS, createLocalStorageBooleanSignal } from '@/utils/localStorage';
+import { isKioskMode, subscribeToKioskMode } from '@/utils/url';
 import { useStorageRecoveryResources } from '@/hooks/useUnifiedResources';
 import { useRecoveryRollups } from '@/hooks/useRecoveryRollups';
 import { useRecoveryPoints } from '@/hooks/useRecoveryPoints';
@@ -266,6 +267,14 @@ const rollupAgeTextClass = (r: ProtectionRollup, nowMs: number): string => {
 const Recovery: Component = () => {
   const navigate = useNavigate();
   const location = useLocation();
+
+  const [kioskMode, setKioskMode] = createSignal(isKioskMode());
+  onMount(() => {
+    const unsubscribe = subscribeToKioskMode((enabled) => {
+      setKioskMode(enabled);
+    });
+    return unsubscribe;
+  });
 
   const storageBackupsResources = useStorageRecoveryResources();
   const recoveryRollups = useRecoveryRollups();
@@ -927,94 +936,95 @@ const Recovery: Component = () => {
       </Card>
 
       <Show when={view() === 'protected'}>
-        <Card padding="sm">
-          <div class="flex flex-col gap-2">
-            <SearchInput
-              value={query}
-              onChange={(value) => setQuery(value)}
-              placeholder="Search protected items..."
-              class="w-full"
-              history={{
-                storageKey: STORAGE_KEYS.RECOVERY_SEARCH_HISTORY,
-                emptyMessage: 'Recent searches appear here.',
-              }}
-            />
-            <Show when={isMobile()}>
-              <button
-                type="button"
-                onClick={() => setProtectedFiltersOpen((o) => !o)}
-                class="flex items-center gap-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400"
-              >
-                <ListFilterIcon class="w-3.5 h-3.5" />
-                Filters
-                <Show when={protectedActiveFilterCount() > 0}>
-                  <span class="ml-0.5 rounded-full bg-blue-500 px-1.5 py-0.5 text-[10px] font-semibold text-white leading-none">
-                    {protectedActiveFilterCount()}
-                  </span>
-                </Show>
-              </button>
-            </Show>
-
-            <Show when={!isMobile() || protectedFiltersOpen()}>
-              <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-                  <label
-                    for="recovery-provider-filter"
-                    class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
-                  >
-                    Provider
-                  </label>
-                  <select
-                    id="recovery-provider-filter"
-                    value={providerFilter()}
-                    onChange={(event) => setProviderFilter(event.currentTarget.value)}
-                    class="min-w-[10rem] max-w-[14rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
-                  >
-                    <For each={providerOptions()}>
-                      {(p) => <option value={p}>{p === 'all' ? 'All Providers' : sourceLabel(p)}</option>}
-                    </For>
-                  </select>
-                </div>
-
-                <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-                  <label
-                    for="recovery-protected-status-filter"
-                    class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
-                  >
-                    Status
-                  </label>
-                  <select
-                    id="recovery-protected-status-filter"
-                    value={outcomeFilter()}
-                    onChange={(event) => {
-                      const value = event.currentTarget.value as 'all' | KnownOutcome;
-                      setOutcomeFilter(value);
-                      if (value !== 'all') setVerificationFilter('all');
-                    }}
-                    class="min-w-[7rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
-                  >
-                    <For each={availableOutcomes}>
-                      {(outcome) => (
-                        <option value={outcome}>
-                          {outcome === 'all' ? 'Any' : titleize(outcome)}
-                        </option>
-                      )}
-                    </For>
-                  </select>
-                </div>
-
+        <Show when={!kioskMode()}>
+          <Card padding="sm">
+            <div class="flex flex-col gap-2">
+              <SearchInput
+                value={query}
+                onChange={(value) => setQuery(value)}
+                placeholder="Search protected items..."
+                class="w-full"
+                history={{
+                  storageKey: STORAGE_KEYS.RECOVERY_SEARCH_HISTORY,
+                  emptyMessage: 'Recent searches appear here.',
+                }}
+              />
+              <Show when={isMobile()}>
                 <button
                   type="button"
-                  aria-pressed={protectedStaleOnly()}
-                  onClick={() => setProtectedStaleOnly((v) => !v)}
-                  class={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${
-                    protectedStaleOnly()
-                      ? 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-100'
-                      : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700'
-                  }`}
+                  onClick={() => setProtectedFiltersOpen((o) => !o)}
+                  class="flex items-center gap-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400"
                 >
-                  Stale only
+                  <ListFilterIcon class="w-3.5 h-3.5" />
+                  Filters
+                  <Show when={protectedActiveFilterCount() > 0}>
+                    <span class="ml-0.5 rounded-full bg-blue-500 px-1.5 py-0.5 text-[10px] font-semibold text-white leading-none">
+                      {protectedActiveFilterCount()}
+                    </span>
+                  </Show>
                 </button>
+              </Show>
+
+              <Show when={!isMobile() || protectedFiltersOpen()}>
+                <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                  <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                    <label
+                      for="recovery-provider-filter"
+                      class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+                    >
+                      Provider
+                    </label>
+                    <select
+                      id="recovery-provider-filter"
+                      value={providerFilter()}
+                      onChange={(event) => setProviderFilter(event.currentTarget.value)}
+                      class="min-w-[10rem] max-w-[14rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+                    >
+                      <For each={providerOptions()}>
+                        {(p) => <option value={p}>{p === 'all' ? 'All Providers' : sourceLabel(p)}</option>}
+                      </For>
+                    </select>
+                  </div>
+
+                  <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                    <label
+                      for="recovery-protected-status-filter"
+                      class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+                    >
+                      Status
+                    </label>
+                    <select
+                      id="recovery-protected-status-filter"
+                      value={outcomeFilter()}
+                      onChange={(event) => {
+                        const value = event.currentTarget.value as 'all' | KnownOutcome;
+                        setOutcomeFilter(value);
+                        if (value !== 'all') setVerificationFilter('all');
+                      }}
+                      class="min-w-[7rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+                    >
+                      <For each={availableOutcomes}>
+                        {(outcome) => (
+                          <option value={outcome}>
+                            {outcome === 'all' ? 'Any' : titleize(outcome)}
+                          </option>
+                        )}
+                      </For>
+                    </select>
+                  </div>
+
+                  <button
+                    type="button"
+                    aria-pressed={protectedStaleOnly()}
+                    onClick={() => setProtectedStaleOnly((v) => !v)}
+                    class={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${
+                      protectedStaleOnly()
+                        ? 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-100'
+                        : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700'
+                    }`}
+                  >
+                    Stale only
+                  </button>
 
                 <Show when={rollupsSummary().stale > 0}>
                   <span class="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-100">
@@ -1154,8 +1164,9 @@ const Recovery: Component = () => {
                 </table>
               </div>
             </Show>
-          </div>
-        </Card>
+            </div>
+          </Card>
+        </Show>
       </Show>
 
       <Show when={view() === 'events'}>
@@ -1470,45 +1481,46 @@ const Recovery: Component = () => {
             </Show>
           </Card>
 
-          <Card padding="sm">
-            <div class="flex flex-col gap-2">
-              <SearchInput
-                value={query}
-                onChange={(value) => {
-                  setQuery(value);
-                  setCurrentPage(1);
-                }}
-                placeholder="Search recovery events..."
-                class="w-full"
-                autoFocus
-                history={{
-                  storageKey: STORAGE_KEYS.RECOVERY_SEARCH_HISTORY,
-                  emptyMessage: 'Recent searches appear here.',
-                }}
-              />
-              <Show when={isMobile()}>
-                <button
-                  type="button"
-                  onClick={() => setEventsFiltersOpen((o) => !o)}
-                  class="flex items-center gap-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400"
-                >
-                  <ListFilterIcon class="w-3.5 h-3.5" />
-                  Filters
-                  <Show when={eventsActiveFilterCount() > 0}>
-                    <span class="ml-0.5 rounded-full bg-blue-500 px-1.5 py-0.5 text-[10px] font-semibold text-white leading-none">
-                      {eventsActiveFilterCount()}
-                    </span>
-                  </Show>
-                </button>
-              </Show>
-
-              <Show when={!isMobile() || eventsFiltersOpen()}>
-                <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-                  <label
-                    for="recovery-provider-filter-events"
-                    class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+          <Show when={!kioskMode()}>
+            <Card padding="sm">
+              <div class="flex flex-col gap-2">
+                <SearchInput
+                  value={query}
+                  onChange={(value) => {
+                    setQuery(value);
+                    setCurrentPage(1);
+                  }}
+                  placeholder="Search recovery events..."
+                  class="w-full"
+                  autoFocus
+                  history={{
+                    storageKey: STORAGE_KEYS.RECOVERY_SEARCH_HISTORY,
+                    emptyMessage: 'Recent searches appear here.',
+                  }}
+                />
+                <Show when={isMobile()}>
+                  <button
+                    type="button"
+                    onClick={() => setEventsFiltersOpen((o) => !o)}
+                    class="flex items-center gap-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400"
                   >
+                    <ListFilterIcon class="w-3.5 h-3.5" />
+                    Filters
+                    <Show when={eventsActiveFilterCount() > 0}>
+                      <span class="ml-0.5 rounded-full bg-blue-500 px-1.5 py-0.5 text-[10px] font-semibold text-white leading-none">
+                        {eventsActiveFilterCount()}
+                      </span>
+                    </Show>
+                  </button>
+                </Show>
+
+                <Show when={!isMobile() || eventsFiltersOpen()}>
+                  <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                  <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                    <label
+                      for="recovery-provider-filter-events"
+                      class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+                    >
                     Provider
                   </label>
                   <select
@@ -1736,9 +1748,10 @@ const Recovery: Component = () => {
                   </Show>
                   </div>
                 </Show>
-              </Show>
-            </div>
-          </Card>
+                </Show>
+              </div>
+            </Card>
+          </Show>
 
           <Card padding="none" class="overflow-hidden">
             <Show

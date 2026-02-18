@@ -1,4 +1,4 @@
-import { Component, For, Show, createMemo, createSignal, createEffect, onCleanup } from 'solid-js';
+import { Component, For, Show, createMemo, createSignal, createEffect, onCleanup, onMount } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { useWebSocket } from '@/App';
 import { useResources } from '@/hooks/useResources';
@@ -6,6 +6,7 @@ import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
 import type { CephCluster, CephPool, CephServiceStatus } from '@/types/api';
 import { formatBytes } from '@/utils/format';
+import { isKioskMode, subscribeToKioskMode } from '@/utils/url';
 
 // Service type icon component with proper styling
 const ServiceIcon: Component<{ type: string; class?: string }> = (props) => {
@@ -241,6 +242,14 @@ const UsageBar: Component<{ percent: number; size?: 'sm' | 'md' }> = (props) => 
 const Ceph: Component = () => {
     const { connected, initialDataReceived, reconnecting, reconnect } = useWebSocket();
     const { byType } = useResources();
+
+    const [kioskMode, setKioskMode] = createSignal(isKioskMode());
+    onMount(() => {
+        const unsubscribe = subscribeToKioskMode((enabled) => {
+            setKioskMode(enabled);
+        });
+        return unsubscribe;
+    });
 
     const [searchTerm, setSearchTerm] = createSignal('');
     let searchInputRef: HTMLInputElement | undefined;
@@ -612,39 +621,41 @@ const Ceph: Component = () => {
                                     Storage Pools ({filteredPools().length})
                                 </h3>
                                 {/* Search Input */}
-                                <div class="relative max-w-xs flex-1">
-                                    <input
-                                        ref={(el) => (searchInputRef = el)}
-                                        type="text"
-                                        placeholder="Search pools..."
-                                        aria-label="Search storage pools"
-                                        value={searchTerm()}
-                                        onInput={(e) => setSearchTerm(e.currentTarget.value)}
-                                        class="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg 
-                                               bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500
-                                               focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:focus:border-blue-400 outline-none transition-all"
-                                    />
-                                    <svg
-                                        class="absolute left-2.5 top-2 h-4 w-4 text-gray-400 dark:text-gray-500"
-                                        fill="none"
-                                        viewBox="0 0 24 24"
-                                        stroke="currentColor"
-                                    >
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                                    </svg>
-                                    <Show when={searchTerm()}>
-                                        <button
-                                            type="button"
-                                            aria-label="Clear pool search"
-                                            onClick={() => setSearchTerm('')}
-                                            class="absolute right-2.5 top-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                                <Show when={!kioskMode()}>
+                                    <div class="relative max-w-xs flex-1">
+                                        <input
+                                            ref={(el) => (searchInputRef = el)}
+                                            type="text"
+                                            placeholder="Search pools..."
+                                            aria-label="Search storage pools"
+                                            value={searchTerm()}
+                                            onInput={(e) => setSearchTerm(e.currentTarget.value)}
+                                            class="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg 
+                                                   bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500
+                                                   focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:focus:border-blue-400 outline-none transition-all"
+                                        />
+                                        <svg
+                                            class="absolute left-2.5 top-2 h-4 w-4 text-gray-400 dark:text-gray-500"
+                                            fill="none"
+                                            viewBox="0 0 24 24"
+                                            stroke="currentColor"
                                         >
-                                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-                                            </svg>
-                                        </button>
-                                    </Show>
-                                </div>
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                        </svg>
+                                        <Show when={searchTerm()}>
+                                            <button
+                                                type="button"
+                                                aria-label="Clear pool search"
+                                                onClick={() => setSearchTerm('')}
+                                                class="absolute right-2.5 top-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                                            >
+                                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                                </svg>
+                                            </button>
+                                        </Show>
+                                    </div>
+                                </Show>
                             </div>
 
                             <Show

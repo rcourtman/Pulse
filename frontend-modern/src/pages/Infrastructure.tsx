@@ -1,4 +1,4 @@
-import { For, Show, createEffect, createMemo, createSignal, onCleanup, untrack } from 'solid-js';
+import { For, Show, createEffect, createMemo, createSignal, onCleanup, onMount, untrack } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { Card } from '@/components/shared/Card';
@@ -15,6 +15,7 @@ import ListFilterIcon from 'lucide-solid/icons/list-filter';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { ScrollToTopButton } from '@/components/shared/ScrollToTopButton';
 import { STORAGE_KEYS } from '@/utils/localStorage';
+import { isKioskMode, subscribeToKioskMode } from '@/utils/url';
 import {
   isSummaryTimeRange,
 } from '@/components/shared/summaryTimeRange';
@@ -42,6 +43,14 @@ export function Infrastructure() {
   const { resources, loading, error, refetch } = useUnifiedResources();
   const location = useLocation();
   const navigate = useNavigate();
+
+  const [kioskMode, setKioskMode] = createSignal(isKioskMode());
+  onMount(() => {
+    const unsubscribe = subscribeToKioskMode((enabled) => {
+      setKioskMode(enabled);
+    });
+    return unsubscribe;
+  });
 
   // Track if we've completed initial load to prevent flash of empty state
   const [initialLoadComplete, setInitialLoadComplete] = createSignal(false);
@@ -392,111 +401,113 @@ export function Infrastructure() {
                 />
               </div>
 
-              <Card padding="sm" class="mb-4">
-                <div class="flex flex-col gap-2">
-                  <SearchInput
-                    value={searchQuery}
-                    onChange={setSearchQuery}
-                    placeholder="Search resources, IDs, IPs, or tags..."
-                    class="w-full"
-                    autoFocus
-                    history={{
-                      storageKey: STORAGE_KEYS.RESOURCES_SEARCH_HISTORY,
-                      emptyMessage: 'Recent infrastructure searches appear here.',
-                    }}
-                  />
+              <Show when={!kioskMode()}>
+                <Card padding="sm" class="mb-4">
+                  <div class="flex flex-col gap-2">
+                    <SearchInput
+                      value={searchQuery}
+                      onChange={setSearchQuery}
+                      placeholder="Search resources, IDs, IPs, or tags..."
+                      class="w-full"
+                      autoFocus
+                      history={{
+                        storageKey: STORAGE_KEYS.RESOURCES_SEARCH_HISTORY,
+                        emptyMessage: 'Recent infrastructure searches appear here.',
+                      }}
+                    />
 
-                  <Show when={isMobile()}>
-                    <button
-                      type="button"
-                      onClick={() => setFiltersOpen((o) => !o)}
-                      class="flex items-center gap-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400"
-                    >
-                      <ListFilterIcon class="w-3.5 h-3.5" />
-                      Filters
-                      <Show when={activeFilterCount() > 0}>
-                        <span class="ml-0.5 rounded-full bg-blue-500 px-1.5 py-0.5 text-[10px] font-semibold text-white leading-none">
-                          {activeFilterCount()}
-                        </span>
-                      </Show>
-                    </button>
-                  </Show>
+                    <Show when={isMobile()}>
+                      <button
+                        type="button"
+                        onClick={() => setFiltersOpen((o) => !o)}
+                        class="flex items-center gap-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400"
+                      >
+                        <ListFilterIcon class="w-3.5 h-3.5" />
+                        Filters
+                        <Show when={activeFilterCount() > 0}>
+                          <span class="ml-0.5 rounded-full bg-blue-500 px-1.5 py-0.5 text-[10px] font-semibold text-white leading-none">
+                            {activeFilterCount()}
+                          </span>
+                        </Show>
+                      </button>
+                    </Show>
 
-                  <Show when={!isMobile() || filtersOpen()}>
-                    <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400 lg:flex-nowrap">
-                      <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-                        <label for="infra-source-filter" class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Source</label>
-                        <select
-                          id="infra-source-filter"
-                          value={selectedSource()}
-                          onChange={(e) => setSelectedSource(e.currentTarget.value)}
-                          class="min-w-[8rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
-                        >
-                          <option value="">All</option>
-                          <For each={sourceOptions.filter((s) => availableSources().has(s.key))}>
-                            {(source) => <option value={source.key}>{source.label}</option>}
-                          </For>
-                        </select>
+                    <Show when={!isMobile() || filtersOpen()}>
+                      <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400 lg:flex-nowrap">
+                        <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                          <label for="infra-source-filter" class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Source</label>
+                          <select
+                            id="infra-source-filter"
+                            value={selectedSource()}
+                            onChange={(e) => setSelectedSource(e.currentTarget.value)}
+                            class="min-w-[8rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+                          >
+                            <option value="">All</option>
+                            <For each={sourceOptions.filter((s) => availableSources().has(s.key))}>
+                              {(source) => <option value={source.key}>{source.label}</option>}
+                            </For>
+                          </select>
+                        </div>
+
+                        <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                          <label for="infra-status-filter" class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Status</label>
+                          <select
+                            id="infra-status-filter"
+                            value={selectedStatus()}
+                            onChange={(e) => setSelectedStatus(e.currentTarget.value)}
+                            class="min-w-[7rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+                          >
+                            <option value="">All</option>
+                            <For each={statusOptions()}>
+                              {(status) => <option value={status.key}>{status.label}</option>}
+                            </For>
+                          </select>
+                        </div>
+
+                        <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                          <button
+                            type="button"
+                            onClick={() => setGroupingMode('grouped')}
+                            class={`inline-flex items-center gap-1.5 ${segmentedButtonClass(groupingMode() === 'grouped', false)}`}
+                            title="Group by cluster"
+                          >
+                            <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2v11z" />
+                            </svg>
+                            Grouped
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setGroupingMode('flat')}
+                            class={`inline-flex items-center gap-1.5 ${segmentedButtonClass(groupingMode() === 'flat', false)}`}
+                            title="Flat list view"
+                          >
+                            <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                              <line x1="8" y1="6" x2="21" y2="6" />
+                              <line x1="8" y1="12" x2="21" y2="12" />
+                              <line x1="8" y1="18" x2="21" y2="18" />
+                              <line x1="3" y1="6" x2="3.01" y2="6" />
+                              <line x1="3" y1="12" x2="3.01" y2="12" />
+                              <line x1="3" y1="18" x2="3.01" y2="18" />
+                            </svg>
+                            List
+                          </button>
+                        </div>
+
+                        <Show when={hasActiveFilters()}>
+                          <button
+                            type="button"
+                            onClick={clearFilters}
+                            class="ml-auto rounded-lg bg-blue-100 px-2.5 py-1.5 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:hover:bg-blue-900/60"
+                          >
+                            Clear
+                          </button>
+                        </Show>
                       </div>
-
-                      <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-                        <label for="infra-status-filter" class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Status</label>
-                        <select
-                          id="infra-status-filter"
-                          value={selectedStatus()}
-                          onChange={(e) => setSelectedStatus(e.currentTarget.value)}
-                          class="min-w-[7rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
-                        >
-                          <option value="">All</option>
-                          <For each={statusOptions()}>
-                            {(status) => <option value={status.key}>{status.label}</option>}
-                          </For>
-                        </select>
-                      </div>
-
-                      <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-                        <button
-                          type="button"
-                          onClick={() => setGroupingMode('grouped')}
-                          class={`inline-flex items-center gap-1.5 ${segmentedButtonClass(groupingMode() === 'grouped', false)}`}
-                          title="Group by cluster"
-                        >
-                          <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2v11z" />
-                          </svg>
-                          Grouped
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setGroupingMode('flat')}
-                          class={`inline-flex items-center gap-1.5 ${segmentedButtonClass(groupingMode() === 'flat', false)}`}
-                          title="Flat list view"
-                        >
-                          <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <line x1="8" y1="6" x2="21" y2="6" />
-                            <line x1="8" y1="12" x2="21" y2="12" />
-                            <line x1="8" y1="18" x2="21" y2="18" />
-                            <line x1="3" y1="6" x2="3.01" y2="6" />
-                            <line x1="3" y1="12" x2="3.01" y2="12" />
-                            <line x1="3" y1="18" x2="3.01" y2="18" />
-                          </svg>
-                          List
-                        </button>
-                      </div>
-
-                      <Show when={hasActiveFilters()}>
-                        <button
-                          type="button"
-                          onClick={clearFilters}
-                          class="ml-auto rounded-lg bg-blue-100 px-2.5 py-1.5 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:hover:bg-blue-900/60"
-                        >
-                          Clear
-                        </button>
-                      </Show>
-                    </div>
-                  </Show>
-                </div>
-              </Card>
+                    </Show>
+                  </div>
+                </Card>
+              </Show>
 
               <Show
                 when={hasFilteredResources()}
