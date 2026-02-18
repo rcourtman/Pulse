@@ -88,7 +88,6 @@ var specialMountPrefixes = []string{
 	"/proc",
 	"/sys",
 	"/run",
-	"/var/lib/docker",
 	"/var/lib/containers",
 	"/snap",
 }

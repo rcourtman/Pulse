@@ -393,13 +393,13 @@ function BackupStatusCell(props: { lastBackup: string | number | null | undefine
                   <div class="text-gray-300">
                     {new Date(props.lastBackup!).toLocaleTimeString()}
                   </div>
-                </div>
-                <div class="pt-1 mt-1 border-t border-gray-700/50">
-                  <span class={config().color}>{info().ageFormatted} ago</span>
-                </div>
-              </Show>
-              <Show when={info().status === 'never'}>
-                <div class="py-0.5 text-red-400">
+	                </div>
+	                <div class="pt-1 mt-1 border-t border-gray-700/50">
+	                  <span class={config().color}>{info().ageFormatted}</span>
+	                </div>
+	              </Show>
+	              <Show when={info().status === 'never'}>
+	                <div class="py-0.5 text-red-400">
                   No backup has ever been recorded for this guest.
                 </div>
               </Show>
