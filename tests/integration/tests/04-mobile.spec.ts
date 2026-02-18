@@ -7,13 +7,26 @@ const getViewportWidth = async (page: import('@playwright/test').Page): Promise<
   return await page.evaluate(() => window.innerWidth);
 };
 
+/**
+ * Dismiss the WhatsNew modal that appears on first visit by marking it as seen
+ * in localStorage before navigating. This prevents the "fixed inset-0 z-50"
+ * overlay from blocking clicks and confusing element locators.
+ */
+const dismissWhatsNewModal = async (page: import('@playwright/test').Page): Promise<void> => {
+  await page.evaluate(() => {
+    localStorage.setItem('pulse_whats_new_v2_shown', 'true');
+  });
+};
+
 test.describe('Mobile viewport flows', () => {
   test.beforeEach(async ({ page }) => {
     await ensureAuthenticated(page);
   });
 
   test('bottom nav bar is visible on mobile', async ({ page }) => {
-    await page.goto('/');
+    await dismissWhatsNewModal(page);
+    await page.goto('/dashboard');
+    await expect(page.locator('#root')).toBeVisible();
 
     const bottomNav = page.locator(
       'nav.md\\:hidden, nav[class*="md:hidden"], .md\\:hidden nav, [class*="md:hidden"] nav',
@@ -33,47 +46,40 @@ test.describe('Mobile viewport flows', () => {
   });
 
   test('MobileNavBar has safe-area padding on nav', async ({ page }) => {
-    await page.goto('/');
+    await dismissWhatsNewModal(page);
+    await page.goto('/dashboard');
+    await expect(page.locator('#root')).toBeVisible();
 
     const nav = page.locator('nav.md\\:hidden, nav[class*="md:hidden"]').first();
     await expect(nav).toBeVisible();
 
-    const paddingBottom = await nav.evaluate((el) => {
-      const raw = window.getComputedStyle(el as HTMLElement).paddingBottom || '0px';
-      const parsed = Number.parseFloat(raw);
-      return Number.isFinite(parsed) ? parsed : 0;
-    });
-
-    expect(paddingBottom).toBeGreaterThan(0);
+    // Verify the safe-area CSS class is applied to the nav. The computed padding-bottom
+    // value is 0 in headless Chromium (no notch), but the pb-safe class must be present.
+    const hasSafeClass = await nav.evaluate((el: HTMLElement) =>
+      el.classList.contains('pb-safe'),
+    );
+    expect(hasSafeClass, 'Expected nav to have pb-safe class for safe-area-inset-bottom').toBeTruthy();
   });
 
   test('Infrastructure filter bar does not overflow horizontally', async ({ page }) => {
-    await page.goto('/proxmox/infrastructure');
-    if (!/\/infrastructure(?:\?.*)?$/.test(page.url())) {
-      await page.goto('/infrastructure');
-    }
+    // Prevent WhatsNew modal from blocking the page.
+    await dismissWhatsNewModal(page);
+    await page.goto('/infrastructure');
 
     await expect(page.getByTestId('infrastructure-page')).toBeVisible();
     await expect(page.getByPlaceholder('Search resources, IDs, IPs, or tags...')).toBeVisible();
 
-    const filterBar = page
-      .getByText('Source', { exact: true })
-      .locator('xpath=ancestor::div[contains(@class,"flex-wrap")][1]');
-    await expect(filterBar).toBeVisible();
-
-    const { scrollWidth, clientWidth } = await filterBar.evaluate((el) => ({
-      scrollWidth: (el as HTMLElement).scrollWidth,
-      clientWidth: (el as HTMLElement).clientWidth,
-    }));
-
-    expect(scrollWidth).toBeLessThanOrEqual(clientWidth + 1);
+    // On mobile the full filter controls are hidden behind a toggle; only the
+    // search bar + Filters button row should be visible. Check the overall page
+    // body does not overflow horizontally.
+    const viewportWidth = await getViewportWidth(page);
+    const bodyScrollWidth = await page.evaluate(() => document.body.scrollWidth);
+    expect(bodyScrollWidth, 'Infrastructure page body must not overflow horizontally').toBeLessThanOrEqual(viewportWidth + 1);
   });
 
   test('Infrastructure table has overflow-x-auto wrapper', async ({ page }) => {
-    await page.goto('/proxmox/infrastructure');
-    if (!/\/infrastructure(?:\?.*)?$/.test(page.url())) {
-      await page.goto('/infrastructure');
-    }
+    await dismissWhatsNewModal(page);
+    await page.goto('/infrastructure');
 
     await expect(page.getByTestId('infrastructure-page')).toBeVisible();
     await expect(page.getByPlaceholder('Search resources, IDs, IPs, or tags...')).toBeVisible();
@@ -89,10 +95,9 @@ test.describe('Mobile viewport flows', () => {
   });
 
   test('Tapping a resource row opens the detail drawer', async ({ page }) => {
-    await page.goto('/proxmox/infrastructure');
-    if (!/\/infrastructure(?:\?.*)?$/.test(page.url())) {
-      await page.goto('/infrastructure');
-    }
+    // Prevent WhatsNew modal from intercepting row clicks.
+    await dismissWhatsNewModal(page);
+    await page.goto('/infrastructure');
 
     await expect(page.getByTestId('infrastructure-page')).toBeVisible();
     await expect(page.getByPlaceholder('Search resources, IDs, IPs, or tags...')).toBeVisible();
@@ -105,9 +110,10 @@ test.describe('Mobile viewport flows', () => {
 
     await row.click();
 
-    const drawerCell = page.locator('td').filter({ has: page.getByRole('button', { name: 'Close' }) }).first();
-    await expect(drawerCell).toBeVisible();
-    await expect(drawerCell.getByText('Discovery', { exact: true })).toBeVisible();
+    // On mobile, the drawer renders as a Portal bottom sheet (not inline in a <td>).
+    // Look for the Discovery tab button anywhere on the page.
+    const discoveryTab = page.getByText('Discovery', { exact: true }).first();
+    await expect(discoveryTab).toBeVisible({ timeout: 10000 });
   });
 
   test('Dashboard loads without horizontal overflow at mobile viewport', async ({ page }) => {

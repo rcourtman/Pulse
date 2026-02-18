@@ -104,7 +104,7 @@ export async function login(page: Page, credentials = E2E_CREDENTIALS) {
   await page.goto('/');
   await page.waitForLoadState('domcontentloaded');
 
-  const authenticatedURL = /\/(proxmox|dashboard|nodes|hosts|docker)/;
+  const authenticatedURL = /\/(proxmox|dashboard|nodes|hosts|docker|infrastructure)/;
   const usernameInput = page.locator('input[name="username"]');
 
   const state = await Promise.race([
@@ -138,7 +138,7 @@ export async function ensureAuthenticated(page: Page) {
   await waitForPulseReady(page);
   await maybeCompleteSetupWizard(page);
   await login(page);
-  await expect(page).toHaveURL(/\/(proxmox|dashboard|nodes|hosts|docker)/);
+  await expect(page).toHaveURL(/\/(proxmox|dashboard|nodes|hosts|docker|infrastructure)/);
 }
 
 export async function logout(page: Page) {
