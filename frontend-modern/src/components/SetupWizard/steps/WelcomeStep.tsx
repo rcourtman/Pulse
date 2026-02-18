@@ -84,7 +84,7 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
                 <img
                     src="/logo.svg"
                     alt="Pulse Logo"
-                    class="w-24 h-24 shadow-2xl shadow-blue-500/30 rounded-full mb-6"
+                    class="w-24 h-24 shadow-2xl shadow-blue-500/30 rounded-full mb-6 mx-auto"
                 />
                 <h1 class="text-4xl font-bold text-white mb-3">
                     Welcome to Pulse
