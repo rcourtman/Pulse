@@ -10,6 +10,7 @@ import { formatRelativeTime, formatAbsoluteTime } from '@/utils/format';
 import { MonitoringAPI } from '@/api/monitoring';
 import { AgentProfilesAPI, type AgentProfile, type AgentProfileAssignment } from '@/api/agentProfiles';
 import { HostMetadataAPI } from '@/api/hostMetadata';
+import { DockerMetadataAPI } from '@/api/dockerMetadata';
 import { SecurityAPI } from '@/api/security';
 import { notificationStore } from '@/stores/notifications';
 import type { SecurityStatus } from '@/types/config';
@@ -175,6 +176,8 @@ export const UnifiedAgents: Component = () => {
     const [expandedRowKey, setExpandedRowKey] = createSignal<string | null>(null);
     const [hostCustomUrl, setHostCustomUrl] = createSignal('');
     const [hostCustomUrlSaving, setHostCustomUrlSaving] = createSignal(false);
+    const [containerUrls, setContainerUrls] = createSignal<Record<string, string>>({});
+    const [containerUrlSaving, setContainerUrlSaving] = createSignal<Record<string, boolean>>({});
     const [filterType, setFilterType] = createSignal<'all' | UnifiedAgentType>('all');
     const [filterStatus, setFilterStatus] = createSignal<'all' | UnifiedAgentStatus>('all');
     const [filterScope, setFilterScope] = createSignal<'all' | Exclude<ScopeCategory, 'na'>>('all');
@@ -561,6 +564,22 @@ export const UnifiedAgents: Component = () => {
         }
     };
 
+    const saveContainerUrl = async (hostId: string, containerId: string) => {
+        if (containerUrlSaving()[containerId]) return;
+        setContainerUrlSaving(prev => ({ ...prev, [containerId]: true }));
+        const trimmed = (containerUrls()[containerId] || '').trim();
+        const metaKey = `${hostId}:container:${containerId}`;
+        try {
+            await DockerMetadataAPI.updateMetadata(metaKey, { customUrl: trimmed });
+            notificationStore.success('Container URL saved');
+        } catch (err) {
+            logger.error('Failed to save container URL', err);
+            notificationStore.error('Failed to save container URL');
+        } finally {
+            setContainerUrlSaving(prev => ({ ...prev, [containerId]: false }));
+        }
+    };
+
     const legacyAgents = createMemo(() => allHosts().filter(h => h.isLegacy));
     const hasLegacyAgents = createMemo(() => legacyAgents().length > 0);
 
@@ -714,6 +733,48 @@ export const UnifiedAgents: Component = () => {
                 logger.error('Failed to load host metadata', err);
                 if (expandedRowKey() !== currentKey) return;
                 setHostCustomUrl('');
+            }
+        })();
+    });
+
+    createEffect(() => {
+        const key = expandedRowKey();
+        if (!key) {
+            setContainerUrls({});
+            return;
+        }
+
+        const row = untrack(() => unifiedRows().find(r => r.rowKey === key));
+        if (!row || row.status !== 'active' || !row.types.includes('docker')) {
+            setContainerUrls({});
+            return;
+        }
+
+        const dockerHost = untrack(() => (state.dockerHosts || []).find(h => h.id === row.id));
+        if (!dockerHost?.containers?.length) {
+            setContainerUrls({});
+            return;
+        }
+
+        const hostId = row.id;
+        const containers = dockerHost.containers;
+        const currentKey = key;
+        void (async () => {
+            try {
+                const results: Record<string, string> = {};
+                await Promise.all(containers.map(async (c) => {
+                    const metaKey = `${hostId}:container:${c.id}`;
+                    try {
+                        const meta = await DockerMetadataAPI.getMetadata(metaKey);
+                        results[c.id] = meta.customUrl || '';
+                    } catch {
+                        results[c.id] = '';
+                    }
+                }));
+                if (expandedRowKey() !== currentKey) return;
+                setContainerUrls(results);
+            } catch (err) {
+                logger.error('Failed to load container metadata', err);
             }
         })();
     });
@@ -1772,6 +1833,62 @@ export const UnifiedAgents: Component = () => {
                                                                 </div>
                                                             </div>
                                                         </div>
+                                                        <Show when={row.status === 'active' && row.types.includes('docker')}>
+                                                            {(() => {
+                                                                const containers = () => (state.dockerHosts || []).find(h => h.id === row.id)?.containers || [];
+                                                                return (
+                                                                    <Show when={containers().length > 0}>
+                                                                        <div class="mt-4 rounded-lg border border-gray-200 bg-white px-4 py-3 dark:border-gray-700 dark:bg-gray-900/30">
+                                                                            <div class="mb-2 text-xs font-medium text-gray-700 dark:text-gray-300">
+                                                                                Container Custom URLs
+                                                                            </div>
+                                                                            <div class="space-y-3">
+                                                                                <For each={containers()}>
+                                                                                    {(container) => {
+                                                                                        const cid = container.id;
+                                                                                        return (
+                                                                                            <div>
+                                                                                                <div class="mb-1 text-xs text-gray-500 dark:text-gray-400">
+                                                                                                    <span class="font-medium text-gray-700 dark:text-gray-300">{container.name || cid}</span>
+                                                                                                    <span class="ml-1.5 inline-flex items-center rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-gray-700 dark:text-gray-400">
+                                                                                                        {container.state}
+                                                                                                    </span>
+                                                                                                </div>
+                                                                                                <div class="flex gap-2">
+                                                                                                    <input
+                                                                                                        type="text"
+                                                                                                        value={containerUrls()[cid] || ''}
+                                                                                                        onInput={(e) => setContainerUrls(prev => ({ ...prev, [cid]: e.currentTarget.value }))}
+                                                                                                        onKeyDown={(e) => {
+                                                                                                            if (e.key === 'Enter' && !containerUrlSaving()[cid]) {
+                                                                                                                void saveContainerUrl(row.id, cid);
+                                                                                                            }
+                                                                                                        }}
+                                                                                                        placeholder="https://container.example.com"
+                                                                                                        class="flex-1 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-800"
+                                                                                                    />
+                                                                                                    <button
+                                                                                                        type="button"
+                                                                                                        onClick={() => void saveContainerUrl(row.id, cid)}
+                                                                                                        disabled={Boolean(containerUrlSaving()[cid])}
+                                                                                                        class="inline-flex items-center justify-center rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                                                                                                    >
+                                                                                                        {containerUrlSaving()[cid] ? 'Saving…' : 'Save'}
+                                                                                                    </button>
+                                                                                                </div>
+                                                                                            </div>
+                                                                                        );
+                                                                                    }}
+                                                                                </For>
+                                                                            </div>
+                                                                            <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                                                                                Optional URL override used when Pulse links to this container (leave blank to use the default).
+                                                                            </p>
+                                                                        </div>
+                                                                    </Show>
+                                                                );
+                                                            })()}
+                                                        </Show>
                                                     </td>
                                                 </tr>
                                             </Show>
