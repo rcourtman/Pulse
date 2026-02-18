@@ -414,7 +414,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
 	        class="overflow-x-auto"
 	        style={{ '-webkit-overflow-scrolling': 'touch' }}
 	      >
-	        <table class="w-full border-collapse whitespace-nowrap" style={{ 'table-layout': 'fixed', 'min-width': '600px' }}>
+	        <table class="w-full border-collapse whitespace-nowrap" style={{ 'table-layout': 'fixed', 'min-width': isMobile() ? undefined : '600px' }}>
 	          <thead>
 	            <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
 	              <th class={`${thClassBase} text-left pl-2 sm:pl-3`} style={resourceColumnStyle()} onClick={() => handleSort('name')}>
@@ -805,7 +805,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
 	              PBS Services
 	            </div>
 	            <div class="overflow-x-auto" style={{ '-webkit-overflow-scrolling': 'touch' }}>
-	              <table class="w-full border-collapse whitespace-nowrap" style={{ 'table-layout': 'fixed', 'min-width': '500px' }}>
+	              <table class="w-full border-collapse whitespace-nowrap" style={{ 'table-layout': 'fixed', 'min-width': isMobile() ? undefined : '500px' }}>
 	                <thead>
 	                  <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
 	                    <th class={`${staticThClass} text-left pl-2 sm:pl-3`} style={resourceColumnStyle()}>

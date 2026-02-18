@@ -104,7 +104,7 @@ export const ResponsiveMetricCell: Component<ResponsiveMetricCellProps> = (props
     if (isMedium()) return compactSublabel();
     return undefined;
   });
-  const showLabel = createMemo(() => !isVeryNarrow());
+  const showLabel = createMemo(() => true);
   const showMobileText = createMemo(() => Boolean(props.showMobile) && !isVeryNarrow());
   const showMetricBar = createMemo(() => !props.showMobile || isVeryNarrow());
 
