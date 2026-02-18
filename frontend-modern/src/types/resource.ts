@@ -7,6 +7,8 @@
  * The frontend receives these via WebSocket state.resources[].
  */
 
+import type { HostNetworkInterface, HostSensorSummary, HostRAIDArray, Memory } from '@/types/api';
+
 // Resource types - what kind of entity is being monitored
 export type ResourceType =
     | 'node'            // Proxmox VE node
@@ -104,6 +106,60 @@ export interface ResourceDiscoveryTarget {
     hostname?: string;
 }
 
+export interface ResourceAgentDisk {
+    device?: string;
+    mountpoint?: string;
+    filesystem?: string;
+    type?: string;
+    total?: number;
+    used?: number;
+    free?: number;
+}
+
+export interface ResourceAgentMeta {
+    agentId?: string;
+    agentVersion?: string;
+    hostname?: string;
+    platform?: string;
+    osName?: string;
+    osVersion?: string;
+    kernelVersion?: string;
+    architecture?: string;
+    uptimeSeconds?: number;
+    cpuCount?: number;
+    memory?: Partial<Memory>;
+    networkInterfaces?: HostNetworkInterface[];
+    disks?: ResourceAgentDisk[];
+    sensors?: HostSensorSummary;
+    raid?: HostRAIDArray[];
+    commandsEnabled?: boolean;
+    tokenId?: string;
+    tokenName?: string;
+    tokenHint?: string;
+    tokenLastUsedAt?: number;
+}
+
+export interface ResourceKubernetesMetricCapabilities {
+    nodeCpuMemory?: boolean;
+    nodeTelemetry?: boolean;
+    podCpuMemory?: boolean;
+    podNetwork?: boolean;
+    podEphemeralDisk?: boolean;
+    podDiskIo?: boolean;
+}
+
+export interface ResourceKubernetesMeta {
+    clusterId?: string;
+    clusterName?: string;
+    context?: string;
+    nodeName?: string;
+    namespace?: string;
+    uptimeSeconds?: number;
+    temperature?: number;
+    pendingUninstall?: boolean;
+    metricCapabilities?: ResourceKubernetesMetricCapabilities;
+}
+
 /**
  * The core unified Resource type.
  * This is what the frontend receives from WebSocket state.resources[].
@@ -148,6 +204,11 @@ export interface Resource {
 
     // Metrics history query coordinates from backend
     metricsTarget?: { resourceType: string; resourceId: string };
+
+    // Common source facets (optional; not all backends/state payloads include these).
+    // Prefer these over casting `platformData` when available.
+    agent?: ResourceAgentMeta;
+    kubernetes?: ResourceKubernetesMeta;
 
     // Platform-specific data (varies by type)
     platformData?: Record<string, unknown>;

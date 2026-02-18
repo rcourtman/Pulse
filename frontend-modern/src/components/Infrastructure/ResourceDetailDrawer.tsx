@@ -1,7 +1,7 @@
 import { Show, Suspense, createMemo, For, createSignal, createEffect } from 'solid-js';
 import type { Component, JSX } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import type { Disk, Host, HostNetworkInterface, HostSensorSummary, Memory, Node } from '@/types/api';
+import type { Disk, Host, HostNetworkInterface, HostRAIDArray, HostSensorSummary, Memory, Node } from '@/types/api';
 import type { Resource, ResourceMetric } from '@/types/resource';
 import { getDisplayName } from '@/types/resource';
 import { formatUptime, formatRelativeTime, formatAbsoluteTime } from '@/utils/format';
@@ -9,6 +9,11 @@ import { formatTemperature } from '@/utils/temperature';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TagBadges } from '@/components/Dashboard/TagBadges';
 import { getHostStatusIndicator } from '@/utils/status';
+import { AIAPI } from '@/api/ai';
+import { renderMarkdown } from '@/components/AI/aiChatUtils';
+import { aiChatStore } from '@/stores/aiChat';
+import { getUpgradeActionUrlOrFallback, hasFeature } from '@/stores/license';
+import { logger } from '@/utils/logger';
 import { getPlatformBadge, getSourceBadge, getTypeBadge, getUnifiedSourceBadges } from './resourceBadges';
 import { buildWorkloadsHref } from './workloadsLink';
 import { buildServiceDetailLinks } from './serviceDetailLinks';
@@ -18,6 +23,7 @@ import { RootDiskCard } from '@/components/shared/cards/RootDiskCard';
 import { NetworkInterfacesCard } from '@/components/shared/cards/NetworkInterfacesCard';
 import { DisksCard } from '@/components/shared/cards/DisksCard';
 import { TemperaturesCard } from '@/components/shared/cards/TemperaturesCard';
+import { RaidCard } from '@/components/shared/cards/RaidCard';
 import { createLocalStorageBooleanSignal, STORAGE_KEYS } from '@/utils/localStorage';
 import { ReportMergeModal } from './ReportMergeModal';
 import { DiscoveryTab } from '@/components/Discovery/DiscoveryTab';
@@ -61,8 +67,9 @@ type AgentPlatformData = {
   networkInterfaces?: HostNetworkInterface[];
   disks?: AgentDiskInfo[];
   sensors?: HostSensorSummary;
+  raid?: HostRAIDArray[];
   cpuCount?: number;
-  memory?: Memory;
+  memory?: Partial<Memory>;
 };
 
 type PBSPlatformData = {
@@ -107,6 +114,9 @@ type KubernetesMetricCapabilities = {
 };
 
 type KubernetesPlatformData = {
+  clusterId?: string;
+  clusterName?: string;
+  context?: string;
   metricCapabilities?: KubernetesMetricCapabilities;
 };
 
@@ -349,9 +359,9 @@ const toNodeFromProxmox = (resource: Resource): Node | null => {
   } as Node;
 };
 
-const toHostFromAgent = (resource: Resource): Host | null => {
+const toHostFromAgent = (resource: Resource, explicitAgent?: AgentPlatformData): Host | null => {
   const platformData = resource.platformData as PlatformData | undefined;
-  const agent = platformData?.agent;
+  const agent = explicitAgent ?? platformData?.agent;
   if (!agent) return null;
 
   const proxmoxCores = platformData?.proxmox?.cpuInfo?.cores;
@@ -374,6 +384,7 @@ const toHostFromAgent = (resource: Resource): Host | null => {
     disks: toHostDisks(agent.disks),
     networkInterfaces: agent.networkInterfaces,
     sensors: agent.sensors,
+    raid: agent.raid,
     status: resource.status,
     uptimeSeconds: agent.uptimeSeconds ?? resource.uptime ?? 0,
     lastSeen: resource.lastSeen,
@@ -481,8 +492,12 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
   });
   const hasUnifiedSources = createMemo(() => unifiedSourceBadges().length > 0);
   const platformData = createMemo(() => props.resource.platformData as PlatformData | undefined);
+  const agentMeta = createMemo(() => props.resource.agent ?? (platformData()?.agent as AgentPlatformData | undefined));
+  const kubernetesMeta = createMemo(
+    () => props.resource.kubernetes ?? (platformData()?.kubernetes as KubernetesPlatformData | undefined),
+  );
   const kubernetesCapabilityBadges = createMemo(() => {
-    const capabilities = platformData()?.kubernetes?.metricCapabilities;
+    const capabilities = kubernetesMeta()?.metricCapabilities;
     if (!capabilities) return [];
 
     const supportedBadge = 'inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400';
@@ -536,8 +551,45 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
   });
 
   const proxmoxNode = createMemo(() => toNodeFromProxmox(props.resource));
-  const agentHost = createMemo(() => toHostFromAgent(props.resource));
+  const agentHost = createMemo(() => toHostFromAgent(props.resource, agentMeta()));
   const temperatureRows = createMemo(() => buildTemperatureRows(agentHost()?.sensors));
+
+  const isKubernetesCluster = createMemo(() => props.resource.type === 'k8s-cluster');
+  const hasKubernetesAI = createMemo(() => hasFeature('kubernetes_ai'));
+  const aiConfigured = createMemo(() => aiChatStore.enabled === true);
+  const aiStatusChecked = createMemo(() => aiChatStore.enabled !== null);
+  const kubernetesClusterId = createMemo(() => {
+    const raw = (kubernetesMeta()?.clusterId || '').trim();
+    return raw || props.resource.id;
+  });
+  const [k8sAIAnalyzing, setK8sAIAnalyzing] = createSignal(false);
+  const [k8sAIError, setK8sAIError] = createSignal<string | null>(null);
+  const [k8sAIResult, setK8sAIResult] = createSignal<string | null>(null);
+
+  createEffect(() => {
+    // Reset analysis state if the target cluster changes while the drawer is open.
+    kubernetesClusterId();
+    setK8sAIAnalyzing(false);
+    setK8sAIError(null);
+    setK8sAIResult(null);
+  });
+
+  const runKubernetesAIAnalysis = async () => {
+    const clusterId = kubernetesClusterId();
+    if (!clusterId || k8sAIAnalyzing()) return;
+    setK8sAIAnalyzing(true);
+    setK8sAIError(null);
+    try {
+      const resp = await AIAPI.analyzeKubernetesCluster(clusterId);
+      setK8sAIResult((resp.content || '').trim() || '(No analysis returned)');
+    } catch (err) {
+      logger.warn('[ResourceDetailDrawer] Kubernetes AI analysis failed', err);
+      const message = err instanceof Error && err.message ? err.message : 'Failed to analyze cluster';
+      setK8sAIError(message);
+    } finally {
+      setK8sAIAnalyzing(false);
+    }
+  };
 
   const pbsData = createMemo(() => platformData()?.pbs);
   const pmgData = createMemo(() => platformData()?.pmg);
@@ -961,19 +1013,20 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                 </>
               )}
             </Show>
-            <Show when={agentHost()}>
-              {(host) => (
-                <>
-                  <SystemInfoCard variant="host" host={host()} />
-                  <HardwareCard variant="host" host={host()} />
-                  <NetworkInterfacesCard interfaces={host().networkInterfaces} />
-                  <DisksCard disks={host().disks} />
-                  <TemperaturesCard rows={temperatureRows()} />
-                </>
-              )}
-            </Show>
-          </div>
-        </Show>
+	            <Show when={agentHost()}>
+	              {(host) => (
+	                <>
+	                  <SystemInfoCard variant="host" host={host()} />
+	                  <HardwareCard variant="host" host={host()} />
+	                  <NetworkInterfacesCard interfaces={host().networkInterfaces} />
+	                  <DisksCard disks={host().disks} />
+	                  <RaidCard arrays={agentMeta()?.raid} />
+	                  <TemperaturesCard rows={temperatureRows()} />
+	                </>
+	              )}
+	            </Show>
+	          </div>
+	        </Show>
 
         <div class="grid gap-3 md:grid-cols-2 lg:grid-cols-3 mt-3">
           <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
@@ -1031,9 +1084,9 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
             </div>
           </div>
 
-          <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-            <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200 mb-2">Identity</div>
-            <div class="space-y-1.5 text-[11px]">
+	          <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+	            <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200 mb-2">Identity</div>
+	            <div class="space-y-1.5 text-[11px]">
               <For each={primaryIdentityRows()}>
                 {(row) => (
                   <div class="flex items-center justify-between gap-2">
@@ -1107,13 +1160,98 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                   No enriched identity metadata yet.
                 </div>
               </Show>
-            </div>
-          </div>
+	            </div>
+	          </div>
 
-          <Show when={pbsData()}>
-            {(pbs) => (
-              <div class="rounded border border-indigo-200 bg-indigo-50/60 p-3 shadow-sm dark:border-indigo-700/60 dark:bg-indigo-900/20">
-                <div class="mb-2 flex items-center justify-between gap-2">
+	          <Show when={isKubernetesCluster()}>
+	            <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+	              <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200 mb-2">AI Analysis</div>
+	              <div class="space-y-2 text-[11px]">
+	                <div class="flex items-center justify-between gap-2">
+	                  <span class="text-gray-500 dark:text-gray-400">Cluster ID</span>
+	                  <span class="font-medium text-gray-700 dark:text-gray-200 truncate" title={kubernetesClusterId()}>
+	                    {kubernetesClusterId()}
+	                  </span>
+	                </div>
+
+	                <Show
+	                  when={hasKubernetesAI()}
+	                  fallback={
+	                    <div class="rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-[10px] text-amber-800 dark:border-amber-800/40 dark:bg-amber-900/20 dark:text-amber-200">
+	                      Requires the Kubernetes Analysis license feature.{' '}
+	                      <a class="underline" href={getUpgradeActionUrlOrFallback('kubernetes_ai')}>
+	                        Upgrade
+	                      </a>
+	                    </div>
+	                  }
+	                >
+	                  <Show
+	                    when={aiStatusChecked()}
+	                    fallback={
+	                      <div class="flex items-center gap-2 text-[10px] text-gray-500 dark:text-gray-400">
+	                        <div class="animate-spin h-3 w-3 border-2 border-blue-500 border-t-transparent rounded-full" />
+	                        Checking AI configuration...
+	                      </div>
+	                    }
+	                  >
+	                    <Show
+	                      when={aiConfigured()}
+	                      fallback={
+	                        <div class="rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-[10px] text-amber-800 dark:border-amber-800/40 dark:bg-amber-900/20 dark:text-amber-200">
+	                          AI is not configured.{' '}
+	                          <a class="underline" href="/settings/ai">
+	                            Configure AI
+	                          </a>
+	                        </div>
+	                      }
+	                    >
+	                      <button
+	                        type="button"
+	                        disabled={k8sAIAnalyzing()}
+	                        onClick={runKubernetesAIAnalysis}
+	                        class="inline-flex items-center justify-center gap-2 rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-100 disabled:opacity-60 disabled:cursor-not-allowed dark:border-gray-700 dark:bg-gray-900/60 dark:text-gray-200 dark:hover:bg-gray-800"
+	                      >
+	                        <Show when={k8sAIAnalyzing()}>
+	                          <div class="animate-spin h-3 w-3 border-2 border-blue-500 border-t-transparent rounded-full" />
+	                        </Show>
+	                        Analyze with AI
+	                      </button>
+	                    </Show>
+	                  </Show>
+	                </Show>
+
+	                <Show when={k8sAIError()}>
+	                  <div class="rounded border border-red-200 bg-red-50 px-2 py-1.5 text-[10px] text-red-800 dark:border-red-800/40 dark:bg-red-900/20 dark:text-red-200">
+	                    {k8sAIError()}
+	                  </div>
+	                </Show>
+
+	                <Show when={k8sAIResult()}>
+	                  <div class="max-h-[260px] overflow-auto rounded border border-gray-200 bg-white/70 p-2 dark:border-gray-700 dark:bg-gray-900/40">
+	                    <div
+	                      class="text-sm prose prose-slate prose-sm dark:prose-invert max-w-none
+	                             prose-p:leading-relaxed prose-p:my-2
+	                             prose-pre:bg-slate-900 prose-pre:text-slate-100 prose-pre:rounded-xl prose-pre:text-xs prose-pre:border prose-pre:border-slate-800
+	                             prose-code:text-blue-700 dark:prose-code:text-blue-300
+	                             prose-code:bg-blue-50/50 dark:prose-code:bg-blue-900/20
+	                             prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-md prose-code:font-mono prose-code:text-[0.9em] prose-code:border prose-code:border-blue-100 dark:prose-code:border-blue-800/30
+	                             prose-code:before:content-none prose-code:after:content-none
+	                             prose-headings:font-semibold prose-headings:tracking-tight
+	                             prose-hr:border-slate-200 dark:prose-hr:border-slate-700
+	                             prose-ul:my-2 prose-ol:my-2 prose-li:my-1"
+	                      // eslint-disable-next-line solid/no-innerhtml
+	                      innerHTML={renderMarkdown(k8sAIResult() || '')}
+	                    />
+	                  </div>
+	                </Show>
+	              </div>
+	            </div>
+	          </Show>
+
+	          <Show when={pbsData()}>
+	            {(pbs) => (
+	              <div class="rounded border border-indigo-200 bg-indigo-50/60 p-3 shadow-sm dark:border-indigo-700/60 dark:bg-indigo-900/20">
+	                <div class="mb-2 flex items-center justify-between gap-2">
                   <div class="text-[11px] font-medium uppercase tracking-wide text-indigo-700 dark:text-indigo-300">PBS Service</div>
                   <Show when={pbs().hostname}>
                     <span class="max-w-[55%] truncate text-[10px] text-indigo-700/80 dark:text-indigo-300/80" title={pbs().hostname}>
