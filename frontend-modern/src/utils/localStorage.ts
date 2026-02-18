@@ -189,7 +189,9 @@ export const STORAGE_KEYS = {
   DASHBOARD_AUTO_REFRESH: 'dashboardAutoRefresh',
   DASHBOARD_SEARCH_HISTORY: 'dashboardSearchHistory',
   WORKLOADS_SUMMARY_RANGE: 'workloadsSummaryRange',
+  WORKLOADS_SUMMARY_COLLAPSED: 'workloadsSummaryCollapsed',
   INFRASTRUCTURE_SUMMARY_RANGE: 'infrastructureSummaryRange',
+  INFRASTRUCTURE_SUMMARY_COLLAPSED: 'infrastructureSummaryCollapsed',
 
   // Storage search
   STORAGE_SEARCH_HISTORY: 'storageSearchHistory',

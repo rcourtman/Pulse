@@ -15,6 +15,7 @@ import ListFilterIcon from 'lucide-solid/icons/list-filter';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { ScrollToTopButton } from '@/components/shared/ScrollToTopButton';
 import { STORAGE_KEYS } from '@/utils/localStorage';
+import { segmentedButtonClass } from '@/utils/segmentedButton';
 import { isKioskMode, subscribeToKioskMode } from '@/utils/url';
 import {
   isSummaryTimeRange,
@@ -70,6 +71,11 @@ export function Infrastructure() {
     STORAGE_KEYS.INFRASTRUCTURE_SUMMARY_RANGE,
     '1h',
     { deserialize: (raw) => (isSummaryTimeRange(raw) ? raw : '1h') },
+  );
+  const [summaryCollapsed, setSummaryCollapsed] = usePersistentSignal<boolean>(
+    STORAGE_KEYS.INFRASTRUCTURE_SUMMARY_COLLAPSED,
+    false,
+    { deserialize: (raw) => raw === 'true' },
   );
   type GroupingMode = 'grouped' | 'flat';
   const [groupingMode, setGroupingMode] = usePersistentSignal<GroupingMode>(
@@ -307,17 +313,6 @@ export function Infrastructure() {
     setSearchQuery('');
   };
 
-  const segmentedButtonClass = (selected: boolean, disabled: boolean) => {
-    const base = 'px-2 py-1 text-xs font-medium rounded-md transition-all duration-150 active:scale-95';
-    if (disabled) {
-      return `${base} text-gray-400 dark:text-gray-600 cursor-not-allowed`;
-    }
-    if (selected) {
-      return `${base} bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm ring-1 ring-gray-200 dark:ring-gray-600`;
-    }
-    return `${base} text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600/50`;
-  };
-
   const searchTerms = createMemo(() => tokenizeSearch(searchQuery()));
 
   const filteredResources = createMemo(() =>
@@ -391,15 +386,17 @@ export function Infrastructure() {
                 />
               </Show>
 
-              <div class="hidden lg:block sticky-shield sticky top-0 z-20 bg-white dark:bg-gray-800">
-                <InfrastructureSummary
-                  hosts={filteredResources()}
-                  timeRange={infrastructureSummaryRange()}
-                  onTimeRangeChange={setInfrastructureSummaryRange}
-                  hoveredHostId={hoveredResourceId()}
-                  focusedHostId={expandedResourceId()}
-                />
-              </div>
+              <Show when={!summaryCollapsed()}>
+                <div class="hidden lg:block sticky-shield sticky top-0 z-20 bg-white dark:bg-gray-800">
+                  <InfrastructureSummary
+                    hosts={filteredResources()}
+                    timeRange={infrastructureSummaryRange()}
+                    onTimeRangeChange={setInfrastructureSummaryRange}
+                    hoveredHostId={hoveredResourceId()}
+                    focusedHostId={expandedResourceId()}
+                  />
+                </div>
+              </Show>
 
               <Show when={!kioskMode()}>
                 <Card padding="sm" class="mb-4">
@@ -468,7 +465,7 @@ export function Infrastructure() {
                           <button
                             type="button"
                             onClick={() => setGroupingMode('grouped')}
-                            class={`inline-flex items-center gap-1.5 ${segmentedButtonClass(groupingMode() === 'grouped', false)}`}
+                            class={segmentedButtonClass(groupingMode() === 'grouped')}
                             title="Group by cluster"
                           >
                             <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -479,7 +476,7 @@ export function Infrastructure() {
                           <button
                             type="button"
                             onClick={() => setGroupingMode('flat')}
-                            class={`inline-flex items-center gap-1.5 ${segmentedButtonClass(groupingMode() === 'flat', false)}`}
+                            class={segmentedButtonClass(groupingMode() === 'flat')}
                             title="Flat list view"
                           >
                             <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -491,6 +488,20 @@ export function Infrastructure() {
                               <line x1="3" y1="18" x2="3.01" y2="18" />
                             </svg>
                             List
+                          </button>
+                        </div>
+
+                        <div class="hidden lg:inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                          <button
+                            type="button"
+                            onClick={() => setSummaryCollapsed((c) => !c)}
+                            class={segmentedButtonClass(!summaryCollapsed())}
+                            title={summaryCollapsed() ? 'Show charts' : 'Hide charts'}
+                          >
+                            <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+                            </svg>
+                            Charts
                           </button>
                         </div>
 

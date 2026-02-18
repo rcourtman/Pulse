@@ -19,6 +19,7 @@ import {
   parseStorageLinkSearch,
 } from '@/routing/resourceLinks';
 import { formatBytes, formatPercent } from '@/utils/format';
+import { segmentedButtonClass } from '@/utils/segmentedButton';
 import { getProxmoxData } from '@/utils/resourcePlatformData';
 import { isKioskMode, subscribeToKioskMode } from '@/utils/url';
 import { useStorageRouteState } from './useStorageRouteState';
@@ -457,10 +458,7 @@ const Storage: Component = () => {
                   type="button"
                   onClick={() => setView('pools')}
                   aria-pressed={view() === 'pools'}
-                  class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${view() === 'pools'
-                    ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                    }`}
+                  class={segmentedButtonClass(view() === 'pools')}
                 >
                   Pools
                 </button>
@@ -468,10 +466,7 @@ const Storage: Component = () => {
                   type="button"
                   onClick={() => setView('disks')}
                   aria-pressed={view() === 'disks'}
-                  class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${view() === 'disks'
-                    ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                    }`}
+                  class={segmentedButtonClass(view() === 'disks')}
                 >
                   Physical Disks
                 </button>

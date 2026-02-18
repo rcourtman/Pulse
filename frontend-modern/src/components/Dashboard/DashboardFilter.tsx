@@ -6,6 +6,7 @@ import type { ColumnDef } from '@/hooks/useColumnVisibility';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import ListFilterIcon from 'lucide-solid/icons/list-filter';
+import { segmentedButtonClass } from '@/utils/segmentedButton';
 
 	interface DashboardFilterProps {
 	  search: () => string;
@@ -47,6 +48,8 @@ import ListFilterIcon from 'lucide-solid/icons/list-filter';
 	    options: { value: string; label: string }[];
 	    onChange: (value: string) => void;
   };
+  chartsCollapsed?: () => boolean;
+  onChartsToggle?: () => void;
 }
 
 export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
@@ -215,26 +218,47 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
             <button
               type="button"
               onClick={() => props.setGroupingMode('grouped')}
-              class={`inline-flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded-md transition-all duration-150 active:scale-95 ${props.groupingMode() === 'grouped'
-                ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm ring-1 ring-gray-200 dark:ring-gray-600'
-                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600/50'
-                }`}
+              class={segmentedButtonClass(props.groupingMode() === 'grouped')}
               title="Group by node"
             >
+              <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2v11z" />
+              </svg>
               Grouped
             </button>
             <button
               type="button"
               onClick={() => props.setGroupingMode('flat')}
-              class={`inline-flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded-md transition-all duration-150 active:scale-95 ${props.groupingMode() === 'flat'
-                ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm ring-1 ring-gray-200 dark:ring-gray-600'
-                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600/50'
-                }`}
+              class={segmentedButtonClass(props.groupingMode() === 'flat')}
               title="Flat list view"
             >
+              <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="8" y1="6" x2="21" y2="6" />
+                <line x1="8" y1="12" x2="21" y2="12" />
+                <line x1="8" y1="18" x2="21" y2="18" />
+                <line x1="3" y1="6" x2="3.01" y2="6" />
+                <line x1="3" y1="12" x2="3.01" y2="12" />
+                <line x1="3" y1="18" x2="3.01" y2="18" />
+              </svg>
               List
             </button>
           </div>
+
+          <Show when={props.onChartsToggle}>
+            <div class="hidden lg:inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+              <button
+                type="button"
+                onClick={props.onChartsToggle}
+                class={segmentedButtonClass(!props.chartsCollapsed?.())}
+                title={props.chartsCollapsed?.() ? 'Show charts' : 'Hide charts'}
+              >
+                <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+                </svg>
+                Charts
+              </button>
+            </div>
+          </Show>
 
           <Show when={props.availableColumns && props.isColumnHidden && props.onColumnToggle}>
             <ColumnPicker

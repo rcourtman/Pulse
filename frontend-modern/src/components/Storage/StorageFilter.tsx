@@ -6,6 +6,7 @@ import type { ColumnDef } from '@/hooks/useColumnVisibility';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import ListFilterIcon from 'lucide-solid/icons/list-filter';
+import { segmentedButtonClass } from '@/utils/segmentedButton';
 import type { StorageSourceOption } from './storageSourceOptions';
 
 export type StorageStatusFilter = 'all' | 'available' | 'warning' | 'critical' | 'offline' | 'unknown';
@@ -132,10 +133,7 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
                   type="button"
                   onClick={() => props.setGroupBy!('node')}
                   aria-pressed={props.groupBy!() === 'node'}
-                  class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.groupBy!() === 'node'
-                    ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                    }`}
+                  class={segmentedButtonClass(props.groupBy!() === 'node')}
                 >
                   By Node
                 </button>
@@ -143,10 +141,7 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
                   type="button"
                   onClick={() => props.setGroupBy!('type')}
                   aria-pressed={props.groupBy!() === 'type'}
-                  class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.groupBy!() === 'type'
-                    ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                    }`}
+                  class={segmentedButtonClass(props.groupBy!() === 'type')}
                 >
                   By Type
                 </button>
@@ -154,10 +149,7 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
                   type="button"
                   onClick={() => props.setGroupBy!('status')}
                   aria-pressed={props.groupBy!() === 'status'}
-                  class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.groupBy!() === 'status'
-                    ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                    }`}
+                  class={segmentedButtonClass(props.groupBy!() === 'status')}
                 >
                   By Status
                 </button>

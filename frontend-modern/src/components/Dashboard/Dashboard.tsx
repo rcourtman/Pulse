@@ -812,6 +812,11 @@ export function Dashboard(props: DashboardProps) {
       deserialize: (raw) => (isSummaryTimeRange(raw) ? raw : '1h'),
     },
   );
+  const [workloadsSummaryCollapsed, setWorkloadsSummaryCollapsed] = usePersistentSignal<boolean>(
+    STORAGE_KEYS.WORKLOADS_SUMMARY_COLLAPSED,
+    false,
+    { deserialize: (raw) => raw === 'true' },
+  );
 
   // Sorting state - default to type ascending so VMs/LXCs/Docker/K8s cluster together
   const [sortKey, setSortKey] = createSignal<WorkloadSortKey | null>('type');
@@ -1330,7 +1335,7 @@ export function Dashboard(props: DashboardProps) {
 
   return (
     <div class="space-y-3">
-      <Show when={isWorkloadsRoute()}>
+      <Show when={isWorkloadsRoute() && !workloadsSummaryCollapsed()}>
         <div class="hidden lg:block sticky-shield sticky top-0 z-20 bg-white dark:bg-gray-800">
           <WorkloadsSummary
             timeRange={workloadsSummaryRange()}
@@ -1505,6 +1510,8 @@ export function Dashboard(props: DashboardProps) {
           isColumnHidden={columnVisibility.isHiddenByUser}
           onColumnToggle={columnVisibility.toggle}
           onColumnReset={columnVisibility.resetToDefaults}
+          chartsCollapsed={isWorkloadsRoute() ? workloadsSummaryCollapsed : undefined}
+          onChartsToggle={isWorkloadsRoute() ? () => setWorkloadsSummaryCollapsed((c) => !c) : undefined}
           containerRuntimeFilter={(() => {
             if (!isWorkloadsRoute()) return undefined;
             if (viewMode() !== 'docker') return undefined;

@@ -39,6 +39,8 @@ import Gauge from 'lucide-solid/icons/gauge';
 import Send from 'lucide-solid/icons/send';
 import Calendar from 'lucide-solid/icons/calendar';
 import ListFilterIcon from 'lucide-solid/icons/list-filter';
+import { SearchInput } from '@/components/shared/SearchInput';
+import { STORAGE_KEYS } from '@/utils/localStorage';
 
 type AlertTab = 'overview' | 'thresholds' | 'destinations' | 'schedule' | 'history';
 
@@ -5546,66 +5548,66 @@ function HistoryTab(props: {
       </Card>
 
       {/* Filters */}
-      <div class="flex flex-col gap-2 mb-4">
-        <div class="flex items-center gap-2">
-          <div class="flex-1">
-            <input
-              ref={searchInputRef}
-              type="text"
+      <Card padding="sm" class="mb-4">
+        <div class="flex flex-col gap-2">
+          <div class="flex items-center gap-2">
+            <SearchInput
+              value={searchTerm}
+              onChange={setSearchTerm}
               placeholder="Search alerts..."
-              value={searchTerm()}
-              onInput={(e) => setSearchTerm(e.currentTarget.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') {
-                  setSearchTerm('');
-                  e.currentTarget.blur();
-                }
-              }}
-              class="w-full px-3 py-2 text-sm border rounded-lg dark:bg-gray-700 dark:border-gray-600 
-                     dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500"
+              class="w-full"
+              inputRef={(el) => (searchInputRef = el)}
+              history={{ storageKey: STORAGE_KEYS.ALERTS_SEARCH_HISTORY }}
             />
+            <Show when={isMobile()}>
+              <button
+                type="button"
+                onClick={() => setFiltersOpen((o) => !o)}
+                class="flex items-center gap-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400"
+              >
+                <ListFilterIcon class="w-3.5 h-3.5" />
+                Filters
+                <Show when={activeFilterCount() > 0}>
+                  <span class="ml-0.5 rounded-full bg-blue-500 px-1.5 py-0.5 text-[10px] font-semibold text-white leading-none">
+                    {activeFilterCount()}
+                  </span>
+                </Show>
+              </button>
+            </Show>
           </div>
-          <Show when={isMobile()}>
-            <button
-              type="button"
-              onClick={() => setFiltersOpen((o) => !o)}
-              class="flex items-center gap-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400"
-            >
-              <ListFilterIcon class="w-3.5 h-3.5" />
-              Filters
-              <Show when={activeFilterCount() > 0}>
-                <span class="ml-0.5 rounded-full bg-blue-500 px-1.5 py-0.5 text-[10px] font-semibold text-white leading-none">
-                  {activeFilterCount()}
-                </span>
-              </Show>
-            </button>
+          <Show when={!isMobile() || filtersOpen()}>
+            <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+              <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                <label for="alert-time-filter" class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Period</label>
+                <select
+                  id="alert-time-filter"
+                  value={timeFilter()}
+                  onChange={(e) => setTimeFilter(e.currentTarget.value as '24h' | '7d' | '30d' | 'all')}
+                  class="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+                >
+                  <option value="24h">Last 24h</option>
+                  <option value="7d">Last 7d</option>
+                  <option value="30d">Last 30d</option>
+                  <option value="all">All Time</option>
+                </select>
+              </div>
+              <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                <label for="alert-severity-filter" class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Severity</label>
+                <select
+                  id="alert-severity-filter"
+                  value={severityFilter()}
+                  onChange={(e) => setSeverityFilter(e.currentTarget.value as 'warning' | 'critical' | 'all')}
+                  class="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+                >
+                  <option value="all">All</option>
+                  <option value="critical">Critical</option>
+                  <option value="warning">Warning</option>
+                </select>
+              </div>
+            </div>
           </Show>
         </div>
-        <Show when={!isMobile() || filtersOpen()}>
-          <div class="flex flex-wrap gap-2">
-            <select
-              value={timeFilter()}
-              onChange={(e) => setTimeFilter(e.currentTarget.value as '24h' | '7d' | '30d' | 'all')}
-              class="w-full sm:w-auto px-3 py-2 text-sm border rounded-lg dark:bg-gray-700 dark:border-gray-600"
-            >
-              <option value="24h">Last 24h</option>
-              <option value="7d">Last 7d</option>
-              <option value="30d">Last 30d</option>
-              <option value="all">All Time</option>
-            </select>
-
-            <select
-              value={severityFilter()}
-              onChange={(e) => setSeverityFilter(e.currentTarget.value as 'warning' | 'critical' | 'all')}
-              class="w-full sm:w-auto px-3 py-2 text-sm border rounded-lg dark:bg-gray-700 dark:border-gray-600"
-            >
-              <option value="all">All Levels</option>
-              <option value="critical">Critical Only</option>
-              <option value="warning">Warning Only</option>
-            </select>
-          </div>
-        </Show>
-      </div>
+      </Card>
 
       <Show when={resourceIncidentPanel()}>
         {(selection) => {
