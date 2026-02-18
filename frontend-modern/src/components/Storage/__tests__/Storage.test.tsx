@@ -333,8 +333,8 @@ describe('Storage', () => {
     expect(screen.getByRole('button', { name: 'Physical Disks' })).toHaveAttribute('aria-pressed', 'true');
     expect((screen.getByLabelText('Node') as HTMLSelectElement).value).toBe('node-2');
     expect((screen.getByLabelText('Sort By') as HTMLSelectElement).value).toBe('usage');
-    expect(screen.getByRole('button', { name: 'PVE' })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('button', { name: 'Warning' })).toHaveAttribute('aria-pressed', 'true');
+    expect((screen.getByLabelText('Source') as HTMLSelectElement).value).toBe('proxmox-pve');
+    expect((screen.getByLabelText('Status') as HTMLSelectElement).value).toBe('warning');
 
     // Grouping controls are only shown on the Pools view.
     fireEvent.click(screen.getByRole('button', { name: 'Pools' }));
@@ -358,7 +358,7 @@ describe('Storage', () => {
     expect(screen.getByTestId('disk-list')).toHaveTextContent('disk-view:node-2:ceph');
     expect(screen.getByRole('button', { name: 'Physical Disks' })).toHaveAttribute('aria-pressed', 'true');
     expect((screen.getByLabelText('Node') as HTMLSelectElement).value).toBe('node-2');
-    expect(screen.getByRole('button', { name: 'PVE' })).toHaveAttribute('aria-pressed', 'true');
+    expect((screen.getByLabelText('Source') as HTMLSelectElement).value).toBe('proxmox-pve');
   });
 
   it('shows ceph summary card and pool expand chevron', async () => {

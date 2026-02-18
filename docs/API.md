@@ -95,6 +95,21 @@ Note: `GET /api/resources` is optimized for list views. Some large, platform-spe
 `GET /api/resources/stats`
 Returns aggregations (counts + health rollups).
 
+`GET /api/resources/k8s/namespaces?cluster=<clusterName>`
+Returns namespace-level rollups (pods + deployments) for a Kubernetes cluster. Requires `monitoring:read`.
+```json
+{
+  "cluster": "prod-k8s",
+  "data": [
+    {
+      "namespace": "default",
+      "pods": { "total": 12, "online": 10, "warning": 2, "offline": 0, "unknown": 0 },
+      "deployments": { "total": 3, "online": 3, "warning": 0, "offline": 0, "unknown": 0 }
+    }
+  ]
+}
+```
+
 `GET /api/resources/{id}`
 Fetch a single resource by ID.
 
