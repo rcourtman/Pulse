@@ -83,11 +83,11 @@ vi.mock('@/hooks/useDashboardTrends', () => ({
   }),
 }));
 
-vi.mock('@/hooks/useDashboardBackups', () => ({
-  useDashboardBackups: () => () => ({
-    totalBackups: 0,
+vi.mock('@/hooks/useDashboardRecovery', () => ({
+  useDashboardRecovery: () => () => ({
+    totalProtected: 0,
     byOutcome: {},
-    latestBackupTimestamp: null,
+    latestEventTimestamp: null,
     hasData: false,
   }),
 }));

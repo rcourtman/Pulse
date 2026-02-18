@@ -686,9 +686,25 @@ export interface PMGInstance {
   mailCount?: PMGMailCountPoint[];
   spamDistribution?: PMGSpamBucket[];
   quarantine?: PMGQuarantineTotals;
+  relayDomains?: PMGRelayDomain[];
+  domainStats?: PMGDomainStat[];
+  domainStatsAsOf?: string;
   connectionHealth: string;
   lastSeen: string;
   lastUpdated: string;
+}
+
+export interface PMGRelayDomain {
+  domain: string;
+  comment?: string;
+}
+
+export interface PMGDomainStat {
+  domain: string;
+  mailCount: number;
+  spamCount: number;
+  virusCount: number;
+  bytes?: number;
 }
 
 export interface PMGNodeStatus {

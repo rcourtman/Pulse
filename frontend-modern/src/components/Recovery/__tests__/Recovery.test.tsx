@@ -1,9 +1,9 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import Backups from '@/components/Backups/Backups';
+import Recovery from '@/components/Recovery/Recovery';
 
 let mockLocationSearch = '';
-let mockLocationPath = '/backups';
+let mockLocationPath = '/recovery';
 const navigateSpy = vi.hoisted(() => vi.fn());
 
 const apiFetchMock = vi.hoisted(() => vi.fn());
@@ -69,7 +69,7 @@ vi.mock('@/utils/apiClient', () => ({
 }));
 
 vi.mock('@/hooks/useUnifiedResources', () => ({
-  useStorageBackupsResources: () => ({
+  useStorageRecoveryResources: () => ({
     resources: () => [{ id: 'vm-123', name: 'VM 123' }],
     loading: () => false,
     error: () => undefined,
@@ -78,13 +78,13 @@ vi.mock('@/hooks/useUnifiedResources', () => ({
   }),
 }));
 
-describe('Backups', () => {
+describe('Recovery', () => {
   beforeEach(() => {
     localStorage.clear();
     navigateSpy.mockReset();
     apiFetchMock.mockClear();
     mockLocationSearch = '';
-    mockLocationPath = '/backups';
+    mockLocationPath = '/recovery';
 
     facetsPayload = {
       clusters: [],
@@ -134,7 +134,7 @@ describe('Backups', () => {
 
   it('renders protected rollups and resolves unified resource names', async () => {
     mockLocationSearch = '?view=protected';
-    render(() => <Backups />);
+    render(() => <Recovery />);
 
     expect(await screen.findByText('VM 123')).toBeInTheDocument();
     expect(screen.getByText('tank/apps')).toBeInTheDocument();
@@ -142,16 +142,16 @@ describe('Backups', () => {
 
   it('drills down into events when a rollup is clicked', async () => {
     mockLocationSearch = '?view=protected';
-    render(() => <Backups />);
+    render(() => <Recovery />);
 
     const subject = await screen.findByText('VM 123');
     fireEvent.click(subject);
 
     await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith('/backups?view=events&rollupId=res%3Avm-123', { replace: true });
+      expect(navigateSpy).toHaveBeenCalledWith('/recovery?view=events&rollupId=res%3Avm-123', { replace: true });
     });
 
-    expect(await screen.findByText('Backup events')).toBeInTheDocument();
+    expect(await screen.findByText('Recovery events')).toBeInTheDocument();
     expect(await screen.findByText('VM 123')).toBeInTheDocument();
     await screen.findByText(/Showing 1 - 1 of 1 events/i);
     const table = await screen.findByRole('table');
@@ -161,7 +161,7 @@ describe('Backups', () => {
 
   it('filters protected rollups by provider', async () => {
     mockLocationSearch = '?view=protected';
-    render(() => <Backups />);
+    render(() => <Recovery />);
 
     expect(await screen.findByText('VM 123')).toBeInTheDocument();
 
@@ -177,7 +177,7 @@ describe('Backups', () => {
     mockLocationSearch = '?view=events';
     facetsPayload.clusters = ['dev-cluster', 'prod-cluster'];
 
-    render(() => <Backups />);
+    render(() => <Recovery />);
 
     fireEvent.click(await screen.findByRole('button', { name: /more filters/i }));
 
@@ -185,7 +185,7 @@ describe('Backups', () => {
     fireEvent.change(clusterSelect, { target: { value: 'dev-cluster' } });
 
     await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith('/backups?view=events&cluster=dev-cluster', { replace: true });
+      expect(navigateSpy).toHaveBeenCalledWith('/recovery?view=events&cluster=dev-cluster', { replace: true });
     });
 
     await waitFor(() => {

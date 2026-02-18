@@ -3,7 +3,7 @@ import type { Component } from 'solid-js';
 import type { GeneralSettingsPanel as GeneralSettingsPanelType } from './GeneralSettingsPanel';
 import type { NetworkSettingsPanel as NetworkSettingsPanelType } from './NetworkSettingsPanel';
 import type { UpdatesSettingsPanel as UpdatesSettingsPanelType } from './UpdatesSettingsPanel';
-import type { BackupsSettingsPanel as BackupsSettingsPanelType } from './BackupsSettingsPanel';
+import type { RecoverySettingsPanel as RecoverySettingsPanelType } from './RecoverySettingsPanel';
 import type OrganizationOverviewPanelType from './OrganizationOverviewPanel';
 import type OrganizationAccessPanelType from './OrganizationAccessPanel';
 import type OrganizationSharingPanelType from './OrganizationSharingPanel';
@@ -25,8 +25,8 @@ const NetworkSettingsPanel = lazy(() =>
 const UpdatesSettingsPanel = lazy(() =>
   import('./UpdatesSettingsPanel').then((m) => ({ default: m.UpdatesSettingsPanel })),
 );
-const BackupsSettingsPanel = lazy(() =>
-  import('./BackupsSettingsPanel').then((m) => ({ default: m.BackupsSettingsPanel })),
+const RecoverySettingsPanel = lazy(() =>
+  import('./RecoverySettingsPanel').then((m) => ({ default: m.RecoverySettingsPanel })),
 );
 const RelaySettingsPanel = lazy(() =>
   import('./RelaySettingsPanel').then((m) => ({ default: m.RelaySettingsPanel })),
@@ -78,7 +78,7 @@ export interface SettingsPanelRegistryContext {
   getGeneralPanelProps: () => Parameters<typeof GeneralSettingsPanelType>[0];
   getNetworkPanelProps: () => Parameters<typeof NetworkSettingsPanelType>[0];
   getUpdatesPanelProps: () => Parameters<typeof UpdatesSettingsPanelType>[0];
-  getBackupsPanelProps: () => Parameters<typeof BackupsSettingsPanelType>[0];
+  getRecoveryPanelProps: () => Parameters<typeof RecoverySettingsPanelType>[0];
   getOrganizationOverviewPanelProps: () => Parameters<typeof OrganizationOverviewPanelType>[0];
   getOrganizationAccessPanelProps: () => Parameters<typeof OrganizationAccessPanelType>[0];
   getOrganizationSharingPanelProps: () => Parameters<typeof OrganizationSharingPanelType>[0];
@@ -112,9 +112,9 @@ export const createSettingsPanelRegistry = (
     component: UpdatesSettingsPanel,
     getProps: context.getUpdatesPanelProps,
   },
-  'system-backups': {
-    component: BackupsSettingsPanel,
-    getProps: context.getBackupsPanelProps,
+  'system-recovery': {
+    component: RecoverySettingsPanel,
+    getProps: context.getRecoveryPanelProps,
   },
   'system-ai': {
     component: context.systemAiPanel,

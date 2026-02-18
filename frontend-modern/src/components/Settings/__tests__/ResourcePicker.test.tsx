@@ -99,7 +99,7 @@ describe('ResourcePicker', () => {
     expect(await screen.findByText('Storage Main')).toBeInTheDocument();
     expect(screen.queryByText('Backup Server')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Backups' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Recovery' }));
     expect(await screen.findByText('Backup Server')).toBeInTheDocument();
     expect(screen.queryByText('Workload VM')).not.toBeInTheDocument();
 

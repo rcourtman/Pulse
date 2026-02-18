@@ -71,8 +71,8 @@ All user-facing data endpoints use tenant context (`X-Pulse-Org-ID`, cookie, or 
 - `/api/state`
 - `/api/charts`
 - `/api/storage/{id}`
-- `/api/backups`, `/api/backups/pve`, `/api/backups/pbs`
-- `/api/snapshots`
+- `/api/recovery/points`
+- `/api/recovery/rollups`
 - `/api/resources/*`
 - `/api/metrics/*`
 - `/api/orgs`

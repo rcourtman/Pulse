@@ -1107,9 +1107,8 @@ type SystemSettings struct {
 	DisableLegacyRouteRedirects bool `json:"disableLegacyRouteRedirects,omitempty"` // Disable legacy frontend route redirects globally
 
 	// UX + privacy knobs (server-wide)
-	ShowClassicPlatformShortcuts bool `json:"showClassicPlatformShortcuts,omitempty"` // Show classic platform shortcuts bar in main navigation
-	ReduceProUpsellNoise         bool `json:"reduceProUpsellNoise,omitempty"`         // Hide proactive Pro prompts; paywalls still appear when accessing gated features
-	DisableLocalUpgradeMetrics   bool `json:"disableLocalUpgradeMetrics,omitempty"`   // Disable local-only upgrade UX metrics collection (no network calls)
+	ReduceProUpsellNoise       bool `json:"reduceProUpsellNoise,omitempty"`       // Hide proactive Pro prompts; paywalls still appear when accessing gated features
+	DisableLocalUpgradeMetrics bool `json:"disableLocalUpgradeMetrics,omitempty"` // Disable local-only upgrade UX metrics collection (no network calls)
 
 	// APIToken removed - now handled via .env file only
 }
@@ -1128,7 +1127,6 @@ func DefaultSystemSettings() *SystemSettings {
 		AllowEmbedding:               false,
 		TemperatureMonitoringEnabled: true,
 		DNSCacheTimeout:              300, // Default: 5 minutes (300 seconds)
-		ShowClassicPlatformShortcuts: true,
 	}
 }
 

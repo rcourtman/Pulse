@@ -5,7 +5,7 @@ export type AppTabId =
   | 'infrastructure'
   | 'workloads'
   | 'storage'
-  | 'backups'
+  | 'recovery'
   | 'alerts'
   | 'ai'
   | 'settings';
@@ -27,12 +27,13 @@ export function getActiveTabForPath(path: string): AppTabId {
   if (path.startsWith(WORKLOADS_PATH)) return 'workloads';
   if (path.startsWith('/storage')) return 'storage';
   if (path.startsWith('/ceph')) return 'storage';
-  if (path.startsWith('/backups')) return 'backups';
-  if (path.startsWith('/replication')) return 'backups';
+  if (path.startsWith('/recovery')) return 'recovery';
+  if (path.startsWith('/backups')) return 'recovery';
+  if (path.startsWith('/replication')) return 'recovery';
   if (path.startsWith('/services')) return 'infrastructure';
   if (path.startsWith('/mail')) return 'infrastructure';
   if (path.startsWith('/proxmox/ceph') || path.startsWith('/proxmox/storage')) return 'storage';
-  if (path.startsWith('/proxmox/replication') || path.startsWith('/proxmox/backups')) return 'backups';
+  if (path.startsWith('/proxmox/replication') || path.startsWith('/proxmox/backups')) return 'recovery';
   if (path.startsWith('/proxmox/mail')) return 'infrastructure';
   if (path.startsWith('/proxmox')) return 'infrastructure';
   if (path.startsWith('/kubernetes')) return 'workloads';

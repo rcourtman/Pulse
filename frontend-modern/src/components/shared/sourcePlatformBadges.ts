@@ -43,7 +43,7 @@ const PLATFORM_TONES: Record<KnownSourcePlatform, SourcePlatformTone> = {
     tone: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400',
   },
   docker: {
-    label: 'Docker',
+    label: 'Containers',
     tone: 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400',
   },
   kubernetes: {

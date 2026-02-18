@@ -221,6 +221,15 @@ rules:
   - apiGroups: ["apps"]
     resources: ["deployments"]
     verbs: ["get", "list", "watch"]
+  # Optional (Recovery): VolumeSnapshots and Velero backups.
+  # These rules are safe to include even if the APIs are not installed; the agent will
+  # feature-detect and ignore 404/403 responses.
+  - apiGroups: ["snapshot.storage.k8s.io"]
+    resources: ["volumesnapshots"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["velero.io"]
+    resources: ["backups"]
+    verbs: ["get", "list", "watch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

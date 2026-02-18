@@ -5,7 +5,6 @@ import type {
   WSMessage,
   Alert,
   ResolvedAlert,
-  PVEBackups,
   DockerHost,
   Host,
   KubernetesCluster,
@@ -112,22 +111,6 @@ export function createWebSocketStore(url: string) {
     pbs: [],
     pmg: [],
     metrics: [],
-    pveBackups: {
-      backupTasks: [],
-      storageBackups: [],
-      guestSnapshots: [],
-    } as PVEBackups,
-    pbsBackups: [],
-    pmgBackups: [],
-    backups: {
-      pve: {
-        backupTasks: [],
-        storageBackups: [],
-        guestSnapshots: [],
-      },
-      pbs: [],
-      pmg: [],
-    },
     performance: {
       apiCallDuration: {},
       lastPollDuration: 0,
@@ -558,22 +541,7 @@ export function createWebSocketStore(url: string) {
             if (message.data.pmg !== undefined) setState('pmg', reconcile(message.data.pmg, { key: 'id' }));
             if (message.data.replicationJobs !== undefined)
               setState('replicationJobs', reconcile(message.data.replicationJobs, { key: 'id' }));
-            if (message.data.backups !== undefined) {
-              setState('backups', message.data.backups);
-              if (message.data.backups.pve !== undefined)
-                setState('pveBackups', message.data.backups.pve);
-              if (message.data.backups.pbs !== undefined)
-                setState('pbsBackups', message.data.backups.pbs);
-              if (message.data.backups.pmg !== undefined)
-                setState('pmgBackups', message.data.backups.pmg);
-            }
-            if (message.data.pbsBackups !== undefined)
-              setState('pbsBackups', message.data.pbsBackups);
-            if (message.data.pmgBackups !== undefined)
-              setState('pmgBackups', message.data.pmgBackups);
             if (message.data.metrics !== undefined) setState('metrics', message.data.metrics);
-            if (message.data.pveBackups !== undefined)
-              setState('pveBackups', message.data.pveBackups);
             if (message.data.performance !== undefined)
               setState('performance', message.data.performance);
             if (message.data.connectionHealth !== undefined)

@@ -343,6 +343,23 @@ export class MonitoringAPI {
 
     return parseOptionalJSON(response, { success: true }, 'Failed to parse check updates response');
   }
+
+  /**
+   * Triggers a batch update for all containers with updates available on a specific Docker host.
+   */
+  static async updateAllDockerContainers(hostId: string): Promise<{ success: boolean; commandId?: string }> {
+    const url = `${this.baseUrl}/agents/docker/hosts/${encodeURIComponent(hostId)}/update-all`;
+
+    const response = await apiFetch(url, {
+      method: 'POST',
+    });
+
+    if (!response.ok) {
+      throw new Error(await readAPIErrorMessage(response, `Failed with status ${response.status}`));
+    }
+
+    return parseOptionalJSON(response, { success: true }, 'Failed to parse update all response');
+  }
 }
 
 

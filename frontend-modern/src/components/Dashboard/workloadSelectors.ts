@@ -14,6 +14,7 @@ export interface FilterWorkloadsParams {
   selectedNode: string | null;
   selectedHostHint: string | null;
   selectedKubernetesContext: string | null;
+  selectedKubernetesNamespace?: string | null;
   containerRuntime?: string | null;
 }
 
@@ -36,7 +37,7 @@ export const workloadNodeScopeId = (guest: WorkloadGuest): string =>
   `${(guest.instance || '').trim()}-${(guest.node || '').trim()}`;
 
 export const getKubernetesContextKey = (guest: WorkloadGuest): string => {
-  const candidates = [guest.contextLabel, guest.instance, guest.node, guest.namespace];
+  const candidates = [guest.contextLabel, guest.instance, guest.node];
   for (const value of candidates) {
     const trimmed = (value || '').trim();
     if (trimmed.length > 0) {
@@ -54,6 +55,7 @@ export const filterWorkloads = ({
   selectedNode,
   selectedHostHint,
   selectedKubernetesContext,
+  selectedKubernetesNamespace,
   containerRuntime,
 }: FilterWorkloadsParams): WorkloadGuest[] => {
   let guests = allGuests;
@@ -77,6 +79,14 @@ export const filterWorkloads = ({
     guests = guests.filter(
       (g) => resolveWorkloadType(g) === 'k8s' && getKubernetesContextKey(g) === k8sContext,
     );
+  }
+
+  const k8sNamespace = (selectedKubernetesNamespace || '').trim();
+  if (k8sNamespace && viewMode === 'k8s') {
+    guests = guests.filter((g) => {
+      if (resolveWorkloadType(g) !== 'k8s') return false;
+      return (g.namespace || '').trim() === k8sNamespace;
+    });
   }
 
   if (viewMode !== 'all') {

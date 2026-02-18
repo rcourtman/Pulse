@@ -1,10 +1,10 @@
 import { cleanup, render, waitFor, screen } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import BackupsRoute from '@/pages/BackupsRoute';
+import RecoveryRoute from '@/pages/RecoveryRoute';
 
 let mockLocationSearch = '';
-let mockLocationPath = '/backups';
+let mockLocationPath = '/recovery';
 const navigateSpy = vi.hoisted(() => vi.fn());
 
 vi.mock('@solidjs/router', async () => {
@@ -16,29 +16,29 @@ vi.mock('@solidjs/router', async () => {
   };
 });
 
-vi.mock('@/components/Backups/Backups', () => ({
-  default: () => <div data-testid="backups-component">Backups Component</div>,
+vi.mock('@/components/Recovery/Recovery', () => ({
+  default: () => <div data-testid="recovery-component">Recovery Component</div>,
 }));
 
-describe('BackupsRoute', () => {
+describe('RecoveryRoute', () => {
   beforeEach(() => {
     navigateSpy.mockReset();
-    mockLocationPath = '/backups';
+    mockLocationPath = '/recovery';
     mockLocationSearch = '';
   });
 
   afterEach(() => cleanup());
 
-  it('redirects legacy query params to the canonical v6 Backups URL and does not render the page during redirect', async () => {
+  it('redirects legacy query params to the canonical v6 Recovery URL and does not render the page during redirect', async () => {
     mockLocationSearch = '?view=artifacts&backupType=remote&group=guest&search=vm-101&source=pbs&type=vm';
-    render(() => <BackupsRoute />);
+    render(() => <RecoveryRoute />);
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalledTimes(1);
     });
 
     const [target, opts] = navigateSpy.mock.calls[0] as [string, { replace?: boolean }];
-    expect(target).toContain('/backups?');
+    expect(target).toContain('/recovery?');
     expect(target).toContain('view=events');
     expect(target).toContain('mode=remote');
     expect(target).toContain('scope=workload');
@@ -47,15 +47,15 @@ describe('BackupsRoute', () => {
     expect(target).not.toContain('type=');
     expect(opts?.replace).toBe(true);
 
-    expect(screen.queryByTestId('backups-component')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('recovery-component')).not.toBeInTheDocument();
   });
 
-  it('renders Backups when query params are already canonical', async () => {
+  it('renders Recovery when query params are already canonical', async () => {
     mockLocationSearch = '?view=events&mode=remote&scope=workload&q=vm-101';
-    render(() => <BackupsRoute />);
+    render(() => <RecoveryRoute />);
 
     await waitFor(() => {
-      expect(screen.getByTestId('backups-component')).toBeInTheDocument();
+      expect(screen.getByTestId('recovery-component')).toBeInTheDocument();
     });
     expect(navigateSpy).not.toHaveBeenCalled();
   });

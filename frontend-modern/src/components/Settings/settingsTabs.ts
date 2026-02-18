@@ -129,8 +129,8 @@ export const baseTabGroups: SettingsNavGroup[] = [
         iconProps: { strokeWidth: 2 },
       },
       {
-        id: 'system-backups',
-        label: 'Backups',
+        id: 'system-recovery',
+        label: 'Recovery',
         icon: Clock,
         iconProps: { strokeWidth: 2 },
       },

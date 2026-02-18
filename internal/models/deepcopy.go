@@ -637,6 +637,8 @@ func clonePMGInstance(src PMGInstance) PMGInstance {
 	dest.MailCount = append([]PMGMailCountPoint(nil), src.MailCount...)
 	dest.SpamDistribution = append([]PMGSpamBucket(nil), src.SpamDistribution...)
 	dest.Quarantine = clonePMGQuarantine(src.Quarantine)
+	dest.RelayDomains = append([]PMGRelayDomain(nil), src.RelayDomains...)
+	dest.DomainStats = append([]PMGDomainStat(nil), src.DomainStats...)
 	return dest
 }
 

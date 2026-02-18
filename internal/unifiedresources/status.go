@@ -87,6 +87,25 @@ func statusFromDockerState(state string) ResourceStatus {
 	}
 }
 
+func statusFromDockerService(service models.DockerService) ResourceStatus {
+	desired := service.DesiredTasks
+	running := service.RunningTasks
+
+	if desired <= 0 {
+		if running > 0 {
+			return StatusOnline
+		}
+		return StatusUnknown
+	}
+	if running >= desired {
+		return StatusOnline
+	}
+	if running == 0 {
+		return StatusOffline
+	}
+	return StatusWarning
+}
+
 func statusFromPBSInstance(instance models.PBSInstance) ResourceStatus {
 	primary := strings.ToLower(strings.TrimSpace(instance.Status))
 	health := strings.ToLower(strings.TrimSpace(instance.ConnectionHealth))

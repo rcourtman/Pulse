@@ -155,6 +155,12 @@ func (h *DockerAgentHandlers) HandleDockerHostActions(w http.ResponseWriter, r *
 		return
 	}
 
+	// Check if this is an update-all request
+	if strings.HasSuffix(r.URL.Path, "/update-all") && r.Method == http.MethodPost {
+		h.HandleUpdateAll(w, r)
+		return
+	}
+
 	// Otherwise, handle as delete/hide request
 	if r.Method == http.MethodDelete {
 		h.HandleDeleteHost(w, r)
@@ -527,6 +533,48 @@ func (h *DockerAgentHandlers) HandleContainerUpdate(w http.ResponseWriter, r *ht
 		"note":    "The update will be executed on the next agent report cycle",
 	}); err != nil {
 		log.Error().Err(err).Msg("Failed to serialize container update response")
+	}
+}
+
+// HandleUpdateAll triggers an update for all containers with updates available on a Docker host.
+// POST /api/agents/docker/hosts/{hostId}/update-all
+func (h *DockerAgentHandlers) HandleUpdateAll(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only POST is allowed", nil)
+		return
+	}
+
+	trimmedPath := strings.TrimPrefix(r.URL.Path, "/api/agents/docker/hosts/")
+	trimmedPath = strings.TrimSuffix(trimmedPath, "/update-all")
+	hostID := strings.TrimSpace(trimmedPath)
+	if hostID == "" {
+		writeErrorResponse(w, http.StatusBadRequest, "missing_host_id", "Docker host ID is required", nil)
+		return
+	}
+
+	// Check if Docker update actions are disabled server-wide
+	if h.config != nil && h.config.DisableDockerUpdateActions {
+		writeErrorResponse(w, http.StatusForbidden, "docker_updates_disabled",
+			"Docker container updates are disabled by server configuration. Set PULSE_DISABLE_DOCKER_UPDATE_ACTIONS=false or disable in Settings to enable.", nil)
+		return
+	}
+
+	commandStatus, err := h.getMonitor(r.Context()).QueueDockerUpdateAllCommand(hostID)
+	if err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, "update_all_command_failed", err.Error(), nil)
+		return
+	}
+
+	h.broadcastState(r.Context())
+
+	if err := utils.WriteJSONResponse(w, map[string]any{
+		"success":   true,
+		"commandId": commandStatus.ID,
+		"hostId":    hostID,
+		"message":   "Update all containers command queued",
+		"note":      "The update will be executed on the next agent report cycle",
+	}); err != nil {
+		log.Error().Err(err).Msg("Failed to serialize update all response")
 	}
 }
 

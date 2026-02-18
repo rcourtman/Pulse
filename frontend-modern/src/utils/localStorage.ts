@@ -1,4 +1,24 @@
-import { createSignal, createEffect, Signal } from 'solid-js';
+import { createSignal, createEffect, onCleanup, Signal } from 'solid-js';
+
+const LOCAL_STORAGE_SYNC_EVENT = 'pulse-localstorage-sync';
+
+type LocalStorageSyncDetail = {
+  key: string;
+  value: string | null;
+};
+
+function broadcastLocalStorageChange(key: string, value: string | null): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.dispatchEvent(
+      new CustomEvent<LocalStorageSyncDetail>(LOCAL_STORAGE_SYNC_EVENT, {
+        detail: { key, value },
+      }),
+    );
+  } catch {
+    // Ignore event dispatch errors
+  }
+}
 
 /**
  * Creates a signal that syncs with localStorage
@@ -20,13 +40,45 @@ function createLocalStorageSignal<T>(
 
   const [value, setValue] = createSignal<T>(initialValue);
 
+  // Keep multiple instances in sync (and reflect updates performed elsewhere in the same tab).
+  if (typeof window !== 'undefined') {
+    const applyRaw = (raw: string | null) => {
+      const next =
+        raw !== null ? (parse ? parse(raw) : (raw as unknown as T)) : defaultValue;
+      if (Object.is(next, value())) return;
+      setValue(() => next);
+    };
+
+    const handleStorage = (e: StorageEvent) => {
+      if (e.storageArea !== window.localStorage) return;
+      if (e.key !== key) return;
+      applyRaw(e.newValue);
+    };
+
+    const handleCustom = (e: Event) => {
+      const evt = e as CustomEvent<LocalStorageSyncDetail>;
+      if (!evt.detail || evt.detail.key !== key) return;
+      applyRaw(evt.detail.value);
+    };
+
+    window.addEventListener('storage', handleStorage);
+    window.addEventListener(LOCAL_STORAGE_SYNC_EVENT, handleCustom);
+    onCleanup(() => {
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener(LOCAL_STORAGE_SYNC_EVENT, handleCustom);
+    });
+  }
+
   // Sync to localStorage on changes
   createEffect(() => {
     const val = value();
     if (val === null || val === undefined) {
       localStorage.removeItem(key);
+      broadcastLocalStorageChange(key, null);
     } else {
-      localStorage.setItem(key, stringify ? stringify(val) : String(val));
+      const raw = stringify ? stringify(val) : String(val);
+      localStorage.setItem(key, raw);
+      broadcastLocalStorageChange(key, raw);
     }
   });
 
@@ -121,7 +173,12 @@ export const STORAGE_KEYS = {
   STORAGE_VIEW_MODE: 'storageViewMode',
   STORAGE_SOURCE_FILTER: 'storageSourceFilter',
 
-  // Backup settings
+  // Recovery settings (canonical name; localStorage keys preserved for backwards compatibility)
+  RECOVERY_SHOW_FILTERS: 'backupsShowFilters',
+  RECOVERY_USE_RELATIVE_TIME: 'backupsUseRelativeTime',
+  RECOVERY_SEARCH_HISTORY: 'backupsSearchHistory',
+
+  // Backup settings (legacy naming; prefer RECOVERY_* in new code)
   BACKUPS_SHOW_FILTERS: 'backupsShowFilters',
   BACKUPS_USE_RELATIVE_TIME: 'backupsUseRelativeTime',
   BACKUPS_SEARCH_HISTORY: 'backupsSearchHistory',
@@ -145,6 +202,7 @@ export const STORAGE_KEYS = {
 
   // Column visibility
   DASHBOARD_HIDDEN_COLUMNS: 'dashboardHiddenColumns',
+  RECOVERY_HIDDEN_COLUMNS: 'backupsHiddenColumns',
   BACKUPS_HIDDEN_COLUMNS: 'backupsHiddenColumns',
   STORAGE_HIDDEN_COLUMNS: 'storageHiddenColumns',
 
@@ -154,8 +212,6 @@ export const STORAGE_KEYS = {
   // Feature discovery
   DISMISSED_FEATURE_TIPS: 'pulse-dismissed-feature-tips',
   WHATS_NEW_NAV_V2_SHOWN: 'pulse_whats_new_v2_shown',
-  CLASSIC_SHORTCUTS_DISMISSED: 'pulse-classic-shortcuts-dismissed',
-  NAVIGATION_MODE: 'pulse-navigation-mode', // 'unified' | 'classic'
   DEBUG_MODE: 'pulse_debug_mode',
 
   // GitHub star prompt

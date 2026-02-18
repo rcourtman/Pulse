@@ -1,6 +1,5 @@
 import { createEffect, createSignal, Show } from 'solid-js';
 import { createLocalStorageBooleanSignal, STORAGE_KEYS } from '@/utils/localStorage';
-import { navigationMode, setNavigationMode } from '@/stores/navigationMode';
 import ServerIcon from 'lucide-solid/icons/server';
 import BoxesIcon from 'lucide-solid/icons/boxes';
 import HardDriveIcon from 'lucide-solid/icons/hard-drive';
@@ -61,7 +60,7 @@ export function WhatsNewModal() {
                   Infrastructure
                 </div>
                 <p class="mt-1.5 sm:mt-2 text-xs text-blue-900/80 dark:text-blue-100/80">
-                  Proxmox nodes, Hosts, and Docker hosts live together in one unified view.
+                  Proxmox nodes, Hosts, and container hosts live together in one unified view.
                 </p>
               </div>
 
@@ -71,7 +70,7 @@ export function WhatsNewModal() {
                   Workloads
                 </div>
                 <p class="mt-1.5 sm:mt-2 text-xs text-purple-900/80 dark:text-purple-100/80">
-                  All VMs, containers, Docker workloads, and Kubernetes workloads now share a single list.
+                  All VMs, containers, and Kubernetes workloads now share a single list.
                 </p>
               </div>
 
@@ -88,10 +87,10 @@ export function WhatsNewModal() {
               <div class="rounded-xl border border-amber-200 bg-amber-50/70 p-3 sm:p-4 dark:border-amber-800/60 dark:bg-amber-900/20">
                 <div class="flex items-center gap-2 text-sm font-semibold text-amber-900 dark:text-amber-100">
                   <ShieldCheckIcon class="h-4 w-4" />
-                  Backups
+                  Recovery
                 </div>
                 <p class="mt-1.5 sm:mt-2 text-xs text-amber-900/80 dark:text-amber-100/80">
-                  Backup status and replication are now first-class pages.
+                  Recovery events (backups, snapshots, and replication) are now first-class pages.
                 </p>
               </div>
             </div>
@@ -103,52 +102,53 @@ export function WhatsNewModal() {
               <ul class="mt-2 space-y-1.5 sm:space-y-2 text-xs sm:text-sm">
                 <li class="flex items-start gap-2">
                   <span class="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-blue-500"></span>
-                  <span>Infrastructure combines Proxmox nodes, Hosts, and Docker hosts.</span>
+                  <span>Infrastructure combines Proxmox nodes, Hosts, and container hosts.</span>
                 </li>
                 <li class="flex items-start gap-2">
                   <span class="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-purple-500"></span>
-                  <span>Workloads now shows every VM, container, Docker container, and Kubernetes workload.</span>
+                  <span>Workloads now shows every VM, container, and Kubernetes workload.</span>
                 </li>
                 <li class="flex items-start gap-2">
                   <span class="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-amber-500"></span>
-                  <span>Storage and Backups live at the top level for faster access.</span>
+                  <span>Storage and Recovery live at the top level for faster access.</span>
                 </li>
               </ul>
             </div>
 
             <div class="rounded-xl border border-gray-200 bg-white p-3 sm:p-4 dark:border-gray-700 dark:bg-gray-800/60">
-              <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                <div>
-                  <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
-                    Prefer the old tab layout?
-                  </div>
-                  <div class="mt-0.5 text-xs text-gray-600 dark:text-gray-400">
-                    You can switch between Unified and Classic navigation style anytime. This is stored per browser.
-                  </div>
-                </div>
-                <div class="flex items-center gap-1 bg-gray-100 dark:bg-gray-900 rounded-lg p-1">
-                  <button
-                    type="button"
-                    class={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${navigationMode() === 'unified'
-                      ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm'
-                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-                      }`}
-                    onClick={() => setNavigationMode('unified')}
-                  >
-                    Unified
-                  </button>
-                  <button
-                    type="button"
-                    class={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${navigationMode() === 'classic'
-                      ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm'
-                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-                      }`}
-                    onClick={() => setNavigationMode('classic')}
-                  >
-                    Classic
-                  </button>
-                </div>
+              <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                Why switch to a unified resource model?
               </div>
+              <ul class="mt-2 space-y-1.5 text-xs sm:text-sm text-gray-700 dark:text-gray-300">
+                <li class="flex items-start gap-2">
+                  <span class="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-gray-400"></span>
+                  <span>One inventory and one search across Proxmox, agents, containers, Kubernetes, and more.</span>
+                </li>
+                <li class="flex items-start gap-2">
+                  <span class="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-gray-400"></span>
+                  <span>Consistent filters, drawers, and workflows instead of separate pages per platform.</span>
+                </li>
+                <li class="flex items-start gap-2">
+                  <span class="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-gray-400"></span>
+                  <span>Easier to add new sources (like TrueNAS) without growing the top-level nav forever.</span>
+                </li>
+              </ul>
+            </div>
+
+            <div class="rounded-xl border border-gray-200 bg-white p-3 sm:p-4 dark:border-gray-700 dark:bg-gray-800/60">
+              <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                Finding things fast
+              </div>
+              <ul class="mt-2 space-y-1.5 text-xs sm:text-sm text-gray-700 dark:text-gray-300">
+                <li class="flex items-start gap-2">
+                  <span class="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-gray-400"></span>
+                  <span>Use the Command Palette: press <span class="font-mono">Cmd+K</span> (or <span class="font-mono">Ctrl+K</span>) and type what you remember: <span class="font-mono">proxmox</span>, <span class="font-mono">containers</span>, <span class="font-mono">k8s</span>, <span class="font-mono">hosts</span>.</span>
+                </li>
+                <li class="flex items-start gap-2">
+                  <span class="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-gray-400"></span>
+                  <span>Old bookmarks still redirect, and Pulse will show a small banner explaining where that page moved.</span>
+                </li>
+              </ul>
             </div>
 
             <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">

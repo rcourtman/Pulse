@@ -97,15 +97,20 @@ var mockEnvStat = os.Stat
 
 // getMockEnvPath returns the path to mock.env
 func getMockEnvPath() string {
-	// Check PULSE_DATA_DIR first, then fall back to /opt/pulse
+	// Check PULSE_DATA_DIR first
 	dataDir := os.Getenv("PULSE_DATA_DIR")
 	if dataDir == "" {
-		// Check if we're in a packaged install (running from mockEnvDefaultDir)
-		probe := filepath.Join(mockEnvDefaultDir, "mock.env")
-		if _, err := mockEnvStat(probe); err == nil {
-			return probe
+		// Check if we're in a dev environment (tmp/dev-config/ exists)
+		if info, err := mockEnvStat("tmp/dev-config"); err == nil && info.IsDir() {
+			dataDir = "tmp/dev-config"
+		} else {
+			// Check if we're in a packaged install (running from mockEnvDefaultDir)
+			probe := filepath.Join(mockEnvDefaultDir, "mock.env")
+			if _, err := mockEnvStat(probe); err == nil {
+				return probe
+			}
+			dataDir = mockEnvDefaultDir
 		}
-		dataDir = mockEnvDefaultDir
 	}
 	return filepath.Join(dataDir, "mock.env")
 }

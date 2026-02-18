@@ -29,7 +29,7 @@ interface NodeSummaryTableProps {
   diskCounts?: Record<string, number>;
   hosts?: Host[];
   backupCounts?: Record<string, number>;
-  currentTab: 'dashboard' | 'storage' | 'backups';
+  currentTab: 'dashboard' | 'storage' | 'recovery';
   selectedNode: string | null;
   globalTemperatureMonitoringEnabled?: boolean;
   onNodeClick: (nodeId: string, nodeType: 'pve' | 'pbs') => void;
@@ -94,7 +94,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
     if (hasAnyTemperatureData()) count += 1;
     if (props.currentTab === 'dashboard') count += 2; // VMs, CTs
     else if (props.currentTab === 'storage') count += 2; // Storage, Disks
-    else if (props.currentTab === 'backups') count += 1; // Backups
+    else if (props.currentTab === 'recovery') count += 1; // Recovery
     return count;
   });
 
@@ -342,7 +342,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                 class={`${thClassBase} text-left pl-3`}
                 onClick={() => handleSort('name')}
               >
-                {props.currentTab === 'backups' ? 'Node / PBS' : 'Node'} {renderSortIndicator('name')}
+                {props.currentTab === 'recovery' ? 'Node / PBS' : 'Node'} {renderSortIndicator('name')}
               </th>
 
               <th class={thClass} style={{ width: '80px', "min-width": '80px', "max-width": '80px' }} onClick={() => handleSort('uptime')}>
@@ -378,9 +378,9 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                   Disks {renderSortIndicator('diskCount')}
                 </th>
               </Show>
-              <Show when={props.currentTab === 'backups'}>
+              <Show when={props.currentTab === 'recovery'}>
                 <th class={thClass} style={{ width: '70px', "min-width": '70px', "max-width": '70px' }} onClick={() => handleSort('backupCount')}>
-                  Backups {renderSortIndicator('backupCount')}
+                  Recovery {renderSortIndicator('backupCount')}
                 </th>
               </Show>
               {/* Link icon column moved to end */}
@@ -754,8 +754,8 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                         </td>
                       </Show>
 
-                      {/* Backups tab: Backups */}
-                      <Show when={props.currentTab === 'backups'}>
+                      {/* Recovery tab */}
+                      <Show when={props.currentTab === 'recovery'}>
                         <td class={tdClass}>
                           <div class="flex justify-center">
                             <span class={online ? 'text-xs text-gray-700 dark:text-gray-300' : 'text-xs text-gray-400 dark:text-gray-500'}>

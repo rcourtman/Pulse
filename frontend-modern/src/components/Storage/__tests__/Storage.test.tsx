@@ -151,6 +151,13 @@ vi.mock('@/stores/alertsActivation', () => ({
 }));
 
 vi.mock('@/hooks/useUnifiedResources', () => ({
+  useStorageRecoveryResources: () => ({
+    resources: () => hookResources,
+    loading: () => hookLoading,
+    error: () => hookError,
+    refetch: vi.fn(),
+    mutate: vi.fn(),
+  }),
   useStorageBackupsResources: () => ({
     resources: () => hookResources,
     loading: () => hookLoading,

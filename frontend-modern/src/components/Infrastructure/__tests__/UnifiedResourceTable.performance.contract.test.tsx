@@ -11,7 +11,10 @@ import {
 } from '@/components/Infrastructure/infrastructureSelectors';
 
 vi.mock('@/hooks/useBreakpoint', () => ({
-  useBreakpoint: () => ({ isMobile: () => false }),
+  useBreakpoint: () => ({
+    isMobile: () => false,
+    isVisible: () => true,
+  }),
 }));
 
 vi.mock('@/components/shared/responsive', () => ({

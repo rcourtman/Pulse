@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 	"github.com/rs/zerolog/log"
@@ -5448,9 +5449,7 @@ func (m *Manager) CheckSnapshotsForInstance(instanceName string, snapshots []mod
 
 // CheckBackups evaluates storage, PBS, and PMG backups for age-based alerts.
 func (m *Manager) CheckBackups(
-	storageBackups []models.StorageBackup,
-	pbsBackups []models.PBSBackup,
-	pmgBackups []models.PMGBackup,
+	rollups []recovery.ProtectionRollup,
 	guestsByKey map[string]GuestLookup,
 	guestsByVMID map[string][]GuestLookup,
 ) {
@@ -5482,10 +5481,8 @@ func (m *Manager) CheckBackups(
 		instance     string
 		node         string
 		source       string
-		storage      string
-		datastore    string
-		backupType   string
-		filename     string
+		rollupID     string
+		providers    []recovery.Provider
 		lastTime     time.Time
 	}
 
@@ -5507,86 +5504,91 @@ func (m *Manager) CheckBackups(
 
 	now := time.Now()
 
-	for _, backup := range storageBackups {
-		if backup.Time.IsZero() {
+	for _, rollup := range rollups {
+		if rollup.LastSuccessAt == nil || rollup.LastSuccessAt.IsZero() {
 			continue
 		}
 
-		key := BuildGuestKey(backup.Instance, backup.Node, backup.VMID)
-		vmID := ""
-		if backup.VMID > 0 {
-			vmID = strconv.Itoa(backup.VMID)
-		}
-		info := guestsByKey[key]
-		displayName := info.Name
-		if displayName == "" {
-			displayName = fmt.Sprintf("%s-%d", sanitizeAlertKey(backup.Node), backup.VMID)
-		}
+		lastTime := rollup.LastSuccessAt.UTC()
+		providers := append([]recovery.Provider(nil), rollup.Providers...)
 
-		updateRecord(key, backupRecord{
-			key:          key,
-			vmID:         vmID,
-			lookup:       info,
-			fallbackName: displayName,
-			instance:     backup.Instance,
-			node:         backup.Node,
-			source:       "PVE storage",
-			storage:      backup.Storage,
-			backupType:   backup.Type,
-			lastTime:     backup.Time,
-		})
-	}
-
-	for _, backup := range pbsBackups {
-		if backup.BackupTime.IsZero() {
-			continue
-		}
-		if backup.VMID == "0" {
-			// Host configuration backups - skip from age alerts
-			continue
+		source := "Recovery"
+		if slicesContainsProvider(providers, recovery.ProviderProxmoxPMG) {
+			source = "PMG"
+		} else if slicesContainsProvider(providers, recovery.ProviderProxmoxPBS) {
+			source = "PBS"
+		} else if slicesContainsProvider(providers, recovery.ProviderProxmoxPVE) {
+			source = "PVE"
 		}
 
-		vmID := backup.VMID
-		guests, exists := guestsByVMID[backup.VMID]
-		var info GuestLookup
-		var key string
-		var displayName string
-		var instance string
-		var node string
+		var (
+			info        GuestLookup
+			key         string
+			displayName string
+			instance    string
+			node        string
+			vmID        string
+		)
 
-		if exists && len(guests) > 0 {
-			// If we have exactly one match, use it directly
-			// If we have multiple matches, try to disambiguate using the PBS namespace
-			if len(guests) == 1 {
-				info = guests[0]
-			} else if backup.Namespace != "" {
-				// Try to match namespace to instance name
-				for _, g := range guests {
-					if namespaceMatchesInstance(backup.Namespace, g.Instance) {
-						info = g
-						break
+		ref := rollup.SubjectRef
+
+		// Primary: subjectRef.ID is the canonical proxmox guest source ID (instance:node:vmid) when linked.
+		if ref != nil && strings.TrimSpace(ref.ID) != "" {
+			if inst, nd, vmid, ok := parseGuestID(ref.ID); ok {
+				key = BuildGuestKey(inst, nd, vmid)
+				info = guestsByKey[key]
+				instance = inst
+				node = nd
+				vmID = strconv.Itoa(vmid)
+			}
+		}
+
+		// Secondary: attempt to map by VMID for orphaned/ambiguous backups.
+		if key == "" && ref != nil {
+			vmidStr := strings.TrimSpace(ref.ID)
+			if vmidStr == "" {
+				vmidStr = strings.TrimSpace(ref.Name)
+			}
+			if vmidStr != "" {
+				if vmid, err := strconv.Atoi(vmidStr); err == nil && vmid > 0 {
+					vmID = vmidStr
+					guests := guestsByVMID[vmidStr]
+					if len(guests) == 1 {
+						info = guests[0]
+					} else if len(guests) > 1 && strings.TrimSpace(ref.Namespace) != "" {
+						for _, g := range guests {
+							if namespaceMatchesInstance(ref.Namespace, g.Instance) {
+								info = g
+								break
+							}
+						}
+					}
+					if info.Instance != "" && info.Node != "" {
+						key = BuildGuestKey(info.Instance, info.Node, info.VMID)
+						instance = info.Instance
+						node = info.Node
 					}
 				}
-				// If no namespace match found, info stays zero-value.
-				// The VMID is ambiguous across instances so we must not guess.
 			}
-			// else: multiple guests, no namespace — info stays zero-value (ambiguous)
-			if info.Instance != "" && info.Node != "" {
-				key = BuildGuestKey(info.Instance, info.Node, info.VMID)
-				displayName = info.Name
-				instance = info.Instance
-				node = info.Node
-			} else {
-				key = fmt.Sprintf("pbs:%s:%s:%s", backup.Instance, backup.BackupType, backup.VMID)
-				displayName = fmt.Sprintf("VMID %s", backup.VMID)
-				instance = fmt.Sprintf("PBS:%s", backup.Instance)
-				node = "Unknown"
+		}
+
+		if key == "" {
+			// Stable fallback for non-guest subjects and orphans.
+			key = strings.TrimSpace(rollup.RollupID)
+			if key == "" {
+				continue
 			}
-		} else {
-			key = fmt.Sprintf("pbs:%s:%s:%s", backup.Instance, backup.BackupType, backup.VMID)
-			displayName = fmt.Sprintf("VMID %s", backup.VMID)
-			instance = fmt.Sprintf("PBS:%s", backup.Instance)
-			node = "Unknown"
+		}
+
+		displayName = strings.TrimSpace(info.Name)
+		if displayName == "" && ref != nil {
+			displayName = strings.TrimSpace(ref.Name)
+		}
+		if displayName == "" && vmID != "" {
+			displayName = fmt.Sprintf("VMID %s", vmID)
+		}
+		if displayName == "" {
+			displayName = "Unknown"
 		}
 
 		updateRecord(key, backupRecord{
@@ -5596,54 +5598,10 @@ func (m *Manager) CheckBackups(
 			fallbackName: displayName,
 			instance:     instance,
 			node:         node,
-			source:       "PBS",
-			datastore:    backup.Datastore,
-			backupType:   backup.BackupType,
-			lastTime:     backup.BackupTime,
-		})
-	}
-
-	for _, backup := range pmgBackups {
-		if backup.BackupTime.IsZero() {
-			continue
-		}
-
-		instanceLabel := strings.TrimSpace(backup.Instance)
-		if instanceLabel == "" {
-			instanceLabel = "PMG"
-		}
-
-		nodeName := strings.TrimSpace(backup.Node)
-		keyComponent := nodeName
-		if keyComponent == "" {
-			keyComponent = strings.TrimSpace(backup.Filename)
-		}
-		if keyComponent == "" {
-			keyComponent = "unknown"
-		}
-
-		displayName := nodeName
-		if displayName == "" {
-			displayName = instanceLabel
-		}
-		if displayName == "" {
-			displayName = "PMG gateway"
-		} else {
-			displayName = fmt.Sprintf("PMG %s", displayName)
-		}
-
-		instanceField := fmt.Sprintf("PMG:%s", instanceLabel)
-		key := fmt.Sprintf("pmg:%s:%s", instanceLabel, keyComponent)
-
-		updateRecord(key, backupRecord{
-			key:          key,
-			fallbackName: displayName,
-			instance:     instanceField,
-			node:         nodeName,
-			source:       "PMG",
-			backupType:   "pmg",
-			filename:     backup.Filename,
-			lastTime:     backup.BackupTime,
+			source:       source,
+			rollupID:     strings.TrimSpace(rollup.RollupID),
+			providers:    providers,
+			lastTime:     lastTime,
 		})
 	}
 
@@ -5736,17 +5694,17 @@ func (m *Manager) CheckBackups(
 		}
 
 		var sourceLabel string
-		switch record.source {
-		case "PBS":
-			sourceLabel = fmt.Sprintf("PBS datastore %s on %s", record.datastore, strings.TrimPrefix(instance, "PBS:"))
-		case "PMG":
-			if node != "" {
-				sourceLabel = fmt.Sprintf("PMG node %s", node)
-			} else {
-				sourceLabel = "PMG"
+		sourceLabel = record.source
+		if len(record.providers) > 0 {
+			parts := make([]string, 0, len(record.providers))
+			for _, p := range record.providers {
+				if s := strings.TrimSpace(string(p)); s != "" {
+					parts = append(parts, s)
+				}
 			}
-		default:
-			sourceLabel = fmt.Sprintf("storage %s on %s", record.storage, node)
+			if len(parts) > 0 {
+				sourceLabel = strings.Join(parts, ", ")
+			}
 		}
 
 		message := fmt.Sprintf(
@@ -5759,21 +5717,11 @@ func (m *Manager) CheckBackups(
 
 		metadata := map[string]interface{}{
 			"source":         record.source,
+			"providers":      record.providers,
+			"rollupId":       record.rollupID,
 			"lastBackupTime": record.lastTime,
 			"ageDays":        ageDays,
 			"thresholdDays":  threshold,
-		}
-		if record.storage != "" {
-			metadata["storage"] = record.storage
-		}
-		if record.datastore != "" {
-			metadata["datastore"] = record.datastore
-		}
-		if record.backupType != "" {
-			metadata["backupType"] = record.backupType
-		}
-		if record.filename != "" {
-			metadata["filename"] = record.filename
 		}
 
 		m.mu.Lock()
@@ -5861,6 +5809,34 @@ func (m *Manager) CheckBackups(
 		m.clearAlertNoLock(alertID)
 	}
 	m.mu.Unlock()
+}
+
+func slicesContainsProvider(providers []recovery.Provider, target recovery.Provider) bool {
+	for _, p := range providers {
+		if p == target {
+			return true
+		}
+	}
+	return false
+}
+
+func parseGuestID(raw string) (instance string, node string, vmid int, ok bool) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", "", 0, false
+	}
+	parts := strings.Split(raw, ":")
+	if len(parts) < 3 {
+		return "", "", 0, false
+	}
+	last := parts[len(parts)-1]
+	prev := parts[len(parts)-2]
+	inst := strings.Join(parts[:len(parts)-2], ":")
+	n, err := strconv.Atoi(strings.TrimSpace(last))
+	if err != nil || n <= 0 {
+		return "", "", 0, false
+	}
+	return strings.TrimSpace(inst), strings.TrimSpace(prev), n, true
 }
 
 // checkZFSPoolHealth checks ZFS pool for errors and degraded state

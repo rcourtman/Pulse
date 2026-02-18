@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	recoverymanager "github.com/rcourtman/pulse-go-rewrite/internal/recovery/manager"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	"github.com/rs/zerolog/log"
 )
@@ -18,6 +19,7 @@ type MultiTenantMonitor struct {
 	persistence  *config.MultiTenantPersistence
 	baseConfig   *config.Config
 	wsHub        *websocket.Hub
+	recoveryMgr  *recoverymanager.Manager
 	globalCtx    context.Context
 	globalCancel context.CancelFunc
 }
@@ -32,6 +34,19 @@ func NewMultiTenantMonitor(baseCfg *config.Config, persistence *config.MultiTena
 		wsHub:        wsHub,
 		globalCtx:    ctx,
 		globalCancel: cancel,
+	}
+}
+
+// SetRecoveryManager wires a recovery store manager into all existing and future tenant monitors.
+func (mtm *MultiTenantMonitor) SetRecoveryManager(manager *recoverymanager.Manager) {
+	mtm.mu.Lock()
+	defer mtm.mu.Unlock()
+	mtm.recoveryMgr = manager
+	for _, monitor := range mtm.monitors {
+		if monitor == nil {
+			continue
+		}
+		monitor.SetRecoveryManager(manager)
 	}
 }
 
@@ -108,6 +123,9 @@ func (mtm *MultiTenantMonitor) GetMonitor(orgID string) (*Monitor, error) {
 	// Set org ID for tenant isolation
 	// This enables tenant-scoped WebSocket broadcasts
 	monitor.SetOrgID(orgID)
+	if mtm.recoveryMgr != nil {
+		monitor.SetRecoveryManager(mtm.recoveryMgr)
+	}
 
 	// 3. Start Monitor
 	// We pass the global context, but maybe we should give it a derived one?

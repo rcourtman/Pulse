@@ -25,8 +25,8 @@ const BADGE_MAP: Record<WorkloadTypeBadgeKey, WorkloadTypeBadge> = {
     className: 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300',
   },
   docker: {
-    label: 'Docker',
-    title: 'Docker Container',
+    label: 'Containers',
+    title: 'Container (Docker-compatible runtime)',
     className: 'bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300',
   },
   k8s: {

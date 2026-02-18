@@ -153,7 +153,27 @@ func clonePMGData(in *PMGData) *PMGData {
 	out.MailStats = clonePMGMailStatsMeta(in.MailStats)
 	out.Quarantine = clonePMGQuarantineMeta(in.Quarantine)
 	out.SpamDistribution = clonePMGSpamBucketMetaSlice(in.SpamDistribution)
+	out.RelayDomains = clonePMGRelayDomainMetaSlice(in.RelayDomains)
+	out.DomainStats = clonePMGDomainStatMetaSlice(in.DomainStats)
 	return &out
+}
+
+func clonePMGRelayDomainMetaSlice(in []PMGRelayDomainMeta) []PMGRelayDomainMeta {
+	if in == nil {
+		return nil
+	}
+	out := make([]PMGRelayDomainMeta, len(in))
+	copy(out, in)
+	return out
+}
+
+func clonePMGDomainStatMetaSlice(in []PMGDomainStatMeta) []PMGDomainStatMeta {
+	if in == nil {
+		return nil
+	}
+	out := make([]PMGDomainStatMeta, len(in))
+	copy(out, in)
+	return out
 }
 
 func cloneK8sData(in *K8sData) *K8sData {

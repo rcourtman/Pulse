@@ -1,7 +1,7 @@
-import { buildBackupsPath, buildStoragePath } from './resourceLinks';
+import { buildRecoveryPath, buildStoragePath } from './resourceLinks';
 
-export type StorageBackupsTabSpec = {
-  id: 'storage' | 'backups';
+export type StorageRecoveryTabSpec = {
+  id: 'storage' | 'recovery';
   label: string;
   route: string;
   settingsRoute: string;
@@ -9,11 +9,14 @@ export type StorageBackupsTabSpec = {
   badge?: 'preview';
 };
 
+// Backwards-compat for older call sites.
+export type StorageBackupsTabSpec = StorageRecoveryTabSpec;
+
 /**
- * Returns the canonical Storage + Backups tab specs for the platform nav.
+ * Returns the canonical Storage + Recovery tab specs for the platform nav.
  * Legacy dual-tab modes were removed in SB5-05.
  */
-export function buildStorageBackupsTabSpecs(_planOrShowV2?: unknown): StorageBackupsTabSpec[] {
+export function buildStorageRecoveryTabSpecs(_planOrShowV2?: unknown): StorageRecoveryTabSpec[] {
   return [
     {
       id: 'storage',
@@ -23,11 +26,16 @@ export function buildStorageBackupsTabSpecs(_planOrShowV2?: unknown): StorageBac
       tooltip: 'Storage pools, disks, and datastores',
     },
     {
-      id: 'backups',
-      label: 'Backups',
-      route: buildBackupsPath(),
-      settingsRoute: '/settings/system-backups',
-      tooltip: 'Backup jobs and schedules',
+      id: 'recovery',
+      label: 'Recovery',
+      route: buildRecoveryPath(),
+      settingsRoute: '/settings/system-recovery',
+      tooltip: 'Backup, snapshot, and replication activity',
     },
   ];
+}
+
+// Backwards-compat for older call sites.
+export function buildStorageBackupsTabSpecs(_planOrShowV2?: unknown): StorageBackupsTabSpec[] {
+  return buildStorageRecoveryTabSpecs(_planOrShowV2);
 }

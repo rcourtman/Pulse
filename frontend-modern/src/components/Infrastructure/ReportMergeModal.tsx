@@ -21,7 +21,7 @@ const formatSourceLabel = (source: string) => {
     case 'agent':
       return 'Agent';
     case 'docker':
-      return 'Docker';
+      return 'Containers';
     case 'pbs':
       return 'PBS';
     case 'pmg':

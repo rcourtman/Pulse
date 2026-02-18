@@ -17,7 +17,7 @@ const canonicalTabPaths = {
   'system-general': '/settings/system-general',
   'system-network': '/settings/system-network',
   'system-updates': '/settings/system-updates',
-  'system-backups': '/settings/system-backups',
+  'system-recovery': '/settings/system-recovery',
   'system-ai': '/settings/system-ai',
   'system-relay': '/settings/system-relay',
   'system-logs': '/settings/operations/logs',
@@ -85,7 +85,9 @@ describe('settingsRouting', () => {
 
   it('canonicalizes legacy settings routes', () => {
     const canonicalCases: Array<[string, string]> = [
-      ['/settings/backups', '/settings/system-backups'],
+      ['/settings/backups', '/settings/system-recovery'],
+      ['/settings/system-backups', '/settings/system-recovery'],
+      ['/settings/recovery', '/settings/system-recovery'],
       ['/settings/integrations/relay', '/settings/system-relay'],
       ['/settings/billing', '/settings/organization/billing'],
       ['/settings/api', '/settings/integrations/api'],
@@ -128,7 +130,8 @@ describe('settingsRouting', () => {
       ['?tab=infrastructure', 'proxmox'],
       ['?tab=workloads', 'agents'],
       ['?tab=docker', 'docker'],
-      ['?tab=backups', 'system-backups'],
+      ['?tab=backups', 'system-recovery'],
+      ['?tab=recovery', 'system-recovery'],
       ['?tab=organization', 'organization-overview'],
       ['?tab=billing', 'organization-billing'],
       ['?tab=security', 'security-overview'],

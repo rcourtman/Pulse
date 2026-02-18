@@ -81,13 +81,14 @@ import {
 } from './routing/navigation';
 import { LEGACY_REDIRECTS } from './routing/legacyRedirects';
 import {
-  buildBackupsPath,
+  buildRecoveryPath,
   DASHBOARD_PATH,
+  BACKUPS_LEGACY_PATH,
   buildInfrastructurePath,
   buildStoragePath,
   buildWorkloadsPath,
 } from './routing/resourceLinks';
-import { buildStorageBackupsTabSpecs } from './routing/platformTabs';
+import { buildStorageRecoveryTabSpecs } from './routing/platformTabs';
 import { isMultiTenantEnabled, isPro, licenseLoaded, loadLicenseStatus } from '@/stores/license';
 
 import { showToast } from '@/utils/toast';
@@ -102,7 +103,7 @@ const Dashboard = lazy(() =>
   import('./components/Dashboard/Dashboard').then((module) => ({ default: module.Dashboard })),
 );
 const StorageComponent = lazy(() => import('./components/Storage/Storage'));
-const BackupsRoute = lazy(() => import('./pages/BackupsRoute'));
+const RecoveryRoute = lazy(() => import('./pages/RecoveryRoute'));
 const CephPage = lazy(() => import('./pages/Ceph'));
 const AlertsPage = lazy(() =>
   import('./pages/Alerts').then((module) => ({ default: module.Alerts })),
@@ -119,8 +120,8 @@ const PricingPage = lazy(() => import('./pages/Pricing'));
 const ROOT_INFRASTRUCTURE_PATH = buildInfrastructurePath();
 const ROOT_WORKLOADS_PATH = buildWorkloadsPath();
 const STORAGE_PATH = buildStoragePath();
-const BACKUPS_PATH = buildBackupsPath();
-const REPLICATION_TARGET_PATH = buildBackupsPath({ view: 'events', mode: 'remote' });
+const RECOVERY_ROUTE_PATH = buildRecoveryPath();
+const RECOVERY_REMOTE_EVENTS_PATH = buildRecoveryPath({ view: 'events', mode: 'remote' });
 
 
 // Enhanced store type with proper typing
@@ -240,6 +241,11 @@ type LegacyRedirectProps = {
     type?: 'success' | 'error' | 'warning' | 'info';
     title: string;
     message?: string;
+    /**
+     * If set, the toast will only be shown once per browser profile.
+     * This avoids spamming users when legacy aliases are hit repeatedly.
+     */
+    onceKey?: string;
   };
 };
 
@@ -248,7 +254,26 @@ function LegacyRedirect(props: LegacyRedirectProps) {
   const location = useLocation();
   onMount(() => {
     if (props.toast) {
-      showToast(props.toast.type ?? 'info', props.toast.title, props.toast.message);
+      let shouldShow = true;
+      const onceKey = props.toast.onceKey;
+      if (onceKey) {
+        try {
+          shouldShow = localStorage.getItem(onceKey) !== '1';
+        } catch {
+          // localStorage may be disabled; fall back to showing the toast.
+        }
+      }
+
+      if (shouldShow) {
+        showToast(props.toast.type ?? 'info', props.toast.title, props.toast.message);
+        if (onceKey) {
+          try {
+            localStorage.setItem(onceKey, '1');
+          } catch {
+            // ignore
+          }
+        }
+      }
     }
     const target = mergeRedirectQueryParams(props.to, location.search);
     navigate(target, { replace: true });
@@ -1133,14 +1158,41 @@ function App() {
       <Route path="/" component={() => <Navigate href={ROOT_INFRASTRUCTURE_PATH} />} />
       <Route path={ROOT_WORKLOADS_PATH} component={WorkloadsView} />
       <Route path={STORAGE_PATH} component={StorageComponent} />
-      <Route path={BACKUPS_PATH} component={BackupsRoute} />
+      <Route path={RECOVERY_ROUTE_PATH} component={RecoveryRoute} />
       <Route path="/ceph" component={CephPage} />
       <Route path={ROOT_INFRASTRUCTURE_PATH} component={InfrastructurePage} />
       <Route path="/migration-guide" component={MigrationGuidePage} />
 
       <Show when={!shouldDisableLegacyRouteRedirects()}>
         <Route path="/proxmox" component={() => <Navigate href={ROOT_INFRASTRUCTURE_PATH} />} />
-        <Route path="/replication" component={() => <LegacyRedirect to={REPLICATION_TARGET_PATH} />} />
+        <Route
+          path="/replication"
+          component={() => (
+            <LegacyRedirect
+              to={RECOVERY_REMOTE_EVENTS_PATH}
+              toast={{
+                type: 'info',
+                title: 'Replication moved',
+                message: 'Replication is now shown in Recovery (Remote events). Update your bookmark to /recovery.',
+                onceKey: 'pulse_toast_replication_moved_to_recovery',
+              }}
+            />
+          )}
+        />
+        <Route
+          path={BACKUPS_LEGACY_PATH}
+          component={() => (
+            <LegacyRedirect
+              to={RECOVERY_ROUTE_PATH}
+              toast={{
+                type: 'info',
+                title: 'Backups moved',
+                message: 'Backups is now Recovery. Update your bookmark to /recovery.',
+                onceKey: 'pulse_toast_backups_moved_to_recovery',
+              }}
+            />
+          )}
+        />
         <Route
           path={LEGACY_REDIRECTS.proxmoxOverview.path}
           component={() => (
@@ -1188,7 +1240,20 @@ function App() {
         />
         <Route path="/proxmox/storage" component={() => <Navigate href={STORAGE_PATH} />} />
         <Route path="/proxmox/ceph" component={() => <Navigate href="/ceph" />} />
-        <Route path="/proxmox/replication" component={() => <LegacyRedirect to={REPLICATION_TARGET_PATH} />} />
+        <Route
+          path="/proxmox/replication"
+          component={() => (
+            <LegacyRedirect
+              to={REPLICATION_TARGET_PATH}
+              toast={{
+                type: 'info',
+                title: 'Replication moved',
+                message: 'Replication is now shown in Recovery (Remote events). Update your bookmark to /recovery.',
+                onceKey: 'pulse_toast_replication_moved_to_recovery',
+              }}
+            />
+          )}
+        />
         <Route
           path={LEGACY_REDIRECTS.proxmoxMail.path}
           component={() => (
@@ -1208,7 +1273,13 @@ function App() {
           path="/proxmox/backups"
           component={() => (
             <LegacyRedirect
-              to={BACKUPS_PATH}
+              to={RECOVERY_ROUTE_PATH}
+              toast={{
+                type: 'info',
+                title: 'Backups moved',
+                message: 'Backups is now Recovery. Update your bookmark to /recovery.',
+                onceKey: 'pulse_toast_backups_moved_to_recovery',
+              }}
             />
           )}
         />
@@ -1425,7 +1496,7 @@ function AppLayout(props: {
         icon: <BoxesIcon class="w-4 h-4 shrink-0" />,
         alwaysShow: true,
       },
-      ...buildStorageBackupsTabSpecs(true).map((tab) => ({
+      ...buildStorageRecoveryTabSpecs(true).map((tab) => ({
         ...tab,
         enabled: true,
         live: true,
@@ -1477,7 +1548,7 @@ function AppLayout(props: {
         icon: <BoxesIcon class="w-4 h-4 shrink-0" />,
         alwaysShow: true,
       },
-      ...buildStorageBackupsTabSpecs(true).map((tab) => ({
+      ...buildStorageRecoveryTabSpecs(true).map((tab) => ({
         ...tab,
         enabled: true,
         live: true,

@@ -1,12 +1,11 @@
 import { createSignal, onCleanup, type Accessor } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
 import {
-  buildBackupsPath,
+  buildRecoveryPath,
   buildInfrastructurePath,
   buildStoragePath,
   buildWorkloadsPath,
 } from '@/routing/resourceLinks';
-import { navigationMode } from '@/stores/navigationMode';
 
 type KeyboardShortcutsOptions = {
   enabled?: Accessor<boolean>;
@@ -88,23 +87,20 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions = {}) {
       i: buildInfrastructurePath(),
       w: buildWorkloadsPath(),
       s: buildStoragePath(),
-      b: buildBackupsPath(),
+      b: buildRecoveryPath(),
       a: '/alerts',
       t: '/settings',
     };
 
-    if (navigationMode() !== 'classic') {
-      return base;
-    }
-
     return {
       ...base,
-      // Classic (v5-like) platform shortcuts
+      // Migration shortcuts (v5 muscle memory) into v6 unified views.
       p: buildInfrastructurePath({ source: 'proxmox' }),
       h: buildInfrastructurePath({ source: 'agent' }),
       d: buildInfrastructurePath({ source: 'docker' }),
       v: buildInfrastructurePath({ source: 'pmg' }), // services/mail gateway
-      c: buildWorkloadsPath({ type: 'docker' }), // containers
+      c: buildWorkloadsPath({ type: 'docker' }), // docker/podman containers
+      l: buildWorkloadsPath({ type: 'lxc' }),
       k: buildWorkloadsPath({ type: 'k8s' }),
     };
   };

@@ -8,9 +8,9 @@
 ![Storage Management](images/02-storage.png)
 *Comprehensive storage view displaying all storage pools across nodes with usage percentages, allocated vs used space, and visual indicators. Monitors local, ZFS, LVM, and network storage types in a unified interface.*
 
-## Backup Central
-![Unified Backup View](images/03-backups.png)
-*Centralized backup management showing PBS backups, PVE backup tasks, and VM snapshots in one place. Track backup status, sizes, retention, and quickly identify failed or missing backups across your entire infrastructure. Time-range buttons (24h/7d/30d/custom) and the synchronized bar chart make it easy to focus on exactly the window you care about.*
+## Recovery Central
+![Unified Recovery View](images/03-backups.png)
+*Centralized recovery management showing backups, snapshots, and replication points in one place. Track outcomes, sizes, retention, and quickly identify failed or missing recovery points across your entire infrastructure. Time-range buttons (24h/7d/30d/custom) and the synchronized bar chart make it easy to focus on exactly the window you care about.*
 
 ## Alerts & Configuration
 ![Alerts and Configuration](images/04-alerts.png)

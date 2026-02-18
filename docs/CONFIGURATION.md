@@ -195,7 +195,6 @@ Numeric intervals are **seconds** unless noted otherwise.
 | `metricsRetentionDailyDays` | Daily metrics retention (days) |
 | `disableDockerUpdateActions` | Hide Docker update actions in UI |
 | `disableLegacyRouteRedirects` | Disable legacy frontend URL redirects (bookmark compatibility aliases) |
-| `showClassicPlatformShortcuts` | Show classic platform shortcuts bar in main navigation |
 | `reduceProUpsellNoise` | Reduce proactive Pro prompts (paywalls still appear when accessing gated features) |
 | `disableLocalUpgradeMetrics` | Disable local-only upgrade metrics collection |
 | `backendPort` | Legacy (unused) |
@@ -406,7 +405,7 @@ docker run --init -e HTTPS_ENABLED=true \
 ## 🛡️ Security Best Practices
 
 1. **Permissions**: Ensure `.env` and `nodes.enc` are `600` (read/write by owner only).
-2. **Backups**: Back up `.env` separately from `system.json`.
+2. **Backup hygiene**: Back up `.env` separately from `system.json`.
 3. **Tokens**: Use scoped API tokens for agents instead of the admin password.
 
 ---

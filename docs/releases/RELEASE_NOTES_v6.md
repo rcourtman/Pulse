@@ -16,17 +16,16 @@ The core architectural change in v6: every monitored resource — Proxmox VMs, c
 - API router decomposed from a monolith into focused route-group files: monitoring, AI/relay, hosted, org/license, auth/security, and registration.
 
 **Frontend:**
-- Navigation reorganized from platform tabs (Proxmox | Docker | Kubernetes | Hosts) to task-oriented tabs: **Dashboard | Infrastructure | Workloads | Storage | Backups**.
+- Navigation reorganized from platform tabs (Proxmox | Docker | Kubernetes | Hosts) to task-oriented tabs: **Dashboard | Infrastructure | Workloads | Storage | Recovery**.
 - New **Infrastructure page** at `/infrastructure` — all hosts and nodes across all platforms in one unified table. Filter by source (PVE, Agent, Docker, PBS, PMG, K8s, TrueNAS), filter by status, search across name/ID/IP/tags, toggle between grouped and flat views.
 - **Resource detail drawer** with hardware cards, disk info, temperature readings, network interfaces, and platform-specific metadata.
 - **Command palette** (Cmd+K / Ctrl+K) with fuzzy-search navigation to any page, resource, or action.
-- **Keyboard shortcuts** — press `?` to see the reference. Vim-style `g` then key navigation: `g+i` Infrastructure, `g+w` Workloads, `g+s` Storage, `g+b` Backups, `g+a` Alerts, `g+t` Settings. `/` focuses search.
+- **Keyboard shortcuts** — press `?` to see the reference. Vim-style `g` then key navigation: `g+i` Infrastructure, `g+w` Workloads, `g+s` Storage, `g+b` Recovery, `g+a` Alerts, `g+t` Settings. `/` focuses search.
 - **Mobile bottom navigation bar** — fixed bottom nav for mobile and tablet with horizontally scrollable tabs and alert badge counts. Hidden on desktop.
 - Legacy routes (`/proxmox/overview`, `/docker`, `/kubernetes`, `/hosts`, `/services`, `/mail`) redirect to their new destinations with toast notifications explaining the move. See Migration Notes below.
 - **"What's New" modal** on first visit after upgrade, explaining the navigation changes with a link to the migration guide.
 - **In-app migration guide** at `/migration-guide` showing the complete old-to-new route mapping.
 - Optional migration aid: **Classic platform shortcuts** bar in the main navigation (can be hidden in Settings → System → General).
-- Optional preference: **Classic navigation style** (Unified vs Classic tabs), configurable in Settings → System → General (stored per browser).
 
 ### Dashboard Redesign
 
@@ -41,13 +40,13 @@ A completely new environment-overview dashboard replaces the previous landing pa
 - **Recent alerts panel** with severity counts.
 - **Relay onboarding card** prompting mobile device pairing (Pro feature, with trial CTA for Community users).
 
-### Storage + Backups (Unified Views)
+### Storage + Recovery (Unified Views)
 
-Storage and Backups are now unified, source-agnostic views — the "V2" naming has been removed.
+Storage and Recovery are now unified, source-agnostic views — the "V2" naming has been removed.
 
 - **Storage hero section** with pool count donut, capacity gauge, disk count, and free space KPIs.
 - Per-pool detail expansion with live disk metrics.
-- Source filter options for both Storage and Backups views (filter by Proxmox, PBS, Ceph, Agent, etc.).
+- Source filter options for both Storage and Recovery views (filter by Proxmox, PBS, Ceph, Agent, etc.).
 - Ceph and physical disk resources integrated into the unified registry.
 - Storage sparklines for usage trends.
 - Alert state integration for storage resources.
@@ -231,7 +230,7 @@ Infrastructure for running Pulse as a hosted SaaS product — entirely opt-in.
     | `/proxmox/mail`, `/mail`, `/services` | `/infrastructure?source=pmg` |
     | `/kubernetes` | `/workloads?type=k8s` |
   - These redirects exist as compatibility aliases; update bookmarks to canonical routes.
-- **Storage/Backups "V2" naming removed** — use canonical `/storage` and `/backups` routes.
+- **Storage/Recovery "V2" naming removed** — use canonical `/storage` and `/recovery` routes (`/backups` remains as a compatibility alias).
 
 ### Agent
 
@@ -259,7 +258,7 @@ Infrastructure for running Pulse as a hosted SaaS product — entirely opt-in.
 
 ### Before Upgrading
 
-1. **Create an encrypted config backup** via Settings → System → Backups → Create Backup.
+1. **Create an encrypted config backup** via Settings → System → Recovery → Create Backup (older versions labeled this **Backups**).
 2. Confirm console access for rollback and bootstrap token retrieval.
 3. Review API changes if you have external integrations.
 
@@ -288,7 +287,7 @@ Infrastructure for running Pulse as a hosted SaaS product — entirely opt-in.
 4. Confirm nodes are polling and no circuit breakers are stuck open.
 5. Confirm notifications still send (send a test).
 6. Confirm agents are connected (if used).
-7. Update bookmarks and automation to canonical routes (`/infrastructure`, `/workloads`, `/storage`, `/backups`).
+7. Update bookmarks and automation to canonical routes (`/infrastructure`, `/workloads`, `/storage`, `/recovery`).
 8. Migrate any scripts calling `/api/v2/resources` to `/api/resources`.
 
 ### Multi-Tenant Organizations (Enterprise, Opt-In)

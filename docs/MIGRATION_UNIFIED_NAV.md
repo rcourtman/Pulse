@@ -3,12 +3,17 @@
 This guide explains what changed in the unified navigation release and how to find the new locations for legacy pages.
 
 ## What Changed
-- Navigation is now organized by **task** (Infrastructure, Workloads, Storage, Backups) instead of by platform.
+- Navigation is now organized by **task** (Infrastructure, Workloads, Storage, Recovery) instead of by platform.
 - Legacy pages (Proxmox Overview, Hosts, Docker, Services, Kubernetes) redirect to unified views.
 - Global search and keyboard shortcuts make navigation faster across all resources.
 - Kubernetes is now split by intent:
   - **Infrastructure** shows Kubernetes clusters and nodes.
   - **Workloads** shows Kubernetes pods with the same filters/grouping as VMs and containers.
+
+## Why This Change
+- A unified resource model enables one inventory and one search across platforms.
+- Filters, drawers, and workflows stay consistent, instead of being re-implemented per platform page.
+- New integrations can be added without expanding the top-level navigation indefinitely.
 
 ## Legacy Aliases and Redirects
 - Legacy redirects exist as compatibility aliases.
@@ -16,8 +21,7 @@ This guide explains what changed in the unified navigation release and how to fi
 - Any future removal of legacy aliases should only happen with explicit notice in release notes.
 - To sunset all legacy aliases immediately, set `PULSE_DISABLE_LEGACY_ROUTE_REDIRECTS=true`
   (or set `disableLegacyRouteRedirects` in `system.json`).
-- If you prefer the previous top-level navigation layout, you can switch to **Classic** navigation style in
-  Settings → System → General (stored per browser).
+- Optional migration aid: enable the **Classic shortcuts** bar in the main navigation (Settings → System → General).
 - Plan automation/bookmarks to use canonical routes now:
   - `/infrastructure?source=pmg`
   - `/workloads?type=k8s`
@@ -30,8 +34,8 @@ This guide explains what changed in the unified navigation release and how to fi
 | Hosts | `/infrastructure` |
 | Docker | `/workloads` (containers) + `/infrastructure` (hosts) |
 | Proxmox Storage | `/storage` |
-| Proxmox Backups | `/backups` |
-| Proxmox Replication | `/replication` (also accessible via Backups if enabled) |
+| Proxmox Backups | `/recovery` (compatibility alias: `/backups`) |
+| Proxmox Replication | `/replication` (compatibility alias → `/recovery?view=events&mode=remote`) |
 | Proxmox Ceph | `/ceph` (summary also visible in Storage) |
 | Proxmox Mail Gateway | `/infrastructure?source=pmg` |
 | Services | `/infrastructure?source=pmg` |
@@ -49,7 +53,7 @@ This guide explains what changed in the unified navigation release and how to fi
 - `g i` → Infrastructure
 - `g w` → Workloads
 - `g s` → Storage
-- `g b` → Backups
+- `g b` → Recovery
 - `g a` → Alerts
 - `g t` → Settings
 - `?` → Shortcut help

@@ -23,10 +23,6 @@ import type {
   Alert,
   PBSInstance,
   PMGInstance,
-  PVEBackups,
-  PBSBackup,
-  PMGBackup,
-  Backups,
 } from '@/types/api';
 import type {
   RawOverrideConfig,
@@ -167,10 +163,6 @@ interface ThresholdsTableProps {
   allResources: Resource[];
   pbsInstances?: PBSInstance[]; // PBS instances from state
   pmgInstances?: PMGInstance[]; // PMG instances from state
-  backups?: Backups;
-  pveBackups?: PVEBackups;
-  pbsBackups?: PBSBackup[];
-  pmgBackups?: PMGBackup[];
   pmgThresholds: () => PMGThresholdDefaults;
   setPMGThresholds: (
     value: PMGThresholdDefaults | ((prev: PMGThresholdDefaults) => PMGThresholdDefaults),
@@ -1869,7 +1861,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         },
         {
           key: 'backups' as const,
-          label: 'Backups',
+          label: 'Recovery',
           total: 1,
           overrides: backupOverridesCount(),
           tab: 'proxmox' as const,
@@ -3073,12 +3065,12 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           <Show when={hasSection('backups')}>
             <CollapsibleSection
               id="backups"
-              title="Backups"
+              title="Recovery"
               collapsed={isCollapsed('backups')}
               onToggle={() => toggleSection('backups')}
               icon={<Archive class="w-5 h-5" />}
               isGloballyDisabled={!props.backupDefaults().enabled}
-              emptyMessage="Configure backup alert thresholds."
+              emptyMessage="Configure recovery alert thresholds."
             >
               <div ref={registerSection('backups')} class="scroll-mt-24">
                 <ResourceTable

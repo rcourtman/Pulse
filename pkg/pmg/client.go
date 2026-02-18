@@ -132,11 +132,29 @@ type QueueStatusEntry struct {
 	OldestAge flexibleInt `json:"oldest_age,omitempty"` // Age of oldest message in seconds
 }
 
+// DomainStatisticsEntry represents aggregated statistics for a single domain.
+//
+// PMG returns numeric fields inconsistently (numbers or strings), so these use flexible types.
+// Field names are based on PMG's API and may vary across versions; unknown fields are ignored.
+type DomainStatisticsEntry struct {
+	Domain     string        `json:"domain"`
+	Count      flexibleFloat `json:"count"`
+	SpamCount  flexibleFloat `json:"spamcount,omitempty"`
+	VirusCount flexibleFloat `json:"viruscount,omitempty"`
+	Bytes      flexibleFloat `json:"bytes,omitempty"`
+}
+
 // BackupEntry represents a PMG configuration backup stored on a node.
 type BackupEntry struct {
 	Filename  string      `json:"filename"`
 	Size      flexibleInt `json:"size"`
 	Timestamp flexibleInt `json:"timestamp"`
+}
+
+// RelayDomainEntry represents a relay domain configured in PMG.
+type RelayDomainEntry struct {
+	Domain  string `json:"domain"`
+	Comment string `json:"comment,omitempty"`
 }
 
 // NewClient creates a new PMG (Proxmox Mail Gateway) API client.
@@ -498,6 +516,32 @@ func (c *Client) ListBackups(ctx context.Context, node string) ([]BackupEntry, e
 	path := fmt.Sprintf("/nodes/%s/backup", url.PathEscape(node))
 	var resp apiResponse[[]BackupEntry]
 	if err := c.getJSON(ctx, path, nil, &resp); err != nil {
+		return nil, err
+	}
+	return resp.Data, nil
+}
+
+// ListRelayDomains returns relay domains configured on the PMG instance.
+func (c *Client) ListRelayDomains(ctx context.Context) ([]RelayDomainEntry, error) {
+	var resp apiResponse[[]RelayDomainEntry]
+	if err := c.getJSON(ctx, "/config/domains", nil, &resp); err != nil {
+		return nil, err
+	}
+	return resp.Data, nil
+}
+
+// GetDomainStatistics returns per-domain statistics for a time range.
+func (c *Client) GetDomainStatistics(ctx context.Context, startTimeUnix, endTimeUnix int64) ([]DomainStatisticsEntry, error) {
+	params := url.Values{}
+	if startTimeUnix > 0 {
+		params.Set("starttime", fmt.Sprintf("%d", startTimeUnix))
+	}
+	if endTimeUnix > 0 {
+		params.Set("endtime", fmt.Sprintf("%d", endTimeUnix))
+	}
+
+	var resp apiResponse[[]DomainStatisticsEntry]
+	if err := c.getJSON(ctx, "/statistics/domains", params, &resp); err != nil {
 		return nil, err
 	}
 	return resp.Data, nil

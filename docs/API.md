@@ -77,17 +77,20 @@ Lightweight HTML status page for quick checks.
 Returns the unified resource list with pagination + aggregations. Requires `monitoring:read`.
 
 Query params:
-- `type`: comma-separated list (e.g., `host`, `vm`, `lxc`, `container`, `storage`, `pbs`, `pmg`, `ceph`)
+- `type`: comma-separated list (e.g., `host`, `vm`, `lxc`, `container`, `docker-service`, `storage`, `pbs`, `pmg`, `k8s-cluster`, `k8s-node`, `pod`, `k8s-deployment`, `physical_disk`, `ceph`)
 - `source`: comma-separated list (e.g., `proxmox`, `agent`, `docker`, `pbs`, `pmg`, `kubernetes`)
 - `status`: comma-separated list (`online`, `offline`, `warning`, `unknown`)
 - `parent`: parent resource ID
 - `cluster`: cluster name
+- `namespace`: Kubernetes namespace (filters Kubernetes resources only)
 - `q`: name search (contains match)
 - `tags`: comma-separated tags
 - `page`: page number (default `1`)
 - `limit`: page size (default `50`, max `100`)
 - `sort`: `name` (default), `status`, `type`, `lastSeen`
 - `order`: `asc` (default) or `desc`
+
+Note: `GET /api/resources` is optimized for list views. Some large, platform-specific fields may be omitted from the list response and are only returned by `GET /api/resources/{id}`.
 
 `GET /api/resources/stats`
 Returns aggregations (counts + health rollups).
@@ -278,18 +281,24 @@ Returns storage chart data.
 `GET /api/storage/`
 Detailed storage usage per node and pool.
 
-### Backup History
-`GET /api/backups/unified`
-Combined view of PVE and PBS backups.
+### Recovery (formerly Backups / Snapshots)
+Pulse v6 uses the recovery API to provide a platform-agnostic view of backup and snapshot artifacts.
+See `docs/RECOVERY_CONTRACT.md` for the provider-neutral contract (subjects, points, rollups, and filter semantics).
 
-Other backup endpoints:
-- `GET /api/backups`
-- `GET /api/backups/pve`
-- `GET /api/backups/pbs`
-
-### Snapshots
-`GET /api/snapshots`
-Returns guest snapshot history for the current tenant.
+- `GET /api/recovery/points`
+  - Query params:
+    - Core filters: `provider`, `kind`, `mode`, `outcome`, `subjectResourceId`, `rollupId`
+    - Time window: `from` (RFC3339), `to` (RFC3339)
+    - Paging: `page`, `limit`
+    - Normalized filters: `q`, `cluster`, `node`, `namespace`, `scope=workload`, `verification` (`verified` | `unverified` | `unknown`)
+- `GET /api/recovery/rollups`
+  - Query params: `provider`, `kind`, `mode`, `outcome`, `subjectResourceId`, `rollupId`, `from` (RFC3339), `to` (RFC3339), `page`, `limit`
+- `GET /api/recovery/series`
+  - Returns per-day counts for the activity chart.
+  - Query params: same filters as `/api/recovery/points` (except paging), plus `tzOffsetMinutes` (integer; UTC offset minutes for day bucketing)
+- `GET /api/recovery/facets`
+  - Returns distinct filter values (clusters/nodes/namespaces) and capability flags (size/verification/entity id present).
+  - Query params: same filters as `/api/recovery/points` (except paging)
 
 ---
 
@@ -974,6 +983,7 @@ Updates server-side config for an agent (e.g., `commandsEnabled`).
 - `PUT /api/agents/docker/hosts/{hostId}/pending-uninstall` (`docker:manage`)
 - `PUT /api/agents/docker/hosts/{hostId}/display-name` (`docker:manage`)
 - `POST /api/agents/docker/hosts/{hostId}/check-updates` (`docker:manage`)
+- `POST /api/agents/docker/hosts/{hostId}/update-all` (`docker:manage`)
 - `POST /api/agents/docker/containers/update` (`docker:manage`)
 
 ### Kubernetes Agent Management (Admin)

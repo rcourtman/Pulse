@@ -1253,6 +1253,70 @@ func TestQueueDockerCheckUpdatesCommand(t *testing.T) {
 	})
 }
 
+func TestQueueDockerUpdateAllCommand(t *testing.T) {
+	t.Parallel()
+
+	monitor := newTestMonitorForCommands(t)
+	now := time.Now().UTC()
+	host := models.DockerHost{
+		ID:       "host-update-all",
+		Hostname: "node-update-all",
+		Status:   "online",
+		Containers: []models.DockerContainer{
+			{ID: "c1", Name: "app1", UpdateStatus: &models.DockerContainerUpdateStatus{UpdateAvailable: true, LastChecked: now}},
+			{ID: "c2", Name: "app2", UpdateStatus: &models.DockerContainerUpdateStatus{UpdateAvailable: false, LastChecked: now}},
+			{ID: "c3", Name: "app3", UpdateStatus: &models.DockerContainerUpdateStatus{UpdateAvailable: true, LastChecked: now}},
+		},
+	}
+	monitor.state.UpsertDockerHost(host)
+
+	status, err := monitor.QueueDockerUpdateAllCommand(host.ID)
+	assert.NoError(t, err)
+	assert.Equal(t, DockerCommandTypeUpdateAll, status.Type)
+	assert.Equal(t, DockerCommandStatusQueued, status.Status)
+
+	payload, fetched := monitor.FetchDockerCommandForHost(host.ID)
+	assert.NotNil(t, fetched)
+	assert.Equal(t, DockerCommandStatusDispatched, fetched.Status)
+	assert.NotNil(t, payload)
+
+	raw, ok := payload["containerIds"]
+	if !ok {
+		t.Fatalf("expected payload to include containerIds")
+	}
+	ids, ok := raw.([]string)
+	if !ok {
+		t.Fatalf("expected containerIds to be []string, got %T", raw)
+	}
+	assert.ElementsMatch(t, []string{"c1", "c3"}, ids)
+
+	// Completion should clear the active command so it won't be sent again.
+	_, _, _, err = monitor.AcknowledgeDockerHostCommand(fetched.ID, host.ID, DockerCommandStatusCompleted, "done")
+	assert.NoError(t, err)
+	payload, fetched = monitor.FetchDockerCommandForHost(host.ID)
+	assert.Nil(t, payload)
+	assert.Nil(t, fetched)
+
+	t.Run("no updates available returns error", func(t *testing.T) {
+		t.Parallel()
+
+		monitor := newTestMonitorForCommands(t)
+		host := models.DockerHost{
+			ID:       "host-none",
+			Hostname: "node-none",
+			Status:   "online",
+			Containers: []models.DockerContainer{
+				{ID: "c1", Name: "app1", UpdateStatus: &models.DockerContainerUpdateStatus{UpdateAvailable: false, LastChecked: now}},
+			},
+		}
+		monitor.state.UpsertDockerHost(host)
+
+		_, err := monitor.QueueDockerUpdateAllCommand(host.ID)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "no containers have updates available")
+	})
+}
+
 func TestMarkInProgress(t *testing.T) {
 	t.Parallel()
 

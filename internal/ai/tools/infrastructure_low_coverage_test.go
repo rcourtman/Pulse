@@ -7,10 +7,50 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+type stubRecoveryPointsProvider struct {
+	points []recovery.RecoveryPoint
+}
+
+func (s *stubRecoveryPointsProvider) ListPoints(_ context.Context, opts recovery.ListPointsOptions) ([]recovery.RecoveryPoint, int, error) {
+	filtered := make([]recovery.RecoveryPoint, 0, len(s.points))
+	for _, p := range s.points {
+		if opts.Provider != "" && p.Provider != opts.Provider {
+			continue
+		}
+		if opts.Kind != "" && p.Kind != opts.Kind {
+			continue
+		}
+		filtered = append(filtered, p)
+	}
+
+	total := len(filtered)
+	limit := opts.Limit
+	if limit <= 0 {
+		limit = 100
+	}
+	if limit > 500 {
+		limit = 500
+	}
+	page := opts.Page
+	if page <= 0 {
+		page = 1
+	}
+	offset := (page - 1) * limit
+	if offset >= len(filtered) {
+		return []recovery.RecoveryPoint{}, total, nil
+	}
+	end := offset + limit
+	if end > len(filtered) {
+		end = len(filtered)
+	}
+	return filtered[offset:end], total, nil
+}
 
 func TestExecuteGetCephStatus(t *testing.T) {
 	ctx := context.Background()
@@ -97,23 +137,33 @@ func TestExecuteListSnapshots(t *testing.T) {
 		VMs: []models.VM{
 			{VMID: 100, Name: "vm100"},
 		},
-		PVEBackups: models.PVEBackups{
-			GuestSnapshots: []models.GuestSnapshot{
-				{
-					ID:       "snap1",
-					VMID:     100,
-					Type:     "vm",
-					Node:     "node1",
-					Instance: "pve1",
-					Name:     "before-upgrade",
-					Time:     now,
-					VMState:  true,
-				},
-			},
-		},
 	}
 
-	exec := NewPulseToolExecutor(ExecutorConfig{StateProvider: &mockStateProvider{state: state}})
+	when := now.UTC()
+	size := int64(0)
+	exec := NewPulseToolExecutor(ExecutorConfig{
+		StateProvider: &mockStateProvider{state: state},
+		RecoveryPointsProvider: &stubRecoveryPointsProvider{points: []recovery.RecoveryPoint{
+			{
+				ID:        "pve-snapshot:snap1",
+				Provider:  recovery.ProviderProxmoxPVE,
+				Kind:      recovery.KindSnapshot,
+				Mode:      recovery.ModeSnapshot,
+				Outcome:   recovery.OutcomeSuccess,
+				StartedAt: &when,
+				SizeBytes: &size,
+				Details: map[string]any{
+					"snapshotName": "before-upgrade",
+					"description":  "",
+					"vmState":      true,
+					"type":         "vm",
+					"instance":     "pve1",
+					"node":         "node1",
+					"vmid":         100,
+				},
+			},
+		}},
+	})
 	result, err := exec.executeListSnapshots(ctx, map[string]interface{}{
 		"guest_id": "100",
 		"instance": "pve1",
@@ -341,14 +391,45 @@ func TestExecuteListBackupTasks(t *testing.T) {
 		Containers: []models.Container{
 			{VMID: 201, Name: "ct201"},
 		},
-		PVEBackups: models.PVEBackups{
-			BackupTasks: []models.BackupTask{
-				{ID: "task1", VMID: 101, Node: "node1", Instance: "pve1", Status: "OK", StartTime: now},
-				{ID: "task2", VMID: 201, Node: "node2", Instance: "pve1", Status: "FAIL", StartTime: now},
-			},
-		},
 	}
-	exec = NewPulseToolExecutor(ExecutorConfig{StateProvider: &mockStateProvider{state: state}})
+	started := now.UTC()
+	exec = NewPulseToolExecutor(ExecutorConfig{
+		StateProvider: &mockStateProvider{state: state},
+		RecoveryPointsProvider: &stubRecoveryPointsProvider{points: []recovery.RecoveryPoint{
+			{
+				ID:        "pve-task:task1",
+				Provider:  recovery.ProviderProxmoxPVE,
+				Kind:      recovery.KindBackup,
+				Mode:      recovery.ModeLocal,
+				Outcome:   recovery.OutcomeSuccess,
+				StartedAt: &started,
+				Details: map[string]any{
+					"status":   "OK",
+					"error":    "",
+					"instance": "pve1",
+					"node":     "node1",
+					"vmid":     101,
+					"type":     "",
+				},
+			},
+			{
+				ID:        "pve-task:task2",
+				Provider:  recovery.ProviderProxmoxPVE,
+				Kind:      recovery.KindBackup,
+				Mode:      recovery.ModeLocal,
+				Outcome:   recovery.OutcomeFailed,
+				StartedAt: &started,
+				Details: map[string]any{
+					"status":   "FAIL",
+					"error":    "boom",
+					"instance": "pve1",
+					"node":     "node2",
+					"vmid":     201,
+					"type":     "",
+				},
+			},
+		}},
+	})
 
 	result, err = exec.executeListBackupTasks(ctx, map[string]interface{}{
 		"guest_id": "101",

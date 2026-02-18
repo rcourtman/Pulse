@@ -21,14 +21,14 @@ interface ResourcePickerProps {
     onSelectionChange: (items: SelectedResource[]) => void;
 }
 
-type TypeFilter = 'all' | 'infrastructure' | 'workloads' | 'storage' | 'backups';
+type TypeFilter = 'all' | 'infrastructure' | 'workloads' | 'storage' | 'recovery';
 
 const typeFilterLabels: Record<TypeFilter, string> = {
     all: 'All',
     infrastructure: 'Infrastructure',
     workloads: 'Workloads',
     storage: 'Storage',
-    backups: 'Backups',
+    recovery: 'Recovery',
 };
 
 const REPORTABLE_RESOURCE_TYPES = new Set<ResourceType>([
@@ -75,7 +75,7 @@ const STORAGE_TYPES = new Set<ResourceType>([
     'dataset',
 ]);
 
-const BACKUP_TYPES = new Set<ResourceType>([
+const RECOVERY_TYPES = new Set<ResourceType>([
     'pbs',
     'datastore',
 ]);
@@ -99,7 +99,7 @@ function matchesTypeFilter(resource: Resource, filter: TypeFilter): boolean {
     if (filter === 'infrastructure') return INFRASTRUCTURE_TYPES.has(resource.type);
     if (filter === 'workloads') return WORKLOAD_TYPES.has(resource.type);
     if (filter === 'storage') return STORAGE_TYPES.has(resource.type);
-    if (filter === 'backups') return BACKUP_TYPES.has(resource.type);
+    if (filter === 'recovery') return RECOVERY_TYPES.has(resource.type);
     return true;
 }
 
@@ -159,7 +159,7 @@ export function ResourcePicker(props: ResourcePickerProps) {
     const [typeFilter, setTypeFilter] = createSignal<TypeFilter>('all');
     const [tagFilter, setTagFilter] = createSignal('');
 
-    // Filter to reportable resource types across infrastructure, workloads, storage, and backups.
+    // Filter to reportable resource types across infrastructure, workloads, storage, and recovery.
     const reportableResources = createMemo(() => {
         return resources().filter((r) => REPORTABLE_RESOURCE_TYPES.has(r.type));
     });
@@ -292,7 +292,7 @@ export function ResourcePicker(props: ResourcePickerProps) {
 
                 {/* Type toggle buttons */}
                 <div class="flex gap-1">
-                    <For each={(['all', 'infrastructure', 'workloads', 'storage', 'backups'] as TypeFilter[])}>
+                    <For each={(['all', 'infrastructure', 'workloads', 'storage', 'recovery'] as TypeFilter[])}>
                         {(type) => (
                             <button
                                 class={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${

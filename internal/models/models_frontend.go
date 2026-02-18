@@ -576,13 +576,9 @@ type StateFrontend struct {
 	Storage                      []StorageFrontend                  `json:"storage"`
 	PBS                          []PBSInstance                      `json:"pbs"` // Keep as is
 	PMG                          []PMGInstance                      `json:"pmg"`
-	PBSBackups                   []PBSBackup                        `json:"pbsBackups"`
-	PMGBackups                   []PMGBackup                        `json:"pmgBackups"`
-	Backups                      Backups                            `json:"backups"`
 	ReplicationJobs              []ReplicationJobFrontend           `json:"replicationJobs"`
 	ActiveAlerts                 []Alert                            `json:"activeAlerts"`                 // Active alerts
 	Metrics                      map[string]json.RawMessage         `json:"metrics"`                      // Empty object for now
-	PVEBackups                   PVEBackups                         `json:"pveBackups"`                   // Keep as is
 	Performance                  map[string]json.RawMessage         `json:"performance"`                  // Empty object for now
 	ConnectionHealth             map[string]bool                    `json:"connectionHealth"`             // Keep as is
 	Stats                        map[string]json.RawMessage         `json:"stats"`                        // Empty object for now
@@ -606,7 +602,7 @@ func (s *StateFrontend) StripLegacyArrays() {
 	s.RemovedDockerHosts = nil
 	s.Hosts = nil
 	s.Storage = nil
-	// Keep PBS, PMG, and Backups fields while they are not fully migrated.
+	// PBS/PMG instances remain as infra entities until they are fully unified.
 }
 
 // ResourceFrontend is the frontend representation of a unified Resource.

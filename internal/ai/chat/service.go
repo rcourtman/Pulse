@@ -66,6 +66,9 @@ type Config struct {
 	Policy        CommandPolicy
 	AgentServer   AgentServer
 	DataDir       string
+
+	// Optional: provides access to persisted recovery points (backups/snapshots).
+	RecoveryPointsProvider tools.RecoveryPointsProvider
 }
 
 // Service provides direct AI chat without external sidecar
@@ -106,10 +109,11 @@ func NewService(cfg Config) *Service {
 	}
 
 	execCfg := tools.ExecutorConfig{
-		StateProvider: stateProvider,
-		ReadState:     cfg.ReadState,
-		Policy:        policy,
-		AgentServer:   agentServer,
+		StateProvider:          stateProvider,
+		ReadState:              cfg.ReadState,
+		Policy:                 policy,
+		AgentServer:            agentServer,
+		RecoveryPointsProvider: cfg.RecoveryPointsProvider,
 	}
 
 	if cfg.AIConfig != nil {

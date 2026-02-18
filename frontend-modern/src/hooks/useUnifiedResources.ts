@@ -9,8 +9,10 @@ import { eventBus } from '@/stores/events';
 
 const UNIFIED_RESOURCES_BASE_URL = '/api/resources';
 const DEFAULT_UNIFIED_RESOURCES_QUERY = 'type=host,pbs,pmg,k8s_cluster,k8s_node';
-const STORAGE_BACKUPS_UNIFIED_RESOURCES_QUERY =
+const STORAGE_RECOVERY_UNIFIED_RESOURCES_QUERY =
   'type=storage,pbs,pmg,vm,lxc,container,pod,host,k8s_cluster,k8s_node,physical_disk,ceph';
+// Backwards-compat for older call sites.
+const _STORAGE_BACKUPS_UNIFIED_RESOURCES_QUERY = STORAGE_RECOVERY_UNIFIED_RESOURCES_QUERY;
 const UNIFIED_RESOURCES_PAGE_LIMIT = 100;
 const UNIFIED_RESOURCES_MAX_PAGES = 20;
 const UNIFIED_RESOURCES_CACHE_MAX_AGE_MS = 15_000;
@@ -149,7 +151,24 @@ type APIResource = {
     tokenHint?: string;
     tokenLastUsedAt?: number;
   };
-  docker?: { hostname?: string; temperature?: number };
+  docker?: {
+    hostSourceId?: string;
+    hostname?: string;
+    temperature?: number;
+    runtime?: string;
+    runtimeVersion?: string;
+    dockerVersion?: string;
+    os?: string;
+    kernelVersion?: string;
+    architecture?: string;
+    agentVersion?: string;
+    uptimeSeconds?: number;
+    swarm?: unknown;
+    containerCount?: number;
+    updatesAvailableCount?: number;
+    updatesLastCheckedAt?: string;
+    command?: Record<string, unknown>;
+  };
   pbs?: {
     instanceId?: string;
     hostname?: string;
@@ -826,11 +845,16 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
   };
 }
 
-export function useStorageBackupsResources() {
+export function useStorageRecoveryResources() {
   return useUnifiedResources({
-    query: STORAGE_BACKUPS_UNIFIED_RESOURCES_QUERY,
+    query: STORAGE_RECOVERY_UNIFIED_RESOURCES_QUERY,
     cacheKey: 'storage-backups',
   });
+}
+
+// Backwards-compat for older call sites.
+export function useStorageBackupsResources() {
+  return useStorageRecoveryResources();
 }
 
 export default useUnifiedResources;

@@ -1,9 +1,11 @@
-import { Component, For, Show } from 'solid-js';
+import { Component, For, Show, createMemo, createSignal } from 'solid-js';
 import { Card } from '@/components/shared/Card';
 import { SearchInput } from '@/components/shared/SearchInput';
 import { ColumnPicker } from '@/components/shared/ColumnPicker';
 import type { ColumnDef } from '@/hooks/useColumnVisibility';
+import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { STORAGE_KEYS } from '@/utils/localStorage';
+import ListFilterIcon from 'lucide-solid/icons/list-filter';
 
 	interface DashboardFilterProps {
 	  search: () => string;
@@ -31,6 +33,13 @@ import { STORAGE_KEYS } from '@/utils/localStorage';
 	    options: { value: string; label: string }[];
 	    onChange: (value: string) => void;
 	  };
+	  namespaceFilter?: {
+	    id?: string;
+	    label?: string;
+	    value: string;
+	    options: { value: string; label: string }[];
+	    onChange: (value: string) => void;
+	  };
 	  containerRuntimeFilter?: {
 	    id?: string;
 	    label?: string;
@@ -41,6 +50,19 @@ import { STORAGE_KEYS } from '@/utils/localStorage';
 }
 
 export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
+  const { isMobile } = useBreakpoint();
+  const [filtersOpen, setFiltersOpen] = createSignal(false);
+
+  const activeFilterCount = createMemo(() => {
+    let count = 0;
+    if (props.search().trim() !== '') count++;
+    if (props.viewMode() !== 'all') count++;
+    if (props.statusMode() !== 'all') count++;
+    if (props.hostFilter && props.hostFilter.value !== '') count++;
+    if (props.namespaceFilter && props.namespaceFilter.value !== '') count++;
+    return count;
+  });
+
   return (
     <Card class="dashboard-filter mb-4" padding="sm">
       <div class="flex flex-col gap-2">
@@ -55,31 +77,73 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
           history={{ storageKey: STORAGE_KEYS.DASHBOARD_SEARCH_HISTORY }}
         />
 
-        <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400 lg:flex-nowrap">
-          <Show when={props.hostFilter}>
-            {(hostFilter) => (
-              <div class="inline-flex items-center rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-                <label
-                  for={hostFilter().id ?? 'dashboard-host-filter'}
-                  class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
-                >
-                  {hostFilter().label ?? 'Host'}
-                </label>
-                <select
-                  id={hostFilter().id ?? 'dashboard-host-filter'}
-                  value={hostFilter().value}
-                  onChange={(e) => hostFilter().onChange(e.currentTarget.value)}
-                  class="min-w-[8rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
-                >
-                  <For each={hostFilter().options}>
-                    {(option) => (
-                      <option value={option.value}>{option.label}</option>
-                    )}
-                  </For>
-                </select>
-              </div>
-            )}
-          </Show>
+        <Show when={isMobile()}>
+          <button
+            type="button"
+            onClick={() => setFiltersOpen((o) => !o)}
+            class="flex items-center gap-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400"
+          >
+            <ListFilterIcon class="w-3.5 h-3.5" />
+            Filters
+            <Show when={activeFilterCount() > 0}>
+              <span class="ml-0.5 rounded-full bg-blue-500 px-1.5 py-0.5 text-[10px] font-semibold text-white leading-none">
+                {activeFilterCount()}
+              </span>
+            </Show>
+          </button>
+        </Show>
+
+        <Show when={!isMobile() || filtersOpen()}>
+          <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400 lg:flex-nowrap">
+            <Show when={props.hostFilter}>
+              {(hostFilter) => (
+                <div class="inline-flex items-center rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                  <label
+                    for={hostFilter().id ?? 'dashboard-host-filter'}
+                    class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+                  >
+                    {hostFilter().label ?? 'Host'}
+                  </label>
+                  <select
+                    id={hostFilter().id ?? 'dashboard-host-filter'}
+                    value={hostFilter().value}
+                    onChange={(e) => hostFilter().onChange(e.currentTarget.value)}
+                    class="min-w-[8rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+                  >
+                    <For each={hostFilter().options}>
+                      {(option) => (
+                        <option value={option.value}>{option.label}</option>
+                      )}
+                    </For>
+                  </select>
+                </div>
+              )}
+            </Show>
+
+            <Show when={props.namespaceFilter}>
+              {(namespaceFilter) => (
+                <div class="inline-flex items-center rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                  <label
+                    for={namespaceFilter().id ?? 'dashboard-namespace-filter'}
+                    class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+                  >
+                    {namespaceFilter().label ?? 'Namespace'}
+                  </label>
+                  <select
+                    id={namespaceFilter().id ?? 'dashboard-namespace-filter'}
+                    value={namespaceFilter().value}
+                    onChange={(e) => namespaceFilter().onChange(e.currentTarget.value)}
+                    class="min-w-[8rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+                  >
+                    <For each={namespaceFilter().options}>
+                      {(option) => (
+                        <option value={option.value}>{option.label}</option>
+                      )}
+                    </For>
+                  </select>
+                </div>
+              )}
+            </Show>
 
 	          <Show when={props.viewMode() === 'docker' ? props.containerRuntimeFilter : undefined}>
 	            {(runtimeFilter) => (
@@ -186,7 +250,8 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
 	            props.viewMode() !== 'all' ||
 	            props.statusMode() !== 'all' ||
 	            props.groupingMode() !== 'grouped' ||
-	            (props.hostFilter ? props.hostFilter.value !== '' : false)
+	            (props.hostFilter ? props.hostFilter.value !== '' : false) ||
+              (props.namespaceFilter ? props.namespaceFilter.value !== '' : false)
 	          }>
 	            <button
 	              onClick={() => {
@@ -199,6 +264,9 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
 	                if (props.hostFilter) {
 	                  props.hostFilter.onChange('');
 	                }
+                  if (props.namespaceFilter) {
+                    props.namespaceFilter.onChange('');
+                  }
 	              }}
 	              title="Reset all filters"
 	              class="ml-auto flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg transition-all duration-150 active:scale-95
@@ -220,7 +288,8 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
               Reset
             </button>
           </Show>
-        </div>
+          </div>
+        </Show>
       </div>
     </Card>
   );

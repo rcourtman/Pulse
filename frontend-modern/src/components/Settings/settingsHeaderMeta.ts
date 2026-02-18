@@ -27,9 +27,9 @@ export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
     title: 'Updates',
     description: 'Manage version checks, update channels, and automatic update behavior.',
   },
-  'system-backups': {
-    title: 'Backups',
-    description: 'Manage backup polling plus configuration export and import workflows.',
+  'system-recovery': {
+    title: 'Recovery',
+    description: 'Manage backup/snapshot polling plus configuration export and import workflows.',
   },
   'system-ai': {
     title: 'AI Settings',

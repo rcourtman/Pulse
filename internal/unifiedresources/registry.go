@@ -144,6 +144,48 @@ func (rr *ResourceRegistry) IngestSnapshot(snapshot models.StateSnapshot) {
 			rr.ingestDockerContainer(dc, dh)
 		}
 	}
+
+	// Swarm services are cluster-scoped; multiple nodes can report identical
+	// service lists. Deduplicate by a stable source ID to avoid churn.
+	type dockerServiceCandidate struct {
+		host    models.DockerHost
+		service models.DockerService
+	}
+	serviceByID := make(map[string]dockerServiceCandidate)
+	for _, dh := range snapshot.DockerHosts {
+		if dh.Swarm == nil {
+			continue
+		}
+		for _, svc := range dh.Services {
+			sourceID := dockerServiceSourceID(dh, svc)
+			if sourceID == "" {
+				continue
+			}
+			existing, ok := serviceByID[sourceID]
+			if !ok {
+				serviceByID[sourceID] = dockerServiceCandidate{host: dh, service: svc}
+				continue
+			}
+			// Prefer candidates with richer fields and fresher host timestamps.
+			replace := false
+			if existing.service.Image == "" && svc.Image != "" {
+				replace = true
+			}
+			if existing.service.UpdateStatus == nil && svc.UpdateStatus != nil {
+				replace = true
+			}
+			if !replace && dh.LastSeen.After(existing.host.LastSeen) {
+				replace = true
+			}
+			if replace {
+				serviceByID[sourceID] = dockerServiceCandidate{host: dh, service: svc}
+			}
+		}
+	}
+	for _, candidate := range serviceByID {
+		rr.ingestDockerService(candidate.service, candidate.host)
+	}
+
 	kubernetesHostLookup := buildKubernetesNodeHostLookup(snapshot.Hosts)
 	for _, cluster := range snapshot.KubernetesClusters {
 		if cluster.Hidden {
@@ -408,6 +450,15 @@ func (rr *ResourceRegistry) ingestDockerContainer(ct models.DockerContainer, hos
 		resource.ParentID = &parentID
 	}
 	rr.ingest(SourceDocker, ct.ID, resource, identity)
+}
+
+func (rr *ResourceRegistry) ingestDockerService(service models.DockerService, host models.DockerHost) {
+	resource, identity := resourceFromDockerService(service, host)
+	sourceID := dockerServiceSourceID(host, service)
+	if sourceID == "" {
+		return
+	}
+	rr.ingest(SourceDocker, sourceID, resource, identity)
 }
 
 func (rr *ResourceRegistry) ingestKubernetesCluster(cluster models.KubernetesCluster, linkedHosts []*models.Host, capabilities *K8sMetricCapabilities) string {
@@ -918,6 +969,34 @@ func pmgInstanceSourceID(instance models.PMGInstance) string {
 		return v
 	}
 	return extractHostname(instance.Host)
+}
+
+func dockerSwarmClusterKey(host models.DockerHost) string {
+	if host.Swarm == nil {
+		return ""
+	}
+	if v := strings.TrimSpace(host.Swarm.ClusterID); v != "" {
+		return v
+	}
+	if v := strings.TrimSpace(host.Swarm.ClusterName); v != "" {
+		return v
+	}
+	return ""
+}
+
+func dockerServiceSourceID(host models.DockerHost, service models.DockerService) string {
+	cluster := dockerSwarmClusterKey(host)
+	if cluster == "" {
+		return ""
+	}
+	serviceID := strings.TrimSpace(service.ID)
+	if serviceID == "" {
+		serviceID = strings.TrimSpace(service.Name)
+	}
+	if serviceID == "" {
+		return ""
+	}
+	return fmt.Sprintf("%s:service:%s", cluster, serviceID)
 }
 
 func mergeIdentity(existing ResourceIdentity, incoming ResourceIdentity) ResourceIdentity {

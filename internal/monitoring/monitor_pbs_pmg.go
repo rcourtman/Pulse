@@ -723,6 +723,48 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 	}
 	pmgInst.Quarantine = &quarantine
 
+	if instanceCfg.MonitorDomainStats {
+		if domains, err := client.ListRelayDomains(ctx); err != nil {
+			if debugEnabled {
+				log.Debug().Err(err).Str("instance", instanceName).Msg("failed to fetch PMG relay domains")
+			}
+		} else if len(domains) > 0 {
+			relayDomains := make([]models.PMGRelayDomain, 0, len(domains))
+			for _, domain := range domains {
+				relayDomains = append(relayDomains, models.PMGRelayDomain{
+					Domain:  strings.TrimSpace(domain.Domain),
+					Comment: strings.TrimSpace(domain.Comment),
+				})
+			}
+			pmgInst.RelayDomains = relayDomains
+		}
+
+		end := time.Now()
+		start := end.Add(-24 * time.Hour)
+		if stats, err := client.GetDomainStatistics(ctx, start.Unix(), end.Unix()); err != nil {
+			if debugEnabled {
+				log.Debug().Err(err).Str("instance", instanceName).Msg("failed to fetch PMG domain statistics")
+			}
+		} else if len(stats) > 0 {
+			domainStats := make([]models.PMGDomainStat, 0, len(stats))
+			for _, entry := range stats {
+				d := strings.TrimSpace(entry.Domain)
+				if d == "" {
+					continue
+				}
+				domainStats = append(domainStats, models.PMGDomainStat{
+					Domain:     d,
+					MailCount:  entry.Count.Float64(),
+					SpamCount:  entry.SpamCount.Float64(),
+					VirusCount: entry.VirusCount.Float64(),
+					Bytes:      entry.Bytes.Float64(),
+				})
+			}
+			pmgInst.DomainStats = domainStats
+			pmgInst.DomainStatsAsOf = end
+		}
+	}
+
 	m.state.UpdatePMGBackups(instanceName, pmgBackups)
 	m.state.UpdatePMGInstance(pmgInst)
 	log.Info().

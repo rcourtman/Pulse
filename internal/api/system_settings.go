@@ -253,12 +253,6 @@ func validateSystemSettings(_ *config.SystemSettings, rawRequest map[string]inte
 		}
 	}
 
-	if val, ok := rawRequest["showClassicPlatformShortcuts"]; ok {
-		if _, ok := val.(bool); !ok {
-			return fmt.Errorf("showClassicPlatformShortcuts must be a boolean")
-		}
-	}
-
 	if val, ok := rawRequest["reduceProUpsellNoise"]; ok {
 		if _, ok := val.(bool); !ok {
 			return fmt.Errorf("reduceProUpsellNoise must be a boolean")
@@ -676,9 +670,6 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	if _, ok := rawRequest["disableLocalUpgradeMetrics"]; ok {
 		settings.DisableLocalUpgradeMetrics = updates.DisableLocalUpgradeMetrics
 		h.config.DisableLocalUpgradeMetrics = settings.DisableLocalUpgradeMetrics
-	}
-	if _, ok := rawRequest["showClassicPlatformShortcuts"]; ok {
-		settings.ShowClassicPlatformShortcuts = updates.ShowClassicPlatformShortcuts
 	}
 	if _, ok := rawRequest["reduceProUpsellNoise"]; ok {
 		settings.ReduceProUpsellNoise = updates.ReduceProUpsellNoise

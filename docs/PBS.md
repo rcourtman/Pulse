@@ -29,7 +29,7 @@ If your PVE cluster has PBS storage configured, Pulse automatically fetches back
 - ❌ Can be slow for encrypted PBS storage
 - ❌ Limited metadata per backup
 
-**Recommendation:** If you see a banner in the Backups page suggesting you add PBS directly, following this guide will significantly improve your monitoring experience.
+**Recommendation:** If you see a banner in the Recovery page (formerly Backups) suggesting you add PBS directly, following this guide will significantly improve your monitoring experience.
 
 ---
 
@@ -122,7 +122,7 @@ It does **not** allow:
 
 If you have multiple PBS servers, add each one separately in Settings. Pulse will:
 - Monitor each server independently
-- Show backups from all servers in the unified Backups view
+- Show backups from all servers in the unified Recovery view
 - Deduplicate if the same backup appears via both PVE passthrough and direct PBS
 
 ---
@@ -162,7 +162,7 @@ If you see the same backup twice:
 
 ## Data Source Indicator
 
-In the Backups view, PBS backups show a data source indicator:
+In the Recovery view, PBS backups show a data source indicator:
 
 - **"PBS"** badge alone = Direct PBS connection (full data)
 - **"PBS via PVE"** = Passthrough via PVE storage (limited data)

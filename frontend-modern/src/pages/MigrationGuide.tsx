@@ -55,12 +55,19 @@ export function MigrationGuide() {
       <Card class="p-5">
         <h1 class="text-base font-semibold text-gray-900 dark:text-gray-100">Navigation Migration Guide</h1>
         <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
-          Pulse now uses a resource-first layout: Infrastructure, Workloads, Storage, and Backups.
+          Pulse now uses a resource-first layout: Infrastructure, Workloads, Storage, and Recovery.
           Legacy URLs still redirect for compatibility, but this guide shows the canonical destinations.
         </p>
+        <div class="mt-3 text-xs text-gray-600 dark:text-gray-300 space-y-1">
+          <div class="font-medium text-gray-900 dark:text-gray-100">Why change?</div>
+          <div>
+            Unified resources enable one inventory, one search, and consistent filters across Proxmox, agents, Docker, Kubernetes, and new sources.
+            The goal is fewer duplicated pages and a navigation model that scales as integrations expand.
+          </div>
+        </div>
         <p class="mt-2 text-xs text-amber-700 dark:text-amber-300">
           Deprecation policy: legacy URLs exist as compatibility aliases. Update bookmarks to canonical routes.
-          If you prefer the previous tab layout, switch to Classic navigation style in Settings → System → General (stored per browser).
+          Tip: use the Command Palette (<span class="font-mono">Cmd+K</span>) to jump to the new destinations by typing what you remember.
         </p>
       </Card>
 

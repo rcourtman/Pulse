@@ -5,7 +5,7 @@ export type SettingsTab =
   | 'system-general'
   | 'system-network'
   | 'system-updates'
-  | 'system-backups'
+  | 'system-recovery'
   | 'system-ai'
   | 'system-relay'
   | 'system-logs'
@@ -56,7 +56,9 @@ const SETTINGS_PATH_ALIASES: Record<string, string> = {
   '/settings/windowsServers': '/settings/workloads',
   '/settings/macServers': '/settings/workloads',
   '/settings/agents': '/settings/workloads',
-  '/settings/backups': '/settings/system-backups',
+  '/settings/backups': '/settings/system-recovery',
+  '/settings/recovery': '/settings/system-recovery',
+  '/settings/system-backups': '/settings/system-recovery',
   '/settings/updates': '/settings/system-updates',
   '/settings/operations/updates': '/settings/system-updates',
   '/settings/integrations/relay': '/settings/system-relay',
@@ -102,8 +104,10 @@ export function deriveTabFromPath(path: string): SettingsTab {
   if (canonicalPath.includes('/settings/system-general')) return 'system-general';
   if (canonicalPath.includes('/settings/system-network')) return 'system-network';
   if (canonicalPath.includes('/settings/system-updates')) return 'system-updates';
-  if (canonicalPath.includes('/settings/backups')) return 'system-backups';
-  if (canonicalPath.includes('/settings/system-backups')) return 'system-backups';
+  if (canonicalPath.includes('/settings/backups')) return 'system-recovery';
+  if (canonicalPath.includes('/settings/system-backups')) return 'system-recovery';
+  if (canonicalPath.includes('/settings/recovery')) return 'system-recovery';
+  if (canonicalPath.includes('/settings/system-recovery')) return 'system-recovery';
   if (canonicalPath.includes('/settings/system-ai')) return 'system-ai';
   if (canonicalPath.includes('/settings/integrations/relay')) return 'system-relay';
   if (canonicalPath.includes('/settings/system-relay')) return 'system-relay';
@@ -183,7 +187,9 @@ export function deriveTabFromQuery(search: string): SettingsTab | null {
     case 'docker':
       return 'docker';
     case 'backups':
-      return 'system-backups';
+      return 'system-recovery';
+    case 'recovery':
+      return 'system-recovery';
     case 'updates':
       return 'system-updates';
     case 'network':
@@ -238,8 +244,8 @@ export function settingsTabPath(tab: SettingsTab): string {
       return '/settings/workloads';
     case 'docker':
       return '/settings/workloads/docker';
-    case 'system-backups':
-      return '/settings/system-backups';
+    case 'system-recovery':
+      return '/settings/system-recovery';
     case 'organization-overview':
       return '/settings/organization';
     case 'organization-access':

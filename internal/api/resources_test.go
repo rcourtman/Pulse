@@ -441,6 +441,62 @@ func TestResourceListIncludesKubernetesPods(t *testing.T) {
 	}
 }
 
+func TestResourceListFiltersKubernetesNamespace(t *testing.T) {
+	now := time.Now().UTC()
+	snapshot := models.StateSnapshot{
+		KubernetesClusters: []models.KubernetesCluster{
+			{
+				ID:       "cluster-1",
+				AgentID:  "agent-1",
+				Name:     "prod-k8s",
+				Context:  "prod",
+				Status:   "online",
+				LastSeen: now,
+				Version:  "1.31.2",
+				Hidden:   false,
+				Pods: []models.KubernetesPod{
+					{UID: "pod-1", Name: "api-1", Namespace: "default", Phase: "Running"},
+					{UID: "pod-2", Name: "api-2", Namespace: "kube-system", Phase: "Running"},
+				},
+				Deployments: []models.KubernetesDeployment{
+					{UID: "dep-1", Name: "web", Namespace: "default", DesiredReplicas: 3, ReadyReplicas: 3},
+					{UID: "dep-2", Name: "dns", Namespace: "kube-system", DesiredReplicas: 2, ReadyReplicas: 2},
+				},
+			},
+		},
+	}
+
+	cfg := &config.Config{DataPath: t.TempDir()}
+	h := NewResourceHandlers(cfg)
+	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/resources?type=k8s&namespace=default", nil)
+	h.HandleListResources(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	var resp ResourcesResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if len(resp.Data) != 2 {
+		t.Fatalf("expected 2 kubernetes resources for namespace=default, got %d", len(resp.Data))
+	}
+
+	for _, resource := range resp.Data {
+		if resource.Kubernetes == nil {
+			t.Fatalf("expected kubernetes payload, got nil: %+v", resource)
+		}
+		if resource.Kubernetes.Namespace != "default" {
+			t.Fatalf("expected namespace default, got %q (resource=%+v)", resource.Kubernetes.Namespace, resource)
+		}
+	}
+}
+
 func TestResourceTypeAliasKubernetesIncludesKubernetesResources(t *testing.T) {
 	now := time.Now().UTC()
 	snapshot := models.StateSnapshot{
@@ -492,6 +548,119 @@ func TestResourceTypeAliasKubernetesIncludesKubernetesResources(t *testing.T) {
 	}
 }
 
+func TestResourceListIncludesDockerSwarmServicesAndFiltersByCluster(t *testing.T) {
+	now := time.Now().UTC()
+
+	service := models.DockerService{
+		ID:           "svc-1",
+		Name:         "web",
+		Stack:        "edge",
+		Image:        "nginx:1.27",
+		Mode:         "replicated",
+		DesiredTasks: 3,
+		RunningTasks: 2,
+		EndpointPorts: []models.DockerServicePort{
+			{Protocol: "tcp", TargetPort: 80, PublishedPort: 8080, PublishMode: "ingress"},
+		},
+	}
+
+	// Two Swarm nodes reporting the same service; unified ingest should de-dupe services per swarm cluster.
+	host1 := models.DockerHost{
+		ID:              "docker-1",
+		AgentID:         "agent-1",
+		Hostname:        "swarm-1",
+		DisplayName:     "swarm-1",
+		Status:          "online",
+		CPUs:            4,
+		TotalMemoryBytes: 8 * 1024 * 1024 * 1024,
+		Memory:          models.Memory{Total: 8 * 1024 * 1024 * 1024, Used: 2 * 1024 * 1024 * 1024, Free: 6 * 1024 * 1024 * 1024, Usage: 0.25},
+		LastSeen:        now,
+		IntervalSeconds: 5,
+		Swarm: &models.DockerSwarmInfo{
+			ClusterID:   "cluster-1",
+			ClusterName: "prod-swarm",
+			NodeID:      "node-1",
+			NodeRole:    "manager",
+		},
+		Services: []models.DockerService{service},
+	}
+	host2 := models.DockerHost{
+		ID:              "docker-2",
+		AgentID:         "agent-2",
+		Hostname:        "swarm-2",
+		DisplayName:     "swarm-2",
+		Status:          "online",
+		CPUs:            4,
+		TotalMemoryBytes: 8 * 1024 * 1024 * 1024,
+		Memory:          models.Memory{Total: 8 * 1024 * 1024 * 1024, Used: 1 * 1024 * 1024 * 1024, Free: 7 * 1024 * 1024 * 1024, Usage: 0.125},
+		LastSeen:        now,
+		IntervalSeconds: 5,
+		Swarm: &models.DockerSwarmInfo{
+			ClusterID:   "cluster-1",
+			ClusterName: "prod-swarm",
+			NodeID:      "node-2",
+			NodeRole:    "worker",
+		},
+		Services: []models.DockerService{service},
+	}
+
+	snapshot := models.StateSnapshot{
+		DockerHosts: []models.DockerHost{host1, host2},
+	}
+
+	cfg := &config.Config{DataPath: t.TempDir()}
+	h := NewResourceHandlers(cfg)
+	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
+
+	// Unfiltered-by-cluster: expect the service to show up exactly once.
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/resources?type=docker_service", nil)
+	h.HandleListResources(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	var resp ResourcesResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if len(resp.Data) != 1 {
+		t.Fatalf("expected 1 docker service resource (de-duped across swarm nodes), got %d", len(resp.Data))
+	}
+
+	r := resp.Data[0]
+	if r.Type != unified.ResourceTypeDockerService {
+		t.Fatalf("resource type = %q, want %q", r.Type, unified.ResourceTypeDockerService)
+	}
+	if r.Docker == nil {
+		t.Fatalf("expected docker payload on docker-service resource")
+	}
+	if r.Docker.ServiceID != "svc-1" || r.Name != "web" {
+		t.Fatalf("unexpected service identity: name=%q serviceId=%q", r.Name, r.Docker.ServiceID)
+	}
+	if r.Identity.ClusterName != "prod-swarm" {
+		t.Fatalf("identity.clusterName = %q, want prod-swarm", r.Identity.ClusterName)
+	}
+
+	// Cluster filter should also return the service.
+	rec2 := httptest.NewRecorder()
+	req2 := httptest.NewRequest(http.MethodGet, "/api/resources?type=docker_service&cluster=prod-swarm", nil)
+	h.HandleListResources(rec2, req2)
+
+	if rec2.Code != http.StatusOK {
+		t.Fatalf("cluster status = %d, body=%s", rec2.Code, rec2.Body.String())
+	}
+	var resp2 ResourcesResponse
+	if err := json.NewDecoder(rec2.Body).Decode(&resp2); err != nil {
+		t.Fatalf("decode cluster response: %v", err)
+	}
+	if len(resp2.Data) != 1 {
+		t.Fatalf("expected 1 docker service resource for cluster filter, got %d", len(resp2.Data))
+	}
+}
+
 func TestResourceListIncludesPBSAndPMG(t *testing.T) {
 	now := time.Now().UTC()
 	snapshot := models.StateSnapshot{
@@ -519,6 +688,13 @@ func TestResourceListIncludesPBSAndPMG(t *testing.T) {
 				ConnectionHealth: "connected",
 				LastSeen:         now,
 				LastUpdated:      now,
+				RelayDomains: []models.PMGRelayDomain{
+					{Domain: "example.com", Comment: "primary relay"},
+				},
+				DomainStats: []models.PMGDomainStat{
+					{Domain: "example.com", MailCount: 100, SpamCount: 5, VirusCount: 1, Bytes: 1234},
+				},
+				DomainStatsAsOf: now,
 				MailStats: &models.PMGMailStats{
 					BytesIn:  1_500_000,
 					BytesOut: 900_000,
@@ -548,6 +724,7 @@ func TestResourceListIncludesPBSAndPMG(t *testing.T) {
 	}
 
 	var gotPBS, gotPMG bool
+	var pmgResourceID string
 	for _, resource := range resp.Data {
 		switch resource.Type {
 		case unified.ResourceTypePBS:
@@ -560,8 +737,16 @@ func TestResourceListIncludesPBSAndPMG(t *testing.T) {
 			}
 		case unified.ResourceTypePMG:
 			gotPMG = true
+			pmgResourceID = resource.ID
 			if resource.PMG == nil {
 				t.Fatalf("expected PMG payload, got nil")
+			}
+			// List response should be summary-only (heavy fields pruned).
+			if len(resource.PMG.RelayDomains) > 0 {
+				t.Fatalf("expected relayDomains pruned from list response, got %+v", resource.PMG.RelayDomains)
+			}
+			if len(resource.PMG.DomainStats) > 0 {
+				t.Fatalf("expected domainStats pruned from list response, got %+v", resource.PMG.DomainStats)
 			}
 			if resource.DiscoveryTarget == nil || resource.DiscoveryTarget.ResourceType != "host" {
 				t.Fatalf("expected host discovery target for PMG, got %+v", resource.DiscoveryTarget)
@@ -571,6 +756,30 @@ func TestResourceListIncludesPBSAndPMG(t *testing.T) {
 
 	if !gotPBS || !gotPMG {
 		t.Fatalf("expected both PBS and PMG resources, got %+v", resp.Data)
+	}
+
+	// Detail response should include the heavy fields.
+	if pmgResourceID == "" {
+		t.Fatalf("expected pmg resource id to be set")
+	}
+	getRec := httptest.NewRecorder()
+	getReq := httptest.NewRequest(http.MethodGet, "/api/resources/"+pmgResourceID, nil)
+	h.HandleGetResource(getRec, getReq)
+	if getRec.Code != http.StatusOK {
+		t.Fatalf("get status = %d, body=%s", getRec.Code, getRec.Body.String())
+	}
+	var pmgResource unified.Resource
+	if err := json.NewDecoder(getRec.Body).Decode(&pmgResource); err != nil {
+		t.Fatalf("decode pmg get response: %v", err)
+	}
+	if pmgResource.PMG == nil {
+		t.Fatalf("expected PMG payload on get response, got nil")
+	}
+	if len(pmgResource.PMG.RelayDomains) == 0 {
+		t.Fatalf("expected relayDomains on get response, got empty")
+	}
+	if len(pmgResource.PMG.DomainStats) == 0 {
+		t.Fatalf("expected domainStats on get response, got empty")
 	}
 }
 

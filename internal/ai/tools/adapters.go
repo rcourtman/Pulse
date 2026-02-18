@@ -7,6 +7,8 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
+	recoverymanager "github.com/rcourtman/pulse-go-rewrite/internal/recovery/manager"
 )
 
 // StateGetter provides access to the current infrastructure state
@@ -119,6 +121,42 @@ func (a *BackupMCPAdapter) GetPBSInstances() []models.PBSInstance {
 	}
 	state := a.stateGetter.GetState()
 	return state.PBSInstances
+}
+
+// RecoveryPointsMCPAdapter provides MCP tools access to persisted recovery points.
+// It is org-scoped to avoid leaking cross-tenant data.
+type RecoveryPointsMCPAdapter struct {
+	manager *recoverymanager.Manager
+	orgID   string
+	timeout time.Duration
+}
+
+func NewRecoveryPointsMCPAdapter(manager *recoverymanager.Manager, orgID string) *RecoveryPointsMCPAdapter {
+	if manager == nil {
+		return nil
+	}
+	if orgID == "" {
+		orgID = "default"
+	}
+	return &RecoveryPointsMCPAdapter{
+		manager: manager,
+		orgID:   orgID,
+		timeout: 5 * time.Second,
+	}
+}
+
+func (a *RecoveryPointsMCPAdapter) ListPoints(ctx context.Context, opts recovery.ListPointsOptions) ([]recovery.RecoveryPoint, int, error) {
+	if a == nil || a.manager == nil {
+		return nil, 0, fmt.Errorf("recovery points provider not available")
+	}
+	ctx, cancel := context.WithTimeout(ctx, a.timeout)
+	defer cancel()
+
+	store, err := a.manager.StoreForOrg(a.orgID)
+	if err != nil {
+		return nil, 0, err
+	}
+	return store.ListPoints(ctx, opts)
 }
 
 // DiskHealthMCPAdapter adapts the monitor state to MCP DiskHealthProvider interface

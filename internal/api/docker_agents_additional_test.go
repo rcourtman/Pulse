@@ -316,3 +316,64 @@ func TestDockerAgentHandlers_HandleCheckUpdates(t *testing.T) {
 		t.Fatalf("expected check updates message")
 	}
 }
+
+func TestDockerAgentHandlers_HandleUpdateAll(t *testing.T) {
+	handler, monitor := newDockerAgentHandlers(t, nil)
+	hostID := seedDockerHost(t, monitor)
+
+	// Ensure the host has at least one container with an update available.
+	_, err := monitor.ApplyDockerReport(agentsdocker.Report{
+		Agent: agentsdocker.AgentInfo{
+			ID:              "agent-1",
+			Version:         "1.0.0",
+			IntervalSeconds: 30,
+		},
+		Host: agentsdocker.HostInfo{
+			Hostname: "docker-host",
+		},
+		Containers: []agentsdocker.Container{{
+			ID:        "container-1",
+			Name:      "nginx",
+			Image:     "nginx:latest",
+			CreatedAt: time.Now().UTC(),
+			State:     "running",
+			Status:    "Up",
+			UpdateStatus: &agentsdocker.UpdateStatus{
+				UpdateAvailable: true,
+				CurrentDigest:   "sha256:old",
+				LatestDigest:    "sha256:new",
+				LastChecked:     time.Now().UTC(),
+			},
+		}},
+		Timestamp: time.Now().UTC(),
+	}, nil)
+	if err != nil {
+		t.Fatalf("ApplyDockerReport (with containers): %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/docker/hosts/"+hostID+"/update-all", nil)
+	rec := httptest.NewRecorder()
+
+	handler.HandleUpdateAll(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+
+	if !strings.Contains(rec.Body.String(), "Update all containers") {
+		t.Fatalf("expected update-all message")
+	}
+}
+
+func TestDockerAgentHandlers_HandleUpdateAll_Disabled(t *testing.T) {
+	cfg := &config.Config{DataPath: t.TempDir(), DisableDockerUpdateActions: true}
+	handler, monitor := newDockerAgentHandlers(t, cfg)
+	hostID := seedDockerHost(t, monitor)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/docker/hosts/"+hostID+"/update-all", nil)
+	rec := httptest.NewRecorder()
+
+	handler.HandleUpdateAll(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", rec.Code)
+	}
+}

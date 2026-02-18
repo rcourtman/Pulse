@@ -4,8 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
+	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
@@ -608,8 +611,8 @@ func containsAny(s string, substrs ...string) bool {
 	return false
 }
 
-func (e *PulseToolExecutor) executeListSnapshots(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
-	if e.stateProvider == nil {
+func (e *PulseToolExecutor) executeListSnapshots(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
+	if e.stateProvider == nil && e.recoveryPointsProvider == nil {
 		return NewTextResult("State provider not available."), nil
 	}
 
@@ -618,59 +621,208 @@ func (e *PulseToolExecutor) executeListSnapshots(_ context.Context, args map[str
 	limit := intArg(args, "limit", 100)
 	offset := intArg(args, "offset", 0)
 
-	state := e.stateProvider.GetState()
-
 	// Build VM name map for enrichment
-	rs, err := e.readStateForControl()
-	if err != nil {
-		return NewErrorResult(err), nil
-	}
 	vmNames := make(map[int]string)
-	for _, w := range rs.Workloads() {
-		if w.VMID() > 0 && w.Name() != "" {
-			vmNames[w.VMID()] = w.Name()
+	if rs, err := e.readStateForControl(); err == nil {
+		for _, w := range rs.Workloads() {
+			if w.VMID() > 0 && w.Name() != "" {
+				// Best-effort: VMID collisions across instances are possible; this matches legacy behavior.
+				if _, exists := vmNames[w.VMID()]; !exists {
+					vmNames[w.VMID()] = w.Name()
+				}
+			}
 		}
 	}
 
 	var snapshots []SnapshotSummary
 	filteredCount := 0
-	count := 0
+	totalCount := 0
 
-	for _, snap := range state.PVEBackups.GuestSnapshots {
-		// Apply filters
-		if guestIDFilter != "" && fmt.Sprintf("%d", snap.VMID) != guestIDFilter {
-			continue
+	trimPrefix := func(id string) string {
+		id = strings.TrimSpace(id)
+		if strings.HasPrefix(id, "pve-snapshot:") {
+			return strings.TrimPrefix(id, "pve-snapshot:")
 		}
-		if instanceFilter != "" && snap.Instance != instanceFilter {
-			continue
-		}
+		return id
+	}
 
-		filteredCount++
-
-		// Apply pagination
-		if count < offset {
-			count++
-			continue
+	getDetailString := func(p recovery.RecoveryPoint, key string) string {
+		if p.Details == nil {
+			return ""
 		}
-		if len(snapshots) >= limit {
-			count++
-			continue
+		v, ok := p.Details[key]
+		if !ok || v == nil {
+			return ""
 		}
+		if s, ok := v.(string); ok {
+			return strings.TrimSpace(s)
+		}
+		return ""
+	}
+	getDetailInt := func(p recovery.RecoveryPoint, key string) int {
+		if p.Details == nil {
+			return 0
+		}
+		v, ok := p.Details[key]
+		if !ok || v == nil {
+			return 0
+		}
+		switch n := v.(type) {
+		case int:
+			return n
+		case int64:
+			return int(n)
+		case float64:
+			return int(n)
+		case json.Number:
+			i, _ := n.Int64()
+			return int(i)
+		default:
+			return 0
+		}
+	}
+	getDetailBool := func(p recovery.RecoveryPoint, key string) bool {
+		if p.Details == nil {
+			return false
+		}
+		v, ok := p.Details[key]
+		if !ok || v == nil {
+			return false
+		}
+		b, ok := v.(bool)
+		return ok && b
+	}
 
-		snapshots = append(snapshots, SnapshotSummary{
-			ID:           snap.ID,
-			VMID:         snap.VMID,
-			VMName:       vmNames[snap.VMID],
-			Type:         snap.Type,
-			Node:         snap.Node,
-			Instance:     snap.Instance,
-			SnapshotName: snap.Name,
-			Description:  snap.Description,
-			Time:         snap.Time,
-			VMState:      snap.VMState,
-			SizeBytes:    snap.SizeBytes,
-		})
-		count++
+	if e.recoveryPointsProvider != nil {
+		const pageLimit = 200
+		const maxPages = 20
+
+		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+
+		matchedIndex := 0
+		for page := 1; page <= maxPages; page++ {
+			points, total, err := e.recoveryPointsProvider.ListPoints(ctx, recovery.ListPointsOptions{
+				Provider: recovery.ProviderProxmoxPVE,
+				Kind:     recovery.KindSnapshot,
+				Page:     page,
+				Limit:    pageLimit,
+			})
+			if err != nil {
+				return NewErrorResult(err), nil
+			}
+			if page == 1 {
+				totalCount = total
+			}
+			if len(points) == 0 {
+				break
+			}
+
+			for _, p := range points {
+				if !strings.HasPrefix(strings.TrimSpace(p.ID), "pve-snapshot:") {
+					continue
+				}
+
+				vmid := getDetailInt(p, "vmid")
+				instance := getDetailString(p, "instance")
+				if guestIDFilter != "" && strconv.Itoa(vmid) != guestIDFilter {
+					continue
+				}
+				if instanceFilter != "" && instance != instanceFilter {
+					continue
+				}
+
+				filteredCount++
+
+				if matchedIndex < offset {
+					matchedIndex++
+					continue
+				}
+				if len(snapshots) >= limit {
+					matchedIndex++
+					continue
+				}
+
+				node := getDetailString(p, "node")
+				guestType := getDetailString(p, "type")
+				snapshotName := getDetailString(p, "snapshotName")
+				description := getDetailString(p, "description")
+
+				var ts time.Time
+				if p.CompletedAt != nil {
+					ts = p.CompletedAt.UTC()
+				} else if p.StartedAt != nil {
+					ts = p.StartedAt.UTC()
+				} else {
+					ts = time.Time{}
+				}
+
+				size := int64(0)
+				if p.SizeBytes != nil {
+					size = *p.SizeBytes
+				}
+
+				snapshots = append(snapshots, SnapshotSummary{
+					ID:           trimPrefix(p.ID),
+					VMID:         vmid,
+					VMName:       vmNames[vmid],
+					Type:         guestType,
+					Node:         node,
+					Instance:     instance,
+					SnapshotName: snapshotName,
+					Description:  description,
+					Time:         ts,
+					VMState:      getDetailBool(p, "vmState"),
+					SizeBytes:    size,
+				})
+				matchedIndex++
+			}
+
+			if len(snapshots) >= limit && matchedIndex >= offset+limit {
+				break
+			}
+		}
+	} else {
+		// Legacy fallback: read from state snapshot guest snapshots.
+		state := e.stateProvider.GetState()
+		matchedIndex := 0
+		for _, snap := range state.PVEBackups.GuestSnapshots {
+			// Apply filters
+			if guestIDFilter != "" && fmt.Sprintf("%d", snap.VMID) != guestIDFilter {
+				continue
+			}
+			if instanceFilter != "" && snap.Instance != instanceFilter {
+				continue
+			}
+
+			filteredCount++
+
+			// Apply pagination
+			if matchedIndex < offset {
+				matchedIndex++
+				continue
+			}
+			if len(snapshots) >= limit {
+				matchedIndex++
+				continue
+			}
+
+			snapshots = append(snapshots, SnapshotSummary{
+				ID:           snap.ID,
+				VMID:         snap.VMID,
+				VMName:       vmNames[snap.VMID],
+				Type:         snap.Type,
+				Node:         snap.Node,
+				Instance:     snap.Instance,
+				SnapshotName: snap.Name,
+				Description:  snap.Description,
+				Time:         snap.Time,
+				VMState:      snap.VMState,
+				SizeBytes:    snap.SizeBytes,
+			})
+			matchedIndex++
+		}
+		totalCount = len(state.PVEBackups.GuestSnapshots)
 	}
 
 	if snapshots == nil {
@@ -679,7 +831,7 @@ func (e *PulseToolExecutor) executeListSnapshots(_ context.Context, args map[str
 
 	response := SnapshotsResponse{
 		Snapshots: snapshots,
-		Total:     len(state.PVEBackups.GuestSnapshots),
+		Total:     totalCount,
 		Filtered:  filteredCount,
 	}
 
@@ -799,8 +951,8 @@ func (e *PulseToolExecutor) executeListPBSJobs(_ context.Context, args map[strin
 	return NewJSONResult(response), nil
 }
 
-func (e *PulseToolExecutor) executeListBackupTasks(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
-	if e.stateProvider == nil {
+func (e *PulseToolExecutor) executeListBackupTasks(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
+	if e.stateProvider == nil && e.recoveryPointsProvider == nil {
 		return NewTextResult("State provider not available."), nil
 	}
 
@@ -809,54 +961,184 @@ func (e *PulseToolExecutor) executeListBackupTasks(_ context.Context, args map[s
 	statusFilter, _ := args["status"].(string)
 	limit := intArg(args, "limit", 50)
 
-	state := e.stateProvider.GetState()
-
 	// Build VM name map
-	rs, err := e.readStateForControl()
-	if err != nil {
-		return NewErrorResult(err), nil
-	}
 	vmNames := make(map[int]string)
-	for _, w := range rs.Workloads() {
-		if w.VMID() > 0 && w.Name() != "" {
-			vmNames[w.VMID()] = w.Name()
+	if rs, err := e.readStateForControl(); err == nil {
+		for _, w := range rs.Workloads() {
+			if w.VMID() > 0 && w.Name() != "" {
+				if _, exists := vmNames[w.VMID()]; !exists {
+					vmNames[w.VMID()] = w.Name()
+				}
+			}
 		}
 	}
 
 	var tasks []BackupTaskDetail
 	filteredCount := 0
+	totalCount := 0
 
-	for _, task := range state.PVEBackups.BackupTasks {
-		// Apply filters
-		if instanceFilter != "" && task.Instance != instanceFilter {
-			continue
+	trimPrefix := func(id string) string {
+		id = strings.TrimSpace(id)
+		if strings.HasPrefix(id, "pve-task:") {
+			return strings.TrimPrefix(id, "pve-task:")
 		}
-		if guestIDFilter != "" && fmt.Sprintf("%d", task.VMID) != guestIDFilter {
-			continue
+		return id
+	}
+	getDetailString := func(p recovery.RecoveryPoint, key string) string {
+		if p.Details == nil {
+			return ""
 		}
-		if statusFilter != "" && !strings.EqualFold(task.Status, statusFilter) {
-			continue
+		v, ok := p.Details[key]
+		if !ok || v == nil {
+			return ""
 		}
+		if s, ok := v.(string); ok {
+			return strings.TrimSpace(s)
+		}
+		return ""
+	}
+	getDetailInt := func(p recovery.RecoveryPoint, key string) int {
+		if p.Details == nil {
+			return 0
+		}
+		v, ok := p.Details[key]
+		if !ok || v == nil {
+			return 0
+		}
+		switch n := v.(type) {
+		case int:
+			return n
+		case int64:
+			return int(n)
+		case float64:
+			return int(n)
+		case json.Number:
+			i, _ := n.Int64()
+			return int(i)
+		default:
+			return 0
+		}
+	}
 
-		filteredCount++
+	if e.recoveryPointsProvider != nil {
+		const pageLimit = 200
+		const maxPages = 20
 
-		if len(tasks) >= limit {
-			continue
+		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+
+		for page := 1; page <= maxPages; page++ {
+			points, _, err := e.recoveryPointsProvider.ListPoints(ctx, recovery.ListPointsOptions{
+				Provider: recovery.ProviderProxmoxPVE,
+				Kind:     recovery.KindBackup,
+				Page:     page,
+				Limit:    pageLimit,
+			})
+			if err != nil {
+				return NewErrorResult(err), nil
+			}
+			if len(points) == 0 {
+				break
+			}
+
+			for _, p := range points {
+				if !strings.HasPrefix(strings.TrimSpace(p.ID), "pve-task:") {
+					continue
+				}
+				totalCount++
+
+				instance := getDetailString(p, "instance")
+				node := getDetailString(p, "node")
+				vmid := getDetailInt(p, "vmid")
+				status := getDetailString(p, "status")
+				taskType := getDetailString(p, "type")
+				errText := getDetailString(p, "error")
+
+				// Apply filters
+				if instanceFilter != "" && instance != instanceFilter {
+					continue
+				}
+				if guestIDFilter != "" && strconv.Itoa(vmid) != guestIDFilter {
+					continue
+				}
+				if statusFilter != "" && !strings.EqualFold(status, statusFilter) {
+					continue
+				}
+
+				filteredCount++
+				if len(tasks) >= limit {
+					continue
+				}
+
+				started := time.Time{}
+				if p.StartedAt != nil {
+					started = p.StartedAt.UTC()
+				}
+				ended := time.Time{}
+				if p.CompletedAt != nil {
+					ended = p.CompletedAt.UTC()
+				}
+
+				size := int64(0)
+				if p.SizeBytes != nil {
+					size = *p.SizeBytes
+				}
+
+				tasks = append(tasks, BackupTaskDetail{
+					ID:        trimPrefix(p.ID),
+					VMID:      vmid,
+					VMName:    vmNames[vmid],
+					Node:      node,
+					Instance:  instance,
+					Type:      taskType,
+					Status:    status,
+					StartTime: started,
+					EndTime:   ended,
+					SizeBytes: size,
+					Error:     errText,
+				})
+			}
+
+			if len(tasks) >= limit {
+				break
+			}
 		}
+	} else {
+		// Legacy fallback: read from state snapshot backup tasks.
+		state := e.stateProvider.GetState()
+		for _, task := range state.PVEBackups.BackupTasks {
+			// Apply filters
+			if instanceFilter != "" && task.Instance != instanceFilter {
+				continue
+			}
+			if guestIDFilter != "" && fmt.Sprintf("%d", task.VMID) != guestIDFilter {
+				continue
+			}
+			if statusFilter != "" && !strings.EqualFold(task.Status, statusFilter) {
+				continue
+			}
 
-		tasks = append(tasks, BackupTaskDetail{
-			ID:        task.ID,
-			VMID:      task.VMID,
-			VMName:    vmNames[task.VMID],
-			Node:      task.Node,
-			Instance:  task.Instance,
-			Type:      task.Type,
-			Status:    task.Status,
-			StartTime: task.StartTime,
-			EndTime:   task.EndTime,
-			SizeBytes: task.Size,
-			Error:     task.Error,
-		})
+			filteredCount++
+
+			if len(tasks) >= limit {
+				continue
+			}
+
+			tasks = append(tasks, BackupTaskDetail{
+				ID:        task.ID,
+				VMID:      task.VMID,
+				VMName:    vmNames[task.VMID],
+				Node:      task.Node,
+				Instance:  task.Instance,
+				Type:      task.Type,
+				Status:    task.Status,
+				StartTime: task.StartTime,
+				EndTime:   task.EndTime,
+				SizeBytes: task.Size,
+				Error:     task.Error,
+			})
+		}
+		totalCount = len(state.PVEBackups.BackupTasks)
 	}
 
 	if tasks == nil {
@@ -865,7 +1147,7 @@ func (e *PulseToolExecutor) executeListBackupTasks(_ context.Context, args map[s
 
 	response := BackupTasksListResponse{
 		Tasks:    tasks,
-		Total:    len(state.PVEBackups.BackupTasks),
+		Total:    totalCount,
 		Filtered: filteredCount,
 	}
 

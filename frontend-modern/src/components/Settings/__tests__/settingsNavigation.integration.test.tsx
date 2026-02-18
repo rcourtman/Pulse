@@ -9,7 +9,7 @@ const canonicalTabPaths = {
   'system-general': '/settings/system-general',
   'system-network': '/settings/system-network',
   'system-updates': '/settings/system-updates',
-  'system-backups': '/settings/system-backups',
+  'system-recovery': '/settings/system-recovery',
   'system-ai': '/settings/system-ai',
   'system-relay': '/settings/system-relay',
   'system-logs': '/settings/operations/logs',

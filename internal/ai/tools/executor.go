@@ -7,6 +7,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
@@ -24,6 +25,12 @@ const ServerVersion = "1.0.0"
 // StateProvider provides access to infrastructure state
 type StateProvider interface {
 	GetState() models.StateSnapshot
+}
+
+// RecoveryPointsProvider provides paged access to persisted recovery points.
+// Tool handlers should prefer this over legacy state backup arrays when present.
+type RecoveryPointsProvider interface {
+	ListPoints(ctx context.Context, opts recovery.ListPointsOptions) ([]recovery.RecoveryPoint, int, error)
 }
 
 // CommandPolicy evaluates command security
@@ -326,7 +333,8 @@ type ExecutorConfig struct {
 	FindingsProvider FindingsProvider
 
 	// Optional providers - infrastructure
-	BackupProvider BackupProvider
+	BackupProvider         BackupProvider
+	RecoveryPointsProvider RecoveryPointsProvider
 
 	GuestConfigProvider GuestConfigProvider
 	DiskHealthProvider  DiskHealthProvider
@@ -373,6 +381,8 @@ type PulseToolExecutor struct {
 
 	// Infrastructure context providers
 	backupProvider BackupProvider
+	// Paged recovery points access for snapshot/backup tools.
+	recoveryPointsProvider RecoveryPointsProvider
 
 	guestConfigProvider GuestConfigProvider
 	diskHealthProvider  DiskHealthProvider
@@ -442,15 +452,16 @@ type TelemetryCallback interface {
 // NewPulseToolExecutor creates a new Pulse tool executor with the given configuration
 func NewPulseToolExecutor(cfg ExecutorConfig) *PulseToolExecutor {
 	e := &PulseToolExecutor{
-		stateProvider:    cfg.StateProvider,
-		policy:           cfg.Policy,
-		agentServer:      cfg.AgentServer,
-		metricsHistory:   cfg.MetricsHistory,
-		baselineProvider: cfg.BaselineProvider,
-		patternProvider:  cfg.PatternProvider,
-		alertProvider:    cfg.AlertProvider,
-		findingsProvider: cfg.FindingsProvider,
-		backupProvider:   cfg.BackupProvider,
+		stateProvider:          cfg.StateProvider,
+		policy:                 cfg.Policy,
+		agentServer:            cfg.AgentServer,
+		metricsHistory:         cfg.MetricsHistory,
+		baselineProvider:       cfg.BaselineProvider,
+		patternProvider:        cfg.PatternProvider,
+		alertProvider:          cfg.AlertProvider,
+		findingsProvider:       cfg.FindingsProvider,
+		backupProvider:         cfg.BackupProvider,
+		recoveryPointsProvider: cfg.RecoveryPointsProvider,
 
 		guestConfigProvider:      cfg.GuestConfigProvider,
 		diskHealthProvider:       cfg.DiskHealthProvider,
@@ -517,6 +528,11 @@ func (e *PulseToolExecutor) SetFindingsManager(manager FindingsManager) {
 // SetMetricsHistory sets the metrics history provider
 func (e *PulseToolExecutor) SetMetricsHistory(provider MetricsHistoryProvider) {
 	e.metricsHistory = provider
+}
+
+// SetRecoveryPointsProvider sets a paged recovery points provider used by snapshot/backup tools.
+func (e *PulseToolExecutor) SetRecoveryPointsProvider(provider RecoveryPointsProvider) {
+	e.recoveryPointsProvider = provider
 }
 
 // SetBaselineProvider sets the baseline provider

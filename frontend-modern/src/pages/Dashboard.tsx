@@ -3,12 +3,12 @@ import { useWebSocket } from '@/App';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import { useDashboardOverview } from '@/hooks/useDashboardOverview';
 import { useDashboardTrends } from '@/hooks/useDashboardTrends';
-import { useDashboardBackups } from '@/hooks/useDashboardBackups';
+import { useDashboardRecovery } from '@/hooks/useDashboardRecovery';
 import type { HistoryTimeRange } from '@/api/charts';
 import type { Alert } from '@/types/api';
 import { isInfrastructure, isStorage } from '@/types/resource';
 import { ALERTS_OVERVIEW_PATH, buildStoragePath, INFRASTRUCTURE_PATH } from '@/routing/resourceLinks';
-import { BackupStatusPanel, CompositionPanel, DashboardHero, RecentAlertsPanel, StoragePanel, TrendCharts } from './DashboardPanels';
+import { RecoveryStatusPanel, CompositionPanel, DashboardHero, RecentAlertsPanel, StoragePanel, TrendCharts } from './DashboardPanels';
 import { type ActionItem, MAX_ACTION_ITEMS, PRIORITY_ORDER } from './DashboardPanels/dashboardHelpers';
 import { RelayOnboardingCard } from '@/components/Dashboard/RelayOnboardingCard';
 import { shouldReduceProUpsellNoise } from '@/stores/systemSettings';
@@ -27,7 +27,7 @@ export default function Dashboard() {
   const overview = useDashboardOverview(resources, alertsList);
   const [trendRange, setTrendRange] = createSignal<HistoryTimeRange>('1h');
   const trends = useDashboardTrends(overview, resources, trendRange);
-  const backups = useDashboardBackups();
+  const recovery = useDashboardRecovery();
 
   // Loading timeout: if REST fetch takes >30s, treat as connection error.
   const [loadingTimedOut, setLoadingTimedOut] = createSignal(false);
@@ -234,7 +234,7 @@ export default function Dashboard() {
                 infrastructureByType={overview().infrastructure.byType}
                 workloadsByType={overview().workloads.byType}
               />
-              <BackupStatusPanel backups={backups()} />
+              <RecoveryStatusPanel recovery={recovery()} />
               <StoragePanel storage={overview().storage} storageTrend={trends().storage.capacity} loading={trends().loading} />
               <RecentAlertsPanel
                 alerts={alertsList()}

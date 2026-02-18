@@ -31,10 +31,10 @@ describe('buildServiceDetailLinks', () => {
 
     expect(links).toEqual([
       {
-        href: '/backups?source=pbs&backupType=remote',
-        label: 'Open in Backups',
-        compactLabel: 'Backups',
-        ariaLabel: 'Open PBS backups for PBS Main',
+        href: '/recovery?provider=proxmox-pbs&mode=remote',
+        label: 'Open in Recovery',
+        compactLabel: 'Recovery',
+        ariaLabel: 'Open PBS backups in Recovery for PBS Main',
       },
     ]);
   });

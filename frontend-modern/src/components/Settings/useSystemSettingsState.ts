@@ -11,9 +11,7 @@ import {
   updateDockerUpdateActionsSetting,
   updateLegacyRouteRedirectsSetting,
   updateReduceProUpsellNoiseSetting,
-  updateShowClassicPlatformShortcutsSetting,
 } from '@/stores/systemSettings';
-import { STORAGE_KEYS } from '@/utils/localStorage';
 import type { SettingsTab } from './settingsTypes';
 
 const BACKUP_INTERVAL_OPTIONS = [
@@ -196,8 +194,6 @@ export function useSystemSettingsState({
   const [savingDockerUpdateActions, setSavingDockerUpdateActions] = createSignal(false);
   const [disableLegacyRouteRedirects, setDisableLegacyRouteRedirects] = createSignal(false);
   const [savingLegacyRedirects, setSavingLegacyRedirects] = createSignal(false);
-  const [showClassicPlatformShortcuts, setShowClassicPlatformShortcuts] = createSignal(true);
-  const [savingClassicShortcuts, setSavingClassicShortcuts] = createSignal(false);
   const [reduceProUpsellNoise, setReduceProUpsellNoise] = createSignal(false);
   const [savingReduceUpsells, setSavingReduceUpsells] = createSignal(false);
   const [disableLocalUpgradeMetrics, setDisableLocalUpgradeMetrics] = createSignal(false);
@@ -337,7 +333,6 @@ export function useSystemSettingsState({
       setHideLocalLogin(systemSettings.hideLocalLogin ?? false);
       setDisableDockerUpdateActions(systemSettings.disableDockerUpdateActions ?? false);
       setDisableLegacyRouteRedirects(systemSettings.disableLegacyRouteRedirects ?? false);
-      setShowClassicPlatformShortcuts(systemSettings.showClassicPlatformShortcuts ?? true);
       setReduceProUpsellNoise(systemSettings.reduceProUpsellNoise ?? false);
       setDisableLocalUpgradeMetrics(systemSettings.disableLocalUpgradeMetrics ?? false);
 
@@ -405,7 +400,7 @@ export function useSystemSettingsState({
         activeTab() === 'system-general' ||
         activeTab() === 'system-network' ||
         activeTab() === 'system-updates' ||
-        activeTab() === 'system-backups'
+        activeTab() === 'system-recovery'
       ) {
         await SettingsAPI.updateSystemSettings({
           pvePollingInterval: pvePollingInterval(),
@@ -517,36 +512,6 @@ export function useSystemSettingsState({
       setDisableLegacyRouteRedirects(previous);
     } finally {
       setSavingLegacyRedirects(false);
-    }
-  };
-
-  const handleShowClassicPlatformShortcutsChange = async (enabled: boolean): Promise<void> => {
-    if (savingClassicShortcuts()) {
-      return;
-    }
-
-    const previous = showClassicPlatformShortcuts();
-    setShowClassicPlatformShortcuts(enabled);
-    setSavingClassicShortcuts(true);
-
-    try {
-      await SettingsAPI.updateSystemSettings({ showClassicPlatformShortcuts: enabled });
-      updateShowClassicPlatformShortcutsSetting(enabled);
-      if (enabled) {
-        localStorage.removeItem(STORAGE_KEYS.CLASSIC_SHORTCUTS_DISMISSED);
-      }
-      notificationStore.success(
-        enabled ? 'Classic shortcuts enabled' : 'Classic shortcuts hidden',
-        2000,
-      );
-    } catch (error) {
-      logger.error('Failed to update classic shortcuts setting', error);
-      notificationStore.error(
-        error instanceof Error ? error.message : 'Failed to update classic shortcuts setting',
-      );
-      setShowClassicPlatformShortcuts(previous);
-    } finally {
-      setSavingClassicShortcuts(false);
     }
   };
 
@@ -726,9 +691,6 @@ export function useSystemSettingsState({
     disableLegacyRouteRedirectsLocked,
     savingLegacyRedirects,
     handleDisableLegacyRouteRedirectsChange,
-    showClassicPlatformShortcuts,
-    savingClassicShortcuts,
-    handleShowClassicPlatformShortcutsChange,
     reduceProUpsellNoise,
     savingReduceUpsells,
     handleReduceProUpsellNoiseChange,

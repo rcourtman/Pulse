@@ -4,6 +4,17 @@ import { render } from '@solidjs/testing-library';
 import type { Resource } from '@/types/resource';
 import { ResourceDetailDrawer } from '@/components/Infrastructure/ResourceDetailDrawer';
 
+const navigateSpy = vi.hoisted(() => vi.fn());
+
+vi.mock('@solidjs/router', async () => {
+  const actual = await vi.importActual<typeof import('@solidjs/router')>('@solidjs/router');
+  return {
+    ...actual,
+    useLocation: () => ({ pathname: '/', search: '' }),
+    useNavigate: () => navigateSpy,
+  };
+});
+
 vi.mock('@/components/Discovery/DiscoveryTab', () => ({
   DiscoveryTab: () => <div data-testid="discovery-tab" />,
 }));

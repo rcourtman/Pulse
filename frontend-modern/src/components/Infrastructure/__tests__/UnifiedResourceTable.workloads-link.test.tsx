@@ -6,6 +6,7 @@ import { UnifiedResourceTable } from '@/components/Infrastructure/UnifiedResourc
 vi.mock('@/hooks/useBreakpoint', () => ({
   useBreakpoint: () => ({
     isMobile: () => false,
+    isVisible: () => true,
   }),
 }));
 
@@ -167,10 +168,10 @@ describe('UnifiedResourceTable workloads links', () => {
     }
 
     const pbsLink = getByRole('link', { name: /open pbs backups/i });
-    expect(pbsLink).toHaveTextContent('Backups');
+    expect(pbsLink).toHaveTextContent('Recovery');
     expect(pbsLink).toHaveAttribute(
       'href',
-      '/backups?source=pbs&backupType=remote',
+      '/recovery?provider=proxmox-pbs&mode=remote',
     );
     const pmgLink = getByRole('link', { name: /open pmg thresholds/i });
     expect(pmgLink).toHaveTextContent('Thresholds');

@@ -116,7 +116,7 @@ Pulse creates a backup before updating. If the update fails:
 3. Error details are logged
 
 ### Manual Rollback
-Backups created by in-app updates are stored as `backup-<timestamp>/` folders inside the Pulse data directory (`/etc/pulse` or `/data`). If that directory is not writable, Pulse falls back to `/tmp/pulse-backup-<timestamp>`.
+Update backups created by in-app updates are stored as `backup-<timestamp>/` folders inside the Pulse data directory (`/etc/pulse` or `/data`). If that directory is not writable, Pulse falls back to `/tmp/pulse-backup-<timestamp>`.
 There is no rollback UI. To revert, stop Pulse, restore the backup contents to `/opt/pulse`, then restart.
 
 Example (systemd/LXC):

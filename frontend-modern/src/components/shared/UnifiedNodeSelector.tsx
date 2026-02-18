@@ -3,9 +3,10 @@ import { useWebSocket } from '@/App';
 import { NodeSummaryTable } from './NodeSummaryTable';
 import { useResources } from '@/hooks/useResources';
 import type { Node } from '@/types/api';
+import { useRecoveryRollups } from '@/hooks/useRecoveryRollups';
 
 interface UnifiedNodeSelectorProps {
-  currentTab: 'dashboard' | 'storage' | 'backups';
+  currentTab: 'dashboard' | 'storage' | 'recovery';
   globalTemperatureMonitoringEnabled?: boolean;
   onNodeSelect?: (nodeId: string | null, nodeType: 'pve' | 'pbs' | null) => void;
   onNamespaceSelect?: (namespace: string) => void;
@@ -17,6 +18,7 @@ interface UnifiedNodeSelectorProps {
 export const UnifiedNodeSelector: Component<UnifiedNodeSelectorProps> = (props) => {
   const { state } = useWebSocket();
   const { byType } = useResources();
+  const recovery = useRecoveryRollups();
   const [selectedNode, setSelectedNode] = createSignal<string | null>(null);
 
   // Handle ESC key to deselect node
@@ -80,41 +82,26 @@ export const UnifiedNodeSelector: Component<UnifiedNodeSelectorProps> = (props) 
     return counts;
   });
 
-  // Calculate backup counts for nodes and PBS instances
-  const pveBackupsState = () => state.backups?.pve ?? state.pveBackups;
-  const pbsBackupsState = () => state.backups?.pbs ?? state.pbsBackups;
+  // Calculate rollup counts for PVE nodes (best-effort based on subjectRef).
+  // PBS-per-instance counts require repository attribution (not currently exposed in rollups).
   const backupCounts = createMemo(() => {
     const counts: Record<string, number> = {};
 
-    // Count PVE backups and snapshots by node instance (to handle duplicate hostnames)
     const nodes = props.nodes || state.nodes;
     if (nodes) {
       nodes.forEach((node) => {
-        let count = 0;
-
-        // Count storage backups (excluding PBS backups which are counted separately)
-        const pveBackups = pveBackupsState();
-        if (pveBackups?.storageBackups) {
-          count += pveBackups.storageBackups.filter(
-            (b) => b.instance === node.instance && b.node === node.name && !b.isPBS,
-          ).length;
-        }
-
-        // Count snapshots
-        if (pveBackups?.guestSnapshots) {
-          count += pveBackups.guestSnapshots.filter((s) => s.instance === node.instance && s.node === node.name).length;
-        }
-
-        counts[node.id] = count;
+        counts[node.id] = 0;
       });
     }
 
-    // Count PBS backups by instance
-    const pbsBackups = pbsBackupsState();
-    if (state.pbs && pbsBackups) {
-      state.pbs.forEach((pbs) => {
-        counts[pbs.name] = pbsBackups.filter((b) => b.instance === pbs.name).length || 0;
-      });
+    const rollups = recovery.rollups() || [];
+    for (const rollup of rollups) {
+      const ref = rollup.subjectRef || null;
+      if (!ref?.namespace || !ref?.class) continue;
+
+      const node = (nodes || []).find((n) => n.instance === ref.namespace && n.name === ref.class);
+      if (!node) continue;
+      counts[node.id] = (counts[node.id] || 0) + 1;
     }
 
     return counts;
@@ -140,7 +127,7 @@ export const UnifiedNodeSelector: Component<UnifiedNodeSelectorProps> = (props) 
       <div class="space-y-2 mb-4">
         <NodeSummaryTable
           nodes={nodes()}
-          pbsInstances={props.currentTab === 'backups' ? state.pbs : undefined}
+          pbsInstances={props.currentTab === 'recovery' ? state.pbs : undefined}
           vmCounts={vmCounts()}
           containerCounts={containerCounts()}
           storageCounts={storageCounts()}

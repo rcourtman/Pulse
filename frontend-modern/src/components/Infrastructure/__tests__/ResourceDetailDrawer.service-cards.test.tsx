@@ -4,6 +4,20 @@ import { render } from '@solidjs/testing-library';
 import type { Resource } from '@/types/resource';
 import { ResourceDetailDrawer } from '@/components/Infrastructure/ResourceDetailDrawer';
 
+const wsState = vi.hoisted(() => ({ pmg: [] as any[] }));
+const reconnectSpy = vi.hoisted(() => vi.fn());
+
+vi.mock('@/App', () => ({
+  useWebSocket: () => ({
+    state: wsState,
+    connected: () => true,
+    initialDataReceived: () => true,
+    reconnecting: () => false,
+    reconnect: reconnectSpy,
+  }),
+  useDarkMode: () => () => false,
+}));
+
 vi.mock('@/components/Discovery/DiscoveryTab', () => ({
   DiscoveryTab: () => <div data-testid="discovery-tab" />,
 }));
@@ -51,7 +65,7 @@ describe('ResourceDetailDrawer service cards', () => {
     expect(getByText('Job breakdown')).toBeInTheDocument();
     expect(getByRole('link', { name: /open pbs backups/i })).toHaveAttribute(
       'href',
-      '/backups?source=pbs&backupType=remote',
+      '/recovery?provider=proxmox-pbs&mode=remote',
     );
   });
 

@@ -20,7 +20,7 @@ import {
 import { ResourceDetailDrawer } from './ResourceDetailDrawer';
 import { buildWorkloadsHref } from './workloadsLink';
 import { buildServiceDetailLinks } from './serviceDetailLinks';
-import { getContainerRuntimeBadge, getPlatformBadge, getSourceBadge, getUnifiedSourceBadges } from './resourceBadges';
+import { getPlatformBadge, getSourceBadge, getUnifiedSourceBadges } from './resourceBadges';
 import { useTableWindowing } from './useTableWindowing';
 
 interface UnifiedResourceTableProps {
@@ -540,13 +540,9 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                 });
                 const platformBadge = createMemo(() => getPlatformBadge(resource.platformType));
                 const sourceBadge = createMemo(() => getSourceBadge(resource.sourceType));
-                const containerRuntimeBadge = createMemo(() =>
-                  getContainerRuntimeBadge(resource.platformType, resource.platformData ?? null),
+                const unifiedSourceBadges = createMemo(() =>
+                  getUnifiedSourceBadges(getUnifiedSources(resource)),
                 );
-                const unifiedSourceBadges = createMemo(() => {
-                  const badges = getUnifiedSourceBadges(getUnifiedSources(resource));
-                  return containerRuntimeBadge() ? badges.filter(b => b.title !== 'docker') : badges;
-                });
                 const hasUnifiedSources = createMemo(() => unifiedSourceBadges().length > 0);
                 const workloadsHref = createMemo(() => buildWorkloadsHref(resource));
 
@@ -716,13 +712,6 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                                     </span>
                                   )}
                                 </Show>
-                                <Show when={containerRuntimeBadge()}>
-                                  {(badge) => (
-                                    <span class={badge().classes} title={badge().title}>
-                                      {badge().label}
-                                    </span>
-                                  )}
-                                </Show>
                               </>
                             }
                           >
@@ -733,13 +722,6 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                                 </span>
                               )}
                             </For>
-                            <Show when={containerRuntimeBadge()}>
-                              {(badge) => (
-                                <span class={badge().classes} title={badge().title}>
-                                  {badge().label}
-                                </span>
-                              )}
-                            </Show>
                           </Show>
 	                        </div>
 	                      </td>

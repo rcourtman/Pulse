@@ -203,21 +203,57 @@ func resourceFromDockerHost(host models.DockerHost) (Resource, ResourceIdentity)
 		MACAddresses: uniqueStrings(macs),
 	}
 
+	// If this Docker host is part of a Swarm, surface the Swarm cluster as the resource cluster.
+	// This drives unified Infrastructure grouping and /api/resources?cluster filtering.
+	if host.Swarm != nil {
+		clusterName := strings.TrimSpace(host.Swarm.ClusterName)
+		if clusterName == "" {
+			clusterName = strings.TrimSpace(host.Swarm.ClusterID)
+		}
+		if clusterName != "" {
+			identity.ClusterName = clusterName
+			identity.Hostnames = uniqueStrings(append(identity.Hostnames, clusterName+":"+host.Hostname))
+		}
+	}
+
+	updatesAvailableCount := 0
+	var updatesLastCheckedAt time.Time
+	for _, container := range host.Containers {
+		if container.UpdateStatus == nil {
+			continue
+		}
+		if container.UpdateStatus.UpdateAvailable {
+			updatesAvailableCount++
+		}
+		if container.UpdateStatus.LastChecked.After(updatesLastCheckedAt) {
+			updatesLastCheckedAt = container.UpdateStatus.LastChecked
+		}
+	}
+	var updatesLastCheckedPtr *time.Time
+	if !updatesLastCheckedAt.IsZero() {
+		copied := updatesLastCheckedAt
+		updatesLastCheckedPtr = &copied
+	}
+
 	docker := &DockerData{
-		HostSourceID:      host.ID,
-		Hostname:          host.Hostname,
-		Temperature:       host.Temperature,
-		Runtime:           host.Runtime,
-		RuntimeVersion:    host.RuntimeVersion,
-		DockerVersion:     host.DockerVersion,
-		OS:                host.OS,
-		KernelVersion:     host.KernelVersion,
-		Architecture:      host.Architecture,
-		AgentVersion:      host.AgentVersion,
-		UptimeSeconds:     host.UptimeSeconds,
-		Swarm:             convertSwarm(host.Swarm),
-		NetworkInterfaces: convertInterfaces(host.NetworkInterfaces),
-		Disks:             convertDisks(host.Disks),
+		HostSourceID:          host.ID,
+		Hostname:              host.Hostname,
+		Temperature:           host.Temperature,
+		Runtime:               host.Runtime,
+		RuntimeVersion:        host.RuntimeVersion,
+		DockerVersion:         host.DockerVersion,
+		OS:                    host.OS,
+		KernelVersion:         host.KernelVersion,
+		Architecture:          host.Architecture,
+		AgentVersion:          host.AgentVersion,
+		UptimeSeconds:         host.UptimeSeconds,
+		ContainerCount:        len(host.Containers),
+		UpdatesAvailableCount: updatesAvailableCount,
+		UpdatesLastCheckedAt:  updatesLastCheckedPtr,
+		Command:               host.Command,
+		Swarm:                 convertSwarm(host.Swarm),
+		NetworkInterfaces:     convertInterfaces(host.NetworkInterfaces),
+		Disks:                 convertDisks(host.Disks),
 	}
 
 	metrics := metricsFromDockerHost(host)
@@ -391,6 +427,34 @@ func resourceFromPMGInstance(instance models.PMGInstance) (Resource, ResourceIde
 			}
 		}
 		resource.PMG.SpamDistribution = buckets
+	}
+
+	// Populate relay domains
+	if len(instance.RelayDomains) > 0 {
+		relayDomains := make([]PMGRelayDomainMeta, len(instance.RelayDomains))
+		for i, d := range instance.RelayDomains {
+			relayDomains[i] = PMGRelayDomainMeta{
+				Domain:  strings.TrimSpace(d.Domain),
+				Comment: strings.TrimSpace(d.Comment),
+			}
+		}
+		resource.PMG.RelayDomains = relayDomains
+	}
+
+	// Populate domain stats
+	if len(instance.DomainStats) > 0 {
+		stats := make([]PMGDomainStatMeta, len(instance.DomainStats))
+		for i, s := range instance.DomainStats {
+			stats[i] = PMGDomainStatMeta{
+				Domain:     strings.TrimSpace(s.Domain),
+				MailCount:  s.MailCount,
+				SpamCount:  s.SpamCount,
+				VirusCount: s.VirusCount,
+				Bytes:      s.Bytes,
+			}
+		}
+		resource.PMG.DomainStats = stats
+		resource.PMG.DomainStatsAsOf = instance.DomainStatsAsOf
 	}
 
 	identity := ResourceIdentity{
@@ -812,6 +876,76 @@ func resourceFromDockerContainer(ct models.DockerContainer, host models.DockerHo
 	identity := ResourceIdentity{
 		Hostnames: uniqueStrings([]string{ct.Name}),
 	}
+	return resource, identity
+}
+
+func resourceFromDockerService(service models.DockerService, host models.DockerHost) (Resource, ResourceIdentity) {
+	now := time.Now().UTC()
+
+	clusterName := ""
+	if host.Swarm != nil {
+		clusterName = strings.TrimSpace(host.Swarm.ClusterName)
+		if clusterName == "" {
+			clusterName = strings.TrimSpace(host.Swarm.ClusterID)
+		}
+	}
+
+	docker := &DockerData{
+		HostSourceID:   host.ID,
+		Hostname:       host.Hostname,
+		ServiceID:      service.ID,
+		Stack:          strings.TrimSpace(service.Stack),
+		Image:          strings.TrimSpace(service.Image),
+		Mode:           strings.TrimSpace(service.Mode),
+		DesiredTasks:   service.DesiredTasks,
+		RunningTasks:   service.RunningTasks,
+		CompletedTasks: service.CompletedTasks,
+		Labels:         cloneLabelMap(service.Labels),
+		Swarm:          convertSwarm(host.Swarm),
+	}
+
+	if service.UpdateStatus != nil {
+		docker.ServiceUpdate = &DockerServiceUpdateMeta{
+			State:       strings.TrimSpace(service.UpdateStatus.State),
+			Message:     strings.TrimSpace(service.UpdateStatus.Message),
+			CompletedAt: service.UpdateStatus.CompletedAt,
+		}
+	}
+
+	if len(service.EndpointPorts) > 0 {
+		ports := make([]DockerServicePortMeta, 0, len(service.EndpointPorts))
+		for _, port := range service.EndpointPorts {
+			ports = append(ports, DockerServicePortMeta{
+				Name:          strings.TrimSpace(port.Name),
+				Protocol:      strings.TrimSpace(port.Protocol),
+				TargetPort:    port.TargetPort,
+				PublishedPort: port.PublishedPort,
+				PublishMode:   strings.TrimSpace(port.PublishMode),
+			})
+		}
+		docker.EndpointPorts = ports
+	}
+
+	resource := Resource{
+		Type:      ResourceTypeDockerService,
+		Name:      strings.TrimSpace(service.Name),
+		Status:    statusFromDockerService(service),
+		LastSeen:  host.LastSeen,
+		UpdatedAt: now,
+		Docker:    docker,
+		Tags:      labelsToTags(docker.Labels),
+	}
+
+	identity := ResourceIdentity{
+		Hostnames: uniqueStrings([]string{
+			strings.TrimSpace(service.Name),
+		}),
+		ClusterName: clusterName,
+	}
+	if docker.Stack != "" {
+		identity.Hostnames = uniqueStrings(append(identity.Hostnames, docker.Stack+":"+strings.TrimSpace(service.Name)))
+	}
+
 	return resource, identity
 }
 

@@ -84,19 +84,20 @@ type Agent struct {
 }
 
 const (
-	defaultInterval                   = 30 * time.Second
-	defaultMaxPods                    = 200
-	defaultMaxDeployments             = 1000
-	requestTimeout                    = 20 * time.Second
-	collectReportTimeout              = 45 * time.Second
-	listPageSize                int64 = 250
-	maxKubeAPIRetries                 = 3
-	initialRetryBackoff               = 300 * time.Millisecond
-	maxRetryBackoff                   = 3 * time.Second
-	maxSummaryMetricNodes             = 200
-	summaryMetricsWorkers             = 8
-	reportUserAgent                   = "pulse-kubernetes-agent/"
-	maxMetricsResponseBodyBytes int64 = 32 * 1024 * 1024 // 32 MB
+	defaultInterval                    = 30 * time.Second
+	defaultMaxPods                     = 200
+	defaultMaxDeployments              = 1000
+	requestTimeout                     = 20 * time.Second
+	collectReportTimeout               = 45 * time.Second
+	listPageSize                 int64 = 250
+	maxKubeAPIRetries                  = 3
+	initialRetryBackoff                = 300 * time.Millisecond
+	maxRetryBackoff                    = 3 * time.Second
+	maxSummaryMetricNodes              = 200
+	summaryMetricsWorkers              = 8
+	reportUserAgent                    = "pulse-kubernetes-agent/"
+	maxMetricsResponseBodyBytes  int64 = 32 * 1024 * 1024 // 32 MB
+	maxRecoveryResponseBodyBytes int64 = 8 * 1024 * 1024  // 8 MB (recovery APIs can be large)
 )
 
 func New(cfg Config) (*Agent, error) {
@@ -498,6 +499,11 @@ func (a *Agent) collectReport(ctx context.Context) (agentsk8s.Report, error) {
 	applyNodeUsage(nodes, nodeUsage)
 	applyPodUsage(pods, podUsage)
 
+	recoveryReport, recoveryErr := a.collectRecovery(ctx)
+	if recoveryErr != nil {
+		a.logger.Debug().Err(recoveryErr).Str("cluster_id", a.clusterID).Msg("kubernetes recovery artifacts unavailable, continuing without recovery report")
+	}
+
 	return agentsk8s.Report{
 		Agent: agentsk8s.AgentInfo{
 			ID:              a.agentID,
@@ -515,8 +521,237 @@ func (a *Agent) collectReport(ctx context.Context) (agentsk8s.Report, error) {
 		Nodes:       nodes,
 		Pods:        pods,
 		Deployments: deployments,
+		Recovery:    recoveryReport,
 		Timestamp:   time.Now().UTC(),
 	}, nil
+}
+
+func (a *Agent) collectRecovery(ctx context.Context) (*agentsk8s.RecoveryReport, error) {
+	restClient := a.getDiscoveryRESTClient()
+	if restClient == nil {
+		return nil, nil
+	}
+
+	volumeSnapshots, _ := a.collectVolumeSnapshots(ctx, restClient)
+	veleroBackups, _ := a.collectVeleroBackups(ctx, restClient)
+
+	if len(volumeSnapshots) == 0 && len(veleroBackups) == 0 {
+		return nil, nil
+	}
+
+	return &agentsk8s.RecoveryReport{
+		VolumeSnapshots: volumeSnapshots,
+		VeleroBackups:   veleroBackups,
+	}, nil
+}
+
+func (a *Agent) collectVolumeSnapshots(ctx context.Context, restClient rest.Interface) ([]agentsk8s.VolumeSnapshot, error) {
+	raw, ok, err := a.doOptionalRawPath(ctx, restClient, "list volumesnapshots", "/apis/snapshot.storage.k8s.io/v1/volumesnapshots?limit=200")
+	if err != nil || !ok || len(raw) == 0 {
+		return nil, err
+	}
+
+	type vsError struct {
+		Message string `json:"message"`
+	}
+	type vsItem struct {
+		Metadata struct {
+			UID               string    `json:"uid"`
+			Name              string    `json:"name"`
+			Namespace         string    `json:"namespace"`
+			CreationTimestamp time.Time `json:"creationTimestamp"`
+		} `json:"metadata"`
+		Spec struct {
+			VolumeSnapshotClassName string `json:"volumeSnapshotClassName"`
+			Source                  struct {
+				PersistentVolumeClaimName string `json:"persistentVolumeClaimName"`
+			} `json:"source"`
+		} `json:"spec"`
+		Status struct {
+			ReadyToUse                     *bool      `json:"readyToUse"`
+			CreationTime                   *time.Time `json:"creationTime"`
+			CompletionTime                 *time.Time `json:"completionTime"`
+			BoundVolumeSnapshotContentName string     `json:"boundVolumeSnapshotContentName"`
+			RestoreSize                    string     `json:"restoreSize"`
+			Error                          *vsError   `json:"error"`
+		} `json:"status"`
+	}
+	type vsList struct {
+		Items []vsItem `json:"items"`
+	}
+
+	var parsed vsList
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		return nil, fmt.Errorf("parse volumesnapshots: %w", err)
+	}
+
+	out := make([]agentsk8s.VolumeSnapshot, 0, len(parsed.Items))
+	for _, item := range parsed.Items {
+		createdAt := item.Metadata.CreationTimestamp.UTC()
+		name := strings.TrimSpace(item.Metadata.Name)
+		namespace := strings.TrimSpace(item.Metadata.Namespace)
+		if name == "" || namespace == "" {
+			continue
+		}
+
+		var restoreSizeBytes *int64
+		if strings.TrimSpace(item.Status.RestoreSize) != "" {
+			if q, err := k8sresource.ParseQuantity(strings.TrimSpace(item.Status.RestoreSize)); err == nil {
+				v := q.Value()
+				restoreSizeBytes = &v
+			}
+		}
+
+		errText := ""
+		if item.Status.Error != nil {
+			errText = strings.TrimSpace(item.Status.Error.Message)
+		}
+
+		creationTime := item.Status.CreationTime
+		if creationTime == nil {
+			creationTime = &createdAt
+		}
+
+		out = append(out, agentsk8s.VolumeSnapshot{
+			UID:              strings.TrimSpace(item.Metadata.UID),
+			Name:             name,
+			Namespace:        namespace,
+			SnapshotClass:    strings.TrimSpace(item.Spec.VolumeSnapshotClassName),
+			SourcePVC:        strings.TrimSpace(item.Spec.Source.PersistentVolumeClaimName),
+			ReadyToUse:       item.Status.ReadyToUse,
+			RestoreSizeBytes: restoreSizeBytes,
+			CreationTime:     creationTime,
+			CompletionTime:   item.Status.CompletionTime,
+			ContentName:      strings.TrimSpace(item.Status.BoundVolumeSnapshotContentName),
+			Error:            errText,
+		})
+	}
+
+	// Sort newest-first to keep payload stable.
+	sort.SliceStable(out, func(i, j int) bool {
+		a := out[i].CompletionTime
+		b := out[j].CompletionTime
+		if a == nil && b == nil {
+			return out[i].Name > out[j].Name
+		}
+		if a == nil {
+			return false
+		}
+		if b == nil {
+			return true
+		}
+		return a.After(*b)
+	})
+
+	const maxItems = 200
+	if len(out) > maxItems {
+		out = out[:maxItems]
+	}
+	return out, nil
+}
+
+func (a *Agent) collectVeleroBackups(ctx context.Context, restClient rest.Interface) ([]agentsk8s.VeleroBackup, error) {
+	raw, ok, err := a.doOptionalRawPath(ctx, restClient, "list velero backups", "/apis/velero.io/v1/backups?limit=200")
+	if err != nil || !ok || len(raw) == 0 {
+		return nil, err
+	}
+
+	type vbItem struct {
+		Metadata struct {
+			UID       string    `json:"uid"`
+			Name      string    `json:"name"`
+			Namespace string    `json:"namespace"`
+			CreatedAt time.Time `json:"creationTimestamp"`
+		} `json:"metadata"`
+		Spec struct {
+			StorageLocation string `json:"storageLocation"`
+		} `json:"spec"`
+		Status struct {
+			Phase               string     `json:"phase"`
+			StartTimestamp      *time.Time `json:"startTimestamp"`
+			CompletionTimestamp *time.Time `json:"completionTimestamp"`
+			Expiration          *time.Time `json:"expiration"`
+		} `json:"status"`
+	}
+	type vbList struct {
+		Items []vbItem `json:"items"`
+	}
+
+	var parsed vbList
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		return nil, fmt.Errorf("parse velero backups: %w", err)
+	}
+
+	out := make([]agentsk8s.VeleroBackup, 0, len(parsed.Items))
+	for _, item := range parsed.Items {
+		name := strings.TrimSpace(item.Metadata.Name)
+		if name == "" {
+			continue
+		}
+
+		namespace := strings.TrimSpace(item.Metadata.Namespace)
+		if namespace == "" {
+			namespace = "velero"
+		}
+
+		out = append(out, agentsk8s.VeleroBackup{
+			UID:             strings.TrimSpace(item.Metadata.UID),
+			Name:            name,
+			Namespace:       namespace,
+			Phase:           strings.TrimSpace(item.Status.Phase),
+			StartedAt:       item.Status.StartTimestamp,
+			CompletedAt:     item.Status.CompletionTimestamp,
+			Expiration:      item.Status.Expiration,
+			StorageLocation: strings.TrimSpace(item.Spec.StorageLocation),
+		})
+	}
+
+	sort.SliceStable(out, func(i, j int) bool {
+		a := out[i].CompletedAt
+		b := out[j].CompletedAt
+		if a == nil && b == nil {
+			return out[i].Name > out[j].Name
+		}
+		if a == nil {
+			return false
+		}
+		if b == nil {
+			return true
+		}
+		return a.After(*b)
+	})
+	const maxItems = 200
+	if len(out) > maxItems {
+		out = out[:maxItems]
+	}
+	return out, nil
+}
+
+func (a *Agent) doOptionalRawPath(ctx context.Context, restClient rest.Interface, action, path string) ([]byte, bool, error) {
+	if restClient == nil {
+		return nil, false, nil
+	}
+
+	callCtx, cancel := context.WithTimeout(ctx, requestTimeout)
+	payload, err := readKubernetesResponseBody(callCtx, restClient, path, maxRecoveryResponseBodyBytes)
+	cancel()
+	if err == nil {
+		return payload, true, nil
+	}
+
+	var statusErr *apierrors.StatusError
+	if errors.As(err, &statusErr) {
+		if apierrors.IsForbidden(statusErr) || apierrors.IsNotFound(statusErr) || apierrors.IsUnauthorized(statusErr) {
+			return nil, false, nil
+		}
+	}
+
+	msg := strings.ToLower(err.Error())
+	if strings.Contains(msg, "not found") || strings.Contains(msg, "forbidden") {
+		return nil, false, nil
+	}
+
+	return nil, false, fmt.Errorf("%s: %w", action, err)
 }
 
 func (a *Agent) getDiscoveryRESTClient() rest.Interface {

@@ -15,6 +15,8 @@ const (
 	DockerCommandTypeStop = "stop"
 	// DockerCommandTypeUpdateContainer instructs the agent to update a container to its latest image.
 	DockerCommandTypeUpdateContainer = "update_container"
+	// DockerCommandTypeUpdateAll instructs the agent to update all containers with updates available.
+	DockerCommandTypeUpdateAll = "update_all"
 	// DockerCommandTypeCheckUpdates instructs the agent to check for container updates immediately.
 	DockerCommandTypeCheckUpdates = "check_updates"
 
@@ -141,7 +143,7 @@ func (m *Monitor) queueDockerStopCommand(hostID string) (models.DockerHostComman
 
 	if existing, ok := m.dockerCommands[hostID]; ok {
 		switch existing.status.Status {
-		case DockerCommandStatusQueued, DockerCommandStatusDispatched, DockerCommandStatusAcknowledged:
+		case DockerCommandStatusQueued, DockerCommandStatusDispatched, DockerCommandStatusAcknowledged, DockerCommandStatusInProgress:
 			return existing.status, fmt.Errorf("docker host %q already has a command in progress", hostID)
 		}
 	}
@@ -196,7 +198,7 @@ func (m *Monitor) QueueDockerContainerUpdateCommand(hostID, containerID, contain
 	// Check for existing commands in progress for this host
 	if existing, ok := m.dockerCommands[hostID]; ok {
 		switch existing.status.Status {
-		case DockerCommandStatusQueued, DockerCommandStatusDispatched, DockerCommandStatusAcknowledged:
+		case DockerCommandStatusQueued, DockerCommandStatusDispatched, DockerCommandStatusAcknowledged, DockerCommandStatusInProgress:
 			return existing.status, fmt.Errorf("docker host %q already has a command in progress", hostID)
 		}
 	}
@@ -227,6 +229,76 @@ func (m *Monitor) QueueDockerContainerUpdateCommand(hostID, containerID, contain
 		Str("containerName", containerName).
 		Str("commandID", cmd.status.ID).
 		Msg("Queued docker container update command")
+
+	return cmd.status, nil
+}
+
+// QueueDockerUpdateAllCommand enqueues an update_all command for a docker host.
+// The monitor selects containers with UpdateStatus.UpdateAvailable == true and includes their IDs in the payload.
+func (m *Monitor) QueueDockerUpdateAllCommand(hostID string) (models.DockerHostCommandStatus, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	hostID = normalizeDockerHostID(hostID)
+	if hostID == "" {
+		return models.DockerHostCommandStatus{}, fmt.Errorf("docker host id is required")
+	}
+
+	host, ok := m.GetDockerHost(hostID)
+	if !ok {
+		return models.DockerHostCommandStatus{}, fmt.Errorf("docker host %q not found", hostID)
+	}
+
+	// Check for existing commands in progress for this host
+	if existing, ok := m.dockerCommands[hostID]; ok {
+		switch existing.status.Status {
+		case DockerCommandStatusQueued, DockerCommandStatusDispatched, DockerCommandStatusAcknowledged, DockerCommandStatusInProgress:
+			return existing.status, fmt.Errorf("docker host %q already has a command in progress", hostID)
+		}
+	}
+
+	// Select containers that currently have updates available.
+	containerIDs := make([]string, 0, len(host.Containers))
+	for _, c := range host.Containers {
+		if c.UpdateStatus == nil || !c.UpdateStatus.UpdateAvailable {
+			continue
+		}
+		if strings.TrimSpace(c.ID) == "" {
+			continue
+		}
+		containerIDs = append(containerIDs, c.ID)
+	}
+
+	if len(containerIDs) == 0 {
+		return models.DockerHostCommandStatus{}, fmt.Errorf("no containers have updates available")
+	}
+
+	payload := map[string]any{
+		"containerIds": containerIDs,
+	}
+
+	cmd := newDockerHostCommand(
+		DockerCommandTypeUpdateAll,
+		fmt.Sprintf("Updating %d containers", len(containerIDs)),
+		dockerCommandDefaultTTL,
+		payload,
+	)
+
+	if m.dockerCommands == nil {
+		m.dockerCommands = make(map[string]*dockerHostCommand)
+	}
+	m.dockerCommands[hostID] = &cmd
+	if m.dockerCommandIndex == nil {
+		m.dockerCommandIndex = make(map[string]string)
+	}
+	m.dockerCommandIndex[cmd.status.ID] = hostID
+
+	m.state.SetDockerHostCommand(hostID, &cmd.status)
+	log.Info().
+		Str("dockerHostID", hostID).
+		Int("containers", len(containerIDs)).
+		Str("commandID", cmd.status.ID).
+		Msg("Queued docker update all command")
 
 	return cmd.status, nil
 }
@@ -369,7 +441,6 @@ func (m *Monitor) acknowledgeDockerCommand(commandID, hostID, status, message st
 		cmd.markAcknowledged(message)
 		cmd.markCompleted(message)
 		// Only remove the Docker host if this was a "stop" command.
-		// Other commands (update_container, check_updates) should not remove the host.
 		if cmd.status.Type == DockerCommandTypeStop {
 			shouldRemove = true
 		}
@@ -388,7 +459,9 @@ func (m *Monitor) acknowledgeDockerCommand(commandID, hostID, status, message st
 		Str("status", cmd.status.Status).
 		Msg("Docker host acknowledged command")
 
-	if status == DockerCommandStatusFailed || shouldRemove {
+	// Completed/failed commands should not be sent to agents again. Keep the last status
+	// in state for UI visibility, but clear the active command from memory.
+	if status == DockerCommandStatusFailed || status == DockerCommandStatusCompleted || shouldRemove {
 		delete(m.dockerCommands, resolvedHostID)
 		delete(m.dockerCommandIndex, commandID)
 	}

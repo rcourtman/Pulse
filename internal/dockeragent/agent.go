@@ -957,6 +957,8 @@ func (a *Agent) handleCommand(ctx context.Context, target TargetConfig, command 
 		return a.handleStopCommand(ctx, target, command)
 	case agentsdocker.CommandTypeUpdateContainer:
 		return a.handleUpdateContainerCommand(ctx, target, command)
+	case agentsdocker.CommandTypeUpdateAll:
+		return a.handleUpdateAllCommand(ctx, target, command)
 	case agentsdocker.CommandTypeCheckUpdates:
 		return a.handleCheckUpdatesCommand(ctx, target, command)
 	default:

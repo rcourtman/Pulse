@@ -107,6 +107,10 @@ testing-tools/*
 manual-test*.md
 verify-*.md
 test-*.md
+test-results/
+frontend-modern/test-results/
+playwright-report/
+frontend-modern/playwright-report/
 
 *.test.js
 *.test.md

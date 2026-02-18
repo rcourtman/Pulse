@@ -10,13 +10,13 @@ Never copy `/etc/pulse` (or `/data` in Docker/Kubernetes) manually. Encryption k
 ### ✅ DO: Use Export/Import
 
 #### 1. Export (Old Server)
-1.  Go to **Settings → System → Backups**.
+1.  Go to **Settings → System → Recovery**.
 2.  Click **Create Backup**.
 3.  Enter a strong passphrase and download the encrypted backup.
 
 #### 2. Import (New Server)
 1.  Install a fresh Pulse instance.
-2.  Go to **Settings → System → Backups**.
+2.  Go to **Settings → System → Recovery**.
 3.  Click **Restore Configuration** and upload your file.
 4.  Enter the passphrase.
 

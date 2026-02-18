@@ -1,18 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { getBackupsLegacyQueryRedirectTarget } from '../backupsLegacyQueryRedirect';
+import { getRecoveryLegacyQueryRedirectTarget } from '../recoveryLegacyQueryRedirect';
 
 function asURL(path: string): URL {
   return new URL(path, 'http://localhost');
 }
 
-describe('backups legacy query redirect', () => {
+describe('recovery legacy query redirect', () => {
   it('rewrites legacy backups params into the canonical v6 contract', () => {
-    const target = getBackupsLegacyQueryRedirectTarget(
+    const target = getRecoveryLegacyQueryRedirectTarget(
       '?view=artifacts&backupType=remote&group=guest&search=vm-101&source=pbs&status=verified&foo=bar',
     );
     expect(target).not.toBeNull();
     const url = asURL(target!);
-    expect(url.pathname).toBe('/backups');
+    expect(url.pathname).toBe('/recovery');
     expect(url.searchParams.get('view')).toBe('events');
     expect(url.searchParams.get('mode')).toBe('remote');
     expect(url.searchParams.get('scope')).toBe('workload');
@@ -28,16 +28,16 @@ describe('backups legacy query redirect', () => {
   });
 
   it('canonicalizes shorthand provider values', () => {
-    const target = getBackupsLegacyQueryRedirectTarget('?provider=pbs&view=events');
+    const target = getRecoveryLegacyQueryRedirectTarget('?provider=pbs&view=events');
     expect(target).not.toBeNull();
     const url = asURL(target!);
-    expect(url.pathname).toBe('/backups');
+    expect(url.pathname).toBe('/recovery');
     expect(url.searchParams.get('view')).toBe('events');
     expect(url.searchParams.get('provider')).toBe('proxmox-pbs');
   });
 
   it('returns null when no legacy params are present', () => {
-    expect(getBackupsLegacyQueryRedirectTarget('?view=events&mode=remote&scope=workload&q=vm-101')).toBeNull();
-    expect(getBackupsLegacyQueryRedirectTarget('')).toBeNull();
+    expect(getRecoveryLegacyQueryRedirectTarget('?view=events&mode=remote&scope=workload&q=vm-101')).toBeNull();
+    expect(getRecoveryLegacyQueryRedirectTarget('')).toBeNull();
   });
 });

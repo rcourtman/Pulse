@@ -1,16 +1,16 @@
 import type { Component } from 'solid-js';
 import { createEffect, createMemo } from 'solid-js';
-import { useLocation, useNavigate } from '@solidjs/router';
 import { Show } from 'solid-js';
+import { useLocation, useNavigate } from '@solidjs/router';
 
-import Backups from '@/components/Backups/Backups';
-import { getBackupsLegacyQueryRedirectTarget } from '@/routing/backupsLegacyQueryRedirect';
+import Recovery from '@/components/Recovery/Recovery';
+import { getRecoveryLegacyQueryRedirectTarget } from '@/routing/recoveryLegacyQueryRedirect';
 
-const BackupsRoute: Component = () => {
+const RecoveryRoute: Component = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const redirectTarget = createMemo(() => getBackupsLegacyQueryRedirectTarget(location.search));
+  const redirectTarget = createMemo(() => getRecoveryLegacyQueryRedirectTarget(location.search));
 
   createEffect(() => {
     const target = redirectTarget();
@@ -22,9 +22,10 @@ const BackupsRoute: Component = () => {
 
   return (
     <Show when={!redirectTarget()}>
-      <Backups />
+      <Recovery />
     </Show>
   );
 };
 
-export default BackupsRoute;
+export default RecoveryRoute;
+

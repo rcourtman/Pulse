@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
@@ -20,6 +21,11 @@ import (
 // testEnvMu protects concurrent access to PULSE_DATA_DIR during parallel tests.
 // newTestManager updates process-wide env vars, so tests using it are serialized.
 var testEnvMu sync.Mutex
+
+func ptrTime(t time.Time) *time.Time {
+	tt := t
+	return &tt
+}
 
 // newTestManager creates a Manager with an isolated temp directory for testing.
 // It uses os.Setenv with a mutex to safely handle parallel tests that call // t.Parallel()
@@ -945,15 +951,19 @@ func TestCheckBackupsCreatesAndClearsAlerts(t *testing.T) {
 	m.mu.Unlock()
 
 	now := time.Now()
-	storageBackups := []models.StorageBackup{
+	rollups := []recovery.ProtectionRollup{
 		{
-			ID:       "inst-node-100-backup",
-			Storage:  "local",
-			Node:     "node",
-			Instance: "inst",
-			Type:     "qemu",
-			VMID:     100,
-			Time:     now.Add(-15 * 24 * time.Hour),
+			RollupID: "res:vm:proxmox:inst:node:100",
+			SubjectRef: &recovery.ExternalRef{
+				Type:      "proxmox-vm",
+				Namespace: "inst",
+				Name:      "app-server",
+				ID:        "inst:node:100",
+				Class:     "node",
+			},
+			LastSuccessAt: ptrTime(now.Add(-15 * 24 * time.Hour)),
+			LastOutcome:   recovery.OutcomeSuccess,
+			Providers:     []recovery.Provider{recovery.ProviderProxmoxPVE},
 		},
 	}
 
@@ -971,7 +981,7 @@ func TestCheckBackupsCreatesAndClearsAlerts(t *testing.T) {
 		"100": {guestsByKey[key]},
 	}
 
-	m.CheckBackups(storageBackups, nil, nil, guestsByKey, guestsByVMID)
+	m.CheckBackups(rollups, guestsByKey, guestsByVMID)
 
 	m.mu.RLock()
 	alert, exists := m.activeAlerts["backup-age-"+sanitizeAlertKey(key)]
@@ -984,8 +994,8 @@ func TestCheckBackupsCreatesAndClearsAlerts(t *testing.T) {
 	}
 
 	// Recent backup clears alert
-	storageBackups[0].Time = now
-	m.CheckBackups(storageBackups, nil, nil, guestsByKey, guestsByVMID)
+	rollups[0].LastSuccessAt = ptrTime(now)
+	m.CheckBackups(rollups, guestsByKey, guestsByVMID)
 
 	m.mu.RLock()
 	_, exists = m.activeAlerts["backup-age-"+sanitizeAlertKey(key)]
@@ -1010,15 +1020,19 @@ func TestCheckBackupsRespectsOverrides(t *testing.T) {
 	m.mu.Unlock()
 
 	now := time.Now()
-	storageBackups := []models.StorageBackup{
+	rollups := []recovery.ProtectionRollup{
 		{
-			ID:       "inst-node-100-backup",
-			Storage:  "local",
-			Node:     "node",
-			Instance: "inst",
-			Type:     "qemu",
-			VMID:     100,
-			Time:     now.Add(-10 * 24 * time.Hour), // Triggers Warning (10 > 7)
+			RollupID: "res:vm:proxmox:inst:node:100",
+			SubjectRef: &recovery.ExternalRef{
+				Type:      "proxmox-vm",
+				Namespace: "inst",
+				Name:      "app-server",
+				ID:        "inst:node:100",
+				Class:     "node",
+			},
+			LastSuccessAt: ptrTime(now.Add(-10 * 24 * time.Hour)), // Triggers Warning (10 > 7)
+			LastOutcome:   recovery.OutcomeSuccess,
+			Providers:     []recovery.Provider{recovery.ProviderProxmoxPVE},
 		},
 	}
 
@@ -1039,7 +1053,7 @@ func TestCheckBackupsRespectsOverrides(t *testing.T) {
 	}
 
 	// 1. Verify warning alert is created with defaults
-	m.CheckBackups(storageBackups, nil, nil, guestsByKey, guestsByVMID)
+	m.CheckBackups(rollups, guestsByKey, guestsByVMID)
 	m.mu.RLock()
 	alert, exists := m.activeAlerts["backup-age-"+sanitizeAlertKey(key)]
 	m.mu.RUnlock()
@@ -1059,7 +1073,7 @@ func TestCheckBackupsRespectsOverrides(t *testing.T) {
 	}
 	m.UpdateConfig(cfg)
 
-	m.CheckBackups(storageBackups, nil, nil, guestsByKey, guestsByVMID)
+	m.CheckBackups(rollups, guestsByKey, guestsByVMID)
 	m.mu.RLock()
 	_, exists = m.activeAlerts["backup-age-"+sanitizeAlertKey(key)]
 	m.mu.RUnlock()
@@ -1076,7 +1090,7 @@ func TestCheckBackupsRespectsOverrides(t *testing.T) {
 		},
 	}
 	m.UpdateConfig(cfg)
-	m.CheckBackups(storageBackups, nil, nil, guestsByKey, guestsByVMID)
+	m.CheckBackups(rollups, guestsByKey, guestsByVMID)
 	m.mu.RLock()
 	_, exists = m.activeAlerts["backup-age-"+sanitizeAlertKey(key)]
 	m.mu.RUnlock()
@@ -1089,8 +1103,8 @@ func TestCheckBackupsRespectsOverrides(t *testing.T) {
 		Disabled: true,
 	}
 	m.UpdateConfig(cfg)
-	storageBackups[0].Time = now.Add(-30 * 24 * time.Hour) // Way past defaults
-	m.CheckBackups(storageBackups, nil, nil, guestsByKey, guestsByVMID)
+	rollups[0].LastSuccessAt = ptrTime(now.Add(-30 * 24 * time.Hour)) // Way past defaults
+	m.CheckBackups(rollups, guestsByKey, guestsByVMID)
 	m.mu.RLock()
 	_, exists = m.activeAlerts["backup-age-"+sanitizeAlertKey(key)]
 	m.mu.RUnlock()
@@ -1113,18 +1127,22 @@ func TestCheckBackupsHandlesPbsOnlyGuests(t *testing.T) {
 	m.mu.Unlock()
 
 	now := time.Now()
-	pbsBackups := []models.PBSBackup{
+	rollups := []recovery.ProtectionRollup{
 		{
-			ID:         "pbs-backup-999-0",
-			Instance:   "pbs-main",
-			Datastore:  "backup-store",
-			BackupType: "qemu",
-			VMID:       "999",
-			BackupTime: now.Add(-6 * 24 * time.Hour),
+			RollupID: "ext:pbs-only-999",
+			SubjectRef: &recovery.ExternalRef{
+				Type:      "proxmox-vm",
+				Namespace: "pbs-ns",
+				Name:      "999",
+				ID:        "999",
+			},
+			LastSuccessAt: ptrTime(now.Add(-6 * 24 * time.Hour)),
+			LastOutcome:   recovery.OutcomeSuccess,
+			Providers:     []recovery.Provider{recovery.ProviderProxmoxPBS},
 		},
 	}
 
-	m.CheckBackups(nil, pbsBackups, nil, map[string]GuestLookup{}, map[string][]GuestLookup{})
+	m.CheckBackups(rollups, map[string]GuestLookup{}, map[string][]GuestLookup{})
 
 	m.mu.RLock()
 	found := false
@@ -1191,19 +1209,22 @@ func TestCheckBackupsDisambiguatesWithNamespace(t *testing.T) {
 	}
 
 	// PBS backup with namespace "nat" should match the "pve-nat" instance
-	pbsBackups := []models.PBSBackup{
+	rollups := []recovery.ProtectionRollup{
 		{
-			ID:         "pbs-backup-100-nat",
-			Instance:   "pbs-main",
-			Datastore:  "backup-store",
-			Namespace:  "nat", // This namespace should match "pve-nat"
-			BackupType: "qemu",
-			VMID:       "100",
-			BackupTime: now.Add(-6 * 24 * time.Hour), // Critical
+			RollupID: "ext:pbs-nat-100",
+			SubjectRef: &recovery.ExternalRef{
+				Type:      "proxmox-vm",
+				Namespace: "nat", // namespaceMatchesInstance("nat", "pve-nat") should match
+				Name:      "100",
+				ID:        "100",
+			},
+			LastSuccessAt: ptrTime(now.Add(-6 * 24 * time.Hour)), // Critical
+			LastOutcome:   recovery.OutcomeSuccess,
+			Providers:     []recovery.Provider{recovery.ProviderProxmoxPBS},
 		},
 	}
 
-	m.CheckBackups(nil, pbsBackups, nil, guestsByKey, guestsByVMID)
+	m.CheckBackups(rollups, guestsByKey, guestsByVMID)
 
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -1273,19 +1294,22 @@ func TestCheckBackupsVMIDCollisionNonMatchingNamespace(t *testing.T) {
 	}
 
 	// PBS backup with namespace "staging" — matches neither pve1 nor pve2
-	pbsBackups := []models.PBSBackup{
+	rollups := []recovery.ProtectionRollup{
 		{
-			ID:         "pbs-100",
-			Instance:   "pbs-main",
-			Datastore:  "backup-store",
-			Namespace:  "staging",
-			BackupType: "qemu",
-			VMID:       "100",
-			BackupTime: now.Add(-6 * 24 * time.Hour),
+			RollupID: "ext:pbs-staging-100",
+			SubjectRef: &recovery.ExternalRef{
+				Type:      "proxmox-vm",
+				Namespace: "staging",
+				Name:      "100",
+				ID:        "100",
+			},
+			LastSuccessAt: ptrTime(now.Add(-6 * 24 * time.Hour)),
+			LastOutcome:   recovery.OutcomeSuccess,
+			Providers:     []recovery.Provider{recovery.ProviderProxmoxPBS},
 		},
 	}
 
-	m.CheckBackups(nil, pbsBackups, nil, guestsByKey, guestsByVMID)
+	m.CheckBackups(rollups, guestsByKey, guestsByVMID)
 
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -1297,14 +1321,17 @@ func TestCheckBackupsVMIDCollisionNonMatchingNamespace(t *testing.T) {
 		}
 	}
 
-	// Should have a generic PBS alert key
-	expectedKey := "backup-age-pbs-pbs-main-qemu-100"
-	if _, exists := m.activeAlerts[expectedKey]; !exists {
-		var keys []string
-		for k := range m.activeAlerts {
-			keys = append(keys, k)
+	found := false
+	for id, alert := range m.activeAlerts {
+		if strings.HasPrefix(id, "backup-age-") {
+			found = true
+			if alert.Metadata == nil || alert.Metadata["rollupId"] != "ext:pbs-staging-100" {
+				t.Fatalf("expected rollupId metadata ext:pbs-staging-100, got %#v", alert.Metadata)
+			}
 		}
-		t.Errorf("expected generic PBS alert key %q, found keys: %v", expectedKey, keys)
+	}
+	if !found {
+		t.Fatalf("expected a backup-age alert for the orphaned PBS rollup")
 	}
 }
 
@@ -1352,19 +1379,21 @@ func TestCheckBackupsVMIDCollisionNoNamespace(t *testing.T) {
 	}
 
 	// PBS backup with NO namespace
-	pbsBackups := []models.PBSBackup{
+	rollups := []recovery.ProtectionRollup{
 		{
-			ID:         "pbs-100",
-			Instance:   "pbs-main",
-			Datastore:  "backup-store",
-			Namespace:  "",
-			BackupType: "qemu",
-			VMID:       "100",
-			BackupTime: now.Add(-6 * 24 * time.Hour),
+			RollupID: "ext:pbs-nons-100",
+			SubjectRef: &recovery.ExternalRef{
+				Type: "proxmox-vm",
+				Name: "100",
+				ID:   "100",
+			},
+			LastSuccessAt: ptrTime(now.Add(-6 * 24 * time.Hour)),
+			LastOutcome:   recovery.OutcomeSuccess,
+			Providers:     []recovery.Provider{recovery.ProviderProxmoxPBS},
 		},
 	}
 
-	m.CheckBackups(nil, pbsBackups, nil, guestsByKey, guestsByVMID)
+	m.CheckBackups(rollups, guestsByKey, guestsByVMID)
 
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -1376,14 +1405,12 @@ func TestCheckBackupsVMIDCollisionNoNamespace(t *testing.T) {
 		}
 	}
 
-	// Should have a generic PBS alert key
-	expectedKey := "backup-age-pbs-pbs-main-qemu-100"
-	if _, exists := m.activeAlerts[expectedKey]; !exists {
+	if _, exists := m.activeAlerts["backup-age-ext-pbs-nons-100"]; !exists {
 		var keys []string
 		for k := range m.activeAlerts {
 			keys = append(keys, k)
 		}
-		t.Errorf("expected generic PBS alert key %q, found keys: %v", expectedKey, keys)
+		t.Fatalf("expected generic rollup-backed alert key %q, found keys: %v", "backup-age-ext-pbs-nons-100", keys)
 	}
 }
 
@@ -1401,18 +1428,22 @@ func TestCheckBackupsHandlesPmgBackups(t *testing.T) {
 	m.mu.Unlock()
 
 	now := time.Now()
-	pmgBackups := []models.PMGBackup{
+	rollups := []recovery.ProtectionRollup{
 		{
-			ID:         "pmg-backup-mail-01",
-			Instance:   "mail",
-			Node:       "mail-gateway",
-			Filename:   "pmg-backup_2024-01-01.tgz",
-			BackupTime: now.Add(-8 * 24 * time.Hour),
-			Size:       123456,
+			RollupID: "ext:pmg-mail-gateway",
+			SubjectRef: &recovery.ExternalRef{
+				Type:      "proxmox-pmg-node",
+				Namespace: "mail",
+				Name:      "mail-gateway",
+				ID:        "mail-gateway",
+			},
+			LastSuccessAt: ptrTime(now.Add(-8 * 24 * time.Hour)),
+			LastOutcome:   recovery.OutcomeSuccess,
+			Providers:     []recovery.Provider{recovery.ProviderProxmoxPMG},
 		},
 	}
 
-	m.CheckBackups(nil, nil, pmgBackups, map[string]GuestLookup{}, map[string][]GuestLookup{})
+	m.CheckBackups(rollups, map[string]GuestLookup{}, map[string][]GuestLookup{})
 
 	m.mu.RLock()
 	found := false
@@ -1448,19 +1479,23 @@ func TestCheckBackupsSkipsOrphanedWhenDisabled(t *testing.T) {
 	m.mu.Unlock()
 
 	now := time.Now()
-	storageBackups := []models.StorageBackup{
+	rollups := []recovery.ProtectionRollup{
 		{
-			ID:       "inst-node-200-backup",
-			Storage:  "local",
-			Node:     "node",
-			Instance: "inst",
-			Type:     "qemu",
-			VMID:     200,
-			Time:     now.Add(-6 * 24 * time.Hour),
+			RollupID: "res:vm:proxmox:inst:node:200",
+			SubjectRef: &recovery.ExternalRef{
+				Type:      "proxmox-vm",
+				Namespace: "inst",
+				Name:      "200",
+				ID:        "inst:node:200",
+				Class:     "node",
+			},
+			LastSuccessAt: ptrTime(now.Add(-6 * 24 * time.Hour)),
+			LastOutcome:   recovery.OutcomeSuccess,
+			Providers:     []recovery.Provider{recovery.ProviderProxmoxPVE},
 		},
 	}
 
-	m.CheckBackups(storageBackups, nil, nil, map[string]GuestLookup{}, map[string][]GuestLookup{})
+	m.CheckBackups(rollups, map[string]GuestLookup{}, map[string][]GuestLookup{})
 
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -1488,24 +1523,32 @@ func TestCheckBackupsIgnoresVMIDs(t *testing.T) {
 	m.mu.Unlock()
 
 	now := time.Now()
-	storageBackups := []models.StorageBackup{
+	rollups := []recovery.ProtectionRollup{
 		{
-			ID:       "inst-node-101-backup",
-			Storage:  "local",
-			Node:     "node",
-			Instance: "inst",
-			Type:     "qemu",
-			VMID:     101,
-			Time:     now.Add(-3 * 24 * time.Hour),
+			RollupID: "res:vm:proxmox:inst:node:101",
+			SubjectRef: &recovery.ExternalRef{
+				Type:      "proxmox-vm",
+				Namespace: "inst",
+				Name:      "ignored-vm",
+				ID:        "inst:node:101",
+				Class:     "node",
+			},
+			LastSuccessAt: ptrTime(now.Add(-3 * 24 * time.Hour)),
+			LastOutcome:   recovery.OutcomeSuccess,
+			Providers:     []recovery.Provider{recovery.ProviderProxmoxPVE},
 		},
 		{
-			ID:       "inst-node-200-backup",
-			Storage:  "local",
-			Node:     "node",
-			Instance: "inst",
-			Type:     "qemu",
-			VMID:     200,
-			Time:     now.Add(-3 * 24 * time.Hour),
+			RollupID: "res:vm:proxmox:inst:node:200",
+			SubjectRef: &recovery.ExternalRef{
+				Type:      "proxmox-vm",
+				Namespace: "inst",
+				Name:      "allowed-vm",
+				ID:        "inst:node:200",
+				Class:     "node",
+			},
+			LastSuccessAt: ptrTime(now.Add(-3 * 24 * time.Hour)),
+			LastOutcome:   recovery.OutcomeSuccess,
+			Providers:     []recovery.Provider{recovery.ProviderProxmoxPVE},
 		},
 	}
 
@@ -1520,7 +1563,7 @@ func TestCheckBackupsIgnoresVMIDs(t *testing.T) {
 		"200": {guestsByKey[keyAllowed]},
 	}
 
-	m.CheckBackups(storageBackups, nil, nil, guestsByKey, guestsByVMID)
+	m.CheckBackups(rollups, guestsByKey, guestsByVMID)
 
 	m.mu.RLock()
 	_, ignoredExists := m.activeAlerts["backup-age-"+sanitizeAlertKey(keyIgnored)]

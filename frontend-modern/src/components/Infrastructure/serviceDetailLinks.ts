@@ -1,5 +1,5 @@
 import type { Resource } from '@/types/resource';
-import { buildBackupsPath, PMG_THRESHOLDS_PATH } from '@/routing/resourceLinks';
+import { buildRecoveryPath, PMG_THRESHOLDS_PATH } from '@/routing/resourceLinks';
 
 export type ServiceDetailLink = {
   href: string;
@@ -12,10 +12,10 @@ export const buildServiceDetailLinks = (resource: Resource): ServiceDetailLink[]
   if (resource.type === 'pbs') {
     return [
       {
-        href: buildBackupsPath({ source: 'pbs', backupType: 'remote' }),
-        label: 'Open in Backups',
-        compactLabel: 'Backups',
-        ariaLabel: `Open PBS backups for ${resource.displayName || resource.name}`,
+        href: buildRecoveryPath({ provider: 'proxmox-pbs', mode: 'remote' }),
+        label: 'Open in Recovery',
+        compactLabel: 'Recovery',
+        ariaLabel: `Open PBS backups in Recovery for ${resource.displayName || resource.name}`,
       },
     ];
   }

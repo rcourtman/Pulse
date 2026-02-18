@@ -2,6 +2,7 @@ export const WORKLOADS_QUERY_PARAMS = {
   type: 'type',
   runtime: 'runtime',
   context: 'context',
+  namespace: 'namespace',
   host: 'host',
   resource: 'resource',
 } as const;
@@ -11,6 +12,10 @@ export const PMG_THRESHOLDS_PATH = '/alerts/thresholds/mail-gateway';
 export const DASHBOARD_PATH = '/dashboard';
 export const ALERTS_OVERVIEW_PATH = '/alerts/overview';
 export const AI_PATROL_PATH = '/ai';
+// Canonical "Recovery" surface (was historically called Backups).
+export const RECOVERY_PATH = '/recovery';
+// Compatibility alias for old bookmarks and the v5/v6 "Backups" naming.
+export const BACKUPS_LEGACY_PATH = '/backups';
 
 export const INFRASTRUCTURE_QUERY_PARAMS = {
   source: 'source',
@@ -34,7 +39,7 @@ export const STORAGE_QUERY_PARAMS = {
   order: 'order',
 } as const;
 
-export const BACKUPS_QUERY_PARAMS = {
+export const RECOVERY_QUERY_PARAMS = {
   view: 'view',
   rollupId: 'rollupId',
   provider: 'provider',
@@ -48,12 +53,17 @@ export const BACKUPS_QUERY_PARAMS = {
   query: 'q',
 } as const;
 
+// Backwards-compat for the historic naming.
+// TODO: remove once callers have migrated to RECOVERY_QUERY_PARAMS.
+export const BACKUPS_QUERY_PARAMS = RECOVERY_QUERY_PARAMS;
+
 const normalizeQueryValue = (value: string | null | undefined): string => (value || '').trim();
 
 type WorkloadsLinkOptions = {
   type?: string | null;
   runtime?: string | null;
   context?: string | null;
+  namespace?: string | null;
   host?: string | null;
   resource?: string | null;
 };
@@ -76,7 +86,7 @@ type StorageLinkOptions = {
   order?: string | null;
 };
 
-type BackupsLinkOptions = {
+type RecoveryLinkOptions = {
   view?: 'events' | 'protected' | null;
   rollupId?: string | null;
   provider?: string | null;
@@ -90,12 +100,17 @@ type BackupsLinkOptions = {
   query?: string | null;
 };
 
+// Backwards-compat for the historic naming.
+// TODO: remove once callers have migrated to RecoveryLinkOptions.
+type BackupsLinkOptions = RecoveryLinkOptions;
+
 export const parseWorkloadsLinkSearch = (search: string) => {
   const params = new URLSearchParams(search);
   return {
     type: normalizeQueryValue(params.get(WORKLOADS_QUERY_PARAMS.type)),
     runtime: normalizeQueryValue(params.get(WORKLOADS_QUERY_PARAMS.runtime)),
     context: normalizeQueryValue(params.get(WORKLOADS_QUERY_PARAMS.context)),
+    namespace: normalizeQueryValue(params.get(WORKLOADS_QUERY_PARAMS.namespace)),
     host: normalizeQueryValue(params.get(WORKLOADS_QUERY_PARAMS.host)),
     resource: normalizeQueryValue(params.get(WORKLOADS_QUERY_PARAMS.resource)),
   };
@@ -106,11 +121,13 @@ export const buildWorkloadsPath = (options: WorkloadsLinkOptions = {}): string =
   const type = normalizeQueryValue(options.type);
   const runtime = normalizeQueryValue(options.runtime);
   const context = normalizeQueryValue(options.context);
+  const namespace = normalizeQueryValue(options.namespace);
   const host = normalizeQueryValue(options.host);
   const resource = normalizeQueryValue(options.resource);
   if (type) params.set(WORKLOADS_QUERY_PARAMS.type, type);
   if (runtime) params.set(WORKLOADS_QUERY_PARAMS.runtime, runtime);
   if (context) params.set(WORKLOADS_QUERY_PARAMS.context, context);
+  if (namespace) params.set(WORKLOADS_QUERY_PARAMS.namespace, namespace);
   if (host) params.set(WORKLOADS_QUERY_PARAMS.host, host);
   if (resource) params.set(WORKLOADS_QUERY_PARAMS.resource, resource);
   const query = params.toString();
@@ -185,25 +202,29 @@ export const buildStoragePath = (options: StorageLinkOptions = {}): string => {
   return serialized ? `/storage?${serialized}` : '/storage';
 };
 
-export const parseBackupsLinkSearch = (search: string) => {
+export const parseRecoveryLinkSearch = (search: string) => {
   const params = new URLSearchParams(search);
 
   return {
-    view: normalizeQueryValue(params.get(BACKUPS_QUERY_PARAMS.view)),
-    rollupId: normalizeQueryValue(params.get(BACKUPS_QUERY_PARAMS.rollupId)),
-    provider: normalizeQueryValue(params.get(BACKUPS_QUERY_PARAMS.provider)),
-    cluster: normalizeQueryValue(params.get(BACKUPS_QUERY_PARAMS.cluster)),
-    namespace: normalizeQueryValue(params.get(BACKUPS_QUERY_PARAMS.namespace)),
-    mode: normalizeQueryValue(params.get(BACKUPS_QUERY_PARAMS.mode)),
-    scope: normalizeQueryValue(params.get(BACKUPS_QUERY_PARAMS.scope)),
-    status: normalizeQueryValue(params.get(BACKUPS_QUERY_PARAMS.status)),
-    verification: normalizeQueryValue(params.get(BACKUPS_QUERY_PARAMS.verification)),
-    node: normalizeQueryValue(params.get(BACKUPS_QUERY_PARAMS.node)),
-    query: normalizeQueryValue(params.get(BACKUPS_QUERY_PARAMS.query)),
+    view: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.view)),
+    rollupId: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.rollupId)),
+    provider: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.provider)),
+    cluster: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.cluster)),
+    namespace: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.namespace)),
+    mode: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.mode)),
+    scope: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.scope)),
+    status: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.status)),
+    verification: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.verification)),
+    node: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.node)),
+    query: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.query)),
   };
 };
 
-export const buildBackupsPath = (options: BackupsLinkOptions = {}): string => {
+// Backwards-compat for the historic naming.
+// TODO: remove once callers have migrated to parseRecoveryLinkSearch.
+export const parseBackupsLinkSearch = parseRecoveryLinkSearch;
+
+export const buildRecoveryPath = (options: RecoveryLinkOptions = {}): string => {
   const params = new URLSearchParams();
   const view = normalizeQueryValue(options.view);
   const rollupId = normalizeQueryValue(options.rollupId);
@@ -217,18 +238,22 @@ export const buildBackupsPath = (options: BackupsLinkOptions = {}): string => {
   const node = normalizeQueryValue(options.node);
   const query = normalizeQueryValue(options.query);
 
-  if (view) params.set(BACKUPS_QUERY_PARAMS.view, view);
-  if (rollupId) params.set(BACKUPS_QUERY_PARAMS.rollupId, rollupId);
-  if (provider) params.set(BACKUPS_QUERY_PARAMS.provider, provider);
-  if (cluster) params.set(BACKUPS_QUERY_PARAMS.cluster, cluster);
-  if (namespace) params.set(BACKUPS_QUERY_PARAMS.namespace, namespace);
-  if (mode) params.set(BACKUPS_QUERY_PARAMS.mode, mode);
-  if (scope) params.set(BACKUPS_QUERY_PARAMS.scope, scope);
-  if (status) params.set(BACKUPS_QUERY_PARAMS.status, status);
-  if (verification) params.set(BACKUPS_QUERY_PARAMS.verification, verification);
-  if (node) params.set(BACKUPS_QUERY_PARAMS.node, node);
-  if (query) params.set(BACKUPS_QUERY_PARAMS.query, query);
+  if (view) params.set(RECOVERY_QUERY_PARAMS.view, view);
+  if (rollupId) params.set(RECOVERY_QUERY_PARAMS.rollupId, rollupId);
+  if (provider) params.set(RECOVERY_QUERY_PARAMS.provider, provider);
+  if (cluster) params.set(RECOVERY_QUERY_PARAMS.cluster, cluster);
+  if (namespace) params.set(RECOVERY_QUERY_PARAMS.namespace, namespace);
+  if (mode) params.set(RECOVERY_QUERY_PARAMS.mode, mode);
+  if (scope) params.set(RECOVERY_QUERY_PARAMS.scope, scope);
+  if (status) params.set(RECOVERY_QUERY_PARAMS.status, status);
+  if (verification) params.set(RECOVERY_QUERY_PARAMS.verification, verification);
+  if (node) params.set(RECOVERY_QUERY_PARAMS.node, node);
+  if (query) params.set(RECOVERY_QUERY_PARAMS.query, query);
 
   const serialized = params.toString();
-  return serialized ? `/backups?${serialized}` : '/backups';
+  return serialized ? `${RECOVERY_PATH}?${serialized}` : RECOVERY_PATH;
 };
+
+// Backwards-compat for the historic naming.
+// TODO: remove once callers have migrated to buildRecoveryPath.
+export const buildBackupsPath = (options: BackupsLinkOptions = {}): string => buildRecoveryPath(options);

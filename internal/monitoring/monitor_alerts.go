@@ -1,6 +1,8 @@
 package monitoring
 
 import (
+	"context"
+
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
@@ -198,19 +200,12 @@ func (m *Monitor) checkMockAlerts() {
 	m.alertManager.CleanupAlertsForNodes(existingNodes)
 
 	guestsByKey, guestsByVMID := buildGuestLookups(state, m.guestMetadataStore)
-	pveStorage := state.Backups.PVE.StorageBackups
-	if len(pveStorage) == 0 && len(state.PVEBackups.StorageBackups) > 0 {
-		pveStorage = state.PVEBackups.StorageBackups
+	rollups, err := m.listBackupRollupsForAlerts(context.Background())
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to list recovery rollups for backup alerts")
+	} else {
+		m.alertManager.CheckBackups(rollups, guestsByKey, guestsByVMID)
 	}
-	pbsBackups := state.Backups.PBS
-	if len(pbsBackups) == 0 && len(state.PBSBackups) > 0 {
-		pbsBackups = state.PBSBackups
-	}
-	pmgBackups := state.Backups.PMG
-	if len(pmgBackups) == 0 && len(state.PMGBackups) > 0 {
-		pmgBackups = state.PMGBackups
-	}
-	m.alertManager.CheckBackups(pveStorage, pbsBackups, pmgBackups, guestsByKey, guestsByVMID)
 
 	// Limit how many guests we check per cycle to prevent blocking with large datasets
 	const maxGuestsPerCycle = 50

@@ -2,12 +2,11 @@ import { Show, For, createMemo, createSignal, createEffect } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
 import { Dialog } from '@/components/shared/Dialog';
 import {
-  buildBackupsPath,
+  buildRecoveryPath,
   buildInfrastructurePath,
   buildStoragePath,
   buildWorkloadsPath,
 } from '@/routing/resourceLinks';
-import { navigationMode } from '@/stores/navigationMode';
 
 interface CommandPaletteModalProps {
   isOpen: boolean;
@@ -29,13 +28,15 @@ export function CommandPaletteModal(props: CommandPaletteModalProps) {
   const infrastructurePath = buildInfrastructurePath();
   const workloadsPath = buildWorkloadsPath();
   const kubernetesWorkloadsPath = buildWorkloadsPath({ type: 'k8s' });
+  const lxcWorkloadsPath = buildWorkloadsPath({ type: 'lxc' });
   const storagePath = buildStoragePath();
-  const backupsPath = buildBackupsPath();
+  const recoveryPath = buildRecoveryPath();
   const classicProxmoxPath = buildInfrastructurePath({ source: 'proxmox' });
   const classicHostsPath = buildInfrastructurePath({ source: 'agent' });
   const classicDockerHostsPath = buildInfrastructurePath({ source: 'docker' });
   const classicServicesPath = buildInfrastructurePath({ source: 'pmg' });
   const classicContainersPath = buildWorkloadsPath({ type: 'docker' });
+  const classicLxcPath = lxcWorkloadsPath;
 
   let inputRef: HTMLInputElement | undefined;
 
@@ -73,12 +74,12 @@ export function CommandPaletteModal(props: CommandPaletteModalProps) {
         action: () => navigate(storagePath),
       },
       {
-        id: 'nav-backups',
-        label: 'Go to Backups',
-        description: backupsPath,
+        id: 'nav-recovery',
+        label: 'Go to Recovery',
+        description: recoveryPath,
         shortcut: 'g b',
-        keywords: ['replication'],
-        action: () => navigate(backupsPath),
+        keywords: ['recovery', 'backups', 'snapshots', 'replication', 'restore'],
+        action: () => navigate(recoveryPath),
       },
       {
         id: 'nav-alerts',
@@ -105,57 +106,61 @@ export function CommandPaletteModal(props: CommandPaletteModalProps) {
       },
     ];
 
-    if (navigationMode() !== 'classic') {
-      return base;
-    }
-
     return [
       {
         id: 'nav-classic-proxmox',
-        label: 'Go to Proxmox (Classic)',
+        label: 'Go to Proxmox (v5 entry point)',
         description: classicProxmoxPath,
         shortcut: 'g p',
-        keywords: ['proxmox', 'pve', 'classic'],
+        keywords: ['proxmox', 'pve', 'legacy', 'v5', 'migration', 'entry'],
         action: () => navigate(classicProxmoxPath),
       },
       {
         id: 'nav-classic-hosts',
-        label: 'Go to Hosts (Classic)',
+        label: 'Go to Hosts (v5 entry point)',
         description: classicHostsPath,
         shortcut: 'g h',
-        keywords: ['hosts', 'agent', 'classic'],
+        keywords: ['hosts', 'agent', 'legacy', 'v5', 'migration', 'entry'],
         action: () => navigate(classicHostsPath),
       },
       {
         id: 'nav-classic-docker-hosts',
-        label: 'Go to Docker Hosts (Classic)',
+        label: 'Go to Container Hosts (v5 entry point)',
         description: classicDockerHostsPath,
         shortcut: 'g d',
-        keywords: ['docker', 'hosts', 'classic'],
+        keywords: ['containers', 'docker', 'podman', 'hosts', 'legacy', 'v5', 'migration', 'entry'],
         action: () => navigate(classicDockerHostsPath),
       },
       {
         id: 'nav-classic-services',
-        label: 'Go to Services (Classic)',
+        label: 'Go to Services (v5 entry point)',
         description: classicServicesPath,
         shortcut: 'g v',
-        keywords: ['services', 'pmg', 'mail', 'classic'],
+        keywords: ['services', 'pmg', 'mail', 'legacy', 'v5', 'migration', 'entry'],
         action: () => navigate(classicServicesPath),
       },
       {
         id: 'nav-classic-containers',
-        label: 'Go to Containers (Classic)',
+        label: 'Go to Containers (v5 entry point)',
         description: classicContainersPath,
         shortcut: 'g c',
-        keywords: ['containers', 'docker', 'workloads', 'classic'],
+        keywords: ['containers', 'docker', 'podman', 'workloads', 'legacy', 'v5', 'migration', 'entry'],
         action: () => navigate(classicContainersPath),
       },
       {
+        id: 'nav-classic-lxc',
+        label: 'Go to LXC Containers (v5 entry point)',
+        description: classicLxcPath,
+        shortcut: 'g l',
+        keywords: ['lxc', 'containers', 'proxmox', 'workloads', 'legacy', 'v5', 'migration', 'entry'],
+        action: () => navigate(classicLxcPath),
+      },
+      {
         id: 'nav-classic-kubernetes',
-        label: 'Go to Kubernetes (Classic)',
+        label: 'Go to Kubernetes (v5 entry point)',
         description: kubernetesWorkloadsPath,
         shortcut: 'g k',
-        keywords: ['k8s', 'kubernetes', 'pods', 'classic'],
+        keywords: ['k8s', 'kubernetes', 'pods', 'legacy', 'v5', 'migration', 'entry'],
         action: () => navigate(kubernetesWorkloadsPath),
       },
       ...base,

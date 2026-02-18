@@ -13,7 +13,6 @@ func TestStateFrontendStripLegacyArrays(t *testing.T) {
 		Storage:            []StorageFrontend{{ID: "s1"}},
 		PBS:                []PBSInstance{{Name: "pbs-1"}},
 		PMG:                []PMGInstance{{Name: "pmg-1"}},
-		Backups:            Backups{PVE: PVEBackups{}},
 	}
 
 	state.StripLegacyArrays()

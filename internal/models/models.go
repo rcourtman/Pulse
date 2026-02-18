@@ -976,9 +976,28 @@ type PMGInstance struct {
 	MailCount        []PMGMailCountPoint  `json:"mailCount,omitempty"`
 	SpamDistribution []PMGSpamBucket      `json:"spamDistribution,omitempty"`
 	Quarantine       *PMGQuarantineTotals `json:"quarantine,omitempty"`
+	RelayDomains     []PMGRelayDomain     `json:"relayDomains,omitempty"`
+	DomainStats      []PMGDomainStat      `json:"domainStats,omitempty"`
+	DomainStatsAsOf  time.Time            `json:"domainStatsAsOf,omitempty"`
 	ConnectionHealth string               `json:"connectionHealth"`
 	LastSeen         time.Time            `json:"lastSeen"`
 	LastUpdated      time.Time            `json:"lastUpdated"`
+}
+
+// PMGDomainStat describes mail statistics for a domain over a fixed time window
+// (currently: the last 24 hours at poll time).
+type PMGDomainStat struct {
+	Domain     string  `json:"domain"`
+	MailCount  float64 `json:"mailCount"`
+	SpamCount  float64 `json:"spamCount"`
+	VirusCount float64 `json:"virusCount"`
+	Bytes      float64 `json:"bytes,omitempty"`
+}
+
+// PMGRelayDomain represents a relay domain configured in Proxmox Mail Gateway.
+type PMGRelayDomain struct {
+	Domain  string `json:"domain"`
+	Comment string `json:"comment,omitempty"`
 }
 
 // PMGNodeStatus represents the status of a PMG cluster node

@@ -2,11 +2,12 @@ import { describe, expect, it } from 'vitest';
 import {
   BACKUPS_QUERY_PARAMS,
   PMG_THRESHOLDS_PATH,
-  buildBackupsPath,
+  RECOVERY_QUERY_PARAMS,
+  buildRecoveryPath,
   buildInfrastructurePath,
   buildStoragePath,
   buildWorkloadsPath,
-  parseBackupsLinkSearch,
+  parseRecoveryLinkSearch,
   INFRASTRUCTURE_QUERY_PARAMS,
   parseStorageLinkSearch,
   parseInfrastructureLinkSearch,
@@ -30,6 +31,7 @@ describe('resource link routing contract', () => {
       type: 'k8s',
       runtime: '',
       context: 'cluster-a',
+      namespace: '',
       host: 'worker-1',
       resource: 'cluster-a:worker-1:101',
     });
@@ -37,6 +39,7 @@ describe('resource link routing contract', () => {
     expect(WORKLOADS_QUERY_PARAMS.type).toBe('type');
     expect(WORKLOADS_QUERY_PARAMS.runtime).toBe('runtime');
     expect(WORKLOADS_QUERY_PARAMS.context).toBe('context');
+    expect(WORKLOADS_QUERY_PARAMS.namespace).toBe('namespace');
     expect(WORKLOADS_QUERY_PARAMS.host).toBe('host');
     expect(WORKLOADS_QUERY_PARAMS.resource).toBe('resource');
   });
@@ -118,8 +121,8 @@ describe('resource link routing contract', () => {
     });
   });
 
-  it('builds and parses backups query params', () => {
-    const href = buildBackupsPath({
+  it('builds and parses recovery query params', () => {
+    const href = buildRecoveryPath({
       provider: 'proxmox-pbs',
       cluster: 'cluster-main',
       namespace: 'tenant-a',
@@ -131,7 +134,7 @@ describe('resource link routing contract', () => {
       query: 'node:pve1',
     });
     const url = new URL(href, 'http://localhost');
-    expect(url.pathname).toBe('/backups');
+    expect(url.pathname).toBe('/recovery');
     expect(url.searchParams.get('provider')).toBe('proxmox-pbs');
     expect(url.searchParams.get('cluster')).toBe('cluster-main');
     expect(url.searchParams.get('namespace')).toBe('tenant-a');
@@ -142,7 +145,7 @@ describe('resource link routing contract', () => {
     expect(url.searchParams.get('node')).toBe('cluster-main-pve1');
     expect(url.searchParams.get('q')).toBe('node:pve1');
 
-    const parsed = parseBackupsLinkSearch(href.slice('/backups'.length));
+    const parsed = parseRecoveryLinkSearch(href.slice('/recovery'.length));
     expect(parsed).toEqual({
       view: '',
       rollupId: '',
@@ -157,13 +160,16 @@ describe('resource link routing contract', () => {
       query: 'node:pve1',
     });
 
-    expect(BACKUPS_QUERY_PARAMS.provider).toBe('provider');
-    expect(BACKUPS_QUERY_PARAMS.cluster).toBe('cluster');
-    expect(BACKUPS_QUERY_PARAMS.namespace).toBe('namespace');
-    expect(BACKUPS_QUERY_PARAMS.mode).toBe('mode');
-    expect(BACKUPS_QUERY_PARAMS.scope).toBe('scope');
-    expect(BACKUPS_QUERY_PARAMS.verification).toBe('verification');
-    expect(BACKUPS_QUERY_PARAMS.query).toBe('q');
+    expect(RECOVERY_QUERY_PARAMS.provider).toBe('provider');
+    expect(RECOVERY_QUERY_PARAMS.cluster).toBe('cluster');
+    expect(RECOVERY_QUERY_PARAMS.namespace).toBe('namespace');
+    expect(RECOVERY_QUERY_PARAMS.mode).toBe('mode');
+    expect(RECOVERY_QUERY_PARAMS.scope).toBe('scope');
+    expect(RECOVERY_QUERY_PARAMS.verification).toBe('verification');
+    expect(RECOVERY_QUERY_PARAMS.query).toBe('q');
+
+    // Backwards-compat: historic exports are aliases for the canonical recovery contract.
+    expect(BACKUPS_QUERY_PARAMS).toBe(RECOVERY_QUERY_PARAMS);
     expect(PMG_THRESHOLDS_PATH).toBe('/alerts/thresholds/mail-gateway');
   });
 

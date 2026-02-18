@@ -618,7 +618,7 @@ const Settings: Component<SettingsProps> = (props) => {
       onInstallUpdate: handleInstallUpdate,
       isInstalling: isInstallingUpdate,
     }),
-    getBackupsPanelProps: () => ({
+    getRecoveryPanelProps: () => ({
       backupPollingEnabled,
       setBackupPollingEnabled,
       backupPollingInterval,
@@ -718,7 +718,7 @@ const Settings: Component<SettingsProps> = (props) => {
               activeTab() === 'system-general' ||
               activeTab() === 'system-network' ||
               activeTab() === 'system-updates' ||
-              activeTab() === 'system-backups')
+              activeTab() === 'system-recovery')
           }
         >
           <div class="bg-amber-50/70 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/60 rounded-lg shadow-sm p-4">

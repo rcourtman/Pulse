@@ -108,6 +108,7 @@ func (h *ResourceHandlers) HandleListResources(w http.ResponseWriter, r *http.Re
 	paged, meta := paginate(resources, filters.page, filters.limit)
 	attachDiscoveryTargets(paged)
 	attachMetricsTargets(paged, registry)
+	pruneResourcesForListResponse(paged)
 
 	response := ResourcesResponse{
 		Data:         paged,
@@ -117,6 +118,27 @@ func (h *ResourceHandlers) HandleListResources(w http.ResponseWriter, r *http.Re
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
+}
+
+// pruneResourcesForListResponse removes heavy, platform-specific fields that would bloat
+// the list response. Detail drawers can fetch full payloads via GET /api/resources/{id}.
+func pruneResourcesForListResponse(resources []unified.Resource) {
+	for i := range resources {
+		pruneResourceForListResponse(&resources[i])
+	}
+}
+
+func pruneResourceForListResponse(resource *unified.Resource) {
+	if resource == nil {
+		return
+	}
+
+	// PMG domain stats can be very large; keep summary-only in list.
+	if resource.PMG != nil {
+		resource.PMG.RelayDomains = nil
+		resource.PMG.DomainStats = nil
+		resource.PMG.DomainStatsAsOf = time.Time{}
+	}
 }
 
 // HandleGetResource handles GET /api/resources/{id}.
@@ -609,6 +631,7 @@ type listFilters struct {
 	statuses  map[unified.ResourceStatus]struct{}
 	parent    string
 	cluster   string
+	namespace string
 	query     string
 	tags      map[string]struct{}
 	page      int
@@ -624,6 +647,7 @@ func parseListFilters(r *http.Request) listFilters {
 		statuses:  parseStatuses(r.URL.Query().Get("status")),
 		parent:    strings.TrimSpace(r.URL.Query().Get("parent")),
 		cluster:   strings.TrimSpace(r.URL.Query().Get("cluster")),
+		namespace: strings.TrimSpace(r.URL.Query().Get("namespace")),
 		query:     strings.TrimSpace(strings.ToLower(r.URL.Query().Get("q"))),
 		tags:      parseTags(r.URL.Query().Get("tags")),
 		page:      parseIntDefault(r.URL.Query().Get("page"), 1),
@@ -686,7 +710,24 @@ func applyFilters(resources []unified.Resource, filters listFilters) []unified.R
 			if r.Proxmox != nil {
 				proxmoxCluster = strings.ToLower(r.Proxmox.ClusterName)
 			}
-			if identityCluster != cluster && proxmoxCluster != cluster {
+			dockerSwarmClusterName := ""
+			dockerSwarmClusterID := ""
+			if r.Docker != nil && r.Docker.Swarm != nil {
+				dockerSwarmClusterName = strings.ToLower(strings.TrimSpace(r.Docker.Swarm.ClusterName))
+				dockerSwarmClusterID = strings.ToLower(strings.TrimSpace(r.Docker.Swarm.ClusterID))
+			}
+
+			if identityCluster != cluster && proxmoxCluster != cluster && dockerSwarmClusterName != cluster && dockerSwarmClusterID != cluster {
+				continue
+			}
+		}
+		if filters.namespace != "" {
+			if r.Kubernetes == nil {
+				continue
+			}
+			want := strings.ToLower(filters.namespace)
+			got := strings.ToLower(strings.TrimSpace(r.Kubernetes.Namespace))
+			if got != want {
 				continue
 			}
 		}
@@ -772,6 +813,8 @@ func parseResourceTypes(raw string) map[unified.ResourceType]struct{} {
 			result[unified.ResourceTypeLXC] = struct{}{}
 		case "container", "containers", "docker_container", "docker-container":
 			result[unified.ResourceTypeContainer] = struct{}{}
+		case "docker_service", "docker-service", "swarm_service", "swarm-service", "service", "services":
+			result[unified.ResourceTypeDockerService] = struct{}{}
 		case "pod", "pods", "k8s_pod", "k8s-pod", "kubernetes_pod", "kubernetes-pod":
 			result[unified.ResourceTypePod] = struct{}{}
 		case "k8s_cluster", "k8s-cluster", "kubernetes_cluster", "kubernetes-cluster":

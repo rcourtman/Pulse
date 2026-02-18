@@ -4,7 +4,7 @@ This guide covers practical upgrade steps for existing Pulse installs moving to 
 
 ## Before You Upgrade
 
-- Create an encrypted config backup: **Settings → System → Backups → Create Backup**
+- Create an encrypted config backup: **Settings → System → Recovery → Create Backup** (older versions labeled this **Backups**)
 - Confirm you can access the host/container console (for rollback and bootstrap token retrieval)
 - If you have any external integrations or scripts: review the **API Changes** section below
 

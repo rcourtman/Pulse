@@ -42,6 +42,13 @@ curl -fsSL http://<pulse-ip>:7655/install.sh | \
   bash -s -- --url http://<pulse-ip>:7655 --token <api-token>
 ```
 
+### TrueNAS SCALE/CORE
+TrueNAS SCALE and TrueNAS CORE are both supported. The installer auto-detects the platform and configures the appropriate service manager (systemd for SCALE, rc.d for CORE).
+```bash
+curl -fsSL http://<pulse-ip>:7655/install.sh | \
+  bash -s -- --url http://<pulse-ip>:7655 --token <api-token>
+```
+
 ## Features
 
 - **Host Metrics**: CPU, memory, disk, network I/O, temperatures
@@ -356,7 +363,7 @@ If your Docker Swarm cluster isn't being detected:
    LOG_LEVEL=debug journalctl -u pulse-agent -f
    ```
 
-### PVE Backups Not Showing
+### PVE Backups Not Showing (Recovery)
 
 If local PVE backups aren't appearing in Pulse after setting up via `--enable-proxmox`:
 

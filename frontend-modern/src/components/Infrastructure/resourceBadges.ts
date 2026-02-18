@@ -26,7 +26,7 @@ const sourceClasses: Record<SourceType, string> = {
 const unifiedSourceLabels: Record<UnifiedSource, string> = {
   proxmox: 'PVE',
   agent: 'Agent',
-  docker: 'Docker',
+  docker: 'Containers',
   pbs: 'PBS',
   pmg: 'PMG',
   kubernetes: 'K8s',
@@ -46,7 +46,7 @@ const unifiedSourceClasses: Record<UnifiedSource, string> = {
 const typeLabels: Partial<Record<ResourceType, string>> = {
   host: 'Host',
   node: 'Node',
-  'docker-host': 'Docker Host',
+  'docker-host': 'Container Host',
   pbs: 'PBS',
   pmg: 'PMG',
   'k8s-node': 'K8s Node',
@@ -98,4 +98,32 @@ export function getUnifiedSourceBadges(sources?: string[] | null): ResourceBadge
     classes: `${baseBadge} ${unifiedSourceClasses[source] ?? typeClasses}`,
     title: source,
   }));
+}
+
+export function getContainerRuntimeBadge(
+  platformType?: PlatformType,
+  platformData?: Record<string, unknown> | null,
+): ResourceBadge | null {
+  if (platformType !== 'docker' || !platformData) return null;
+
+  const docker = (platformData as { docker?: { runtime?: string } } | undefined)?.docker;
+  const raw = (docker?.runtime || '').trim();
+  if (!raw) return null;
+
+  const normalized = raw.toLowerCase();
+  const label =
+    normalized === 'podman' ? 'Podman' :
+    normalized === 'docker' ? 'Docker' :
+    raw;
+
+  const classes =
+    normalized === 'podman'
+      ? 'bg-zinc-100 text-zinc-700 dark:bg-zinc-900/30 dark:text-zinc-300'
+      : 'bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-300';
+
+  return {
+    label,
+    classes: `${baseBadge} ${classes}`,
+    title: `Runtime: ${label}`,
+  };
 }

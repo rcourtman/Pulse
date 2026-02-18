@@ -1,6 +1,10 @@
 package unifiedresources
 
-import "time"
+import (
+	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+)
 
 // Resource represents a unified resource aggregated across multiple data sources.
 type Resource struct {
@@ -64,6 +68,7 @@ const (
 	ResourceTypeVM            ResourceType = "vm"
 	ResourceTypeLXC           ResourceType = "lxc"
 	ResourceTypeContainer     ResourceType = "container"
+	ResourceTypeDockerService ResourceType = "docker-service"
 	ResourceTypeK8sCluster    ResourceType = "k8s-cluster"
 	ResourceTypeK8sNode       ResourceType = "k8s-node"
 	ResourceTypePod           ResourceType = "pod"
@@ -354,6 +359,22 @@ type DockerUpdateStatusMeta struct {
 	Error           string `json:"error,omitempty"`
 }
 
+// DockerServiceUpdateMeta captures service update progress.
+type DockerServiceUpdateMeta struct {
+	State       string     `json:"state,omitempty"`
+	Message     string     `json:"message,omitempty"`
+	CompletedAt *time.Time `json:"completedAt,omitempty"`
+}
+
+// DockerServicePortMeta describes a published service port.
+type DockerServicePortMeta struct {
+	Name          string `json:"name,omitempty"`
+	Protocol      string `json:"protocol,omitempty"`
+	TargetPort    uint32 `json:"targetPort,omitempty"`
+	PublishedPort uint32 `json:"publishedPort,omitempty"`
+	PublishMode   string `json:"publishMode,omitempty"`
+}
+
 // DockerData contains Docker host- and container-specific data.
 type DockerData struct {
 	HostSourceID   string   `json:"hostSourceId,omitempty"` // raw model ID for the docker host
@@ -370,6 +391,12 @@ type DockerData struct {
 	AgentVersion   string   `json:"agentVersion,omitempty"`
 	UptimeSeconds  int64    `json:"uptimeSeconds,omitempty"`
 
+	// Host-level summary fields (populated when Resource.Type == ResourceTypeHost and Docker != nil)
+	ContainerCount        int                             `json:"containerCount,omitempty"`
+	UpdatesAvailableCount int                             `json:"updatesAvailableCount,omitempty"`
+	UpdatesLastCheckedAt  *time.Time                      `json:"updatesLastCheckedAt,omitempty"`
+	Command               *models.DockerHostCommandStatus `json:"command,omitempty"`
+
 	// Container-specific fields (populated when Resource.Type == ResourceTypeContainer)
 	ContainerState string                  `json:"containerState,omitempty"`
 	Health         string                  `json:"health,omitempty"`
@@ -380,6 +407,16 @@ type DockerData struct {
 	Networks       []DockerNetworkMeta     `json:"networks,omitempty"`
 	Mounts         []DockerMountMeta       `json:"mounts,omitempty"`
 	UpdateStatus   *DockerUpdateStatusMeta `json:"updateStatus,omitempty"`
+
+	// Service-specific fields (populated when Resource.Type == ResourceTypeDockerService)
+	ServiceID      string                 `json:"serviceId,omitempty"`
+	Stack          string                 `json:"stack,omitempty"`
+	Mode           string                 `json:"mode,omitempty"`
+	DesiredTasks   int                    `json:"desiredTasks,omitempty"`
+	RunningTasks   int                    `json:"runningTasks,omitempty"`
+	CompletedTasks int                    `json:"completedTasks,omitempty"`
+	ServiceUpdate  *DockerServiceUpdateMeta `json:"serviceUpdate,omitempty"`
+	EndpointPorts  []DockerServicePortMeta  `json:"endpointPorts,omitempty"`
 
 	Swarm             *DockerSwarmInfo   `json:"swarm,omitempty"`
 	NetworkInterfaces []NetworkInterface `json:"networkInterfaces,omitempty"`
@@ -467,6 +504,22 @@ type PMGSpamBucketMeta struct {
 	Count  float64 `json:"count"`
 }
 
+// PMGRelayDomainMeta represents a relay domain configured in Proxmox Mail Gateway.
+type PMGRelayDomainMeta struct {
+	Domain  string `json:"domain"`
+	Comment string `json:"comment,omitempty"`
+}
+
+// PMGDomainStatMeta describes mail statistics for a domain over a fixed time window
+// (currently: the last 24 hours at poll time).
+type PMGDomainStatMeta struct {
+	Domain     string  `json:"domain"`
+	MailCount  float64 `json:"mailCount"`
+	SpamCount  float64 `json:"spamCount"`
+	VirusCount float64 `json:"virusCount"`
+	Bytes      float64 `json:"bytes,omitempty"`
+}
+
 // PMGData contains Proxmox Mail Gateway data.
 type PMGData struct {
 	InstanceID       string    `json:"instanceId,omitempty"`
@@ -489,6 +542,9 @@ type PMGData struct {
 	MailStats        *PMGMailStatsMeta   `json:"mailStats,omitempty"`
 	Quarantine       *PMGQuarantineMeta  `json:"quarantine,omitempty"`
 	SpamDistribution []PMGSpamBucketMeta `json:"spamDistribution,omitempty"`
+	RelayDomains     []PMGRelayDomainMeta `json:"relayDomains,omitempty"`
+	DomainStats      []PMGDomainStatMeta  `json:"domainStats,omitempty"`
+	DomainStatsAsOf  time.Time            `json:"domainStatsAsOf,omitempty"`
 }
 
 // TrueNASData contains TrueNAS-specific metadata for system host resources.

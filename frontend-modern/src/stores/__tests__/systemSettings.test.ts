@@ -5,7 +5,6 @@ import {
   shouldDisableLocalUpgradeMetrics,
   shouldHideDockerUpdateActions,
   shouldReduceProUpsellNoise,
-  shouldShowClassicPlatformShortcuts,
   updateSystemSettingsFromResponse,
 } from '@/stores/systemSettings';
 
@@ -19,14 +18,12 @@ describe('systemSettings store', () => {
       autoUpdateEnabled: false,
       disableDockerUpdateActions: true,
       disableLegacyRouteRedirects: true,
-      showClassicPlatformShortcuts: false,
       reduceProUpsellNoise: true,
       disableLocalUpgradeMetrics: true,
     });
 
     expect(shouldHideDockerUpdateActions()).toBe(true);
     expect(shouldDisableLegacyRouteRedirects()).toBe(true);
-    expect(shouldShowClassicPlatformShortcuts()).toBe(false);
     expect(shouldReduceProUpsellNoise()).toBe(true);
     expect(shouldDisableLocalUpgradeMetrics()).toBe(true);
   });
@@ -36,7 +33,6 @@ describe('systemSettings store', () => {
       autoUpdateEnabled: false,
       disableDockerUpdateActions: true,
       disableLegacyRouteRedirects: true,
-      showClassicPlatformShortcuts: false,
       reduceProUpsellNoise: true,
       disableLocalUpgradeMetrics: true,
     });
@@ -44,7 +40,6 @@ describe('systemSettings store', () => {
     markSystemSettingsLoadedWithDefaults();
     expect(shouldHideDockerUpdateActions()).toBe(false);
     expect(shouldDisableLegacyRouteRedirects()).toBe(false);
-    expect(shouldShowClassicPlatformShortcuts()).toBe(true);
     expect(shouldReduceProUpsellNoise()).toBe(false);
     expect(shouldDisableLocalUpgradeMetrics()).toBe(false);
   });

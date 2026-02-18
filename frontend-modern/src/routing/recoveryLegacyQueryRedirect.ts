@@ -1,4 +1,4 @@
-import { buildBackupsPath } from './resourceLinks';
+import { buildRecoveryPath } from './resourceLinks';
 import { mergeRedirectQueryParams } from './navigation';
 
 const LEGACY_QUERY_KEYS = {
@@ -95,7 +95,7 @@ function buildRedirect(search: string): RedirectResult {
     // Also treat shorthand/legacy provider values as legacy (e.g. provider=pbs, provider=PVE).
     (rawProviderParam !== '' && normalizedProviderParam !== rawProviderParam.toLowerCase());
 
-  const base = buildBackupsPath({
+  const base = buildRecoveryPath({
     view: view === 'events' || view === 'protected' ? (view as 'events' | 'protected') : null,
     rollupId: normalize(incomingParams.get('rollupId')) || null,
     provider: provider || null,
@@ -124,9 +124,9 @@ function buildRedirect(search: string): RedirectResult {
   return { target: merged, didRewrite };
 }
 
-// Returns a canonical /backups URL if the incoming query contains any legacy Backups params.
-// This lets the rest of the app treat Backups URLs as "v6-native" only.
-export function getBackupsLegacyQueryRedirectTarget(search: string): string | null {
+// Returns a canonical /recovery URL if the incoming query contains any legacy Backups params.
+// This lets the rest of the app treat Recovery URLs as "v6-native" only.
+export function getRecoveryLegacyQueryRedirectTarget(search: string): string | null {
   const { target, didRewrite } = buildRedirect(search);
   return didRewrite ? target : null;
 }

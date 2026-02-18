@@ -4,7 +4,7 @@ This is a practical guide for upgrading an existing Pulse install to v5.
 
 ## Before You Upgrade
 
-- Create an encrypted config backup: **Settings → System → Backups → Create Backup**
+- Create an encrypted config backup: **Settings → System → Recovery → Create Backup** (older versions labeled this **Backups**)
 - Confirm you can access the host/container console (for rollback and bootstrap token retrieval)
 - Review the v5 release notes on GitHub before upgrading
 

@@ -262,7 +262,7 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
                       )}
                       {node.type === 'pve' && 'monitorBackups' in node && node.monitorBackups && (
                         <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
-                          Backups
+                          Recovery
                         </span>
                       )}
                       {node.type === 'pve' &&

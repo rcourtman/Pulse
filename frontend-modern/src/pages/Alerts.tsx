@@ -16,6 +16,7 @@ import { formField, formControl, formHelpText, labelClass, controlClass } from '
 import { ScrollableTable } from '@/components/shared/ScrollableTable';
 import { useWebSocket } from '@/App';
 import { useResources } from '@/hooks/useResources';
+import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { notificationStore } from '@/stores/notifications';
 import { eventBus } from '@/stores/events';
 import { showTooltip, hideTooltip } from '@/components/shared/Tooltip';
@@ -37,6 +38,7 @@ import History from 'lucide-solid/icons/history';
 import Gauge from 'lucide-solid/icons/gauge';
 import Send from 'lucide-solid/icons/send';
 import Calendar from 'lucide-solid/icons/calendar';
+import ListFilterIcon from 'lucide-solid/icons/list-filter';
 
 type AlertTab = 'overview' | 'thresholds' | 'destinations' | 'schedule' | 'history';
 
@@ -3201,10 +3203,6 @@ function ThresholdsTab(props: ThresholdsTabProps) {
       allResources={props.allResources}
       pbsInstances={props.state.pbs || []}
       pmgInstances={props.state.pmg || []}
-      backups={props.state.backups}
-      pveBackups={props.state.pveBackups}
-      pbsBackups={props.state.pbsBackups}
-      pmgBackups={props.state.pmgBackups}
       pmgThresholds={props.pmgThresholds}
       setPMGThresholds={props.setPMGThresholds}
       guestDefaults={props.guestDefaults()}
@@ -4561,6 +4559,14 @@ function HistoryTab(props: {
   const [expandedIncidents, setExpandedIncidents] = createSignal<Set<string>>(new Set());
   const [incidentNoteDrafts, setIncidentNoteDrafts] = createSignal<Record<string, string>>({});
   const [incidentNoteSaving, setIncidentNoteSaving] = createSignal<Set<string>>(new Set());
+  const { isMobile } = useBreakpoint();
+  const [filtersOpen, setFiltersOpen] = createSignal(false);
+  const activeFilterCount = createMemo(() => {
+    let count = 0;
+    if (timeFilter() !== '7d') count++;
+    if (severityFilter() !== 'all') count++;
+    return count;
+  });
   const MS_PER_HOUR = 60 * 60 * 1000;
   const userLocale =
     Intl.DateTimeFormat().resolvedOptions().locale ||
@@ -5540,45 +5546,65 @@ function HistoryTab(props: {
       </Card>
 
       {/* Filters */}
-      <div class="flex flex-wrap gap-2 mb-4">
-        <select
-          value={timeFilter()}
-          onChange={(e) => setTimeFilter(e.currentTarget.value as '24h' | '7d' | '30d' | 'all')}
-          class="w-full sm:w-auto px-3 py-2 text-sm border rounded-lg dark:bg-gray-700 dark:border-gray-600"
-        >
-          <option value="24h">Last 24h</option>
-          <option value="7d">Last 7d</option>
-          <option value="30d">Last 30d</option>
-          <option value="all">All Time</option>
-        </select>
-
-        <select
-          value={severityFilter()}
-          onChange={(e) => setSeverityFilter(e.currentTarget.value as 'warning' | 'critical' | 'all')}
-          class="w-full sm:w-auto px-3 py-2 text-sm border rounded-lg dark:bg-gray-700 dark:border-gray-600"
-        >
-          <option value="all">All Levels</option>
-          <option value="critical">Critical Only</option>
-          <option value="warning">Warning Only</option>
-        </select>
-
-        <div class="w-full sm:flex-1 sm:max-w-xs">
-          <input
-            ref={searchInputRef}
-            type="text"
-            placeholder="Search alerts..."
-            value={searchTerm()}
-            onInput={(e) => setSearchTerm(e.currentTarget.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') {
-                setSearchTerm('');
-                e.currentTarget.blur();
-              }
-            }}
-            class="w-full px-3 py-2 text-sm border rounded-lg dark:bg-gray-700 dark:border-gray-600 
-                   dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500"
-          />
+      <div class="flex flex-col gap-2 mb-4">
+        <div class="flex items-center gap-2">
+          <div class="flex-1">
+            <input
+              ref={searchInputRef}
+              type="text"
+              placeholder="Search alerts..."
+              value={searchTerm()}
+              onInput={(e) => setSearchTerm(e.currentTarget.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  setSearchTerm('');
+                  e.currentTarget.blur();
+                }
+              }}
+              class="w-full px-3 py-2 text-sm border rounded-lg dark:bg-gray-700 dark:border-gray-600 
+                     dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500"
+            />
+          </div>
+          <Show when={isMobile()}>
+            <button
+              type="button"
+              onClick={() => setFiltersOpen((o) => !o)}
+              class="flex items-center gap-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400"
+            >
+              <ListFilterIcon class="w-3.5 h-3.5" />
+              Filters
+              <Show when={activeFilterCount() > 0}>
+                <span class="ml-0.5 rounded-full bg-blue-500 px-1.5 py-0.5 text-[10px] font-semibold text-white leading-none">
+                  {activeFilterCount()}
+                </span>
+              </Show>
+            </button>
+          </Show>
         </div>
+        <Show when={!isMobile() || filtersOpen()}>
+          <div class="flex flex-wrap gap-2">
+            <select
+              value={timeFilter()}
+              onChange={(e) => setTimeFilter(e.currentTarget.value as '24h' | '7d' | '30d' | 'all')}
+              class="w-full sm:w-auto px-3 py-2 text-sm border rounded-lg dark:bg-gray-700 dark:border-gray-600"
+            >
+              <option value="24h">Last 24h</option>
+              <option value="7d">Last 7d</option>
+              <option value="30d">Last 30d</option>
+              <option value="all">All Time</option>
+            </select>
+
+            <select
+              value={severityFilter()}
+              onChange={(e) => setSeverityFilter(e.currentTarget.value as 'warning' | 'critical' | 'all')}
+              class="w-full sm:w-auto px-3 py-2 text-sm border rounded-lg dark:bg-gray-700 dark:border-gray-600"
+            >
+              <option value="all">All Levels</option>
+              <option value="critical">Critical Only</option>
+              <option value="warning">Warning Only</option>
+            </select>
+          </div>
+        </Show>
       </div>
 
       <Show when={resourceIncidentPanel()}>
