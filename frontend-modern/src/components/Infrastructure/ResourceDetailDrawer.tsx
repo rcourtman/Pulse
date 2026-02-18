@@ -1,4 +1,6 @@
-import { Component, Show, Suspense, createMemo, For, createSignal, createEffect } from 'solid-js';
+import { Show, Suspense, createMemo, For, createSignal, createEffect } from 'solid-js';
+import type { Component, JSX } from 'solid-js';
+import { Portal } from 'solid-js/web';
 import type { Disk, Host, HostNetworkInterface, HostSensorSummary, Memory, Node } from '@/types/api';
 import type { Resource, ResourceMetric } from '@/types/resource';
 import { getDisplayName } from '@/types/resource';
@@ -20,6 +22,7 @@ import { createLocalStorageBooleanSignal, STORAGE_KEYS } from '@/utils/localStor
 import { ReportMergeModal } from './ReportMergeModal';
 import { DiscoveryTab } from '@/components/Discovery/DiscoveryTab';
 import type { ResourceType as DiscoveryResourceType } from '@/types/discovery';
+import { useBreakpoint } from '@/hooks/useBreakpoint';
 
 interface ResourceDetailDrawerProps {
   resource: Resource;
@@ -457,7 +460,7 @@ const formatSourceType = (value: Resource['sourceType']): string => {
   }
 };
 
-export const ResourceDetailDrawer: Component<ResourceDetailDrawerProps> = (props) => {
+const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
   type DrawerTab = 'overview' | 'discovery' | 'debug';
   const [activeTab, setActiveTab] = createSignal<DrawerTab>('overview');
   const [debugEnabled] = createLocalStorageBooleanSignal(STORAGE_KEYS.DEBUG_MODE, false);
@@ -750,7 +753,7 @@ export const ResourceDetailDrawer: Component<ResourceDetailDrawerProps> = (props
     const sections = [
       { id: 'proxmox', label: 'Proxmox', payload: data.proxmox },
       { id: 'agent', label: 'Agent', payload: data.agent },
-      { id: 'docker', label: 'Docker', payload: data.docker },
+      { id: 'docker', label: 'Containers', payload: data.docker },
       { id: 'pbs', label: 'PBS', payload: data.pbs },
       { id: 'pmg', label: 'PMG', payload: data.pmg },
       { id: 'kubernetes', label: 'Kubernetes', payload: data.kubernetes },
@@ -1392,6 +1395,56 @@ export const ResourceDetailDrawer: Component<ResourceDetailDrawerProps> = (props
         onClose={() => setShowReportModal(false)}
       />
     </div>
+  );
+};
+
+interface MobileSheetProps {
+  onClose: () => void;
+  children: JSX.Element;
+}
+
+const MobileSheet: Component<MobileSheetProps> = (props) => {
+  return (
+    <Portal>
+      {/* Backdrop */}
+      <div class="fixed inset-0 bg-black/40 z-40" onClick={props.onClose} aria-hidden="true" />
+      {/* Sheet panel */}
+      <div class="fixed inset-x-0 bottom-0 z-50 flex flex-col max-h-[85vh] bg-white dark:bg-gray-800 rounded-t-2xl shadow-2xl overflow-hidden">
+        {/* Drag handle + close button row */}
+        <div class="relative flex items-center justify-center pt-3 pb-2 shrink-0">
+          <div class="w-10 h-1 bg-gray-300 dark:bg-gray-600 rounded-full" />
+          <button
+            type="button"
+            onClick={props.onClose}
+            class="absolute right-3 top-2 p-1.5 rounded-full text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700"
+            aria-label="Close"
+          >
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        {/* Scrollable content */}
+        <div class="overflow-y-auto flex-1 px-4 pb-safe-or-20">{props.children}</div>
+      </div>
+    </Portal>
+  );
+};
+
+export const ResourceDetailDrawer: Component<ResourceDetailDrawerProps> = (props) => {
+  const { isMobile } = useBreakpoint();
+
+  return (
+    <Show
+      when={!isMobile()}
+      fallback={
+        <MobileSheet onClose={props.onClose ?? (() => {})}>
+          <DrawerContent resource={props.resource} onClose={props.onClose} />
+        </MobileSheet>
+      }
+    >
+      <DrawerContent resource={props.resource} onClose={props.onClose} />
+    </Show>
   );
 };
 
