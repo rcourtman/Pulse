@@ -76,10 +76,11 @@ const statusTone = (status?: string) => {
   return 'bg-gray-400';
 };
 
-export const K8sDeploymentsDrawer: Component<{ cluster: string }> = (props) => {
+export const K8sDeploymentsDrawer: Component<{ cluster: string; initialNamespace?: string | null }> = (props) => {
   const navigate = useNavigate();
   const [namespace, setNamespace] = createSignal('');
   const [search, setSearch] = createSignal('');
+  const [lastAppliedNamespace, setLastAppliedNamespace] = createSignal('');
 
   const clusterName = createMemo(() => normalize(props.cluster));
 
@@ -99,6 +100,18 @@ export const K8sDeploymentsDrawer: Component<{ cluster: string }> = (props) => {
       if (ns) set.add(ns);
     }
     return Array.from(set).sort((a, b) => a.localeCompare(b));
+  });
+
+  createEffect(() => {
+    // Allow other drawer tabs (e.g., Namespaces) to prefill the namespace filter.
+    const next = normalize(props.initialNamespace);
+    if (!next) return;
+    if (next.toLowerCase() === normalize(lastAppliedNamespace()).toLowerCase()) return;
+    const exists = namespaceOptions().some((ns) => ns.toLowerCase() === next.toLowerCase());
+    if (exists) {
+      setNamespace(next);
+      setLastAppliedNamespace(next);
+    }
   });
 
   createEffect(() => {
