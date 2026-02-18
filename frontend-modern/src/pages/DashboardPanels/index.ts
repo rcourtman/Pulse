@@ -5,3 +5,4 @@ export { BackupStatusPanel } from './BackupStatusPanel';
 export { RecoveryStatusPanel } from './RecoveryStatusPanel';
 export { StoragePanel } from './StoragePanel';
 export { RecentAlertsPanel } from './RecentAlertsPanel';
+export { DashboardCustomizer } from './DashboardCustomizer';

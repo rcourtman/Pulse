@@ -1,10 +1,10 @@
-import { createMemo, Show, For } from 'solid-js';
+import { createMemo, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 
 import Server from 'lucide-solid/icons/server';
-import Box from 'lucide-solid/icons/box';
+import Boxes from 'lucide-solid/icons/boxes';
 import HardDrive from 'lucide-solid/icons/hard-drive';
-import Bell from 'lucide-solid/icons/bell';
+import Archive from 'lucide-solid/icons/archive';
 import CheckCircle from 'lucide-solid/icons/check-circle';
 import AlertTriangle from 'lucide-solid/icons/alert-triangle';
 import XCircle from 'lucide-solid/icons/x-circle';
@@ -13,29 +13,75 @@ import {
     ALERTS_OVERVIEW_PATH,
     INFRASTRUCTURE_PATH,
     WORKLOADS_PATH,
+    buildRecoveryPath,
     buildStoragePath,
 } from '@/routing/resourceLinks';
 import { Card } from '@/components/shared/Card';
-import { type ActionItem } from './dashboardHelpers';
 import { MiniDonut, MiniGauge } from './Visualizations';
+import { formatBytes, formatRelativeTime } from '@/utils/format';
+import type { DashboardRecoverySummary } from '@/hooks/useDashboardRecovery';
+
+const CARD_THEMES = {
+    blue: {
+        iconBg: 'bg-blue-50 dark:bg-blue-900/20',
+        iconColor: 'text-blue-500 dark:text-blue-400',
+        hoverBorder: 'hover:border-blue-400 dark:hover:border-blue-500',
+        hoverIconBg: 'group-hover:bg-blue-100 dark:group-hover:bg-blue-900/30',
+    },
+    purple: {
+        iconBg: 'bg-purple-50 dark:bg-purple-900/20',
+        iconColor: 'text-purple-500 dark:text-purple-400',
+        hoverBorder: 'hover:border-purple-400 dark:hover:border-purple-500',
+        hoverIconBg: 'group-hover:bg-purple-100 dark:group-hover:bg-purple-900/30',
+    },
+    cyan: {
+        iconBg: 'bg-cyan-50 dark:bg-cyan-900/20',
+        iconColor: 'text-cyan-600 dark:text-cyan-400',
+        hoverBorder: 'hover:border-cyan-400 dark:hover:border-cyan-500',
+        hoverIconBg: 'group-hover:bg-cyan-100 dark:group-hover:bg-cyan-900/30',
+    },
+    emerald: {
+        iconBg: 'bg-emerald-50 dark:bg-emerald-900/20',
+        iconColor: 'text-emerald-600 dark:text-emerald-400',
+        hoverBorder: 'hover:border-emerald-400 dark:hover:border-emerald-500',
+        hoverIconBg: 'group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900/30',
+    },
+} as const;
+
+function SeverityChip(props: { severity: 'warning' | 'critical' }) {
+    const isWarning = () => props.severity === 'warning';
+    return (
+        <span
+            class={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${
+                isWarning()
+                    ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+                    : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+            }`}
+        >
+            <span class={`w-1.5 h-1.5 rounded-full ${isWarning() ? 'bg-amber-500' : 'bg-red-500'}`} />
+            {isWarning() ? 'Warning' : 'Critical'}
+        </span>
+    );
+}
 
 interface DashboardHeroProps {
-    title?: string;
-    totalResources: number;
     criticalAlerts: number;
     warningAlerts: number;
-    byStatus: Record<string, number>;
     infrastructure: { total: number; online: number };
-    workloads: { total: number; running: number };
-    storage: { capacityPercent: number; totalUsed: number; totalCapacity: number };
+    workloads: { total: number; running: number; stopped: number };
+    storage: {
+        capacityPercent: number;
+        totalUsed: number;
+        totalCapacity: number;
+        warningCount: number;
+        criticalCount: number;
+    };
     alerts: { activeCritical: number; activeWarning: number; total: number };
-    topIssues?: ActionItem[];
+    recovery: DashboardRecoverySummary;
+    topCPU: Array<{ id: string; name: string; percent: number }>;
 }
 
 export function DashboardHero(props: DashboardHeroProps) {
-    const allIssues = createMemo(() => props.topIssues ?? []);
-    const needsTicker = createMemo(() => allIssues().length > 3);
-
     const status = createMemo(() => {
         if (props.criticalAlerts > 0) return 'critical';
         if (props.warningAlerts > 0) return 'warning';
@@ -47,176 +93,195 @@ export function DashboardHero(props: DashboardHeroProps) {
             case 'critical':
                 return {
                     label: 'Critical Status',
-                    description: `${props.criticalAlerts} critical alert${props.criticalAlerts === 1 ? '' : 's'} requires immediate attention.`,
                     icon: XCircle,
                     color: 'text-red-600 dark:text-red-400',
                     bg: 'bg-red-50 dark:bg-red-900/20',
-                    border: 'border-red-200 dark:border-red-800',
                     pulseColor: 'bg-red-500',
-                    gradient: 'from-red-500/10 to-transparent'
                 };
             case 'warning':
                 return {
                     label: 'System Warning',
-                    description: `${props.warningAlerts} warning alert${props.warningAlerts === 1 ? '' : 's'} active.`,
                     icon: AlertTriangle,
                     color: 'text-amber-600 dark:text-amber-400',
                     bg: 'bg-amber-50 dark:bg-amber-900/20',
-                    border: 'border-amber-200 dark:border-amber-800',
                     pulseColor: 'bg-amber-500',
-                    gradient: 'from-amber-500/10 to-transparent'
                 };
-            case 'healthy':
             default:
                 return {
                     label: 'All Systems Operational',
-                    description: 'Infrastructure and workloads are running normally.',
                     icon: CheckCircle,
                     color: 'text-emerald-600 dark:text-emerald-400',
                     bg: 'bg-emerald-50 dark:bg-emerald-900/20',
-                    border: 'border-emerald-200 dark:border-emerald-800',
                     pulseColor: 'bg-emerald-500',
-                    gradient: 'from-emerald-500/10 to-transparent'
                 };
         }
     });
 
+    const isRecoveryStale = createMemo(() => {
+        const ts = props.recovery.latestEventTimestamp;
+        if (typeof ts !== 'number' || !Number.isFinite(ts)) return false;
+        return Date.now() - ts > 24 * 60 * 60_000;
+    });
 
+    const infrastructureHasIssue = createMemo(() => props.infrastructure.total - props.infrastructure.online > 0);
+    const workloadsHasIssue = createMemo(() => props.workloads.stopped > 0);
+
+    const storageSeverity = createMemo<'warning' | 'critical' | null>(() => {
+        if (props.storage.criticalCount > 0) return 'critical';
+        if (props.storage.warningCount > 0) return 'warning';
+        return null;
+    });
+
+    const recoverySeverity = createMemo<'warning' | 'critical' | null>(() => {
+        if ((props.recovery.byOutcome.failed ?? 0) > 0) return 'critical';
+        if (isRecoveryStale()) return 'warning';
+        return null;
+    });
+
+    const badgeBase =
+        'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold border';
 
     return (
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 mb-2">
-            {/* Primary Status Card (Spans 4 columns) */}
-            <Card
-                padding="none"
-                class={`lg:col-span-4 relative overflow-hidden flex flex-col justify-between border-l-4 shadow-lg hover:shadow-xl transition-shadow duration-300 ${statusConfig().bg} ${statusConfig().color.replace('text-', 'border-l-')}`}
-            >
-                {/* Refined Background Gradient */}
-                <div class={`absolute inset-0 bg-gradient-to-br ${statusConfig().gradient} opacity-60 pointer-events-none mix-blend-overlay`} />
-                <div class="absolute -right-10 -top-10 w-40 h-40 bg-white dark:bg-gray-800 opacity-10 rounded-full blur-3xl pointer-events-none" />
-
-                <div class="relative p-6 z-10 flex flex-col h-full justify-between">
-                    <div>
-                        <div class="flex items-start justify-between mb-6">
-                            <div class={`p-2.5 rounded-xl shadow-inner ${status() === 'healthy' ? 'bg-emerald-100/80 dark:bg-emerald-900/40' : status() === 'warning' ? 'bg-amber-100/80 dark:bg-amber-900/40' : 'bg-red-100/80 dark:bg-red-900/40'}`}>
-                                <Dynamic component={statusConfig().icon} class={`w-7 h-7 drop-shadow-sm ${statusConfig().color}`} />
-                            </div>
-
-                            {/* Pulse Indicator */}
-                            <div class="flex items-center gap-2.5 bg-white/50 dark:bg-black/20 px-2.5 py-1 rounded-full backdrop-blur-sm border border-white/20 dark:border-white/5">
-                                <span class="relative flex h-2.5 w-2.5">
-                                    <span class={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${statusConfig().pulseColor}`}></span>
-                                    <span class={`relative inline-flex rounded-full h-2.5 w-2.5 ${statusConfig().pulseColor}`}></span>
+        <div class="space-y-3">
+            <Card padding="none" class="border border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800">
+                <div class="px-4 py-2.5 flex items-center justify-between gap-3">
+                    <div class="flex items-center gap-2.5 min-w-0">
+                        <div class={`relative rounded-lg p-1.5 ${statusConfig().bg}`}>
+                            <Dynamic component={statusConfig().icon} class={`w-4 h-4 ${statusConfig().color}`} />
+                            <Show when={status() === 'critical'}>
+                                <span class="absolute -right-0.5 -top-0.5 flex h-2.5 w-2.5">
+                                    <span
+                                        class={`absolute inline-flex h-full w-full rounded-full opacity-75 animate-ping ${statusConfig().pulseColor}`}
+                                    />
+                                    <span
+                                        class={`relative inline-flex h-2.5 w-2.5 rounded-full ${statusConfig().pulseColor}`}
+                                    />
                                 </span>
-                                <span class="text-[10px] font-bold uppercase tracking-widest opacity-70">System Status</span>
-                            </div>
+                            </Show>
                         </div>
-
-                        <h2 class="text-2xl font-extrabold tracking-tight text-gray-900 dark:text-white mb-3 drop-shadow-sm">
+                        <span class="text-sm font-semibold text-gray-800 dark:text-gray-100 truncate">
                             {statusConfig().label}
-                        </h2>
+                        </span>
+                    </div>
 
-                        <Show
-                            when={allIssues().length > 0}
-                            fallback={
-                                <p class="text-sm font-medium text-gray-700 dark:text-gray-200 opacity-90 leading-relaxed max-w-[95%]">
-                                    {statusConfig().description}
-                                </p>
-                            }
-                        >
-                            <div class="mt-2">
-                                <p class="text-[10px] uppercase tracking-wider font-bold text-gray-500 dark:text-gray-400 mb-1.5 opacity-80">
-                                    Active Incidents
-                                    <Show when={allIssues().length > 1}>
-                                        <span class="ml-1 font-normal">({allIssues().length})</span>
-                                    </Show>
-                                </p>
-                                <div
-                                    class="overflow-hidden relative group/ticker"
-                                    style={{ "max-height": needsTicker() ? "108px" : undefined }}
-                                >
-                                    <div
-                                        class={needsTicker() ? "group-hover/ticker:[animation-play-state:paused]" : ""}
-                                        style={needsTicker() ? {
-                                            animation: `ticker-up ${allIssues().length * 3}s linear infinite`,
-                                        } : {}}
-                                    >
-                                        <For each={needsTicker() ? [...allIssues(), ...allIssues()] : allIssues()}>
-                                            {(item) => (
-                                                <a href={item.link} class="group/item flex items-center gap-2.5 p-2 -mx-2 rounded-lg hover:bg-white/40 dark:hover:bg-black/20 transition-colors backdrop-blur-sm">
-                                                    <span class={`flex h-2 w-2 shrink-0 rounded-full ring-2 ring-white/20 ${item.priority === 'critical' ? 'bg-red-500' : 'bg-amber-500'}`} />
-                                                    <span class="text-xs font-semibold text-gray-800 dark:text-gray-100 truncate group-hover/item:underline decoration-black/20 dark:decoration-white/20 underline-offset-2">
-                                                        {item.label}
-                                                    </span>
-                                                </a>
-                                            )}
-                                        </For>
-                                    </div>
-                                    <Show when={needsTicker()}>
-                                        <style>{`@keyframes ticker-up { 0% { transform: translateY(0); } 100% { transform: translateY(-50%); } }`}</style>
-                                    </Show>
-                                </div>
-                            </div>
+                    <div class="flex items-center gap-2 shrink-0">
+                        <Show when={props.alerts.activeCritical > 0}>
+                            <span
+                                class={`${badgeBase} bg-red-50 text-red-700 border-red-100 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800`}
+                            >
+                                <span class="w-1.5 h-1.5 rounded-full bg-red-500" />
+                                {props.alerts.activeCritical} Critical
+                            </span>
                         </Show>
+
+                        <Show when={props.alerts.activeWarning > 0}>
+                            <span
+                                class={`${badgeBase} bg-amber-50 text-amber-700 border-amber-100 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800`}
+                            >
+                                <span class="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                                {props.alerts.activeWarning} Warning
+                            </span>
+                        </Show>
+
+                        <a
+                            href={ALERTS_OVERVIEW_PATH}
+                            class="text-xs font-semibold text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white transition-colors"
+                        >
+                            View Alerts →
+                        </a>
                     </div>
                 </div>
             </Card>
 
-            {/* Metrics Grid (Spans 8 columns) */}
-            <div class="lg:col-span-8 grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {/* Infrastructure */}
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <a href={INFRASTRUCTURE_PATH} class="group block">
-                    <Card padding="none" class="h-full p-4 hover:border-blue-400 dark:hover:border-blue-500 transition-all duration-300 cursor-pointer hover:shadow-lg hover:-translate-y-0.5 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700">
-                        <div class="flex items-start justify-between mb-4">
-                            <div class="p-2 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-500 dark:text-blue-400 group-hover:bg-blue-100 dark:group-hover:bg-blue-900/30 transition-colors">
-                                <Server class="w-5 h-5" />
+                    <Card
+                        padding="none"
+                        class={`h-full p-4 ${CARD_THEMES.blue.hoverBorder} transition-all duration-300 cursor-pointer hover:shadow-lg hover:-translate-y-0.5 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700`}
+                    >
+                        <div class="flex items-start justify-between gap-2 mb-3">
+                            <div class="flex items-center gap-2 min-w-0">
+                                <div
+                                    class={`p-2 rounded-lg transition-colors ${CARD_THEMES.blue.iconBg} ${CARD_THEMES.blue.iconColor} ${CARD_THEMES.blue.hoverIconBg}`}
+                                >
+                                    <Server class="w-5 h-5" />
+                                </div>
+                                <h3 class="text-sm font-semibold text-gray-900 dark:text-white truncate">Infrastructure</h3>
+                                <Show when={infrastructureHasIssue()}>
+                                    <SeverityChip severity="critical" />
+                                </Show>
                             </div>
                             <MiniDonut
                                 size={28}
                                 strokeWidth={3}
                                 data={[
                                     { value: props.infrastructure.online, color: 'text-blue-500 dark:text-blue-400' },
-                                    { value: props.infrastructure.total - props.infrastructure.online, color: 'text-gray-200 dark:text-gray-700' }
+                                    {
+                                        value: props.infrastructure.total - props.infrastructure.online,
+                                        color: 'text-gray-200 dark:text-gray-700',
+                                    },
                                 ]}
                             />
                         </div>
-                        <div class="space-y-0.5">
-                            <div class="text-xs text-gray-500 dark:text-gray-400 font-semibold uppercase tracking-wide flex items-center gap-1">
-                                Infrastructure
-                                <span class="text-[10px] font-normal text-gray-400 ml-auto">{props.infrastructure.online} Online</span>
-                            </div>
-                            <div class="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">
-                                {props.infrastructure.total}
-                            </div>
+
+                        <div class="text-2xl font-bold text-gray-900 dark:text-white">{props.infrastructure.total}</div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">Total Nodes</div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-2 truncate">
+                            {props.infrastructure.online} online
+                            <Show when={props.topCPU[0]}>
+                                <span>
+                                    {' '}
+                                    · Top CPU: {props.topCPU[0].name} {Math.round(props.topCPU[0].percent)}%
+                                </span>
+                            </Show>
                         </div>
                     </Card>
                 </a>
 
-                {/* Workloads */}
                 <a href={WORKLOADS_PATH} class="group block">
-                    <Card padding="none" class="h-full p-4 hover:border-purple-400 dark:hover:border-purple-500 transition-all duration-300 cursor-pointer hover:shadow-lg hover:-translate-y-0.5 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700">
-                        <div class="flex items-center justify-between mb-4">
-                            <div class="p-2 rounded-lg bg-purple-50 dark:bg-purple-900/20 text-purple-500 dark:text-purple-400 group-hover:bg-purple-100 dark:group-hover:bg-purple-900/30 transition-colors">
-                                <Box class="w-5 h-5" />
+                    <Card
+                        padding="none"
+                        class={`h-full p-4 ${CARD_THEMES.purple.hoverBorder} transition-all duration-300 cursor-pointer hover:shadow-lg hover:-translate-y-0.5 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700`}
+                    >
+                        <div class="flex items-start justify-between gap-2 mb-3">
+                            <div class="flex items-center gap-2 min-w-0">
+                                <div
+                                    class={`p-2 rounded-lg transition-colors ${CARD_THEMES.purple.iconBg} ${CARD_THEMES.purple.iconColor} ${CARD_THEMES.purple.hoverIconBg}`}
+                                >
+                                    <Boxes class="w-5 h-5" />
+                                </div>
+                                <h3 class="text-sm font-semibold text-gray-900 dark:text-white truncate">Workloads</h3>
+                                <Show when={workloadsHasIssue()}>
+                                    <SeverityChip severity="warning" />
+                                </Show>
                             </div>
                             <span class="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-gray-50 border-gray-200 text-gray-600 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400">
                                 {props.workloads.running} RUNNING
                             </span>
                         </div>
-                        <div class="space-y-0.5">
-                            <div class="text-xs text-gray-500 dark:text-gray-400 font-semibold uppercase tracking-wide">Workloads</div>
-                            <div class="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">
-                                {props.workloads.total}
-                            </div>
+
+                        <div class="text-2xl font-bold text-gray-900 dark:text-white">{props.workloads.total}</div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">Total</div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                            {props.workloads.running} running · {props.workloads.stopped} stopped
                         </div>
                     </Card>
                 </a>
 
-                {/* Storage */}
                 <a href={buildStoragePath()} class="group block">
-                    <Card padding="none" class="h-full p-4 hover:border-cyan-400 dark:hover:border-cyan-500 transition-all duration-300 cursor-pointer hover:shadow-lg hover:-translate-y-0.5 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700">
-                        <div class="flex items-start justify-between mb-4">
-                            <div class="p-2 rounded-lg bg-cyan-50 dark:bg-cyan-900/20 text-cyan-600 dark:text-cyan-400 group-hover:bg-cyan-100 dark:group-hover:bg-cyan-900/30 transition-colors">
-                                <HardDrive class="w-5 h-5" />
+                    <Card
+                        padding="none"
+                        class={`h-full p-4 ${CARD_THEMES.cyan.hoverBorder} transition-all duration-300 cursor-pointer hover:shadow-lg hover:-translate-y-0.5 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700`}
+                    >
+                        <div class="flex items-start justify-between gap-2 mb-3">
+                            <div class="flex items-center gap-2 min-w-0">
+                                <div
+                                    class={`p-2 rounded-lg transition-colors ${CARD_THEMES.cyan.iconBg} ${CARD_THEMES.cyan.iconColor} ${CARD_THEMES.cyan.hoverIconBg}`}
+                                >
+                                    <HardDrive class="w-5 h-5" />
+                                </div>
+                                <h3 class="text-sm font-semibold text-gray-900 dark:text-white truncate">Storage</h3>
+                                <Show when={storageSeverity()}>{(severity) => <SeverityChip severity={severity()} />}</Show>
                             </div>
                             <MiniGauge
                                 percent={props.storage.capacityPercent}
@@ -225,40 +290,74 @@ export function DashboardHero(props: DashboardHeroProps) {
                                 color={props.storage.capacityPercent > 90 ? 'text-red-500' : 'text-cyan-500'}
                             />
                         </div>
-                        <div class="space-y-0.5">
-                            <div class="text-xs text-gray-500 dark:text-gray-400 font-semibold uppercase tracking-wide">Storage Used</div>
-                            <div class="text-2xl font-bold text-gray-900 dark:text-white tracking-tight flex items-baseline gap-0.5">
-                                {Math.round(props.storage.capacityPercent)}<span class="text-sm font-normal text-gray-400">%</span>
-                            </div>
+
+                        <div class="text-2xl font-bold text-gray-900 dark:text-white flex items-baseline gap-0.5">
+                            {Math.round(props.storage.capacityPercent)}
+                            <span class="text-sm font-normal text-gray-400">%</span>
+                        </div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">Capacity Used</div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                            {formatBytes(props.storage.totalUsed)} / {formatBytes(props.storage.totalCapacity)}
                         </div>
                     </Card>
                 </a>
 
-                {/* Alerts */}
-                <a href={ALERTS_OVERVIEW_PATH} class="group block">
-                    <Card padding="none" class="h-full p-4 hover:border-amber-400 dark:hover:border-amber-500 transition-all duration-300 cursor-pointer hover:shadow-lg hover:-translate-y-0.5 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700">
-                        <div class="flex items-start justify-between mb-4">
-                            <div class={`p-2 rounded-lg transition-colors ${props.alerts.activeCritical > 0 || props.alerts.activeWarning > 0 ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-500 dark:text-amber-400' : 'bg-gray-50 dark:bg-gray-800 text-gray-400 group-hover:text-amber-500 group-hover:bg-amber-50 dark:group-hover:bg-amber-900/20'}`}>
-                                <Bell class="w-5 h-5" />
+                <a href={buildRecoveryPath()} class="group block">
+                    <Card
+                        padding="none"
+                        class={`h-full p-4 ${CARD_THEMES.emerald.hoverBorder} transition-all duration-300 cursor-pointer hover:shadow-lg hover:-translate-y-0.5 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700`}
+                    >
+                        <div class="flex items-start justify-between gap-2 mb-3">
+                            <div class="flex items-center gap-2 min-w-0">
+                                <div
+                                    class={`p-2 rounded-lg transition-colors ${CARD_THEMES.emerald.iconBg} ${CARD_THEMES.emerald.iconColor} ${CARD_THEMES.emerald.hoverIconBg}`}
+                                >
+                                    <Archive class="w-5 h-5" />
+                                </div>
+                                <h3 class="text-sm font-semibold text-gray-900 dark:text-white truncate">Recovery</h3>
+                                <Show when={recoverySeverity()}>{(severity) => <SeverityChip severity={severity()} />}</Show>
                             </div>
-                            <div class="flex flex-col items-end gap-1">
-                                <Show when={props.alerts.activeCritical > 0}>
-                                    <div class="flex items-center gap-1.5 px-1.5 py-0.5 bg-red-50 dark:bg-red-900/30 border border-red-100 dark:border-red-800 rounded">
-                                        <div class="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-                                        <span class="text-[9px] font-bold text-red-700 dark:text-red-300">{props.alerts.activeCritical} CRIT</span>
-                                    </div>
-                                </Show>
-                                <Show when={props.alerts.activeWarning > 0}>
-                                    <span class="text-[9px] font-semibold text-amber-600 dark:text-amber-400">{props.alerts.activeWarning} WARN</span>
-                                </Show>
-                            </div>
+
+                            <Show when={props.recovery.hasData}>
+                                <MiniDonut
+                                    size={28}
+                                    strokeWidth={3}
+                                    data={[
+                                        {
+                                            value: props.recovery.byOutcome.success ?? 0,
+                                            color: 'text-emerald-500 dark:text-emerald-400',
+                                        },
+                                        { value: props.recovery.byOutcome.failed ?? 0, color: 'text-red-400 dark:text-red-400' },
+                                        {
+                                            value: props.recovery.byOutcome.warning ?? 0,
+                                            color: 'text-amber-400 dark:text-amber-400',
+                                        },
+                                    ]}
+                                />
+                            </Show>
                         </div>
-                        <div class="space-y-0.5">
-                            <div class="text-xs text-gray-500 dark:text-gray-400 font-semibold uppercase tracking-wide">Active Alerts</div>
-                            <div class="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">
-                                {props.alerts.total}
+
+                        <Show
+                            when={props.recovery.hasData}
+                            fallback={<div class="text-2xl font-bold text-gray-900 dark:text-white">—</div>}
+                        >
+                            <div class="text-2xl font-bold text-gray-900 dark:text-white">{props.recovery.totalProtected}</div>
+                        </Show>
+                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">Protected</div>
+
+                        <Show
+                            when={props.recovery.hasData}
+                            fallback={<div class="text-xs text-gray-500 dark:text-gray-400 mt-2">No data</div>}
+                        >
+                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                                {(props.recovery.byOutcome.success ?? 0)} ok · {(props.recovery.byOutcome.failed ?? 0)} failed
+                                {' · Last '}
+                                {formatRelativeTime(props.recovery.latestEventTimestamp ?? undefined, {
+                                    compact: true,
+                                    emptyText: '—',
+                                })}
                             </div>
-                        </div>
+                        </Show>
                     </Card>
                 </a>
             </div>

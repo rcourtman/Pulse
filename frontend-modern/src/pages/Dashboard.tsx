@@ -4,12 +4,11 @@ import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import { useDashboardOverview } from '@/hooks/useDashboardOverview';
 import { useDashboardTrends } from '@/hooks/useDashboardTrends';
 import { useDashboardRecovery } from '@/hooks/useDashboardRecovery';
+import { useDashboardLayout } from '@/hooks/useDashboardLayout';
 import type { HistoryTimeRange } from '@/api/charts';
 import type { Alert } from '@/types/api';
-import { isInfrastructure, isStorage } from '@/types/resource';
-import { ALERTS_OVERVIEW_PATH, buildStoragePath, INFRASTRUCTURE_PATH } from '@/routing/resourceLinks';
-import { RecoveryStatusPanel, CompositionPanel, DashboardHero, RecentAlertsPanel, StoragePanel, TrendCharts } from './DashboardPanels';
-import { type ActionItem, MAX_ACTION_ITEMS, PRIORITY_ORDER } from './DashboardPanels/dashboardHelpers';
+import { DashboardHero, RecentAlertsPanel, TrendCharts } from './DashboardPanels';
+import type { DashboardWidgetDef, DashboardWidgetId } from './DashboardPanels/dashboardWidgets';
 
 
 export default function Dashboard() {
@@ -27,6 +26,7 @@ export default function Dashboard() {
   const [trendRange, setTrendRange] = createSignal<HistoryTimeRange>('1h');
   const trends = useDashboardTrends(overview, resources, trendRange);
   const recovery = useDashboardRecovery();
+  const layout = useDashboardLayout();
 
   // Loading timeout: if REST fetch takes >30s, treat as connection error.
   const [loadingTimedOut, setLoadingTimedOut] = createSignal(false);
@@ -72,69 +72,63 @@ export default function Dashboard() {
     () => !isLoading() && !hasConnectionError() && resources().length === 0,
   );
 
-  const actionItems = createMemo<ActionItem[]>(() => {
-    const items: ActionItem[] = [];
-    const allResources = resources();
-    const alerts = alertsList();
-
-    // Tier 1/4: Alerts
-    for (const alert of alerts) {
-      if (alert.level === 'critical') {
-        items.push({ id: `alert-crit-${alert.id}`, priority: 'critical', label: `Critical alert: ${alert.resourceName} — ${alert.message}`, link: ALERTS_OVERVIEW_PATH });
-        continue;
-      }
-      if (alert.level === 'warning') {
-        items.push({ id: `alert-warn-${alert.id}`, priority: 'medium', label: `Warning: ${alert.resourceName} — ${alert.message}`, link: ALERTS_OVERVIEW_PATH });
-      }
-    }
-
-    // Tier 2: Infrastructure offline
-    for (const resource of allResources) {
-      if (isInfrastructure(resource) && resource.status === 'offline') {
-        items.push({ id: `infra-offline-${resource.id}`, priority: 'high', label: `Offline: ${resource.displayName || resource.name}`, link: INFRASTRUCTURE_PATH });
-      }
-    }
-
-    // Tier 3/5: Storage capacity
-    for (const resource of allResources) {
-      if (isStorage(resource) && resource.disk) {
-        const diskPercent = typeof resource.disk.total === 'number' && resource.disk.total > 0 ? ((resource.disk.used ?? 0) / resource.disk.total) * 100 : null;
-        if (diskPercent === null) continue;
-
-        if (diskPercent >= 90) {
-          items.push({ id: `storage-crit-${resource.id}`, priority: 'high', label: `Storage critical: ${resource.displayName || resource.name} at ${Math.round(diskPercent)}%`, link: buildStoragePath() });
-          continue;
-        }
-
-        if (diskPercent >= 80) {
-          items.push({ id: `storage-warn-${resource.id}`, priority: 'medium', label: `Storage warning: ${resource.displayName || resource.name} at ${Math.round(diskPercent)}%`, link: buildStoragePath() });
-        }
-      }
-    }
-
-    // Tier 6: High CPU (>=90%)
-    for (const entry of overview().infrastructure.topCPU) {
-      if (entry.percent >= 90) {
-        items.push({ id: `cpu-crit-${entry.id}`, priority: 'low', label: `High CPU: ${entry.name} at ${Math.round(entry.percent)}%`, link: INFRASTRUCTURE_PATH });
-      }
-    }
-
-    items.sort((a, b) => {
-      const priorityDiff = PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority];
-      if (priorityDiff !== 0) return priorityDiff;
-      return a.label.localeCompare(b.label);
-    });
-
-    return items;
-  });
-
-  const displayedActions = createMemo(() => actionItems().slice(0, MAX_ACTION_ITEMS));
-
-
   const storageCapacityPercent = createMemo(() => {
     const { totalUsed, totalCapacity } = overview().storage;
     if (totalCapacity <= 0) return 0;
     return Math.max(0, Math.min(100, (totalUsed / totalCapacity) * 100));
+  });
+
+  const renderWidget = (id: DashboardWidgetId) => {
+    switch (id) {
+      case 'trends':
+        return (
+          <TrendCharts
+            trends={trends()}
+            overview={overview()}
+            trendRange={trendRange}
+            setTrendRange={setTrendRange}
+          />
+        );
+      case 'alerts':
+        return (
+          <RecentAlertsPanel
+            alerts={alertsList()}
+            criticalCount={overview().alerts.activeCritical}
+            warningCount={overview().alerts.activeWarning}
+            totalCount={overview().alerts.total}
+          />
+        );
+      default: {
+        const unreachable: never = id;
+        return unreachable;
+      }
+    }
+  };
+
+  type WidgetGroup = { type: 'full'; widget: DashboardWidgetDef } | { type: 'grid'; widgets: DashboardWidgetDef[] };
+  const widgetGroups = createMemo<WidgetGroup[]>(() => {
+    const visible = layout.visibleWidgets();
+    const result: WidgetGroup[] = [];
+    let currentQuarters: DashboardWidgetDef[] = [];
+
+    const flushQuarters = () => {
+      if (currentQuarters.length > 0) {
+        result.push({ type: 'grid', widgets: currentQuarters });
+        currentQuarters = [];
+      }
+    };
+
+    for (const widget of visible) {
+      if (widget.size === 'full') {
+        flushQuarters();
+        result.push({ type: 'full', widget });
+      } else {
+        currentQuarters.push(widget);
+      }
+    }
+
+    flushQuarters();
+    return result;
   });
 
   return (
@@ -188,11 +182,8 @@ export default function Dashboard() {
         <Match when={initialLoadComplete() && !hasConnectionError() && !isEmpty()}>
           <section class="space-y-5">
             <DashboardHero
-              title="Dashboard"
-              totalResources={overview().health.totalResources}
               criticalAlerts={overview().health.criticalAlerts}
               warningAlerts={overview().health.warningAlerts}
-              byStatus={overview().health.byStatus}
               infrastructure={{
                 total: overview().infrastructure.total,
                 online: overview().infrastructure.byStatus.online ?? 0,
@@ -200,41 +191,36 @@ export default function Dashboard() {
               workloads={{
                 total: overview().workloads.total,
                 running: overview().workloads.running,
+                stopped: overview().workloads.stopped,
               }}
               storage={{
                 capacityPercent: storageCapacityPercent(),
                 totalUsed: overview().storage.totalUsed,
                 totalCapacity: overview().storage.totalCapacity,
+                warningCount: overview().storage.warningCount,
+                criticalCount: overview().storage.criticalCount,
               }}
               alerts={{
                 activeCritical: overview().alerts.activeCritical,
                 activeWarning: overview().alerts.activeWarning,
                 total: overview().alerts.total,
               }}
-              topIssues={displayedActions()}
+              recovery={recovery()}
+              topCPU={overview().infrastructure.topCPU}
             />
-
-            <TrendCharts
-              trends={trends()}
-              overview={overview()}
-              trendRange={trendRange}
-              setTrendRange={setTrendRange}
-            />
-
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-start">
-              <CompositionPanel
-                infrastructureByType={overview().infrastructure.byType}
-                workloadsByType={overview().workloads.byType}
-              />
-              <RecoveryStatusPanel recovery={recovery()} />
-              <StoragePanel storage={overview().storage} storageTrend={trends().storage.capacity} loading={trends().loading} />
-              <RecentAlertsPanel
-                alerts={alertsList()}
-                criticalCount={overview().alerts.activeCritical}
-                warningCount={overview().alerts.activeWarning}
-                totalCount={overview().alerts.total}
-              />
-            </div>
+            <For each={widgetGroups()}>
+              {(group) =>
+                group.type === 'full'
+                  ? renderWidget(group.widget.id)
+                  : (
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-start">
+                      <For each={group.widgets}>
+                        {(widget) => renderWidget(widget.id)}
+                      </For>
+                    </div>
+                  )
+              }
+            </For>
           </section>
         </Match>
       </Switch>
