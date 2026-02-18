@@ -1496,8 +1496,13 @@ func (p *PatrolService) TriggerPatrolForAlert(alert *alerts.Alert) {
 	}
 
 	p.mu.RLock()
+	enabled := p.config.Enabled
 	triggerManager := p.triggerManager
 	p.mu.RUnlock()
+
+	if !enabled {
+		return
+	}
 
 	resourceType := inferResourceType(alert.Type, alert.Metadata)
 
