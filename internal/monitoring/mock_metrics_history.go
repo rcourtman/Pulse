@@ -645,12 +645,29 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, state models.
 			runningVMs++
 		}
 	}
-	log.Debug().Int("total", len(state.VMs)).Int("running", runningVMs).Msg("mock seeding: processing VMs")
+	log.Debug().Int("total", len(state.VMs)).Int("running", runningVMs).Msg("mock seeding: processing VMs (including stopped)")
 	for _, vm := range state.VMs {
+		cpuPct := vm.CPU * 100
+		memPct := vm.Memory.Usage
+		diskPct := vm.Disk.Usage
+		diskR := float64(vm.DiskRead)
+		diskW := float64(vm.DiskWrite)
+		netI := float64(vm.NetworkIn)
+		netO := float64(vm.NetworkOut)
+
+		// Stopped VMs have 0 metrics; synthesize "was running" baselines so
+		// their charts show historical activity before the resource stopped.
 		if vm.Status != "running" {
-			continue
+			h := HashSeed("vm", vm.ID, "baseline")
+			cpuPct = 10 + float64(h%30)        // 10-39 %
+			memPct = 30 + float64((h>>8)%40)   // 30-69 %
+			diskPct = 15 + float64((h>>16)%35) // 15-49 %
+			diskR = float64(1000 + h%5000)
+			diskW = float64(500 + (h>>8)%3000)
+			netI = float64(2000 + (h>>16)%8000)
+			netO = float64(1000 + (h>>24)%4000)
 		}
-		recordGuest(vm.ID, "vm", vm.ID, vm.CPU*100, vm.Memory.Usage, vm.Disk.Usage, float64(vm.DiskRead), float64(vm.DiskWrite), float64(vm.NetworkIn), float64(vm.NetworkOut), true, true, true)
+		recordGuest(vm.ID, "vm", vm.ID, cpuPct, memPct, diskPct, diskR, diskW, netI, netO, true, true, true)
 		time.Sleep(50 * time.Millisecond) // Reduced from 200ms for faster startup
 	}
 
@@ -660,12 +677,27 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, state models.
 			runningContainers++
 		}
 	}
-	log.Debug().Int("total", len(state.Containers)).Int("running", runningContainers).Msg("mock seeding: processing containers")
+	log.Debug().Int("total", len(state.Containers)).Int("running", runningContainers).Msg("mock seeding: processing containers (including stopped)")
 	for _, ct := range state.Containers {
+		cpuPct := ct.CPU * 100
+		memPct := ct.Memory.Usage
+		diskPct := ct.Disk.Usage
+		diskR := float64(ct.DiskRead)
+		diskW := float64(ct.DiskWrite)
+		netI := float64(ct.NetworkIn)
+		netO := float64(ct.NetworkOut)
+
 		if ct.Status != "running" {
-			continue
+			h := HashSeed("container", ct.ID, "baseline")
+			cpuPct = 10 + float64(h%30)
+			memPct = 30 + float64((h>>8)%40)
+			diskPct = 15 + float64((h>>16)%35)
+			diskR = float64(1000 + h%5000)
+			diskW = float64(500 + (h>>8)%3000)
+			netI = float64(2000 + (h>>16)%8000)
+			netO = float64(1000 + (h>>24)%4000)
 		}
-		recordGuest(ct.ID, "container", ct.ID, ct.CPU*100, ct.Memory.Usage, ct.Disk.Usage, float64(ct.DiskRead), float64(ct.DiskWrite), float64(ct.NetworkIn), float64(ct.NetworkOut), true, true, true)
+		recordGuest(ct.ID, "container", ct.ID, cpuPct, memPct, diskPct, diskR, diskW, netI, netO, true, true, true)
 		time.Sleep(50 * time.Millisecond) // Reduced from 200ms for faster startup
 	}
 
@@ -806,16 +838,24 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, state models.
 		recordGuest("dockerHost:"+host.ID, "dockerHost", host.ID, host.CPUUsage, host.Memory.Usage, diskPercent, 0, 0, 0, 0, true, false, false)
 
 		for _, container := range host.Containers {
-			if container.ID == "" || container.State != "running" {
+			if container.ID == "" {
 				continue
 			}
 
-			var containerDisk float64
+			cpuPct := container.CPUPercent
+			memPct := container.MemoryPercent
+			var diskPct float64
 			if container.RootFilesystemBytes > 0 && container.WritableLayerBytes > 0 {
-				containerDisk = float64(container.WritableLayerBytes) / float64(container.RootFilesystemBytes) * 100
-				containerDisk = clampFloat(containerDisk, 0, 100)
+				diskPct = float64(container.WritableLayerBytes) / float64(container.RootFilesystemBytes) * 100
+				diskPct = clampFloat(diskPct, 0, 100)
 			}
-			recordGuest("docker:"+container.ID, "dockerContainer", container.ID, container.CPUPercent, container.MemoryPercent, containerDisk, 0, 0, 0, 0, true, false, false)
+			if container.State != "running" {
+				h := HashSeed("dockerContainer", container.ID, "baseline")
+				cpuPct = 5 + float64(h%25)       // 5-29 %
+				memPct = 10 + float64((h>>8)%40) // 10-49 %
+				diskPct = 5 + float64((h>>16)%30)
+			}
+			recordGuest("docker:"+container.ID, "dockerContainer", container.ID, cpuPct, memPct, diskPct, 0, 0, 0, 0, true, false, false)
 		}
 		time.Sleep(50 * time.Millisecond) // Add delay for docker hosts
 	}
