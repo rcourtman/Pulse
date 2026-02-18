@@ -136,6 +136,12 @@ export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
     { initialValue: null },
   );
 
+  const loadError = createMemo(() => {
+    const err = resource.error;
+    if (!err) return '';
+    return (err as Error)?.message || 'Failed to fetch PMG details';
+  });
+
   const pmg = createMemo(() => resource()?.pmg ?? null);
 
   const lastUpdatedRelative = createMemo(() => {
@@ -184,6 +190,11 @@ export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
 
   return (
     <div class="space-y-3">
+      <Show when={loadError()}>
+        <Card padding="lg" tone="danger">
+          <EmptyState title="Failed to load PMG details" description={loadError()} tone="danger" />
+        </Card>
+      </Show>
       <Show when={!resource.loading} fallback={
         <Card padding="lg">
           <EmptyState title="Loading mail gateway details..." description="Fetching PMG resource details." />
@@ -418,4 +429,3 @@ export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
 };
 
 export default PMGInstanceDrawer;
-

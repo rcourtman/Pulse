@@ -1,4 +1,4 @@
-import { render, waitFor } from '@solidjs/testing-library';
+import { fireEvent, render, waitFor } from '@solidjs/testing-library';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Resource } from '@/types/resource';
 import { Infrastructure } from '@/pages/Infrastructure';
@@ -77,6 +77,10 @@ vi.mock('@/components/Infrastructure/InfrastructureSummary', () => ({
 
 describe('Infrastructure PBS/PMG integration', () => {
   beforeEach(() => {
+    // Ensure the desktop filter controls are rendered (some suites resize the viewport).
+    Object.defineProperty(window, 'innerWidth', { writable: true, configurable: true, value: 1024 });
+    window.dispatchEvent(new Event('resize'));
+
     mockLocationSearch = '';
     navigateSpy.mockReset();
     navigateSpy.mockImplementation((path: string) => {
@@ -114,9 +118,9 @@ describe('Infrastructure PBS/PMG integration', () => {
   });
 
   it('syncs source filter selection to query params', async () => {
-    const { getByRole } = render(() => <Infrastructure />);
+    const { getByLabelText } = render(() => <Infrastructure />);
 
-    getByRole('button', { name: 'PMG' }).click();
+    fireEvent.change(getByLabelText('Source'), { target: { value: 'pmg' } });
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalled();
