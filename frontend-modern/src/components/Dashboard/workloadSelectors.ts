@@ -14,6 +14,8 @@ export interface FilterWorkloadsParams {
   selectedNode: string | null;
   selectedHostHint: string | null;
   selectedKubernetesContext: string | null;
+  selectedNamespace: string | null;
+  containerRuntime?: string | null;
 }
 
 export interface WorkloadStats {
@@ -53,6 +55,8 @@ export const filterWorkloads = ({
   selectedNode,
   selectedHostHint,
   selectedKubernetesContext,
+  selectedNamespace,
+  containerRuntime,
 }: FilterWorkloadsParams): WorkloadGuest[] => {
   let guests = allGuests;
 
@@ -77,8 +81,25 @@ export const filterWorkloads = ({
     );
   }
 
+  const namespace = (selectedNamespace || '').trim();
+  if (namespace && viewMode === 'k8s') {
+    guests = guests.filter((g) => {
+      if (resolveWorkloadType(g) !== 'k8s') return false;
+      return g.namespace === namespace;
+    });
+  }
+
   if (viewMode !== 'all') {
     guests = guests.filter((g) => resolveWorkloadType(g) === viewMode);
+  }
+
+  const normalizedRuntime = (containerRuntime || '').trim().toLowerCase();
+  if (normalizedRuntime && viewMode === 'docker') {
+    guests = guests.filter((g) => {
+      if (resolveWorkloadType(g) !== 'docker') return false;
+      const runtime = (g.containerRuntime || '').trim().toLowerCase();
+      return runtime === normalizedRuntime;
+    });
   }
 
   if (statusMode === 'running') {

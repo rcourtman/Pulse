@@ -3,7 +3,7 @@ import { apiFetchJSON, getOrgID } from '@/utils/apiClient';
 import { eventBus } from '@/stores/events';
 import type { WorkloadGuest, WorkloadType } from '@/types/workloads';
 
-const WORKLOADS_URL = '/api/resources?type=vm,lxc,docker_container,pod';
+const WORKLOADS_URL = '/api/resources?type=vm,lxc,docker_container,pod,k8s-deployment';
 const WORKLOADS_PAGE_LIMIT = 200;
 const WORKLOADS_MAX_PAGES = 20;
 const WORKLOADS_CACHE_MAX_AGE_MS = 15_000;
@@ -224,6 +224,7 @@ const resolveWorkloadType = (value?: string | null): WorkloadType | null => {
     return 'docker';
   }
   if (normalized === 'pod' || normalized === 'k8s' || normalized === 'kubernetes') return 'k8s';
+  if (normalized === 'k8s-deployment' || normalized === 'k8s_deployment') return 'k8s';
   return null;
 };
 

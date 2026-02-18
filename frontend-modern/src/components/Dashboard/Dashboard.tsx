@@ -1,4 +1,4 @@
-import { createSignal, createMemo, createEffect, For, Index, Show, onMount, onCleanup } from 'solid-js';
+import { createSignal, createMemo, createEffect, For, Index, Show, onMount, onCleanup, untrack } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 import type { VM, Container, Node } from '@/types/api';
 import type { WorkloadGuest, ViewMode } from '@/types/workloads';
@@ -308,14 +308,45 @@ export function Dashboard(props: DashboardProps) {
   const [isSearchLocked, setIsSearchLocked] = createSignal(false);
   const [selectedNode, setSelectedNode] = createSignal<string | null>(null);
   const [selectedKubernetesContext, setSelectedKubernetesContext] = createSignal<string | null>(null);
+  const [selectedNamespace, setSelectedNamespace] = createSignal<string | null>(null);
   const [selectedGuestId, setSelectedGuestIdRaw] = createSignal<string | null>(null);
   const [hoveredWorkloadId, setHoveredWorkloadId] = createSignal<string | null>(null);
   const [handledResourceId, setHandledResourceId] = createSignal<string | null>(null);
-  const [handledTypeParam, setHandledTypeParam] = createSignal<string | null>(null);
+  const [handledTypeParam, setHandledTypeParam] = createSignal<string>('');
+  const [handledRuntimeParam, setHandledRuntimeParam] = createSignal<string>('');
   const [handledContextParam, setHandledContextParam] = createSignal('');
   const [handledHostParam, setHandledHostParam] = createSignal('');
   const [selectedHostHint, setSelectedHostHint] = createSignal<string | null>(null);
   const [hideMigrationNotice, setHideMigrationNotice] = createSignal(true);
+
+  // URL-sync can legitimately require multiple reactive updates (e.g. canonicalizing
+  // legacy params, normalizing type aliases, dropping irrelevant params). If we
+  // call navigate() synchronously for each intermediate state, Solid Router will
+  // treat it as a redirect chain and can throw "Too many redirects".
+  //
+  // Coalesce URL sync into a single replace-navigation per tick.
+  let pendingUrlSyncHandle: number | null = null;
+  let pendingUrlSyncPath: string | null = null;
+  const scheduleUrlSyncNavigate = (nextPath: string) => {
+    pendingUrlSyncPath = nextPath;
+    if (pendingUrlSyncHandle !== null) return;
+    pendingUrlSyncHandle = window.setTimeout(() => {
+      pendingUrlSyncHandle = null;
+      const target = pendingUrlSyncPath;
+      pendingUrlSyncPath = null;
+      if (!target) return;
+      const current = `${untrack(() => location.pathname)}${untrack(() => location.search)}`;
+      if (current === target) return;
+      navigate(target, { replace: true });
+    }, 0);
+  };
+  onCleanup(() => {
+    if (pendingUrlSyncHandle !== null) {
+      window.clearTimeout(pendingUrlSyncHandle);
+      pendingUrlSyncHandle = null;
+      pendingUrlSyncPath = null;
+    }
+  });
 
   const migrationNotice = createMemo(() => {
     const notice = resolveMigrationNotice(location.search);
@@ -477,12 +508,65 @@ export function Dashboard(props: DashboardProps) {
     return Array.from(contexts).sort((a, b) => a.localeCompare(b));
   });
 
+  const kubernetesNamespaceOptions = createMemo(() => {
+    const namespaces = new Set<string>();
+    const context = selectedKubernetesContext();
+    for (const guest of allGuests()) {
+      if (resolveWorkloadType(guest) !== 'k8s') continue;
+      if (context && getKubernetesContextKey(guest) !== context) continue;
+      const namespace = (guest.namespace || '').trim();
+      if (namespace) {
+        namespaces.add(namespace);
+      }
+    }
+    return Array.from(namespaces).sort((a, b) => a.localeCompare(b));
+  });
+
+  const containerRuntimeOptions = createMemo(() => {
+    const runtimes = new Set<string>();
+    for (const guest of allGuests()) {
+      if (resolveWorkloadType(guest) !== 'docker') continue;
+      const runtime = (guest.containerRuntime || '').trim();
+      if (runtime) {
+        runtimes.add(runtime);
+      }
+    }
+    return Array.from(runtimes).sort((a, b) => a.localeCompare(b));
+  });
+
   // Initialize from localStorage with proper type checking
   const [viewMode, setViewMode] = usePersistentSignal<ViewMode>('dashboardViewMode', 'all', {
     deserialize: (raw) =>
       raw === 'all' || raw === 'vm' || raw === 'lxc' || raw === 'docker' || raw === 'k8s'
         ? raw
         : 'all',
+  });
+
+  const [containerRuntime, setContainerRuntime] = usePersistentSignal<string>('dashboardContainerRuntime', '', {
+    deserialize: (raw) => (typeof raw === 'string' ? raw : ''),
+    serialize: (value) => value,
+  });
+
+  createEffect(() => {
+    if (!isWorkloadsRoute()) return;
+    if (viewMode() !== 'docker') return;
+    const selected = containerRuntime().trim();
+    if (!selected) return;
+    const normalized = selected.toLowerCase();
+    const exists = containerRuntimeOptions().some((value) => value.toLowerCase() === normalized);
+    if (!exists) {
+      setContainerRuntime('');
+    }
+  });
+
+  createEffect(() => {
+    if (!isWorkloadsRoute()) return;
+    if (viewMode() !== 'k8s') return;
+    const selected = selectedNamespace();
+    if (!selected) return;
+    if (!kubernetesNamespaceOptions().includes(selected)) {
+      setSelectedNamespace(null);
+    }
   });
 
   createEffect(() => {
@@ -499,6 +583,16 @@ export function Dashboard(props: DashboardProps) {
     if (selectedKubernetesContext() !== null) {
       setSelectedKubernetesContext(null);
     }
+    if (selectedNamespace() !== null) {
+      setSelectedNamespace(null);
+    }
+  });
+
+  createEffect(() => {
+    if (!isWorkloadsRoute()) return;
+    if (viewMode() !== 'docker' && containerRuntime().trim() !== '') {
+      setContainerRuntime('');
+    }
   });
 
   const normalizeTypeParam = (value: string): ViewMode | null => {
@@ -513,26 +607,45 @@ export function Dashboard(props: DashboardProps) {
 
   createEffect(() => {
     const { type: typeParam } = parseWorkloadsLinkSearch(location.search);
-    if (!typeParam || typeParam === handledTypeParam()) return;
-    const nextMode = normalizeTypeParam(typeParam);
-    if (!nextMode) return;
+    const normalizedType = typeParam ?? '';
+    if (normalizedType === handledTypeParam()) return;
+
+    if (!normalizedType) {
+      setHandledTypeParam('');
+      return;
+    }
+
+    // Context implies k8s view; ignore conflicting type params.
+    const { context: contextParam } = parseWorkloadsLinkSearch(location.search);
+    const hasContext = Boolean((contextParam ?? '').trim());
+    const nextMode = normalizeTypeParam(normalizedType);
+    if (!nextMode) {
+      setHandledTypeParam(normalizedType);
+      return;
+    }
+    if (hasContext && nextMode !== 'k8s') {
+      setHandledTypeParam(normalizedType);
+      return;
+    }
+
     setViewMode(nextMode);
-    setHandledTypeParam(typeParam);
+    setHandledTypeParam(normalizedType);
   });
 
   createEffect(() => {
     const { context: contextParam } = parseWorkloadsLinkSearch(location.search);
-    if (contextParam === handledContextParam()) return;
+    const normalized = contextParam ?? '';
+    if (normalized === handledContextParam()) return;
 
-    if (contextParam) {
+    if (normalized) {
       if (viewMode() !== 'k8s') {
         setViewMode('k8s');
       }
-      setSelectedKubernetesContext(contextParam);
+      setSelectedKubernetesContext(normalized);
       if (!showFilters()) {
         setShowFilters(true);
       }
-      setHandledContextParam(contextParam);
+      setHandledContextParam(normalized);
       return;
     }
 
@@ -542,37 +655,91 @@ export function Dashboard(props: DashboardProps) {
 
   createEffect(() => {
     const { host: hostParam } = parseWorkloadsLinkSearch(location.search);
-    if (hostParam === handledHostParam()) return;
+    const normalized = hostParam ?? '';
+    if (normalized === handledHostParam()) return;
 
-    if (hostParam) {
-      setSelectedHostHint(hostParam);
+    if (normalized) {
+      setSelectedHostHint(normalized);
       if (!showFilters()) {
         setShowFilters(true);
       }
-      setHandledHostParam(hostParam);
+      setHandledHostParam(normalized);
       return;
     }
 
     setSelectedHostHint(null);
+    if (selectedNode() !== null) {
+      setSelectedNode(null);
+    }
     setHandledHostParam('');
+  });
+
+  createEffect(() => {
+    const parsed = parseWorkloadsLinkSearch(location.search);
+    const urlRuntime = parsed.runtime ?? '';
+    if (urlRuntime === handledRuntimeParam()) return;
+
+    const urlContext = parsed.context ?? '';
+    const hasContext = Boolean(urlContext.trim());
+    const urlType = parsed.type ?? '';
+    const nextMode = normalizeTypeParam(urlType);
+    const runtimeRelevant = !hasContext && (nextMode === 'docker' || !urlType.trim());
+
+    // Ignore runtime param outside of container views, but still mark it handled so URL-sync can clean it up.
+    if (!runtimeRelevant) {
+      setHandledRuntimeParam(urlRuntime);
+      return;
+    }
+
+    if (!urlRuntime.trim()) {
+      setContainerRuntime('');
+      setHandledRuntimeParam('');
+      return;
+    }
+
+    if (viewMode() !== 'docker') {
+      setViewMode('docker');
+    }
+    setContainerRuntime(urlRuntime);
+    if (!showFilters()) {
+      setShowFilters(true);
+    }
+    setHandledRuntimeParam(urlRuntime);
   });
 
   createEffect(() => {
     if (!isWorkloadsRoute()) return;
 
+    const parsed = parseWorkloadsLinkSearch(location.search);
+    const urlType = parsed.type ?? '';
+    const urlRuntime = parsed.runtime ?? '';
+    const urlContext = parsed.context ?? '';
+    const urlHost = parsed.host ?? '';
+    const urlResource = parsed.resource ?? '';
+
+    // Avoid oscillation: only write managed params after we've processed the current URL.
+    if (handledTypeParam() !== urlType) return;
+    if (handledRuntimeParam() !== urlRuntime) return;
+    if (handledContextParam() !== urlContext) return;
+    if (handledHostParam() !== urlHost) return;
+    if (urlResource && handledResourceId() !== urlResource) return;
+
     const currentParams = new URLSearchParams(location.search);
     const nextParams = new URLSearchParams(location.search);
     const nextType = viewMode() === 'all' ? '' : viewMode();
+    const nextRuntime = viewMode() === 'docker' ? containerRuntime().trim() : '';
     const nextContext = viewMode() === 'k8s' ? selectedKubernetesContext() ?? '' : '';
     const nextHost = viewMode() === 'k8s' ? '' : selectedNode() ?? selectedHostHint() ?? '';
 
     const managedPath = buildWorkloadsPath({
       type: nextType || null,
+      runtime: nextRuntime || null,
       context: nextContext || null,
       host: nextHost || null,
     });
     const managedUrl = new URL(managedPath, 'http://pulse.local');
     nextParams.delete(WORKLOADS_QUERY_PARAMS.type);
+    nextParams.delete(WORKLOADS_QUERY_PARAMS.runtime);
     nextParams.delete(WORKLOADS_QUERY_PARAMS.context);
     nextParams.delete(WORKLOADS_QUERY_PARAMS.host);
     managedUrl.searchParams.forEach((value, key) => {
@@ -582,7 +749,7 @@ export function Dashboard(props: DashboardProps) {
     if (!areSearchParamsEquivalent(currentParams, nextParams)) {
       const nextSearch = nextParams.toString();
       const nextPath = nextSearch ? `${WORKLOADS_PATH}?${nextSearch}` : WORKLOADS_PATH;
-      navigate(nextPath, { replace: true });
+      scheduleUrlSyncNavigate(nextPath);
     }
   });
 
@@ -822,6 +989,8 @@ export function Dashboard(props: DashboardProps) {
           selectedNode() !== null ||
           selectedHostHint() !== null ||
           selectedKubernetesContext() !== null ||
+          selectedNamespace() !== null ||
+          containerRuntime().trim() !== '' ||
           viewMode() !== 'all' ||
           statusMode() !== 'all';
 
@@ -834,6 +1003,8 @@ export function Dashboard(props: DashboardProps) {
           setSelectedNode(null);
           setSelectedHostHint(null);
           setSelectedKubernetesContext(null);
+          setSelectedNamespace(null);
+          setContainerRuntime('');
           setViewMode('all');
           setStatusMode('all');
 
@@ -862,6 +1033,8 @@ export function Dashboard(props: DashboardProps) {
       selectedNode: selectedNode(),
       selectedHostHint: selectedHostHint(),
       selectedKubernetesContext: selectedKubernetesContext(),
+      selectedNamespace: selectedNamespace(),
+      containerRuntime: containerRuntime().trim() || null,
     };
     return filterWorkloads(params);
   });
@@ -925,7 +1098,7 @@ export function Dashboard(props: DashboardProps) {
     const normalizedGroupKey = guests.length > 0 ? getWorkloadGroupKey(guests[0]) : groupKey;
     const [prefix, ...rest] = normalizedGroupKey.split(':');
     const context = rest.length > 0 ? rest.join(':') : normalizedGroupKey;
-    if (prefix === 'docker') return { type: 'Docker', name: context };
+    if (prefix === 'docker') return { type: 'Containers', name: context };
     if (prefix === 'k8s') return { type: 'K8s', name: context };
     if (prefix === 'vm') return { type: 'VM', name: context };
     if (prefix === 'lxc') return { type: 'LXC', name: context };
@@ -1304,6 +1477,41 @@ export function Dashboard(props: DashboardProps) {
           isColumnHidden={columnVisibility.isHiddenByUser}
           onColumnToggle={columnVisibility.toggle}
           onColumnReset={columnVisibility.resetToDefaults}
+          kubernetesNamespaceFilter={(() => {
+            if (!isWorkloadsRoute()) return undefined;
+            if (viewMode() !== 'k8s') return undefined;
+            const options = kubernetesNamespaceOptions();
+            if (options.length === 0) return undefined;
+            return {
+              id: 'workloads-k8s-namespace-filter',
+              label: 'Namespace',
+              value: selectedNamespace() ?? '',
+              options: [
+                { value: '', label: 'All namespaces' },
+                ...options.map((namespace) => ({
+                  value: namespace,
+                  label: namespace,
+                })),
+              ],
+              onChange: (value: string) => setSelectedNamespace(value || null),
+            };
+          })()}
+          containerRuntimeFilter={(() => {
+            if (!isWorkloadsRoute()) return undefined;
+            if (viewMode() !== 'docker') return undefined;
+            const options = containerRuntimeOptions();
+            if (options.length === 0) return undefined;
+            return {
+              id: 'workloads-container-runtime-filter',
+              label: 'Runtime',
+              value: containerRuntime(),
+              options: [
+                { value: '', label: 'All runtimes' },
+                ...options.map((value) => ({ value, label: value })),
+              ],
+              onChange: (value: string) => setContainerRuntime(value),
+            };
+          })()}
           hostFilter={(() => {
             if (!isWorkloadsRoute()) return undefined;
             if (viewMode() === 'k8s') {

@@ -56,6 +56,9 @@ vi.mock('@/hooks/useWorkloads', () => ({
   useWorkloads: () => ({
     workloads: () => mockWorkloads as any,
     refetch: vi.fn(),
+    mutate: vi.fn(),
+    loading: () => false,
+    error: () => null,
   }),
 }));
 

@@ -44,7 +44,13 @@ vi.mock('@/hooks/useWorkloads', () => ({
   useWorkloads: () => {
     const [workloads, setWorkloads] = createSignal(mockWorkloads as any);
     setMockWorkloadsSignal = (next) => setWorkloads(next as any);
-    return { workloads, refetch: vi.fn() };
+    return {
+      workloads,
+      refetch: vi.fn(),
+      mutate: vi.fn(),
+      loading: () => false,
+      error: () => null,
+    };
   },
 }));
 
@@ -344,6 +350,7 @@ describe('Dashboard performance contract', () => {
         selectedNode: null,
         selectedHostHint: null,
         selectedKubernetesContext: null,
+        selectedNamespace: null,
       });
       expect(result).toHaveLength(PROFILES.S);
     });
@@ -359,6 +366,7 @@ describe('Dashboard performance contract', () => {
         selectedNode: null,
         selectedHostHint: null,
         selectedKubernetesContext: null,
+        selectedNamespace: null,
       });
       expect(result).toHaveLength(vmCount);
     });
