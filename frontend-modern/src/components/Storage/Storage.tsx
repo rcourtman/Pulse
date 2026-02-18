@@ -13,7 +13,7 @@ import {
   getCephHealthStyles,
 } from '@/features/storageBackups/storageDomain';
 import type { NormalizedHealth, StorageRecord } from '@/features/storageBackups/models';
-import { useStorageBackupsResources } from '@/hooks/useUnifiedResources';
+import { useStorageRecoveryResources } from '@/hooks/useUnifiedResources';
 import {
   buildStoragePath,
   parseStorageLinkSearch,
@@ -88,7 +88,7 @@ const Storage: Component = () => {
   const nodes = createMemo(() => byType('node'));
   const physicalDisks = createMemo(() => byType('physical_disk'));
   const cephResources = createMemo(() => byType('ceph'));
-  const storageBackupsResources = useStorageBackupsResources();
+  const storageBackupsResources = useStorageRecoveryResources();
   const alertsActivation = useAlertsActivation();
   const alertsEnabled = createMemo(() => alertsActivation.activationState() === 'active');
 
@@ -551,18 +551,18 @@ const Storage: Component = () => {
                 }
               >
                 <div class="overflow-x-auto">
-                  <table class="w-full text-sm">
+                  <table class="w-full text-xs">
                     <thead>
-                      <tr class="border-b border-gray-200 bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500 dark:border-gray-700 dark:bg-gray-800/60 dark:text-gray-400">
-                        <th class="px-3 py-2">Name</th>
+                      <tr class="border-b border-gray-200 bg-gray-50 text-left text-[10px] uppercase tracking-wide text-gray-500 dark:border-gray-700 dark:bg-gray-800/60 dark:text-gray-400">
+                        <th class="px-1.5 sm:px-2 py-1">Name</th>
                         <Show when={groupBy() !== 'node'}>
-                          <th class="px-3 py-2">Node</th>
+                          <th class="px-1.5 sm:px-2 py-1">Node</th>
                         </Show>
-                        <th class="px-3 py-2">Type</th>
-                        <th class="px-3 py-2 min-w-[180px]">Capacity</th>
-                        <th class="px-3 py-2 w-[120px] hidden md:table-cell">Trend</th>
-                        <th class="px-3 py-2">Health</th>
-                        <th class="px-3 py-2 w-10" />
+                        <th class="px-1.5 sm:px-2 py-1">Type</th>
+                        <th class="px-1.5 sm:px-2 py-1 min-w-[180px]">Capacity</th>
+                        <th class="px-1.5 sm:px-2 py-1 w-[120px] hidden md:table-cell">Trend</th>
+                        <th class="px-1.5 sm:px-2 py-1">Health</th>
+                        <th class="px-1.5 sm:px-2 py-1 w-10" />
                       </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-200 dark:divide-gray-700">

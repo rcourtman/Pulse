@@ -77,9 +77,9 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
         {...props.alertDataAttrs}
       >
         {/* Name + badges */}
-        <td class="px-3 py-2 text-gray-900 dark:text-gray-100">
+        <td class="px-1.5 sm:px-2 py-1 text-gray-900 dark:text-gray-100">
           <div class="flex items-center gap-1.5 min-w-0">
-            <span class="truncate max-w-[220px] text-sm" title={props.record.name}>
+            <span class="truncate max-w-[220px] text-[11px]" title={props.record.name}>
               {props.record.name}
             </span>
             <Show when={zfsPool() && zfsPool()!.devices.length > 0}>
@@ -115,20 +115,20 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
 
         {/* Node (only when not grouped by node) */}
         <Show when={props.groupBy !== 'node'}>
-          <td class="px-3 py-2 text-xs text-gray-600 dark:text-gray-400">
+          <td class="px-1.5 sm:px-2 py-1 text-xs text-gray-600 dark:text-gray-400">
             {getRecordNodeLabel(props.record)}
           </td>
         </Show>
 
         {/* Type badge */}
-        <td class="px-3 py-2">
+        <td class="px-1.5 sm:px-2 py-1">
           <span class={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${getTypeBadgeClass(type())}`}>
             {type()}
           </span>
         </td>
 
         {/* Capacity bar */}
-        <td class="px-3 py-2 min-w-[180px]">
+        <td class="px-1.5 sm:px-2 py-1 min-w-[180px]">
           <Show
             when={totalBytes() > 0}
             fallback={<span class="text-xs text-gray-400">n/a</span>}
@@ -143,21 +143,21 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
         </td>
 
         {/* Sparkline: 7-day usage trend */}
-        <td class="px-3 py-2 w-[120px] hidden md:table-cell">
+        <td class="px-1.5 sm:px-2 py-1 w-[120px] hidden md:table-cell">
           <Show when={sparklineData().length > 0} fallback={<div class="h-4 w-full" />}>
             <Sparkline data={sparklineData()} metric="disk" width={100} height={20} />
           </Show>
         </td>
 
         {/* Health */}
-        <td class="px-3 py-2">
+        <td class="px-1.5 sm:px-2 py-1">
           <span class={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${healthBadge().bg} ${healthBadge().text}`}>
             {props.record.health}
           </span>
         </td>
 
         {/* Expand chevron */}
-        <td class="px-2 py-2 text-right">
+        <td class="px-1.5 sm:px-2 py-1 text-right">
           <button
             type="button"
             onClick={(e) => {

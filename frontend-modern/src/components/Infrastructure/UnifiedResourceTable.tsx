@@ -344,7 +344,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
   const tdClass = 'px-1.5 sm:px-2 py-1 align-middle';
   const resourceColumnStyle = createMemo(() =>
     isMobile()
-      ? { width: '140px', 'min-width': '120px' }
+      ? { width: '220px', 'min-width': '180px' }
       : { 'min-width': '220px' }
   );
   const metricColumnStyle = createMemo(() =>
@@ -359,8 +359,8 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
   );
   const sourceColumnStyle = createMemo(() =>
     isMobile()
-      ? { width: '100px', 'min-width': '100px', 'max-width': '120px' }
-      : { width: '140px', 'min-width': '140px', 'max-width': '160px' }
+      ? { width: '140px', 'min-width': '140px' }
+      : { width: '160px', 'min-width': '160px' }
   );
   const uptimeColumnStyle = createMemo(() =>
     isMobile()
@@ -414,7 +414,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
 	        class="overflow-x-auto"
 	        style={{ '-webkit-overflow-scrolling': 'touch' }}
 	      >
-	        <table class="w-full border-collapse whitespace-nowrap" style={{ 'table-layout': 'fixed', 'min-width': isMobile() ? '960px' : '600px' }}>
+	        <table class="w-full border-collapse whitespace-nowrap" style={{ 'table-layout': 'fixed', 'min-width': isMobile() ? '1080px' : '600px' }}>
 	          <thead>
 	            <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
 	              <th class={`${thClassBase} text-left pl-2 sm:pl-3`} style={resourceColumnStyle()} onClick={() => handleSort('name')}>
@@ -540,12 +540,13 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                 });
                 const platformBadge = createMemo(() => getPlatformBadge(resource.platformType));
                 const sourceBadge = createMemo(() => getSourceBadge(resource.sourceType));
-                const unifiedSourceBadges = createMemo(() =>
-                  getUnifiedSourceBadges(getUnifiedSources(resource)),
-                );
                 const containerRuntimeBadge = createMemo(() =>
                   getContainerRuntimeBadge(resource.platformType, resource.platformData ?? null),
                 );
+                const unifiedSourceBadges = createMemo(() => {
+                  const badges = getUnifiedSourceBadges(getUnifiedSources(resource));
+                  return containerRuntimeBadge() ? badges.filter(b => b.title !== 'docker') : badges;
+                });
                 const hasUnifiedSources = createMemo(() => unifiedSourceBadges().length > 0);
                 const workloadsHref = createMemo(() => buildWorkloadsHref(resource));
 
@@ -696,7 +697,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
 	                      </td>
 	
 	                      <td class={tdClass} classList={{ hidden: !isVisible('secondary') && !isMobile() }}>
-	                        <div class="flex flex-wrap items-center justify-center gap-1">
+	                        <div class="flex items-center justify-center gap-1">
 	                          <Show
 	                            when={hasUnifiedSources()}
 	                            fallback={
@@ -940,7 +941,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
 	                            </td>
 	
 	                            <td class={tdClass} classList={{ hidden: !isVisible('secondary') && !isMobile() }}>
-	                              <div class="flex flex-wrap items-center justify-center gap-1">
+	                              <div class="flex items-center justify-center gap-1">
 	                                <Show
 	                                  when={hasUnifiedSources()}
 	                                  fallback={
@@ -1184,7 +1185,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
 	                            </td>
 	
 	                            <td class={tdClass} classList={{ hidden: !isVisible('secondary') && !isMobile() }}>
-	                              <div class="flex flex-wrap items-center justify-center gap-1">
+	                              <div class="flex items-center justify-center gap-1">
 	                                <Show
 	                                  when={hasUnifiedSources()}
 	                                  fallback={

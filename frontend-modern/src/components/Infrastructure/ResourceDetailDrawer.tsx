@@ -1,6 +1,5 @@
 import { Show, Suspense, createMemo, For, createSignal, createEffect } from 'solid-js';
-import type { Component, JSX } from 'solid-js';
-import { Portal } from 'solid-js/web';
+import type { Component } from 'solid-js';
 import type { Disk, Host, HostNetworkInterface, HostRAIDArray, HostSensorSummary, Memory, Node } from '@/types/api';
 import type { Resource, ResourceMetric } from '@/types/resource';
 import { getDisplayName } from '@/types/resource';
@@ -23,7 +22,12 @@ import { createLocalStorageBooleanSignal, STORAGE_KEYS } from '@/utils/localStor
 import { ReportMergeModal } from './ReportMergeModal';
 import { DiscoveryTab } from '@/components/Discovery/DiscoveryTab';
 import type { ResourceType as DiscoveryResourceType } from '@/types/discovery';
-import { useBreakpoint } from '@/hooks/useBreakpoint';
+import { PMGInstanceDrawer } from '@/components/PMG/PMGInstanceDrawer';
+import { K8sDeploymentsDrawer } from '@/components/Kubernetes/K8sDeploymentsDrawer';
+import { K8sNamespacesDrawer } from '@/components/Kubernetes/K8sNamespacesDrawer';
+import { MonitoringAPI } from '@/api/monitoring';
+import { areSystemSettingsLoaded, shouldHideDockerUpdateActions } from '@/stores/systemSettings';
+import { SwarmServicesDrawer } from '@/components/Docker/SwarmServicesDrawer';
 
 interface ResourceDetailDrawerProps {
   resource: Resource;
@@ -129,6 +133,46 @@ type PlatformData = {
   matchResults?: unknown;
   matchCandidates?: unknown;
   matches?: unknown;
+};
+
+type DockerHostCommand = {
+  id?: string;
+  type?: string;
+  status?: string;
+  message?: string;
+  failureReason?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  acknowledgedAt?: string;
+  completedAt?: string;
+  failedAt?: string;
+};
+
+type DockerPlatformData = {
+  hostSourceId?: string;
+  hostname?: string;
+  runtime?: string;
+  runtimeVersion?: string;
+  dockerVersion?: string;
+  os?: string;
+  kernelVersion?: string;
+  architecture?: string;
+  agentVersion?: string;
+  uptimeSeconds?: number;
+  swarm?: {
+    nodeId?: string;
+    nodeRole?: string;
+    localState?: string;
+    controlAvailable?: boolean;
+    clusterId?: string;
+    clusterName?: string;
+    scope?: string;
+    error?: string;
+  };
+  containerCount?: number;
+  updatesAvailableCount?: number;
+  updatesLastCheckedAt?: string;
+  command?: DockerHostCommand;
 };
 
 export type DiscoveryConfig = {
@@ -467,7 +511,7 @@ const formatSourceType = (value: Resource['sourceType']): string => {
 };
 
 const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
-  type DrawerTab = 'overview' | 'discovery' | 'debug';
+  type DrawerTab = 'overview' | 'mail' | 'namespaces' | 'deployments' | 'swarm' | 'discovery' | 'debug';
   const [activeTab, setActiveTab] = createSignal<DrawerTab>('overview');
   const [debugEnabled] = createLocalStorageBooleanSignal(STORAGE_KEYS.DEBUG_MODE, false);
   const [copied, setCopied] = createSignal(false);
@@ -548,6 +592,37 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
 	const proxmoxNode = createMemo(() => toNodeFromProxmox(props.resource));
 	const agentHost = createMemo(() => toHostFromAgent(props.resource, agentMeta()));
 	const temperatureRows = createMemo(() => buildTemperatureRows(agentHost()?.sensors));
+
+  const dockerHostData = createMemo(() => platformData()?.docker as DockerPlatformData | undefined);
+  const dockerHostSourceId = createMemo(() => (dockerHostData()?.hostSourceId || '').trim() || null);
+  const dockerUpdatesAvailable = createMemo(() => dockerHostData()?.updatesAvailableCount ?? 0);
+  const dockerContainerCount = createMemo(() => dockerHostData()?.containerCount ?? 0);
+  const dockerUpdatesCheckedRelative = createMemo(() => {
+    const raw = dockerHostData()?.updatesLastCheckedAt;
+    if (!raw) return '';
+    const parsed = Date.parse(raw);
+    if (!Number.isFinite(parsed)) return '';
+    return formatRelativeTime(parsed);
+  });
+  const dockerHostCommand = createMemo(() => dockerHostData()?.command);
+  const dockerHostCommandActive = createMemo(() => {
+    const status = (dockerHostCommand()?.status || '').trim().toLowerCase();
+    return ['queued', 'dispatched', 'acknowledged', 'in_progress'].includes(status);
+  });
+  const dockerUpdateActionsDisabled = createMemo(() => shouldHideDockerUpdateActions());
+  const dockerUpdateActionsLoading = createMemo(() => !areSystemSettingsLoaded());
+
+  const [dockerActionError, setDockerActionError] = createSignal<string>('');
+  const [dockerActionNote, setDockerActionNote] = createSignal<string>('');
+  const [confirmUpdateAll, setConfirmUpdateAll] = createSignal(false);
+  const [dockerActionBusy, setDockerActionBusy] = createSignal(false);
+  const dockerSwarmInfo = createMemo(() => dockerHostData()?.swarm);
+  const dockerSwarmClusterKey = createMemo(() => {
+    const swarm = dockerSwarmInfo();
+    return (swarm?.clusterName || swarm?.clusterId || '').trim();
+  });
+
+  const [k8sDeploymentsPrefillNamespace, setK8sDeploymentsPrefillNamespace] = createSignal('');
 
 	const pbsData = createMemo(() => platformData()?.pbs);
 	const pmgData = createMemo(() => platformData()?.pmg);
@@ -809,12 +884,26 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
   const tabs = createMemo(() => {
     const base = [
       { id: 'overview' as DrawerTab, label: 'Overview' },
+      ...(props.resource.type === 'pmg' ? [{ id: 'mail' as DrawerTab, label: 'Mail' }] : []),
+      ...(props.resource.type === 'k8s-cluster' ? [{ id: 'namespaces' as DrawerTab, label: 'Namespaces' }] : []),
+      ...(props.resource.type === 'k8s-cluster' ? [{ id: 'deployments' as DrawerTab, label: 'Deployments' }] : []),
+      ...(props.resource.type === 'docker-host' && dockerSwarmClusterKey()
+        ? [{ id: 'swarm' as DrawerTab, label: 'Swarm' }]
+        : []),
       { id: 'discovery' as DrawerTab, label: 'Discovery' },
     ];
     if (debugEnabled()) {
       base.push({ id: 'debug' as DrawerTab, label: 'Debug' });
     }
     return base;
+  });
+
+  createEffect(() => {
+    const current = activeTab();
+    const available = new Set(tabs().map((tab) => tab.id));
+    if (!available.has(current)) {
+      setActiveTab('overview');
+    }
   });
 
   const formatSourceTime = (value?: string | number) => {
@@ -916,9 +1005,12 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
           <button
             type="button"
             onClick={() => props.onClose?.()}
-            class="text-xs font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            class="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300"
+            aria-label="Close"
           >
-            Close
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
           </button>
         </Show>
       </div>
@@ -1121,6 +1213,147 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
 		            </div>
 		          </div>
 
+              <Show when={props.resource.type === 'docker-host'}>
+                <div class="rounded border border-sky-200 bg-sky-50/50 p-3 shadow-sm dark:border-sky-700/50 dark:bg-sky-900/20">
+                  <div class="mb-2 flex items-center justify-between gap-2">
+                    <div class="text-[11px] font-medium uppercase tracking-wide text-sky-700 dark:text-sky-300">Container Updates</div>
+                    <Show when={dockerHostData()?.runtime}>
+                      <span class="max-w-[55%] truncate text-[10px] text-sky-700/80 dark:text-sky-300/80" title={dockerHostData()?.runtime}>
+                        {dockerHostData()?.runtime}
+                      </span>
+                    </Show>
+                  </div>
+
+                  <div class="space-y-1.5 text-[11px]">
+                    <div class="flex items-center justify-between gap-2">
+                      <span class="text-gray-500 dark:text-gray-400">Containers</span>
+                      <span class="font-medium text-gray-700 dark:text-gray-200">{formatInteger(dockerContainerCount())}</span>
+                    </div>
+                    <div class="flex items-center justify-between gap-2">
+                      <span class="text-gray-500 dark:text-gray-400">Updates Available</span>
+                      <span class={`font-medium ${dockerUpdatesAvailable() > 0 ? 'text-sky-700 dark:text-sky-300' : 'text-gray-700 dark:text-gray-200'}`}>
+                        {formatInteger(dockerUpdatesAvailable())}
+                      </span>
+                    </div>
+                    <Show when={dockerUpdatesCheckedRelative()}>
+                      <div class="flex items-center justify-between gap-2">
+                        <span class="text-gray-500 dark:text-gray-400">Last Check</span>
+                        <span class="font-medium text-gray-700 dark:text-gray-200">{dockerUpdatesCheckedRelative()}</span>
+                      </div>
+                    </Show>
+
+                    <Show when={dockerHostCommand()?.type || dockerHostCommand()?.status}>
+                      <div class="rounded border border-sky-200/60 bg-white/70 px-2 py-1.5 text-[10px] dark:border-sky-700/40 dark:bg-gray-900/30">
+                        <div class="flex items-center justify-between gap-2">
+                          <span class="text-gray-500 dark:text-gray-400">Command</span>
+                          <span class="font-medium text-gray-700 dark:text-gray-200">
+                            {(dockerHostCommand()?.type || 'command').replace(/_/g, ' ')}
+                          </span>
+                        </div>
+                        <div class="mt-1 flex items-center justify-between gap-2">
+                          <span class="text-gray-500 dark:text-gray-400">Status</span>
+                          <span class={`font-medium ${dockerHostCommandActive() ? 'text-sky-700 dark:text-sky-300' : 'text-gray-700 dark:text-gray-200'}`}>
+                            {(dockerHostCommand()?.status || 'unknown').replace(/_/g, ' ')}
+                          </span>
+                        </div>
+                        <Show when={dockerHostCommand()?.message}>
+                          <div class="mt-1 text-gray-600 dark:text-gray-300 truncate" title={dockerHostCommand()?.message}>
+                            {dockerHostCommand()?.message}
+                          </div>
+                        </Show>
+                        <Show when={dockerHostCommand()?.failureReason}>
+                          <div class="mt-1 text-red-700 dark:text-red-300 truncate" title={dockerHostCommand()?.failureReason}>
+                            {dockerHostCommand()?.failureReason}
+                          </div>
+                        </Show>
+                      </div>
+                    </Show>
+
+                    <Show when={dockerActionError()}>
+                      <div class="rounded border border-red-200 bg-red-50/60 px-2 py-1.5 text-[10px] text-red-700 dark:border-red-700/50 dark:bg-red-900/20 dark:text-red-200">
+                        {dockerActionError()}
+                      </div>
+                    </Show>
+                    <Show when={dockerActionNote()}>
+                      <div class="rounded border border-sky-200/60 bg-white/70 px-2 py-1.5 text-[10px] text-gray-700 dark:border-sky-700/40 dark:bg-gray-900/30 dark:text-gray-200">
+                        {dockerActionNote()}
+                      </div>
+                    </Show>
+
+                    <div class="flex flex-wrap items-center gap-2 pt-1">
+                      <button
+                        type="button"
+                        disabled={
+                          dockerActionBusy() ||
+                          dockerUpdateActionsLoading() ||
+                          dockerHostCommandActive() ||
+                          dockerHostSourceId() === null
+                        }
+                        onClick={async () => {
+                          setDockerActionError('');
+                          setDockerActionNote('');
+                          setConfirmUpdateAll(false);
+                          const hostId = dockerHostSourceId();
+                          if (!hostId) return;
+                          try {
+                            setDockerActionBusy(true);
+                            await MonitoringAPI.checkDockerUpdates(hostId);
+                            setDockerActionNote('Update check queued. Results will refresh on the next agent report.');
+                          } catch (err) {
+                            setDockerActionError((err as Error)?.message || 'Failed to queue update check');
+                          } finally {
+                            setDockerActionBusy(false);
+                          }
+                        }}
+                        class="rounded-md border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-60 disabled:hover:bg-white dark:border-gray-700 dark:bg-gray-900/50 dark:text-gray-200 dark:hover:bg-gray-800 dark:disabled:hover:bg-gray-900/50"
+                        title={dockerUpdateActionsLoading() ? 'Loading server settings...' : undefined}
+                      >
+                        Check Updates
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={
+                          dockerActionBusy() ||
+                          dockerUpdateActionsLoading() ||
+                          dockerUpdateActionsDisabled() ||
+                          dockerHostCommandActive() ||
+                          dockerHostSourceId() === null ||
+                          dockerUpdatesAvailable() <= 0
+                        }
+                        onClick={async () => {
+                          setDockerActionError('');
+                          setDockerActionNote('');
+                          const hostId = dockerHostSourceId();
+                          if (!hostId) return;
+
+                          if (!confirmUpdateAll()) {
+                            setConfirmUpdateAll(true);
+                            setDockerActionNote(`Click again to confirm updating ${dockerUpdatesAvailable()} container(s).`);
+                            return;
+                          }
+
+                          try {
+                            setDockerActionBusy(true);
+                            await MonitoringAPI.updateAllDockerContainers(hostId);
+                            setDockerActionNote('Batch update queued. Progress will appear as the agent reports back.');
+                          } catch (err) {
+                            setDockerActionError((err as Error)?.message || 'Failed to queue batch update');
+                          } finally {
+                            setDockerActionBusy(false);
+                            setConfirmUpdateAll(false);
+                          }
+                        }}
+                        class="rounded-md border border-sky-200 bg-sky-600 px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm hover:bg-sky-700 disabled:opacity-60 disabled:hover:bg-sky-600 dark:border-sky-700/60 dark:bg-sky-600 dark:hover:bg-sky-500 dark:disabled:hover:bg-sky-600"
+                        title={dockerUpdateActionsDisabled() ? 'Docker updates are disabled by server configuration.' : undefined}
+                      >
+                        {confirmUpdateAll() ? 'Confirm Update All' : `Update All${dockerUpdatesAvailable() > 0 ? ` (${dockerUpdatesAvailable()})` : ''}`}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </Show>
+
 		          <Show when={pbsData()}>
 		            {(pbs) => (
 		              <div class="rounded border border-indigo-200 bg-indigo-50/60 p-3 shadow-sm dark:border-indigo-700/60 dark:bg-indigo-900/20">
@@ -1314,6 +1547,86 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
         </Show>
       </div>
 
+      {/* PMG Mail Tab */}
+      <div class={activeTab() === 'mail' ? '' : 'hidden'} style={{ "overflow-anchor": "none" }}>
+        {/* Mount on-demand to avoid background fetching when the tab isn't open. */}
+        <Show when={activeTab() === 'mail'}>
+          <Show
+            when={props.resource.type === 'pmg'}
+            fallback={
+              <div class="rounded border border-dashed border-gray-300 bg-gray-50/70 p-4 text-sm text-gray-600 dark:border-gray-600 dark:bg-gray-900/30 dark:text-gray-300">
+                Mail details are only available for PMG resources.
+              </div>
+            }
+          >
+            <PMGInstanceDrawer
+              resourceId={props.resource.id}
+              resourceName={props.resource.name || props.resource.displayName || props.resource.id}
+            />
+          </Show>
+        </Show>
+      </div>
+
+      {/* Kubernetes Namespaces Tab */}
+      <div class={activeTab() === 'namespaces' ? '' : 'hidden'} style={{ "overflow-anchor": "none" }}>
+        {/* Mount on-demand to avoid background fetching when the tab isn't open. */}
+        <Show when={activeTab() === 'namespaces'}>
+          <Show
+            when={props.resource.type === 'k8s-cluster'}
+            fallback={
+              <div class="rounded border border-dashed border-gray-300 bg-gray-50/70 p-4 text-sm text-gray-600 dark:border-gray-600 dark:bg-gray-900/30 dark:text-gray-300">
+                Namespaces are only available for Kubernetes cluster resources.
+              </div>
+            }
+          >
+            <K8sNamespacesDrawer
+              cluster={props.resource.name || props.resource.displayName || ''}
+              onOpenDeployments={(ns) => {
+                setK8sDeploymentsPrefillNamespace((ns || '').trim());
+                setActiveTab('deployments');
+              }}
+            />
+          </Show>
+        </Show>
+      </div>
+
+      {/* Kubernetes Deployments Tab */}
+      <div class={activeTab() === 'deployments' ? '' : 'hidden'} style={{ "overflow-anchor": "none" }}>
+        {/* Mount on-demand to avoid background fetching when the tab isn't open. */}
+        <Show when={activeTab() === 'deployments'}>
+          <Show
+            when={props.resource.type === 'k8s-cluster'}
+            fallback={
+              <div class="rounded border border-dashed border-gray-300 bg-gray-50/70 p-4 text-sm text-gray-600 dark:border-gray-600 dark:bg-gray-900/30 dark:text-gray-300">
+                Deployments are only available for Kubernetes cluster resources.
+              </div>
+            }
+          >
+            <K8sDeploymentsDrawer
+              cluster={props.resource.name || props.resource.displayName || ''}
+              initialNamespace={k8sDeploymentsPrefillNamespace() || null}
+            />
+          </Show>
+        </Show>
+      </div>
+
+      {/* Docker Swarm Tab */}
+      <div class={activeTab() === 'swarm' ? '' : 'hidden'} style={{ "overflow-anchor": "none" }}>
+        {/* Mount on-demand to avoid background fetching when the tab isn't open. */}
+        <Show when={activeTab() === 'swarm'}>
+          <Show
+            when={props.resource.type === 'docker-host' && dockerSwarmClusterKey()}
+            fallback={
+              <div class="rounded border border-dashed border-gray-300 bg-gray-50/70 p-4 text-sm text-gray-600 dark:border-gray-600 dark:bg-gray-900/30 dark:text-gray-300">
+                Swarm details are only available for Docker hosts reporting Swarm metadata.
+              </div>
+            }
+          >
+            <SwarmServicesDrawer cluster={dockerSwarmClusterKey()} swarm={dockerSwarmInfo()} />
+          </Show>
+        </Show>
+      </div>
+
       {/* Debug Tab */}
       <Show when={debugEnabled()}>
         <div class={activeTab() === 'debug' ? '' : 'hidden'} style={{ "overflow-anchor": "none" }}>
@@ -1409,54 +1722,9 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
   );
 };
 
-interface MobileSheetProps {
-  onClose: () => void;
-  children: JSX.Element;
-}
-
-const MobileSheet: Component<MobileSheetProps> = (props) => {
-  return (
-    <Portal>
-      {/* Backdrop */}
-      <div class="fixed inset-0 bg-black/40 z-40" onClick={props.onClose} aria-hidden="true" />
-      {/* Sheet panel */}
-      <div class="fixed inset-x-0 bottom-0 z-50 flex flex-col max-h-[85vh] bg-white dark:bg-gray-800 rounded-t-2xl shadow-2xl overflow-hidden">
-        {/* Drag handle + close button row */}
-        <div class="relative flex items-center justify-center pt-3 pb-2 shrink-0">
-          <div class="w-10 h-1 bg-gray-300 dark:bg-gray-600 rounded-full" />
-          <button
-            type="button"
-            onClick={props.onClose}
-            class="absolute right-3 top-2 p-1.5 rounded-full text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700"
-            aria-label="Close"
-          >
-            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-        {/* Scrollable content */}
-        <div class="overflow-y-auto flex-1 px-4 pb-safe-or-20">{props.children}</div>
-      </div>
-    </Portal>
-  );
-};
 
 export const ResourceDetailDrawer: Component<ResourceDetailDrawerProps> = (props) => {
-  const { isMobile } = useBreakpoint();
-
-  return (
-    <Show
-      when={!isMobile()}
-      fallback={
-        <MobileSheet onClose={props.onClose ?? (() => {})}>
-          <DrawerContent resource={props.resource} onClose={props.onClose} />
-        </MobileSheet>
-      }
-    >
-      <DrawerContent resource={props.resource} onClose={props.onClose} />
-    </Show>
-  );
+  return <DrawerContent resource={props.resource} onClose={props.onClose} />;
 };
 
 export default ResourceDetailDrawer;

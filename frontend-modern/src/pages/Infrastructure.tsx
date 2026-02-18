@@ -54,8 +54,8 @@ export function Infrastructure() {
   const hasResources = createMemo(() => resources().length > 0);
   // Only show "no resources" after initial load completes with zero results
   const showNoResources = createMemo(() => initialLoadComplete() && !hasResources() && !error());
-  const [selectedSources, setSelectedSources] = createSignal<Set<string>>(new Set());
-  const [selectedStatuses, setSelectedStatuses] = createSignal<Set<string>>(new Set());
+  const [selectedSource, setSelectedSource] = createSignal('');
+  const [selectedStatus, setSelectedStatus] = createSignal('');
   const [searchQuery, setSearchQuery] = createSignal('');
   const [infrastructureSummaryRange, setInfrastructureSummaryRange] = usePersistentSignal<TimeRange>(
     STORAGE_KEYS.INFRASTRUCTURE_SUMMARY_RANGE,
@@ -77,7 +77,7 @@ export function Infrastructure() {
   const [hideMigrationNotice, setHideMigrationNotice] = createSignal(true);
   const { isMobile } = useBreakpoint();
   const [filtersOpen, setFiltersOpen] = createSignal(false);
-  const activeFilterCount = createMemo(() => selectedSources().size + selectedStatuses().size);
+  const activeFilterCount = createMemo(() => (selectedSource() !== '' ? 1 : 0) + (selectedStatus() !== '' ? 1 : 0));
   let highlightTimer: number | undefined;
 
   // URL sync can require multiple reactive updates (canonicalizing legacy params,
@@ -168,14 +168,9 @@ export function Infrastructure() {
   createEffect(() => {
     const { source: sourceParam } = parseInfrastructureLinkSearch(location.search);
     if (!sourceParam) {
-      // Keep URL as source-of-truth only for real URL transitions. If the user
-      // has just clicked a filter button, selectedSources() may update before
-      // the URL-sync effect runs; don't fight that.
       const previous = (handledSourceParam() ?? '').trim();
       if (previous) {
-        if (selectedSources().size > 0) {
-          setSelectedSources(new Set<string>());
-        }
+        if (selectedSource() !== '') setSelectedSource('');
         setHandledSourceParam('');
       } else if (handledSourceParam() === null) {
         setHandledSourceParam('');
@@ -183,16 +178,10 @@ export function Infrastructure() {
       return;
     }
     if (sourceParam === handledSourceParam()) return;
-    const sources = sourceParam
-      .split(',')
-      .map((value) => normalizeSource(value.trim()))
-      .filter((value): value is string => Boolean(value));
-    if (sources.length === 0) {
-      setSelectedSources(new Set<string>());
-      setHandledSourceParam(sourceParam);
-      return;
-    }
-    setSelectedSources(new Set(sources));
+    // Support legacy comma-separated params by taking the first value
+    const firstSource = sourceParam.split(',')[0].trim();
+    const normalized = normalizeSource(firstSource) ?? '';
+    setSelectedSource(normalized);
     setHandledSourceParam(sourceParam);
   });
 
@@ -219,10 +208,7 @@ export function Infrastructure() {
     if (handledQueryParam() !== urlQuery) return;
     if (urlResource && handledResourceId() !== urlResource && !initialLoadComplete()) return;
 
-    const selectedSourceValues = sourceOptions
-      .map((source) => source.key)
-      .filter((source) => selectedSources().has(source));
-    const nextSource = selectedSourceValues.join(',');
+    const nextSource = selectedSource();
     const nextQuery = searchQuery().trim();
     const currentLinkedResource = parseInfrastructureLinkSearch(location.search).resource;
     const selectedResourceId = expandedResourceId();
@@ -303,32 +289,12 @@ export function Infrastructure() {
   const statusOptions = createMemo(() => buildStatusOptions(availableStatuses()));
 
   const hasActiveFilters = createMemo(
-    () => selectedSources().size > 0 || selectedStatuses().size > 0 || searchQuery().trim().length > 0,
+    () => selectedSource() !== '' || selectedStatus() !== '' || searchQuery().trim().length > 0,
   );
 
-  const toggleSource = (source: string) => {
-    const next = new Set(selectedSources());
-    if (next.has(source)) {
-      next.delete(source);
-    } else {
-      next.add(source);
-    }
-    setSelectedSources(next);
-  };
-
-  const toggleStatus = (status: string) => {
-    const next = new Set(selectedStatuses());
-    if (next.has(status)) {
-      next.delete(status);
-    } else {
-      next.add(status);
-    }
-    setSelectedStatuses(next);
-  };
-
   const clearFilters = () => {
-    setSelectedSources(new Set<string>());
-    setSelectedStatuses(new Set<string>());
+    setSelectedSource('');
+    setSelectedStatus('');
     setSearchQuery('');
   };
 
@@ -346,7 +312,12 @@ export function Infrastructure() {
   const searchTerms = createMemo(() => tokenizeSearch(searchQuery()));
 
   const filteredResources = createMemo(() =>
-    filterResources(resources(), selectedSources(), selectedStatuses(), searchTerms()),
+    filterResources(
+      resources(),
+      selectedSource() !== '' ? new Set([selectedSource()]) : new Set(),
+      selectedStatus() !== '' ? new Set([selectedStatus()]) : new Set(),
+      searchTerms(),
+    ),
   );
 
   const hasFilteredResources = createMemo(() => filteredResources().length > 0);
@@ -453,52 +424,34 @@ export function Infrastructure() {
 
                   <Show when={!isMobile() || filtersOpen()}>
                     <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400 lg:flex-nowrap">
-                      <div class="flex items-center gap-2 max-w-full overflow-x-auto scrollbar-hide">
-                        <span class="flex-shrink-0 uppercase tracking-wide text-[9px] text-gray-400 dark:text-gray-500">Source</span>
-                        <div class="flex-shrink-0 inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-                          <For each={sourceOptions}>
-                            {(source) => {
-                              const isSelected = () => selectedSources().has(source.key);
-                              const isDisabled = () =>
-                                !availableSources().has(source.key) && !selectedSources().has(source.key);
-                              return (
-                                <button
-                                  type="button"
-                                  disabled={isDisabled()}
-                                  aria-pressed={isSelected()}
-                                  onClick={() => toggleSource(source.key)}
-                                  class={segmentedButtonClass(isSelected(), isDisabled())}
-                                >
-                                  {source.label}
-                                </button>
-                              );
-                            }}
+                      <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                        <label for="infra-source-filter" class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Source</label>
+                        <select
+                          id="infra-source-filter"
+                          value={selectedSource()}
+                          onChange={(e) => setSelectedSource(e.currentTarget.value)}
+                          class="min-w-[8rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+                        >
+                          <option value="">All</option>
+                          <For each={sourceOptions.filter((s) => availableSources().has(s.key))}>
+                            {(source) => <option value={source.key}>{source.label}</option>}
                           </For>
-                        </div>
+                        </select>
                       </div>
 
-                      <div class="flex items-center gap-2 max-w-full overflow-x-auto scrollbar-hide">
-                        <span class="flex-shrink-0 uppercase tracking-wide text-[9px] text-gray-400 dark:text-gray-500">Status</span>
-                        <div class="flex-shrink-0 inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                      <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                        <label for="infra-status-filter" class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Status</label>
+                        <select
+                          id="infra-status-filter"
+                          value={selectedStatus()}
+                          onChange={(e) => setSelectedStatus(e.currentTarget.value)}
+                          class="min-w-[7rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+                        >
+                          <option value="">All</option>
                           <For each={statusOptions()}>
-                            {(status) => {
-                              const isSelected = () => selectedStatuses().has(status.key);
-                              const isDisabled = () =>
-                                !availableStatuses().has(status.key) && !selectedStatuses().has(status.key);
-                              return (
-                                <button
-                                  type="button"
-                                  disabled={isDisabled()}
-                                  aria-pressed={isSelected()}
-                                  onClick={() => toggleStatus(status.key)}
-                                  class={segmentedButtonClass(isSelected(), isDisabled())}
-                                >
-                                  {status.label}
-                                </button>
-                              );
-                            }}
+                            {(status) => <option value={status.key}>{status.label}</option>}
                           </For>
-                        </div>
+                        </select>
                       </div>
 
                       <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">

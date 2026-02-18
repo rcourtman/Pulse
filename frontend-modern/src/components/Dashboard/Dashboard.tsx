@@ -308,12 +308,14 @@ export function Dashboard(props: DashboardProps) {
   const [isSearchLocked, setIsSearchLocked] = createSignal(false);
   const [selectedNode, setSelectedNode] = createSignal<string | null>(null);
   const [selectedKubernetesContext, setSelectedKubernetesContext] = createSignal<string | null>(null);
+  const [selectedKubernetesNamespace, setSelectedKubernetesNamespace] = createSignal<string | null>(null);
   const [selectedGuestId, setSelectedGuestIdRaw] = createSignal<string | null>(null);
   const [hoveredWorkloadId, setHoveredWorkloadId] = createSignal<string | null>(null);
   const [handledResourceId, setHandledResourceId] = createSignal<string | null>(null);
   const [handledTypeParam, setHandledTypeParam] = createSignal<string>('');
   const [handledRuntimeParam, setHandledRuntimeParam] = createSignal<string>('');
   const [handledContextParam, setHandledContextParam] = createSignal('');
+  const [handledNamespaceParam, setHandledNamespaceParam] = createSignal('');
   const [handledHostParam, setHandledHostParam] = createSignal('');
   const [selectedHostHint, setSelectedHostHint] = createSignal<string | null>(null);
   const [hideMigrationNotice, setHideMigrationNotice] = createSignal(true);
@@ -507,6 +509,30 @@ export function Dashboard(props: DashboardProps) {
     return Array.from(contexts).sort((a, b) => a.localeCompare(b));
   });
 
+  const kubernetesNamespaceOptions = createMemo(() => {
+    const namespaces = new Set<string>();
+    const contextFilter = (selectedKubernetesContext() || '').trim();
+    for (const guest of allGuests()) {
+      if (resolveWorkloadType(guest) !== 'k8s') continue;
+      if (contextFilter && getKubernetesContextKey(guest) !== contextFilter) continue;
+      const ns = (guest.namespace || '').trim();
+      if (ns) namespaces.add(ns);
+    }
+    return Array.from(namespaces).sort((a, b) => a.localeCompare(b));
+  });
+
+  createEffect(() => {
+    if (!isWorkloadsRoute()) return;
+    if (viewMode() !== 'k8s') return;
+    const selected = (selectedKubernetesNamespace() || '').trim();
+    if (!selected) return;
+    const normalized = selected.toLowerCase();
+    const exists = kubernetesNamespaceOptions().some((value) => value.toLowerCase() === normalized);
+    if (!exists) {
+      setSelectedKubernetesNamespace(null);
+    }
+  });
+
   const containerRuntimeOptions = createMemo(() => {
     const runtimes = new Set<string>();
     for (const guest of allGuests()) {
@@ -558,6 +584,9 @@ export function Dashboard(props: DashboardProps) {
     if (selectedKubernetesContext() !== null) {
       setSelectedKubernetesContext(null);
     }
+    if (selectedKubernetesNamespace() !== null) {
+      setSelectedKubernetesNamespace(null);
+    }
   });
 
   createEffect(() => {
@@ -578,7 +607,8 @@ export function Dashboard(props: DashboardProps) {
   };
 
   createEffect(() => {
-    const { type: typeParam } = parseWorkloadsLinkSearch(location.search);
+    const parsed = parseWorkloadsLinkSearch(location.search);
+    const typeParam = parsed.type;
     const normalizedType = typeParam ?? '';
     if (normalizedType === handledTypeParam()) return;
 
@@ -587,15 +617,14 @@ export function Dashboard(props: DashboardProps) {
       return;
     }
 
-    // Context implies k8s view; ignore conflicting type params.
-    const { context: contextParam } = parseWorkloadsLinkSearch(location.search);
-    const hasContext = Boolean((contextParam ?? '').trim());
+    // Context/namespace implies k8s view; ignore conflicting type params.
+    const hasK8sScope = Boolean((parsed.context ?? '').trim()) || Boolean((parsed.namespace ?? '').trim());
     const nextMode = normalizeTypeParam(normalizedType);
     if (!nextMode) {
       setHandledTypeParam(normalizedType);
       return;
     }
-    if (hasContext && nextMode !== 'k8s') {
+    if (hasK8sScope && nextMode !== 'k8s') {
       setHandledTypeParam(normalizedType);
       return;
     }
@@ -626,6 +655,27 @@ export function Dashboard(props: DashboardProps) {
   });
 
   createEffect(() => {
+    const { namespace: namespaceParam } = parseWorkloadsLinkSearch(location.search);
+    const normalized = namespaceParam ?? '';
+    if (normalized === handledNamespaceParam()) return;
+
+    if (normalized) {
+      if (viewMode() !== 'k8s') {
+        setViewMode('k8s');
+      }
+      setSelectedKubernetesNamespace(normalized);
+      if (!showFilters()) {
+        setShowFilters(true);
+      }
+      setHandledNamespaceParam(normalized);
+      return;
+    }
+
+    setSelectedKubernetesNamespace(null);
+    setHandledNamespaceParam('');
+  });
+
+  createEffect(() => {
     const { host: hostParam } = parseWorkloadsLinkSearch(location.search);
     const normalized = hostParam ?? '';
     if (normalized === handledHostParam()) return;
@@ -653,9 +703,10 @@ export function Dashboard(props: DashboardProps) {
 
     const urlContext = parsed.context ?? '';
     const hasContext = Boolean(urlContext.trim());
+    const hasNamespace = Boolean((parsed.namespace ?? '').trim());
     const urlType = parsed.type ?? '';
     const nextMode = normalizeTypeParam(urlType);
-    const runtimeRelevant = !hasContext && (nextMode === 'docker' || !urlType.trim());
+    const runtimeRelevant = !hasContext && !hasNamespace && (nextMode === 'docker' || !urlType.trim());
 
     // Ignore runtime param outside of container views, but still mark it handled so URL-sync can clean it up.
     if (!runtimeRelevant) {
@@ -686,6 +737,7 @@ export function Dashboard(props: DashboardProps) {
     const urlType = parsed.type ?? '';
     const urlRuntime = parsed.runtime ?? '';
     const urlContext = parsed.context ?? '';
+    const urlNamespace = parsed.namespace ?? '';
     const urlHost = parsed.host ?? '';
     const urlResource = parsed.resource ?? '';
 
@@ -693,6 +745,7 @@ export function Dashboard(props: DashboardProps) {
     if (handledTypeParam() !== urlType) return;
     if (handledRuntimeParam() !== urlRuntime) return;
     if (handledContextParam() !== urlContext) return;
+    if (handledNamespaceParam() !== urlNamespace) return;
     if (handledHostParam() !== urlHost) return;
     if (urlResource && handledResourceId() !== urlResource) return;
 
@@ -701,18 +754,21 @@ export function Dashboard(props: DashboardProps) {
     const nextType = viewMode() === 'all' ? '' : viewMode();
     const nextRuntime = viewMode() === 'docker' ? containerRuntime().trim() : '';
     const nextContext = viewMode() === 'k8s' ? selectedKubernetesContext() ?? '' : '';
+    const nextNamespace = viewMode() === 'k8s' ? selectedKubernetesNamespace() ?? '' : '';
     const nextHost = viewMode() === 'k8s' ? '' : selectedNode() ?? selectedHostHint() ?? '';
 
     const managedPath = buildWorkloadsPath({
       type: nextType || null,
       runtime: nextRuntime || null,
       context: nextContext || null,
+      namespace: nextNamespace || null,
       host: nextHost || null,
     });
     const managedUrl = new URL(managedPath, 'http://pulse.local');
     nextParams.delete(WORKLOADS_QUERY_PARAMS.type);
     nextParams.delete(WORKLOADS_QUERY_PARAMS.runtime);
     nextParams.delete(WORKLOADS_QUERY_PARAMS.context);
+    nextParams.delete(WORKLOADS_QUERY_PARAMS.namespace);
     nextParams.delete(WORKLOADS_QUERY_PARAMS.host);
     managedUrl.searchParams.forEach((value, key) => {
       nextParams.set(key, value);
@@ -961,6 +1017,7 @@ export function Dashboard(props: DashboardProps) {
           selectedNode() !== null ||
           selectedHostHint() !== null ||
           selectedKubernetesContext() !== null ||
+          selectedKubernetesNamespace() !== null ||
           containerRuntime().trim() !== '' ||
           viewMode() !== 'all' ||
           statusMode() !== 'all';
@@ -974,6 +1031,7 @@ export function Dashboard(props: DashboardProps) {
           setSelectedNode(null);
           setSelectedHostHint(null);
           setSelectedKubernetesContext(null);
+          setSelectedKubernetesNamespace(null);
           setContainerRuntime('');
           setViewMode('all');
           setStatusMode('all');
@@ -1003,6 +1061,7 @@ export function Dashboard(props: DashboardProps) {
       selectedNode: selectedNode(),
       selectedHostHint: selectedHostHint(),
       selectedKubernetesContext: selectedKubernetesContext(),
+      selectedKubernetesNamespace: selectedKubernetesNamespace(),
       containerRuntime: containerRuntime().trim() || null,
     };
     return filterWorkloads(params);
@@ -1493,6 +1552,22 @@ export function Dashboard(props: DashboardProps) {
               },
             };
           })()}
+          namespaceFilter={(() => {
+            if (!isWorkloadsRoute()) return undefined;
+            if (viewMode() !== 'k8s') return undefined;
+            const options = kubernetesNamespaceOptions();
+            if (options.length === 0) return undefined;
+            return {
+              id: 'workloads-k8s-namespace-filter',
+              label: 'Namespace',
+              value: selectedKubernetesNamespace() ?? '',
+              options: [
+                { value: '', label: 'All namespaces' },
+                ...options.map((value) => ({ value, label: value })),
+              ],
+              onChange: (value: string) => setSelectedKubernetesNamespace(value || null),
+            };
+          })()}
         />
       </Show>
 
@@ -1505,7 +1580,7 @@ export function Dashboard(props: DashboardProps) {
               class="overflow-x-auto"
               style={{ '-webkit-overflow-scrolling': 'touch' }}
             >
-              <table class="w-full border-collapse whitespace-nowrap" style={{ "table-layout": "fixed", "min-width": isMobile() ? "800px" : "900px" }}>
+              <table class="w-full border-collapse whitespace-nowrap" style={{ "table-layout": "fixed", "min-width": isMobile() ? "940px" : "900px" }}>
                 <thead>
                   <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
                     <For each={visibleColumns()}>
@@ -1518,13 +1593,13 @@ export function Dashboard(props: DashboardProps) {
                         return (
                           <th
                             class={`py-1 text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap
-                                  ${isFirst() ? 'pl-4 pr-2 text-left' : 'px-2 text-center'}
+                                  ${isFirst() ? 'pl-2 sm:pl-3 pr-1.5 sm:pr-2 text-left' : 'px-1.5 sm:px-2 text-center'}
                                   ${isSortable ? 'cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600' : ''}`}
                             style={{
                               ...((['cpu', 'memory', 'disk'].includes(col.id))
-                                ? { "width": isMobile() ? "60px" : "140px" }
+                                ? { "width": isMobile() ? "80px" : "140px" }
                                 : (['netIo', 'diskIo'].includes(col.id))
-                                  ? { "width": isMobile() ? "130px" : "170px" }
+                                  ? { "width": isMobile() ? "170px" : "170px" }
                                 : (col.width ? { "width": col.width } : {})),
                               "vertical-align": 'middle',
                             }}
@@ -1566,7 +1641,7 @@ export function Dashboard(props: DashboardProps) {
                                 <tr class="bg-gray-50 dark:bg-gray-900/40">
                                   <td
                                     colspan={totalColumns()}
-                                    class="py-1 pr-2 pl-4 text-[12px] sm:text-sm font-semibold text-slate-700 dark:text-slate-100"
+                                    class="py-1 pr-1.5 sm:pr-2 pl-2 sm:pl-3 text-[12px] sm:text-sm font-semibold text-slate-700 dark:text-slate-100"
                                   >
                                     {(() => {
                                       const label = getGroupLabel(groupKey, fullGroupGuests());

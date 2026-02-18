@@ -1,9 +1,11 @@
-import { Component, Show, type JSX } from 'solid-js';
+import { Component, Show, createMemo, createSignal, type JSX } from 'solid-js';
 import { Card } from '@/components/shared/Card';
 import { SearchInput } from '@/components/shared/SearchInput';
 import { ColumnPicker } from '@/components/shared/ColumnPicker';
 import type { ColumnDef } from '@/hooks/useColumnVisibility';
+import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { STORAGE_KEYS } from '@/utils/localStorage';
+import ListFilterIcon from 'lucide-solid/icons/list-filter';
 import type { StorageSourceOption } from './storageSourceOptions';
 
 export type StorageStatusFilter = 'all' | 'available' | 'warning' | 'critical' | 'offline' | 'unknown';
@@ -38,6 +40,18 @@ interface StorageFilterProps {
 }
 
 export const StorageFilter: Component<StorageFilterProps> = (props) => {
+  const { isMobile } = useBreakpoint();
+  const [filtersOpen, setFiltersOpen] = createSignal(false);
+
+  const activeFilterCount = createMemo(() => {
+    let count = 0;
+    if (props.search().trim() !== '') count++;
+    if (props.groupBy && props.groupBy() !== 'node') count++;
+    if (props.statusFilter && props.statusFilter() !== 'all') count++;
+    if (props.sourceFilter && props.sourceFilter() !== 'all') count++;
+    return count;
+  });
+
   const sortOptions = props.sortOptions ?? [
     { value: 'name', label: 'Name' },
     { value: 'usage', label: 'Usage %' },
@@ -60,24 +74,6 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
       { key: 'pbs', label: 'PBS', tone: 'emerald' },
       { key: 'ceph', label: 'Ceph', tone: 'violet' },
     ];
-
-  const sourceToneClasses = (tone: StorageSourceOption['tone'], active: boolean) => {
-    if (!active) {
-      return 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100';
-    }
-    switch (tone) {
-      case 'blue':
-        return 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-300 shadow-sm';
-      case 'emerald':
-        return 'bg-white dark:bg-gray-800 text-emerald-600 dark:text-emerald-300 shadow-sm';
-      case 'violet':
-        return 'bg-white dark:bg-gray-800 text-violet-600 dark:text-violet-300 shadow-sm';
-      case 'cyan':
-        return 'bg-white dark:bg-gray-800 text-cyan-600 dark:text-cyan-300 shadow-sm';
-      default:
-        return 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm';
-    }
-  };
 
   return (
     <Card class="storage-filter mb-3" padding="sm">
@@ -107,148 +103,104 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
           }}
         />
 
+        <Show when={isMobile()}>
+          <button
+            type="button"
+            onClick={() => setFiltersOpen((o) => !o)}
+            class="flex items-center gap-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400"
+          >
+            <ListFilterIcon class="w-3.5 h-3.5" />
+            Filters
+            <Show when={activeFilterCount() > 0}>
+              <span class="ml-0.5 rounded-full bg-blue-500 px-1.5 py-0.5 text-[10px] font-semibold text-white leading-none">
+                {activeFilterCount()}
+              </span>
+            </Show>
+          </button>
+        </Show>
+
         {/* Row 2: Filters - Compact horizontal layout */}
-        <div class="flex flex-wrap items-center gap-x-1.5 sm:gap-x-2 gap-y-2">
-          {props.leadingFilters}
+        <Show when={!isMobile() || filtersOpen()}>
+          <div class="flex flex-wrap items-center gap-x-1.5 sm:gap-x-2 gap-y-2">
+            {props.leadingFilters}
 
-          {/* Group By Filter */}
-          <Show when={props.groupBy && props.setGroupBy}>
-            <div class="max-w-full overflow-x-auto scrollbar-hide">
-            <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5" role="group" aria-label="Group By">
-              <button
-                type="button"
-                onClick={() => props.setGroupBy!('node')}
-                aria-pressed={props.groupBy!() === 'node'}
-                class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.groupBy!() === 'node'
-                  ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                  }`}
-              >
-                By Node
-              </button>
-              <button
-                type="button"
-                onClick={() => props.setGroupBy!('type')}
-                aria-pressed={props.groupBy!() === 'type'}
-                class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.groupBy!() === 'type'
-                  ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                  }`}
-              >
-                By Type
-              </button>
-              <button
-                type="button"
-                onClick={() => props.setGroupBy!('status')}
-                aria-pressed={props.groupBy!() === 'status'}
-                class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.groupBy!() === 'status'
-                  ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                  }`}
-              >
-                By Status
-              </button>
-            </div>
-            </div>
-            <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
-          </Show>
+            {/* Group By Filter */}
+            <Show when={props.groupBy && props.setGroupBy}>
+              <div class="max-w-full overflow-x-auto scrollbar-hide">
+              <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5" role="group" aria-label="Group By">
+                <button
+                  type="button"
+                  onClick={() => props.setGroupBy!('node')}
+                  aria-pressed={props.groupBy!() === 'node'}
+                  class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.groupBy!() === 'node'
+                    ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                    }`}
+                >
+                  By Node
+                </button>
+                <button
+                  type="button"
+                  onClick={() => props.setGroupBy!('type')}
+                  aria-pressed={props.groupBy!() === 'type'}
+                  class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.groupBy!() === 'type'
+                    ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                    }`}
+                >
+                  By Type
+                </button>
+                <button
+                  type="button"
+                  onClick={() => props.setGroupBy!('status')}
+                  aria-pressed={props.groupBy!() === 'status'}
+                  class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.groupBy!() === 'status'
+                    ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                    }`}
+                >
+                  By Status
+                </button>
+              </div>
+              </div>
+              <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
+            </Show>
 
-          {/* Source Filter */}
-          <Show when={props.sourceFilter && props.setSourceFilter}>
-            <div class="max-w-full overflow-x-auto scrollbar-hide">
-            <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5" role="group" aria-label="Source">
-              {sourceOptions().map((option) => {
-                const active = () => props.sourceFilter!() === option.key;
-                return (
-                  <button
-                    type="button"
-                    onClick={() => props.setSourceFilter!(option.key)}
-                    aria-pressed={active()}
-                    class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${sourceToneClasses(
-                      option.tone,
-                      active(),
-                    )}`}
-                  >
-                    {option.label}
-                  </button>
-                );
-              })}
-            </div>
-            </div>
-            <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
-          </Show>
+            {/* Source Filter */}
+            <Show when={props.sourceFilter && props.setSourceFilter}>
+              <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                <label for="storage-source-filter" class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Source</label>
+                <select
+                  id="storage-source-filter"
+                  value={props.sourceFilter!()}
+                  onChange={(e) => props.setSourceFilter!(e.currentTarget.value)}
+                  class="min-w-[8rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+                >
+                  {sourceOptions().map((option) => (
+                    <option value={option.key}>{option.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
+            </Show>
 
-          {/* Status Filter */}
-          <div class="max-w-full overflow-x-auto scrollbar-hide">
-          <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5" role="group" aria-label="Health">
-            <button
-              type="button"
-              onClick={() => props.setStatusFilter && props.setStatusFilter('all')}
-              aria-pressed={props.statusFilter && props.statusFilter() === 'all'}
-              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.statusFilter && props.statusFilter() === 'all'
-                ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
-                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                }`}
-            >
-              All
-            </button>
-            <button
-              type="button"
-              onClick={() => props.setStatusFilter && props.setStatusFilter('available')}
-              aria-pressed={props.statusFilter && props.statusFilter() === 'available'}
-              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.statusFilter && props.statusFilter() === 'available'
-                ? 'bg-white dark:bg-gray-800 text-green-600 dark:text-green-400 shadow-sm'
-                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                }`}
-            >
-              Healthy
-            </button>
-            <button
-              type="button"
-              onClick={() => props.setStatusFilter && props.setStatusFilter('warning')}
-              aria-pressed={props.statusFilter && props.statusFilter() === 'warning'}
-              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.statusFilter && props.statusFilter() === 'warning'
-                ? 'bg-white dark:bg-gray-800 text-yellow-700 dark:text-yellow-300 shadow-sm'
-                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                }`}
-            >
-              Warning
-            </button>
-            <button
-              type="button"
-              onClick={() => props.setStatusFilter && props.setStatusFilter('critical')}
-              aria-pressed={props.statusFilter && props.statusFilter() === 'critical'}
-              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.statusFilter && props.statusFilter() === 'critical'
-                ? 'bg-white dark:bg-gray-800 text-red-600 dark:text-red-400 shadow-sm'
-                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                }`}
-            >
-              Critical
-            </button>
-            <button
-              type="button"
-              onClick={() => props.setStatusFilter && props.setStatusFilter('offline')}
-              aria-pressed={props.statusFilter && props.statusFilter() === 'offline'}
-              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.statusFilter && props.statusFilter() === 'offline'
-                ? 'bg-white dark:bg-gray-800 text-red-600 dark:text-red-400 shadow-sm'
-                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                }`}
-            >
-              Offline
-            </button>
-            <button
-              type="button"
-              onClick={() => props.setStatusFilter && props.setStatusFilter('unknown')}
-              aria-pressed={props.statusFilter && props.statusFilter() === 'unknown'}
-              class={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${props.statusFilter && props.statusFilter() === 'unknown'
-                ? 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 shadow-sm'
-                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                }`}
-            >
-              Unknown
-            </button>
-          </div>
-          </div>
+            {/* Status Filter */}
+            <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+              <label for="storage-status-filter" class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Status</label>
+              <select
+                id="storage-status-filter"
+                value={props.statusFilter?.() ?? 'all'}
+                onChange={(e) => props.setStatusFilter?.(e.currentTarget.value as StorageStatusFilter)}
+                class="min-w-[8rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+              >
+                <option value="all">All</option>
+                <option value="available">Healthy</option>
+                <option value="warning">Warning</option>
+                <option value="critical">Critical</option>
+                <option value="offline">Offline</option>
+                <option value="unknown">Unknown</option>
+              </select>
+            </div>
 
           <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
 
@@ -332,7 +284,8 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
               Reset
             </button>
           </Show>
-        </div>
+          </div>
+        </Show>
       </div>
     </Card>
   );

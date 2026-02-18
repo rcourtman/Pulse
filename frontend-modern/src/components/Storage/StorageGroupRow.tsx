@@ -24,7 +24,7 @@ export const StorageGroupRow: Component<StorageGroupRowProps> = (props) => {
       class="cursor-pointer select-none bg-gray-50/80 dark:bg-gray-800/50 hover:bg-gray-100/80 dark:hover:bg-gray-700/40 transition-colors border-b border-gray-200 dark:border-gray-700"
       onClick={() => props.onToggle()}
     >
-      <td colSpan={99} class="px-3 py-2">
+      <td colSpan={99} class="px-1.5 sm:px-2 py-1">
         <div class="flex items-center gap-3">
           {/* Expand chevron */}
           <svg
@@ -42,7 +42,7 @@ export const StorageGroupRow: Component<StorageGroupRowProps> = (props) => {
           </svg>
 
           {/* Group label */}
-          <span class="text-sm font-semibold text-gray-800 dark:text-gray-200 min-w-0 truncate max-w-[200px]">
+          <span class="text-[11px] font-semibold text-gray-800 dark:text-gray-200 min-w-0 truncate max-w-[200px]">
             {props.group.key}
           </span>
 
