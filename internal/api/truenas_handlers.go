@@ -21,6 +21,12 @@ type TrueNASHandlers struct {
 	getPersistence func(ctx context.Context) *config.ConfigPersistence
 	getConfig      func(ctx context.Context) *config.Config
 	getMonitor     func(ctx context.Context) *monitoring.Monitor
+	newClient      func(truenas.ClientConfig) (trueNASClient, error)
+}
+
+type trueNASClient interface {
+	TestConnection(ctx context.Context) error
+	Close()
 }
 
 // HandleAdd stores a new TrueNAS connection.
@@ -179,7 +185,12 @@ func (h *TrueNASHandlers) HandleTestConnection(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	client, err := truenas.NewClient(truenas.ClientConfig{
+	newClient := h.newClient
+	if newClient == nil {
+		newClient = func(cfg truenas.ClientConfig) (trueNASClient, error) { return truenas.NewClient(cfg) }
+	}
+
+	client, err := newClient(truenas.ClientConfig{
 		Host:               instance.Host,
 		Port:               instance.Port,
 		APIKey:             instance.APIKey,

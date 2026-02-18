@@ -4,10 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
-	"strconv"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -15,6 +14,19 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
 )
+
+type fakeTrueNASClient struct {
+	testConnection func(context.Context) error
+}
+
+func (c *fakeTrueNASClient) TestConnection(ctx context.Context) error {
+	if c == nil || c.testConnection == nil {
+		return nil
+	}
+	return c.testConnection(ctx)
+}
+
+func (c *fakeTrueNASClient) Close() {}
 
 func TestTrueNASHandlers_HandleAdd_Success(t *testing.T) {
 	setTrueNASFeatureForTest(t, true)
@@ -219,30 +231,16 @@ func TestTrueNASHandlers_HandleDelete_RemovesAndHandlesUnknownID(t *testing.T) {
 func TestTrueNASHandlers_HandleTestConnection_SuccessAndFailure(t *testing.T) {
 	setTrueNASFeatureForTest(t, true)
 
-	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v2.0/system/info" {
-			http.NotFound(w, r)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"hostname":"nas","version":"24.10","buildtime":"24.10.1","uptime_seconds":1}`))
-	}))
-	t.Cleanup(testServer.Close)
-
 	handler, _, _ := newTrueNASHandlersForTest(t, nil)
-
-	parsedURL, err := url.Parse(testServer.URL)
-	if err != nil {
-		t.Fatalf("parse test server URL: %v", err)
-	}
-	port, err := strconv.Atoi(parsedURL.Port())
-	if err != nil {
-		t.Fatalf("parse test server port: %v", err)
+	var gotConfig truenas.ClientConfig
+	handler.newClient = func(cfg truenas.ClientConfig) (trueNASClient, error) {
+		gotConfig = cfg
+		return &fakeTrueNASClient{}, nil
 	}
 
 	successBody := marshalTrueNASRequest(t, map[string]any{
-		"host":     parsedURL.Hostname(),
-		"port":     port,
+		"host":     "nas.local",
+		"port":     80,
 		"useHttps": false,
 		"apiKey":   "key",
 	})
@@ -253,6 +251,13 @@ func TestTrueNASHandlers_HandleTestConnection_SuccessAndFailure(t *testing.T) {
 	if successRec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", successRec.Code, successRec.Body.String())
 	}
+	if gotConfig.Host != "nas.local" || gotConfig.Port != 80 || gotConfig.UseHTTPS {
+		t.Fatalf("unexpected client config: %+v", gotConfig)
+	}
+
+	// For invalid hosts, rely on the real TrueNAS client constructor so we exercise the
+	// same endpoint parsing and validation logic as production.
+	handler.newClient = nil
 
 	failureBody := marshalTrueNASRequest(t, map[string]any{
 		"host":   "http://127.0.0.1:65536",
@@ -264,6 +269,24 @@ func TestTrueNASHandlers_HandleTestConnection_SuccessAndFailure(t *testing.T) {
 
 	if failureRec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 for bad host, got %d: %s", failureRec.Code, failureRec.Body.String())
+	}
+
+	handler.newClient = func(cfg truenas.ClientConfig) (trueNASClient, error) {
+		return &fakeTrueNASClient{
+			testConnection: func(context.Context) error { return errors.New("boom") },
+		}, nil
+	}
+	errorBody := marshalTrueNASRequest(t, map[string]any{
+		"host":   "nas.local",
+		"port":   80,
+		"apiKey": "key",
+	})
+	errorReq := httptest.NewRequest(http.MethodPost, "/api/truenas/connections/test", bytes.NewReader(errorBody))
+	errorRec := httptest.NewRecorder()
+	handler.HandleTestConnection(errorRec, errorReq)
+
+	if errorRec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for failing connection, got %d: %s", errorRec.Code, errorRec.Body.String())
 	}
 }
 
