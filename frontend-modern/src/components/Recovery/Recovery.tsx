@@ -870,54 +870,6 @@ const Recovery: Component = () => {
 
   return (
     <div data-testid="recovery-page" class="flex flex-col gap-4">
-      <Card padding="sm">
-        <Show
-          when={!rollupId().trim()}
-          fallback={
-            <div class="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => {
-                  setRollupId('');
-                  setView('protected');
-                }}
-                class="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
-              >
-                Protected
-              </button>
-              <span class="text-gray-400 dark:text-gray-500 text-sm">›</span>
-              <span class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
-                <Show when={selectedRollup()}>
-                  {rollupSubjectLabel(selectedRollup()!, resourcesById())}
-                </Show>
-              </span>
-            </div>
-          }
-        >
-          <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5" role="group" aria-label="View">
-            <button
-              type="button"
-              onClick={() => {
-                setView('protected');
-                setRollupId('');
-              }}
-              aria-pressed={view() === 'protected'}
-              class={segmentedButtonClass(view() === 'protected')}
-            >
-              Protected
-            </button>
-            <button
-              type="button"
-              onClick={() => setView('events')}
-              aria-pressed={view() === 'events'}
-              class={segmentedButtonClass(view() === 'events')}
-            >
-              Events
-            </button>
-          </div>
-        </Show>
-      </Card>
-
       <Show when={view() === 'protected'}>
         <Show when={!kioskMode()}>
           <Card padding="sm">
@@ -950,6 +902,29 @@ const Recovery: Component = () => {
 
               <Show when={!isMobile() || protectedFiltersOpen()}>
                 <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                  <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5" role="group" aria-label="View">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setView('protected');
+                        setRollupId('');
+                      }}
+                      aria-pressed={view() === 'protected'}
+                      class={segmentedButtonClass(view() === 'protected')}
+                    >
+                      Protected
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setView('events')}
+                      aria-pressed={view() === 'events'}
+                      class={segmentedButtonClass(view() === 'events')}
+                    >
+                      Events
+                    </button>
+                  </div>
+                  <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block" />
+
                   <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
                     <label
                       for="recovery-provider-filter"
@@ -1462,6 +1437,53 @@ const Recovery: Component = () => {
 
                 <Show when={!isMobile() || eventsFiltersOpen()}>
                   <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                    <Show
+                      when={!rollupId().trim()}
+                      fallback={
+                        <div class="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setRollupId('');
+                              setView('protected');
+                            }}
+                            class="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+                          >
+                            Protected
+                          </button>
+                          <span class="text-gray-400 dark:text-gray-500 text-sm">›</span>
+                          <span class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate max-w-[12rem]">
+                            <Show when={selectedRollup()}>
+                              {rollupSubjectLabel(selectedRollup()!, resourcesById())}
+                            </Show>
+                          </span>
+                        </div>
+                      }
+                    >
+                      <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5" role="group" aria-label="View">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setView('protected');
+                            setRollupId('');
+                          }}
+                          aria-pressed={view() === 'protected'}
+                          class={segmentedButtonClass(view() === 'protected')}
+                        >
+                          Protected
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setView('events')}
+                          aria-pressed={view() === 'events'}
+                          class={segmentedButtonClass(view() === 'events')}
+                        >
+                          Events
+                        </button>
+                      </div>
+                    </Show>
+                    <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block" />
+
                     <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
                       <label
                         for="recovery-provider-filter-events"
