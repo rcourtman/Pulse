@@ -1,6 +1,7 @@
 import { createMemo, createResource, onCleanup, createEffect, createSignal, type Accessor } from 'solid-js';
 import { apiFetchJSON, getOrgID } from '@/utils/apiClient';
 import { eventBus } from '@/stores/events';
+import { normalizeDiskArray } from '@/utils/format';
 import type { WorkloadGuest, WorkloadType } from '@/types/workloads';
 
 const WORKLOADS_URL = '/api/resources?type=vm,lxc,docker_container,pod';
@@ -261,23 +262,6 @@ const mapNetworkInterfaces = (interfaces?: APINetworkInterface[]) =>
     txBytes: iface.txBytes,
   }));
 
-const mapDisks = (disks?: APIDiskInfo[]) =>
-  disks?.map((disk) => {
-    const total = disk.total ?? 0;
-    const used = disk.used ?? 0;
-    const free = disk.free ?? (total > 0 ? Math.max(0, total - used) : 0);
-    const usage = total > 0 ? (used / total) * 100 : 0;
-    return {
-      total,
-      used,
-      free,
-      usage,
-      mountpoint: disk.mountpoint,
-      type: disk.filesystem,
-      device: disk.device,
-    };
-  });
-
 const toIsoString = (value?: string): string => {
   if (!value) return new Date().toISOString();
   const parsed = Date.parse(value);
@@ -387,7 +371,7 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
       };
     })(),
     disk: buildMetric(resource.metrics?.disk),
-    disks: mapDisks(resource.proxmox?.disks ?? resource.agent?.disks),
+    disks: normalizeDiskArray(resource.proxmox?.disks ?? resource.agent?.disks),
     diskStatusReason: undefined,
     ipAddresses: resource.identity?.ipAddresses ?? [],
     osName: resource.agent?.osName,

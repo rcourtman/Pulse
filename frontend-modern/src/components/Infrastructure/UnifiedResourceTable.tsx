@@ -1,7 +1,7 @@
 import { Component, For, Show, createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
 import type { Resource } from '@/types/resource';
 import { getDisplayName, getCpuPercent, getMemoryPercent, getDiskPercent } from '@/types/resource';
-import { formatBytes, formatUptime, formatSpeed } from '@/utils/format';
+import { formatBytes, formatUptime, formatSpeed, normalizeDiskArray } from '@/utils/format';
 import { formatTemperature } from '@/utils/temperature';
 import { Card } from '@/components/shared/Card';
 import { StatusDot } from '@/components/shared/StatusDot';
@@ -643,7 +643,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
 	                        <Show when={diskPercentValue() !== null} fallback={<div class="flex justify-center"><span class="text-xs text-gray-400">—</span></div>}>
 	                          <div class="w-full" title={diskSublabel()}>
 	                            <StackedDiskBar
-	                              disks={(resource.agent?.disks ?? []) as Disk[]}
+	                              disks={normalizeDiskArray(resource.agent?.disks)}
 	                              aggregateDisk={resource.disk ? { total: resource.disk.total ?? 0, used: resource.disk.used ?? 0, free: resource.disk.free ?? 0, usage: resource.disk.current ?? 0 } as Disk : undefined}
 	                            />
 	                          </div>

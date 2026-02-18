@@ -4,6 +4,7 @@ import { readAPIErrorMessage } from '@/api/responseUtils';
 import { apiFetch, getOrgID } from '@/utils/apiClient';
 import { getGlobalWebSocketStore } from '@/stores/websocket-global';
 import type { Resource, PlatformType, SourceType, ResourceStatus, ResourceType } from '@/types/resource';
+import { normalizeDiskArray } from '@/utils/format';
 import { logger } from '@/utils/logger';
 import { eventBus } from '@/stores/events';
 
@@ -125,7 +126,20 @@ type APIResource = {
   };
   parentId?: string;
   tags?: string[];
-  proxmox?: { nodeName?: string; clusterName?: string; uptime?: number; temperature?: number };
+  proxmox?: {
+    nodeName?: string;
+    clusterName?: string;
+    instance?: string;
+    vmid?: number;
+    cpus?: number;
+    uptime?: number;
+    temperature?: number;
+    template?: boolean;
+    disks?: APIAgentDiskInfo[];
+    swapUsed?: number;
+    swapTotal?: number;
+    balloon?: number;
+  };
   agent?: {
     agentId?: string;
     agentVersion?: string;
@@ -488,6 +502,17 @@ const toResource = (v2: APIResource): Resource => {
     status: resolveStatus(v2.status),
     agent: v2.agent,
     kubernetes: v2.kubernetes,
+    proxmox: v2.proxmox ? {
+      vmid: v2.proxmox.vmid,
+      node: v2.proxmox.nodeName,
+      instance: v2.proxmox.instance,
+      cpus: v2.proxmox.cpus,
+      template: v2.proxmox.template,
+      disks: normalizeDiskArray(v2.proxmox.disks),
+      swapUsed: v2.proxmox.swapUsed,
+      swapTotal: v2.proxmox.swapTotal,
+      balloon: v2.proxmox.balloon,
+    } : undefined,
     cpu: metricToResourceMetric(v2.metrics?.cpu),
     memory: metricToResourceMetric(v2.metrics?.memory),
     disk: metricToResourceMetric(v2.metrics?.disk),

@@ -1,4 +1,5 @@
 // Type-safe formatting utilities
+import type { Disk } from '@/types/api';
 
 /**
  * Format bytes to human-readable string with dynamic precision.
@@ -283,4 +284,29 @@ export function getShortImageName(fullImage: string | undefined): string {
     return parts.slice(-2).join('/');
   }
   return cleanImage;
+}
+
+/**
+ * Normalize raw disk objects (from API/agent) into proper Disk[].
+ * Calculates `usage` from used/total and defaults missing fields.
+ */
+export function normalizeDiskArray(
+  disks?: Array<{ device?: string; mountpoint?: string; filesystem?: string; type?: string; total?: number; used?: number; free?: number }>,
+): Disk[] | undefined {
+  if (!disks || disks.length === 0) return undefined;
+  return disks.map((d) => {
+    const total = d.total ?? 0;
+    const used = d.used ?? 0;
+    const free = d.free ?? (total > 0 ? Math.max(0, total - used) : 0);
+    const usage = total > 0 ? (used / total) * 100 : 0;
+    return {
+      total,
+      used,
+      free,
+      usage,
+      mountpoint: d.mountpoint,
+      type: d.filesystem ?? d.type,
+      device: d.device,
+    };
+  });
 }
