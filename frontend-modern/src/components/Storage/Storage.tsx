@@ -23,6 +23,7 @@ import { getProxmoxData } from '@/utils/resourcePlatformData';
 import { useStorageRouteState } from './useStorageRouteState';
 import { isCephRecord, useStorageCephModel } from './useStorageCephModel';
 import { useStorageAlertState } from './useStorageAlertState';
+import { useStorageHeroTrend } from './useStorageHeroTrend';
 import { StorageFilter, type StorageGroupByFilter, type StorageStatusFilter } from './StorageFilter';
 import { StorageGroupRow } from './StorageGroupRow';
 import { StoragePoolRow } from './StoragePoolRow';
@@ -112,6 +113,7 @@ const Storage: Component = () => {
   });
 
   const records = createMemo(() => buildStorageRecords({ state, resources: adapterResources() }));
+  const storageTrend = useStorageHeroTrend(records);
   const activeAlertsAccessor = () => {
     if (typeof activeAlerts === 'function') {
       return (activeAlerts as () => unknown)();
@@ -347,13 +349,12 @@ const Storage: Component = () => {
 
   return (
     <div class="space-y-4">
-      <div class="flex flex-col gap-1">
-        <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Storage</h2>
-        <p class="text-sm text-gray-600 dark:text-gray-400">
-          Storage capacity and health across connected platforms.
-        </p>
-      </div>
-      <StorageHero summary={summary()} healthBreakdown={healthBreakdown()} diskCount={physicalDisks().length} />
+      <StorageHero
+        summary={summary()}
+        healthBreakdown={healthBreakdown()}
+        diskCount={physicalDisks().length}
+        trend={storageTrend.trend()}
+      />
 
       <Show
         when={

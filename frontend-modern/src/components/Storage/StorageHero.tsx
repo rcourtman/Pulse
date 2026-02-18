@@ -2,6 +2,7 @@ import { Component, createMemo, Show } from 'solid-js';
 
 import { Card } from '@/components/shared/Card';
 import { MiniDonut, MiniGauge } from '@/pages/DashboardPanels/Visualizations';
+import { deltaColorClass, formatDelta } from '@/pages/DashboardPanels/dashboardHelpers';
 import { formatBytes, formatPercent } from '@/utils/format';
 import { getMetricSeverity } from '@/utils/metricThresholds';
 import type { MetricSeverity } from '@/utils/metricThresholds';
@@ -10,6 +11,7 @@ export interface StorageHeroProps {
   summary: { count: number; totalBytes: number; usedBytes: number; usagePercent: number };
   healthBreakdown: { healthy: number; warning: number; critical: number; offline: number; unknown: number };
   diskCount?: number;
+  trend?: { delta: number | null } | null;
 }
 
 const GAUGE_COLOR_BY_SEVERITY: Record<MetricSeverity, string> = {
@@ -54,6 +56,11 @@ export const StorageHero: Component<StorageHeroProps> = (props) => {
             <div class="text-sm font-bold text-gray-900 dark:text-white">{formatBytes(props.summary.totalBytes)}</div>
             <div class={`text-[10px] font-medium ${gaugeColor()}`}>
               {formatPercent(props.summary.usagePercent)} used
+              <Show when={props.trend?.delta != null}>
+                <span class={`text-[10px] font-medium ${deltaColorClass(props.trend?.delta ?? null)}`}>
+                  {' '}{formatDelta(props.trend?.delta ?? null)} / 7d
+                </span>
+              </Show>
             </div>
           </div>
         </div>

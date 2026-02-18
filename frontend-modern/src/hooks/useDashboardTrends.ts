@@ -148,7 +148,7 @@ function buildHistoryTargets(
   return targets;
 }
 
-function aggregateStoragePoints(allSeries: TrendPoint[][]): TrendPoint[] {
+export function aggregateStoragePoints(allSeries: TrendPoint[][]): TrendPoint[] {
   const buckets = new Map<number, { sum: number; count: number }>();
 
   for (const series of allSeries) {
