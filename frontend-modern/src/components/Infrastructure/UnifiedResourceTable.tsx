@@ -20,7 +20,7 @@ import {
 import { ResourceDetailDrawer } from './ResourceDetailDrawer';
 import { buildWorkloadsHref } from './workloadsLink';
 import { buildServiceDetailLinks } from './serviceDetailLinks';
-import { getPlatformBadge, getSourceBadge, getUnifiedSourceBadges } from './resourceBadges';
+import { getContainerRuntimeBadge, getPlatformBadge, getSourceBadge, getUnifiedSourceBadges } from './resourceBadges';
 import { useTableWindowing } from './useTableWindowing';
 
 interface UnifiedResourceTableProps {
@@ -97,6 +97,12 @@ const hasAlternateName = (resource: Resource) => {
   const display = resource.displayName.trim().toLowerCase();
   const name = resource.name.trim().toLowerCase();
   return display !== name;
+};
+
+const isK8sClusterPendingUninstall = (resource: Resource): boolean => {
+  if (resource.type !== 'k8s-cluster') return false;
+  const platformData = resource.platformData as { kubernetes?: { pendingUninstall?: boolean } } | undefined;
+  return platformData?.kubernetes?.pendingUninstall === true;
 };
 
 const summarizeServiceHealthTone = (value?: string): ServiceSummaryTone => {
@@ -185,7 +191,7 @@ const getOutlierEmphasis = (value: number, stats: IODistributionStats): IOEmphas
 };
 
 export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props) => {
-  const { isMobile } = useBreakpoint();
+  const { isMobile, isVisible } = useBreakpoint();
   const [sortKey, setSortKey] = createSignal<SortKey>('default');
   const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>('asc');
   const setExpandedResourceId = (id: string | null) => props.onExpandedResourceChange(id);
@@ -410,43 +416,43 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
           <div class="border-b border-gray-200/70 bg-gray-50/70 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:border-gray-700 dark:bg-gray-900/40 dark:text-slate-300">
             Host Infrastructure
           </div>
-      <div
-        class="overflow-x-auto"
-        style={{ '-webkit-overflow-scrolling': 'touch' }}
-      >
-        <table class="w-full border-collapse whitespace-nowrap" style={{ 'table-layout': 'fixed', 'min-width': '900px' }}>
-          <thead>
-            <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
-              <th class={`${thClassBase} text-left pl-2 sm:pl-3`} style={resourceColumnStyle()} onClick={() => handleSort('name')}>
-                Resource {renderSortIndicator('name')}
-              </th>
-              <th class={thClass} style={metricColumnStyle()} onClick={() => handleSort('cpu')}>
-                CPU {renderSortIndicator('cpu')}
-              </th>
-              <th class={thClass} style={metricColumnStyle()} onClick={() => handleSort('memory')}>
-                Memory {renderSortIndicator('memory')}
-              </th>
-              <th class={thClass} style={metricColumnStyle()} onClick={() => handleSort('disk')}>
-                Disk {renderSortIndicator('disk')}
-              </th>
-              <th class={thClass} style={ioColumnStyle()} onClick={() => handleSort('network')}>
-                Net I/O {renderSortIndicator('network')}
-              </th>
-              <th class={thClass} style={ioColumnStyle()} onClick={() => handleSort('diskio')}>
-                Disk I/O {renderSortIndicator('diskio')}
-              </th>
-              <th class={thClass} style={sourceColumnStyle()} onClick={() => handleSort('source')}>
-                Source {renderSortIndicator('source')}
-              </th>
-              <th class={thClass} style={uptimeColumnStyle()} onClick={() => handleSort('uptime')}>
-                Uptime {renderSortIndicator('uptime')}
-              </th>
-              <th class={thClass} style={tempColumnStyle()} onClick={() => handleSort('temp')}>
-                Temp {renderSortIndicator('temp')}
-              </th>
-            </tr>
-          </thead>
-          <tbody ref={setHostBodyRef} class="bg-white dark:bg-gray-800">
+	      <div
+	        class="overflow-x-auto"
+	        style={{ '-webkit-overflow-scrolling': 'touch' }}
+	      >
+	        <table class="w-full border-collapse whitespace-nowrap" style={{ 'table-layout': 'fixed', 'min-width': '600px' }}>
+	          <thead>
+	            <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
+	              <th class={`${thClassBase} text-left pl-2 sm:pl-3`} style={resourceColumnStyle()} onClick={() => handleSort('name')}>
+	                Resource {renderSortIndicator('name')}
+	              </th>
+	              <th class={thClass} style={metricColumnStyle()} onClick={() => handleSort('cpu')}>
+	                CPU {renderSortIndicator('cpu')}
+	              </th>
+	              <th class={thClass} style={metricColumnStyle()} onClick={() => handleSort('memory')}>
+	                Memory {renderSortIndicator('memory')}
+	              </th>
+	              <th class={thClass} classList={{ hidden: !isVisible('primary') }} style={metricColumnStyle()} onClick={() => handleSort('disk')}>
+	                Disk {renderSortIndicator('disk')}
+	              </th>
+	              <th class={thClass} classList={{ hidden: !isVisible('secondary') }} style={ioColumnStyle()} onClick={() => handleSort('network')}>
+	                Net I/O {renderSortIndicator('network')}
+	              </th>
+	              <th class={thClass} classList={{ hidden: !isVisible('supplementary') }} style={ioColumnStyle()} onClick={() => handleSort('diskio')}>
+	                Disk I/O {renderSortIndicator('diskio')}
+	              </th>
+	              <th class={thClass} classList={{ hidden: !isVisible('secondary') }} style={sourceColumnStyle()} onClick={() => handleSort('source')}>
+	                Source {renderSortIndicator('source')}
+	              </th>
+	              <th class={thClass} classList={{ hidden: !isVisible('supplementary') }} style={uptimeColumnStyle()} onClick={() => handleSort('uptime')}>
+	                Uptime {renderSortIndicator('uptime')}
+	              </th>
+	              <th class={thClass} classList={{ hidden: !isVisible('supplementary') }} style={tempColumnStyle()} onClick={() => handleSort('temp')}>
+	                Temp {renderSortIndicator('temp')}
+	              </th>
+	            </tr>
+	          </thead>
+	          <tbody ref={setHostBodyRef} class="bg-white dark:bg-gray-800">
             <Show when={hostWindowing.isWindowed() && hostTopSpacerHeight() > 0}>
               <tr aria-hidden="true">
                 <td colspan={9} style={{ height: `${hostTopSpacerHeight()}px`, padding: '0', border: '0' }} />
@@ -543,6 +549,9 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                 const unifiedSourceBadges = createMemo(() =>
                   getUnifiedSourceBadges(getUnifiedSources(resource)),
                 );
+                const containerRuntimeBadge = createMemo(() =>
+                  getContainerRuntimeBadge(resource.platformType, resource.platformData ?? null),
+                );
                 const hasUnifiedSources = createMemo(() => unifiedSourceBadges().length > 0);
                 const workloadsHref = createMemo(() => buildWorkloadsHref(resource));
 
@@ -584,6 +593,11 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                             >
                               {displayName()}
                             </span>
+                            <Show when={isK8sClusterPendingUninstall(resource)}>
+                              <span class="shrink-0 text-[9px] text-gray-400 dark:text-gray-500">
+                                (pending uninstall)
+                              </span>
+                            </Show>
                             <Show when={hasAlternateName(resource)}>
                               <span class="hidden min-w-0 max-w-[28%] shrink truncate text-[9px] text-gray-500 dark:text-gray-400 lg:inline">
                                 ({resource.name})
@@ -607,11 +621,11 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                             )}
                           </Show>
                         </div>
-                      </td>
-
-                      <td class={tdClass}>
-                        <Show when={cpuPercentValue() !== null} fallback={<div class="flex justify-center"><span class="text-xs text-gray-400">—</span></div>}>
-                          <ResponsiveMetricCell
+	                      </td>
+	
+	                      <td class={tdClass}>
+	                        <Show when={cpuPercentValue() !== null} fallback={<div class="flex justify-center"><span class="text-xs text-gray-400">—</span></div>}>
+	                          <ResponsiveMetricCell
                             class="w-full"
                             value={cpuPercentValue() ?? 0}
                             type="cpu"
@@ -619,12 +633,12 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                             isRunning={isResourceOnline(resource)}
                             showMobile={false}
                           />
-                        </Show>
-                      </td>
-
-                      <td class={tdClass}>
-                        <Show when={memoryPercentValue() !== null} fallback={<div class="flex justify-center"><span class="text-xs text-gray-400">—</span></div>}>
-                          <ResponsiveMetricCell
+	                        </Show>
+	                      </td>
+	
+	                      <td class={tdClass}>
+	                        <Show when={memoryPercentValue() !== null} fallback={<div class="flex justify-center"><span class="text-xs text-gray-400">—</span></div>}>
+	                          <ResponsiveMetricCell
                             class="w-full"
                             value={memoryPercentValue() ?? 0}
                             type="memory"
@@ -633,28 +647,28 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                             isRunning={isResourceOnline(resource)}
                             showMobile={false}
                           />
-                        </Show>
-                      </td>
-
-                      <td class={tdClass}>
-                        <Show when={diskPercentValue() !== null} fallback={<div class="flex justify-center"><span class="text-xs text-gray-400">—</span></div>}>
-                          <ResponsiveMetricCell
-                            class="w-full"
-                            value={diskPercentValue() ?? 0}
+	                        </Show>
+	                      </td>
+	
+	                      <td class={tdClass} classList={{ hidden: !isVisible('primary') }}>
+	                        <Show when={diskPercentValue() !== null} fallback={<div class="flex justify-center"><span class="text-xs text-gray-400">—</span></div>}>
+	                          <ResponsiveMetricCell
+	                            class="w-full"
+	                            value={diskPercentValue() ?? 0}
                             type="disk"
                             sublabel={diskSublabel()}
                             resourceId={isMobile() ? undefined : metricsKey()}
                             isRunning={isResourceOnline(resource)}
                             showMobile={false}
                           />
-                        </Show>
-                      </td>
-
-                      <td class={tdClass}>
-                        <Show when={resource.network} fallback={<div class="text-center"><span class="text-xs text-gray-400">—</span></div>}>
-                          <div class="grid w-full grid-cols-[0.75rem_minmax(0,1fr)_0.75rem_minmax(0,1fr)] items-center gap-x-1 text-[11px] tabular-nums">
-                            <span class="inline-flex w-3 justify-center text-emerald-500">↓</span>
-                            <span
+	                        </Show>
+	                      </td>
+	
+	                      <td class={tdClass} classList={{ hidden: !isVisible('secondary') }}>
+	                        <Show when={resource.network} fallback={<div class="text-center"><span class="text-xs text-gray-400">—</span></div>}>
+	                          <div class="grid w-full grid-cols-[0.75rem_minmax(0,1fr)_0.75rem_minmax(0,1fr)] items-center gap-x-1 text-[11px] tabular-nums">
+	                            <span class="inline-flex w-3 justify-center text-emerald-500">↓</span>
+	                            <span
                               class={`min-w-0 whitespace-nowrap ${networkEmphasis().className}`}
                               title={networkEmphasis().showOutlierHint ? `${formatSpeed(resource.network!.rxBytes)} (Top outlier)` : formatSpeed(resource.network!.rxBytes)}
                             >
@@ -668,14 +682,14 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                               {formatSpeed(resource.network!.txBytes)}
                             </span>
                           </div>
-                        </Show>
-                      </td>
-
-                      <td class={tdClass}>
-                        <Show when={resource.diskIO} fallback={<div class="text-center"><span class="text-xs text-gray-400">—</span></div>}>
-                          <div class="grid w-full grid-cols-[0.75rem_minmax(0,1fr)_0.75rem_minmax(0,1fr)] items-center gap-x-1 text-[11px] tabular-nums">
-                            <span class="inline-flex w-3 justify-center font-mono text-blue-500">R</span>
-                            <span
+	                        </Show>
+	                      </td>
+	
+	                      <td class={tdClass} classList={{ hidden: !isVisible('supplementary') }}>
+	                        <Show when={resource.diskIO} fallback={<div class="text-center"><span class="text-xs text-gray-400">—</span></div>}>
+	                          <div class="grid w-full grid-cols-[0.75rem_minmax(0,1fr)_0.75rem_minmax(0,1fr)] items-center gap-x-1 text-[11px] tabular-nums">
+	                            <span class="inline-flex w-3 justify-center font-mono text-blue-500">R</span>
+	                            <span
                               class={`min-w-0 whitespace-nowrap ${diskIOEmphasis().className}`}
                               title={diskIOEmphasis().showOutlierHint ? `${formatSpeed(resource.diskIO!.readRate)} (Top outlier)` : formatSpeed(resource.diskIO!.readRate)}
                             >
@@ -689,14 +703,14 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                               {formatSpeed(resource.diskIO!.writeRate)}
                             </span>
                           </div>
-                        </Show>
-                      </td>
-
-                      <td class={tdClass}>
-                        <div class="flex flex-wrap items-center justify-center gap-1">
-                          <Show
-                            when={hasUnifiedSources()}
-                            fallback={
+	                        </Show>
+	                      </td>
+	
+	                      <td class={tdClass} classList={{ hidden: !isVisible('secondary') }}>
+	                        <div class="flex flex-wrap items-center justify-center gap-1">
+	                          <Show
+	                            when={hasUnifiedSources()}
+	                            fallback={
                               <>
                                 <Show when={platformBadge()}>
                                   {(badge) => (
@@ -706,6 +720,13 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                                   )}
                                 </Show>
                                 <Show when={sourceBadge()}>
+                                  {(badge) => (
+                                    <span class={badge().classes} title={badge().title}>
+                                      {badge().label}
+                                    </span>
+                                  )}
+                                </Show>
+                                <Show when={containerRuntimeBadge()}>
                                   {(badge) => (
                                     <span class={badge().classes} title={badge().title}>
                                       {badge().label}
@@ -722,25 +743,32 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                                 </span>
                               )}
                             </For>
+                            <Show when={containerRuntimeBadge()}>
+                              {(badge) => (
+                                <span class={badge().classes} title={badge().title}>
+                                  {badge().label}
+                                </span>
+                              )}
+                            </Show>
                           </Show>
-                        </div>
-                      </td>
-
-                      <td class={tdClass}>
-                        <div class="flex justify-center">
-                          <Show when={resource.uptime} fallback={<span class="text-xs text-gray-400">—</span>}>
-                            <span class="text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
-                              {formatUptime(resource.uptime ?? 0)}
+	                        </div>
+	                      </td>
+	
+	                      <td class={tdClass} classList={{ hidden: !isVisible('supplementary') }}>
+	                        <div class="flex justify-center">
+	                          <Show when={resource.uptime} fallback={<span class="text-xs text-gray-400">—</span>}>
+	                            <span class="text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
+	                              {formatUptime(resource.uptime ?? 0)}
                             </span>
                           </Show>
-                        </div>
-                      </td>
-
-                      <td class={tdClass}>
-                        <div class="flex justify-center">
-                          <Show when={resource.temperature != null} fallback={<span class="text-xs text-gray-400">—</span>}>
-                            <span
-                              class={`text-xs whitespace-nowrap font-medium ${
+	                        </div>
+	                      </td>
+	
+	                      <td class={tdClass} classList={{ hidden: !isVisible('supplementary') }}>
+	                        <div class="flex justify-center">
+	                          <Show when={resource.temperature != null} fallback={<span class="text-xs text-gray-400">—</span>}>
+	                            <span
+	                              class={`text-xs whitespace-nowrap font-medium ${
                                 (resource.temperature ?? 0) >= 80
                                   ? 'text-red-600 dark:text-red-400'
                                   : (resource.temperature ?? 0) >= 65
@@ -783,35 +811,35 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
             Service Infrastructure
           </div>
 
-          <Show when={sortedPBSResources().length > 0}>
-            <div class="border-b border-gray-100 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:border-gray-700 dark:text-slate-300">
-              PBS Services
-            </div>
-            <div class="overflow-x-auto" style={{ '-webkit-overflow-scrolling': 'touch' }}>
-              <table class="w-full border-collapse whitespace-nowrap" style={{ 'table-layout': 'fixed', 'min-width': '760px' }}>
-                <thead>
-                  <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
-                    <th class={`${staticThClass} text-left pl-2 sm:pl-3`} style={resourceColumnStyle()}>
-                      Resource
-                    </th>
-                    <th class={staticThClass} style={serviceCountColumnStyle()}>
-                      Datastores
-                    </th>
-                    <th class={staticThClass} style={serviceCountColumnStyle()}>
-                      Jobs
-                    </th>
-                    <th class={staticThClass} style={serviceHealthColumnStyle()}>
-                      Health
-                    </th>
-                    <th class={staticThClass} style={sourceColumnStyle()}>
-                      Source
-                    </th>
-                    <th class={staticThClass} style={uptimeColumnStyle()}>
-                      Uptime
-                    </th>
-                    <th class={staticThClass} style={serviceActionColumnStyle()}>
-                      Action
-                    </th>
+	          <Show when={sortedPBSResources().length > 0}>
+	            <div class="border-b border-gray-100 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:border-gray-700 dark:text-slate-300">
+	              PBS Services
+	            </div>
+	            <div class="overflow-x-auto" style={{ '-webkit-overflow-scrolling': 'touch' }}>
+	              <table class="w-full border-collapse whitespace-nowrap" style={{ 'table-layout': 'fixed', 'min-width': '500px' }}>
+	                <thead>
+	                  <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
+	                    <th class={`${staticThClass} text-left pl-2 sm:pl-3`} style={resourceColumnStyle()}>
+	                      Resource
+	                    </th>
+	                    <th class={staticThClass} classList={{ hidden: !isVisible('primary') }} style={serviceCountColumnStyle()}>
+	                      Datastores
+	                    </th>
+	                    <th class={staticThClass} classList={{ hidden: !isVisible('secondary') }} style={serviceCountColumnStyle()}>
+	                      Jobs
+	                    </th>
+	                    <th class={staticThClass} style={serviceHealthColumnStyle()}>
+	                      Health
+	                    </th>
+	                    <th class={staticThClass} classList={{ hidden: !isVisible('secondary') }} style={sourceColumnStyle()}>
+	                      Source
+	                    </th>
+	                    <th class={staticThClass} classList={{ hidden: !isVisible('supplementary') }} style={uptimeColumnStyle()}>
+	                      Uptime
+	                    </th>
+	                    <th class={staticThClass} style={serviceActionColumnStyle()}>
+	                      Action
+	                    </th>
                   </tr>
                 </thead>
                 <tbody class="bg-white dark:bg-gray-800">
@@ -898,19 +926,19 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                               </div>
                             </td>
 
-                            <td class={tdClass}>
-                              <div class="flex justify-center">
-                                <Show when={pbsRow()?.datastores != null} fallback={<span class="text-xs text-gray-400">—</span>}>
-                                  <span class="text-xs text-gray-700 dark:text-gray-300">{pbsRow()!.datastores}</span>
-                                </Show>
+	                            <td class={tdClass} classList={{ hidden: !isVisible('primary') }}>
+	                              <div class="flex justify-center">
+	                                <Show when={pbsRow()?.datastores != null} fallback={<span class="text-xs text-gray-400">—</span>}>
+	                                  <span class="text-xs text-gray-700 dark:text-gray-300">{pbsRow()!.datastores}</span>
+	                                </Show>
                               </div>
                             </td>
 
-                            <td class={tdClass}>
-                              <div class="flex justify-center">
-                                <Show when={pbsRow()?.jobs != null} fallback={<span class="text-xs text-gray-400">—</span>}>
-                                  <span class="text-xs text-gray-700 dark:text-gray-300">{pbsRow()!.jobs}</span>
-                                </Show>
+	                            <td class={tdClass} classList={{ hidden: !isVisible('secondary') }}>
+	                              <div class="flex justify-center">
+	                                <Show when={pbsRow()?.jobs != null} fallback={<span class="text-xs text-gray-400">—</span>}>
+	                                  <span class="text-xs text-gray-700 dark:text-gray-300">{pbsRow()!.jobs}</span>
+	                                </Show>
                               </div>
                             </td>
 
@@ -920,13 +948,13 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                                   <span class={`text-xs font-medium ${healthClass()}`}>{pbsRow()!.health}</span>
                                 </Show>
                               </div>
-                            </td>
-
-                            <td class={tdClass}>
-                              <div class="flex flex-wrap items-center justify-center gap-1">
-                                <Show
-                                  when={hasUnifiedSources()}
-                                  fallback={
+	                            </td>
+	
+	                            <td class={tdClass} classList={{ hidden: !isVisible('secondary') }}>
+	                              <div class="flex flex-wrap items-center justify-center gap-1">
+	                                <Show
+	                                  when={hasUnifiedSources()}
+	                                  fallback={
                                     <>
                                       <Show when={platformBadge()}>
                                         {(badge) => (
@@ -953,14 +981,14 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                                     )}
                                   </For>
                                 </Show>
-                              </div>
-                            </td>
-
-                            <td class={tdClass}>
-                              <div class="flex justify-center">
-                                <Show when={resource.uptime} fallback={<span class="text-xs text-gray-400">—</span>}>
-                                  <span class="text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
-                                    {formatUptime(resource.uptime ?? 0)}
+	                              </div>
+	                            </td>
+	
+	                            <td class={tdClass} classList={{ hidden: !isVisible('supplementary') }}>
+	                              <div class="flex justify-center">
+	                                <Show when={resource.uptime} fallback={<span class="text-xs text-gray-400">—</span>}>
+	                                  <span class="text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
+	                                    {formatUptime(resource.uptime ?? 0)}
                                   </span>
                                 </Show>
                               </div>
@@ -1001,40 +1029,40 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
           </Show>
 
           <Show when={sortedPMGResources().length > 0}>
-            <div class="border-b border-gray-100 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:border-gray-700 dark:text-slate-300">
-              PMG Services
-            </div>
-            <div class="overflow-x-auto" style={{ '-webkit-overflow-scrolling': 'touch' }}>
-              <table class="w-full border-collapse whitespace-nowrap" style={{ 'table-layout': 'fixed', 'min-width': '880px' }}>
-                <thead>
-                  <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
-                    <th class={`${staticThClass} text-left pl-2 sm:pl-3`} style={resourceColumnStyle()}>
-                      Resource
-                    </th>
-                    <th class={staticThClass} style={serviceQueueColumnStyle()}>
-                      Queue
-                    </th>
-                    <th class={staticThClass} style={serviceQueueColumnStyle()}>
-                      Deferred
-                    </th>
-                    <th class={staticThClass} style={serviceQueueColumnStyle()}>
-                      Hold
-                    </th>
-                    <th class={staticThClass} style={serviceCountColumnStyle()}>
-                      Nodes
-                    </th>
-                    <th class={staticThClass} style={serviceHealthColumnStyle()}>
-                      Health
-                    </th>
-                    <th class={staticThClass} style={sourceColumnStyle()}>
-                      Source
-                    </th>
-                    <th class={staticThClass} style={uptimeColumnStyle()}>
-                      Uptime
-                    </th>
-                    <th class={staticThClass} style={serviceActionColumnStyle()}>
-                      Action
-                    </th>
+	            <div class="border-b border-gray-100 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:border-gray-700 dark:text-slate-300">
+	              PMG Services
+	            </div>
+	            <div class="overflow-x-auto" style={{ '-webkit-overflow-scrolling': 'touch' }}>
+	              <table class="w-full border-collapse whitespace-nowrap" style={{ 'table-layout': 'fixed', 'min-width': '550px' }}>
+	                <thead>
+	                  <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
+	                    <th class={`${staticThClass} text-left pl-2 sm:pl-3`} style={resourceColumnStyle()}>
+	                      Resource
+	                    </th>
+	                    <th class={staticThClass} classList={{ hidden: !isVisible('primary') }} style={serviceQueueColumnStyle()}>
+	                      Queue
+	                    </th>
+	                    <th class={staticThClass} classList={{ hidden: !isVisible('secondary') }} style={serviceQueueColumnStyle()}>
+	                      Deferred
+	                    </th>
+	                    <th class={staticThClass} classList={{ hidden: !isVisible('supplementary') }} style={serviceQueueColumnStyle()}>
+	                      Hold
+	                    </th>
+	                    <th class={staticThClass} classList={{ hidden: !isVisible('secondary') }} style={serviceCountColumnStyle()}>
+	                      Nodes
+	                    </th>
+	                    <th class={staticThClass} style={serviceHealthColumnStyle()}>
+	                      Health
+	                    </th>
+	                    <th class={staticThClass} classList={{ hidden: !isVisible('secondary') }} style={sourceColumnStyle()}>
+	                      Source
+	                    </th>
+	                    <th class={staticThClass} classList={{ hidden: !isVisible('supplementary') }} style={uptimeColumnStyle()}>
+	                      Uptime
+	                    </th>
+	                    <th class={staticThClass} style={serviceActionColumnStyle()}>
+	                      Action
+	                    </th>
                   </tr>
                 </thead>
                 <tbody class="bg-white dark:bg-gray-800">
@@ -1126,35 +1154,35 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                               </div>
                             </td>
 
-                            <td class={tdClass}>
-                              <div class="flex justify-center">
-                                <Show when={pmgRow()?.queue != null} fallback={<span class="text-xs text-gray-400">—</span>}>
-                                  <span class={`text-xs font-medium ${queueClass()}`}>{pmgRow()!.queue}</span>
-                                </Show>
+	                            <td class={tdClass} classList={{ hidden: !isVisible('primary') }}>
+	                              <div class="flex justify-center">
+	                                <Show when={pmgRow()?.queue != null} fallback={<span class="text-xs text-gray-400">—</span>}>
+	                                  <span class={`text-xs font-medium ${queueClass()}`}>{pmgRow()!.queue}</span>
+	                                </Show>
                               </div>
                             </td>
 
-                            <td class={tdClass}>
-                              <div class="flex justify-center">
-                                <Show when={pmgRow()?.deferred != null} fallback={<span class="text-xs text-gray-400">—</span>}>
-                                  <span class="text-xs text-gray-700 dark:text-gray-300">{pmgRow()!.deferred}</span>
-                                </Show>
+	                            <td class={tdClass} classList={{ hidden: !isVisible('secondary') }}>
+	                              <div class="flex justify-center">
+	                                <Show when={pmgRow()?.deferred != null} fallback={<span class="text-xs text-gray-400">—</span>}>
+	                                  <span class="text-xs text-gray-700 dark:text-gray-300">{pmgRow()!.deferred}</span>
+	                                </Show>
                               </div>
                             </td>
 
-                            <td class={tdClass}>
-                              <div class="flex justify-center">
-                                <Show when={pmgRow()?.hold != null} fallback={<span class="text-xs text-gray-400">—</span>}>
-                                  <span class="text-xs text-gray-700 dark:text-gray-300">{pmgRow()!.hold}</span>
-                                </Show>
+	                            <td class={tdClass} classList={{ hidden: !isVisible('supplementary') }}>
+	                              <div class="flex justify-center">
+	                                <Show when={pmgRow()?.hold != null} fallback={<span class="text-xs text-gray-400">—</span>}>
+	                                  <span class="text-xs text-gray-700 dark:text-gray-300">{pmgRow()!.hold}</span>
+	                                </Show>
                               </div>
                             </td>
 
-                            <td class={tdClass}>
-                              <div class="flex justify-center">
-                                <Show when={pmgRow()?.nodes != null} fallback={<span class="text-xs text-gray-400">—</span>}>
-                                  <span class="text-xs text-gray-700 dark:text-gray-300">{pmgRow()!.nodes}</span>
-                                </Show>
+	                            <td class={tdClass} classList={{ hidden: !isVisible('secondary') }}>
+	                              <div class="flex justify-center">
+	                                <Show when={pmgRow()?.nodes != null} fallback={<span class="text-xs text-gray-400">—</span>}>
+	                                  <span class="text-xs text-gray-700 dark:text-gray-300">{pmgRow()!.nodes}</span>
+	                                </Show>
                               </div>
                             </td>
 
@@ -1163,14 +1191,14 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                                 <Show when={pmgRow()?.health} fallback={<span class="text-xs text-gray-400">—</span>}>
                                   <span class={`text-xs font-medium ${healthClass()}`}>{pmgRow()!.health}</span>
                                 </Show>
-                              </div>
-                            </td>
-
-                            <td class={tdClass}>
-                              <div class="flex flex-wrap items-center justify-center gap-1">
-                                <Show
-                                  when={hasUnifiedSources()}
-                                  fallback={
+	                              </div>
+	                            </td>
+	
+	                            <td class={tdClass} classList={{ hidden: !isVisible('secondary') }}>
+	                              <div class="flex flex-wrap items-center justify-center gap-1">
+	                                <Show
+	                                  when={hasUnifiedSources()}
+	                                  fallback={
                                     <>
                                       <Show when={platformBadge()}>
                                         {(badge) => (
@@ -1197,14 +1225,14 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                                     )}
                                   </For>
                                 </Show>
-                              </div>
-                            </td>
-
-                            <td class={tdClass}>
-                              <div class="flex justify-center">
-                                <Show when={resource.uptime} fallback={<span class="text-xs text-gray-400">—</span>}>
-                                  <span class="text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
-                                    {formatUptime(resource.uptime ?? 0)}
+	                              </div>
+	                            </td>
+	
+	                            <td class={tdClass} classList={{ hidden: !isVisible('supplementary') }}>
+	                              <div class="flex justify-center">
+	                                <Show when={resource.uptime} fallback={<span class="text-xs text-gray-400">—</span>}>
+	                                  <span class="text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
+	                                    {formatUptime(resource.uptime ?? 0)}
                                   </span>
                                 </Show>
                               </div>
