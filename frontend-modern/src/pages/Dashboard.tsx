@@ -1,4 +1,4 @@
-import { For, Match, Show, Switch, createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
+import { For, Match, Switch, createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
 import { useWebSocket } from '@/App';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import { useDashboardOverview } from '@/hooks/useDashboardOverview';
