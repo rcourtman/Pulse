@@ -71,6 +71,45 @@ func isVMSpecificError(errStr string) bool {
 	return false
 }
 
+// isEndpointConnectivityError reports whether an error indicates the endpoint
+// itself is unreachable (TCP/DNS/TLS failure). Any error that carries an HTTP
+// response — even a 500 — proves the endpoint is reachable, so those are NOT
+// connectivity errors.
+func isEndpointConnectivityError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := strings.ToLower(err.Error())
+
+	// If we received an HTTP response from Proxmox (any status code),
+	// the endpoint is reachable.
+	if strings.Contains(errStr, "api error") {
+		return false
+	}
+
+	// TCP/DNS connectivity failures
+	if strings.Contains(errStr, "connection refused") ||
+		strings.Contains(errStr, "connection reset") ||
+		strings.Contains(errStr, "no such host") ||
+		strings.Contains(errStr, "network is unreachable") ||
+		strings.Contains(errStr, "no route to host") ||
+		strings.Contains(errStr, "i/o timeout") ||
+		strings.Contains(errStr, "dial tcp") ||
+		strings.Contains(errStr, "dial:") {
+		return true
+	}
+
+	// TLS failures
+	if strings.Contains(errStr, "tls handshake") ||
+		strings.Contains(errStr, "tls:") ||
+		strings.Contains(errStr, "certificate") ||
+		strings.Contains(errStr, "fingerprint mismatch") {
+		return true
+	}
+
+	return false
+}
+
 // sanitizeEndpointError transforms raw Go errors into user-friendly messages
 // for display in the UI. The original error is preserved in logs.
 func sanitizeEndpointError(errMsg string) string {
@@ -694,62 +733,7 @@ func (cc *ClusterClient) executeWithFailover(ctx context.Context, fn func(*Clien
 		}
 		lastErr = err
 
-		// Check error type and content
-		errStr := err.Error()
-
-		// Check if it's a node-specific or transient failure that shouldn't mark endpoint unhealthy
-		// Error 595 in Proxmox means "no ticket" but in cluster context often means target node unreachable
-		// Error 500 with hostname lookup failure means a node reference issue, not endpoint failure
-		// Error 403 for storage operations means permission issue, not node health issue
-		// Error 500 with "No QEMU guest agent configured" means VM-specific issue, not node failure
-		// Error 500 with "QEMU guest agent is not running" means VM-specific issue, not node failure
-		// Error 500 with any guest agent/QMP message means VM-specific issue, not node failure
-		// Error 400 with "ds" parameter error means Proxmox 9.x doesn't support RRD data source filtering
-		// JSON unmarshal errors are data format issues, not connectivity problems
-		// Context deadline/timeout errors on storage endpoints mean storage issues, not node unreachability
-		// PBS (Proxmox Backup Server) errors are upstream storage issues, not node connectivity problems
-		// RRD data timeouts are secondary data fetch failures, not node unreachability
-		if isVMSpecificError(errStr) ||
-			strings.Contains(errStr, "595") ||
-			(strings.Contains(errStr, "500") && strings.Contains(errStr, "hostname lookup")) ||
-			(strings.Contains(errStr, "500") && strings.Contains(errStr, "Name or service not known")) ||
-			(strings.Contains(errStr, "403") && (strings.Contains(errStr, "storage") || strings.Contains(errStr, "datastore"))) ||
-			strings.Contains(errStr, "permission denied") ||
-			(strings.Contains(errStr, "400") && strings.Contains(errStr, "\"ds\"") && strings.Contains(errStr, "property is not defined in schema")) ||
-			strings.Contains(errStr, "json: cannot unmarshal") ||
-			(strings.Contains(errStr, "storage '") && strings.Contains(errStr, "is not available on node")) ||
-			strings.Contains(errStr, "unexpected response format") ||
-			(strings.Contains(errStr, "context deadline exceeded") && strings.Contains(errStr, "/storage")) ||
-			(strings.Contains(errStr, "Client.Timeout exceeded") && strings.Contains(errStr, "/storage")) ||
-			// PBS storage errors - Proxmox can't reach PBS, but node is still reachable
-			(strings.Contains(errStr, "500") && strings.Contains(errStr, "pbs-") && strings.Contains(errStr, "error fetching datastores")) ||
-			(strings.Contains(errStr, "500") && strings.Contains(errStr, "Can't connect to") && strings.Contains(errStr, ":8007")) ||
-			// External Ceph errors - Ceph not managed by Proxmox, but node is still reachable
-			(strings.Contains(errStr, "500") && strings.Contains(errStr, "binary not installed")) ||
-			// RRD data timeouts - secondary metric fetch failures, node is still working
-			(strings.Contains(errStr, "context deadline exceeded") && strings.Contains(errStr, "/rrddata")) ||
-			(strings.Contains(errStr, "context deadline exceeded") && strings.Contains(errStr, "/lxc/") && strings.Contains(errStr, "rrd")) ||
-			(strings.Contains(errStr, "context deadline exceeded") && strings.Contains(errStr, "/qemu/") && strings.Contains(errStr, "rrd")) {
-			// This is likely a node-specific failure, not an endpoint failure
-			// Return the error but don't mark the endpoint as unhealthy
-			log.Debug().
-				Str("cluster", cc.name).
-				Str("endpoint", clientEndpoint).
-				Err(err).
-				Msg("Node-specific or configuration error, not marking endpoint unhealthy")
-			return err
-		}
-
-		if isNotImplementedError(errStr) {
-			// Endpoint not implemented on this node/version; bubble up without marking it unhealthy
-			log.Debug().
-				Str("cluster", cc.name).
-				Str("endpoint", clientEndpoint).
-				Err(err).
-				Msg("Endpoint not implemented, not marking cluster node unhealthy")
-			return err
-		}
-
+		// Rate limit - retry with backoff (check before connectivity classification)
 		if isRateLimited, statusCode := isTransientRateLimitError(err); isRateLimited {
 			backoff := calculateRateLimitBackoff(i)
 			cc.applyRateLimitCooldown(clientEndpoint, backoff)
@@ -778,21 +762,32 @@ func (cc *ClusterClient) executeWithFailover(ctx context.Context, fn func(*Clien
 			continue
 		}
 
-		// Check if it's an auth error - don't retry on auth errors
+		// Auth errors - return immediately without marking endpoint unhealthy
 		if isAuthError(err) {
 			return err
 		}
 
-		// Mark endpoint as unhealthy and try next
-		errMsg := err.Error()
-		cc.markUnhealthyWithError(clientEndpoint, errMsg)
+		// Only mark endpoint unhealthy for actual connectivity failures (TCP/DNS/TLS).
+		// Any HTTP response — even 500 — proves the endpoint is reachable.
+		if isEndpointConnectivityError(err) {
+			cc.markUnhealthyWithError(clientEndpoint, err.Error())
+			log.Warn().
+				Str("cluster", cc.name).
+				Str("endpoint", clientEndpoint).
+				Err(err).
+				Int("attempt", i+1).
+				Msg("Connectivity failure on cluster node, trying next")
+			continue
+		}
 
-		log.Warn().
+		// Endpoint is reachable but this specific request failed (API error, permission
+		// issue, VM-specific error, etc.). Return without marking endpoint unhealthy.
+		log.Debug().
 			Str("cluster", cc.name).
 			Str("endpoint", clientEndpoint).
 			Err(err).
-			Int("attempt", i+1).
-			Msg("Failed on cluster node, trying next")
+			Msg("Request-level error, endpoint reachable - not marking unhealthy")
+		return err
 	}
 
 	if lastErr != nil {
