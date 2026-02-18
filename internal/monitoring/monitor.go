@@ -802,6 +802,7 @@ type Monitor struct {
 	guestSnapshots             map[string]GuestMemorySnapshot
 	rrdCacheMu                 sync.RWMutex // Protects RRD memavailable cache
 	nodeRRDMemCache            map[string]rrdMemCacheEntry
+	vmRRDMemCache              map[string]rrdMemCacheEntry
 	removedDockerHosts         map[string]time.Time // Track deliberately removed Docker hosts (ID -> removal time)
 	dockerTokenBindings        map[string]string    // Track token ID -> agent ID bindings to enforce uniqueness
 	removedKubernetesClusters  map[string]time.Time // Track deliberately removed Kubernetes clusters (ID -> removal time)
@@ -1233,6 +1234,55 @@ func (m *Monitor) getNodeRRDMetrics(ctx context.Context, client PVEClientInterfa
 	m.rrdCacheMu.Unlock()
 
 	return entry, nil
+}
+
+// getVMRRDMetrics fetches Proxmox RRD memavailable for a single VM with a
+// short-lived cache to avoid a live API call on every poll for VMs that
+// consistently lack guest-agent memory data (e.g. Windows VMs).
+func (m *Monitor) getVMRRDMetrics(ctx context.Context, client PVEClientInterface, node string, vmid int) (uint64, error) {
+	if client == nil || node == "" || vmid <= 0 {
+		return 0, fmt.Errorf("invalid arguments for VM RRD lookup")
+	}
+
+	cacheKey := fmt.Sprintf("%s/%d", node, vmid)
+	now := time.Now()
+
+	m.rrdCacheMu.RLock()
+	if entry, ok := m.vmRRDMemCache[cacheKey]; ok && now.Sub(entry.fetchedAt) < nodeRRDCacheTTL {
+		m.rrdCacheMu.RUnlock()
+		return entry.available, nil
+	}
+	m.rrdCacheMu.RUnlock()
+
+	requestCtx, cancel := context.WithTimeout(ctx, nodeRRDRequestTimeout)
+	defer cancel()
+
+	points, err := client.GetVMRRDData(requestCtx, node, vmid, "hour", "AVERAGE", []string{"memavailable"})
+	if err != nil {
+		return 0, err
+	}
+	if len(points) == 0 {
+		return 0, fmt.Errorf("no RRD points for VM %s/%d", node, vmid)
+	}
+
+	var memAvailable uint64
+	for i := len(points) - 1; i >= 0; i-- {
+		p := points[i]
+		if p.MemAvailable != nil && !math.IsNaN(*p.MemAvailable) && *p.MemAvailable > 0 {
+			memAvailable = uint64(math.Round(*p.MemAvailable))
+			break
+		}
+	}
+	if memAvailable == 0 {
+		return 0, fmt.Errorf("rrd memavailable not present for VM %s/%d", node, vmid)
+	}
+
+	entry := rrdMemCacheEntry{available: memAvailable, fetchedAt: now}
+	m.rrdCacheMu.Lock()
+	m.vmRRDMemCache[cacheKey] = entry
+	m.rrdCacheMu.Unlock()
+
+	return memAvailable, nil
 }
 
 // RemoveDockerHost removes a docker host from the shared state and clears related alerts.
@@ -3092,6 +3142,12 @@ func (m *Monitor) cleanupRRDCache(now time.Time) {
 				Msg("Cleaned up stale RRD cache entry")
 		}
 	}
+
+	for key, entry := range m.vmRRDMemCache {
+		if now.Sub(entry.fetchedAt) > maxAge {
+			delete(m.vmRRDMemCache, key)
+		}
+	}
 }
 
 // cleanupMetricsHistory removes stale entries from the metrics history.
@@ -3745,6 +3801,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		nodeSnapshots:              make(map[string]NodeMemorySnapshot),
 		guestSnapshots:             make(map[string]GuestMemorySnapshot),
 		nodeRRDMemCache:            make(map[string]rrdMemCacheEntry),
+		vmRRDMemCache:              make(map[string]rrdMemCacheEntry),
 		removedDockerHosts:         make(map[string]time.Time),
 		dockerTokenBindings:        make(map[string]string),
 		removedKubernetesClusters:  make(map[string]time.Time),
@@ -6767,24 +6824,17 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 					// try Proxmox RRD's memavailable (cache-aware) before falling back to status.Mem
 					// which can include reclaimable page cache (inflating usage). Refs: #1270
 					if memAvailable == 0 {
-						rrdCtx, rrdCancel := context.WithTimeout(ctx, 5*time.Second)
-						rrdPoints, rrdErr := client.GetVMRRDData(rrdCtx, res.Node, res.VMID, "hour", "AVERAGE", []string{"memavailable"})
-						rrdCancel()
-
-						if rrdErr == nil && len(rrdPoints) > 0 {
-							point := rrdPoints[len(rrdPoints)-1]
-							if point.MemAvailable != nil && *point.MemAvailable > 0 {
-								memAvailable = uint64(*point.MemAvailable)
-								memorySource = "rrd-memavailable"
-								guestRaw.MemInfoAvailable = memAvailable
-								log.Debug().
-									Str("vm", res.Name).
-									Str("node", res.Node).
-									Int("vmid", res.VMID).
-									Uint64("total", memTotal).
-									Uint64("available", memAvailable).
-									Msg("QEMU memory: using RRD memavailable fallback (excludes reclaimable cache)")
-							}
+						if rrdAvailable, rrdErr := m.getVMRRDMetrics(ctx, client, res.Node, res.VMID); rrdErr == nil && rrdAvailable > 0 {
+							memAvailable = rrdAvailable
+							memorySource = "rrd-memavailable"
+							guestRaw.MemInfoAvailable = memAvailable
+							log.Debug().
+								Str("vm", res.Name).
+								Str("node", res.Node).
+								Int("vmid", res.VMID).
+								Uint64("total", memTotal).
+								Uint64("available", memAvailable).
+								Msg("QEMU memory: using RRD memavailable fallback (excludes reclaimable cache)")
 						} else if rrdErr != nil {
 							log.Debug().
 								Err(rrdErr).
