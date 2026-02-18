@@ -366,6 +366,17 @@ func (r *Router) handleUpdateSSOProvider(w http.ResponseWriter, req *http.Reques
 		return
 	}
 
+	// Preserve provider-specific configs when the update payload omits nested objects
+	// (e.g. when the frontend sends back the flat list-response shape).
+	if updated.OIDC == nil && existing.OIDC != nil {
+		oidcCopy := *existing.OIDC
+		updated.OIDC = &oidcCopy
+	}
+	if updated.SAML == nil && existing.SAML != nil {
+		samlCopy := *existing.SAML
+		updated.SAML = &samlCopy
+	}
+
 	// Preserve secrets if not provided in update
 	if updated.Type == config.SSOProviderTypeOIDC && updated.OIDC != nil && existing.OIDC != nil {
 		if updated.OIDC.ClientSecret == "" && existing.OIDC.ClientSecretSet {
