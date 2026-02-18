@@ -501,6 +501,13 @@ func buildRuntimeCandidates(preference RuntimeKind) []runtimeCandidate {
 	}
 
 	if preference == RuntimeDocker || preference == RuntimeAuto {
+		// Prefer rootless docker if present. Rootless installs use the per-user XDG runtime socket.
+		rootlessDocker := fmt.Sprintf("unix:///run/user/%d/docker.sock", os.Getuid())
+		add(runtimeCandidate{
+			host:  rootlessDocker,
+			label: "docker rootless socket",
+		})
+
 		add(runtimeCandidate{
 			host:           "unix:///var/run/docker.sock",
 			label:          "default docker socket",

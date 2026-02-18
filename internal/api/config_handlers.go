@@ -5753,7 +5753,27 @@ func (h *ConfigHandlers) handleSecureAutoRegister(w http.ResponseWriter, r *http
 			MonitorStorage:    true,
 			MonitorBackups:    true,
 		}
-		h.getConfig(r.Context()).PVEInstances = append(h.getConfig(r.Context()).PVEInstances, pveNode)
+		// Deduplicate by host to keep secure auto-registration idempotent on reruns.
+		existingIndex := -1
+		for i, node := range h.getConfig(r.Context()).PVEInstances {
+			if node.Host == host {
+				existingIndex = i
+				break
+			}
+		}
+		if existingIndex >= 0 {
+			instance := &h.getConfig(r.Context()).PVEInstances[existingIndex]
+			instance.Host = host
+			instance.User = ""
+			instance.Password = ""
+			instance.TokenName = pveNode.TokenName
+			instance.TokenValue = pveNode.TokenValue
+			instance.Fingerprint = pveNode.Fingerprint
+			instance.VerifySSL = pveNode.VerifySSL
+			log.Info().Str("host", host).Str("type", "pve").Msg("Secure auto-register matched existing node by host; updated token in-place")
+		} else {
+			h.getConfig(r.Context()).PVEInstances = append(h.getConfig(r.Context()).PVEInstances, pveNode)
+		}
 	} else if req.Type == "pbs" {
 		pbsNode := config.PBSInstance{
 			Name:              serverName,
@@ -5768,7 +5788,27 @@ func (h *ConfigHandlers) handleSecureAutoRegister(w http.ResponseWriter, r *http
 			MonitorVerifyJobs: true,
 			MonitorPruneJobs:  true,
 		}
-		h.getConfig(r.Context()).PBSInstances = append(h.getConfig(r.Context()).PBSInstances, pbsNode)
+		// Deduplicate by host to keep secure auto-registration idempotent on reruns.
+		existingIndex := -1
+		for i, node := range h.getConfig(r.Context()).PBSInstances {
+			if node.Host == host {
+				existingIndex = i
+				break
+			}
+		}
+		if existingIndex >= 0 {
+			instance := &h.getConfig(r.Context()).PBSInstances[existingIndex]
+			instance.Host = host
+			instance.User = ""
+			instance.Password = ""
+			instance.TokenName = pbsNode.TokenName
+			instance.TokenValue = pbsNode.TokenValue
+			instance.Fingerprint = pbsNode.Fingerprint
+			instance.VerifySSL = pbsNode.VerifySSL
+			log.Info().Str("host", host).Str("type", "pbs").Msg("Secure auto-register matched existing node by host; updated token in-place")
+		} else {
+			h.getConfig(r.Context()).PBSInstances = append(h.getConfig(r.Context()).PBSInstances, pbsNode)
+		}
 	}
 
 	// Save configuration

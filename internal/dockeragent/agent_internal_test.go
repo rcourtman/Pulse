@@ -1001,8 +1001,12 @@ func TestBuildRuntimeCandidatesContent(t *testing.T) {
 	t.Run("auto includes both docker and podman", func(t *testing.T) {
 		candidates := buildRuntimeCandidates(RuntimeAuto)
 		hasDocker := false
+		hasRootlessDocker := false
 		hasPodman := false
 		for _, c := range candidates {
+			if c.label == "docker rootless socket" {
+				hasRootlessDocker = true
+			}
 			if c.label == "default docker socket" {
 				hasDocker = true
 			}
@@ -1010,11 +1014,40 @@ func TestBuildRuntimeCandidatesContent(t *testing.T) {
 				hasPodman = true
 			}
 		}
+		if !hasRootlessDocker {
+			t.Error("auto preference should include docker rootless socket")
+		}
 		if !hasDocker {
 			t.Error("auto preference should include docker socket")
 		}
 		if !hasPodman {
 			t.Error("auto preference should include podman sockets")
+		}
+	})
+}
+
+func TestBuildRuntimeCandidatesDockerRootlessOrder(t *testing.T) {
+	t.Run("docker tries rootless before system socket", func(t *testing.T) {
+		candidates := buildRuntimeCandidates(RuntimeDocker)
+		rootlessIdx := -1
+		systemIdx := -1
+		for i, c := range candidates {
+			if c.label == "docker rootless socket" && rootlessIdx < 0 {
+				rootlessIdx = i
+			}
+			if c.label == "default docker socket" && systemIdx < 0 {
+				systemIdx = i
+			}
+		}
+
+		if rootlessIdx < 0 {
+			t.Fatal("expected docker rootless socket candidate")
+		}
+		if systemIdx < 0 {
+			t.Fatal("expected default docker socket candidate")
+		}
+		if rootlessIdx > systemIdx {
+			t.Fatalf("expected docker rootless socket to be tried before default docker socket; rootlessIdx=%d systemIdx=%d", rootlessIdx, systemIdx)
 		}
 	})
 }

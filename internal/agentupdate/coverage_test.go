@@ -85,6 +85,15 @@ func TestDetermineArchOverrides(t *testing.T) {
 		unameCommand = origUname
 	})
 
+	// FreeBSD is a first-class OS target for agent auto-updates.
+	// It should not fall back to uname mappings that force a linux-* arch.
+	runtimeGOOS = "freebsd"
+	runtimeGOARCH = "amd64"
+	unameCommand = func() ([]byte, error) { return nil, errors.New("uname should not be called for freebsd") }
+	if got := determineArch(); got != "freebsd-amd64" {
+		t.Fatalf("expected freebsd-amd64, got %q", got)
+	}
+
 	runtimeGOOS = "linux"
 	runtimeGOARCH = "arm"
 	if got := determineArch(); got != "linux-armv7" {
