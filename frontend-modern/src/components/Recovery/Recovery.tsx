@@ -884,46 +884,44 @@ const Recovery: Component = () => {
                   emptyMessage: 'Recent searches appear here.',
                 }}
               />
-              <Show when={isMobile()}>
-                <button
-                  type="button"
-                  onClick={() => setProtectedFiltersOpen((o) => !o)}
-                  class="flex items-center gap-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400"
-                >
-                  <ListFilterIcon class="w-3.5 h-3.5" />
-                  Filters
-                  <Show when={protectedActiveFilterCount() > 0}>
-                    <span class="ml-0.5 rounded-full bg-blue-500 px-1.5 py-0.5 text-[10px] font-semibold text-white leading-none">
-                      {protectedActiveFilterCount()}
-                    </span>
-                  </Show>
-                </button>
-              </Show>
+              <div class="flex items-center justify-between gap-2">
+                <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5" role="group" aria-label="View">
+                  <button
+                    type="button"
+                    onClick={() => { setView('protected'); setRollupId(''); }}
+                    aria-pressed={view() === 'protected'}
+                    class={segmentedButtonClass(view() === 'protected')}
+                  >
+                    Protected
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setView('events')}
+                    aria-pressed={view() === 'events'}
+                    class={segmentedButtonClass(view() === 'events')}
+                  >
+                    Events
+                  </button>
+                </div>
+                <Show when={isMobile()}>
+                  <button
+                    type="button"
+                    onClick={() => setProtectedFiltersOpen((o) => !o)}
+                    class="flex items-center gap-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400"
+                  >
+                    <ListFilterIcon class="w-3.5 h-3.5" />
+                    Filters
+                    <Show when={protectedActiveFilterCount() > 0}>
+                      <span class="ml-0.5 rounded-full bg-blue-500 px-1.5 py-0.5 text-[10px] font-semibold text-white leading-none">
+                        {protectedActiveFilterCount()}
+                      </span>
+                    </Show>
+                  </button>
+                </Show>
+              </div>
 
               <Show when={!isMobile() || protectedFiltersOpen()}>
                 <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                  <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5" role="group" aria-label="View">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setView('protected');
-                        setRollupId('');
-                      }}
-                      aria-pressed={view() === 'protected'}
-                      class={segmentedButtonClass(view() === 'protected')}
-                    >
-                      Protected
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setView('events')}
-                      aria-pressed={view() === 'events'}
-                      class={segmentedButtonClass(view() === 'events')}
-                    >
-                      Events
-                    </button>
-                  </div>
-                  <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block" />
 
                   <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
                     <label
@@ -1419,70 +1417,65 @@ const Recovery: Component = () => {
                     emptyMessage: 'Recent searches appear here.',
                   }}
                 />
-                <Show when={isMobile()}>
-                  <button
-                    type="button"
-                    onClick={() => setEventsFiltersOpen((o) => !o)}
-                    class="flex items-center gap-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400"
-                  >
-                    <ListFilterIcon class="w-3.5 h-3.5" />
-                    Filters
-                    <Show when={eventsActiveFilterCount() > 0}>
-                      <span class="ml-0.5 rounded-full bg-blue-500 px-1.5 py-0.5 text-[10px] font-semibold text-white leading-none">
-                        {eventsActiveFilterCount()}
-                      </span>
-                    </Show>
-                  </button>
-                </Show>
-
-                <Show when={!isMobile() || eventsFiltersOpen()}>
-                  <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                    <Show
-                      when={!rollupId().trim()}
-                      fallback={
-                        <div class="flex items-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setRollupId('');
-                              setView('protected');
-                            }}
-                            class="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
-                          >
-                            Protected
-                          </button>
-                          <span class="text-gray-400 dark:text-gray-500 text-sm">›</span>
-                          <span class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate max-w-[12rem]">
-                            <Show when={selectedRollup()}>
-                              {rollupSubjectLabel(selectedRollup()!, resourcesById())}
-                            </Show>
-                          </span>
-                        </div>
-                      }
-                    >
-                      <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5" role="group" aria-label="View">
+                <div class="flex items-center justify-between gap-2">
+                  <Show
+                    when={!rollupId().trim()}
+                    fallback={
+                      <div class="flex items-center gap-1.5">
                         <button
                           type="button"
-                          onClick={() => {
-                            setView('protected');
-                            setRollupId('');
-                          }}
-                          aria-pressed={view() === 'protected'}
-                          class={segmentedButtonClass(view() === 'protected')}
+                          onClick={() => { setRollupId(''); setView('protected'); }}
+                          class="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
                         >
                           Protected
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => setView('events')}
-                          aria-pressed={view() === 'events'}
-                          class={segmentedButtonClass(view() === 'events')}
-                        >
-                          Events
-                        </button>
+                        <span class="text-gray-400 dark:text-gray-500 text-sm">›</span>
+                        <span class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate max-w-[12rem]">
+                          <Show when={selectedRollup()}>
+                            {rollupSubjectLabel(selectedRollup()!, resourcesById())}
+                          </Show>
+                        </span>
                       </div>
-                    </Show>
-                    <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block" />
+                    }
+                  >
+                    <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5" role="group" aria-label="View">
+                      <button
+                        type="button"
+                        onClick={() => { setView('protected'); setRollupId(''); }}
+                        aria-pressed={view() === 'protected'}
+                        class={segmentedButtonClass(view() === 'protected')}
+                      >
+                        Protected
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setView('events')}
+                        aria-pressed={view() === 'events'}
+                        class={segmentedButtonClass(view() === 'events')}
+                      >
+                        Events
+                      </button>
+                    </div>
+                  </Show>
+                  <Show when={isMobile()}>
+                    <button
+                      type="button"
+                      onClick={() => setEventsFiltersOpen((o) => !o)}
+                      class="flex items-center gap-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400"
+                    >
+                      <ListFilterIcon class="w-3.5 h-3.5" />
+                      Filters
+                      <Show when={eventsActiveFilterCount() > 0}>
+                        <span class="ml-0.5 rounded-full bg-blue-500 px-1.5 py-0.5 text-[10px] font-semibold text-white leading-none">
+                          {eventsActiveFilterCount()}
+                        </span>
+                      </Show>
+                    </button>
+                  </Show>
+                </div>
+
+                <Show when={!isMobile() || eventsFiltersOpen()}>
+                  <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
 
                     <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
                       <label
