@@ -171,7 +171,7 @@ func TestShouldSkipFilesystem(t *testing.T) {
 		{"/proc prefix", "ext4", "/proc/sys", 1024, 100, true},
 		{"/sys prefix", "ext4", "/sys/kernel", 1024, 100, true},
 		{"/run prefix", "ext4", "/run/user/1000", 1024, 100, true},
-		{"/var/lib/docker", "ext4", "/var/lib/docker/overlay2", 1000000, 500000, true},
+		{"/var/lib/docker", "ext4", "/var/lib/docker/overlay2", 1000000, 500000, false}, // real ext4 storage; overlay layers (fsType=overlay) are filtered via virtualFSTypes
 		{"/snap prefix", "ext4", "/snap/core/12345", 1000000, 500000, true},
 		{"/boot/efi exact", "vfat", "/boot/efi", 512 * 1024 * 1024, 50 * 1024 * 1024, true},
 		{"/var/lib/containers podman", "ext4", "/var/lib/containers/storage/overlay/abc123/merged", 1000000, 500000, true},
