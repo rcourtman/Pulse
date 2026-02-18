@@ -39,6 +39,13 @@ curl -fsSL http://<pulse-ip>:7655/install.sh | \
   bash -s -- --url http://<pulse-ip>:7655 --token <api-token>
 ```
 
+### TrueNAS SCALE/CORE
+TrueNAS SCALE and TrueNAS CORE are both supported. The installer auto-detects the platform and configures the appropriate service manager (systemd for SCALE, rc.d for CORE).
+```bash
+curl -fsSL http://<pulse-ip>:7655/install.sh | \
+  bash -s -- --url http://<pulse-ip>:7655 --token <api-token>
+```
+
 ## Features
 
 - **Host Metrics**: CPU, memory, disk, network I/O, temperatures
