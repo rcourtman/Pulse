@@ -69,11 +69,11 @@ const fetchAllDeployments = async (cluster: string): Promise<K8sDeploymentResour
 
 const statusTone = (status?: string) => {
   const normalized = (status || '').trim().toLowerCase();
-  if (!normalized) return 'bg-gray-400';
+  if (!normalized) return 'bg-slate-400';
   if (normalized === 'online' || normalized === 'running' || normalized === 'healthy') return 'bg-green-500';
   if (normalized === 'warning' || normalized === 'degraded') return 'bg-amber-500';
   if (normalized === 'offline' || normalized === 'stopped') return 'bg-red-500';
-  return 'bg-gray-400';
+  return 'bg-slate-400';
 };
 
 export const K8sDeploymentsDrawer: Component<{ cluster: string; initialNamespace?: string | null }> = (props) => {
@@ -159,8 +159,8 @@ export const K8sDeploymentsDrawer: Component<{ cluster: string; initialNamespace
       <Card padding="md">
         <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div class="min-w-0">
-            <div class="text-sm font-semibold text-gray-800 dark:text-gray-100">Deployments</div>
-            <div class="text-xs text-gray-500 dark:text-gray-400">Desired state controllers (not Pods)</div>
+            <div class="text-sm font-semibold text-slate-800 dark:text-slate-100">Deployments</div>
+            <div class="text-xs text-slate-500 dark:text-slate-400">Desired state controllers (not Pods)</div>
           </div>
 
           <div class="flex flex-wrap items-center gap-2">
@@ -168,14 +168,14 @@ export const K8sDeploymentsDrawer: Component<{ cluster: string; initialNamespace
               value={search()}
               onInput={(e) => setSearch(e.currentTarget.value)}
               placeholder="Search deployments..."
-              class="w-[12rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-900/50 dark:text-gray-100"
+              class="w-[12rem] rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
             />
 
             <Show when={namespaceOptions().length > 0}>
-              <div class="inline-flex items-center rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+              <div class="inline-flex items-center rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
                 <label
                   for="k8s-deployments-namespace"
-                  class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+                  class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500"
                 >
                   Namespace
                 </label>
@@ -183,7 +183,7 @@ export const K8sDeploymentsDrawer: Component<{ cluster: string; initialNamespace
                   id="k8s-deployments-namespace"
                   value={namespace()}
                   onChange={(e) => setNamespace(e.currentTarget.value)}
-                  class="min-w-[10rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+                  class="min-w-[10rem] rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                 >
                   <option value="">All namespaces</option>
                   <For each={namespaceOptions()}>
@@ -196,7 +196,7 @@ export const K8sDeploymentsDrawer: Component<{ cluster: string; initialNamespace
             <button
               type="button"
               onClick={() => openPods(namespace() || undefined)}
-              class="rounded-md border border-gray-200 bg-white px-3 py-1 text-xs font-semibold text-gray-700 shadow-sm hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900/50 dark:text-gray-200 dark:hover:bg-gray-800"
+              class="rounded-md border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-800"
             >
               Open Pods
             </button>
@@ -222,10 +222,10 @@ export const K8sDeploymentsDrawer: Component<{ cluster: string; initialNamespace
               </Card>
             }
           >
-            <Card padding="none" tone="glass" class="overflow-hidden">
+            <Card padding="none" tone="card" class="overflow-hidden">
               <div class="overflow-x-auto">
                 <table class="w-full min-w-[760px] border-collapse text-xs">
-                  <thead class="bg-gray-50 dark:bg-gray-800/60 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
+                  <thead class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
                     <tr class="text-left text-[10px] uppercase tracking-wide">
                       <th class="px-3 py-2 font-medium">Deployment</th>
                       <th class="px-3 py-2 font-medium">Namespace</th>
@@ -247,25 +247,25 @@ export const K8sDeploymentsDrawer: Component<{ cluster: string; initialNamespace
                         const available = () => dep.kubernetes?.availableReplicas ?? 0;
 
                         return (
-                          <tr class="hover:bg-gray-50/50 dark:hover:bg-gray-800/30">
+                          <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
                             <td class="px-3 py-2">
                               <div class="flex items-center gap-2 min-w-0">
                                 <span class={`h-2 w-2 rounded-full ${statusTone(dep.status)}`} title={dep.status || 'unknown'} />
-                                <span class="font-semibold text-gray-900 dark:text-gray-100 truncate" title={name()}>
+                                <span class="font-semibold text-slate-900 dark:text-slate-100 truncate" title={name()}>
                                   {name()}
                                 </span>
                               </div>
                             </td>
-                            <td class="px-3 py-2 text-gray-700 dark:text-gray-200">{ns()}</td>
-                            <td class="px-3 py-2 text-gray-700 dark:text-gray-200">{desired()}</td>
-                            <td class="px-3 py-2 text-gray-700 dark:text-gray-200">{updated()}</td>
-                            <td class="px-3 py-2 text-gray-700 dark:text-gray-200">{ready()}</td>
-                            <td class="px-3 py-2 text-gray-700 dark:text-gray-200">{available()}</td>
+                            <td class="px-3 py-2 text-slate-700 dark:text-slate-200">{ns()}</td>
+                            <td class="px-3 py-2 text-slate-700 dark:text-slate-200">{desired()}</td>
+                            <td class="px-3 py-2 text-slate-700 dark:text-slate-200">{updated()}</td>
+                            <td class="px-3 py-2 text-slate-700 dark:text-slate-200">{ready()}</td>
+                            <td class="px-3 py-2 text-slate-700 dark:text-slate-200">{available()}</td>
                             <td class="px-3 py-2">
                               <button
                                 type="button"
                                 onClick={() => openPods(dep.kubernetes?.namespace)}
-                                class="rounded-md border border-gray-200 bg-white px-2 py-1 text-[11px] font-semibold text-gray-700 shadow-sm hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900/50 dark:text-gray-200 dark:hover:bg-gray-800"
+                                class="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-800"
                               >
                                 View Pods
                               </button>

@@ -15,7 +15,7 @@ import { getMetricColorHex } from '@/utils/metricThresholds';
 
 /** Compact inline lock badge shown in sparkline rows when the selected range requires Pro. */
 export const SparklineLockBadge: Component = () => (
-  <span class="flex items-center gap-0.5 text-[9px] text-gray-400 dark:text-gray-500">
+  <span class="flex items-center gap-0.5 text-[9px] text-slate-400 dark:text-slate-500">
     <svg class="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
       <path d="M7 11V7a5 5 0 0 1 10 0v4" />
@@ -301,7 +301,7 @@ export const Sparkline: Component<SparklineProps> = (props) => {
         <Show when={hoveredPoint()}>
           {(point) => (
             <div
-              class="fixed pointer-events-none bg-gray-900 dark:bg-gray-800 text-white text-xs rounded px-2 py-1 shadow-lg border border-gray-700"
+              class="fixed pointer-events-none bg-slate-900 dark:bg-slate-800 text-white text-xs rounded px-2 py-1 shadow-sm border border-slate-700"
               style={{
                 left: `${point().x}px`,
                 top: `${point().y}px`,
@@ -310,7 +310,7 @@ export const Sparkline: Component<SparklineProps> = (props) => {
               }}
             >
               <div class="font-medium">{point().value.toFixed(1)}%</div>
-              <div class="text-gray-400 text-[10px]">{formatTime(point().timestamp)}</div>
+              <div class="text-slate-400 text-[10px]">{formatTime(point().timestamp)}</div>
             </div>
           )}
         </Show>

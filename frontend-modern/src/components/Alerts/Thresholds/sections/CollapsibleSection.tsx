@@ -66,10 +66,10 @@ export const CollapsibleSection: Component<CollapsibleSectionProps> = (props) =>
     return (
         <div
             class={`
-        rounded-lg border transition-all duration-200
+        rounded-md border transition-all duration-200
         ${props.isGloballyDisabled
-                    ? 'border-gray-300 bg-gray-50 dark:border-gray-700 dark:bg-gray-900/50 opacity-60'
-                    : 'border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800'
+                    ? 'border-slate-300 bg-slate-50 dark:border-slate-700 dark:bg-slate-800 opacity-60'
+                    : 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800'
                 }
         ${props.hasChanges ? 'ring-2 ring-blue-400 ring-opacity-50' : ''}
       `}
@@ -82,9 +82,9 @@ export const CollapsibleSection: Component<CollapsibleSectionProps> = (props) =>
                 class={`
           w-full flex items-center justify-between gap-3 px-4 py-3
           text-left cursor-pointer select-none
-          hover:bg-gray-50 dark:hover:bg-gray-700/50
+          hover:bg-slate-50 dark:hover:bg-slate-700/50
           transition-colors duration-150
-          ${isCollapsed() ? 'rounded-lg' : 'rounded-t-lg border-b border-gray-200 dark:border-gray-700'}
+          ${isCollapsed() ? 'rounded-md' : 'rounded-t-lg border-b border-slate-200 dark:border-slate-700'}
         `}
                 aria-expanded={!isCollapsed()}
                 aria-controls={`section-content-${props.id}`}
@@ -92,7 +92,7 @@ export const CollapsibleSection: Component<CollapsibleSectionProps> = (props) =>
                 {/* Left side: Chevron + Icon + Title + Count */}
                 <div class="flex items-center gap-3 min-w-0">
                     {/* Expand/Collapse chevron */}
-                    <div class="flex-shrink-0 text-gray-400 dark:text-gray-500 transition-transform duration-200">
+                    <div class="flex-shrink-0 text-slate-400 dark:text-slate-500 transition-transform duration-200">
                         <Show when={isCollapsed()} fallback={<ChevronDown class="w-5 h-5" />}>
                             <ChevronRight class="w-5 h-5" />
                         </Show>
@@ -100,7 +100,7 @@ export const CollapsibleSection: Component<CollapsibleSectionProps> = (props) =>
 
                     {/* Optional icon */}
                     <Show when={props.icon}>
-                        <div class="flex-shrink-0 text-gray-500 dark:text-gray-400">
+                        <div class="flex-shrink-0 text-slate-500 dark:text-slate-400">
                             {props.icon}
                         </div>
                     </Show>
@@ -108,11 +108,11 @@ export const CollapsibleSection: Component<CollapsibleSectionProps> = (props) =>
                     {/* Title and count */}
                     <div class="min-w-0">
                         <div class="flex items-center gap-2">
-                            <h3 class="font-semibold text-gray-900 dark:text-gray-100 truncate">
+                            <h3 class="font-semibold text-slate-900 dark:text-slate-100 truncate">
                                 {props.title}
                             </h3>
                             <Show when={props.resourceCount !== undefined}>
-                                <span class="flex-shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300">
+                                <span class="flex-shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300">
                                     {props.resourceCount}
                                 </span>
                             </Show>
@@ -126,7 +126,7 @@ export const CollapsibleSection: Component<CollapsibleSectionProps> = (props) =>
                             </Show>
                         </div>
                         <Show when={props.subtitle}>
-                            <p class="text-sm text-gray-500 dark:text-gray-400 truncate">
+                            <p class="text-sm text-slate-500 dark:text-slate-400 truncate">
                                 {props.subtitle}
                             </p>
                         </Show>
@@ -152,7 +152,7 @@ export const CollapsibleSection: Component<CollapsibleSectionProps> = (props) =>
             >
                 <div class="p-4">
                     <Show when={showEmpty()}>
-                        <div class="text-center py-8 text-gray-500 dark:text-gray-400">
+                        <div class="text-center py-8 text-slate-500 dark:text-slate-400">
                             <p>{props.emptyMessage}</p>
                         </div>
                     </Show>
@@ -179,7 +179,7 @@ export interface SectionActionButtonProps {
 
 export const SectionActionButton: Component<SectionActionButtonProps> = (props) => {
     const variantClasses = {
-        default: 'text-gray-600 hover:text-gray-900 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700',
+        default: 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-700',
         primary: 'text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:text-blue-300 dark:hover:bg-blue-900/30',
         danger: 'text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-900/30',
     };
@@ -226,21 +226,21 @@ export const NestedGroupHeader: Component<NestedGroupHeaderProps> = (props) => {
     const statusColors = {
         online: 'bg-green-500',
         offline: 'bg-red-500',
-        unknown: 'bg-gray-400',
+        unknown: 'bg-slate-400',
     };
 
     return (
         <div
             class={`
         flex items-center justify-between gap-3 px-3 py-2 -mx-3 rounded-md
-        ${props.onToggle ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50' : ''}
+        ${props.onToggle ? 'cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50' : ''}
         transition-colors duration-150
       `}
             onClick={props.onToggle}
         >
             <div class="flex items-center gap-2 min-w-0">
                 <Show when={props.onToggle}>
-                    <div class="flex-shrink-0 text-gray-400">
+                    <div class="flex-shrink-0 text-slate-400">
                         <Show when={props.collapsed} fallback={<ChevronDown class="w-4 h-4" />}>
                             <ChevronRight class="w-4 h-4" />
                         </Show>
@@ -259,7 +259,7 @@ export const NestedGroupHeader: Component<NestedGroupHeaderProps> = (props) => {
                         <Show
                             when={props.href}
                             fallback={
-                                <span class="font-medium text-gray-800 dark:text-gray-200 truncate">
+                                <span class="font-medium text-slate-800 dark:text-slate-200 truncate">
                                     {props.title}
                                 </span>
                             }
@@ -275,13 +275,13 @@ export const NestedGroupHeader: Component<NestedGroupHeaderProps> = (props) => {
                             </a>
                         </Show>
                         <Show when={props.count !== undefined}>
-                            <span class="text-xs text-gray-500 dark:text-gray-400">
+                            <span class="text-xs text-slate-500 dark:text-slate-400">
                                 ({props.count})
                             </span>
                         </Show>
                     </div>
                     <Show when={props.subtitle}>
-                        <p class="text-xs text-gray-500 dark:text-gray-400 truncate">
+                        <p class="text-xs text-slate-500 dark:text-slate-400 truncate">
                             {props.subtitle}
                         </p>
                     </Show>

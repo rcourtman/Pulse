@@ -34,7 +34,7 @@ export function RecentAlertsPanel(props: RecentAlertsPanelProps) {
   return (
     <Card padding="none" class="px-4 py-3.5">
       <div class="flex items-center justify-between gap-2">
-        <h2 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Alerts</h2>
+        <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Alerts</h2>
         <div class="flex items-center gap-2">
           <a
             href={ALERTS_OVERVIEW_PATH}
@@ -60,21 +60,21 @@ export function RecentAlertsPanel(props: RecentAlertsPanelProps) {
         }
       >
         <div class="mt-1">
-          <p class="text-xs text-gray-500 dark:text-gray-400 mb-1">
+          <p class="text-xs text-slate-500 dark:text-slate-400 mb-1">
             <span class="font-mono font-semibold text-red-600 dark:text-red-400">{props.criticalCount}</span> critical · <span class="font-mono font-semibold text-amber-600 dark:text-amber-400">{props.warningCount}</span> warning
           </p>
 
           <ul class="space-y-0.5" role="list">
             <For each={recent()}>
               {(alert) => (
-                <li class="flex items-center gap-2 -mx-1 px-1 py-0.5 rounded hover:bg-gray-50 dark:hover:bg-gray-700/40 transition-colors">
+                <li class="flex items-center gap-2 -mx-1 px-1 py-0.5 rounded hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors">
                   <span class={severityBadgeClass(alert.level)}>
                     {alert.level === 'critical' ? 'CRIT' : 'WARN'}
                   </span>
-                  <p class="min-w-0 text-xs text-gray-700 dark:text-gray-200 truncate">
+                  <p class="min-w-0 text-xs text-slate-700 dark:text-slate-200 truncate">
                     {alert.resourceName}
                   </p>
-                  <span class="shrink-0 ml-auto text-[10px] font-mono text-gray-400">
+                  <span class="shrink-0 ml-auto text-[10px] font-mono text-slate-400">
                     {formatRelativeTime(alert.startTime, { compact: true })}
                   </span>
                 </li>
@@ -83,7 +83,7 @@ export function RecentAlertsPanel(props: RecentAlertsPanelProps) {
           </ul>
 
           <Show when={props.alerts.length > 4}>
-            <p class="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
+            <p class="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
               <a href={ALERTS_OVERVIEW_PATH} class="text-blue-600 hover:underline dark:text-blue-400">
                 +{props.alerts.length - 4} more
               </a>

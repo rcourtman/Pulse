@@ -43,16 +43,16 @@ export interface Finding {
 
 export type InvestigationStatus = 'pending' | 'running' | 'completed' | 'failed' | 'needs_attention';
 export type InvestigationOutcome =
-  | 'resolved'
-  | 'fix_queued'
-  | 'fix_executed'
-  | 'fix_failed'
-  | 'needs_attention'
-  | 'cannot_fix'
-  | 'timed_out'
-  | 'fix_verified'
-  | 'fix_verification_failed'
-  | 'fix_verification_unknown';
+    | 'resolved'
+    | 'fix_queued'
+    | 'fix_executed'
+    | 'fix_failed'
+    | 'needs_attention'
+    | 'cannot_fix'
+    | 'timed_out'
+    | 'fix_verified'
+    | 'fix_verification_failed'
+    | 'fix_verification_unknown';
 export type PatrolAutonomyLevel = 'monitor' | 'approval' | 'assisted' | 'full';
 
 export interface PatrolAutonomySettings {
@@ -314,16 +314,16 @@ export const investigationOutcomeLabels: Record<InvestigationOutcome, string> = 
  * Investigation outcome badge colors for UI
  */
 export const investigationOutcomeColors: Record<InvestigationOutcome, string> = {
-    resolved: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
-    fix_queued: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
-    fix_executed: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
-    fix_failed: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
-    needs_attention: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
-    cannot_fix: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400',
-    timed_out: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
-    fix_verified: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
-    fix_verification_failed: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
-    fix_verification_unknown: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+    resolved: 'border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-900/10 dark:text-green-300',
+    fix_queued: 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900/10 dark:text-blue-300',
+    fix_executed: 'border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-900/10 dark:text-green-300',
+    fix_failed: 'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900/10 dark:text-red-300',
+    needs_attention: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/10 dark:text-amber-300',
+    cannot_fix: 'border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400',
+    timed_out: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/10 dark:text-amber-300',
+    fix_verified: 'border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-900/10 dark:text-green-300',
+    fix_verification_failed: 'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900/10 dark:text-red-300',
+    fix_verification_unknown: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/10 dark:text-amber-300',
 };
 
 // =============================================================================

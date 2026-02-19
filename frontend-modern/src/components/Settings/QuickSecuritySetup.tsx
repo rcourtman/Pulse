@@ -153,7 +153,7 @@ Important:
   };
 
   return (
-    <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+    <div class="bg-white dark:bg-slate-800 rounded-md border border-slate-200 dark:border-slate-700 p-6">
       <Show when={!showCredentials()}>
         <div class="space-y-4">
           <div class="flex items-start space-x-3">
@@ -181,10 +181,10 @@ Important:
                     : 'Enable authentication with one click. This will:'
                 }
                 size="sm"
-                titleClass="text-gray-900 dark:text-gray-100"
-                descriptionClass="!text-xs text-gray-600 dark:text-gray-400"
+                titleClass="text-slate-900 dark:text-slate-100"
+                descriptionClass="!text-xs text-slate-600 dark:text-slate-400"
               />
-              <ul class="mt-2 space-y-1 text-xs text-gray-600 dark:text-gray-400">
+              <ul class="mt-2 space-y-1 text-xs text-slate-600 dark:text-slate-400">
                 <li class="flex items-center">
                   <span class="text-emerald-400 mr-2">✓</span>
                   {isRotation
@@ -209,16 +209,16 @@ Important:
             </div>
           </div>
 
-          <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-3 space-y-3">
+          <div class="bg-slate-50 dark:bg-slate-900 rounded-md p-3 space-y-3">
             <div class="flex items-center justify-between">
               <label class={labelClass()}>Password Setup</label>
               <div class="flex items-center space-x-2">
                 <button
                   type="button"
                   onClick={() => setUseCustomPassword(false)}
-                  class={`px-3 py-1 text-xs rounded-lg transition-colors ${!useCustomPassword()
+                  class={`px-3 py-1 text-xs rounded-md transition-colors ${!useCustomPassword()
                     ? 'bg-blue-600 text-white'
-                    : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                    : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600'
                     }`}
                 >
                   Auto-Generate
@@ -226,9 +226,9 @@ Important:
                 <button
                   type="button"
                   onClick={() => setUseCustomPassword(true)}
-                  class={`px-3 py-1 text-xs rounded-lg transition-colors ${useCustomPassword()
+                  class={`px-3 py-1 text-xs rounded-md transition-colors ${useCustomPassword()
                     ? 'bg-blue-600 text-white'
-                    : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                    : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600'
                     }`}
                 >
                   Custom
@@ -276,7 +276,7 @@ Important:
             </Show>
           </div>
 
-          <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
+          <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md p-3">
             <div class="flex">
               <svg
                 class="h-5 w-5 text-yellow-600 dark:text-yellow-400 mr-2 flex-shrink-0"
@@ -312,7 +312,7 @@ Important:
             type="button"
             onClick={setupSecurity}
             disabled={isSettingUp()}
-            class="w-full px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            class="w-full px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {isSettingUp() ? (
               <span class="flex items-center justify-center">
@@ -353,7 +353,7 @@ Important:
               title={isRotation ? 'Admin credentials generated' : 'Security enabled successfully'}
               size="md"
               class="flex-1"
-              titleClass="text-gray-900 dark:text-gray-100"
+              titleClass="text-slate-900 dark:text-slate-100"
             />
             <button
               type="button"
@@ -364,55 +364,55 @@ Important:
             </button>
           </div>
 
-          <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3">
+          <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md p-3">
             <p class="text-sm font-semibold text-green-800 dark:text-green-200 mb-2">
               Save these credentials now - they won't be shown again!
             </p>
           </div>
 
           <div class="space-y-3">
-            <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-3">
+            <div class="bg-slate-50 dark:bg-slate-900 rounded-md p-3">
               <label class={labelClass('text-xs')}>Username</label>
               <div class="mt-1 flex items-center gap-2">
-                <code class="flex-1 font-mono text-sm bg-white dark:bg-gray-800 px-3 py-2 rounded border border-gray-200 dark:border-gray-700">
+                <code class="flex-1 font-mono text-sm bg-white dark:bg-slate-800 px-3 py-2 rounded border border-slate-200 dark:border-slate-700">
                   {credentials()!.username}
                 </code>
                 <button
                   type="button"
                   onClick={() => handleCopy(credentials()!.username, 'username')}
-                  class="px-3 py-2 text-xs bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
+                  class="px-3 py-2 text-xs bg-slate-600 text-white rounded hover:bg-slate-700 transition-colors"
                 >
                   {copied() === 'username' ? 'Copied!' : 'Copy'}
                 </button>
               </div>
             </div>
 
-            <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-3">
+            <div class="bg-slate-50 dark:bg-slate-900 rounded-md p-3">
               <label class={labelClass('text-xs')}>Password</label>
               <div class="mt-1 flex items-center gap-2">
-                <code class="flex-1 font-mono text-sm bg-white dark:bg-gray-800 px-3 py-2 rounded border border-gray-200 dark:border-gray-700 break-all">
+                <code class="flex-1 font-mono text-sm bg-white dark:bg-slate-800 px-3 py-2 rounded border border-slate-200 dark:border-slate-700 break-all">
                   {credentials()!.password}
                 </code>
                 <button
                   type="button"
                   onClick={() => handleCopy(credentials()!.password, 'password')}
-                  class="px-3 py-2 text-xs bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
+                  class="px-3 py-2 text-xs bg-slate-600 text-white rounded hover:bg-slate-700 transition-colors"
                 >
                   {copied() === 'password' ? 'Copied!' : 'Copy'}
                 </button>
               </div>
             </div>
 
-            <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-3">
+            <div class="bg-slate-50 dark:bg-slate-900 rounded-md p-3">
               <label class={labelClass('text-xs')}>API token</label>
               <div class="mt-1 flex items-center gap-2">
-                <code class="flex-1 font-mono text-sm bg-white dark:bg-gray-800 px-3 py-2 rounded border border-gray-200 dark:border-gray-700 break-all">
+                <code class="flex-1 font-mono text-sm bg-white dark:bg-slate-800 px-3 py-2 rounded border border-slate-200 dark:border-slate-700 break-all">
                   {credentials()!.apiToken}
                 </code>
                 <button
                   type="button"
                   onClick={() => handleCopy(credentials()!.apiToken!, 'token')}
-                  class="px-3 py-2 text-xs bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
+                  class="px-3 py-2 text-xs bg-slate-600 text-white rounded hover:bg-slate-700 transition-colors"
                 >
                   {copied() === 'token' ? 'Copied!' : 'Copy'}
                 </button>
@@ -426,7 +426,7 @@ Important:
             </div>
           </div>
 
-          <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3">
+          <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md p-3">
             <p class="text-sm font-semibold text-green-800 dark:text-green-200 mb-2">
               Credentials saved
             </p>
@@ -450,7 +450,7 @@ Important:
                 // Reload the page to trigger login screen
                 window.location.reload();
               }}
-              class="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
+              class="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors"
             >
               Done - I've Saved My Credentials
             </button>

@@ -49,7 +49,7 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
       >
         {/* Backup Polling Section */}
         <section class="space-y-3">
-          <h4 class="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+          <h4 class="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
             <svg
               width="16"
               height="16"
@@ -67,7 +67,7 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
             </svg>
             Backup polling
           </h4>
-          <p class="text-xs text-gray-600 dark:text-gray-400">
+          <p class="text-xs text-slate-600 dark:text-slate-400">
             Control how often Pulse queries Proxmox backup tasks, datastore contents, and guest
             snapshots. Longer intervals reduce disk activity and API load.
           </p>
@@ -76,10 +76,10 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
             {/* Enable toggle */}
             <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                <p class="text-sm font-medium text-slate-900 dark:text-slate-100">
                   Enable backup polling
                 </p>
-                <p class="text-xs text-gray-600 dark:text-gray-400">
+                <p class="text-xs text-slate-600 dark:text-slate-400">
                   Required for dashboard backup status, storage snapshots, and alerting.
                 </p>
               </div>
@@ -96,19 +96,19 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
                     }
                   }}
                 />
-                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600 peer-disabled:opacity-50"></div>
+                <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600 peer-disabled:opacity-50"></div>
               </label>
             </div>
 
             {/* Polling interval options */}
             <Show when={props.backupPollingEnabled()}>
-              <div class="space-y-3 rounded-md border border-gray-200 dark:border-gray-600 p-3">
+              <div class="space-y-3 rounded-md border border-slate-200 dark:border-slate-600 p-3">
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <label class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                    <label class="text-sm font-medium text-slate-900 dark:text-slate-100">
                       Polling interval
                     </label>
-                    <p class="text-xs text-gray-600 dark:text-gray-400">
+                    <p class="text-xs text-slate-600 dark:text-slate-400">
                       {props.backupIntervalSummary()}
                     </p>
                   </div>
@@ -137,7 +137,7 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
                         props.setHasUnsavedChanges(true);
                       }
                     }}
-                    class="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 disabled:opacity-50"
+                    class="w-full sm:w-auto min-h-10 sm:min-h-9 px-3 py-2.5 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 disabled:opacity-50"
                   >
                     <For each={BACKUP_INTERVAL_OPTIONS}>
                       {(option) => <option value={String(option.value)}>{option.label}</option>}
@@ -149,10 +149,10 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
                 {/* Custom interval input */}
                 <Show when={props.backupIntervalSelectValue() === 'custom'}>
                   <div class="space-y-2">
-                    <label class="text-xs font-medium text-gray-700 dark:text-gray-300">
+                    <label class="text-xs font-medium text-slate-700 dark:text-slate-300">
                       Custom interval (minutes)
                     </label>
-                    <div class="flex items-center gap-3">
+                    <div class="flex flex-col sm:flex-row sm:items-center gap-3">
                       <input
                         type="number"
                         min="1"
@@ -174,9 +174,9 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
                             props.setHasUnsavedChanges(true);
                           }
                         }}
-                        class="w-24 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 disabled:opacity-50"
+                        class="w-full sm:w-24 min-h-10 sm:min-h-9 px-3 py-2.5 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 disabled:opacity-50"
                       />
-                      <span class="text-xs text-gray-500 dark:text-gray-400">
+                      <span class="text-xs text-slate-500 dark:text-slate-400">
                         1 - {BACKUP_INTERVAL_MAX_MINUTES} minutes (~7 days max)
                       </span>
                     </div>
@@ -224,9 +224,9 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Export Section */}
-          <div class="group border border-gray-200 dark:border-gray-700 rounded-xl p-5 bg-blue-50/50 dark:bg-blue-900/10 hover:border-blue-300 dark:hover:border-blue-700 transition-all duration-200">
+          <div class="group border border-slate-200 dark:border-slate-700 rounded-md p-5 bg-blue-50/50 dark:bg-blue-900/10 hover:border-blue-300 dark:hover:border-blue-700 transition-all duration-200">
             <div class="flex items-start gap-4">
-              <div class="flex-shrink-0 w-12 h-12 bg-blue-500 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20">
+              <div class="flex-shrink-0 w-12 h-12 bg-blue-500 rounded-md flex items-center justify-center shadow-sm shadow-blue-500/20">
                 {/* Archive/Download Box Icon */}
                 <svg
                   class="w-6 h-6 text-white"
@@ -243,28 +243,28 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
                 </svg>
               </div>
               <div class="flex-1 min-w-0">
-                <h4 class="text-base font-semibold text-gray-900 dark:text-gray-100 mb-1">
+                <h4 class="text-base font-semibold text-slate-900 dark:text-slate-100 mb-1">
                   Export Configuration
                 </h4>
-                <p class="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                <p class="text-sm text-slate-600 dark:text-slate-400 mb-3">
                   Create an encrypted backup package
                 </p>
 
                 {/* Feature list */}
                 <ul class="space-y-1 mb-4">
-                  <li class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                  <li class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
                     <svg class="w-3.5 h-3.5 text-emerald-400" fill="currentColor" viewBox="0 0 20 20">
                       <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
                     </svg>
                     <span>All node connections & credentials</span>
                   </li>
-                  <li class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                  <li class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
                     <svg class="w-3.5 h-3.5 text-emerald-400" fill="currentColor" viewBox="0 0 20 20">
                       <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
                     </svg>
                     <span>Alert thresholds & overrides</span>
                   </li>
-                  <li class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                  <li class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
                     <svg class="w-3.5 h-3.5 text-emerald-400" fill="currentColor" viewBox="0 0 20 20">
                       <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
                     </svg>
@@ -279,7 +279,7 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
                     props.setUseCustomPassphrase(!props.securityStatus()?.hasAuthentication);
                     props.setShowExportDialog(true);
                   }}
-                  class="w-full sm:w-auto px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-all duration-200 inline-flex items-center justify-center gap-2 shadow-md hover:shadow-lg"
+                  class="w-full sm:w-auto min-h-10 sm:min-h-9 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-all duration-200 inline-flex items-center justify-center gap-2 shadow-sm hover:shadow-sm"
                 >
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
@@ -296,9 +296,9 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
           </div>
 
           {/* Import Section */}
-          <div class="group border border-gray-200 dark:border-gray-700 rounded-xl p-5 bg-gray-50/50 dark:bg-gray-800/30 hover:border-gray-400 dark:hover:border-gray-600 transition-all duration-200">
+          <div class="group border border-slate-200 dark:border-slate-700 rounded-md p-5 bg-slate-50/50 dark:bg-slate-800 hover:border-slate-400 dark:hover:border-slate-600 transition-all duration-200">
             <div class="flex items-start gap-4">
-              <div class="flex-shrink-0 w-12 h-12 bg-gray-500 rounded-xl flex items-center justify-center shadow-lg shadow-gray-500/20">
+              <div class="flex-shrink-0 w-12 h-12 bg-slate-500 rounded-md flex items-center justify-center shadow-sm shadow-gray-500/20">
                 {/* Upload/Restore Icon */}
                 <svg
                   class="w-6 h-6 text-white"
@@ -315,28 +315,28 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
                 </svg>
               </div>
               <div class="flex-1 min-w-0">
-                <h4 class="text-base font-semibold text-gray-900 dark:text-gray-100 mb-1">
+                <h4 class="text-base font-semibold text-slate-900 dark:text-slate-100 mb-1">
                   Restore Configuration
                 </h4>
-                <p class="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                <p class="text-sm text-slate-600 dark:text-slate-400 mb-3">
                   Import from an encrypted backup file
                 </p>
 
                 {/* Feature list */}
                 <ul class="space-y-1 mb-4">
-                  <li class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                  <li class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
                     <svg class="w-3.5 h-3.5 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
                       <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
                     </svg>
                     <span>Merge or replace existing config</span>
                   </li>
-                  <li class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                  <li class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
                     <svg class="w-3.5 h-3.5 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
                       <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
                     </svg>
                     <span>Validates backup before applying</span>
                   </li>
-                  <li class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                  <li class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
                     <svg class="w-3.5 h-3.5 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
                       <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
                     </svg>
@@ -347,7 +347,7 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
                 <button
                   type="button"
                   onClick={() => props.setShowImportDialog(true)}
-                  class="w-full sm:w-auto px-4 py-2 bg-gray-600 text-white text-sm font-medium rounded-lg hover:bg-gray-700 transition-all duration-200 inline-flex items-center justify-center gap-2 shadow-md hover:shadow-lg"
+                  class="w-full sm:w-auto min-h-10 sm:min-h-9 px-4 py-2.5 bg-slate-600 text-white text-sm font-medium rounded-md hover:bg-slate-700 transition-all duration-200 inline-flex items-center justify-center gap-2 shadow-sm hover:shadow-sm"
                 >
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
@@ -365,10 +365,10 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
         </div>
 
         {/* Security Tips */}
-        <div class="mt-6 p-4 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-800/50">
+        <div class="mt-6 p-4 bg-amber-50 dark:bg-amber-900/20 rounded-md border border-amber-200 dark:border-amber-800/50">
           <div class="flex gap-3">
             {/* Shield Icon */}
-            <div class="flex-shrink-0 w-10 h-10 bg-amber-100 dark:bg-amber-900/40 rounded-lg flex items-center justify-center">
+            <div class="flex-shrink-0 w-10 h-10 bg-amber-100 dark:bg-amber-900/40 rounded-md flex items-center justify-center">
               <svg
                 class="w-5 h-5 text-amber-600 dark:text-amber-400"
                 fill="none"

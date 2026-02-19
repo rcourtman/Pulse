@@ -129,7 +129,7 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
         <button
           type="button"
           onClick={() => void copyJSON()}
-          class="rounded-md border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+          class="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
         >
           <Show when={copied()} fallback="Copy JSON">
             Copied
@@ -140,32 +140,32 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
       <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
         <For each={summaryPairs()}>
           {(pair) => (
-            <div class="rounded border border-gray-200 bg-white/70 px-3 py-2 text-xs dark:border-gray-700 dark:bg-gray-900/30">
-              <div class="text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">{pair.k}</div>
-              <div class="mt-0.5 font-mono text-[11px] text-gray-800 dark:text-gray-200 break-all">{pair.v}</div>
+            <div class="rounded border border-slate-200 bg-white px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-800">
+              <div class="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">{pair.k}</div>
+              <div class="mt-0.5 font-mono text-[11px] text-slate-800 dark:text-slate-200 break-all">{pair.v}</div>
             </div>
           )}
         </For>
       </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs text-gray-500 dark:text-gray-400">
-        <div class="rounded border border-gray-200 bg-white/70 px-3 py-2 dark:border-gray-700 dark:bg-gray-900/30">
-          <div class="text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Started</div>
-          <div class="mt-0.5 font-mono text-[11px] text-gray-800 dark:text-gray-200">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs text-slate-500 dark:text-slate-400">
+        <div class="rounded border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-800">
+          <div class="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Started</div>
+          <div class="mt-0.5 font-mono text-[11px] text-slate-800 dark:text-slate-200">
             {startedMs() > 0 ? formatAbsoluteTime(startedMs()) : 'n/a'}
           </div>
         </div>
-        <div class="rounded border border-gray-200 bg-white/70 px-3 py-2 dark:border-gray-700 dark:bg-gray-900/30">
-          <div class="text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Completed</div>
-          <div class="mt-0.5 font-mono text-[11px] text-gray-800 dark:text-gray-200">
+        <div class="rounded border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-800">
+          <div class="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Completed</div>
+          <div class="mt-0.5 font-mono text-[11px] text-slate-800 dark:text-slate-200">
             {completedMs() > 0 ? formatAbsoluteTime(completedMs()) : 'n/a'}
           </div>
         </div>
       </div>
 
-      <div class="rounded border border-gray-200 bg-white/70 p-3 dark:border-gray-700 dark:bg-gray-900/30">
-        <div class="text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Raw</div>
-        <pre class="mt-2 overflow-auto text-[11px] leading-relaxed text-gray-800 dark:text-gray-200 font-mono">
+      <div class="rounded border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-800">
+        <div class="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Raw</div>
+        <pre class="mt-2 overflow-auto text-[11px] leading-relaxed text-slate-800 dark:text-slate-200 font-mono">
 {prettyJSON()}
         </pre>
       </div>

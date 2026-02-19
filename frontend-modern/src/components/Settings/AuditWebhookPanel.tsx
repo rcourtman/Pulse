@@ -90,11 +90,11 @@ export function AuditWebhookPanel() {
                 description="Configure real-time delivery of security audit events to external systems."
                 icon={<Globe class="w-5 h-5" strokeWidth={2} />}
             >
-                <Show when={!loading()} fallback={<div class="text-sm text-gray-500 dark:text-gray-400">Loading...</div>}>
+                <Show when={!loading()} fallback={<div class="text-sm text-slate-500 dark:text-slate-400">Loading...</div>}>
                     <Card tone="info" padding="md">
                         <div class="text-sm">
-                            <p class="font-semibold text-gray-900 dark:text-gray-100">Pro Required</p>
-                            <p class="mt-1 text-gray-600 dark:text-gray-400">
+                            <p class="font-semibold text-slate-900 dark:text-slate-100">Pro Required</p>
+                            <p class="mt-1 text-slate-600 dark:text-slate-400">
                                 Audit webhooks are part of the audit logging feature set and require Pro.
                             </p>
                         </div>
@@ -112,25 +112,25 @@ export function AuditWebhookPanel() {
                 icon={<Globe class="w-5 h-5" strokeWidth={2} />}
                 bodyClass="space-y-6"
             >
-                <p class="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+                <p class="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
                     Pulse can send a signed event payload whenever security-relevant activity occurs
                     (logins, settings changes, RBAC updates, and similar audit events).
                 </p>
 
-                <Show when={!loading()} fallback={<p class="text-sm text-gray-500 dark:text-gray-400">Loading audit webhooks…</p>}>
+                <Show when={!loading()} fallback={<p class="text-sm text-slate-500 dark:text-slate-400">Loading audit webhooks…</p>}>
                     <div class="space-y-3">
                         <For each={webhookUrls()}>
                             {(url) => (
-                                <div class="flex items-center justify-between gap-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 p-3">
+                                <div class="flex items-center justify-between gap-3 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-3">
                                     <div class="flex items-center gap-3 overflow-hidden min-w-0">
                                         <div class="p-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 rounded-md shrink-0">
                                             <ExternalLink size={16} />
                                         </div>
-                                        <span class="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{url}</span>
+                                        <span class="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">{url}</span>
                                     </div>
                                     <button
                                         onClick={() => handleRemoveWebhook(url)}
-                                        class="p-2 text-gray-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-md transition-colors"
+                                        class="p-2 text-slate-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-md transition-colors"
                                         title="Remove webhook endpoint"
                                     >
                                         <Trash2 size={16} />
@@ -140,7 +140,7 @@ export function AuditWebhookPanel() {
                         </For>
 
                         <Show when={webhookUrls().length === 0}>
-                            <div class="py-10 flex flex-col items-center justify-center text-gray-500 dark:text-gray-400 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-xl">
+                            <div class="py-10 flex flex-col items-center justify-center text-slate-500 dark:text-slate-400 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-md">
                                 <Globe size={36} class="opacity-40 mb-3" />
                                 <p class="text-sm">No audit webhooks configured yet.</p>
                             </div>
@@ -148,7 +148,7 @@ export function AuditWebhookPanel() {
                     </div>
                 </Show>
 
-                <div class="flex gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <div class="flex gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
                     <input
                         type="text"
                         placeholder="https://your-api.com/webhook"
@@ -160,7 +160,7 @@ export function AuditWebhookPanel() {
                     <button
                         onClick={handleAddWebhook}
                         disabled={saving() || !newUrl().trim()}
-                        class="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg flex items-center gap-2 transition-colors"
+                        class="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-md flex items-center gap-2 transition-colors"
                     >
                         <Plus size={18} />
                         Add Endpoint
@@ -170,7 +170,7 @@ export function AuditWebhookPanel() {
 
             <Card tone="warning" class="border border-amber-200 dark:border-amber-800">
                 <div class="p-5 flex gap-4">
-                    <div class="p-3 bg-amber-100 dark:bg-amber-900/40 rounded-lg h-fit text-amber-600 dark:text-amber-300">
+                    <div class="p-3 bg-amber-100 dark:bg-amber-900/40 rounded-md h-fit text-amber-600 dark:text-amber-300">
                         <Shield size={22} />
                     </div>
                     <div>

@@ -36,7 +36,7 @@ export const QuestionCard: Component<QuestionCardProps> = (props) => {
   };
 
   return (
-    <div class="rounded-lg border border-blue-300 dark:border-blue-700 overflow-hidden shadow-md">
+    <div class="rounded-md border border-blue-300 dark:border-blue-700 overflow-hidden shadow-sm">
       {/* Header */}
       <div class="px-3 py-2 text-xs font-medium flex items-center gap-2 bg-blue-50 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 border-b border-blue-200 dark:border-blue-800">
         <div class="p-1 rounded bg-blue-100 dark:bg-blue-800/50">
@@ -57,7 +57,7 @@ export const QuestionCard: Component<QuestionCardProps> = (props) => {
                   {q.header}
                 </p>
               </Show>
-              <p class="text-sm font-medium text-gray-800 dark:text-gray-200">
+              <p class="text-sm font-medium text-slate-800 dark:text-slate-200">
                 {q.question}
               </p>
 
@@ -66,7 +66,7 @@ export const QuestionCard: Component<QuestionCardProps> = (props) => {
                   type="text"
                   value={answers()[q.id] || ''}
                   onInput={(e) => handleInputChange(q.id, e.currentTarget.value)}
-                  class="w-full px-3 py-2 text-sm border border-blue-200 dark:border-blue-700 rounded-lg bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  class="w-full px-3 py-2 text-sm border border-blue-200 dark:border-blue-700 rounded-md bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Type your answer..."
                   disabled={props.question.isAnswering}
                 />
@@ -80,10 +80,10 @@ export const QuestionCard: Component<QuestionCardProps> = (props) => {
                         type="button"
                         onClick={() => handleSelectOption(q.id, option.value)}
                         disabled={props.question.isAnswering}
-                        class={`w-full px-3 py-2 text-sm text-left rounded-lg border transition-colors ${
+                        class={`w-full px-3 py-2 text-sm text-left rounded-md border transition-colors ${
                           answers()[q.id] === option.value
                             ? 'bg-blue-100 dark:bg-blue-800 border-blue-400 dark:border-blue-600 text-blue-800 dark:text-blue-200'
-                            : 'bg-white dark:bg-gray-800 border-blue-200 dark:border-blue-700 text-gray-700 dark:text-gray-300 hover:bg-blue-50 dark:hover:bg-blue-900/30'
+                            : 'bg-white dark:bg-slate-800 border-blue-200 dark:border-blue-700 text-slate-700 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-blue-900/30'
                         } ${props.question.isAnswering ? 'opacity-50 cursor-not-allowed' : ''}`}
                       >
                         <div class="flex flex-col gap-0.5">
@@ -109,12 +109,12 @@ export const QuestionCard: Component<QuestionCardProps> = (props) => {
             type="button"
             onClick={handleSubmit}
             disabled={props.question.isAnswering || !isValid()}
-            class={`flex-1 px-3 py-2 text-xs font-semibold rounded-lg transition-all ${
+            class={`flex-1 px-3 py-2 text-xs font-semibold rounded-md transition-all ${
               props.question.isAnswering
                 ? 'bg-blue-400 text-white cursor-wait'
                 : !isValid()
-                ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
-                : 'bg-blue-500 hover:bg-blue-600 text-white shadow-sm hover:shadow-md'
+                ? 'bg-slate-300 dark:bg-slate-600 text-slate-500 dark:text-slate-400 cursor-not-allowed'
+                : 'bg-blue-500 hover:bg-blue-600 text-white shadow-sm hover:shadow-sm'
             }`}
           >
             <Show
@@ -141,7 +141,7 @@ export const QuestionCard: Component<QuestionCardProps> = (props) => {
             type="button"
             onClick={props.onSkip}
             disabled={props.question.isAnswering}
-            class="flex-1 px-3 py-2 text-xs font-semibold bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg transition-colors disabled:opacity-50"
+            class="flex-1 px-3 py-2 text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-md transition-colors disabled:opacity-50"
           >
             <span class="flex items-center justify-center gap-1.5">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

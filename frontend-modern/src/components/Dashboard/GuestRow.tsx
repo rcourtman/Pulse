@@ -53,32 +53,32 @@ interface IOEmphasis {
 
 const getOutlierEmphasis = (value: number, stats: IODistributionStats): IOEmphasis => {
   if (!Number.isFinite(value) || value <= 0 || stats.max <= 0) {
-    return { className: 'text-gray-400 dark:text-gray-500', showOutlierHint: false };
+    return { className: 'text-slate-400 dark:text-slate-500', showOutlierHint: false };
   }
 
   if (stats.count < 4) {
     const ratio = value / stats.max;
     if (ratio >= 0.995) {
-      return { className: 'text-gray-800 dark:text-gray-100 font-medium', showOutlierHint: true };
+      return { className: 'text-slate-800 dark:text-slate-100 font-medium', showOutlierHint: true };
     }
-    return { className: 'text-gray-500 dark:text-gray-400', showOutlierHint: false };
+    return { className: 'text-slate-500 dark:text-slate-400', showOutlierHint: false };
   }
 
   if (stats.mad > 0) {
     const modifiedZ = (0.6745 * (value - stats.median)) / stats.mad;
     if (modifiedZ >= 6.5 && value >= stats.p99) {
-      return { className: 'text-gray-900 dark:text-gray-50 font-semibold', showOutlierHint: true };
+      return { className: 'text-slate-900 dark:text-slate-50 font-semibold', showOutlierHint: true };
     }
     if (modifiedZ >= 5.5 && value >= stats.p97) {
-      return { className: 'text-gray-800 dark:text-gray-100 font-medium', showOutlierHint: true };
+      return { className: 'text-slate-800 dark:text-slate-100 font-medium', showOutlierHint: true };
     }
-    return { className: 'text-gray-500 dark:text-gray-400', showOutlierHint: false };
+    return { className: 'text-slate-500 dark:text-slate-400', showOutlierHint: false };
   }
 
-  if (value >= stats.p99) return { className: 'text-gray-900 dark:text-gray-50 font-semibold', showOutlierHint: true };
-  if (value >= stats.p97) return { className: 'text-gray-800 dark:text-gray-100 font-medium', showOutlierHint: true };
-  if (value > 0) return { className: 'text-gray-500 dark:text-gray-400', showOutlierHint: false };
-  return { className: 'text-gray-400 dark:text-gray-500', showOutlierHint: false };
+  if (value >= stats.p99) return { className: 'text-slate-900 dark:text-slate-50 font-semibold', showOutlierHint: true };
+  if (value >= stats.p97) return { className: 'text-slate-800 dark:text-slate-100 font-medium', showOutlierHint: true };
+  if (value > 0) return { className: 'text-slate-500 dark:text-slate-400', showOutlierHint: false };
+  return { className: 'text-slate-400 dark:text-slate-500', showOutlierHint: false };
 }
 
 
@@ -100,7 +100,7 @@ const BACKUP_STATUS_CONFIG: Record<BackupStatus, { color: string; bgColor: strin
   fresh: { color: 'text-green-600 dark:text-green-400', bgColor: 'bg-green-100 dark:bg-green-900/40', icon: 'check' },
   stale: { color: 'text-yellow-600 dark:text-yellow-400', bgColor: 'bg-yellow-100 dark:bg-yellow-900/40', icon: 'warning' },
   critical: { color: 'text-red-600 dark:text-red-400', bgColor: 'bg-red-100 dark:bg-red-900/40', icon: 'x' },
-  never: { color: 'text-gray-400 dark:text-gray-500', bgColor: 'bg-gray-100 dark:bg-gray-800', icon: 'x' },
+  never: { color: 'text-slate-400 dark:text-slate-500', bgColor: 'bg-slate-100 dark:bg-slate-800', icon: 'x' },
 };
 
 function BackupIndicator(props: { lastBackup: string | number | null | undefined; isTemplate: boolean }) {
@@ -161,7 +161,7 @@ function NetworkInfoCell(props: { ipAddresses: string[]; networkInterfaces: Gues
   return (
     <>
       <span
-        class="inline-flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400"
+        class="inline-flex items-center gap-1 text-xs text-slate-600 dark:text-slate-400"
         onMouseEnter={tip.onMouseEnter}
         onMouseLeave={tip.onMouseLeave}
       >
@@ -176,34 +176,34 @@ function NetworkInfoCell(props: { ipAddresses: string[]; networkInterfaces: Gues
 
       <TooltipPortal when={tip.show() && (hasInterfaces() || props.ipAddresses.length > 0)} x={tip.pos().x} y={tip.pos().y}>
         <div class="min-w-[180px] max-w-[280px]">
-          <div class="font-medium mb-1 text-gray-300 border-b border-gray-700 pb-1">
+          <div class="font-medium mb-1 text-slate-300 border-b border-slate-700 pb-1">
             Network Interfaces
           </div>
 
           <Show when={hasInterfaces()}>
             <For each={props.networkInterfaces}>
               {(iface, idx) => (
-                <div class="py-1" classList={{ 'border-t border-gray-700/50': idx() > 0 }}>
+                <div class="py-1" classList={{ 'border-t border-slate-700/50': idx() > 0 }}>
                   <div class="flex items-center gap-2 text-blue-400 font-medium">
                     <span>{iface.name || 'eth' + idx()}</span>
                     <Show when={iface.mac}>
-                      <span class="text-[9px] text-gray-500 font-normal">{iface.mac}</span>
+                      <span class="text-[9px] text-slate-500 font-normal">{iface.mac}</span>
                     </Show>
                   </div>
                   <Show when={iface.addresses && iface.addresses.length > 0}>
                     <div class="mt-0.5 flex flex-wrap gap-1">
                       <For each={iface.addresses}>
                         {(ip) => (
-                          <span class="text-gray-300 font-mono">{ip}</span>
+                          <span class="text-slate-300 font-mono">{ip}</span>
                         )}
                       </For>
                     </div>
                   </Show>
                   <Show when={!iface.addresses || iface.addresses.length === 0}>
-                    <span class="text-gray-500 text-[9px]">No IP assigned</span>
+                    <span class="text-slate-500 text-[9px]">No IP assigned</span>
                   </Show>
                   <Show when={(iface.rxBytes || 0) > 0 || (iface.txBytes || 0) > 0}>
-                    <div class="mt-0.5 text-[9px] text-gray-500">
+                    <div class="mt-0.5 text-[9px] text-slate-500">
                       RX: {formatBytes(iface.rxBytes || 0)} / TX: {formatBytes(iface.txBytes || 0)}
                     </div>
                   </Show>
@@ -216,12 +216,12 @@ function NetworkInfoCell(props: { ipAddresses: string[]; networkInterfaces: Gues
             <div class="py-1">
               <div class="flex items-center gap-2 text-blue-400 font-medium">
                 <span>IP Addresses</span>
-                <span class="text-[9px] text-gray-500 font-normal">No agent data</span>
+                <span class="text-[9px] text-slate-500 font-normal">No agent data</span>
               </div>
               <div class="mt-0.5 flex flex-wrap gap-1">
                 <For each={props.ipAddresses}>
                   {(ip) => (
-                    <span class="text-gray-300 font-mono">{ip}</span>
+                    <span class="text-slate-300 font-mono">{ip}</span>
                   )}
                 </For>
               </div>
@@ -260,7 +260,7 @@ function OSInfoCell(props: { osName: string; osVersion: string; agentVersion: st
   // OS icons - Windows logo and terminal prompt for Linux
   const OSIcon = () => {
     const type = osType();
-    const iconClass = 'w-3.5 h-3.5 text-gray-500 dark:text-gray-400';
+    const iconClass = 'w-3.5 h-3.5 text-slate-500 dark:text-slate-400';
 
     switch (type) {
       case 'windows':
@@ -279,7 +279,7 @@ function OSInfoCell(props: { osName: string; osVersion: string; agentVersion: st
           </svg>
         );
       default:
-        return <span class="text-gray-400">-</span>;
+        return <span class="text-slate-400">-</span>;
     }
   };
 
@@ -295,16 +295,16 @@ function OSInfoCell(props: { osName: string; osVersion: string; agentVersion: st
 
       <TooltipPortal when={tip.show()} x={tip.pos().x} y={tip.pos().y}>
         <div class="min-w-[120px] max-w-[220px]">
-          <div class="font-medium mb-1 text-gray-300 border-b border-gray-700 pb-1">
+          <div class="font-medium mb-1 text-slate-300 border-b border-slate-700 pb-1">
             Operating System
           </div>
           <div class="py-0.5">
-            <div class="text-gray-200 font-medium">{props.osName}</div>
+            <div class="text-slate-200 font-medium">{props.osName}</div>
             <Show when={props.osVersion}>
-              <div class="text-gray-400">Version: {props.osVersion}</div>
+              <div class="text-slate-400">Version: {props.osVersion}</div>
             </Show>
             <Show when={props.agentVersion}>
-              <div class="text-gray-500 text-[9px] mt-1 pt-1 border-t border-gray-700/50">
+              <div class="text-slate-500 text-[9px] mt-1 pt-1 border-t border-slate-700/50">
                 Agent: {props.agentVersion}
               </div>
             </Show>
@@ -350,13 +350,13 @@ function BackupStatusCell(props: { lastBackup: string | number | null | undefine
 
       <TooltipPortal when={tip.show()} x={tip.pos().x} y={tip.pos().y}>
         <div class="min-w-[140px]">
-          <div class="font-medium mb-1 text-gray-300 border-b border-gray-700 pb-1">
+          <div class="font-medium mb-1 text-slate-300 border-b border-slate-700 pb-1">
             Backup Status
           </div>
           <Show when={info().status !== 'never'}>
             <div class="py-0.5">
-              <div class="text-gray-400">Last backup</div>
-              <div class="text-gray-200 font-medium">
+              <div class="text-slate-400">Last backup</div>
+              <div class="text-slate-200 font-medium">
                 {new Date(props.lastBackup!).toLocaleDateString(undefined, {
                   weekday: 'short',
                   year: 'numeric',
@@ -364,11 +364,11 @@ function BackupStatusCell(props: { lastBackup: string | number | null | undefine
                   day: 'numeric',
                 })}
               </div>
-              <div class="text-gray-300">
+              <div class="text-slate-300">
                 {new Date(props.lastBackup!).toLocaleTimeString()}
               </div>
             </div>
-            <div class="pt-1 mt-1 border-t border-gray-700/50">
+            <div class="pt-1 mt-1 border-t border-slate-700/50">
               <span class={config().color}>{info().ageFormatted} ago</span>
             </div>
           </Show>
@@ -405,10 +405,10 @@ function InfoTooltipCell(props: { value: string; tooltip: string; type: string }
 
       <TooltipPortal when={tip.show()} x={tip.pos().x} y={tip.pos().y}>
         <div class="max-w-[280px]">
-          <div class="font-medium mb-1 text-gray-300 border-b border-gray-700 pb-1">
+          <div class="font-medium mb-1 text-slate-300 border-b border-slate-700 pb-1">
             {label()}
           </div>
-          <div class="py-0.5 text-gray-200 break-all">
+          <div class="py-0.5 text-slate-200 break-all">
             {props.tooltip}
           </div>
         </div>
@@ -731,10 +731,10 @@ export function GuestRow(props: GuestRowProps) {
       ? props.alertStyles?.severity === 'critical'
         ? 'bg-red-50 dark:bg-red-950/30'
         : 'bg-yellow-50 dark:bg-yellow-950/20'
-      : 'bg-white dark:bg-gray-800';
+      : 'bg-white dark:bg-slate-800';
     const defaultHover = hasUnacknowledgedAlert()
       ? ''
-      : 'hover:bg-gray-50 dark:hover:bg-gray-700/30';
+      : 'hover:bg-slate-50 dark:hover:bg-slate-700/30';
     const stoppedDimming = !isRunning() ? 'opacity-60' : '';
     return `${base} ${hover} ${defaultHover} ${alertBg} ${stoppedDimming}`;
   });
@@ -773,7 +773,7 @@ export function GuestRow(props: GuestRowProps) {
         >
           <div class="flex items-center gap-2 min-w-0">
             <div class={`transition-transform duration-200 ${props.isExpanded ? 'rotate-90' : ''}`}>
-              <svg class="w-3.5 h-3.5 text-gray-500 group-hover:text-gray-700 dark:group-hover:text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg class="w-3.5 h-3.5 text-slate-500 group-hover:text-slate-700 dark:group-hover:text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
               </svg>
             </div>
@@ -786,7 +786,7 @@ export function GuestRow(props: GuestRowProps) {
               />
               <div class="flex items-center gap-1.5 min-w-0 group/name">
                 <span
-                  class="text-[11px] font-medium text-gray-900 dark:text-gray-100 select-none truncate"
+                  class="text-[11px] font-medium text-slate-900 dark:text-slate-100 select-none truncate"
                   title={props.guest.name}
                 >
                   {props.guest.name}
@@ -803,7 +803,7 @@ export function GuestRow(props: GuestRowProps) {
 
             <Show when={lockLabel()}>
               <span
-                class="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap"
+                class="text-[10px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide whitespace-nowrap"
                 title={`Guest is locked (${lockLabel()})`}
               >
                 Lock: {lockLabel()}
@@ -829,8 +829,8 @@ export function GuestRow(props: GuestRowProps) {
         {/* Info - merged identifier (VMID / image / namespace) for mixed-type views */}
         <Show when={isColVisible('info')}>
           <td class="px-1.5 sm:px-2 py-1 align-middle">
-            <div class="flex justify-center text-xs text-gray-600 dark:text-gray-400 whitespace-nowrap">
-              <Show when={infoValue()} fallback={<span class="text-gray-400">-</span>}>
+            <div class="flex justify-center text-xs text-slate-600 dark:text-slate-400 whitespace-nowrap">
+              <Show when={infoValue()} fallback={<span class="text-slate-400">-</span>}>
                 <InfoTooltipCell value={infoValue()} tooltip={infoTooltip()} type={workloadType()} />
               </Show>
             </div>
@@ -840,8 +840,8 @@ export function GuestRow(props: GuestRowProps) {
         {/* VMID */}
         <Show when={isColVisible('vmid')}>
           <td class="px-1.5 sm:px-2 py-1 align-middle">
-            <div class="flex justify-center text-xs text-gray-600 dark:text-gray-400 whitespace-nowrap">
-              <Show when={displayId()} fallback={<span class="text-gray-400">-</span>}>
+            <div class="flex justify-center text-xs text-slate-600 dark:text-slate-400 whitespace-nowrap">
+              <Show when={displayId()} fallback={<span class="text-slate-400">-</span>}>
                 {displayId()}
               </Show>
             </div>
@@ -887,7 +887,7 @@ export function GuestRow(props: GuestRowProps) {
               when={hasDiskUsage()}
               fallback={
                 <div class="flex justify-center">
-                  <span class="text-xs text-gray-400" title={getDiskStatusTooltip()}>
+                  <span class="text-xs text-slate-400" title={getDiskStatusTooltip()}>
                     -
                   </span>
                 </div>
@@ -906,7 +906,7 @@ export function GuestRow(props: GuestRowProps) {
         <Show when={isColVisible('ip')}>
           <td class="px-1.5 sm:px-2 py-1 align-middle">
             <div class="flex justify-center">
-              <Show when={ipAddresses().length > 0 || hasNetworkInterfaces()} fallback={<span class="text-xs text-gray-400">-</span>}>
+              <Show when={ipAddresses().length > 0 || hasNetworkInterfaces()} fallback={<span class="text-xs text-slate-400">-</span>}>
                 <NetworkInfoCell
                   ipAddresses={ipAddresses()}
                   networkInterfaces={networkInterfaces()}
@@ -920,8 +920,8 @@ export function GuestRow(props: GuestRowProps) {
         <Show when={isColVisible('uptime')}>
           <td class="px-1.5 sm:px-2 py-1 align-middle">
             <div class="flex justify-center">
-              <Show when={isRunning()} fallback={<span class="text-xs text-gray-400">-</span>}>
-                <span class={`text-xs whitespace-nowrap ${props.guest.uptime > 0 && props.guest.uptime < 3600 ? 'text-orange-500' : 'text-gray-600 dark:text-gray-400'}`}>
+              <Show when={isRunning()} fallback={<span class="text-xs text-slate-400">-</span>}>
+                <span class={`text-xs whitespace-nowrap ${props.guest.uptime > 0 && props.guest.uptime < 3600 ? 'text-orange-500' : 'text-slate-600 dark:text-slate-400'}`}>
                   <Show when={isMobile()} fallback={formatUptime(props.guest.uptime)}>
                     {formatUptime(props.guest.uptime, true)}
                   </Show>
@@ -935,7 +935,7 @@ export function GuestRow(props: GuestRowProps) {
         <Show when={isColVisible('node')}>
           <td class="px-1.5 sm:px-2 py-1 align-middle">
             <div class="flex justify-center">
-              <Show when={props.guest.node} fallback={<span class="text-xs text-gray-400">-</span>}>
+              <Show when={props.guest.node} fallback={<span class="text-xs text-slate-400">-</span>}>
                 <button
                   type="button"
                   class="text-xs text-blue-600 dark:text-blue-400 hover:underline truncate max-w-[80px]"
@@ -958,10 +958,10 @@ export function GuestRow(props: GuestRowProps) {
             <div class="flex justify-center">
               <Show
                 when={workloadType() === 'docker' && dockerImage()}
-                fallback={<span class="text-xs text-gray-400">-</span>}
+                fallback={<span class="text-xs text-slate-400">-</span>}
               >
                 <span
-                  class="text-xs text-gray-600 dark:text-gray-400 truncate max-w-[140px]"
+                  class="text-xs text-slate-600 dark:text-slate-400 truncate max-w-[140px]"
                   title={dockerImage()}
                 >
                   {getShortImageName(dockerImage())}
@@ -977,10 +977,10 @@ export function GuestRow(props: GuestRowProps) {
             <div class="flex justify-center">
               <Show
                 when={workloadType() === 'k8s' && namespace()}
-                fallback={<span class="text-xs text-gray-400">-</span>}
+                fallback={<span class="text-xs text-slate-400">-</span>}
               >
                 <span
-                  class="text-xs text-gray-600 dark:text-gray-400 truncate max-w-[120px]"
+                  class="text-xs text-slate-600 dark:text-slate-400 truncate max-w-[120px]"
                   title={namespace()}
                 >
                   {namespace()}
@@ -996,10 +996,10 @@ export function GuestRow(props: GuestRowProps) {
             <div class="flex justify-center">
               <Show
                 when={contextLabel()}
-                fallback={<span class="text-xs text-gray-400">-</span>}
+                fallback={<span class="text-xs text-slate-400">-</span>}
               >
                 <span
-                  class="text-xs text-gray-600 dark:text-gray-400 truncate max-w-[140px]"
+                  class="text-xs text-slate-600 dark:text-slate-400 truncate max-w-[140px]"
                   title={contextLabel()}
                 >
                   {contextLabel()}
@@ -1013,12 +1013,12 @@ export function GuestRow(props: GuestRowProps) {
         <Show when={isColVisible('backup')}>
           <td class="px-1.5 sm:px-2 py-1 align-middle">
             <div class="flex justify-center">
-              <Show when={supportsBackup()} fallback={<span class="text-xs text-gray-400">-</span>}>
+              <Show when={supportsBackup()} fallback={<span class="text-xs text-slate-400">-</span>}>
                 <Show when={!props.guest.template}>
                   <BackupStatusCell lastBackup={props.guest.lastBackup} />
                 </Show>
                 <Show when={props.guest.template}>
-                  <span class="text-xs text-gray-400">-</span>
+                  <span class="text-xs text-slate-400">-</span>
                 </Show>
               </Show>
             </div>
@@ -1048,7 +1048,7 @@ export function GuestRow(props: GuestRowProps) {
                 fallback={
                   <Show
                     when={ociImage()}
-                    fallback={<span class="text-xs text-gray-400">-</span>}
+                    fallback={<span class="text-xs text-slate-400">-</span>}
                   >
                     {/* For OCI containers without guest agent, show image name in OS column */}
                     <span
@@ -1073,7 +1073,7 @@ export function GuestRow(props: GuestRowProps) {
 		        {/* Net I/O */}
 		        <Show when={isColVisible('netIo')}>
 		          <td class="px-1.5 sm:px-2 py-1 align-middle">
-		            <Show when={isRunning()} fallback={<div class="text-center"><span class="text-xs text-gray-400">-</span></div>}>
+		            <Show when={isRunning()} fallback={<div class="text-center"><span class="text-xs text-slate-400">-</span></div>}>
 		              <div class="grid w-full min-w-0 grid-cols-[0.75rem_minmax(0,1fr)_0.75rem_minmax(0,1fr)] items-center gap-x-1 overflow-hidden text-[11px] tabular-nums">
 		                <span class="inline-flex w-3 justify-center text-emerald-500">↓</span>
 		                <span
@@ -1097,7 +1097,7 @@ export function GuestRow(props: GuestRowProps) {
 		        {/* Disk I/O */}
 		        <Show when={isColVisible('diskIo')}>
 		          <td class="px-1.5 sm:px-2 py-1 align-middle">
-		            <Show when={isRunning()} fallback={<div class="text-center"><span class="text-xs text-gray-400">-</span></div>}>
+		            <Show when={isRunning()} fallback={<div class="text-center"><span class="text-xs text-slate-400">-</span></div>}>
 		              <div class="grid w-full min-w-0 grid-cols-[0.75rem_minmax(0,1fr)_0.75rem_minmax(0,1fr)] items-center gap-x-1 overflow-hidden text-[11px] tabular-nums">
 		                <span class="inline-flex w-3 justify-center font-mono text-blue-500">R</span>
 		                <span

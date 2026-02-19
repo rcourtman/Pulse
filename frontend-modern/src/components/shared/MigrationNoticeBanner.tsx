@@ -10,7 +10,7 @@ interface MigrationNoticeBannerProps {
 
 export const MigrationNoticeBanner: Component<MigrationNoticeBannerProps> = (props) => {
   return (
-    <div class="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-blue-900 shadow-sm dark:border-blue-800/80 dark:bg-blue-950/40 dark:text-blue-100">
+    <div class="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-blue-900 shadow-sm dark:border-blue-800/80 dark:bg-blue-950/40 dark:text-blue-100">
       <div class="flex items-start justify-between gap-3">
         <div class="min-w-0">
           <div class="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">

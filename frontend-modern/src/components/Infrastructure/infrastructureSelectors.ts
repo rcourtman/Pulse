@@ -337,30 +337,30 @@ export const computeIOScale = (
 
 export const getOutlierEmphasis = (value: number, stats: IODistributionStats): OutlierEmphasis => {
   if (!Number.isFinite(value) || value <= 0 || stats.max <= 0) {
-    return { fontWeight: 'normal', color: 'text-gray-400 dark:text-gray-500', showOutlierHint: false };
+    return { fontWeight: 'normal', color: 'text-slate-400 dark:text-slate-500', showOutlierHint: false };
   }
 
   if (stats.count < 4) {
     const ratio = value / stats.max;
     if (ratio >= 0.995) {
-      return { fontWeight: '500', color: 'text-gray-800 dark:text-gray-100', showOutlierHint: true };
+      return { fontWeight: '500', color: 'text-slate-800 dark:text-slate-100', showOutlierHint: true };
     }
-    return { fontWeight: 'normal', color: 'text-gray-500 dark:text-gray-400', showOutlierHint: false };
+    return { fontWeight: 'normal', color: 'text-slate-500 dark:text-slate-400', showOutlierHint: false };
   }
 
   if (stats.mad > 0) {
     const modifiedZ = (0.6745 * (value - stats.median)) / stats.mad;
     if (modifiedZ >= 6.5 && value >= stats.p99) {
-      return { fontWeight: '600', color: 'text-gray-900 dark:text-gray-50', showOutlierHint: true };
+      return { fontWeight: '600', color: 'text-slate-900 dark:text-slate-50', showOutlierHint: true };
     }
     if (modifiedZ >= 5.5 && value >= stats.p97) {
-      return { fontWeight: '500', color: 'text-gray-800 dark:text-gray-100', showOutlierHint: true };
+      return { fontWeight: '500', color: 'text-slate-800 dark:text-slate-100', showOutlierHint: true };
     }
-    return { fontWeight: 'normal', color: 'text-gray-500 dark:text-gray-400', showOutlierHint: false };
+    return { fontWeight: 'normal', color: 'text-slate-500 dark:text-slate-400', showOutlierHint: false };
   }
 
-  if (value >= stats.p99) return { fontWeight: '600', color: 'text-gray-900 dark:text-gray-50', showOutlierHint: true };
-  if (value >= stats.p97) return { fontWeight: '500', color: 'text-gray-800 dark:text-gray-100', showOutlierHint: true };
-  if (value > 0) return { fontWeight: 'normal', color: 'text-gray-500 dark:text-gray-400', showOutlierHint: false };
-  return { fontWeight: 'normal', color: 'text-gray-400 dark:text-gray-500', showOutlierHint: false };
+  if (value >= stats.p99) return { fontWeight: '600', color: 'text-slate-900 dark:text-slate-50', showOutlierHint: true };
+  if (value >= stats.p97) return { fontWeight: '500', color: 'text-slate-800 dark:text-slate-100', showOutlierHint: true };
+  if (value > 0) return { fontWeight: 'normal', color: 'text-slate-500 dark:text-slate-400', showOutlierHint: false };
+  return { fontWeight: 'normal', color: 'text-slate-400 dark:text-slate-500', showOutlierHint: false };
 };

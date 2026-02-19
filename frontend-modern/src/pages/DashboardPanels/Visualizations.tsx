@@ -51,7 +51,7 @@ export const MiniDonut: Component<MiniDonutProps> = (props) => {
             </svg>
 
             {props.centerText && (
-                <span class="absolute text-[10px] font-bold text-gray-700 dark:text-gray-200">
+                <span class="absolute text-[10px] font-bold text-slate-700 dark:text-slate-200">
                     {props.centerText}
                 </span>
             )}
@@ -87,7 +87,7 @@ export const MiniGauge: Component<MiniGaugeProps> = (props) => {
                     stroke-width={strokeWidth}
                     stroke-dasharray={`${arcLength} ${circumference}`}
                     stroke-linecap="round"
-                    class="text-gray-100 dark:text-gray-800"
+                    class="text-slate-100 dark:text-slate-800"
                 />
                 {/* Value */}
                 <circle

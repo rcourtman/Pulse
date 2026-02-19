@@ -39,7 +39,7 @@ const statusTone = (counts: NamespaceCounts) => {
   if (counts.offline > 0) return 'bg-rose-500';
   if (counts.warning > 0) return 'bg-amber-500';
   if (counts.online > 0) return 'bg-emerald-500';
-  return 'bg-gray-400';
+  return 'bg-slate-400';
 };
 
 export const K8sNamespacesDrawer: Component<{
@@ -93,8 +93,8 @@ export const K8sNamespacesDrawer: Component<{
       <Card padding="md">
         <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div class="min-w-0">
-            <div class="text-sm font-semibold text-gray-800 dark:text-gray-100">{PAGE_TITLE}</div>
-            <div class="text-xs text-gray-500 dark:text-gray-400">Scope Pods and Deployments by namespace</div>
+            <div class="text-sm font-semibold text-slate-800 dark:text-slate-100">{PAGE_TITLE}</div>
+            <div class="text-xs text-slate-500 dark:text-slate-400">Scope Pods and Deployments by namespace</div>
           </div>
 
           <div class="flex flex-wrap items-center gap-2">
@@ -102,12 +102,12 @@ export const K8sNamespacesDrawer: Component<{
               value={search()}
               onInput={(e) => setSearch(e.currentTarget.value)}
               placeholder="Search namespaces..."
-              class="w-[12rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-900/50 dark:text-gray-100"
+              class="w-[12rem] rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
             />
             <button
               type="button"
               onClick={() => openPods(null)}
-              class="rounded-md border border-gray-200 bg-white px-3 py-1 text-xs font-semibold text-gray-700 shadow-sm hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900/50 dark:text-gray-200 dark:hover:bg-gray-800"
+              class="rounded-md border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-800"
             >
               Open All Pods
             </button>
@@ -146,10 +146,10 @@ export const K8sNamespacesDrawer: Component<{
               </Card>
             }
           >
-            <Card padding="none" tone="glass" class="overflow-hidden">
+            <Card padding="none" tone="card" class="overflow-hidden">
               <div class="overflow-x-auto">
                 <table class="w-full min-w-[720px] border-collapse text-xs">
-                  <thead class="bg-gray-50 dark:bg-gray-800/60 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
+                  <thead class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
                     <tr class="text-left text-[10px] uppercase tracking-wide">
                       <th class="px-3 py-2 font-medium">Namespace</th>
                       <th class="px-3 py-2 font-medium">Pods</th>
@@ -160,25 +160,25 @@ export const K8sNamespacesDrawer: Component<{
                   <tbody class="divide-y divide-gray-100 dark:divide-gray-700/50">
                     <For each={filteredRows()}>
                       {(row) => (
-                        <tr class="hover:bg-gray-50/50 dark:hover:bg-gray-800/30">
+                        <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
                           <td class="px-3 py-2">
                             <div class="flex items-center gap-2 min-w-0">
                               <span class={`h-2 w-2 rounded-full ${statusTone(row.pods)}`} />
-                              <span class="font-semibold text-gray-900 dark:text-gray-100 truncate" title={row.namespace}>
+                              <span class="font-semibold text-slate-900 dark:text-slate-100 truncate" title={row.namespace}>
                                 {row.namespace}
                               </span>
                             </div>
                           </td>
-                          <td class="px-3 py-2 text-gray-700 dark:text-gray-200">
+                          <td class="px-3 py-2 text-slate-700 dark:text-slate-200">
                             <span class="font-semibold">{formatInteger(row.pods.total)}</span>
-                            <span class="ml-2 text-[11px] text-gray-500 dark:text-gray-400">
+                            <span class="ml-2 text-[11px] text-slate-500 dark:text-slate-400">
                               {row.pods.offline > 0 ? `${formatInteger(row.pods.offline)} off` : ''}
                               {row.pods.warning > 0 ? `${row.pods.offline > 0 ? ' · ' : ''}${formatInteger(row.pods.warning)} warn` : ''}
                             </span>
                           </td>
-                          <td class="px-3 py-2 text-gray-700 dark:text-gray-200">
+                          <td class="px-3 py-2 text-slate-700 dark:text-slate-200">
                             <span class="font-semibold">{formatInteger(row.deployments.total)}</span>
-                            <span class="ml-2 text-[11px] text-gray-500 dark:text-gray-400">
+                            <span class="ml-2 text-[11px] text-slate-500 dark:text-slate-400">
                               {row.deployments.warning > 0 ? `${formatInteger(row.deployments.warning)} warn` : ''}
                               {row.deployments.offline > 0 ? `${row.deployments.warning > 0 ? ' · ' : ''}${formatInteger(row.deployments.offline)} off` : ''}
                             </span>
@@ -188,7 +188,7 @@ export const K8sNamespacesDrawer: Component<{
                               <button
                                 type="button"
                                 onClick={() => openPods(row.namespace)}
-                                class="rounded-md border border-gray-200 bg-white px-2 py-1 text-[11px] font-semibold text-gray-700 shadow-sm hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900/50 dark:text-gray-200 dark:hover:bg-gray-800"
+                                class="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-800"
                               >
                                 Open Pods
                               </button>
@@ -196,7 +196,7 @@ export const K8sNamespacesDrawer: Component<{
                                 <button
                                   type="button"
                                   onClick={() => props.onOpenDeployments?.(row.namespace)}
-                                  class="rounded-md border border-gray-200 bg-white px-2 py-1 text-[11px] font-semibold text-gray-700 shadow-sm hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900/50 dark:text-gray-200 dark:hover:bg-gray-800"
+                                  class="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-800"
                                 >
                                   View Deployments
                                 </button>

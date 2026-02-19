@@ -1066,8 +1066,8 @@ function App() {
       <Show
         when={!isLoading()}
         fallback={
-          <div class="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
-            <div class="text-gray-600 dark:text-gray-400">Loading...</div>
+          <div class="min-h-screen flex items-center justify-center bg-slate-100 dark:bg-slate-900">
+            <div class="text-slate-600 dark:text-slate-400">Loading...</div>
           </div>
         }
       >
@@ -1077,8 +1077,8 @@ function App() {
             <Show when={!needsAuth()} fallback={<Login onLogin={handleLogin} hasAuth={hasAuth()} securityStatus={securityStatus() ?? undefined} />}>
               <ErrorBoundary>
                 <Show when={enhancedStore()} fallback={
-                  <div class="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
-                    <div class="text-gray-600 dark:text-gray-400">Initializing...</div>
+                  <div class="min-h-screen flex items-center justify-center bg-slate-100 dark:bg-slate-900">
+                    <div class="text-slate-600 dark:text-slate-400">Initializing...</div>
                   </div>
                 }>
                   <WebSocketContext.Provider value={enhancedStore()!}>
@@ -1096,7 +1096,7 @@ function App() {
                       <div class="flex h-screen overflow-hidden">
                         {/* Main content area - shrinks when AI panel is open, scrolls independently */}
                         <div
-                          class={`app-scroll-shell flex-1 min-w-0 overflow-y-scroll bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 font-sans py-4 sm:py-6 transition-all duration-300`}
+                          class={`app-scroll-shell flex-1 min-w-0 overflow-y-scroll bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-sans py-4 sm:py-6 transition-all duration-300`}
                         >
                           <AppLayout
                             connected={connected}
@@ -1139,7 +1139,7 @@ function App() {
             </Show>
           }
         >
-          <div class="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 font-sans">
+          <div class="min-h-screen bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-sans">
             <div class="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">
               {props.children}
             </div>
@@ -1347,7 +1347,7 @@ function ConnectionStatusBadge(props: {
         ? 'connected bg-green-200 dark:bg-green-700 text-green-700 dark:text-green-300 min-w-6 h-6 group-hover:px-3'
         : props.reconnecting()
           ? 'reconnecting bg-yellow-200 dark:bg-yellow-700 text-yellow-700 dark:text-yellow-300 py-1'
-          : 'disconnected bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 min-w-6 h-6 group-hover:px-3'
+          : 'disconnected bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 min-w-6 h-6 group-hover:px-3'
         } ${props.class ?? ''}`}
     >
       <Show when={props.reconnecting()}>
@@ -1371,7 +1371,7 @@ function ConnectionStatusBadge(props: {
         <span class="h-2.5 w-2.5 rounded-full bg-green-600 dark:bg-green-400 flex-shrink-0"></span>
       </Show>
       <Show when={!props.connected() && !props.reconnecting()}>
-        <span class="h-2.5 w-2.5 rounded-full bg-gray-600 dark:bg-gray-400 flex-shrink-0"></span>
+        <span class="h-2.5 w-2.5 rounded-full bg-slate-600 dark:bg-slate-400 flex-shrink-0"></span>
       </Show>
       <span
         class={`whitespace-nowrap overflow-hidden transition-all duration-500 ${props.connected() || (!props.connected() && !props.reconnecting())
@@ -1751,7 +1751,7 @@ function AppLayout(props: {
       </Show>
       <div
         class={`header mb-3 flex items-center gap-2 ${kioskMode()
-          ? 'fixed top-0 left-0 right-0 z-50 justify-end bg-white/90 dark:bg-gray-900/90 backdrop-blur-sm shadow-sm'
+          ? 'fixed top-0 left-0 right-0 z-50 justify-end bg-white dark:bg-slate-800  shadow-sm'
           : 'justify-between sm:grid sm:grid-cols-[1fr_auto_1fr] sm:items-center sm:gap-0'}`}
         style={kioskMode()
           ? {
@@ -1813,7 +1813,7 @@ function AppLayout(props: {
                   r="26"
                 />
               </svg>
-              <span class="text-lg font-medium text-gray-800 dark:text-gray-200">Pulse</span>
+              <span class="text-lg font-medium text-slate-800 dark:text-slate-200">Pulse</span>
               <Show when={props.versionInfo()?.channel === 'rc'}>
                 <span class="text-xs px-1.5 py-0.5 bg-orange-500 text-white rounded font-bold">
                   RC
@@ -1837,32 +1837,32 @@ function AppLayout(props: {
               <button
                 type="button"
                 onClick={toggleKioskMode}
-                class={`group relative flex h-7 w-7 items-center justify-center rounded-full text-xs transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${kioskMode()
+                class={`group relative flex h-11 w-11 items-center justify-center rounded-full text-xs transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 sm:h-10 sm:w-10 ${kioskMode()
                   ? 'bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900 dark:text-blue-300 dark:hover:bg-blue-800'
-                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
+                  : 'bg-slate-200 text-slate-700 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600'
                   }`}
                 title={kioskMode() ? 'Exit kiosk mode (show navigation)' : 'Enter kiosk mode (hide navigation)'}
                 aria-label={kioskMode() ? 'Exit kiosk mode' : 'Enter kiosk mode'}
                 aria-pressed={kioskMode()}
               >
-                <Show when={kioskMode()} fallback={<Maximize2Icon class="h-3 w-3 flex-shrink-0" />}>
-                  <Minimize2Icon class="h-3 w-3 flex-shrink-0" />
+                <Show when={kioskMode()} fallback={<Maximize2Icon class="h-4 w-4 flex-shrink-0" />}>
+                  <Minimize2Icon class="h-4 w-4 flex-shrink-0" />
                 </Show>
               </button>
               <Show when={props.proxyAuthInfo()?.username}>
-                <span class="text-xs px-2 py-1 text-gray-600 dark:text-gray-400">
+                <span class="text-xs px-2 py-1 text-slate-600 dark:text-slate-400">
                   {props.proxyAuthInfo()?.username}
                 </span>
               </Show>
               <button
                 type="button"
                 onClick={props.handleLogout}
-                class="group relative flex h-7 w-7 items-center justify-center rounded-full bg-gray-200 text-xs text-gray-700 transition hover:bg-gray-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+                class="group relative flex h-11 w-11 items-center justify-center rounded-full bg-slate-200 text-xs text-slate-700 transition hover:bg-slate-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 sm:h-10 sm:w-10 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600"
                 title="Logout"
                 aria-label="Logout"
               >
                 <svg
-                  class="h-3 w-3 flex-shrink-0"
+                  class="h-4 w-4 flex-shrink-0"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -1890,7 +1890,7 @@ function AppLayout(props: {
       {/* Tabs - hidden in kiosk mode */}
       <Show when={!kioskMode()}>
         <div
-          class="tabs mb-2 hidden md:flex items-end gap-2 overflow-x-auto overflow-y-hidden whitespace-nowrap border-b border-gray-300 dark:border-gray-700 scrollbar-hide"
+          class="tabs mb-2 hidden md:flex items-end gap-2 overflow-x-auto overflow-y-hidden whitespace-nowrap border-b border-slate-300 dark:border-slate-700 scrollbar-hide"
           role="tablist"
           aria-label="Primary navigation"
         >
@@ -1904,12 +1904,12 @@ function AppLayout(props: {
 
                 const className = () => {
                   if (isActive()) {
-                    return `${baseClasses} bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 border-gray-300 dark:border-gray-700 border-b border-b-white dark:border-b-gray-800 shadow-sm font-semibold`;
+                    return `${baseClasses} bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 border-slate-300 dark:border-slate-700 border-b border-b-white dark:border-b-gray-800 shadow-sm font-semibold`;
                   }
                   if (disabled()) {
-                    return `${baseClasses} cursor-not-allowed text-gray-400 dark:text-gray-600 opacity-70 bg-gray-100/40 dark:bg-gray-800/40`;
+                    return `${baseClasses} cursor-not-allowed text-slate-400 dark:text-slate-600 opacity-70 bg-slate-100/40 dark:bg-slate-800`;
                   }
-                  return `${baseClasses} text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60`;
+                  return `${baseClasses} text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-200/60 dark:hover:bg-slate-700/60`;
                 };
 
                 const title = () =>
@@ -1929,7 +1929,7 @@ function AppLayout(props: {
                     <span class="hidden xs:inline-flex items-center gap-1">
                       <span>{platform.label}</span>
                       <Show when={platform.badge}>
-                        <span class="px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 bg-gray-200/70 dark:bg-gray-700/60 rounded">
+                        <span class="px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 bg-slate-200/70 dark:bg-slate-800 rounded">
                           {platform.badge}
                         </span>
                       </Show>
@@ -1950,9 +1950,9 @@ function AppLayout(props: {
 
                   const className = () => {
                     if (isActive()) {
-                      return `${baseClasses} bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 border-gray-300 dark:border-gray-700 border-b border-b-white dark:border-b-gray-800 shadow-sm font-semibold`;
+                      return `${baseClasses} bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 border-slate-300 dark:border-slate-700 border-b border-b-white dark:border-b-gray-800 shadow-sm font-semibold`;
                     }
-                    return `${baseClasses} text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60`;
+                    return `${baseClasses} text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-200/60 dark:hover:bg-slate-700/60`;
                   };
 
                   return (
@@ -2011,10 +2011,10 @@ function AppLayout(props: {
       {/* Main Content */}
       <main
         id="main"
-        class="tab-content block bg-white dark:bg-gray-800 rounded-b rounded-tr rounded-tl shadow mb-2"
+        class="tab-content block bg-white dark:bg-slate-800 rounded-b rounded-tr rounded-tl shadow mb-2"
       >
         <div class="pulse-panel">
-          <Suspense fallback={<div class="p-6 text-sm text-gray-500 dark:text-gray-400">Loading view...</div>}>
+          <Suspense fallback={<div class="p-6 text-sm text-slate-500 dark:text-slate-400">Loading view...</div>}>
             {props.children}
           </Suspense>
         </div>
@@ -2032,31 +2032,38 @@ function AppLayout(props: {
 
       {/* Footer - hidden in kiosk mode */}
       <Show when={!kioskMode()}>
-        <footer class="text-center text-xs text-gray-500 dark:text-gray-400 py-4">
-          Pulse | Version:{' '}
-          <a
-            href="https://github.com/rcourtman/Pulse/releases"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="text-blue-600 dark:text-blue-400 hover:underline"
-          >
-            {props.versionInfo()?.version || 'loading...'}
-          </a>
-          {props.versionInfo()?.isDevelopment && ' (Development)'}
-          {props.versionInfo()?.isDocker && ' - Docker'}
-          <Show when={props.lastUpdateText()}>
-            <span class="mx-2">|</span>
-            <span>Last refresh: {props.lastUpdateText()}</span>
-          </Show>
-          <Show when={isPro()}>
-            <span class="mx-2">|</span>
+        <footer class="px-4 py-4 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+          <div class="text-center">
+            <span>Pulse | Version: </span>
             <a
-              href={`mailto:support@pulserelay.pro?subject=${encodeURIComponent(`Support Request - Pulse ${props.versionInfo()?.version || ''}`)}`}
-              class="text-blue-600 dark:text-blue-400 hover:underline"
+              href="https://github.com/rcourtman/Pulse/releases"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="inline-flex min-h-10 sm:min-h-9 items-center break-all rounded px-1 py-1 text-blue-600 dark:text-blue-400 hover:underline"
             >
-              Get Support
+              {props.versionInfo()?.version || 'loading...'}
             </a>
-          </Show>
+            {props.versionInfo()?.isDevelopment && ' (Development)'}
+            {props.versionInfo()?.isDocker && ' - Docker'}
+          </div>
+          <div class="mt-1 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-center">
+            <Show when={props.lastUpdateText()}>
+              <>
+                <span>Last refresh: {props.lastUpdateText()}</span>
+                <Show when={isPro()}>
+                  <span aria-hidden="true">|</span>
+                </Show>
+              </>
+            </Show>
+            <Show when={isPro()}>
+              <a
+                href={`mailto:support@pulserelay.pro?subject=${encodeURIComponent(`Support Request - Pulse ${props.versionInfo()?.version || ''}`)}`}
+                class="inline-flex min-h-10 sm:min-h-9 items-center rounded px-1 py-1 text-blue-600 dark:text-blue-400 hover:underline"
+              >
+                Get Support
+              </a>
+            </Show>
+          </div>
         </footer>
       </Show>
 
@@ -2065,7 +2072,7 @@ function AppLayout(props: {
         <button
           type="button"
           onClick={() => aiChatStore.toggle()}
-          class="fixed right-0 top-1/2 -translate-y-1/2 z-40 flex items-center gap-1.5 pl-2 pr-1.5 py-3 rounded-l-xl bg-blue-600 text-white shadow-lg hover:bg-blue-700 transition-colors duration-200 group sm:top-1/2 sm:translate-y-[-50%] top-auto bottom-[calc(5rem+env(safe-area-inset-bottom,0px))] translate-y-0"
+          class="fixed right-0 top-1/2 -translate-y-1/2 z-40 flex min-h-10 sm:min-h-9 min-w-10 items-center justify-center px-2.5 py-2.5 rounded-l-xl bg-blue-600 text-white shadow-sm hover:bg-blue-700 transition-colors duration-200 group sm:top-1/2 sm:translate-y-[-50%] top-auto bottom-[calc(5rem+env(safe-area-inset-bottom,0px))] translate-y-0"
           title={aiChatStore.context.context?.name ? `Pulse Assistant - ${aiChatStore.context.context.name}` : 'Pulse Assistant (⌘K)'}
           aria-label="Expand Pulse Assistant"
         >

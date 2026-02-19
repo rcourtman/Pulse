@@ -158,13 +158,13 @@ export function ReportingPanel() {
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <FormField label="Time Range">
-                        <div class="flex gap-2">
+                        <div class="grid grid-cols-1 sm:flex gap-2">
                             <For each={['24h', '7d', '30d']}>
                                 {(r) => (
                                     <button
-                                        class={`px-4 py-2 rounded-lg border transition-all ${range() === r
+                                        class={`w-full sm:w-auto min-h-10 sm:min-h-9 px-4 py-2.5 rounded-md border transition-all ${range() === r
                                             ? 'bg-blue-50 border-blue-500 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-500'
-                                            : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700'
+                                            : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700'
                                             }`}
                                         onClick={() => setRange(r)}
                                     >
@@ -176,11 +176,11 @@ export function ReportingPanel() {
                     </FormField>
 
                     <FormField label="Export Format">
-                        <div class="flex gap-2">
+                        <div class="grid grid-cols-1 sm:flex gap-2">
                             <button
-                                class={`flex items-center gap-2 px-4 py-2 rounded-lg border transition-all ${format() === 'pdf'
+                                class={`w-full sm:w-auto min-h-10 sm:min-h-9 flex items-center justify-center gap-2 px-4 py-2.5 rounded-md border transition-all ${format() === 'pdf'
                                     ? 'bg-blue-50 border-blue-500 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-500'
-                                    : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700'
+                                    : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700'
                                     }`}
                                 onClick={() => setFormat('pdf')}
                             >
@@ -188,9 +188,9 @@ export function ReportingPanel() {
                                 PDF Report
                             </button>
                             <button
-                                class={`flex items-center gap-2 px-4 py-2 rounded-lg border transition-all ${format() === 'csv'
+                                class={`w-full sm:w-auto min-h-10 sm:min-h-9 flex items-center justify-center gap-2 px-4 py-2.5 rounded-md border transition-all ${format() === 'csv'
                                     ? 'bg-blue-50 border-blue-500 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-500'
-                                    : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700'
+                                    : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700'
                                     }`}
                                 onClick={() => setFormat('csv')}
                             >
@@ -201,10 +201,10 @@ export function ReportingPanel() {
                     </FormField>
                 </div>
 
-                <div class="flex justify-end pt-4 border-t border-gray-200 dark:border-gray-700">
+                <div class="flex justify-end pt-4 border-t border-slate-200 dark:border-slate-700">
                     <button
-                        class={`flex items-center gap-2 px-6 py-3 rounded-xl font-semibold transition-all ${generating()
-                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed dark:bg-gray-700 dark:text-gray-400'
+                        class={`w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 rounded-md font-semibold transition-all ${generating()
+                            ? 'bg-slate-300 text-slate-500 cursor-not-allowed dark:bg-slate-700 dark:text-slate-400'
                             : 'bg-blue-600 hover:bg-blue-700 text-white'
                             }`}
                         disabled={generating()}
@@ -223,9 +223,9 @@ export function ReportingPanel() {
                 </div>
             </SettingsPanel>
 
-            <div class="rounded-xl border border-blue-200 bg-blue-50 p-6 dark:border-blue-800 dark:bg-blue-900/20">
-                <div class="flex gap-4">
-                    <div class="p-3 rounded-lg h-fit text-blue-600 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/40">
+            <div class="rounded-md border border-blue-200 bg-blue-50 p-6 dark:border-blue-800 dark:bg-blue-900/20">
+                <div class="flex flex-col sm:flex-row gap-4">
+                    <div class="p-3 rounded-md h-fit text-blue-600 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/40">
                         <BarChart size={24} />
                     </div>
                     <div>

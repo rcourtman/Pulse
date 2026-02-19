@@ -103,35 +103,35 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
     };
 
     return (
-        <div class="bg-white/10 backdrop-blur-xl rounded-2xl border border-white/20 overflow-hidden">
-            <div class="p-6 border-b border-white/10">
+        <div class="bg-slate-800 rounded-md border border-slate-700 overflow-hidden shadow-sm">
+            <div class="p-6 border-b border-slate-700">
                 <h2 class="text-2xl font-bold text-white">Secure Your Dashboard</h2>
-                <p class="text-white/70 mt-1">Create your admin account</p>
+                <p class="text-slate-300 mt-1">Create your admin account</p>
             </div>
 
             <div class="p-6 space-y-6">
                 {/* Username */}
                 <div>
-                    <label class="block text-sm font-medium text-white/80 mb-2">Username</label>
+                    <label class="block text-sm font-medium text-slate-300 mb-2">Username</label>
                     <input
                         type="text"
                         value={username()}
                         onInput={(e) => setUsername(e.currentTarget.value)}
-                        class="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-md text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                         placeholder="admin"
                     />
                 </div>
 
                 {/* Password choice */}
                 <div>
-                    <label class="block text-sm font-medium text-white/80 mb-3">Password</label>
-                    <div class="grid grid-cols-2 gap-3 mb-4">
+                    <label class="block text-sm font-medium text-slate-300 mb-3">Password</label>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
                         <button
                             type="button"
                             onClick={() => setUseCustomPassword(false)}
-                            class={`py-3 px-4 rounded-xl text-sm font-medium transition-all ${!useCustomPassword()
+                            class={`py-3 px-4 rounded-md text-sm font-medium transition-all ${!useCustomPassword()
                                 ? 'bg-blue-500 text-white'
-                                : 'bg-white/10 text-white/70 hover:bg-white/20'
+                                : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
                                 }`}
                         >
                             Generate Secure
@@ -139,9 +139,9 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
                         <button
                             type="button"
                             onClick={() => setUseCustomPassword(true)}
-                            class={`py-3 px-4 rounded-xl text-sm font-medium transition-all ${useCustomPassword()
+                            class={`py-3 px-4 rounded-md text-sm font-medium transition-all ${useCustomPassword()
                                 ? 'bg-blue-500 text-white'
-                                : 'bg-white/10 text-white/70 hover:bg-white/20'
+                                : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
                                 }`}
                         >
                             Custom Password
@@ -154,21 +154,21 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
                                 type="password"
                                 value={password()}
                                 onInput={(e) => setPassword(e.currentTarget.value)}
-                                class="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-md text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 placeholder="Password"
                             />
                             <input
                                 type="password"
                                 value={confirmPassword()}
                                 onInput={(e) => setConfirmPassword(e.currentTarget.value)}
-                                class="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-md text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 placeholder="Confirm password"
                             />
                         </div>
                     </Show>
 
                     <Show when={!useCustomPassword()}>
-                        <div class="bg-blue-500/20 border border-blue-400/30 rounded-xl p-4">
+                        <div class="bg-blue-900/30 border border-blue-800 rounded-md p-4">
                             <p class="text-sm text-blue-200">
                                 A secure 16-character password will be generated and shown after setup.
                             </p>
@@ -177,8 +177,8 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
                 </div>
 
                 {/* Info */}
-                <div class="bg-white/5 rounded-xl p-4">
-                    <p class="text-sm text-white/60">
+                <div class="bg-slate-700/50 rounded-md p-4">
+                    <p class="text-sm text-slate-300">
                         This creates your admin account and an API token for automation.
                         Credentials will be displayed once - save them securely!
                     </p>
@@ -186,17 +186,17 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
             </div>
 
             {/* Actions */}
-            <div class="p-6 bg-black/20 flex gap-3">
+            <div class="p-6 bg-slate-900/50 flex gap-3 border-t border-slate-700">
                 <button
                     onClick={props.onBack}
-                    class="px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all"
+                    class="px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-md transition-all"
                 >
                     ← Back
                 </button>
                 <button
                     onClick={handleSetup}
                     disabled={isSettingUp()}
-                    class="flex-1 py-3 px-6 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white font-medium rounded-xl transition-all"
+                    class="flex-1 py-3 px-6 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white font-medium rounded-md transition-all"
                 >
                     {isSettingUp() ? 'Setting up...' : 'Create Account →'}
                 </button>

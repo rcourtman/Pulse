@@ -182,7 +182,7 @@ Please:
         bg-purple-500
         hover:bg-purple-600
         text-white font-medium
-        shadow-sm hover:shadow-md
+        shadow-sm hover:shadow-sm
         gap-2
         ${isLocked() ? 'opacity-60 cursor-not-allowed hover:bg-purple-500' : ''}
         ${props.class || ''}`}

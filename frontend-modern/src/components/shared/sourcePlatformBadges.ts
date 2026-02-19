@@ -56,7 +56,7 @@ const PLATFORM_TONES: Record<KnownSourcePlatform, SourcePlatformTone> = {
   },
   'host-agent': {
     label: 'Host',
-    tone: 'bg-slate-100 text-slate-700 dark:bg-slate-800/60 dark:text-slate-200',
+    tone: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200',
   },
   unraid: {
     label: 'Unraid',
@@ -88,11 +88,11 @@ const PLATFORM_TONES: Record<KnownSourcePlatform, SourcePlatformTone> = {
   },
   generic: {
     label: 'Generic',
-    tone: 'bg-gray-100 text-gray-700 dark:bg-gray-800/60 dark:text-gray-300',
+    tone: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
   },
 };
 
-const DEFAULT_TONE = 'bg-gray-100 text-gray-700 dark:bg-gray-800/60 dark:text-gray-300';
+const DEFAULT_TONE = 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
 
 const titleize = (value: string): string =>
   value

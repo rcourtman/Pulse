@@ -41,9 +41,9 @@ function TierCtaButton(props: { children: string; disabled?: boolean; onClick?: 
   return (
     <button
       class={[
-        'w-full inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold transition-colors',
+        'w-full inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-semibold transition-colors',
         props.disabled
-          ? 'bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-200 cursor-not-allowed'
+          ? 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-200 cursor-not-allowed'
           : 'bg-blue-600 text-white hover:bg-blue-700',
       ].join(' ')}
       disabled={props.disabled}
@@ -57,7 +57,7 @@ function TierCtaButton(props: { children: string; disabled?: boolean; onClick?: 
 
 function TierCtaLabel(props: { children: string }) {
   return (
-    <div class="w-full inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-800 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100">
+    <div class="w-full inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100">
       {props.children}
     </div>
   );
@@ -69,7 +69,7 @@ function CheckCell(props: { enabled: boolean; tier: TierColumn; featureKey: stri
     <span
       class={[
         'inline-flex w-full justify-center text-sm font-semibold',
-        props.enabled ? 'text-emerald-700 dark:text-emerald-300' : 'text-gray-400 dark:text-gray-500',
+        props.enabled ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-400 dark:text-slate-500',
       ].join(' ')}
       aria-label={label}
       title={label}
@@ -153,7 +153,7 @@ export default function Pricing() {
     if (trialCtaMode() === 'upgrade') {
       return (
         <a
-          class="w-full inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
+          class="w-full inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
           href={getUpgradeActionUrlOrFallback('upgrade')}
           target="_blank"
           rel="noopener noreferrer"
@@ -173,19 +173,19 @@ export default function Pricing() {
   return (
     <div class="space-y-6">
       <div class="space-y-1">
-        <h1 class="text-2xl font-semibold text-gray-900 dark:text-gray-100">Pricing</h1>
-        <p class="text-sm text-gray-600 dark:text-gray-400">
+        <h1 class="text-2xl font-semibold text-slate-900 dark:text-slate-100">Pricing</h1>
+        <p class="text-sm text-slate-600 dark:text-slate-400">
           Compare tiers and choose what fits.
         </p>
       </div>
 
       <div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card padding="lg" class="relative">
-          <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Community</h2>
-          <div class="mt-2 text-3xl font-semibold tracking-tight text-gray-900 dark:text-gray-100">
+          <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Community</h2>
+          <div class="mt-2 text-3xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
             Free forever
           </div>
-          <ul class="mt-4 space-y-2 text-sm text-gray-700 dark:text-gray-200">
+          <ul class="mt-4 space-y-2 text-sm text-slate-700 dark:text-slate-200">
             <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>Real-time monitoring</span></li>
             <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>Update alerts</span></li>
             <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>Basic SSO (OIDC)</span></li>
@@ -207,15 +207,15 @@ export default function Pricing() {
             </span>
           </div>
 
-          <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Pro</h2>
-          <div class="mt-2 text-3xl font-semibold tracking-tight text-gray-900 dark:text-gray-100">
+          <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Pro</h2>
+          <div class="mt-2 text-3xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
             $15/month
           </div>
-          <div class="mt-1 text-sm text-gray-600 dark:text-gray-300">
+          <div class="mt-1 text-sm text-slate-600 dark:text-slate-300">
             or $129/year (save 28%)
           </div>
 
-          <ul class="mt-4 space-y-2 text-sm text-gray-700 dark:text-gray-200">
+          <ul class="mt-4 space-y-2 text-sm text-slate-700 dark:text-slate-200">
             <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>Everything in Community</span></li>
             <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>AI Auto-Fix &amp; Investigation</span></li>
             <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>Pulse Relay (mobile)</span></li>
@@ -235,14 +235,14 @@ export default function Pricing() {
         </Card>
 
         <Card padding="lg" class="relative">
-          <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Cloud</h2>
-          <div class="mt-2 text-3xl font-semibold tracking-tight text-gray-900 dark:text-gray-100">
+          <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Cloud</h2>
+          <div class="mt-2 text-3xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
             $29/month
           </div>
-          <div class="mt-1 text-sm text-gray-600 dark:text-gray-300">
+          <div class="mt-1 text-sm text-slate-600 dark:text-slate-300">
             Founding price: $19/mo for first 100 signups
           </div>
-          <ul class="mt-4 space-y-2 text-sm text-gray-700 dark:text-gray-200">
+          <ul class="mt-4 space-y-2 text-sm text-slate-700 dark:text-slate-200">
             <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>Everything in Pro</span></li>
             <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>Managed hosting</span></li>
             <li class="flex gap-2"><span class="text-blue-700 dark:text-blue-300">•</span><span>Automatic backups</span></li>
@@ -250,7 +250,7 @@ export default function Pricing() {
           </ul>
           <div class="mt-6">
             <a
-              class="w-full inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-800 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700/60"
+              class="w-full inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700/60"
               href={getUpgradeActionUrlOrFallback('cloud')}
               target="_blank"
               rel="noopener noreferrer"
@@ -262,32 +262,32 @@ export default function Pricing() {
       </div>
 
       <Card padding="lg" class="overflow-hidden">
-        <h2 class="text-base font-semibold text-gray-900 dark:text-gray-100">Feature Comparison</h2>
+        <h2 class="text-base font-semibold text-slate-900 dark:text-slate-100">Feature Comparison</h2>
         <div class="mt-4 overflow-x-auto">
           <table class="min-w-[720px] w-full border-collapse">
             <thead>
-              <tr class="bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-700">
-                <th class="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-300">
+              <tr class="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+                <th class="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">
                   Feature
                 </th>
-                <th class="px-3 py-2 text-center text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-300">
+                <th class="px-3 py-2 text-center text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">
                   Community
                 </th>
-                <th class="px-3 py-2 text-center text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-300">
+                <th class="px-3 py-2 text-center text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">
                   Pro
                 </th>
-                <th class="px-3 py-2 text-center text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-300">
+                <th class="px-3 py-2 text-center text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">
                   Cloud
                 </th>
               </tr>
             </thead>
-            <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-100 dark:divide-gray-700/70">
+            <tbody class="bg-white dark:bg-slate-800 divide-y divide-gray-100 dark:divide-gray-700/70">
               <For each={FEATURE_ROWS}>
                 {(row) => (
                   <tr>
                     <td class="px-4 py-2">
-                      <div class="text-sm font-medium text-gray-900 dark:text-gray-100">{row.name}</div>
-                      <div class="mt-0.5 text-xs font-mono text-gray-500 dark:text-gray-400">{row.key}</div>
+                      <div class="text-sm font-medium text-slate-900 dark:text-slate-100">{row.name}</div>
+                      <div class="mt-0.5 text-xs font-mono text-slate-500 dark:text-slate-400">{row.key}</div>
                     </td>
                     <td class="px-3 py-2"><CheckCell enabled={row.community} tier="community" featureKey={row.key} /></td>
                     <td class="px-3 py-2"><CheckCell enabled={row.pro} tier="pro" featureKey={row.key} /></td>

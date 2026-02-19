@@ -125,14 +125,14 @@ export function MentionAutocomplete(props: MentionAutocompleteProps) {
       case 'paused':
         return 'bg-yellow-500';
       default:
-        return 'bg-gray-400';
+        return 'bg-slate-400';
     }
   };
 
   return (
     <Show when={props.visible && filteredResources().length > 0}>
       <div
-        class="absolute z-50 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg overflow-hidden min-w-[280px] max-w-[400px]"
+        class="absolute z-50 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-sm overflow-hidden min-w-[280px] max-w-[400px]"
         style={{
           bottom: `${props.position.top}px`,
           left: `${props.position.left}px`,

@@ -54,7 +54,7 @@ const typeLabels: Partial<Record<ResourceType, string>> = {
   truenas: 'TrueNAS',
 };
 
-const typeClasses = 'bg-gray-100 text-gray-700 dark:bg-gray-700/60 dark:text-gray-200';
+const typeClasses = 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200';
 
 export function getPlatformBadge(platformType?: PlatformType): ResourceBadge | null {
   if (!platformType) return null;
@@ -119,7 +119,7 @@ export function getContainerRuntimeBadge(
   const classes =
     normalized === 'podman'
       ? 'bg-zinc-100 text-zinc-700 dark:bg-zinc-900/30 dark:text-zinc-300'
-      : 'bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-300';
+      : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
 
   return {
     label,

@@ -84,7 +84,7 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
           <button
             type="button"
             onClick={() => setFiltersOpen((o) => !o)}
-            class="flex items-center gap-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400"
+            class="flex items-center gap-1.5 rounded-md bg-slate-100 dark:bg-slate-700 px-2.5 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-400"
           >
             <ListFilterIcon class="w-3.5 h-3.5" />
             Filters
@@ -97,13 +97,13 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
         </Show>
 
         <Show when={!isMobile() || filtersOpen()}>
-          <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400 lg:flex-nowrap">
+          <div class="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400 lg:flex-nowrap">
             <Show when={props.hostFilter}>
               {(hostFilter) => (
-                <div class="inline-flex items-center rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                <div class="inline-flex items-center rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
                   <label
                     for={hostFilter().id ?? 'dashboard-host-filter'}
-                    class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+                    class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500"
                   >
                     {hostFilter().label ?? 'Host'}
                   </label>
@@ -111,7 +111,7 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
                     id={hostFilter().id ?? 'dashboard-host-filter'}
                     value={hostFilter().value}
                     onChange={(e) => hostFilter().onChange(e.currentTarget.value)}
-                    class="min-w-[8rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+                    class="min-w-[8rem] rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                   >
                     <For each={hostFilter().options}>
                       {(option) => (
@@ -125,10 +125,10 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
 
             <Show when={props.namespaceFilter}>
               {(namespaceFilter) => (
-                <div class="inline-flex items-center rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                <div class="inline-flex items-center rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
                   <label
                     for={namespaceFilter().id ?? 'dashboard-namespace-filter'}
-                    class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+                    class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500"
                   >
                     {namespaceFilter().label ?? 'Namespace'}
                   </label>
@@ -136,7 +136,7 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
                     id={namespaceFilter().id ?? 'dashboard-namespace-filter'}
                     value={namespaceFilter().value}
                     onChange={(e) => namespaceFilter().onChange(e.currentTarget.value)}
-                    class="min-w-[8rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+                    class="min-w-[8rem] rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                   >
                     <For each={namespaceFilter().options}>
                       {(option) => (
@@ -150,10 +150,10 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
 
 	          <Show when={props.viewMode() === 'docker' ? props.containerRuntimeFilter : undefined}>
 	            {(runtimeFilter) => (
-	              <div class="inline-flex items-center rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+	              <div class="inline-flex items-center rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
 	                <label
                   for={runtimeFilter().id ?? 'dashboard-runtime-filter'}
-                  class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+                  class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500"
                 >
                   {runtimeFilter().label ?? 'Runtime'}
                 </label>
@@ -161,7 +161,7 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
                   id={runtimeFilter().id ?? 'dashboard-runtime-filter'}
                   value={runtimeFilter().value}
                   onChange={(e) => runtimeFilter().onChange(e.currentTarget.value)}
-                  class="min-w-[7rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+                  class="min-w-[7rem] rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                 >
                   <For each={runtimeFilter().options}>
                     {(option) => (
@@ -173,10 +173,10 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
             )}
           </Show>
 
-          <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+          <div class="inline-flex items-center gap-1 rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
             <label
               for="dashboard-type-filter"
-              class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+              class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500"
             >
               Type
             </label>
@@ -184,7 +184,7 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
               id="dashboard-type-filter"
               value={props.viewMode()}
               onChange={(event) => props.setViewMode(event.currentTarget.value as 'all' | 'vm' | 'lxc' | 'docker' | 'k8s')}
-              class="min-w-[7rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+              class="min-w-[7rem] rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
             >
               <option value="all">All</option>
               <option value="vm">VMs</option>
@@ -194,10 +194,10 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
             </select>
           </div>
 
-          <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+          <div class="inline-flex items-center gap-1 rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
             <label
               for="dashboard-status-filter"
-              class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+              class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500"
             >
               Status
             </label>
@@ -205,7 +205,7 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
               id="dashboard-status-filter"
               value={props.statusMode()}
               onChange={(event) => props.setStatusMode(event.currentTarget.value as 'all' | 'running' | 'degraded' | 'stopped')}
-              class="min-w-[8rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+              class="min-w-[8rem] rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
             >
               <option value="all">All</option>
               <option value="running">Running</option>
@@ -214,7 +214,7 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
             </select>
           </div>
 
-          <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+          <div class="inline-flex rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
             <button
               type="button"
               onClick={() => props.setGroupingMode('grouped')}
@@ -245,7 +245,7 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
           </div>
 
           <Show when={props.onChartsToggle}>
-            <div class="hidden lg:inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+            <div class="hidden lg:inline-flex rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
               <button
                 type="button"
                 onClick={props.onChartsToggle}
@@ -293,8 +293,7 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
                   }
 	              }}
 	              title="Reset all filters"
-	              class="ml-auto flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg transition-all duration-150 active:scale-95
-	                     text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/50 hover:bg-blue-200 dark:hover:bg-blue-900/70"
+	              class="ml-auto flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-all duration-150 active:scale-95 text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/50 hover:bg-blue-200 dark:hover:bg-blue-900/70"
 	            >
               <svg
                 width="12"

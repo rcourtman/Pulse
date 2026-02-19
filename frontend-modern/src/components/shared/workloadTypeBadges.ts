@@ -54,7 +54,7 @@ const BADGE_MAP: Record<WorkloadTypeBadgeKey, WorkloadTypeBadge> = {
 const DEFAULT_BADGE: WorkloadTypeBadge = {
   label: 'Unknown',
   title: 'Unknown workload type',
-  className: 'bg-gray-100 text-gray-700 dark:bg-gray-700/60 dark:text-gray-300',
+  className: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
 };
 
 const toTitleCase = (value: string): string =>

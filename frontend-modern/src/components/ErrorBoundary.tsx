@@ -10,8 +10,8 @@ interface ErrorBoundaryProps {
 
 const DefaultErrorFallback: Component<{ error: Error; reset: () => void }> = (props) => {
   return (
-    <div class="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900 p-4">
-      <div class="max-w-md w-full bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
+    <div class="min-h-screen flex items-center justify-center bg-slate-100 dark:bg-slate-900 p-4">
+      <div class="max-w-md w-full bg-white dark:bg-slate-800 rounded-md shadow-sm p-6">
         <div class="flex items-center mb-4">
           <svg
             class="w-12 h-12 text-red-500 mr-3"
@@ -31,8 +31,8 @@ const DefaultErrorFallback: Component<{ error: Error; reset: () => void }> = (pr
               title="Something went wrong"
               description="An unexpected error occurred"
               size="md"
-              titleClass="text-gray-900 dark:text-gray-100"
-              descriptionClass="text-sm text-gray-600 dark:text-gray-400"
+              titleClass="text-slate-900 dark:text-slate-100"
+              descriptionClass="text-sm text-slate-600 dark:text-slate-400"
             />
           </div>
         </div>
@@ -54,13 +54,13 @@ const DefaultErrorFallback: Component<{ error: Error; reset: () => void }> = (pr
           <button
             type="button"
             onClick={() => window.location.reload()}
-            class="flex-1 px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
+            class="flex-1 px-4 py-2 bg-slate-600 text-white rounded hover:bg-slate-700 transition-colors"
           >
             Reload Page
           </button>
         </div>
 
-        <div class="mt-4 text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+        <div class="mt-4 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
           Technical details are suppressed in this view. Check server logs for full context.
         </div>
       </div>

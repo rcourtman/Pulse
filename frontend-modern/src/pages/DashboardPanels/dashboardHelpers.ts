@@ -10,9 +10,9 @@ export function statusBadgeClass(tone: StatusTone): string {
     case 'critical':
       return `${base} border-red-200 bg-red-100 text-red-700 dark:border-red-800 dark:bg-red-900/50 dark:text-red-300`;
     case 'offline':
-      return `${base} border-gray-200 bg-gray-100 text-gray-700 dark:border-gray-600 dark:bg-gray-700/60 dark:text-gray-200`;
+      return `${base} border-slate-200 bg-slate-100 text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200`;
     default:
-      return `${base} border-gray-200 bg-gray-100 text-gray-600 dark:border-gray-600 dark:bg-gray-700/60 dark:text-gray-400`;
+      return `${base} border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-400`;
   }
 }
 
@@ -27,12 +27,12 @@ export function formatDelta(delta: number | null): string | null {
 }
 
 export function deltaColorClass(delta: number | null): string {
-  if (delta === null) return 'text-gray-400 dark:text-gray-500';
+  if (delta === null) return 'text-slate-400 dark:text-slate-500';
   if (delta > 5) return 'text-red-500 dark:text-red-400';
   if (delta > 0) return 'text-amber-500 dark:text-amber-400';
   if (delta < -5) return 'text-emerald-500 dark:text-emerald-400';
   if (delta < 0) return 'text-blue-500 dark:text-blue-400';
-  return 'text-gray-500 dark:text-gray-400';
+  return 'text-slate-500 dark:text-slate-400';
 }
 
 export type ActionPriority = 'critical' | 'high' | 'medium' | 'low';

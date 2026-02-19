@@ -22,7 +22,7 @@ export const ZFSHealthMap: Component<ZFSHealthMapProps> = (props) => {
         if (state === 'ONLINE') return 'bg-green-500/80 dark:bg-green-500/70 hover:bg-green-400';
         if (state === 'DEGRADED') return 'bg-yellow-500/80 dark:bg-yellow-500/70 hover:bg-yellow-400';
         if (state === 'FAULTED' || state === 'UNAVAIL' || state === 'OFFLINE') return 'bg-red-500/80 dark:bg-red-500/70 hover:bg-red-400';
-        return 'bg-gray-400/80 dark:bg-gray-500/70 hover:bg-gray-300';
+        return 'bg-slate-400/80 dark:bg-slate-800 hover:bg-slate-300';
     };
 
     const isResilvering = (device: ZFSDevice) => {
@@ -63,14 +63,14 @@ export const ZFSHealthMap: Component<ZFSHealthMapProps> = (props) => {
                             transform: 'translate(-50%, -100%)',
                         }}
                     >
-                        <div class="bg-gray-900 dark:bg-gray-800 text-white text-[10px] rounded-md shadow-lg px-2 py-1.5 min-w-[120px] border border-gray-700">
-                            <div class="font-medium mb-0.5 text-gray-200">
+                        <div class="bg-slate-900 dark:bg-slate-800 text-white text-[10px] rounded-md shadow-sm px-2 py-1.5 min-w-[120px] border border-slate-700">
+                            <div class="font-medium mb-0.5 text-slate-200">
                                 {hoveredDevice()?.name}
                             </div>
-                            <div class="text-gray-400 mb-1">
+                            <div class="text-slate-400 mb-1">
                                 {hoveredDevice()?.type}
                             </div>
-                            <div class="flex items-center gap-2 border-t border-gray-700/50 pt-1">
+                            <div class="flex items-center gap-2 border-t border-slate-700/50 pt-1">
                                 <span class={`font-semibold ${hoveredDevice()?.state === 'ONLINE' ? 'text-green-400' :
                                     hoveredDevice()?.state === 'DEGRADED' ? 'text-yellow-400' :
                                         'text-red-400'
@@ -84,7 +84,7 @@ export const ZFSHealthMap: Component<ZFSHealthMapProps> = (props) => {
                                 </Show>
                             </div>
                             <Show when={hoveredDevice()?.message}>
-                                <div class="text-gray-400 mt-1 italic max-w-[200px] break-words">
+                                <div class="text-slate-400 mt-1 italic max-w-[200px] break-words">
                                     {hoveredDevice()?.message}
                                 </div>
                             </Show>

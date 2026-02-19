@@ -133,7 +133,7 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
   });
 
   return (
-    <Show when={isMultiTenantEnabled()} fallback={<div class="p-4 text-sm text-gray-500">This feature is not available.</div>}>
+    <Show when={isMultiTenantEnabled()} fallback={<div class="p-4 text-sm text-slate-500">This feature is not available.</div>}>
       <div class="space-y-6">
         <SettingsPanel
           title="Organization Access"
@@ -145,24 +145,24 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
             when={!loading()}
             fallback={
               <div class="space-y-5">
-                <div class="rounded-lg border border-gray-200 dark:border-gray-700 p-4 space-y-3">
-                  <div class="h-4 w-24 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                <div class="rounded-md border border-slate-200 dark:border-slate-700 p-4 space-y-3">
+                  <div class="h-4 w-24 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
                   <div class="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
-                    <div class="h-10 w-full animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
-                    <div class="h-10 w-28 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
-                    <div class="h-10 w-16 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                    <div class="h-10 w-full animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                    <div class="h-10 w-28 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                    <div class="h-10 w-16 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
                   </div>
                 </div>
 
-                <div class="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
-                  <div class="h-10 w-full animate-pulse bg-gray-100 dark:bg-gray-800/70" />
+                <div class="overflow-hidden rounded-md border border-slate-200 dark:border-slate-700">
+                  <div class="h-10 w-full animate-pulse bg-slate-100 dark:bg-slate-800" />
                   {Array.from({ length: 4 }).map(() => (
-                    <div class="border-t border-gray-100 dark:border-gray-800 px-3 py-3">
+                    <div class="border-t border-slate-100 dark:border-slate-800 px-3 py-3">
                       <div class="grid grid-cols-[1fr_auto_auto_auto] items-center gap-3">
-                        <div class="h-4 w-40 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
-                        <div class="h-7 w-24 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
-                        <div class="h-4 w-20 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
-                        <div class="ml-auto h-6 w-16 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                        <div class="h-4 w-40 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                        <div class="h-7 w-24 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                        <div class="h-4 w-20 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                        <div class="ml-auto h-6 w-16 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
                       </div>
                     </div>
                   ))}
@@ -174,20 +174,20 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
               {(currentOrg) => (
                 <>
                   <Show when={canManageOrg(currentOrg(), props.currentUser)}>
-                    <div class="rounded-lg border border-gray-200 dark:border-gray-700 p-4 space-y-3">
-                      <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Add Member</h4>
+                    <div class="rounded-md border border-slate-200 dark:border-slate-700 p-4 space-y-3">
+                      <h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Add Member</h4>
                       <div class="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
                         <input
                           type="text"
                           value={inviteUserID()}
                           onInput={(event) => setInviteUserID(event.currentTarget.value)}
                           placeholder="username"
-                          class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+                          class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                         />
                         <select
                           value={inviteRole()}
                           onChange={(event) => setInviteRole(event.currentTarget.value as Exclude<OrganizationRole, 'member'>)}
-                          class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+                          class="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                         >
                           <For each={roleOptions.filter((option) => option.value !== 'owner' || currentOrg().ownerUserId === props.currentUser)}>
                             {(option) => <option value={option.value}>{option.label}</option>}
@@ -197,7 +197,7 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
                           type="button"
                           onClick={inviteMember}
                           disabled={saving()}
-                          class="inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                          class="inline-flex w-full sm:w-auto items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           {saving() ? 'Saving...' : 'Add'}
                         </button>
@@ -206,19 +206,19 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
                   </Show>
 
                   <Show when={!canManageOrg(currentOrg(), props.currentUser)}>
-                    <div class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
+                    <div class="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
                       Admin or owner role required to manage organization access.
                     </div>
                   </Show>
 
-                  <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
-                    <table class="w-full text-sm">
-                      <thead class="bg-gray-50 dark:bg-gray-800/70">
+                  <div class="overflow-x-auto rounded-md border border-slate-200 dark:border-slate-700">
+                    <table class="min-w-[700px] w-full text-sm">
+                      <thead class="bg-slate-50 dark:bg-slate-800">
                         <tr>
-                          <th class="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">User</th>
-                          <th class="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Role</th>
-                          <th class="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Added</th>
-                          <th class="px-3 py-2 text-right font-medium text-gray-600 dark:text-gray-300">Actions</th>
+                          <th class="px-3 py-2 text-left font-medium text-slate-600 dark:text-slate-300">User</th>
+                          <th class="px-3 py-2 text-left font-medium text-slate-600 dark:text-slate-300">Role</th>
+                          <th class="px-3 py-2 text-left font-medium text-slate-600 dark:text-slate-300">Added</th>
+                          <th class="px-3 py-2 text-right font-medium text-slate-600 dark:text-slate-300">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -226,7 +226,7 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
                           when={members().length > 0}
                           fallback={
                             <tr>
-                              <td colSpan={4} class="px-3 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
+                              <td colSpan={4} class="px-3 py-4 text-center text-sm text-slate-500 dark:text-slate-400">
                                 No organization members found.
                               </td>
                             </tr>
@@ -237,8 +237,8 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
                               const role = normalizeRole(member.role);
                               const isOwner = () => member.userId === currentOrg().ownerUserId;
                               return (
-                                <tr class="border-t border-gray-100 dark:border-gray-800">
-                                  <td class="px-3 py-2 text-gray-900 dark:text-gray-100">{member.userId}</td>
+                                <tr class="border-t border-slate-100 dark:border-slate-800">
+                                  <td class="px-3 py-2 text-slate-900 dark:text-slate-100">{member.userId}</td>
                                   <td class="px-3 py-2">
                                     <Show
                                       when={canManageOrg(currentOrg(), props.currentUser)}
@@ -254,7 +254,7 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
                                           void updateRole(member, event.currentTarget.value as Exclude<OrganizationRole, 'member'>);
                                         }}
                                         disabled={saving() || (isOwner() && props.currentUser !== currentOrg().ownerUserId)}
-                                        class="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+                                        class="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                                       >
                                         <For
                                           each={roleOptions.filter(
@@ -266,7 +266,7 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
                                       </select>
                                     </Show>
                                   </td>
-                                  <td class="px-3 py-2 text-gray-600 dark:text-gray-400">{new Date(member.addedAt).toLocaleDateString()}</td>
+                                  <td class="px-3 py-2 text-slate-600 dark:text-slate-400">{new Date(member.addedAt).toLocaleDateString()}</td>
                                   <td class="px-3 py-2 text-right">
                                     <Show when={canManageOrg(currentOrg(), props.currentUser) && !isOwner()}>
                                       <button

@@ -311,10 +311,10 @@ export const Login: Component<LoginProps> = (props) => {
     <Show
       when={!loadingAuth()}
       fallback={
-        <div class="min-h-screen flex items-center justify-center bg-blue-50 dark:bg-gray-900">
+        <div class="min-h-screen flex items-center justify-center bg-blue-50 dark:bg-slate-900">
           <div class="text-center">
             <div class="animate-spin h-12 w-12 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
-            <p class="text-gray-600 dark:text-gray-400">Checking authentication...</p>
+            <p class="text-slate-600 dark:text-slate-400">Checking authentication...</p>
           </div>
         </div>
       }
@@ -346,10 +346,10 @@ export const Login: Component<LoginProps> = (props) => {
       >
         <Suspense
           fallback={
-            <div class="min-h-screen flex items-center justify-center bg-blue-50 dark:bg-gray-900">
+            <div class="min-h-screen flex items-center justify-center bg-blue-50 dark:bg-slate-900">
               <div class="text-center">
                 <div class="animate-spin h-12 w-12 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
-                <p class="text-gray-600 dark:text-gray-400">Loading setup...</p>
+                <p class="text-slate-600 dark:text-slate-400">Loading setup...</p>
               </div>
             </div>
           }
@@ -409,11 +409,11 @@ const LoginForm: Component<{
   };
 
   return (
-    <div class="min-h-screen flex items-center justify-center bg-blue-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
+    <div class="min-h-screen flex items-center justify-center bg-blue-50 dark:bg-slate-900 py-12 px-4 sm:px-6 lg:px-8">
       <div class="max-w-md w-full space-y-8">
         {/* Demo Credentials Banner */}
         <Show when={isDemoServer()}>
-          <div class="bg-white/80 dark:bg-gray-800/80 backdrop-blur-lg rounded-lg p-4 shadow-xl border border-blue-200 dark:border-blue-800 animate-fade-in">
+          <div class="bg-white dark:bg-slate-800 rounded-md p-4 shadow-sm border border-blue-200 dark:border-blue-800 animate-fade-in">
             <div class="flex items-center gap-3">
               <div class="flex-shrink-0 w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center">
                 <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -421,8 +421,8 @@ const LoginForm: Component<{
                 </svg>
               </div>
               <div class="flex-1">
-                <div class="font-semibold text-sm text-gray-900 dark:text-white">Demo Mode</div>
-                <div class="text-sm text-gray-600 dark:text-gray-300">
+                <div class="font-semibold text-sm text-slate-900 dark:text-white">Demo Mode</div>
+                <div class="text-sm text-slate-600 dark:text-slate-300">
                   Login with <code class="bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded font-mono text-xs">demo</code> / <code class="bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded font-mono text-xs">demo</code>
                 </div>
               </div>
@@ -433,11 +433,10 @@ const LoginForm: Component<{
         <div class="animate-fade-in">
           <div class="flex justify-center mb-8">
             <div class="relative group">
-              <div class="absolute -inset-1 bg-blue-600 rounded-full blur opacity-25 group-hover:opacity-75 transition duration-1000 group-hover:duration-200 animate-pulse-slow"></div>
               <img
                 src="/logo.svg"
                 alt="Pulse Logo"
-                class="relative w-24 h-24 transform transition duration-500 group-hover:scale-110"
+                class="relative w-24 h-24 rounded-md shadow-sm"
               />
             </div>
           </div>
@@ -447,13 +446,13 @@ const LoginForm: Component<{
           </h2>
 
           <Show when={showLocalLogin}>
-            <p class="mt-3 text-center text-sm text-gray-600 dark:text-gray-400 animate-fade-in delay-200">
+            <p class="mt-3 text-center text-sm text-slate-600 dark:text-slate-400 animate-fade-in delay-200">
               Enter your credentials to continue
             </p>
           </Show>
         </div>
         <form
-          class="mt-8 space-y-6 bg-white/80 dark:bg-gray-800/80 backdrop-blur-lg rounded-lg p-8 shadow-xl animate-slide-up"
+          class="mt-8 space-y-6 bg-white dark:bg-slate-800 rounded-md p-8 shadow-sm border border-slate-200 dark:border-slate-700 animate-slide-up"
           onSubmit={handleSubmit}
         >
           {/* Multi-Provider SSO Section */}
@@ -463,7 +462,7 @@ const LoginForm: Component<{
                 {(provider) => (
                   <button
                     type="button"
-                    class={`w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg border border-blue-500 text-blue-600 hover:bg-blue-50 transition dark:border-blue-400 dark:text-blue-200 dark:hover:bg-blue-900/40 ${oidcLoading() ? 'opacity-75 cursor-wait' : ''}`}
+                    class={`w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-md border border-blue-500 text-blue-600 hover:bg-blue-50 transition dark:border-blue-400 dark:text-blue-200 dark:hover:bg-blue-900/40 ${oidcLoading() ? 'opacity-75 cursor-wait' : ''}`}
                     disabled={oidcLoading()}
                     onClick={() => {
                       window.location.href = provider.loginUrl;
@@ -503,13 +502,13 @@ const LoginForm: Component<{
               </Show>
               <Show when={showLocalLogin}>
                 <div class="flex items-center gap-3 pt-2">
-                  <span class="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
-                  <span class="text-xs uppercase tracking-wide text-gray-400 dark:text-gray-500">
+                  <span class="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
+                  <span class="text-xs uppercase tracking-wide text-slate-400 dark:text-slate-500">
                     or
                   </span>
-                  <span class="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
+                  <span class="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
                 </div>
-                <p class="text-xs text-center text-gray-500 dark:text-gray-400">
+                <p class="text-xs text-center text-slate-500 dark:text-slate-400">
                   Use your admin credentials to sign in below.
                 </p>
               </Show>
@@ -520,7 +519,7 @@ const LoginForm: Component<{
             <div class="space-y-3">
               <button
                 type="button"
-                class={`w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg border border-blue-500 text-blue-600 hover:bg-blue-50 transition dark:border-blue-400 dark:text-blue-200 dark:hover:bg-blue-900/40 ${oidcLoading() ? 'opacity-75 cursor-wait' : ''}`}
+                class={`w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-md border border-blue-500 text-blue-600 hover:bg-blue-50 transition dark:border-blue-400 dark:text-blue-200 dark:hover:bg-blue-900/40 ${oidcLoading() ? 'opacity-75 cursor-wait' : ''}`}
                 disabled={oidcLoading()}
                 onClick={() => startOidcLogin()}
               >
@@ -551,13 +550,13 @@ const LoginForm: Component<{
               </Show>
               <Show when={showLocalLogin}>
                 <div class="flex items-center gap-3 pt-2">
-                  <span class="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
-                  <span class="text-xs uppercase tracking-wide text-gray-400 dark:text-gray-500">
+                  <span class="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
+                  <span class="text-xs uppercase tracking-wide text-slate-400 dark:text-slate-500">
                     or
                   </span>
-                  <span class="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
+                  <span class="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
                 </div>
-                <p class="text-xs text-center text-gray-500 dark:text-gray-400">
+                <p class="text-xs text-center text-slate-500 dark:text-slate-400">
                   Use your admin credentials to sign in below.
                 </p>
               </Show>
@@ -571,7 +570,7 @@ const LoginForm: Component<{
                 </label>
                 <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <svg
-                    class="h-5 w-5 text-gray-400"
+                    class="h-5 w-5 text-slate-400"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -590,7 +589,7 @@ const LoginForm: Component<{
                   type="text"
                   autocomplete="username"
                   required
-                  class="appearance-none relative block w-full pl-10 pr-3 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
+                  class="appearance-none relative block w-full pl-10 pr-3 py-3 border border-slate-300 placeholder-gray-500 text-slate-900 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all sm:text-sm dark:bg-slate-700 dark:border-slate-600 dark:text-white dark:placeholder-gray-400"
                   placeholder="Username"
                   value={username()}
                   onInput={(e) => setUsername(e.currentTarget.value)}
@@ -602,7 +601,7 @@ const LoginForm: Component<{
                 </label>
                 <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <svg
-                    class="h-5 w-5 text-gray-400"
+                    class="h-5 w-5 text-slate-400"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -621,7 +620,7 @@ const LoginForm: Component<{
                   type="password"
                   autocomplete="current-password"
                   required
-                  class="appearance-none relative block w-full pl-10 pr-3 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
+                  class="appearance-none relative block w-full pl-10 pr-3 py-3 border border-slate-300 placeholder-gray-500 text-slate-900 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all sm:text-sm dark:bg-slate-700 dark:border-slate-600 dark:text-white dark:placeholder-gray-400"
                   placeholder="Password"
                   value={password()}
                   onInput={(e) => setPassword(e.currentTarget.value)}
@@ -634,11 +633,11 @@ const LoginForm: Component<{
                   type="checkbox"
                   checked={rememberMe()}
                   onChange={(e) => setRememberMe(e.currentTarget.checked)}
-                  class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer dark:border-gray-600 dark:bg-gray-700"
+                  class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-slate-300 rounded cursor-pointer dark:border-slate-600 dark:bg-slate-700"
                 />
                 <label
                   for="remember-me"
-                  class="ml-2 block text-sm text-gray-700 dark:text-gray-300 cursor-pointer"
+                  class="ml-2 block text-sm text-slate-700 dark:text-slate-300 cursor-pointer"
                 >
                   Remember me
                 </label>
@@ -699,7 +698,7 @@ const LoginForm: Component<{
               <button
                 type="submit"
                 disabled={loading()}
-                class="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transform transition hover:scale-105 shadow-lg"
+                class="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 <Show when={loading()}>
                   <svg

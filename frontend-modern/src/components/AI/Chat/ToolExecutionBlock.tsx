@@ -67,7 +67,7 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
       {/* Compact single-line header */}
       <div
         class={`flex items-center gap-1.5 px-2 py-1 rounded ${hasMoreOutput() ? 'cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800' : ''
-          } ${showOutput() ? 'bg-slate-50 dark:bg-slate-800/50' : ''}`}
+          } ${showOutput() ? 'bg-slate-50 dark:bg-slate-800' : ''}`}
         onClick={() => hasMoreOutput() && setShowOutput(!showOutput())}
       >
         {/* Status icon */}
@@ -99,7 +99,7 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
       {/* Output - always show last few lines, expandable for full output */}
       <Show when={hasOutput()}>
         <div class="ml-4 mt-1 mb-2 pl-2 border-l-2 border-slate-200 dark:border-slate-700 overflow-hidden">
-          <pre class={`text-[10px] text-slate-600 dark:text-slate-400 whitespace-pre-wrap break-all leading-relaxed overflow-y-auto overflow-x-hidden bg-slate-50 dark:bg-slate-900/50 rounded p-2 ${showOutput() ? 'max-h-64' : 'max-h-20'}`}>
+          <pre class={`text-[10px] text-slate-600 dark:text-slate-400 whitespace-pre-wrap break-all leading-relaxed overflow-y-auto overflow-x-hidden bg-slate-50 dark:bg-slate-800 rounded p-2 ${showOutput() ? 'max-h-64' : 'max-h-20'}`}>
             {displayOutput()}
           </pre>
           <Show when={hasMoreOutput()}>

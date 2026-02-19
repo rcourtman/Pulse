@@ -127,27 +127,27 @@ function getTypeBadge(type: ResourceType): { label: string; classes: string } {
             return { label: 'Node', classes: 'bg-blue-500/20 text-blue-300' };
         case 'host':
         case 'docker-host':
-            return { label: 'Host', classes: 'bg-gray-500/20 text-gray-300' };
+            return { label: 'Host', classes: 'bg-slate-500/20 text-slate-300' };
         case 'k8s-cluster':
-            return { label: 'K8s', classes: 'bg-gray-500/20 text-gray-300' };
+            return { label: 'K8s', classes: 'bg-slate-500/20 text-slate-300' };
         case 'vm':
-            return { label: 'VM', classes: 'bg-gray-500/20 text-gray-300' };
+            return { label: 'VM', classes: 'bg-slate-500/20 text-slate-300' };
         case 'container':
         case 'oci-container':
         case 'docker-container':
             return { label: 'Container', classes: 'bg-blue-500/20 text-blue-300' };
         case 'pod':
-            return { label: 'Pod', classes: 'bg-gray-500/20 text-gray-300' };
+            return { label: 'Pod', classes: 'bg-slate-500/20 text-slate-300' };
         case 'pbs':
-            return { label: 'PBS', classes: 'bg-gray-500/20 text-gray-300' };
+            return { label: 'PBS', classes: 'bg-slate-500/20 text-slate-300' };
         case 'pmg':
-            return { label: 'PMG', classes: 'bg-gray-500/20 text-gray-300' };
+            return { label: 'PMG', classes: 'bg-slate-500/20 text-slate-300' };
         case 'datastore':
-            return { label: 'Datastore', classes: 'bg-gray-500/20 text-gray-300' };
+            return { label: 'Datastore', classes: 'bg-slate-500/20 text-slate-300' };
         case 'storage':
         case 'pool':
         case 'dataset':
-            return { label: 'Storage', classes: 'bg-gray-500/20 text-gray-300' };
+            return { label: 'Storage', classes: 'bg-slate-500/20 text-slate-300' };
         default:
             return { label: type, classes: 'bg-slate-500/20 text-slate-400' };
     }
@@ -295,7 +295,7 @@ export function ResourcePicker(props: ResourcePickerProps) {
                     <For each={(['all', 'infrastructure', 'workloads', 'storage', 'recovery'] as TypeFilter[])}>
                         {(type) => (
                             <button
-                                class={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                                class={`min-h-10 sm:min-h-9 min-w-10 px-3 py-2 rounded-md text-sm font-medium transition-all ${
                                     typeFilter() === type
                                         ? 'bg-blue-600/20 border border-blue-500 text-blue-400'
                                         : 'bg-slate-800/50 border border-slate-700 text-slate-400 hover:border-slate-500'
@@ -310,7 +310,7 @@ export function ResourcePicker(props: ResourcePickerProps) {
             </div>
 
             {/* Resource list */}
-            <div class="border border-slate-700 rounded-lg overflow-hidden">
+            <div class="border border-slate-700 rounded-md overflow-hidden">
                 <Show
                     when={reportableResources().length > 0}
                     fallback={
@@ -334,7 +334,7 @@ export function ResourcePicker(props: ResourcePickerProps) {
                                     const badge = getTypeBadge(resource.type);
                                     return (
                                         <button
-                                            class={`w-full flex items-center gap-3 px-3 py-2 text-left transition-colors border-b border-slate-800 last:border-b-0 ${
+                                            class={`w-full flex items-start sm:items-center gap-3 px-3 py-2 text-left transition-colors border-b border-slate-800 last:border-b-0 ${
                                                 isSelected(resource.id)
                                                     ? 'bg-blue-600/10'
                                                     : 'hover:bg-slate-800/50'
@@ -359,18 +359,35 @@ export function ResourcePicker(props: ResourcePickerProps) {
 
                                             {/* Name and ID */}
                                             <div class="flex-1 min-w-0">
-                                                <div class="text-sm text-white truncate">{getDisplayName(resource)}</div>
-                                                <div class="text-xs text-slate-500 truncate">{resource.id}</div>
+                                                <div class="text-sm text-white sm:truncate break-words">{getDisplayName(resource)}</div>
+                                                <div class="text-xs text-slate-500 sm:truncate break-all">{resource.id}</div>
+                                                <div class="mt-1 flex flex-wrap items-center gap-1 sm:hidden">
+                                                    <span class={`text-xs px-2 py-0.5 rounded-full ${badge.classes}`}>
+                                                        {badge.label}
+                                                    </span>
+                                                    <Show when={resource.tags && resource.tags.length > 0}>
+                                                        <For each={resource.tags?.slice(0, 2)}>
+                                                            {(tag) => (
+                                                                <span class="text-xs px-1.5 py-0.5 rounded bg-slate-700 text-slate-300">
+                                                                    {tag}
+                                                                </span>
+                                                            )}
+                                                        </For>
+                                                        <Show when={(resource.tags?.length ?? 0) > 2}>
+                                                            <span class="text-xs text-slate-500">+{(resource.tags?.length ?? 0) - 2}</span>
+                                                        </Show>
+                                                    </Show>
+                                                </div>
                                             </div>
 
                                             {/* Type badge */}
-                                            <span class={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${badge.classes}`}>
+                                            <span class={`hidden sm:inline-flex text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${badge.classes}`}>
                                                 {badge.label}
                                             </span>
 
                                             {/* Tags */}
                                             <Show when={resource.tags && resource.tags.length > 0}>
-                                                <div class="flex gap-1 flex-shrink-0">
+                                                <div class="hidden sm:flex gap-1 flex-shrink-0">
                                                     <For each={resource.tags?.slice(0, 2)}>
                                                         {(tag) => (
                                                             <span class="text-xs px-1.5 py-0.5 rounded bg-slate-700 text-slate-300">
@@ -393,10 +410,10 @@ export function ResourcePicker(props: ResourcePickerProps) {
             </div>
 
             {/* Action bar */}
-            <div class="flex items-center justify-between">
-                <div class="flex gap-2">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <div class="flex flex-col sm:flex-row gap-2">
                     <button
-                        class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-300 transition-colors"
+                        class="w-full sm:w-auto min-h-10 sm:min-h-9 flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm rounded-md border border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-300 transition-colors"
                         onClick={selectAllVisible}
                     >
                         <CheckSquare size={14} />
@@ -404,7 +421,7 @@ export function ResourcePicker(props: ResourcePickerProps) {
                     </button>
                     <Show when={props.selected().length > 0}>
                         <button
-                            class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-slate-700 text-slate-400 hover:border-red-500/50 hover:text-red-400 transition-colors"
+                            class="w-full sm:w-auto min-h-10 sm:min-h-9 flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm rounded-md border border-slate-700 text-slate-400 hover:border-red-500/50 hover:text-red-400 transition-colors"
                             onClick={clearAll}
                         >
                             <XSquare size={14} />
@@ -412,7 +429,7 @@ export function ResourcePicker(props: ResourcePickerProps) {
                         </button>
                     </Show>
                 </div>
-                <span class="text-xs text-slate-500">
+                <span class="text-xs sm:text-sm text-slate-500">
                     {props.selected().length} selected
                     <Show when={props.selected().length >= MAX_SELECTION}>
                         <span class="text-amber-400 ml-1">(max)</span>
@@ -425,7 +442,7 @@ export function ResourcePicker(props: ResourcePickerProps) {
                 <div class="flex flex-wrap gap-1.5">
                     <For each={props.selected()}>
                         {(item) => (
-                            <span class="inline-flex items-center gap-1 pl-2 pr-1 py-1 rounded-lg bg-blue-600/10 border border-blue-500/30 text-sm text-blue-300">
+                            <span class="inline-flex items-center gap-1 pl-2 pr-1 py-1 rounded-md bg-blue-600/10 border border-blue-500/30 text-sm text-blue-300">
                                 {item.name}
                                 <button
                                     class="p-0.5 rounded hover:bg-blue-500/20 transition-colors"

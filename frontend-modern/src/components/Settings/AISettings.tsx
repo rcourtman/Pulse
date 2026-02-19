@@ -362,7 +362,7 @@ export const AISettings: Component = () => {
       case 'deleted':
         return 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-200';
       default:
-        return 'bg-gray-100 text-gray-700 dark:bg-gray-900/40 dark:text-gray-200';
+        return 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200';
     }
   };
 
@@ -473,7 +473,7 @@ export const AISettings: Component = () => {
       case 'checking':
         return 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300';
       default:
-        return 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-300';
+        return 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300';
     }
   };
 
@@ -913,7 +913,7 @@ export const AISettings: Component = () => {
                 disabled={loading() || saving()}
                 containerClass="items-center gap-2"
                 label={
-                  <span class="text-xs font-medium text-gray-600 dark:text-gray-300">
+                  <span class="text-xs font-medium text-slate-600 dark:text-slate-300">
                     {form.enabled ? 'Enabled' : 'Disabled'}
                   </span>
                 }
@@ -924,7 +924,7 @@ export const AISettings: Component = () => {
       >
         <form class="space-y-6" onSubmit={handleSave}>
           <Show when={loading()}>
-            <div class="flex items-center gap-3 text-sm text-gray-600 dark:text-gray-300">
+            <div class="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-300">
               <span class="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
               Loading Pulse Assistant settings...
             </div>
@@ -932,7 +932,7 @@ export const AISettings: Component = () => {
 
           <Show when={!loading()}>
             <Show when={form.enabled}>
-              <div class="flex items-start gap-2 text-xs text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 mb-4">
+              <div class="flex items-start gap-2 text-xs text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md p-3 mb-4">
                 <svg class="w-4 h-4 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
@@ -942,13 +942,13 @@ export const AISettings: Component = () => {
                     ? `${Math.round(form.patrolIntervalMinutes / 60)} hour${Math.round(form.patrolIntervalMinutes / 60) === 1 ? '' : 's'}`
                     : `${form.patrolIntervalMinutes} minute${form.patrolIntervalMinutes === 1 ? '' : 's'}`}{' '}
                   to monitor your infrastructure.{' '}
-                    <button
-                      type="button"
-                      class="underline hover:text-blue-800 dark:hover:text-blue-300"
-                      onClick={() => navigate('/ai')}
-                    >
-                      Configure schedule & autonomy
-                    </button>
+                  <button
+                    type="button"
+                    class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-1 py-1 text-sm underline hover:text-blue-800 dark:hover:text-blue-300"
+                    onClick={() => navigate('/ai')}
+                  >
+                    Configure schedule & autonomy
+                  </button>
                 </span>
               </div>
             </Show>
@@ -958,13 +958,13 @@ export const AISettings: Component = () => {
                 <div class="flex items-center justify-between mb-1">
                   <label class={labelClass()}>
                     Default Model
-                    {modelsLoading() && <span class="ml-2 text-xs text-gray-500">(loading...)</span>}
+                    {modelsLoading() && <span class="ml-2 text-xs text-slate-500">(loading...)</span>}
                   </label>
                   <button
                     type="button"
                     onClick={loadModels}
                     disabled={modelsLoading()}
-                    class="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 disabled:opacity-50 flex items-center gap-1"
+                    class="inline-flex min-h-10 sm:min-h-9 items-center gap-1 rounded-md px-2 py-1.5 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 disabled:opacity-50"
                     title="Refresh model list from all configured providers"
                   >
                     <svg class={`w-3 h-3 ${modelsLoading() ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1012,7 +1012,7 @@ export const AISettings: Component = () => {
                         <optgroup label={`${PROVIDER_DISPLAY_NAMES[provider] || provider} (not configured)`}>
                           <For each={models}>
                             {(model) => (
-                              <option value={model.id} selected={model.id === form.model} class="text-gray-400">
+                              <option value={model.id} selected={model.id === form.model} class="text-slate-400">
                                 {model.name || model.id.split(':').pop()}
                               </option>
                             )}
@@ -1035,34 +1035,34 @@ export const AISettings: Component = () => {
               </div>
 
               {/* Advanced Model Selection - Collapsible */}
-              <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+              <div class="border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden">
                 <button
                   type="button"
-                  class="w-full px-3 py-2 flex items-center justify-between bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors text-left"
+                  class="w-full min-h-10 sm:min-h-9 px-3 py-2.5 flex items-center justify-between bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors text-left"
                   onClick={() => setShowAdvancedModels(!showAdvancedModels())}
                 >
                   <div class="flex items-center gap-2">
-                    <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
                     </svg>
-                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Advanced Model Selection</span>
+                    <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Advanced Model Selection</span>
                     <Show when={form.chatModel || form.patrolModel}>
                       <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">Customized</span>
                     </Show>
                   </div>
-                  <svg class={`w-4 h-4 text-gray-500 transition-transform ${showAdvancedModels() ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg class={`w-4 h-4 text-slate-500 transition-transform ${showAdvancedModels() ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                   </svg>
                 </button>
                 <Show when={showAdvancedModels()}>
-                  <div class="px-3 py-3 bg-white dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700 space-y-3">
-                    <p class="text-xs text-gray-500 dark:text-gray-400">
+                  <div class="px-3 py-3 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 space-y-3">
+                    <p class="text-xs text-slate-500 dark:text-slate-400">
                       Override the default model for specific tasks. Leave empty to use the default.
                     </p>
                     {/* Chat Model */}
                     <div>
-                      <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">Chat Model (Interactive)</label>
-                      <p class="text-[11px] text-gray-400 dark:text-gray-500 mb-1">Used for chat and fix execution — a more capable model is recommended.</p>
+                      <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-0.5">Chat Model (Interactive)</label>
+                      <p class="text-[11px] text-slate-400 dark:text-slate-500 mb-1">Used for chat and fix execution — a more capable model is recommended.</p>
                       <Show when={availableModels().length > 0} fallback={
                         <input
                           type="text"
@@ -1098,8 +1098,8 @@ export const AISettings: Component = () => {
                     </div>
                     {/* Patrol Model */}
                     <div>
-                      <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">Patrol Model (Background)</label>
-                      <p class="text-[11px] text-gray-400 dark:text-gray-500 mb-1">Runs frequently for detection — a smaller, cheaper model keeps costs low.</p>
+                      <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-0.5">Patrol Model (Background)</label>
+                      <p class="text-[11px] text-slate-400 dark:text-slate-500 mb-1">Runs frequently for detection — a smaller, cheaper model keeps costs low.</p>
                       <Show when={availableModels().length > 0} fallback={
                         <input
                           type="text"
@@ -1138,10 +1138,10 @@ export const AISettings: Component = () => {
               </div>
 
               {/* Provider Configuration - Configure API keys for all providers */}
-              <div class={`${formField} p-5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40`}>
+              <div class={`${formField} p-5 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800`}>
                 <div class="mb-3 space-y-1.5">
                   <div class="flex items-center justify-between gap-2">
-                    <h4 class="font-medium text-gray-900 dark:text-white flex items-center gap-2">
+                    <h4 class="font-medium text-slate-900 dark:text-white flex items-center gap-2">
                       <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                       </svg>
@@ -1151,16 +1151,16 @@ export const AISettings: Component = () => {
                       type="button"
                       onClick={() => void runProviderPreflight()}
                       disabled={preflightRunning() || saving()}
-                      class="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50"
+                      class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-3 py-2 text-sm bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50"
                     >
                       {preflightRunning() ? 'Checking...' : 'Run Preflight'}
                     </button>
                   </div>
-                  <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                  <p class="text-xs text-slate-600 dark:text-slate-400 mt-1">
                     Configure API keys for each provider you want to use. Models from all configured providers will appear in the model selectors.
                   </p>
                   <Show when={preflightLastCheckedAt()}>
-                    <p class="text-[11px] text-gray-500 dark:text-gray-400">
+                    <p class="text-[11px] text-slate-500 dark:text-slate-400">
                       Last checked: {new Date(preflightLastCheckedAt()!).toLocaleTimeString()}
                     </p>
                   </Show>
@@ -1183,10 +1183,10 @@ export const AISettings: Component = () => {
                 {/* Provider Accordions */}
                 <div class="space-y-2">
                   {/* Anthropic */}
-                  <div class={`border rounded-lg overflow-hidden ${settings()?.anthropic_configured ? 'border-green-300 dark:border-green-700' : 'border-gray-200 dark:border-gray-700'}`}>
+                  <div class={`border rounded-md overflow-hidden ${settings()?.anthropic_configured ? 'border-green-300 dark:border-green-700' : 'border-slate-200 dark:border-slate-700'}`}>
                     <button
                       type="button"
-                      class="w-full px-3 py-2 flex items-center justify-between bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                      class="w-full min-h-10 sm:min-h-9 px-3 py-2.5 flex items-center justify-between bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
                       onClick={() => {
                         const current = expandedProviders();
                         const next = new Set(current);
@@ -1211,7 +1211,7 @@ export const AISettings: Component = () => {
                       </svg>
                     </button>
                     <Show when={expandedProviders().has('anthropic')}>
-                      <div class="px-3 py-3 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700 space-y-2">
+                      <div class="px-3 py-3 bg-slate-50 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 space-y-2">
                         <input
                           type="password"
                           value={form.anthropicApiKey}
@@ -1221,8 +1221,8 @@ export const AISettings: Component = () => {
                           disabled={saving()}
                         />
                         <div class="flex items-center justify-between">
-                          <p class="text-xs text-gray-500">
-                            <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener" class="text-blue-600 dark:text-blue-400 hover:underline">Get API key →</a>
+                          <p class="text-xs text-slate-500">
+                            <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener" class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-1 py-1 text-sm text-blue-600 dark:text-blue-400 hover:underline">Get API key →</a>
                           </p>
                           <Show when={settings()?.anthropic_configured}>
                             <div class="flex gap-1">
@@ -1230,7 +1230,7 @@ export const AISettings: Component = () => {
                                 type="button"
                                 onClick={() => handleTestProvider('anthropic')}
                                 disabled={testingProvider() === 'anthropic' || saving()}
-                                class="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50"
+                                class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-3 py-2 text-sm bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50"
                               >
                                 {testingProvider() === 'anthropic' ? 'Testing...' : 'Test'}
                               </button>
@@ -1238,7 +1238,7 @@ export const AISettings: Component = () => {
                                 type="button"
                                 onClick={() => handleClearProvider('anthropic')}
                                 disabled={saving()}
-                                class="px-2 py-1 text-xs bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded hover:bg-red-200 dark:hover:bg-red-800 disabled:opacity-50"
+                                class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-3 py-2 text-sm bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800 disabled:opacity-50"
                                 title="Clear API key"
                               >
                                 Clear
@@ -1256,10 +1256,10 @@ export const AISettings: Component = () => {
                   </div>
 
                   {/* OpenAI */}
-                  <div class={`border rounded-lg overflow-hidden ${settings()?.openai_configured ? 'border-green-300 dark:border-green-700' : 'border-gray-200 dark:border-gray-700'}`}>
+                  <div class={`border rounded-md overflow-hidden ${settings()?.openai_configured ? 'border-green-300 dark:border-green-700' : 'border-slate-200 dark:border-slate-700'}`}>
                     <button
                       type="button"
-                      class="w-full px-3 py-2 flex items-center justify-between bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                      class="w-full min-h-10 sm:min-h-9 px-3 py-2.5 flex items-center justify-between bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
                       onClick={() => {
                         const current = expandedProviders();
                         const next = new Set(current);
@@ -1284,7 +1284,7 @@ export const AISettings: Component = () => {
                       </svg>
                     </button>
                     <Show when={expandedProviders().has('openai')}>
-                      <div class="px-3 py-3 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700 space-y-2">
+                      <div class="px-3 py-3 bg-slate-50 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 space-y-2">
                         <input
                           type="password"
                           value={form.openaiApiKey}
@@ -1294,7 +1294,7 @@ export const AISettings: Component = () => {
                           disabled={saving()}
                         />
                         <div class="space-y-1">
-                          <label class="text-xs text-gray-600 dark:text-gray-400 inline-flex items-center gap-1">
+                          <label class="text-xs text-slate-600 dark:text-slate-400 inline-flex items-center gap-1">
                             Custom Base URL
                             <HelpIcon contentId="ai.openai.baseUrl" size="xs" />
                           </label>
@@ -1308,8 +1308,8 @@ export const AISettings: Component = () => {
                           />
                         </div>
                         <div class="flex items-center justify-between">
-                          <p class="text-xs text-gray-500">
-                            <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener" class="text-blue-600 dark:text-blue-400 hover:underline">Get API key →</a>
+                          <p class="text-xs text-slate-500">
+                            <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener" class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-1 py-1 text-sm text-blue-600 dark:text-blue-400 hover:underline">Get API key →</a>
                           </p>
                           <Show when={settings()?.openai_configured}>
                             <div class="flex gap-1">
@@ -1317,7 +1317,7 @@ export const AISettings: Component = () => {
                                 type="button"
                                 onClick={() => handleTestProvider('openai')}
                                 disabled={testingProvider() === 'openai' || saving()}
-                                class="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50"
+                                class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-3 py-2 text-sm bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50"
                               >
                                 {testingProvider() === 'openai' ? 'Testing...' : 'Test'}
                               </button>
@@ -1325,7 +1325,7 @@ export const AISettings: Component = () => {
                                 type="button"
                                 onClick={() => handleClearProvider('openai')}
                                 disabled={saving()}
-                                class="px-2 py-1 text-xs bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded hover:bg-red-200 dark:hover:bg-red-800 disabled:opacity-50"
+                                class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-3 py-2 text-sm bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800 disabled:opacity-50"
                                 title="Clear API key"
                               >
                                 Clear
@@ -1343,10 +1343,10 @@ export const AISettings: Component = () => {
                   </div>
 
                   {/* OpenRouter */}
-                  <div class={`border rounded-lg overflow-hidden ${settings()?.openrouter_configured ? 'border-green-300 dark:border-green-700' : 'border-gray-200 dark:border-gray-700'}`}>
+                  <div class={`border rounded-md overflow-hidden ${settings()?.openrouter_configured ? 'border-green-300 dark:border-green-700' : 'border-slate-200 dark:border-slate-700'}`}>
                     <button
                       type="button"
-                      class="w-full px-3 py-2 flex items-center justify-between bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                      class="w-full min-h-10 sm:min-h-9 px-3 py-2.5 flex items-center justify-between bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
                       onClick={() => {
                         const current = expandedProviders();
                         const next = new Set(current);
@@ -1371,7 +1371,7 @@ export const AISettings: Component = () => {
                       </svg>
                     </button>
                     <Show when={expandedProviders().has('openrouter')}>
-                      <div class="px-3 py-3 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700 space-y-2">
+                      <div class="px-3 py-3 bg-slate-50 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 space-y-2">
                         <input
                           type="password"
                           value={form.openrouterApiKey}
@@ -1380,12 +1380,12 @@ export const AISettings: Component = () => {
                           class={controlClass()}
                           disabled={saving()}
                         />
-                        <p class="text-xs text-gray-500">
+                        <p class="text-xs text-slate-500">
                           Uses <code>https://openrouter.ai/api/v1</code> automatically.
                         </p>
                         <div class="flex items-center justify-between">
-                          <p class="text-xs text-gray-500">
-                            <a href="https://openrouter.ai/keys" target="_blank" rel="noopener" class="text-blue-600 dark:text-blue-400 hover:underline">Get API key →</a>
+                          <p class="text-xs text-slate-500">
+                            <a href="https://openrouter.ai/keys" target="_blank" rel="noopener" class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-1 py-1 text-sm text-blue-600 dark:text-blue-400 hover:underline">Get API key →</a>
                           </p>
                           <Show when={settings()?.openrouter_configured}>
                             <div class="flex gap-1">
@@ -1393,7 +1393,7 @@ export const AISettings: Component = () => {
                                 type="button"
                                 onClick={() => handleTestProvider('openrouter')}
                                 disabled={testingProvider() === 'openrouter' || saving()}
-                                class="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50"
+                                class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-3 py-2 text-sm bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50"
                               >
                                 {testingProvider() === 'openrouter' ? 'Testing...' : 'Test'}
                               </button>
@@ -1401,7 +1401,7 @@ export const AISettings: Component = () => {
                                 type="button"
                                 onClick={() => handleClearProvider('openrouter')}
                                 disabled={saving()}
-                                class="px-2 py-1 text-xs bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded hover:bg-red-200 dark:hover:bg-red-800 disabled:opacity-50"
+                                class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-3 py-2 text-sm bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800 disabled:opacity-50"
                                 title="Clear API key"
                               >
                                 Clear
@@ -1419,10 +1419,10 @@ export const AISettings: Component = () => {
                   </div>
 
                   {/* DeepSeek */}
-                  <div class={`border rounded-lg overflow-hidden ${settings()?.deepseek_configured ? 'border-green-300 dark:border-green-700' : 'border-gray-200 dark:border-gray-700'}`}>
+                  <div class={`border rounded-md overflow-hidden ${settings()?.deepseek_configured ? 'border-green-300 dark:border-green-700' : 'border-slate-200 dark:border-slate-700'}`}>
                     <button
                       type="button"
-                      class="w-full px-3 py-2 flex items-center justify-between bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                      class="w-full min-h-10 sm:min-h-9 px-3 py-2.5 flex items-center justify-between bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
                       onClick={() => {
                         const current = expandedProviders();
                         const next = new Set(current);
@@ -1447,7 +1447,7 @@ export const AISettings: Component = () => {
                       </svg>
                     </button>
                     <Show when={expandedProviders().has('deepseek')}>
-                      <div class="px-3 py-3 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700 space-y-2">
+                      <div class="px-3 py-3 bg-slate-50 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 space-y-2">
                         <input
                           type="password"
                           value={form.deepseekApiKey}
@@ -1457,8 +1457,8 @@ export const AISettings: Component = () => {
                           disabled={saving()}
                         />
                         <div class="flex items-center justify-between">
-                          <p class="text-xs text-gray-500">
-                            <a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener" class="text-blue-600 dark:text-blue-400 hover:underline">Get API key →</a>
+                          <p class="text-xs text-slate-500">
+                            <a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener" class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-1 py-1 text-sm text-blue-600 dark:text-blue-400 hover:underline">Get API key →</a>
                           </p>
                           <Show when={settings()?.deepseek_configured}>
                             <div class="flex gap-1">
@@ -1466,7 +1466,7 @@ export const AISettings: Component = () => {
                                 type="button"
                                 onClick={() => handleTestProvider('deepseek')}
                                 disabled={testingProvider() === 'deepseek' || saving()}
-                                class="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50"
+                                class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-3 py-2 text-sm bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50"
                               >
                                 {testingProvider() === 'deepseek' ? 'Testing...' : 'Test'}
                               </button>
@@ -1474,7 +1474,7 @@ export const AISettings: Component = () => {
                                 type="button"
                                 onClick={() => handleClearProvider('deepseek')}
                                 disabled={saving()}
-                                class="px-2 py-1 text-xs bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded hover:bg-red-200 dark:hover:bg-red-800 disabled:opacity-50"
+                                class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-3 py-2 text-sm bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800 disabled:opacity-50"
                                 title="Clear API key"
                               >
                                 Clear
@@ -1492,10 +1492,10 @@ export const AISettings: Component = () => {
                   </div>
 
                   {/* Google Gemini */}
-                  <div class={`border rounded-lg overflow-hidden ${settings()?.gemini_configured ? 'border-green-300 dark:border-green-700' : 'border-gray-200 dark:border-gray-700'}`}>
+                  <div class={`border rounded-md overflow-hidden ${settings()?.gemini_configured ? 'border-green-300 dark:border-green-700' : 'border-slate-200 dark:border-slate-700'}`}>
                     <button
                       type="button"
-                      class="w-full px-3 py-2 flex items-center justify-between bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                      class="w-full min-h-10 sm:min-h-9 px-3 py-2.5 flex items-center justify-between bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
                       onClick={() => {
                         const current = expandedProviders();
                         const next = new Set(current);
@@ -1520,7 +1520,7 @@ export const AISettings: Component = () => {
                       </svg>
                     </button>
                     <Show when={expandedProviders().has('gemini')}>
-                      <div class="px-3 py-3 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700 space-y-2">
+                      <div class="px-3 py-3 bg-slate-50 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 space-y-2">
                         <input
                           type="password"
                           value={form.geminiApiKey}
@@ -1530,8 +1530,8 @@ export const AISettings: Component = () => {
                           disabled={saving()}
                         />
                         <div class="flex items-center justify-between">
-                          <p class="text-xs text-gray-500">
-                            <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener" class="text-blue-600 dark:text-blue-400 hover:underline">Get API key →</a>
+                          <p class="text-xs text-slate-500">
+                            <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener" class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-1 py-1 text-sm text-blue-600 dark:text-blue-400 hover:underline">Get API key →</a>
                           </p>
                           <Show when={settings()?.gemini_configured}>
                             <div class="flex gap-1">
@@ -1539,7 +1539,7 @@ export const AISettings: Component = () => {
                                 type="button"
                                 onClick={() => handleTestProvider('gemini')}
                                 disabled={testingProvider() === 'gemini' || saving()}
-                                class="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50"
+                                class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-3 py-2 text-sm bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50"
                               >
                                 {testingProvider() === 'gemini' ? 'Testing...' : 'Test'}
                               </button>
@@ -1547,7 +1547,7 @@ export const AISettings: Component = () => {
                                 type="button"
                                 onClick={() => handleClearProvider('gemini')}
                                 disabled={saving()}
-                                class="px-2 py-1 text-xs bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded hover:bg-red-200 dark:hover:bg-red-800 disabled:opacity-50"
+                                class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-3 py-2 text-sm bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800 disabled:opacity-50"
                                 title="Clear API key"
                               >
                                 Clear
@@ -1565,10 +1565,10 @@ export const AISettings: Component = () => {
                   </div>
 
                   {/* Ollama */}
-                  <div class={`border rounded-lg overflow-hidden ${settings()?.ollama_configured ? 'border-green-300 dark:border-green-700' : 'border-gray-200 dark:border-gray-700'}`}>
+                  <div class={`border rounded-md overflow-hidden ${settings()?.ollama_configured ? 'border-green-300 dark:border-green-700' : 'border-slate-200 dark:border-slate-700'}`}>
                     <button
                       type="button"
-                      class="w-full px-3 py-2 flex items-center justify-between bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                      class="w-full min-h-10 sm:min-h-9 px-3 py-2.5 flex items-center justify-between bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
                       onClick={() => {
                         const current = expandedProviders();
                         const next = new Set(current);
@@ -1593,9 +1593,9 @@ export const AISettings: Component = () => {
                       </svg>
                     </button>
                     <Show when={expandedProviders().has('ollama')}>
-                      <div class="px-3 py-3 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700 space-y-2">
+                      <div class="px-3 py-3 bg-slate-50 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 space-y-2">
                         <div class="space-y-1">
-                          <label class="text-xs text-gray-600 dark:text-gray-400 inline-flex items-center gap-1">
+                          <label class="text-xs text-slate-600 dark:text-slate-400 inline-flex items-center gap-1">
                             Server URL
                             <HelpIcon contentId="ai.ollama.baseUrl" size="xs" />
                           </label>
@@ -1609,9 +1609,9 @@ export const AISettings: Component = () => {
                           />
                         </div>
                         <div class="flex items-center justify-between">
-                          <p class="text-xs text-gray-500">
-                            <a href="https://ollama.ai" target="_blank" rel="noopener" class="text-blue-600 dark:text-blue-400 hover:underline">Learn about Ollama →</a>
-                            <span class="text-gray-400"> · Free & local</span>
+                          <p class="text-xs text-slate-500">
+                            <a href="https://ollama.ai" target="_blank" rel="noopener" class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-1 py-1 text-sm text-blue-600 dark:text-blue-400 hover:underline">Learn about Ollama →</a>
+                            <span class="text-slate-400"> · Free & local</span>
                           </p>
                           <Show when={settings()?.ollama_configured}>
                             <div class="flex gap-1">
@@ -1619,7 +1619,7 @@ export const AISettings: Component = () => {
                                 type="button"
                                 onClick={() => handleTestProvider('ollama')}
                                 disabled={testingProvider() === 'ollama' || saving()}
-                                class="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50"
+                                class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-3 py-2 text-sm bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50"
                               >
                                 {testingProvider() === 'ollama' ? 'Testing...' : 'Test'}
                               </button>
@@ -1627,7 +1627,7 @@ export const AISettings: Component = () => {
                                 type="button"
                                 onClick={() => handleClearProvider('ollama')}
                                 disabled={saving()}
-                                class="px-2 py-1 text-xs bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded hover:bg-red-200 dark:hover:bg-red-800 disabled:opacity-50"
+                                class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-3 py-2 text-sm bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800 disabled:opacity-50"
                                 title="Clear Ollama URL"
                               >
                                 Clear
@@ -1647,17 +1647,17 @@ export const AISettings: Component = () => {
               </div>
 
               {/* Discovery Settings - Collapsible */}
-              <div class="rounded-lg border border-blue-200 dark:border-blue-800 overflow-hidden">
+              <div class="rounded-md border border-blue-200 dark:border-blue-800 overflow-hidden">
                 <button
                   type="button"
-                  class="w-full px-3 py-2 flex items-center justify-between bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors text-left"
+                  class="w-full min-h-10 sm:min-h-9 px-3 py-2.5 flex items-center justify-between bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors text-left"
                   onClick={() => setShowDiscoverySettings(!showDiscoverySettings())}
                 >
                   <div class="flex items-center gap-2">
                     <svg class="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                     </svg>
-                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Discovery Settings</span>
+                    <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Discovery Settings</span>
                     {/* Summary badges */}
                     <Show when={form.discoveryEnabled}>
                       <span class="px-1.5 py-0.5 text-[10px] font-medium bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300 rounded">
@@ -1665,18 +1665,18 @@ export const AISettings: Component = () => {
                       </span>
                     </Show>
                     <Show when={!form.discoveryEnabled}>
-                      <span class="px-1.5 py-0.5 text-[10px] font-medium bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 rounded">Off</span>
+                      <span class="px-1.5 py-0.5 text-[10px] font-medium bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 rounded">Off</span>
                     </Show>
                   </div>
-                  <svg class={`w-4 h-4 text-gray-500 transition-transform ${showDiscoverySettings() ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg class={`w-4 h-4 text-slate-500 transition-transform ${showDiscoverySettings() ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                   </svg>
                 </button>
                 <Show when={showDiscoverySettings()}>
-                  <div class="px-3 py-3 bg-white dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700 space-y-3">
+                  <div class="px-3 py-3 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 space-y-3">
                     {/* Discovery Enabled Toggle */}
                     <div class="flex items-center justify-between gap-2">
-                      <label class="text-xs font-medium text-gray-600 dark:text-gray-400 flex items-center gap-1.5">
+                      <label class="text-xs font-medium text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
                         Enable Discovery
                         <HelpIcon inline={{ title: "What is Discovery?", description: "Discovery scans your VMs, containers, and Docker hosts to identify what services are running (databases, web servers, etc.), their versions, and how to access them. This information helps Pulse AI give you accurate troubleshooting commands and understand your infrastructure." }} size="xs" />
                       </label>
@@ -1691,9 +1691,9 @@ export const AISettings: Component = () => {
                     <Show when={form.discoveryEnabled}>
                       <div class="flex flex-col gap-1">
                         <div class="flex items-center gap-3">
-                          <label class="text-xs font-medium text-gray-600 dark:text-gray-400 w-32 flex-shrink-0">Scan Interval</label>
+                          <label class="text-xs font-medium text-slate-600 dark:text-slate-400 w-32 flex-shrink-0">Scan Interval</label>
                           <select
-                            class="flex-1 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700"
+                            class="flex-1 px-2 py-1 text-sm border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700"
                             value={form.discoveryIntervalHours}
                             onChange={(e) => setForm('discoveryIntervalHours', parseInt(e.currentTarget.value, 10))}
                             disabled={saving()}
@@ -1706,7 +1706,7 @@ export const AISettings: Component = () => {
                             <option value={168}>Every 7 days</option>
                           </select>
                         </div>
-                        <p class="text-[10px] text-gray-500 dark:text-gray-400 ml-32 pl-3">
+                        <p class="text-[10px] text-slate-500 dark:text-slate-400 ml-32 pl-3">
                           {form.discoveryIntervalHours === 0
                             ? 'Discovery runs only when you click "Update Discovery" on a resource'
                             : 'Discovery will automatically re-scan resources at this interval'}
@@ -1714,7 +1714,7 @@ export const AISettings: Component = () => {
                       </div>
                     </Show>
 
-                    <p class="text-[10px] text-gray-500 dark:text-gray-400">
+                    <p class="text-[10px] text-slate-500 dark:text-slate-400">
                       Discovery gives Pulse AI workload context, so responses can reference concrete services and commands instead of generic advice.
                     </p>
                   </div>
@@ -1722,16 +1722,16 @@ export const AISettings: Component = () => {
               </div>
 
               {/* Usage Cost Controls - Compact */}
-              <div class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40">
-                <svg class="w-4 h-4 text-gray-500 dark:text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div class="flex items-center gap-3 p-3 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
+                <svg class="w-4 h-4 text-slate-500 dark:text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                <label class="text-xs font-medium text-gray-700 dark:text-gray-300">30-day Budget</label>
+                <label class="text-xs font-medium text-slate-700 dark:text-slate-300">30-day Budget</label>
                 <div class="relative flex-shrink-0">
-                  <span class="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 text-xs">$</span>
+                  <span class="absolute left-2 top-1/2 -translate-y-1/2 text-slate-500 dark:text-slate-400 text-xs">$</span>
                   <input
                     type="number"
-                    class="w-24 pl-5 pr-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800"
+                    class="w-24 min-h-10 sm:min-h-9 pl-5 pr-2 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800"
                     value={form.costBudgetUSD30d}
                     onInput={(e) => setForm('costBudgetUSD30d', e.currentTarget.value)}
                     min={0}
@@ -1741,22 +1741,22 @@ export const AISettings: Component = () => {
                   />
                 </div>
                 <Show when={parseFloat(form.costBudgetUSD30d) > 0}>
-                  <span class="text-xs text-gray-500">≈ ${(parseFloat(form.costBudgetUSD30d) / 30).toFixed(2)}/day</span>
+                  <span class="text-xs text-slate-500">≈ ${(parseFloat(form.costBudgetUSD30d) / 30).toFixed(2)}/day</span>
                 </Show>
                 <Show when={!form.costBudgetUSD30d || parseFloat(form.costBudgetUSD30d) === 0}>
-                  <span class="text-[10px] text-gray-500 dark:text-gray-400">Set a budget to receive usage alerts</span>
+                  <span class="text-[10px] text-slate-500 dark:text-slate-400">Set a budget to receive usage alerts</span>
                 </Show>
               </div>
 
               {/* Request Timeout - For slow Ollama hardware */}
-              <div class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40">
-                <svg class="w-4 h-4 text-gray-500 dark:text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div class="flex items-center gap-3 p-3 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
+                <svg class="w-4 h-4 text-slate-500 dark:text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                <label class="text-xs font-medium text-gray-700 dark:text-gray-300">Request Timeout</label>
+                <label class="text-xs font-medium text-slate-700 dark:text-slate-300">Request Timeout</label>
                 <input
                   type="number"
-                  class="w-20 px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800"
+                  class="w-20 min-h-10 sm:min-h-9 px-2 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800"
                   value={form.requestTimeoutSeconds}
                   onInput={(e) => {
                     const value = parseInt(e.currentTarget.value, 10);
@@ -1767,25 +1767,25 @@ export const AISettings: Component = () => {
                   step={30}
                   disabled={saving()}
                 />
-                <span class="text-xs text-gray-500">seconds</span>
+                <span class="text-xs text-slate-500">seconds</span>
                 <Show when={form.requestTimeoutSeconds !== 300}>
                   <span class="text-[10px] text-blue-600 dark:text-blue-400">Custom</span>
                 </Show>
                 <Show when={form.requestTimeoutSeconds === 300}>
-                  <span class="text-[10px] text-gray-400 dark:text-gray-500">default</span>
+                  <span class="text-[10px] text-slate-400 dark:text-slate-500">default</span>
                 </Show>
               </div>
-              <p class="text-[10px] text-gray-500 dark:text-gray-400 -mt-4 ml-1">
+              <p class="text-[10px] text-slate-500 dark:text-slate-400 -mt-4 ml-1">
                 Increase for slower Ollama hardware (default: 300s / 5 min)
               </p>
 
               {/* Pulse Permission Level */}
-              <div class={`space-y-3 p-4 rounded-lg border ${form.controlLevel === 'autonomous' ? 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20' : 'border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20'}`}>
+              <div class={`space-y-3 p-4 rounded-md border ${form.controlLevel === 'autonomous' ? 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20' : 'border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20'}`}>
                 <div class="flex items-center gap-2">
                   <svg class="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                   </svg>
-                  <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Pulse Permission Level</span>
+                  <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Pulse Permission Level</span>
                   <Show when={form.controlLevel !== 'read_only'}>
                     <span class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${form.controlLevel === 'autonomous'
                       ? 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300'
@@ -1800,11 +1800,11 @@ export const AISettings: Component = () => {
 
                 {/* Permission Level */}
                 <div class="flex items-center gap-3">
-                  <label class="text-xs font-medium text-gray-600 dark:text-gray-400 w-28 flex-shrink-0">Permission</label>
+                  <label class="text-xs font-medium text-slate-600 dark:text-slate-400 w-28 flex-shrink-0">Permission</label>
                   <select
                     value={form.controlLevel}
                     onChange={(e) => setForm('controlLevel', e.currentTarget.value as ControlLevel)}
-                    class="flex-1 px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700"
+                    class="flex-1 min-h-10 sm:min-h-9 px-2 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700"
                     disabled={saving()}
                   >
                     <option value="read_only">Read Only - Pulse Assistant can only observe</option>
@@ -1812,18 +1812,18 @@ export const AISettings: Component = () => {
                     <option value="autonomous">Autonomous - Pulse Assistant executes without approval (Pro)</option>
                   </select>
                 </div>
-                <p class="text-[10px] text-gray-500 dark:text-gray-400 ml-[7.5rem]">
+                <p class="text-[10px] text-slate-500 dark:text-slate-400 ml-[7.5rem]">
                   {form.controlLevel === 'read_only' && 'Read-only mode: Pulse Assistant can query and observe only.'}
                   {form.controlLevel === 'controlled' && 'Controlled mode: Pulse Assistant can execute commands and control VMs/containers with approval.'}
                   {form.controlLevel === 'autonomous' && 'Autonomous mode: Pulse Assistant executes commands and control actions without confirmation.'}
                 </p>
                 <Show when={form.controlLevel === 'autonomous'}>
                   <div class="p-2 bg-amber-100/50 dark:bg-amber-900/30 rounded border border-amber-200 dark:border-amber-800 text-[10px] text-amber-800 dark:text-amber-200">
-                    <strong>Legal Disclaimer:</strong> Model-driven systems can hallucinate. You are responsible for any damage caused by autonomous actions. See <a href="https://github.com/rcourtman/Pulse/blob/main/TERMS.md" target="_blank" rel="noopener noreferrer" class="underline">Terms of Service</a>.
+                    <strong>Legal Disclaimer:</strong> Model-driven systems can hallucinate. You are responsible for any damage caused by autonomous actions. See <a href="https://github.com/rcourtman/Pulse/blob/main/TERMS.md" target="_blank" rel="noopener noreferrer" class="inline-flex min-h-10 sm:min-h-9 items-center rounded px-1 underline">Terms of Service</a>.
                   </div>
                 </Show>
                 <Show when={form.controlLevel === 'autonomous' && autoFixLocked()}>
-                  <p class="text-xs text-gray-500 dark:text-gray-400">
+                  <p class="text-xs text-slate-500 dark:text-slate-400">
                     <a
                       class="text-blue-600 dark:text-blue-400 font-medium hover:underline"
                       href={getUpgradeActionUrlOrFallback('ai_autofix')}
@@ -1840,17 +1840,17 @@ export const AISettings: Component = () => {
                 {/* Protected Guests - Only show if control is enabled */}
                 <Show when={form.controlLevel !== 'read_only'}>
                   <div class="flex items-start gap-3 pt-2 border-t border-blue-200 dark:border-blue-700">
-                    <label class="text-xs font-medium text-gray-600 dark:text-gray-400 w-28 flex-shrink-0 pt-1">Protected</label>
+                    <label class="text-xs font-medium text-slate-600 dark:text-slate-400 w-28 flex-shrink-0 pt-1">Protected</label>
                     <div class="flex-1">
                       <input
                         type="text"
                         value={form.protectedGuests}
                         onInput={(e) => setForm('protectedGuests', e.currentTarget.value)}
                         placeholder="e.g., 100, 101, prod-db"
-                        class="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700"
+                        class="w-full min-h-10 sm:min-h-9 px-2 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700"
                         disabled={saving()}
                       />
-                      <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
+                      <p class="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
                         Comma-separated VMIDs or names that Pulse Assistant cannot control
                       </p>
                     </div>
@@ -1859,10 +1859,10 @@ export const AISettings: Component = () => {
               </div>
 
               {/* Chat session maintenance */}
-              <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+              <div class="border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden">
                 <button
                   type="button"
-                  class="w-full px-3 py-2 flex items-center justify-between bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors text-left"
+                  class="w-full min-h-10 sm:min-h-9 px-3 py-2.5 flex items-center justify-between bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors text-left"
                   onClick={() => {
                     const next = !showChatMaintenance();
                     setShowChatMaintenance(next);
@@ -1872,34 +1872,34 @@ export const AISettings: Component = () => {
                   }}
                 >
                   <div class="flex items-center gap-2">
-                    <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
                     </svg>
-                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Chat Session Maintenance</span>
+                    <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Chat Session Maintenance</span>
                   </div>
-                  <svg class={`w-4 h-4 text-gray-500 transition-transform ${showChatMaintenance() ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg class={`w-4 h-4 text-slate-500 transition-transform ${showChatMaintenance() ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                   </svg>
                 </button>
                 <Show when={showChatMaintenance()}>
-                  <div class="px-3 py-3 bg-white dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700 space-y-3">
-                    <p class="text-xs text-gray-500 dark:text-gray-400">
+                  <div class="px-3 py-3 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 space-y-3">
+                    <p class="text-xs text-slate-500 dark:text-slate-400">
                       Use this panel to summarize, inspect, or revert a specific chat session. It does not change your default Pulse Assistant settings.
                     </p>
                     <div class="flex items-center justify-between">
-                      <label class="text-xs font-medium text-gray-600 dark:text-gray-400">Session</label>
+                      <label class="text-xs font-medium text-slate-600 dark:text-slate-400">Session</label>
                       <button
                         type="button"
                         onClick={loadChatSessions}
                         disabled={chatSessionsLoading()}
-                        class="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 disabled:opacity-50"
+                        class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-2 py-1.5 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 disabled:opacity-50"
                       >
                         {chatSessionsLoading() ? 'Refreshing...' : 'Refresh'}
                       </button>
                     </div>
 
                     <Show when={chatSessionsLoading()}>
-                      <div class="text-xs text-gray-500 dark:text-gray-400">Loading chat sessions...</div>
+                      <div class="text-xs text-slate-500 dark:text-slate-400">Loading chat sessions...</div>
                     </Show>
                     <Show when={!chatSessionsLoading()}>
                       <Show when={chatSessionsError()}>
@@ -1909,7 +1909,7 @@ export const AISettings: Component = () => {
                         <Show
                           when={chatSessions().length > 0}
                           fallback={
-                            <div class="text-xs text-gray-500 dark:text-gray-400">
+                            <div class="text-xs text-slate-500 dark:text-slate-400">
                               No chat sessions yet. Start a chat to create one.
                             </div>
                           }
@@ -1917,7 +1917,7 @@ export const AISettings: Component = () => {
                           <select
                             value={selectedSessionId()}
                             onChange={(e) => setSelectedSessionId(e.currentTarget.value)}
-                            class="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700"
+                            class="w-full min-h-10 sm:min-h-9 px-2 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700"
                             disabled={saving()}
                           >
                             <For each={chatSessions()}>
@@ -1929,7 +1929,7 @@ export const AISettings: Component = () => {
                             </For>
                           </select>
                           <Show when={selectedChatSession()}>
-                            <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
+                            <p class="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
                               Last updated {new Date(selectedChatSession()!.updated_at).toLocaleString()}
                             </p>
                           </Show>
@@ -1942,7 +1942,7 @@ export const AISettings: Component = () => {
                         type="button"
                         onClick={handleSessionSummarize}
                         disabled={!selectedSessionId() || sessionActionLoading() !== null}
-                        class="px-3 py-1.5 text-xs font-medium rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+                        class="w-full sm:w-auto min-h-10 sm:min-h-9 px-3 py-2 text-sm font-medium rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50"
                       >
                         {sessionActionLoading() === 'summarize' ? 'Summarizing...' : 'Summarize context'}
                       </button>
@@ -1950,7 +1950,7 @@ export const AISettings: Component = () => {
                         type="button"
                         onClick={handleSessionDiff}
                         disabled={!selectedSessionId() || sessionActionLoading() !== null}
-                        class="px-3 py-1.5 text-xs font-medium rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+                        class="w-full sm:w-auto min-h-10 sm:min-h-9 px-3 py-2 text-sm font-medium rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50"
                       >
                         {sessionActionLoading() === 'diff' ? 'Loading...' : 'View file changes'}
                       </button>
@@ -1958,12 +1958,12 @@ export const AISettings: Component = () => {
                         type="button"
                         onClick={handleSessionRevert}
                         disabled={!selectedSessionId() || sessionActionLoading() !== null}
-                        class="px-3 py-1.5 text-xs font-medium rounded border border-red-200 dark:border-red-700 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/40 disabled:opacity-50"
+                        class="w-full sm:w-auto min-h-10 sm:min-h-9 px-3 py-2 text-sm font-medium rounded border border-red-200 dark:border-red-700 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/40 disabled:opacity-50"
                       >
                         {sessionActionLoading() === 'revert' ? 'Reverting...' : 'Revert changes'}
                       </button>
                     </div>
-                    <p class="text-[10px] text-gray-500 dark:text-gray-400">
+                    <p class="text-[10px] text-slate-500 dark:text-slate-400">
                       These actions apply to the selected chat session only.
                     </p>
                   </div>
@@ -1975,7 +1975,7 @@ export const AISettings: Component = () => {
             {/* Status indicator */}
             <Show when={settings()}>
               <div
-                class={`flex items-center gap-2 p-3 rounded-lg ${settings()?.configured
+                class={`flex items-center gap-2 p-3 rounded-md ${settings()?.configured
                   ? 'bg-green-50 dark:bg-green-900/30 text-green-800 dark:text-green-200'
                   : 'bg-amber-50 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200'
                   }`}
@@ -1984,14 +1984,14 @@ export const AISettings: Component = () => {
                   class={`w-2 h-2 rounded-full ${settings()?.configured ? 'bg-emerald-400' : 'bg-amber-400'
                     }`}
                 />
-                <div class="flex-1">
+                <div class="flex-1 min-w-0">
                   <span class="text-xs font-medium">
                     {settings()?.configured
                       ? `Ready • ${settings()?.configured_providers?.length || 0} provider${(settings()?.configured_providers?.length || 0) !== 1 ? 's' : ''} • ${availableModels().length} models`
                       : 'Configure at least one provider above to enable Pulse Assistant features'}
                   </span>
                   <Show when={settings()?.configured && settings()?.model}>
-                    <span class="text-xs opacity-75 ml-2">
+                    <span class="block sm:inline text-xs opacity-75 sm:ml-2">
                       • Default: {settings()?.model?.split(':').pop() || settings()?.model}
                     </span>
                   </Show>
@@ -2000,21 +2000,21 @@ export const AISettings: Component = () => {
             </Show>
 
             {/* Actions - sticky at bottom for easy access */}
-            <div class="sticky bottom-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 -mx-6 px-6 py-4 mt-6 flex flex-wrap items-center justify-between gap-3">
+            <div class="sticky bottom-0 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 -mx-4 sm:-mx-6 px-4 sm:px-6 py-4 mt-6 flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-between gap-3">
               <Show when={settings()?.api_key_set || settings()?.oauth_connected}>
                 <button
                   type="button"
-                  class="px-4 py-2 text-sm border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                  class="w-full sm:w-auto min-h-10 sm:min-h-9 px-4 py-2.5 text-sm border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900/30 disabled:opacity-50 disabled:cursor-not-allowed"
                   onClick={handleTest}
                   disabled={testing() || saving() || loading()}
                 >
                   {testing() ? 'Testing...' : 'Test Connection'}
                 </button>
               </Show>
-              <div class="flex gap-3 ml-auto">
+              <div class="grid grid-cols-1 sm:flex gap-3 w-full sm:w-auto sm:ml-auto">
                 <button
                   type="button"
-                  class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
+                  class="w-full sm:w-auto min-h-10 sm:min-h-9 px-4 py-2.5 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 rounded-md hover:bg-slate-50 dark:hover:bg-slate-700"
                   onClick={() => resetForm(settings())}
                   disabled={saving() || loading()}
                 >
@@ -2022,7 +2022,7 @@ export const AISettings: Component = () => {
                 </button>
                 <button
                   type="submit"
-                  class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  class="w-full sm:w-auto min-h-10 sm:min-h-9 px-4 py-2.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                   disabled={saving() || loading()}
                 >
                   {saving() ? 'Saving...' : 'Save changes'}
@@ -2036,23 +2036,23 @@ export const AISettings: Component = () => {
       {/* Session Diff Modal */}
       <Show when={showDiffModal()}>
         <div
-          class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+          class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
           onClick={() => setShowDiffModal(false)}
         >
           <div
-            class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-2xl w-full overflow-hidden"
+            class="bg-white dark:bg-slate-800 rounded-md shadow-sm max-w-2xl w-full overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            <div class="flex items-start justify-between gap-4 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+            <div class="flex items-start justify-between gap-4 px-6 py-4 border-b border-slate-200 dark:border-slate-700">
               <div>
-                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Session File Changes</h3>
-                <p class="text-xs text-gray-500 dark:text-gray-400">
+                <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Session File Changes</h3>
+                <p class="text-xs text-slate-500 dark:text-slate-400">
                   {diffSessionLabel() || 'Selected session'}
                 </p>
               </div>
               <button
                 type="button"
-                class="text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
+                class="text-sm text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
                 onClick={() => setShowDiffModal(false)}
               >
                 Close
@@ -2060,24 +2060,24 @@ export const AISettings: Component = () => {
             </div>
             <div class="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
               <Show when={diffSummary()}>
-                <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40 p-3">
-                  <p class="text-xs font-semibold text-gray-700 dark:text-gray-200">Summary</p>
-                  <p class="text-xs text-gray-600 dark:text-gray-300 mt-1 whitespace-pre-wrap">{diffSummary()}</p>
+                <div class="rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-3">
+                  <p class="text-xs font-semibold text-slate-700 dark:text-slate-200">Summary</p>
+                  <p class="text-xs text-slate-600 dark:text-slate-300 mt-1 whitespace-pre-wrap">{diffSummary()}</p>
                 </div>
               </Show>
               <div class="space-y-2">
                 <For each={diffFiles()}>
                   {(file) => (
-                    <div class="flex items-center justify-between gap-3 rounded-md border border-gray-200 dark:border-gray-700 px-3 py-2 text-xs">
+                    <div class="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between rounded-md border border-slate-200 dark:border-slate-700 px-3 py-2 text-xs">
                       <div class="flex items-center gap-2 min-w-0">
                         <span
                           class={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase ${diffStatusClasses(file.status)}`}
                         >
                           {formatDiffStatus(file.status)}
                         </span>
-                        <span class="text-gray-700 dark:text-gray-200 truncate">{file.path}</span>
+                        <span class="text-slate-700 dark:text-slate-200 truncate">{file.path}</span>
                       </div>
-                      <span class="text-gray-500 dark:text-gray-400 flex-shrink-0">{formatDiffStats(file)}</span>
+                      <span class="text-slate-500 dark:text-slate-400 sm:flex-shrink-0">{formatDiffStats(file)}</span>
                     </div>
                   )}
                 </For>
@@ -2089,8 +2089,8 @@ export const AISettings: Component = () => {
 
       {/* First-time Setup Modal */}
       <Show when={showSetupModal()}>
-        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-md w-full mx-4 overflow-hidden">
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div class="bg-white dark:bg-slate-800 rounded-md shadow-sm max-w-md w-full mx-4 overflow-hidden">
             {/* Header */}
             <div class="bg-blue-600 px-6 py-4">
               <h3 class="text-lg font-semibold text-white">Set Up Pulse Assistant</h3>
@@ -2103,75 +2103,75 @@ export const AISettings: Component = () => {
                 <button
                   type="button"
                   onClick={() => setSetupProvider('anthropic')}
-                  class={`p-3 rounded-lg border-2 transition-all text-center ${setupProvider() === 'anthropic'
+                  class={`p-3 rounded-md border-2 transition-all text-center ${setupProvider() === 'anthropic'
                     ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
-                    : 'border-gray-200 dark:border-gray-700 hover:border-blue-300'
+                    : 'border-slate-200 dark:border-slate-700 hover:border-blue-300'
                     }`}
                 >
                   <div class="text-sm font-medium">Anthropic</div>
-                  <div class="text-xs text-gray-500 mt-0.5">Claude</div>
+                  <div class="text-xs text-slate-500 mt-0.5">Claude</div>
                 </button>
                 <button
                   type="button"
                   onClick={() => setSetupProvider('openai')}
-                  class={`p-3 rounded-lg border-2 transition-all text-center ${setupProvider() === 'openai'
+                  class={`p-3 rounded-md border-2 transition-all text-center ${setupProvider() === 'openai'
                     ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
-                    : 'border-gray-200 dark:border-gray-700 hover:border-blue-300'
+                    : 'border-slate-200 dark:border-slate-700 hover:border-blue-300'
                     }`}
                 >
                   <div class="text-sm font-medium">OpenAI</div>
-                  <div class="text-xs text-gray-500 mt-0.5">ChatGPT</div>
+                  <div class="text-xs text-slate-500 mt-0.5">ChatGPT</div>
                 </button>
                 <button
                   type="button"
                   onClick={() => setSetupProvider('openrouter')}
-                  class={`p-3 rounded-lg border-2 transition-all text-center ${setupProvider() === 'openrouter'
+                  class={`p-3 rounded-md border-2 transition-all text-center ${setupProvider() === 'openrouter'
                     ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
-                    : 'border-gray-200 dark:border-gray-700 hover:border-blue-300'
+                    : 'border-slate-200 dark:border-slate-700 hover:border-blue-300'
                     }`}
                 >
                   <div class="text-sm font-medium">OpenRouter</div>
-                  <div class="text-xs text-gray-500 mt-0.5">Gateway</div>
+                  <div class="text-xs text-slate-500 mt-0.5">Gateway</div>
                 </button>
                 <button
                   type="button"
                   onClick={() => setSetupProvider('deepseek')}
-                  class={`p-3 rounded-lg border-2 transition-all text-center ${setupProvider() === 'deepseek'
+                  class={`p-3 rounded-md border-2 transition-all text-center ${setupProvider() === 'deepseek'
                     ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
-                    : 'border-gray-200 dark:border-gray-700 hover:border-blue-300'
+                    : 'border-slate-200 dark:border-slate-700 hover:border-blue-300'
                     }`}
                 >
                   <div class="text-sm font-medium">DeepSeek</div>
-                  <div class="text-xs text-gray-500 mt-0.5">V3</div>
+                  <div class="text-xs text-slate-500 mt-0.5">V3</div>
                 </button>
                 <button
                   type="button"
                   onClick={() => setSetupProvider('gemini')}
-                  class={`p-3 rounded-lg border-2 transition-all text-center ${setupProvider() === 'gemini'
+                  class={`p-3 rounded-md border-2 transition-all text-center ${setupProvider() === 'gemini'
                     ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
-                    : 'border-gray-200 dark:border-gray-700 hover:border-blue-300'
+                    : 'border-slate-200 dark:border-slate-700 hover:border-blue-300'
                     }`}
                 >
                   <div class="text-sm font-medium">Gemini</div>
-                  <div class="text-xs text-gray-500 mt-0.5">Google</div>
+                  <div class="text-xs text-slate-500 mt-0.5">Google</div>
                 </button>
                 <button
                   type="button"
                   onClick={() => setSetupProvider('ollama')}
-                  class={`p-3 rounded-lg border-2 transition-all text-center ${setupProvider() === 'ollama'
+                  class={`p-3 rounded-md border-2 transition-all text-center ${setupProvider() === 'ollama'
                     ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
-                    : 'border-gray-200 dark:border-gray-700 hover:border-blue-300'
+                    : 'border-slate-200 dark:border-slate-700 hover:border-blue-300'
                     }`}
                 >
                   <div class="text-sm font-medium">Ollama</div>
-                  <div class="text-xs text-gray-500 mt-0.5">Local</div>
+                  <div class="text-xs text-slate-500 mt-0.5">Local</div>
                 </button>
               </div>
 
               {/* API Key / URL Input */}
               <Show when={setupProvider() === 'ollama'} fallback={
                 <div>
-                  <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                  <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
                     {setupProvider() === 'anthropic'
                       ? 'Anthropic'
                       : setupProvider() === 'openai'
@@ -2187,9 +2187,9 @@ export const AISettings: Component = () => {
                     value={setupApiKey()}
                     onInput={(e) => setSetupApiKey(e.currentTarget.value)}
                     placeholder={setupProvider() === 'anthropic' ? 'sk-ant-...' : setupProvider() === 'gemini' ? 'AIza...' : setupProvider() === 'openrouter' ? 'sk-or-...' : 'sk-...'}
-                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
-                  <p class="text-xs text-gray-500 mt-1.5">
+                  <p class="text-xs text-slate-500 mt-1.5">
                     <a
                       href={setupProvider() === 'anthropic'
                         ? 'https://console.anthropic.com/settings/keys'
@@ -2197,9 +2197,9 @@ export const AISettings: Component = () => {
                           ? 'https://platform.openai.com/api-keys'
                           : setupProvider() === 'openrouter'
                             ? 'https://openrouter.ai/keys'
-                          : setupProvider() === 'gemini'
-                            ? 'https://aistudio.google.com/app/apikey'
-                            : 'https://platform.deepseek.com/api_keys'
+                            : setupProvider() === 'gemini'
+                              ? 'https://aistudio.google.com/app/apikey'
+                              : 'https://platform.deepseek.com/api_keys'
                       }
                       target="_blank"
                       rel="noopener"
@@ -2211,7 +2211,7 @@ export const AISettings: Component = () => {
                 </div>
               }>
                 <div>
-                  <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                  <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
                     Ollama Server URL
                   </label>
                   <input
@@ -2219,9 +2219,9 @@ export const AISettings: Component = () => {
                     value={setupOllamaUrl()}
                     onInput={(e) => setSetupOllamaUrl(e.currentTarget.value)}
                     placeholder="http://localhost:11434"
-                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
-                  <p class="text-xs text-gray-500 mt-1.5">
+                  <p class="text-xs text-slate-500 mt-1.5">
                     Ollama runs locally - no API key needed
                   </p>
                 </div>
@@ -2229,14 +2229,14 @@ export const AISettings: Component = () => {
             </div>
 
             {/* Footer */}
-            <div class="px-6 py-4 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
+            <div class="px-6 py-4 bg-slate-50 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 flex justify-end gap-3">
               <button
                 type="button"
                 onClick={() => {
                   setShowSetupModal(false);
                   setSetupApiKey('');
                 }}
-                class="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                class="px-4 py-2 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-md"
                 disabled={setupSaving()}
               >
                 Cancel
@@ -2312,7 +2312,7 @@ export const AISettings: Component = () => {
                     setSetupSaving(false);
                   }
                 }}
-                class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+                class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
                 disabled={setupSaving() || (setupProvider() !== 'ollama' && !setupApiKey().trim()) || (setupProvider() === 'ollama' && !setupOllamaUrl().trim())}
               >
                 {setupSaving() && <span class="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}

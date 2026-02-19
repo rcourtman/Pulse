@@ -113,7 +113,7 @@ export const ProLicensePanel: Component = () => {
 
   const statusTone = createMemo(() => {
     const current = status();
-    if (!current) return 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400';
+    if (!current) return 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400';
     if (current.valid && current.in_grace_period) {
       return 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300';
     }
@@ -123,7 +123,7 @@ export const ProLicensePanel: Component = () => {
     if (current.expires_at) {
       return 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300';
     }
-    return 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400';
+    return 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400';
   });
 
   const hasLicenseDetails = createMemo(() => {
@@ -197,7 +197,7 @@ export const ProLicensePanel: Component = () => {
         icon={<ShieldCheck class="w-5 h-5" />}
         action={
           <button
-            class="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors disabled:opacity-60"
+            class="inline-flex min-h-10 sm:min-h-9 items-center gap-2 px-3 py-2 text-sm font-medium rounded-md border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-60"
             disabled={loading()}
             onClick={loadStatus}
           >
@@ -218,19 +218,19 @@ export const ProLicensePanel: Component = () => {
             onInput={(event) => setLicenseKey(event.currentTarget.value)}
           />
           <p class={formHelpText}>
-            Keys are validated locally and never sent to a license server. By activating a license, you agree to the <a href="https://github.com/rcourtman/Pulse/blob/main/TERMS.md" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">Terms of Service</a>.
+            Keys are validated locally and never sent to a license server. By activating a license, you agree to the <a href="https://github.com/rcourtman/Pulse/blob/main/TERMS.md" target="_blank" rel="noopener noreferrer" class="inline-flex min-h-10 sm:min-h-9 items-center rounded px-1 text-blue-600 hover:underline">Terms of Service</a>.
           </p>
         </div>
         <div class="flex flex-wrap items-center gap-2">
           <button
-            class="px-4 py-2 text-sm font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            class="min-h-10 sm:min-h-9 px-4 py-2.5 text-sm font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
             onClick={handleActivate}
             disabled={activating() || !licenseKey().trim()}
           >
             {activating() ? 'Activating...' : 'Activate License'}
           </button>
           <button
-            class="px-4 py-2 text-sm font-medium rounded-md border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            class="min-h-10 sm:min-h-9 px-4 py-2.5 text-sm font-medium rounded-md border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
             onClick={handleClear}
             disabled={clearing() || loading() || !hasLicenseDetails()}
           >
@@ -239,14 +239,14 @@ export const ProLicensePanel: Component = () => {
         </div>
 
         <Show when={showTrialStart()}>
-          <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30 p-3">
-            <p class="text-sm font-medium text-gray-900 dark:text-gray-100">Try Pro for free</p>
-            <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">
+          <div class="rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-3">
+            <p class="text-sm font-medium text-slate-900 dark:text-slate-100">Try Pro for free</p>
+            <p class="text-xs text-slate-600 dark:text-slate-400 mt-1">
               Start a 14-day Pro trial for this organization.
             </p>
             <button
               type="button"
-              class="mt-3 inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md bg-emerald-600 text-white hover:bg-emerald-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              class="mt-3 inline-flex min-h-10 sm:min-h-9 items-center justify-center px-4 py-2.5 text-sm font-medium rounded-md bg-emerald-600 text-white hover:bg-emerald-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
               disabled={startingTrial()}
               onClick={handleStartTrial}
             >
@@ -262,7 +262,7 @@ export const ProLicensePanel: Component = () => {
         icon={<BadgeCheck class="w-5 h-5" />}
       >
 	        <Show when={subscriptionState() === 'expired'}>
-	          <div class="mb-4 rounded-lg border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-900/20 p-3 text-sm text-red-900 dark:text-red-100">
+	          <div class="mb-4 rounded-md border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-900/20 p-3 text-sm text-red-900 dark:text-red-100">
 	            <p class="font-medium">Your Pro trial has ended</p>
 	            <p class="text-xs text-red-800/80 dark:text-red-200/80 mt-1">
 	              Upgrade to keep Pro features.
@@ -277,7 +277,7 @@ export const ProLicensePanel: Component = () => {
 	            </a>
 	          </div>
 	        </Show>
-        <Show when={!loading()} fallback={<p class="text-sm text-gray-500">Loading license status...</p>}>
+        <Show when={!loading()} fallback={<p class="text-sm text-slate-500">Loading license status...</p>}>
           <div class="flex flex-wrap items-center gap-2">
             <span class={`px-2 py-1 text-xs font-medium rounded-full ${statusTone()}`}>
               {statusLabel()}
@@ -290,34 +290,34 @@ export const ProLicensePanel: Component = () => {
           </div>
 
 	          <Show when={hasLicenseDetails()} fallback={
-	            <div class="text-sm text-gray-500 dark:text-gray-400">
+	            <div class="text-sm text-slate-500 dark:text-slate-400">
 	              No Pro license is active.
 	            </div>
 	          }>
             <div class="grid gap-4 sm:grid-cols-2">
               <div>
-                <p class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Tier</p>
-                <p class="text-sm font-medium text-gray-900 dark:text-gray-100">{formattedTier()}</p>
+                <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Tier</p>
+                <p class="text-sm font-medium text-slate-900 dark:text-slate-100">{formattedTier()}</p>
               </div>
               <div>
-                <p class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Licensed Email</p>
-                <p class="text-sm font-medium text-gray-900 dark:text-gray-100">{status()?.email || 'Not available'}</p>
+                <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Licensed Email</p>
+                <p class="text-sm font-medium text-slate-900 dark:text-slate-100">{status()?.email || 'Not available'}</p>
               </div>
               <div>
-                <p class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Expires</p>
-                <p class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Expires</p>
+                <p class="text-sm font-medium text-slate-900 dark:text-slate-100">
                   {status()?.is_lifetime ? 'Never (Lifetime)' : formatDate(status()?.expires_at)}
                 </p>
               </div>
               <div>
-                <p class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Days Remaining</p>
-                <p class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Days Remaining</p>
+                <p class="text-sm font-medium text-slate-900 dark:text-slate-100">
                   {status()?.is_lifetime ? 'Unlimited' : status()?.days_remaining ?? 'Unknown'}
                 </p>
               </div>
               <div>
-                <p class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Max Nodes</p>
-                <p class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Max Nodes</p>
+                <p class="text-sm font-medium text-slate-900 dark:text-slate-100">
                   {(() => {
                     const maxNodes = status()?.max_nodes;
                     return typeof maxNodes === 'number' && maxNodes > 0 ? maxNodes : 'Unlimited';
@@ -325,8 +325,8 @@ export const ProLicensePanel: Component = () => {
                 </p>
               </div>
               <div>
-                <p class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Max Guests</p>
-                <p class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Max Guests</p>
+                <p class="text-sm font-medium text-slate-900 dark:text-slate-100">
                   {(() => {
                     const maxGuests = status()?.max_guests;
                     return typeof maxGuests === 'number' && maxGuests > 0 ? maxGuests : 'Unlimited';
@@ -337,11 +337,11 @@ export const ProLicensePanel: Component = () => {
 
             <Show when={formattedFeatures().length > 0}>
               <div>
-                <p class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">Features</p>
+                <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-2">Features</p>
                 <ul class="grid gap-2 sm:grid-cols-2">
                   <For each={formattedFeatures()}>
                     {(feature) => (
-                      <li class="text-sm text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                      <li class="text-sm text-slate-700 dark:text-slate-300 flex items-center gap-2">
                         <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
                         {feature}
                       </li>
@@ -353,7 +353,7 @@ export const ProLicensePanel: Component = () => {
           </Show>
 
 	          <Show when={!status()?.valid && subscriptionState() !== 'expired'}>
-	            <div class="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-3 text-sm text-amber-800 dark:text-amber-200">
+	            <div class="rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-3 text-sm text-amber-800 dark:text-amber-200">
 	              <p class="font-medium">Upgrade to Pro</p>
 	              <p class="text-xs text-amber-700 dark:text-amber-300 mt-1">
 	                Unlock Pulse Patrol, alert analysis, auto-fix, and more.

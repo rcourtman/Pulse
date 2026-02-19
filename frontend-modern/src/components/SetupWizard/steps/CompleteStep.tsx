@@ -282,8 +282,8 @@ Keep these credentials secure!
         <div class="text-center">
             {/* Success animation */}
             <div class="mb-5">
-                <div class="inline-flex items-center justify-center w-14 h-14 rounded-full bg-green-500 shadow-xl shadow-green-500/30 mb-3">
-                    <svg class="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+                <div class="inline-flex items-center justify-center w-12 h-12 rounded-md bg-green-600 mb-3 text-white">
+                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
                     </svg>
                 </div>
@@ -297,7 +297,7 @@ Keep these credentials secure!
 
             {/* Connected Agents - show when agents connect */}
             <Show when={connectedAgents().length > 0}>
-                <div class="bg-green-500/20 backdrop-blur-xl rounded-xl border border-green-400/30 p-4 text-left mb-4">
+                <div class="bg-green-900/40 rounded-md border border-green-800 p-4 text-left mb-4">
                     <h3 class="text-sm font-semibold text-green-300 mb-2 flex items-center gap-2">
                         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
@@ -307,7 +307,7 @@ Keep these credentials secure!
                     <div class="space-y-2">
                         <For each={connectedAgents()}>
                             {(agent) => (
-                                <div class="flex items-center justify-between bg-black/20 rounded-lg px-3 py-2">
+                                <div class="flex items-center justify-between bg-black/20 rounded-md px-3 py-2">
                                     <div class="flex items-center gap-2">
                                         <span class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
                                         <span class="text-white text-sm font-medium">{agent.name}</span>
@@ -326,7 +326,7 @@ Keep these credentials secure!
             </Show>
 
             {/* Auto-detection info */}
-            <div class="bg-white/10 backdrop-blur-xl rounded-xl border border-white/20 p-4 text-left mb-4">
+            <div class="bg-slate-800 rounded-md border border-slate-700 p-4 text-left mb-4">
                 <h3 class="text-sm font-semibold text-white mb-3 flex items-center gap-2">
                     <svg class="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
@@ -339,28 +339,28 @@ Keep these credentials secure!
                 </p>
 
                 <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
-                    <div class="bg-white/5 border border-white/10 rounded-lg p-2 text-center">
+                    <div class="bg-white border border-white/10 rounded-md p-2 text-center">
                         <div class="h-6 flex items-center justify-center mb-1">
                             <span class="text-lg">🐳</span>
                         </div>
                         <div class="text-white font-medium text-xs">Docker</div>
                         <p class="text-[9px] text-white/40">Container monitoring</p>
                     </div>
-                    <div class="bg-white/5 border border-white/10 rounded-lg p-2 text-center">
+                    <div class="bg-white border border-white/10 rounded-md p-2 text-center">
                         <div class="h-6 flex items-center justify-center mb-1">
                             <span class="text-lg">☸️</span>
                         </div>
                         <div class="text-white font-medium text-xs">Kubernetes</div>
                         <p class="text-[9px] text-white/40">Cluster monitoring</p>
                     </div>
-                    <div class="bg-white/5 border border-white/10 rounded-lg p-2 text-center">
+                    <div class="bg-white border border-white/10 rounded-md p-2 text-center">
                         <div class="h-6 flex items-center justify-center mb-1">
                             <ProxmoxIcon class="w-5 h-5 text-orange-400" />
                         </div>
                         <div class="text-white font-medium text-xs">Proxmox</div>
                         <p class="text-[9px] text-white/40">VM & container API</p>
                     </div>
-                    <div class="bg-white/5 border border-white/10 rounded-lg p-2 text-center">
+                    <div class="bg-white border border-white/10 rounded-md p-2 text-center">
                         <div class="h-6 flex items-center justify-center mb-1">
                             <span class="text-sm text-cyan-300 font-semibold">NAS</span>
                         </div>
@@ -369,7 +369,7 @@ Keep these credentials secure!
                     </div>
                 </div>
 
-                <div class="bg-green-500/10 border border-green-400/30 rounded-lg p-2.5">
+                <div class="bg-green-500/10 border border-green-400/30 rounded-md p-2.5">
                     <div class="flex items-center gap-2">
                         <div class="w-4 h-4 rounded-full bg-green-500 flex items-center justify-center">
                             <svg class="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
@@ -388,7 +388,7 @@ Keep these credentials secure!
             </div>
 
             {/* Agent installation */}
-            <div class="bg-white/10 backdrop-blur-xl rounded-xl border border-white/20 p-4 text-left mb-4">
+            <div class="bg-slate-800 rounded-md border border-slate-700 p-4 text-left mb-4">
                 <div class="flex items-center justify-between mb-2">
                     <h3 class="text-sm font-semibold text-white flex items-center gap-2">
                         <svg class="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -421,11 +421,11 @@ Keep these credentials secure!
                     Copy and run on each host you want monitored. <span class="text-green-300">A new token is generated automatically after each copy.</span>
                 </p>
 
-                <div class="bg-black/40 rounded-lg p-2.5 font-mono text-[10px] mb-2 relative group">
+                <div class="bg-black/40 rounded-md p-2.5 font-mono text-[10px] mb-2 relative group">
                     <code class="text-green-400 break-all block leading-relaxed">{getInstallCommand()}</code>
                     <button
                         onClick={handleCopyInstall}
-                        class="absolute top-1.5 right-1.5 p-1.5 bg-white/10 hover:bg-white/20 rounded-md transition-all"
+                        class="absolute top-1.5 right-1.5 p-1.5 bg-white hover:bg-white rounded-md transition-all"
                         title="Copy command"
                     >
                         {copied() === 'install' ? (
@@ -446,10 +446,10 @@ Keep these credentials secure!
             </div>
 
             {/* Credentials section (collapsible) */}
-            <div class="bg-white/5 backdrop-blur rounded-lg border border-white/10 mb-4 overflow-hidden">
+            <div class="bg-slate-800 rounded-md border border-slate-700 mb-4 overflow-hidden shadow-sm">
                 <button
                     onClick={() => setShowCredentials(!showCredentials())}
-                    class="w-full p-2.5 flex items-center justify-between text-left hover:bg-white/5 transition-all"
+                    class="w-full p-2.5 flex items-center justify-between text-left hover:bg-white transition-all"
                 >
                     <div class="flex items-center gap-2">
                         <svg class="w-3.5 h-3.5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -476,7 +476,7 @@ Keep these credentials secure!
                                 <code class="text-white font-mono text-xs break-all">{props.state.password}</code>
                                 <button
                                     onClick={() => handleCopy('password')}
-                                    class="ml-2 p-0.5 hover:bg-white/10 rounded transition-all text-white/40 hover:text-white"
+                                    class="ml-2 p-0.5 hover:bg-white rounded transition-all text-white/40 hover:text-white"
                                 >
                                     {copied() === 'password' ? (
                                         <svg class="w-3 h-3 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -497,7 +497,7 @@ Keep these credentials secure!
                                 <code class="text-white font-mono text-[10px] break-all">{props.state.apiToken}</code>
                                 <button
                                     onClick={() => handleCopy('token')}
-                                    class="ml-2 p-0.5 hover:bg-white/10 rounded transition-all text-white/40 hover:text-white"
+                                    class="ml-2 p-0.5 hover:bg-white rounded transition-all text-white/40 hover:text-white"
                                 >
                                     {copied() === 'token' ? (
                                         <svg class="w-3 h-3 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -514,7 +514,7 @@ Keep these credentials secure!
 
                         <button
                             onClick={downloadCredentials}
-                            class="w-full py-1.5 text-[10px] text-blue-300 hover:text-blue-200 flex items-center justify-center gap-1 hover:bg-white/5 rounded-md transition-all"
+                            class="w-full py-1.5 text-[10px] text-blue-300 hover:text-blue-200 flex items-center justify-center gap-1 hover:bg-white rounded-md transition-all"
                         >
                             <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -528,7 +528,7 @@ Keep these credentials secure!
             {/* Launch button */}
             <button
                 onClick={props.onComplete}
-                class="w-full py-2.5 px-5 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-lg transition-all shadow-lg shadow-blue-500/25"
+                class="w-full py-2.5 px-5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-md transition-colors"
             >
                 {connectedAgents().length > 0 ? 'Go to Dashboard' : 'Skip for Now'}
             </button>
@@ -539,9 +539,9 @@ Keep these credentials secure!
 
             {/* Optional upsell after core agent onboarding is complete */}
             <Show when={connectedAgents().length > 0}>
-                <div class="bg-gradient-to-r from-blue-500/20 to-purple-500/20 backdrop-blur-xl rounded-xl border border-blue-400/30 p-4 text-left mt-4">
+                <div class="bg-slate-800 rounded-md border border-slate-700 p-4 text-left mt-4 shadow-sm">
                     <div class="flex items-start gap-3">
-                        <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-500 text-white shadow-lg shadow-blue-500/30 shrink-0">
+                        <div class="flex h-9 w-9 items-center justify-center rounded bg-blue-600 text-white shrink-0">
                             <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
                             </svg>
@@ -557,7 +557,7 @@ Keep these credentials secure!
                                     <button
                                         type="button"
                                         onClick={handleSetupRelay}
-                                        class="inline-flex items-center gap-1.5 rounded-lg bg-blue-500 hover:bg-blue-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm transition-all"
+                                        class="inline-flex items-center gap-1.5 rounded-md bg-blue-500 hover:bg-blue-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm transition-all"
                                     >
                                         <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                             <path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
@@ -570,7 +570,7 @@ Keep these credentials secure!
                                     type="button"
                                     onClick={() => void handleStartTrial()}
                                     disabled={trialStarting()}
-                                    class="inline-flex items-center gap-1.5 rounded-lg bg-blue-500 hover:bg-blue-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm transition-all disabled:opacity-50"
+                                    class="inline-flex items-center gap-1.5 rounded-md bg-blue-500 hover:bg-blue-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm transition-all disabled:opacity-50"
                                 >
                                     {trialStarting() ? (
                                         <>

@@ -51,7 +51,7 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
           {/* Header */}
           <div class="bg-amber-50 dark:bg-amber-900/20 px-6 py-4 border-b border-amber-200 dark:border-amber-700">
             <div class="flex items-center gap-3">
-              <div class="p-2 bg-amber-100 dark:bg-amber-900/50 rounded-lg">
+              <div class="p-2 bg-amber-100 dark:bg-amber-900/50 rounded-md">
                 <svg
                   class="w-5 h-5 text-amber-600 dark:text-amber-400"
                   fill="none"
@@ -70,7 +70,7 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
               <Show
                 when={!props.authDisabledByEnv()}
                 fallback={
-                  <span class="px-3 py-1.5 text-xs font-semibold rounded-lg border border-amber-300 text-amber-800 bg-amber-100/60 dark:border-amber-700 dark:text-amber-100 dark:bg-amber-900/40 whitespace-nowrap">
+                  <span class="px-3 py-1.5 text-xs font-semibold rounded-md border border-amber-300 text-amber-800 bg-amber-100/60 dark:border-amber-700 dark:text-amber-100 dark:bg-amber-900/40 whitespace-nowrap">
                     Controlled by DISABLE_AUTH
                   </span>
                 }
@@ -78,7 +78,7 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
                 <button
                   type="button"
                   onClick={() => props.setShowQuickSecuritySetup(!props.showQuickSecuritySetup())}
-                  class="px-3 py-1.5 text-xs font-medium rounded-lg border border-amber-300 text-amber-800 bg-amber-100/50 hover:bg-amber-100 transition-colors dark:border-amber-700 dark:text-amber-200 dark:bg-amber-900/30 dark:hover:bg-amber-900/40 whitespace-nowrap"
+                  class="px-3 py-1.5 text-xs font-medium rounded-md border border-amber-300 text-amber-800 bg-amber-100/50 hover:bg-amber-100 transition-colors dark:border-amber-700 dark:text-amber-200 dark:bg-amber-900/30 dark:hover:bg-amber-900/40 whitespace-nowrap"
                 >
                   Setup
                 </button>
@@ -132,42 +132,43 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
           icon={<Lock class="w-5 h-5" strokeWidth={2} />}
         >
           {/* Content */}
-          <div class="flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                props.setShowPasswordModal(true);
-              }}
-              class="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              Change password
-            </button>
-            <Show
-              when={!props.authDisabledByEnv()}
-              fallback={
-                <span class="px-4 py-2 text-sm font-semibold border border-amber-300 text-amber-800 bg-amber-50 dark:border-amber-700 dark:text-amber-200 dark:bg-amber-900/30 rounded-lg">
-                  Remove DISABLE_AUTH to rotate credentials
-                </span>
-              }
-            >
+          <div class="flex flex-col gap-3 sm:gap-4">
+            <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
               <button
                 type="button"
-                onClick={() => props.setShowQuickSecurityWizard(!props.showQuickSecurityWizard())}
-                class="px-4 py-2 text-sm font-medium border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  props.setShowPasswordModal(true);
+                }}
+                class="w-full sm:w-auto min-h-10 sm:min-h-10 px-4 py-2.5 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
               >
-                Rotate credentials
+                Change password
               </button>
-            </Show>
-            <div class="flex-1"></div>
-            <div class="text-xs text-gray-600 dark:text-gray-400">
-              <span class="font-medium text-gray-800 dark:text-gray-200">User:</span>{' '}
+              <Show
+                when={!props.authDisabledByEnv()}
+                fallback={
+                  <span class="w-full sm:w-auto min-h-10 sm:min-h-10 inline-flex items-center justify-center px-4 py-2.5 text-sm font-semibold border border-amber-300 text-amber-800 bg-amber-50 dark:border-amber-700 dark:text-amber-200 dark:bg-amber-900/30 rounded-md">
+                    Remove DISABLE_AUTH to rotate credentials
+                  </span>
+                }
+              >
+                <button
+                  type="button"
+                  onClick={() => props.setShowQuickSecurityWizard(!props.showQuickSecurityWizard())}
+                  class="w-full sm:w-auto min-h-10 sm:min-h-10 px-4 py-2.5 text-sm font-medium border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                >
+                  Rotate credentials
+                </button>
+              </Show>
+            </div>
+            <div class="text-xs text-slate-600 dark:text-slate-400">
+              <span class="font-medium text-slate-800 dark:text-slate-200">User:</span>{' '}
               {props.securityStatus()?.authUsername || 'Not configured'}
             </div>
           </div>
 
-          <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+          <div class="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
             <Toggle
               label="Hide local login form"
               description="Hide the username/password form on the login page. Users will only see SSO options unless ?show_local=true is used."
@@ -182,7 +183,7 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
           </div>
 
           <Show when={!props.authDisabledByEnv() && props.showQuickSecurityWizard()}>
-            <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+            <div class="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
               <QuickSecuritySetup
                 mode="rotate"
                 defaultUsername={props.securityStatus()?.authUsername || 'admin'}
@@ -198,7 +199,7 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
 
       {/* Show pending restart message if configured but not loaded */}
       <Show when={props.securityStatus()?.configuredButPendingRestart}>
-        <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
+        <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md p-4">
           <div class="flex items-start space-x-3">
             <div class="flex-shrink-0">
               <svg
@@ -227,19 +228,19 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
                 After restarting, you'll need to log in with your saved credentials.
               </p>
 
-              <div class="mt-4 bg-white dark:bg-gray-800 rounded-lg p-3 border border-amber-200 dark:border-amber-700">
-                <p class="text-xs font-semibold text-gray-900 dark:text-gray-100 mb-2">
+              <div class="mt-4 bg-white dark:bg-slate-800 rounded-md p-3 border border-amber-200 dark:border-amber-700">
+                <p class="text-xs font-semibold text-slate-900 dark:text-slate-100 mb-2">
                   How to restart Pulse:
                 </p>
 
                 <Show when={props.versionInfo()?.deploymentType === 'proxmoxve'}>
                   <div class="space-y-2">
-                    <p class="text-xs text-gray-700 dark:text-gray-300">
+                    <p class="text-xs text-slate-700 dark:text-slate-300">
                       Type{' '}
-                      <code class="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded">update</code>{' '}
+                      <code class="px-1 py-0.5 bg-slate-100 dark:bg-slate-700 rounded">update</code>{' '}
                       in your ProxmoxVE console
                     </p>
-                    <p class="text-xs text-gray-600 dark:text-gray-400 italic">
+                    <p class="text-xs text-slate-600 dark:text-slate-400 italic">
                       Or restart manually with: <code class="text-xs">systemctl restart pulse</code>
                     </p>
                   </div>
@@ -247,10 +248,10 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
 
                 <Show when={props.versionInfo()?.deploymentType === 'docker'}>
                   <div class="space-y-1">
-                    <p class="text-xs text-gray-700 dark:text-gray-300">
+                    <p class="text-xs text-slate-700 dark:text-slate-300">
                       Restart your Docker container:
                     </p>
-                    <code class="block text-xs bg-gray-100 dark:bg-gray-700 p-2 rounded mt-1">
+                    <code class="block text-xs bg-slate-100 dark:bg-slate-700 p-2 rounded mt-1">
                       docker restart pulse
                     </code>
                   </div>
@@ -263,8 +264,8 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
                   }
                 >
                   <div class="space-y-1">
-                    <p class="text-xs text-gray-700 dark:text-gray-300">Restart the service:</p>
-                    <code class="block text-xs bg-gray-100 dark:bg-gray-700 p-2 rounded mt-1">
+                    <p class="text-xs text-slate-700 dark:text-slate-300">Restart the service:</p>
+                    <code class="block text-xs bg-slate-100 dark:bg-slate-700 p-2 rounded mt-1">
                       sudo systemctl restart pulse
                     </code>
                   </div>
@@ -272,10 +273,10 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
 
                 <Show when={props.versionInfo()?.deploymentType === 'development'}>
                   <div class="space-y-1">
-                    <p class="text-xs text-gray-700 dark:text-gray-300">
+                    <p class="text-xs text-slate-700 dark:text-slate-300">
                       Restart the development server:
                     </p>
-                    <code class="block text-xs bg-gray-100 dark:bg-gray-700 p-2 rounded mt-1">
+                    <code class="block text-xs bg-slate-100 dark:bg-slate-700 p-2 rounded mt-1">
                       sudo systemctl restart pulse-hot-dev
                     </code>
                   </div>
@@ -283,7 +284,7 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
 
                 <Show when={!props.versionInfo()?.deploymentType}>
                   <div class="space-y-1">
-                    <p class="text-xs text-gray-700 dark:text-gray-300">
+                    <p class="text-xs text-slate-700 dark:text-slate-300">
                       Restart Pulse using your deployment method
                     </p>
                   </div>

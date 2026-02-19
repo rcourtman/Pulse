@@ -38,10 +38,10 @@ export function DashboardCustomizer(props: DashboardCustomizerProps) {
     <div class="relative shrink-0" ref={rootRef}>
       <button
         type="button"
-        class={`inline-flex items-center gap-1.5 whitespace-nowrap px-2.5 py-1.5 text-xs font-medium rounded-lg transition-all ${
+        class={`inline-flex items-center gap-1.5 whitespace-nowrap px-2.5 py-1.5 text-xs font-medium rounded-md transition-all ${
           open()
             ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300'
-            : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+            : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
         }`}
         title="Customize dashboard widgets"
         onClick={() => setOpen(!open())}
@@ -58,10 +58,10 @@ export function DashboardCustomizer(props: DashboardCustomizerProps) {
       </button>
 
       <Show when={open()}>
-        <div class="absolute right-0 mt-1 w-64 rounded-lg border border-gray-200 bg-white shadow-xl z-50 dark:border-gray-700 dark:bg-gray-800">
-          <div class="px-3 py-2 border-b border-gray-100 dark:border-gray-700">
+        <div class="absolute right-0 mt-1 w-64 rounded-md border border-slate-200 bg-white shadow-sm z-50 dark:border-slate-700 dark:bg-slate-800">
+          <div class="px-3 py-2 border-b border-slate-100 dark:border-slate-700">
             <div class="flex items-center justify-between">
-              <span class="text-xs font-medium text-gray-700 dark:text-gray-200">Dashboard Widgets</span>
+              <span class="text-xs font-medium text-slate-700 dark:text-slate-200">Dashboard Widgets</span>
               <Show when={!props.isDefault()}>
                 <button
                   type="button"
@@ -82,17 +82,17 @@ export function DashboardCustomizer(props: DashboardCustomizerProps) {
                 const isLast = () => index() === props.allWidgets().length - 1;
 
                 return (
-                  <div class="flex items-center gap-2.5 px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                  <div class="flex items-center gap-2.5 px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
                     <label class="flex min-w-0 flex-1 items-center gap-2.5 cursor-pointer">
                       <input
                         type="checkbox"
-                        class="w-3.5 h-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 focus:ring-offset-0 dark:border-gray-600 dark:bg-gray-700 dark:checked:bg-blue-600"
+                        class="w-3.5 h-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 focus:ring-offset-0 dark:border-slate-600 dark:bg-slate-700 dark:checked:bg-blue-600"
                         checked={visible()}
                         onChange={() => props.toggleWidget(widget.id)}
                       />
                       <span
                         class={`truncate text-sm ${
-                          visible() ? 'text-gray-700 dark:text-gray-200' : 'text-gray-400 dark:text-gray-500'
+                          visible() ? 'text-slate-700 dark:text-slate-200' : 'text-slate-400 dark:text-slate-500'
                         }`}
                       >
                         {widget.label}
@@ -102,7 +102,7 @@ export function DashboardCustomizer(props: DashboardCustomizerProps) {
                     <div class="flex items-center gap-0.5">
                       <button
                         type="button"
-                        class="rounded p-1 text-gray-500 transition-colors hover:bg-gray-200 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-600 dark:hover:text-gray-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                        class="rounded p-1 text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-600 dark:hover:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed"
                         title="Move up"
                         aria-label={`Move ${widget.label} up`}
                         disabled={isFirst()}
@@ -114,7 +114,7 @@ export function DashboardCustomizer(props: DashboardCustomizerProps) {
                       </button>
                       <button
                         type="button"
-                        class="rounded p-1 text-gray-500 transition-colors hover:bg-gray-200 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-600 dark:hover:text-gray-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                        class="rounded p-1 text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-600 dark:hover:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed"
                         title="Move down"
                         aria-label={`Move ${widget.label} down`}
                         disabled={isLast()}

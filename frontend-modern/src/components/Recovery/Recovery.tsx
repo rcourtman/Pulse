@@ -42,7 +42,7 @@ const normalizeProviderFromQuery = (value: string): string => {
   return v;
 };
 
-const groupHeaderRowClass = () => 'bg-gray-50 dark:bg-gray-900/40';
+const groupHeaderRowClass = () => 'bg-slate-50 dark:bg-slate-800';
 const groupHeaderTextClass = () =>
   'py-1 pr-2 pl-4 text-[12px] sm:text-sm font-semibold text-slate-700 dark:text-slate-300';
 
@@ -71,7 +71,7 @@ const OUTCOME_BADGE_CLASS: Record<KnownOutcome, string> = {
   warning: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300',
   failed: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
   running: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
-  unknown: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
+  unknown: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
 };
 
 const titleize = (value: string): string =>
@@ -242,11 +242,11 @@ const deriveRollupIssueTone = (r: ProtectionRollup, nowMs: number): IssueTone =>
 
 const rollupAgeTextClass = (r: ProtectionRollup, nowMs: number): string => {
   const ts = rollupTimestampMs(r);
-  if (!ts || ts <= 0) return 'text-gray-500 dark:text-gray-500';
+  if (!ts || ts <= 0) return 'text-slate-500 dark:text-slate-500';
   const ageMs = nowMs - ts;
   if (ageMs >= STALE_ISSUE_THRESHOLD_MS) return 'text-rose-700 dark:text-rose-300';
   if (ageMs >= AGING_THRESHOLD_MS) return 'text-amber-700 dark:text-amber-300';
-  return 'text-gray-600 dark:text-gray-400';
+  return 'text-slate-600 dark:text-slate-400';
 };
 
 
@@ -911,7 +911,7 @@ const Recovery: Component = () => {
               />
               {/* Mobile-only: toggle + Filters button */}
               <div class="flex items-center justify-between gap-2 sm:hidden">
-                <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5" role="group" aria-label="View">
+                <div class="inline-flex rounded-md bg-slate-100 dark:bg-slate-700 p-0.5" role="group" aria-label="View">
                   <button
                     type="button"
                     onClick={() => { setView('protected'); setRollupId(''); }}
@@ -933,7 +933,7 @@ const Recovery: Component = () => {
                   <button
                     type="button"
                     onClick={() => setProtectedFiltersOpen((o) => !o)}
-                    class="flex items-center gap-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400"
+                    class="flex items-center gap-1.5 rounded-md bg-slate-100 dark:bg-slate-700 px-2.5 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-400"
                   >
                     <ListFilterIcon class="w-3.5 h-3.5" />
                     Filters
@@ -947,9 +947,9 @@ const Recovery: Component = () => {
               </div>
 
               <Show when={!isMobile() || protectedFiltersOpen()}>
-                <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                <div class="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
                   {/* Toggle — desktop only, first in filter row */}
-                  <div class="hidden sm:inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5" role="group" aria-label="View">
+                  <div class="hidden sm:inline-flex rounded-md bg-slate-100 dark:bg-slate-700 p-0.5" role="group" aria-label="View">
                     <button
                       type="button"
                       onClick={() => { setView('protected'); setRollupId(''); }}
@@ -967,12 +967,12 @@ const Recovery: Component = () => {
                       Events
                     </button>
                   </div>
-                  <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block" />
+                  <div class="h-5 w-px bg-slate-200 dark:bg-slate-600 hidden sm:block" />
 
-                  <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                  <div class="inline-flex items-center gap-1 rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
                     <label
                       for="recovery-provider-filter"
-                      class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+                      class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500"
                     >
                       Provider
                     </label>
@@ -980,7 +980,7 @@ const Recovery: Component = () => {
                       id="recovery-provider-filter"
                       value={providerFilter()}
                       onChange={(event) => setProviderFilter(event.currentTarget.value)}
-                      class="min-w-[10rem] max-w-[14rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+                      class="min-w-[10rem] max-w-[14rem] rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-800 outline-none focus:border-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
                     >
                       <For each={providerOptions()}>
                         {(p) => <option value={p}>{p === 'all' ? 'All Providers' : sourceLabel(p)}</option>}
@@ -988,10 +988,10 @@ const Recovery: Component = () => {
                     </select>
                   </div>
 
-                  <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                  <div class="inline-flex items-center gap-1 rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
                     <label
                       for="recovery-protected-status-filter"
-                      class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+                      class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500"
                     >
                       Status
                     </label>
@@ -1003,7 +1003,7 @@ const Recovery: Component = () => {
                         setOutcomeFilter(value);
                         if (value !== 'all') setVerificationFilter('all');
                       }}
-                      class="min-w-[7rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+                      class="min-w-[7rem] rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-800 outline-none focus:border-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
                     >
                       <For each={availableOutcomes}>
                         {(outcome) => (
@@ -1022,7 +1022,7 @@ const Recovery: Component = () => {
                     class={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${
                       protectedStaleOnly()
                         ? 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-100'
-                        : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700'
+                        : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'
                     }`}
                   >
                     Stale only
@@ -1047,7 +1047,7 @@ const Recovery: Component = () => {
 
         <Card padding="sm">
           <Show when={recoveryRollups.rollups.loading && filteredRollups().length === 0}>
-            <div class="px-3 py-6 text-sm text-gray-500 dark:text-gray-400">Loading protection rollups...</div>
+            <div class="px-3 py-6 text-sm text-slate-500 dark:text-slate-400">Loading protection rollups...</div>
           </Show>
 
           <Show when={!recoveryRollups.rollups.loading && recoveryRollups.rollups.error}>
@@ -1068,10 +1068,10 @@ const Recovery: Component = () => {
             <div class="overflow-x-auto">
               <table class="w-full table-fixed text-xs">
                 <thead>
-                  <tr class="border-b border-gray-200 bg-gray-50 text-left text-[10px] uppercase tracking-wide text-gray-500 dark:border-gray-700 dark:bg-gray-800/70 dark:text-gray-400">
+                  <tr class="border-b border-slate-200 bg-slate-50 text-left text-[10px] uppercase tracking-wide text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
                     {([['subject', 'Subject'], ['source', 'Source'], ['lastBackup', 'Last Backup'], ['outcome', 'Outcome']] as const).map(([col, label]) => (
                       <th
-                        class={`px-1.5 sm:px-2 py-1 cursor-pointer select-none hover:text-gray-700 dark:hover:text-gray-200 transition-colors${col === 'source' ? ' hidden md:table-cell w-[110px]' : col === 'lastBackup' ? ' w-[75px]' : col === 'outcome' ? ' w-[70px]' : ''}`}
+                        class={`px-1.5 sm:px-2 py-1 cursor-pointer select-none hover:text-slate-700 dark:hover:text-slate-200 transition-colors${col === 'source' ? ' hidden md:table-cell w-[110px]' : col === 'lastBackup' ? ' w-[75px]' : col === 'outcome' ? ' w-[70px]' : ''}`}
                         onClick={() => toggleProtectedSort(col)}
                       >
                         <span class="inline-flex items-center gap-1">
@@ -1108,19 +1108,19 @@ const Recovery: Component = () => {
                       const neverSucceeded = (!Number.isFinite(successMs) || successMs <= 0) && Number.isFinite(attemptMs) && attemptMs > 0;
                       return (
                         <tr
-                          class="cursor-pointer border-b border-gray-200 hover:bg-gray-50/70 dark:border-gray-700 dark:hover:bg-gray-800/35"
+                          class="cursor-pointer border-b border-slate-200 hover:bg-slate-50/70 dark:border-slate-700 dark:hover:bg-slate-800/35"
                           onClick={() => {
                             setView('events');
                             setRollupId(r.rollupId);
                           }}
                         >
                           <td
-                            class={`relative max-w-[420px] truncate whitespace-nowrap px-1.5 sm:px-2 py-1 text-gray-900 ${
+                            class={`relative max-w-[420px] truncate whitespace-nowrap px-1.5 sm:px-2 py-1 text-slate-900 ${
                               issueTone === 'rose' || issueTone === 'blue'
                                 ? 'font-medium dark:text-slate-100'
                                 : issueTone === 'amber'
                                   ? 'dark:text-slate-200'
-                                  : 'dark:text-gray-300'
+                                  : 'dark:text-slate-300'
                             }`}
                             title={label}
                           >
@@ -1176,7 +1176,7 @@ const Recovery: Component = () => {
       <Show when={view() === 'events'}>
         <Show when={recoveryPoints.response.loading && sortedPoints().length === 0}>
           <Card padding="sm">
-            <div class="px-3 py-6 text-sm text-gray-500 dark:text-gray-400">Loading recovery points...</div>
+            <div class="px-3 py-6 text-sm text-slate-500 dark:text-slate-400">Loading recovery points...</div>
           </Card>
         </Show>
 
@@ -1274,7 +1274,7 @@ const Recovery: Component = () => {
             <Show
               when={timeline().points.length > 0 && timeline().maxValue > 0}
               fallback={
-                <div class="text-sm text-gray-600 dark:text-gray-300">
+                <div class="text-sm text-slate-600 dark:text-slate-300">
                   <Show when={recoverySeries.response.loading}>
                     <span>Loading recovery activity...</span>
                   </Show>
@@ -1284,7 +1284,7 @@ const Recovery: Component = () => {
                 </div>
               }
             >
-              <div class="mb-1.5 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-600 dark:text-gray-300">
+              <div class="mb-1.5 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600 dark:text-slate-300">
                 <div class="flex items-center gap-3">
                   <span class="flex items-center gap-1">
                     <span class={`h-2.5 w-2.5 rounded ${CHART_SEGMENT_CLASS.snapshot}`} />
@@ -1299,7 +1299,7 @@ const Recovery: Component = () => {
                     Remote
                   </span>
                 </div>
-                <div class="inline-flex rounded border border-gray-300 bg-white p-0.5 text-xs dark:border-gray-700 dark:bg-gray-900">
+                <div class="inline-flex rounded border border-slate-300 bg-white p-0.5 text-xs dark:border-slate-700 dark:bg-slate-900">
                   <For each={[7, 30, 90, 365] as const}>
                     {(range) => (
                       <button
@@ -1312,7 +1312,7 @@ const Recovery: Component = () => {
                         class={`rounded px-2 py-1 ${
                           chartRangeDays() === range
                             ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-200'
-                            : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700/60'
+                            : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700/60'
                         }`}
                       >
                         {range === 365 ? '1y' : `${range}d`}
@@ -1322,8 +1322,8 @@ const Recovery: Component = () => {
                 </div>
               </div>
 
-              <div class="relative h-32 overflow-hidden rounded bg-gray-100 dark:bg-gray-800/80">
-                <div class="absolute bottom-8 left-0 top-2 w-6 text-[10px] text-gray-500 dark:text-gray-400">
+              <div class="relative h-32 overflow-hidden rounded bg-slate-100 dark:bg-slate-800">
+                <div class="absolute bottom-8 left-0 top-2 w-6 text-[10px] text-slate-500 dark:text-slate-400">
                   <div class="flex h-full flex-col justify-between pr-1 text-right">
                     <For each={[...timeline().axisTicks].reverse()}>{(tick) => <span>{tick}</span>}</For>
                   </div>
@@ -1339,7 +1339,7 @@ const Recovery: Component = () => {
                           const bottom = timeline().axisMax > 0 ? (tick / timeline().axisMax) * 100 : 0;
                           return (
                             <div
-                              class="pointer-events-none absolute inset-x-0 border-t border-gray-200/80 dark:border-gray-700/70"
+                              class="pointer-events-none absolute inset-x-0 border-t border-slate-200/80 dark:border-slate-700/70"
                               style={{ bottom: `${bottom}%` }}
                             />
                           );
@@ -1383,7 +1383,7 @@ const Recovery: Component = () => {
                               <button
                                 type="button"
                                 class={`h-full w-full rounded-sm ${
-                                  isSelected ? 'bg-blue-100 dark:bg-blue-900/30' : 'hover:bg-gray-200 dark:hover:bg-gray-700/70'
+                                  isSelected ? 'bg-blue-100 dark:bg-blue-900/30' : 'hover:bg-slate-200 dark:hover:bg-slate-700/70'
                                 }`}
                                 aria-label={`${prettyDateLabel(point.key)}: ${total} recovery points`}
                                 onClick={() => {
@@ -1451,7 +1451,7 @@ const Recovery: Component = () => {
                               <Show when={showLabel}>
                                 <span
                                   class={`absolute bottom-0 left-1/2 -translate-x-1/2 whitespace-nowrap text-[9px] ${
-                                    isSelected ? 'font-semibold text-blue-700 dark:text-blue-300' : 'text-gray-500 dark:text-gray-400'
+                                    isSelected ? 'font-semibold text-blue-700 dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'
                                   }`}
                                 >
                                   {compactAxisLabel(point.key, chartRangeDays())}
@@ -1497,8 +1497,8 @@ const Recovery: Component = () => {
                         >
                           Protected
                         </button>
-                        <span class="text-gray-400 dark:text-gray-500 text-sm">›</span>
-                        <span class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate max-w-[12rem]">
+                        <span class="text-slate-400 dark:text-slate-500 text-sm">›</span>
+                        <span class="text-sm font-medium text-slate-900 dark:text-slate-100 truncate max-w-[12rem]">
                           <Show when={selectedRollup()}>
                             {rollupSubjectLabel(selectedRollup()!, resourcesById())}
                           </Show>
@@ -1506,7 +1506,7 @@ const Recovery: Component = () => {
                       </div>
                     }
                   >
-                    <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5" role="group" aria-label="View">
+                    <div class="inline-flex rounded-md bg-slate-100 dark:bg-slate-700 p-0.5" role="group" aria-label="View">
                       <button
                         type="button"
                         onClick={() => { setView('protected'); setRollupId(''); }}
@@ -1529,7 +1529,7 @@ const Recovery: Component = () => {
                     <button
                       type="button"
                       onClick={() => setEventsFiltersOpen((o) => !o)}
-                      class="flex items-center gap-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400"
+                      class="flex items-center gap-1.5 rounded-md bg-slate-100 dark:bg-slate-700 px-2.5 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-400"
                     >
                       <ListFilterIcon class="w-3.5 h-3.5" />
                       Filters
@@ -1543,7 +1543,7 @@ const Recovery: Component = () => {
                 </div>
 
                 <Show when={!isMobile() || eventsFiltersOpen()}>
-                  <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                  <div class="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
                     {/* Toggle/breadcrumb — desktop only, first in filter row */}
                     <Show
                       when={!rollupId().trim()}
@@ -1556,8 +1556,8 @@ const Recovery: Component = () => {
                           >
                             Protected
                           </button>
-                          <span class="text-gray-400 dark:text-gray-500 text-sm">›</span>
-                          <span class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate max-w-[12rem]">
+                          <span class="text-slate-400 dark:text-slate-500 text-sm">›</span>
+                          <span class="text-sm font-medium text-slate-900 dark:text-slate-100 truncate max-w-[12rem]">
                             <Show when={selectedRollup()}>
                               {rollupSubjectLabel(selectedRollup()!, resourcesById())}
                             </Show>
@@ -1565,7 +1565,7 @@ const Recovery: Component = () => {
                         </div>
                       }
                     >
-                      <div class="hidden sm:inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5" role="group" aria-label="View">
+                      <div class="hidden sm:inline-flex rounded-md bg-slate-100 dark:bg-slate-700 p-0.5" role="group" aria-label="View">
                         <button
                           type="button"
                           onClick={() => { setView('protected'); setRollupId(''); }}
@@ -1584,12 +1584,12 @@ const Recovery: Component = () => {
                         </button>
                       </div>
                     </Show>
-                    <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block" />
+                    <div class="h-5 w-px bg-slate-200 dark:bg-slate-600 hidden sm:block" />
 
-                    <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                    <div class="inline-flex items-center gap-1 rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
                       <label
                         for="recovery-provider-filter-events"
-                        class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+                        class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500"
                       >
                         Provider
                       </label>
@@ -1600,7 +1600,7 @@ const Recovery: Component = () => {
                           setProviderFilter(normalizeProviderFromQuery(event.currentTarget.value));
                           setCurrentPage(1);
                         }}
-                        class="min-w-[10rem] max-w-[14rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+                        class="min-w-[10rem] max-w-[14rem] rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-800 outline-none focus:border-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
                       >
                         <For each={providerOptions()}>
                           {(p) => <option value={p}>{p === 'all' ? 'All Providers' : sourceLabel(p)}</option>}
@@ -1608,10 +1608,10 @@ const Recovery: Component = () => {
                       </select>
                     </div>
 
-                    <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                    <div class="inline-flex items-center gap-1 rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
                       <label
                         for="recovery-status-filter"
-                        class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+                        class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500"
                       >
                         Status
                       </label>
@@ -1624,7 +1624,7 @@ const Recovery: Component = () => {
                           if (value !== 'all') setVerificationFilter('all');
                           setCurrentPage(1);
                         }}
-                        class="min-w-[7rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+                        class="min-w-[7rem] rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-800 outline-none focus:border-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
                       >
                         <For each={availableOutcomes}>
                           {(outcome) => (
@@ -1636,8 +1636,8 @@ const Recovery: Component = () => {
                       </select>
                     </div>
 
-                    <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-                      <span class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Scope</span>
+                    <div class="inline-flex items-center gap-1 rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
+                      <span class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Scope</span>
                       <button
                         type="button"
                         onClick={() => {
@@ -1665,11 +1665,11 @@ const Recovery: Component = () => {
                       aria-expanded={moreFiltersOpen()}
                       aria-controls="recovery-more-filters"
                       onClick={() => setMoreFiltersOpen((v) => !v)}
-                      class="inline-flex items-center gap-2 rounded-md border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+                      class="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
                     >
                       <span>{moreFiltersOpen() ? 'Less filters' : 'More filters'}</span>
                       <Show when={activeAdvancedFilterCount() > 0}>
-                        <span class="rounded-full bg-gray-200 px-1.5 py-0.5 text-[10px] font-mono text-gray-700 dark:bg-gray-700 dark:text-gray-200">
+                        <span class="rounded-full bg-slate-200 px-1.5 py-0.5 text-[10px] font-mono text-slate-700 dark:bg-slate-700 dark:text-slate-200">
                           {activeAdvancedFilterCount()}
                         </span>
                       </Show>
@@ -1688,7 +1688,7 @@ const Recovery: Component = () => {
                       <button
                         type="button"
                         onClick={resetAllArtifactFilters}
-                        class="shrink-0 rounded-lg bg-blue-100 px-2.5 py-1.5 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:hover:bg-blue-900/60"
+                        class="shrink-0 rounded-md bg-blue-100 px-2.5 py-1.5 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:hover:bg-blue-900/60"
                       >
                         Clear
                       </button>
@@ -1696,9 +1696,9 @@ const Recovery: Component = () => {
                   </div>
 
                   <Show when={moreFiltersOpen()}>
-                    <div id="recovery-more-filters" class="flex flex-wrap items-center gap-2 pt-2 border-t border-gray-200 dark:border-gray-700">
-                      <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-                        <span class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Method</span>
+                    <div id="recovery-more-filters" class="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+                      <div class="inline-flex items-center gap-1 rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
+                        <span class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Method</span>
                         <For each={(['all', 'snapshot', 'local', 'remote'] as const)}>
                           {(mode) => (
                             <button
@@ -1717,10 +1717,10 @@ const Recovery: Component = () => {
                       </div>
 
                       <Show when={showVerificationFilter()}>
-                        <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                        <div class="inline-flex items-center gap-1 rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
                           <label
                             for="recovery-verification-filter"
-                            class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+                            class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500"
                           >
                             Verification
                           </label>
@@ -1732,7 +1732,7 @@ const Recovery: Component = () => {
                               if (event.currentTarget.value !== 'all') setOutcomeFilter('all');
                               setCurrentPage(1);
                             }}
-                            class="min-w-[6.5rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+                            class="min-w-[6.5rem] rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-800 outline-none focus:border-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
                           >
                             <option value="all">Any</option>
                             <option value="verified">Verified</option>
@@ -1743,10 +1743,10 @@ const Recovery: Component = () => {
                       </Show>
 
                       <Show when={showClusterFilter()}>
-                        <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                        <div class="inline-flex items-center gap-1 rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
                           <label
                             for="recovery-cluster-filter"
-                            class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+                            class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500"
                           >
                             Cluster
                           </label>
@@ -1757,7 +1757,7 @@ const Recovery: Component = () => {
                               setClusterFilter(event.currentTarget.value);
                               setCurrentPage(1);
                             }}
-                            class="min-w-[8rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+                            class="min-w-[8rem] rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-800 outline-none focus:border-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
                           >
                             <option value="all">All</option>
                             <For each={clusterOptions().filter((value) => value !== 'all')}>
@@ -1768,10 +1768,10 @@ const Recovery: Component = () => {
                       </Show>
 
                       <Show when={showNodeFilter()}>
-                        <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                        <div class="inline-flex items-center gap-1 rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
                           <label
                             for="recovery-node-filter"
-                            class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+                            class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500"
                           >
                             Node/Host
                           </label>
@@ -1782,7 +1782,7 @@ const Recovery: Component = () => {
                               setNodeFilter(event.currentTarget.value);
                               setCurrentPage(1);
                             }}
-                            class="min-w-[7.5rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+                            class="min-w-[7.5rem] rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-800 outline-none focus:border-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
                           >
                             <option value="all">All</option>
                             <For each={nodeOptions().filter((value) => value !== 'all')}>
@@ -1793,10 +1793,10 @@ const Recovery: Component = () => {
                       </Show>
 
                       <Show when={showNamespaceFilter()}>
-                        <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                        <div class="inline-flex items-center gap-1 rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
                           <label
                             for="recovery-namespace-filter"
-                            class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+                            class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500"
                           >
                             Namespace
                           </label>
@@ -1807,7 +1807,7 @@ const Recovery: Component = () => {
                               setNamespaceFilter(event.currentTarget.value);
                               setCurrentPage(1);
                             }}
-                            class="min-w-[8rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-800 outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+                            class="min-w-[8rem] rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-800 outline-none focus:border-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
                           >
                             <option value="all">All</option>
                             <For each={namespaceOptions().filter((value) => value !== 'all')}>
@@ -1836,7 +1836,7 @@ const Recovery: Component = () => {
                         <button
                           type="button"
                           onClick={resetAllArtifactFilters}
-                          class="inline-flex items-center gap-2 rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+                          class="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
                         >
                           Clear filters
                         </button>
@@ -1849,7 +1849,7 @@ const Recovery: Component = () => {
               <div class="overflow-x-auto">
                 <table class="w-full text-xs" style={{ 'min-width': tableMinWidth() }}>
                   <thead>
-                    <tr class="border-b border-gray-200 bg-gray-50 text-left text-[10px] uppercase tracking-wide text-gray-500 dark:border-gray-700 dark:bg-gray-800/70 dark:text-gray-400">
+                    <tr class="border-b border-slate-200 bg-slate-50 text-left text-[10px] uppercase tracking-wide text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
                       <For each={mobileVisibleArtifactColumns()}>{(col) => <th class="px-1.5 sm:px-2 py-1">{col.label}</th>}</For>
                     </tr>
                   </thead>
@@ -1891,7 +1891,7 @@ const Recovery: Component = () => {
 
                               return (
                                 <tr
-                                  class="cursor-pointer border-b border-gray-200 hover:bg-gray-50/70 dark:border-gray-700 dark:hover:bg-gray-800/35"
+                                  class="cursor-pointer border-b border-slate-200 hover:bg-slate-50/70 dark:border-slate-700 dark:hover:bg-slate-800/35"
                                   onClick={() => setSelectedPoint(p)}
                                 >
                                   <For each={mobileVisibleArtifactColumns()}>
@@ -1899,14 +1899,14 @@ const Recovery: Component = () => {
                                       switch (col.id) {
                                         case 'time':
                                           return (
-                                            <td class="whitespace-nowrap px-1.5 sm:px-2 py-1 text-gray-500 dark:text-gray-400">
+                                            <td class="whitespace-nowrap px-1.5 sm:px-2 py-1 text-slate-500 dark:text-slate-400">
                                               {timeOnly}
                                             </td>
                                           );
                                         case 'subject':
                                           return (
                                             <td
-                                              class="max-w-[420px] truncate whitespace-nowrap px-1.5 sm:px-2 py-1 text-gray-900 dark:text-gray-100"
+                                              class="max-w-[420px] truncate whitespace-nowrap px-1.5 sm:px-2 py-1 text-slate-900 dark:text-slate-100"
                                               title={subject}
                                             >
                                               {subject}
@@ -1914,25 +1914,25 @@ const Recovery: Component = () => {
                                           );
                                         case 'entityId':
                                           return (
-                                            <td class="whitespace-nowrap px-1.5 sm:px-2 py-1 text-gray-600 dark:text-gray-400 font-mono">
+                                            <td class="whitespace-nowrap px-1.5 sm:px-2 py-1 text-slate-600 dark:text-slate-400 font-mono">
                                               {entityId || '—'}
                                             </td>
                                           );
                                         case 'cluster':
                                           return (
-                                            <td class="whitespace-nowrap px-1.5 sm:px-2 py-1 text-gray-600 dark:text-gray-400 font-mono">
+                                            <td class="whitespace-nowrap px-1.5 sm:px-2 py-1 text-slate-600 dark:text-slate-400 font-mono">
                                               {cluster || '—'}
                                             </td>
                                           );
                                         case 'nodeHost':
                                           return (
-                                            <td class="whitespace-nowrap px-1.5 sm:px-2 py-1 text-gray-600 dark:text-gray-400 font-mono">
+                                            <td class="whitespace-nowrap px-1.5 sm:px-2 py-1 text-slate-600 dark:text-slate-400 font-mono">
                                               {nodeHost || '—'}
                                             </td>
                                           );
                                         case 'namespace':
                                           return (
-                                            <td class="whitespace-nowrap px-1.5 sm:px-2 py-1 text-gray-600 dark:text-gray-400 font-mono">
+                                            <td class="whitespace-nowrap px-1.5 sm:px-2 py-1 text-slate-600 dark:text-slate-400 font-mono">
                                               {namespace || '—'}
                                             </td>
                                           );
@@ -1962,13 +1962,13 @@ const Recovery: Component = () => {
                                                   </span>
                                                 )
                                               ) : (
-                                                <span class="text-gray-400 dark:text-gray-600">—</span>
+                                                <span class="text-slate-400 dark:text-slate-600">—</span>
                                               )}
                                             </td>
                                           );
                                         case 'size':
                                           return (
-                                            <td class="whitespace-nowrap px-1.5 sm:px-2 py-1 text-gray-500 dark:text-gray-400">
+                                            <td class="whitespace-nowrap px-1.5 sm:px-2 py-1 text-slate-500 dark:text-slate-400">
                                               {p.sizeBytes && p.sizeBytes > 0 ? formatBytes(p.sizeBytes) : '—'}
                                             </td>
                                           );
@@ -1985,7 +1985,7 @@ const Recovery: Component = () => {
                                         case 'repository':
                                           return (
                                             <td
-                                              class="max-w-[220px] truncate whitespace-nowrap px-1.5 sm:px-2 py-1 text-[11px] leading-4 text-gray-600 dark:text-gray-400"
+                                              class="max-w-[220px] truncate whitespace-nowrap px-1.5 sm:px-2 py-1 text-[11px] leading-4 text-slate-600 dark:text-slate-400"
                                               title={repoLabel}
                                             >
                                               {repoLabel || '—'}
@@ -2005,7 +2005,7 @@ const Recovery: Component = () => {
                                           );
                                         default:
                                           return (
-                                            <td class="whitespace-nowrap px-1.5 sm:px-2 py-1 text-gray-500 dark:text-gray-400">-</td>
+                                            <td class="whitespace-nowrap px-1.5 sm:px-2 py-1 text-slate-500 dark:text-slate-400">-</td>
                                           );
                                       }
                                     }}
@@ -2021,7 +2021,7 @@ const Recovery: Component = () => {
                 </table>
               </div>
 
-              <div class="flex items-center justify-between gap-2 px-3 py-2 text-xs text-gray-500 dark:text-gray-400 border-t border-gray-200 dark:border-gray-700">
+              <div class="flex items-center justify-between gap-2 px-3 py-2 text-xs text-slate-500 dark:text-slate-400 border-t border-slate-200 dark:border-slate-700">
                 <div>
                   <Show when={(recoveryPoints.meta().total || 0) > 0} fallback={<span>Showing 0 of 0 events</span>}>
                     <span>
@@ -2036,7 +2036,7 @@ const Recovery: Component = () => {
                     type="button"
                     disabled={currentPage() <= 1}
                     onClick={() => setCurrentPage(Math.max(1, currentPage() - 1))}
-                    class="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 disabled:opacity-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200"
+                    class="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
                   >
                     Prev
                   </button>
@@ -2045,7 +2045,7 @@ const Recovery: Component = () => {
                     type="button"
                     disabled={currentPage() >= totalPages()}
                     onClick={() => setCurrentPage(Math.min(totalPages(), currentPage() + 1))}
-                    class="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 disabled:opacity-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200"
+                    class="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
                   >
                     Next
                   </button>
@@ -2060,12 +2060,12 @@ const Recovery: Component = () => {
             panelClass="w-[min(920px,92vw)]"
             ariaLabel="Recovery point details"
           >
-            <div class="flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-gray-700">
-              <h2 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Recovery Point Details</h2>
+            <div class="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-700">
+              <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Recovery Point Details</h2>
               <button
                 type="button"
                 onClick={() => setSelectedPoint(null)}
-                class="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300"
+                class="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300"
                 aria-label="Close details"
               >
                 <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

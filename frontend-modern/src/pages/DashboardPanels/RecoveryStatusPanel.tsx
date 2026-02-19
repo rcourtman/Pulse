@@ -23,7 +23,7 @@ const outcomeBadgeClass = (outcome: ProtectionOutcome): string => {
     case 'running':
       return `${base} bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300`;
     default:
-      return `${base} bg-gray-100 text-gray-600 dark:bg-gray-700/60 dark:text-gray-300`;
+      return `${base} bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300`;
   }
 };
 
@@ -39,7 +39,7 @@ export function RecoveryStatusPanel(props: RecoveryStatusPanelProps) {
   return (
     <Card padding="none" class="px-4 py-3.5">
       <div class="flex items-center justify-between gap-3">
-        <h2 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Recovery Status</h2>
+        <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Recovery Status</h2>
         <a
           href={buildRecoveryPath()}
           aria-label="View all recovery"
@@ -50,15 +50,15 @@ export function RecoveryStatusPanel(props: RecoveryStatusPanelProps) {
       </div>
       <Show
         when={props.recovery.hasData}
-        fallback={<p class="text-xs text-gray-500 dark:text-gray-400 mt-1">No recovery data available</p>}
+        fallback={<p class="text-xs text-slate-500 dark:text-slate-400 mt-1">No recovery data available</p>}
       >
         <div class="space-y-1.5">
           <div class="flex items-baseline justify-between gap-4">
-            <p class="text-xs text-gray-500 dark:text-gray-400">
-              <span class="font-mono font-semibold text-base text-gray-900 dark:text-gray-100">{props.recovery.totalProtected}</span> total
+            <p class="text-xs text-slate-500 dark:text-slate-400">
+              <span class="font-mono font-semibold text-base text-slate-900 dark:text-slate-100">{props.recovery.totalProtected}</span> total
             </p>
-            <p class="text-xs text-gray-500 dark:text-gray-400">
-              Last: <span class="font-mono font-medium text-gray-700 dark:text-gray-200">{formatRelativeTime(props.recovery.latestEventTimestamp ?? undefined, { compact: true }) || '—'}</span>
+            <p class="text-xs text-slate-500 dark:text-slate-400">
+              Last: <span class="font-mono font-medium text-slate-700 dark:text-slate-200">{formatRelativeTime(props.recovery.latestEventTimestamp ?? undefined, { compact: true }) || '—'}</span>
             </p>
           </div>
 

@@ -164,11 +164,11 @@ export const RelayOnboardingCard: Component = () => {
     <Show when={shouldShow()}>
       <Card padding="lg" class="relative overflow-hidden">
         <div class="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-blue-100/60 dark:bg-blue-900/20" />
-        <div class="absolute -right-16 -bottom-16 h-40 w-40 rounded-full bg-gray-100/80 dark:bg-gray-700/20" />
+        <div class="absolute -right-16 -bottom-16 h-40 w-40 rounded-full bg-slate-100/80 dark:bg-slate-800" />
 
         <button
           type="button"
-          class="absolute right-3 top-3 inline-flex items-center justify-center rounded-md p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700/40 dark:text-gray-400 dark:hover:text-gray-200"
+          class="absolute right-3 top-3 inline-flex items-center justify-center rounded-md p-1 text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700/40 dark:text-slate-400 dark:hover:text-slate-200"
           onClick={dismiss}
           aria-label="Dismiss relay onboarding"
         >
@@ -176,15 +176,15 @@ export const RelayOnboardingCard: Component = () => {
         </button>
 
         <div class="relative flex items-start gap-3">
-          <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-600 text-white shadow-sm">
+          <div class="flex h-10 w-10 items-center justify-center rounded-md bg-blue-600 text-white shadow-sm">
             <Smartphone size={20} strokeWidth={2} />
           </div>
 
           <div class="min-w-0 flex-1">
-            <h2 class="text-base font-semibold text-gray-900 dark:text-gray-100">
+            <h2 class="text-base font-semibold text-slate-900 dark:text-slate-100">
               Pair Your Mobile Device
             </h2>
-            <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
+            <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
               Pulse Relay lets your phone securely connect to this Pulse instance for remote monitoring.
             </p>
 
@@ -212,7 +212,7 @@ export const RelayOnboardingCard: Component = () => {
               </Show>
 
               <Show when={hasRelay() && statusLoaded() && status()?.connected === false}>
-                <span class="text-xs text-gray-500 dark:text-gray-400">
+                <span class="text-xs text-slate-500 dark:text-slate-400">
                   Relay is currently disconnected.
                 </span>
               </Show>

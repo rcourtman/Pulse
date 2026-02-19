@@ -96,12 +96,11 @@ export const CollapsibleSearchInput: Component<CollapsibleSearchInputProps> = (p
       <Show
         when={showExpanded()}
         fallback={
-          <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+          <div class="inline-flex rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
             <button
               type="button"
               onClick={() => expandSearch(false)}
-              class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-150 active:scale-95
-                     text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600/50"
+              class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-150 active:scale-95 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-600/50"
               aria-label={props.title ?? props.placeholder ?? 'Open search'}
               title={`${props.placeholder ?? 'Search'} (/)`}
               data-global-search-trigger

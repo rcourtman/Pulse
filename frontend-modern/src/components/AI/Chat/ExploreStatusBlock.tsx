@@ -35,7 +35,7 @@ const phaseClasses = (phase: string): string => {
 };
 
 export const ExploreStatusBlock: Component<ExploreStatusBlockProps> = (props) => (
-  <div class={`my-2 rounded-lg border px-3 py-2 text-xs ${phaseClasses(props.status.phase)}`}>
+  <div class={`my-2 rounded-md border px-3 py-2 text-xs ${phaseClasses(props.status.phase)}`}>
     <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
       <span class="font-semibold tracking-wide uppercase">{phaseLabel(props.status.phase)}</span>
       {props.status.model && <span class="font-mono opacity-80">{props.status.model}</span>}

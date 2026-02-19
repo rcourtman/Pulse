@@ -42,7 +42,7 @@ export function EnhancedStorageBar(props: EnhancedStorageBarProps) {
     return (
         <div class="metric-text w-full h-5 flex items-center min-w-0">
             <div
-                class="relative w-full h-full overflow-hidden bg-gray-200 dark:bg-gray-600 rounded"
+                class="relative w-full h-full overflow-hidden bg-slate-200 dark:bg-slate-600 rounded"
                 onMouseEnter={tip.onMouseEnter}
                 onMouseLeave={tip.onMouseLeave}
             >
@@ -54,7 +54,7 @@ export function EnhancedStorageBar(props: EnhancedStorageBarProps) {
 
                 {/* Scrubbing/Resilvering Animation Overlay */}
                 <Show when={isScrubbing() || isResilvering()}>
-                    <div class="absolute inset-0 w-full h-full bg-white/30 animate-pulse" />
+                    <div class="absolute inset-0 w-full h-full bg-white animate-pulse" />
                 </Show>
 
                 {/* Error Indicator (Red border/glow) */}
@@ -63,7 +63,7 @@ export function EnhancedStorageBar(props: EnhancedStorageBarProps) {
                 </Show>
 
                 {/* Label */}
-                <span class="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-gray-800 dark:text-gray-100 leading-none pointer-events-none min-w-0 overflow-hidden">
+                <span class="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-slate-800 dark:text-slate-100 leading-none pointer-events-none min-w-0 overflow-hidden">
                     <span class="max-w-full min-w-0 whitespace-nowrap overflow-hidden text-ellipsis px-0.5 text-center">
                         {formatPercent(usagePercent())} (
                         {formatBytes(props.used)}/
@@ -75,28 +75,28 @@ export function EnhancedStorageBar(props: EnhancedStorageBarProps) {
             {/* Tooltip */}
             <TooltipPortal when={tip.show()} x={tip.pos().x} y={tip.pos().y}>
                 <div class="min-w-[160px]">
-                    <div class="font-medium mb-1 text-gray-300 border-b border-gray-700 pb-1">
+                    <div class="font-medium mb-1 text-slate-300 border-b border-slate-700 pb-1">
                         Storage Details
                     </div>
 
                     <div class="flex justify-between gap-3 py-0.5">
-                        <span class="text-gray-400">Used</span>
-                        <span class="text-gray-200">{formatBytes(props.used)}</span>
+                        <span class="text-slate-400">Used</span>
+                        <span class="text-slate-200">{formatBytes(props.used)}</span>
                     </div>
                     <div class="flex justify-between gap-3 py-0.5">
-                        <span class="text-gray-400">Free</span>
-                        <span class="text-gray-200">{formatBytes(props.free)}</span>
+                        <span class="text-slate-400">Free</span>
+                        <span class="text-slate-200">{formatBytes(props.free)}</span>
                     </div>
-                    <div class="flex justify-between gap-3 py-0.5 border-t border-gray-700/50 mt-0.5 pt-0.5">
-                        <span class="text-gray-400">Total</span>
-                        <span class="text-gray-200">{formatBytes(props.total)}</span>
+                    <div class="flex justify-between gap-3 py-0.5 border-t border-slate-700/50 mt-0.5 pt-0.5">
+                        <span class="text-slate-400">Total</span>
+                        <span class="text-slate-200">{formatBytes(props.total)}</span>
                     </div>
 
                     <Show when={props.zfsPool}>
-                        <div class="mt-1 pt-1 border-t border-gray-600">
+                        <div class="mt-1 pt-1 border-t border-slate-600">
                             <div class="font-medium mb-0.5 text-blue-300">ZFS Status</div>
                             <div class="flex justify-between gap-3 py-0.5">
-                                <span class="text-gray-400">State</span>
+                                <span class="text-slate-400">State</span>
                                 <span class={hasErrors() ? 'text-red-400 font-bold' : 'text-green-400'}>
                                     {props.zfsPool?.state}
                                 </span>

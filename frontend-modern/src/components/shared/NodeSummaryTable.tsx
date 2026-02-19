@@ -324,7 +324,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
     return sortDirection() === 'asc' ? '▲' : '▼';
   };
 
-  const thClassBase = "px-2 py-1 text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap";
+  const thClassBase = "px-2 py-1 text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 whitespace-nowrap";
   const thClass = `${thClassBase} text-center`;
 
   // Cell class constants for consistency
@@ -332,11 +332,11 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
   const metricColumnStyle = { "min-width": "140px", "max-width": "180px" } as const;
 
   return (
-    <Card padding="none" tone="glass" class="mb-4 overflow-hidden">
+    <Card padding="none" tone="card" class="mb-4 overflow-hidden">
       <div class="overflow-x-auto">
         <table class="w-full border-collapse whitespace-nowrap" style={{ "table-layout": "fixed", "min-width": "800px" }}>
           <thead>
-            <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
+            <tr class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
 
               <th
                 class={`${thClassBase} text-left pl-3`}
@@ -501,7 +501,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                               class={`cursor-pointer transition-transform duration-200 ${isExpanded() ? 'rotate-90' : ''}`}
                               onClick={(e) => toggleNodeExpand(nodeId, e)}
                             >
-                              <svg class="w-3.5 h-3.5 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <svg class="w-3.5 h-3.5 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
                               </svg>
                             </div>
@@ -513,13 +513,13 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                             size="xs"
                           />
                           <span
-                            class="font-medium text-[11px] text-gray-900 dark:text-gray-100 whitespace-nowrap select-text"
+                            class="font-medium text-[11px] text-slate-900 dark:text-slate-100 whitespace-nowrap select-text"
                             title={displayName()}
                           >
                             {displayName()}
                           </span>
                           <Show when={showActualName()}>
-                            <span class="text-[9px] text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                            <span class="text-[9px] text-slate-500 dark:text-slate-400 whitespace-nowrap">
                               ({(node as Node).name})
                             </span>
                           </Show>
@@ -530,7 +530,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                               </span>
                             </Show>
                             <Show when={isPVEItem && node!.pveVersion}>
-                              <span class="text-[9px] text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                              <span class="text-[9px] text-slate-500 dark:text-slate-400 whitespace-nowrap">
                                 v{node!.pveVersion.split('/')[1] || node!.pveVersion}
                               </span>
                             </Show>
@@ -538,7 +538,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                               <span
                                 class={`text-[9px] px-1 py-0 rounded font-medium whitespace-nowrap ${node!.isClusterMember
                                   ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
-                                  : 'bg-gray-100 text-gray-600 dark:bg-gray-700/50 dark:text-gray-400'
+                                  : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
                                   }`}
                               >
                                 {node!.isClusterMember ? node!.clusterName : 'Standalone'}
@@ -569,7 +569,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                               </span>
                             </Show>
                             <Show when={isPBSItem && pbs!.version}>
-                              <span class="text-[9px] text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                              <span class="text-[9px] text-slate-500 dark:text-slate-400 whitespace-nowrap">
                                 v{pbs!.version}
                               </span>
                             </Show>
@@ -585,7 +585,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                           <span
                             class={`text-xs whitespace-nowrap ${isPVEItem && (node?.uptime ?? 0) < 3600
                               ? 'text-orange-500'
-                              : 'text-gray-600 dark:text-gray-400'
+                              : 'text-slate-600 dark:text-slate-400'
                               }`}
                           >
                             <Show when={online && uptimeValue} fallback="-">
@@ -672,7 +672,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                                 (node!.temperature?.hasCPU ?? node!.temperature?.hasGPU ?? node!.temperature?.available) &&
                                 isTemperatureMonitoringEnabled(node!)
                               }
-                              fallback={<span class="text-xs text-gray-400 dark:text-gray-500">-</span>}
+                              fallback={<span class="text-xs text-slate-400 dark:text-slate-500">-</span>}
                             >
                               {(() => {
                                 const value = cpuTemperatureValue as number;
@@ -722,14 +722,14 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                       <Show when={props.currentTab === 'dashboard'}>
                         <td class={tdClass}>
                           <div class="flex justify-center">
-                            <span class={online ? 'text-xs text-gray-700 dark:text-gray-300' : 'text-xs text-gray-400 dark:text-gray-500'}>
+                            <span class={online ? 'text-xs text-slate-700 dark:text-slate-300' : 'text-xs text-slate-400 dark:text-slate-500'}>
                               {online ? getCountValue(item, 'vmCount') ?? '-' : '-'}
                             </span>
                           </div>
                         </td>
                         <td class={tdClass}>
                           <div class="flex justify-center">
-                            <span class={online ? 'text-xs text-gray-700 dark:text-gray-300' : 'text-xs text-gray-400 dark:text-gray-500'}>
+                            <span class={online ? 'text-xs text-slate-700 dark:text-slate-300' : 'text-xs text-slate-400 dark:text-slate-500'}>
                               {online ? getCountValue(item, 'containerCount') ?? '-' : '-'}
                             </span>
                           </div>
@@ -740,14 +740,14 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                       <Show when={props.currentTab === 'storage'}>
                         <td class={tdClass}>
                           <div class="flex justify-center">
-                            <span class={online ? 'text-xs text-gray-700 dark:text-gray-300' : 'text-xs text-gray-400 dark:text-gray-500'}>
+                            <span class={online ? 'text-xs text-slate-700 dark:text-slate-300' : 'text-xs text-slate-400 dark:text-slate-500'}>
                               {online ? getCountValue(item, 'storageCount') ?? '-' : '-'}
                             </span>
                           </div>
                         </td>
                         <td class={tdClass}>
                           <div class="flex justify-center">
-                            <span class={online ? 'text-xs text-gray-700 dark:text-gray-300' : 'text-xs text-gray-400 dark:text-gray-500'}>
+                            <span class={online ? 'text-xs text-slate-700 dark:text-slate-300' : 'text-xs text-slate-400 dark:text-slate-500'}>
                               {online ? getCountValue(item, 'diskCount') ?? '-' : '-'}
                             </span>
                           </div>
@@ -758,7 +758,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                       <Show when={props.currentTab === 'recovery'}>
                         <td class={tdClass}>
                           <div class="flex justify-center">
-                            <span class={online ? 'text-xs text-gray-700 dark:text-gray-300' : 'text-xs text-gray-400 dark:text-gray-500'}>
+                            <span class={online ? 'text-xs text-slate-700 dark:text-slate-300' : 'text-xs text-slate-400 dark:text-slate-500'}>
                               {online ? getCountValue(item, 'backupCount') ?? '-' : '-'}
                             </span>
                           </div>
@@ -793,7 +793,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                     </tr>
                     <Show when={isExpanded() && isPVEItem}>
                       <tr>
-                        <td colspan={totalColumnCount()} class="bg-gray-50/50 dark:bg-gray-900/20 px-4 py-4 border-b border-gray-100 dark:border-gray-700 shadow-inner">
+                        <td colspan={totalColumnCount()} class="bg-slate-50/50 dark:bg-slate-800 px-4 py-4 border-b border-slate-100 dark:border-slate-700 shadow-inner">
                           <Suspense fallback={<div class="flex justify-center p-4">Loading stats...</div>}>
                             <NodeDrawer node={node!} host={linkedHostForDrawer()} />
                           </Suspense>

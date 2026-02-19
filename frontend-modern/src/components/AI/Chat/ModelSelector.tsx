@@ -134,7 +134,7 @@ export const ModelSelector: Component<ModelSelectorProps> = (props) => {
             <button
                 ref={buttonRef}
                 onClick={handleToggle}
-                class="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-slate-100 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-white dark:bg-slate-800 transition-colors"
+                class="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-slate-100 rounded-md border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-white dark:bg-slate-800 transition-colors"
                 title="Select model for this chat"
             >
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -154,7 +154,7 @@ export const ModelSelector: Component<ModelSelectorProps> = (props) => {
 
             <Show when={isOpen()}>
                 <div
-                    class="fixed w-80 max-h-96 overflow-hidden bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 z-[9999]"
+                    class="fixed w-80 max-h-96 overflow-hidden bg-white dark:bg-slate-800 rounded-md shadow-sm border border-slate-200 dark:border-slate-700 z-[9999]"
                     style={{ top: `${dropdownPosition().top}px`, right: `${dropdownPosition().right}px` }}
                 >
                     {/* Search bar */}
@@ -239,7 +239,7 @@ export const ModelSelector: Component<ModelSelectorProps> = (props) => {
                         <For each={Array.from(groupModelsByProvider(filteredModels()).entries())}>
                             {([provider, providerModels]) => (
                                 <>
-                                    <div class="px-3 py-1.5 text-[11px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-700/50 sticky top-0">
+                                    <div class="px-3 py-1.5 text-[11px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 sticky top-0">
                                         {PROVIDER_DISPLAY_NAMES[provider] || provider}
                                     </div>
                                     <For each={providerModels}>

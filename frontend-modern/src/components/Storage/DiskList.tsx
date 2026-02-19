@@ -181,8 +181,8 @@ export const DiskList: Component<DiskListProps> = (props) => {
       };
     }
     return {
-      color: 'text-gray-700 dark:text-gray-400',
-      bgColor: 'bg-gray-100 dark:bg-gray-700',
+      color: 'text-slate-700 dark:text-slate-400',
+      bgColor: 'bg-slate-100 dark:bg-slate-700',
       text: 'UNKNOWN',
     };
   };
@@ -197,7 +197,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
       case 'sas':
         return 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300';
       default:
-        return 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300';
+        return 'bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-300';
     }
   };
 
@@ -240,7 +240,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
     <div>
       <Show when={filteredDisks().length === 0}>
         <Card padding="lg" class="text-center">
-          <div class="text-gray-500">
+          <div class="text-slate-500">
             <p class="text-sm font-medium">No physical disks found</p>
             {selectedNodeName() && <p class="text-xs mt-1">for node {selectedNodeName()}</p>}
             {props.searchTerm && <p class="text-xs mt-1">matching "{props.searchTerm}"</p>}
@@ -249,14 +249,14 @@ export const DiskList: Component<DiskListProps> = (props) => {
             <Show
               when={hasPVENodes()}
               fallback={
-                <div class="mt-4 p-4 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-left">
-                  <p class="text-sm text-gray-600 dark:text-gray-400">
+                <div class="mt-4 p-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md text-left">
+                  <p class="text-sm text-slate-600 dark:text-slate-400">
                     No Proxmox nodes configured. Add a Proxmox VE cluster in Settings to monitor physical disks.
                   </p>
                 </div>
               }
             >
-              <div class="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg text-left">
+              <div class="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md text-left">
                 <p class="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
                   Physical disk monitoring requirements:
                 </p>
@@ -275,11 +275,11 @@ export const DiskList: Component<DiskListProps> = (props) => {
       </Show>
 
       <Show when={filteredDisks().length > 0}>
-        <Card padding="none" tone="glass" class="overflow-hidden">
+        <Card padding="none" tone="card" class="overflow-hidden">
           <div class="overflow-x-auto" style={{ '-webkit-overflow-scrolling': 'touch' }}>
             <table class="w-full">
               <thead>
-                <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
+                <tr class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-600">
                   <th class="px-1 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
                     Node
                   </th>
@@ -332,7 +332,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
                     return (
                       <>
                         <tr
-                          class={`cursor-pointer transition-colors ${isSelected() ? 'bg-blue-50 dark:bg-blue-900/20' : 'hover:bg-gray-50 dark:hover:bg-gray-700/30'}`}
+                          class={`cursor-pointer transition-colors ${isSelected() ? 'bg-blue-50 dark:bg-blue-900/20' : 'hover:bg-slate-50 dark:hover:bg-slate-700/30'}`}
                           onClick={() => handleRowClick(disk)}
                         >
                           <td class="px-1 py-1.5 text-xs">
@@ -340,22 +340,22 @@ export const DiskList: Component<DiskListProps> = (props) => {
                               <div
                                 class={`cursor-pointer transition-transform duration-200 ${isSelected() ? 'rotate-90' : ''}`}
                               >
-                                <svg class="w-3.5 h-3.5 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <svg class="w-3.5 h-3.5 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
                                 </svg>
                               </div>
-                              <span class="font-medium text-gray-900 dark:text-gray-100">
+                              <span class="font-medium text-slate-900 dark:text-slate-100">
                                 {data.node}
                               </span>
                             </div>
                           </td>
                           <td class="hidden md:table-cell px-1 py-1.5 text-xs">
-                            <span class="font-mono text-gray-600 dark:text-gray-400">
+                            <span class="font-mono text-slate-600 dark:text-slate-400">
                               {data.devPath}
                             </span>
                           </td>
                           <td class="px-1 py-1.5 text-xs">
-                            <span class="text-gray-700 dark:text-gray-300">
+                            <span class="text-slate-700 dark:text-slate-300">
                               {data.model || 'Unknown'}
                             </span>
                           </td>
@@ -369,9 +369,9 @@ export const DiskList: Component<DiskListProps> = (props) => {
                           <td class="hidden md:table-cell px-1 py-1.5 text-xs">
                             <Show
                               when={data.used && data.used !== 'unknown'}
-                              fallback={<span class="text-gray-400">-</span>}
+                              fallback={<span class="text-slate-400">-</span>}
                             >
-                              <span class="text-[10px] font-mono text-gray-600 dark:text-gray-400">
+                              <span class="text-[10px] font-mono text-slate-600 dark:text-slate-400">
                                 {data.used}
                               </span>
                             </Show>
@@ -391,9 +391,9 @@ export const DiskList: Component<DiskListProps> = (props) => {
                           <td class="hidden md:table-cell px-1 py-1.5 text-xs">
                             <Show
                               when={data.wearout > 0}
-                              fallback={<span class="text-gray-400">-</span>}
+                              fallback={<span class="text-slate-400">-</span>}
                             >
-                              <div class="relative w-24 h-3.5 rounded overflow-hidden bg-gray-200 dark:bg-gray-600">
+                              <div class="relative w-24 h-3.5 rounded overflow-hidden bg-slate-200 dark:bg-slate-600">
                                 <div
                                   class={`absolute top-0 left-0 h-full ${data.wearout >= 50
                                     ? 'bg-green-500/60 dark:bg-green-500/50'
@@ -405,7 +405,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
                                     }`}
                                   style={{ width: `${data.wearout}%` }}
                                 />
-                                <span class="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-gray-800 dark:text-gray-100 leading-none">
+                                <span class="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-slate-800 dark:text-slate-100 leading-none">
                                   <span class="whitespace-nowrap px-0.5">{data.wearout}%</span>
                                 </span>
                               </div>
@@ -414,9 +414,9 @@ export const DiskList: Component<DiskListProps> = (props) => {
                           <td class="hidden md:table-cell px-1 py-1.5 text-xs">
                             <Show
                               when={data.smartAttributes?.powerOnHours != null}
-                              fallback={<span class="text-gray-400">-</span>}
+                              fallback={<span class="text-slate-400">-</span>}
                             >
-                              <span class="text-gray-700 dark:text-gray-300">
+                              <span class="text-slate-700 dark:text-slate-300">
                                 {formatPowerOnHours(data.smartAttributes!.powerOnHours!, true)}
                               </span>
                             </Show>
@@ -424,7 +424,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
                           <td class="px-1 py-1.5 text-xs">
                             <Show
                               when={typeof data.temperature === 'number'}
-                              fallback={<span class="font-medium text-gray-400">-</span>}
+                              fallback={<span class="font-medium text-slate-400">-</span>}
                             >
                               <span
                                 class={`font-medium ${data.temperature > 70
@@ -439,35 +439,35 @@ export const DiskList: Component<DiskListProps> = (props) => {
                             </Show>
                           </td>
                           <td class="hidden md:table-cell px-1 py-1.5 align-middle">
-                            <Show when={getMetricResourceId(disk)} fallback={<span class="text-gray-300">-</span>}>
+                            <Show when={getMetricResourceId(disk)} fallback={<span class="text-slate-300">-</span>}>
                               {(resourceId) => (
                                 <DiskLiveMetric resourceId={resourceId()} type="read" />
                               )}
                             </Show>
                           </td>
                           <td class="hidden md:table-cell px-1 py-1.5 align-middle">
-                            <Show when={getMetricResourceId(disk)} fallback={<span class="text-gray-300">-</span>}>
+                            <Show when={getMetricResourceId(disk)} fallback={<span class="text-slate-300">-</span>}>
                               {(resourceId) => (
                                 <DiskLiveMetric resourceId={resourceId()} type="write" />
                               )}
                             </Show>
                           </td>
                           <td class="hidden md:table-cell px-1 py-1.5 align-middle">
-                            <Show when={getMetricResourceId(disk)} fallback={<span class="text-gray-300">-</span>}>
+                            <Show when={getMetricResourceId(disk)} fallback={<span class="text-slate-300">-</span>}>
                               {(resourceId) => (
                                 <DiskLiveMetric resourceId={resourceId()} type="ioTime" />
                               )}
                             </Show>
                           </td>
                           <td class="px-1 py-1.5 text-xs whitespace-nowrap">
-                            <span class="text-gray-700 dark:text-gray-300">
+                            <span class="text-slate-700 dark:text-slate-300">
                               {formatBytes(data.size)}
                             </span>
                           </td>
                         </tr>
                         <Show when={isSelected()}>
                           <tr>
-                            <td colSpan={13} class="bg-gray-50/50 dark:bg-gray-900/20 px-4 py-4 border-b border-gray-100 dark:border-gray-700 shadow-inner">
+                            <td colSpan={13} class="bg-slate-50/50 dark:bg-slate-800 px-4 py-4 border-b border-slate-100 dark:border-slate-700 shadow-inner">
                               <DiskDetail disk={disk} nodes={props.nodes} />
                             </td>
                           </tr>

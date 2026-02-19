@@ -134,15 +134,15 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
   return (
     <div class={`rounded-md border transition-colors ${props.selected
       ? 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20'
-      : 'border-gray-200 dark:border-gray-700'
+      : 'border-slate-200 dark:border-slate-700'
       }`}>
       <button
         type="button"
         onClick={() => props.onSelect(props.selected ? null : run)}
-        class={`w-full text-left px-3 py-2 rounded-md transition-colors ${!props.selected ? 'hover:bg-gray-50 dark:hover:bg-gray-700/40' : ''}`}
+        class={`w-full text-left px-3 py-2 rounded-md transition-colors ${!props.selected ? 'hover:bg-slate-50 dark:hover:bg-slate-700/40' : ''}`}
       >
-        <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-          <span class="text-gray-900 dark:text-gray-100 font-medium">
+        <div class="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+          <span class="text-slate-900 dark:text-slate-100 font-medium">
             {formatRelativeTime(run.started_at, { compact: true })}
           </span>
           <span class={`px-1.5 py-0.5 rounded ${run.status === 'critical'
@@ -169,7 +169,7 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
             <span>• {run.new_findings} new</span>
           </Show>
           <Show when={run.rejected_findings}>
-            <span class="text-gray-400 dark:text-gray-500">• {run.rejected_findings} rejected</span>
+            <span class="text-slate-400 dark:text-slate-500">• {run.rejected_findings} rejected</span>
           </Show>
         </div>
       </button>
@@ -179,7 +179,7 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
         <div class="px-3 pb-3 border-t border-blue-200 dark:border-blue-800 mt-0">
 
           {/* Section 1: Narrative Summary */}
-          <div class="mt-3 flex items-start gap-2 text-sm text-gray-700 dark:text-gray-200">
+          <div class="mt-3 flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
             <SparklesIcon class="w-4 h-4 text-blue-500 dark:text-blue-400 mt-0.5 flex-shrink-0" />
             <p>
               {run.resources_checked > 0
@@ -200,8 +200,8 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
           <Show when={run.resources_checked > 0}>
             <div class="mt-3">
               <div class="flex items-center gap-1.5 mb-2">
-                <SearchIcon class="w-3.5 h-3.5 text-gray-400 dark:text-gray-500" />
-                <span class="text-[10px] font-semibold tracking-wider uppercase text-gray-500 dark:text-gray-400">
+                <SearchIcon class="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
+                <span class="text-[10px] font-semibold tracking-wider uppercase text-slate-500 dark:text-slate-400">
                   Resources Scanned ({run.resources_checked})
                 </span>
               </div>
@@ -253,8 +253,8 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
           {/* Section 3: Outcomes */}
           <div class="mt-3">
             <div class="flex items-center gap-1.5 mb-2">
-              <ShieldAlertIcon class="w-3.5 h-3.5 text-gray-400 dark:text-gray-500" />
-              <span class="text-[10px] font-semibold tracking-wider uppercase text-gray-500 dark:text-gray-400">
+              <ShieldAlertIcon class="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
+              <span class="text-[10px] font-semibold tracking-wider uppercase text-slate-500 dark:text-slate-400">
                 Outcomes
               </span>
             </div>
@@ -265,7 +265,7 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
                 </span>
               </Show>
               <Show when={run.existing_findings > 0}>
-                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300">
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300">
                   <ActivityIcon class="w-3 h-3" /> {run.existing_findings} existing
                 </span>
               </Show>
@@ -280,7 +280,7 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
                 </span>
               </Show>
               <Show when={run.rejected_findings > 0}>
-                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-50 text-gray-400 dark:bg-gray-800 dark:text-gray-500">
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-slate-50 text-slate-400 dark:bg-slate-800 dark:text-slate-500">
                   <FilterXIcon class="w-3 h-3" /> {run.rejected_findings} rejected
                 </span>
               </Show>
@@ -293,7 +293,7 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
           </div>
 
           {/* Section 4: AI Effort Bar */}
-          <div class="mt-3 flex flex-wrap items-center gap-3 px-3 py-2 rounded-md bg-gray-50 dark:bg-gray-900/50 text-xs text-gray-500 dark:text-gray-400">
+          <div class="mt-3 flex flex-wrap items-center gap-3 px-3 py-2 rounded-md bg-slate-50 dark:bg-slate-800 text-xs text-slate-500 dark:text-slate-400">
             <Show when={formatDurationMs(run.duration_ms)}>
               <span class="inline-flex items-center gap-1">
                 <ClockIcon class="w-3.5 h-3.5" /> {formatDurationMs(run.duration_ms)}
@@ -321,8 +321,8 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
             <div class="mt-3">
               <div class="flex items-center justify-between">
                 <div class="flex items-center gap-1.5">
-                  <BrainCircuitIcon class="w-3.5 h-3.5 text-gray-400 dark:text-gray-500" />
-                  <span class="text-[10px] font-semibold tracking-wider uppercase text-gray-500 dark:text-gray-400">
+                  <BrainCircuitIcon class="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
+                  <span class="text-[10px] font-semibold tracking-wider uppercase text-slate-500 dark:text-slate-400">
                     Patrol Analysis
                   </span>
                 </div>
@@ -336,7 +336,7 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
               </div>
               <Show when={showRunAnalysis()}>
                 <div
-                  class="mt-2 p-3 rounded bg-white dark:bg-gray-900 text-sm leading-relaxed text-gray-700 dark:text-gray-200 max-h-64 overflow-auto prose prose-sm max-w-none dark:prose-invert prose-headings:text-sm prose-headings:mt-2 prose-headings:mb-1 prose-p:my-1 prose-ul:my-1 prose-li:my-0"
+                  class="mt-2 p-3 rounded bg-white dark:bg-slate-900 text-sm leading-relaxed text-slate-700 dark:text-slate-200 max-h-64 overflow-auto prose prose-sm max-w-none dark:prose-invert prose-headings:text-sm prose-headings:mt-2 prose-headings:mb-1 prose-p:my-1 prose-ul:my-1 prose-li:my-0"
                   // eslint-disable-next-line solid/no-innerhtml
                   innerHTML={renderMarkdown(sanitizeAnalysis(run.ai_analysis))}
                 />

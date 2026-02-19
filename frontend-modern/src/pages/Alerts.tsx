@@ -163,18 +163,18 @@ function IncidentEventFilters(props: {
   };
 
   return (
-    <div class="flex flex-wrap items-center gap-2 text-[10px] text-gray-500 dark:text-gray-400">
-      <span class="uppercase tracking-wide text-[9px] text-gray-400 dark:text-gray-500">Filters</span>
+    <div class="flex flex-wrap items-center gap-2 text-[10px] text-slate-500 dark:text-slate-400">
+      <span class="uppercase tracking-wide text-[9px] text-slate-400 dark:text-slate-500">Filters</span>
       <button
         type="button"
-        class="px-2 py-0.5 rounded border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+        class="px-2 py-0.5 rounded border border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700"
         onClick={() => props.setFilters(new Set(INCIDENT_EVENT_TYPES))}
       >
         All
       </button>
       <button
         type="button"
-        class="px-2 py-0.5 rounded border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+        class="px-2 py-0.5 rounded border border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700"
         onClick={() => props.setFilters(new Set())}
       >
         None
@@ -187,7 +187,7 @@ function IncidentEventFilters(props: {
               type="button"
               class={`px-2 py-0.5 rounded border text-[10px] ${selected()
                 ? 'border-blue-300 bg-blue-100 text-blue-700 dark:border-blue-800 dark:bg-blue-900/40 dark:text-blue-300'
-                : 'border-gray-300 text-gray-500 dark:border-gray-600 dark:text-gray-300'
+                : 'border-slate-300 text-slate-500 dark:border-slate-600 dark:text-slate-300'
                 }`}
               onClick={() => toggleFilter(type)}
             >
@@ -1787,7 +1787,7 @@ export function Alerts() {
           <Show when={activeTab() === 'overview'}>
             <div class="flex items-center gap-3">
               <span
-                class={`text-sm font-medium ${isAlertsActive() ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'
+                class={`text-sm font-medium ${isAlertsActive() ? 'text-green-600 dark:text-green-400' : 'text-slate-500 dark:text-slate-400'
                   }`}
               >
                 {isAlertsActive() ? 'Alerts enabled' : 'Alerts disabled'}
@@ -1808,7 +1808,7 @@ export function Alerts() {
                   }}
                 />
                 <div
-                  class={`relative w-11 h-6 rounded-full transition ${isAlertsActive() ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'
+                  class={`relative w-11 h-6 rounded-full transition ${isAlertsActive() ? 'bg-blue-600' : 'bg-slate-200 dark:bg-slate-700'
                     } ${alertsActivation.isLoading() || isSwitchingActivation() ? 'opacity-50' : ''}`}
                 >
                   <span
@@ -1843,7 +1843,7 @@ export function Alerts() {
             </div>
             <div class="flex w-full gap-2 sm:w-auto">
               <button
-                class="flex-1 px-4 py-2 text-sm text-white transition-colors sm:flex-initial bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                class="flex-1 px-4 py-2 text-sm text-white transition-colors sm:flex-initial bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
                 disabled={isReloadingConfig()}
                 onClick={async () => {
                   try {
@@ -2077,7 +2077,7 @@ export function Alerts() {
                 Save Changes
               </button>
               <button
-                class="flex-1 px-4 py-2 text-sm transition-colors border border-gray-300 rounded-lg text-gray-700 dark:border-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 sm:flex-initial disabled:opacity-60 disabled:cursor-not-allowed"
+                class="flex-1 px-4 py-2 text-sm transition-colors border border-slate-300 rounded-md text-slate-700 dark:border-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 sm:flex-initial disabled:opacity-60 disabled:cursor-not-allowed"
                 disabled={isReloadingConfig()}
                 onClick={async () => {
                   await loadAlertConfiguration({ notify: true });
@@ -2093,7 +2093,7 @@ export function Alerts() {
       <div>
         <Card padding="none" class="relative lg:flex overflow-hidden">
           <div
-            class={`hidden lg:flex lg:flex-col ${sidebarCollapsed() ? 'w-16' : 'w-72'} ${sidebarCollapsed() ? 'lg:min-w-[4rem] lg:max-w-[4rem] lg:basis-[4rem]' : 'lg:min-w-[18rem] lg:max-w-[18rem] lg:basis-[18rem]'} relative border-b border-gray-200 dark:border-gray-700 lg:border-b-0 lg:border-r lg:border-gray-200 dark:lg:border-gray-700 lg:align-top flex-shrink-0 transition-all duration-200`}
+            class={`hidden lg:flex lg:flex-col ${sidebarCollapsed() ? 'w-16' : 'w-72'} ${sidebarCollapsed() ? 'lg:min-w-[4rem] lg:max-w-[4rem] lg:basis-[4rem]' : 'lg:min-w-[18rem] lg:max-w-[18rem] lg:basis-[18rem]'} relative border-b border-slate-200 dark:border-slate-700 lg:border-b-0 lg:border-r lg:border-slate-200 dark:lg:border-slate-700 lg:align-top flex-shrink-0 transition-all duration-200`}
             aria-label="Alerts navigation"
             aria-expanded={!sidebarCollapsed()}
           >
@@ -2101,12 +2101,12 @@ export function Alerts() {
               class={`sticky top-0 ${sidebarCollapsed() ? 'px-2' : 'px-4'} py-5 space-y-5 transition-all duration-200`}
             >
               <Show when={!sidebarCollapsed()}>
-                <div class="flex items-center justify-between pb-2 border-b border-gray-200 dark:border-gray-700">
-                  <h2 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Alerts</h2>
+                <div class="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-700">
+                  <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Alerts</h2>
                   <button
                     type="button"
                     onClick={() => setSidebarCollapsed(true)}
-                    class="p-1 rounded-md text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                    class="p-1 rounded-md text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                     aria-label="Collapse sidebar"
                   >
                     <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -2124,7 +2124,7 @@ export function Alerts() {
                 <button
                   type="button"
                   onClick={() => setSidebarCollapsed(false)}
-                  class="w-full p-2 rounded-md text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                  class="w-full p-2 rounded-md text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                   aria-label="Expand sidebar"
                 >
                   <svg
@@ -2147,7 +2147,7 @@ export function Alerts() {
                   {(group) => (
                     <div class="space-y-2">
                       <Show when={!sidebarCollapsed()}>
-                        <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                           {group.label}
                         </p>
                       </Show>
@@ -2160,10 +2160,10 @@ export function Alerts() {
                               aria-disabled={areAlertsDisabled()}
                               disabled={areAlertsDisabled()}
                               class={`flex w-full items-center ${sidebarCollapsed() ? 'justify-center' : 'gap-2.5'} rounded-md ${sidebarCollapsed() ? 'px-2 py-2.5' : 'px-3 py-2'} text-sm font-medium transition-colors ${areAlertsDisabled()
-                                ? 'cursor-not-allowed text-gray-400 dark:text-gray-500 bg-gray-100/60 dark:bg-gray-800/60'
+                                ? 'cursor-not-allowed text-slate-400 dark:text-slate-500 bg-slate-100/60 dark:bg-slate-800'
                                 : activeTab() === item.id
                                   ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-200'
-                                  : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700/60 dark:hover:text-gray-100'
+                                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-700/60 dark:hover:text-slate-100'
                                 }`}
                               onClick={() => handleTabChange(item.id)}
                               title={sidebarCollapsed() ? item.label : undefined}
@@ -2185,10 +2185,10 @@ export function Alerts() {
 
           <div class="flex-1 overflow-hidden">
             <Show when={flatTabs.length > 0}>
-              <div class="lg:hidden border-b border-gray-200 dark:border-gray-700">
+              <div class="lg:hidden border-b border-slate-200 dark:border-slate-700">
                 <div class="p-1">
                   <div
-                    class="flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5 w-full overflow-x-auto"
+                    class="flex rounded-md bg-slate-100 dark:bg-slate-700 p-0.5 w-full overflow-x-auto"
                     style="-webkit-overflow-scrolling: touch;"
                   >
                     <For each={flatTabs}>
@@ -2198,10 +2198,10 @@ export function Alerts() {
                           aria-disabled={areAlertsDisabled()}
                           disabled={areAlertsDisabled()}
                           class={`flex-1 min-w-0 px-2 py-1.5 sm:px-4 sm:py-2 text-[11px] sm:text-xs font-medium rounded-md transition-all ${areAlertsDisabled()
-                            ? 'cursor-not-allowed text-gray-400 dark:text-gray-500 bg-gray-200/60 dark:bg-gray-800/60'
+                            ? 'cursor-not-allowed text-slate-400 dark:text-slate-500 bg-slate-200/60 dark:bg-slate-800'
                             : activeTab() === tab.id
-                              ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
-                              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                              ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 shadow-sm'
+                              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
                             }`}
                           onClick={() => handleTabChange(tab.id)}
                         >
@@ -2554,12 +2554,12 @@ function OverviewTab(props: {
   return (
     <div class="space-y-4 sm:space-y-6">
       {/* Stats Cards - only show cards not duplicated in sub-tabs */}
-      <div class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4">
 
         <Card padding="sm" class="sm:p-4">
           <div class="flex items-center justify-between">
             <div>
-              <p class="text-[10px] sm:text-sm text-gray-600 dark:text-gray-400 uppercase tracking-wider sm:normal-case">Acknowledged</p>
+              <p class="text-[10px] sm:text-sm text-slate-600 dark:text-slate-400 uppercase tracking-wider sm:normal-case">Acknowledged</p>
               <p class="text-lg sm:text-2xl font-semibold text-yellow-600 dark:text-yellow-400">
                 {alertStats().acknowledged}
               </p>
@@ -2584,16 +2584,16 @@ function OverviewTab(props: {
         <Card padding="sm" class="sm:p-4">
           <div class="flex items-center justify-between">
             <div>
-              <p class="text-[10px] sm:text-sm text-gray-600 dark:text-gray-400 uppercase tracking-wider sm:normal-case">Last 24 Hours</p>
-              <p class="text-lg sm:text-2xl font-semibold text-gray-700 dark:text-gray-300">
+              <p class="text-[10px] sm:text-sm text-slate-600 dark:text-slate-400 uppercase tracking-wider sm:normal-case">Last 24 Hours</p>
+              <p class="text-lg sm:text-2xl font-semibold text-slate-700 dark:text-slate-300">
                 {alertStats().total24h}
               </p>
             </div>
-            <div class="w-8 h-8 sm:w-10 sm:h-10 bg-gray-200 dark:bg-gray-600 rounded-full flex items-center justify-center">
+            <div class="w-8 h-8 sm:w-10 sm:h-10 bg-slate-200 dark:bg-slate-600 rounded-full flex items-center justify-center">
               <svg
                 width="16"
                 height="16"
-                class="sm:w-5 sm:h-5 text-gray-600 dark:text-gray-400"
+                class="sm:w-5 sm:h-5 text-slate-600 dark:text-slate-400"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
@@ -2609,7 +2609,7 @@ function OverviewTab(props: {
         <Card padding="sm" class="sm:p-4">
           <div class="flex items-center justify-between">
             <div>
-              <p class="text-[10px] sm:text-sm text-gray-600 dark:text-gray-400 uppercase tracking-wider sm:normal-case">Guest Overrides</p>
+              <p class="text-[10px] sm:text-sm text-slate-600 dark:text-slate-400 uppercase tracking-wider sm:normal-case">Guest Overrides</p>
               <p class="text-lg sm:text-2xl font-semibold text-blue-600 dark:text-blue-400">
                 {alertStats().overrides}
               </p>
@@ -2638,7 +2638,7 @@ function OverviewTab(props: {
         <Show
           when={Object.keys(props.activeAlerts).length > 0}
           fallback={
-            <div class="text-center py-8 text-gray-500 dark:text-gray-400">
+            <div class="text-center py-8 text-slate-500 dark:text-slate-400">
               <div class="flex justify-center mb-3">
                 <svg class="w-12 h-12 text-green-500 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none" />
@@ -2651,11 +2651,11 @@ function OverviewTab(props: {
           }
         >
           <Show when={alertStats().acknowledged > 0 || alertStats().active > 0}>
-            <div class="flex flex-wrap items-center justify-between gap-1.5 p-1.5 bg-gray-50 dark:bg-gray-800 rounded-t-lg border border-gray-200 dark:border-gray-700">
+            <div class="flex flex-wrap items-center justify-between gap-1.5 p-1.5 bg-slate-50 dark:bg-slate-800 rounded-t-lg border border-slate-200 dark:border-slate-700">
               <Show when={alertStats().acknowledged > 0}>
                 <button
                   onClick={() => props.setShowAcknowledged(!props.showAcknowledged())}
-                  class="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                  class="text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
                 >
                   {props.showAcknowledged() ? 'Hide' : 'Show'} acknowledged
                 </button>
@@ -2663,7 +2663,7 @@ function OverviewTab(props: {
               <Show when={alertStats().active > 0}>
                 <button
                   type="button"
-                  class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg border border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/40 text-blue-700 dark:text-blue-200 transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/60 disabled:opacity-60 disabled:cursor-not-allowed"
+                  class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md border border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/40 text-blue-700 dark:text-blue-200 transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/60 disabled:opacity-60 disabled:cursor-not-allowed"
                   disabled={bulkAckProcessing()}
                   onClick={async () => {
                     if (bulkAckProcessing()) return;
@@ -2712,7 +2712,7 @@ function OverviewTab(props: {
           </Show>
           <div class="space-y-2">
             <Show when={filteredAlerts().length === 0}>
-              <div class="text-center py-8 text-gray-500 dark:text-gray-400">
+              <div class="text-center py-8 text-slate-500 dark:text-slate-400">
                 {props.showAcknowledged() ? 'No active alerts' : 'No unacknowledged alerts'}
               </div>
             </Show>
@@ -2720,9 +2720,9 @@ function OverviewTab(props: {
               {(alert) => (
                 <div
                   id={`alert-${alert.id}`}
-                  class={`border rounded-lg p-3 sm:p-4 transition-all ${processingAlerts().has(alert.id) ? 'opacity-50' : ''
+                  class={`border rounded-md p-3 sm:p-4 transition-all ${processingAlerts().has(alert.id) ? 'opacity-50' : ''
                     } ${alert.acknowledged
-                      ? 'opacity-60 border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/20'
+                      ? 'opacity-60 border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800'
                       : alert.level === 'critical'
                         ? 'border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900/20'
                         : 'border-yellow-300 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900/20'
@@ -2781,11 +2781,11 @@ function OverviewTab(props: {
                           >
                             {alert.resourceName}
                           </span>
-                          <span class="text-xs text-gray-600 dark:text-gray-400">
+                          <span class="text-xs text-slate-600 dark:text-slate-400">
                             ({alert.type})
                           </span>
                           <Show when={alert.node}>
-                            <span class="text-xs text-gray-500 dark:text-gray-500">
+                            <span class="text-xs text-slate-500 dark:text-slate-500">
                               on {alert.nodeDisplayName || alert.node}
                             </span>
                           </Show>
@@ -2795,19 +2795,19 @@ function OverviewTab(props: {
                             </span>
                           </Show>
                         </div>
-                        <p class="text-sm text-gray-700 dark:text-gray-300 mt-1 break-words">
+                        <p class="text-sm text-slate-700 dark:text-slate-300 mt-1 break-words">
                           {alert.message}
                         </p>
-                        <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                        <p class="text-xs text-slate-600 dark:text-slate-400 mt-1">
                           Started: {new Date(alert.startTime).toLocaleString()}
                         </p>
                       </div>
                     </div>
                     <div class="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-3 sm:mt-0 sm:ml-4 self-end sm:self-start justify-end">
                       <button
-                        class={`px-3 py-1.5 text-xs font-medium border rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed ${alert.acknowledged
-                          ? 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
-                          : 'bg-white dark:bg-gray-700 text-yellow-700 dark:text-yellow-300 border-yellow-300 dark:border-yellow-700 hover:bg-yellow-50 dark:hover:bg-yellow-900/20'
+                        class={`px-3 py-1.5 text-xs font-medium border rounded-md transition-all disabled:opacity-50 disabled:cursor-not-allowed ${alert.acknowledged
+                          ? 'bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600'
+                          : 'bg-white dark:bg-slate-700 text-yellow-700 dark:text-yellow-300 border-yellow-300 dark:border-yellow-700 hover:bg-yellow-50 dark:hover:bg-yellow-900/20'
                           }`}
                         disabled={processingAlerts().has(alert.id)}
                         onClick={async (e) => {
@@ -2874,7 +2874,7 @@ function OverviewTab(props: {
                             : 'Acknowledge'}
                       </button>
                       <button
-                        class="px-3 py-1.5 text-xs font-medium border rounded-lg transition-all bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600"
+                        class="px-3 py-1.5 text-xs font-medium border rounded-md transition-all bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600"
                         onClick={() => {
                           void toggleIncidentTimeline(alert.id, alert.startTime);
                         }}
@@ -2890,16 +2890,16 @@ function OverviewTab(props: {
                     </div>
                   </div>
                   <Show when={expandedIncidents().has(alert.id)}>
-                    <div class="mt-3 border-t border-gray-200 dark:border-gray-700 pt-3">
+                    <div class="mt-3 border-t border-slate-200 dark:border-slate-700 pt-3">
                       <Show when={incidentLoading()[alert.id]}>
-                        <p class="text-xs text-gray-500 dark:text-gray-400">Loading timeline...</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Loading timeline...</p>
                       </Show>
                       <Show when={!incidentLoading()[alert.id]}>
                         <Show when={incidentTimelines()[alert.id]}>
                           {(timeline) => (
                             <div class="space-y-3">
-                              <div class="flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-                                <span class="font-medium text-gray-700 dark:text-gray-200">Incident</span>
+                              <div class="flex flex-wrap items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
+                                <span class="font-medium text-slate-700 dark:text-slate-200">Incident</span>
                                 <span>{timeline().status}</span>
                                 <Show when={timeline().acknowledged}>
                                   <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
@@ -2928,25 +2928,25 @@ function OverviewTab(props: {
                                       <div class="space-y-2">
                                         <For each={filteredEvents}>
                                           {(event) => (
-                                            <div class="rounded border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30 p-2">
-                                              <div class="flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-                                                <span class="font-medium text-gray-800 dark:text-gray-200">
+                                            <div class="rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-2">
+                                              <div class="flex flex-wrap items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
+                                                <span class="font-medium text-slate-800 dark:text-slate-200">
                                                   {event.summary}
                                                 </span>
                                                 <span>{new Date(event.timestamp).toLocaleString()}</span>
                                               </div>
                                               <Show when={event.details && (event.details as { note?: string }).note}>
-                                                <p class="text-xs text-gray-700 dark:text-gray-300 mt-1">
+                                                <p class="text-xs text-slate-700 dark:text-slate-300 mt-1">
                                                   {(event.details as { note?: string }).note}
                                                 </p>
                                               </Show>
                                               <Show when={event.details && (event.details as { command?: string }).command}>
-                                                <p class="text-xs text-gray-700 dark:text-gray-300 mt-1 font-mono">
+                                                <p class="text-xs text-slate-700 dark:text-slate-300 mt-1 font-mono">
                                                   {(event.details as { command?: string }).command}
                                                 </p>
                                               </Show>
                                               <Show when={event.details && (event.details as { output_excerpt?: string }).output_excerpt}>
-                                                <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                                                <p class="text-xs text-slate-600 dark:text-slate-400 mt-1">
                                                   {(event.details as { output_excerpt?: string }).output_excerpt}
                                                 </p>
                                               </Show>
@@ -2956,19 +2956,19 @@ function OverviewTab(props: {
                                       </div>
                                     </Show>
                                     <Show when={events.length > 0 && filteredEvents.length === 0}>
-                                      <p class="text-xs text-gray-500 dark:text-gray-400">
+                                      <p class="text-xs text-slate-500 dark:text-slate-400">
                                         No timeline events match the selected filters.
                                       </p>
                                     </Show>
                                     <Show when={events.length === 0}>
-                                      <p class="text-xs text-gray-500 dark:text-gray-400">No timeline events yet.</p>
+                                      <p class="text-xs text-slate-500 dark:text-slate-400">No timeline events yet.</p>
                                     </Show>
                                   </>
                                 );
                               })()}
                               <div class="flex flex-col gap-2">
                                 <textarea
-                                  class="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 p-2 text-xs text-gray-800 dark:text-gray-200"
+                                  class="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 p-2 text-xs text-slate-800 dark:text-slate-200"
                                   rows={2}
                                   placeholder="Add a note for this incident..."
                                   value={incidentNoteDrafts()[alert.id] || ''}
@@ -2979,7 +2979,7 @@ function OverviewTab(props: {
                                 />
                                 <div class="flex justify-end">
                                   <button
-                                    class="px-3 py-1.5 text-xs font-medium border rounded-lg transition-all bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    class="px-3 py-1.5 text-xs font-medium border rounded-md transition-all bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
                                     disabled={incidentNoteSaving().has(alert.id) || !(incidentNoteDrafts()[alert.id] || '').trim()}
                                     onClick={() => {
                                       void saveIncidentNote(alert.id, alert.startTime);
@@ -2993,7 +2993,7 @@ function OverviewTab(props: {
                           )}
                         </Show>
                         <Show when={!incidentTimelines()[alert.id]}>
-                          <p class="text-xs text-gray-500 dark:text-gray-400">No incident timeline available.</p>
+                          <p class="text-xs text-slate-500 dark:text-slate-400">No incident timeline available.</p>
                         </Show>
                       </Show>
                     </div>
@@ -3434,7 +3434,7 @@ function DestinationsTab(props: DestinationsTabProps) {
             }}
             containerClass="sm:self-start"
             label={
-              <span class="text-xs font-medium text-gray-600 dark:text-gray-400">
+              <span class="text-xs font-medium text-slate-600 dark:text-slate-400">
                 {props.emailConfig().enabled ? 'Enabled' : 'Disabled'}
               </span>
             }
@@ -3471,13 +3471,13 @@ function DestinationsTab(props: DestinationsTabProps) {
               }}
               containerClass=""
               label={
-                <span class="text-xs font-medium text-gray-600 dark:text-gray-400">
+                <span class="text-xs font-medium text-slate-600 dark:text-slate-400">
                   {appriseState().enabled ? 'Enabled' : 'Disabled'}
                 </span>
               }
             />
             <button
-              class="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
+              class="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
               disabled={!appriseState().enabled || testingApprise()}
               onClick={testApprise}
             >
@@ -3604,14 +3604,14 @@ mailto://alerts@example.com`}
                 <label class="inline-flex items-center gap-2">
                   <input
                     type="checkbox"
-                    class="h-4 w-4 rounded border border-gray-300 dark:border-gray-600"
+                    class="h-4 w-4 rounded border border-slate-300 dark:border-slate-600"
                     checked={appriseState().skipTlsVerify}
                     onChange={(e) => {
                       updateApprise({ skipTlsVerify: e.currentTarget.checked });
                       props.setHasUnsavedChanges(true);
                     }}
                   />
-                  <span class="text-sm text-gray-600 dark:text-gray-400">Allow self-signed certificates</span>
+                  <span class="text-sm text-slate-600 dark:text-slate-400">Allow self-signed certificates</span>
                 </label>
                 <p class={formHelpText}>Enable only when the Apprise API uses a self-signed certificate.</p>
               </div>
@@ -3642,7 +3642,7 @@ mailto://alerts@example.com`}
         title="Webhooks"
         description="Push alerts to chat apps or automation systems."
         action={
-          <span class="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
+          <span class="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">
             {webhooks().length} configured
           </span>
         }
@@ -3843,17 +3843,17 @@ function ScheduleTab(props: ScheduleTabProps) {
     <div class="space-y-6">
       <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">
+          <h3 class="text-base font-semibold text-slate-900 dark:text-slate-100">
             Alert scheduling
           </h3>
-          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+          <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
             Configure when and how alerts are delivered
           </p>
         </div>
         <button
           type="button"
           onClick={resetToDefaults}
-          class="inline-flex items-center gap-2 self-start rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+          class="inline-flex items-center gap-2 self-start rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
           title="Restore quiet hours, cooldown, grouping, and escalation settings to their defaults"
         >
           <svg
@@ -3887,7 +3887,7 @@ function ScheduleTab(props: ScheduleTabProps) {
               }}
               containerClass="sm:self-start"
               label={
-                <span class="text-xs font-medium text-gray-600 dark:text-gray-400">
+                <span class="text-xs font-medium text-slate-600 dark:text-slate-400">
                   {quietHours().enabled ? 'Enabled' : 'Disabled'}
                 </span>
               }
@@ -3959,7 +3959,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                         title={day.fullLabel}
                         class={`px-2 py-2 text-xs font-medium transition-all duration-200 ${quietHours().days[day.id]
                           ? 'rounded-md bg-blue-500 text-white shadow-sm'
-                          : 'rounded-md bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-400 dark:hover:bg-gray-600'
+                          : 'rounded-md bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-400 dark:hover:bg-slate-600'
                           }`}
                       >
                         {day.label}
@@ -3967,7 +3967,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                     )}
                   </For>
                 </div>
-                <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">
                   <Show
                     when={
                       quietHours().days.monday &&
@@ -3997,20 +3997,20 @@ function ScheduleTab(props: ScheduleTabProps) {
                 </p>
               </div>
 
-              <div class="space-y-3 border-t border-gray-200 pt-4 dark:border-gray-700">
+              <div class="space-y-3 border-t border-slate-200 pt-4 dark:border-slate-700">
                 <span class={`${labelClass('text-xs uppercase tracking-[0.08em]')} block`}>
                   Suppress categories
                 </span>
-                <p class="text-xs text-gray-500 dark:text-gray-400">
+                <p class="text-xs text-slate-500 dark:text-slate-400">
                   Critical alerts in selected categories will stay silent during quiet hours.
                 </p>
                 <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:gap-3">
                   <For each={quietHourSuppressOptions}>
                     {(option) => (
                       <label
-                        class={`flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-2 transition-colors ${quietHours().suppress[option.key]
+                        class={`flex cursor-pointer items-start gap-3 rounded-md border px-3 py-2 transition-colors ${quietHours().suppress[option.key]
                           ? 'border-blue-500 bg-blue-50 dark:border-blue-400 dark:bg-blue-500/10'
-                          : 'border-gray-200 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700'
+                          : 'border-slate-200 hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-700'
                           }`}
                       >
                         <input
@@ -4031,7 +4031,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                         <div
                           class={`mt-1 flex h-4 w-4 items-center justify-center rounded border-2 ${quietHours().suppress[option.key]
                             ? 'border-blue-500 bg-blue-500'
-                            : 'border-gray-300 dark:border-gray-600'
+                            : 'border-slate-300 dark:border-slate-600'
                             }`}
                         >
                           <Show when={quietHours().suppress[option.key]}>
@@ -4047,10 +4047,10 @@ function ScheduleTab(props: ScheduleTabProps) {
                           </Show>
                         </div>
                         <div>
-                          <p class="text-sm font-medium text-gray-700 dark:text-gray-200">
+                          <p class="text-sm font-medium text-slate-700 dark:text-slate-200">
                             {option.label}
                           </p>
-                          <p class="text-xs text-gray-500 dark:text-gray-400">
+                          <p class="text-xs text-slate-500 dark:text-slate-400">
                             {option.description}
                           </p>
                         </div>
@@ -4086,7 +4086,7 @@ function ScheduleTab(props: ScheduleTabProps) {
               }}
               containerClass="sm:self-start"
               label={
-                <span class="text-xs font-medium text-gray-600 dark:text-gray-400">
+                <span class="text-xs font-medium text-slate-600 dark:text-slate-400">
                   {cooldown().enabled ? 'Enabled' : 'Disabled'}
                 </span>
               }
@@ -4117,7 +4117,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                       }}
                       class={controlClass('pr-16')}
                     />
-                    <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-gray-500 dark:text-gray-400">
+                    <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-slate-500 dark:text-slate-400">
                       minutes
                     </span>
                   </div>
@@ -4146,7 +4146,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                       }}
                       class={controlClass('pr-16')}
                     />
-                    <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-gray-500 dark:text-gray-400">
+                    <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-slate-500 dark:text-slate-400">
                       alerts
                     </span>
                   </div>
@@ -4170,7 +4170,7 @@ function ScheduleTab(props: ScheduleTabProps) {
               }}
               containerClass="sm:self-start"
               label={
-                <span class="text-xs font-medium text-gray-600 dark:text-gray-400">
+                <span class="text-xs font-medium text-slate-600 dark:text-slate-400">
                   {grouping().enabled ? 'Enabled' : 'Disabled'}
                 </span>
               }
@@ -4196,7 +4196,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                     }}
                     class="flex-1"
                   />
-                  <div class="w-16 rounded-md bg-gray-100 px-2 py-1 text-center text-sm text-gray-700 dark:bg-gray-700 dark:text-gray-200">
+                  <div class="w-16 rounded-md bg-slate-100 px-2 py-1 text-center text-sm text-slate-700 dark:bg-slate-700 dark:text-slate-200">
                     {grouping().window} min
                   </div>
                 </div>
@@ -4211,9 +4211,9 @@ function ScheduleTab(props: ScheduleTabProps) {
                 </span>
                 <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <label
-                    class={`relative flex items-center gap-2 rounded-lg border-2 p-3 transition-all ${grouping().byNode
+                    class={`relative flex items-center gap-2 rounded-md border-2 p-3 transition-all ${grouping().byNode
                       ? 'border-blue-500 bg-blue-50 shadow-sm dark:bg-blue-900/20'
-                      : 'border-gray-200 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700'
+                      : 'border-slate-200 hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-700'
                       }`}
                   >
                     <input
@@ -4228,7 +4228,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                     <div
                       class={`flex h-4 w-4 items-center justify-center rounded border-2 ${grouping().byNode
                         ? 'border-blue-500 bg-blue-500'
-                        : 'border-gray-300 dark:border-gray-600'
+                        : 'border-slate-300 dark:border-slate-600'
                         }`}
                     >
                       <Show when={grouping().byNode}>
@@ -4243,15 +4243,15 @@ function ScheduleTab(props: ScheduleTabProps) {
                         </svg>
                       </Show>
                     </div>
-                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    <span class="text-sm font-medium text-slate-700 dark:text-slate-300">
                       By Node
                     </span>
                   </label>
 
                   <label
-                    class={`relative flex items-center gap-2 rounded-lg border-2 p-3 transition-all ${grouping().byGuest
+                    class={`relative flex items-center gap-2 rounded-md border-2 p-3 transition-all ${grouping().byGuest
                       ? 'border-blue-500 bg-blue-50 shadow-sm dark:bg-blue-900/20'
-                      : 'border-gray-200 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700'
+                      : 'border-slate-200 hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-700'
                       }`}
                   >
                     <input
@@ -4266,7 +4266,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                     <div
                       class={`flex h-4 w-4 items-center justify-center rounded border-2 ${grouping().byGuest
                         ? 'border-blue-500 bg-blue-500'
-                        : 'border-gray-300 dark:border-gray-600'
+                        : 'border-slate-300 dark:border-slate-600'
                         }`}
                     >
                       <Show when={grouping().byGuest}>
@@ -4281,7 +4281,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                         </svg>
                       </Show>
                     </div>
-                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    <span class="text-sm font-medium text-slate-700 dark:text-slate-300">
                       By Guest
                     </span>
                   </label>
@@ -4304,7 +4304,7 @@ function ScheduleTab(props: ScheduleTabProps) {
               }}
               containerClass="sm:self-start"
               label={
-                <span class="text-xs font-medium text-gray-600 dark:text-gray-400">
+                <span class="text-xs font-medium text-slate-600 dark:text-slate-400">
                   {notifyOnResolve() ? 'Enabled' : 'Disabled'}
                 </span>
               }
@@ -4330,7 +4330,7 @@ function ScheduleTab(props: ScheduleTabProps) {
               }}
               containerClass="sm:self-start"
               label={
-                <span class="text-xs font-medium text-gray-600 dark:text-gray-400">
+                <span class="text-xs font-medium text-slate-600 dark:text-slate-400">
                   {escalation().enabled ? 'Enabled' : 'Disabled'}
                 </span>
               }
@@ -4343,10 +4343,10 @@ function ScheduleTab(props: ScheduleTabProps) {
               <p class={formHelpText}>Define escalation levels for unresolved alerts:</p>
               <For each={escalation().levels}>
                 {(level, index) => (
-                  <div class="flex items-center gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-600 dark:bg-gray-700/40">
+                  <div class="flex items-center gap-3 rounded-md border border-slate-200 bg-slate-50 p-3 dark:border-slate-600 dark:bg-slate-800">
                     <div class="flex flex-1 flex-col gap-3 sm:grid sm:grid-cols-2 sm:items-center sm:gap-2">
                       <div class="flex items-center gap-2">
-                        <span class="text-xs font-medium text-gray-600 dark:text-gray-400">
+                        <span class="text-xs font-medium text-slate-600 dark:text-slate-400">
                           After
                         </span>
                         <input
@@ -4366,10 +4366,10 @@ function ScheduleTab(props: ScheduleTabProps) {
                           }}
                           class={`${controlClass('px-2 py-1 text-sm')} w-20`}
                         />
-                        <span class="text-xs text-gray-600 dark:text-gray-400">min</span>
+                        <span class="text-xs text-slate-600 dark:text-slate-400">min</span>
                       </div>
                       <div class="flex items-center gap-2">
-                        <span class="text-xs font-medium text-gray-600 dark:text-gray-400">
+                        <span class="text-xs font-medium text-slate-600 dark:text-slate-400">
                           Notify
                         </span>
                         <select
@@ -4428,7 +4428,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                   });
                   props.setHasUnsavedChanges(true);
                 }}
-                class="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-gray-300 py-2 text-sm text-gray-600 transition-all hover:border-gray-400 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-400 dark:hover:border-gray-500 dark:hover:bg-gray-700"
+                class="flex w-full items-center justify-center gap-2 rounded-md border-2 border-dashed border-slate-300 py-2 text-sm text-slate-600 transition-all hover:border-slate-400 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-400 dark:hover:border-slate-500 dark:hover:bg-slate-700"
               >
                 <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
@@ -5386,7 +5386,7 @@ function HistoryTab(props: {
           <SectionHeader
             title="Alert frequency"
             description={
-              <span class="text-xs text-gray-500 dark:text-gray-400">
+              <span class="text-xs text-slate-500 dark:text-slate-400">
                 {alertData().length} alerts
               </span>
             }
@@ -5404,17 +5404,17 @@ function HistoryTab(props: {
                 </div>
               )}
             </Show>
-            <div class="flex flex-col items-start gap-1 text-xs text-gray-500 dark:text-gray-400 sm:items-end">
+            <div class="flex flex-col items-start gap-1 text-xs text-slate-500 dark:text-slate-400 sm:items-end">
               <div>
-                <span class="font-medium text-gray-600 dark:text-gray-300">Bar size:</span>{' '}
+                <span class="font-medium text-slate-600 dark:text-slate-300">Bar size:</span>{' '}
                 {bucketDurationLabel()}
               </div>
               <Show when={rangeSummary()}>
                 {(summary) => (
                   <div class="flex items-center gap-1 whitespace-nowrap">
-                    <span class="font-medium text-gray-600 dark:text-gray-300">Range:</span>
+                    <span class="font-medium text-slate-600 dark:text-slate-300">Range:</span>
                     <span>{summary().startLabel}</span>
-                    <span class="text-gray-400 dark:text-gray-500">→</span>
+                    <span class="text-slate-400 dark:text-slate-500">→</span>
                     <span>{summary().endLabel}</span>
                   </div>
                 )}
@@ -5430,7 +5430,7 @@ function HistoryTab(props: {
                   Clear filter
                 </button>
               </Show>
-              <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+              <div class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
                 <span class="flex items-center gap-1">
                   <div class="h-2 w-2 rounded-full bg-yellow-500"></div>
                   {alertData().filter((a) => a.level === 'warning').length} warnings
@@ -5445,7 +5445,7 @@ function HistoryTab(props: {
         </div>
 
         {/* Mini sparkline chart */}
-        <div class="mb-1 text-[10px] text-gray-400 dark:text-gray-500">
+        <div class="mb-1 text-[10px] text-slate-400 dark:text-slate-500">
           Showing {alertTrends().buckets.length} time periods ({bucketDurationLabel()} each) ·
           Total: {alertData().length} alerts
         </div>
@@ -5454,7 +5454,7 @@ function HistoryTab(props: {
         {(() => {
           const trends = alertTrends();
           return (
-            <div class="rounded bg-gray-100 p-1 dark:bg-gray-800">
+            <div class="rounded bg-slate-100 p-1 dark:bg-slate-800">
               <div class="flex h-12 items-end gap-1">
                 {trends.buckets.map((val, i) => {
                   const scaledHeight =
@@ -5488,7 +5488,7 @@ function HistoryTab(props: {
                       }}
                     >
                       {/* Background track for all slots */}
-                      <div class="absolute bottom-0 h-1 w-full rounded-full bg-gray-300 opacity-30 dark:bg-gray-600"></div>
+                      <div class="absolute bottom-0 h-1 w-full rounded-full bg-slate-300 opacity-30 dark:bg-slate-600"></div>
                       {/* Actual bar */}
                       <div
                         class="relative w-full rounded-sm transition-all"
@@ -5523,16 +5523,16 @@ function HistoryTab(props: {
 
         <Show when={axisTicks().length > 0}>
           <div class="relative mt-3 h-10">
-            <div class="absolute inset-x-0 top-0 h-px bg-gray-200 dark:bg-gray-700"></div>
+            <div class="absolute inset-x-0 top-0 h-px bg-slate-200 dark:bg-slate-700"></div>
             <For each={axisTicks()}>
               {(tick) => (
                 <div
                   class="pointer-events-none absolute top-0 flex h-full flex-col items-center"
                   style={{ left: `${tick.position * 100}%` }}
                 >
-                  <div class="h-3 w-px bg-gray-300 dark:bg-gray-600"></div>
+                  <div class="h-3 w-px bg-slate-300 dark:bg-slate-600"></div>
                   <div
-                    class="mt-1 whitespace-nowrap text-[10px] text-gray-500 dark:text-gray-400 transform"
+                    class="mt-1 whitespace-nowrap text-[10px] text-slate-500 dark:text-slate-400 transform"
                     classList={{
                       '-translate-x-1/2': tick.align === 'center',
                       '-translate-x-full': tick.align === 'end',
@@ -5563,7 +5563,7 @@ function HistoryTab(props: {
               <button
                 type="button"
                 onClick={() => setFiltersOpen((o) => !o)}
-                class="flex items-center gap-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400"
+                class="flex items-center gap-1.5 rounded-md bg-slate-100 dark:bg-slate-700 px-2.5 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-400"
               >
                 <ListFilterIcon class="w-3.5 h-3.5" />
                 Filters
@@ -5576,14 +5576,14 @@ function HistoryTab(props: {
             </Show>
           </div>
           <Show when={!isMobile() || filtersOpen()}>
-            <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-              <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-                <label for="alert-time-filter" class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Period</label>
+            <div class="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+              <div class="inline-flex items-center gap-1 rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
+                <label for="alert-time-filter" class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Period</label>
                 <select
                   id="alert-time-filter"
                   value={timeFilter()}
                   onChange={(e) => setTimeFilter(e.currentTarget.value as '24h' | '7d' | '30d' | 'all')}
-                  class="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+                  class="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                 >
                   <option value="24h">Last 24h</option>
                   <option value="7d">Last 7d</option>
@@ -5591,13 +5591,13 @@ function HistoryTab(props: {
                   <option value="all">All Time</option>
                 </select>
               </div>
-              <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-                <label for="alert-severity-filter" class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Severity</label>
+              <div class="inline-flex items-center gap-1 rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
+                <label for="alert-severity-filter" class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Severity</label>
                 <select
                   id="alert-severity-filter"
                   value={severityFilter()}
                   onChange={(e) => setSeverityFilter(e.currentTarget.value as 'warning' | 'critical' | 'all')}
-                  class="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+                  class="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                 >
                   <option value="all">All</option>
                   <option value="critical">Critical</option>
@@ -5618,8 +5618,8 @@ function HistoryTab(props: {
             <Card padding="md">
               <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                  <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-100">Resource incidents</h3>
-                  <p class="text-xs text-gray-500 dark:text-gray-400">
+                  <h3 class="text-sm font-semibold text-slate-800 dark:text-slate-100">Resource incidents</h3>
+                  <p class="text-xs text-slate-500 dark:text-slate-400">
                     {selection().resourceName}
                     <Show when={incidents().length > 0}>
                       <span> · {incidents().length} incident{incidents().length === 1 ? '' : 's'}</span>
@@ -5629,7 +5629,7 @@ function HistoryTab(props: {
                 <div class="flex items-center gap-2">
                   <button
                     type="button"
-                    class="px-2 py-1 text-xs border rounded-md border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+                    class="px-2 py-1 text-xs border rounded-md border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50"
                     disabled={isLoading()}
                     onClick={() => {
                       void refreshResourceIncidentPanel();
@@ -5639,7 +5639,7 @@ function HistoryTab(props: {
                   </button>
                   <button
                     type="button"
-                    class="px-2 py-1 text-xs border rounded-md border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                    class="px-2 py-1 text-xs border rounded-md border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700"
                     onClick={() => setResourceIncidentPanel(null)}
                   >
                     Close
@@ -5647,7 +5647,7 @@ function HistoryTab(props: {
                 </div>
               </div>
               <Show when={isLoading()}>
-                <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">Loading incidents...</p>
+                <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">Loading incidents...</p>
               </Show>
               <Show when={!isLoading()}>
                 <Show when={incidents().length > 0}>
@@ -5661,7 +5661,7 @@ function HistoryTab(props: {
                 <Show
                   when={incidents().length > 0}
                   fallback={
-                    <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                    <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">
                       No incidents recorded for this resource yet.
                     </p>
                   }
@@ -5678,7 +5678,7 @@ function HistoryTab(props: {
                             ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300'
                             : statusLabel === 'open'
                               ? 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300'
-                              : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300';
+                              : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300';
                         const levelClasses =
                           incident.level === 'critical'
                             ? 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300'
@@ -5695,9 +5695,9 @@ function HistoryTab(props: {
                             ? `${filteredEvents.length}/${events.length}`
                             : `${events.length}`;
                         return (
-                          <div class="rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/40 p-3">
-                            <div class="flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-                              <span class="font-medium text-gray-800 dark:text-gray-200">
+                          <div class="rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-3">
+                            <div class="flex flex-wrap items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
+                              <span class="font-medium text-slate-800 dark:text-slate-200">
                                 {incident.alertType}
                               </span>
                               <span class={`px-2 py-0.5 rounded ${levelClasses}`}>{incident.level}</span>
@@ -5708,17 +5708,17 @@ function HistoryTab(props: {
                               </Show>
                             </div>
                             <Show when={incident.message}>
-                              <p class="mt-1 text-xs text-gray-600 dark:text-gray-300">
+                              <p class="mt-1 text-xs text-slate-600 dark:text-slate-300">
                                 {incident.message}
                               </p>
                             </Show>
                             <Show when={incident.acknowledged && incident.ackUser}>
-                              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                              <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
                                 Acknowledged by {incident.ackUser}
                               </p>
                             </Show>
                             <Show when={events.length > 0}>
-                              <div class="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500 dark:text-gray-400">
+                              <div class="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 dark:text-slate-400">
                                 <span>
                                   <Show
                                     when={filteredEvents.length > 0}
@@ -5729,7 +5729,7 @@ function HistoryTab(props: {
                                 </span>
                                 <button
                                   type="button"
-                                  class="px-2 py-1 text-[10px] border rounded-md border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                                  class="px-2 py-1 text-[10px] border rounded-md border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700"
                                   onClick={() => toggleResourceIncidentDetails(incident.id)}
                                 >
                                   {isExpanded ? 'Hide events' : `Events (${filteredLabel})`}
@@ -5741,32 +5741,32 @@ function HistoryTab(props: {
                                 <Show
                                   when={filteredEvents.length > 0}
                                   fallback={
-                                    <p class="text-[10px] text-gray-400 dark:text-gray-500">
+                                    <p class="text-[10px] text-slate-400 dark:text-slate-500">
                                       No events match the selected filters.
                                     </p>
                                   }
                                 >
                                   <For each={recentEvents}>
                                     {(event) => (
-                                      <div class="rounded border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 p-2">
-                                        <div class="flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-                                          <span class="font-medium text-gray-800 dark:text-gray-200">
+                                      <div class="rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-2">
+                                        <div class="flex flex-wrap items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
+                                          <span class="font-medium text-slate-800 dark:text-slate-200">
                                             {event.summary}
                                           </span>
                                           <span>{new Date(event.timestamp).toLocaleString()}</span>
                                         </div>
                                         <Show when={event.details && (event.details as { note?: string }).note}>
-                                          <p class="text-xs text-gray-700 dark:text-gray-300 mt-1">
+                                          <p class="text-xs text-slate-700 dark:text-slate-300 mt-1">
                                             {(event.details as { note?: string }).note}
                                           </p>
                                         </Show>
                                         <Show when={event.details && (event.details as { command?: string }).command}>
-                                          <p class="text-xs text-gray-700 dark:text-gray-300 mt-1 font-mono">
+                                          <p class="text-xs text-slate-700 dark:text-slate-300 mt-1 font-mono">
                                             {(event.details as { command?: string }).command}
                                           </p>
                                         </Show>
                                         <Show when={event.details && (event.details as { output_excerpt?: string }).output_excerpt}>
-                                          <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                                          <p class="text-xs text-slate-600 dark:text-slate-400 mt-1">
                                             {(event.details as { output_excerpt?: string }).output_excerpt}
                                           </p>
                                         </Show>
@@ -5774,7 +5774,7 @@ function HistoryTab(props: {
                                     )}
                                   </For>
                                   <Show when={filteredEvents.length > recentEvents.length}>
-                                    <p class="text-[10px] text-gray-400 dark:text-gray-500">
+                                    <p class="text-[10px] text-slate-400 dark:text-slate-500">
                                       Showing last {recentEvents.length} events
                                     </p>
                                   </Show>
@@ -5800,18 +5800,18 @@ function HistoryTab(props: {
           <Show
             when={alertData().length > 0}
             fallback={
-              <div class="text-center py-12 text-gray-500 dark:text-gray-400">
+              <div class="text-center py-12 text-slate-500 dark:text-slate-400">
                 <p class="text-sm">No alerts found</p>
                 <p class="text-xs mt-1">Try adjusting your filters or check back later</p>
               </div>
             }
           >
             {/* Table */}
-            <div class="mb-2 border border-gray-200 dark:border-gray-700 rounded overflow-hidden">
+            <div class="mb-2 border border-slate-200 dark:border-slate-700 rounded overflow-hidden">
               <ScrollableTable minWidth="800px">
                 <table class="w-full min-w-[800px] text-[11px] sm:text-sm">
                   <thead>
-                    <tr class="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-b border-gray-300 dark:border-gray-600">
+                    <tr class="bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border-b border-slate-300 dark:border-slate-600">
                       <th class="p-1 sm:p-1.5 px-1 sm:px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">
                         Timestamp
                       </th>
@@ -5849,7 +5849,7 @@ function HistoryTab(props: {
                       {(group) => (
                         <>
                           {/* Date divider */}
-                          <tr class="bg-gray-50 dark:bg-gray-900/40">
+                          <tr class="bg-slate-50 dark:bg-slate-800">
                             <td
                               colspan="10"
                               class="py-1.5 pr-3 pl-4 text-[12px] sm:text-sm font-semibold text-slate-700 dark:text-slate-100"
@@ -5879,11 +5879,11 @@ function HistoryTab(props: {
                               return (
                                 <>
                                   <tr
-                                    class={`border-b border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 ${alert.status === 'active' ? 'bg-red-50 dark:bg-red-900/10' : ''
+                                    class={`border-b border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 ${alert.status === 'active' ? 'bg-red-50 dark:bg-red-900/10' : ''
                                       }`}
                                   >
                                     {/* Timestamp */}
-                                    <td class="p-1 sm:p-1.5 px-1 sm:px-2 text-gray-600 dark:text-gray-400 font-mono whitespace-nowrap">
+                                    <td class="p-1 sm:p-1.5 px-1 sm:px-2 text-slate-600 dark:text-slate-400 font-mono whitespace-nowrap">
                                       {new Date(alert.startTime).toLocaleTimeString('en-US', {
                                         hour: '2-digit',
                                         minute: '2-digit',
@@ -5903,7 +5903,7 @@ function HistoryTab(props: {
                                     </td>
 
                                     {/* Resource */}
-                                    <td class="p-1 sm:p-1.5 px-1 sm:px-2 font-medium text-gray-900 dark:text-gray-100 truncate max-w-[150px]">
+                                    <td class="p-1 sm:p-1.5 px-1 sm:px-2 font-medium text-slate-900 dark:text-slate-100 truncate max-w-[150px]">
                                       {alert.resourceName}
                                     </td>
 
@@ -5918,7 +5918,7 @@ function HistoryTab(props: {
                                               ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300'
                                               : alert.resourceType === 'Storage'
                                                 ? 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300'
-                                                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                                                : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
                                           }`}
                                       >
                                         {alert.type}
@@ -5939,14 +5939,14 @@ function HistoryTab(props: {
 
                                     {/* Message */}
                                     <td
-                                      class="p-1 sm:p-1.5 px-1 sm:px-2 text-gray-700 dark:text-gray-300 truncate max-w-[300px]"
+                                      class="p-1 sm:p-1.5 px-1 sm:px-2 text-slate-700 dark:text-slate-300 truncate max-w-[300px]"
                                       title={alert.message}
                                     >
                                       {alert.message}
                                     </td>
 
                                     {/* Duration */}
-                                    <td class="p-1 sm:p-1.5 px-1 sm:px-2 text-center text-gray-600 dark:text-gray-400">
+                                    <td class="p-1 sm:p-1.5 px-1 sm:px-2 text-center text-slate-600 dark:text-slate-400">
                                       {alert.duration}
                                     </td>
 
@@ -5957,7 +5957,7 @@ function HistoryTab(props: {
                                           ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 font-medium'
                                           : alert.status === 'acknowledged'
                                             ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300'
-                                            : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                                            : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
                                           }`}
                                       >
                                         {alert.status}
@@ -5965,7 +5965,7 @@ function HistoryTab(props: {
                                     </td>
 
                                     {/* Node */}
-                                    <td class="p-1 sm:p-1.5 px-1 sm:px-2 text-gray-600 dark:text-gray-400 truncate">
+                                    <td class="p-1 sm:p-1.5 px-1 sm:px-2 text-slate-600 dark:text-slate-400 truncate">
                                       {alert.nodeDisplayName || alert.node || '—'}
                                     </td>
 
@@ -5975,7 +5975,7 @@ function HistoryTab(props: {
                                         <Show when={alert.source === 'alert'}>
                                           <button
                                             type="button"
-                                            class="px-2 py-1 text-[10px] border rounded-md border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                                            class="px-2 py-1 text-[10px] border rounded-md border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700"
                                             onClick={() => {
                                               void toggleIncidentTimeline(rowKey, alert.id, alert.startTime);
                                             }}
@@ -5986,7 +5986,7 @@ function HistoryTab(props: {
                                         <Show when={alert.source === 'alert' && alert.resourceId}>
                                           <button
                                             type="button"
-                                            class="px-2 py-1 text-[10px] border rounded-md border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                                            class="px-2 py-1 text-[10px] border rounded-md border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700"
                                             title="View incidents for this resource"
                                             onClick={() => {
                                               void openResourceIncidentPanel(alert.resourceId as string, alert.resourceName);
@@ -6022,17 +6022,17 @@ function HistoryTab(props: {
                                     </td>
                                   </tr>
                                   <Show when={alert.source === 'alert' && expandedIncidents().has(rowKey)}>
-                                    <tr class="bg-gray-50 dark:bg-gray-900/40 border-b border-gray-200 dark:border-gray-700">
+                                    <tr class="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
                                       <td colspan="11" class="p-3">
                                         <Show when={incidentLoading()[rowKey]}>
-                                          <p class="text-xs text-gray-500 dark:text-gray-400">Loading timeline...</p>
+                                          <p class="text-xs text-slate-500 dark:text-slate-400">Loading timeline...</p>
                                         </Show>
                                         <Show when={!incidentLoading()[rowKey]}>
                                           <Show when={incidentTimelines()[rowKey]}>
                                             {(timeline) => (
                                               <div class="space-y-3">
-                                                <div class="flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-                                                  <span class="font-medium text-gray-700 dark:text-gray-200">Incident</span>
+                                                <div class="flex flex-wrap items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
+                                                  <span class="font-medium text-slate-700 dark:text-slate-200">Incident</span>
                                                   <span>{timeline().status}</span>
                                                   <Show when={timeline().acknowledged}>
                                                     <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
@@ -6061,25 +6061,25 @@ function HistoryTab(props: {
                                                         <div class="space-y-2">
                                                           <For each={filteredEvents}>
                                                             {(event) => (
-                                                              <div class="rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/30 p-2">
-                                                                <div class="flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-                                                                  <span class="font-medium text-gray-800 dark:text-gray-200">
+                                                              <div class="rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-2">
+                                                                <div class="flex flex-wrap items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
+                                                                  <span class="font-medium text-slate-800 dark:text-slate-200">
                                                                     {event.summary}
                                                                   </span>
                                                                   <span>{new Date(event.timestamp).toLocaleString()}</span>
                                                                 </div>
                                                                 <Show when={event.details && (event.details as { note?: string }).note}>
-                                                                  <p class="text-xs text-gray-700 dark:text-gray-300 mt-1">
+                                                                  <p class="text-xs text-slate-700 dark:text-slate-300 mt-1">
                                                                     {(event.details as { note?: string }).note}
                                                                   </p>
                                                                 </Show>
                                                                 <Show when={event.details && (event.details as { command?: string }).command}>
-                                                                  <p class="text-xs text-gray-700 dark:text-gray-300 mt-1 font-mono">
+                                                                  <p class="text-xs text-slate-700 dark:text-slate-300 mt-1 font-mono">
                                                                     {(event.details as { command?: string }).command}
                                                                   </p>
                                                                 </Show>
                                                                 <Show when={event.details && (event.details as { output_excerpt?: string }).output_excerpt}>
-                                                                  <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                                                                  <p class="text-xs text-slate-600 dark:text-slate-400 mt-1">
                                                                     {(event.details as { output_excerpt?: string }).output_excerpt}
                                                                   </p>
                                                                 </Show>
@@ -6089,19 +6089,19 @@ function HistoryTab(props: {
                                                         </div>
                                                       </Show>
                                                       <Show when={events.length > 0 && filteredEvents.length === 0}>
-                                                        <p class="text-xs text-gray-500 dark:text-gray-400">
+                                                        <p class="text-xs text-slate-500 dark:text-slate-400">
                                                           No timeline events match the selected filters.
                                                         </p>
                                                       </Show>
                                                       <Show when={events.length === 0}>
-                                                        <p class="text-xs text-gray-500 dark:text-gray-400">No timeline events yet.</p>
+                                                        <p class="text-xs text-slate-500 dark:text-slate-400">No timeline events yet.</p>
                                                       </Show>
                                                     </>
                                                   );
                                                 })()}
                                                 <div class="flex flex-col gap-2">
                                                   <textarea
-                                                    class="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 p-2 text-xs text-gray-800 dark:text-gray-200"
+                                                    class="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 p-2 text-xs text-slate-800 dark:text-slate-200"
                                                     rows={2}
                                                     placeholder="Add a note for this incident..."
                                                     value={incidentNoteDrafts()[rowKey] || ''}
@@ -6112,7 +6112,7 @@ function HistoryTab(props: {
                                                   />
                                                   <div class="flex justify-end">
                                                     <button
-                                                      class="px-3 py-1.5 text-xs font-medium border rounded-lg transition-all bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                      class="px-3 py-1.5 text-xs font-medium border rounded-md transition-all bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
                                                       disabled={incidentNoteSaving().has(rowKey) || !(incidentNoteDrafts()[rowKey] || '').trim()}
                                                       onClick={() => {
                                                         void saveIncidentNote(rowKey, alert.id, alert.startTime);
@@ -6126,7 +6126,7 @@ function HistoryTab(props: {
                                             )}
                                           </Show>
                                           <Show when={!incidentTimelines()[rowKey]}>
-                                            <p class="text-xs text-gray-500 dark:text-gray-400">No incident timeline available.</p>
+                                            <p class="text-xs text-slate-500 dark:text-slate-400">No incident timeline available.</p>
                                           </Show>
                                         </Show>
                                       </td>
@@ -6146,21 +6146,21 @@ function HistoryTab(props: {
           </Show>
         }
       >
-        <div class="text-center py-12 text-gray-500 dark:text-gray-400">
+        <div class="text-center py-12 text-slate-500 dark:text-slate-400">
           <p class="text-sm">Loading alert history...</p>
         </div>
       </Show>
 
       {/* Administrative Actions - Only show if there's history to clear */}
       <Show when={alertHistory().length > 0}>
-        <div class="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
-          <div class="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4">
+        <div class="mt-8 pt-6 border-t border-slate-200 dark:border-slate-700">
+          <div class="bg-slate-50 dark:bg-slate-800 rounded-md p-4">
             <div class="flex items-start justify-between">
               <div>
-                <h4 class="text-sm font-medium text-gray-800 dark:text-gray-200 mb-1">
+                <h4 class="text-sm font-medium text-slate-800 dark:text-slate-200 mb-1">
                   Administrative Actions
                 </h4>
-                <p class="text-xs text-gray-600 dark:text-gray-400">
+                <p class="text-xs text-slate-600 dark:text-slate-400">
                   Permanently clear all alert history. Use with caution - this action cannot be
                   undone.
                 </p>
@@ -6185,8 +6185,7 @@ function HistoryTab(props: {
                     }
                   }
                 }}
-                class="px-3 py-2 text-xs border border-red-300 dark:border-red-600 text-red-600 dark:text-red-400 
-                       rounded-md hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors flex-shrink-0"
+                class="px-3 py-2 text-xs border border-red-300 dark:border-red-600 text-red-600 dark:text-red-400 rounded-md hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors flex-shrink-0"
               >
                 Clear All History
               </button>

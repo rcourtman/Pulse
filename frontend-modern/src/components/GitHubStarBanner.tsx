@@ -96,12 +96,12 @@ export function GitHubStarBanner() {
   return (
     <Show when={showModal()}>
       <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-md w-full overflow-hidden">
+        <div class="bg-white dark:bg-slate-800 rounded-md shadow-sm max-w-md w-full overflow-hidden">
           {/* Header with close button */}
           <div class="flex justify-end p-3 pb-0">
             <button
               onClick={handleDismiss}
-              class="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+              class="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
               title="Don't show again"
               aria-label="Close and don't show again"
             >
@@ -114,20 +114,20 @@ export function GitHubStarBanner() {
             {/* Icon */}
             <div class="flex justify-center mb-4">
               <div class="relative">
-                <div class="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center">
-                  <GithubIcon class="w-8 h-8 text-gray-700 dark:text-gray-300" />
+                <div class="w-16 h-16 bg-slate-100 dark:bg-slate-700 rounded-full flex items-center justify-center">
+                  <GithubIcon class="w-8 h-8 text-slate-700 dark:text-slate-300" />
                 </div>
-                <div class="absolute -top-1 -right-1 w-7 h-7 bg-yellow-400 rounded-full flex items-center justify-center shadow-md">
+                <div class="absolute -top-1 -right-1 w-7 h-7 bg-yellow-400 rounded-full flex items-center justify-center shadow-sm">
                   <StarIcon class="w-4 h-4 text-yellow-800" />
                 </div>
               </div>
             </div>
 
             {/* Text */}
-            <h2 class="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
+            <h2 class="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-2">
               Enjoying Pulse?
             </h2>
-            <p class="text-gray-600 dark:text-gray-400 mb-6 leading-relaxed">
+            <p class="text-slate-600 dark:text-slate-400 mb-6 leading-relaxed">
               Pulse is built and maintained by an independent developer. If it's been useful for monitoring your infrastructure, a GitHub star helps more than you'd think.
             </p>
 
@@ -135,14 +135,14 @@ export function GitHubStarBanner() {
             <div class="flex flex-col gap-3">
               <button
                 onClick={handleStarClick}
-                class="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-gray-900 hover:bg-gray-800 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white rounded-lg transition-colors"
+                class="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white rounded-md transition-colors"
               >
                 <StarIcon class="w-4 h-4" />
                 Star on GitHub
               </button>
               <button
                 onClick={handleMaybeLater}
-                class="w-full px-4 py-2 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+                class="w-full px-4 py-2 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 transition-colors"
               >
                 Maybe later
               </button>

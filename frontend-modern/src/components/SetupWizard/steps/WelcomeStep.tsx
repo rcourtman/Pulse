@@ -84,7 +84,7 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
                 <img
                     src="/logo.svg"
                     alt="Pulse Logo"
-                    class="w-24 h-24 shadow-2xl shadow-blue-500/30 rounded-full mb-6 mx-auto"
+                    class="w-24 h-24 rounded-md mb-6 mx-auto"
                 />
                 <h1 class="text-4xl font-bold text-white mb-3">
                     Welcome to Pulse
@@ -96,12 +96,12 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
 
             {/* Bootstrap token unlock */}
             <Show when={!props.isUnlocked}>
-                <div class="bg-white/10 backdrop-blur-xl rounded-2xl p-6 border border-white/20 text-left">
+                <div class="bg-slate-800 rounded-md p-6 border border-slate-700 text-left shadow-sm">
                     <h3 class="text-lg font-semibold text-white mb-2">Unlock Setup</h3>
-                    <p class="text-sm text-white/70 mb-4">
+                    <p class="text-sm text-slate-300 mb-4">
                         Retrieve the bootstrap token from your host:
                     </p>
-                    <div class="bg-black/30 rounded-lg p-3 font-mono text-sm text-green-400 mb-4">
+                    <div class="bg-black/30 rounded-md p-3 font-mono text-sm text-green-400 mb-4">
                         {getTokenCommand()}
                     </div>
                     <input
@@ -109,14 +109,14 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
                         value={props.bootstrapToken}
                         onInput={(e) => props.setBootstrapToken(e.currentTarget.value)}
                         onKeyPress={(e) => e.key === 'Enter' && handleUnlock()}
-                        class="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                        class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-md text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
                         placeholder="Paste your bootstrap token"
                         autofocus
                     />
                     <button
                         onClick={handleUnlock}
                         disabled={isValidating() || !props.bootstrapToken.trim()}
-                        class="w-full mt-4 py-3 px-6 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-xl transition-all shadow-lg shadow-blue-500/25"
+                        class="w-full mt-4 py-3 px-6 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-md transition-all"
                     >
                         {isValidating() ? 'Validating...' : 'Continue →'}
                     </button>
@@ -126,7 +126,7 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
             <Show when={props.isUnlocked}>
                 <button
                     onClick={props.onNext}
-                    class="py-4 px-8 bg-blue-500 hover:bg-blue-600 text-white text-lg font-medium rounded-xl transition-all shadow-lg shadow-blue-500/25"
+                    class="py-4 px-8 bg-blue-500 hover:bg-blue-600 text-white text-lg font-medium rounded-md transition-all"
                 >
                     Get Started →
                 </button>

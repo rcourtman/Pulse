@@ -9,7 +9,7 @@ interface ApprovalCardProps {
 
 export const ApprovalCard: Component<ApprovalCardProps> = (props) => {
   return (
-    <div class="rounded-lg border border-amber-300 dark:border-amber-700 overflow-hidden shadow-md">
+    <div class="rounded-md border border-amber-300 dark:border-amber-700 overflow-hidden shadow-sm">
       {/* Header */}
       <div class="px-3 py-2 text-xs font-medium flex items-center gap-2 bg-amber-50 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 border-b border-amber-200 dark:border-amber-800">
         <div class="p-1 rounded bg-amber-100 dark:bg-amber-800/50">
@@ -32,8 +32,8 @@ export const ApprovalCard: Component<ApprovalCardProps> = (props) => {
 
       {/* Command */}
       <div class="px-3 py-3 bg-amber-50/50 dark:bg-amber-900/10">
-        <div class="mb-3 p-2 bg-white dark:bg-gray-800 rounded border border-amber-200 dark:border-amber-700/50">
-          <code class="text-xs font-mono text-gray-800 dark:text-gray-200 break-all">
+        <div class="mb-3 p-2 bg-white dark:bg-slate-800 rounded border border-amber-200 dark:border-amber-700/50">
+          <code class="text-xs font-mono text-slate-800 dark:text-slate-200 break-all">
             {props.approval.command}
           </code>
         </div>
@@ -44,10 +44,10 @@ export const ApprovalCard: Component<ApprovalCardProps> = (props) => {
             type="button"
             onClick={props.onApprove}
             disabled={props.approval.isExecuting}
-            class={`flex-1 px-3 py-2 text-xs font-semibold rounded-lg transition-all ${
+            class={`flex-1 px-3 py-2 text-xs font-semibold rounded-md transition-all ${
               props.approval.isExecuting
                 ? 'bg-green-400 text-white cursor-wait'
-                : 'bg-green-500 hover:bg-green-600 text-white shadow-sm hover:shadow-md'
+                : 'bg-green-500 hover:bg-green-600 text-white shadow-sm hover:shadow-sm'
             }`}
           >
             <Show
@@ -74,7 +74,7 @@ export const ApprovalCard: Component<ApprovalCardProps> = (props) => {
             type="button"
             onClick={props.onSkip}
             disabled={props.approval.isExecuting}
-            class="flex-1 px-3 py-2 text-xs font-semibold bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg transition-colors disabled:opacity-50"
+            class="flex-1 px-3 py-2 text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-md transition-colors disabled:opacity-50"
           >
             <span class="flex items-center justify-center gap-1.5">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

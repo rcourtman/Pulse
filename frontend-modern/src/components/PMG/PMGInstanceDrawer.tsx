@@ -114,11 +114,11 @@ const formatCompact = (value?: number | null): string => {
 
 const statusTone = (status?: string) => {
   const normalized = (status || '').trim().toLowerCase();
-  if (!normalized) return 'bg-gray-400';
+  if (!normalized) return 'bg-slate-400';
   if (normalized === 'online' || normalized === 'healthy') return 'bg-emerald-500';
   if (normalized === 'warning' || normalized === 'degraded') return 'bg-amber-500';
   if (normalized === 'offline' || normalized === 'error') return 'bg-rose-500';
-  return 'bg-gray-400';
+  return 'bg-slate-400';
 };
 
 export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
@@ -213,18 +213,18 @@ export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
               <Card padding="lg">
                 <div class="flex items-start justify-between gap-4">
                   <div class="min-w-0">
-                    <div class="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
+                    <div class="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">
                       {normalize(props.resourceName) || resource()?.name || 'Mail Gateway'}
                     </div>
-                    <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">
                       {pmgData().hostname || 'Unknown host'}
                       <Show when={pmgData().version}>
-                        <span class="mx-2 text-gray-300 dark:text-gray-700">|</span>
+                        <span class="mx-2 text-slate-300 dark:text-slate-700">|</span>
                         <span>v{pmgData().version}</span>
                       </Show>
                     </div>
                     <Show when={lastUpdatedRelative()}>
-                      <div class="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
+                      <div class="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
                         Updated {lastUpdatedRelative()}
                       </div>
                     </Show>
@@ -232,7 +232,7 @@ export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
 
                   <div class="shrink-0 flex items-center gap-2">
                     <span class={`inline-block h-2.5 w-2.5 rounded-full ${statusTone(resource()?.status)}`} />
-                    <span class="text-xs font-medium text-gray-700 dark:text-gray-200">
+                    <span class="text-xs font-medium text-slate-700 dark:text-slate-200">
                       {(resource()?.status || 'unknown').toLowerCase()}
                     </span>
                     <Show when={resource()?.customUrl}>
@@ -251,27 +251,27 @@ export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
                 </div>
 
                 <div class="mt-4 grid grid-cols-2 gap-3 text-xs sm:grid-cols-4">
-                  <div class="rounded border border-gray-200 bg-white px-3 py-2 dark:border-gray-700 dark:bg-gray-900/30">
-                    <div class="text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-400">Queue Total</div>
-                    <div class="mt-1 text-sm font-semibold text-gray-900 dark:text-gray-100">
+                  <div class="rounded border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-800">
+                    <div class="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">Queue Total</div>
+                    <div class="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">
                       {formatCompact(pmgData().queueTotal ?? 0)}
                     </div>
                   </div>
-                  <div class="rounded border border-gray-200 bg-white px-3 py-2 dark:border-gray-700 dark:bg-gray-900/30">
-                    <div class="text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-400">Deferred</div>
-                    <div class="mt-1 text-sm font-semibold text-gray-900 dark:text-gray-100">
+                  <div class="rounded border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-800">
+                    <div class="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">Deferred</div>
+                    <div class="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">
                       {formatCompact(pmgData().queueDeferred ?? 0)}
                     </div>
                   </div>
-                  <div class="rounded border border-gray-200 bg-white px-3 py-2 dark:border-gray-700 dark:bg-gray-900/30">
-                    <div class="text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-400">Mail</div>
-                    <div class="mt-1 text-sm font-semibold text-gray-900 dark:text-gray-100">
+                  <div class="rounded border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-800">
+                    <div class="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">Mail</div>
+                    <div class="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">
                       {formatCompact(pmgData().mailCountTotal ?? 0)}
                     </div>
                   </div>
-                  <div class="rounded border border-gray-200 bg-white px-3 py-2 dark:border-gray-700 dark:bg-gray-900/30">
-                    <div class="text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-400">Spam/Virus</div>
-                    <div class="mt-1 text-sm font-semibold text-gray-900 dark:text-gray-100">
+                  <div class="rounded border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-800">
+                    <div class="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">Spam/Virus</div>
+                    <div class="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">
                       {formatCompact(pmgData().spamIn ?? 0)} / {formatCompact(pmgData().virusIn ?? 0)}
                     </div>
                   </div>
@@ -280,10 +280,10 @@ export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
 
               <Show when={(pmgData().nodes || []).length > 0}>
                 <Card padding="lg">
-                  <div class="text-xs font-semibold text-gray-900 dark:text-gray-100">Nodes</div>
+                  <div class="text-xs font-semibold text-slate-900 dark:text-slate-100">Nodes</div>
                   <div class="mt-2 overflow-x-auto">
                     <table class="min-w-full text-xs">
-                      <thead class="text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                      <thead class="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
                         <tr>
                           <th class="text-left py-2 pr-3">Node</th>
                           <th class="text-left py-2 pr-3">Role</th>
@@ -295,10 +295,10 @@ export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
                         <For each={pmgData().nodes || []}>
                           {(node) => (
                             <tr>
-                              <td class="py-2 pr-3 font-medium text-gray-900 dark:text-gray-100">{node.name}</td>
-                              <td class="py-2 pr-3 text-gray-600 dark:text-gray-300">{node.role || '—'}</td>
-                              <td class="py-2 pr-3 text-gray-600 dark:text-gray-300">{node.status || '—'}</td>
-                              <td class="py-2 pl-3 text-right text-gray-600 dark:text-gray-300">
+                              <td class="py-2 pr-3 font-medium text-slate-900 dark:text-slate-100">{node.name}</td>
+                              <td class="py-2 pr-3 text-slate-600 dark:text-slate-300">{node.role || '—'}</td>
+                              <td class="py-2 pr-3 text-slate-600 dark:text-slate-300">{node.status || '—'}</td>
+                              <td class="py-2 pl-3 text-right text-slate-600 dark:text-slate-300">
                                 {formatCompact(node.queueStatus?.total ?? 0)}
                               </td>
                             </tr>
@@ -313,17 +313,17 @@ export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
               <Show when={(pmgData().relayDomains || []).length > 0}>
                 <Card padding="lg">
                   <div class="flex items-center justify-between gap-3">
-                    <div class="text-xs font-semibold text-gray-900 dark:text-gray-100">Relay Domains</div>
+                    <div class="text-xs font-semibold text-slate-900 dark:text-slate-100">Relay Domains</div>
                     <input
                       value={searchRelay()}
                       onInput={(e) => setSearchRelay(e.currentTarget.value)}
                       placeholder="Search domains..."
-                      class="w-56 rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 placeholder:text-gray-400 dark:border-gray-700 dark:bg-gray-900/30 dark:text-gray-200"
+                      class="w-56 rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 placeholder:text-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
                     />
                   </div>
                   <div class="mt-2 overflow-x-auto">
                     <table class="min-w-full text-xs">
-                      <thead class="text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                      <thead class="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
                         <tr>
                           <th class="text-left py-2 pr-3">Domain</th>
                           <th class="text-left py-2 pr-3">Comment</th>
@@ -333,8 +333,8 @@ export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
                         <For each={relayDomains()}>
                           {(row) => (
                             <tr>
-                              <td class="py-2 pr-3 font-medium text-gray-900 dark:text-gray-100">{row.domain}</td>
-                              <td class="py-2 pr-3 text-gray-600 dark:text-gray-300">{row.comment || '—'}</td>
+                              <td class="py-2 pr-3 font-medium text-slate-900 dark:text-slate-100">{row.domain}</td>
+                              <td class="py-2 pr-3 text-slate-600 dark:text-slate-300">{row.comment || '—'}</td>
                             </tr>
                           )}
                         </For>
@@ -348,9 +348,9 @@ export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
                 <Card padding="lg">
                   <div class="flex items-center justify-between gap-3">
                     <div class="min-w-0">
-                      <div class="text-xs font-semibold text-gray-900 dark:text-gray-100">Domain Stats</div>
+                      <div class="text-xs font-semibold text-slate-900 dark:text-slate-100">Domain Stats</div>
                       <Show when={domainStatsAsOfRelative()}>
-                        <div class="mt-0.5 text-[11px] text-gray-500 dark:text-gray-400">
+                        <div class="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
                           As of {domainStatsAsOfRelative()}
                         </div>
                       </Show>
@@ -359,12 +359,12 @@ export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
                       value={searchDomain()}
                       onInput={(e) => setSearchDomain(e.currentTarget.value)}
                       placeholder="Search domains..."
-                      class="w-56 rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 placeholder:text-gray-400 dark:border-gray-700 dark:bg-gray-900/30 dark:text-gray-200"
+                      class="w-56 rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 placeholder:text-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
                     />
                   </div>
                   <div class="mt-2 overflow-x-auto">
                     <table class="min-w-full text-xs">
-                      <thead class="text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                      <thead class="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
                         <tr>
                           <th class="text-left py-2 pr-3">Domain</th>
                           <th class="text-right py-2 pl-3">Mail</th>
@@ -377,11 +377,11 @@ export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
                         <For each={domainStats()}>
                           {(row) => (
                             <tr>
-                              <td class="py-2 pr-3 font-medium text-gray-900 dark:text-gray-100">{row.domain}</td>
-                              <td class="py-2 pl-3 text-right text-gray-600 dark:text-gray-300">{formatCompact(row.mailCount)}</td>
-                              <td class="py-2 pl-3 text-right text-gray-600 dark:text-gray-300">{formatCompact(row.spamCount)}</td>
-                              <td class="py-2 pl-3 text-right text-gray-600 dark:text-gray-300">{formatCompact(row.virusCount)}</td>
-                              <td class="py-2 pl-3 text-right text-gray-600 dark:text-gray-300">
+                              <td class="py-2 pr-3 font-medium text-slate-900 dark:text-slate-100">{row.domain}</td>
+                              <td class="py-2 pl-3 text-right text-slate-600 dark:text-slate-300">{formatCompact(row.mailCount)}</td>
+                              <td class="py-2 pl-3 text-right text-slate-600 dark:text-slate-300">{formatCompact(row.spamCount)}</td>
+                              <td class="py-2 pl-3 text-right text-slate-600 dark:text-slate-300">{formatCompact(row.virusCount)}</td>
+                              <td class="py-2 pl-3 text-right text-slate-600 dark:text-slate-300">
                                 {row.bytes ? formatBytes(row.bytes) : '—'}
                               </td>
                             </tr>
@@ -395,15 +395,15 @@ export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
 
               <Show when={spamBuckets().length > 0}>
                 <Card padding="lg">
-                  <div class="text-xs font-semibold text-gray-900 dark:text-gray-100">Spam Distribution</div>
+                  <div class="text-xs font-semibold text-slate-900 dark:text-slate-100">Spam Distribution</div>
                   <div class="mt-3 space-y-2">
                     <For each={spamBuckets()}>
                       {(bucket) => (
                         <div class="flex items-center gap-3">
-                          <div class="w-16 text-[11px] font-medium text-gray-600 dark:text-gray-300">
+                          <div class="w-16 text-[11px] font-medium text-slate-600 dark:text-slate-300">
                             {bucket.bucket}
                           </div>
-                          <div class="flex-1 h-2 rounded bg-gray-100 dark:bg-gray-800 overflow-hidden">
+                          <div class="flex-1 h-2 rounded bg-slate-100 dark:bg-slate-800 overflow-hidden">
                             <div
                               class="h-full bg-amber-500"
                               style={{
@@ -411,7 +411,7 @@ export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
                               }}
                             />
                           </div>
-                          <div class="w-14 text-right text-[11px] text-gray-600 dark:text-gray-300">
+                          <div class="w-14 text-right text-[11px] text-slate-600 dark:text-slate-300">
                             {formatCompact(bucket.count)}
                           </div>
                         </div>

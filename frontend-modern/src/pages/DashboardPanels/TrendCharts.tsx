@@ -86,7 +86,7 @@ export function TrendCharts(props: TrendChartsProps) {
   return (
     <div>
       <div class="flex items-center justify-between mb-1.5">
-        <p class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Trends</p>
+        <p class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Trends</p>
         <div class="flex items-center gap-1.5">
           <For each={SUMMARY_TIME_RANGES}>
             {(range) => {
@@ -94,7 +94,7 @@ export function TrendCharts(props: TrendChartsProps) {
               const className = () =>
                 active()
                   ? 'px-2 py-0.5 rounded bg-blue-600 text-white text-[11px] font-medium'
-                  : 'px-2 py-0.5 rounded border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 text-[11px] font-medium hover:bg-gray-50 dark:hover:bg-gray-700/40 transition-colors';
+                  : 'px-2 py-0.5 rounded border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 text-[11px] font-medium hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors';
 
               return (
                 <button type="button" class={className()} onClick={() => props.setTrendRange(range)}>
@@ -108,7 +108,7 @@ export function TrendCharts(props: TrendChartsProps) {
 
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <Card padding="none" class="px-4 py-3">
-          <p class="text-[11px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">CPU</p>
+          <p class="text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">CPU</p>
           <div class="h-[240px] mt-1">
             <InteractiveSparkline
               series={cpuSeries()}
@@ -121,7 +121,7 @@ export function TrendCharts(props: TrendChartsProps) {
         </Card>
 
         <Card padding="none" class="px-4 py-3">
-          <p class="text-[11px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Memory</p>
+          <p class="text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Memory</p>
           <div class="h-[240px] mt-1">
             <InteractiveSparkline
               series={memorySeries()}

@@ -136,14 +136,14 @@ export default function Dashboard() {
       <Switch>
         <Match when={isLoading() && !initialLoadComplete()}>
           <section class="space-y-2" data-testid="dashboard-loading">
-            <div class="border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-4 sm:p-5 bg-white dark:bg-gray-800">
+            <div class="border border-slate-200 dark:border-slate-700 rounded-md shadow-sm p-4 sm:p-5 bg-white dark:bg-slate-800">
               <div class="space-y-4">
                 <For each={['h-4 w-44', 'h-10 w-40']}>
-                  {(dims) => <div data-testid="dashboard-skeleton-block" class={`animate-pulse bg-gray-200 dark:bg-gray-700 rounded ${dims}`} />}
+                  {(dims) => <div data-testid="dashboard-skeleton-block" class={`animate-pulse bg-slate-200 dark:bg-slate-700 rounded ${dims}`} />}
                 </For>
                 <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
                   <For each={Array.from({ length: 5 })}>
-                    {() => <div data-testid="dashboard-skeleton-block" class="animate-pulse bg-gray-200 dark:bg-gray-700 rounded h-8" />}
+                    {() => <div data-testid="dashboard-skeleton-block" class="animate-pulse bg-slate-200 dark:bg-slate-700 rounded h-8" />}
                   </For>
                 </div>
               </div>
@@ -151,7 +151,7 @@ export default function Dashboard() {
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
               <For each={Array.from({ length: 2 })}>
                 {() => (
-                  <div data-testid="dashboard-skeleton-block" class="border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-4 sm:p-5 bg-white dark:bg-gray-800"><div class="animate-pulse bg-gray-200 dark:bg-gray-700 rounded h-24" /></div>
+                  <div data-testid="dashboard-skeleton-block" class="border border-slate-200 dark:border-slate-700 rounded-md shadow-sm p-4 sm:p-5 bg-white dark:bg-slate-800"><div class="animate-pulse bg-slate-200 dark:bg-slate-700 rounded h-24" /></div>
                 )}
               </For>
             </div>
@@ -159,13 +159,13 @@ export default function Dashboard() {
         </Match>
 
         <Match when={hasConnectionError()}>
-          <section class="border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-4 sm:p-5 bg-white dark:bg-gray-800" aria-live="polite">
-            <h2 class="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100">Dashboard unavailable</h2>
-            <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">Real-time dashboard data is currently unavailable. Reconnect to try again.</p>
+          <section class="border border-slate-200 dark:border-slate-700 rounded-md shadow-sm p-4 sm:p-5 bg-white dark:bg-slate-800" aria-live="polite">
+            <h2 class="text-base sm:text-lg font-semibold text-slate-900 dark:text-slate-100">Dashboard unavailable</h2>
+            <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">Real-time dashboard data is currently unavailable. Reconnect to try again.</p>
             <button
               type="button"
               onClick={() => reconnect()}
-              class="mt-4 inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+              class="mt-4 inline-flex items-center rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
             >
               Reconnect
             </button>
@@ -173,9 +173,9 @@ export default function Dashboard() {
         </Match>
 
         <Match when={isEmpty()}>
-          <section class="border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-4 sm:p-5 bg-white dark:bg-gray-800" aria-live="polite">
-            <h2 class="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100">No resources yet</h2>
-            <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">Once connected platforms report resources, your dashboard overview will appear here.</p>
+          <section class="border border-slate-200 dark:border-slate-700 rounded-md shadow-sm p-4 sm:p-5 bg-white dark:bg-slate-800" aria-live="polite">
+            <h2 class="text-base sm:text-lg font-semibold text-slate-900 dark:text-slate-100">No resources yet</h2>
+            <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">Once connected platforms report resources, your dashboard overview will appear here.</p>
           </section>
         </Match>
 

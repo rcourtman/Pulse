@@ -96,11 +96,11 @@ const fetchAllServices = async (cluster: string): Promise<DockerServiceResource[
 
 const statusTone = (status?: string) => {
   const normalized = (status || '').trim().toLowerCase();
-  if (!normalized) return 'bg-gray-400';
+  if (!normalized) return 'bg-slate-400';
   if (normalized === 'online' || normalized === 'running' || normalized === 'healthy') return 'bg-green-500';
   if (normalized === 'warning' || normalized === 'degraded') return 'bg-amber-500';
   if (normalized === 'offline' || normalized === 'stopped') return 'bg-red-500';
-  return 'bg-gray-400';
+  return 'bg-slate-400';
 };
 
 const formatUpdate = (update?: DockerServiceUpdate) => {
@@ -167,8 +167,8 @@ export const SwarmServicesDrawer: Component<{ cluster: string; swarm?: SwarmInfo
       <Card padding="md">
         <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div class="min-w-0">
-            <div class="text-sm font-semibold text-gray-800 dark:text-gray-100">Swarm</div>
-            <div class="text-xs text-gray-500 dark:text-gray-400 truncate" title={clusterName()}>
+            <div class="text-sm font-semibold text-slate-800 dark:text-slate-100">Swarm</div>
+            <div class="text-xs text-slate-500 dark:text-slate-400 truncate" title={clusterName()}>
               {clusterName() ? `Cluster: ${clusterName()}` : 'No Swarm cluster detected'}
             </div>
           </div>
@@ -178,13 +178,13 @@ export const SwarmServicesDrawer: Component<{ cluster: string; swarm?: SwarmInfo
               value={search()}
               onInput={(e) => setSearch(e.currentTarget.value)}
               placeholder="Search services..."
-              class="w-[12rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-900/50 dark:text-gray-100"
+              class="w-[12rem] rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
             />
           </div>
         </div>
 
         <Show when={clusterId()}>
-          <div class="mt-2 text-[10px] text-gray-500 dark:text-gray-400 truncate" title={clusterId()}>
+          <div class="mt-2 text-[10px] text-slate-500 dark:text-slate-400 truncate" title={clusterId()}>
             Cluster ID: {clusterId()}
           </div>
         </Show>
@@ -192,17 +192,17 @@ export const SwarmServicesDrawer: Component<{ cluster: string; swarm?: SwarmInfo
         <Show when={normalize(swarm()?.nodeRole) || normalize(swarm()?.localState) || typeof swarm()?.controlAvailable === 'boolean'}>
           <div class="mt-2 flex flex-wrap gap-2 text-[11px]">
             <Show when={normalize(swarm()?.nodeRole)}>
-              <span class="inline-flex items-center rounded bg-gray-100 px-2 py-0.5 text-gray-700 dark:bg-gray-800 dark:text-gray-200">
+              <span class="inline-flex items-center rounded bg-slate-100 px-2 py-0.5 text-slate-700 dark:bg-slate-800 dark:text-slate-200">
                 Role: {normalize(swarm()?.nodeRole)}
               </span>
             </Show>
             <Show when={normalize(swarm()?.localState)}>
-              <span class="inline-flex items-center rounded bg-gray-100 px-2 py-0.5 text-gray-700 dark:bg-gray-800 dark:text-gray-200">
+              <span class="inline-flex items-center rounded bg-slate-100 px-2 py-0.5 text-slate-700 dark:bg-slate-800 dark:text-slate-200">
                 State: {normalize(swarm()?.localState)}
               </span>
             </Show>
             <Show when={typeof swarm()?.controlAvailable === 'boolean'}>
-              <span class="inline-flex items-center rounded bg-gray-100 px-2 py-0.5 text-gray-700 dark:bg-gray-800 dark:text-gray-200">
+              <span class="inline-flex items-center rounded bg-slate-100 px-2 py-0.5 text-slate-700 dark:bg-slate-800 dark:text-slate-200">
                 Control: {swarm()?.controlAvailable ? 'available' : 'unavailable'}
               </span>
             </Show>
@@ -234,10 +234,10 @@ export const SwarmServicesDrawer: Component<{ cluster: string; swarm?: SwarmInfo
               </Card>
             }
           >
-            <Card padding="none" tone="glass" class="overflow-hidden">
+            <Card padding="none" tone="card" class="overflow-hidden">
               <div class="overflow-x-auto">
                 <table class="w-full min-w-[900px] border-collapse text-xs">
-                  <thead class="bg-gray-50 dark:bg-gray-800/60 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
+                  <thead class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
                     <tr class="text-left text-[10px] uppercase tracking-wide">
                       <th class="px-3 py-2 font-medium">Service</th>
                       <th class="px-3 py-2 font-medium">Stack</th>
@@ -262,26 +262,26 @@ export const SwarmServicesDrawer: Component<{ cluster: string; swarm?: SwarmInfo
                         const ports = () => formatPorts(svc.docker?.endpointPorts);
 
                         return (
-                          <tr class="hover:bg-gray-50/50 dark:hover:bg-gray-800/30">
+                          <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
                             <td class="px-3 py-2">
                               <div class="flex items-center gap-2 min-w-0">
                                 <span class={`h-2 w-2 rounded-full ${statusTone(svc.status)}`} title={svc.status || 'unknown'} />
-                                <span class="font-semibold text-gray-900 dark:text-gray-100 truncate" title={name()}>
+                                <span class="font-semibold text-slate-900 dark:text-slate-100 truncate" title={name()}>
                                   {name()}
                                 </span>
                               </div>
                             </td>
-                            <td class="px-3 py-2 text-gray-700 dark:text-gray-200">{stack()}</td>
-                            <td class="px-3 py-2 text-gray-700 dark:text-gray-200 truncate" title={image()}>
+                            <td class="px-3 py-2 text-slate-700 dark:text-slate-200">{stack()}</td>
+                            <td class="px-3 py-2 text-slate-700 dark:text-slate-200 truncate" title={image()}>
                               {image()}
                             </td>
-                            <td class="px-3 py-2 text-gray-700 dark:text-gray-200">{mode()}</td>
-                            <td class="px-3 py-2 text-gray-700 dark:text-gray-200">{desired()}</td>
-                            <td class="px-3 py-2 text-gray-700 dark:text-gray-200">{running()}</td>
-                            <td class="px-3 py-2 text-gray-700 dark:text-gray-200 truncate" title={update()}>
+                            <td class="px-3 py-2 text-slate-700 dark:text-slate-200">{mode()}</td>
+                            <td class="px-3 py-2 text-slate-700 dark:text-slate-200">{desired()}</td>
+                            <td class="px-3 py-2 text-slate-700 dark:text-slate-200">{running()}</td>
+                            <td class="px-3 py-2 text-slate-700 dark:text-slate-200 truncate" title={update()}>
                               {update()}
                             </td>
-                            <td class="px-3 py-2 text-gray-700 dark:text-gray-200 truncate" title={ports()}>
+                            <td class="px-3 py-2 text-slate-700 dark:text-slate-200 truncate" title={ports()}>
                               {ports()}
                             </td>
                           </tr>
@@ -296,7 +296,7 @@ export const SwarmServicesDrawer: Component<{ cluster: string; swarm?: SwarmInfo
         }
       >
         <Card padding="lg">
-          <div class="text-xs text-gray-500 dark:text-gray-400">Loading Swarm services...</div>
+          <div class="text-xs text-slate-500 dark:text-slate-400">Loading Swarm services...</div>
         </Card>
       </Show>
     </div>

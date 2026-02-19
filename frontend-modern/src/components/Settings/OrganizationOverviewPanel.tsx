@@ -82,7 +82,7 @@ export const OrganizationOverviewPanel: Component<OrganizationOverviewPanelProps
   });
 
   return (
-    <Show when={isMultiTenantEnabled()} fallback={<div class="p-4 text-sm text-gray-500">This feature is not available.</div>}>
+    <Show when={isMultiTenantEnabled()} fallback={<div class="p-4 text-sm text-slate-500">This feature is not available.</div>}>
       <div class="space-y-6">
         <SettingsPanel
           title="Organization Overview"
@@ -96,31 +96,31 @@ export const OrganizationOverviewPanel: Component<OrganizationOverviewPanelProps
               <div class="space-y-5">
                 <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   {Array.from({ length: 4 }).map(() => (
-                    <div class="rounded-lg border border-gray-200 dark:border-gray-700 p-3 space-y-2">
-                      <div class="h-3 w-20 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
-                      <div class="h-5 w-28 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                    <div class="rounded-md border border-slate-200 dark:border-slate-700 p-3 space-y-2">
+                      <div class="h-3 w-20 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                      <div class="h-5 w-28 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
                     </div>
                   ))}
                 </div>
 
                 <div class="space-y-2">
-                  <div class="h-4 w-24 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                  <div class="h-4 w-24 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
                   <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
-                    <div class="h-10 w-full animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
-                    <div class="h-10 w-20 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                    <div class="h-10 w-full animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                    <div class="h-10 w-20 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
                   </div>
                 </div>
 
                 <div class="space-y-2">
-                  <div class="h-4 w-24 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
-                  <div class="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
-                    <div class="h-10 w-full animate-pulse bg-gray-100 dark:bg-gray-800/70" />
+                  <div class="h-4 w-24 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                  <div class="overflow-hidden rounded-md border border-slate-200 dark:border-slate-700">
+                    <div class="h-10 w-full animate-pulse bg-slate-100 dark:bg-slate-800" />
                     {Array.from({ length: 3 }).map(() => (
-                      <div class="border-t border-gray-100 dark:border-gray-800 px-3 py-3">
+                      <div class="border-t border-slate-100 dark:border-slate-800 px-3 py-3">
                         <div class="flex items-center gap-3">
-                          <div class="h-4 w-40 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
-                          <div class="h-4 w-14 animate-pulse rounded-full bg-gray-200 dark:bg-gray-700" />
-                          <div class="h-4 w-24 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                          <div class="h-4 w-40 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                          <div class="h-4 w-14 animate-pulse rounded-full bg-slate-200 dark:bg-slate-700" />
+                          <div class="h-4 w-24 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
                         </div>
                       </div>
                     ))}
@@ -133,26 +133,26 @@ export const OrganizationOverviewPanel: Component<OrganizationOverviewPanelProps
               {(currentOrg) => (
                 <>
                   <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                    <div class="rounded-lg border border-gray-200 dark:border-gray-700 p-3">
-                      <p class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Organization</p>
-                      <p class="mt-1 text-sm font-medium text-gray-900 dark:text-gray-100">{currentOrg().displayName || currentOrg().id}</p>
+                    <div class="rounded-md border border-slate-200 dark:border-slate-700 p-3">
+                      <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Organization</p>
+                      <p class="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{currentOrg().displayName || currentOrg().id}</p>
                     </div>
-                    <div class="rounded-lg border border-gray-200 dark:border-gray-700 p-3">
-                      <p class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Org ID</p>
-                      <p class="mt-1 text-sm font-mono text-gray-900 dark:text-gray-100">{currentOrg().id}</p>
+                    <div class="rounded-md border border-slate-200 dark:border-slate-700 p-3">
+                      <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Org ID</p>
+                      <p class="mt-1 text-sm font-mono break-all text-slate-900 dark:text-slate-100">{currentOrg().id}</p>
                     </div>
-                    <div class="rounded-lg border border-gray-200 dark:border-gray-700 p-3">
-                      <p class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Created</p>
-                      <p class="mt-1 text-sm font-medium text-gray-900 dark:text-gray-100">{formatOrgDate(currentOrg().createdAt)}</p>
+                    <div class="rounded-md border border-slate-200 dark:border-slate-700 p-3">
+                      <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Created</p>
+                      <p class="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{formatOrgDate(currentOrg().createdAt)}</p>
                     </div>
-                    <div class="rounded-lg border border-gray-200 dark:border-gray-700 p-3">
-                      <p class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Members</p>
-                      <p class="mt-1 text-sm font-medium text-gray-900 dark:text-gray-100">{members().length}</p>
+                    <div class="rounded-md border border-slate-200 dark:border-slate-700 p-3">
+                      <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Members</p>
+                      <p class="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{members().length}</p>
                     </div>
                   </div>
 
                   <div class="space-y-2">
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="org-display-name-input">
+                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300" for="org-display-name-input">
                       Display Name
                     </label>
                     <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -162,31 +162,31 @@ export const OrganizationOverviewPanel: Component<OrganizationOverviewPanelProps
                         value={displayNameDraft()}
                         onInput={(event) => setDisplayNameDraft(event.currentTarget.value)}
                         disabled={!canManageOrg(currentOrg(), props.currentUser) || saving()}
-                        class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+                        class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                       />
                       <button
                         type="button"
                         onClick={saveDisplayName}
                         disabled={!canManageOrg(currentOrg(), props.currentUser) || saving()}
-                        class="inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                        class="inline-flex w-full sm:w-auto items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         {saving() ? 'Saving...' : 'Save'}
                       </button>
                     </div>
                     <Show when={!canManageOrg(currentOrg(), props.currentUser)}>
-                      <p class="text-xs text-gray-500 dark:text-gray-400">Admin or owner role required to update organization details.</p>
+                      <p class="text-xs text-slate-500 dark:text-slate-400">Admin or owner role required to update organization details.</p>
                     </Show>
                   </div>
 
                   <div class="space-y-2">
-                    <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Membership</h4>
-                    <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
-                      <table class="w-full text-sm">
-                        <thead class="bg-gray-50 dark:bg-gray-800/70">
+                    <h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Membership</h4>
+                    <div class="overflow-x-auto rounded-md border border-slate-200 dark:border-slate-700">
+                      <table class="min-w-[560px] w-full text-sm">
+                        <thead class="bg-slate-50 dark:bg-slate-800">
                           <tr>
-                            <th class="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">User</th>
-                            <th class="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Role</th>
-                            <th class="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Added</th>
+                            <th class="px-3 py-2 text-left font-medium text-slate-600 dark:text-slate-300">User</th>
+                            <th class="px-3 py-2 text-left font-medium text-slate-600 dark:text-slate-300">Role</th>
+                            <th class="px-3 py-2 text-left font-medium text-slate-600 dark:text-slate-300">Added</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -194,7 +194,7 @@ export const OrganizationOverviewPanel: Component<OrganizationOverviewPanelProps
                             when={members().length > 0}
                             fallback={
                               <tr>
-                                <td colSpan={3} class="px-3 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
+                                <td colSpan={3} class="px-3 py-4 text-center text-sm text-slate-500 dark:text-slate-400">
                                   No members found.
                                 </td>
                               </tr>
@@ -203,14 +203,14 @@ export const OrganizationOverviewPanel: Component<OrganizationOverviewPanelProps
                             {members().map((member) => {
                               const role = normalizeRole(member.role);
                               return (
-                                <tr class="border-t border-gray-100 dark:border-gray-800">
-                                  <td class="px-3 py-2 text-gray-900 dark:text-gray-100">{member.userId}</td>
+                                <tr class="border-t border-slate-100 dark:border-slate-800">
+                                  <td class="px-3 py-2 text-slate-900 dark:text-slate-100">{member.userId}</td>
                                   <td class="px-3 py-2">
                                     <span class={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${roleBadgeClass(role)}`}>
                                       {role}
                                     </span>
                                   </td>
-                                  <td class="px-3 py-2 text-gray-600 dark:text-gray-400">{formatOrgDate(member.addedAt)}</td>
+                                  <td class="px-3 py-2 text-slate-600 dark:text-slate-400">{formatOrgDate(member.addedAt)}</td>
                                 </tr>
                               );
                             })}

@@ -69,10 +69,10 @@ export const SearchTipsPopover: Component<SearchTipsPopoverProps> = (props) => {
 
   const triggerClasses =
     triggerVariant === 'button'
-      ? `rounded-md border border-gray-200 px-2.5 py-1 text-gray-600 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700 ${triggerBaseClasses}`
+      ? `rounded-md border border-slate-200 px-2.5 py-1 text-slate-600 transition-colors hover:bg-slate-100 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700 ${triggerBaseClasses}`
       : triggerVariant === 'link'
-      ? `rounded px-1 py-0.5 text-gray-500 underline decoration-dotted underline-offset-4 transition-colors hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 ${triggerBaseClasses}`
-      : `flex h-5 w-5 items-center justify-center rounded-full text-gray-400 transition-colors hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-100 ${triggerBaseClasses}`;
+      ? `rounded px-1 py-0.5 text-slate-500 underline decoration-dotted underline-offset-4 transition-colors hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 ${triggerBaseClasses}`
+      : `flex h-5 w-5 items-center justify-center rounded-full text-slate-400 transition-colors hover:text-slate-600 dark:text-slate-400 dark:hover:text-slate-100 ${triggerBaseClasses}`;
 
   const handleMouseEnter = () => {
     pointerInside = true;
@@ -128,15 +128,15 @@ export const SearchTipsPopover: Component<SearchTipsPopoverProps> = (props) => {
           id={popoverId}
           role="dialog"
           aria-label={props.title ?? 'Search tips'}
-          class={`absolute ${popoverPositionClass} z-50 mt-2 w-72 overflow-hidden rounded-lg border border-gray-200 bg-white text-left shadow-xl dark:border-gray-600 dark:bg-gray-800`}
+          class={`absolute ${popoverPositionClass} z-50 mt-2 w-72 overflow-hidden rounded-md border border-slate-200 bg-white text-left shadow-sm dark:border-slate-600 dark:bg-slate-800`}
         >
-          <div class="flex items-center justify-between border-b border-gray-100 px-3 py-2 dark:border-gray-700">
-            <span class="text-sm font-semibold text-gray-900 dark:text-gray-100">
+          <div class="flex items-center justify-between border-b border-slate-100 px-3 py-2 dark:border-slate-700">
+            <span class="text-sm font-semibold text-slate-900 dark:text-slate-100">
               {props.title ?? 'Search tips'}
             </span>
             <button
               type="button"
-              class="rounded p-1 text-gray-400 transition-colors hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
+              class="rounded p-1 text-slate-400 transition-colors hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300"
               onClick={close}
               aria-label="Close search tips"
             >
@@ -145,9 +145,9 @@ export const SearchTipsPopover: Component<SearchTipsPopoverProps> = (props) => {
               </svg>
             </button>
           </div>
-          <div class="px-3 py-3 text-xs text-gray-600 dark:text-gray-300">
+          <div class="px-3 py-3 text-xs text-slate-600 dark:text-slate-300">
             <Show when={props.intro}>
-              <p class="mb-3 text-[11px] uppercase tracking-wide text-gray-400 dark:text-gray-500">
+              <p class="mb-3 text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">
                 {props.intro}
               </p>
             </Show>
@@ -155,10 +155,10 @@ export const SearchTipsPopover: Component<SearchTipsPopoverProps> = (props) => {
               <For each={props.tips}>
                 {(tip) => (
                   <div class="flex items-start gap-2">
-                    <code class="rounded bg-gray-100 px-2 py-0.5 font-mono text-[11px] text-gray-700 dark:bg-gray-700 dark:text-gray-100">
+                    <code class="rounded bg-slate-100 px-2 py-0.5 font-mono text-[11px] text-slate-700 dark:bg-slate-700 dark:text-slate-100">
                       {tip.code}
                     </code>
-                    <span class="text-[12px] leading-snug text-gray-500 dark:text-gray-400">
+                    <span class="text-[12px] leading-snug text-slate-500 dark:text-slate-400">
                       {tip.description}
                     </span>
                   </div>

@@ -697,7 +697,7 @@ export const InteractiveSparkline: Component<InteractiveSparklineProps> = (props
           <For each={axisTicks()}>
             {(tick) => (
               <span
-                class="absolute left-0 text-[8px] leading-none text-gray-400 dark:text-gray-500"
+                class="absolute left-0 text-[8px] leading-none text-slate-400 dark:text-slate-500"
                 style={{
                   top: tick.top,
                   transform:
@@ -822,7 +822,7 @@ export const InteractiveSparkline: Component<InteractiveSparklineProps> = (props
         <For each={xAxisTicks()}>
           {(tick) => (
             <span
-              class="absolute top-[2px] text-[9px] font-medium leading-none text-gray-500 dark:text-gray-400"
+              class="absolute top-[2px] text-[9px] font-medium leading-none text-slate-500 dark:text-slate-400"
               style={{
                 left: `${tick.left}%`,
                 transform:
@@ -843,7 +843,7 @@ export const InteractiveSparkline: Component<InteractiveSparklineProps> = (props
         <Show when={hoveredState()}>
           {(hover) => (
             <div
-              class="fixed pointer-events-none bg-gray-900 dark:bg-gray-800 text-white text-xs rounded px-2 py-1.5 shadow-lg border border-gray-700"
+              class="fixed pointer-events-none bg-slate-900 dark:bg-slate-800 text-white text-xs rounded px-2 py-1.5 shadow-sm border border-slate-700"
               style={{
                 left: `${hover().tooltipX}px`,
                 top: `${hover().tooltipY}px`,
@@ -859,18 +859,18 @@ export const InteractiveSparkline: Component<InteractiveSparklineProps> = (props
                     hover().focusedTooltip &&
                     hover().highlightedSeriesIndex !== null
                       ? hover().highlightedSeriesIndex === entry.seriesIndex
-                        ? 'text-white bg-white/10 rounded px-1'
+                        ? 'text-white bg-white rounded px-1'
                         : 'opacity-40'
                       : ''
                   }`}>
                     <span class="w-1.5 h-1.5 rounded-full" style={{ background: entry.color }} />
-                    <span class="text-gray-300">{entry.name}</span>
+                    <span class="text-slate-300">{entry.name}</span>
                     <span class="ml-auto font-medium text-white">{formatValue(entry.value)}</span>
                   </div>
                 )}
               </For>
               <Show when={hover().totalValues > hover().values.length}>
-                <div class="text-[10px] text-gray-400 mt-0.5">+{hover().totalValues - hover().values.length} more series</div>
+                <div class="text-[10px] text-slate-400 mt-0.5">+{hover().totalValues - hover().values.length} more series</div>
               </Show>
             </div>
           )}

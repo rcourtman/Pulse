@@ -374,22 +374,22 @@ const Storage: Component = () => {
           filteredRecords().some(isRecordCeph)
         }
       >
-        <Card padding="md" tone="glass">
+        <Card padding="md" tone="card">
           <div class="flex flex-wrap items-center justify-between gap-3">
             <div class="space-y-0.5">
-              <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+              <div class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                 Ceph Summary
               </div>
-              <div class="text-sm text-gray-600 dark:text-gray-300">
+              <div class="text-sm text-slate-600 dark:text-slate-300">
                 {cephSummaryStats().clusters.length} cluster
                 {cephSummaryStats().clusters.length !== 1 ? 's' : ''} detected
               </div>
             </div>
             <div class="text-right">
-              <div class="text-sm font-semibold text-gray-900 dark:text-gray-100">
+              <div class="text-sm font-semibold text-slate-900 dark:text-slate-100">
                 {formatBytes(cephSummaryStats().totalBytes)}
               </div>
-              <div class="text-[11px] text-gray-500 dark:text-gray-400">
+              <div class="text-[11px] text-slate-500 dark:text-slate-400">
                 {formatPercent(cephSummaryStats().usagePercent)} used
               </div>
             </div>
@@ -397,15 +397,15 @@ const Storage: Component = () => {
           <div class="mt-3 grid gap-3 sm:grid-cols-2">
             <For each={cephSummaryStats().clusters}>
               {(cluster) => (
-                <div class="rounded-lg border border-gray-200/70 dark:border-gray-700/70 bg-white/60 dark:bg-gray-800/40 p-3">
+                <div class="rounded-md border border-slate-200/70 dark:border-slate-700/70 bg-white dark:bg-slate-800 p-3">
                   <div class="flex items-start justify-between gap-2">
                     <div class="min-w-0">
-                      <div class="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
+                      <div class="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">
                         {cluster.name || 'Ceph Cluster'}
                       </div>
                       <Show when={cluster.healthMessage}>
                         <div
-                          class="text-[11px] text-gray-500 dark:text-gray-400 truncate max-w-[240px]"
+                          class="text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-[240px]"
                           title={cluster.healthMessage}
                         >
                           {cluster.healthMessage}
@@ -453,7 +453,7 @@ const Storage: Component = () => {
           sourceOptions={sourceFilterOptions()}
           leadingFilters={
             <>
-              <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5" role="group" aria-label="View">
+              <div class="inline-flex rounded-md bg-slate-100 dark:bg-slate-700 p-0.5" role="group" aria-label="View">
                 <button
                   type="button"
                   onClick={() => setView('pools')}
@@ -471,17 +471,17 @@ const Storage: Component = () => {
                   Physical Disks
                 </button>
               </div>
-              <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
+              <div class="h-5 w-px bg-slate-200 dark:bg-slate-600 hidden sm:block"></div>
               <select
                 value={selectedNodeId()}
               onChange={(event) => setSelectedNodeId(event.currentTarget.value)}
-              class="px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+              class="px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
               aria-label="Node"
             >
               <option value="all">All Nodes</option>
               <For each={nodeOptions()}>{(node) => <option value={node.id}>{node.label}</option>}</For>
             </select>
-            <div class="h-5 w-px bg-gray-200 dark:bg-gray-600 hidden sm:block"></div>
+            <div class="h-5 w-px bg-slate-200 dark:bg-slate-600 hidden sm:block"></div>
           </>
         }
       />
@@ -553,7 +553,7 @@ const Storage: Component = () => {
               <Show
                 when={groupedRecords().length > 0}
                 fallback={
-                  <div class="p-6 text-sm text-gray-600 dark:text-gray-300">
+                  <div class="p-6 text-sm text-slate-600 dark:text-slate-300">
                     No storage records match the current filters.
                   </div>
                 }
@@ -561,7 +561,7 @@ const Storage: Component = () => {
                 <div class="overflow-x-auto">
                   <table class="w-full text-xs">
                     <thead>
-                      <tr class="border-b border-gray-200 bg-gray-50 text-left text-[10px] uppercase tracking-wide text-gray-500 dark:border-gray-700 dark:bg-gray-800/60 dark:text-gray-400">
+                      <tr class="border-b border-slate-200 bg-slate-50 text-left text-[10px] uppercase tracking-wide text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
                         <th class="px-1.5 sm:px-2 py-1">Name</th>
                         <Show when={groupBy() !== 'node'}>
                           <th class="px-1.5 sm:px-2 py-1">Node</th>
@@ -612,7 +612,7 @@ const Storage: Component = () => {
                                 const rowClass = createMemo(() => {
                                   const classes = [
                                     'transition-all duration-200',
-                                    'hover:bg-gray-50 dark:hover:bg-gray-800/30',
+                                    'hover:bg-slate-50 dark:hover:bg-slate-800/30',
                                   ];
 
                                   if (showAlertHighlight()) {
@@ -624,11 +624,11 @@ const Storage: Component = () => {
                                   } else if (isResourceHighlighted()) {
                                     classes.push('bg-blue-50/60 dark:bg-blue-900/20 ring-1 ring-blue-300 dark:ring-blue-600');
                                   } else if (hasAcknowledgedOnlyAlert()) {
-                                    classes.push('bg-gray-50/40 dark:bg-gray-800/40');
+                                    classes.push('bg-slate-50/40 dark:bg-slate-800');
                                   }
 
                                   if (isExpanded()) {
-                                    classes.push('bg-gray-50 dark:bg-gray-800/40');
+                                    classes.push('bg-slate-50 dark:bg-slate-800');
                                   }
 
                                   return classes.join(' ');
@@ -689,7 +689,7 @@ const Storage: Component = () => {
               </Show>
             }
           >
-            <div class="p-6 text-sm text-gray-600 dark:text-gray-300">Loading storage resources...</div>
+            <div class="p-6 text-sm text-slate-600 dark:text-slate-300">Loading storage resources...</div>
           </Show>
         </Show>
       </Card>

@@ -102,14 +102,14 @@ export const ChangePasswordModal: Component<ChangePasswordModalProps> = (props) 
           class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4"
           style="z-index: 9999"
         >
-          <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full">
-            <div class="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+          <div class="bg-white dark:bg-slate-800 rounded-md shadow-sm max-w-md w-full">
+            <div class="flex items-center justify-between p-6 border-b border-slate-200 dark:border-slate-700">
               <SectionHeader title="Change password" size="lg" class="flex-1" />
               <button
                 type="button"
                 onClick={handleClose}
                 disabled={loading()}
-                class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-50"
+                class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 disabled:opacity-50"
               >
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
@@ -181,7 +181,7 @@ export const ChangePasswordModal: Component<ChangePasswordModalProps> = (props) 
                   type="button"
                   onClick={handleClose}
                   disabled={loading()}
-                  class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50"
+                  class="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
                 >
                   Cancel
                 </button>

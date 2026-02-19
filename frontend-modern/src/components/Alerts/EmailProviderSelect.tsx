@@ -241,17 +241,17 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
         />
       </div>
 
-      <div class="border-t border-gray-200 pt-3 dark:border-gray-700">
+      <div class="border-t border-slate-200 pt-3 dark:border-slate-700">
         <button
           type="button"
           onClick={() => setShowAdvanced(!showAdvanced())}
-          class="text-xs font-semibold uppercase tracking-wide text-gray-600 transition-colors hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
+          class="text-xs font-semibold uppercase tracking-wide text-slate-600 transition-colors hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
         >
           {showAdvanced() ? 'Hide advanced options' : 'Show advanced options'}
         </button>
 
         <Show when={showAdvanced()}>
-          <div class="mt-3 space-y-3 text-xs text-gray-700 dark:text-gray-300">
+          <div class="mt-3 space-y-3 text-xs text-slate-700 dark:text-slate-300">
             <div class="grid gap-3 sm:grid-cols-3">
               <div class="flex items-center gap-2">
                 <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>Security</label>

@@ -984,7 +984,7 @@ export function Dashboard(props: DashboardProps) {
   // Also maps by instance-nodeName for guest grouping compatibility
   const nodeByInstance = createMemo(() => buildNodeByInstance(props.nodes));
 
-  // PERFORMANCE: Pre-compute guest-to-parent-node mapping for faster lookups
+  // PERFORMANCE: Pre-compute guest- mapping for faster lookups
   // This avoids repeated node lookups for each guest during render
   const guestParentNodeMap = createMemo(() => buildGuestParentNodeMap(allGuests(), nodeByInstance()));
 
@@ -1347,7 +1347,7 @@ export function Dashboard(props: DashboardProps) {
   return (
     <div class="space-y-3">
       <Show when={isWorkloadsRoute() && !workloadsSummaryCollapsed()}>
-        <div class="hidden lg:block sticky-shield sticky top-0 z-20 bg-white dark:bg-gray-800">
+        <div class="hidden lg:block sticky-shield sticky top-0 z-20 bg-white dark:bg-slate-800">
           <WorkloadsSummary
             timeRange={workloadsSummaryRange()}
             onTimeRangeChange={setWorkloadsSummaryRange}
@@ -1386,7 +1386,7 @@ export function Dashboard(props: DashboardProps) {
           <EmptyState
             icon={
               <svg
-                class="mx-auto h-12 w-12 animate-spin text-gray-400"
+                class="mx-auto h-12 w-12 animate-spin text-slate-400"
                 fill="none"
                 viewBox="0 0 24 24"
               >
@@ -1429,7 +1429,7 @@ export function Dashboard(props: DashboardProps) {
           <EmptyState
             icon={
               <svg
-                class="h-12 w-12 text-gray-400"
+                class="h-12 w-12 text-slate-400"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -1592,7 +1592,7 @@ export function Dashboard(props: DashboardProps) {
       {/* Table View */}
       <Show when={connected() && initialDataReceived() && filteredGuests().length > 0}>
         <ComponentErrorBoundary name="Guest Table">
-          <Card padding="none" tone="glass" class="mb-4 overflow-hidden">
+          <Card padding="none" tone="card" class="mb-4 overflow-hidden">
             <div
               ref={tableRef}
               class="overflow-x-auto"
@@ -1600,7 +1600,7 @@ export function Dashboard(props: DashboardProps) {
             >
               <table class="w-full border-collapse whitespace-nowrap" style={{ "table-layout": "fixed", "min-width": isMobile() ? "330px" : "900px" }}>
                 <thead>
-                  <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
+                  <tr class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
                     <For each={mobileVisibleColumns()}>
                       {(col) => {
                         const isFirst = () => col.id === visibleColumns()[0]?.id;
@@ -1612,7 +1612,7 @@ export function Dashboard(props: DashboardProps) {
                           <th
                             class={`py-1 text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap
                                   ${isFirst() ? 'pl-2 sm:pl-3 pr-1.5 sm:pr-2 text-left' : 'px-1.5 sm:px-2 text-center'}
-                                  ${isSortable ? 'cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600' : ''}`}
+                                  ${isSortable ? 'cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600' : ''}`}
                             style={{
                               ...((['cpu', 'memory', 'disk'].includes(col.id))
                                 ? { "width": isMobile() ? "70px" : "140px" }
@@ -1658,7 +1658,7 @@ export function Dashboard(props: DashboardProps) {
                             <Show
                               when={node()}
                               fallback={
-                                <tr class="bg-gray-50 dark:bg-gray-900/40">
+                                <tr class="bg-slate-50 dark:bg-slate-800">
                                   <td
                                     colspan={totalColumns()}
                                     class="py-1 pr-1.5 sm:pr-2 pl-2 sm:pl-3 text-[12px] sm:text-sm font-semibold text-slate-700 dark:text-slate-100"
@@ -1669,7 +1669,7 @@ export function Dashboard(props: DashboardProps) {
                                         <div class="flex items-center gap-3">
                                           <span>{label.name}</span>
                                           <Show when={label.type}>
-                                            <span class="rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-slate-200 text-slate-600 dark:bg-slate-700/60 dark:text-slate-300">
+                                            <span class="rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                                               {label.type}
                                             </span>
                                           </Show>
@@ -1718,7 +1718,7 @@ export function Dashboard(props: DashboardProps) {
                                   />
                                   <Show when={selectedGuestId() === guestId()}>
                                     <tr>
-                                      <td colspan={totalColumns()} class="p-0 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50">
+                                      <td colspan={totalColumns()} class="p-0 border-b border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800">
                                         <div class="p-4" onClick={(e) => e.stopPropagation()}>
                                           <GuestDrawer
                                             guest={guest()}
@@ -1762,7 +1762,7 @@ export function Dashboard(props: DashboardProps) {
           <EmptyState
             icon={
               <svg
-                class="h-12 w-12 text-gray-400"
+                class="h-12 w-12 text-slate-400"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -1788,20 +1788,20 @@ export function Dashboard(props: DashboardProps) {
       {/* Stats */}
       <Show when={connected() && initialDataReceived()}>
         <div class="mb-4">
-          <div class="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-700 rounded">
-            <span class="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400">
+          <div class="flex items-center gap-2 p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded">
+            <span class="flex items-center gap-1 text-xs text-slate-600 dark:text-slate-400">
               <span class="h-2 w-2 bg-green-500 rounded-full"></span>
               {totalStats().running} running
             </span>
             <Show when={totalStats().degraded > 0}>
-              <span class="text-gray-400">|</span>
-              <span class="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400">
+              <span class="text-slate-400">|</span>
+              <span class="flex items-center gap-1 text-xs text-slate-600 dark:text-slate-400">
                 <span class="h-2 w-2 bg-orange-500 rounded-full"></span>
                 {totalStats().degraded} degraded
               </span>
             </Show>
-            <span class="text-gray-400">|</span>
-            <span class="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400">
+            <span class="text-slate-400">|</span>
+            <span class="flex items-center gap-1 text-xs text-slate-600 dark:text-slate-400">
               <span class="h-2 w-2 bg-red-500 rounded-full"></span>
               {totalStats().stopped} stopped
             </span>

@@ -58,14 +58,14 @@ export function KeyboardShortcutsModal(props: KeyboardShortcutsModalProps) {
       panelClass="max-w-xl"
       ariaLabel="Keyboard shortcuts"
     >
-      <div class="flex items-center justify-between border-b border-gray-200 px-5 py-4 dark:border-gray-700">
-        <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
+      <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-slate-700">
+        <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100">
           Keyboard Shortcuts
         </h2>
         <button
           type="button"
           onClick={props.onClose}
-          class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+          class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
           aria-label="Close shortcuts"
         >
           <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -78,15 +78,15 @@ export function KeyboardShortcutsModal(props: KeyboardShortcutsModalProps) {
         <For each={shortcutGroups()}>
           {(group) => (
             <div>
-              <div class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+              <div class="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                 {group.title}
               </div>
               <div class="mt-2 space-y-2">
                 <For each={group.items}>
                   {(item) => (
-                    <div class="flex items-center justify-between text-sm text-gray-700 dark:text-gray-300">
+                    <div class="flex items-center justify-between text-sm text-slate-700 dark:text-slate-300">
                       <span>{item.description}</span>
-                      <span class="rounded bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700 dark:bg-gray-700 dark:text-gray-200">
+                      <span class="rounded bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-200">
                         {item.keys}
                       </span>
                     </div>
@@ -98,7 +98,7 @@ export function KeyboardShortcutsModal(props: KeyboardShortcutsModalProps) {
         </For>
       </div>
 
-      <div class="border-t border-gray-200 px-5 py-3 text-xs text-gray-500 dark:border-gray-700 dark:text-gray-400">
+      <div class="border-t border-slate-200 px-5 py-3 text-xs text-slate-500 dark:border-slate-700 dark:text-slate-400">
         Press <span class="font-medium">?</span> again or <span class="font-medium">Esc</span> to close.
       </div>
     </Dialog>

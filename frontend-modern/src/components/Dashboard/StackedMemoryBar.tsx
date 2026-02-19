@@ -135,7 +135,7 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
     return (
         <div ref={containerRef} class="metric-text w-full h-4 flex items-center justify-center">
             <div
-                class="relative w-full h-full overflow-hidden bg-gray-200 dark:bg-gray-600 rounded"
+                class="relative w-full h-full overflow-hidden bg-slate-200 dark:bg-slate-600 rounded"
                 onMouseEnter={tip.onMouseEnter}
                 onMouseLeave={tip.onMouseLeave}
             >
@@ -174,11 +174,11 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
                 </Show>
 
                 {/* Label overlay */}
-                <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-gray-700 dark:text-gray-100 leading-none pointer-events-none min-w-0 overflow-hidden">
+                <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-slate-700 dark:text-slate-100 leading-none pointer-events-none min-w-0 overflow-hidden">
                     <span class="max-w-full min-w-0 whitespace-nowrap overflow-hidden text-ellipsis px-0.5 text-center">
                         <span>{displayLabel()}</span>
                         <Show when={showSublabel()}>
-                            <span class="metric-sublabel font-normal text-gray-500 dark:text-gray-300">
+                            <span class="metric-sublabel font-normal text-slate-500 dark:text-slate-300">
                                 {' '}({displaySublabel()})
                             </span>
                         </Show>
@@ -198,23 +198,23 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
             {/* Tooltip */}
             <TooltipPortal when={tip.show()} x={tip.pos().x} y={tip.pos().y}>
                 <div class="min-w-[140px]">
-                    <div class="font-medium mb-1 text-gray-300 border-b border-gray-700 pb-1">
+                    <div class="font-medium mb-1 text-slate-300 border-b border-slate-700 pb-1">
                         Memory Composition
                     </div>
 
                     <Show when={props.total > 0}>
                         <div class="flex justify-between gap-3 py-0.5">
                             <span class="text-green-400">Used</span>
-                            <span class="whitespace-nowrap text-gray-300">
+                            <span class="whitespace-nowrap text-slate-300">
                                 {formatBytes(props.used)}
                             </span>
                         </div>
                     </Show>
 
                     <Show when={props.total > 0 && (props.balloon || 0) > 0 && (props.balloon || 0) < props.total}>
-                        <div class="flex justify-between gap-3 py-0.5 border-t border-gray-700/50">
+                        <div class="flex justify-between gap-3 py-0.5 border-t border-slate-700/50">
                             <span class="text-blue-400">Balloon Limit</span>
-                            <span class="whitespace-nowrap text-gray-300">
+                            <span class="whitespace-nowrap text-slate-300">
                                 {formatBytes(props.balloon || 0)}
                             </span>
                         </div>
@@ -223,25 +223,25 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
                     <Show
                         when={props.total > 0}
                         fallback={
-                            <div class="flex justify-between gap-3 py-0.5 border-t border-gray-700/50">
+                            <div class="flex justify-between gap-3 py-0.5 border-t border-slate-700/50">
                                 <span class="text-blue-300">Utilization</span>
-                                <span class="whitespace-nowrap text-gray-300">{displayLabel()}</span>
+                                <span class="whitespace-nowrap text-slate-300">{displayLabel()}</span>
                             </div>
                         }
                     >
-                        <div class="flex justify-between gap-3 py-0.5 border-t border-gray-700/50">
-                            <span class="text-gray-400">Free</span>
-                            <span class="whitespace-nowrap text-gray-300">
+                        <div class="flex justify-between gap-3 py-0.5 border-t border-slate-700/50">
+                            <span class="text-slate-400">Free</span>
+                            <span class="whitespace-nowrap text-slate-300">
                                 {formatBytes(props.total - props.used)}
                             </span>
                         </div>
                     </Show>
 
                     <Show when={props.total > 0 && hasSwap()}>
-                        <div class="mt-1 pt-1 border-t border-gray-600">
+                        <div class="mt-1 pt-1 border-t border-slate-600">
                             <div class="flex justify-between gap-3 py-0.5">
                                 <span class="text-purple-400">Swap</span>
-                                <span class="whitespace-nowrap text-gray-300">
+                                <span class="whitespace-nowrap text-slate-300">
                                     {formatBytes(props.swapUsed || 0)} / {formatBytes(props.swapTotal || 0)}
                                 </span>
                             </div>

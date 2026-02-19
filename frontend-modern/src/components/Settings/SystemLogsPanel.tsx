@@ -113,7 +113,7 @@ export const SystemLogsPanel: Component = () => {
                         <select
                             value={level()}
                             onChange={(e) => handleLevelChange(e.currentTarget.value)}
-                            class="form-select text-sm py-1.5 px-3 rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 focus:ring-primary-500 focus:border-primary-500"
+                            class="form-select min-h-10 sm:min-h-9 text-sm py-2.5 px-3 rounded-md border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 focus:ring-primary-500 focus:border-primary-500"
                         >
                             <option value="debug">Debug</option>
                             <option value="info">Info</option>
@@ -125,7 +125,7 @@ export const SystemLogsPanel: Component = () => {
                     <div class="flex items-center space-x-2">
                         <button
                             onClick={() => setIsPaused(!isPaused())}
-                            class={`p-2 rounded transition-colors ${isPaused()
+                            class={`min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 p-2.5 rounded transition-colors ${isPaused()
                                 ? 'bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400'
                                 : 'hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400'
                                 }`}
@@ -135,7 +135,7 @@ export const SystemLogsPanel: Component = () => {
                         </button>
                         <button
                             onClick={() => setLogs([])}
-                            class="p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400 transition-colors"
+                            class="min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 p-2.5 rounded hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400 transition-colors"
                             title="Clear Logs"
                         >
                             <Trash2 size={18} />
@@ -143,7 +143,7 @@ export const SystemLogsPanel: Component = () => {
                         <div class="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-2"></div>
                         <button
                             onClick={handleDownload}
-                            class="flex items-center space-x-2 px-3 py-1.5 bg-primary-600 text-white rounded-md hover:bg-primary-700 text-sm font-medium transition-colors shadow-sm"
+                            class="min-h-10 sm:min-h-9 flex items-center space-x-2 px-3 py-2.5 bg-primary-600 text-white rounded-md hover:bg-primary-700 text-sm font-medium transition-colors shadow-sm"
                         >
                             <Download size={16} />
                             <span>Support Bundle</span>
@@ -154,7 +154,7 @@ export const SystemLogsPanel: Component = () => {
                 {/* Terminal View */}
                 <div
                     ref={logContainer}
-                    class="bg-slate-950 text-slate-300 font-mono text-xs p-4 rounded-lg h-[500px] overflow-y-auto whitespace-pre-wrap leading-relaxed shadow-inner border border-slate-800 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent"
+                    class="bg-slate-950 text-slate-300 font-mono text-xs p-4 rounded-md h-[500px] overflow-y-auto whitespace-pre-wrap leading-relaxed shadow-inner border border-slate-800 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent"
                 >
                     <For each={logs()}>{(log) =>
                         <div class="border-b border-slate-900/50 last:border-0 pb-0.5 mb-0.5 hover:bg-slate-900/50 px-1 -mx-1 rounded">

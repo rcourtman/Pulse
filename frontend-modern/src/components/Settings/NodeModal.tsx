@@ -443,10 +443,10 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
             <div class="fixed inset-0 bg-black/50 transition-opacity" onClick={props.onClose} />
 
             {/* Modal */}
-            <div class="relative w-full max-w-2xl bg-white dark:bg-gray-800 rounded-lg shadow-xl">
+            <div class="relative w-full max-w-2xl bg-white dark:bg-slate-800 rounded-md shadow-sm">
               <form onSubmit={handleSubmit}>
                 {/* Header */}
-                <div class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+                <div class="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700">
                   <SectionHeader
                     title={`${props.editingNode ? 'Edit' : 'Add'} ${nodeProductName()} node`}
                     size="md"
@@ -455,7 +455,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                   <button
                     type="button"
                     onClick={props.onClose}
-                    class="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
+                    class="text-slate-400 hover:text-slate-500 dark:hover:text-slate-300"
                   >
                     <svg
                       width="20"
@@ -479,7 +479,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                       title="Basic information"
                       size="sm"
                       class="mb-4"
-                      titleClass="text-gray-900 dark:text-gray-100"
+                      titleClass="text-slate-900 dark:text-slate-100"
                     />
                     <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
                       <div class={formField}>
@@ -531,7 +531,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
 
                       <div class={formField}>
                         <label class={labelClass('flex items-center gap-1')}>
-                          Guest URL <span class="text-gray-500 text-xs font-normal">(Optional)</span>
+                          Guest URL <span class="text-slate-500 text-xs font-normal">(Optional)</span>
                         </label>
                         <input
                           type="text"
@@ -559,7 +559,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                       title="Authentication"
                       size="sm"
                       class="mb-4"
-                      titleClass="text-gray-900 dark:text-gray-100"
+                      titleClass="text-slate-900 dark:text-slate-100"
                     />
 
                     {/* Auth Type Selector */}
@@ -574,7 +574,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                             onChange={() => updateField('authType', 'password')}
                             class="mr-2"
                           />
-                          <span class="text-sm text-gray-700 dark:text-gray-300">
+                          <span class="text-sm text-slate-700 dark:text-slate-300">
                             Username & Password
                           </span>
                         </label>
@@ -588,7 +588,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                               onChange={() => updateField('authType', 'token')}
                               class="mr-2"
                             />
-                            <span class="text-sm text-gray-700 dark:text-gray-300">
+                            <span class="text-sm text-slate-700 dark:text-slate-300">
                               API Token{' '}
                               <span class="text-green-600 dark:text-green-400 text-xs ml-1">
                                 (Recommended)
@@ -598,7 +598,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                         </Show>
                       </div>
                       <Show when={props.nodeType === 'pmg'}>
-                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-2">
                           Proxmox Mail Gateway does not support API tokens. Use a service account with
                           password authentication (for example <code>root@pam</code> or a dedicated{' '}
                           <code>api@pmg</code> user).
@@ -660,7 +660,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                     <Show when={formData().authType === 'token'}>
                       <div class="space-y-4">
                         {/* Token Creation Guide */}
-                        <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                        <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md p-4">
                           <h5 class="text-sm font-medium text-blue-900 dark:text-blue-100 mb-3 flex items-center gap-2">
                             <svg
                               width="16"
@@ -684,8 +684,8 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                   type="button"
                                   onClick={() => updateField('setupMode', 'agent')}
                                   class={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md border border-transparent transition-colors ${formData().setupMode === 'agent'
-                                    ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-300 border-gray-300 dark:border-gray-600 shadow-sm'
-                                    : 'text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60'
+                                    ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-300 border-slate-300 dark:border-slate-600 shadow-sm'
+                                    : 'text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-slate-200/60 dark:hover:bg-slate-700/60'
                                     }`}
                                 >
                                   Agent Install
@@ -701,8 +701,8 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                     }
                                   }}
                                   class={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md border border-transparent transition-colors ${isAdvancedSetupMode()
-                                    ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-300 border-gray-300 dark:border-gray-600 shadow-sm'
-                                    : 'text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60'
+                                    ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-300 border-slate-300 dark:border-slate-600 shadow-sm'
+                                    : 'text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-slate-200/60 dark:hover:bg-slate-700/60'
                                     }`}
                                 >
                                   Advanced
@@ -715,8 +715,8 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                     type="button"
                                     onClick={() => updateField('setupMode', 'auto')}
                                     class={`inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-md border border-transparent transition-colors ${formData().setupMode === 'auto'
-                                      ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-300 border-gray-300 dark:border-gray-600 shadow-sm'
-                                      : 'text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60'
+                                      ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-300 border-slate-300 dark:border-slate-600 shadow-sm'
+                                      : 'text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-slate-200/60 dark:hover:bg-slate-700/60'
                                       }`}
                                   >
                                     API Only
@@ -725,8 +725,8 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                     type="button"
                                     onClick={() => updateField('setupMode', 'manual')}
                                     class={`inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-md border border-transparent transition-colors ${formData().setupMode === 'manual'
-                                      ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-300 border-gray-300 dark:border-gray-600 shadow-sm'
-                                      : 'text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60'
+                                      ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-300 border-slate-300 dark:border-slate-600 shadow-sm'
+                                      : 'text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-slate-200/60 dark:hover:bg-slate-700/60'
                                       }`}
                                   >
                                     Manual
@@ -737,10 +737,10 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                               {/* Agent Install Tab (Recommended) */}
                               <Show when={formData().setupMode === 'agent'}>
                                 <div class="space-y-3">
-                                  <p class="text-xs text-gray-600 dark:text-gray-400">
+                                  <p class="text-xs text-slate-600 dark:text-slate-400">
                                     Install the Pulse agent on your Proxmox node. This single command sets everything up:
                                   </p>
-                                  <ul class="text-xs text-gray-600 dark:text-gray-400 list-disc list-inside space-y-1">
+                                  <ul class="text-xs text-slate-600 dark:text-slate-400 list-disc list-inside space-y-1">
                                     <li>Creates monitoring user and API token automatically</li>
                                     <li>Registers the node with Pulse</li>
                                     <li>Enables temperature monitoring (no SSH required)</li>
@@ -749,7 +749,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                   <p class="text-blue-800 dark:text-blue-200 font-medium">
                                     Run this command on your Proxmox VE node:
                                   </p>
-                                  <div class="relative bg-gray-900 rounded-md p-3 font-mono text-xs overflow-x-auto">
+                                  <div class="relative bg-slate-900 rounded-md p-3 font-mono text-xs overflow-x-auto">
                                     <button
                                       type="button"
                                       disabled={loadingAgentCommand()}
@@ -779,7 +779,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                           setLoadingAgentCommand(false);
                                         }
                                       }}
-                                      class="absolute top-2 right-2 p-1.5 text-gray-400 hover:text-gray-200 bg-gray-700 rounded-md transition-colors disabled:opacity-50"
+                                      class="absolute top-2 right-2 p-1.5 text-slate-400 hover:text-slate-200 bg-slate-700 rounded-md transition-colors disabled:opacity-50"
                                       title="Copy command"
                                     >
                                       <Show when={loadingAgentCommand()} fallback={
@@ -807,7 +807,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                       </code>
                                     </Show>
                                   </div>
-                                  <p class="text-[11px] text-gray-500 dark:text-gray-400 italic">
+                                  <p class="text-[11px] text-slate-500 dark:text-slate-400 italic">
                                     The node will appear in Pulse automatically after the agent starts.
                                   </p>
                                 </div>
@@ -815,7 +815,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
 
                               {/* API Only Tab (formerly Quick Setup) */}
                               <Show when={formData().setupMode === 'auto'}>
-                                <div class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 mb-3 dark:border-amber-700 dark:bg-amber-900/20">
+                                <div class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 mb-3 dark:border-amber-700 dark:bg-amber-900/20">
                                   <p class="text-xs text-amber-800 dark:text-amber-200">
                                     <strong>Limited functionality:</strong> API-only mode does not include temperature monitoring or Pulse Patrol automation.
                                     For full functionality, use the Agent Install tab instead.
@@ -827,7 +827,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
 
                                 {/* One-line command */}
                                 <div class="space-y-3">
-                                  <div class="relative bg-gray-900 rounded-md p-3 font-mono text-xs overflow-x-auto">
+                                  <div class="relative bg-slate-900 rounded-md p-3 font-mono text-xs overflow-x-auto">
                                     <button
                                       type="button"
                                       onClick={async () => {
@@ -893,7 +893,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                           notificationStore.error('Failed to copy command');
                                         }
                                       }}
-                                      class="absolute top-2 right-2 p-1.5 text-gray-400 hover:text-gray-200 bg-gray-700 rounded-md transition-colors"
+                                      class="absolute top-2 right-2 p-1.5 text-slate-400 hover:text-slate-200 bg-slate-700 rounded-md transition-colors"
                                       title="Copy command"
                                     >
                                       <svg
@@ -944,7 +944,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                     </Show>
                                   </div>
 
-                                  <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+                                  <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md p-3">
                                     <div class="flex items-start space-x-2">
                                       <svg
                                         class="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0"
@@ -972,8 +972,8 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                   </div>
 
                                   {/* Alternative: Download script */}
-                                  <details class="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3">
-                                    <summary class="cursor-pointer text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100">
+                                  <details class="bg-slate-50 dark:bg-slate-800 rounded-md p-3">
+                                    <summary class="cursor-pointer text-sm font-medium text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100">
                                       Alternative: Download script manually
                                     </summary>
                                     <div class="mt-3 space-y-3">
@@ -1022,13 +1022,13 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                       >
                                         Download pulse-setup.sh
                                       </button>
-                                      <div class="text-xs text-gray-600 dark:text-gray-400">
+                                      <div class="text-xs text-slate-600 dark:text-slate-400">
                                         1. Click to download the script
                                         <br />
                                         2. Upload to your server via SCP/SFTP
                                         <br />
                                         3. Run:{' '}
-                                        <code class="bg-gray-100 dark:bg-gray-800 px-1 rounded">
+                                        <code class="bg-slate-100 dark:bg-slate-800 px-1 rounded">
                                           bash pulse-setup.sh
                                         </code>
                                       </div>
@@ -1036,7 +1036,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                   </details>
                                 </div>
 
-                                <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                                <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md p-3">
                                   <p class="text-sm font-semibold text-blue-800 dark:text-blue-200 mb-2">
                                     What this does:
                                   </p>
@@ -1081,10 +1081,10 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                 <div class="space-y-3">
                                   {/* Step 1: Create user */}
                                   <div>
-                                    <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                    <p class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                                       1. Create monitoring user:
                                     </p>
-                                    <div class="relative bg-white dark:bg-gray-800 rounded-md p-2 font-mono text-xs">
+                                    <div class="relative bg-white dark:bg-slate-800 rounded-md p-2 font-mono text-xs">
                                       <button
                                         type="button"
                                         onClick={async () => {
@@ -1094,7 +1094,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                             notificationStore.success('Command copied!');
                                           }
                                         }}
-                                        class="absolute top-1 right-1 p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+                                        class="absolute top-1 right-1 p-1 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors"
                                         title="Copy command"
                                       >
                                         <svg
@@ -1116,7 +1116,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                           <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
                                         </svg>
                                       </button>
-                                      <code class="text-gray-800 dark:text-gray-200">
+                                      <code class="text-slate-800 dark:text-slate-200">
                                         pveum user add pulse-monitor@pam --comment "Pulse monitoring
                                         service"
                                       </code>
@@ -1125,10 +1125,10 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
 
                                   {/* Step 2: Generate token */}
                                   <div>
-                                    <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                    <p class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                                       2. Generate API token (save the output!):
                                     </p>
-                                    <div class="relative bg-white dark:bg-gray-800 rounded-md p-2 font-mono text-xs">
+                                    <div class="relative bg-white dark:bg-slate-800 rounded-md p-2 font-mono text-xs">
                                       <button
                                         type="button"
                                         onClick={async () => {
@@ -1138,7 +1138,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                             notificationStore.success('Command copied!');
                                           }
                                         }}
-                                        class="absolute top-1 right-1 p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+                                        class="absolute top-1 right-1 p-1 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors"
                                         title="Copy command"
                                       >
                                         <svg
@@ -1160,7 +1160,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                           <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
                                         </svg>
                                       </button>
-                                      <code class="text-gray-800 dark:text-gray-200">
+                                      <code class="text-slate-800 dark:text-slate-200">
                                         pveum user token add pulse-monitor@pam pulse-token --privsep
                                         0
                                       </code>
@@ -1172,10 +1172,10 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
 
                                   {/* Step 3: Set permissions */}
                                   <div>
-                                    <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                    <p class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                                       3. Set up monitoring permissions:
                                     </p>
-                                    <div class="relative bg-white dark:bg-gray-800 rounded-md p-2 font-mono text-xs mb-1">
+                                    <div class="relative bg-white dark:bg-slate-800 rounded-md p-2 font-mono text-xs mb-1">
                                       <button
                                         type="button"
                                         onClick={async () => {
@@ -1185,7 +1185,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                             notificationStore.success('Command copied!');
                                           }
                                         }}
-                                        class="absolute top-1 right-1 p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+                                        class="absolute top-1 right-1 p-1 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors"
                                         title="Copy command"
                                       >
                                         <svg
@@ -1207,13 +1207,13 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                           <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
                                         </svg>
                                       </button>
-                                      <code class="text-gray-800 dark:text-gray-200 whitespace-pre-line">
+                                      <code class="text-slate-800 dark:text-slate-200 whitespace-pre-line">
                                         {
                                           '# Apply monitoring permissions - use built-in PVEAuditor role\npveum aclmod / -user pulse-monitor@pam -role PVEAuditor\n\n# Gather additional privileges for VM metrics\nEXTRA_PRIVS=()\n\n# Sys.Audit (Ceph, cluster status)\nif pveum role list 2>/dev/null | grep -q "Sys.Audit"; then\n  EXTRA_PRIVS+=(\"Sys.Audit\")\nelse\n  if pveum role add PulseTmpSysAudit -privs Sys.Audit 2>/dev/null; then\n    EXTRA_PRIVS+=(\"Sys.Audit\")\n    pveum role delete PulseTmpSysAudit 2>/dev/null\n  fi\nfi\n\n# VM guest agent / monitor privileges\nVM_PRIV=\"\"\nif pveum role list 2>/dev/null | grep -q "VM.Monitor"; then\n  VM_PRIV=\"VM.Monitor\"\nelif pveum role list 2>/dev/null | grep -q "VM.GuestAgent.Audit"; then\n  VM_PRIV=\"VM.GuestAgent.Audit\"\nelse\n  if pveum role add PulseTmpVMMonitor -privs VM.Monitor 2>/dev/null; then\n    VM_PRIV=\"VM.Monitor\"\n    pveum role delete PulseTmpVMMonitor 2>/dev/null\n  elif pveum role add PulseTmpGuestAudit -privs VM.GuestAgent.Audit 2>/dev/null; then\n    VM_PRIV=\"VM.GuestAgent.Audit\"\n    pveum role delete PulseTmpGuestAudit 2>/dev/null\n  fi\nfi\n\nif [ -n \"$VM_PRIV\" ]; then\n  EXTRA_PRIVS+=(\"$VM_PRIV\")\nfi\n\nif [ ${#EXTRA_PRIVS[@]} -gt 0 ]; then\n  PRIV_STRING=\"${EXTRA_PRIVS[*]}\"\n  pveum role delete PulseMonitor 2>/dev/null\n  pveum role add PulseMonitor -privs \"$PRIV_STRING\"\n  pveum aclmod / -user pulse-monitor@pam -role PulseMonitor\nfi'
                                         }
                                       </code>
                                     </div>
-                                    <div class="relative bg-white dark:bg-gray-800 rounded-md p-2 font-mono text-xs">
+                                    <div class="relative bg-white dark:bg-slate-800 rounded-md p-2 font-mono text-xs">
                                       <button
                                         type="button"
                                         onClick={async () => {
@@ -1223,7 +1223,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                             notificationStore.success('Command copied!');
                                           }
                                         }}
-                                        class="absolute top-1 right-1 p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+                                        class="absolute top-1 right-1 p-1 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors"
                                         title="Copy command"
                                       >
                                         <svg
@@ -1245,12 +1245,12 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                           <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
                                         </svg>
                                       </button>
-                                      <code class="text-gray-800 dark:text-gray-200">
+                                      <code class="text-slate-800 dark:text-slate-200">
                                         pveum aclmod /storage -user pulse-monitor@pam -role
                                         PVEDatastoreAdmin
                                       </code>
                                     </div>
-                                    <p class="text-gray-600 dark:text-gray-400 text-xs mt-1">
+                                    <p class="text-slate-600 dark:text-slate-400 text-xs mt-1">
                                       Note: PVEAuditor gives read-only API access. PulseMonitor adds
                                       Sys.Audit plus either VM.Monitor (PVE 8) or VM.GuestAgent.Audit
                                       (PVE 9+) for disk and guest metrics. PVEDatastoreAdmin on
@@ -1289,8 +1289,8 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                   type="button"
                                   onClick={() => updateField('setupMode', 'agent')}
                                   class={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md border border-transparent transition-colors ${formData().setupMode === 'agent'
-                                    ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-300 border-gray-300 dark:border-gray-600 shadow-sm'
-                                    : 'text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60'
+                                    ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-300 border-slate-300 dark:border-slate-600 shadow-sm'
+                                    : 'text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-slate-200/60 dark:hover:bg-slate-700/60'
                                     }`}
                                 >
                                   Agent Install
@@ -1304,8 +1304,8 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                     }
                                   }}
                                   class={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md border border-transparent transition-colors ${isAdvancedSetupMode()
-                                    ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-300 border-gray-300 dark:border-gray-600 shadow-sm'
-                                    : 'text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60'
+                                    ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-300 border-slate-300 dark:border-slate-600 shadow-sm'
+                                    : 'text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-slate-200/60 dark:hover:bg-slate-700/60'
                                     }`}
                                 >
                                   Advanced
@@ -1318,8 +1318,8 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                     type="button"
                                     onClick={() => updateField('setupMode', 'auto')}
                                     class={`inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-md border border-transparent transition-colors ${formData().setupMode === 'auto'
-                                      ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-300 border-gray-300 dark:border-gray-600 shadow-sm'
-                                      : 'text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60'
+                                      ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-300 border-slate-300 dark:border-slate-600 shadow-sm'
+                                      : 'text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-slate-200/60 dark:hover:bg-slate-700/60'
                                       }`}
                                   >
                                     API Only
@@ -1328,8 +1328,8 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                     type="button"
                                     onClick={() => updateField('setupMode', 'manual')}
                                     class={`inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-md border border-transparent transition-colors ${formData().setupMode === 'manual'
-                                      ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-300 border-gray-300 dark:border-gray-600 shadow-sm'
-                                      : 'text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-gray-200/60 dark:hover:bg-gray-700/60'
+                                      ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-300 border-slate-300 dark:border-slate-600 shadow-sm'
+                                      : 'text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-slate-200/60 dark:hover:bg-slate-700/60'
                                       }`}
                                   >
                                     Manual Setup
@@ -1340,10 +1340,10 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                               {/* Agent Install Tab for PBS */}
                               <Show when={formData().setupMode === 'agent'}>
                                 <div class="space-y-3">
-                                  <p class="text-xs text-gray-600 dark:text-gray-400">
+                                  <p class="text-xs text-slate-600 dark:text-slate-400">
                                     Install the Pulse agent on your Proxmox Backup Server. This is the recommended method as it provides:
                                   </p>
-                                  <ul class="text-xs text-gray-600 dark:text-gray-400 list-disc list-inside space-y-1">
+                                  <ul class="text-xs text-slate-600 dark:text-slate-400 list-disc list-inside space-y-1">
                                     <li>One-command setup (creates API user and token automatically)</li>
                                     <li>Built-in temperature monitoring (no SSH required)</li>
                                     <li>Pulse features (execute commands via Pulse Assistant)</li>
@@ -1352,7 +1352,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                   <p class="text-blue-800 dark:text-blue-200 text-xs mt-3">
                                     Run this command on your PBS node:
                                   </p>
-                                  <div class="relative bg-gray-900 rounded-md p-3 font-mono text-xs overflow-x-auto">
+                                  <div class="relative bg-slate-900 rounded-md p-3 font-mono text-xs overflow-x-auto">
                                     <button
                                       type="button"
                                       onClick={async () => {
@@ -1384,7 +1384,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                           setLoadingAgentCommand(false);
                                         }
                                       }}
-                                      class="absolute top-2 right-2 p-1.5 text-gray-400 hover:text-white rounded bg-gray-800 hover:bg-gray-700 transition-colors"
+                                      class="absolute top-2 right-2 p-1.5 text-slate-400 hover:text-white rounded bg-slate-800 hover:bg-slate-700 transition-colors"
                                       title="Copy to clipboard"
                                       disabled={loadingAgentCommand()}
                                     >
@@ -1406,7 +1406,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                   <Show when={agentCommandError()}>
                                     <p class="text-xs text-red-500">{agentCommandError()}</p>
                                   </Show>
-                                  <p class="text-xs text-gray-500 dark:text-gray-500">
+                                  <p class="text-xs text-slate-500 dark:text-slate-500">
                                     The node will automatically appear in Pulse once the agent connects.
                                   </p>
                                 </div>
@@ -1420,7 +1420,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
 
                                 {/* One-line command */}
                                 <div class="space-y-3">
-                                  <div class="relative bg-gray-900 rounded-md p-3 font-mono text-xs overflow-x-auto">
+                                  <div class="relative bg-slate-900 rounded-md p-3 font-mono text-xs overflow-x-auto">
                                     <Show when={formData().host && formData().host.trim() !== ''}>
                                       <button
                                         type="button"
@@ -1465,7 +1465,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                             notificationStore.error('Failed to copy command');
                                           }
                                         }}
-                                        class="absolute top-2 right-2 p-1.5 text-gray-400 hover:text-gray-200 bg-gray-700 rounded-md transition-colors"
+                                        class="absolute top-2 right-2 p-1.5 text-slate-400 hover:text-slate-200 bg-slate-700 rounded-md transition-colors"
                                         title="Copy command"
                                       >
                                         <svg
@@ -1517,7 +1517,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                     </Show>
                                   </div>
 
-                                  <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+                                  <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md p-3">
                                     <div class="flex items-start space-x-2">
                                       <svg
                                         class="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0"
@@ -1545,8 +1545,8 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                   </div>
 
                                   {/* Alternative: Download script */}
-                                  <details class="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3">
-                                    <summary class="cursor-pointer text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100">
+                                  <details class="bg-slate-50 dark:bg-slate-800 rounded-md p-3">
+                                    <summary class="cursor-pointer text-sm font-medium text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100">
                                       Alternative: Download script manually
                                     </summary>
                                     <div class="mt-3 space-y-3">
@@ -1595,13 +1595,13 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                       >
                                         Download pulse-pbs-setup.sh
                                       </button>
-                                      <div class="text-xs text-gray-600 dark:text-gray-400">
+                                      <div class="text-xs text-slate-600 dark:text-slate-400">
                                         1. Click to download the script
                                         <br />
                                         2. Upload to your PBS via SCP/SFTP
                                         <br />
                                         3. Run:{' '}
-                                        <code class="bg-gray-100 dark:bg-gray-800 px-1 rounded">
+                                        <code class="bg-slate-100 dark:bg-slate-800 px-1 rounded">
                                           bash pulse-pbs-setup.sh
                                         </code>
                                       </div>
@@ -1609,7 +1609,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                   </details>
                                 </div>
 
-                                <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                                <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md p-3">
                                   <p class="text-sm font-semibold text-blue-800 dark:text-blue-200 mb-2">
                                     What this does:
                                   </p>
@@ -1654,10 +1654,10 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                 <div class="space-y-3">
                                   {/* Step 1: Create user */}
                                   <div>
-                                    <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                    <p class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                                       1. Create monitoring user:
                                     </p>
-                                    <div class="relative bg-white dark:bg-gray-800 rounded-md p-2 font-mono text-xs">
+                                    <div class="relative bg-white dark:bg-slate-800 rounded-md p-2 font-mono text-xs">
                                       <button
                                         type="button"
                                         onClick={async () => {
@@ -1667,7 +1667,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                             notificationStore.success('Command copied!');
                                           }
                                         }}
-                                        class="absolute top-1 right-1 p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+                                        class="absolute top-1 right-1 p-1 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors"
                                         title="Copy command"
                                       >
                                         <svg
@@ -1689,7 +1689,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                           <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
                                         </svg>
                                       </button>
-                                      <code class="text-gray-800 dark:text-gray-200">
+                                      <code class="text-slate-800 dark:text-slate-200">
                                         proxmox-backup-manager user create pulse-monitor@pbs
                                       </code>
                                     </div>
@@ -1697,10 +1697,10 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
 
                                   {/* Step 2: Generate token */}
                                   <div>
-                                    <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                    <p class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                                       2. Generate API token (save the output!):
                                     </p>
-                                    <div class="relative bg-white dark:bg-gray-800 rounded-md p-2 font-mono text-xs">
+                                    <div class="relative bg-white dark:bg-slate-800 rounded-md p-2 font-mono text-xs">
                                       <button
                                         type="button"
                                         onClick={async () => {
@@ -1710,7 +1710,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                             notificationStore.success('Command copied!');
                                           }
                                         }}
-                                        class="absolute top-1 right-1 p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+                                        class="absolute top-1 right-1 p-1 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors"
                                         title="Copy command"
                                       >
                                         <svg
@@ -1732,7 +1732,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                           <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
                                         </svg>
                                       </button>
-                                      <code class="text-gray-800 dark:text-gray-200">
+                                      <code class="text-slate-800 dark:text-slate-200">
                                         proxmox-backup-manager user generate-token pulse-monitor@pbs
                                         pulse-token
                                       </code>
@@ -1744,10 +1744,10 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
 
                                   {/* Step 3: Set permissions */}
                                   <div>
-                                    <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                    <p class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                                       3. Set up read-only permissions (includes system stats):
                                     </p>
-                                    <div class="relative bg-white dark:bg-gray-800 rounded-md p-2 font-mono text-xs mb-1">
+                                    <div class="relative bg-white dark:bg-slate-800 rounded-md p-2 font-mono text-xs mb-1">
                                       <button
                                         type="button"
                                         onClick={async () => {
@@ -1757,7 +1757,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                             notificationStore.success('Command copied!');
                                           }
                                         }}
-                                        class="absolute top-1 right-1 p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+                                        class="absolute top-1 right-1 p-1 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors"
                                         title="Copy command"
                                       >
                                         <svg
@@ -1779,12 +1779,12 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                           <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
                                         </svg>
                                       </button>
-                                      <code class="text-gray-800 dark:text-gray-200">
+                                      <code class="text-slate-800 dark:text-slate-200">
                                         proxmox-backup-manager acl update / Audit --auth-id
                                         pulse-monitor@pbs
                                       </code>
                                     </div>
-                                    <div class="relative bg-white dark:bg-gray-800 rounded-md p-2 font-mono text-xs">
+                                    <div class="relative bg-white dark:bg-slate-800 rounded-md p-2 font-mono text-xs">
                                       <button
                                         type="button"
                                         onClick={async () => {
@@ -1794,7 +1794,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                             notificationStore.success('Command copied!');
                                           }
                                         }}
-                                        class="absolute top-1 right-1 p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+                                        class="absolute top-1 right-1 p-1 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors"
                                         title="Copy command"
                                       >
                                         <svg
@@ -1816,7 +1816,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                           <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
                                         </svg>
                                       </button>
-                                      <code class="text-gray-800 dark:text-gray-200">
+                                      <code class="text-slate-800 dark:text-slate-200">
                                         proxmox-backup-manager acl update / Audit --auth-id
                                         'pulse-monitor@pbs!pulse-token'
                                       </code>
@@ -1865,7 +1865,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                             </div>
                           </Show>
                           <Show when={props.nodeType === 'pmg'}>
-                            <div class="space-y-3 text-xs text-gray-700 dark:text-gray-200">
+                            <div class="space-y-3 text-xs text-slate-700 dark:text-slate-200">
                               <p>
                                 Generate a dedicated API token in <strong>Configuration → API Tokens</strong> on your
                                 Mail Gateway. We recommend creating a service user such as <code class="font-mono">pulse-monitor@pmg</code>
@@ -1876,7 +1876,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                 <li>Enable <em>Privilege Separation</em> and assign the <em>Auditor</em> role.</li>
                                 <li>Copy the generated Token ID (e.g. <code class="font-mono">pulse-monitor@pmg!pulse-edge</code>) and the secret value into the fields below.</li>
                               </ol>
-                              <p class="text-xs text-gray-500 dark:text-gray-400">
+                              <p class="text-xs text-slate-500 dark:text-slate-400">
                                 Pulse only requires read-only access. Avoid granting administrator permissions to the token.
                               </p>
                             </div>
@@ -1940,10 +1940,10 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                       title="SSL settings"
                       size="sm"
                       class="mb-4"
-                      titleClass="text-gray-900 dark:text-gray-100"
+                      titleClass="text-slate-900 dark:text-slate-100"
                     />
                     <div class="space-y-3">
-                      <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                      <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
                         <input
                           type="checkbox"
                           checked={formData().verifySSL}
@@ -1975,9 +1975,9 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                       title="Monitoring coverage"
                       size="sm"
                       class="mb-2"
-                      titleClass="text-gray-900 dark:text-gray-100"
+                      titleClass="text-slate-900 dark:text-slate-100"
                     />
-                    <p class="text-sm text-gray-600 dark:text-gray-400">
+                    <p class="text-sm text-slate-600 dark:text-slate-400">
                       {props.nodeType === 'pmg'
                         ? 'Pulse captures mail flow analytics, rejection causes, and quarantine visibility without additional scripts.'
                         : 'Pulse automatically tracks all supported resources for this node — virtual machines, containers, storage usage, backups, and PBS job activity — so you always get full visibility without extra configuration.'}
@@ -1991,13 +1991,13 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                         title="Advanced monitoring"
                         size="sm"
                         class="mb-3"
-                        titleClass="text-gray-900 dark:text-gray-100"
+                        titleClass="text-slate-900 dark:text-slate-100"
                       />
-                      <div class="rounded-lg border border-gray-200 bg-white p-3 text-sm text-gray-700 shadow-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200">
+                      <div class="rounded-md border border-slate-200 bg-white p-3 text-sm text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
                         <div class="flex items-start justify-between gap-3">
                           <div>
-                            <p class="font-medium text-gray-900 dark:text-gray-100">Monitor physical disk health (SMART)</p>
-                            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                            <p class="font-medium text-slate-900 dark:text-slate-100">Monitor physical disk health (SMART)</p>
+                            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
                               This will spin up idle HDDs; leave disabled if you rely on drive standby.
                             </p>
                           </div>
@@ -2012,10 +2012,10 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                           />
                         </div>
                         <Show when={formData().monitorPhysicalDisks}>
-                          <div class="mt-3 flex items-center gap-2 border-t border-gray-200 pt-3 dark:border-gray-700">
-                            <label class="text-xs text-gray-600 dark:text-gray-400">Poll every</label>
+                          <div class="mt-3 flex items-center gap-2 border-t border-slate-200 pt-3 dark:border-slate-700">
+                            <label class="text-xs text-slate-600 dark:text-slate-400">Poll every</label>
                             <select
-                              class="rounded border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200"
+                              class="rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200"
                               value={formData().physicalDiskPollingMinutes}
                               onChange={(e) => updateField('physicalDiskPollingMinutes', parseInt(e.currentTarget.value, 10))}
                             >
@@ -2029,11 +2029,11 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                       </div>
 
                       <Show when={showTemperatureMonitoringSection()}>
-                        <div class="rounded-lg border border-gray-200 bg-white p-3 text-sm text-gray-700 shadow-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200">
+                        <div class="rounded-md border border-slate-200 bg-white p-3 text-sm text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
                           <div class="flex items-start justify-between gap-3">
                             <div>
-                              <p class="font-medium text-gray-900 dark:text-gray-100">Temperature monitoring</p>
-                              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                              <p class="font-medium text-slate-900 dark:text-slate-100">Temperature monitoring</p>
+                              <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
                                 Uses the Pulse sensors key or proxy to read CPU/NVMe temperatures for this node. Disable if you don't need temperature data or haven't deployed the proxy yet.
                               </p>
                             </div>
@@ -2070,13 +2070,13 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                         title="Data collection"
                         size="sm"
                         class="mb-1"
-                        titleClass="text-gray-900 dark:text-gray-100"
+                        titleClass="text-slate-900 dark:text-slate-100"
                       />
-                      <p class="text-xs text-gray-600 dark:text-gray-400">
+                      <p class="text-xs text-slate-600 dark:text-slate-400">
                         Control which PMG data sets Pulse ingests. Disable individual collectors if you want to limit API usage.
                       </p>
 
-                      <label class="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300">
+                      <label class="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300">
                         <input
                           type="checkbox"
                           checked={formData().monitorMailStats}
@@ -2085,13 +2085,13 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                         />
                         <div>
                           <div>Mail statistics &amp; trends</div>
-                          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
                             Total mail volume, inbound/outbound breakdown, spam and virus counts.
                           </p>
                         </div>
                       </label>
 
-                      <label class="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300">
+                      <label class="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300">
                         <input
                           type="checkbox"
                           checked={formData().monitorQueues}
@@ -2100,13 +2100,13 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                         />
                         <div>
                           <div>Queue health insights</div>
-                          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
                             Track Postfix queue depth and rejection trends to spot delivery bottlenecks.
                           </p>
                         </div>
                       </label>
 
-                      <label class="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300">
+                      <label class="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300">
                         <input
                           type="checkbox"
                           checked={formData().monitorQuarantine}
@@ -2115,13 +2115,13 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                         />
                         <div>
                           <div>Quarantine totals</div>
-                          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
                             Mirror PMG quarantine sizes for spam, virus, and attachment buckets.
                           </p>
                         </div>
                       </label>
 
-                      <label class="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300">
+                      <label class="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300">
                         <input
                           type="checkbox"
                           checked={formData().monitorDomainStats}
@@ -2130,7 +2130,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                         />
                         <div>
                           <div>Domain-level statistics</div>
-                          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
                             Gather per-domain metrics for deeper mail routing analysis.
                           </p>
                         </div>
@@ -2150,7 +2150,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                     return null;
                   })()}
                   <div
-                    class={`mx-6 p-3 rounded-lg text-sm ${testResult()?.status === 'success'
+                    class={`mx-6 p-3 rounded-md text-sm ${testResult()?.status === 'success'
                       ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-200'
                       : testResult()?.status === 'warning'
                         ? 'bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200'
@@ -2223,12 +2223,12 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                 </Show>
 
                 {/* Footer */}
-                <div class="flex items-center justify-between px-6 py-4 border-t border-gray-200 dark:border-gray-700">
+                <div class="flex items-center justify-between px-6 py-4 border-t border-slate-200 dark:border-slate-700">
                   <button
                     type="button"
                     onClick={handleTestConnection}
                     disabled={isTesting()}
-                    class="px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    class="px-4 py-2 text-sm border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 rounded-md hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isTesting() ? 'Testing...' : 'Test Connection'}
                   </button>
@@ -2241,7 +2241,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                           props.onBackToDiscovery!();
                           props.onClose();
                         }}
-                        class="px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center gap-2"
+                        class="px-4 py-2 text-sm border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 rounded-md hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2"
                       >
                         <svg
                           width="16"
@@ -2260,13 +2260,13 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                     <button
                       type="button"
                       onClick={props.onClose}
-                      class="px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                      class="px-4 py-2 text-sm border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 rounded-md hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
                     >
                       Cancel
                     </button>
                     <button
                       type="submit"
-                      class="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                      class="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
                     >
                       {props.editingNode ? 'Update' : 'Add'} Node
                     </button>

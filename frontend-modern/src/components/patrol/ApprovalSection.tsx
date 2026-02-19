@@ -168,7 +168,7 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
 
   return (
     <Show when={shouldShow()}>
-      <div class="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
+      <div class="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700">
         {/* Pending approval */}
         <Show when={pendingApproval() && !executionResult()}>
           {(() => {
@@ -179,18 +179,18 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
                   <svg class="w-4 h-4 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
                   </svg>
-                  <span class="text-sm font-medium text-gray-900 dark:text-gray-100">Fix Available</span>
+                  <span class="text-sm font-medium text-slate-900 dark:text-slate-100">Fix Available</span>
                   <span class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${riskBadgeColor(approval.riskLevel)}`}>
                     {approval.riskLevel} risk
                   </span>
                 </div>
                 <div class="space-y-2 text-sm">
-                  <div class="text-gray-600 dark:text-gray-400">{approval.context}</div>
-                  <div class="bg-gray-50 dark:bg-gray-800 rounded p-2 font-mono text-xs text-gray-700 dark:text-gray-300 break-all">
+                  <div class="text-slate-600 dark:text-slate-400">{approval.context}</div>
+                  <div class="bg-slate-50 dark:bg-slate-800 rounded p-2 font-mono text-xs text-slate-700 dark:text-slate-300 break-all">
                     {approval.command}
                   </div>
                 </div>
-                <div class="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
+                <div class="flex items-center gap-2 mt-3 pt-3 border-t border-slate-100 dark:border-slate-700">
                   <Show when={canAutoFix()}>
                     <button
                       type="button"
@@ -212,7 +212,7 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
                       type="button"
                       onClick={(e) => handleDeny(approval, e)}
                       disabled={actionLoading() === approval.id}
-                      class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 disabled:opacity-50 text-gray-600 dark:text-gray-400 text-xs font-medium rounded"
+                      class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 disabled:opacity-50 text-slate-600 dark:text-slate-400 text-xs font-medium rounded"
                     >
                       Deny
                     </button>
@@ -245,7 +245,7 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
                   <svg class="w-4 h-4 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                   </svg>
-                  <span class="text-sm font-medium text-gray-900 dark:text-gray-100">Fix Pending Approval</span>
+                  <span class="text-sm font-medium text-slate-900 dark:text-slate-100">Fix Pending Approval</span>
                   <span class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${riskBadgeColor(fix.risk_level)}`}>
                     {fix.risk_level || 'unknown'} risk
                   </span>
@@ -254,17 +254,17 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
                   </span>
                 </div>
                 <div class="space-y-2 text-sm">
-                  <div class="text-gray-600 dark:text-gray-400">{fix.description}</div>
+                  <div class="text-slate-600 dark:text-slate-400">{fix.description}</div>
                   <Show when={fix.commands && fix.commands.length > 0}>
-                    <div class="bg-gray-50 dark:bg-gray-800 rounded p-2 font-mono text-xs text-gray-700 dark:text-gray-300 break-all">
+                    <div class="bg-slate-50 dark:bg-slate-800 rounded p-2 font-mono text-xs text-slate-700 dark:text-slate-300 break-all">
                       {fix.commands![0]}
                     </div>
                   </Show>
                   <Show when={fix.target_host}>
-                    <div class="text-xs text-gray-500 dark:text-gray-400">Target: {fix.target_host}</div>
+                    <div class="text-xs text-slate-500 dark:text-slate-400">Target: {fix.target_host}</div>
                   </Show>
                 </div>
-                <div class="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
+                <div class="flex items-center gap-2 mt-3 pt-3 border-t border-slate-100 dark:border-slate-700">
                   <Show when={canAutoFix()}>
                     <button
                       type="button"
@@ -323,17 +323,17 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
           <Show when={investigation()?.proposed_fix}>
             {(fix) => (
               <div class="mt-2 space-y-1 text-sm">
-                <div class="text-gray-600 dark:text-gray-400">{fix().description}</div>
+                <div class="text-slate-600 dark:text-slate-400">{fix().description}</div>
                 <Show when={fix().commands && fix().commands!.length > 0}>
-                  <div class="bg-gray-50 dark:bg-gray-800 rounded p-2 font-mono text-xs text-gray-700 dark:text-gray-300 break-all">
+                  <div class="bg-slate-50 dark:bg-slate-800 rounded p-2 font-mono text-xs text-slate-700 dark:text-slate-300 break-all">
                     {fix().commands![0]}
                   </div>
                 </Show>
                 <Show when={fix().target_host}>
-                  <div class="text-xs text-gray-500 dark:text-gray-400">Target: {fix().target_host}</div>
+                  <div class="text-xs text-slate-500 dark:text-slate-400">Target: {fix().target_host}</div>
                 </Show>
                 <Show when={fix().rationale}>
-                  <div class="text-xs text-gray-500 dark:text-gray-400 whitespace-pre-line mt-1">{fix().rationale}</div>
+                  <div class="text-xs text-slate-500 dark:text-slate-400 whitespace-pre-line mt-1">{fix().rationale}</div>
                 </Show>
               </div>
             )}
@@ -351,17 +351,17 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
           <Show when={investigation()?.proposed_fix}>
             {(fix) => (
               <div class="mt-2 space-y-1 text-sm">
-                <div class="text-gray-600 dark:text-gray-400">{fix().description}</div>
+                <div class="text-slate-600 dark:text-slate-400">{fix().description}</div>
                 <Show when={fix().commands && fix().commands!.length > 0}>
-                  <div class="bg-gray-50 dark:bg-gray-800 rounded p-2 font-mono text-xs text-gray-700 dark:text-gray-300 break-all">
+                  <div class="bg-slate-50 dark:bg-slate-800 rounded p-2 font-mono text-xs text-slate-700 dark:text-slate-300 break-all">
                     {fix().commands![0]}
                   </div>
                 </Show>
                 <Show when={fix().target_host}>
-                  <div class="text-xs text-gray-500 dark:text-gray-400">Target: {fix().target_host}</div>
+                  <div class="text-xs text-slate-500 dark:text-slate-400">Target: {fix().target_host}</div>
                 </Show>
                 <Show when={fix().rationale}>
-                  <div class="text-xs text-gray-500 dark:text-gray-400 whitespace-pre-line mt-1">{fix().rationale}</div>
+                  <div class="text-xs text-slate-500 dark:text-slate-400 whitespace-pre-line mt-1">{fix().rationale}</div>
                 </Show>
               </div>
             )}

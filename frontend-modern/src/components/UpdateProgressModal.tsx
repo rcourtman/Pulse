@@ -350,17 +350,17 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
   return (
     <Show when={props.isOpen}>
       <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full">
+        <div class="bg-white dark:bg-slate-800 rounded-md shadow-sm max-w-2xl w-full">
           {/* Header */}
-          <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+          <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
             <div class="flex items-center justify-between">
-              <h2 class="text-xl font-semibold text-gray-900 dark:text-gray-100">
+              <h2 class="text-xl font-semibold text-slate-900 dark:text-slate-100">
                 Updating Pulse
               </h2>
               <Show when={isComplete()}>
                 <button
                   onClick={props.onClose}
-                  class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                  class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
                 >
                   <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -376,11 +376,11 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
             <div class="flex flex-col items-center text-center space-y-4">
               {getStageIcon()}
               <div>
-                <div class="text-lg font-medium text-gray-900 dark:text-gray-100">
+                <div class="text-lg font-medium text-slate-900 dark:text-slate-100">
                   {getStatusText()}
                 </div>
                 <Show when={status()?.status && !isComplete()}>
-                  <div class="text-sm text-gray-500 dark:text-gray-400 mt-1 capitalize">
+                  <div class="text-sm text-slate-500 dark:text-slate-400 mt-1 capitalize">
                     {status()!.status.replace('-', ' ')}
                   </div>
                 </Show>
@@ -390,11 +390,11 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
             {/* Progress Bar */}
             <Show when={!isComplete() && status()?.progress !== undefined}>
               <div class="mt-6">
-                <div class="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400 mb-2">
+                <div class="flex items-center justify-between text-sm text-slate-600 dark:text-slate-400 mb-2">
                   <span>Progress</span>
                   <span>{status()!.progress}%</span>
                 </div>
-                <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                <div class="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
                   <div
                     class="bg-blue-600 h-2 rounded-full transition-all duration-300"
                     style={{ width: `${status()!.progress}%` }}
@@ -405,7 +405,7 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
 
             {/* Error Message */}
             <Show when={hasError() && status()?.error}>
-              <div class="mt-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+              <div class="mt-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-4">
                 <div class="text-sm text-red-800 dark:text-red-200">
                   <div class="font-medium mb-1">Error Details:</div>
                   <div class="text-red-700 dark:text-red-300">{status()!.error}</div>
@@ -416,7 +416,7 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
             {/* Warning / Info */}
             <Show when={!isComplete()}>
               <Show when={isRestarting()}>
-                <div class="mt-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                <div class="mt-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md p-3">
                   <div class="flex items-start gap-2">
                     <svg class="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -442,7 +442,7 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
                 </div>
               </Show>
               <Show when={!isRestarting()}>
-                <div class="mt-6 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
+                <div class="mt-6 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md p-3">
                   <div class="flex items-start gap-2">
                     <svg class="w-5 h-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -458,11 +458,11 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
 
           {/* Footer */}
           <Show when={isComplete()}>
-            <div class="px-6 py-4 bg-gray-50 dark:bg-gray-900/50 border-t border-gray-200 dark:border-gray-700 flex items-center justify-end gap-3">
+            <div class="px-6 py-4 bg-slate-50 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 flex items-center justify-end gap-3">
               <Show when={!hasError()}>
                 <button
                   onClick={props.onViewHistory}
-                  class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md transition-colors"
+                  class="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors"
                 >
                   View History
                 </button>

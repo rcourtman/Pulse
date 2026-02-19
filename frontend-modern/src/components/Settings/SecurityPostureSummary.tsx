@@ -147,21 +147,21 @@ export const SecurityPostureSummary: Component<SecurityPostureSummaryProps> = (p
   return (
     <Card
       padding="none"
-      class="overflow-hidden border border-gray-200 dark:border-gray-700"
+      class="overflow-hidden border border-slate-200 dark:border-slate-700"
       border={false}
     >
       {/* Header with Security Score */}
       <div class={`px-6 py-5 ${scoreTone().headerBg} ${scoreTone().headerBorder}`}>
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-4">
-            <div class={`p-3 rounded-xl ${scoreTone().iconWrap}`}>
+            <div class={`p-3 rounded-md ${scoreTone().iconWrap}`}>
               {(() => {
                 const Icon = ScoreIcon();
                 return <Icon class={`w-6 h-6 ${scoreTone().icon}`} />;
               })()}
             </div>
             <div>
-              <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Security Posture</h2>
+              <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Security Posture</h2>
               <p class={`text-sm ${scoreTone().subtitle}`}>
                 {props.status.publicAccess && !props.status.isPrivateNetwork
                   ? 'Public network access detected'
@@ -183,24 +183,24 @@ export const SecurityPostureSummary: Component<SecurityPostureSummaryProps> = (p
         <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <For each={items()}>
             {(item) => (
-              <div class={`rounded-xl border p-4 transition-all ${item.enabled
+              <div class={`rounded-md border p-4 transition-all ${item.enabled
                   ? 'border-emerald-200 dark:border-emerald-800/70 bg-emerald-50/60 dark:bg-emerald-950/20'
                   : item.critical
                     ? 'border-rose-200 dark:border-rose-800/70 bg-rose-50/60 dark:bg-rose-950/20'
-                    : 'border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50'
+                    : 'border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800'
                 }`}>
                 <div class="flex items-center justify-between mb-2">
-                  <span class="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                  <span class="text-sm font-semibold text-slate-900 dark:text-slate-100">
                     {item.label}
                   </span>
                   <Show when={item.enabled} fallback={
-                    <XCircle class={`w-5 h-5 ${item.critical ? 'text-rose-500 dark:text-rose-400' : 'text-gray-400 dark:text-gray-500'}`} />
+                    <XCircle class={`w-5 h-5 ${item.critical ? 'text-rose-500 dark:text-rose-400' : 'text-slate-400 dark:text-slate-500'}`} />
                   }>
                     <CheckCircle class="w-5 h-5 text-emerald-500 dark:text-emerald-400" />
                   </Show>
                 </div>
                 <div class="flex items-center justify-between">
-                  <p class="text-xs text-gray-600 dark:text-gray-400">
+                  <p class="text-xs text-slate-600 dark:text-slate-400">
                     {item.description}
                   </p>
                   <Show when={item.critical && !item.enabled}>
@@ -216,8 +216,8 @@ export const SecurityPostureSummary: Component<SecurityPostureSummaryProps> = (p
 
         {/* Client IP Badge */}
         <Show when={props.status.clientIP}>
-          <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-end">
-            <span class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-full bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300">
+          <div class="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700 flex items-center justify-end">
+            <span class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-full bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
               Your IP: {props.status.clientIP}
             </span>
           </div>

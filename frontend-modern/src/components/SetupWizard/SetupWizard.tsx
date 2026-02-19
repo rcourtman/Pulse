@@ -113,9 +113,6 @@ export const SetupWizard: Component<SetupWizardProps> = (props) => {
         >
             {/* Background decoration */}
             <div class="fixed inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
-                <div class="absolute -top-40 -right-40 w-80 h-80 bg-blue-500/20 rounded-full blur-3xl" />
-                <div class="absolute top-1/2 -left-40 w-80 h-80 bg-indigo-500/20 rounded-full blur-3xl" />
-                <div class="absolute -bottom-40 right-1/3 w-80 h-80 bg-purple-500/20 rounded-full blur-3xl" />
             </div>
 
             {/* Step indicator - only show during security step */}

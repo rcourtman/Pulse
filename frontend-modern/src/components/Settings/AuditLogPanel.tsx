@@ -329,12 +329,12 @@ export default function AuditLogPanel() {
     const getEventTypeBadge = (event: string) => {
         const colors: Record<string, string> = {
             login: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-            logout: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200',
+            logout: 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200',
             config_change: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
             startup: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-            oidc_token_refresh: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200',
+            oidc_token_refresh: 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200',
         };
-        return colors[event] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200';
+        return colors[event] || 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-200';
     };
 
     const hasSignedEvents = () => events().some((event) => event.signature);
@@ -440,7 +440,7 @@ export default function AuditLogPanel() {
 
     const getVerificationBadge = (state?: VerificationState) => {
         if (!state) {
-            return { label: 'Not checked', class: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300' };
+            return { label: 'Not checked', class: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300' };
         }
         switch (state.status) {
             case 'verified':
@@ -450,23 +450,23 @@ export default function AuditLogPanel() {
             case 'error':
                 return { label: 'Error', class: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200' };
             default:
-                return { label: 'Unavailable', class: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300' };
+                return { label: 'Unavailable', class: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300' };
         }
     };
 
     return (
         <div class="space-y-6">
             {/* Header */}
-            <div class="flex items-center justify-between">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div class="flex items-center gap-3">
-                    <Shield class="w-6 h-6 text-gray-500" />
-                    <h2 class="text-xl font-semibold text-gray-900 dark:text-white">Audit Log</h2>
+                    <Shield class="w-6 h-6 text-slate-500" />
+                    <h2 class="text-xl font-semibold text-slate-900 dark:text-white">Audit Log</h2>
                 </div>
-                <div class="flex items-center gap-2">
+                <div class="flex w-full flex-wrap items-center gap-2 sm:w-auto">
                     <button
                         onClick={() => fetchAuditEvents()}
                         disabled={loading()}
-                        class="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50"
+                        class="flex min-h-10 sm:min-h-10 items-center gap-2 px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
                     >
                         <RefreshCw class={`w-4 h-4 ${loading() ? 'animate-spin' : ''}`} />
                         Refresh
@@ -474,7 +474,7 @@ export default function AuditLogPanel() {
                     <button
                         onClick={() => verifyAllEvents({ showToast: true })}
                         disabled={!isPersistent() || loading() || verifyingAll() || !hasSignedEvents()}
-                        class="flex items-center gap-2 px-3 py-2 text-sm font-medium text-blue-700 dark:text-blue-200 bg-blue-50 dark:bg-blue-900/40 border border-blue-200 dark:border-blue-700 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/60 disabled:opacity-50"
+                        class="flex min-h-10 sm:min-h-10 items-center gap-2 px-3 py-2 text-sm font-medium text-blue-700 dark:text-blue-200 bg-blue-50 dark:bg-blue-900/40 border border-blue-200 dark:border-blue-700 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900/60 disabled:opacity-50"
                     >
                         <CheckCircle class="w-4 h-4" />
                         {verifyAllLabel()}
@@ -482,14 +482,14 @@ export default function AuditLogPanel() {
                     <button
                         onClick={() => setCancelVerifyAll(true)}
                         disabled={!verifyingAll()}
-                        class="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50"
+                        class="flex min-h-10 sm:min-h-10 items-center gap-2 px-3 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
                     >
                         Cancel
                     </button>
                     <button
                         onClick={() => verifyAllEvents({ showToast: true, resume: true })}
                         disabled={verifyingAll() || !hasResumeEvents()}
-                        class="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50"
+                        class="flex min-h-10 sm:min-h-10 items-center gap-2 px-3 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
                         onMouseEnter={(e) => {
                             if (!hasResumeEvents()) return;
                             const rect = e.currentTarget.getBoundingClientRect();
@@ -515,11 +515,11 @@ export default function AuditLogPanel() {
 
             {/* Upgrade CTA */}
             <Show when={licenseLoaded() && !hasFeature('audit_logging') && !loading()}>
-                <div class="p-6 bg-gray-50 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-700 rounded-xl">
+                <div class="p-6 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md">
                     <div class="flex flex-col sm:flex-row items-center gap-4">
                         <div class="flex-1">
-                            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Audit Logging</h3>
-                            <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Audit Logging</h3>
+                            <p class="text-sm text-slate-600 dark:text-slate-400 mt-1">
                                 Persistent, searchable audit logs with cryptographic signature verification.
                             </p>
                         </div>
@@ -527,7 +527,7 @@ export default function AuditLogPanel() {
                             href={getUpgradeActionUrlOrFallback('audit_logging')}
                             target="_blank"
                             rel="noopener noreferrer"
-                            class="px-5 py-2.5 text-sm font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                            class="px-5 py-2.5 text-sm font-semibold bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
                             onClick={() => trackUpgradeClicked('settings_audit_log_panel', 'audit_logging')}
                         >
                             Upgrade to Pro
@@ -538,15 +538,15 @@ export default function AuditLogPanel() {
 
             {/* Filters */}
             <Show when={isPersistent()}>
-                <div class="flex flex-wrap gap-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                <div class="flex flex-wrap gap-3 p-4 bg-slate-50 dark:bg-slate-800 rounded-md">
                     <div class="flex items-center gap-2">
-                        <Filter class="w-4 h-4 text-gray-400" />
-                        <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Filters:</span>
+                        <Filter class="w-4 h-4 text-slate-400" />
+                        <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Filters:</span>
                     </div>
                     <select
                         value={eventFilter()}
                         onChange={(e) => setEventFilter(e.currentTarget.value)}
-                        class="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        class="w-full sm:w-auto min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
                     >
                         <option value="">All Events</option>
                         <option value="login">Login</option>
@@ -559,12 +559,12 @@ export default function AuditLogPanel() {
                         placeholder="Filter by user..."
                         value={userFilter()}
                         onInput={(e) => setUserFilter(e.currentTarget.value)}
-                        class="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400"
+                        class="w-full sm:w-auto min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-gray-400"
                     />
                     <select
                         value={successFilter()}
                         onChange={(e) => setSuccessFilter(e.currentTarget.value)}
-                        class="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        class="w-full sm:w-auto min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
                     >
                         <option value="all">All</option>
                         <option value="success">Success Only</option>
@@ -573,7 +573,7 @@ export default function AuditLogPanel() {
                     <select
                         value={verificationFilter()}
                         onChange={(e) => setVerificationFilter(e.currentTarget.value)}
-                        class="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        class="w-full sm:w-auto min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
                     >
                         <option value="all">All Verification</option>
                         <option value="needs">Needs Verification</option>
@@ -583,7 +583,7 @@ export default function AuditLogPanel() {
                     <select
                         value={String(pageSize())}
                         onChange={(e) => setPageSize(Number(e.currentTarget.value))}
-                        class="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        class="w-full sm:w-auto min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
                     >
                         <option value="25">25 / page</option>
                         <option value="50">50 / page</option>
@@ -595,7 +595,7 @@ export default function AuditLogPanel() {
                             setPageOffset(0);
                             void fetchAuditEvents({ offset: 0 });
                         }}
-                        class="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg"
+                        class="w-full sm:w-auto min-h-10 sm:min-h-10 px-3 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md"
                     >
                         Apply
                     </button>
@@ -612,7 +612,7 @@ export default function AuditLogPanel() {
                                 showSuccess('Audit filters cleared');
                             }
                         }}
-                        class="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600"
+                        class="w-full sm:w-auto min-h-10 sm:min-h-10 px-3 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md hover:bg-slate-50 dark:hover:bg-slate-600"
                     >
                         Clear{activeFilterCount() > 0 ? ` (${activeFilterCount()})` : ''}
                     </button>
@@ -631,7 +631,7 @@ export default function AuditLogPanel() {
                                         setPageOffset(0);
                                         void fetchAuditEvents({ offset: 0 });
                                     }}
-                                    class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600"
+                                    class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-600"
                                     title="Click to clear filter"
                                     aria-label={`Clear ${chip.label}`}
                                     onMouseEnter={(e) => {
@@ -654,7 +654,7 @@ export default function AuditLogPanel() {
                                     }}
                                 >
                                     {chip.label}
-                                    <X class="w-3 h-3 text-gray-500 dark:text-gray-300" />
+                                    <X class="w-3 h-3 text-slate-500 dark:text-slate-300" />
                                 </button>
                             )}
                         </For>
@@ -664,14 +664,14 @@ export default function AuditLogPanel() {
 
             {/* Verification Preferences */}
             <Show when={isPersistent()}>
-                <div class="flex items-center justify-between gap-4 px-1">
+                <div class="flex flex-col gap-4 px-1 lg:flex-row lg:items-center lg:justify-between">
                     <Toggle
                         label="Auto-verify signatures"
                         description="Verify signatures after loading audit events."
                         checked={autoVerifyEnabled()}
                         onChange={(e) => setAutoVerifyEnabled(e.currentTarget.checked)}
                     />
-                    <div class="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
+                    <div class="flex flex-col gap-2 text-xs text-slate-600 dark:text-slate-300 sm:flex-row sm:flex-wrap sm:items-center">
                         <label class="flex items-center gap-2">
                             <span>Auto-verify limit</span>
                             <input
@@ -688,12 +688,12 @@ export default function AuditLogPanel() {
                                     const clamped = Math.max(0, Math.min(500, Math.floor(raw)));
                                     setAutoVerifyLimit(clamped);
                                 }}
-                                class="w-20 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-2 py-1 text-xs text-gray-900 dark:text-gray-100"
+                                class="min-h-10 sm:min-h-10 w-24 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2.5 py-2 text-sm text-slate-900 dark:text-slate-100"
                             />
                         </label>
-                        <span class="text-gray-500 dark:text-gray-400">0 disables, max 500</span>
+                        <span class="text-slate-500 dark:text-slate-400">0 disables, max 500</span>
                         <span
-                            class="inline-flex items-center text-gray-400 cursor-help"
+                            class="inline-flex items-center text-slate-400 cursor-help"
                             onMouseEnter={(e) => {
                                 const rect = e.currentTarget.getBoundingClientRect();
                                 showTooltip(
@@ -716,7 +716,7 @@ export default function AuditLogPanel() {
                                 setPageInput('');
                                 showSuccess('Audit preferences reset');
                             }}
-                            class="ml-2 px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800"
+                            class="w-full sm:w-auto sm:ml-2 min-h-10 sm:min-h-10 px-3 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 border border-slate-300 dark:border-slate-600 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800"
                         >
                             Reset preferences
                         </button>
@@ -726,7 +726,7 @@ export default function AuditLogPanel() {
 
             {/* Error State */}
             <Show when={error()}>
-                <div class="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-300">
+                <div class="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md text-red-700 dark:text-red-300">
                     {error()}
                 </div>
             </Show>
@@ -740,7 +740,7 @@ export default function AuditLogPanel() {
 
             {/* Events Table */}
             <Show when={!loading() && isPersistent() && filteredEvents().length > 0}>
-                <div class="flex flex-wrap items-center gap-3 text-xs text-gray-600 dark:text-gray-300">
+                <div class="flex flex-wrap items-center gap-3 text-xs text-slate-600 dark:text-slate-300">
                     <span>Total: {totalEvents()}</span>
                     <span>Signed: {verificationSummary().signed}</span>
                     <span>Verified: {verificationSummary().verified}</span>
@@ -749,7 +749,7 @@ export default function AuditLogPanel() {
                     <span>Unavailable: {verificationSummary().unavailable}</span>
                     <span>Unchecked: {verificationSummary().unchecked}</span>
                     <span
-                        class="inline-flex items-center gap-1 text-gray-500 dark:text-gray-400 cursor-help"
+                        class="inline-flex items-center gap-1 text-slate-500 dark:text-slate-400 cursor-help"
                         onMouseEnter={(e) => {
                             const rect = e.currentTarget.getBoundingClientRect();
                             const content = [
@@ -770,31 +770,31 @@ export default function AuditLogPanel() {
                         <Info class="w-3 h-3" />
                         Legend
                     </span>
-                    <span class="ml-auto text-gray-500 dark:text-gray-400">
+                    <span class="w-full sm:w-auto sm:ml-auto text-slate-500 dark:text-slate-400">
                         {pageRangeText()} • Page {pageNumber()} of {totalPages()}
                     </span>
                 </div>
                 <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                        <thead class="bg-gray-50 dark:bg-gray-800">
+                    <table class="min-w-[760px] w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead class="bg-slate-50 dark:bg-slate-800">
                             <tr>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Timestamp</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Event</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">User</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">IP</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Details</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Verification</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Timestamp</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Event</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">User</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">IP</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Details</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Verification</th>
                             </tr>
                         </thead>
-                        <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
+                        <tbody class="bg-white dark:bg-slate-900 divide-y divide-gray-200 dark:divide-gray-700">
                             <For each={filteredEvents()}>
                                 {(event) => (
-                                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-800">
+                                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800">
                                         <td class="px-4 py-3 whitespace-nowrap">
                                             {getEventIcon(event.event, event.success)}
                                         </td>
-                                        <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-600 dark:text-gray-300">
+                                        <td class="px-4 py-3 whitespace-nowrap text-sm text-slate-600 dark:text-slate-300">
                                             {formatTimestamp(event.timestamp)}
                                         </td>
                                         <td class="px-4 py-3 whitespace-nowrap">
@@ -802,19 +802,19 @@ export default function AuditLogPanel() {
                                                 {event.event}
                                             </span>
                                         </td>
-                                        <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                                        <td class="px-4 py-3 whitespace-nowrap text-sm text-slate-900 dark:text-white">
                                             {event.user || '-'}
                                         </td>
-                                        <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 font-mono">
+                                        <td class="px-4 py-3 whitespace-nowrap text-sm text-slate-500 dark:text-slate-400 font-mono">
                                             {event.ip || '-'}
                                         </td>
-                                        <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300 max-w-xs truncate">
+                                        <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-300 max-w-xs break-all sm:truncate">
                                             {event.details || '-'}
                                         </td>
                                         <td class="px-4 py-3 whitespace-nowrap">
                                             <Show
                                                 when={event.signature}
-                                                fallback={<span class="text-gray-400">Unsigned</span>}
+                                                fallback={<span class="text-slate-400">Unsigned</span>}
                                             >
                                                 {(() => {
                                                     const badge = getVerificationBadge(verification()[event.id]);
@@ -828,12 +828,12 @@ export default function AuditLogPanel() {
                                                                     </span>
                                                                 }
                                                             >
-                                                                <span class="text-xs text-gray-500 dark:text-gray-400">Verifying…</span>
+                                                                <span class="text-xs text-slate-500 dark:text-slate-400">Verifying…</span>
                                                             </Show>
                                                             <button
                                                                 onClick={() => verifyEvent(event)}
                                                                 disabled={verifying()[event.id]}
-                                                                class="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-50"
+                                                                class="inline-flex min-h-10 sm:min-h-10 items-center rounded-md border border-blue-200 dark:border-blue-700 px-3 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 disabled:opacity-50"
                                                             >
                                                                 Verify
                                                             </button>
@@ -852,16 +852,16 @@ export default function AuditLogPanel() {
 
             {/* Empty State */}
             <Show when={!loading() && isPersistent() && filteredEvents().length === 0}>
-                <div class="text-center py-12 px-4 bg-gray-50/50 dark:bg-gray-800/30 rounded-xl border border-dashed border-gray-200 dark:border-gray-700">
+                <div class="text-center py-12 px-4 bg-slate-50/50 dark:bg-slate-800 rounded-md border border-dashed border-slate-200 dark:border-slate-700">
                     <div class="flex flex-col items-center max-w-sm mx-auto">
                         <Show
                             when={activeFilterCount() > 0}
-                            fallback={<Shield class="w-12 h-12 text-gray-300 dark:text-gray-600 mb-4" />}
+                            fallback={<Shield class="w-12 h-12 text-slate-300 dark:text-slate-600 mb-4" />}
                         >
                             <ShieldAlert class="w-12 h-12 text-blue-300 dark:text-blue-900 mb-4" />
                         </Show>
-                        <h3 class="text-lg font-medium text-gray-900 dark:text-white">No audit events found</h3>
-                        <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                        <h3 class="text-lg font-medium text-slate-900 dark:text-white">No audit events found</h3>
+                        <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">
                             {activeFilterCount() > 0
                                 ? "No events match your current filters. Try adjusting or clearing them."
                                 : "Audit logging is active, but no events have been recorded yet."}
@@ -876,7 +876,7 @@ export default function AuditLogPanel() {
                                     setPageOffset(0);
                                     void fetchAuditEvents({ offset: 0 });
                                 }}
-                                class="mt-6 px-4 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/30"
+                                class="mt-6 px-4 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900/30"
                             >
                                 Clear all filters
                             </button>
@@ -887,8 +887,8 @@ export default function AuditLogPanel() {
 
             {/* Pagination */}
             <Show when={!loading() && isPersistent()}>
-                <div class="flex items-center justify-end gap-2">
-                    <div class="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
+                <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+                    <div class="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
                         <label class="flex items-center gap-2">
                             <span>Page</span>
                             <input
@@ -905,7 +905,7 @@ export default function AuditLogPanel() {
                                     setPageOffset(nextOffset);
                                     void fetchAuditEvents({ offset: nextOffset });
                                 }}
-                                class="w-16 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-2 py-1 text-xs text-gray-900 dark:text-gray-100"
+                                class="min-h-10 sm:min-h-10 w-20 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2.5 text-sm text-slate-900 dark:text-slate-100"
                             />
                         </label>
                         <button
@@ -917,54 +917,56 @@ export default function AuditLogPanel() {
                                 setPageOffset(nextOffset);
                                 void fetchAuditEvents({ offset: nextOffset });
                             }}
-                            class="px-2 py-1 text-xs font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600"
+                            class="min-h-10 sm:min-h-10 px-3 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md hover:bg-slate-50 dark:hover:bg-slate-600"
                         >
                             Go
                         </button>
                     </div>
-                    <button
-                        onClick={() => {
-                            setPageOffset(0);
-                            void fetchAuditEvents({ offset: 0 });
-                        }}
-                        disabled={pageOffset() === 0}
-                        class="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50"
-                    >
-                        First
-                    </button>
-                    <button
-                        onClick={() => {
-                            const nextOffset = Math.max(0, pageOffset() - pageSize());
-                            setPageOffset(nextOffset);
-                            void fetchAuditEvents({ offset: nextOffset });
-                        }}
-                        disabled={pageOffset() === 0}
-                        class="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50"
-                    >
-                        Previous
-                    </button>
-                    <button
-                        onClick={() => {
-                            const nextOffset = pageOffset() + pageSize();
-                            setPageOffset(nextOffset);
-                            void fetchAuditEvents({ offset: nextOffset });
-                        }}
-                        disabled={!hasNextPage()}
-                        class="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50"
-                    >
-                        Next
-                    </button>
-                    <button
-                        onClick={() => {
-                            const lastOffset = Math.max(0, (totalPages() - 1) * pageSize());
-                            setPageOffset(lastOffset);
-                            void fetchAuditEvents({ offset: lastOffset });
-                        }}
-                        disabled={!hasNextPage()}
-                        class="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50"
-                    >
-                        Last
-                    </button>
+                    <div class="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-end">
+                        <button
+                            onClick={() => {
+                                setPageOffset(0);
+                                void fetchAuditEvents({ offset: 0 });
+                            }}
+                            disabled={pageOffset() === 0}
+                            class="min-h-10 sm:min-h-10 px-3 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
+                        >
+                            First
+                        </button>
+                        <button
+                            onClick={() => {
+                                const nextOffset = Math.max(0, pageOffset() - pageSize());
+                                setPageOffset(nextOffset);
+                                void fetchAuditEvents({ offset: nextOffset });
+                            }}
+                            disabled={pageOffset() === 0}
+                            class="min-h-10 sm:min-h-10 px-3 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
+                        >
+                            Previous
+                        </button>
+                        <button
+                            onClick={() => {
+                                const nextOffset = pageOffset() + pageSize();
+                                setPageOffset(nextOffset);
+                                void fetchAuditEvents({ offset: nextOffset });
+                            }}
+                            disabled={!hasNextPage()}
+                            class="min-h-10 sm:min-h-10 px-3 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
+                        >
+                            Next
+                        </button>
+                        <button
+                            onClick={() => {
+                                const lastOffset = Math.max(0, (totalPages() - 1) * pageSize());
+                                setPageOffset(lastOffset);
+                                void fetchAuditEvents({ offset: lastOffset });
+                            }}
+                            disabled={!hasNextPage()}
+                            class="min-h-10 sm:min-h-10 px-3 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50"
+                        >
+                            Last
+                        </button>
+                    </div>
                 </div>
             </Show>
         </div>

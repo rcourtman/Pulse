@@ -112,7 +112,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
     <div class={`${isUser() ? 'flex justify-end' : ''} mb-4`}>
       {/* User message - compact bubble */}
       <Show when={isUser()}>
-        <div class="max-w-[85%] px-4 py-2.5 rounded-2xl rounded-br-md bg-blue-600 text-white shadow-sm">
+        <div class="max-w-[85%] px-4 py-2.5 rounded-md rounded-br-sm bg-blue-600 text-white shadow-sm">
           <p class="text-sm whitespace-pre-wrap">{props.message.content}</p>
         </div>
       </Show>
@@ -120,10 +120,10 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
       {/* Assistant message - card style */}
       <Show when={!isUser()}>
         <div class="w-full pl-2 pr-2">
-          <div class="group relative bg-slate-50/80 dark:bg-slate-800/40 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 p-5 shadow-sm transition-all hover:border-slate-300 dark:hover:border-slate-600">
+          <div class="group relative bg-slate-50/80 dark:bg-slate-800 rounded-md border border-slate-200/60 dark:border-slate-700/60 p-5 shadow-sm transition-all hover:border-slate-300 dark:hover:border-slate-600">
             {/* Assistant indicator */}
             <div class="flex items-center gap-2.5 mb-3">
-              <div class="w-6 h-6 rounded-lg bg-white dark:bg-slate-700 border border-slate-100 dark:border-slate-600 shadow-sm flex items-center justify-center shrink-0">
+              <div class="w-6 h-6 rounded-md bg-white dark:bg-slate-700 border border-slate-100 dark:border-slate-600 shadow-sm flex items-center justify-center shrink-0">
                 <svg class="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" />
                 </svg>
@@ -173,16 +173,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                       {/* Content/text block */}
                       <Match when={evt.type === 'content' && evt.content}>
                         <div
-                          class="text-sm prose prose-slate prose-sm dark:prose-invert max-w-none 
-                                 prose-p:leading-relaxed prose-p:my-2
-                                 prose-pre:bg-slate-900 prose-pre:text-slate-100 prose-pre:rounded-xl prose-pre:text-xs prose-pre:border prose-pre:border-slate-800
-                                 prose-code:text-blue-700 dark:prose-code:text-blue-300
-                                 prose-code:bg-blue-50/50 dark:prose-code:bg-blue-900/20
-                                 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-md prose-code:font-mono prose-code:text-[0.9em] prose-code:border prose-code:border-blue-100 dark:prose-code:border-blue-800/30
-                                 prose-code:before:content-none prose-code:after:content-none
-                                 prose-headings:font-semibold prose-headings:tracking-tight
-                                 prose-hr:border-slate-200 dark:prose-hr:border-slate-700
-                                 prose-ul:my-2 prose-ol:my-2 prose-li:my-1"
+                          class="text-sm prose prose-slate prose-sm dark:prose-invert max-w-none prose-p:leading-relaxed prose-p:my-2 prose-pre:bg-slate-900 prose-pre:text-slate-100 prose-pre:rounded-md prose-pre:text-xs prose-pre:border prose-pre:border-slate-800 prose-code:text-blue-700 dark:prose-code:text-blue-300 prose-code:bg-blue-50/50 dark:prose-code:bg-blue-900/20 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-md prose-code:font-mono prose-code:text-[0.9em] prose-code:border prose-code:border-blue-100 dark:prose-code:border-blue-800/30 prose-code:before:content-none prose-code:after:content-none prose-headings:font-semibold prose-headings:tracking-tight prose-hr:border-slate-200 dark:prose-hr:border-slate-700 prose-ul:my-2 prose-ol:my-2 prose-li:my-1"
                           // eslint-disable-next-line solid/no-innerhtml
                           innerHTML={renderMarkdown(evt.content || '')}
                         />
@@ -215,16 +206,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
               {/* Fallback */}
               <Show when={props.message.content && !hasStreamEvents()}>
                 <div
-                  class="text-sm prose prose-slate prose-sm dark:prose-invert max-w-none
-                         prose-p:leading-relaxed prose-p:my-2
-                         prose-pre:bg-slate-900 prose-pre:text-slate-100 prose-pre:rounded-xl prose-pre:text-xs prose-pre:border prose-pre:border-slate-800
-                         prose-code:text-blue-700 dark:prose-code:text-blue-300
-                         prose-code:bg-blue-50/50 dark:prose-code:bg-blue-900/20
-                         prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-md prose-code:font-mono prose-code:text-[0.9em] prose-code:border prose-code:border-blue-100 dark:prose-code:border-blue-800/30
-                         prose-code:before:content-none prose-code:after:content-none
-                         prose-headings:font-semibold prose-headings:tracking-tight
-                         prose-hr:border-slate-200 dark:prose-hr:border-slate-700
-                         prose-ul:my-2 prose-ol:my-2 prose-li:my-1"
+                  class="text-sm prose prose-slate prose-sm dark:prose-invert max-w-none prose-p:leading-relaxed prose-p:my-2 prose-pre:bg-slate-900 prose-pre:text-slate-100 prose-pre:rounded-md prose-pre:text-xs prose-pre:border prose-pre:border-slate-800 prose-code:text-blue-700 dark:prose-code:text-blue-300 prose-code:bg-blue-50/50 dark:prose-code:bg-blue-900/20 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-md prose-code:font-mono prose-code:text-[0.9em] prose-code:border prose-code:border-blue-100 dark:prose-code:border-blue-800/30 prose-code:before:content-none prose-code:after:content-none prose-headings:font-semibold prose-headings:tracking-tight prose-hr:border-slate-200 dark:prose-hr:border-slate-700 prose-ul:my-2 prose-ol:my-2 prose-li:my-1"
                   // eslint-disable-next-line solid/no-innerhtml
                   innerHTML={renderMarkdown(props.message.content)}
                 />

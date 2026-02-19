@@ -675,16 +675,16 @@ export function AIIntelligence() {
   };
 
   return (
-    <div class="h-full flex flex-col bg-gray-50 dark:bg-gray-900">
+    <div class="h-full flex flex-col bg-slate-50 dark:bg-slate-900">
       {/* Header */}
-      <div class="flex-shrink-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3">
+      <div class="flex-shrink-0 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-4 py-3">
         {/* Top row: Title and refresh */}
         <div class="flex items-center justify-between gap-4 mb-3">
           <div class="flex items-center gap-3">
-            <PulsePatrolLogo class="w-6 h-6 text-gray-700 dark:text-gray-200" />
+            <PulsePatrolLogo class="w-6 h-6 text-slate-700 dark:text-slate-200" />
             <div title="Pulse Patrol constantly monitors your infrastructure, investigates alerts, and can automatically fix issues based on your autonomy settings.">
-              <h1 class="text-lg font-semibold text-gray-900 dark:text-white">Patrol</h1>
-              <p class="text-sm text-gray-500 dark:text-gray-400">
+              <h1 class="text-lg font-semibold text-slate-900 dark:text-white">Patrol</h1>
+              <p class="text-sm text-slate-500 dark:text-slate-400">
                 Pulse Patrol monitoring and analysis
               </p>
             </div>
@@ -693,10 +693,10 @@ export function AIIntelligence() {
           <div class="flex items-center gap-3">
             {/* Last/Next patrol timing - only show if patrol has run */}
             <Show when={patrolStatus()?.last_patrol_at}>
-              <div class="hidden sm:flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
+              <div class="hidden sm:flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
                 <span>Last: {formatRelativeTime(patrolStatus()?.last_patrol_at, { compact: true, emptyText: 'Never' })}</span>
                 <Show when={patrolStatus()?.next_patrol_at}>
-                  <span class="text-gray-300 dark:text-gray-600">|</span>
+                  <span class="text-slate-300 dark:text-slate-600">|</span>
                   <CountdownTimer
                     targetDate={patrolStatus()!.next_patrol_at!}
                     prefix="Next run: "
@@ -711,7 +711,7 @@ export function AIIntelligence() {
               onClick={() => handleRunPatrol()}
               disabled={isTriggeringPatrol() || !canTriggerPatrol() || manualRunRequested() || patrolStream.isStreaming()}
               title={triggerPatrolDisabledReason()}
-              class="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 disabled:text-gray-500 rounded-md transition-colors"
+              class="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 dark:disabled:bg-slate-600 disabled:text-slate-500 rounded-md transition-colors"
             >
               <PlayIcon class={`w-4 h-4 ${(isTriggeringPatrol() || manualRunRequested() || patrolStream.isStreaming()) ? 'animate-pulse' : ''}`} />
               {isTriggeringPatrol() ? 'Starting…' : (manualRunRequested() || patrolStream.isStreaming()) ? 'Running…' : 'Run Patrol'}
@@ -721,7 +721,7 @@ export function AIIntelligence() {
             <button
               onClick={() => loadAllData()}
               disabled={isRefreshing()}
-              class="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 transition-colors"
+              class="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-50 transition-colors"
             >
               <RefreshCwIcon class={`w-4 h-4 ${isRefreshing() ? 'animate-spin' : ''}`} />
               Refresh
@@ -740,22 +740,22 @@ export function AIIntelligence() {
               size="sm"
               ariaLabel="Toggle Patrol"
             />
-            <span class="text-sm text-gray-600 dark:text-gray-400">
+            <span class="text-sm text-slate-600 dark:text-slate-400">
               {patrolEnabledLocal() ? 'On' : 'Off'}
             </span>
           </div>
 
-          <div class="h-4 w-px bg-gray-200 dark:bg-gray-700" />
+          <div class="h-4 w-px bg-slate-200 dark:bg-slate-700" />
 
           {/* Model Selector */}
           <div class="flex items-center gap-2">
-            <span class="text-xs text-gray-500 dark:text-gray-400">Model:</span>
+            <span class="text-xs text-slate-500 dark:text-slate-400">Model:</span>
             <select
               ref={patrolModelSelectRef}
               value={patrolModel()}
               onChange={(e) => handleModelChange(e.currentTarget.value)}
               disabled={isUpdatingSettings() || !patrolEnabledLocal()}
-              class={`text-xs bg-gray-100 dark:bg-gray-700 border-0 rounded-md py-1 pl-2 pr-6 text-gray-700 dark:text-gray-300 focus:ring-1 focus:ring-blue-500 disabled:opacity-50 ${patrolModelStale() ? 'ring-1 ring-amber-400' : ''}`}
+              class={`text-xs bg-slate-100 dark:bg-slate-700 border-0 rounded-md py-1 pl-2 pr-6 text-slate-700 dark:text-slate-300 focus:ring-1 focus:ring-blue-500 disabled:opacity-50 ${patrolModelStale() ? 'ring-1 ring-amber-400' : ''}`}
               title={patrolModelStale() ? `Model "${patrolModel()}" is no longer available. Select a new model.` : ''}
             >
               <option value="">Default ({defaultModel().split(':').pop() || 'not set'})</option>
@@ -776,16 +776,16 @@ export function AIIntelligence() {
             </select>
           </div>
 
-          <div class="h-4 w-px bg-gray-200 dark:bg-gray-700" />
+          <div class="h-4 w-px bg-slate-200 dark:bg-slate-700" />
 
           {/* Schedule Selector */}
           <div class="flex items-center gap-2">
-            <span class="text-xs text-gray-500 dark:text-gray-400">Every:</span>
+            <span class="text-xs text-slate-500 dark:text-slate-400">Every:</span>
             <select
               value={patrolInterval()}
               onChange={(e) => handleIntervalChange(parseInt(e.currentTarget.value))}
               disabled={isUpdatingSettings() || !patrolEnabledLocal()}
-              class="text-xs bg-gray-100 dark:bg-gray-700 border-0 rounded-md py-1 pl-2 pr-6 text-gray-700 dark:text-gray-300 focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
+              class="text-xs bg-slate-100 dark:bg-slate-700 border-0 rounded-md py-1 pl-2 pr-6 text-slate-700 dark:text-slate-300 focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
             >
               <For each={scheduleOptions()}>
                 {(preset) => (
@@ -795,12 +795,12 @@ export function AIIntelligence() {
             </select>
           </div>
 
-          <div class="h-4 w-px bg-gray-200 dark:bg-gray-700" />
+          <div class="h-4 w-px bg-slate-200 dark:bg-slate-700" />
 
           {/* Autonomy Level Selector */}
           <div class="flex items-center gap-1.5">
-            <span class="text-xs text-gray-500 dark:text-gray-400">Mode:</span>
-            <div class="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-0.5">
+            <span class="text-xs text-slate-500 dark:text-slate-400">Mode:</span>
+            <div class="flex items-center bg-slate-100 dark:bg-slate-700 rounded-md p-0.5">
               <For each={(['monitor', 'approval', 'assisted'] as PatrolAutonomyLevel[])}>
                 {(level) => {
                   const isProLocked = () => autoFixLocked() && level === 'assisted';
@@ -815,11 +815,11 @@ export function AIIntelligence() {
                       onClick={() => handleAutonomyChange(level)}
                       disabled={isDisabled()}
                       title={isProLocked() ? 'Upgrade to Pro for automatic fixes' : undefined}
-                      class={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${isActive()
-                        ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
+                      class={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors border ${isActive()
+                        ? 'bg-white dark:bg-slate-600 border-slate-200 dark:border-slate-500 text-slate-900 dark:text-white shadow-sm'
                         : isDisabled()
-                          ? 'text-gray-400 dark:text-gray-500'
-                          : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                          ? 'border-transparent text-slate-400 dark:text-slate-500'
+                          : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                         } ${isDisabled() ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
                       {level === 'monitor' ? 'Monitor' : level === 'approval' ? 'Investigate' : 'Auto-fix'}
@@ -829,20 +829,20 @@ export function AIIntelligence() {
               </For>
             </div>
             <div class="relative group">
-              <CircleHelpIcon class="w-4 h-4 text-gray-400 dark:text-gray-500 cursor-help" />
-              <div class="absolute left-0 top-6 z-50 hidden group-hover:block w-72 p-3 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 text-xs">
+              <CircleHelpIcon class="w-4 h-4 text-slate-400 dark:text-slate-500 cursor-help" />
+              <div class="absolute left-0 top-6 z-50 hidden group-hover:block w-72 p-3 bg-white dark:bg-slate-800 rounded-md shadow-sm border border-slate-200 dark:border-slate-700 text-xs">
                 <div class="space-y-2">
                   <div>
-                    <span class="font-semibold text-gray-900 dark:text-white">Monitor</span>
-                    <p class="text-gray-600 dark:text-gray-400">Detect issues only. No investigation or fixes.</p>
+                    <span class="font-semibold text-slate-900 dark:text-white">Monitor</span>
+                    <p class="text-slate-600 dark:text-slate-400">Detect issues only. No investigation or fixes.</p>
                   </div>
                   <div>
-                    <span class="font-semibold text-gray-900 dark:text-white">Investigate</span>
-                    <p class="text-gray-600 dark:text-gray-400">Investigates findings and proposes fixes. All fixes require your approval before execution.</p>
+                    <span class="font-semibold text-slate-900 dark:text-white">Investigate</span>
+                    <p class="text-slate-600 dark:text-slate-400">Investigates findings and proposes fixes. All fixes require your approval before execution.</p>
                   </div>
                   <div>
-                    <span class="font-semibold text-gray-900 dark:text-white">Auto-fix</span>
-                    <p class="text-gray-600 dark:text-gray-400">Automatically fixes issues and verifies results. By default, critical findings still require approval — configure in ⚙️ settings.</p>
+                    <span class="font-semibold text-slate-900 dark:text-white">Auto-fix</span>
+                    <p class="text-slate-600 dark:text-slate-400">Automatically fixes issues and verifies results. By default, critical findings still require approval — configure in ⚙️ settings.</p>
                   </div>
                 </div>
               </div>
@@ -855,7 +855,7 @@ export function AIIntelligence() {
                 disabled={!patrolEnabledLocal()}
                 class={`p-1 rounded transition-colors ${showAdvancedSettings()
                   ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30'
-                  : 'text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300'
+                  : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'
                   } ${!patrolEnabledLocal() ? 'opacity-50 cursor-not-allowed' : ''}`}
                 title="Advanced investigation settings"
               >
@@ -864,12 +864,12 @@ export function AIIntelligence() {
 
               {/* Advanced Settings Popover */}
               <Show when={showAdvancedSettings()}>
-                <div class="absolute right-0 top-8 z-50 w-72 p-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
+                <div class="absolute right-0 top-8 z-50 w-72 p-4 bg-white dark:bg-slate-800 rounded-md shadow-sm border border-slate-200 dark:border-slate-700">
                   <div class="flex items-center justify-between mb-3">
-                    <h4 class="text-sm font-semibold text-gray-900 dark:text-white">Advanced Settings</h4>
+                    <h4 class="text-sm font-semibold text-slate-900 dark:text-white">Advanced Settings</h4>
                     <button
                       onClick={() => setShowAdvancedSettings(false)}
-                      class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                      class="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
                     >
                       <XIcon class="w-4 h-4" />
                     </button>
@@ -881,7 +881,7 @@ export function AIIntelligence() {
                       <div class="flex items-start justify-between gap-3">
                         <div class="flex-1">
                           <label class="text-xs font-medium text-red-600 dark:text-red-400">Auto-fix critical issues</label>
-                          <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">
+                          <p class="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
                             When enabled, Patrol will automatically fix critical issues without requiring your approval.
                           </p>
                         </div>
@@ -892,7 +892,7 @@ export function AIIntelligence() {
                         />
                       </div>
                       <Show when={autoFixLocked()}>
-                        <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
+                        <p class="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
                           <a class="text-indigo-600 dark:text-indigo-400 font-medium hover:underline" href={getUpgradeActionUrlOrFallback('ai_autofix')} target="_blank" rel="noopener noreferrer" onClick={() => trackUpgradeClicked('ai_intelligence', 'ai_autofix')}>Upgrade to Pro</a>
                           {' '}to unlock auto-fix.
                           <Show when={canStartTrial()}>
@@ -909,7 +909,7 @@ export function AIIntelligence() {
                         </p>
                       </Show>
                       <Show when={!autoFixLocked() && !(autonomyLevel() === 'assisted' || autonomyLevel() === 'full')}>
-                        <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
+                        <p class="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
                           Select Auto-fix mode to configure this setting.
                         </p>
                       </Show>
@@ -922,13 +922,13 @@ export function AIIntelligence() {
                     </div>
 
                     {/* Alert-Triggered Analysis */}
-                    <div class="pt-3 border-t border-gray-200 dark:border-gray-700">
+                    <div class="pt-3 border-t border-slate-200 dark:border-slate-700">
                       <div class="flex items-center justify-between gap-3">
                         <div class="flex-1">
-                          <label class="text-xs font-medium text-gray-700 dark:text-gray-300">
+                          <label class="text-xs font-medium text-slate-700 dark:text-slate-300">
                             Alert-Triggered Analysis
                           </label>
-                          <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">
+                          <p class="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
                             Analyze infrastructure when alerts fire.
                           </p>
                         </div>
@@ -939,7 +939,7 @@ export function AIIntelligence() {
                         />
                       </div>
                       <Show when={alertAnalysisLocked()}>
-                        <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
+                        <p class="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
                           <a class="text-indigo-600 dark:text-indigo-400 font-medium hover:underline" href={getUpgradeActionUrlOrFallback('ai_alerts')} target="_blank" rel="noopener noreferrer" onClick={() => trackUpgradeClicked('ai_intelligence', 'ai_alerts')}>Upgrade to Pro</a>
                           {' '}to enable alert-triggered analysis.
                           <Show when={canStartTrial()}>
@@ -963,7 +963,7 @@ export function AIIntelligence() {
                     <button
                       onClick={saveAdvancedSettings}
                       disabled={isSavingAdvanced()}
-                      class="w-full px-3 py-2 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 rounded-lg transition-colors flex items-center justify-center gap-2"
+                      class="w-full px-3 py-2 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 rounded-md transition-colors flex items-center justify-center gap-2"
                     >
                       <Show when={isSavingAdvanced()}>
                         <div class="animate-spin h-3 w-3 border-2 border-white border-t-transparent rounded-full"></div>
@@ -1018,7 +1018,7 @@ export function AIIntelligence() {
         <div class="flex-shrink-0 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-800 px-4 py-3">
           <div class="flex flex-wrap items-center justify-between gap-3">
             <div class="flex items-start gap-3">
-              <div class="flex-shrink-0 p-1.5 bg-amber-100 dark:bg-amber-900/40 rounded-lg">
+              <div class="flex-shrink-0 p-1.5 bg-amber-100 dark:bg-amber-900/40 rounded-md">
                 <ShieldAlertIcon class="w-4 h-4 text-amber-600 dark:text-amber-400" />
               </div>
               <div>
@@ -1038,7 +1038,7 @@ export function AIIntelligence() {
             <div class="flex items-center gap-2">
               <a
                 href="/settings/system-ai"
-                class="inline-flex items-center justify-center gap-2 px-3 py-1.5 text-xs font-semibold text-amber-900 dark:text-amber-100 bg-amber-100 dark:bg-amber-900/40 border border-amber-200 dark:border-amber-700 rounded-lg hover:bg-amber-200/70 dark:hover:bg-amber-900/60 transition-colors"
+                class="inline-flex items-center justify-center gap-2 px-3 py-1.5 text-xs font-semibold text-amber-900 dark:text-amber-100 bg-amber-100 dark:bg-amber-900/40 border border-amber-200 dark:border-amber-700 rounded-md hover:bg-amber-200/70 dark:hover:bg-amber-900/60 transition-colors"
               >
                 <SettingsIcon class="w-3.5 h-3.5" />
                 Open AI Settings
@@ -1048,7 +1048,7 @@ export function AIIntelligence() {
                   href={upgradeUrl()}
                   target="_blank"
                   rel="noopener noreferrer"
-                  class="inline-flex items-center justify-center gap-2 px-3 py-1.5 text-xs font-semibold text-white bg-amber-600 hover:bg-amber-700 rounded-lg transition-colors"
+                  class="inline-flex items-center justify-center gap-2 px-3 py-1.5 text-xs font-semibold text-white bg-amber-600 hover:bg-amber-700 rounded-md transition-colors"
                 >
                   <SparklesIcon class="w-3.5 h-3.5" />
                   Upgrade
@@ -1091,31 +1091,31 @@ export function AIIntelligence() {
             when={summaryStats().criticalFindings > 0 || summaryStats().warningFindings > 0 || summaryStats().fixedCount > 0}
             fallback={
               <Show when={patrolStatus()?.last_patrol_at}>
-                <div class="flex items-center gap-2 px-4 py-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                <div class="flex items-center gap-2 px-4 py-3 bg-white dark:bg-slate-800 rounded-md border border-slate-200 dark:border-slate-700">
                   <CheckCircleIcon class="w-4 h-4 text-green-500 dark:text-green-400" />
-                  <span class="text-sm text-gray-600 dark:text-gray-400">No issues found</span>
+                  <span class="text-sm text-slate-600 dark:text-slate-400">No issues found</span>
                 </div>
               </Show>
             }
           >
-            <div class="grid grid-cols-3 gap-3">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {/* Critical */}
-              <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3">
+              <div class="bg-white dark:bg-slate-800 rounded-md border border-slate-200 dark:border-slate-700 p-3">
                 <div class="flex items-center gap-2">
-                  <div class={`p-1.5 rounded ${summaryStats().criticalFindings > 0
-                    ? 'bg-red-100 dark:bg-red-900/30'
-                    : 'bg-gray-100 dark:bg-gray-700'
+                  <div class={`p-1.5 rounded-md border ${summaryStats().criticalFindings > 0
+                    ? 'bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800'
+                    : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700'
                     }`}>
                     <ShieldAlertIcon class={`w-4 h-4 ${summaryStats().criticalFindings > 0
-                      ? 'text-red-600 dark:text-red-400'
-                      : 'text-gray-400 dark:text-gray-500'
+                      ? 'text-red-500 dark:text-red-400'
+                      : 'text-slate-400 dark:text-slate-500'
                       }`} />
                   </div>
                   <div>
-                    <p class="text-xs text-gray-500 dark:text-gray-400">Critical</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Critical</p>
                     <p class={`text-lg font-bold ${summaryStats().criticalFindings > 0
                       ? 'text-red-600 dark:text-red-400'
-                      : 'text-gray-400 dark:text-gray-500'
+                      : 'text-slate-400 dark:text-slate-500'
                       }`}>
                       {summaryStats().criticalFindings}
                     </p>
@@ -1124,22 +1124,22 @@ export function AIIntelligence() {
               </div>
 
               {/* Warnings */}
-              <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3">
+              <div class="bg-white dark:bg-slate-800 rounded-md border border-slate-200 dark:border-slate-700 p-3">
                 <div class="flex items-center gap-2">
-                  <div class={`p-1.5 rounded ${summaryStats().warningFindings > 0
-                    ? 'bg-amber-100 dark:bg-amber-900/30'
-                    : 'bg-gray-100 dark:bg-gray-700'
+                  <div class={`p-1.5 rounded-md border ${summaryStats().warningFindings > 0
+                    ? 'bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800'
+                    : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700'
                     }`}>
                     <ActivityIcon class={`w-4 h-4 ${summaryStats().warningFindings > 0
-                      ? 'text-amber-600 dark:text-amber-400'
-                      : 'text-gray-400 dark:text-gray-500'
+                      ? 'text-amber-500 dark:text-amber-400'
+                      : 'text-slate-400 dark:text-slate-500'
                       }`} />
                   </div>
                   <div>
-                    <p class="text-xs text-gray-500 dark:text-gray-400">Warnings</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Warnings</p>
                     <p class={`text-lg font-bold ${summaryStats().warningFindings > 0
                       ? 'text-amber-600 dark:text-amber-400'
-                      : 'text-gray-400 dark:text-gray-500'
+                      : 'text-slate-400 dark:text-slate-500'
                       }`}>
                       {summaryStats().warningFindings}
                     </p>
@@ -1148,22 +1148,22 @@ export function AIIntelligence() {
               </div>
 
               {/* Fixed (issues resolved by Patrol) */}
-              <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3">
+              <div class="bg-white dark:bg-slate-800 rounded-md border border-slate-200 dark:border-slate-700 p-3">
                 <div class="flex items-center gap-2">
-                  <div class={`p-1.5 rounded ${summaryStats().fixedCount > 0
-                    ? 'bg-green-100 dark:bg-green-900/30'
-                    : 'bg-gray-100 dark:bg-gray-700'
+                  <div class={`p-1.5 rounded-md border ${summaryStats().fixedCount > 0
+                    ? 'bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800'
+                    : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700'
                     }`}>
                     <CheckCircleIcon class={`w-4 h-4 ${summaryStats().fixedCount > 0
-                      ? 'text-green-600 dark:text-green-400'
-                      : 'text-gray-400 dark:text-gray-500'
+                      ? 'text-green-500 dark:text-green-400'
+                      : 'text-slate-400 dark:text-slate-500'
                       }`} />
                   </div>
                   <div>
-                    <p class="text-xs text-gray-500 dark:text-gray-400">Fixed</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Fixed</p>
                     <p class={`text-lg font-bold ${summaryStats().fixedCount > 0
                       ? 'text-green-600 dark:text-green-400'
-                      : 'text-gray-400 dark:text-gray-500'
+                      : 'text-slate-400 dark:text-slate-500'
                       }`}>
                       {summaryStats().fixedCount}
                     </p>
@@ -1174,13 +1174,13 @@ export function AIIntelligence() {
           </Show>
 
           {/* Tab Bar */}
-          <div class="flex items-center gap-1 border-b border-gray-200 dark:border-gray-700">
+          <div class="flex items-center gap-1 border-b border-slate-200 dark:border-slate-700">
             <button
               type="button"
               onClick={() => setActiveTab('findings')}
               class={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab() === 'findings'
-                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                ? 'border-blue-500 text-slate-900 dark:text-white'
+                : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600'
                 }`}
             >
               Findings
@@ -1197,13 +1197,13 @@ export function AIIntelligence() {
               type="button"
               onClick={() => { setActiveTab('history'); setFindingsFilterOverride(undefined); }}
               class={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab() === 'history'
-                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                ? 'border-blue-500 text-slate-900 dark:text-white'
+                : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600'
                 }`}
             >
               Run History
               <Show when={displayRunHistory().length > 0}>
-                <span class="ml-1.5 px-1.5 py-0.5 text-xs rounded-full bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300">
+                <span class="ml-1.5 px-1.5 py-0.5 text-xs rounded-full bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300">
                   {displayRunHistory().length}
                 </span>
               </Show>

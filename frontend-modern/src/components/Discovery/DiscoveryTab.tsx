@@ -10,8 +10,6 @@ import {
     getConfidenceLevel,
     getConnectedAgents,
 } from '../../api/discovery';
-import { GuestMetadataAPI } from '../../api/guestMetadata';
-import { HostMetadataAPI } from '../../api/hostMetadata';
 import { eventBus } from '../../stores/events';
 
 interface DiscoveryTabProps {
@@ -19,18 +17,6 @@ interface DiscoveryTabProps {
     hostId: string;
     resourceId: string;
     hostname: string;
-    /** Canonical guest ID used for metadata API calls (legacy prop, prefer urlMetadataId) */
-    guestId?: string;
-    /** Current custom URL from parent state (optional) */
-    customUrl?: string;
-    /** Called after a URL is saved or deleted so the parent can update its state */
-    onCustomUrlChange?: (url: string) => void;
-    /** Metadata target kind for URL persistence */
-    urlMetadataKind?: 'guest' | 'host';
-    /** Metadata target ID for URL persistence */
-    urlMetadataId?: string;
-    /** Display label used in URL helper copy */
-    urlTargetLabel?: string;
     /** Whether commands are enabled for this host (from host agent config) */
     commandsEnabled?: boolean;
 }
@@ -79,89 +65,6 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
     // Delayed loading spinner - only show after 150ms to prevent flash
     const [showLoadingSpinner, setShowLoadingSpinner] = createSignal(false);
 
-    // --- Guest URL editing state ---
-    const [urlValue, setUrlValue] = createSignal(props.customUrl ?? '');
-    const [urlSaving, setUrlSaving] = createSignal(false);
-    const [fetchedCustomUrl, setFetchedCustomUrl] = createSignal('');
-    const [urlError, setUrlError] = createSignal<string | null>(null);
-    const [urlSuccess, setUrlSuccess] = createSignal<string | null>(null);
-
-    const urlMetadataKind = createMemo<'guest' | 'host'>(() => props.urlMetadataKind ?? 'guest');
-    const urlMetadataId = createMemo(() => props.urlMetadataId ?? props.guestId ?? '');
-    const currentCustomUrl = createMemo(() => props.customUrl ?? fetchedCustomUrl());
-    const urlTargetLabel = createMemo(() => props.urlTargetLabel ?? (urlMetadataKind() === 'host' ? 'host' : 'guest'));
-    let urlSuccessTimer: ReturnType<typeof setTimeout> | undefined;
-
-    const clearUrlSuccessTimer = () => {
-        if (urlSuccessTimer) {
-            clearTimeout(urlSuccessTimer);
-            urlSuccessTimer = undefined;
-        }
-    };
-
-    onCleanup(() => {
-        clearUrlSuccessTimer();
-    });
-
-    const setUrlSuccessMessage = (message: string) => {
-        clearUrlSuccessTimer();
-        setUrlSuccess(message);
-        urlSuccessTimer = setTimeout(() => {
-            setUrlSuccess(null);
-            urlSuccessTimer = undefined;
-        }, 2500);
-    };
-
-    const validateCustomUrl = (value: string): string | null => {
-        if (!value) return null;
-        let parsed: URL;
-        try {
-            parsed = new URL(value);
-        } catch {
-            return 'Enter a valid URL (for example: https://192.168.1.100:8080).';
-        }
-
-        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-            return 'URL must start with http:// or https://.';
-        }
-
-        if (!parsed.hostname) {
-            return 'URL is missing a hostname or IP address.';
-        }
-
-        return null;
-    };
-
-    createEffect(() => {
-        const id = urlMetadataId();
-        const kind = urlMetadataKind();
-        if (!id || props.customUrl !== undefined) return;
-
-        let cancelled = false;
-        const loadMetadata = async () => {
-            try {
-                const metadata = kind === 'host'
-                    ? await HostMetadataAPI.getMetadata(id)
-                    : await GuestMetadataAPI.getMetadata(id);
-                if (!cancelled) {
-                    setFetchedCustomUrl(metadata?.customUrl ?? '');
-                }
-            } catch (err) {
-                console.error('Failed to load custom URL metadata:', err);
-            }
-        };
-
-        void loadMetadata();
-        onCleanup(() => {
-            cancelled = true;
-        });
-    });
-
-    // Keep local value in sync with prop changes
-    createEffect(() => {
-        setUrlValue(currentCustomUrl());
-    });
-
     // Reset ephemeral UI state when changing discovery context
     createEffect(() => {
         void discoverySourceKey();
@@ -175,62 +78,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
         setShowLoadingSpinner(false);
         setEditingNotes(false);
         setSaveError(null);
-        setUrlError(null);
-        setUrlSuccess(null);
     });
-
-    const updateCustomUrlMetadata = async (value: string) => {
-        const id = urlMetadataId();
-        if (!id) return;
-        if (urlMetadataKind() === 'host') {
-            await HostMetadataAPI.updateMetadata(id, { customUrl: value });
-        } else {
-            await GuestMetadataAPI.updateMetadata(id, { customUrl: value });
-        }
-    };
-
-    const handleSaveUrl = async () => {
-        if (!urlMetadataId()) return;
-        const trimmed = urlValue().trim();
-        setUrlError(null);
-        setUrlSuccess(null);
-        const validationError = validateCustomUrl(trimmed);
-        if (validationError) {
-            setUrlError(validationError);
-            return;
-        }
-        setUrlSaving(true);
-        try {
-            await updateCustomUrlMetadata(trimmed);
-            setFetchedCustomUrl(trimmed);
-            props.onCustomUrlChange?.(trimmed);
-            setUrlSuccessMessage(trimmed ? 'URL saved.' : 'URL cleared.');
-        } catch (err) {
-            setUrlError(err instanceof Error ? err.message : 'Failed to save URL.');
-            console.error('Failed to save custom URL:', err);
-        } finally {
-            setUrlSaving(false);
-        }
-    };
-
-    const handleDeleteUrl = async () => {
-        if (!urlMetadataId()) return;
-        setUrlError(null);
-        setUrlSuccess(null);
-        setUrlSaving(true);
-        try {
-            await updateCustomUrlMetadata('');
-            setFetchedCustomUrl('');
-            setUrlValue('');
-            props.onCustomUrlChange?.('');
-            setUrlSuccessMessage('URL removed.');
-        } catch (err) {
-            setUrlError(err instanceof Error ? err.message : 'Failed to remove URL.');
-            console.error('Failed to remove custom URL:', err);
-        } finally {
-            setUrlSaving(false);
-        }
-    };
     const [notesText, setNotesText] = createSignal('');
     const [saveError, setSaveError] = createSignal<string | null>(null);
     const [scanError, setScanError] = createSignal<string | null>(null);
@@ -546,9 +394,9 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
 
             {/* Commands Preview - Expandable before first scan */}
             <Show when={!discovery() && !isScanning() && !discovery.loading && !discoveryInfo.loading && discoveryInfo()?.commands && discoveryInfo()!.commands!.length > 0}>
-                <details class="rounded border border-gray-200 bg-white/70 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30" open={showCommandsPreview()}>
+                <details class="rounded border border-slate-200 bg-white shadow-sm dark:border-slate-600/70 dark:bg-slate-800" open={showCommandsPreview()}>
                     <summary
-                        class="p-2.5 text-xs font-medium text-gray-700 dark:text-gray-300 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 flex items-center gap-2"
+                        class="p-2.5 text-xs font-medium text-slate-700 dark:text-slate-300 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 flex items-center gap-2"
                         onClick={(e) => { e.preventDefault(); setShowCommandsPreview(!showCommandsPreview()); }}
                     >
                         <svg class={`w-3.5 h-3.5 transition-transform ${showCommandsPreview() ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -562,11 +410,11 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                                 {(cmd) => (
                                     <div class="text-xs">
                                         <div class="flex items-start gap-2">
-                                            <code class="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 font-mono break-all">
+                                            <code class="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-mono break-all">
                                                 {cmd.command}
                                             </code>
                                         </div>
-                                        <p class="text-gray-500 dark:text-gray-400 mt-0.5 pl-0.5">{cmd.description}</p>
+                                        <p class="text-slate-500 dark:text-slate-400 mt-0.5 pl-0.5">{cmd.description}</p>
                                     </div>
                                 )}
                             </For>
@@ -579,7 +427,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
             <Show when={showLoadingSpinner()}>
                 <div class="flex items-center justify-center py-8">
                     <div class="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full"></div>
-                    <span class="ml-2 text-sm text-gray-500 dark:text-gray-400">Loading discovery...</span>
+                    <span class="ml-2 text-sm text-slate-500 dark:text-slate-400">Loading discovery...</span>
                 </div>
             </Show>
 
@@ -634,7 +482,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
 
             {/* Scan Success */}
             <Show when={scanSuccess()}>
-                <div class="mb-4 rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-900/20">
+                <div class="mb-4 rounded-md border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-900/20">
                     <div class="flex items-center gap-2">
                         <svg class="w-5 h-5 text-green-500 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
@@ -646,7 +494,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
 
             {/* Scan Error */}
             <Show when={scanError()}>
-                <div class="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20">
+                <div class="mb-4 rounded-md border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20">
                     <div class="flex items-start gap-3">
                         <svg class="w-5 h-5 text-red-500 dark:text-red-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -670,7 +518,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
             {/* No discovery yet - only show after initial fetch completes to prevent flash */}
             <Show when={!discovery() && !isScanning()}>
                 <div class="text-center py-8">
-                    <div class="text-gray-500 dark:text-gray-400 mb-4">
+                    <div class="text-slate-500 dark:text-slate-400 mb-4">
                         <svg class="w-12 h-12 mx-auto mb-2 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                         </svg>
@@ -679,14 +527,14 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                             fallback={
                                 <>
                                     <p class="text-sm">No discovery data yet</p>
-                                    <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                                    <p class="text-xs text-slate-400 dark:text-slate-500 mt-1">
                                         Run a discovery scan to identify services and configurations
                                     </p>
                                 </>
                             }
                         >
                             <p class="text-sm">Checking existing discovery data...</p>
-                            <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                            <p class="text-xs text-slate-400 dark:text-slate-500 mt-1">
                                 You can run discovery now if this takes too long.
                             </p>
                         </Show>
@@ -695,7 +543,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                     {/* Connection Status Warning - Show when commands are needed but not available */}
                     <Show when={props.resourceType === 'host' && !connectedAgents.loading}>
                         <Show when={props.commandsEnabled === false}>
-                            <div class="mb-4 mx-auto max-w-md rounded-lg border border-amber-200 bg-amber-50 p-3 text-left dark:border-amber-800/50 dark:bg-amber-900/20">
+                            <div class="mb-4 mx-auto max-w-md rounded-md border border-amber-200 bg-amber-50 p-3 text-left dark:border-amber-800/50 dark:bg-amber-900/20">
                                 <div class="flex items-start gap-2">
                                     <svg class="w-4 h-4 text-amber-500 dark:text-amber-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -711,7 +559,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                             </div>
                         </Show>
                         <Show when={props.commandsEnabled === true && !hasConnectedAgent()}>
-                            <div class="mb-4 mx-auto max-w-md rounded-lg border border-amber-200 bg-amber-50 p-3 text-left dark:border-amber-800/50 dark:bg-amber-900/20">
+                            <div class="mb-4 mx-auto max-w-md rounded-md border border-amber-200 bg-amber-50 p-3 text-left dark:border-amber-800/50 dark:bg-amber-900/20">
                                 <div class="flex items-start gap-2">
                                     <svg class="w-4 h-4 text-amber-500 dark:text-amber-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -728,7 +576,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                             </div>
                         </Show>
                         <Show when={props.commandsEnabled === true && hasConnectedAgent()}>
-                            <div class="mb-4 mx-auto max-w-md rounded-lg border border-green-200 bg-green-50 p-3 text-left dark:border-green-800/50 dark:bg-green-900/20">
+                            <div class="mb-4 mx-auto max-w-md rounded-md border border-green-200 bg-green-50 p-3 text-left dark:border-green-800/50 dark:bg-green-900/20">
                                 <div class="flex items-center gap-2">
                                     <svg class="w-4 h-4 text-green-500 dark:text-green-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
@@ -761,16 +609,16 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
             {/* Discovery exists but has no meaningful data - show re-scan option */}
             <Show when={!discovery.loading && discovery() && !hasValidDiscovery() && !isScanning()}>
                 <div class="text-center py-8">
-                    <div class="text-gray-500 dark:text-gray-400 mb-4">
+                    <div class="text-slate-500 dark:text-slate-400 mb-4">
                         <svg class="w-12 h-12 mx-auto mb-2 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                         <p class="text-sm">Unknown Service</p>
-                        <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                        <p class="text-xs text-slate-400 dark:text-slate-500 mt-1">
                             Discovery completed but couldn't identify a known service.
                         </p>
                         <Show when={discovery()?.updated_at}>
-                            <p class="text-xs text-gray-400 dark:text-gray-500 mt-2">
+                            <p class="text-xs text-slate-400 dark:text-slate-500 mt-2">
                                 Last scanned: {formatDiscoveryAge(discovery()!.updated_at)}
                             </p>
                         </Show>
@@ -797,14 +645,14 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                 {(d) => (
                     <div class="space-y-4">
                         {/* Service Header */}
-                        <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                        <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600/70 dark:bg-slate-800">
                             <div class="flex items-start justify-between">
                                 <div>
-                                    <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                                    <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100">
                                         {d().service_name || 'Unknown Service'}
                                     </h3>
                                     <Show when={d().service_version}>
-                                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                                             Version {d().service_version}
                                         </p>
                                     </Show>
@@ -816,20 +664,54 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                                 </Show>
                             </div>
 
-                            <Show when={confidenceInfo()}>
+                            <Show
+                                when={confidenceInfo()}
+                            >
                                 <p class={`text-xs mt-2 ${confidenceInfo()!.color}`}>
                                     {confidenceInfo()!.label} ({Math.round((d().confidence || 0) * 100)}%)
                                 </p>
                             </Show>
                         </div>
 
+                        <Show when={d().suggested_url || d().suggested_url_diagnostic}>
+                            <div class="rounded border border-blue-200 bg-blue-50/50 p-3 shadow-sm dark:border-blue-800/60 dark:bg-blue-900/20">
+                                <div class="text-[11px] font-medium uppercase tracking-wide text-blue-800 dark:text-blue-200 mb-1">
+                                    Web Interface Suggestion
+                                </div>
+                                <Show
+                                    when={d().suggested_url}
+                                    fallback={
+                                        <div class="text-xs text-blue-800 dark:text-blue-200">
+                                            <p class="font-medium">No suggested URL found</p>
+                                            <p class="mt-1 text-blue-700 dark:text-blue-300">{d().suggested_url_diagnostic}</p>
+                                        </div>
+                                    }
+                                >
+                                    <Show when={suggestedURLReasonText()}>
+                                        <p
+                                            class="mb-1 text-[10px] text-blue-700/90 dark:text-blue-300/90"
+                                            title={suggestedURLReasonTitle()}
+                                        >
+                                            Why this URL: {suggestedURLReasonText()}
+                                        </p>
+                                    </Show>
+                                    <code class="block rounded bg-white px-2 py-1 text-xs text-blue-800 dark:bg-slate-800 dark:text-blue-100 font-mono break-all">
+                                        {d().suggested_url}
+                                    </code>
+                                    <p class="mt-1.5 text-[11px] text-blue-700 dark:text-blue-300">
+                                        Save this URL from the Overview tab in the Web Interface URL field.
+                                    </p>
+                                </Show>
+                            </div>
+                        </Show>
+
                         {/* CLI Access */}
                         <Show when={d().cli_access}>
-                            <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                                <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200 mb-2">
+                            <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600/70 dark:bg-slate-800">
+                                <div class="text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 mb-2">
                                     CLI Access
                                 </div>
-                                <code class="block bg-gray-100 dark:bg-gray-800 rounded px-2 py-1.5 text-xs text-gray-800 dark:text-gray-200 font-mono overflow-x-auto">
+                                <code class="block bg-slate-100 dark:bg-slate-800 rounded px-2 py-1.5 text-xs text-slate-800 dark:text-slate-200 font-mono overflow-x-auto">
                                     {d().cli_access}
                                 </code>
                             </div>
@@ -837,16 +719,16 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
 
                         {/* Configuration, Data & Log Paths */}
                         <Show when={d().config_paths?.length > 0 || d().data_paths?.length > 0 || d().log_paths?.length > 0}>
-                            <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                            <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600/70 dark:bg-slate-800">
                                 <Show when={d().config_paths?.length > 0}>
                                     <div class="mb-3">
-                                        <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200 mb-1">
+                                        <div class="text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 mb-1">
                                             Config Paths
                                         </div>
                                         <div class="space-y-1">
                                             <For each={d().config_paths}>
                                                 {(path) => (
-                                                    <code class="block text-xs text-gray-600 dark:text-gray-300 font-mono">
+                                                    <code class="block text-xs text-slate-600 dark:text-slate-300 font-mono">
                                                         {path}
                                                     </code>
                                                 )}
@@ -856,13 +738,13 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                                 </Show>
                                 <Show when={d().data_paths?.length > 0}>
                                     <div class="mb-3">
-                                        <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200 mb-1">
+                                        <div class="text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 mb-1">
                                             Data Paths
                                         </div>
                                         <div class="space-y-1">
                                             <For each={d().data_paths}>
                                                 {(path) => (
-                                                    <code class="block text-xs text-gray-600 dark:text-gray-300 font-mono">
+                                                    <code class="block text-xs text-slate-600 dark:text-slate-300 font-mono">
                                                         {path}
                                                     </code>
                                                 )}
@@ -872,13 +754,13 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                                 </Show>
                                 <Show when={d().log_paths?.length > 0}>
                                     <div>
-                                        <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200 mb-1">
+                                        <div class="text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 mb-1">
                                             Log Paths
                                         </div>
                                         <div class="space-y-1">
                                             <For each={d().log_paths}>
                                                 {(path) => (
-                                                    <code class="block text-xs text-gray-600 dark:text-gray-300 font-mono">
+                                                    <code class="block text-xs text-slate-600 dark:text-slate-300 font-mono">
                                                         {path}
                                                     </code>
                                                 )}
@@ -891,17 +773,17 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
 
                         {/* Ports */}
                         <Show when={d().ports?.length > 0}>
-                            <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                                <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200 mb-2">
+                            <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600/70 dark:bg-slate-800">
+                                <div class="text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 mb-2">
                                     Listening Ports
                                 </div>
                                 <div class="flex flex-wrap gap-1">
                                     <For each={d().ports}>
                                         {(port) => (
-                                            <span class="inline-block rounded bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-700 dark:bg-gray-700 dark:text-gray-200">
+                                            <span class="inline-block rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-700 dark:bg-slate-700 dark:text-slate-200">
                                                 {port.port}/{port.protocol}
                                                 <Show when={port.process}>
-                                                    <span class="text-gray-500 dark:text-gray-400 ml-1">({port.process})</span>
+                                                    <span class="text-slate-500 dark:text-slate-400 ml-1">({port.process})</span>
                                                 </Show>
                                             </span>
                                         )}
@@ -912,16 +794,16 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
 
                         {/* Key Facts */}
                         <Show when={d().facts?.length > 0}>
-                            <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                                <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200 mb-2">
+                            <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600/70 dark:bg-slate-800">
+                                <div class="text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 mb-2">
                                     Discovered Facts
                                 </div>
                                 <div class="space-y-1.5">
                                     <For each={d().facts.slice(0, 8)}>
                                         {(fact) => (
                                             <div class="flex items-center justify-between text-xs">
-                                                <span class="text-gray-600 dark:text-gray-400">{fact.key}</span>
-                                                <span class="font-medium text-gray-800 dark:text-gray-200 truncate ml-2 max-w-[60%]" title={fact.value}>
+                                                <span class="text-slate-600 dark:text-slate-400">{fact.key}</span>
+                                                <span class="font-medium text-slate-800 dark:text-slate-200 truncate ml-2 max-w-[60%]" title={fact.value}>
                                                     {fact.value}
                                                 </span>
                                             </div>
@@ -932,9 +814,9 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                         </Show>
 
                         {/* User Notes */}
-                        <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                        <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600/70 dark:bg-slate-800">
                             <div class="flex items-center justify-between mb-2">
-                                <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200">
+                                <div class="text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200">
                                     Your Notes
                                 </div>
                                 <Show when={!editingNotes()}>
@@ -953,12 +835,12 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                                     <Show
                                         when={d().user_notes}
                                         fallback={
-                                            <p class="text-xs text-gray-400 dark:text-gray-500 italic">
+                                            <p class="text-xs text-slate-400 dark:text-slate-500 italic">
                                                 No notes yet. Add notes to document important information.
                                             </p>
                                         }
                                     >
-                                        <p class="text-xs text-gray-600 dark:text-gray-300 whitespace-pre-wrap">
+                                        <p class="text-xs text-slate-600 dark:text-slate-300 whitespace-pre-wrap">
                                             {d().user_notes}
                                         </p>
                                     </Show>
@@ -969,7 +851,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                                         value={notesText()}
                                         onInput={(e) => setNotesText(e.currentTarget.value)}
                                         placeholder="Add notes about this resource (API tokens, passwords, important info)..."
-                                        class="w-full h-24 px-2 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                        class="w-full h-24 px-2 py-1.5 text-xs border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
                                     />
                                     <Show when={saveError()}>
                                         <p class="text-xs text-red-600 dark:text-red-400">{saveError()}</p>
@@ -983,7 +865,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                                         </button>
                                         <button
                                             onClick={() => setEditingNotes(false)}
-                                            class="px-3 py-1 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                                            class="px-3 py-1 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs rounded hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
                                         >
                                             Cancel
                                         </button>
@@ -994,12 +876,12 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
 
                         {/* AI Reasoning (collapsible) */}
                         <Show when={d().ai_reasoning}>
-                            <details class="rounded border border-gray-200 bg-white/70 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                                <summary class="p-3 text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                            <details class="rounded border border-slate-200 bg-white shadow-sm dark:border-slate-600/70 dark:bg-slate-800">
+                                <summary class="p-3 text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50">
                                     AI Reasoning
                                 </summary>
                                 <div class="px-3 pb-3">
-                                    <p class="text-xs text-gray-600 dark:text-gray-300">
+                                    <p class="text-xs text-slate-600 dark:text-slate-300">
                                         {d().ai_reasoning}
                                     </p>
                                 </div>
@@ -1008,18 +890,18 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
 
                         {/* Scan Details / Raw Command Outputs (collapsible) */}
                         <Show when={d().raw_command_output && Object.keys(d().raw_command_output!).length > 0}>
-                            <details class="rounded border border-gray-200 bg-white/70 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                                <summary class="p-3 text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                            <details class="rounded border border-slate-200 bg-white shadow-sm dark:border-slate-600/70 dark:bg-slate-800">
+                                <summary class="p-3 text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50">
                                     Scan Details ({Object.keys(d().raw_command_output!).length} commands)
                                 </summary>
                                 <div class="px-3 pb-3 space-y-3">
                                     <For each={Object.entries(d().raw_command_output!)}>
                                         {([cmdName, output]) => (
                                             <div>
-                                                <div class="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                <div class="text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
                                                     {cmdName}
                                                 </div>
-                                                <pre class="text-[10px] bg-gray-100 dark:bg-gray-800 rounded p-2 overflow-x-auto text-gray-600 dark:text-gray-400 max-h-32 overflow-y-auto">
+                                                <pre class="text-[10px] bg-slate-100 dark:bg-slate-800 rounded p-2 overflow-x-auto text-slate-600 dark:text-slate-400 max-h-32 overflow-y-auto">
                                                     {output || '(no output)'}
                                                 </pre>
                                             </div>
@@ -1031,120 +913,26 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
 
                         {/* Commands Run (for non-admin users who can't see full output) */}
                         <Show when={!d().raw_command_output && d().scan_duration && d().scan_duration > 0}>
-                            <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                                <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200 mb-1">
+                            <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600/70 dark:bg-slate-800">
+                                <div class="text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 mb-1">
                                     Scan Info
                                 </div>
-                                <p class="text-xs text-gray-500 dark:text-gray-400">
+                                <p class="text-xs text-slate-500 dark:text-slate-400">
                                     Scan completed in {(d().scan_duration! / 1000).toFixed(1)}s.
                                     Full scan details are available to administrators.
                                 </p>
                             </div>
                         </Show>
 
-                        {/* Web Interface URL */}
-                        <Show when={urlMetadataId()}>
-                            <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
-                                <div class="text-[11px] font-medium uppercase tracking-wide text-gray-700 dark:text-gray-200 mb-2">
-                                    Web Interface URL
-                                </div>
-                                <div class="flex items-center gap-2">
-                                    <input
-                                        type="url"
-                                        class="flex-1 text-xs px-2.5 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                                        placeholder="https://192.168.1.100:8080"
-                                        value={urlValue()}
-                                        onInput={(e) => setUrlValue(e.currentTarget.value)}
-                                        onKeyDown={(e) => { if (e.key === 'Enter') handleSaveUrl(); }}
-                                        disabled={urlSaving()}
-                                    />
-                                    <button
-                                        type="button"
-                                        class="px-2.5 py-1.5 text-xs font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                                        disabled={urlSaving() || urlValue().trim() === currentCustomUrl().trim()}
-                                        onClick={handleSaveUrl}
-                                    >
-                                        Save
-                                    </button>
-                                    <Show when={currentCustomUrl()}>
-                                        <a
-                                            href={currentCustomUrl()}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            class="px-2.5 py-1.5 text-xs font-medium rounded-md text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20 transition-colors"
-                                            title="Open URL"
-                                        >
-                                            Open
-                                        </a>
-                                    </Show>
-                                    <Show when={currentCustomUrl()}>
-                                        <button
-                                            type="button"
-                                            class="px-2.5 py-1.5 text-xs font-medium rounded-md text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20 disabled:opacity-50 transition-colors"
-                                            disabled={urlSaving()}
-                                            onClick={handleDeleteUrl}
-                                            title="Remove URL"
-                                        >
-                                            Remove
-                                        </button>
-                                    </Show>
-                                </div>
-                                <Show when={urlError()}>
-                                    <p class="mt-1.5 text-[11px] text-red-600 dark:text-red-400">{urlError()}</p>
-                                </Show>
-                                <Show when={urlSuccess()}>
-                                    <p class="mt-1.5 text-[11px] text-emerald-600 dark:text-emerald-400">{urlSuccess()}</p>
-                                </Show>
-                                <Show when={!d().suggested_url && d().suggested_url_diagnostic}>
-                                    <div class="mt-2 rounded border border-amber-200 bg-amber-50/80 p-2 text-[11px] text-amber-800 dark:border-amber-800/50 dark:bg-amber-900/20 dark:text-amber-200">
-                                        <p class="font-medium">No suggested URL found</p>
-                                        <p class="mt-0.5">{d().suggested_url_diagnostic}</p>
-                                    </div>
-                                </Show>
-                                {/* Suggested URL from discovery */}
-                                <Show when={d().suggested_url && d().suggested_url !== currentCustomUrl()}>
-                                    <div class="mt-2 p-2 rounded bg-blue-50 border border-blue-200 dark:bg-blue-900/20 dark:border-blue-800/50">
-                                        <div class="text-[10px] font-medium text-blue-700 dark:text-blue-300 mb-1">
-                                            {currentCustomUrl() ? 'Discovered URL' : 'Suggested URL'}
-                                        </div>
-                                        <Show when={suggestedURLReasonText()}>
-                                            <p
-                                                class="mb-1 text-[10px] text-blue-700/90 dark:text-blue-300/90"
-                                                title={suggestedURLReasonTitle()}
-                                            >
-                                                Why this URL: {suggestedURLReasonText()}
-                                            </p>
-                                        </Show>
-                                        <div class="flex items-center gap-2">
-                                            <code class="flex-1 text-xs text-blue-800 dark:text-blue-200 font-mono truncate" title={d().suggested_url}>
-                                                {d().suggested_url}
-                                            </code>
-                                            <button
-                                                type="button"
-                                                class="px-2 py-1 text-xs font-medium rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors flex-shrink-0"
-                                                onClick={() => setUrlValue(d().suggested_url || '')}
-                                                disabled={urlSaving()}
-                                            >
-                                                {currentCustomUrl() ? 'Use instead' : 'Use this'}
-                                            </button>
-                                        </div>
-                                    </div>
-                                </Show>
-                                <p class="mt-1.5 text-[10px] text-gray-400 dark:text-gray-500">
-                                    Add a URL to quickly access this {urlTargetLabel()}'s web interface from the dashboard.
-                                </p>
-                            </div>
-                        </Show>
-
                         {/* Footer with Update button */}
-                        <div class="flex items-center justify-between pt-2 border-t border-gray-200 dark:border-gray-700">
-                            <span class="text-xs text-gray-500 dark:text-gray-400">
+                        <div class="flex items-center justify-between pt-2 border-t border-slate-200 dark:border-slate-700">
+                            <span class="text-xs text-slate-500 dark:text-slate-400">
                                 Last updated: {formatDiscoveryAge(d().updated_at)}
                             </span>
                             <button
                                 onClick={() => handleTriggerDiscovery(true)}
                                 disabled={isScanning()}
-                                class="px-3 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs rounded hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
+                                class="px-3 py-1.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs rounded hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
                             >
                                 <Show
                                     when={isScanning()}
@@ -1157,7 +945,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                                         </>
                                     }
                                 >
-                                    <span class="animate-spin h-3.5 w-3.5 border-2 border-gray-500 border-t-transparent rounded-full"></span>
+                                    <span class="animate-spin h-3.5 w-3.5 border-2 border-slate-500 border-t-transparent rounded-full"></span>
                                     Scanning...
                                 </Show>
                             </button>

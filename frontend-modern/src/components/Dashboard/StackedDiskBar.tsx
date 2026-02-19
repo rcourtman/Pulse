@@ -239,7 +239,7 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
         when={miniMode() && hasDisks()}
         fallback={
           <div
-            class="relative w-full h-full overflow-hidden bg-gray-200 dark:bg-gray-600 rounded"
+            class="relative w-full h-full overflow-hidden bg-slate-200 dark:bg-slate-600 rounded"
             onMouseEnter={handleMouseEnter}
             onMouseLeave={tip.onMouseLeave}
           >
@@ -273,24 +273,24 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
             </Show>
 
             {/* Label overlay */}
-            <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-gray-700 dark:text-gray-100 leading-none min-w-0 overflow-hidden">
+            <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-slate-700 dark:text-slate-100 leading-none min-w-0 overflow-hidden">
               <span class="max-w-full min-w-0 whitespace-nowrap overflow-hidden text-ellipsis px-0.5 text-center">
                 <span>{displayLabel()}</span>
                 <Show when={showMaxLabel()}>
                   <span
-                    class="text-[8px] font-normal text-gray-500 dark:text-gray-400"
+                    class="text-[8px] font-normal text-slate-500 dark:text-slate-400"
                     title={maxLabelFull()}
                   >
                     {' '}{maxLabelShort()}
                   </span>
                 </Show>
                 <Show when={showSublabel()}>
-                  <span class="metric-sublabel font-normal text-gray-500 dark:text-gray-300">
+                  <span class="metric-sublabel font-normal text-slate-500 dark:text-slate-300">
                     {' '}({displaySublabel()})
                   </span>
                 </Show>
                 <Show when={useStackedSegments()}>
-                  <span class="text-[8px] font-normal text-gray-500 dark:text-gray-400">
+                  <span class="text-[8px] font-normal text-slate-500 dark:text-slate-400">
                     {' '}[{props.disks?.length}]
                   </span>
                 </Show>
@@ -318,10 +318,10 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
             <For each={miniDisks()}>
               {(disk) => (
                 <div class="flex flex-col items-stretch gap-0.5">
-                  <span class="text-[8px] text-gray-500 dark:text-gray-400 truncate" title={disk.label}>
+                  <span class="text-[8px] text-slate-500 dark:text-slate-400 truncate" title={disk.label}>
                     {disk.label}
                   </span>
-                  <div class="relative h-2.5 rounded-sm bg-gray-300/70 dark:bg-gray-500/70 overflow-hidden">
+                  <div class="relative h-2.5 rounded-sm bg-slate-300/70 dark:bg-slate-800 overflow-hidden">
                     <div
                       class="h-full"
                       style={{
@@ -340,12 +340,12 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
       {/* Tooltip for disk breakdown */}
       <TooltipPortal when={tip.show() && tooltipContent().length > 0} x={tip.pos().x} y={tip.pos().y}>
         <div class="min-w-[140px]">
-          <div class="font-medium mb-1 text-gray-300 border-b border-gray-700 pb-1">
+          <div class="font-medium mb-1 text-slate-300 border-b border-slate-700 pb-1">
             {hasMultipleDisks() ? 'Disk Breakdown' : 'Disk Usage'}
           </div>
           <For each={tooltipContent()}>
             {(item, idx) => (
-              <div class="flex flex-col gap-1 py-0.5" classList={{ 'border-t border-gray-700/50': idx() > 0 }}>
+              <div class="flex flex-col gap-1 py-0.5" classList={{ 'border-t border-slate-700/50': idx() > 0 }}>
                 <div class="flex justify-between gap-3">
                   <span
                     class="truncate max-w-[100px]"
@@ -353,11 +353,11 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
                   >
                     {item.label}
                   </span>
-                  <span class="whitespace-nowrap text-gray-300">
+                  <span class="whitespace-nowrap text-slate-300">
                     {item.percent} ({item.used}/{item.total})
                   </span>
                 </div>
-                <div class="h-1.5 w-full rounded bg-gray-700/70 overflow-hidden">
+                <div class="h-1.5 w-full rounded bg-slate-700/70 overflow-hidden">
                   <div
                     class="h-full"
                     style={{

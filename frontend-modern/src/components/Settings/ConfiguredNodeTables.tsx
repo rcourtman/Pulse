@@ -40,9 +40,9 @@ const STATUS_META: Record<string, StatusMeta> = {
     labelClass: 'text-amber-600 dark:text-amber-400',
   },
   unknown: {
-    dotClass: 'bg-gray-400',
+    dotClass: 'bg-slate-400',
     label: 'Unknown',
-    labelClass: 'text-gray-500 dark:text-gray-400',
+    labelClass: 'text-slate-500 dark:text-slate-400',
   },
 };
 
@@ -96,28 +96,28 @@ const resolvePveStatusMeta = (
 
 export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
   return (
-    <Card padding="none" tone="glass" class="overflow-x-auto rounded-lg">
+    <Card padding="none" tone="card" class="overflow-x-auto rounded-md">
       <table class="min-w-[900px] divide-y divide-gray-200 dark:divide-gray-700 text-sm">
-        <thead class="bg-gray-50 dark:bg-gray-800/70">
+        <thead class="bg-slate-50 dark:bg-slate-800">
           <tr>
-            <th scope="col" class="py-2 pl-4 pr-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+            <th scope="col" class="py-2 pl-4 pr-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
               Node
             </th>
-            <th scope="col" class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+            <th scope="col" class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
               Credentials
             </th>
-            <th scope="col" class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+            <th scope="col" class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
               Capabilities
             </th>
-            <th scope="col" class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+            <th scope="col" class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
               Status
             </th>
-            <th scope="col" class="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+            <th scope="col" class="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
               Actions
             </th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-gray-900/40">
+        <tbody class="divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-slate-800">
           <For each={props.nodes}>
             {(node) => {
               const statusMeta = createMemo(() => resolvePveStatusMeta(node, props.stateNodes));
@@ -128,25 +128,25 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
                 'clusterName' in node && node.clusterName ? node.clusterName : 'Unknown',
               );
               return (
-                <tr class="even:bg-gray-50/60 dark:even:bg-gray-800/30 hover:bg-blue-50/40 dark:hover:bg-blue-900/20 transition-colors">
+                <tr class="even:bg-slate-50/60 dark:even:bg-slate-800/30 hover:bg-blue-50/40 dark:hover:bg-blue-900/20 transition-colors">
                   <td class="align-top py-3 pl-4 pr-3">
                     <div class="min-w-0 space-y-1">
                       <div class="flex items-start gap-3">
                         <div class={`mt-1.5 h-3 w-3 rounded-full ${statusMeta().dotClass}`}></div>
                         <div class="min-w-0 flex-1">
-                          <p class="font-medium text-gray-900 dark:text-gray-100 truncate">
+                          <p class="font-medium text-slate-900 dark:text-slate-100 truncate">
                             {node.name}
                           </p>
-                          <p class="text-xs text-gray-600 dark:text-gray-400 truncate">
+                          <p class="text-xs text-slate-600 dark:text-slate-400 truncate">
                             {node.host}
                           </p>
                         </div>
                       </div>
                       <Show when={node.type === 'pve' && 'isCluster' in node && node.isCluster}>
-                        <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 px-3 py-2 space-y-2">
-                          <div class="flex items-center gap-2 text-xs font-semibold text-gray-700 dark:text-gray-300">
+                        <div class="rounded-md border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 px-3 py-2 space-y-2">
+                          <div class="flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-300">
                             <span>{clusterName()} Cluster</span>
-                            <span class="ml-auto text-[0.65rem] font-normal text-gray-500 dark:text-gray-500">
+                            <span class="ml-auto text-[0.65rem] font-normal text-slate-500 dark:text-slate-500">
                               {clusterEndpoints().length} nodes
                             </span>
                           </div>
@@ -166,7 +166,7 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
                                       ? 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-300'
                                       : endpoint.Online
                                         ? 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-900/20 dark:text-blue-300'
-                                        : 'border-gray-200 bg-gray-100 text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400';
+                                        : 'border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400';
 
                                   return (
                                     <div class={`rounded border px-3 py-2 text-[0.7rem] ${statusColor}`}>
@@ -199,7 +199,7 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
                             </div>
                           </Show>
                           <div class="flex items-center justify-between gap-2">
-                            <p class="flex items-center gap-1 text-[0.7rem] text-gray-600 dark:text-gray-400">
+                            <p class="flex items-center gap-1 text-[0.7rem] text-slate-600 dark:text-slate-400">
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M5 12h14M12 5l7 7-7 7" />
                               </svg>
@@ -209,7 +209,7 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
                               <button
                                 type="button"
                                 onClick={() => props.onRefreshCluster?.(node.id)}
-                                class="flex items-center gap-1 px-2 py-1 text-[0.65rem] font-medium text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+                                class="flex min-h-10 sm:min-h-9 items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors"
                                 title="Re-detect cluster membership (use if nodes were added to the Proxmox cluster)"
                               >
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -227,17 +227,17 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
                   </td>
                   <td class="align-top px-3 py-3">
                     <div class="flex flex-col gap-1">
-                      <span class="text-xs text-gray-600 dark:text-gray-400">
+                      <span class="text-xs text-slate-600 dark:text-slate-400">
                         {node.user ? `User: ${node.user}` : `Token: ${node.tokenName}`}
                       </span>
                       <Show when={node.source === 'agent'}>
-                        <span class="inline-flex items-center gap-1 text-[0.65rem] px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded w-fit">
-                          <span class="h-1.5 w-1.5 rounded-full bg-gray-500"></span>
+                        <span class="inline-flex items-center gap-1 text-[0.65rem] px-1.5 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded w-fit">
+                          <span class="h-1.5 w-1.5 rounded-full bg-slate-500"></span>
                           Agent
                         </span>
                       </Show>
                       <Show when={node.source === 'script' || (!node.source && node.tokenName)}>
-                        <span class="text-[0.65rem] px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 rounded w-fit">
+                        <span class="text-[0.65rem] px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded w-fit">
                           API only
                         </span>
                       </Show>
@@ -291,7 +291,7 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
                       <button
                         type="button"
                         onClick={() => props.onTestConnection(node.id)}
-                        class="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
+                        class="min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 p-2.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
                         title="Test connection"
                       >
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -301,7 +301,7 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
                       <button
                         type="button"
                         onClick={() => props.onEdit(node)}
-                        class="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
+                        class="min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 p-2.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
                         title="Edit node"
                       >
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -312,7 +312,7 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
                       <button
                         type="button"
                         onClick={() => props.onDelete(node)}
-                        class="p-2 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
+                        class="min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 p-2.5 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
                         title="Delete node"
                       >
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -377,42 +377,42 @@ const resolvePbsStatusMeta = (
 
 export const PbsNodesTable: Component<PbsNodesTableProps> = (props) => {
   return (
-    <Card padding="none" tone="glass" class="overflow-x-auto rounded-lg">
+    <Card padding="none" tone="card" class="overflow-x-auto rounded-md">
       <table class="min-w-[900px] divide-y divide-gray-200 dark:divide-gray-700 text-sm">
-        <thead class="bg-gray-50 dark:bg-gray-800/70">
+        <thead class="bg-slate-50 dark:bg-slate-800">
           <tr>
-            <th scope="col" class="py-2 pl-4 pr-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+            <th scope="col" class="py-2 pl-4 pr-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
               Node
             </th>
-            <th scope="col" class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+            <th scope="col" class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
               Credentials
             </th>
-            <th scope="col" class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+            <th scope="col" class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
               Capabilities
             </th>
-            <th scope="col" class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+            <th scope="col" class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
               Status
             </th>
-            <th scope="col" class="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+            <th scope="col" class="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
               Actions
             </th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-gray-900/40">
+        <tbody class="divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-slate-800">
           <For each={props.nodes}>
             {(node) => {
               const statusMeta = createMemo(() => resolvePbsStatusMeta(node, props.statePbs));
               return (
-                <tr class="even:bg-gray-50/60 dark:even:bg-gray-800/30 hover:bg-blue-50/40 dark:hover:bg-blue-900/20 transition-colors">
+                <tr class="even:bg-slate-50/60 dark:even:bg-slate-800/30 hover:bg-blue-50/40 dark:hover:bg-blue-900/20 transition-colors">
                   <td class="align-top py-3 pl-4 pr-3">
                     <div class="min-w-0 space-y-1">
                       <div class="flex items-start gap-3">
                         <div class={`mt-1.5 h-3 w-3 rounded-full ${statusMeta().dotClass}`}></div>
                         <div class="min-w-0 flex-1">
-                          <p class="font-medium text-gray-900 dark:text-gray-100 truncate">
+                          <p class="font-medium text-slate-900 dark:text-slate-100 truncate">
                             {node.name}
                           </p>
-                          <p class="text-xs text-gray-600 dark:text-gray-400 truncate">
+                          <p class="text-xs text-slate-600 dark:text-slate-400 truncate">
                             {node.host}
                           </p>
                         </div>
@@ -421,17 +421,17 @@ export const PbsNodesTable: Component<PbsNodesTableProps> = (props) => {
                   </td>
                   <td class="align-top px-3 py-3">
                     <div class="flex flex-col gap-1">
-                      <span class="text-xs text-gray-600 dark:text-gray-400">
+                      <span class="text-xs text-slate-600 dark:text-slate-400">
                         {node.user ? `User: ${node.user}` : `Token: ${node.tokenName}`}
                       </span>
                       <Show when={node.source === 'agent'}>
-                        <span class="inline-flex items-center gap-1 text-[0.65rem] px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded w-fit">
-                          <span class="h-1.5 w-1.5 rounded-full bg-gray-500"></span>
+                        <span class="inline-flex items-center gap-1 text-[0.65rem] px-1.5 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded w-fit">
+                          <span class="h-1.5 w-1.5 rounded-full bg-slate-500"></span>
                           Agent
                         </span>
                       </Show>
                       <Show when={node.source === 'script' || (!node.source && node.tokenName)}>
-                        <span class="text-[0.65rem] px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 rounded w-fit">
+                        <span class="text-[0.65rem] px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded w-fit">
                           API only
                         </span>
                       </Show>
@@ -487,7 +487,7 @@ export const PbsNodesTable: Component<PbsNodesTableProps> = (props) => {
                       <button
                         type="button"
                         onClick={() => props.onTestConnection(node.id)}
-                        class="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
+                        class="min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 p-2.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
                         title="Test connection"
                       >
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -497,7 +497,7 @@ export const PbsNodesTable: Component<PbsNodesTableProps> = (props) => {
                       <button
                         type="button"
                         onClick={() => props.onEdit(node)}
-                        class="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
+                        class="min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 p-2.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
                         title="Edit node"
                       >
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -508,7 +508,7 @@ export const PbsNodesTable: Component<PbsNodesTableProps> = (props) => {
                       <button
                         type="button"
                         onClick={() => props.onDelete(node)}
-                        class="p-2 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
+                        class="min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 p-2.5 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
                         title="Delete node"
                       >
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -573,42 +573,42 @@ const resolvePmgStatusMeta = (
 
 export const PmgNodesTable: Component<PmgNodesTableProps> = (props) => {
   return (
-    <Card padding="none" tone="glass" class="overflow-x-auto rounded-lg">
+    <Card padding="none" tone="card" class="overflow-x-auto rounded-md">
       <table class="min-w-[900px] divide-y divide-gray-200 dark:divide-gray-700 text-sm">
-        <thead class="bg-gray-50 dark:bg-gray-800/70">
+        <thead class="bg-slate-50 dark:bg-slate-800">
           <tr>
-            <th scope="col" class="py-2 pl-4 pr-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+            <th scope="col" class="py-2 pl-4 pr-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
               Node
             </th>
-            <th scope="col" class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+            <th scope="col" class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
               Credentials
             </th>
-            <th scope="col" class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+            <th scope="col" class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
               Capabilities
             </th>
-            <th scope="col" class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+            <th scope="col" class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
               Status
             </th>
-            <th scope="col" class="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+            <th scope="col" class="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
               Actions
             </th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-gray-900/40">
+        <tbody class="divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-slate-800">
           <For each={props.nodes}>
             {(node) => {
               const statusMeta = createMemo(() => resolvePmgStatusMeta(node, props.statePmg));
               return (
-                <tr class="even:bg-gray-50/60 dark:even:bg-gray-800/30 hover:bg-blue-50/40 dark:hover:bg-blue-900/20 transition-colors">
+                <tr class="even:bg-slate-50/60 dark:even:bg-slate-800/30 hover:bg-blue-50/40 dark:hover:bg-blue-900/20 transition-colors">
                   <td class="align-top py-3 pl-4 pr-3">
                     <div class="min-w-0 space-y-1">
                       <div class="flex items-start gap-3">
                         <div class={`mt-1.5 h-3 w-3 rounded-full ${statusMeta().dotClass}`}></div>
                         <div class="min-w-0 flex-1">
-                          <p class="font-medium text-gray-900 dark:text-gray-100 truncate">
+                          <p class="font-medium text-slate-900 dark:text-slate-100 truncate">
                             {node.name}
                           </p>
-                          <p class="text-xs text-gray-600 dark:text-gray-400 truncate">
+                          <p class="text-xs text-slate-600 dark:text-slate-400 truncate">
                             {node.host}
                           </p>
                         </div>
@@ -617,17 +617,17 @@ export const PmgNodesTable: Component<PmgNodesTableProps> = (props) => {
                   </td>
                   <td class="align-top px-3 py-3">
                     <div class="flex flex-col gap-1">
-                      <span class="text-xs text-gray-600 dark:text-gray-400">
+                      <span class="text-xs text-slate-600 dark:text-slate-400">
                         {node.user ? `User: ${node.user}` : `Token: ${node.tokenName}`}
                       </span>
                       <Show when={node.source === 'agent'}>
-                        <span class="inline-flex items-center gap-1 text-[0.65rem] px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded w-fit">
-                          <span class="h-1.5 w-1.5 rounded-full bg-gray-500"></span>
+                        <span class="inline-flex items-center gap-1 text-[0.65rem] px-1.5 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded w-fit">
+                          <span class="h-1.5 w-1.5 rounded-full bg-slate-500"></span>
                           Agent
                         </span>
                       </Show>
                       <Show when={node.source === 'script' || (!node.source && node.tokenName)}>
-                        <span class="text-[0.65rem] px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 rounded w-fit">
+                        <span class="text-[0.65rem] px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded w-fit">
                           API only
                         </span>
                       </Show>
@@ -672,7 +672,7 @@ export const PmgNodesTable: Component<PmgNodesTableProps> = (props) => {
                       <button
                         type="button"
                         onClick={() => props.onTestConnection(node.id)}
-                        class="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
+                        class="min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 p-2.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
                         title="Test connection"
                       >
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -682,7 +682,7 @@ export const PmgNodesTable: Component<PmgNodesTableProps> = (props) => {
                       <button
                         type="button"
                         onClick={() => props.onEdit(node)}
-                        class="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
+                        class="min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 p-2.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
                         title="Edit node"
                       >
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -693,7 +693,7 @@ export const PmgNodesTable: Component<PmgNodesTableProps> = (props) => {
                       <button
                         type="button"
                         onClick={() => props.onDelete(node)}
-                        class="p-2 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
+                        class="min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 p-2.5 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
                         title="Delete node"
                       >
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

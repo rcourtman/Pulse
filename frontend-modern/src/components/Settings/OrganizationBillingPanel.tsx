@@ -88,7 +88,7 @@ export const OrganizationBillingPanel: Component<OrganizationBillingPanelProps> 
   });
 
   return (
-    <Show when={isMultiTenantEnabled()} fallback={<div class="p-4 text-sm text-gray-500">This feature is not available.</div>}>
+    <Show when={isMultiTenantEnabled()} fallback={<div class="p-4 text-sm text-slate-500">This feature is not available.</div>}>
       <div class="space-y-6">
         <SettingsPanel
           title="Billing & Plan"
@@ -102,70 +102,70 @@ export const OrganizationBillingPanel: Component<OrganizationBillingPanelProps> 
               <div class="space-y-5">
                 <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   {Array.from({ length: 4 }).map(() => (
-                    <div class="rounded-lg border border-gray-200 dark:border-gray-700 p-3 space-y-2">
-                      <div class="h-3 w-20 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
-                      <div class="h-5 w-24 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                    <div class="rounded-md border border-slate-200 dark:border-slate-700 p-3 space-y-2">
+                      <div class="h-3 w-20 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                      <div class="h-5 w-24 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
                     </div>
                   ))}
                 </div>
 
-                <div class="space-y-3 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
-                  <div class="h-4 w-36 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                <div class="space-y-3 rounded-md border border-slate-200 dark:border-slate-700 p-4">
+                  <div class="h-4 w-36 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
                   {Array.from({ length: 2 }).map(() => (
                     <div class="space-y-2">
                       <div class="flex items-center justify-between">
-                        <div class="h-3 w-14 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
-                        <div class="h-3 w-20 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                        <div class="h-3 w-14 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                        <div class="h-3 w-20 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
                       </div>
-                      <div class="h-2 w-full animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                      <div class="h-2 w-full animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
                     </div>
                   ))}
                 </div>
 
                 <div class="grid gap-3 sm:grid-cols-2">
                   {Array.from({ length: 2 }).map(() => (
-                    <div class="rounded-lg border border-gray-200 dark:border-gray-700 p-3 space-y-2">
-                      <div class="h-3 w-24 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
-                      <div class="h-5 w-40 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                    <div class="rounded-md border border-slate-200 dark:border-slate-700 p-3 space-y-2">
+                      <div class="h-3 w-24 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                      <div class="h-5 w-40 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
                     </div>
                   ))}
                 </div>
 
                 <div class="flex flex-wrap items-center gap-2">
-                  <div class="h-10 w-40 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
-                  <div class="h-10 w-40 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                  <div class="h-10 w-40 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                  <div class="h-10 w-40 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
                 </div>
               </div>
             }
           >
           <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <div class="rounded-lg border border-gray-200 dark:border-gray-700 p-3">
-              <p class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Plan Tier</p>
-              <p class="mt-1 text-sm font-medium text-gray-900 dark:text-gray-100">
+            <div class="rounded-md border border-slate-200 dark:border-slate-700 p-3">
+              <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Plan Tier</p>
+              <p class="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">
                 {tierLabel[status()?.tier || 'free'] || status()?.tier || 'Free'}
               </p>
             </div>
-            <div class="rounded-lg border border-gray-200 dark:border-gray-700 p-3">
-              <p class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">License Status</p>
-              <p class="mt-1 text-sm font-medium text-gray-900 dark:text-gray-100">
+            <div class="rounded-md border border-slate-200 dark:border-slate-700 p-3">
+              <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">License Status</p>
+              <p class="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">
                 {status()?.valid ? (status()?.in_grace_period ? 'Grace Period' : 'Active') : 'No License'}
               </p>
             </div>
-            <div class="rounded-lg border border-gray-200 dark:border-gray-700 p-3">
-              <p class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Organizations</p>
-              <p class="mt-1 text-sm font-medium text-gray-900 dark:text-gray-100">{orgCount()}</p>
+            <div class="rounded-md border border-slate-200 dark:border-slate-700 p-3">
+              <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Organizations</p>
+              <p class="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{orgCount()}</p>
             </div>
-            <div class="rounded-lg border border-gray-200 dark:border-gray-700 p-3">
-              <p class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Members (Current Org)</p>
-              <p class="mt-1 text-sm font-medium text-gray-900 dark:text-gray-100">{memberCount()}</p>
+            <div class="rounded-md border border-slate-200 dark:border-slate-700 p-3">
+              <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Members (Current Org)</p>
+              <p class="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{memberCount()}</p>
             </div>
           </div>
 
-          <div class="space-y-3 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
-            <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Usage vs Plan Limits</h4>
+          <div class="space-y-3 rounded-md border border-slate-200 dark:border-slate-700 p-4">
+            <h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Usage vs Plan Limits</h4>
 
             <div class="space-y-1">
-              <div class="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400">
+              <div class="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400">
                 <span>Nodes</span>
                 <span>
                   {props.nodeUsage}
@@ -173,7 +173,7 @@ export const OrganizationBillingPanel: Component<OrganizationBillingPanelProps> 
                 </span>
               </div>
               <Show when={typeof nodeLimit() === 'number'}>
-                <div class="h-2 w-full rounded bg-gray-200 dark:bg-gray-700">
+                <div class="h-2 w-full rounded bg-slate-200 dark:bg-slate-700">
                   <div
                     class="h-2 rounded bg-blue-600 dark:bg-blue-500"
                     style={{ width: `${ratio(props.nodeUsage, nodeLimit())}%` }}
@@ -183,7 +183,7 @@ export const OrganizationBillingPanel: Component<OrganizationBillingPanelProps> 
             </div>
 
             <div class="space-y-1">
-              <div class="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400">
+              <div class="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400">
                 <span>Guests</span>
                 <span>
                   {props.guestUsage}
@@ -191,7 +191,7 @@ export const OrganizationBillingPanel: Component<OrganizationBillingPanelProps> 
                 </span>
               </div>
               <Show when={typeof guestLimit() === 'number'}>
-                <div class="h-2 w-full rounded bg-gray-200 dark:bg-gray-700">
+                <div class="h-2 w-full rounded bg-slate-200 dark:bg-slate-700">
                   <div
                     class="h-2 rounded bg-emerald-600 dark:bg-emerald-500"
                     style={{ width: `${ratio(props.guestUsage, guestLimit())}%` }}
@@ -202,13 +202,13 @@ export const OrganizationBillingPanel: Component<OrganizationBillingPanelProps> 
           </div>
 
           <div class="grid gap-3 sm:grid-cols-2">
-            <div class="rounded-lg border border-gray-200 dark:border-gray-700 p-3">
-              <p class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Licensed Email</p>
-              <p class="mt-1 text-sm font-medium text-gray-900 dark:text-gray-100">{status()?.email || 'Not configured'}</p>
+            <div class="rounded-md border border-slate-200 dark:border-slate-700 p-3">
+              <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Licensed Email</p>
+              <p class="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{status()?.email || 'Not configured'}</p>
             </div>
-            <div class="rounded-lg border border-gray-200 dark:border-gray-700 p-3">
-              <p class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Renews / Expires</p>
-              <p class="mt-1 text-sm font-medium text-gray-900 dark:text-gray-100">
+            <div class="rounded-md border border-slate-200 dark:border-slate-700 p-3">
+              <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Renews / Expires</p>
+              <p class="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">
                 {status()?.is_lifetime ? 'Never (Lifetime)' : formatDate(status()?.expires_at)}
               </p>
             </div>

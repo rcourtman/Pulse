@@ -254,7 +254,7 @@ export const AgentProfilesPanel: Component = () => {
                 <Card padding="lg">
                     <div class="flex items-center justify-center py-8">
                         <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500" />
-                        <span class="ml-3 text-gray-600 dark:text-gray-400">Checking license...</span>
+                        <span class="ml-3 text-slate-600 dark:text-slate-400">Checking license...</span>
                     </div>
                 </Card>
             }
@@ -264,15 +264,15 @@ export const AgentProfilesPanel: Component = () => {
                 fallback={
                     <Card padding="lg" class="space-y-4">
                         <div class="flex items-center gap-3">
-                            <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-amber-100 dark:bg-amber-900/30">
+                            <div class="flex items-center justify-center w-10 h-10 rounded-md bg-amber-100 dark:bg-amber-900/30">
                                 <Crown class="w-5 h-5 text-amber-600 dark:text-amber-400" />
                             </div>
                             <div>
-                                <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">Agent Profiles</h3>
-                                <p class="text-sm text-gray-600 dark:text-gray-400">Pro feature</p>
+                                <h3 class="text-base font-semibold text-slate-900 dark:text-slate-100">Agent Profiles</h3>
+                                <p class="text-sm text-slate-600 dark:text-slate-400">Pro feature</p>
                             </div>
                         </div>
-                        <p class="text-sm text-gray-600 dark:text-gray-400">
+                        <p class="text-sm text-slate-600 dark:text-slate-400">
                             Create reusable configuration profiles for your agents. Manage settings like Docker monitoring,
                             logging levels, and reporting intervals from a central location.
                         </p>
@@ -280,7 +280,7 @@ export const AgentProfilesPanel: Component = () => {
                             href={getUpgradeActionUrlOrFallback('agent_profiles')}
                             target="_blank"
                             rel="noopener noreferrer"
-                            class="inline-flex items-center gap-2 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-100 dark:bg-amber-900/40 px-4 py-2 text-sm font-medium text-amber-800 dark:text-amber-100 transition-colors hover:bg-amber-200 dark:hover:bg-amber-900/60"
+                            class="inline-flex items-center gap-2 rounded-md border border-amber-300 dark:border-amber-700 bg-amber-100 dark:bg-amber-900/40 px-4 py-2 text-sm font-medium text-amber-800 dark:text-amber-100 transition-colors hover:bg-amber-200 dark:hover:bg-amber-900/60"
                             onClick={() => trackUpgradeClicked('settings_agent_profiles_panel', 'agent_profiles')}
                         >
                             <Crown class="w-4 h-4" />
@@ -301,7 +301,7 @@ export const AgentProfilesPanel: Component = () => {
                                 <button
                                     type="button"
                                     onClick={handleCreate}
-                                    class="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700 sm:px-4 sm:py-2 sm:text-sm"
+                                    class="inline-flex min-h-10 sm:min-h-9 items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 sm:px-4 sm:py-2 sm:text-sm"
                                 >
                                     <Plus class="w-4 h-4" />
                                     <span class="hidden sm:inline">New Profile</span>
@@ -313,7 +313,7 @@ export const AgentProfilesPanel: Component = () => {
                                         type="button"
                                         onClick={handleSuggest}
                                         title="Get AI-powered profile suggestions"
-                                        class="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 transition-colors hover:bg-gray-50 dark:hover:bg-gray-700 sm:px-3 sm:py-2 sm:text-sm"
+                                        class="inline-flex min-h-10 sm:min-h-9 min-w-10 items-center gap-1.5 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 transition-colors hover:bg-slate-50 dark:hover:bg-slate-700 sm:px-3 sm:py-2 sm:text-sm"
                                     >
                                         <Lightbulb class="w-3.5 h-3.5" />
                                         <span class="hidden sm:inline">Ideas</span>
@@ -329,7 +329,7 @@ export const AgentProfilesPanel: Component = () => {
                         </Show>
 
                         <Show when={!loading() && profiles().length === 0}>
-                            <div class="text-center py-8 text-gray-500 dark:text-gray-400">
+                            <div class="text-center py-8 text-slate-500 dark:text-slate-400">
                                 <Settings class="w-12 h-12 mx-auto mb-3 opacity-50" />
                                 <p class="text-sm">No profiles yet. Create one to get started.</p>
                             </div>
@@ -339,25 +339,25 @@ export const AgentProfilesPanel: Component = () => {
                             <div class="overflow-x-auto">
                                 <table class="w-full text-sm">
                                     <thead>
-                                        <tr class="border-b border-gray-200 dark:border-gray-700">
-                                            <th class="text-left py-2 px-3 font-medium text-gray-600 dark:text-gray-400">Name</th>
-                                            <th class="text-left py-2 px-3 font-medium text-gray-600 dark:text-gray-400">Settings</th>
-                                            <th class="text-left py-2 px-3 font-medium text-gray-600 dark:text-gray-400">Agents</th>
-                                            <th class="text-right py-2 px-3 font-medium text-gray-600 dark:text-gray-400">Actions</th>
+                                        <tr class="border-b border-slate-200 dark:border-slate-700">
+                                            <th class="text-left py-2 px-3 font-medium text-slate-600 dark:text-slate-400">Name</th>
+                                            <th class="text-left py-2 px-3 font-medium text-slate-600 dark:text-slate-400">Settings</th>
+                                            <th class="text-left py-2 px-3 font-medium text-slate-600 dark:text-slate-400">Agents</th>
+                                            <th class="text-right py-2 px-3 font-medium text-slate-600 dark:text-slate-400">Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         <For each={profiles()}>
                                             {(profile) => (
-                                                <tr class="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                                <tr class="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50">
                                                     <td class="py-3 px-3">
-                                                        <span class="font-medium text-gray-900 dark:text-gray-100">{profile.name}</span>
+                                                        <span class="font-medium text-slate-900 dark:text-slate-100">{profile.name}</span>
                                                     </td>
                                                     <td class="py-3 px-3">
-                                                        <span class="text-gray-600 dark:text-gray-400">{getSettingsCount(profile)}</span>
+                                                        <span class="text-slate-600 dark:text-slate-400">{getSettingsCount(profile)}</span>
                                                     </td>
                                                     <td class="py-3 px-3">
-                                                        <span class="inline-flex items-center gap-1 text-gray-600 dark:text-gray-400">
+                                                        <span class="inline-flex items-center gap-1 text-slate-600 dark:text-slate-400">
                                                             <Users class="w-4 h-4" />
                                                             {getAssignmentCount(profile.id)}
                                                         </span>
@@ -367,7 +367,7 @@ export const AgentProfilesPanel: Component = () => {
                                                             <button
                                                                 type="button"
                                                                 onClick={() => handleEdit(profile)}
-                                                                class="p-1.5 rounded-md text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:text-blue-400 dark:hover:bg-blue-900/30"
+                                                                class="p-1.5 rounded-md text-slate-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:text-blue-400 dark:hover:bg-blue-900/30"
                                                                 title="Edit profile"
                                                             >
                                                                 <Pencil class="w-4 h-4" />
@@ -375,7 +375,7 @@ export const AgentProfilesPanel: Component = () => {
                                                             <button
                                                                 type="button"
                                                                 onClick={() => handleDelete(profile)}
-                                                                class="p-1.5 rounded-md text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-900/30"
+                                                                class="p-1.5 rounded-md text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-900/30"
                                                                 title="Delete profile"
                                                             >
                                                                 <Trash2 class="w-4 h-4" />
@@ -399,7 +399,7 @@ export const AgentProfilesPanel: Component = () => {
                         bodyClass="space-y-4"
                     >
                         <Show when={connectedAgents().length === 0}>
-                            <div class="text-center py-8 text-gray-500 dark:text-gray-400">
+                            <div class="text-center py-8 text-slate-500 dark:text-slate-400">
                                 <Users class="w-12 h-12 mx-auto mb-3 opacity-50" />
                                 <p class="text-sm">No agents connected. Install an agent to assign profiles.</p>
                             </div>
@@ -409,11 +409,11 @@ export const AgentProfilesPanel: Component = () => {
                             <div class="overflow-x-auto">
                                 <table class="w-full text-sm">
                                     <thead>
-                                        <tr class="border-b border-gray-200 dark:border-gray-700">
-                                            <th class="text-left py-2 px-3 font-medium text-gray-600 dark:text-gray-400">Agent</th>
-                                            <th class="text-left py-2 px-3 font-medium text-gray-600 dark:text-gray-400">Profile</th>
-                                            <th class="text-left py-2 px-3 font-medium text-gray-600 dark:text-gray-400">Status</th>
-                                            <th class="text-left py-2 px-3 font-medium text-gray-600 dark:text-gray-400">Last Seen</th>
+                                        <tr class="border-b border-slate-200 dark:border-slate-700">
+                                            <th class="text-left py-2 px-3 font-medium text-slate-600 dark:text-slate-400">Agent</th>
+                                            <th class="text-left py-2 px-3 font-medium text-slate-600 dark:text-slate-400">Profile</th>
+                                            <th class="text-left py-2 px-3 font-medium text-slate-600 dark:text-slate-400">Status</th>
+                                            <th class="text-left py-2 px-3 font-medium text-slate-600 dark:text-slate-400">Last Seen</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -423,14 +423,14 @@ export const AgentProfilesPanel: Component = () => {
                                                 const isOnline = () => agent.status?.toLowerCase() === 'online' || agent.status?.toLowerCase() === 'running';
 
                                                 return (
-                                                    <tr class="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                                    <tr class="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50">
                                                         <td class="py-3 px-3">
                                                             <div>
-                                                                <span class="font-medium text-gray-900 dark:text-gray-100">
+                                                                <span class="font-medium text-slate-900 dark:text-slate-100">
                                                                     {agent.displayName || agent.hostname}
                                                                 </span>
                                                                 <Show when={agent.displayName && agent.hostname !== agent.displayName}>
-                                                                    <span class="ml-2 text-xs text-gray-500 dark:text-gray-400">
+                                                                    <span class="ml-2 text-xs text-slate-500 dark:text-slate-400">
                                                                         ({agent.hostname})
                                                                     </span>
                                                                 </Show>
@@ -440,7 +440,7 @@ export const AgentProfilesPanel: Component = () => {
                                                             <select
                                                                 value={assignment()?.profile_id || ''}
                                                                 onChange={(e) => handleAssign(agent.id, e.currentTarget.value)}
-                                                                class="rounded-md border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+                                                                class="min-h-10 sm:min-h-9 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                                                             >
                                                                 <option value="">No profile</option>
                                                                 <For each={profiles()}>
@@ -453,12 +453,12 @@ export const AgentProfilesPanel: Component = () => {
                                                         <td class="py-3 px-3">
                                                             <span class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${isOnline()
                                                                 ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
-                                                                : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+                                                                : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
                                                                 }`}>
                                                                 {isOnline() ? 'Online' : 'Offline'}
                                                             </span>
                                                         </td>
-                                                        <td class="py-3 px-3 text-gray-600 dark:text-gray-400">
+                                                        <td class="py-3 px-3 text-slate-600 dark:text-slate-400">
                                                             {agent.lastSeen ? formatRelativeTime(agent.lastSeen) : 'Never'}
                                                         </td>
                                                     </tr>
@@ -473,16 +473,16 @@ export const AgentProfilesPanel: Component = () => {
 
                     {/* Profile Modal */}
                     <Show when={showModal()}>
-                        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-                            <div class="w-full max-w-lg bg-white dark:bg-gray-900 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 mx-4">
-                                <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                                    <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+                            <div class="w-full max-w-lg bg-white dark:bg-slate-900 rounded-md shadow-sm border border-slate-200 dark:border-slate-700 mx-4">
+                                <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+                                    <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">
                                         {editingProfile() ? 'Edit Profile' : 'New Profile'}
                                     </h3>
                                     <button
                                         type="button"
                                         onClick={() => setShowModal(false)}
-                                        class="p-1.5 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:hover:text-gray-300 dark:hover:bg-gray-800"
+                                        class="p-1.5 rounded-md text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:text-slate-300 dark:hover:bg-slate-800"
                                     >
                                         <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -493,7 +493,7 @@ export const AgentProfilesPanel: Component = () => {
                                 <div class="px-6 py-4 space-y-4 max-h-[60vh] overflow-y-auto">
                                     {/* Profile Name */}
                                     <div class="space-y-1">
-                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">
                                             Profile Name
                                         </label>
                                         <input
@@ -501,35 +501,35 @@ export const AgentProfilesPanel: Component = () => {
                                             value={formName()}
                                             onInput={(e) => setFormName(e.currentTarget.value)}
                                             placeholder="e.g., Production Servers"
-                                            class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-800/60"
+                                            class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-blue-400 dark:focus:ring-blue-800/60"
                                         />
                                     </div>
 
                                     {/* Profile Description */}
                                     <div class="space-y-1">
-                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                            Description <span class="text-gray-400 font-normal">(optional)</span>
+                                        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                                            Description <span class="text-slate-400 font-normal">(optional)</span>
                                         </label>
                                         <textarea
                                             value={formDescription()}
                                             onInput={(e) => setFormDescription(e.currentTarget.value)}
                                             placeholder="What is this profile for?"
                                             rows={2}
-                                            class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-800/60 resize-none"
+                                            class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-blue-400 dark:focus:ring-blue-800/60 resize-none"
                                         />
                                     </div>
 
                                     {/* Settings */}
                                     <div class="space-y-3">
-                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">
                                             Settings
                                         </label>
 
                                         <For each={KNOWN_SETTINGS}>
                                             {(setting) => (
-                                                <div class="rounded-lg border border-gray-200 dark:border-gray-700 p-3 space-y-1">
+                                                <div class="rounded-md border border-slate-200 dark:border-slate-700 p-3 space-y-1">
                                                     <div class="flex items-center justify-between">
-                                                        <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                        <label class="text-sm font-medium text-slate-700 dark:text-slate-300">
                                                             {setting.label}
                                                         </label>
                                                         <Show when={setting.type === 'boolean'}>
@@ -545,16 +545,16 @@ export const AgentProfilesPanel: Component = () => {
                                                                         updateSetting(setting.key, undefined);
                                                                     }
                                                                 }}
-                                                                class={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${formSettings()[setting.key] === true
+                                                                class={`relative inline-flex h-8 w-12 sm:h-7 sm:w-12 items-center rounded-full transition-colors ${formSettings()[setting.key] === true
                                                                     ? 'bg-blue-600'
                                                                     : formSettings()[setting.key] === false
-                                                                        ? 'bg-gray-400'
-                                                                        : 'bg-gray-200 dark:bg-gray-700'
+                                                                        ? 'bg-slate-400'
+                                                                        : 'bg-slate-200 dark:bg-slate-700'
                                                                     }`}
                                                             >
                                                                 <span
-                                                                    class={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${formSettings()[setting.key] === true
-                                                                        ? 'translate-x-6'
+                                                                    class={`inline-block h-6 w-6 sm:h-5 sm:w-5 transform rounded-full bg-white transition-transform ${formSettings()[setting.key] === true
+                                                                        ? 'translate-x-4 sm:translate-x-5'
                                                                         : formSettings()[setting.key] === false
                                                                             ? 'translate-x-1'
                                                                             : 'translate-x-3'
@@ -566,7 +566,7 @@ export const AgentProfilesPanel: Component = () => {
                                                             <select
                                                                 value={(formSettings()[setting.key] as string) || ''}
                                                                 onChange={(e) => updateSetting(setting.key, e.currentTarget.value || undefined)}
-                                                                class="rounded-md border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+                                                                class="min-h-10 sm:min-h-9 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                                                             >
                                                                 <option value="">Default</option>
                                                                 <For each={(setting as SelectSetting).options}>
@@ -580,7 +580,7 @@ export const AgentProfilesPanel: Component = () => {
                                                                 value={(formSettings()[setting.key] as string) || ''}
                                                                 onInput={(e) => updateSetting(setting.key, e.currentTarget.value || undefined)}
                                                                 placeholder="30s"
-                                                                class="w-24 rounded-md border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+                                                                class="min-h-10 sm:min-h-9 w-24 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                                                             />
                                                         </Show>
                                                         <Show when={setting.type === 'string'}>
@@ -589,26 +589,26 @@ export const AgentProfilesPanel: Component = () => {
                                                                 value={(formSettings()[setting.key] as string) || ''}
                                                                 onInput={(e) => updateSetting(setting.key, e.currentTarget.value || undefined)}
                                                                 placeholder={(setting as StringSetting).placeholder || ''}
-                                                                class="w-40 rounded-md border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+                                                                class="min-h-10 sm:min-h-9 w-40 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                                                             />
                                                         </Show>
                                                     </div>
-                                                    <p class="text-xs text-gray-500 dark:text-gray-400">{setting.description}</p>
+                                                    <p class="text-xs text-slate-500 dark:text-slate-400">{setting.description}</p>
                                                 </div>
                                             )}
                                         </For>
 
                                         {/* Unknown Keys Section */}
                                         <Show when={unknownKeys().length > 0}>
-                                            <div class="pt-3 mt-3 border-t border-gray-200 dark:border-gray-700">
+                                            <div class="pt-3 mt-3 border-t border-slate-200 dark:border-slate-700">
                                                 <p class="text-xs text-amber-600 dark:text-amber-400 mb-2">
                                                     Additional settings (not in standard list):
                                                 </p>
                                                 <For each={unknownKeys()}>
                                                     {(key) => (
-                                                        <div class="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-3 mb-2">
+                                                        <div class="rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-3 mb-2">
                                                             <div class="flex items-center justify-between">
-                                                                <label class="text-sm font-medium text-gray-700 dark:text-gray-300 font-mono">
+                                                                <label class="text-sm font-medium text-slate-700 dark:text-slate-300 font-mono">
                                                                     {key}
                                                                 </label>
                                                                 <div class="flex items-center gap-2">
@@ -624,12 +624,12 @@ export const AgentProfilesPanel: Component = () => {
                                                                                 updateSetting(key, val || undefined);
                                                                             }
                                                                         }}
-                                                                        class="w-32 rounded-md border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+                                                                        class="min-h-10 sm:min-h-9 w-32 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                                                                     />
                                                                     <button
                                                                         type="button"
                                                                         onClick={() => updateSetting(key, undefined)}
-                                                                        class="p-1 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30"
+                                                                        class="inline-flex min-h-10 min-w-10 sm:min-h-9 sm:min-w-9 items-center justify-center rounded text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30"
                                                                         title="Remove this setting"
                                                                     >
                                                                         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -646,11 +646,11 @@ export const AgentProfilesPanel: Component = () => {
                                     </div>
                                 </div>
 
-                                <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
+                                <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-200 dark:border-slate-700">
                                     <button
                                         type="button"
                                         onClick={() => setShowModal(false)}
-                                        class="rounded-lg px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+                                        class="rounded-md px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
                                     >
                                         Cancel
                                     </button>
@@ -658,7 +658,7 @@ export const AgentProfilesPanel: Component = () => {
                                         type="button"
                                         onClick={handleSave}
                                         disabled={saving() || !formName().trim()}
-                                        class="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                                        class="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                                     >
                                         {saving() ? 'Saving...' : editingProfile() ? 'Update Profile' : 'Create Profile'}
                                     </button>

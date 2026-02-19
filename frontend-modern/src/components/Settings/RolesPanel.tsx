@@ -143,7 +143,7 @@ export const RolesPanel: Component = () => {
                     <button
                         type="button"
                         onClick={handleCreate}
-                        class="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+                        class="inline-flex w-full sm:w-auto min-h-10 sm:min-h-9 items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-700"
                     >
                         <Plus class="w-4 h-4" />
                         New Role
@@ -153,11 +153,11 @@ export const RolesPanel: Component = () => {
             >
 
                 <Show when={licenseLoaded() && !hasFeature('rbac') && !loading()}>
-                    <div class="p-4 bg-gray-50 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-700 rounded-xl">
+                    <div class="p-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md">
                         <div class="flex flex-col sm:flex-row items-center gap-4">
                             <div class="flex-1">
-                                <h4 class="text-base font-semibold text-gray-900 dark:text-white">Custom Roles (Pro)</h4>
-                                <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                                <h4 class="text-base font-semibold text-slate-900 dark:text-white">Custom Roles (Pro)</h4>
+                                <p class="text-sm text-slate-600 dark:text-slate-400 mt-1">
                                     Define granular permissions and custom access tiers for your team.
                                 </p>
                             </div>
@@ -165,7 +165,7 @@ export const RolesPanel: Component = () => {
                                 href={getUpgradeActionUrlOrFallback('rbac')}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                class="px-5 py-2.5 text-sm font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                                class="px-5 py-2.5 text-sm font-semibold bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
                                 onClick={() => trackUpgradeClicked('settings_roles_panel', 'rbac')}
                             >
                                 Upgrade to Pro
@@ -182,34 +182,34 @@ export const RolesPanel: Component = () => {
 
                 <Show when={!loading()}>
                     <div class="overflow-x-auto">
-                        <table class="w-full text-sm">
+                        <table class="min-w-[620px] w-full text-sm">
                             <thead>
-                                <tr class="border-b border-gray-200 dark:border-gray-700">
-                                    <th class="text-left py-2 px-3 font-medium text-gray-600 dark:text-gray-400">Role</th>
-                                    <th class="text-left py-2 px-3 font-medium text-gray-600 dark:text-gray-400">Permissions</th>
-                                    <th class="text-right py-2 px-3 font-medium text-gray-600 dark:text-gray-400">Actions</th>
+                                <tr class="border-b border-slate-200 dark:border-slate-700">
+                                    <th class="text-left py-2 px-3 font-medium text-slate-600 dark:text-slate-400">Role</th>
+                                    <th class="text-left py-2 px-3 font-medium text-slate-600 dark:text-slate-400">Permissions</th>
+                                    <th class="text-right py-2 px-3 font-medium text-slate-600 dark:text-slate-400">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <For each={roles()}>
                                     {(role) => (
-                                        <tr class="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                        <tr class="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50">
                                             <td class="py-3 px-3">
                                                 <div class="flex flex-col">
-                                                    <span class="font-medium text-gray-900 dark:text-gray-100 flex items-center gap-1">
+                                                    <span class="font-medium text-slate-900 dark:text-slate-100 flex items-center gap-1">
                                                         {role.name}
                                                         <Show when={role.isBuiltIn}>
                                                             <BadgeCheck class="w-4 h-4 text-blue-500" />
                                                         </Show>
                                                     </span>
-                                                    <span class="text-xs text-gray-500 dark:text-gray-400">{role.description}</span>
+                                                    <span class="text-xs text-slate-500 dark:text-slate-400">{role.description}</span>
                                                 </div>
                                             </td>
                                             <td class="py-3 px-3">
                                                 <div class="flex flex-wrap gap-1">
                                                     <For each={role.permissions}>
                                                         {(perm) => (
-                                                            <span class="inline-flex items-center rounded-md bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-400 border border-gray-200 dark:border-gray-700">
+                                                            <span class="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
                                                                 {perm.action}:{perm.resource}
                                                             </span>
                                                         )}
@@ -222,7 +222,7 @@ export const RolesPanel: Component = () => {
                                                         <button
                                                             type="button"
                                                             onClick={() => handleEdit(role)}
-                                                            class="p-1.5 rounded-md text-gray-500 hover:text-blue-600 hover:bg-gray-100 dark:hover:text-blue-300 dark:hover:bg-gray-800"
+                                                            class="p-1.5 rounded-md text-slate-500 hover:text-blue-600 hover:bg-slate-100 dark:hover:text-blue-300 dark:hover:bg-slate-800"
                                                             title="Edit role"
                                                         >
                                                             <Pencil class="w-4 h-4" />
@@ -230,7 +230,7 @@ export const RolesPanel: Component = () => {
                                                         <button
                                                             type="button"
                                                             onClick={() => handleDelete(role)}
-                                                            class="p-1.5 rounded-md text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-900/30"
+                                                            class="p-1.5 rounded-md text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-900/30"
                                                             title="Delete role"
                                                         >
                                                             <Trash2 class="w-4 h-4" />
@@ -238,7 +238,7 @@ export const RolesPanel: Component = () => {
                                                     </div>
                                                 </Show>
                                                 <Show when={role.isBuiltIn}>
-                                                    <span class="text-xs text-gray-400 italic">Read-only</span>
+                                                    <span class="text-xs text-slate-400 italic">Read-only</span>
                                                 </Show>
                                             </td>
                                         </tr>
@@ -252,25 +252,25 @@ export const RolesPanel: Component = () => {
 
             {/* Role Modal */}
             <Show when={showModal()}>
-                <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-                    <div class="w-full max-w-2xl bg-white dark:bg-gray-900 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 mx-4">
-                        <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                            <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+                    <div class="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-md shadow-sm border border-slate-200 dark:border-slate-700 mx-4 max-h-[92vh] overflow-hidden">
+                        <div class="flex items-start justify-between gap-3 px-4 sm:px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+                            <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">
                                 {editingRole() ? 'Edit Role' : 'New Role'}
                             </h3>
                             <button
                                 type="button"
                                 onClick={() => setShowModal(false)}
-                                class="p-1.5 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:hover:text-gray-300 dark:hover:bg-gray-800"
+                                class="p-1.5 rounded-md text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:text-slate-300 dark:hover:bg-slate-800"
                             >
                                 <X class="w-5 h-5" />
                             </button>
                         </div>
 
-                        <div class="px-6 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
+                        <div class="px-4 sm:px-6 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div class="space-y-1">
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">
                                         Role ID
                                     </label>
                                     <input
@@ -279,11 +279,11 @@ export const RolesPanel: Component = () => {
                                         onInput={(e) => setFormId(e.currentTarget.value)}
                                         placeholder="e.g., custom-auditor"
                                         disabled={!!editingRole()}
-                                        class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-900/40 disabled:opacity-50"
+                                        class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-blue-400 dark:focus:ring-blue-900/40 disabled:opacity-50"
                                     />
                                 </div>
                                 <div class="space-y-1">
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">
                                         Role Name
                                     </label>
                                     <input
@@ -291,12 +291,12 @@ export const RolesPanel: Component = () => {
                                         value={formName()}
                                         onInput={(e) => setFormName(e.currentTarget.value)}
                                         placeholder="e.g., Custom Auditor"
-                                        class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-900/40"
+                                        class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-blue-400 dark:focus:ring-blue-900/40"
                                     />
                                 </div>
                             </div>
                             <div class="space-y-1">
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">
                                     Description
                                 </label>
                                 <input
@@ -304,13 +304,13 @@ export const RolesPanel: Component = () => {
                                     value={formDescription()}
                                     onInput={(e) => setFormDescription(e.currentTarget.value)}
                                     placeholder="Brief description of this role's purpose"
-                                    class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-900/40"
+                                    class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-blue-400 dark:focus:ring-blue-900/40"
                                 />
                             </div>
 
                             <div class="space-y-3 pt-2">
-                                <div class="flex items-center justify-between">
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                <div class="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">
                                         Permissions
                                     </label>
                                     <button
@@ -325,21 +325,21 @@ export const RolesPanel: Component = () => {
                                 <div class="space-y-2">
                                     <For each={formPermissions()}>
                                         {(perm, index) => (
-                                            <div class="flex items-center gap-2">
+                                            <div class="flex flex-col sm:flex-row sm:items-center gap-2">
                                                 <select
                                                     value={perm.action}
                                                     onChange={(e) => updatePermission(index(), 'action', e.currentTarget.value)}
-                                                    class="flex-1 rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+                                                    class="w-full sm:flex-1 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                                                 >
                                                     <For each={ACTIONS}>
                                                         {(action) => <option value={action}>{action}</option>}
                                                     </For>
                                                 </select>
-                                                <span class="text-gray-400 text-sm">:</span>
+                                                <span class="hidden sm:inline text-slate-400 text-sm">:</span>
                                                 <select
                                                     value={perm.resource}
                                                     onChange={(e) => updatePermission(index(), 'resource', e.currentTarget.value)}
-                                                    class="flex-1 rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+                                                    class="w-full sm:flex-1 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                                                 >
                                                     <For each={RESOURCES}>
                                                         {(resource) => <option value={resource}>{resource}</option>}
@@ -349,7 +349,7 @@ export const RolesPanel: Component = () => {
                                                     type="button"
                                                     onClick={() => removePermission(index())}
                                                     disabled={formPermissions().length <= 1}
-                                                    class="p-1.5 text-gray-400 hover:text-red-500 disabled:opacity-30"
+                                                    class="self-end sm:self-auto p-1.5 text-slate-400 hover:text-red-500 disabled:opacity-30"
                                                 >
                                                     <Trash2 class="w-4 h-4" />
                                                 </button>
@@ -360,11 +360,11 @@ export const RolesPanel: Component = () => {
                             </div>
                         </div>
 
-                        <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
+                        <div class="grid grid-cols-1 sm:flex sm:items-center sm:justify-end gap-3 px-4 sm:px-6 py-4 border-t border-slate-200 dark:border-slate-700">
                             <button
                                 type="button"
                                 onClick={() => setShowModal(false)}
-                                class="rounded-lg px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+                                class="w-full sm:w-auto rounded-md px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
                             >
                                 Cancel
                             </button>
@@ -372,7 +372,7 @@ export const RolesPanel: Component = () => {
                                 type="button"
                                 onClick={handleSave}
                                 disabled={saving() || !formName().trim()}
-                                class="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                                class="inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                             >
                                 {saving() ? 'Saving...' : editingRole() ? 'Update Role' : 'Create Role'}
                             </button>

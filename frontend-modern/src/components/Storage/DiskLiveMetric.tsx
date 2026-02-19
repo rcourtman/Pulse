@@ -48,7 +48,7 @@ export function DiskLiveMetric(props: DiskLiveMetricProps) {
             // > 100MB/s
             if (v > 100 * 1024 * 1024) return 'text-blue-600 dark:text-blue-400 font-semibold';
         }
-        return 'text-gray-600 dark:text-gray-400';
+        return 'text-slate-600 dark:text-slate-400';
     });
 
     return (

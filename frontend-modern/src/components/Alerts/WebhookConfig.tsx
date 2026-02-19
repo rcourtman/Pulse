@@ -343,8 +343,8 @@ export function WebhookConfig(props: WebhookConfigProps) {
       <Show when={props.webhooks.length > 0}>
         <div class="space-y-3 w-full">
           {/* Quick Actions Bar */}
-          <div class="flex flex-col gap-2 rounded border border-gray-200 px-3 py-3 text-xs dark:border-gray-700 sm:flex-row sm:items-center sm:justify-between">
-            <div class="text-gray-600 dark:text-gray-400 sm:text-sm">
+          <div class="flex flex-col gap-2 rounded border border-slate-200 px-3 py-3 text-xs dark:border-slate-700 sm:flex-row sm:items-center sm:justify-between">
+            <div class="text-slate-600 dark:text-slate-400 sm:text-sm">
               {props.webhooks.filter((w) => w.enabled).length} of {props.webhooks.length} webhooks
               enabled
             </div>
@@ -352,7 +352,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
               <button
                 onClick={() => toggleAllWebhooks(false)}
                 disabled={!someEnabled()}
-                class="w-full rounded border border-gray-300 px-3 py-1 text-xs text-gray-700 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700 sm:w-auto"
+                class="w-full rounded border border-slate-300 px-3 py-1 text-xs text-slate-700 transition-colors hover:bg-slate-100 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700 sm:w-auto"
               >
                 Disable All
               </button>
@@ -367,38 +367,38 @@ export function WebhookConfig(props: WebhookConfigProps) {
           </div>
           <For each={props.webhooks}>
             {(webhook) => (
-              <div class="w-full px-3 py-3 border border-gray-200 text-xs dark:border-gray-700 sm:text-sm">
+              <div class="w-full px-3 py-3 border border-slate-200 text-xs dark:border-slate-700 sm:text-sm">
                 <div class="flex flex-wrap items-center justify-between gap-2">
-                  <span class="font-medium text-gray-800 dark:text-gray-200">{webhook.name}</span>
+                  <span class="font-medium text-slate-800 dark:text-slate-200">{webhook.name}</span>
                   <button
                     onClick={() => props.onUpdate({ ...webhook, enabled: !webhook.enabled })}
                     class={`rounded border px-3 py-1 text-xs font-medium transition-colors ${webhook.enabled
                       ? 'border-green-500 text-green-700 hover:bg-green-50 dark:border-green-600 dark:text-green-400 dark:hover:bg-green-900/20'
-                      : 'border-gray-300 text-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700'
+                      : 'border-slate-300 text-slate-600 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700'
                       }`}
                   >
                     {webhook.enabled ? 'Enabled' : 'Disabled'}
                   </button>
                 </div>
-                <div class="mt-2 flex flex-wrap gap-2 text-[11px] text-gray-600 dark:text-gray-400 sm:text-xs">
-                  <span class="rounded bg-gray-200 px-2 py-0.5 text-gray-700 dark:bg-gray-600 dark:text-gray-200">
+                <div class="mt-2 flex flex-wrap gap-2 text-[11px] text-slate-600 dark:text-slate-400 sm:text-xs">
+                  <span class="rounded bg-slate-200 px-2 py-0.5 text-slate-700 dark:bg-slate-600 dark:text-slate-200">
                     {serviceName(webhook.service || 'generic')}
                   </span>
-                  <span class="rounded bg-gray-200 px-2 py-0.5 text-gray-700 dark:bg-gray-600 dark:text-gray-200">
+                  <span class="rounded bg-slate-200 px-2 py-0.5 text-slate-700 dark:bg-slate-600 dark:text-slate-200">
                     {webhook.method}
                   </span>
-                  <span class="rounded bg-gray-200 px-2 py-0.5 text-gray-700 dark:bg-gray-600 dark:text-gray-200">
+                  <span class="rounded bg-slate-200 px-2 py-0.5 text-slate-700 dark:bg-slate-600 dark:text-slate-200">
                     ID: {webhook.id || '—'}
                   </span>
                 </div>
-                <p class="mt-2 break-all text-[11px] font-mono text-gray-500 dark:text-gray-400 sm:text-xs">
+                <p class="mt-2 break-all text-[11px] font-mono text-slate-500 dark:text-slate-400 sm:text-xs">
                   {webhook.url}
                 </p>
-                <div class="mt-3 flex flex-wrap gap-2 border-t border-gray-100 pt-2 dark:border-gray-700 sm:justify-end w-full">
+                <div class="mt-3 flex flex-wrap gap-2 border-t border-slate-100 pt-2 dark:border-slate-700 sm:justify-end w-full">
                   <button
                     onClick={() => webhook.id && props.onTest(webhook.id)}
                     disabled={props.testing === webhook.id || !webhook.enabled}
-                    class="rounded border border-gray-300 px-3 py-1 text-xs text-gray-700 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700 disabled:opacity-50"
+                    class="rounded border border-slate-300 px-3 py-1 text-xs text-slate-700 transition-colors hover:bg-slate-100 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700 disabled:opacity-50"
                   >
                     {props.testing === webhook.id ? 'Testing…' : 'Test'}
                   </button>
@@ -427,7 +427,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
           {/* Service Selection */}
           <div>
             <div class="flex items-center justify-between mb-4">
-              <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
+              <label class="text-sm font-medium text-slate-700 dark:text-slate-300">
                 Service Type
               </label>
               <button
@@ -440,7 +440,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
             </div>
 
             <Show when={showServiceDropdown()}>
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-2 border border-gray-200 dark:border-gray-700 px-3 py-2 mb-3 text-xs">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-2 border border-slate-200 dark:border-slate-700 px-3 py-2 mb-3 text-xs">
                 <For
                   each={[
                     'generic',
@@ -462,13 +462,13 @@ export function WebhookConfig(props: WebhookConfigProps) {
                       onClick={() => selectService(service)}
                       class={`px-2 py-1.5 text-left border transition-colors text-xs ${formData().service === service
                         ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                        : 'border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/30'
+                        : 'border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700/30'
                         }`}
                     >
-                      <div class="font-medium text-xs text-gray-800 dark:text-gray-200">
+                      <div class="font-medium text-xs text-slate-800 dark:text-slate-200">
                         {serviceName(service)}
                       </div>
-                      <div class="text-[11px] text-gray-600 dark:text-gray-400 mt-1">
+                      <div class="text-[11px] text-slate-600 dark:text-slate-400 mt-1">
                         {service === 'generic'
                           ? 'Custom webhook endpoint'
                           : service === 'discord'
@@ -545,15 +545,15 @@ export function WebhookConfig(props: WebhookConfigProps) {
             />
             <p class={formHelpText + ' mt-1'}>
               Supports template variables like{' '}
-              <code class="font-mono text-[11px] text-gray-600 dark:text-gray-300">
+              <code class="font-mono text-[11px] text-slate-600 dark:text-slate-300">
                 {'{{.Message}}'}
               </code>
               . Use{' '}
-              <code class="font-mono text-[11px] text-gray-600 dark:text-gray-300">
+              <code class="font-mono text-[11px] text-slate-600 dark:text-slate-300">
                 {'{{urlpath ...}}'}
               </code>{' '}
               or{' '}
-              <code class="font-mono text-[11px] text-gray-600 dark:text-gray-300">
+              <code class="font-mono text-[11px] text-slate-600 dark:text-slate-300">
                 {'{{urlquery ...}}'}
               </code>{' '}
               to keep dynamic values URL-safe.
@@ -565,7 +565,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
             <div class={formField}>
               <label class={labelClass('flex items-center gap-2')}>
                 Mention
-                <span class="text-xs text-gray-500 dark:text-gray-400">
+                <span class="text-xs text-slate-500 dark:text-slate-400">
                   Optional — tag users or groups
                 </span>
               </label>
@@ -596,7 +596,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
             <div class={formField}>
               <label class={labelClass('flex items-center gap-2')}>
                 Custom payload template (JSON)
-                <span class="text-xs text-gray-500 dark:text-gray-400">
+                <span class="text-xs text-slate-500 dark:text-slate-400">
                   Optional — leave empty to use default
                 </span>
               </label>
@@ -628,9 +628,9 @@ export function WebhookConfig(props: WebhookConfigProps) {
             <div class={formField}>
               <label class={labelClass('flex items-center gap-2')}>
                 Custom fields
-                <span class="text-xs text-gray-500 dark:text-gray-400">
+                <span class="text-xs text-slate-500 dark:text-slate-400">
                   Available as{' '}
-                  <code class="font-mono text-[11px] text-gray-600 dark:text-gray-300">
+                  <code class="font-mono text-[11px] text-slate-600 dark:text-slate-300">
                     {'{{.CustomFields.<name>}}'}
                   </code>{' '}
                   in templates
@@ -642,7 +642,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
                     <div class="flex gap-2 text-xs">
                       <div class="flex flex-1 flex-col gap-1">
                         <Show when={field().label}>
-                          <span class="text-[11px] text-gray-500 dark:text-gray-400">
+                          <span class="text-[11px] text-slate-500 dark:text-slate-400">
                             {field().label}
                           </span>
                         </Show>
@@ -705,12 +705,12 @@ export function WebhookConfig(props: WebhookConfigProps) {
                       },
                     ]);
                   }}
-                  class="w-full border border-dashed border-gray-300 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-800"
+                  class="w-full border border-dashed border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-400 dark:hover:bg-slate-800"
                 >
                   + Add custom field
                 </button>
               </div>
-              <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+              <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">
                 Need Pushover? Provide your Application Token and User Key here.
               </p>
             </div>
@@ -720,7 +720,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
           <div class={formField}>
             <label class={labelClass('flex items-center gap-2')}>
               Custom headers
-              <span class="text-xs text-gray-500 dark:text-gray-400">
+              <span class="text-xs text-slate-500 dark:text-slate-400">
                 Add authentication tokens or custom headers
               </span>
             </label>
@@ -781,18 +781,18 @@ export function WebhookConfig(props: WebhookConfigProps) {
                     },
                   ]);
                 }}
-                class="w-full border border-dashed border-gray-300 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-800"
+                class="w-full border border-dashed border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-400 dark:hover:bg-slate-800"
               >
                 + Add header
               </button>
             </div>
-            <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+            <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">
               Common headers: Authorization (Bearer token), X-API-Key, X-Auth-Token
             </p>
           </div>
 
           <div>
-            <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+            <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
               <input
                 type="checkbox"
                 checked={formData().enabled}
@@ -806,7 +806,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
           <div class="flex justify-end gap-2 text-xs">
             <button
               onClick={cancelForm}
-              class="px-3 py-1.5 border border-gray-300 rounded text-xs hover:bg-gray-100 dark:border-gray-600 dark:text-gray-200"
+              class="px-3 py-1.5 border border-slate-300 rounded text-xs hover:bg-slate-100 dark:border-slate-600 dark:text-slate-200"
             >
               Cancel
             </button>
@@ -834,7 +834,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
                   props.onTest(tempId, testPayload);
                 }}
                 disabled={props.testing === (editingId() || 'temp-new-webhook')}
-                class="px-3 py-1.5 border border-gray-300 rounded text-xs hover:bg-gray-100 dark:border-gray-600 dark:text-gray-200"
+                class="px-3 py-1.5 border border-slate-300 rounded text-xs hover:bg-slate-100 dark:border-slate-600 dark:text-slate-200"
               >
                 {props.testing === (editingId() || 'temp-new-webhook') ? 'Testing...' : 'Test'}
               </button>
@@ -865,7 +865,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
             ]);
             setCustomFieldInputs([]);
           }}
-          class="w-full border border-dashed border-gray-300 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-800"
+          class="w-full border border-dashed border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-400 dark:hover:bg-slate-800"
         >
           + Add Webhook
         </button>

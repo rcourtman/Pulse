@@ -29,16 +29,16 @@ export function UpdateConfirmationModal(props: UpdateConfirmationModalProps) {
   return (
     <Show when={props.isOpen}>
       <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div class="bg-white dark:bg-slate-800 rounded-md shadow-sm max-w-2xl w-full max-h-[90vh] overflow-y-auto">
           {/* Header */}
-          <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+          <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
             <div class="flex items-center justify-between">
-              <h2 class="text-xl font-semibold text-gray-900 dark:text-gray-100">
+              <h2 class="text-xl font-semibold text-slate-900 dark:text-slate-100">
                 Confirm Update
               </h2>
               <button
                 onClick={props.onClose}
-                class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
                 disabled={props.isApplying}
               >
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -51,7 +51,7 @@ export function UpdateConfirmationModal(props: UpdateConfirmationModalProps) {
           {/* Body */}
           <div class="px-6 py-4 space-y-4">
             {/* Version Jump */}
-            <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+            <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md p-4">
               <div class="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
                 Version Update
               </div>
@@ -66,7 +66,7 @@ export function UpdateConfirmationModal(props: UpdateConfirmationModalProps) {
 
             {/* Estimated Time */}
             <Show when={props.plan.estimatedTime}>
-              <div class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+              <div class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
@@ -77,13 +77,13 @@ export function UpdateConfirmationModal(props: UpdateConfirmationModalProps) {
             {/* Prerequisites */}
             <Show when={props.plan.prerequisites && props.plan.prerequisites.length > 0}>
               <div>
-                <div class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">
+                <div class="text-sm font-medium text-slate-900 dark:text-slate-100 mb-2">
                   Prerequisites
                 </div>
                 <ul class="space-y-2">
                   <For each={props.plan.prerequisites}>
                     {(prerequisite) => (
-                      <li class="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300">
+                      <li class="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300">
                         <svg class="w-4 h-4 mt-0.5 flex-shrink-0 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                         </svg>
@@ -97,7 +97,7 @@ export function UpdateConfirmationModal(props: UpdateConfirmationModalProps) {
 
             {/* Root Required Warning */}
             <Show when={props.plan.requiresRoot}>
-              <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
+              <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md p-3">
                 <div class="flex items-start gap-2">
                   <svg class="w-5 h-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
@@ -123,16 +123,16 @@ export function UpdateConfirmationModal(props: UpdateConfirmationModalProps) {
             </Show>
 
             {/* Acknowledgement Checkbox */}
-            <div class="pt-4 border-t border-gray-200 dark:border-gray-700">
+            <div class="pt-4 border-t border-slate-200 dark:border-slate-700">
               <label class="flex items-start gap-3 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={acknowledged()}
                   onChange={(e) => setAcknowledged(e.currentTarget.checked)}
-                  class="mt-1 w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+                  class="mt-1 w-4 h-4 text-blue-600 bg-slate-100 border-slate-300 rounded focus:ring-blue-500 focus:ring-2"
                   disabled={props.isApplying}
                 />
-                <span class="text-sm text-gray-700 dark:text-gray-300">
+                <span class="text-sm text-slate-700 dark:text-slate-300">
                   I understand that Pulse will be temporarily unavailable during the update process.
                   {props.plan.rollbackSupport && ' A backup will be created automatically.'}
                 </span>
@@ -141,11 +141,11 @@ export function UpdateConfirmationModal(props: UpdateConfirmationModalProps) {
           </div>
 
           {/* Footer */}
-          <div class="px-6 py-4 bg-gray-50 dark:bg-gray-900/50 border-t border-gray-200 dark:border-gray-700 flex items-center justify-end gap-3">
+          <div class="px-6 py-4 bg-slate-50 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 flex items-center justify-end gap-3">
             <button
               onClick={props.onClose}
               disabled={props.isApplying}
-              class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              class="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Cancel
             </button>

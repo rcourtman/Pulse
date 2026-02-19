@@ -51,17 +51,17 @@ export const StoragePoolDetail: Component<StoragePoolDetailProps> = (props) => {
   });
 
   return (
-    <tr class="border-t border-gray-200 dark:border-gray-700">
-      <td colSpan={99} class="bg-gray-50/60 dark:bg-gray-900/20 px-4 py-4">
+    <tr class="border-t border-slate-200 dark:border-slate-700">
+      <td colSpan={99} class="bg-slate-50/60 dark:bg-slate-800 px-4 py-4">
         <div class="grid gap-4 md:grid-cols-2">
           {/* Left: Capacity trend chart */}
-          <div class="rounded-lg border border-gray-200 bg-white/80 p-3 shadow-sm dark:border-gray-600/60 dark:bg-gray-900/30">
+          <div class="rounded-md border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600/60 dark:bg-slate-800">
             <div class="flex items-center justify-between mb-2">
-              <h4 class="text-xs font-semibold text-gray-700 dark:text-gray-200">Capacity Trend</h4>
+              <h4 class="text-xs font-semibold text-slate-700 dark:text-slate-200">Capacity Trend</h4>
               <select
                 value={chartRange()}
                 onChange={(e) => setChartRange(e.currentTarget.value as HistoryTimeRange)}
-                class="text-[11px] font-medium pl-2 pr-5 py-0.5 rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 cursor-pointer appearance-none"
+                class="text-[11px] font-medium pl-2 pr-5 py-0.5 rounded border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 cursor-pointer appearance-none"
                 style={{
                   'background-image': "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")",
                   'background-repeat': 'no-repeat',
@@ -91,8 +91,8 @@ export const StoragePoolDetail: Component<StoragePoolDetailProps> = (props) => {
           {/* Right: Configuration & details */}
           <div class="space-y-3">
             {/* Config card */}
-            <div class="rounded-lg border border-gray-200 bg-white/80 p-3 shadow-sm dark:border-gray-600/60 dark:bg-gray-900/30">
-              <h4 class="text-xs font-semibold text-gray-700 dark:text-gray-200 mb-2">Configuration</h4>
+            <div class="rounded-md border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600/60 dark:bg-slate-800">
+              <h4 class="text-xs font-semibold text-slate-700 dark:text-slate-200 mb-2">Configuration</h4>
               <div class="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[11px]">
                 <ConfigRow label="Node" value={getRecordNodeLabel(props.record)} />
                 <ConfigRow label="Type" value={type()} />
@@ -110,13 +110,13 @@ export const StoragePoolDetail: Component<StoragePoolDetailProps> = (props) => {
 
             {/* ZFS details */}
             <Show when={zfsPool()}>
-              <div class="rounded-lg border border-gray-200 bg-white/80 p-3 shadow-sm dark:border-gray-600/60 dark:bg-gray-900/30">
-                <h4 class="text-xs font-semibold text-gray-700 dark:text-gray-200 mb-2">ZFS Pool</h4>
+              <div class="rounded-md border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600/60 dark:bg-slate-800">
+                <h4 class="text-xs font-semibold text-slate-700 dark:text-slate-200 mb-2">ZFS Pool</h4>
                 <div class="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[11px]">
                   <ConfigRow label="State" value={zfsPool()!.state} />
                   <Show when={zfsPool()!.scan && zfsPool()!.scan !== 'none'}>
                     <div class="col-span-2">
-                      <span class="text-gray-500 dark:text-gray-400">Scan: </span>
+                      <span class="text-slate-500 dark:text-slate-400">Scan: </span>
                       <span class="text-yellow-600 dark:text-yellow-400 italic">{zfsPool()!.scan}</span>
                     </div>
                   </Show>
@@ -131,8 +131,8 @@ export const StoragePoolDetail: Component<StoragePoolDetailProps> = (props) => {
 
             {/* Physical disks linked to this pool */}
             <Show when={poolDisks().length > 0}>
-              <div class="rounded-lg border border-gray-200 bg-white/80 p-3 shadow-sm dark:border-gray-600/60 dark:bg-gray-900/30">
-                <h4 class="text-xs font-semibold text-gray-700 dark:text-gray-200 mb-2">
+              <div class="rounded-md border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600/60 dark:bg-slate-800">
+                <h4 class="text-xs font-semibold text-slate-700 dark:text-slate-200 mb-2">
                   Physical Disks ({poolDisks().length})
                 </h4>
                 <div class="space-y-1">
@@ -143,7 +143,7 @@ export const StoragePoolDetail: Component<StoragePoolDetailProps> = (props) => {
                       const health = () => (pd()?.smart as Record<string, unknown>)?.reallocatedSectors as number | undefined;
                       return (
                         <div class="flex items-center gap-2 text-[11px] py-0.5">
-                          <span class="font-mono text-gray-600 dark:text-gray-400 w-16 truncate" title={pd()?.devPath as string}>
+                          <span class="font-mono text-slate-600 dark:text-slate-400 w-16 truncate" title={pd()?.devPath as string}>
                             {pd()?.devPath as string || disk.name}
                           </span>
                           <span class={`w-2 h-2 rounded-full flex-shrink-0 ${
@@ -151,12 +151,12 @@ export const StoragePoolDetail: Component<StoragePoolDetailProps> = (props) => {
                               ? 'bg-yellow-500'
                               : 'bg-green-500'
                           }`} />
-                          <span class="text-gray-700 dark:text-gray-300 truncate flex-1">
+                          <span class="text-slate-700 dark:text-slate-300 truncate flex-1">
                             {pd()?.model as string || 'Unknown'}
                           </span>
                           <Show when={temp() > 0}>
                             <span class={`font-medium ${
-                              temp() > 60 ? 'text-red-500' : temp() > 50 ? 'text-yellow-500' : 'text-gray-500 dark:text-gray-400'
+                              temp() > 60 ? 'text-red-500' : temp() > 50 ? 'text-yellow-500' : 'text-slate-500 dark:text-slate-400'
                             }`}>
                               {temp()}°C
                             </span>
@@ -177,7 +177,7 @@ export const StoragePoolDetail: Component<StoragePoolDetailProps> = (props) => {
 
 const ConfigRow: Component<{ label: string; value: string }> = (props) => (
   <div class="flex justify-between">
-    <span class="text-gray-500 dark:text-gray-400">{props.label}</span>
-    <span class="text-gray-800 dark:text-gray-200 font-medium">{props.value}</span>
+    <span class="text-slate-500 dark:text-slate-400">{props.label}</span>
+    <span class="text-slate-800 dark:text-slate-200 font-medium">{props.value}</span>
   </div>
 );

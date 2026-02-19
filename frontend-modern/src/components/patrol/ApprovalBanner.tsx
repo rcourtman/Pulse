@@ -93,11 +93,11 @@ export const ApprovalBanner: Component<ApprovalBannerProps> = (props) => {
 
   return (
     <Show when={pending().length > 0}>
-      <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-4 py-3">
+      <div class="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-md px-4 py-3">
         <div class="flex items-center justify-between gap-3 flex-wrap">
           <div class="flex items-center gap-3">
-            <div class="flex-shrink-0 p-1.5 bg-amber-100 dark:bg-amber-900/40 rounded-lg">
-              <ShieldAlertIcon class="w-4 h-4 text-amber-600 dark:text-amber-400" />
+            <div class="flex-shrink-0 p-1.5 border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-900/10 rounded-md">
+              <ShieldAlertIcon class="w-4 h-4 text-amber-500 dark:text-amber-400" />
             </div>
             <div>
               <Show when={pending().length === 1 && firstApproval()}>
@@ -144,7 +144,7 @@ export const ApprovalBanner: Component<ApprovalBannerProps> = (props) => {
                 type="button"
                 onClick={() => handleDeny(firstApproval()!)}
                 disabled={actionLoading() === firstApproval()!.id}
-                class="flex items-center gap-1.5 px-3 py-1.5 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 disabled:opacity-50 text-gray-700 dark:text-gray-300 text-xs font-medium rounded-md transition-colors"
+                class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 disabled:opacity-50 text-slate-700 dark:text-slate-300 text-xs font-medium rounded-md transition-colors"
               >
                 <XIcon class="w-3.5 h-3.5" />
                 Deny

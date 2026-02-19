@@ -38,7 +38,7 @@ export const ThinkingBlock: Component<ThinkingBlockProps> = (props) => {
       <button
         type="button"
         onClick={() => setExpanded(!expanded())}
-        class="w-full flex items-center gap-2 px-3 py-1.5 rounded-md bg-slate-100 dark:bg-slate-800/60 hover:bg-slate-200 dark:hover:bg-slate-700/60 transition-colors text-left group"
+        class="w-full flex items-center gap-2 px-3 py-1.5 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700/60 transition-colors text-left group"
       >
         {/* Thinking icon */}
         <div class={`flex items-center justify-center w-4 h-4 ${props.isStreaming ? 'animate-pulse' : ''}`}>

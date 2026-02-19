@@ -42,44 +42,44 @@ const sourceLabels: Record<string, string> = {
 
 // Severity badge colors
 const severityColors: Record<string, string> = {
-  critical: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300',
-  warning: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
-  info: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300',
-  watch: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300',
+  critical: 'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300',
+  warning: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-300',
+  info: 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-300',
+  watch: 'border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300',
 };
 
 // Source badge colors
 const sourceColors: Record<string, string> = {
-  'threshold': 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300',
-  'ai-patrol': 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300',
-  'anomaly': 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300',
-  'ai-chat': 'bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300',
-  'correlation': 'bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300',
-  'forecast': 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300',
+  'threshold': 'border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-800 dark:bg-orange-900/20 dark:text-orange-300',
+  'ai-patrol': 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-300',
+  'anomaly': 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-300',
+  'ai-chat': 'border-teal-200 bg-teal-50 text-teal-700 dark:border-teal-800 dark:bg-teal-900/20 dark:text-teal-300',
+  'correlation': 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-300',
+  'forecast': 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300',
 };
 
 // Investigation status badge colors
 const investigationStatusColors: Record<InvestigationStatus, string> = {
-  pending: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400',
-  running: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
-  completed: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
-  failed: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
-  needs_attention: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+  pending: 'border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400',
+  running: 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-300',
+  completed: 'border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-900/20 dark:text-green-300',
+  failed: 'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300',
+  needs_attention: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-300',
 };
 
 // Patrol loop state badge colors (best-effort; state is optional)
 const loopStateColors: Record<string, string> = {
-  detected: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
-  investigating: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300',
-  remediation_planned: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
-  remediating: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
-  remediation_failed: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
-  needs_attention: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
-  timed_out: 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300',
-  resolved: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
-  dismissed: 'bg-gray-200 text-gray-600 dark:bg-gray-600 dark:text-gray-300',
-  snoozed: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
-  suppressed: 'bg-gray-200 text-gray-600 dark:bg-gray-600 dark:text-gray-300',
+  detected: 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-300',
+  investigating: 'border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-800 dark:bg-indigo-900/20 dark:text-indigo-300',
+  remediation_planned: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-300',
+  remediating: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-300',
+  remediation_failed: 'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300',
+  needs_attention: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-300',
+  timed_out: 'border-slate-300 bg-slate-100 text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300',
+  resolved: 'border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-900/20 dark:text-green-300',
+  dismissed: 'border-slate-300 bg-slate-100 text-slate-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300',
+  snoozed: 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-300',
+  suppressed: 'border-slate-300 bg-slate-100 text-slate-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300',
 };
 
 const formatLoopState = (s: string) => s.replace(/_/g, ' ');
@@ -480,9 +480,9 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       id={`finding-${finding.id}`}
       class={`p-3 cursor-pointer transition-colors ${finding.status === 'active'
         ? finding.acknowledgedAt
-          ? 'opacity-60 hover:opacity-80 bg-gray-50/30 dark:bg-gray-800/20'
-          : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'
-        : 'opacity-60 bg-gray-50/50 dark:bg-gray-800/30 hover:opacity-80'
+          ? 'opacity-60 hover:opacity-80 bg-slate-50/30 dark:bg-slate-800'
+          : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'
+        : 'opacity-60 bg-slate-50/50 dark:bg-slate-800 hover:opacity-80'
         }`}
       onClick={() => {
         if (expandedId() === finding.id) {
@@ -499,42 +499,42 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
           <div class="flex items-center gap-2 flex-wrap">
             {/* Status badge for non-active findings */}
             <Show when={finding.status !== 'active'}>
-              <span class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${finding.status === 'resolved'
-                ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+              <span class={`px-1.5 py-0.5 border text-[10px] font-medium rounded ${finding.status === 'resolved'
+                ? 'border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-900/20 dark:text-green-300'
                 : finding.status === 'snoozed'
-                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
-                  : 'bg-gray-200 text-gray-600 dark:bg-gray-600 dark:text-gray-300'
+                  ? 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-300'
+                  : 'border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
                 }`}>
                 {finding.status === 'resolved' ? 'Resolved' : finding.status === 'snoozed' ? 'Snoozed' : 'Dismissed'}
               </span>
             </Show>
             {/* Source badge - only show when requested */}
             <Show when={showSourceBadge}>
-              <span class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${sourceColors[finding.source] || sourceColors['ai-patrol']}`}>
+              <span class={`px-1.5 py-0.5 border text-[10px] font-medium rounded ${sourceColors[finding.source] || sourceColors['ai-patrol']}`}>
                 {sourceLabels[finding.source] || finding.source}
               </span>
             </Show>
             {/* Severity badge */}
-            <span class={`px-1.5 py-0.5 text-[10px] font-medium rounded uppercase ${severityColors[finding.severity]}`}>
+            <span class={`px-1.5 py-0.5 border text-[10px] font-medium rounded uppercase ${severityColors[finding.severity]}`}>
               {finding.severity}
             </span>
             {/* Alert-triggered badge */}
             <Show when={finding.alertId}>
               <span
-                class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300"
+                class="px-1.5 py-0.5 border text-[10px] font-medium rounded border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-900/10 text-amber-700 dark:text-amber-300"
                 title={finding.alertType ? `Alert: ${finding.alertType}` : `Alert ID: ${finding.alertId}`}
               >
                 Alert-triggered
               </span>
             </Show>
             <Show when={finding.acknowledgedAt && finding.status === 'active'}>
-              <span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-gray-200 text-gray-600 dark:bg-gray-600 dark:text-gray-300">
+              <span class="px-1.5 py-0.5 border text-[10px] font-medium rounded border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
                 Acknowledged
               </span>
             </Show>
             <Show when={finding.status === 'active' && finding.loopState && !finding.investigationStatus && !finding.investigationOutcome}>
               <span
-                class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${loopStateColors[finding.loopState!] || 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'}`}
+                class={`px-1.5 py-0.5 border text-[10px] font-medium rounded ${loopStateColors[finding.loopState!] || 'border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800 text-slate-600 dark:text-slate-400'}`}
                 title={`Patrol loop: ${formatLoopState(finding.loopState!)}`}
               >
                 {formatLoopState(finding.loopState!)}
@@ -542,7 +542,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             </Show>
             <Show when={isOutOfScope(finding)}>
               <span
-                class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-amber-200 text-amber-900 dark:bg-amber-900/60 dark:text-amber-100"
+                class="px-1.5 py-0.5 border text-[10px] font-medium rounded border-amber-300 bg-amber-100 text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-100"
                 title="This finding references a resource outside the selected run scope."
               >
                 Out of scope
@@ -551,7 +551,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             {/* Investigation status badge — only when no outcome badge will show */}
             <Show when={finding.investigationStatus && !(finding.investigationOutcome && finding.investigationStatus !== 'running' && finding.investigationStatus !== 'pending')}>
               <span
-                class={`px-1.5 py-0.5 text-[10px] font-medium rounded flex items-center gap-1 ${investigationStatusColors[finding.investigationStatus!]}`}
+                class={`px-1.5 py-0.5 border text-[10px] font-medium rounded flex items-center gap-1 ${investigationStatusColors[finding.investigationStatus!]}`}
                 title={`Investigation: ${investigationStatusLabels[finding.investigationStatus!]}`}
               >
                 <Show when={finding.investigationStatus === 'running' || finding.investigationStatus === 'pending'}>
@@ -562,20 +562,20 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             </Show>
             {/* Investigation outcome badge — replaces status badge when outcome is known */}
             <Show when={finding.investigationOutcome && finding.investigationStatus !== 'running' && finding.investigationStatus !== 'pending'}>
-              <span class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${investigationOutcomeColors[finding.investigationOutcome!] || 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'}`}>
+              <span class={`px-1.5 py-0.5 border text-[10px] font-medium rounded ${investigationOutcomeColors[finding.investigationOutcome!] || 'border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800 text-slate-600 dark:text-slate-400'}`}>
                 {investigationOutcomeLabels[finding.investigationOutcome!]}
               </span>
             </Show>
             {/* Title */}
             <span class={`font-medium text-sm truncate ${finding.status === 'active'
-              ? 'text-gray-900 dark:text-gray-100'
-              : 'text-gray-500 dark:text-gray-400'
+              ? 'text-slate-900 dark:text-slate-100'
+              : 'text-slate-500 dark:text-slate-400'
               }`}>
               {finding.title}
             </span>
           </div>
           {/* Resource info */}
-          <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+          <div class="text-xs text-slate-500 dark:text-slate-400 mt-1">
             {finding.resourceName} ({finding.resourceType}) - {formatTime(finding.detectedAt)}
             <Show when={finding.status === 'resolved' && finding.resolvedAt}>
               <span class="ml-2 text-green-600 dark:text-green-400">
@@ -583,7 +583,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               </span>
             </Show>
             <Show when={finding.dismissedReason}>
-              <span class="ml-2 text-gray-400 dark:text-gray-500">
+              <span class="ml-2 text-slate-400 dark:text-slate-500">
                 ({finding.dismissedReason?.replace(/_/g, ' ')})
               </span>
             </Show>
@@ -593,12 +593,12 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               </span>
             </Show>
             <Show when={finding.acknowledgedAt && finding.status === 'active'}>
-              <span class="ml-2 text-gray-400 dark:text-gray-500">
+              <span class="ml-2 text-slate-400 dark:text-slate-500">
                 acknowledged {formatTime(finding.acknowledgedAt!)}
               </span>
             </Show>
             <Show when={finding.status === 'active' && finding.lastInvestigatedAt}>
-              <span class="ml-2 text-gray-400 dark:text-gray-500">
+              <span class="ml-2 text-slate-400 dark:text-slate-500">
                 last investigated {formatTime(finding.lastInvestigatedAt!)}
               </span>
             </Show>
@@ -611,7 +611,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               <button
                 type="button"
                 onClick={(e) => handleAcknowledge(finding, e)}
-                class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                class="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
                 title="Acknowledge"
                 disabled={actionLoading() === finding.id}
               >
@@ -623,7 +623,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             <button
               type="button"
               onClick={(e) => handleSnooze(finding, 24, e)}
-              class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              class="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
               title="Snooze 24h"
               disabled={actionLoading() === finding.id}
             >
@@ -634,7 +634,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             <button
               type="button"
               onClick={(e) => handleStartDismiss(finding, 'will_fix_later', e)}
-              class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              class="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
               title="Dismiss"
               disabled={actionLoading() === finding.id}
             >
@@ -645,7 +645,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
           </Show>
           {/* Expand indicator */}
           <svg
-            class={`w-4 h-4 text-gray-400 transition-transform ${expandedId() === finding.id ? 'rotate-180' : ''}`}
+            class={`w-4 h-4 text-slate-400 transition-transform ${expandedId() === finding.id ? 'rotate-180' : ''}`}
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -664,17 +664,17 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
 
   // Render expanded content for a finding
   const renderExpandedContent = (finding: UnifiedFinding) => (
-    <div class="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
+    <div class="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700">
       <Show when={finding.alertId}>
         <div class="text-xs text-amber-700 dark:text-amber-300 mb-2">
           Triggered by alert{finding.alertType ? ` (${finding.alertType})` : ''} • ID {finding.alertId}
         </div>
       </Show>
-      <p class="text-sm text-gray-600 dark:text-gray-400">
+      <p class="text-sm text-slate-600 dark:text-slate-400">
         {finding.description}
       </p>
       <Show when={finding.recommendation}>
-        <p class="text-sm text-gray-700 dark:text-gray-300 mt-2">
+        <p class="text-sm text-slate-700 dark:text-slate-300 mt-2">
           <span class="font-medium">Recommendation:</span> {finding.recommendation}
         </p>
       </Show>
@@ -689,21 +689,21 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       </Show>
 
       <Show when={finding.lifecycle && finding.lifecycle.length > 0}>
-        <div class="mt-3 p-2 rounded border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
-          <div class="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Lifecycle</div>
+        <div class="mt-3 p-2 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
+          <div class="text-xs font-medium text-slate-700 dark:text-slate-300 mb-2">Lifecycle</div>
           <div class="space-y-1">
             <For each={[...(finding.lifecycle || [])].slice(-6).reverse()}>
               {(event) => (
-                <div class="text-xs text-gray-600 dark:text-gray-400 flex items-start justify-between gap-2">
+                <div class="text-xs text-slate-600 dark:text-slate-400 flex items-start justify-between gap-2">
                   <span class="truncate">
-                    <span class="font-medium text-gray-700 dark:text-gray-300">{formatLifecycleType(event.type)}</span>
+                    <span class="font-medium text-slate-700 dark:text-slate-300">{formatLifecycleType(event.type)}</span>
                     <Show when={event.message}>
                       {' '}
                       <span>{event.message}</span>
                     </Show>
                     <Show when={event.from && event.to}>
                       {' '}
-                      <span class="text-gray-500 dark:text-gray-400">({event.from} {'->'} {event.to})</span>
+                      <span class="text-slate-500 dark:text-slate-400">({event.from} {'->'} {event.to})</span>
                     </Show>
                   </span>
                   <span class="shrink-0">{formatRelativeTime(event.at)}</span>
@@ -718,7 +718,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       <Show when={editingNoteId() === finding.id}>
         <div class="mt-3 p-2 rounded border border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-900/20" onClick={(e) => e.stopPropagation()}>
           <textarea
-            class="w-full text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-2 py-1.5 resize-none focus:outline-none focus:ring-1 focus:ring-blue-500"
+            class="w-full text-sm rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-2 py-1.5 resize-none focus:outline-none focus:ring-1 focus:ring-blue-500"
             rows={3}
             value={noteText()}
             onInput={(e) => setNoteText(e.currentTarget.value)}
@@ -736,7 +736,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             <button
               type="button"
               onClick={handleCancelNote}
-              class="px-3 py-1 text-xs font-medium rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
+              class="px-3 py-1 text-xs font-medium rounded border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700"
             >
               Cancel
             </button>
@@ -744,15 +744,15 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
         </div>
       </Show>
       <Show when={editingNoteId() !== finding.id && finding.userNote}>
-        <div class="mt-3 p-2 rounded border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 flex items-start gap-2">
-          <svg class="w-4 h-4 text-gray-400 dark:text-gray-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div class="mt-3 p-2 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 flex items-start gap-2">
+          <svg class="w-4 h-4 text-slate-400 dark:text-slate-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
           </svg>
-          <p class="text-sm text-gray-600 dark:text-gray-400 flex-1">{finding.userNote}</p>
+          <p class="text-sm text-slate-600 dark:text-slate-400 flex-1">{finding.userNote}</p>
           <button
             type="button"
             onClick={(e) => handleStartEditNote(finding, e)}
-            class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 flex-shrink-0"
+            class="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 flex-shrink-0"
             title="Edit note"
           >
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -768,9 +768,9 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
           <button
             type="button"
             onClick={(e) => handleStartEditNote(finding, e)}
-            class="px-2 py-1 rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-1"
+            class="px-2 py-1 rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-1"
           >
-            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="w-3 h-3 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
             </svg>
             Add Note
@@ -779,7 +779,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
         <button
           type="button"
           onClick={(e) => handleDiscussWithAssistant(finding, e)}
-          class="px-2 py-1 rounded border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30 flex items-center gap-1"
+          class="px-2 py-1 rounded bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/40 flex items-center gap-1 transition-colors"
         >
           <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
@@ -794,7 +794,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             <button
               type="button"
               onClick={(e) => handleAcknowledge(finding, e)}
-              class="px-2 py-1 rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
+              class="px-2 py-1 rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
               disabled={actionLoading() === finding.id}
             >
               Acknowledge
@@ -803,7 +803,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
           <button
             type="button"
             onClick={(e) => handleSnooze(finding, 1, e)}
-            class="px-2 py-1 rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
+            class="px-2 py-1 rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
             disabled={actionLoading() === finding.id}
           >
             Snooze 1h
@@ -811,7 +811,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
           <button
             type="button"
             onClick={(e) => handleSnooze(finding, 24, e)}
-            class="px-2 py-1 rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
+            class="px-2 py-1 rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
             disabled={actionLoading() === finding.id}
           >
             Snooze 24h
@@ -819,7 +819,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
           <button
             type="button"
             onClick={(e) => handleSnooze(finding, 168, e)}
-            class="px-2 py-1 rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
+            class="px-2 py-1 rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
             disabled={actionLoading() === finding.id}
           >
             Snooze 7d
@@ -827,7 +827,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
           <button
             type="button"
             onClick={(e) => handleStartDismiss(finding, 'not_an_issue', e)}
-            class="px-2 py-1 rounded border border-red-200 text-red-700 dark:border-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/30"
+            class="px-2 py-1 rounded border border-slate-200 text-red-600 dark:border-slate-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
             disabled={actionLoading() === finding.id}
           >
             Dismiss: Not an issue
@@ -835,7 +835,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
           <button
             type="button"
             onClick={(e) => handleStartDismiss(finding, 'expected_behavior', e)}
-            class="px-2 py-1 rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
+            class="px-2 py-1 rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
             disabled={actionLoading() === finding.id}
           >
             Dismiss: Expected
@@ -843,7 +843,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
           <button
             type="button"
             onClick={(e) => handleStartDismiss(finding, 'will_fix_later', e)}
-            class="px-2 py-1 rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
+            class="px-2 py-1 rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
             disabled={actionLoading() === finding.id}
           >
             Dismiss: Later
@@ -859,7 +859,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             </span>
           </div>
           <textarea
-            class="w-full text-xs px-2 py-1.5 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 resize-none focus:outline-none focus:ring-1 focus:ring-red-400"
+            class="w-full text-xs px-2 py-1.5 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 resize-none focus:outline-none focus:ring-1 focus:ring-red-400"
             rows={2}
             placeholder="Optional note (for learning context)..."
             value={dismissNote()}
@@ -878,7 +878,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             <button
               type="button"
               onClick={handleCancelDismiss}
-              class="px-2.5 py-1 text-xs font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+              class="px-2.5 py-1 text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors"
             >
               Cancel
             </button>
@@ -886,7 +886,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
         </div>
       </Show>
       <Show when={finding.correlatedFindingIds && finding.correlatedFindingIds.length > 0}>
-        <div class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+        <div class="mt-2 text-xs text-slate-500 dark:text-slate-400">
           Related findings: {finding.correlatedFindingIds?.length}
         </div>
       </Show>
@@ -923,12 +923,12 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       {/* Remediation Plan artifact (generated by Patrol and/or an investigation) */}
       <Show when={finding.status === 'active' && plansByFindingId().get(finding.id)}>
         {(plan) => (
-          <div class="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
+          <div class="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700">
             <div class="flex items-center gap-2 mb-2">
               <svg class="w-4 h-4 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
               </svg>
-              <span class="text-sm font-medium text-gray-900 dark:text-gray-100">Remediation Plan</span>
+              <span class="text-sm font-medium text-slate-900 dark:text-slate-100">Remediation Plan</span>
               <span class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${plan().risk_level === 'high' ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' :
                 plan().risk_level === 'medium' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' :
                   'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
@@ -940,13 +940,13 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               <For each={plan().steps}>
                 {(step) => (
                   <div class="flex items-start gap-2 text-sm">
-                    <span class="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded-full bg-gray-100 dark:bg-gray-700 text-xs font-medium text-gray-600 dark:text-gray-400">
+                    <span class="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-700 text-xs font-medium text-slate-600 dark:text-slate-400">
                       {step.order}
                     </span>
                     <div class="flex-1 min-w-0">
-                      <div class="text-gray-700 dark:text-gray-300">{step.action}</div>
+                      <div class="text-slate-700 dark:text-slate-300">{step.action}</div>
                       <Show when={step.command}>
-                        <div class="mt-1 font-mono text-[11px] whitespace-pre-wrap break-words text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800/40 px-2 py-1 rounded">
+                        <div class="mt-1 font-mono text-[11px] whitespace-pre-wrap break-words text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded">
                           {step.command}
                         </div>
                       </Show>
@@ -956,7 +956,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               </For>
             </div>
 
-            <div class="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
+            <div class="flex items-center gap-2 mt-3 pt-3 border-t border-slate-100 dark:border-slate-700">
               <button
                 type="button"
                 onClick={(e) => handleOpenPlanInAssistant(finding, plan(), e)}
@@ -970,7 +970,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               <button
                 type="button"
                 onClick={(e) => handleDismissPlan(plan(), e)}
-                class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-400 text-xs font-medium rounded"
+                class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-400 text-xs font-medium rounded"
               >
                 Dismiss
               </button>
@@ -991,8 +991,8 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               type="button"
               onClick={() => setFilter('active')}
               class={`px-2 py-1 rounded-l border ${filter() === 'active'
-                ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
-                : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
+                ? 'bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border-slate-300 dark:border-slate-600 shadow-sm'
+                : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                 }`}
             >
               Active
@@ -1000,9 +1000,9 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             <button
               type="button"
               onClick={() => setFilter('all')}
-              class={`px-2 py-1 border-t border-b ${filter() === 'all'
-                ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
-                : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
+              class={`px-2 py-1 border-y border-x ${filter() === 'all'
+                ? 'bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border-slate-300 dark:border-slate-600 shadow-sm'
+                : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                 }`}
             >
               All
@@ -1010,10 +1010,10 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             <button
               type="button"
               onClick={() => setFilter('resolved')}
-              class={`px-2 py-1 border ${filter() === 'resolved'
-                ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
-                : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
-                } ${aiIntelligenceStore.needsAttentionCount > 0 || aiIntelligenceStore.pendingApprovalCount > 0 ? '' : 'rounded-r'}`}
+              class={`px-2 py-1 border-y border-r ${filter() === 'resolved'
+                ? 'bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border-slate-300 dark:border-slate-600 shadow-sm'
+                : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                } ${aiIntelligenceStore.needsAttentionCount > 0 || aiIntelligenceStore.pendingApprovalCount > 0 ? '' : 'rounded-r border-r'}`}
             >
               Resolved
             </button>
@@ -1021,10 +1021,10 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               <button
                 type="button"
                 onClick={() => setFilter('attention')}
-                class={`px-2 py-1 border ${filter() === 'attention'
-                  ? 'bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700'
-                  : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
-                  } ${aiIntelligenceStore.pendingApprovalCount > 0 ? '' : 'rounded-r'}`}
+                class={`px-2 py-1 border-y border-r ${filter() === 'attention'
+                  ? 'bg-amber-50 dark:bg-amber-900/10 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700 shadow-sm'
+                  : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  } ${aiIntelligenceStore.pendingApprovalCount > 0 ? '' : 'rounded-r border-r'}`}
               >
                 Needs Attention ({aiIntelligenceStore.needsAttentionCount})
               </button>
@@ -1033,9 +1033,9 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               <button
                 type="button"
                 onClick={() => setFilter('approvals')}
-                class={`px-2 py-1 rounded-r border ${filter() === 'approvals'
-                  ? 'bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700'
-                  : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
+                class={`px-2 py-1 rounded-r border-y border-r ${filter() === 'approvals'
+                  ? 'bg-amber-50 dark:bg-amber-900/10 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700 shadow-sm'
+                  : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                   }`}
               >
                 Approvals ({aiIntelligenceStore.pendingApprovalCount})
@@ -1045,7 +1045,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
           <select
             value={sortBy()}
             onChange={(e) => setSortBy(e.currentTarget.value as 'severity' | 'time')}
-            class="text-xs px-2 py-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800"
+            class="text-xs px-2 py-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800"
           >
             <option value="severity">By Severity</option>
             <option value="time">By Time</option>
@@ -1055,7 +1055,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
 
       {/* Loading/Error states */}
       <Show when={aiIntelligenceStore.findingsLoading}>
-        <div class="p-4 text-sm text-gray-500 dark:text-gray-400 flex items-center gap-2">
+        <div class="p-4 text-sm text-slate-500 dark:text-slate-400 flex items-center gap-2">
           <span class="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
           Loading findings...
         </div>
@@ -1071,41 +1071,41 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       <Show when={!aiIntelligenceStore.findingsLoading}>
         <Card padding="none" class="overflow-hidden">
           {/* Header */}
-          <div class="bg-blue-50 dark:bg-blue-900/20 px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+          <div class="bg-blue-50 dark:bg-blue-900/20 px-4 py-3 border-b border-slate-200 dark:border-slate-700">
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-2">
                 <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                 </svg>
-                <span class="font-medium text-gray-900 dark:text-gray-100">Pulse Patrol Findings</span>
+                <span class="font-medium text-slate-900 dark:text-slate-100">Pulse Patrol Findings</span>
                 <Show when={patrolFindings().length > 0}>
                   <span class="px-2 py-0.5 text-xs font-medium bg-blue-200 dark:bg-blue-700 text-blue-800 dark:text-blue-200 rounded-full">
                     {patrolFindings().length}
                   </span>
                 </Show>
               </div>
-              <span class="text-xs text-gray-500 dark:text-gray-400">AI-discovered insights</span>
+              <span class="text-xs text-slate-500 dark:text-slate-400">AI-discovered insights</span>
             </div>
           </div>
           {/* Content */}
           <div class="divide-y divide-gray-100 dark:divide-gray-800">
             <Show when={patrolFindings().length === 0}>
-              <div class="p-6 text-sm text-gray-500 dark:text-gray-400 text-center">
+              <div class="p-6 text-sm text-slate-500 dark:text-slate-400 text-center">
                 <Show when={filter() === 'active'}>
                   <div class="flex flex-col items-center gap-3">
                     <svg class="w-10 h-10 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                     <div>
-                      <p class="font-medium text-gray-700 dark:text-gray-300">No active findings</p>
+                      <p class="font-medium text-slate-700 dark:text-slate-300">No active findings</p>
                       <p class="text-xs mt-1">Your infrastructure looks healthy!</p>
                     </div>
                     <Show when={props.nextPatrolAt || props.lastPatrolAt || props.patrolIntervalMs}>
-                      <div class="mt-2 pt-3 border-t border-gray-200 dark:border-gray-700 w-full max-w-xs">
+                      <div class="mt-2 pt-3 border-t border-slate-200 dark:border-slate-700 w-full max-w-xs">
                         <div class="flex items-center justify-center gap-4 text-xs">
                           <Show when={props.lastPatrolAt}>
                             <div class="flex items-center gap-1.5">
-                              <svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                               </svg>
                               <span>Last: {formatTime(props.lastPatrolAt!)}</span>
@@ -1120,7 +1120,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                             </div>
                           </Show>
                           <Show when={!props.nextPatrolAt && !props.lastPatrolAt && props.patrolIntervalMs}>
-                            <div class="flex items-center gap-1.5 text-gray-500 dark:text-gray-400">
+                            <div class="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
                               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                               </svg>

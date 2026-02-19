@@ -28,11 +28,11 @@ interface InvestigationSectionProps {
 }
 
 const statusColors: Record<string, string> = {
-  pending: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400',
-  running: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
-  completed: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
-  failed: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
-  needs_attention: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+  pending: 'border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400',
+  running: 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900/10 dark:text-blue-300',
+  completed: 'border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-900/10 dark:text-green-300',
+  failed: 'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900/10 dark:text-red-300',
+  needs_attention: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/10 dark:text-amber-300',
 };
 
 
@@ -94,27 +94,27 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
   };
 
   return (
-    <div class="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
+    <div class="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700">
       {/* Header */}
       <div class="flex items-center justify-between mb-2">
         <div class="flex items-center gap-2">
-          <span class="text-sm font-medium text-gray-900 dark:text-gray-100">Investigation</span>
+          <span class="text-sm font-medium text-slate-900 dark:text-slate-100">Investigation</span>
           {/* Show outcome badge when available, otherwise show status badge */}
           <Show when={investigation()?.outcome}
             fallback={
               <Show when={investigation()?.status}>
-                <span class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${statusColors[investigation()!.status] || statusColors.pending}`}>
+                <span class={`px-1.5 py-0.5 border text-[10px] font-medium rounded ${statusColors[investigation()!.status] || statusColors.pending}`}>
                   {investigationStatusLabels[investigation()!.status] || investigation()!.status}
                 </span>
               </Show>
             }
           >
-            <span class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${investigationOutcomeColors[investigation()!.outcome!] || investigationOutcomeColors.needs_attention}`}>
+            <span class={`px-1.5 py-0.5 border text-[10px] font-medium rounded ${investigationOutcomeColors[investigation()!.outcome!] || investigationOutcomeColors.needs_attention}`}>
               {investigationOutcomeLabels[investigation()!.outcome!] || investigation()!.outcome}
             </span>
           </Show>
           <Show when={props.investigationAttempts && props.investigationAttempts > 1}>
-            <span class="text-[10px] text-gray-500 dark:text-gray-400">
+            <span class="text-[10px] text-slate-500 dark:text-slate-400">
               attempt {props.investigationAttempts}
             </span>
           </Show>
@@ -131,13 +131,13 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
           </button>
         </Show>
         <Show when={!canReinvestigate() && Date.now() < cooldownUntil()}>
-          <span class="text-xs text-gray-500 dark:text-gray-400">Re-investigation started</span>
+          <span class="text-xs text-slate-500 dark:text-slate-400">Re-investigation started</span>
         </Show>
       </div>
 
       {/* Loading */}
       <Show when={investigation.loading}>
-        <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 py-2">
+        <div class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 py-2">
           <span class="h-3 w-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
           Loading investigation...
         </div>
@@ -145,7 +145,7 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
 
       {/* No investigation data */}
       <Show when={!investigation.loading && !investigation()}>
-        <p class="text-xs text-gray-500 dark:text-gray-400 py-1">
+        <p class="text-xs text-slate-500 dark:text-slate-400 py-1">
           No investigation data available. Enable patrol autonomy to investigate findings.
         </p>
       </Show>
@@ -155,7 +155,7 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
         {(inv) => (
           <div class="space-y-2">
             {/* Error message for failed investigations */}
-          <Show when={inv().error && (inv().status === 'failed' || inv().outcome === 'timed_out' || inv().outcome === 'fix_failed' || inv().outcome === 'fix_verification_failed' || inv().outcome === 'fix_verification_unknown' || inv().outcome === 'needs_attention' || inv().outcome === 'cannot_fix')}>
+            <Show when={inv().error && (inv().status === 'failed' || inv().outcome === 'timed_out' || inv().outcome === 'fix_failed' || inv().outcome === 'fix_verification_failed' || inv().outcome === 'fix_verification_unknown' || inv().outcome === 'needs_attention' || inv().outcome === 'cannot_fix')}>
               <div class="text-xs text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded p-2">
                 {inv().error}
               </div>
@@ -163,7 +163,7 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
 
             {/* Summary */}
             <Show when={inv().summary}>
-              <div class="text-sm text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800/50 rounded p-2">
+              <div class="text-sm text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 rounded p-2">
                 {inv().summary}
               </div>
             </Show>
@@ -181,11 +181,11 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
                   </For>
                 </div>
               </Show>
-              <span class="text-[10px] text-gray-500 dark:text-gray-400">
+              <span class="text-[10px] text-slate-500 dark:text-slate-400">
                 {inv().turn_count} turn{inv().turn_count === 1 ? '' : 's'}
               </span>
               <Show when={inv().started_at}>
-                <span class="text-[10px] text-gray-500 dark:text-gray-400">
+                <span class="text-[10px] text-slate-500 dark:text-slate-400">
                   started {formatTimestamp(inv().started_at)}
                 </span>
               </Show>

@@ -20,7 +20,7 @@
 }
 
 /* Notification animations */
-@keyframes slide-in-glass {
+@keyframes slide-in-card {
   from {
     opacity: 0;
     transform: translateX(100%) scale(0.95);
@@ -34,17 +34,10 @@
   }
 }
 
-.animate-slide-in-glass {
-  animation: slide-in-glass 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+.animate-slide-in-card {
+  animation: slide-in-card 0.5s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* Support for backdrop blur in browsers */
-@supports (backdrop-filter: blur(0px)) {
-  .backdrop-blur-xl {
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-  }
-}
 
 /* Custom styles */
 @layer base {
@@ -59,7 +52,7 @@
   }
 
   body {
-    @apply bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100;
+    @apply bg-slate-100 dark:bg-slate-900 text-slate-900 dark:text-slate-100;
     /* Ensure body scrollbar follows our styling */
     overflow-y: auto;
     overflow-x: hidden;
@@ -82,11 +75,11 @@
 
   /* Slider track styles - match progress bar height */
   .threshold-slider::-webkit-slider-runnable-track {
-    @apply h-3.5 rounded bg-gray-200 dark:bg-gray-600;
+    @apply h-3.5 rounded bg-slate-200 dark:bg-slate-600;
   }
 
   .threshold-slider::-moz-range-track {
-    @apply h-3.5 rounded bg-gray-200 dark:bg-gray-600;
+    @apply h-3.5 rounded bg-slate-200 dark:bg-slate-600;
   }
 
   /* Slider thumb styles with value display */
@@ -181,16 +174,16 @@
 
   /* Card styles */
   .card {
-    @apply bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700;
+    @apply bg-white dark:bg-slate-800 rounded-md shadow-sm border border-slate-200 dark:border-slate-700;
   }
 
   /* Table styles */
   .table-header {
-    @apply text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider;
+    @apply text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider;
   }
 
   .table-row {
-    @apply border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-750;
+    @apply border-b border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750;
   }
 
   /* Status indicators */
@@ -199,7 +192,7 @@
   }
 
   .status-stopped {
-    @apply text-gray-600 dark:text-gray-400;
+    @apply text-slate-600 dark:text-slate-400;
   }
 
   .status-error {
@@ -208,7 +201,7 @@
 
   /* Progress bars */
   .progress-bar {
-    @apply bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden;
+    @apply bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden;
   }
 
   .progress-fill {
@@ -249,15 +242,15 @@
   }
 
   .custom-scrollbar::-webkit-scrollbar-track {
-    @apply bg-gray-100 dark:bg-gray-800;
+    @apply bg-slate-100 dark:bg-slate-800;
   }
 
   .custom-scrollbar::-webkit-scrollbar-thumb {
-    @apply bg-gray-300 dark:bg-gray-700 rounded-full;
+    @apply bg-slate-300 dark:bg-slate-700 rounded-full;
   }
 
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    @apply bg-gray-400 dark:bg-gray-600;
+    @apply bg-slate-400 dark:bg-slate-600;
   }
 }
 
@@ -316,31 +309,31 @@ body,
 .table-row,
 .table-header,
 .bg-white,
-.bg-gray-50,
-.bg-gray-100,
-.bg-gray-200,
-.bg-gray-300,
-.bg-gray-700,
-.bg-gray-800,
-.bg-gray-900,
-.text-gray-500,
-.text-gray-600,
-.text-gray-700,
-.text-gray-800,
-.text-gray-900,
-.border-gray-200,
-.border-gray-300,
-.border-gray-600,
-.border-gray-700,
-.dark\:bg-gray-700,
-.dark\:bg-gray-800,
-.dark\:bg-gray-900,
-.dark\:text-gray-100,
-.dark\:text-gray-200,
-.dark\:text-gray-300,
-.dark\:text-gray-400,
-.dark\:border-gray-600,
-.dark\:border-gray-700 {
+.bg-slate-50,
+.bg-slate-100,
+.bg-slate-200,
+.bg-slate-300,
+.bg-slate-700,
+.bg-slate-800,
+.bg-slate-900,
+.text-slate-500,
+.text-slate-600,
+.text-slate-700,
+.text-slate-800,
+.text-slate-900,
+.border-slate-200,
+.border-slate-300,
+.border-slate-600,
+.border-slate-700,
+.dark\:bg-slate-700,
+.dark\:bg-slate-800,
+.dark\:bg-slate-900,
+.dark\:text-slate-100,
+.dark\:text-slate-200,
+.dark\:text-slate-300,
+.dark\:text-slate-400,
+.dark\:border-slate-600,
+.dark\:border-slate-700 {
   transition:
     background-color 150ms ease-in-out,
     color 150ms ease-in-out,
@@ -503,16 +496,16 @@ body,
 }
 
 /* Glassmorphism Utilities */
-.glass {
-  @apply bg-white/80 dark:bg-gray-800/80 backdrop-blur-md border border-white/20 dark:border-gray-700/30 shadow-sm;
+.card {
+  @apply bg-white dark:bg-slate-800  border border-white/20 dark:border-slate-700/30 shadow-sm;
 }
 
-.glass-panel {
-  @apply bg-white/60 dark:bg-gray-900/60 backdrop-blur-xl border border-gray-200/50 dark:border-gray-700/50;
+.card {
+  @apply bg-white dark:bg-slate-800  border border-slate-200/50 dark:border-slate-700/50;
 }
 
-.glass-hover {
-  @apply hover:bg-white/90 dark:hover:bg-gray-800/90 transition-colors duration-200;
+.card-hover {
+  @apply hover:bg-white dark:hover:bg-slate-800/90 transition-colors duration-200;
 }
 
 /* Staggered Entry Animation */

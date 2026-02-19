@@ -33,19 +33,19 @@ export function WhatsNewModal() {
   return (
     <Show when={isOpen()}>
       <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-        <div class="w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-gray-800">
-          <div class="flex-shrink-0 flex items-start justify-between border-b border-gray-200 px-6 py-4 dark:border-gray-700">
+        <div class="w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden rounded-md bg-white shadow-sm dark:bg-slate-800">
+          <div class="flex-shrink-0 flex items-start justify-between border-b border-slate-200 px-6 py-4 dark:border-slate-700">
             <div>
-              <h2 class="text-xl sm:text-2xl font-semibold text-gray-900 dark:text-gray-100">
+              <h2 class="text-xl sm:text-2xl font-semibold text-slate-900 dark:text-slate-100">
                 Welcome to the New Navigation!
               </h2>
-              <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
+              <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
                 Everything is now organized by what you want to do, not where the data comes from.
               </p>
             </div>
             <button
               onClick={handleClose}
-              class="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300"
+              class="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300"
               aria-label="Close"
             >
               <XIcon class="h-5 w-5" />
@@ -54,7 +54,7 @@ export function WhatsNewModal() {
 
           <div class="flex-1 overflow-y-auto space-y-4 sm:space-y-6 px-4 sm:px-6 py-4 sm:py-5">
             <div class="grid gap-3 sm:gap-4 sm:grid-cols-2">
-              <div class="rounded-xl border border-blue-200 bg-blue-50/70 p-3 sm:p-4 dark:border-blue-800/60 dark:bg-blue-900/20">
+              <div class="rounded-md border border-blue-200 bg-blue-50/70 p-3 sm:p-4 dark:border-blue-800/60 dark:bg-blue-900/20">
                 <div class="flex items-center gap-2 text-sm font-semibold text-blue-900 dark:text-blue-100">
                   <ServerIcon class="h-4 w-4" />
                   Infrastructure
@@ -64,7 +64,7 @@ export function WhatsNewModal() {
                 </p>
               </div>
 
-              <div class="rounded-xl border border-purple-200 bg-purple-50/70 p-3 sm:p-4 dark:border-purple-800/60 dark:bg-purple-900/20">
+              <div class="rounded-md border border-purple-200 bg-purple-50/70 p-3 sm:p-4 dark:border-purple-800/60 dark:bg-purple-900/20">
                 <div class="flex items-center gap-2 text-sm font-semibold text-purple-900 dark:text-purple-100">
                   <BoxesIcon class="h-4 w-4" />
                   Workloads
@@ -74,7 +74,7 @@ export function WhatsNewModal() {
                 </p>
               </div>
 
-              <div class="rounded-xl border border-emerald-200 bg-emerald-50/70 p-3 sm:p-4 dark:border-emerald-800/60 dark:bg-emerald-900/20">
+              <div class="rounded-md border border-emerald-200 bg-emerald-50/70 p-3 sm:p-4 dark:border-emerald-800/60 dark:bg-emerald-900/20">
                 <div class="flex items-center gap-2 text-sm font-semibold text-emerald-900 dark:text-emerald-100">
                   <HardDriveIcon class="h-4 w-4" />
                   Storage
@@ -84,7 +84,7 @@ export function WhatsNewModal() {
                 </p>
               </div>
 
-              <div class="rounded-xl border border-amber-200 bg-amber-50/70 p-3 sm:p-4 dark:border-amber-800/60 dark:bg-amber-900/20">
+              <div class="rounded-md border border-amber-200 bg-amber-50/70 p-3 sm:p-4 dark:border-amber-800/60 dark:bg-amber-900/20">
                 <div class="flex items-center gap-2 text-sm font-semibold text-amber-900 dark:text-amber-100">
                   <ShieldCheckIcon class="h-4 w-4" />
                   Recovery
@@ -95,8 +95,8 @@ export function WhatsNewModal() {
               </div>
             </div>
 
-            <div class="rounded-xl border border-gray-200 bg-gray-50 p-3 sm:p-4 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-300">
-              <div class="font-medium text-gray-900 dark:text-gray-100">
+            <div class="rounded-md border border-slate-200 bg-slate-50 p-3 sm:p-4 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+              <div class="font-medium text-slate-900 dark:text-slate-100">
                 Quick summary
               </div>
               <ul class="mt-2 space-y-1.5 sm:space-y-2 text-xs sm:text-sm">
@@ -115,49 +115,49 @@ export function WhatsNewModal() {
               </ul>
             </div>
 
-            <div class="rounded-xl border border-gray-200 bg-white p-3 sm:p-4 dark:border-gray-700 dark:bg-gray-800/60">
-              <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
+            <div class="rounded-md border border-slate-200 bg-white p-3 sm:p-4 dark:border-slate-700 dark:bg-slate-800">
+              <div class="text-sm font-medium text-slate-900 dark:text-slate-100">
                 Why switch to a unified resource model?
               </div>
-              <ul class="mt-2 space-y-1.5 text-xs sm:text-sm text-gray-700 dark:text-gray-300">
+              <ul class="mt-2 space-y-1.5 text-xs sm:text-sm text-slate-700 dark:text-slate-300">
                 <li class="flex items-start gap-2">
-                  <span class="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-gray-400"></span>
+                  <span class="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-slate-400"></span>
                   <span>One inventory and one search across Proxmox, agents, containers, Kubernetes, and more.</span>
                 </li>
                 <li class="flex items-start gap-2">
-                  <span class="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-gray-400"></span>
+                  <span class="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-slate-400"></span>
                   <span>Consistent filters, drawers, and workflows instead of separate pages per platform.</span>
                 </li>
                 <li class="flex items-start gap-2">
-                  <span class="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-gray-400"></span>
+                  <span class="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-slate-400"></span>
                   <span>Easier to add new sources (like TrueNAS) without growing the top-level nav forever.</span>
                 </li>
               </ul>
             </div>
 
-            <div class="rounded-xl border border-gray-200 bg-white p-3 sm:p-4 dark:border-gray-700 dark:bg-gray-800/60">
-              <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
+            <div class="rounded-md border border-slate-200 bg-white p-3 sm:p-4 dark:border-slate-700 dark:bg-slate-800">
+              <div class="text-sm font-medium text-slate-900 dark:text-slate-100">
                 Finding things fast
               </div>
-              <ul class="mt-2 space-y-1.5 text-xs sm:text-sm text-gray-700 dark:text-gray-300">
+              <ul class="mt-2 space-y-1.5 text-xs sm:text-sm text-slate-700 dark:text-slate-300">
                 <li class="flex items-start gap-2">
-                  <span class="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-gray-400"></span>
+                  <span class="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-slate-400"></span>
                   <span>Use the Command Palette: press <span class="font-mono">Cmd+K</span> (or <span class="font-mono">Ctrl+K</span>) and type what you remember: <span class="font-mono">proxmox</span>, <span class="font-mono">containers</span>, <span class="font-mono">k8s</span>, <span class="font-mono">hosts</span>.</span>
                 </li>
                 <li class="flex items-start gap-2">
-                  <span class="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-gray-400"></span>
+                  <span class="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-slate-400"></span>
                   <span>Old bookmarks still redirect, and Pulse will show a small banner explaining where that page moved.</span>
                 </li>
               </ul>
             </div>
 
             <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
-              <label class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+              <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
                 <input
                   type="checkbox"
                   checked={dontShowAgain()}
                   onChange={(event) => setDontShowAgain(event.currentTarget.checked)}
-                  class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 focus:ring-2"
+                  class="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 focus:ring-2"
                 />
                 Don&#39;t show again
               </label>
@@ -180,10 +180,10 @@ export function WhatsNewModal() {
             </div>
           </div>
 
-          <div class="flex-shrink-0 flex items-center justify-end border-t border-gray-200 bg-gray-50 px-4 sm:px-6 py-3 sm:py-4 dark:border-gray-700 dark:bg-gray-900/50">
+          <div class="flex-shrink-0 flex items-center justify-end border-t border-slate-200 bg-slate-50 px-4 sm:px-6 py-3 sm:py-4 dark:border-slate-700 dark:bg-slate-800">
             <button
               onClick={handleClose}
-              class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
+              class="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
             >
               Let&#39;s go
             </button>

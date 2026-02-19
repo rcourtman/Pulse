@@ -1,12 +1,12 @@
-import { Component, Suspense, createSignal, createEffect } from 'solid-js';
+import { Component, Suspense, createSignal } from 'solid-js';
 import type { Host, Node } from '@/types/api';
 import { DiscoveryTab } from '../Discovery/DiscoveryTab';
-import { HostMetadataAPI } from '@/api/hostMetadata';
 import { SystemInfoCard } from '@/components/shared/cards/SystemInfoCard';
 import { HardwareCard } from '@/components/shared/cards/HardwareCard';
 import { RootDiskCard } from '@/components/shared/cards/RootDiskCard';
 import { NetworkInterfacesCard } from '@/components/shared/cards/NetworkInterfacesCard';
 import { DisksCard } from '@/components/shared/cards/DisksCard';
+import { WebInterfaceUrlField } from '@/components/shared/WebInterfaceUrlField';
 
 interface NodeDrawerProps {
     node: Node;
@@ -17,26 +17,7 @@ interface NodeDrawerProps {
 
 export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
     const [activeTab, setActiveTab] = createSignal<'overview' | 'discovery'>('overview');
-
-    // Fetch custom URL from metadata
-    const [fetchedCustomUrl, setFetchedCustomUrl] = createSignal<string | undefined>(props.customUrl);
-
-    // Fetch metadata on mount
-    createEffect(() => {
-        const hostId = props.node.id || props.node.name;
-        HostMetadataAPI.getMetadata(hostId).then(meta => {
-            if (meta && meta.customUrl) {
-                setFetchedCustomUrl(meta.customUrl);
-            }
-        }).catch(e => console.error("Failed to load node metadata", e));
-    });
-
-    const handleCustomUrlChange = (url: string) => {
-        setFetchedCustomUrl(url);
-        if (props.onCustomUrlChange) {
-            props.onCustomUrlChange(props.node.id || props.node.name, url);
-        }
-    };
+    const metadataId = () => props.node.id || props.node.name;
 
     const switchTab = (tab: 'overview' | 'discovery') => {
         setActiveTab(tab);
@@ -45,12 +26,12 @@ export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
     return (
         <div class="space-y-3">
             {/* Tabs */}
-            <div class="flex items-center gap-6 border-b border-gray-200 dark:border-gray-700 px-1 mb-1">
+            <div class="flex items-center gap-6 border-b border-slate-200 dark:border-slate-700 px-1 mb-1">
                 <button
                     onClick={() => switchTab('overview')}
                     class={`pb-2 text-sm font-medium transition-colors relative ${activeTab() === 'overview'
                         ? 'text-blue-600 dark:text-blue-400'
-                        : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+                        : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
                         }`}
                 >
                     Overview
@@ -62,7 +43,7 @@ export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
                     onClick={() => switchTab('discovery')}
                     class={`pb-2 text-sm font-medium transition-colors relative ${activeTab() === 'discovery'
                         ? 'text-blue-600 dark:text-blue-400'
-                        : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+                        : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
                         }`}
                 >
                     Discovery
@@ -81,6 +62,15 @@ export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
                     <NetworkInterfacesCard interfaces={props.host?.networkInterfaces} />
                     <DisksCard disks={props.host?.disks} />
                 </div>
+                <div class="mt-3">
+                    <WebInterfaceUrlField
+                        metadataKind="host"
+                        metadataId={metadataId()}
+                        targetLabel="host"
+                        customUrl={props.customUrl}
+                        onCustomUrlChange={(url) => props.onCustomUrlChange?.(metadataId(), url)}
+                    />
+                </div>
             </div>
 
             {/* Discovery Tab */}
@@ -88,20 +78,14 @@ export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
                 <Suspense fallback={
                     <div class="flex items-center justify-center py-8">
                         <div class="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full" />
-                        <span class="ml-2 text-sm text-gray-500 dark:text-gray-400">Loading discovery...</span>
+                        <span class="ml-2 text-sm text-slate-500 dark:text-slate-400">Loading discovery...</span>
                     </div>
                 }>
                     <DiscoveryTab
                         resourceType="host" /* Assuming 'host' type works for PVE nodes discovery, or if backend treats them same */
-                        hostId={props.node.id || props.node.name}
-                        resourceId={props.node.id || props.node.name}
+                        hostId={metadataId()}
+                        resourceId={metadataId()}
                         hostname={props.node.name}
-                        guestId={props.node.id || props.node.name}
-                        urlMetadataKind="host"
-                        urlMetadataId={props.node.id || props.node.name}
-                        urlTargetLabel="host"
-                        customUrl={fetchedCustomUrl()}
-                        onCustomUrlChange={handleCustomUrlChange}
                     />
                 </Suspense>
             </div>

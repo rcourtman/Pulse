@@ -17,7 +17,7 @@ const VARIANT_CLASSES: Record<StatusIndicatorVariant, string> = {
   success: 'bg-emerald-500 dark:bg-emerald-400 glow-success',
   warning: 'bg-amber-500 dark:bg-amber-400 glow-warning',
   danger: 'bg-red-500 dark:bg-red-400 glow-danger',
-  muted: 'bg-gray-400 dark:bg-gray-500',
+  muted: 'bg-slate-400 dark:bg-slate-500',
 };
 
 const SIZE_CLASSES: Record<StatusDotSize, string> = {

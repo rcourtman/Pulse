@@ -339,7 +339,7 @@ export function Infrastructure() {
     <div data-testid="infrastructure-page" class="space-y-4">
       <Show when={!loading() || initialLoadComplete()} fallback={
         <Card class="p-6">
-          <div class="text-sm text-gray-600 dark:text-gray-300">Loading infrastructure resources...</div>
+          <div class="text-sm text-slate-600 dark:text-slate-300">Loading infrastructure resources...</div>
         </Card>
       }>
         <Show
@@ -347,14 +347,14 @@ export function Infrastructure() {
           fallback={
             <Card class="p-6">
               <EmptyState
-                icon={<ServerIcon class="w-6 h-6 text-gray-400" />}
+                icon={<ServerIcon class="w-6 h-6 text-slate-400" />}
                 title="Unable to load infrastructure"
                 description="We couldn’t fetch unified resources. Check connectivity or retry."
                 actions={
                   <button
                     type="button"
                     onClick={() => refetch()}
-                    class="inline-flex items-center gap-2 rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+                    class="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
                   >
                     <RefreshCwIcon class="h-3.5 w-3.5" />
                     Retry
@@ -369,7 +369,7 @@ export function Infrastructure() {
             fallback={
               <Card class="p-6">
                 <EmptyState
-                  icon={<ServerIcon class="w-6 h-6 text-gray-400" />}
+                  icon={<ServerIcon class="w-6 h-6 text-slate-400" />}
                   title="No infrastructure resources yet"
                   description="Once resources are reporting, they will appear here."
                 />
@@ -387,7 +387,7 @@ export function Infrastructure() {
               </Show>
 
               <Show when={!summaryCollapsed()}>
-                <div class="hidden lg:block sticky-shield sticky top-0 z-20 bg-white dark:bg-gray-800">
+                <div class="hidden lg:block sticky-shield sticky top-0 z-20 bg-white dark:bg-slate-800">
                   <InfrastructureSummary
                     hosts={filteredResources()}
                     timeRange={infrastructureSummaryRange()}
@@ -417,7 +417,7 @@ export function Infrastructure() {
                       <button
                         type="button"
                         onClick={() => setFiltersOpen((o) => !o)}
-                        class="flex items-center gap-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400"
+                        class="flex items-center gap-1.5 rounded-md bg-slate-100 dark:bg-slate-700 px-2.5 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-400"
                       >
                         <ListFilterIcon class="w-3.5 h-3.5" />
                         Filters
@@ -430,14 +430,14 @@ export function Infrastructure() {
                     </Show>
 
                     <Show when={!isMobile() || filtersOpen()}>
-                      <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400 lg:flex-nowrap">
-                        <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-                          <label for="infra-source-filter" class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Source</label>
+                      <div class="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400 lg:flex-nowrap">
+                        <div class="inline-flex items-center gap-1 rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
+                          <label for="infra-source-filter" class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Source</label>
                           <select
                             id="infra-source-filter"
                             value={selectedSource()}
                             onChange={(e) => setSelectedSource(e.currentTarget.value)}
-                            class="min-w-[8rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+                            class="min-w-[8rem] rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                           >
                             <option value="">All</option>
                             <For each={sourceOptions.filter((s) => availableSources().has(s.key))}>
@@ -446,13 +446,13 @@ export function Infrastructure() {
                           </select>
                         </div>
 
-                        <div class="inline-flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
-                          <label for="infra-status-filter" class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Status</label>
+                        <div class="inline-flex items-center gap-1 rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
+                          <label for="infra-status-filter" class="px-1.5 text-[9px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Status</label>
                           <select
                             id="infra-status-filter"
                             value={selectedStatus()}
                             onChange={(e) => setSelectedStatus(e.currentTarget.value)}
-                            class="min-w-[7rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+                            class="min-w-[7rem] rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                           >
                             <option value="">All</option>
                             <For each={statusOptions()}>
@@ -461,7 +461,7 @@ export function Infrastructure() {
                           </select>
                         </div>
 
-                        <div class="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                        <div class="inline-flex rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
                           <button
                             type="button"
                             onClick={() => setGroupingMode('grouped')}
@@ -491,7 +491,7 @@ export function Infrastructure() {
                           </button>
                         </div>
 
-                        <div class="hidden lg:inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                        <div class="hidden lg:inline-flex rounded-md bg-slate-100 dark:bg-slate-700 p-0.5">
                           <button
                             type="button"
                             onClick={() => setSummaryCollapsed((c) => !c)}
@@ -509,7 +509,7 @@ export function Infrastructure() {
                           <button
                             type="button"
                             onClick={clearFilters}
-                            class="ml-auto rounded-lg bg-blue-100 px-2.5 py-1.5 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:hover:bg-blue-900/60"
+                            class="ml-auto rounded-md bg-blue-100 px-2.5 py-1.5 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:hover:bg-blue-900/60"
                           >
                             Clear
                           </button>
@@ -525,7 +525,7 @@ export function Infrastructure() {
                 fallback={
                   <Card class="p-6">
                     <EmptyState
-                      icon={<ServerIcon class="w-6 h-6 text-gray-400" />}
+                      icon={<ServerIcon class="w-6 h-6 text-slate-400" />}
                       title="No resources match filters"
                       description="Try adjusting the search, source, or status filters."
                       actions={
@@ -533,7 +533,7 @@ export function Infrastructure() {
                           <button
                             type="button"
                             onClick={clearFilters}
-                            class="inline-flex items-center gap-2 rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+                            class="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
                           >
                             Clear filters
                           </button>

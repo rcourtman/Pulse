@@ -472,10 +472,10 @@ const Settings: Component<SettingsProps> = (props) => {
       description="Configure server-wide Docker workload behavior."
       icon={<Container class="w-5 h-5" strokeWidth={2} />}
     >
-      <div class="flex items-start justify-between gap-4 p-4 rounded-lg border border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800/50">
+      <div class="flex items-start justify-between gap-4 p-4 rounded-md border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800">
         <div class="flex-1 space-y-1">
           <div class="flex items-center gap-2">
-            <span class="text-sm font-medium text-gray-900 dark:text-gray-100">
+            <span class="text-sm font-medium text-slate-900 dark:text-slate-100">
               Hide Docker Update Buttons
             </span>
             <Show when={disableDockerUpdateActionsLocked()}>
@@ -490,13 +490,13 @@ const Settings: Component<SettingsProps> = (props) => {
               </span>
             </Show>
           </div>
-          <p class="text-xs text-gray-500 dark:text-gray-400">
+          <p class="text-xs text-slate-500 dark:text-slate-400">
             When enabled, the "Update" button on Docker containers is hidden across all views.
             Update detection still runs, so available updates remain visible.
           </p>
-          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
             Environment variable override:{' '}
-            <code class="px-1 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+            <code class="px-1 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
               PULSE_DISABLE_DOCKER_UPDATE_ACTIONS=true
             </code>
           </p>
@@ -506,16 +506,16 @@ const Settings: Component<SettingsProps> = (props) => {
             type="button"
             onClick={() => handleDisableDockerUpdateActionsChange(!disableDockerUpdateActions())}
             disabled={disableDockerUpdateActionsLocked() || savingDockerUpdateActions()}
-            class={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900 ${disableDockerUpdateActions()
+            class={`relative inline-flex h-8 w-12 sm:h-7 sm:w-12 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900 ${disableDockerUpdateActions()
               ? 'bg-blue-600'
-              : 'bg-gray-300 dark:bg-gray-600'
+              : 'bg-slate-300 dark:bg-slate-600'
               } ${disableDockerUpdateActionsLocked() ? 'opacity-50 cursor-not-allowed' : ''}`}
             role="switch"
             aria-checked={disableDockerUpdateActions()}
             title={disableDockerUpdateActionsLocked() ? 'Locked by environment variable' : undefined}
           >
             <span
-              class={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${disableDockerUpdateActions() ? 'translate-x-6' : 'translate-x-1'
+              class={`inline-block h-6 w-6 sm:h-5 sm:w-5 transform rounded-full bg-white shadow-sm transition-transform ${disableDockerUpdateActions() ? 'translate-x-4 sm:translate-x-5' : 'translate-x-1'
                 }`}
             />
           </button>
@@ -701,13 +701,13 @@ const Settings: Component<SettingsProps> = (props) => {
 
   return (
     <>
-      <div class="space-y-6">
+      <div class="space-y-6 pb-24 sm:pb-6">
         {/* Page header - no card wrapper for cleaner hierarchy */}
         <div class="px-1">
-          <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">
+          <h1 class="text-xl font-medium tracking-tight text-slate-900 dark:text-slate-100 mb-1">
             {headerMeta().title}
           </h1>
-          <p class="text-base text-gray-600 dark:text-gray-400">{headerMeta().description}</p>
+          <p class="text-sm text-slate-600 dark:text-slate-400">{headerMeta().description}</p>
         </div>
 
         {/* Save notification bar - only show when there are unsaved changes */}
@@ -721,11 +721,11 @@ const Settings: Component<SettingsProps> = (props) => {
               activeTab() === 'system-recovery')
           }
         >
-          <div class="bg-amber-50/70 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/60 rounded-lg shadow-sm p-4">
-            <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              <div class="flex items-start gap-3">
+          <div class="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/60 rounded-md p-3">
+            <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div class="flex items-center gap-3">
                 <svg
-                  class="w-5 h-5 text-amber-500 dark:text-amber-300 flex-shrink-0 mt-0.5"
+                  class="w-4 h-4 text-amber-500 dark:text-amber-400 flex-shrink-0"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -737,24 +737,24 @@ const Settings: Component<SettingsProps> = (props) => {
                     d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
                   />
                 </svg>
-                <div>
-                  <p class="font-semibold text-gray-900 dark:text-gray-100">Unsaved changes</p>
-                  <p class="text-sm text-gray-600 dark:text-gray-300 mt-0.5">
+                <div class="flex items-center gap-2">
+                  <span class="text-sm font-semibold text-slate-900 dark:text-slate-100">Unsaved changes</span>
+                  <span class="text-sm text-slate-600 dark:text-slate-400">
                     Your changes will be lost if you navigate away
-                  </p>
+                  </span>
                 </div>
               </div>
-              <div class="flex w-full sm:w-auto gap-3">
+              <div class="flex w-full sm:w-auto gap-2 items-center">
                 <button
                   type="button"
-                  class="flex-1 sm:flex-initial px-5 py-2.5 text-sm font-medium border border-amber-300 dark:border-amber-700 bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-100 rounded-lg hover:bg-amber-200 dark:hover:bg-amber-900/60 shadow-sm transition-colors"
+                  class="flex-1 sm:flex-initial px-3 py-1.5 text-xs font-medium border border-amber-300 dark:border-amber-700/80 bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200 rounded-md hover:bg-amber-200 dark:hover:bg-amber-900/60 transition-colors"
                   onClick={saveSettings}
                 >
-                  Save Changes
+                  Save
                 </button>
                 <button
                   type="button"
-                  class="px-4 py-2.5 text-sm font-medium text-gray-600 dark:text-gray-300 hover:underline transition-colors"
+                  class="px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:underline transition-colors"
                   onClick={() => {
                     window.location.reload();
                   }}
@@ -768,7 +768,7 @@ const Settings: Component<SettingsProps> = (props) => {
 
         <Card padding="none" class="relative lg:flex overflow-hidden">
           <div
-            class={`hidden lg:flex lg:flex-col ${sidebarCollapsed() ? 'w-16' : 'w-72'} ${sidebarCollapsed() ? 'lg:min-w-[4rem] lg:max-w-[4rem] lg:basis-[4rem]' : 'lg:min-w-[18rem] lg:max-w-[18rem] lg:basis-[18rem]'} relative border-b border-gray-200 dark:border-gray-700 lg:border-b-0 lg:border-r lg:border-gray-200 dark:lg:border-gray-700 lg:align-top flex-shrink-0 transition-all duration-200`}
+            class={`hidden lg:flex lg:flex-col ${sidebarCollapsed() ? 'w-16' : 'w-72'} ${sidebarCollapsed() ? 'lg:min-w-[4rem] lg:max-w-[4rem] lg:basis-[4rem]' : 'lg:min-w-[18rem] lg:max-w-[18rem] lg:basis-[18rem]'} relative border-b border-slate-200 dark:border-slate-700 lg:border-b-0 lg:border-r lg:border-slate-200 dark:lg:border-slate-700 lg:align-top flex-shrink-0 transition-all duration-200`}
             aria-label="Settings navigation"
             aria-expanded={!sidebarCollapsed()}
           >
@@ -776,12 +776,12 @@ const Settings: Component<SettingsProps> = (props) => {
               class={`sticky top-0 ${sidebarCollapsed() ? 'px-2' : 'px-4'} py-5 space-y-5 transition-all duration-200`}
             >
               <Show when={!sidebarCollapsed()}>
-                <div class="flex items-center justify-between pb-2 border-b border-gray-200 dark:border-gray-700">
-                  <h2 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Settings</h2>
+                <div class="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-700">
+                  <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Settings</h2>
                   <button
                     type="button"
                     onClick={() => setSidebarCollapsed(true)}
-                    class="p-1 rounded-md text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                    class="p-1 rounded-md text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                     aria-label="Collapse sidebar"
                   >
                     <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -799,7 +799,7 @@ const Settings: Component<SettingsProps> = (props) => {
                 <button
                   type="button"
                   onClick={() => setSidebarCollapsed(false)}
-                  class="w-full p-2 rounded-md text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                  class="w-full p-2 rounded-md text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                   aria-label="Expand sidebar"
                 >
                   <svg
@@ -822,7 +822,7 @@ const Settings: Component<SettingsProps> = (props) => {
                   {(group) => (
                     <div class="space-y-2">
                       <Show when={!sidebarCollapsed()}>
-                        <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                           {group.label}
                         </p>
                       </Show>
@@ -841,10 +841,10 @@ const Settings: Component<SettingsProps> = (props) => {
                                 aria-disabled={isUnavailable() ? 'true' : undefined}
                                 class={`flex w-full items-center ${sidebarCollapsed() ? 'justify-center' : 'gap-2.5'} rounded-md ${sidebarCollapsed() ? 'px-2 py-2.5' : 'px-3 py-2'
                                   } text-sm font-medium transition-colors ${isUnavailable()
-                                    ? 'opacity-60 cursor-not-allowed text-gray-400 dark:text-gray-600'
+                                    ? 'opacity-60 cursor-not-allowed text-slate-400 dark:text-slate-600'
                                     : isActive()
-                                      ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-200'
-                                      : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700/60 dark:hover:text-gray-100'
+                                      ? 'bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-slate-100'
+                                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-slate-200'
                                   }`}
                                 onClick={() => {
                                   if (isHardDisabled()) return;
@@ -860,7 +860,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                 <Show when={!sidebarCollapsed()}>
                                   <span class="truncate">{item.label}</span>
                                   <Show when={item.badge}>
-                                    <span class="ml-auto px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-gray-500 text-white rounded-md shadow-sm">
+                                    <span class="ml-auto px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-slate-500 text-white rounded-md shadow-sm">
                                       {item.badge}
                                     </span>
                                   </Show>
@@ -879,80 +879,84 @@ const Settings: Component<SettingsProps> = (props) => {
 
           <div class="flex-1 overflow-hidden">
             <Show when={flatTabs().length > 0}>
-              <div class="lg:hidden border-b border-gray-200 dark:border-gray-700">
-                {/* Tier 1: Group selector pills */}
-                <div
-                  class="flex gap-1 px-2 pt-2 pb-1 overflow-x-auto scrollbar-hide border-b border-gray-100 dark:border-gray-800"
-                  style="-webkit-overflow-scrolling: touch;"
-                >
-                  <For each={tabGroups()}>
-                    {(group) => {
-                      const isActiveGroup = () => activeGroupId() === group.id;
-                      return (
-                        <button
-                          type="button"
-                          class={`px-3 py-1 text-[11px] font-semibold rounded-full whitespace-nowrap transition-colors ${
-                            isActiveGroup()
-                              ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
-                              : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
-                          }`}
-                          onClick={() => {
-                            const first = group.items.find((item) => !item.disabled);
-                            if (first) handleTabSelect(first.id as SettingsTab);
-                          }}
-                        >
-                          {group.label}
-                        </button>
-                      );
-                    }}
-                  </For>
-                </div>
+              <div class="lg:hidden sticky top-0 z-20 border-b border-slate-200/70 dark:border-slate-700/70 bg-white dark:bg-slate-800">
+                <div class="mx-2 mt-2 mb-1 overflow-hidden rounded-md border border-slate-200/80 bg-white dark:border-slate-700/80 dark:bg-slate-800">
+                  {/* Tier 1: Group selector */}
+                  <div class="px-2 pt-2 pb-1.5">
+                    <div
+                      class="flex gap-1 overflow-x-auto rounded-md bg-slate-100/70 p-1 scrollbar-hide dark:bg-slate-800"
+                      style="-webkit-overflow-scrolling: touch;"
+                    >
+                      <For each={tabGroups()}>
+                        {(group) => {
+                          const isActiveGroup = () => activeGroupId() === group.id;
+                          return (
+                            <button
+                              type="button"
+                              class={`min-h-8 min-w-[4.5rem] flex-1 rounded-md px-2 py-1 text-[11px] font-semibold whitespace-nowrap transition-colors ${isActiveGroup()
+                                  ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-700 dark:text-slate-100'
+                                  : 'text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700/70 hover:text-slate-900 dark:hover:text-slate-100'
+                                }`}
+                              onClick={() => {
+                                const first = group.items.find((item) => !item.disabled);
+                                if (first) handleTabSelect(first.id as SettingsTab);
+                              }}
+                            >
+                              {group.label}
+                            </button>
+                          );
+                        }}
+                      </For>
+                    </div>
+                  </div>
 
-                {/* Tier 2: Tabs within the active group, with icons */}
-                <div
-                  class="flex gap-1 px-2 py-1 overflow-x-auto scrollbar-hide"
-                  style="-webkit-overflow-scrolling: touch;"
-                >
-                  <For each={activeGroupTabs()}>
-                    {(tab) => {
-                      const isActive = () => activeTab() === tab.id;
-                      const isHardDisabled = () => Boolean(tab.disabled);
-                      const isLocked = () => Boolean(tab.locked);
-                      const disabled = () => isHardDisabled() || isLocked();
-                      return (
-                        <button
-                          type="button"
-                          disabled={isHardDisabled()}
-                          aria-disabled={disabled() ? 'true' : undefined}
-                          aria-current={isActive() ? 'page' : undefined}
-                          class={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 transition-colors whitespace-nowrap ${
-                            disabled()
-                              ? 'opacity-60 cursor-not-allowed text-gray-400 dark:text-gray-600 border-transparent'
-                              : isActive()
-                                ? 'text-blue-600 dark:text-blue-300 border-blue-500 dark:border-blue-400'
-                                : 'text-gray-600 dark:text-gray-400 border-transparent hover:text-blue-500 dark:hover:text-blue-300'
-                          }`}
-                          onClick={() => {
-                            if (isHardDisabled()) return;
-                            handleTabSelect(tab.id as SettingsTab);
-                          }}
-                        >
-                          <tab.icon class="w-3.5 h-3.5" {...(tab.iconProps || {})} />
-                          {tab.label}
-                          <Show when={tab.badge}>
-                            <span class="px-1 py-0.5 text-[9px] font-bold uppercase bg-gray-500 text-white rounded">
-                              {tab.badge}
-                            </span>
-                          </Show>
-                        </button>
-                      );
-                    }}
-                  </For>
+                  {/* Tier 2: Tabs within the active group */}
+                  <div class="border-t border-slate-200/60 px-2 pb-1 dark:border-slate-700/60">
+                    <div
+                      class="flex gap-1.5 overflow-x-auto scrollbar-hide"
+                      style="-webkit-overflow-scrolling: touch;"
+                    >
+                      <For each={activeGroupTabs()}>
+                        {(tab) => {
+                          const isActive = () => activeTab() === tab.id;
+                          const isHardDisabled = () => Boolean(tab.disabled);
+                          const isLocked = () => Boolean(tab.locked);
+                          const disabled = () => isHardDisabled() || isLocked();
+                          return (
+                            <button
+                              type="button"
+                              disabled={isHardDisabled()}
+                              aria-disabled={disabled() ? 'true' : undefined}
+                              aria-current={isActive() ? 'page' : undefined}
+                              class={`shrink-0 flex min-h-8 items-center gap-1.5 border-b-2 px-2 py-1 text-xs font-medium transition-colors whitespace-nowrap ${disabled()
+                                  ? 'cursor-not-allowed border-transparent text-slate-400 opacity-60 dark:text-slate-600'
+                                  : isActive()
+                                    ? 'border-blue-500 text-blue-700 dark:border-blue-400 dark:text-blue-200'
+                                    : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+                                }`}
+                              onClick={() => {
+                                if (isHardDisabled()) return;
+                                handleTabSelect(tab.id as SettingsTab);
+                              }}
+                            >
+                              <tab.icon class="h-3.5 w-3.5" {...(tab.iconProps || {})} />
+                              {tab.label}
+                              <Show when={tab.badge}>
+                                <span class="rounded-md bg-slate-500 px-1 py-0.5 text-[9px] font-bold uppercase text-white dark:bg-slate-600">
+                                  {tab.badge}
+                                </span>
+                              </Show>
+                            </button>
+                          );
+                        }}
+                      </For>
+                    </div>
+                  </div>
                 </div>
               </div>
             </Show>
 
-            <div class="p-6 lg:p-8">
+            <div class="p-4 sm:p-6 lg:p-8">
               <Show when={activeTab() === 'proxmox'}>
                 <SettingsSectionNav
                   current={selectedAgent()}
@@ -963,7 +967,7 @@ const Settings: Component<SettingsProps> = (props) => {
 
               {/* Recommendation banner for Proxmox tab */}
               <Show when={activeTab() === 'proxmox'}>
-                <div class="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 mb-6 dark:border-blue-800 dark:bg-blue-900/20">
+                <div class="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 mb-6 dark:border-blue-800 dark:bg-blue-900/20">
                   <div class="flex items-start gap-3">
                     <svg
                       class="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0"
@@ -988,7 +992,7 @@ const Settings: Component<SettingsProps> = (props) => {
                       <button
                         type="button"
                         onClick={() => navigate('/settings/workloads')}
-                        class="mt-2 text-sm font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200 underline"
+                        class="mt-2 inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-2 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-100/70 hover:text-blue-800 dark:text-blue-300 dark:hover:bg-blue-900/30 dark:hover:text-blue-200 underline"
                       >
                         Open Unified Agents →
                       </button>
@@ -1002,15 +1006,15 @@ const Settings: Component<SettingsProps> = (props) => {
                 <div class="space-y-6 mt-6">
                   <div class="space-y-4">
                     <Show when={!initialLoadComplete()}>
-                      <div class="flex items-center justify-center rounded-lg border border-dashed border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 py-12 text-sm text-gray-500 dark:text-gray-400">
+                      <div class="flex items-center justify-center rounded-md border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 py-12 text-sm text-slate-500 dark:text-slate-400">
                         Loading configuration...
                       </div>
                     </Show>
                     <Show when={initialLoadComplete()}>
-                      <Card padding="none" tone="glass">
+                      <Card padding="none" tone="card">
                         <div class="px-3 py-4 sm:px-6 sm:py-6 space-y-4">
                           <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                            <h4 class="text-base font-semibold text-gray-900 dark:text-gray-100">
+                            <h4 class="text-base font-semibold text-slate-900 dark:text-slate-100">
                               Proxmox VE nodes
                             </h4>
                             <div class="flex flex-wrap items-center justify-start gap-2 sm:justify-end">
@@ -1019,7 +1023,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                 class="flex items-center gap-2 sm:gap-3"
                                 title="Enable automatic discovery of Proxmox servers on your network"
                               >
-                                <span class="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
+                                <span class="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
                                   Discovery
                                 </span>
                                 <Toggle
@@ -1044,7 +1048,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                   }
                                   containerClass="gap-2"
                                   label={
-                                    <span class="text-xs font-medium text-gray-600 dark:text-gray-400">
+                                    <span class="text-xs font-medium text-slate-600 dark:text-slate-400">
                                       {discoveryEnabled() ? 'On' : 'Off'}
                                     </span>
                                   }
@@ -1062,7 +1066,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                       await loadDiscoveredNodes();
                                     }
                                   }}
-                                  class="px-2 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-1"
+                                  class="min-h-10 sm:min-h-9 min-w-10 px-3 sm:px-4 py-2 text-sm bg-slate-600 text-white rounded-md hover:bg-slate-700 transition-colors flex items-center gap-1"
                                   title="Refresh discovered servers"
                                 >
                                   <svg
@@ -1089,7 +1093,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                   setModalResetKey((prev) => prev + 1);
                                   setShowNodeModal(true);
                                 }}
-                                class="px-2 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1"
+                                class="min-h-10 sm:min-h-9 px-3 sm:px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-1"
                               >
                                 <svg
                                   width="16"
@@ -1132,13 +1136,13 @@ const Settings: Component<SettingsProps> = (props) => {
                             }
                           >
                             <div class="flex flex-col items-center justify-center py-12 px-4 text-center">
-                              <div class="rounded-full bg-gray-100 dark:bg-gray-800 p-4 mb-4">
-                                <Server class="h-8 w-8 text-gray-400 dark:text-gray-500" />
+                              <div class="rounded-full bg-slate-100 dark:bg-slate-800 p-4 mb-4">
+                                <Server class="h-8 w-8 text-slate-400 dark:text-slate-500" />
                               </div>
-                              <p class="text-base font-medium text-gray-900 dark:text-gray-100 mb-1">
+                              <p class="text-base font-medium text-slate-900 dark:text-slate-100 mb-1">
                                 No PVE nodes configured
                               </p>
-                              <p class="text-sm text-gray-500 dark:text-gray-400">
+                              <p class="text-sm text-slate-500 dark:text-slate-400">
                                 Add a Proxmox VE node to start monitoring your infrastructure
                               </p>
                             </div>
@@ -1150,7 +1154,7 @@ const Settings: Component<SettingsProps> = (props) => {
                     {/* Discovered PVE nodes - only show when discovery is enabled */}
                     <Show when={discoveryEnabled()}>
                       <div class="space-y-3">
-                        <div class="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                        <div class="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
                           <Show when={discoveryScanStatus().scanning}>
                             <span class="flex items-center gap-2">
                               <Loader class="h-4 w-4 animate-spin" />
@@ -1179,7 +1183,7 @@ const Settings: Component<SettingsProps> = (props) => {
                             discoveryScanStatus().errors && discoveryScanStatus().errors!.length
                           }
                         >
-                          <div class="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-2">
+                          <div class="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md p-2">
                             <span class="font-medium">Discovery issues:</span>
                             <ul class="list-disc ml-4 mt-1 space-y-0.5">
                               <For each={discoveryScanStatus().errors || []}>
@@ -1207,7 +1211,7 @@ const Settings: Component<SettingsProps> = (props) => {
                             discoveredNodes().filter((n) => n.type === 'pve').length === 0
                           }
                         >
-                          <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                          <div class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
                             <Loader class="h-4 w-4 animate-spin" />
                             <span>
                               Waiting for responses… this can take up to a minute depending on your
@@ -1218,7 +1222,7 @@ const Settings: Component<SettingsProps> = (props) => {
                         <For each={discoveredNodes().filter((n) => n.type === 'pve')}>
                           {(server) => (
                             <div
-                              class="bg-gray-50/50 dark:bg-gray-700/30 rounded-lg p-4 border border-gray-200/50 dark:border-gray-600/50 opacity-75 hover:opacity-100 transition-opacity cursor-pointer"
+                              class="bg-slate-50/50 dark:bg-slate-800 rounded-md p-4 border border-slate-200/50 dark:border-slate-600/50 opacity-75 hover:opacity-100 transition-opacity cursor-pointer"
                               onClick={() => {
                                 // Pre-fill the modal with discovered server info
                                 setEditingNode({
@@ -1244,19 +1248,19 @@ const Settings: Component<SettingsProps> = (props) => {
                               <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
                                 <div class="flex-1 min-w-0">
                                   <div class="flex items-start gap-3">
-                                    <div class="flex-shrink-0 w-3 h-3 mt-1.5 rounded-full bg-gray-400 animate-pulse"></div>
+                                    <div class="flex-shrink-0 w-3 h-3 mt-1.5 rounded-full bg-slate-400 animate-pulse"></div>
                                     <div class="flex-1 min-w-0">
-                                      <h4 class="font-medium text-gray-700 dark:text-gray-300">
+                                      <h4 class="font-medium text-slate-700 dark:text-slate-300">
                                         {server.hostname || `Proxmox VE at ${server.ip}`}
                                       </h4>
-                                      <p class="text-sm text-gray-500 dark:text-gray-500 mt-1">
+                                      <p class="text-sm text-slate-500 dark:text-slate-500 mt-1">
                                         {server.ip}:{server.port}
                                       </p>
                                       <div class="flex items-center gap-2 mt-2">
                                         <span class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded">
                                           Discovered
                                         </span>
-                                        <span class="text-xs text-gray-500 dark:text-gray-400">
+                                        <span class="text-xs text-slate-500 dark:text-slate-400">
                                           Click to configure
                                         </span>
                                       </div>
@@ -1268,7 +1272,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                   height="20"
                                   viewBox="0 0 24 24"
                                   fill="none"
-                                  class="text-gray-400 mt-1"
+                                  class="text-slate-400 mt-1"
                                 >
                                   <path
                                     d="M12 5v14m-7-7h14"
@@ -1292,15 +1296,15 @@ const Settings: Component<SettingsProps> = (props) => {
                 <div class="space-y-6 mt-6">
                   <div class="space-y-4">
                     <Show when={!initialLoadComplete()}>
-                      <div class="flex items-center justify-center rounded-lg border border-dashed border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 py-12 text-sm text-gray-500 dark:text-gray-400">
+                      <div class="flex items-center justify-center rounded-md border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 py-12 text-sm text-slate-500 dark:text-slate-400">
                         Loading configuration...
                       </div>
                     </Show>
                     <Show when={initialLoadComplete()}>
-                      <Card padding="none" tone="glass">
+                      <Card padding="none" tone="card">
                         <div class="px-3 py-4 sm:px-6 sm:py-6 space-y-4">
                           <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                            <h4 class="text-base font-semibold text-gray-900 dark:text-gray-100">
+                            <h4 class="text-base font-semibold text-slate-900 dark:text-slate-100">
                               Proxmox Backup Server nodes
                             </h4>
                             <div class="flex flex-wrap items-center justify-start gap-2 sm:justify-end">
@@ -1309,7 +1313,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                 class="flex items-center gap-2 sm:gap-3"
                                 title="Enable automatic discovery of PBS servers on your network"
                               >
-                                <span class="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
+                                <span class="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
                                   Discovery
                                 </span>
                                 <Toggle
@@ -1334,7 +1338,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                   }
                                   containerClass="gap-2"
                                   label={
-                                    <span class="text-xs font-medium text-gray-600 dark:text-gray-400">
+                                    <span class="text-xs font-medium text-slate-600 dark:text-slate-400">
                                       {discoveryEnabled() ? 'On' : 'Off'}
                                     </span>
                                   }
@@ -1352,7 +1356,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                       await loadDiscoveredNodes();
                                     }
                                   }}
-                                  class="px-2 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-1"
+                                  class="min-h-10 sm:min-h-9 min-w-10 px-3 sm:px-4 py-2 text-sm bg-slate-600 text-white rounded-md hover:bg-slate-700 transition-colors flex items-center gap-1"
                                   title="Refresh discovered servers"
                                 >
                                   <svg
@@ -1379,7 +1383,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                   setModalResetKey((prev) => prev + 1);
                                   setShowNodeModal(true);
                                 }}
-                                class="px-2 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1"
+                                class="min-h-10 sm:min-h-9 px-3 sm:px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-1"
                               >
                                 <svg
                                   width="16"
@@ -1420,13 +1424,13 @@ const Settings: Component<SettingsProps> = (props) => {
                             }
                           >
                             <div class="flex flex-col items-center justify-center py-12 px-4 text-center">
-                              <div class="rounded-full bg-gray-100 dark:bg-gray-800 p-4 mb-4">
-                                <HardDrive class="h-8 w-8 text-gray-400 dark:text-gray-500" />
+                              <div class="rounded-full bg-slate-100 dark:bg-slate-800 p-4 mb-4">
+                                <HardDrive class="h-8 w-8 text-slate-400 dark:text-slate-500" />
                               </div>
-                              <p class="text-base font-medium text-gray-900 dark:text-gray-100 mb-1">
+                              <p class="text-base font-medium text-slate-900 dark:text-slate-100 mb-1">
                                 No PBS nodes configured
                               </p>
-                              <p class="text-sm text-gray-500 dark:text-gray-400">
+                              <p class="text-sm text-slate-500 dark:text-slate-400">
                                 Add a Proxmox Backup Server to monitor your backups
                               </p>
                             </div>
@@ -1438,7 +1442,7 @@ const Settings: Component<SettingsProps> = (props) => {
                     {/* Discovered PBS nodes - only show when discovery is enabled */}
                     <Show when={discoveryEnabled()}>
                       <div class="space-y-3">
-                        <div class="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                        <div class="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
                           <Show when={discoveryScanStatus().scanning}>
                             <span class="flex items-center gap-2">
                               <Loader class="h-4 w-4 animate-spin" />
@@ -1467,7 +1471,7 @@ const Settings: Component<SettingsProps> = (props) => {
                             discoveryScanStatus().errors && discoveryScanStatus().errors!.length
                           }
                         >
-                          <div class="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-2">
+                          <div class="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md p-2">
                             <span class="font-medium">Discovery issues:</span>
                             <ul class="list-disc ml-4 mt-1 space-y-0.5">
                               <For each={discoveryScanStatus().errors || []}>
@@ -1495,7 +1499,7 @@ const Settings: Component<SettingsProps> = (props) => {
                             discoveredNodes().filter((n) => n.type === 'pbs').length === 0
                           }
                         >
-                          <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                          <div class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
                             <Loader class="h-4 w-4 animate-spin" />
                             <span>
                               Waiting for responses… this can take up to a minute depending on your
@@ -1506,7 +1510,7 @@ const Settings: Component<SettingsProps> = (props) => {
                         <For each={discoveredNodes().filter((n) => n.type === 'pbs')}>
                           {(server) => (
                             <div
-                              class="bg-gray-50/50 dark:bg-gray-700/30 rounded-lg p-4 border border-gray-200/50 dark:border-gray-600/50 opacity-75 hover:opacity-100 transition-opacity cursor-pointer"
+                              class="bg-slate-50/50 dark:bg-slate-800 rounded-md p-4 border border-slate-200/50 dark:border-slate-600/50 opacity-75 hover:opacity-100 transition-opacity cursor-pointer"
                               onClick={() => {
                                 // Pre-fill the modal with discovered server info
                                 setEditingNode({
@@ -1532,19 +1536,19 @@ const Settings: Component<SettingsProps> = (props) => {
                               <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
                                 <div class="flex-1 min-w-0">
                                   <div class="flex items-start gap-3">
-                                    <div class="flex-shrink-0 w-3 h-3 mt-1.5 rounded-full bg-gray-400 animate-pulse"></div>
+                                    <div class="flex-shrink-0 w-3 h-3 mt-1.5 rounded-full bg-slate-400 animate-pulse"></div>
                                     <div class="flex-1 min-w-0">
-                                      <h4 class="font-medium text-gray-700 dark:text-gray-300">
+                                      <h4 class="font-medium text-slate-700 dark:text-slate-300">
                                         {server.hostname || `Backup Server at ${server.ip}`}
                                       </h4>
-                                      <p class="text-sm text-gray-500 dark:text-gray-500 mt-1">
+                                      <p class="text-sm text-slate-500 dark:text-slate-500 mt-1">
                                         {server.ip}:{server.port}
                                       </p>
                                       <div class="flex items-center gap-2 mt-2">
                                         <span class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded">
                                           Discovered
                                         </span>
-                                        <span class="text-xs text-gray-500 dark:text-gray-400">
+                                        <span class="text-xs text-slate-500 dark:text-slate-400">
                                           Click to configure
                                         </span>
                                       </div>
@@ -1556,7 +1560,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                   height="20"
                                   viewBox="0 0 24 24"
                                   fill="none"
-                                  class="text-gray-400 mt-1"
+                                  class="text-slate-400 mt-1"
                                 >
                                   <path
                                     d="M12 5v14m-7-7h14"
@@ -1579,16 +1583,16 @@ const Settings: Component<SettingsProps> = (props) => {
                 <div class="space-y-6 mt-6">
                   <div class="space-y-4">
                     <Show when={!initialLoadComplete()}>
-                      <div class="flex items-center justify-center rounded-lg border border-dashed border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 py-12 text-sm text-gray-500 dark:text-gray-400">
+                      <div class="flex items-center justify-center rounded-md border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 py-12 text-sm text-slate-500 dark:text-slate-400">
                         Loading configuration...
                       </div>
                     </Show>
 
                     <Show when={initialLoadComplete()}>
-                      <Card padding="none" tone="glass">
+                      <Card padding="none" tone="card">
                         <div class="px-3 py-4 sm:px-6 sm:py-6 space-y-4">
                           <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                            <h4 class="text-base font-semibold text-gray-900 dark:text-gray-100">
+                            <h4 class="text-base font-semibold text-slate-900 dark:text-slate-100">
                               Proxmox Mail Gateway nodes
                             </h4>
                             <div class="flex flex-wrap items-center justify-start gap-2 sm:justify-end">
@@ -1597,7 +1601,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                 class="flex items-center gap-2 sm:gap-3"
                                 title="Enable automatic discovery of PMG servers on your network"
                               >
-                                <span class="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
+                                <span class="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
                                   Discovery
                                 </span>
                                 <Toggle
@@ -1622,7 +1626,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                   }
                                   containerClass="gap-2"
                                   label={
-                                    <span class="text-xs font-medium text-gray-600 dark:text-gray-400">
+                                    <span class="text-xs font-medium text-slate-600 dark:text-slate-400">
                                       {discoveryEnabled() ? 'On' : 'Off'}
                                     </span>
                                   }
@@ -1640,7 +1644,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                       await loadDiscoveredNodes();
                                     }
                                   }}
-                                  class="px-2 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-1"
+                                  class="min-h-10 sm:min-h-9 min-w-10 px-3 sm:px-4 py-2 text-sm bg-slate-600 text-white rounded-md hover:bg-slate-700 transition-colors flex items-center gap-1"
                                   title="Refresh discovered servers"
                                 >
                                   <svg
@@ -1667,7 +1671,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                   setModalResetKey((prev) => prev + 1);
                                   setShowNodeModal(true);
                                 }}
-                                class="px-2 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1"
+                                class="min-h-10 sm:min-h-9 px-3 sm:px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-1"
                               >
                                 <svg
                                   width="16"
@@ -1704,13 +1708,13 @@ const Settings: Component<SettingsProps> = (props) => {
 
                           <Show when={pmgNodes().length === 0}>
                             <div class="flex flex-col items-center justify-center py-12 px-4 text-center">
-                              <div class="rounded-full bg-gray-100 dark:bg-gray-800 p-4 mb-4">
-                                <Mail class="h-8 w-8 text-gray-400 dark:text-gray-500" />
+                              <div class="rounded-full bg-slate-100 dark:bg-slate-800 p-4 mb-4">
+                                <Mail class="h-8 w-8 text-slate-400 dark:text-slate-500" />
                               </div>
-                              <p class="text-base font-medium text-gray-900 dark:text-gray-100 mb-1">
+                              <p class="text-base font-medium text-slate-900 dark:text-slate-100 mb-1">
                                 No PMG nodes configured
                               </p>
-                              <p class="text-sm text-gray-500 dark:text-gray-400">
+                              <p class="text-sm text-slate-500 dark:text-slate-400">
                                 Add a Proxmox Mail Gateway node to start monitoring
                               </p>
                             </div>
@@ -1722,7 +1726,7 @@ const Settings: Component<SettingsProps> = (props) => {
                     {/* Discovered PMG nodes - only show when discovery is enabled */}
                     <Show when={discoveryEnabled()}>
                       <div class="space-y-3">
-                        <div class="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                        <div class="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
                           <Show when={discoveryScanStatus().scanning}>
                             <span class="flex items-center gap-2">
                               <Loader class="h-4 w-4 animate-spin" />
@@ -1751,7 +1755,7 @@ const Settings: Component<SettingsProps> = (props) => {
                             discoveryScanStatus().errors && discoveryScanStatus().errors!.length
                           }
                         >
-                          <div class="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-2">
+                          <div class="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md p-2">
                             <span class="font-medium">Discovery issues:</span>
                             <ul class="list-disc ml-4 mt-1 space-y-0.5">
                               <For each={discoveryScanStatus().errors || []}>
@@ -1779,9 +1783,9 @@ const Settings: Component<SettingsProps> = (props) => {
                             discoveredNodes().filter((n) => n.type === 'pmg').length === 0
                           }
                         >
-                          <div class="text-center py-6 text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800/50 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600">
+                          <div class="text-center py-6 text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 rounded-md border-2 border-dashed border-slate-300 dark:border-slate-600">
                             <svg
-                              class="h-8 w-8 mx-auto mb-2 animate-pulse text-gray-400"
+                              class="h-8 w-8 mx-auto mb-2 animate-pulse text-slate-400"
                               viewBox="0 0 24 24"
                               fill="none"
                               stroke="currentColor"
@@ -1796,7 +1800,7 @@ const Settings: Component<SettingsProps> = (props) => {
                         <For each={discoveredNodes().filter((n) => n.type === 'pmg')}>
                           {(server) => (
                             <div
-                              class="bg-gray-50 dark:bg-gray-800/50 border-l-4 border-gray-400 rounded-lg p-4 cursor-pointer hover:shadow-md transition-all"
+                              class="bg-slate-50 dark:bg-slate-800 border-l-4 border-slate-400 rounded-md p-4 cursor-pointer hover:shadow-sm transition-all"
                               onClick={() => {
                                 setEditingNode(null);
                                 setCurrentNodeType('pmg');
@@ -1822,23 +1826,23 @@ const Settings: Component<SettingsProps> = (props) => {
                                     fill="none"
                                     stroke="currentColor"
                                     stroke-width="2"
-                                    class="text-gray-500 flex-shrink-0 mt-0.5"
+                                    class="text-slate-500 flex-shrink-0 mt-0.5"
                                   >
                                     <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
                                     <polyline points="22,6 12,13 2,6"></polyline>
                                   </svg>
                                   <div class="flex-1 min-w-0">
-                                    <h4 class="font-medium text-gray-900 dark:text-gray-100 truncate">
+                                    <h4 class="font-medium text-slate-900 dark:text-slate-100 truncate">
                                       {server.hostname || `PMG at ${server.ip}`}
                                     </h4>
-                                    <p class="text-sm text-gray-500 dark:text-gray-500 mt-1">
+                                    <p class="text-sm text-slate-500 dark:text-slate-500 mt-1">
                                       {server.ip}:{server.port}
                                     </p>
                                     <div class="flex items-center gap-2 mt-2">
                                       <span class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded">
                                         Discovered
                                       </span>
-                                      <span class="text-xs text-gray-500 dark:text-gray-400">
+                                      <span class="text-xs text-slate-500 dark:text-slate-400">
                                         Click to configure
                                       </span>
                                     </div>
@@ -1849,7 +1853,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                   height="20"
                                   viewBox="0 0 24 24"
                                   fill="none"
-                                  class="text-gray-400 mt-1"
+                                  class="text-slate-400 mt-1"
                                 >
                                   <path
                                     d="M12 5v14m-7-7h14"
@@ -1884,13 +1888,13 @@ const Settings: Component<SettingsProps> = (props) => {
         <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <Card padding="lg" class="w-full max-w-lg space-y-5">
             <SectionHeader title={`Remove ${nodePendingDeleteLabel()}`} size="md" class="mb-1" />
-            <div class="space-y-3 text-sm text-gray-600 dark:text-gray-300">
+            <div class="space-y-3 text-sm text-slate-600 dark:text-slate-300">
               <p>
                 Removing this {nodePendingDeleteTypeLabel().toLowerCase()} also scrubs the Pulse
                 footprint on the host — the proxy service, SSH key, API token, and bind mount are
                 all cleaned up automatically.
               </p>
-              <div class="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm leading-relaxed dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-100">
+              <div class="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm leading-relaxed dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-100">
                 <p class="font-medium text-blue-900 dark:text-blue-100">What happens next</p>
                 <ul class="mt-2 list-disc space-y-1 pl-4 text-blue-800 dark:text-blue-200 text-sm">
                   <li>Pulse removes the node entry and clears related alerts.</li>
@@ -1928,7 +1932,7 @@ const Settings: Component<SettingsProps> = (props) => {
               <button
                 type="button"
                 onClick={cancelDeleteNode}
-                class="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+                class="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700"
                 disabled={deleteNodeLoading()}
               >
                 Keep node
@@ -2053,7 +2057,7 @@ const Settings: Component<SettingsProps> = (props) => {
             <div class="space-y-4">
               {/* Password Choice Section - Only show if auth is enabled */}
               <Show when={securityStatus()?.hasAuthentication}>
-                <div class="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                <div class="bg-slate-50 dark:bg-slate-800 rounded-md p-4 border border-slate-200 dark:border-slate-700">
                   <div class="space-y-3">
                     <label class="flex items-start gap-3 cursor-pointer">
                       <input
@@ -2066,10 +2070,10 @@ const Settings: Component<SettingsProps> = (props) => {
                         class="mt-1 text-blue-600 focus:ring-blue-500"
                       />
                       <div class="flex-1">
-                        <div class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                        <div class="text-sm font-medium text-slate-700 dark:text-slate-300">
                           Use your login password
                         </div>
-                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                        <div class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                           Use the same password you use to log into Pulse (recommended)
                         </div>
                       </div>
@@ -2083,10 +2087,10 @@ const Settings: Component<SettingsProps> = (props) => {
                         class="mt-1 text-blue-600 focus:ring-blue-500"
                       />
                       <div class="flex-1">
-                        <div class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                        <div class="text-sm font-medium text-slate-700 dark:text-slate-300">
                           Use a custom passphrase
                         </div>
-                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                        <div class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                           Create a different passphrase for this backup
                         </div>
                       </div>
@@ -2129,7 +2133,7 @@ const Settings: Component<SettingsProps> = (props) => {
                 </Show>
               </div>
 
-              <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+              <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md p-3">
                 <div class="flex gap-2">
                   <svg
                     class="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5"
@@ -2160,7 +2164,7 @@ const Settings: Component<SettingsProps> = (props) => {
                 <button
                   type="button"
                   onClick={closeExportDialog}
-                  class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
+                  class="px-4 py-2 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 rounded-md hover:bg-slate-50 dark:hover:bg-slate-700"
                 >
                   Cancel
                 </button>
@@ -2187,7 +2191,7 @@ const Settings: Component<SettingsProps> = (props) => {
             <SectionHeader title="API token required" size="md" class="mb-4" />
 
             <div class="space-y-4">
-              <p class="text-sm text-gray-600 dark:text-gray-400">
+              <p class="text-sm text-slate-600 dark:text-slate-400">
                 This Pulse instance requires an API token for export/import operations. Please enter
                 the API token configured on the server.
               </p>
@@ -2203,7 +2207,7 @@ const Settings: Component<SettingsProps> = (props) => {
                 />
               </div>
 
-              <div class="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 rounded p-2">
+              <div class="text-xs text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 rounded p-2">
                 <p class="font-semibold mb-1">The API token is set as an environment variable:</p>
                 <code class="block">API_TOKENS=token-for-export,token-for-automation</code>
               </div>
@@ -2213,7 +2217,7 @@ const Settings: Component<SettingsProps> = (props) => {
               <button
                 type="button"
                 onClick={closeApiTokenModal}
-                class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
+                class="px-4 py-2 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 rounded-md hover:bg-slate-50 dark:hover:bg-slate-700"
               >
                 Cancel
               </button>
@@ -2275,7 +2279,7 @@ const Settings: Component<SettingsProps> = (props) => {
                 <button
                   type="button"
                   onClick={closeImportDialog}
-                  class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
+                  class="px-4 py-2 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 rounded-md hover:bg-slate-50 dark:hover:bg-slate-700"
                 >
                   Cancel
                 </button>

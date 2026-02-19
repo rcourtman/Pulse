@@ -110,9 +110,9 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
 
           {/* Discovery Toggle */}
           <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div class="text-sm text-gray-600 dark:text-gray-400">
-              <p class="font-medium text-gray-900 dark:text-gray-100">Automatic scanning</p>
-              <p class="text-xs text-gray-500 dark:text-gray-400">
+            <div class="text-sm text-slate-600 dark:text-slate-400">
+              <p class="font-medium text-slate-900 dark:text-slate-100">Automatic scanning</p>
+              <p class="text-xs text-slate-500 dark:text-slate-400">
                 Enable discovery to surface Proxmox VE, PBS, and PMG endpoints automatically.
               </p>
             </div>
@@ -131,7 +131,7 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
               disabled={props.envOverrides().discoveryEnabled || props.savingDiscoverySettings()}
               containerClass="gap-2"
               label={
-                <span class="text-xs font-medium text-gray-600 dark:text-gray-400">
+                <span class="text-xs font-medium text-slate-600 dark:text-slate-400">
                   {props.discoveryEnabled() ? 'On' : 'Off'}
                 </span>
               }
@@ -140,17 +140,17 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
 
           {/* Discovery Options (shown when enabled) */}
           <Show when={props.discoveryEnabled()}>
-            <div class="space-y-4 rounded-lg border border-gray-200 bg-white/40 p-3 dark:border-gray-600 dark:bg-gray-800/40">
+            <div class="space-y-4 rounded-md border border-slate-200 bg-white p-3 dark:border-slate-600 dark:bg-slate-800">
               <fieldset class="space-y-2">
-                <legend class="text-xs font-medium text-gray-700 dark:text-gray-300">
+                <legend class="text-xs font-medium text-slate-700 dark:text-slate-300">
                   Scan scope
                 </legend>
                 <div class="space-y-2">
                   {/* Auto mode */}
                   <label
-                    class={`flex items-start gap-3 rounded-lg border p-2 transition-colors ${props.discoveryMode() === 'auto'
+                    class={`flex items-start gap-3 rounded-md border p-2 transition-colors ${props.discoveryMode() === 'auto'
                       ? 'border-blue-200 bg-blue-50/80 dark:border-blue-700 dark:bg-blue-900/20'
-                      : 'border-transparent hover:border-gray-200 dark:hover:border-gray-600'
+                      : 'border-transparent hover:border-slate-200 dark:hover:border-slate-600'
                       }`}
                   >
                     <input
@@ -166,13 +166,13 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
                       disabled={
                         props.envOverrides().discoverySubnet || props.savingDiscoverySettings()
                       }
-                      class="mt-1 h-4 w-4 border-gray-300 text-blue-600 focus:ring-blue-500"
+                      class="mt-1 h-5 w-5 sm:h-4 sm:w-4 border-slate-300 text-blue-600 focus:ring-blue-500"
                     />
                     <div class="space-y-1">
-                      <p class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                      <p class="text-sm font-medium text-slate-900 dark:text-slate-100">
                         Auto (slower, full scan)
                       </p>
-                      <p class="text-xs text-gray-500 dark:text-gray-400">
+                      <p class="text-xs text-slate-500 dark:text-slate-400">
                         Scans all network interfaces on this host, including container bridges, local
                         subnets, and gateways. On large or shared networks, consider using a custom
                         subnet instead.
@@ -182,9 +182,9 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
 
                   {/* Custom mode */}
                   <label
-                    class={`flex items-start gap-3 rounded-lg border p-2 transition-colors ${props.discoveryMode() === 'custom'
+                    class={`flex items-start gap-3 rounded-md border p-2 transition-colors ${props.discoveryMode() === 'custom'
                       ? 'border-blue-200 bg-blue-50/80 dark:border-blue-700 dark:bg-blue-900/20'
-                      : 'border-transparent hover:border-gray-200 dark:hover:border-gray-600'
+                      : 'border-transparent hover:border-slate-200 dark:hover:border-slate-600'
                       }`}
                   >
                     <input
@@ -200,13 +200,13 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
                       disabled={
                         props.envOverrides().discoverySubnet || props.savingDiscoverySettings()
                       }
-                      class="mt-1 h-4 w-4 border-gray-300 text-blue-600 focus:ring-blue-500"
+                      class="mt-1 h-5 w-5 sm:h-4 sm:w-4 border-slate-300 text-blue-600 focus:ring-blue-500"
                     />
                     <div class="space-y-1">
-                      <p class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                      <p class="text-sm font-medium text-slate-900 dark:text-slate-100">
                         Custom subnet (faster)
                       </p>
-                      <p class="text-xs text-gray-500 dark:text-gray-400">
+                      <p class="text-xs text-slate-500 dark:text-slate-400">
                         Limit discovery to one or more CIDR ranges to finish faster on large
                         networks.
                       </p>
@@ -216,7 +216,7 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
                   {/* Common subnet presets */}
                   <Show when={props.discoveryMode() === 'custom'}>
                     <div class="flex flex-wrap items-center gap-2 pl-9 pr-2">
-                      <span class="text-[0.68rem] uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                      <span class="text-[0.68rem] uppercase tracking-wide text-slate-500 dark:text-slate-400">
                         Common networks:
                       </span>
                       <For each={COMMON_DISCOVERY_SUBNETS}>
@@ -229,7 +229,7 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
                               type="button"
                               class={`rounded border px-2.5 py-1 text-[0.7rem] transition-colors ${isActive
                                 ? 'border-blue-500 bg-blue-600 text-white dark:border-blue-400 dark:bg-blue-500'
-                                : 'border-gray-300 text-gray-700 hover:border-blue-400 hover:bg-blue-50 dark:border-gray-600 dark:text-gray-300 dark:hover:border-blue-500 dark:hover:bg-blue-900/30'
+                                : 'border-slate-300 text-slate-700 hover:border-blue-400 hover:bg-blue-50 dark:border-slate-600 dark:text-slate-300 dark:hover:border-blue-500 dark:hover:bg-blue-900/30'
                                 }`}
                               onClick={async () => {
                                 if (props.envOverrides().discoverySubnet) {
@@ -281,16 +281,16 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
                 <div class="flex items-center justify-between gap-2">
                   <label
                     for="discoverySubnetInput"
-                    class="text-xs font-medium text-gray-700 dark:text-gray-300"
+                    class="text-xs font-medium text-slate-700 dark:text-slate-300"
                   >
                     Discovery subnet
                   </label>
                   <span
-                    class="text-gray-400 hover:text-gray-500 dark:text-gray-500 dark:hover:text-gray-300"
+                    class="text-slate-400 hover:text-slate-500 dark:text-slate-500 dark:hover:text-slate-300"
                     title="Use CIDR notation (comma-separated for multiple), e.g. 192.168.1.0/24, 10.0.0.0/24. Smaller ranges keep scans quick."
                   >
                     <svg
-                      class="h-4 w-4"
+                      class="h-5 w-5 sm:h-4 sm:w-4"
                       viewBox="0 0 24 24"
                       fill="none"
                       stroke="currentColor"
@@ -312,9 +312,9 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
                       ? 'auto (scan every network phase)'
                       : '192.168.1.0/24, 10.0.0.0/24'
                   }
-                  class={`w-full rounded-lg border px-3 py-2 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${props.envOverrides().discoverySubnet
+                  class={`w-full min-h-10 sm:min-h-10 rounded-md border px-3 py-2.5 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${props.envOverrides().discoverySubnet
                     ? 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-600 dark:bg-amber-900/20 dark:text-amber-200 cursor-not-allowed opacity-60'
-                    : 'border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-900/70'
+                    : 'border-slate-300 bg-white dark:border-slate-600 dark:bg-slate-800'
                     }`}
                   disabled={props.envOverrides().discoverySubnet}
                   onInput={(e) => {
@@ -378,13 +378,13 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
                   </p>
                 </Show>
                 <Show when={!props.discoverySubnetError() && props.discoveryMode() === 'auto'}>
-                  <p class="text-xs text-gray-500 dark:text-gray-400">
+                  <p class="text-xs text-slate-500 dark:text-slate-400">
                     Auto scans all host network interfaces, which may include corporate or shared
                     networks. Switch to a custom subnet for faster, more targeted scans.
                   </p>
                 </Show>
                 <Show when={!props.discoverySubnetError() && props.discoveryMode() === 'custom'}>
-                  <p class="text-xs text-gray-500 dark:text-gray-400">
+                  <p class="text-xs text-slate-500 dark:text-slate-400">
                     Example: 192.168.1.0/24, 10.0.0.0/24 (comma-separated). Smaller ranges finish
                     faster and avoid timeouts.
                   </p>
@@ -395,7 +395,7 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
 
           {/* Env override warning */}
           <Show when={props.envOverrides().discoveryEnabled || props.envOverrides().discoverySubnet}>
-            <div class="rounded-lg border border-amber-200 bg-amber-100/80 p-3 text-xs text-amber-800 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">
+            <div class="rounded-md border border-amber-200 bg-amber-100/80 p-3 text-xs text-amber-800 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">
               Discovery settings are locked by environment variables. Update the service
               configuration and restart Pulse to change them here.
             </div>
@@ -404,7 +404,7 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
 
         {/* Public URL Setting */}
         <section class="space-y-3">
-          <h4 class="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+          <h4 class="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
             <svg
               width="16"
               height="16"
@@ -419,10 +419,10 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
             Public URL
           </h4>
           <div class="space-y-2">
-            <label class="text-sm font-medium text-gray-900 dark:text-gray-100">
+            <label class="text-sm font-medium text-slate-900 dark:text-slate-100">
               Dashboard URL for Notifications
             </label>
-            <p class="text-xs text-gray-600 dark:text-gray-400">
+            <p class="text-xs text-slate-600 dark:text-slate-400">
               The URL included in email alerts to link back to Pulse. Required for Docker deployments with custom ports.
             </p>
             <div class="relative">
@@ -437,9 +437,9 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
                 }}
                 disabled={props.envOverrides().publicURL}
                 placeholder="http://192.168.1.100:8080"
-                class={`w-full px-3 py-1.5 text-sm border rounded-lg ${props.envOverrides().publicURL
+                class={`w-full min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border rounded-md ${props.envOverrides().publicURL
                   ? 'border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/20 cursor-not-allowed opacity-75'
-                  : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800'
+                  : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800'
                   }`}
               />
               {props.envOverrides().publicURL && (
@@ -461,7 +461,7 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
                 </div>
               )}
             </div>
-            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
               Example: If you access Pulse at <code>http://myserver:8080</code>, enter that URL here.
               Leave empty to auto-detect (may not work correctly with Docker port mappings).
             </p>
@@ -470,7 +470,7 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
 
         {/* CORS Settings Section */}
         <section class="space-y-3">
-          <h4 class="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+          <h4 class="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
             <svg
               width="16"
               height="16"
@@ -485,10 +485,10 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
             Network Settings
           </h4>
           <div class="space-y-2">
-            <label class="text-sm font-medium text-gray-900 dark:text-gray-100">
+            <label class="text-sm font-medium text-slate-900 dark:text-slate-100">
               CORS Allowed Origins
             </label>
-            <p class="text-xs text-gray-600 dark:text-gray-400">
+            <p class="text-xs text-slate-600 dark:text-slate-400">
               For reverse proxy setups (* = allow all, empty = same-origin only)
             </p>
             <div class="relative">
@@ -503,9 +503,9 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
                 }}
                 disabled={props.envOverrides().allowedOrigins}
                 placeholder="* or https://example.com"
-                class={`w-full px-3 py-1.5 text-sm border rounded-lg ${props.envOverrides().allowedOrigins
+                class={`w-full min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border rounded-md ${props.envOverrides().allowedOrigins
                   ? 'border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/20 cursor-not-allowed opacity-75'
-                  : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800'
+                  : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800'
                   }`}
               />
               {props.envOverrides().allowedOrigins && (
@@ -532,7 +532,7 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
 
         {/* Embedding Section */}
         <section class="space-y-3">
-          <h4 class="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+          <h4 class="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
             <svg
               width="16"
               height="16"
@@ -546,7 +546,7 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
             </svg>
             Embedding
           </h4>
-          <p class="text-xs text-gray-600 dark:text-gray-400">
+          <p class="text-xs text-slate-600 dark:text-slate-400">
             Allow Pulse to be embedded in iframes (e.g., Homepage dashboard)
           </p>
           <div class="space-y-3">
@@ -559,19 +559,19 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
                   props.setAllowEmbedding(e.currentTarget.checked);
                   props.setHasUnsavedChanges(true);
                 }}
-                class="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                class="h-5 w-5 sm:h-4 sm:w-4 rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500"
               />
-              <label for="allowEmbedding" class="text-sm text-gray-700 dark:text-gray-300">
+              <label for="allowEmbedding" class="text-sm text-slate-700 dark:text-slate-300">
                 Allow iframe embedding
               </label>
             </div>
 
             <Show when={props.allowEmbedding()}>
               <div class="space-y-2">
-                <label class="text-xs font-medium text-gray-700 dark:text-gray-300">
+                <label class="text-xs font-medium text-slate-700 dark:text-slate-300">
                   Allowed Embed Origins (optional)
                 </label>
-                <p class="text-xs text-gray-600 dark:text-gray-400">
+                <p class="text-xs text-slate-600 dark:text-slate-400">
                   Comma-separated list of origins that can embed Pulse (leave empty for same-origin
                   only)
                 </p>
@@ -583,9 +583,9 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
                     props.setHasUnsavedChanges(true);
                   }}
                   placeholder="https://my.domain, https://dashboard.example.com"
-                  class="w-full px-3 py-1.5 text-sm border rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800"
+                  class="w-full min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border rounded-md border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800"
                 />
-                <p class="text-xs text-gray-500 dark:text-gray-400">
+                <p class="text-xs text-slate-500 dark:text-slate-400">
                   Example: If Pulse is at <code>pulse.my.domain</code> and your dashboard is at{' '}
                   <code>my.domain</code>, add <code>https://my.domain</code> here.
                 </p>
@@ -596,10 +596,10 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
 
         {/* Webhook Security Section */}
         <section class="space-y-3">
-          <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+          <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
             <svg
               xmlns="http://www.w3.org/2000/svg"
-              class="h-4 w-4"
+              class="h-5 w-5 sm:h-4 sm:w-4"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -615,10 +615,10 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
           </h3>
           <div class="space-y-3">
             <div>
-              <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
+              <label class="text-sm font-medium text-slate-700 dark:text-slate-300">
                 Allowed Private IP Ranges for Webhooks
               </label>
-              <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">
+              <p class="text-xs text-slate-500 dark:text-slate-400 mb-2">
                 By default, webhooks to private IP addresses are blocked for security. Enter
                 trusted CIDR ranges to allow webhooks to internal services (leave empty to block
                 all private IPs).
@@ -631,9 +631,9 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
                   props.setHasUnsavedChanges(true);
                 }}
                 placeholder="192.168.1.0/24, 10.0.0.0/8"
-                class="w-full px-3 py-1.5 text-sm border rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800"
+                class="w-full min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border rounded-md border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800"
               />
-              <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
                 Example: <code>192.168.1.0/24,10.0.0.0/8</code> allows webhooks to these private
                 networks. Localhost and cloud metadata services remain blocked.
               </p>

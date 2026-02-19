@@ -25,8 +25,8 @@ export function StoragePanel(props: StoragePanelProps) {
   return (
     <Card padding="none" class="px-4 py-3.5" aria-busy={props.loading}>
       <div class="flex items-center justify-between gap-3">
-        <h2 class="text-sm font-semibold text-gray-900 dark:text-gray-100">
-          Storage <span class="font-normal text-xs text-gray-500 dark:text-gray-400">({props.storage.total} pools)</span>
+        <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">
+          Storage <span class="font-normal text-xs text-slate-500 dark:text-slate-400">({props.storage.total} pools)</span>
         </h2>
         <a
           href={buildStoragePath()}
@@ -39,20 +39,20 @@ export function StoragePanel(props: StoragePanelProps) {
 
       <Switch>
         <Match when={props.storage.total === 0}>
-          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">No storage resources</p>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">No storage resources</p>
         </Match>
         <Match when={props.storage.total > 0}>
           <div class="mt-1.5 space-y-1.5">
             <div class="flex items-center justify-between gap-3">
-              <p class="text-xs text-gray-500 dark:text-gray-400">
+              <p class="text-xs text-slate-500 dark:text-slate-400">
                 {formatBytes(props.storage.totalUsed)} / {formatBytes(props.storage.totalCapacity)}
               </p>
-              <span class="text-xs font-mono font-semibold text-gray-700 dark:text-gray-200">
+              <span class="text-xs font-mono font-semibold text-slate-700 dark:text-slate-200">
                 {formatPercent(capacityPercent())}
               </span>
             </div>
 
-            <div class="h-2 overflow-hidden rounded bg-gray-100 dark:bg-gray-700/70">
+            <div class="h-2 overflow-hidden rounded bg-slate-100 dark:bg-slate-800">
               <div
                 class={`h-full rounded ${getMetricColorClass(capacityPercent(), 'disk')}`}
                 style={{ width: `${capacityPercent()}%` }}

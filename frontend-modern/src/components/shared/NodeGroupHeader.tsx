@@ -45,7 +45,7 @@ export const NodeGroupHeader: Component<NodeGroupHeaderProps> = (props) => {
         <span
           class={`rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap ${props.node.isClusterMember
             ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
-            : 'bg-slate-200 text-slate-600 dark:bg-slate-700/60 dark:text-slate-300'
+            : 'bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
             }`}
         >
           {props.node.isClusterMember ? props.node.clusterName : 'Standalone'}
@@ -67,14 +67,14 @@ export const NodeGroupHeader: Component<NodeGroupHeaderProps> = (props) => {
     <Show
       when={props.renderAs === 'tr'}
       fallback={
-        <div class="bg-gray-50 dark:bg-gray-900/40 w-full">
+        <div class="bg-slate-50 dark:bg-slate-800 w-full">
           <div class="py-1 pr-2 pl-4 text-[12px] sm:text-sm font-semibold text-slate-700 dark:text-slate-100">
             <InnerContent />
           </div>
         </div>
       }
     >
-      <tr class="bg-gray-50 dark:bg-gray-900/40">
+      <tr class="bg-slate-50 dark:bg-slate-800">
         <td
           colspan={props.colspan}
           class="py-1 pr-2 pl-4 text-[12px] sm:text-sm font-semibold text-slate-700 dark:text-slate-100"

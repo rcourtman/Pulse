@@ -29,11 +29,11 @@ interface RunHistoryPanelProps {
 
 export function RunHistoryPanel(props: RunHistoryPanelProps) {
   return (
-    <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+    <div class="bg-white dark:bg-slate-800 rounded-md border border-slate-200 dark:border-slate-700 p-4">
       <div class="flex items-center justify-between mb-4">
         <div>
-          <h2 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Patrol Run History</h2>
-          <p class="text-xs text-gray-500 dark:text-gray-400">
+          <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Patrol Run History</h2>
+          <p class="text-xs text-slate-500 dark:text-slate-400">
             Select a run to filter findings to that snapshot
           </p>
         </div>
@@ -49,13 +49,13 @@ export function RunHistoryPanel(props: RunHistoryPanelProps) {
       </div>
 
       <Show when={props.loading}>
-        <div class="text-xs text-gray-500 dark:text-gray-400">Loading run history…</div>
+        <div class="text-xs text-slate-500 dark:text-slate-400">Loading run history…</div>
       </Show>
 
       <Show when={!props.loading && props.runs.length === 0}>
         <div class="text-center py-8">
-          <RefreshCwIcon class="w-12 h-12 mx-auto text-gray-300 dark:text-gray-600 mb-3" />
-          <p class="text-sm text-gray-500 dark:text-gray-400">
+          <RefreshCwIcon class="w-12 h-12 mx-auto text-slate-300 dark:text-slate-600 mb-3" />
+          <p class="text-sm text-slate-500 dark:text-slate-400">
             No patrol runs yet. Trigger a run to populate history.
           </p>
         </div>

@@ -133,7 +133,7 @@ export const Dialog: Component<DialogProps> = (props) => {
                 aria-describedby={props.ariaDescribedBy}
                 tabindex="-1"
                 data-dialog-panel
-                class={`relative flex w-full max-h-[calc(100dvh-2rem)] flex-col overflow-hidden rounded-xl bg-white shadow-2xl outline-none dark:bg-gray-800 ${
+                class={`relative flex w-full max-h-[calc(100dvh-2rem)] flex-col overflow-hidden rounded-md bg-white shadow-sm outline-none dark:bg-slate-800 ${
                   props.panelClass ?? 'max-w-lg'
                 }`.trim()}
                 onClick={(event) => event.stopPropagation()}

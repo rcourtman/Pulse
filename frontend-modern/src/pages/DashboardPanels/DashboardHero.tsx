@@ -143,10 +143,10 @@ export function DashboardHero(props: DashboardHeroProps) {
 
     return (
         <div class="space-y-3">
-            <Card padding="none" class="border border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800">
+            <Card padding="none" class="border border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800">
                 <div class="px-4 py-2.5 flex items-center justify-between gap-3">
                     <div class="flex items-center gap-2.5 min-w-0">
-                        <div class={`relative rounded-lg p-1.5 ${statusConfig().bg}`}>
+                        <div class={`relative rounded-md p-1.5 ${statusConfig().bg}`}>
                             <Dynamic component={statusConfig().icon} class={`w-4 h-4 ${statusConfig().color}`} />
                             <Show when={status() === 'critical'}>
                                 <span class="absolute -right-0.5 -top-0.5 flex h-2.5 w-2.5">
@@ -159,7 +159,7 @@ export function DashboardHero(props: DashboardHeroProps) {
                                 </span>
                             </Show>
                         </div>
-                        <span class="text-sm font-semibold text-gray-800 dark:text-gray-100 truncate">
+                        <span class="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate">
                             {statusConfig().label}
                         </span>
                     </div>
@@ -185,7 +185,7 @@ export function DashboardHero(props: DashboardHeroProps) {
 
                         <a
                             href={ALERTS_OVERVIEW_PATH}
-                            class="text-xs font-semibold text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white transition-colors"
+                            class="text-xs font-semibold text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white transition-colors"
                         >
                             View Alerts →
                         </a>
@@ -197,16 +197,16 @@ export function DashboardHero(props: DashboardHeroProps) {
                 <a href={INFRASTRUCTURE_PATH} class="group block">
                     <Card
                         padding="none"
-                        class={`h-full p-4 ${CARD_THEMES.blue.hoverBorder} transition-all duration-300 cursor-pointer hover:shadow-lg hover:-translate-y-0.5 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700`}
+                        class={`h-full p-4 ${CARD_THEMES.blue.hoverBorder} transition-all duration-300 cursor-pointer hover:shadow-sm hover:-translate-y-0.5 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700`}
                     >
                         <div class="flex items-start justify-between gap-2 mb-3">
                             <div class="flex items-center gap-2 min-w-0">
                                 <div
-                                    class={`p-2 rounded-lg transition-colors ${CARD_THEMES.blue.iconBg} ${CARD_THEMES.blue.iconColor} ${CARD_THEMES.blue.hoverIconBg}`}
+                                    class={`p-2 rounded-md transition-colors ${CARD_THEMES.blue.iconBg} ${CARD_THEMES.blue.iconColor} ${CARD_THEMES.blue.hoverIconBg}`}
                                 >
                                     <Server class="w-5 h-5" />
                                 </div>
-                                <h3 class="text-sm font-semibold text-gray-900 dark:text-white truncate">Infrastructure</h3>
+                                <h3 class="text-sm font-semibold text-slate-900 dark:text-white truncate">Infrastructure</h3>
                                 <Show when={infrastructureHasIssue()}>
                                     <SeverityChip severity="critical" />
                                 </Show>
@@ -218,15 +218,15 @@ export function DashboardHero(props: DashboardHeroProps) {
                                     { value: props.infrastructure.online, color: 'text-blue-500 dark:text-blue-400' },
                                     {
                                         value: props.infrastructure.total - props.infrastructure.online,
-                                        color: 'text-gray-200 dark:text-gray-700',
+                                        color: 'text-slate-200 dark:text-slate-700',
                                     },
                                 ]}
                             />
                         </div>
 
-                        <div class="text-2xl font-bold text-gray-900 dark:text-white">{props.infrastructure.total}</div>
-                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">Total Nodes</div>
-                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-2 truncate">
+                        <div class="text-2xl font-bold text-slate-900 dark:text-white">{props.infrastructure.total}</div>
+                        <div class="text-xs text-slate-500 dark:text-slate-400 mt-1">Total Nodes</div>
+                        <div class="text-xs text-slate-500 dark:text-slate-400 mt-2 truncate">
                             {props.infrastructure.online} online
                             <Show when={props.topCPU[0]}>
                                 <span>
@@ -241,28 +241,28 @@ export function DashboardHero(props: DashboardHeroProps) {
                 <a href={WORKLOADS_PATH} class="group block">
                     <Card
                         padding="none"
-                        class={`h-full p-4 ${CARD_THEMES.purple.hoverBorder} transition-all duration-300 cursor-pointer hover:shadow-lg hover:-translate-y-0.5 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700`}
+                        class={`h-full p-4 ${CARD_THEMES.purple.hoverBorder} transition-all duration-300 cursor-pointer hover:shadow-sm hover:-translate-y-0.5 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700`}
                     >
                         <div class="flex items-start justify-between gap-2 mb-3">
                             <div class="flex items-center gap-2 min-w-0">
                                 <div
-                                    class={`p-2 rounded-lg transition-colors ${CARD_THEMES.purple.iconBg} ${CARD_THEMES.purple.iconColor} ${CARD_THEMES.purple.hoverIconBg}`}
+                                    class={`p-2 rounded-md transition-colors ${CARD_THEMES.purple.iconBg} ${CARD_THEMES.purple.iconColor} ${CARD_THEMES.purple.hoverIconBg}`}
                                 >
                                     <Boxes class="w-5 h-5" />
                                 </div>
-                                <h3 class="text-sm font-semibold text-gray-900 dark:text-white truncate">Workloads</h3>
+                                <h3 class="text-sm font-semibold text-slate-900 dark:text-white truncate">Workloads</h3>
                                 <Show when={workloadsHasIssue()}>
                                     <SeverityChip severity="warning" />
                                 </Show>
                             </div>
-                            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-gray-50 border-gray-200 text-gray-600 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400">
+                            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-slate-50 border-slate-200 text-slate-600 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400">
                                 {props.workloads.running} RUNNING
                             </span>
                         </div>
 
-                        <div class="text-2xl font-bold text-gray-900 dark:text-white">{props.workloads.total}</div>
-                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">Total</div>
-                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                        <div class="text-2xl font-bold text-slate-900 dark:text-white">{props.workloads.total}</div>
+                        <div class="text-xs text-slate-500 dark:text-slate-400 mt-1">Total</div>
+                        <div class="text-xs text-slate-500 dark:text-slate-400 mt-2">
                             {props.workloads.running} running · {props.workloads.stopped} stopped
                         </div>
                     </Card>
@@ -271,16 +271,16 @@ export function DashboardHero(props: DashboardHeroProps) {
                 <a href={buildStoragePath()} class="group block">
                     <Card
                         padding="none"
-                        class={`h-full p-4 ${CARD_THEMES.cyan.hoverBorder} transition-all duration-300 cursor-pointer hover:shadow-lg hover:-translate-y-0.5 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700`}
+                        class={`h-full p-4 ${CARD_THEMES.cyan.hoverBorder} transition-all duration-300 cursor-pointer hover:shadow-sm hover:-translate-y-0.5 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700`}
                     >
                         <div class="flex items-start justify-between gap-2 mb-3">
                             <div class="flex items-center gap-2 min-w-0">
                                 <div
-                                    class={`p-2 rounded-lg transition-colors ${CARD_THEMES.cyan.iconBg} ${CARD_THEMES.cyan.iconColor} ${CARD_THEMES.cyan.hoverIconBg}`}
+                                    class={`p-2 rounded-md transition-colors ${CARD_THEMES.cyan.iconBg} ${CARD_THEMES.cyan.iconColor} ${CARD_THEMES.cyan.hoverIconBg}`}
                                 >
                                     <HardDrive class="w-5 h-5" />
                                 </div>
-                                <h3 class="text-sm font-semibold text-gray-900 dark:text-white truncate">Storage</h3>
+                                <h3 class="text-sm font-semibold text-slate-900 dark:text-white truncate">Storage</h3>
                                 <Show when={storageSeverity()}>{(severity) => <SeverityChip severity={severity()} />}</Show>
                             </div>
                             <MiniGauge
@@ -291,12 +291,12 @@ export function DashboardHero(props: DashboardHeroProps) {
                             />
                         </div>
 
-                        <div class="text-2xl font-bold text-gray-900 dark:text-white flex items-baseline gap-0.5">
+                        <div class="text-2xl font-bold text-slate-900 dark:text-white flex items-baseline gap-0.5">
                             {Math.round(props.storage.capacityPercent)}
-                            <span class="text-sm font-normal text-gray-400">%</span>
+                            <span class="text-sm font-normal text-slate-400">%</span>
                         </div>
-                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">Capacity Used</div>
-                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                        <div class="text-xs text-slate-500 dark:text-slate-400 mt-1">Capacity Used</div>
+                        <div class="text-xs text-slate-500 dark:text-slate-400 mt-2">
                             {formatBytes(props.storage.totalUsed)} / {formatBytes(props.storage.totalCapacity)}
                         </div>
                     </Card>
@@ -305,16 +305,16 @@ export function DashboardHero(props: DashboardHeroProps) {
                 <a href={buildRecoveryPath()} class="group block">
                     <Card
                         padding="none"
-                        class={`h-full p-4 ${CARD_THEMES.emerald.hoverBorder} transition-all duration-300 cursor-pointer hover:shadow-lg hover:-translate-y-0.5 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700`}
+                        class={`h-full p-4 ${CARD_THEMES.emerald.hoverBorder} transition-all duration-300 cursor-pointer hover:shadow-sm hover:-translate-y-0.5 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700`}
                     >
                         <div class="flex items-start justify-between gap-2 mb-3">
                             <div class="flex items-center gap-2 min-w-0">
                                 <div
-                                    class={`p-2 rounded-lg transition-colors ${CARD_THEMES.emerald.iconBg} ${CARD_THEMES.emerald.iconColor} ${CARD_THEMES.emerald.hoverIconBg}`}
+                                    class={`p-2 rounded-md transition-colors ${CARD_THEMES.emerald.iconBg} ${CARD_THEMES.emerald.iconColor} ${CARD_THEMES.emerald.hoverIconBg}`}
                                 >
                                     <Archive class="w-5 h-5" />
                                 </div>
-                                <h3 class="text-sm font-semibold text-gray-900 dark:text-white truncate">Recovery</h3>
+                                <h3 class="text-sm font-semibold text-slate-900 dark:text-white truncate">Recovery</h3>
                                 <Show when={recoverySeverity()}>{(severity) => <SeverityChip severity={severity()} />}</Show>
                             </div>
 
@@ -339,17 +339,17 @@ export function DashboardHero(props: DashboardHeroProps) {
 
                         <Show
                             when={props.recovery.hasData}
-                            fallback={<div class="text-2xl font-bold text-gray-900 dark:text-white">—</div>}
+                            fallback={<div class="text-2xl font-bold text-slate-900 dark:text-white">—</div>}
                         >
-                            <div class="text-2xl font-bold text-gray-900 dark:text-white">{props.recovery.totalProtected}</div>
+                            <div class="text-2xl font-bold text-slate-900 dark:text-white">{props.recovery.totalProtected}</div>
                         </Show>
-                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">Protected</div>
+                        <div class="text-xs text-slate-500 dark:text-slate-400 mt-1">Protected</div>
 
                         <Show
                             when={props.recovery.hasData}
-                            fallback={<div class="text-xs text-gray-500 dark:text-gray-400 mt-2">No data</div>}
+                            fallback={<div class="text-xs text-slate-500 dark:text-slate-400 mt-2">No data</div>}
                         >
-                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                            <div class="text-xs text-slate-500 dark:text-slate-400 mt-2">
                                 {(props.recovery.byOutcome.success ?? 0)} ok · {(props.recovery.byOutcome.failed ?? 0)} failed
                                 {' · Last '}
                                 {formatRelativeTime(props.recovery.latestEventTimestamp ?? undefined, {

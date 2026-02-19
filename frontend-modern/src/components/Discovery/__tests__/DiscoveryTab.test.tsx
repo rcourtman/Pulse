@@ -10,30 +10,16 @@ vi.mock('@/api/discovery', () => {
     updateDiscoveryNotes: vi.fn(),
     formatDiscoveryAge: vi.fn(() => 'just now'),
     getCategoryDisplayName: vi.fn((category: string) => category),
-    getConfidenceLevel: vi.fn(() => ({ label: 'Low confidence', color: 'text-gray-500' })),
+    getConfidenceLevel: vi.fn(() => ({ label: 'Low confidence', color: 'text-slate-500' })),
     getConnectedAgents: vi.fn(async () => ({ count: 0, agents: [] })),
   };
 });
 
-vi.mock('@/api/guestMetadata', () => ({
-  GuestMetadataAPI: {
-    getMetadata: vi.fn(async () => ({ id: 'guest-1', customUrl: '' })),
-    updateMetadata: vi.fn(async () => ({ id: 'guest-1', customUrl: '' })),
-  },
-}));
-
-vi.mock('@/api/hostMetadata', () => ({
-  HostMetadataAPI: {
-    getMetadata: vi.fn(async () => ({ id: 'host-1', customUrl: '' })),
-    updateMetadata: vi.fn(async () => ({ id: 'host-1', customUrl: '' })),
-  },
-}));
-
 import { DiscoveryTab } from '@/components/Discovery/DiscoveryTab';
-
 describe('DiscoveryTab', () => {
   afterEach(() => {
     cleanup();
+    vi.clearAllMocks();
   });
 
   it('keeps run action visible while discovery lookup is still loading', async () => {
@@ -43,8 +29,6 @@ describe('DiscoveryTab', () => {
         hostId="host-1"
         resourceId="host-1"
         hostname="pve1"
-        urlMetadataKind="host"
-        urlMetadataId="host-1"
       />
     ));
 

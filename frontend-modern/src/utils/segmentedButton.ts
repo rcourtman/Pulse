@@ -10,10 +10,10 @@ export const segmentedButtonClass = (selected: boolean, disabled = false): strin
   const base =
     'inline-flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded-md transition-all duration-150 active:scale-95';
   if (disabled) {
-    return `${base} text-gray-400 dark:text-gray-600 cursor-not-allowed`;
+    return `${base} text-slate-400 dark:text-slate-600 cursor-not-allowed`;
   }
   if (selected) {
-    return `${base} bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm ring-1 ring-gray-200 dark:ring-gray-600`;
+    return `${base} bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 shadow-sm ring-1 ring-gray-200 dark:ring-gray-600`;
   }
-  return `${base} text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600/50`;
+  return `${base} text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-600/50`;
 };

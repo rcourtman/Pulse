@@ -180,14 +180,14 @@ const DiagnosticCard: Component<{
     };
 
     return (
-        <div class={`rounded-xl border p-4 transition-all hover:shadow-md ${statusColors[props.status || 'info']}`}>
+        <div class={`rounded-md border p-4 transition-all hover:shadow-sm ${statusColors[props.status || 'info']}`}>
             <div class="flex items-center gap-3 mb-3">
-                <div class={`p-2 rounded-lg bg-white/60 dark:bg-gray-800/60 ${iconColors[props.status || 'info']}`}>
+                <div class={`p-2 rounded-md bg-white dark:bg-slate-800 ${iconColors[props.status || 'info']}`}>
                     <props.icon class="w-4 h-4" />
                 </div>
-                <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">{props.title}</h4>
+                <h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100">{props.title}</h4>
             </div>
-            <div class="text-xs text-gray-600 dark:text-gray-400 space-y-1.5">
+            <div class="text-xs text-slate-600 dark:text-slate-400 space-y-1.5">
                 {props.children}
             </div>
         </div>
@@ -203,12 +203,12 @@ const StatusBadge: Component<{
         online: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
         offline: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
         warning: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
-        unknown: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300',
+        unknown: 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300',
     };
 
     return (
         <span class={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium uppercase tracking-wide ${colors[props.status]}`}>
-            <span class={`w-1.5 h-1.5 rounded-full ${props.status === 'online' ? 'bg-emerald-400' : props.status === 'offline' ? 'bg-rose-400' : props.status === 'warning' ? 'bg-amber-400' : 'bg-gray-400'}`} />
+            <span class={`w-1.5 h-1.5 rounded-full ${props.status === 'online' ? 'bg-emerald-400' : props.status === 'offline' ? 'bg-rose-400' : props.status === 'warning' ? 'bg-amber-400' : 'bg-slate-400'}`} />
             {props.label || props.status}
         </span>
     );
@@ -220,9 +220,9 @@ const MetricRow: Component<{
     value: string | number | undefined;
     mono?: boolean;
 }> = (props) => (
-    <div class="flex items-center justify-between py-1.5 border-b border-gray-100 dark:border-gray-700/50 last:border-0">
-        <span class="text-gray-500 dark:text-gray-400">{props.label}</span>
-        <span class={`text-gray-900 dark:text-gray-100 ${props.mono ? 'font-mono text-[11px]' : 'font-medium'}`}>
+    <div class="flex items-center justify-between py-1.5 border-b border-slate-100 dark:border-slate-700/50 last:border-0">
+        <span class="text-slate-500 dark:text-slate-400">{props.label}</span>
+        <span class={`text-slate-900 dark:text-slate-100 ${props.mono ? 'font-mono text-[11px]' : 'font-medium'}`}>
             {props.value ?? 'Unknown'}
         </span>
     </div>
@@ -458,14 +458,14 @@ export const DiagnosticsPanel: Component = () => {
             };
         }
         return {
-            headerBg: 'bg-gray-50 dark:bg-gray-800/50',
-            headerBorder: 'border-b border-gray-200 dark:border-gray-700',
-            iconWrap: 'bg-gray-100 dark:bg-gray-700',
-            icon: 'text-gray-700 dark:text-gray-300',
-            subtitle: 'text-gray-600 dark:text-gray-400',
-            meta: 'text-gray-500 dark:text-gray-400',
+            headerBg: 'bg-slate-50 dark:bg-slate-800',
+            headerBorder: 'border-b border-slate-200 dark:border-slate-700',
+            iconWrap: 'bg-slate-100 dark:bg-slate-700',
+            icon: 'text-slate-700 dark:text-slate-300',
+            subtitle: 'text-slate-600 dark:text-slate-400',
+            meta: 'text-slate-500 dark:text-slate-400',
             button:
-                'border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-100 hover:bg-gray-200 dark:hover:bg-gray-600',
+                'border border-slate-300 dark:border-slate-600 bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-600',
         };
     };
 
@@ -474,17 +474,17 @@ export const DiagnosticsPanel: Component = () => {
             {/* Header Card */}
             <Card
                 padding="none"
-                class="overflow-hidden border border-gray-200 dark:border-gray-700"
+                class="overflow-hidden border border-slate-200 dark:border-slate-700"
                 border={false}
             >
                 <div class={`px-4 sm:px-6 py-4 sm:py-5 ${healthTone().headerBg} ${healthTone().headerBorder}`}>
                     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                         <div class="flex items-center gap-3 sm:gap-4">
-                            <div class={`p-2 sm:p-3 rounded-xl flex-shrink-0 ${healthTone().iconWrap}`}>
+                            <div class={`p-2 sm:p-3 rounded-md flex-shrink-0 ${healthTone().iconWrap}`}>
                                 <Activity class={`w-5 h-5 sm:w-6 sm:h-6 ${healthTone().icon}`} />
                             </div>
                             <div class="min-w-0">
-                                <h2 class="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100">System Diagnostics</h2>
+                                <h2 class="text-base sm:text-lg font-semibold text-slate-900 dark:text-slate-100">System Diagnostics</h2>
                                 <p class={`text-xs sm:text-sm hidden sm:block ${healthTone().subtitle}`}>
                                     Connection health, configuration status, and troubleshooting tools
                                 </p>
@@ -501,7 +501,7 @@ export const DiagnosticsPanel: Component = () => {
                                 type="button"
                                 onClick={runDiagnostics}
                                 disabled={loading()}
-                                class={`flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg font-medium text-xs sm:text-sm transition-colors disabled:opacity-50 whitespace-nowrap ${healthTone().button}`}
+                                class={`flex min-h-10 sm:min-h-9 min-w-10 items-center gap-2 px-3 sm:px-4 py-2.5 rounded-md font-medium text-sm transition-colors disabled:opacity-50 whitespace-nowrap ${healthTone().button}`}
                             >
                                 <RefreshCw class={`w-4 h-4 ${loading() ? 'animate-spin' : ''}`} />
                                 <span class="sm:hidden">{loading() ? '...' : 'Run'}</span>
@@ -512,8 +512,8 @@ export const DiagnosticsPanel: Component = () => {
                 </div>
 
                 {/* Quick Actions */}
-                <div class="px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                    <p class="text-xs text-gray-500 dark:text-gray-400">
+                <div class="px-4 sm:px-6 py-3 sm:py-4 bg-slate-50 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <p class="text-xs text-slate-500 dark:text-slate-400">
                         Test all connections and inspect runtime configuration
                     </p>
                     <Show when={diagnosticsData()}>
@@ -522,7 +522,7 @@ export const DiagnosticsPanel: Component = () => {
                                 type="button"
                                 onClick={() => exportDiagnostics(false)}
                                 disabled={exportLoading()}
-                                class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+                                class="flex min-h-10 sm:min-h-9 items-center gap-1.5 px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors"
                             >
                                 <Download class="w-3.5 h-3.5" />
                                 Full
@@ -531,7 +531,7 @@ export const DiagnosticsPanel: Component = () => {
                                 type="button"
                                 onClick={() => exportDiagnostics(true)}
                                 disabled={exportLoading()}
-                                class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/50 transition-colors"
+                                class="flex min-h-10 sm:min-h-9 items-center gap-1.5 px-3 py-2 text-sm font-medium text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-md hover:bg-green-100 dark:hover:bg-green-900/50 transition-colors"
                             >
                                 <Download class="w-3.5 h-3.5" />
                                 GitHub
@@ -545,18 +545,18 @@ export const DiagnosticsPanel: Component = () => {
             <Show when={diagnosticsData()} fallback={
                 <Card padding="lg" class="text-center">
                     <div class="py-12">
-                        <Activity class="w-12 h-12 mx-auto text-gray-300 dark:text-gray-600 mb-4" />
-                        <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
+                        <Activity class="w-12 h-12 mx-auto text-slate-300 dark:text-slate-600 mb-4" />
+                        <h3 class="text-lg font-medium text-slate-900 dark:text-slate-100 mb-2">
                             No diagnostics data yet
                         </h3>
-                        <p class="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                        <p class="text-sm text-slate-500 dark:text-slate-400 mb-6">
                             Click "Run Diagnostics" above to test connections and inspect system status
                         </p>
                         <button
                             type="button"
                             onClick={runDiagnostics}
                             disabled={loading()}
-                            class="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium text-sm transition-colors disabled:opacity-50"
+                            class="inline-flex min-h-10 sm:min-h-9 items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium text-sm transition-colors disabled:opacity-50"
                         >
                             <RefreshCw class={`w-4 h-4 ${loading() ? 'animate-spin' : ''}`} />
                             Run Diagnostics
@@ -587,14 +587,14 @@ export const DiagnosticsPanel: Component = () => {
                     >
                         <div class="flex items-center justify-between mb-2">
                             <span>Total Nodes</span>
-                            <span class="font-bold text-lg text-gray-900 dark:text-gray-100">
+                            <span class="font-bold text-lg text-slate-900 dark:text-slate-100">
                                 {diagnosticsData()?.nodes?.length || 0}
                             </span>
                         </div>
                         <div class="space-y-1">
                             <For each={diagnosticsData()?.nodes || []}>
                                 {(node) => (
-                                    <div class="flex items-center justify-between py-1 border-b border-gray-100 dark:border-gray-700/50 last:border-0">
+                                    <div class="flex items-center justify-between py-1 border-b border-slate-100 dark:border-slate-700/50 last:border-0">
                                         <span class="truncate max-w-[120px]" title={node.host}>{node.name}</span>
                                         <StatusBadge status={node.connected ? 'online' : 'offline'} />
                                     </div>
@@ -610,20 +610,20 @@ export const DiagnosticsPanel: Component = () => {
                         status={diagnosticsData()?.pbs?.every(p => p.connected) ? 'success' : (diagnosticsData()?.pbs?.length ? 'warning' : 'info')}
                     >
                         <Show when={(diagnosticsData()?.pbs?.length || 0) > 0} fallback={
-                            <div class="text-center py-4 text-gray-400 dark:text-gray-500">
+                            <div class="text-center py-4 text-slate-400 dark:text-slate-500">
                                 No PBS configured
                             </div>
                         }>
                             <div class="flex items-center justify-between mb-2">
                                 <span>Total Instances</span>
-                                <span class="font-bold text-lg text-gray-900 dark:text-gray-100">
+                                <span class="font-bold text-lg text-slate-900 dark:text-slate-100">
                                     {diagnosticsData()?.pbs?.length || 0}
                                 </span>
                             </div>
                             <div class="space-y-1">
                                 <For each={diagnosticsData()?.pbs || []}>
                                     {(pbs) => (
-                                        <div class="flex items-center justify-between py-1 border-b border-gray-100 dark:border-gray-700/50 last:border-0">
+                                        <div class="flex items-center justify-between py-1 border-b border-slate-100 dark:border-slate-700/50 last:border-0">
                                             <span class="truncate max-w-[120px]" title={pbs.host}>{pbs.name}</span>
                                             <StatusBadge status={pbs.connected ? 'online' : 'offline'} />
                                         </div>
@@ -668,13 +668,13 @@ export const DiagnosticsPanel: Component = () => {
                     {/* Metrics Store */}
                     <Show when={diagnosticsData()?.metricsStore}>
                         <Card padding="md">
-                            <div class="flex items-center gap-3 mb-4 pb-3 border-b border-gray-200 dark:border-gray-700">
-                                <div class="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30">
+                            <div class="flex items-center gap-3 mb-4 pb-3 border-b border-slate-200 dark:border-slate-700">
+                                <div class="p-2 rounded-md bg-blue-100 dark:bg-blue-900/30">
                                     <Database class="w-4 h-4 text-blue-600 dark:text-blue-400" />
                                 </div>
                                 <div>
-                                    <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Metrics Store</h4>
-                                    <p class="text-xs text-gray-500 dark:text-gray-400">History persistence health</p>
+                                    <h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Metrics Store</h4>
+                                    <p class="text-xs text-slate-500 dark:text-slate-400">History persistence health</p>
                                 </div>
                                 <div class="ml-auto">
                                     <StatusBadge
@@ -702,7 +702,7 @@ export const DiagnosticsPanel: Component = () => {
                                 <MetricRow label="Buffer Size" value={diagnosticsData()?.metricsStore?.bufferSize ?? 0} />
                             </div>
                             <Show when={(diagnosticsData()?.metricsStore?.notes?.length || 0) > 0}>
-                                <div class="mt-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-2">
+                                <div class="mt-3 rounded-md bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-2">
                                     <div class="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-300">
                                         <AlertTriangle class="w-4 h-4 flex-shrink-0 mt-0.5" />
                                         <div class="space-y-1">
@@ -714,7 +714,7 @@ export const DiagnosticsPanel: Component = () => {
                                 </div>
                             </Show>
                             <Show when={diagnosticsData()?.metricsStore?.error}>
-                                <div class="mt-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-2 text-xs text-red-700 dark:text-red-300">
+                                <div class="mt-3 rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-2 text-xs text-red-700 dark:text-red-300">
                                     {diagnosticsData()?.metricsStore?.error}
                                 </div>
                             </Show>
@@ -724,13 +724,13 @@ export const DiagnosticsPanel: Component = () => {
                     {/* API Tokens */}
                     <Show when={diagnosticsData()?.apiTokens}>
                         <Card padding="md">
-                            <div class="flex items-center gap-3 mb-4 pb-3 border-b border-gray-200 dark:border-gray-700">
-                                <div class="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30">
+                            <div class="flex items-center gap-3 mb-4 pb-3 border-b border-slate-200 dark:border-slate-700">
+                                <div class="p-2 rounded-md bg-blue-100 dark:bg-blue-900/30">
                                     <Shield class="w-4 h-4 text-blue-600 dark:text-blue-400" />
                                 </div>
                                 <div>
-                                    <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">API Tokens</h4>
-                                    <p class="text-xs text-gray-500 dark:text-gray-400">Authentication status</p>
+                                    <h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100">API Tokens</h4>
+                                    <p class="text-xs text-slate-500 dark:text-slate-400">Authentication status</p>
                                 </div>
                                 <div class="ml-auto">
                                     <StatusBadge
@@ -755,19 +755,19 @@ export const DiagnosticsPanel: Component = () => {
                     {/* Docker Agents */}
                     <Show when={diagnosticsData()?.dockerAgents}>
                         <Card padding="md">
-                            <div class="flex items-center gap-3 mb-4 pb-3 border-b border-gray-200 dark:border-gray-700">
-                                <div class="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30">
+                            <div class="flex items-center gap-3 mb-4 pb-3 border-b border-slate-200 dark:border-slate-700">
+                                <div class="p-2 rounded-md bg-blue-100 dark:bg-blue-900/30">
                                     <Database class="w-4 h-4 text-blue-600 dark:text-blue-400" />
                                 </div>
                                 <div>
-                                    <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Docker Agents</h4>
-                                    <p class="text-xs text-gray-500 dark:text-gray-400">Container monitoring</p>
+                                    <h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Docker Agents</h4>
+                                    <p class="text-xs text-slate-500 dark:text-slate-400">Container monitoring</p>
                                 </div>
                                 <div class="ml-auto text-right">
-                                    <div class="text-lg font-bold text-gray-900 dark:text-gray-100">
+                                    <div class="text-lg font-bold text-slate-900 dark:text-slate-100">
                                         {diagnosticsData()?.dockerAgents?.hostsOnline}/{diagnosticsData()?.dockerAgents?.hostsTotal}
                                     </div>
-                                    <div class="text-[10px] text-gray-500 dark:text-gray-400">online</div>
+                                    <div class="text-[10px] text-slate-500 dark:text-slate-400">online</div>
                                 </div>
                             </div>
                             <div class="space-y-2 text-xs">
@@ -776,7 +776,7 @@ export const DiagnosticsPanel: Component = () => {
                                 <MetricRow label="Outdated Version" value={diagnosticsData()?.dockerAgents?.hostsOutdatedVersion ?? 0} />
                             </div>
                             <Show when={diagnosticsData()?.dockerAgents?.recommendedAgentVersion}>
-                                <div class="mt-3 pt-2 border-t border-gray-100 dark:border-gray-700/50 text-xs text-gray-500 dark:text-gray-400">
+                                <div class="mt-3 pt-2 border-t border-slate-100 dark:border-slate-700/50 text-xs text-slate-500 dark:text-slate-400">
                                     Recommended version: {diagnosticsData()?.dockerAgents?.recommendedAgentVersion}
                                 </div>
                             </Show>
@@ -786,13 +786,13 @@ export const DiagnosticsPanel: Component = () => {
                     {/* Alerts Configuration */}
                     <Show when={diagnosticsData()?.alerts}>
                         <Card padding="md">
-                            <div class="flex items-center gap-3 mb-4 pb-3 border-b border-gray-200 dark:border-gray-700">
-                                <div class="p-2 rounded-lg bg-rose-100 dark:bg-rose-900/30">
+                            <div class="flex items-center gap-3 mb-4 pb-3 border-b border-slate-200 dark:border-slate-700">
+                                <div class="p-2 rounded-md bg-rose-100 dark:bg-rose-900/30">
                                     <AlertTriangle class="w-4 h-4 text-rose-600 dark:text-rose-400" />
                                 </div>
                                 <div>
-                                    <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Alerts Configuration</h4>
-                                    <p class="text-xs text-gray-500 dark:text-gray-400">Alert system status</p>
+                                    <h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Alerts Configuration</h4>
+                                    <p class="text-xs text-slate-500 dark:text-slate-400">Alert system status</p>
                                 </div>
                             </div>
                             <div class="flex flex-wrap gap-2">
@@ -816,7 +816,7 @@ export const DiagnosticsPanel: Component = () => {
                                 </span>
                             </div>
                             <Show when={(diagnosticsData()?.alerts?.notes?.length || 0) > 0}>
-                                <ul class="mt-3 pt-2 border-t border-gray-100 dark:border-gray-700/50 space-y-1 text-xs text-gray-500 dark:text-gray-400 list-disc pl-4">
+                                <ul class="mt-3 pt-2 border-t border-slate-100 dark:border-slate-700/50 space-y-1 text-xs text-slate-500 dark:text-slate-400 list-disc pl-4">
                                     <For each={diagnosticsData()?.alerts?.notes || []}>
                                         {(note) => <li>{note}</li>}
                                     </For>
@@ -828,13 +828,13 @@ export const DiagnosticsPanel: Component = () => {
                     {/* AI Chat Status */}
                     <Show when={diagnosticsData()?.aiChat}>
                         <Card padding="md">
-                            <div class="flex items-center gap-3 mb-4 pb-3 border-b border-gray-200 dark:border-gray-700">
-                                <div class="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30">
+                            <div class="flex items-center gap-3 mb-4 pb-3 border-b border-slate-200 dark:border-slate-700">
+                                <div class="p-2 rounded-md bg-blue-100 dark:bg-blue-900/30">
                                     <Sparkles class="w-4 h-4 text-blue-600 dark:text-blue-400" />
                                 </div>
                                 <div>
-                                    <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Pulse Assistant</h4>
-                                    <p class="text-xs text-gray-500 dark:text-gray-400">Pulse Assistant Service</p>
+                                    <h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Pulse Assistant</h4>
+                                    <p class="text-xs text-slate-500 dark:text-slate-400">Pulse Assistant Service</p>
                                 </div>
                                 <div class="ml-auto">
                                     <StatusBadge
@@ -848,14 +848,14 @@ export const DiagnosticsPanel: Component = () => {
                                 <MetricRow label="Port" value={diagnosticsData()?.aiChat?.port} mono />
                                 <MetricRow label="Status" value={diagnosticsData()?.aiChat?.healthy ? 'Healthy' : 'Unhealthy'} />
                             </div>
-                            <div class="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700/50 flex items-center justify-between text-xs">
-                                <span class="text-gray-500 dark:text-gray-400">MCP Connection</span>
+                            <div class="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700/50 flex items-center justify-between text-xs">
+                                <span class="text-slate-500 dark:text-slate-400">MCP Connection</span>
                                 <div class="flex items-center gap-1.5">
                                     {diagnosticsData()?.aiChat?.mcpConnected ?
                                         <CheckCircle class="w-3.5 h-3.5 text-emerald-400" /> :
                                         <XCircle class="w-3.5 h-3.5 text-rose-400" />
                                     }
-                                    <span class={diagnosticsData()?.aiChat?.mcpConnected ? 'text-green-700 dark:text-green-300' : 'text-gray-500'}>
+                                    <span class={diagnosticsData()?.aiChat?.mcpConnected ? 'text-green-700 dark:text-green-300' : 'text-slate-500'}>
                                         {diagnosticsData()?.aiChat?.mcpConnected ? 'Connected' : 'Disconnected'}
                                     </span>
                                 </div>

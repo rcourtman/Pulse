@@ -928,14 +928,14 @@ export const UnifiedAgents: Component = () => {
                 bodyClass="space-y-5"
             >
 
-                <div class="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 dark:border-blue-700 dark:bg-blue-900/20 dark:text-blue-100">
+                <div class="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 dark:border-blue-700 dark:bg-blue-900/20 dark:text-blue-100">
                     <p class="font-semibold">Unified Agent is the default monitoring gateway.</p>
                     <p class="mt-1 text-xs text-blue-800 dark:text-blue-200">
                         Install it on each host you want Pulse to monitor. The installer auto-detects available platforms on that machine and enables the right integrations.
                     </p>
                 </div>
 
-                <div class="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-100">
+                <div class="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-100">
                     <div class="flex items-start gap-3">
                         <ProxmoxIcon class="w-5 h-5 text-amber-500 mt-0.5 shrink-0" />
                         <div class="flex-1">
@@ -945,7 +945,7 @@ export const UnifiedAgents: Component = () => {
                             <button
                                 type="button"
                                 onClick={() => navigate('/settings/infrastructure')}
-                                class="mt-2 text-xs font-medium text-emerald-800 hover:text-emerald-900 dark:text-emerald-200 dark:hover:text-emerald-100 underline"
+                                class="mt-2 inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-2 py-1.5 text-sm font-medium text-emerald-800 hover:bg-emerald-100 hover:text-emerald-900 dark:text-emerald-200 dark:hover:bg-emerald-900/30 dark:hover:text-emerald-100 underline"
                             >
                                 Prefer API-only? Use manual setup →
                             </button>
@@ -957,11 +957,11 @@ export const UnifiedAgents: Component = () => {
                     <Show when={requiresToken()}>
                         <div class="space-y-3">
                             <div class="space-y-1">
-                                <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                                <p class="text-sm font-semibold text-slate-900 dark:text-slate-100">
                                     <span class="inline-flex items-center justify-center w-5 h-5 mr-1.5 rounded-full bg-blue-600 text-white text-xs font-bold">1</span>
                                     Generate API token
                                 </p>
-                                <p class="text-sm text-gray-600 dark:text-gray-400 ml-6">
+                                <p class="text-sm text-slate-600 dark:text-slate-400 ml-6">
                                     Create a fresh token scoped for Host, Docker, and Kubernetes monitoring.
                                 </p>
                             </div>
@@ -977,20 +977,20 @@ export const UnifiedAgents: Component = () => {
                                         }
                                     }}
                                     placeholder="Token name (optional)"
-                                    class="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-900/60"
+                                    class="flex-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-blue-400 dark:focus:ring-blue-900/60"
                                 />
                                 <button
                                     type="button"
                                     onClick={handleGenerateToken}
                                     disabled={isGeneratingToken()}
-                                    class="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                                    class="inline-flex items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                                 >
                                     {isGeneratingToken() ? 'Generating…' : hasToken() ? 'Generate another' : 'Generate token'}
                                 </button>
                             </div>
 
                             <Show when={latestRecord()}>
-                                <div class="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200">
+                                <div class="flex items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-4 py-2 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200">
                                     <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
                                     </svg>
@@ -1005,7 +1005,7 @@ export const UnifiedAgents: Component = () => {
 
                     <Show when={!requiresToken()}>
                         <div class="space-y-3">
-                            <div class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-200">
+                            <div class="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-200">
                                 Tokens are optional on this Pulse instance. Confirm to generate commands without embedding a token.
                             </div>
                             <button
@@ -1014,7 +1014,7 @@ export const UnifiedAgents: Component = () => {
                                 disabled={confirmedNoToken()}
                                 class={`inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors ${confirmedNoToken()
                                     ? 'bg-green-600 text-white cursor-default'
-                                    : 'bg-gray-900 text-white hover:bg-black dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white'
+                                    : 'bg-slate-900 text-white hover:bg-black dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white'
                                     }`}
                             >
                                 {confirmedNoToken() ? 'No token confirmed' : 'Confirm without token'}
@@ -1027,18 +1027,18 @@ export const UnifiedAgents: Component = () => {
                         <div class="space-y-3 opacity-60 pointer-events-none select-none">
                             <div class="flex items-center justify-between">
                                 <div>
-                                    <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                                        <span class="inline-flex items-center justify-center w-5 h-5 mr-1.5 rounded-full bg-gray-400 text-white text-xs font-bold">2</span>
+                                    <h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                                        <span class="inline-flex items-center justify-center w-5 h-5 mr-1.5 rounded-full bg-slate-400 text-white text-xs font-bold">2</span>
                                         Installation commands
                                     </h4>
-                                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5 ml-6">Generate a token above to unlock installation commands.</p>
+                                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 ml-6">Generate a token above to unlock installation commands.</p>
                                 </div>
                             </div>
-                            <div class="rounded-lg border border-gray-200 bg-gray-50 px-4 py-6 dark:border-gray-700 dark:bg-gray-800/50 text-center">
-                                <svg class="w-8 h-8 mx-auto text-gray-400 dark:text-gray-500 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                            <div class="rounded-md border border-slate-200 bg-slate-50 px-4 py-6 dark:border-slate-700 dark:bg-slate-800 text-center">
+                                <svg class="w-8 h-8 mx-auto text-slate-400 dark:text-slate-500 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
                                 </svg>
-                                <p class="text-sm text-gray-500 dark:text-gray-400">Click "Generate token" above to see installation commands</p>
+                                <p class="text-sm text-slate-500 dark:text-slate-400">Click "Generate token" above to see installation commands</p>
                             </div>
                         </div>
                     </Show>
@@ -1048,18 +1048,18 @@ export const UnifiedAgents: Component = () => {
                             <div class="space-y-3">
                                 <div class="flex items-center justify-between">
                                     <div>
-                                        <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                                        <h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100">
                                             <Show when={requiresToken()}>
                                                 <span class="inline-flex items-center justify-center w-5 h-5 mr-1.5 rounded-full bg-green-600 text-white text-xs font-bold">2</span>
                                             </Show>
                                             Installation commands
                                         </h4>
-                                        <p class={`text-xs text-gray-500 dark:text-gray-400 mt-0.5 ${requiresToken() ? 'ml-6' : ''}`}>The installer auto-detects Docker, Kubernetes, and Proxmox on the target machine.</p>
+                                        <p class={`text-xs text-slate-500 dark:text-slate-400 mt-0.5 ${requiresToken() ? 'ml-6' : ''}`}>The installer auto-detects Docker, Kubernetes, and Proxmox on the target machine.</p>
                                     </div>
                                 </div>
 
-                                <div class="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 dark:border-gray-700 dark:bg-gray-800/50">
-                                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                                <div class="rounded-md border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-800">
+                                    <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5">
                                         Connection URL (Agent → Pulse)
                                     </label>
                                     <div class="flex gap-2">
@@ -1068,10 +1068,10 @@ export const UnifiedAgents: Component = () => {
                                             value={customAgentUrl()}
                                             onInput={(e) => setCustomAgentUrl(e.currentTarget.value)}
                                             placeholder={agentUrl()}
-                                            class="flex-1 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-800"
+                                            class="flex-1 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-blue-400 dark:focus:ring-blue-800"
                                         />
                                     </div>
-                                    <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                                    <p class="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
                                         Override the address agents use to connect to this server (e.g., use IP address <code>http://192.168.1.50:7655</code> if DNS fails).
                                         <Show when={!customAgentUrl()}>
                                             <span class="ml-1 opacity-75">Currently using auto-detected: {agentUrl()}</span>
@@ -1079,45 +1079,45 @@ export const UnifiedAgents: Component = () => {
                                     </p>
                                 </div>
                                 <Show when={insecureMode()}>
-                                    <div class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">
+                                    <div class="rounded-md border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">
                                         <span class="font-medium">TLS verification disabled</span> — skip cert checks for self-signed setups. Not recommended for production.
                                     </div>
                                 </Show>
-                                <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer" title="Skip TLS certificate verification (for self-signed certificates)">
+                                <label class="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer" title="Skip TLS certificate verification (for self-signed certificates)">
                                     <input
                                         type="checkbox"
                                         checked={insecureMode()}
                                         onChange={(e) => setInsecureMode(e.currentTarget.checked)}
-                                        class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
+                                        class="rounded border-slate-300 text-blue-600 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-700"
                                     />
                                     Skip TLS certificate verification (self-signed certs; not recommended)
                                 </label>
-                                <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer" title="Allow Pulse Patrol to execute diagnostic and fix commands on this agent (auto-fix requires Pulse Pro)">
+                                <label class="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer" title="Allow Pulse Patrol to execute diagnostic and fix commands on this agent (auto-fix requires Pulse Pro)">
                                     <input
                                         type="checkbox"
                                         checked={enableCommands()}
                                         onChange={(e) => setEnableCommands(e.currentTarget.checked)}
-                                        class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
+                                        class="rounded border-slate-300 text-blue-600 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-700"
                                     />
                                     Enable Pulse command execution (for Patrol auto-fix)
                                 </label>
                                 <Show when={enableCommands()}>
-                                    <div class="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-800 dark:border-blue-700 dark:bg-blue-900/20 dark:text-blue-200">
+                                    <div class="rounded-md border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-800 dark:border-blue-700 dark:bg-blue-900/20 dark:text-blue-200">
                                         <span class="font-medium">Pulse commands enabled</span> — The agent will accept diagnostic and fix commands from Pulse Patrol features.
                                     </div>
                                 </Show>
-                                <div class="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-100">
+                                <div class="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-100">
                                     <span class="font-medium">Config signing (optional)</span> — Require signed remote config payloads with <code>PULSE_AGENT_CONFIG_SIGNATURE_REQUIRED=true</code>. Provide keys via <code>PULSE_AGENT_CONFIG_SIGNING_KEY</code> (Pulse) and <code>PULSE_AGENT_CONFIG_PUBLIC_KEYS</code> (agents).
                                 </div>
-                                <div class="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 dark:border-gray-700 dark:bg-gray-800/50">
-                                    <label for="install-profile-select" class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                                <div class="rounded-md border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-800">
+                                    <label for="install-profile-select" class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5">
                                         Target profile (optional)
                                     </label>
                                     <select
                                         id="install-profile-select"
                                         value={installProfile()}
                                         onChange={(event) => handleInstallProfileChange(event.currentTarget.value as InstallProfile)}
-                                        class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-800"
+                                        class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-blue-400 dark:focus:ring-blue-800"
                                     >
                                         <For each={INSTALL_PROFILE_OPTIONS}>
                                             {(option) => (
@@ -1125,11 +1125,11 @@ export const UnifiedAgents: Component = () => {
                                             )}
                                         </For>
                                     </select>
-                                    <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                                    <p class="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
                                         {getSelectedInstallProfile().description}
                                     </p>
                                     <Show when={getInstallProfileFlags().length > 0}>
-                                        <p class="mt-1.5 text-xs text-gray-600 dark:text-gray-300">
+                                        <p class="mt-1.5 text-xs text-slate-600 dark:text-slate-300">
                                             Adds flags to shell-based install commands: <code>{getInstallProfileFlags().join(' ')}</code>
                                         </p>
                                     </Show>
@@ -1139,10 +1139,10 @@ export const UnifiedAgents: Component = () => {
                             <div class="space-y-4">
                                 <For each={commandSections()}>
                                     {(section) => (
-                                        <div class="space-y-3 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+                                        <div class="space-y-3 rounded-md border border-slate-200 dark:border-slate-700 p-4">
                                             <div class="space-y-1">
-                                                <h5 class="text-sm font-semibold text-gray-900 dark:text-gray-100">{section.title}</h5>
-                                                <p class="text-xs text-gray-500 dark:text-gray-400">{section.description}</p>
+                                                <h5 class="text-sm font-semibold text-slate-900 dark:text-slate-100">{section.title}</h5>
+                                                <p class="text-xs text-slate-500 dark:text-slate-400">{section.description}</p>
                                             </div>
                                             <div class="space-y-3">
                                                 <For each={section.snippets}>
@@ -1177,7 +1177,7 @@ export const UnifiedAgents: Component = () => {
 
                                                         return (
                                                             <div class="space-y-2">
-                                                                <h6 class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                                                                <h6 class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                                                                     {snippet.label}
                                                                 </h6>
                                                                 <div class="relative">
@@ -1195,7 +1195,7 @@ export const UnifiedAgents: Component = () => {
                                                                                 notificationStore.error('Failed to copy');
                                                                             }
                                                                         }}
-                                                                        class="absolute top-2 right-2 p-1.5 text-gray-400 hover:text-gray-200 bg-gray-700 rounded-md transition-colors"
+                                                                        class="absolute right-2 top-2 inline-flex min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 items-center justify-center rounded-md bg-slate-700 p-2 text-slate-400 transition-colors hover:text-slate-200"
                                                                         title="Copy command"
                                                                     >
                                                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1203,12 +1203,12 @@ export const UnifiedAgents: Component = () => {
                                                                             <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
                                                                         </svg>
                                                                     </button>
-                                                                    <pre class="overflow-x-auto rounded-md bg-gray-900/90 p-3 pr-12 text-xs text-gray-100">
+                                                                    <pre class="overflow-x-auto rounded-md bg-slate-900/90 p-3 pr-12 text-xs text-slate-100">
                                                                         <code>{copyCommand()}</code>
                                                                     </pre>
                                                                 </div>
                                                                 <Show when={snippet.note}>
-                                                                    <p class="text-xs text-gray-500 dark:text-gray-400">{snippet.note}</p>
+                                                                    <p class="text-xs text-slate-500 dark:text-slate-400">{snippet.note}</p>
                                                                 </Show>
                                                             </div>
                                                         );
@@ -1220,14 +1220,14 @@ export const UnifiedAgents: Component = () => {
                                 </For>
                             </div>
 
-                            <div class="space-y-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-100">
+                            <div class="space-y-3 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-100">
                                 <div class="flex items-center justify-between gap-3">
                                     <h5 class="text-sm font-semibold">Check installation status</h5>
                                     <button
                                         type="button"
                                         onClick={handleLookup}
                                         disabled={lookupLoading()}
-                                        class="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                                        class="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                                     >
                                         {lookupLoading() ? 'Checking…' : 'Check status'}
                                     </button>
@@ -1251,7 +1251,7 @@ export const UnifiedAgents: Component = () => {
                                             }
                                         }}
                                         placeholder="Hostname or host ID"
-                                        class="flex-1 rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm text-blue-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-100 dark:focus:border-blue-300 dark:focus:ring-blue-800/60"
+                                        class="flex-1 rounded-md border border-blue-200 bg-white px-3 py-2 text-sm text-blue-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-100 dark:focus:border-blue-300 dark:focus:ring-blue-800/60"
                                     />
                                 </div>
                                 <Show when={lookupError()}>
@@ -1265,7 +1265,7 @@ export const UnifiedAgents: Component = () => {
                                                 ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
                                                 : 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200';
                                         return (
-                                            <div class="space-y-1 rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs text-blue-900 dark:border-blue-700 dark:bg-blue-900/40 dark:text-blue-100">
+                                            <div class="space-y-1 rounded-md border border-blue-200 bg-white px-3 py-2 text-xs text-blue-900 dark:border-blue-700 dark:bg-blue-900/40 dark:text-blue-100">
                                                 <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                                                     <div class="text-sm font-semibold">
                                                         {host().displayName || host().hostname}
@@ -1292,22 +1292,22 @@ export const UnifiedAgents: Component = () => {
                                     }}
                                 </Show>
                             </div>
-                            <details class="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-300">
-                                <summary class="cursor-pointer text-sm font-medium text-gray-900 dark:text-gray-100">
+                            <details class="rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                                <summary class="cursor-pointer text-sm font-medium text-slate-900 dark:text-slate-100">
                                     Troubleshooting
                                 </summary>
                                 <div class="mt-3 space-y-4">
                                     <div>
-                                        <p class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Auto-detection not working?</p>
-                                        <p class="mt-1 text-xs text-gray-600 dark:text-gray-400">
+                                        <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Auto-detection not working?</p>
+                                        <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">
                                             If Docker, Kubernetes, or Proxmox isn't detected automatically, add these flags to the install command:
                                         </p>
-                                        <ul class="mt-2 text-xs text-gray-600 dark:text-gray-400 list-disc list-inside space-y-1">
-                                            <li><code class="bg-gray-200 dark:bg-gray-700 px-1 rounded">--enable-docker</code> — Force enable Docker/Podman monitoring</li>
-                                            <li><code class="bg-gray-200 dark:bg-gray-700 px-1 rounded">--enable-kubernetes</code> — Force enable Kubernetes monitoring</li>
-                                            <li><code class="bg-gray-200 dark:bg-gray-700 px-1 rounded">--enable-proxmox</code> — Force enable Proxmox integration (creates API token)</li>
-                                            <li><code class="bg-gray-200 dark:bg-gray-700 px-1 rounded">--proxmox-type pve|pbs</code> — Set Proxmox node mode explicitly</li>
-                                            <li><code class="bg-gray-200 dark:bg-gray-700 px-1 rounded">--disable-docker</code> — Skip Docker even if detected</li>
+                                        <ul class="mt-2 text-xs text-slate-600 dark:text-slate-400 list-disc list-inside space-y-1">
+                                            <li><code class="bg-slate-200 dark:bg-slate-700 px-1 rounded">--enable-docker</code> — Force enable Docker/Podman monitoring</li>
+                                            <li><code class="bg-slate-200 dark:bg-slate-700 px-1 rounded">--enable-kubernetes</code> — Force enable Kubernetes monitoring</li>
+                                            <li><code class="bg-slate-200 dark:bg-slate-700 px-1 rounded">--enable-proxmox</code> — Force enable Proxmox integration (creates API token)</li>
+                                            <li><code class="bg-slate-200 dark:bg-slate-700 px-1 rounded">--proxmox-type pve|pbs</code> — Set Proxmox node mode explicitly</li>
+                                            <li><code class="bg-slate-200 dark:bg-slate-700 px-1 rounded">--disable-docker</code> — Skip Docker even if detected</li>
                                         </ul>
                                     </div>
                                 </div>
@@ -1316,15 +1316,15 @@ export const UnifiedAgents: Component = () => {
                     </Show>
 
                     {/* Uninstall section - always visible */}
-                    <div class="border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
+                    <div class="border-t border-slate-200 dark:border-slate-700 pt-4 mt-4">
                         <div class="space-y-3">
-                            <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Uninstall agent</h4>
-                            <p class="text-xs text-gray-600 dark:text-gray-400">
+                            <h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Uninstall agent</h4>
+                            <p class="text-xs text-slate-600 dark:text-slate-400">
                                 Run the appropriate command on your host to remove the Pulse agent:
                             </p>
                             {/* Linux/macOS uninstall */}
                             <div class="space-y-1">
-                                <span class="text-xs font-medium text-gray-500 dark:text-gray-400">Linux / macOS / FreeBSD</span>
+                                <span class="text-xs font-medium text-slate-500 dark:text-slate-400">Linux / macOS / FreeBSD</span>
                                 <div class="relative">
                                     <button
                                         type="button"
@@ -1336,7 +1336,7 @@ export const UnifiedAgents: Component = () => {
                                                 notificationStore.error('Failed to copy');
                                             }
                                         }}
-                                        class="absolute top-2 right-2 p-1.5 text-gray-400 hover:text-gray-200 bg-gray-700/50 hover:bg-gray-700 rounded-md transition-colors"
+                                        class="absolute right-2 top-2 inline-flex min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 items-center justify-center rounded-md bg-slate-700/50 p-2 text-slate-400 transition-colors hover:bg-slate-700 hover:text-slate-200"
                                         title="Copy command"
                                     >
                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1344,14 +1344,14 @@ export const UnifiedAgents: Component = () => {
                                             <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
                                         </svg>
                                     </button>
-                                    <pre class="overflow-x-auto rounded-md bg-gray-950 p-3 pr-12 font-mono text-xs text-red-400">
+                                    <pre class="overflow-x-auto rounded-md bg-slate-950 p-3 pr-12 font-mono text-xs text-red-400">
                                         <code>{getUninstallCommand()}</code>
                                     </pre>
                                 </div>
                             </div>
                             {/* Windows uninstall */}
                             <div class="space-y-1">
-                                <span class="text-xs font-medium text-gray-500 dark:text-gray-400">Windows (PowerShell as Administrator)</span>
+                                <span class="text-xs font-medium text-slate-500 dark:text-slate-400">Windows (PowerShell as Administrator)</span>
                                 <div class="relative">
                                     <button
                                         type="button"
@@ -1363,7 +1363,7 @@ export const UnifiedAgents: Component = () => {
                                                 notificationStore.error('Failed to copy');
                                             }
                                         }}
-                                        class="absolute top-2 right-2 p-1.5 text-gray-400 hover:text-gray-200 bg-gray-700/50 hover:bg-gray-700 rounded-md transition-colors"
+                                        class="absolute right-2 top-2 inline-flex min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 items-center justify-center rounded-md bg-slate-700/50 p-2 text-slate-400 transition-colors hover:bg-slate-700 hover:text-slate-200"
                                         title="Copy command"
                                     >
                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1371,7 +1371,7 @@ export const UnifiedAgents: Component = () => {
                                             <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
                                         </svg>
                                     </button>
-                                    <pre class="overflow-x-auto rounded-md bg-gray-950 p-3 pr-12 font-mono text-xs text-red-400">
+                                    <pre class="overflow-x-auto rounded-md bg-slate-950 p-3 pr-12 font-mono text-xs text-red-400">
                                         <code>{getWindowsUninstallCommand()}</code>
                                     </pre>
                                 </div>
@@ -1389,7 +1389,7 @@ export const UnifiedAgents: Component = () => {
             >
 
                 <Show when={hasLinkedAgents()}>
-                    <div class="flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 dark:border-blue-800 dark:bg-blue-900/20">
+                    <div class="flex items-start gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 dark:border-blue-800 dark:bg-blue-900/20">
                         <svg class="h-4 w-4 mt-0.5 flex-shrink-0 text-blue-500 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
@@ -1400,7 +1400,7 @@ export const UnifiedAgents: Component = () => {
                 </Show>
 
                 <Show when={hasLegacyAgents()}>
-                    <div class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-700 dark:bg-amber-900/20">
+                    <div class="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-700 dark:bg-amber-900/20">
                         <div class="flex items-start gap-3">
                             <svg class="h-5 w-5 flex-shrink-0 text-amber-500 dark:text-amber-400 mt-0.5" viewBox="0 0 20 20" fill="currentColor">
                                 <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
@@ -1419,12 +1419,12 @@ export const UnifiedAgents: Component = () => {
 
                 <div class="flex flex-wrap items-end gap-3">
                     <div class="space-y-1">
-                        <label for="agent-filter-type" class="text-xs font-medium text-gray-600 dark:text-gray-400">Type</label>
+                        <label for="agent-filter-type" class="text-xs font-medium text-slate-600 dark:text-slate-400">Type</label>
                         <select
                             id="agent-filter-type"
                             value={filterType()}
                             onChange={(event) => setFilterType(event.currentTarget.value as 'all' | UnifiedAgentType)}
-                            class="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-800"
+                            class="min-h-10 sm:min-h-9 rounded-md border border-slate-300 bg-white px-2.5 py-2 sm:py-1.5 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-blue-400 dark:focus:ring-blue-800"
                         >
                             <option value="all">All types</option>
                             <option value="host">Host</option>
@@ -1433,12 +1433,12 @@ export const UnifiedAgents: Component = () => {
                         </select>
                     </div>
                     <div class="space-y-1">
-                        <label for="agent-filter-status" class="text-xs font-medium text-gray-600 dark:text-gray-400">Status</label>
+                        <label for="agent-filter-status" class="text-xs font-medium text-slate-600 dark:text-slate-400">Status</label>
                         <select
                             id="agent-filter-status"
                             value={filterStatus()}
                             onChange={(event) => setFilterStatus(event.currentTarget.value as 'all' | UnifiedAgentStatus)}
-                            class="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-800"
+                            class="min-h-10 sm:min-h-9 rounded-md border border-slate-300 bg-white px-2.5 py-2 sm:py-1.5 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-blue-400 dark:focus:ring-blue-800"
                         >
                             <option value="all">All statuses</option>
                             <option value="active">Active</option>
@@ -1446,12 +1446,12 @@ export const UnifiedAgents: Component = () => {
                         </select>
                     </div>
                     <div class="space-y-1">
-                        <label for="agent-filter-scope" class="text-xs font-medium text-gray-600 dark:text-gray-400">Scope</label>
+                        <label for="agent-filter-scope" class="text-xs font-medium text-slate-600 dark:text-slate-400">Scope</label>
                         <select
                             id="agent-filter-scope"
                             value={filterScope()}
                             onChange={(event) => setFilterScope(event.currentTarget.value as 'all' | Exclude<ScopeCategory, 'na'>)}
-                            class="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-800"
+                            class="min-h-10 sm:min-h-9 rounded-md border border-slate-300 bg-white px-2.5 py-2 sm:py-1.5 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-blue-400 dark:focus:ring-blue-800"
                         >
                             <option value="all">All scopes</option>
                             <option value="default">Default</option>
@@ -1460,51 +1460,51 @@ export const UnifiedAgents: Component = () => {
                         </select>
                     </div>
                     <div class="min-w-[220px] flex-1 space-y-1">
-                        <label for="agent-filter-search" class="text-xs font-medium text-gray-600 dark:text-gray-400">Search</label>
+                        <label for="agent-filter-search" class="text-xs font-medium text-slate-600 dark:text-slate-400">Search</label>
                         <input
                             id="agent-filter-search"
                             type="text"
                             value={filterSearch()}
                             onInput={(event) => setFilterSearch(event.currentTarget.value)}
                             placeholder="Search name, hostname, or ID"
-                            class="w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-800"
+                            class="w-full min-h-10 sm:min-h-9 rounded-md border border-slate-300 bg-white px-2.5 py-2 sm:py-1.5 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-blue-400 dark:focus:ring-blue-800"
                         />
                     </div>
                     <button
                         type="button"
                         onClick={resetFilters}
                         disabled={!hasFilters()}
-                        class={`rounded-md px-3 py-2 text-xs font-medium transition-colors ${hasFilters()
-                            ? 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700'
-                            : 'bg-gray-50 text-gray-400 cursor-not-allowed dark:bg-gray-900 dark:text-gray-500'
+                        class={`min-h-10 sm:min-h-9 rounded-md px-3 py-2 text-sm font-medium transition-colors ${hasFilters()
+                            ? 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'
+                            : 'bg-slate-50 text-slate-400 cursor-not-allowed dark:bg-slate-900 dark:text-slate-500'
                             }`}
                     >
                         Clear
                     </button>
                 </div>
 
-                <div class="text-xs text-gray-500 dark:text-gray-400">
+                <div class="text-xs text-slate-500 dark:text-slate-400">
                     Showing {filteredRows().length} of {unifiedRows().length} records.
                 </div>
 
-                <Card padding="none" tone="glass" class="overflow-x-auto rounded-lg">
+                <Card padding="none" tone="card" class="overflow-x-auto rounded-md">
                     <table class="w-full min-w-[960px] divide-y divide-gray-200 dark:divide-gray-700">
-                        <thead class="bg-gray-50 dark:bg-gray-800">
+                        <thead class="bg-slate-50 dark:bg-slate-800">
                             <tr>
-                                <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Name</th>
-                                <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Type</th>
-                                <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Status</th>
-                                <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Scope</th>
-                                <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Pulse Cmds</th>
-                                <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Last Seen</th>
-                                <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Version</th>
-                                <th scope="col" class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Actions</th>
+                                <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Name</th>
+                                <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Type</th>
+                                <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Status</th>
+                                <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Scope</th>
+                                <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Pulse Cmds</th>
+                                <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Last Seen</th>
+                                <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Version</th>
+                                <th scope="col" class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Actions</th>
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-900">
+                        <tbody class="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-slate-900">
                             <For each={filteredRows()} fallback={
                                 <tr>
-                                    <td colspan="8" class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                                    <td colspan="8" class="px-4 py-8 text-center text-sm text-slate-500 dark:text-slate-400">
                                         <Show when={hasFilters()} fallback="No agents installed yet.">
                                             No agents match the current filters.
                                         </Show>
@@ -1536,7 +1536,7 @@ export const UnifiedAgents: Component = () => {
                                         if (connectedFromStatus(row.healthStatus)) {
                                             return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300';
                                         }
-                                        return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
+                                        return 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300';
                                     };
                                     const lastSeenLabel = () => {
                                         if (isRemoved()) {
@@ -1548,14 +1548,14 @@ export const UnifiedAgents: Component = () => {
                                     return (
                                         <>
                                             <tr>
-                                                <td class="px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100">
+                                                <td class="px-4 py-3 text-sm font-medium text-slate-900 dark:text-slate-100">
                                                     <div class="flex items-start justify-between gap-3">
                                                         <div>
-                                                            <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                                            <div class="text-sm font-medium text-slate-900 dark:text-slate-100">
                                                                 {row.name}
                                                             </div>
                                                             <Show when={row.displayName && row.hostname && row.displayName !== row.hostname}>
-                                                                <div class="text-xs text-gray-500 dark:text-gray-400">
+                                                                <div class="text-xs text-slate-500 dark:text-slate-400">
                                                                     {row.hostname}
                                                                 </div>
                                                             </Show>
@@ -1563,7 +1563,7 @@ export const UnifiedAgents: Component = () => {
                                                         <button
                                                             type="button"
                                                             onClick={() => toggleAgentDetails(row.rowKey)}
-                                                            class="inline-flex items-center justify-center rounded-md p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                                                            class="inline-flex min-h-10 min-w-10 sm:min-h-9 sm:min-w-9 items-center justify-center rounded-md p-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
                                                             aria-label={`${expanded() ? 'Hide' : 'Show'} details for ${agentName}`}
                                                             aria-expanded={expanded()}
                                                             aria-controls={`agent-details-${row.rowKey}`}
@@ -1594,12 +1594,12 @@ export const UnifiedAgents: Component = () => {
                                                         {isRemoved() ? 'Removed' : row.healthStatus || 'unknown'}
                                                     </span>
                                                 </td>
-                                                <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                                                <td class="whitespace-nowrap px-4 py-3 text-sm text-slate-500 dark:text-slate-400">
                                                     <Show when={isActive() && !isKubernetes() && resolvedAgentId} fallback={
-                                                        <span class="text-xs text-gray-400 dark:text-gray-500">N/A</span>
+                                                        <span class="text-xs text-slate-400 dark:text-slate-500">N/A</span>
                                                     }>
                                                         <Show when={profiles().length > 0} fallback={
-                                                            <span class="text-gray-700 dark:text-gray-300" title={row.scope.detail}>
+                                                            <span class="text-slate-700 dark:text-slate-300" title={row.scope.detail}>
                                                                 {row.scope.label}
                                                             </span>
                                                         }>
@@ -1615,7 +1615,7 @@ export const UnifiedAgents: Component = () => {
                                                                         void updateScopeAssignment(resolvedAgentId, nextValue || null, agentName);
                                                                     }}
                                                                     disabled={isScopeUpdating()}
-                                                                    class="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-800"
+                                                                    class="min-h-10 sm:min-h-9 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-blue-400 dark:focus:ring-blue-800"
                                                                 >
                                                                     <option value="">Default (Auto-detect)</option>
                                                                     <For each={profiles()}>
@@ -1625,15 +1625,15 @@ export const UnifiedAgents: Component = () => {
                                                                     </For>
                                                                 </select>
                                                                 <Show when={isScopeUpdating()}>
-                                                                    <span class="text-[10px] text-gray-400 dark:text-gray-500">Updating…</span>
+                                                                    <span class="text-[10px] text-slate-400 dark:text-slate-500">Updating…</span>
                                                                 </Show>
                                                             </div>
                                                         </Show>
                                                     </Show>
                                                 </td>
-                                                <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                                                <td class="whitespace-nowrap px-4 py-3 text-sm text-slate-500 dark:text-slate-400">
                                                     <Show when={isActive() && row.types.includes('host')} fallback={
-                                                        <span class="text-xs text-gray-400 dark:text-gray-500">N/A</span>
+                                                        <span class="text-xs text-slate-400 dark:text-slate-500">N/A</span>
                                                     }>
                                                         {(() => {
                                                             const pending = pendingCommandConfig();
@@ -1645,10 +1645,10 @@ export const UnifiedAgents: Component = () => {
                                                                     <button
                                                                         onClick={() => handleToggleCommands(row.id, !effectiveEnabled)}
                                                                         disabled={isPending}
-                                                                        class={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${isPending ? 'opacity-60 cursor-wait' : ''
+                                                                        class={`relative inline-flex h-8 w-12 sm:h-7 sm:w-12 flex-shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${isPending ? 'opacity-60 cursor-wait' : ''
                                                                             } ${effectiveEnabled
                                                                                 ? 'bg-blue-600'
-                                                                                : 'bg-gray-200 dark:bg-gray-700'
+                                                                                : 'bg-slate-200 dark:bg-slate-700'
                                                                             }`}
                                                                         title={isPending
                                                                             ? 'Syncing with agent...'
@@ -1658,7 +1658,7 @@ export const UnifiedAgents: Component = () => {
                                                                         }
                                                                     >
                                                                         <span
-                                                                            class={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${effectiveEnabled ? 'translate-x-4' : 'translate-x-0'
+                                                                            class={`pointer-events-none inline-block h-6 w-6 sm:h-5 sm:w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${effectiveEnabled ? 'translate-x-4 sm:translate-x-5' : 'translate-x-0'
                                                                                 }`}
                                                                         />
                                                                     </button>
@@ -1673,10 +1673,10 @@ export const UnifiedAgents: Component = () => {
                                                         })()}
                                                     </Show>
                                                 </td>
-                                                <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                                                <td class="whitespace-nowrap px-4 py-3 text-sm text-slate-500 dark:text-slate-400">
                                                     {lastSeenLabel()}
                                                 </td>
-                                                <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                                                <td class="whitespace-nowrap px-4 py-3 text-sm text-slate-500 dark:text-slate-400">
                                                     {row.version || '—'}
                                                 </td>
                                                 <td class="whitespace-nowrap px-4 py-3 text-right text-sm font-medium">
@@ -1684,14 +1684,14 @@ export const UnifiedAgents: Component = () => {
                                                         <Show when={isKubernetes()} fallback={
                                                             <button
                                                                 onClick={() => handleRemoveAgent(row.id, row.types.filter(type => type !== 'kubernetes') as ('host' | 'docker')[])}
-                                                                class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
+                                                                class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-2.5 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 hover:text-red-900 dark:text-red-400 dark:hover:bg-red-900/20 dark:hover:text-red-300"
                                                             >
                                                                 Remove
                                                             </button>
                                                         }>
                                                             <button
                                                                 onClick={() => handleRemoveKubernetesCluster(row.id)}
-                                                                class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
+                                                                class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-2.5 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 hover:text-red-900 dark:text-red-400 dark:hover:bg-red-900/20 dark:hover:text-red-300"
                                                             >
                                                                 Remove
                                                             </button>
@@ -1700,14 +1700,14 @@ export const UnifiedAgents: Component = () => {
                                                         <Show when={row.types.includes('docker')} fallback={
                                                             <button
                                                                 onClick={() => handleAllowKubernetesReenroll(row.id, row.name)}
-                                                                class="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
+                                                                class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-2.5 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-900 dark:text-blue-400 dark:hover:bg-blue-900/20 dark:hover:text-blue-300"
                                                             >
                                                                 Allow re-enroll
                                                             </button>
                                                         }>
                                                             <button
                                                                 onClick={() => handleAllowReenroll(row.id, row.hostname)}
-                                                                class="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
+                                                                class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-2.5 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-900 dark:text-blue-400 dark:hover:bg-blue-900/20 dark:hover:text-blue-300"
                                                             >
                                                                 Allow re-enroll
                                                             </button>
@@ -1716,8 +1716,8 @@ export const UnifiedAgents: Component = () => {
                                                 </td>
                                             </tr>
                                             <Show when={expanded()}>
-                                                <tr id={`agent-details-${row.rowKey}`} class="bg-gray-50 dark:bg-gray-800/40">
-                                                    <td colspan="8" class="px-4 py-4 text-sm text-gray-600 dark:text-gray-300">
+                                                <tr id={`agent-details-${row.rowKey}`} class="bg-slate-50 dark:bg-slate-800">
+                                                    <td colspan="8" class="px-4 py-4 text-sm text-slate-600 dark:text-slate-300">
                                                         <div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto]">
                                                             <div class="space-y-3">
                                                                 <div class="flex flex-wrap items-center gap-2 text-xs">
@@ -1739,47 +1739,47 @@ export const UnifiedAgents: Component = () => {
                                                                         </span>
                                                                     </Show>
                                                                 </div>
-                                                                <div class="text-xs text-gray-500 dark:text-gray-400">
-                                                                    ID: <span class="font-mono text-gray-700 dark:text-gray-200">{row.id}</span>
+                                                                <div class="text-xs text-slate-500 dark:text-slate-400">
+                                                                    ID: <span class="font-mono text-slate-700 dark:text-slate-200">{row.id}</span>
                                                                 </div>
                                                                 <Show when={row.agentId && row.agentId !== row.id}>
-                                                                    <div class="text-xs text-gray-500 dark:text-gray-400">
-                                                                        Agent ID: <span class="font-mono text-gray-700 dark:text-gray-200">{row.agentId}</span>
+                                                                    <div class="text-xs text-slate-500 dark:text-slate-400">
+                                                                        Agent ID: <span class="font-mono text-slate-700 dark:text-slate-200">{row.agentId}</span>
                                                                     </div>
                                                                 </Show>
                                                                 <Show when={row.linkedNodeId}>
-                                                                    <div class="text-xs text-gray-500 dark:text-gray-400">
-                                                                        Linked node ID: <span class="font-mono text-gray-700 dark:text-gray-200">{row.linkedNodeId}</span>
+                                                                    <div class="text-xs text-slate-500 dark:text-slate-400">
+                                                                        Linked node ID: <span class="font-mono text-slate-700 dark:text-slate-200">{row.linkedNodeId}</span>
                                                                     </div>
                                                                 </Show>
                                                                 <Show when={row.status === 'active' && row.lastSeen}>
-                                                                    <div class="text-xs text-gray-500 dark:text-gray-400">
+                                                                    <div class="text-xs text-slate-500 dark:text-slate-400">
                                                                         Last seen {formatRelativeTime(row.lastSeen)} ({formatAbsoluteTime(row.lastSeen)})
                                                                     </div>
                                                                 </Show>
                                                                 <Show when={row.status === 'removed' && row.removedAt}>
-                                                                    <div class="text-xs text-gray-500 dark:text-gray-400">
+                                                                    <div class="text-xs text-slate-500 dark:text-slate-400">
                                                                         Removed {formatRelativeTime(row.removedAt)} ({formatAbsoluteTime(row.removedAt)})
                                                                     </div>
                                                                 </Show>
                                                                 <Show when={row.kubernetesInfo && (row.kubernetesInfo.server || row.kubernetesInfo.context || row.kubernetesInfo.tokenName)}>
-                                                                    <div class="space-y-1 text-xs text-gray-500 dark:text-gray-400">
+                                                                    <div class="space-y-1 text-xs text-slate-500 dark:text-slate-400">
                                                                         <Show when={row.kubernetesInfo?.server}>
-                                                                            <div>Server: <span class="text-gray-700 dark:text-gray-200">{row.kubernetesInfo?.server}</span></div>
+                                                                            <div>Server: <span class="text-slate-700 dark:text-slate-200">{row.kubernetesInfo?.server}</span></div>
                                                                         </Show>
                                                                         <Show when={row.kubernetesInfo?.context}>
-                                                                            <div>Context: <span class="text-gray-700 dark:text-gray-200">{row.kubernetesInfo?.context}</span></div>
+                                                                            <div>Context: <span class="text-slate-700 dark:text-slate-200">{row.kubernetesInfo?.context}</span></div>
                                                                         </Show>
                                                                         <Show when={row.kubernetesInfo?.tokenName}>
-                                                                            <div>Token: <span class="text-gray-700 dark:text-gray-200">{row.kubernetesInfo?.tokenName}</span></div>
+                                                                            <div>Token: <span class="text-slate-700 dark:text-slate-200">{row.kubernetesInfo?.tokenName}</span></div>
                                                                         </Show>
                                                                     </div>
                                                                 </Show>
                                                                 <Show when={row.scope.category !== 'na'}>
-                                                                    <div class="text-xs text-gray-500 dark:text-gray-400">
-                                                                        Scope profile: <span class="text-gray-700 dark:text-gray-200">{row.scope.label}</span>
+                                                                    <div class="text-xs text-slate-500 dark:text-slate-400">
+                                                                        Scope profile: <span class="text-slate-700 dark:text-slate-200">{row.scope.label}</span>
                                                                         <Show when={row.scope.detail}>
-                                                                            <span class="ml-1 text-gray-400 dark:text-gray-500">{row.scope.detail}</span>
+                                                                            <span class="ml-1 text-slate-400 dark:text-slate-500">{row.scope.detail}</span>
                                                                         </Show>
                                                                     </div>
                                                                     <Show when={assignment()}>
@@ -1797,7 +1797,7 @@ export const UnifiedAgents: Component = () => {
                                                                 </Show>
                                                             </div>
                                                             <div class="space-y-2 md:justify-self-end">
-                                                                <div class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                                                                <div class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
                                                                     Utilities
                                                                 </div>
                                                                 <div class="flex flex-col gap-2">
@@ -1813,7 +1813,7 @@ export const UnifiedAgents: Component = () => {
                                                                                     notificationStore.error('Failed to copy');
                                                                                 }
                                                                             }}
-                                                                            class="text-xs text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-gray-100 text-left"
+                                                                            class="text-xs text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-slate-100 text-left"
                                                                         >
                                                                             Copy uninstall command
                                                                         </button>

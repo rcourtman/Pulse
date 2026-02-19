@@ -73,7 +73,7 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
       <Show when={props.messages.length === 0 && props.emptyState}>
         <div class="flex flex-col items-center justify-center min-h-full text-center py-8">
           {/* AI Icon */}
-          <div class="w-14 h-14 mb-3 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center shadow-sm">
+          <div class="w-14 h-14 mb-3 rounded-md bg-slate-100 dark:bg-slate-800 flex items-center justify-center shadow-sm">
             <svg
               class="w-7 h-7 text-blue-500 dark:text-blue-400"
               fill="none"
@@ -112,7 +112,7 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
                     <button
                       type="button"
                       onClick={() => props.emptyState!.onSuggestionClick?.(suggestion)}
-                      class="w-full text-left px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/30 text-slate-600 dark:text-slate-400 text-sm hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors border border-transparent hover:border-slate-200 dark:hover:border-slate-700"
+                      class="w-full text-left px-4 py-2.5 rounded-md bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-sm hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors border border-transparent hover:border-slate-200 dark:hover:border-slate-700"
                     >
                       <span class="text-blue-500 dark:text-blue-400 mr-2 opacity-50">→</span>
                       {suggestion}

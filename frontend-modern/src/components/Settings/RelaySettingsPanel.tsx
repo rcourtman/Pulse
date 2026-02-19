@@ -180,15 +180,15 @@ export const RelaySettingsPanel: Component = () => {
         description="Configure Pulse relay connectivity for secure remote access."
         icon={<RadioTower size={20} strokeWidth={2} />}
       >
-        <Show when={!loading()} fallback={<div class="text-sm text-gray-500">Loading...</div>}>
+        <Show when={!loading()} fallback={<div class="text-sm text-slate-500">Loading...</div>}>
           <Card tone="info" padding="md">
             <div class="flex items-start gap-3">
               <RadioTower size={20} class="text-blue-500 mt-0.5 flex-shrink-0" strokeWidth={2} />
               <div>
-                <p class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                <p class="text-sm font-medium text-slate-900 dark:text-slate-100">
                   Pro Required
                 </p>
-                <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                <p class="text-sm text-slate-600 dark:text-slate-400 mt-1">
                   Remote access via Pulse Relay requires a Pro license. Upgrade to access your infrastructure from anywhere.
                 </p>
               </div>
@@ -205,7 +205,7 @@ export const RelaySettingsPanel: Component = () => {
       description="Configure Pulse relay connectivity for secure remote access."
       icon={<RadioTower size={20} strokeWidth={2} />}
     >
-      <Show when={!loading()} fallback={<div class="text-sm text-gray-500">Loading configuration...</div>}>
+      <Show when={!loading()} fallback={<div class="text-sm text-slate-500">Loading configuration...</div>}>
         {/* Connection Status */}
         <Card padding="md">
           <div class="flex items-center gap-3">
@@ -215,16 +215,16 @@ export const RelaySettingsPanel: Component = () => {
               pulse={config()?.enabled && status()?.connected}
             />
             <div class="flex-1">
-              <p class="text-sm font-medium text-gray-900 dark:text-gray-100">
+              <p class="text-sm font-medium text-slate-900 dark:text-slate-100">
                 {connectionStatusText()}
               </p>
               <Show when={status()?.instance_id}>
-                <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                   Instance: {status()!.instance_id}
                 </p>
               </Show>
               <Show when={status()?.connected && (status()!.active_channels > 0)}>
-                <p class="text-xs text-gray-500 dark:text-gray-400">
+                <p class="text-xs text-slate-500 dark:text-slate-400">
                   {status()!.active_channels} active {status()!.active_channels === 1 ? 'channel' : 'channels'}
                 </p>
               </Show>
@@ -239,7 +239,7 @@ export const RelaySettingsPanel: Component = () => {
 
         {/* Enable/Disable Toggle */}
         <div class={formField}>
-          <div class="flex items-center justify-between">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <label class={labelClass()}>Enable Remote Access</label>
               <p class={formHelpText}>
@@ -250,6 +250,7 @@ export const RelaySettingsPanel: Component = () => {
               checked={config()?.enabled ?? false}
               onChange={(e) => void handleToggleEnabled(e.currentTarget.checked)}
               disabled={saving()}
+              containerClass="self-end sm:self-auto"
             />
           </div>
         </div>
@@ -257,7 +258,7 @@ export const RelaySettingsPanel: Component = () => {
         {/* Server URL */}
         <div class={formField}>
           <label class={labelClass()}>Relay Server URL</label>
-          <div class="flex gap-2">
+          <div class="flex flex-col gap-2 sm:flex-row">
             <input
               type="text"
               class={controlClass()}
@@ -268,7 +269,7 @@ export const RelaySettingsPanel: Component = () => {
             />
             <Show when={serverUrl() !== config()?.server_url}>
               <button
-                class="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md disabled:opacity-50"
+                class="min-h-10 sm:min-h-10 px-3 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md disabled:opacity-50 sm:self-auto self-end"
                 onClick={() => void handleSaveServerUrl()}
                 disabled={saving()}
               >
@@ -285,7 +286,7 @@ export const RelaySettingsPanel: Component = () => {
         <Show when={config()?.identity_fingerprint}>
           <div class={formField}>
             <label class={labelClass()}>Instance Fingerprint</label>
-            <code class="block text-xs font-mono text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 rounded px-3 py-2 select-all break-all">
+            <code class="block text-xs font-mono text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 rounded px-3 py-2 select-all break-all">
               {config()!.identity_fingerprint}
             </code>
             <p class={formHelpText}>
@@ -301,7 +302,7 @@ export const RelaySettingsPanel: Component = () => {
               <div class="space-y-3">
                 <div class="flex flex-wrap items-center gap-2">
                   <button
-                    class="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md disabled:opacity-50"
+                    class="min-h-10 sm:min-h-10 px-3 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md disabled:opacity-50"
                     onClick={() => void handlePairNewDevice()}
                     disabled={saving() || pairingLoading()}
                   >
@@ -313,7 +314,7 @@ export const RelaySettingsPanel: Component = () => {
                   </button>
                   <Show when={showPairing() && pairingPayload()}>
                     <button
-                      class="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md disabled:opacity-50"
+                      class="min-h-10 sm:min-h-10 px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-md disabled:opacity-50"
                       onClick={() => void handleCopyPairingPayload()}
                       disabled={pairingLoading()}
                     >
@@ -329,7 +330,7 @@ export const RelaySettingsPanel: Component = () => {
                 <Show when={showPairing()}>
                   <div class="space-y-3">
                     <Show when={pairingLoading()}>
-                      <p class="text-sm text-gray-600 dark:text-gray-300">
+                      <p class="text-sm text-slate-600 dark:text-slate-300">
                         Preparing pairing payload...
                       </p>
                     </Show>
@@ -340,19 +341,19 @@ export const RelaySettingsPanel: Component = () => {
                         alt="Pulse mobile pairing QR code"
                         width="256"
                         height="256"
-                        class="rounded-md border border-gray-200 dark:border-gray-700 bg-white p-2"
+                        class="rounded-md border border-slate-200 dark:border-slate-700 bg-white p-2"
                       />
                     </Show>
 
                     <Show when={pairingPayload()?.deep_link}>
-                      <code class="block text-xs font-mono text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 rounded px-3 py-2 select-all break-all">
+                      <code class="block text-xs font-mono text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 rounded px-3 py-2 select-all break-all">
                         {pairingPayload()!.deep_link}
                       </code>
                     </Show>
 
                     <Show when={(pairingPayload()?.diagnostics?.length ?? 0) > 0}>
                       <div class="space-y-2">
-                        <p class="text-xs font-semibold text-gray-700 dark:text-gray-200">
+                        <p class="text-xs font-semibold text-slate-700 dark:text-slate-200">
                           Diagnostics
                         </p>
                         {(pairingPayload()?.diagnostics ?? []).map((diagnostic) => (

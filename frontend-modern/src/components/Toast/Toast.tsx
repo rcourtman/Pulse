@@ -120,13 +120,13 @@ export const Toast: Component<ToastProps> = (props) => {
     <div
       class={`transform transition-all duration-500 ease-out ${
         show() ? 'translate-x-0 opacity-100 scale-100' : 'translate-x-full opacity-0 scale-95'
-      } animate-slide-in-glass`}
+      } animate-slide-in-card`}
     >
       <div
         class={`
-          backdrop-blur-xl bg-white/10 dark:bg-gray-900/30
-          border border-white/20 dark:border-gray-700/30
-          px-5 py-4 rounded-2xl shadow-2xl 
+           bg-white dark:bg-slate-800
+          border border-white/20 dark:border-slate-700/30
+          px-5 py-4 rounded-md shadow-sm 
           flex items-center gap-4 
           min-w-[320px] max-w-[500px]
         `}
@@ -138,9 +138,9 @@ export const Toast: Component<ToastProps> = (props) => {
       >
         <div class={`flex-shrink-0 ${iconColors[props.toast.type]}`}>{icons[props.toast.type]}</div>
         <div class="flex-1">
-          <h3 class="text-sm font-medium text-gray-800 dark:text-gray-100">{props.toast.title}</h3>
+          <h3 class="text-sm font-medium text-slate-800 dark:text-slate-100">{props.toast.title}</h3>
           <Show when={props.toast.message}>
-            <p class="mt-1 text-xs text-gray-700 dark:text-gray-300 opacity-90">
+            <p class="mt-1 text-xs text-slate-700 dark:text-slate-300 opacity-90">
               {props.toast.message}
             </p>
           </Show>
@@ -148,7 +148,7 @@ export const Toast: Component<ToastProps> = (props) => {
         <button
           type="button"
           onClick={handleClose}
-          class="flex-shrink-0 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-white/10 rounded-lg p-1.5 transition-all duration-200"
+          class="flex-shrink-0 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-white rounded-md p-1.5 transition-all duration-200"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path

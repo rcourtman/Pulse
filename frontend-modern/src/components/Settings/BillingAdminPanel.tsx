@@ -161,7 +161,7 @@ export const BillingAdminPanel: Component = () => {
   return (
     <Show
       when={hostedEnabled()}
-      fallback={<div class="p-4 text-sm text-gray-500">This feature is not available.</div>}
+      fallback={<div class="p-4 text-sm text-slate-500">This feature is not available.</div>}
     >
       <SettingsPanel
         title="Billing Admin"
@@ -176,7 +176,7 @@ export const BillingAdminPanel: Component = () => {
               void loadOrganizations();
             }}
             disabled={loadingOrgs()}
-            class="px-3 py-1.5 text-xs font-medium rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50"
+            class="w-full sm:w-auto px-3 py-1.5 text-xs font-medium rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
           >
             Refresh
           </button>
@@ -189,9 +189,9 @@ export const BillingAdminPanel: Component = () => {
           </div>
         </Show>
 
-        <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
-          <table class="min-w-full text-sm">
-            <thead class="bg-gray-50 dark:bg-gray-800/60 text-gray-600 dark:text-gray-300">
+        <div class="overflow-x-auto rounded-md border border-slate-200 dark:border-slate-700">
+          <table class="min-w-[920px] w-full text-sm">
+            <thead class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
               <tr>
                 <th class="text-left py-2 px-3 font-medium">Organization</th>
                 <th class="text-left py-2 px-3 font-medium">Owner</th>
@@ -201,12 +201,12 @@ export const BillingAdminPanel: Component = () => {
                 <th class="text-right py-2 px-3 font-medium">Actions</th>
               </tr>
             </thead>
-            <tbody class="divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-gray-900">
+            <tbody class="divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-slate-900">
               <Show
                 when={!loadingOrgs()}
                 fallback={
                   <tr>
-                    <td colSpan={6} class="py-6 px-3 text-center text-gray-500">
+                    <td colSpan={6} class="py-6 px-3 text-center text-slate-500">
                       Loading organizations...
                     </td>
                   </tr>
@@ -216,7 +216,7 @@ export const BillingAdminPanel: Component = () => {
                   when={orgs().length > 0}
                   fallback={
                     <tr>
-                      <td colSpan={6} class="py-6 px-3 text-center text-gray-500">
+                      <td colSpan={6} class="py-6 px-3 text-center text-slate-500">
                         No organizations found.
                       </td>
                     </tr>
@@ -232,7 +232,7 @@ export const BillingAdminPanel: Component = () => {
                         (billing()?.subscription_state || '').toLowerCase() || 'unknown';
 
                       const rowMuted = () =>
-                        org.soft_deleted || org.suspended ? 'bg-gray-50/70 dark:bg-gray-800/30' : '';
+                        org.soft_deleted || org.suspended ? 'bg-slate-50/70 dark:bg-slate-800' : '';
 
                       return (
                         <>
@@ -248,10 +248,10 @@ export const BillingAdminPanel: Component = () => {
                                   void ensureBillingState(id);
                                 }}
                               >
-                                <div class="font-medium text-gray-900 dark:text-gray-100">
+                                <div class="font-medium text-slate-900 dark:text-slate-100">
                                   {org.display_name || org.org_id}
                                 </div>
-                                <div class="text-xs text-gray-500 dark:text-gray-400">
+                                <div class="text-xs text-slate-500 dark:text-slate-400">
                                   <span class="font-mono">{org.org_id}</span>
                                   <Show when={org.soft_deleted}>
                                     <span class="ml-2 rounded px-1.5 py-0.5 bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-200">
@@ -266,27 +266,27 @@ export const BillingAdminPanel: Component = () => {
                                 </div>
                               </button>
                             </td>
-                            <td class="py-2.5 px-3 text-gray-700 dark:text-gray-200">
+                            <td class="py-2.5 px-3 text-slate-700 dark:text-slate-200">
                               <span class="font-mono text-xs">{org.owner_user_id || 'N/A'}</span>
                             </td>
                             <td class="py-2.5 px-3">
-                              <span class="font-mono text-xs text-gray-700 dark:text-gray-200">
+                              <span class="font-mono text-xs text-slate-700 dark:text-slate-200">
                                 {currentSubState()}
                               </span>
                             </td>
-                            <td class="py-2.5 px-3 text-gray-700 dark:text-gray-200">
+                            <td class="py-2.5 px-3 text-slate-700 dark:text-slate-200">
                               <span class="text-xs">{trialStatus(billing())}</span>
                             </td>
                             <td class="py-2.5 px-3">
                               <span
-                                class="font-mono text-xs text-gray-700 dark:text-gray-200"
+                                class="font-mono text-xs text-slate-700 dark:text-slate-200"
                                 title={stripeCustomerCell(billing())}
                               >
                                 {stripeCustomerCell(billing())}
                               </span>
                             </td>
                             <td class="py-2.5 px-3 text-right">
-                              <div class="inline-flex items-center gap-2">
+                              <div class="inline-flex flex-col sm:flex-row sm:items-center gap-2">
                                 <button
                                   type="button"
                                   onClick={() => {
@@ -299,7 +299,7 @@ export const BillingAdminPanel: Component = () => {
                                     billingLoadingByOrgID()[orgID()] ||
                                     currentSubState() === 'suspended'
                                   }
-                                  class="px-2.5 py-1.5 text-xs font-medium rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50"
+                                  class="px-2.5 py-1.5 text-xs font-medium rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
                                 >
                                   Suspend Org
                                 </button>
@@ -315,7 +315,7 @@ export const BillingAdminPanel: Component = () => {
                                     billingLoadingByOrgID()[orgID()] ||
                                     currentSubState() === 'active'
                                   }
-                                  class="px-2.5 py-1.5 text-xs font-medium rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50"
+                                  class="px-2.5 py-1.5 text-xs font-medium rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
                                 >
                                   Activate Org
                                 </button>
@@ -325,9 +325,9 @@ export const BillingAdminPanel: Component = () => {
                           <Show when={expanded()}>
                             <tr class={rowMuted()}>
                               <td colSpan={6} class="px-3 pb-3">
-                                <div class="mt-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 p-3">
-                                  <div class="flex items-center justify-between gap-3 mb-2">
-                                    <div class="text-xs font-semibold text-gray-600 dark:text-gray-300">
+                                <div class="mt-2 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-3">
+                                  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-2">
+                                    <div class="text-xs font-semibold text-slate-600 dark:text-slate-300">
                                       Billing state JSON
                                     </div>
                                     <button
@@ -338,12 +338,12 @@ export const BillingAdminPanel: Component = () => {
                                         setBillingByOrgID((prev) => ({ ...prev, [id]: undefined }));
                                         void ensureBillingState(id);
                                       }}
-                                      class="px-2 py-1 text-xs rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800"
+                                      class="px-2 py-1 text-xs rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800"
                                     >
                                       Reload
                                     </button>
                                   </div>
-                                  <pre class="text-xs overflow-x-auto whitespace-pre-wrap font-mono text-gray-800 dark:text-gray-100">
+                                  <pre class="text-xs overflow-x-auto whitespace-pre-wrap font-mono text-slate-800 dark:text-slate-100">
                                     {JSON.stringify(billing() ?? { loading: true }, null, 2)}
                                   </pre>
                                 </div>
@@ -365,4 +365,3 @@ export const BillingAdminPanel: Component = () => {
 };
 
 export default BillingAdminPanel;
-

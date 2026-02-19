@@ -35,7 +35,7 @@ export const UpdateBadge: Component<UpdateBadgeProps> = (props) => {
                     // Show subtle error indicator if check failed
                     <Show when={hasError()}>
                         <span
-                            class="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs font-medium bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400 cursor-help"
+                            class="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs font-medium bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 cursor-help"
                             onMouseEnter={(e) => {
                                 const rect = e.currentTarget.getBoundingClientRect();
                                 showTooltip(`Update check failed: ${props.updateStatus?.error}`, rect.left + rect.width / 2, rect.top, {
@@ -357,7 +357,7 @@ export const UpdateButton: Component<UpdateButtonProps> = (props) => {
                     <Show when={settingsLoaded() && currentState() === 'confirming'}>
                         <button
                             type="button"
-                            class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                            class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
                             onClick={handleCancel}
                             title="Cancel"
                         >

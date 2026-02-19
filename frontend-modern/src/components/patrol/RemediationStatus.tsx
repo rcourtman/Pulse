@@ -35,7 +35,7 @@ export const RemediationStatus: Component<RemediationStatusProps> = (props) => {
           <span class="font-medium text-red-700 dark:text-red-300">Fix failed</span>
         </Show>
         <Show when={props.result.exit_code !== undefined}>
-          <span class="text-gray-500 dark:text-gray-400">exit code: {props.result.exit_code}</span>
+          <span class="text-slate-500 dark:text-slate-400">exit code: {props.result.exit_code}</span>
         </Show>
       </div>
 
@@ -44,19 +44,19 @@ export const RemediationStatus: Component<RemediationStatusProps> = (props) => {
       </Show>
 
       <Show when={props.result.message && props.result.message !== props.result.error}>
-        <div class="text-gray-600 dark:text-gray-400 mt-1">{props.result.message}</div>
+        <div class="text-slate-600 dark:text-slate-400 mt-1">{props.result.message}</div>
       </Show>
 
       <Show when={props.result.output}>
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); setShowOutput(!showOutput()); }}
-          class="text-[10px] text-gray-500 dark:text-gray-400 hover:underline mt-1"
+          class="text-[10px] text-slate-500 dark:text-slate-400 hover:underline mt-1"
         >
           {showOutput() ? 'Hide output' : 'Show output'}
         </button>
         <Show when={showOutput()}>
-          <div class="bg-white dark:bg-gray-900 rounded p-2 font-mono mt-1 max-h-32 overflow-auto whitespace-pre-wrap text-[11px] text-gray-700 dark:text-gray-300">
+          <div class="bg-white dark:bg-slate-900 rounded p-2 font-mono mt-1 max-h-32 overflow-auto whitespace-pre-wrap text-[11px] text-slate-700 dark:text-slate-300">
             {props.result.output}
           </div>
         </Show>

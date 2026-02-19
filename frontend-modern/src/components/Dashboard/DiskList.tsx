@@ -44,7 +44,7 @@ export function DiskList(props: DiskListProps) {
     <Show
       when={props.disks && props.disks.length > 0}
       fallback={
-        <span class="text-gray-400 text-sm" title={getDiskStatusTooltip()}>
+        <span class="text-slate-400 text-sm" title={getDiskStatusTooltip()}>
           -
         </span>
       }
@@ -57,25 +57,25 @@ export function DiskList(props: DiskListProps) {
             const hasCapacity = disk.total && disk.total > 0;
 
             return (
-              <div class="rounded border border-gray-200 bg-gray-50 px-1.5 py-1 text-[10px] leading-tight shadow-sm dark:border-gray-700 dark:bg-gray-800/80">
+              <div class="rounded border border-slate-200 bg-slate-50 px-1.5 py-1 text-[10px] leading-tight shadow-sm dark:border-slate-700 dark:bg-slate-800">
                 <div
-                  class="truncate text-gray-700 dark:text-gray-200"
+                  class="truncate text-slate-700 dark:text-slate-200"
                   title={label !== 'Unknown' ? label : undefined}
                 >
                   {label}
                 </div>
-                <div class="mt-0.5 text-[9px] text-gray-500 dark:text-gray-400">
+                <div class="mt-0.5 text-[9px] text-slate-500 dark:text-slate-400">
                   {hasCapacity
                     ? `${formatBytes(disk.used)}/${formatBytes(disk.total)}`
                     : 'Usage unavailable'}
                 </div>
-                <div class="relative mt-1 h-1.5 w-full overflow-hidden rounded bg-gray-200 dark:bg-gray-600">
+                <div class="relative mt-1 h-1.5 w-full overflow-hidden rounded bg-slate-200 dark:bg-slate-600">
                   <div
                     class={`absolute inset-y-0 left-0 ${getMetricColorClass(usage, 'disk')}`}
                     style={{ width: `${Math.min(usage, 100)}%` }}
                   />
                 </div>
-                <div class="mt-0.5 flex items-center justify-between text-[9px] font-medium text-gray-600 dark:text-gray-300">
+                <div class="mt-0.5 flex items-center justify-between text-[9px] font-medium text-slate-600 dark:text-slate-300">
                   <span>{hasCapacity ? `${usage.toFixed(0)}%` : '—'}</span>
                   <span>{disk.type?.toUpperCase() ?? ''}</span>
                 </div>

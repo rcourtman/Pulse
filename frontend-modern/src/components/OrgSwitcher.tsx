@@ -16,12 +16,12 @@ export function OrgSwitcher(props: OrgSwitcherProps) {
 
   return (
     <div class="flex items-center gap-2">
-      <span class="hidden lg:inline text-xs text-gray-600 dark:text-gray-400">Org</span>
+      <span class="hidden lg:inline text-xs text-slate-600 dark:text-slate-400">Org</span>
       <Show
         when={props.orgs.length > 1}
         fallback={
           <span
-            class="inline-flex h-7 items-center rounded-md border border-gray-300 bg-white px-2 text-xs font-medium text-gray-700 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+            class="inline-flex h-7 items-center rounded-md border border-slate-300 bg-white px-2 text-xs font-medium text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
             title={selectedOrgName()}
           >
             {selectedOrgName()}
@@ -37,7 +37,7 @@ export function OrgSwitcher(props: OrgSwitcherProps) {
           value={props.selectedOrgId}
           disabled={Boolean(props.loading)}
           onChange={(event) => props.onChange(event.currentTarget.value)}
-          class="h-7 max-w-44 rounded-md border border-gray-300 bg-white px-2 text-xs text-gray-700 shadow-sm transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+          class="h-7 max-w-44 rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-700 shadow-sm transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
         >
           <For each={props.orgs}>
             {(org) => (
@@ -49,7 +49,7 @@ export function OrgSwitcher(props: OrgSwitcherProps) {
         </select>
       </Show>
       <Show when={props.loading}>
-        <svg class="h-3.5 w-3.5 animate-spin text-gray-400" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+        <svg class="h-3.5 w-3.5 animate-spin text-slate-400" fill="none" viewBox="0 0 24 24" aria-hidden="true">
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
           <path
             class="opacity-75"

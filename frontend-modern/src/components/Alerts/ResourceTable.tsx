@@ -360,7 +360,7 @@ export function ResourceTable(props: ResourceTableProps) {
 
   const renderGroupHeader = (groupKey: string, meta?: GroupHeaderMeta) => {
     if (!meta || meta.type !== 'node') {
-      return <span class="text-xs font-medium text-gray-600 dark:text-gray-400">{groupKey}</span>;
+      return <span class="text-xs font-medium text-slate-600 dark:text-slate-400">{groupKey}</span>;
     }
 
     return (
@@ -368,7 +368,7 @@ export function ResourceTable(props: ResourceTableProps) {
         <Show
           when={meta.host}
           fallback={
-            <span class="text-sm font-medium text-gray-900 dark:text-gray-100">
+            <span class="text-sm font-medium text-slate-900 dark:text-slate-100">
               {meta.displayName || groupKey}
             </span>
           }
@@ -379,7 +379,7 @@ export function ResourceTable(props: ResourceTableProps) {
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
-              class="text-sm font-medium text-gray-900 dark:text-gray-100 transition-colors duration-150 hover:text-sky-600 dark:hover:text-sky-400"
+              class="text-sm font-medium text-slate-900 dark:text-slate-100 transition-colors duration-150 hover:text-sky-600 dark:hover:text-sky-400"
               title={`Open ${meta.displayName || groupKey} web interface`}
             >
               {meta.displayName || groupKey}
@@ -413,10 +413,10 @@ export function ResourceTable(props: ResourceTableProps) {
       >
         <span
           class={`text-sm ${isDisabledMetric
-            ? 'text-gray-400 dark:text-gray-500 italic'
+            ? 'text-slate-400 dark:text-slate-500 italic'
             : metricProps.isOverridden
-              ? 'text-gray-900 dark:text-gray-100 font-bold'
-              : 'text-gray-900 dark:text-gray-100'
+              ? 'text-slate-900 dark:text-slate-100 font-bold'
+              : 'text-slate-900 dark:text-slate-100'
             }`}
         >
           {displayText}
@@ -449,7 +449,7 @@ export function ResourceTable(props: ResourceTableProps) {
     off: {
       label: 'Off',
       className:
-        'bg-gray-200 text-gray-600 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600',
+        'bg-slate-200 text-slate-600 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600',
       title: 'Offline alerts disabled for this resource.',
     },
     warning: {
@@ -518,14 +518,14 @@ export function ResourceTable(props: ResourceTableProps) {
                 const val = () => props.globalDefaults?.[metric] ?? 0;
                 const isOff = () => val() === -1;
                 return (
-                  <div class="p-2 bg-white dark:bg-gray-800 rounded border border-gray-100 dark:border-gray-700 flex flex-col gap-1">
-                    <span class="text-[10px] uppercase text-gray-500 font-medium">{column}</span>
+                  <div class="p-2 bg-white dark:bg-slate-800 rounded border border-slate-100 dark:border-slate-700 flex flex-col gap-1">
+                    <span class="text-[10px] uppercase text-slate-500 font-medium">{column}</span>
                     <div class="relative">
                       <input type="number" min={bounds.min} max={bounds.max} step={metricStep(metric)}
                         value={isOff() ? '' : val()}
                         placeholder={isOff() ? 'Off' : ''}
                         disabled={isOff()}
-                        class={`w-full text-sm p-1 rounded border text-center ${isOff() ? 'bg-gray-100 dark:bg-gray-700' : 'bg-white dark:bg-gray-600 border-gray-200 dark:border-gray-500'}`}
+                        class={`w-full text-sm p-1 rounded border text-center ${isOff() ? 'bg-slate-100 dark:bg-slate-700' : 'bg-white dark:bg-slate-600 border-slate-200 dark:border-slate-500'}`}
                         onInput={(e) => {
                           const value = parseFloat(e.currentTarget.value);
                           if (props.setGlobalDefaults) {
@@ -565,7 +565,7 @@ export function ResourceTable(props: ResourceTableProps) {
         {([groupName, resources]: [string, Resource[]]) => (
           <div class="space-y-2">
             <Show when={props.groupedResources}>
-              <div class="px-1 font-medium text-xs text-gray-500 uppercase mt-4 mb-1">{renderGroupHeader(groupName, props.groupHeaderMeta?.[groupName])}</div>
+              <div class="px-1 font-medium text-xs text-slate-500 uppercase mt-4 mb-1">{renderGroupHeader(groupName, props.groupHeaderMeta?.[groupName])}</div>
             </Show>
             <For each={resources as Resource[]}>
               {(resource) => {
@@ -618,7 +618,7 @@ export function ResourceTable(props: ResourceTableProps) {
                         {/* Name */}
                         <div class="min-w-0 truncate">
                           <div class="font-medium text-sm truncate">{resource.displayName || resource.name}</div>
-                          <Show when={resource.subtitle}><div class="text-xs text-gray-500 truncate">{resource.subtitle}</div></Show>
+                          <Show when={resource.subtitle}><div class="text-xs text-slate-500 truncate">{resource.subtitle}</div></Show>
                         </div>
                       </div>
 
@@ -638,7 +638,7 @@ export function ResourceTable(props: ResourceTableProps) {
                           <button
                             type="button"
                             onClick={() => { props.onCancelEdit(); setActiveMetricInput(null); }}
-                            class="p-1.5 bg-gray-100 dark:bg-gray-700 text-gray-600 rounded"
+                            class="p-1.5 bg-slate-100 dark:bg-slate-700 text-slate-600 rounded"
                             aria-label="Cancel threshold edits"
                           >
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
@@ -668,7 +668,7 @@ export function ResourceTable(props: ResourceTableProps) {
                     {/* Note editor in mobile */}
                     <Show when={isEditing()}>
                       <textarea
-                        class="w-full text-xs p-2 rounded border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800"
+                        class="w-full text-xs p-2 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
                         rows={2}
                         placeholder="Add a note..."
                         value={props.editingNote()}
@@ -677,7 +677,7 @@ export function ResourceTable(props: ResourceTableProps) {
                     </Show>
 
                     {/* Metrics Grid */}
-                    <div class="grid grid-cols-2 gap-2 text-sm border-t pt-2 dark:border-gray-700/50">
+                    <div class="grid grid-cols-2 gap-2 text-sm border-t pt-2 dark:border-slate-700/50">
                       <For each={props.columns}>
                         {(column) => {
                           const metric = normalizeMetricKey(column);
@@ -688,8 +688,8 @@ export function ResourceTable(props: ResourceTableProps) {
                           const bounds = metricBounds(metric);
 
                           return (
-                            <div class="flex justify-between items-center p-1.5 bg-gray-50 dark:bg-gray-800/50 rounded">
-                              <span class="text-[10px] text-gray-500 uppercase font-bold tracking-wider">{column.replace(/mb\/s|%|°c/gi, '').trim()}</span>
+                            <div class="flex justify-between items-center p-1.5 bg-slate-50 dark:bg-slate-800 rounded">
+                              <span class="text-[10px] text-slate-500 uppercase font-bold tracking-wider">{column.replace(/mb\/s|%|°c/gi, '').trim()}</span>
 
                               <Show when={isEditing()} fallback={
                                 <button
@@ -713,7 +713,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                 <input type="number" min={bounds.min} max={bounds.max}
                                   value={thresholds()?.[metric] ?? ''}
                                   placeholder={isDisabled() ? 'Off' : ''}
-                                  class="w-16 text-right text-xs p-1 rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900"
+                                  class="w-16 text-right text-xs p-1 rounded border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900"
                                   onInput={(e) => {
                                     const val = parseFloat(e.currentTarget.value);
                                     props.setEditingThresholds({ ...props.editingThresholds(), [metric]: Number.isNaN(val) ? undefined : val });
@@ -733,7 +733,7 @@ export function ResourceTable(props: ResourceTableProps) {
         )}
       </For>
       <Show when={!hasRows()}>
-        <div class="text-center p-8 text-gray-500 text-sm italic bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+        <div class="text-center p-8 text-slate-500 text-sm italic bg-slate-50 dark:bg-slate-800 rounded-md">
           {props.emptyMessage || 'No resources available.'}
         </div>
       </Show>
@@ -744,27 +744,27 @@ export function ResourceTable(props: ResourceTableProps) {
     <Show when={!isMobile()} fallback={renderMobileView()}>
       <Card
         padding="none"
-        class="overflow-hidden border border-gray-200 dark:border-gray-700"
+        class="overflow-hidden border border-slate-200 dark:border-slate-700"
         border={false}
-        tone="glass"
+        tone="card"
       >
-        <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+        <div class="px-4 py-3 border-b border-slate-200 dark:border-slate-700">
           <SectionHeader title={props.title} size="sm" />
         </div>
         <div class="overflow-x-auto" style={{ '-webkit-overflow-scrolling': 'touch' }}>
           <table class="w-full">
             <thead>
-              <tr class="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
-                <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-16">
+              <tr class="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700">
+                <th class="px-3 py-2 text-center text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider w-16">
                   Alerts
                 </th>
-                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th class="px-3 py-2 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                   Resource
                 </th>
                 <For each={props.columns}>
                   {(column) => (
                     <th
-                      class="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
+                      class="px-3 py-2 text-center text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider"
                       title={getColumnHeaderTooltip(column)}
                     >
                       {column}
@@ -773,13 +773,13 @@ export function ResourceTable(props: ResourceTableProps) {
                 </For>
                 <Show when={props.showOfflineAlertsColumn}>
                   <th
-                    class="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
+                    class="px-3 py-2 text-center text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider"
                     title={OFFLINE_ALERTS_TOOLTIP}
                   >
                     Offline Alerts
                   </th>
                 </Show>
-                <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th class="px-3 py-2 text-center text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
@@ -790,12 +790,12 @@ export function ResourceTable(props: ResourceTableProps) {
                 when={props.globalDefaults && props.setGlobalDefaults && props.setHasUnsavedChanges}
               >
                 <tr
-                  class={`bg-gray-50 dark:bg-gray-800/50 border-b border-gray-300 dark:border-gray-600 ${props.globalDisableFlag?.() ? 'opacity-40' : ''}`}
+                  class={`bg-slate-50 dark:bg-slate-800 border-b border-slate-300 dark:border-slate-600 ${props.globalDisableFlag?.() ? 'opacity-40' : ''}`}
                 >
                   <td class="p-1 px-2 text-center align-middle">
                     <Show
                       when={props.onToggleGlobalDisable}
-                      fallback={<span class="text-sm text-gray-400">-</span>}
+                      fallback={<span class="text-sm text-slate-400">-</span>}
                     >
                       <div class="flex items-center justify-center">
                         <TogglePrimitive
@@ -814,7 +814,7 @@ export function ResourceTable(props: ResourceTableProps) {
                   </td>
                   <td class="p-1 px-2">
                     <div class="flex items-center gap-2">
-                      <span class="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                      <span class="text-sm font-semibold text-slate-700 dark:text-slate-300">
                         Global Defaults
                       </span>
                       <Show when={hasCustomGlobalDefaults()}>
@@ -855,8 +855,8 @@ export function ResourceTable(props: ResourceTableProps) {
                                 }
                               }}
                               class={`w-16 px-2 py-0.5 text-sm text-center border rounded ${isOff()
-                                ? 'border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 italic placeholder:text-gray-400 dark:placeholder:text-gray-500 placeholder:opacity-60 pointer-events-none'
-                                : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
+                                ? 'border-slate-300 dark:border-slate-600 bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 italic placeholder:text-slate-400 dark:placeholder:text-slate-500 placeholder:opacity-60 pointer-events-none'
+                                : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
                                 }`}
                               title={
                                 isOff()
@@ -893,7 +893,7 @@ export function ResourceTable(props: ResourceTableProps) {
                         fallback={
                           <Show
                             when={props.onToggleGlobalDisableOffline}
-                            fallback={<span class="text-sm text-gray-400">-</span>}
+                            fallback={<span class="text-sm text-slate-400">-</span>}
                           >
                             {(() => {
                               const defaultDisabled = props.globalDisableOfflineFlag?.() ?? false;
@@ -944,7 +944,7 @@ export function ResourceTable(props: ResourceTableProps) {
                         <button
                           type="button"
                           onClick={() => setShowDelayRow(!showDelayRow())}
-                          class="p-1 text-gray-600 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 transition-colors"
+                          class="p-1 text-slate-600 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300 transition-colors"
                           title={
                             showDelayRow() ? 'Hide alert delay settings' : 'Show alert delay settings'
                           }
@@ -986,7 +986,7 @@ export function ResourceTable(props: ResourceTableProps) {
                         </button>
                       </Show>
                       <Show when={!props.showDelayColumn && !hasCustomGlobalDefaults()}>
-                        <span class="text-sm text-gray-400">-</span>
+                        <span class="text-sm text-slate-400">-</span>
                       </Show>
                     </div>
                   </td>
@@ -1000,13 +1000,13 @@ export function ResourceTable(props: ResourceTableProps) {
                 }
               >
                 <tr
-                  class={`bg-gray-50 dark:bg-gray-800/50 border-b border-gray-300 dark:border-gray-600 ${props.globalDisableFlag?.() ? 'opacity-40' : ''}`}
+                  class={`bg-slate-50 dark:bg-slate-800 border-b border-slate-300 dark:border-slate-600 ${props.globalDisableFlag?.() ? 'opacity-40' : ''}`}
                 >
                   <td class="p-1 px-2 text-center align-middle">
-                    <span class="text-sm text-gray-400">-</span>
+                    <span class="text-sm text-slate-400">-</span>
                   </td>
                   <td class="p-1 px-2 align-middle">
-                    <span class="text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300 inline-flex items-center gap-1">
+                    <span class="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300 inline-flex items-center gap-1">
                       Alert Delay (s)
                       <HelpIcon contentId="alerts.thresholds.delay" size="xs" />
                     </span>
@@ -1027,7 +1027,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                 return overrideDelay !== undefined ? overrideDelay : '';
                               })()}
                               placeholder={String(typeDefaultDelay)}
-                              class="w-16 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2 py-0.5 text-sm text-center text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                              class="w-16 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 px-2 py-0.5 text-sm text-center text-slate-900 dark:text-slate-100 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                               onInput={(e) => {
                                 const raw = e.currentTarget.value;
                                 if (raw === '') {
@@ -1056,11 +1056,11 @@ export function ResourceTable(props: ResourceTableProps) {
                   </For>
                   <Show when={props.showOfflineAlertsColumn}>
                     <td class="p-1 px-2 text-center align-middle">
-                      <span class="text-sm text-gray-400">-</span>
+                      <span class="text-sm text-slate-400">-</span>
                     </td>
                   </Show>
                   <td class="p-1 px-2 text-center align-middle">
-                    <span class="text-sm text-gray-400">-</span>
+                    <span class="text-sm text-slate-400">-</span>
                   </td>
                 </tr>
               </Show>
@@ -1076,10 +1076,10 @@ export function ResourceTable(props: ResourceTableProps) {
                     return (
                       <>
                         {/* Node group header */}
-                        <tr class="bg-gray-50 dark:bg-gray-700/50">
+                        <tr class="bg-slate-50 dark:bg-slate-800">
                           <td
                             colspan={totalColumnCount()}
-                            class="p-1 px-2 text-xs font-medium text-gray-600 dark:text-gray-400"
+                            class="p-1 px-2 text-xs font-medium text-slate-600 dark:text-slate-400"
                           >
                             {renderGroupHeader(nodeName, headerMeta)}
                           </td>
@@ -1137,7 +1137,7 @@ export function ResourceTable(props: ResourceTableProps) {
 
                             return (
                               <tr
-                                class={`hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors ${resource.disabled || props.globalDisableFlag?.() ? 'opacity-40' : ''}`}
+                                class={`hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors ${resource.disabled || props.globalDisableFlag?.() ? 'opacity-40' : ''}`}
                               >
                                 {/* Alert toggle column */}
                                 <td class="p-1 px-2 text-center align-middle">
@@ -1180,7 +1180,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                       when={resource.type === 'node'}
                                       fallback={
                                         <span
-                                          class={`text-sm font-medium truncate flex-nowrap ${resource.disabled ? 'text-gray-500 dark:text-gray-500' : 'text-gray-900 dark:text-gray-100'}`}
+                                          class={`text-sm font-medium truncate flex-nowrap ${resource.disabled ? 'text-slate-500 dark:text-slate-500' : 'text-slate-900 dark:text-slate-100'}`}
                                         >
                                           {resource.name}
                                         </span>
@@ -1194,7 +1194,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                           when={resource.host}
                                           fallback={
                                             <span
-                                              class={`text-sm font-medium truncate flex-nowrap ${resource.disabled ? 'text-gray-500 dark:text-gray-500' : 'text-gray-900 dark:text-gray-100'}`}
+                                              class={`text-sm font-medium truncate flex-nowrap ${resource.disabled ? 'text-slate-500 dark:text-slate-500' : 'text-slate-900 dark:text-slate-100'}`}
                                             >
                                               {resource.type === 'node'
                                                 ? resource.name
@@ -1209,8 +1209,8 @@ export function ResourceTable(props: ResourceTableProps) {
                                               rel="noopener noreferrer"
                                               onClick={(e) => e.stopPropagation()}
                                               class={`text-sm font-medium truncate flex-nowrap transition-colors duration-150 ${resource.disabled
-                                                ? 'text-gray-500 dark:text-gray-500'
-                                                : 'text-gray-900 dark:text-gray-100 hover:text-sky-600 dark:hover:text-sky-400'
+                                                ? 'text-slate-500 dark:text-slate-500'
+                                                : 'text-slate-900 dark:text-slate-100 hover:text-sky-600 dark:hover:text-sky-400'
                                                 }`}
                                               title={`Open ${resource.displayName || resource.name} web interface`}
                                             >
@@ -1233,7 +1233,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                       </div>
                                     </Show>
                                     <Show when={resource.subtitle}>
-                                      <span class="text-xs text-gray-500 dark:text-gray-400">
+                                      <span class="text-xs text-slate-500 dark:text-slate-400">
                                         {resource.subtitle as string}
                                       </span>
                                     </Show>
@@ -1249,7 +1249,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                         </label>
                                         <textarea
                                           id={`note-${resource.id}`}
-                                          class="w-full rounded border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+                                          class="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
                                           rows={2}
                                           placeholder="Add a note about this override (optional)"
                                           value={props.editingNote()}
@@ -1258,7 +1258,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                       </div>
                                     </Show>
                                     <Show when={!isEditing() && resource.note}>
-                                      <p class="mt-2 text-xs italic text-gray-500 dark:text-gray-400 break-words">
+                                      <p class="mt-2 text-xs italic text-slate-500 dark:text-slate-400 break-words">
                                         {resource.note as string}
                                       </p>
                                     </Show>
@@ -1282,7 +1282,7 @@ export function ResourceTable(props: ResourceTableProps) {
 
                                       return (
                                         <td class="p-1 px-2 text-center align-middle">
-                                          <Show when={onToggle} fallback={<span class="text-sm text-gray-400">-</span>}>
+                                          <Show when={onToggle} fallback={<span class="text-sm text-slate-400">-</span>}>
                                             <div class="flex items-center justify-center">
                                               <StatusBadge
                                                 isEnabled={isEnabled}
@@ -1312,7 +1312,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                         <Show
                                           when={showMetric()}
                                           fallback={
-                                            <span class="text-sm text-gray-400 dark:text-gray-500">
+                                            <span class="text-sm text-slate-400 dark:text-slate-500">
                                               -
                                             </span>
                                           }
@@ -1324,7 +1324,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                                 onClick={(event) => {
                                                   openMetricEditor(event);
                                                 }}
-                                                class="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 rounded px-1 py-0.5 transition-colors"
+                                                class="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 rounded px-1 py-0.5 transition-colors"
                                                 title="Click to edit this metric"
                                               >
                                                 <MetricValueWithHeat
@@ -1443,8 +1443,8 @@ export function ResourceTable(props: ResourceTableProps) {
                                                     setActiveMetricInput(null);
                                                   }}
                                                   class={`w-16 px-2 py-0.5 text-sm text-center border rounded ${isDisabled()
-                                                    ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 border-gray-300 dark:border-gray-600'
-                                                    : 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600'
+                                                    ? 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-600 border-slate-300 dark:border-slate-600'
+                                                    : 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 border-slate-300 dark:border-slate-600'
                                                     }`}
                                                 />
                                               </div>
@@ -1496,7 +1496,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                       }
 
                                       if (!props.onToggleNodeConnectivity) {
-                                        return <span class="text-sm text-gray-400">-</span>;
+                                        return <span class="text-sm text-slate-400">-</span>;
                                       }
 
                                       const globalOfflineDisabled =
@@ -1531,7 +1531,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                             props.onCancelEdit();
                                             setActiveMetricInput(null);
                                           }}
-                                          class="p-1 text-gray-600 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+                                          class="p-1 text-slate-600 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300"
                                           title="Cancel editing"
                                           aria-label="Cancel editing"
                                         >
@@ -1677,7 +1677,7 @@ export function ResourceTable(props: ResourceTableProps) {
 
                         return (
                           <tr
-                            class={`hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors ${resource.disabled || props.globalDisableFlag?.() ? 'opacity-40' : ''}`}
+                            class={`hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors ${resource.disabled || props.globalDisableFlag?.() ? 'opacity-40' : ''}`}
                           >
                             {/* Alert toggle column */}
                             <td class="p-1 px-2 text-center align-middle">
@@ -1719,7 +1719,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                 fallback={
                                   <div class="flex items-center gap-2 min-w-0">
                                     <span
-                                      class={`text-sm font-medium truncate flex-nowrap ${resource.disabled ? 'text-gray-500 dark:text-gray-500' : 'text-gray-900 dark:text-gray-100'}`}
+                                      class={`text-sm font-medium truncate flex-nowrap ${resource.disabled ? 'text-slate-500 dark:text-slate-500' : 'text-slate-900 dark:text-slate-100'}`}
                                     >
                                       {resource.name}
                                     </span>
@@ -1739,7 +1739,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                     when={resource.host}
                                     fallback={
                                       <span
-                                        class={`text-sm font-medium truncate flex-nowrap ${resource.disabled ? 'text-gray-500 dark:text-gray-500' : 'text-gray-900 dark:text-gray-100'}`}
+                                        class={`text-sm font-medium truncate flex-nowrap ${resource.disabled ? 'text-slate-500 dark:text-slate-500' : 'text-slate-900 dark:text-slate-100'}`}
                                       >
                                         {resource.type === 'node'
                                           ? resource.name
@@ -1754,8 +1754,8 @@ export function ResourceTable(props: ResourceTableProps) {
                                         rel="noopener noreferrer"
                                         onClick={(e) => e.stopPropagation()}
                                         class={`text-sm font-medium truncate flex-nowrap transition-colors duration-150 ${resource.disabled
-                                          ? 'text-gray-500 dark:text-gray-500'
-                                          : 'text-gray-900 dark:text-gray-100 hover:text-sky-600 dark:hover:text-sky-400'
+                                          ? 'text-slate-500 dark:text-slate-500'
+                                          : 'text-slate-900 dark:text-slate-100 hover:text-sky-600 dark:hover:text-sky-400'
                                           }`}
                                         title={`Open ${resource.displayName || resource.name} web interface`}
                                       >
@@ -1824,7 +1824,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                     <Show
                                       when={showMetric()}
                                       fallback={
-                                        <span class="text-sm text-gray-400 dark:text-gray-500">
+                                        <span class="text-sm text-slate-400 dark:text-slate-500">
                                           -
                                         </span>
                                       }
@@ -1834,7 +1834,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                         fallback={
                                           <div
                                             onClick={openMetricEditor}
-                                            class="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 rounded px-1 py-0.5 transition-colors"
+                                            class="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 rounded px-1 py-0.5 transition-colors"
                                             title="Click to edit this metric"
                                           >
                                             <MetricValueWithHeat
@@ -1898,8 +1898,8 @@ export function ResourceTable(props: ResourceTableProps) {
                                               setActiveMetricInput(null);
                                             }}
                                             class={`w-16 px-2 py-0.5 text-sm text-center border rounded ${isDisabled()
-                                              ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 border-gray-300 dark:border-gray-600'
-                                              : 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600'
+                                              ? 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-600 border-slate-300 dark:border-slate-600'
+                                              : 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 border-slate-300 dark:border-slate-600'
                                               }`}
                                           />
                                         </div>
@@ -1953,7 +1953,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                     resource.editable !== false && typeof props.onEdit === 'function'
                                   }
                                   fallback={
-                                    <span class="text-xs text-gray-400 dark:text-gray-600">—</span>
+                                    <span class="text-xs text-slate-400 dark:text-slate-600">—</span>
                                   }
                                 >
                                   <Show
@@ -1965,7 +1965,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                           props.onCancelEdit();
                                           setActiveMetricInput(null);
                                         }}
-                                        class="p-1 text-gray-600 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+                                        class="p-1 text-slate-600 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300"
                                         title="Cancel editing"
                                         aria-label="Cancel editing"
                                       >
@@ -2056,7 +2056,7 @@ export function ResourceTable(props: ResourceTableProps) {
                   <tr>
                     <td
                       colspan={totalColumnCount()}
-                      class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400"
+                      class="px-4 py-8 text-center text-sm text-slate-500 dark:text-slate-400"
                     >
                       No {props.title.toLowerCase()} found
                     </td>
@@ -2067,7 +2067,7 @@ export function ResourceTable(props: ResourceTableProps) {
                 <tr>
                   <td
                     colspan={totalColumnCount()}
-                    class="px-4 py-6 text-sm text-center text-gray-500 dark:text-gray-400"
+                    class="px-4 py-6 text-sm text-center text-slate-500 dark:text-slate-400"
                   >
                     {props.emptyMessage || 'No resources available.'}
                   </td>

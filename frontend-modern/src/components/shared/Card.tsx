@@ -1,6 +1,6 @@
 import { JSX, splitProps, mergeProps } from 'solid-js';
 
-type Tone = 'default' | 'muted' | 'info' | 'success' | 'warning' | 'danger' | 'glass';
+type Tone = 'default' | 'muted' | 'info' | 'success' | 'warning' | 'danger' | 'card';
 type Padding = 'none' | 'sm' | 'md' | 'lg';
 
 type CardProps = {
@@ -11,13 +11,13 @@ type CardProps = {
 } & JSX.HTMLAttributes<HTMLDivElement>;
 
 const toneClassMap: Record<Tone, string> = {
-  default: 'bg-white dark:bg-gray-800',
-  muted: 'bg-gray-50 dark:bg-gray-800/80',
+  default: 'bg-white dark:bg-slate-800',
+  muted: 'bg-slate-50 dark:bg-slate-800',
   info: 'bg-blue-50/70 dark:bg-blue-900/20',
   success: 'bg-green-50/70 dark:bg-green-900/20',
   warning: 'bg-amber-50/80 dark:bg-amber-900/20',
   danger: 'bg-red-50/80 dark:bg-red-900/20',
-  glass: 'glass',
+  card: 'card',
 };
 
 const paddingClassMap: Record<Padding, string> = {
@@ -34,11 +34,11 @@ export function Card(props: CardProps) {
   );
   const [local, rest] = splitProps(merged, ['tone', 'padding', 'hoverable', 'border', 'class']);
 
-  const baseClass = 'rounded-lg shadow-sm transition-shadow duration-200 max-w-full';
+  const baseClass = 'rounded-md shadow-sm transition-shadow duration-200 max-w-full';
   const toneClass = toneClassMap[local.tone];
   const paddingClass = paddingClassMap[local.padding];
-  const borderClass = local.border ? 'border border-gray-200 dark:border-gray-700' : '';
-  const hoverClass = local.hoverable ? 'hover:shadow-md' : '';
+  const borderClass = local.border ? 'border border-slate-200 dark:border-slate-700' : '';
+  const hoverClass = local.hoverable ? 'hover:shadow-sm' : '';
 
   return (
     <div

@@ -258,7 +258,7 @@ export const OIDCPanel: Component<Props> = (props) => {
           disabled={isEnvLocked() || loading() || saving()}
           containerClass="items-center gap-2"
           label={
-            <span class="text-xs font-medium text-gray-600 dark:text-gray-300">
+            <span class="text-xs font-medium text-slate-600 dark:text-slate-300">
               {form.enabled ? 'Enabled' : 'Disabled'}
             </span>
           }
@@ -267,11 +267,11 @@ export const OIDCPanel: Component<Props> = (props) => {
       bodyClass="space-y-5"
     >
       <Show when={licenseLoaded() && !hasFeature('sso') && !loading()}>
-        <div class="p-5 bg-gray-50 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-700 rounded-xl">
+        <div class="p-5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md">
           <div class="flex flex-col sm:flex-row items-center gap-4">
             <div class="flex-1">
-              <h4 class="text-base font-semibold text-gray-900 dark:text-white">Single Sign-On</h4>
-              <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+              <h4 class="text-base font-semibold text-slate-900 dark:text-white">Single Sign-On</h4>
+              <p class="text-sm text-slate-600 dark:text-slate-400 mt-1">
                 Connect Pulse to your identity provider for seamless team authentication.
               </p>
             </div>
@@ -279,7 +279,7 @@ export const OIDCPanel: Component<Props> = (props) => {
               href={getUpgradeActionUrlOrFallback('advanced_sso')}
               target="_blank"
               rel="noopener noreferrer"
-              class="px-5 py-2.5 text-sm font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              class="px-5 py-2.5 text-sm font-semibold bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
               onClick={() => trackUpgradeClicked('settings_oidc_panel', 'sso')}
             >
               Upgrade to Pro
@@ -288,7 +288,7 @@ export const OIDCPanel: Component<Props> = (props) => {
         </div>
       </Show>
       <form class="space-y-5" onSubmit={handleSave}>
-        <div class="bg-gray-50 dark:bg-gray-800/40 border border-gray-200 dark:border-gray-700 rounded-lg p-3 text-xs text-gray-700 dark:text-gray-300">
+        <div class="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md p-3 text-xs text-slate-700 dark:text-slate-300">
           <ol class="space-y-1 list-decimal pl-4">
             <li>Set PUBLIC_URL environment variable</li>
             <li>Register client with your IdP using redirect URL below</li>
@@ -297,7 +297,7 @@ export const OIDCPanel: Component<Props> = (props) => {
           </ol>
         </div>
         <Show when={loading()}>
-          <div class="flex items-center gap-3 text-sm text-gray-600 dark:text-gray-300">
+          <div class="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-300">
             <span class="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
             Loading OIDC settings...
           </div>
@@ -343,7 +343,7 @@ export const OIDCPanel: Component<Props> = (props) => {
                 <Show when={config()?.clientSecretSet}>
                   <button
                     type="button"
-                    class="text-xs text-gray-600 hover:underline dark:text-gray-300"
+                    class="text-xs text-slate-600 hover:underline dark:text-slate-300"
                     onClick={() => {
                       if (!isEnvLocked() && !saving()) {
                         setForm('clientSecret', '');
@@ -413,7 +413,7 @@ export const OIDCPanel: Component<Props> = (props) => {
           <div class="space-y-4">
             <button
               type="button"
-              class="text-xs font-semibold text-gray-700 hover:underline dark:text-gray-300"
+              class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md border border-slate-300 dark:border-slate-600 px-3 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800"
               onClick={() => setAdvancedOpen(!advancedOpen())}
             >
               {advancedOpen() ? 'Hide advanced OIDC options' : 'Show advanced OIDC options'}
@@ -544,15 +544,15 @@ export const OIDCPanel: Component<Props> = (props) => {
 
           <div class="flex flex-wrap items-center justify-between gap-3 pt-4">
             <Show when={config()?.defaultRedirect}>
-              <div class="text-xs text-gray-500 dark:text-gray-400">
+              <div class="text-xs text-slate-500 dark:text-slate-400">
                 Redirect URL registered with your IdP must match Pulse:{' '}
                 {config()?.defaultRedirect}
               </div>
             </Show>
-            <div class="flex gap-3">
+            <div class="flex w-full sm:w-auto gap-3">
               <button
                 type="button"
-                class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
+                class="flex-1 sm:flex-none min-h-10 sm:min-h-9 px-4 py-2.5 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 rounded-md hover:bg-slate-50 dark:hover:bg-slate-700"
                 onClick={() => resetForm(config())}
                 disabled={saving() || loading()}
               >
@@ -560,7 +560,7 @@ export const OIDCPanel: Component<Props> = (props) => {
               </button>
               <button
                 type="submit"
-                class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                class="flex-1 sm:flex-none min-h-10 sm:min-h-9 px-4 py-2.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 disabled={saving() || loading() || isEnvLocked()}
               >
                 {saving() ? 'Saving…' : 'Save changes'}

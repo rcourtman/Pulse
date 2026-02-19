@@ -273,7 +273,7 @@ describe('infrastructureSelectors', () => {
     it('returns baseline styling below threshold', () => {
       expect(getOutlierEmphasis(12, stats)).toEqual({
         fontWeight: 'normal',
-        color: 'text-gray-500 dark:text-gray-400',
+        color: 'text-slate-500 dark:text-slate-400',
         showOutlierHint: false,
       });
     });
@@ -281,7 +281,7 @@ describe('infrastructureSelectors', () => {
     it('returns medium emphasis for moderate outliers', () => {
       expect(getOutlierEmphasis(27, stats)).toEqual({
         fontWeight: '500',
-        color: 'text-gray-800 dark:text-gray-100',
+        color: 'text-slate-800 dark:text-slate-100',
         showOutlierHint: true,
       });
     });
@@ -289,7 +289,7 @@ describe('infrastructureSelectors', () => {
     it('returns high emphasis for strong outliers', () => {
       expect(getOutlierEmphasis(30, stats)).toEqual({
         fontWeight: '600',
-        color: 'text-gray-900 dark:text-gray-50',
+        color: 'text-slate-900 dark:text-slate-50',
         showOutlierHint: true,
       });
     });

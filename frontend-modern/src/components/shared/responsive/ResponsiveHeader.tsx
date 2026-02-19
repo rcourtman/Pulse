@@ -69,7 +69,7 @@ export const ResponsiveHeader: Component<ResponsiveHeaderProps> = (props) => {
     ];
 
     if (props.column.sortable) {
-      classes.push('cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600');
+      classes.push('cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600');
     }
 
     if (props.class) {
@@ -119,7 +119,7 @@ export const ResponsiveHeader: Component<ResponsiveHeaderProps> = (props) => {
 export const StickyHeader: Component<ResponsiveHeaderProps & { width?: string }> = (props) => {
   return (
     <div
-      class={`sticky left-0 z-30 bg-gray-50 dark:bg-gray-700/50 border-r md:border-r-0 border-gray-200 dark:border-gray-600 ${props.width || 'w-[160px] sm:w-[200px] md:w-full'}`}
+      class={`sticky left-0 z-30 bg-slate-50 dark:bg-slate-800 border-r md:border-r-0 border-slate-200 dark:border-slate-600 ${props.width || 'w-[160px] sm:w-[200px] md:w-full'}`}
     >
       <ResponsiveHeader {...props} />
     </div>

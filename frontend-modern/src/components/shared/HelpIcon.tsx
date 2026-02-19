@@ -148,7 +148,7 @@ export const HelpIcon: Component<HelpIconProps> = (props) => {
       <button
         ref={buttonRef}
         type="button"
-        class={`inline-flex items-center justify-center text-gray-400 hover:text-blue-500 dark:text-gray-500 dark:hover:text-blue-400 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 rounded-full ${props.class ?? ''}`}
+        class={`inline-flex min-h-11 min-w-11 items-center justify-center rounded-full p-1 text-slate-400 transition-colors hover:text-blue-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 sm:min-h-8 sm:min-w-8 dark:text-slate-500 dark:hover:text-blue-400 ${props.class ?? ''}`}
         onClick={(e) => {
           e.stopPropagation();
           setIsOpen(!isOpen());
@@ -166,7 +166,7 @@ export const HelpIcon: Component<HelpIconProps> = (props) => {
             ref={popoverRef}
             role="dialog"
             aria-labelledby="help-popover-title"
-            class="fixed z-[9999] bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden animate-in fade-in-0 zoom-in-95 duration-150"
+            class="fixed z-[9999] bg-white dark:bg-slate-800 rounded-md shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden animate-in fade-in-0 zoom-in-95 duration-150"
             style={{
               top: `${popoverPosition().top}px`,
               left: `${popoverPosition().left}px`,
@@ -175,13 +175,13 @@ export const HelpIcon: Component<HelpIconProps> = (props) => {
             }}
           >
             {/* Header */}
-            <div class="px-3 py-2 bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between gap-2">
-              <span id="help-popover-title" class="text-sm font-medium text-gray-900 dark:text-gray-100">
+            <div class="px-3 py-2 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between gap-2">
+              <span id="help-popover-title" class="text-sm font-medium text-slate-900 dark:text-slate-100">
                 {helpContent.title}
               </span>
               <button
                 type="button"
-                class="p-0.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded transition-colors"
+                class="p-0.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded transition-colors"
                 onClick={() => setIsOpen(false)}
                 aria-label="Close help"
               >
@@ -190,19 +190,19 @@ export const HelpIcon: Component<HelpIconProps> = (props) => {
             </div>
 
             {/* Content */}
-            <div class="px-3 py-2.5 text-xs text-gray-600 dark:text-gray-300 space-y-2">
+            <div class="px-3 py-2.5 text-xs text-slate-600 dark:text-slate-300 space-y-2">
               <p class="whitespace-pre-line leading-relaxed">{helpContent.description}</p>
 
               <Show when={helpContent.examples && helpContent.examples.length > 0}>
-                <div class="pt-2 border-t border-gray-100 dark:border-gray-700">
-                  <p class="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500 font-medium mb-1.5">
+                <div class="pt-2 border-t border-slate-100 dark:border-slate-700">
+                  <p class="text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500 font-medium mb-1.5">
                     Examples
                   </p>
                   <ul class="space-y-1 text-[11px]">
                     {helpContent.examples!.map((example) => (
                       <li class="flex items-start gap-1.5">
-                        <span class="text-gray-400 dark:text-gray-500 mt-0.5 select-none">-</span>
-                        <span class="text-gray-600 dark:text-gray-400">{example}</span>
+                        <span class="text-slate-400 dark:text-slate-500 mt-0.5 select-none">-</span>
+                        <span class="text-slate-600 dark:text-slate-400">{example}</span>
                       </li>
                     ))}
                   </ul>
@@ -210,7 +210,7 @@ export const HelpIcon: Component<HelpIconProps> = (props) => {
               </Show>
 
               <Show when={helpContent.docUrl}>
-                <div class="pt-2 border-t border-gray-100 dark:border-gray-700">
+                <div class="pt-2 border-t border-slate-100 dark:border-slate-700">
                   <a
                     href={helpContent.docUrl}
                     target="_blank"

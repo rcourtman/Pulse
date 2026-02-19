@@ -53,13 +53,13 @@ export function MigrationGuide() {
   return (
     <div class="space-y-4">
       <Card class="p-5">
-        <h1 class="text-base font-semibold text-gray-900 dark:text-gray-100">Navigation Migration Guide</h1>
-        <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">
+        <h1 class="text-base font-semibold text-slate-900 dark:text-slate-100">Navigation Migration Guide</h1>
+        <p class="mt-2 text-sm text-slate-600 dark:text-slate-300">
           Pulse now uses a resource-first layout: Infrastructure, Workloads, Storage, and Recovery.
           Legacy URLs still redirect for compatibility, but this guide shows the canonical destinations.
         </p>
-        <div class="mt-3 text-xs text-gray-600 dark:text-gray-300 space-y-1">
-          <div class="font-medium text-gray-900 dark:text-gray-100">Why change?</div>
+        <div class="mt-3 text-xs text-slate-600 dark:text-slate-300 space-y-1">
+          <div class="font-medium text-slate-900 dark:text-slate-100">Why change?</div>
           <div>
             Unified resources enable one inventory, one search, and consistent filters across Proxmox, agents, Docker, Kubernetes, and new sources.
             The goal is fewer duplicated pages and a navigation model that scales as integrations expand.
@@ -74,21 +74,21 @@ export function MigrationGuide() {
       <Card padding="none" class="overflow-hidden">
         <table class="w-full border-collapse">
           <thead>
-            <tr class="bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-700">
-              <th class="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-300">Legacy route</th>
-              <th class="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-300">New destination</th>
-              <th class="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-300">Reason</th>
-              <th class="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-300">Status</th>
+            <tr class="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+              <th class="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">Legacy route</th>
+              <th class="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">New destination</th>
+              <th class="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">Reason</th>
+              <th class="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">Status</th>
             </tr>
           </thead>
-          <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-100 dark:divide-gray-700/70">
+          <tbody class="bg-white dark:bg-slate-800 divide-y divide-gray-100 dark:divide-gray-700/70">
             <For each={ROUTE_MAPPINGS}>
               {(item) => (
                 <tr>
-                  <td class="px-4 py-2 text-sm font-mono text-gray-700 dark:text-gray-200">{item.legacy}</td>
+                  <td class="px-4 py-2 text-sm font-mono text-slate-700 dark:text-slate-200">{item.legacy}</td>
                   <td class="px-4 py-2 text-sm font-mono text-blue-700 dark:text-blue-300">{item.destination}</td>
-                  <td class="px-4 py-2 text-sm text-gray-600 dark:text-gray-300">{item.rationale}</td>
-                  <td class="px-4 py-2 text-sm text-gray-600 dark:text-gray-300">{item.deprecation}</td>
+                  <td class="px-4 py-2 text-sm text-slate-600 dark:text-slate-300">{item.rationale}</td>
+                  <td class="px-4 py-2 text-sm text-slate-600 dark:text-slate-300">{item.deprecation}</td>
                 </tr>
               )}
             </For>
