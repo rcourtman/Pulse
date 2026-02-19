@@ -37,10 +37,17 @@ func CheckCSRF(w http.ResponseWriter, r *http.Request) bool {
 		return true
 	}
 
-	// Skip CSRF for Basic Auth (doesn't use sessions, not vulnerable to CSRF)
-	if r.Header.Get("Authorization") != "" {
-		log.Debug().Str("path", r.URL.Path).Msg("CSRF check skipped: Basic Auth header present")
-		return true
+	// Skip CSRF only for explicit non-session auth schemes.
+	if authHeader := strings.TrimSpace(r.Header.Get("Authorization")); authHeader != "" {
+		lower := strings.ToLower(authHeader)
+		if strings.HasPrefix(lower, "basic ") {
+			log.Debug().Str("path", r.URL.Path).Msg("CSRF check skipped: Basic auth header present")
+			return true
+		}
+		if strings.HasPrefix(lower, "bearer ") {
+			log.Debug().Str("path", r.URL.Path).Msg("CSRF check skipped: Bearer auth header present")
+			return true
+		}
 	}
 
 	// Get session from cookie

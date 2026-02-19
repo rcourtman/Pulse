@@ -85,8 +85,6 @@ func TestRouterCSRFSpecialCaseSkips(t *testing.T) {
 
 	skipPaths := []string{
 		"/api/login",
-		"/api/security/apply-restart",
-		"/api/security/quick-setup",
 		"/api/security/validate-bootstrap-token",
 		"/api/setup-script-url",
 	}
@@ -104,6 +102,31 @@ func TestRouterCSRFSpecialCaseSkips(t *testing.T) {
 
 		if rec.Code != http.StatusOK {
 			t.Fatalf("path %s: expected status %d, got %d (%s)", path, http.StatusOK, rec.Code, rec.Body.String())
+		}
+	}
+}
+
+func TestRouterCSRFEnforcedForSecurityMutationRoutesWhenAuthConfigured(t *testing.T) {
+	router, sessionToken := newRouterWithSession(t)
+
+	protectedPaths := []string{
+		"/api/security/apply-restart",
+		"/api/security/quick-setup",
+	}
+
+	for _, path := range protectedPaths {
+		router.mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		})
+
+		req := httptest.NewRequest(http.MethodPost, path, nil)
+		req.AddCookie(&http.Cookie{Name: "pulse_session", Value: sessionToken})
+		rec := httptest.NewRecorder()
+
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("path %s: expected status %d, got %d (%s)", path, http.StatusForbidden, rec.Code, rec.Body.String())
 		}
 	}
 }

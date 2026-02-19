@@ -7,9 +7,7 @@ export type SettingsNavGroupId =
   | 'resources'
   | 'organization'
   | 'integrations'
-  | 'operations'
-  | 'system'
-  | 'security';
+  | 'platform';
 
 export interface SettingsNavItem {
   id: SettingsTab;

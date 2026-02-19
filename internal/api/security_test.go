@@ -1272,7 +1272,34 @@ func TestCheckCSRF_BasicAuth(t *testing.T) {
 	// Basic auth bypasses CSRF check
 	result := CheckCSRF(w, req)
 	if !result {
-		t.Error("CheckCSRF should return true when Authorization header is present")
+		t.Error("CheckCSRF should return true when Basic Authorization header is present")
+	}
+}
+
+func TestCheckCSRF_BearerAuth(t *testing.T) {
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/api/test", nil)
+	req.Header.Set("Authorization", "Bearer some-token")
+
+	// Bearer auth bypasses CSRF check for token-based API clients.
+	result := CheckCSRF(w, req)
+	if !result {
+		t.Error("CheckCSRF should return true when Bearer Authorization header is present")
+	}
+}
+
+func TestCheckCSRF_UnknownAuthorizationSchemeDoesNotBypass(t *testing.T) {
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/api/test", nil)
+	req.Header.Set("Authorization", "Digest abc123")
+	req.AddCookie(&http.Cookie{
+		Name:  "pulse_session",
+		Value: "test-session-id-1234567890",
+	})
+
+	result := CheckCSRF(w, req)
+	if result {
+		t.Error("CheckCSRF should return false for unknown Authorization schemes when session cookie is present")
 	}
 }
 

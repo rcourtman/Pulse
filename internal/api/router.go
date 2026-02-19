@@ -2877,13 +2877,17 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				return
 			}
 		}
-		// Check CSRF for state-changing requests
-		// CSRF is only needed when using session-based auth
-		// Only skip CSRF for initial setup when no auth is configured
+		// Check CSRF for state-changing requests.
+		// CSRF is only needed when using session-based auth.
 		skipCSRF := false
-		if req.URL.Path == "/api/security/quick-setup" || req.URL.Path == "/api/security/apply-restart" {
-			// Quick-setup has its own auth logic (bootstrap token or session validation)
-			// so we can skip CSRF here - the handler will reject unauthorized requests
+		// Quick setup can run before auth exists. Keep bootstrap/recovery flows usable
+		// without a prior session+CSRF pair, but enforce CSRF once auth is configured.
+		authConfigured := (r.config.AuthUser != "" && r.config.AuthPass != "") ||
+			r.config.HasAPITokens() ||
+			r.config.ProxyAuthSecret != "" ||
+			(r.config.OIDC != nil && r.config.OIDC.Enabled)
+		if req.URL.Path == "/api/security/quick-setup" &&
+			(!authConfigured || strings.TrimSpace(req.Header.Get("X-Recovery-Token")) != "") {
 			skipCSRF = true
 		}
 		// Skip CSRF for setup-script-url endpoint (generates temporary tokens, not a state change)

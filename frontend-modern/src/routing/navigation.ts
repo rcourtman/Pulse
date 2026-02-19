@@ -8,7 +8,8 @@ export type AppTabId =
   | 'recovery'
   | 'alerts'
   | 'ai'
-  | 'settings';
+  | 'settings'
+  | 'operations';
 
 export type LegacyRouteSource =
   | 'proxmox-overview'
@@ -41,6 +42,7 @@ export function getActiveTabForPath(path: string): AppTabId {
   if (path.startsWith('/alerts')) return 'alerts';
   if (path.startsWith('/ai')) return 'ai';
   if (path.startsWith('/settings')) return 'settings';
+  if (path.startsWith('/operations')) return 'operations';
   return 'infrastructure';
 }
 

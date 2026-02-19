@@ -11,12 +11,12 @@ import Sliders from 'lucide-solid/icons/sliders-horizontal';
 import RefreshCw from 'lucide-solid/icons/refresh-cw';
 import Clock from 'lucide-solid/icons/clock';
 import Sparkles from 'lucide-solid/icons/sparkles';
-import FileText from 'lucide-solid/icons/file-text';
+
 import Globe from 'lucide-solid/icons/globe';
 import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
 import { PulseLogoIcon } from '@/components/icons/PulseLogoIcon';
 import BadgeCheck from 'lucide-solid/icons/badge-check';
-import Terminal from 'lucide-solid/icons/terminal';
+
 import Container from 'lucide-solid/icons/container';
 import Building2 from 'lucide-solid/icons/building-2';
 import Share2 from 'lucide-solid/icons/share-2';
@@ -82,34 +82,10 @@ export const baseTabGroups: SettingsNavGroup[] = [
     items: [{ id: 'api', label: 'API Access', icon: BadgeCheck }],
   },
   {
-    id: 'operations',
-    label: 'Operations',
+    id: 'platform',
+    label: 'Platform Administration',
     items: [
-      {
-        id: 'diagnostics',
-        label: 'Diagnostics',
-        icon: Activity,
-        iconProps: { strokeWidth: 2 },
-      },
-      {
-        id: 'reporting',
-        label: 'Reporting',
-        icon: FileText,
-        iconProps: { strokeWidth: 2 },
-        features: ['advanced_reporting'],
-      },
-      {
-        id: 'system-logs',
-        label: 'System Logs',
-        icon: Terminal,
-        iconProps: { strokeWidth: 2 },
-      },
-    ],
-  },
-  {
-    id: 'system',
-    label: 'System',
-    items: [
+      // System grouped tab items
       {
         id: 'system-general',
         label: 'General',
@@ -136,7 +112,7 @@ export const baseTabGroups: SettingsNavGroup[] = [
       },
       {
         id: 'system-ai',
-        label: 'AI',
+        label: 'AI Services',
         icon: Sparkles,
         iconProps: { strokeWidth: 2 },
       },
@@ -147,20 +123,10 @@ export const baseTabGroups: SettingsNavGroup[] = [
         iconProps: { strokeWidth: 2 },
         features: ['relay'],
       },
-      {
-        id: 'system-pro',
-        label: 'Pro',
-        icon: PulseLogoIcon,
-      },
-    ],
-  },
-  {
-    id: 'security',
-    label: 'Security',
-    items: [
+      // Security grouped tab items
       {
         id: 'security-overview',
-        label: 'Overview',
+        label: 'Security Overview',
         icon: Shield,
         iconProps: { strokeWidth: 2 },
       },
@@ -200,6 +166,11 @@ export const baseTabGroups: SettingsNavGroup[] = [
         icon: Globe,
         iconProps: { strokeWidth: 2 },
         features: ['audit_logging'],
+      },
+      {
+        id: 'system-pro',
+        label: 'Pulse Pro',
+        icon: PulseLogoIcon,
       },
     ],
   },

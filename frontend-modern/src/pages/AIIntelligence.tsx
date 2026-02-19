@@ -729,10 +729,10 @@ export function AIIntelligence() {
           </div>
         </div>
 
-        {/* Settings row */}
-        <div class="flex flex-wrap items-center gap-4">
-          {/* Patrol Toggle */}
-          <div class="flex items-center gap-2">
+        {/* Settings row - Simplified for Enterprise Feel */}
+        <div class="flex items-center gap-4 mt-2 mb-1">
+          {/* Global Patrol Toggle */}
+          <div class="flex items-center gap-2 bg-slate-50 dark:bg-slate-700/50 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700">
             <TogglePrimitive
               checked={patrolEnabledLocal()}
               disabled={isTogglingPatrol()}
@@ -740,240 +740,197 @@ export function AIIntelligence() {
               size="sm"
               ariaLabel="Toggle Patrol"
             />
-            <span class="text-sm text-slate-600 dark:text-slate-400">
-              {patrolEnabledLocal() ? 'On' : 'Off'}
+            <span class="text-sm font-medium text-slate-700 dark:text-slate-300">
+              {patrolEnabledLocal() ? 'Patrol Active' : 'Patrol Disabled'}
             </span>
           </div>
 
-          <div class="h-4 w-px bg-slate-200 dark:bg-slate-700" />
+          <div class="flex-1"></div>
 
-          {/* Model Selector */}
-          <div class="flex items-center gap-2">
-            <span class="text-xs text-slate-500 dark:text-slate-400">Model:</span>
-            <select
-              ref={patrolModelSelectRef}
-              value={patrolModel()}
-              onChange={(e) => handleModelChange(e.currentTarget.value)}
-              disabled={isUpdatingSettings() || !patrolEnabledLocal()}
-              class={`text-xs bg-slate-100 dark:bg-slate-700 border-0 rounded-md py-1 pl-2 pr-6 text-slate-700 dark:text-slate-300 focus:ring-1 focus:ring-blue-500 disabled:opacity-50 ${patrolModelStale() ? 'ring-1 ring-amber-400' : ''}`}
-              title={patrolModelStale() ? `Model "${patrolModel()}" is no longer available. Select a new model.` : ''}
+          {/* Configuration Popover */}
+          <div class="relative" ref={advancedSettingsRef}>
+            <button
+              onClick={() => setShowAdvancedSettings(!showAdvancedSettings())}
+              disabled={!patrolEnabledLocal()}
+              class={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg transition-all shadow-sm ${showAdvancedSettings()
+                ? 'bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-800'
+                : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700 dark:hover:bg-slate-750'
+                } ${!patrolEnabledLocal() ? 'opacity-50 cursor-not-allowed hidden' : ''}`}
             >
-              <option value="">Default ({defaultModel().split(':').pop() || 'not set'})</option>
-              <Show when={patrolModelStale()}>
-                <option value={patrolModel()} disabled>
-                  {patrolModel().split(':').pop()} (unavailable)
-                </option>
-              </Show>
-              {Array.from(groupModelsByProvider(availableModels()).entries()).map(([provider, models]) => (
-                <optgroup label={provider.charAt(0).toUpperCase() + provider.slice(1)}>
-                  {models.map((model) => (
-                    <option value={model.id}>
-                      {model.name || model.id.split(':').pop()}
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
-          </div>
+              <SettingsIcon class="w-4 h-4" />
+              Configure Patrol
+            </button>
 
-          <div class="h-4 w-px bg-slate-200 dark:bg-slate-700" />
-
-          {/* Schedule Selector */}
-          <div class="flex items-center gap-2">
-            <span class="text-xs text-slate-500 dark:text-slate-400">Every:</span>
-            <select
-              value={patrolInterval()}
-              onChange={(e) => handleIntervalChange(parseInt(e.currentTarget.value))}
-              disabled={isUpdatingSettings() || !patrolEnabledLocal()}
-              class="text-xs bg-slate-100 dark:bg-slate-700 border-0 rounded-md py-1 pl-2 pr-6 text-slate-700 dark:text-slate-300 focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
-            >
-              <For each={scheduleOptions()}>
-                {(preset) => (
-                  <option value={preset.value}>{preset.label}</option>
-                )}
-              </For>
-            </select>
-          </div>
-
-          <div class="h-4 w-px bg-slate-200 dark:bg-slate-700" />
-
-          {/* Autonomy Level Selector */}
-          <div class="flex items-center gap-1.5">
-            <span class="text-xs text-slate-500 dark:text-slate-400">Mode:</span>
-            <div class="flex items-center bg-slate-100 dark:bg-slate-700 rounded-md p-0.5">
-              <For each={(['monitor', 'approval', 'assisted'] as PatrolAutonomyLevel[])}>
-                {(level) => {
-                  const isProLocked = () => autoFixLocked() && level === 'assisted';
-                  const isDisabled = () => !patrolEnabledLocal() || isProLocked();
-                  // Show as active for 'assisted' when actual level is 'assisted' or 'full' (full is assisted + critical toggle)
-                  const isActive = () => level === 'assisted'
-                    ? autonomyLevel() === 'assisted' || autonomyLevel() === 'full'
-                    : autonomyLevel() === level;
-
-                  return (
-                    <button
-                      onClick={() => handleAutonomyChange(level)}
-                      disabled={isDisabled()}
-                      title={isProLocked() ? 'Upgrade to Pro for automatic fixes' : undefined}
-                      class={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors border ${isActive()
-                        ? 'bg-white dark:bg-slate-600 border-slate-200 dark:border-slate-500 text-slate-900 dark:text-white shadow-sm'
-                        : isDisabled()
-                          ? 'border-transparent text-slate-400 dark:text-slate-500'
-                          : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                        } ${isDisabled() ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    >
-                      {level === 'monitor' ? 'Monitor' : level === 'approval' ? 'Investigate' : 'Auto-fix'}
-                    </button>
-                  );
-                }}
-              </For>
-            </div>
-            <div class="relative group">
-              <CircleHelpIcon class="w-4 h-4 text-slate-400 dark:text-slate-500 cursor-help" />
-              <div class="absolute left-0 top-6 z-50 hidden group-hover:block w-72 p-3 bg-white dark:bg-slate-800 rounded-md shadow-sm border border-slate-200 dark:border-slate-700 text-xs">
-                <div class="space-y-2">
-                  <div>
-                    <span class="font-semibold text-slate-900 dark:text-white">Monitor</span>
-                    <p class="text-slate-600 dark:text-slate-400">Detect issues only. No investigation or fixes.</p>
-                  </div>
-                  <div>
-                    <span class="font-semibold text-slate-900 dark:text-white">Investigate</span>
-                    <p class="text-slate-600 dark:text-slate-400">Investigates findings and proposes fixes. All fixes require your approval before execution.</p>
-                  </div>
-                  <div>
-                    <span class="font-semibold text-slate-900 dark:text-white">Auto-fix</span>
-                    <p class="text-slate-600 dark:text-slate-400">Automatically fixes issues and verifies results. By default, critical findings still require approval — configure in ⚙️ settings.</p>
-                  </div>
+            <Show when={showAdvancedSettings()}>
+              <div class="absolute right-0 top-10 z-50 w-[340px] p-5 bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-slate-200/80 dark:border-slate-700/80 animate-slide-up transform origin-top-right">
+                <div class="flex items-center justify-between mb-5 pb-3 border-b border-slate-100 dark:border-slate-700">
+                  <h4 class="text-base font-semibold tracking-tight text-slate-900 dark:text-white">Patrol Configuration</h4>
+                  <button
+                    onClick={() => setShowAdvancedSettings(false)}
+                    class="p-1 rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300 transition-colors"
+                  >
+                    <XIcon class="w-4 h-4" />
+                  </button>
                 </div>
-              </div>
-            </div>
 
-            {/* Advanced Settings Gear — visible to all users with gentle Pro upgrade hints */}
-            <div class="relative" ref={advancedSettingsRef}>
-              <button
-                onClick={() => setShowAdvancedSettings(!showAdvancedSettings())}
-                disabled={!patrolEnabledLocal()}
-                class={`p-1 rounded transition-colors ${showAdvancedSettings()
-                  ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30'
-                  : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'
-                  } ${!patrolEnabledLocal() ? 'opacity-50 cursor-not-allowed' : ''}`}
-                title="Advanced investigation settings"
-              >
-                <SettingsIcon class="w-4 h-4" />
-              </button>
+                <div class="space-y-6">
+                  {/* Model & Schedule grouped */}
+                  <div class="grid grid-cols-2 gap-4">
+                    <div class="space-y-1.5">
+                      <label class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">AI Model</label>
+                      <select
+                        ref={patrolModelSelectRef}
+                        value={patrolModel()}
+                        onChange={(e) => handleModelChange(e.currentTarget.value)}
+                        disabled={isUpdatingSettings() || !patrolEnabledLocal()}
+                        class="w-full text-sm bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg py-2 pl-3 pr-8 text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
+                      >
+                        <option value="">Default ({defaultModel().split(':').pop() || 'not set'})</option>
+                        <Show when={patrolModelStale()}>
+                          <option value={patrolModel()} disabled>
+                            {patrolModel().split(':').pop()} (unavailable)
+                          </option>
+                        </Show>
+                        {Array.from(groupModelsByProvider(availableModels()).entries()).map(([provider, models]) => (
+                          <optgroup label={provider.charAt(0).toUpperCase() + provider.slice(1)}>
+                            {models.map((model) => (
+                              <option value={model.id}>
+                                {model.name || model.id.split(':').pop()}
+                              </option>
+                            ))}
+                          </optgroup>
+                        ))}
+                      </select>
+                    </div>
 
-              {/* Advanced Settings Popover */}
-              <Show when={showAdvancedSettings()}>
-                <div class="absolute right-0 top-8 z-50 w-72 p-4 bg-white dark:bg-slate-800 rounded-md shadow-sm border border-slate-200 dark:border-slate-700">
-                  <div class="flex items-center justify-between mb-3">
-                    <h4 class="text-sm font-semibold text-slate-900 dark:text-white">Advanced Settings</h4>
-                    <button
-                      onClick={() => setShowAdvancedSettings(false)}
-                      class="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
-                    >
-                      <XIcon class="w-4 h-4" />
-                    </button>
+                    <div class="space-y-1.5">
+                      <label class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Run Every</label>
+                      <select
+                        value={patrolInterval()}
+                        onChange={(e) => handleIntervalChange(parseInt(e.currentTarget.value))}
+                        disabled={isUpdatingSettings() || !patrolEnabledLocal()}
+                        class="w-full text-sm bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg py-2 pl-3 pr-8 text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
+                      >
+                        <For each={scheduleOptions()}>
+                          {(preset) => (
+                            <option value={preset.value}>{preset.label}</option>
+                          )}
+                        </For>
+                      </select>
+                    </div>
                   </div>
 
-                  <div class="space-y-4">
-                    {/* Auto-fix critical issues toggle */}
-                    <div>
-                      <div class="flex items-start justify-between gap-3">
-                        <div class="flex-1">
-                          <label class="text-xs font-medium text-red-600 dark:text-red-400">Auto-fix critical issues</label>
-                          <p class="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
-                            When enabled, Patrol will automatically fix critical issues without requiring your approval.
-                          </p>
+                  {/* Operational Mode */}
+                  <div class="space-y-2">
+                    <div class="flex items-center justify-between">
+                      <label class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                        Operational Mode
+                        <div class="relative group">
+                          <CircleHelpIcon class="w-3.5 h-3.5 text-slate-400 cursor-help" />
+                          <div class="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover:block w-64 p-3 bg-slate-800 text-white rounded-lg shadow-xl text-xs z-50 pointer-events-none before:absolute before:top-full before:left-1/2 before:-translate-x-1/2 before:border-4 before:border-transparent before:border-t-slate-800">
+                            <strong>Monitor:</strong> Detect only.<br />
+                            <strong>Investigate:</strong> Detect & propose fixes.<br />
+                            <strong>Auto-fix:</strong> Execute safe fixes automatically.
+                          </div>
                         </div>
-                        <Toggle
-                          checked={!autoFixLocked() && fullModeUnlocked()}
-                          onChange={(e) => setFullModeUnlocked(e.currentTarget.checked)}
-                          disabled={autoFixLocked() || !(autonomyLevel() === 'assisted' || autonomyLevel() === 'full')}
-                        />
-                      </div>
-                      <Show when={autoFixLocked()}>
-                        <p class="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
-                          <a class="text-indigo-600 dark:text-indigo-400 font-medium hover:underline" href={getUpgradeActionUrlOrFallback('ai_autofix')} target="_blank" rel="noopener noreferrer" onClick={() => trackUpgradeClicked('ai_intelligence', 'ai_autofix')}>Upgrade to Pro</a>
-                          {' '}to unlock auto-fix.
-                          <Show when={canStartTrial()}>
-                            {' '}
-                            <button
-                              type="button"
-                              class="text-indigo-600 dark:text-indigo-400 font-medium hover:underline disabled:opacity-60"
-                              disabled={startingTrial()}
-                              onClick={handleStartTrial}
-                            >
-                              Or start a free 14-day trial
-                            </button>
-                          </Show>
-                        </p>
-                      </Show>
-                      <Show when={!autoFixLocked() && !(autonomyLevel() === 'assisted' || autonomyLevel() === 'full')}>
-                        <p class="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
-                          Select Auto-fix mode to configure this setting.
-                        </p>
-                      </Show>
-                      <Show when={!autoFixLocked() && fullModeUnlocked() && (autonomyLevel() === 'assisted' || autonomyLevel() === 'full')}>
-                        <p class="text-[10px] text-amber-600 dark:text-amber-400 mt-2 flex items-center gap-1">
-                          <ShieldAlertIcon class="w-3 h-3 flex-shrink-0" />
-                          Critical issues will be auto-fixed without approval. Click Save to apply.
-                        </p>
-                      </Show>
+                      </label>
                     </div>
 
-                    {/* Alert-Triggered Analysis */}
-                    <div class="pt-3 border-t border-slate-200 dark:border-slate-700">
-                      <div class="flex items-center justify-between gap-3">
-                        <div class="flex-1">
-                          <label class="text-xs font-medium text-slate-700 dark:text-slate-300">
-                            Alert-Triggered Analysis
-                          </label>
-                          <p class="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
-                            Analyze infrastructure when alerts fire.
-                          </p>
-                        </div>
-                        <Toggle
-                          checked={alertTriggeredAnalysis()}
-                          onChange={(e) => handleAlertTriggeredAnalysisChange(e.currentTarget.checked)}
-                          disabled={isUpdatingSettings() || alertAnalysisLocked()}
-                        />
-                      </div>
-                      <Show when={alertAnalysisLocked()}>
-                        <p class="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
-                          <a class="text-indigo-600 dark:text-indigo-400 font-medium hover:underline" href={getUpgradeActionUrlOrFallback('ai_alerts')} target="_blank" rel="noopener noreferrer" onClick={() => trackUpgradeClicked('ai_intelligence', 'ai_alerts')}>Upgrade to Pro</a>
-                          {' '}to enable alert-triggered analysis.
-                          <Show when={canStartTrial()}>
-                            {' '}
+                    <div class="flex items-center bg-slate-100 dark:bg-slate-900 rounded-lg p-1 border border-slate-200 dark:border-slate-800 shadow-inner">
+                      <For each={(['monitor', 'approval', 'assisted'] as PatrolAutonomyLevel[])}>
+                        {(level) => {
+                          const isProLocked = () => autoFixLocked() && level === 'assisted';
+                          const isDisabled = () => !patrolEnabledLocal() || isProLocked();
+                          const isActive = () => level === 'assisted'
+                            ? autonomyLevel() === 'assisted' || autonomyLevel() === 'full'
+                            : autonomyLevel() === level;
+
+                          return (
                             <button
-                              type="button"
-                              class="text-indigo-600 dark:text-indigo-400 font-medium hover:underline disabled:opacity-60"
-                              disabled={startingTrial()}
-                              onClick={handleStartTrial}
+                              onClick={() => handleAutonomyChange(level)}
+                              disabled={isDisabled()}
+                              title={isProLocked() ? 'Upgrade to Pro for automatic fixes' : undefined}
+                              class={`flex-1 py-1.5 px-2 text-xs font-semibold rounded-md transition-all duration-200 ${isActive()
+                                ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-[0_1px_3px_rgba(0,0,0,0.1)]'
+                                : isDisabled()
+                                  ? 'text-slate-400 dark:text-slate-600'
+                                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
+                                } ${isDisabled() ? 'opacity-50 cursor-not-allowed' : ''}`}
                             >
-                              Or start a free 14-day trial
+                              {level === 'monitor' ? 'Monitor' : level === 'approval' ? 'Investigate' : 'Auto-fix'}
                             </button>
-                          </Show>
+                          );
+                        }}
+                      </For>
+                    </div>
+                  </div>
+
+                  {/* Toggles */}
+                  <div class="space-y-4 pt-4 border-t border-slate-100 dark:border-slate-700">
+                    <div class="flex items-start justify-between gap-3">
+                      <div class="flex-1">
+                        <label class="text-sm font-medium text-slate-800 dark:text-slate-200">Alert-Triggered Analysis</label>
+                        <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-tight">
+                          Analyze infrastructure automatically when critical alerts fire.
                         </p>
-                      </Show>
+                      </div>
+                      <Toggle
+                        checked={alertTriggeredAnalysis()}
+                        onChange={(e) => handleAlertTriggeredAnalysisChange(e.currentTarget.checked)}
+                        disabled={isUpdatingSettings() || alertAnalysisLocked()}
+                      />
                     </div>
 
+                    <Show when={alertAnalysisLocked()}>
+                      <div class="-my-1 pl-1 text-[11px] text-slate-500">
+                        <a href={getUpgradeActionUrlOrFallback('ai_alerts')} target="_blank" class="text-indigo-500 font-medium hover:underline">Upgrade</a> to enable.
+                        <Show when={canStartTrial()}>
+                          <button type="button" onClick={handleStartTrial} disabled={startingTrial()} class="ml-1 text-indigo-500 hover:underline">Start free trial</button>
+                        </Show>
+                      </div>
+                    </Show>
 
+                    <div class="flex items-start justify-between gap-3">
+                      <div class="flex-1">
+                        <label class="text-sm font-medium text-red-600 dark:text-red-400">Auto-fix critical issues</label>
+                        <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-tight">
+                          Permit Patrol to execute critical remediations without approval.
+                        </p>
+                      </div>
+                      <Toggle
+                        checked={!autoFixLocked() && fullModeUnlocked()}
+                        onChange={(e) => setFullModeUnlocked(e.currentTarget.checked)}
+                        disabled={autoFixLocked() || !(autonomyLevel() === 'assisted' || autonomyLevel() === 'full')}
+                      />
+                    </div>
 
-                    {/* Save Button (for investigation limits + full mode unlock) */}
+                    <Show when={autoFixLocked()}>
+                      <div class="-mt-1 pl-1 text-[11px] text-slate-500">
+                        <a href={getUpgradeActionUrlOrFallback('ai_autofix')} target="_blank" class="text-indigo-500 font-medium hover:underline">Upgrade</a> to unlock auto-fix.
+                        <Show when={canStartTrial()}>
+                          <button type="button" onClick={handleStartTrial} disabled={startingTrial()} class="ml-1 text-indigo-500 hover:underline">Start free trial</button>
+                        </Show>
+                      </div>
+                    </Show>
+                  </div>
+
+                  {/* Save Footer */}
+                  <div class="pt-4 border-t border-slate-100 dark:border-slate-700">
                     <button
                       onClick={saveAdvancedSettings}
                       disabled={isSavingAdvanced()}
-                      class="w-full px-3 py-2 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 rounded-md transition-colors flex items-center justify-center gap-2"
+                      class="w-full py-2.5 text-sm font-medium text-white bg-slate-900 dark:bg-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-100 rounded-lg shadow-sm transition-all focus:ring-2 focus:ring-offset-2 focus:ring-slate-900 disabled:opacity-70 flex items-center justify-center gap-2"
                     >
                       <Show when={isSavingAdvanced()}>
-                        <div class="animate-spin h-3 w-3 border-2 border-white border-t-transparent rounded-full"></div>
+                        <div class="animate-spin w-4 h-4 border-2 border-current border-t-transparent rounded-full"></div>
                       </Show>
-                      <Show when={!isSavingAdvanced()}>Save</Show>
+                      <Show when={!isSavingAdvanced()}>Apply Configuration</Show>
                     </button>
                   </div>
+
                 </div>
-              </Show>
-            </div>
+              </div>
+            </Show>
           </div>
         </div>
       </div>

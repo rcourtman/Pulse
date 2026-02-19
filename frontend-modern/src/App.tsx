@@ -56,6 +56,7 @@ import BellIcon from 'lucide-solid/icons/bell';
 import SettingsIcon from 'lucide-solid/icons/settings';
 import Maximize2Icon from 'lucide-solid/icons/maximize-2';
 import Minimize2Icon from 'lucide-solid/icons/minimize-2';
+import ActivityIcon from 'lucide-solid/icons/activity';
 import { PulsePatrolLogo } from '@/components/Brand/PulsePatrolLogo';
 import { TokenRevealDialog } from './components/TokenRevealDialog';
 import { useAlertsActivation } from './stores/alertsActivation';
@@ -117,6 +118,7 @@ const AIIntelligencePage = lazy(() =>
 const MigrationGuidePage = lazy(() => import('./pages/MigrationGuide'));
 const NotFoundPage = lazy(() => import('./pages/NotFound'));
 const PricingPage = lazy(() => import('./pages/Pricing'));
+const OperationsPage = lazy(() => import('./pages/Operations'));
 const ROOT_INFRASTRUCTURE_PATH = buildInfrastructurePath();
 const ROOT_WORKLOADS_PATH = buildWorkloadsPath();
 const STORAGE_PATH = buildStoragePath();
@@ -1331,6 +1333,7 @@ function App() {
       <Route path="/alerts/*" component={AlertsPage} />
       <Route path="/ai/*" component={AIIntelligencePage} />
       <Route path="/settings/*" component={SettingsRoute} />
+      <Route path="/operations/*" component={OperationsPage} />
       <Route path="*all" component={NotFoundPage} />
     </Router>
   );
@@ -1588,6 +1591,17 @@ function AppLayout(props: {
         ),
         alwaysShow: true,
       })),
+      {
+        id: 'operations' as const,
+        label: 'Operations',
+        route: '/operations',
+        settingsRoute: '/operations',
+        tooltip: 'System operations, diagnostics, and reporting',
+        enabled: true,
+        live: true,
+        icon: <ActivityIcon class="w-4 h-4 shrink-0" />,
+        alwaysShow: true,
+      }
     ];
 
     // Filter out platforms that should be hidden when not configured
@@ -1640,6 +1654,17 @@ function AppLayout(props: {
         ),
         alwaysShow: true,
       })),
+      {
+        id: 'operations' as const,
+        label: 'Operations',
+        route: '/operations',
+        settingsRoute: '/operations',
+        tooltip: 'System operations, diagnostics, and reporting',
+        enabled: true,
+        live: true,
+        icon: <ActivityIcon class="w-4 h-4 shrink-0" />,
+        alwaysShow: true,
+      }
     ];
 
     return allPlatforms.filter(p => p.alwaysShow || p.enabled);
@@ -1943,7 +1968,7 @@ function AppLayout(props: {
           <div class="flex items-end gap-1 ml-auto" role="group" aria-label="System">
             <div class="flex items-end gap-1 pl-1 sm:pl-4">
               <For each={utilityTabs()}>
-              {(tab) => {
+                {(tab) => {
                   const isActive = () => getActiveTabDesktop() === tab.id;
                   const baseClasses =
                     'tab relative px-1.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium flex items-center gap-1 sm:gap-1.5 rounded-t border border-transparent transition-colors whitespace-nowrap cursor-pointer';
