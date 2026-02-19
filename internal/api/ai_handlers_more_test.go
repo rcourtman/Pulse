@@ -78,11 +78,11 @@ func TestAISettingsHandler_setSSECORSHeaders(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.setSSECORSHeaders(rec, req)
 
-	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "https://example.com" {
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "*" {
 		t.Fatalf("expected allow origin, got %q", got)
 	}
-	if got := rec.Header().Get("Access-Control-Allow-Credentials"); got != "true" {
-		t.Fatalf("expected credentials header, got %q", got)
+	if got := rec.Header().Get("Access-Control-Allow-Credentials"); got != "" {
+		t.Fatalf("expected no credentials header for wildcard origins, got %q", got)
 	}
 	if rec.Header().Get("Access-Control-Allow-Methods") == "" {
 		t.Fatalf("expected allow methods header")
@@ -90,8 +90,23 @@ func TestAISettingsHandler_setSSECORSHeaders(t *testing.T) {
 	if rec.Header().Get("Access-Control-Allow-Headers") == "" {
 		t.Fatalf("expected allow headers header")
 	}
+	if got := rec.Header().Get("Vary"); got != "" {
+		t.Fatalf("expected no Vary header for wildcard policy, got %q", got)
+	}
+
+	handler = newTestAISettingsHandler(&config.Config{AllowedOrigins: "https://allowed.com"}, nil, nil)
+	req = httptest.NewRequest(http.MethodGet, "/api/ai/stream", nil)
+	req.Header.Set("Origin", "https://allowed.com")
+	rec = httptest.NewRecorder()
+	handler.setSSECORSHeaders(rec, req)
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "https://allowed.com" {
+		t.Fatalf("expected allow origin for matched origin, got %q", got)
+	}
+	if got := rec.Header().Get("Access-Control-Allow-Credentials"); got != "true" {
+		t.Fatalf("expected credentials header for matched origin, got %q", got)
+	}
 	if got := rec.Header().Get("Vary"); got != "Origin" {
-		t.Fatalf("expected Vary=Origin, got %q", got)
+		t.Fatalf("expected Vary=Origin for matched origin, got %q", got)
 	}
 
 	handler = newTestAISettingsHandler(&config.Config{AllowedOrigins: "https://allowed.com"}, nil, nil)

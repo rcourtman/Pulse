@@ -433,13 +433,14 @@ type ChatRequest struct {
 // HandleChat handles POST /api/ai/chat - streaming chat
 func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 	// CORS
-	origin := r.Header.Get("Origin")
-	if origin != "" {
-		w.Header().Set("Access-Control-Allow-Origin", origin)
-		w.Header().Set("Access-Control-Allow-Credentials", "true")
-		w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Accept, Cookie")
-		w.Header().Set("Vary", "Origin")
+	if cfg := h.getConfig(r.Context()); cfg != nil {
+		applyConfiguredCORSHeaders(
+			w,
+			r.Header.Get("Origin"),
+			cfg.AllowedOrigins,
+			"POST, OPTIONS",
+			"Content-Type, Accept, Cookie",
+		)
 	}
 
 	if r.Method == http.MethodOptions {

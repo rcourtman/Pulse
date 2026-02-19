@@ -290,22 +290,7 @@ func (h *AISettingsHandler) setSSECORSHeaders(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if allowed == "*" {
-		w.Header().Set("Access-Control-Allow-Origin", origin)
-		w.Header().Set("Access-Control-Allow-Credentials", "true")
-	} else {
-		for _, o := range strings.Split(allowed, ",") {
-			if strings.TrimSpace(o) == origin {
-				w.Header().Set("Access-Control-Allow-Origin", origin)
-				w.Header().Set("Access-Control-Allow-Credentials", "true")
-				break
-			}
-		}
-	}
-
-	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Accept, Cookie")
-	w.Header().Set("Vary", "Origin")
+	applyConfiguredCORSHeaders(w, origin, allowed, "GET, POST, OPTIONS", "Content-Type, Accept, Cookie")
 }
 
 // SetStateProvider sets the state provider for infrastructure context

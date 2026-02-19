@@ -1,6 +1,7 @@
 package agentexec
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -211,6 +212,29 @@ func TestHandleWebSocket_FirstMessageMustBeRegister(t *testing.T) {
 	_, _, err = conn.ReadMessage()
 	if err == nil {
 		t.Fatalf("expected server to close connection")
+	}
+}
+
+func TestHandleWebSocket_RejectsOversizedRegistrationMessage(t *testing.T) {
+	s := NewServer(nil)
+	ts := newWSServer(t, s)
+	defer ts.Close()
+
+	conn, _, err := websocket.DefaultDialer.Dial(wsURLForHTTP(ts.URL), nil)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	defer conn.Close()
+
+	oversized := bytes.Repeat([]byte("x"), int(maxWebSocketMessageBytes)+1)
+	if err := conn.WriteMessage(websocket.TextMessage, oversized); err != nil {
+		t.Fatalf("WriteMessage: %v", err)
+	}
+
+	_ = conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+	_, _, err = conn.ReadMessage()
+	if err == nil {
+		t.Fatalf("expected server to close connection for oversized registration message")
 	}
 }
 

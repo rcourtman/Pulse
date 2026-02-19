@@ -590,13 +590,25 @@ func TestHandleAnswerQuestion_Error(t *testing.T) {
 }
 
 func TestHandleChat_Options(t *testing.T) {
-	h := newTestAIHandler(nil, nil, nil)
+	h := newTestAIHandler(&config.Config{AllowedOrigins: "*"}, nil, nil)
 	req := httptest.NewRequest("OPTIONS", "/api/ai/chat", nil)
 	req.Header.Set("Origin", "http://example.com")
 	w := httptest.NewRecorder()
 	h.HandleChat(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Equal(t, "http://example.com", w.Header().Get("Access-Control-Allow-Origin"))
+	assert.Equal(t, "*", w.Header().Get("Access-Control-Allow-Origin"))
+	assert.Equal(t, "", w.Header().Get("Access-Control-Allow-Credentials"))
+}
+
+func TestHandleChat_Options_DisallowedOrigin(t *testing.T) {
+	h := newTestAIHandler(&config.Config{AllowedOrigins: "https://allowed.com"}, nil, nil)
+	req := httptest.NewRequest("OPTIONS", "/api/ai/chat", nil)
+	req.Header.Set("Origin", "https://not-allowed.com")
+	w := httptest.NewRecorder()
+	h.HandleChat(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "", w.Header().Get("Access-Control-Allow-Origin"))
+	assert.Equal(t, "Origin", w.Header().Get("Vary"))
 }
 
 func TestHandleChat_MethodNotAllowed(t *testing.T) {

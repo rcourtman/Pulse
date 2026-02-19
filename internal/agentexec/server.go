@@ -263,6 +263,7 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		log.Error().Err(err).Str("remote_addr", remoteAddr).Msg("Failed to upgrade WebSocket connection")
 		return
 	}
+	conn.SetReadLimit(maxWebSocketMessageBytes)
 	closeConn := func(context string) {
 		if closeErr := conn.Close(); closeErr != nil {
 			log.Debug().Err(closeErr).Msg(context)
