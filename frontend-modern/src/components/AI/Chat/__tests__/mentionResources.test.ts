@@ -70,4 +70,108 @@ describe('mentionResources', () => {
     expect(nodes[0].name).toBe('pve01');
     expect(nodes[0].status).toBe('online');
   });
+
+  it('deduplicates node and host via linkedHostAgentId', () => {
+    const state = {
+      nodes: [
+        {
+          id: 'node/pve01',
+          instance: 'inst-1',
+          name: 'pve01',
+          status: 'online',
+          linkedHostAgentId: 'abc-123',
+        },
+      ],
+      vms: [],
+      containers: [],
+      dockerHosts: [],
+      hosts: [
+        {
+          id: 'abc-123',
+          hostname: 'pve01.local',
+          displayName: 'pve01',
+          status: 'online',
+          linkedNodeId: 'node/pve01',
+          lastSeen: Date.now(),
+          memory: { total: 16, used: 8, free: 8, usage: 50 },
+        },
+      ],
+    } as unknown as State;
+
+    const resources = buildMentionResources(state);
+    const nodeAndHostEntries = resources.filter(
+      (r) => r.type === 'node' || r.type === 'host',
+    );
+    expect(nodeAndHostEntries).toHaveLength(1);
+    expect(nodeAndHostEntries[0].type).toBe('node');
+    expect(nodeAndHostEntries[0].name).toBe('pve01');
+  });
+
+  it('deduplicates node and host via linkedNodeId', () => {
+    const state = {
+      nodes: [
+        {
+          id: 'node/pve02',
+          instance: 'inst-2',
+          name: 'pve02',
+          status: 'online',
+        },
+      ],
+      vms: [],
+      containers: [],
+      dockerHosts: [],
+      hosts: [
+        {
+          id: 'def-456',
+          hostname: 'pve02.local',
+          displayName: 'pve02',
+          status: 'online',
+          linkedNodeId: 'node/pve02',
+          lastSeen: Date.now(),
+          memory: { total: 16, used: 8, free: 8, usage: 50 },
+        },
+      ],
+    } as unknown as State;
+
+    const resources = buildMentionResources(state);
+    const nodeAndHostEntries = resources.filter(
+      (r) => r.type === 'node' || r.type === 'host',
+    );
+    expect(nodeAndHostEntries).toHaveLength(1);
+    expect(nodeAndHostEntries[0].type).toBe('node');
+  });
+
+  it('does not merge unrelated nodes and hosts', () => {
+    const state = {
+      nodes: [
+        {
+          id: 'node/pve01',
+          instance: 'inst-1',
+          name: 'pve01',
+          status: 'online',
+        },
+      ],
+      vms: [],
+      containers: [],
+      dockerHosts: [],
+      hosts: [
+        {
+          id: 'xyz-999',
+          hostname: 'standalone.local',
+          displayName: 'standalone',
+          status: 'online',
+          lastSeen: Date.now(),
+          memory: { total: 16, used: 8, free: 8, usage: 50 },
+        },
+      ],
+    } as unknown as State;
+
+    const resources = buildMentionResources(state);
+    const nodeAndHostEntries = resources.filter(
+      (r) => r.type === 'node' || r.type === 'host',
+    );
+    expect(nodeAndHostEntries).toHaveLength(2);
+    expect(nodeAndHostEntries.find((r) => r.type === 'node')).toBeDefined();
+    expect(nodeAndHostEntries.find((r) => r.type === 'host')).toBeDefined();
+  });
 });

@@ -204,6 +204,8 @@ export function buildMentionResources(state: MentionStateSubset): MentionResourc
       [
         `node-id:${node.instance}:${node.name}`,
         nodeAlias(node.instance, node.clusterName, node.name),
+        ...(node.linkedHostAgentId ? [`host-link:${node.linkedHostAgentId}`] : []),
+        `node-backend-id:${node.id}`,
       ],
     );
   }
@@ -223,6 +225,8 @@ export function buildMentionResources(state: MentionStateSubset): MentionResourc
         `agent-host-id:${host.id}`,
         `host-name:${hostName}`,
         `host-hostname:${host.hostname}`,
+        `host-link:${host.id}`,
+        ...(host.linkedNodeId ? [`node-backend-id:${host.linkedNodeId}`] : []),
       ],
     );
   }
