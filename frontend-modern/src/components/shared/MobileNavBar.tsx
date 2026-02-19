@@ -36,6 +36,7 @@ type MobileNavBarProps = {
 export function MobileNavBar(props: MobileNavBarProps) {
   let navRef: HTMLDivElement | undefined;
   const [showFade, setShowFade] = createSignal(false);
+  const [showLeftFade, setShowLeftFade] = createSignal(false);
 
   const orderedPlatformTabs = createMemo(() => {
     const tabs = props.platformTabs();
@@ -82,6 +83,7 @@ export function MobileNavBar(props: MobileNavBarProps) {
     }
     const maxScrollLeft = navRef.scrollWidth - navRef.clientWidth;
     setShowFade(maxScrollLeft > 1 && navRef.scrollLeft < maxScrollLeft - 1);
+    setShowLeftFade(navRef.scrollLeft > 1);
   };
 
   createEffect(() => {
@@ -141,12 +143,12 @@ export function MobileNavBar(props: MobileNavBarProps) {
     <>
       {/* Bottom navigation bar */}
       <nav
-        class="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white/95 backdrop-blur dark:border-gray-700 dark:bg-gray-900/95 md:hidden pb-safe"
+        class="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200/90 bg-white/92 backdrop-blur-md dark:border-gray-700/90 dark:bg-gray-900/92 md:hidden pb-safe"
       >
         <div class="relative">
           <div
             ref={(el) => (navRef = el)}
-            class="flex items-center gap-1 overflow-x-auto scrollbar-hide px-2 py-2"
+            class="flex items-center gap-1 overflow-x-auto scrollbar-hide px-2 py-1.5"
             role="tablist"
             aria-label="Mobile navigation"
           >
@@ -157,8 +159,8 @@ export function MobileNavBar(props: MobileNavBarProps) {
                   data-tab-id={platform.id}
                   onClick={() => handlePlatformClick(platform)}
                   title={platform.tooltip}
-                  class={`relative flex shrink-0 flex-col items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-medium transition-colors ${props.activeTab() === platform.id
-                    ? 'text-blue-600 dark:text-blue-400'
+                  class={`relative flex min-h-10 shrink-0 flex-col items-center gap-1 rounded-md px-2 py-1.5 text-[11px] font-medium transition-colors ${props.activeTab() === platform.id
+                    ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
                     : 'text-gray-500 dark:text-gray-400'
                     } ${platform.enabled ? '' : 'opacity-70'}`}
                 >
@@ -187,8 +189,8 @@ export function MobileNavBar(props: MobileNavBarProps) {
                   data-tab-id={tab.id}
                   onClick={() => handleUtilityClick(tab)}
                   title={tab.tooltip}
-                  class={`relative flex shrink-0 flex-col items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-medium transition-colors ${props.activeTab() === tab.id
-                    ? 'text-blue-600 dark:text-blue-400'
+                  class={`relative flex min-h-10 shrink-0 flex-col items-center gap-1 rounded-md px-2 py-1.5 text-[11px] font-medium transition-colors ${props.activeTab() === tab.id
+                    ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
                     : 'text-gray-500 dark:text-gray-400'
                     }`}
                 >
@@ -210,8 +212,11 @@ export function MobileNavBar(props: MobileNavBarProps) {
             </For>
           </div>
 
+          <Show when={showLeftFade()}>
+            <div class="pointer-events-none absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-white/90 via-white/70 to-transparent dark:from-gray-900/90 dark:via-gray-900/65"></div>
+          </Show>
           <Show when={showFade()}>
-            <div class="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-white via-white/80 to-transparent dark:from-gray-900/95 dark:via-gray-900/70"></div>
+            <div class="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-white/90 via-white/70 to-transparent dark:from-gray-900/90 dark:via-gray-900/65"></div>
           </Show>
         </div>
       </nav>

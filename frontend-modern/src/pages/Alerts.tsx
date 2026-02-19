@@ -2197,7 +2197,7 @@ export function Alerts() {
                           type="button"
                           aria-disabled={areAlertsDisabled()}
                           disabled={areAlertsDisabled()}
-                          class={`px-3 py-1.5 sm:px-4 sm:py-2 text-[11px] sm:text-xs font-medium rounded-md transition-all whitespace-nowrap ${areAlertsDisabled()
+                          class={`flex-1 min-w-0 px-2 py-1.5 sm:px-4 sm:py-2 text-[11px] sm:text-xs font-medium rounded-md transition-all ${areAlertsDisabled()
                             ? 'cursor-not-allowed text-gray-400 dark:text-gray-500 bg-gray-200/60 dark:bg-gray-800/60'
                             : activeTab() === tab.id
                               ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
@@ -2205,7 +2205,7 @@ export function Alerts() {
                             }`}
                           onClick={() => handleTabChange(tab.id)}
                         >
-                          {tab.label}
+                          <span class="w-full text-center truncate block">{tab.label}</span>
                         </button>
                       )}
                     </For>
