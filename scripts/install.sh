@@ -79,7 +79,7 @@ KUBECONFIG_PATH=""  # Path to kubeconfig file for Kubernetes monitoring
 KUBE_INCLUDE_ALL_PODS="false"
 KUBE_INCLUDE_ALL_DEPLOYMENTS="false"
 DISK_EXCLUDES=()  # Array for multiple --disk-exclude values
-CURL_CA_BUNDLE="" # Path to CA bundle to supply to curl
+CURL_CA_BUNDLE="" # Path to CA bundle for curl and agent TLS (sets SSL_CERT_FILE)
 
 # Track if flags were explicitly set (to override auto-detection)
 DOCKER_EXPLICIT="false"
@@ -123,7 +123,7 @@ Options:
   --hostname <name>       Override hostname reported to Pulse
   --disk-exclude <path>   Exclude mount point (repeatable)
   --insecure              Skip TLS verification
-  --cacert <path>         Provide path to custom CA bundle for curl
+  --cacert <path>         Custom CA certificate for TLS (used by curl and agent)
   --enable-commands       Enable AI command execution
   --uninstall             Remove the agent
   --help, -h              Show this help
@@ -354,6 +354,24 @@ fi
 # (e.g., http://host:7655//download/... which would match frontend routes)
 if [[ -n "$PULSE_URL" ]]; then
     PULSE_URL="${PULSE_URL%/}"
+fi
+
+# --- CA Certificate Validation ---
+# --cacert must point to a PEM file (matches curl --cacert behaviour).
+# The same path is passed to the agent process via SSL_CERT_FILE so that
+# Go's crypto/x509 trusts the custom CA at runtime.
+SSL_CERT_ENV_NAME=""
+SSL_CERT_ENV_VALUE=""
+if [[ -n "$CURL_CA_BUNDLE" ]]; then
+    if [[ -f "$CURL_CA_BUNDLE" ]]; then
+        SSL_CERT_ENV_NAME="SSL_CERT_FILE"
+        SSL_CERT_ENV_VALUE="$CURL_CA_BUNDLE"
+        log_info "CA certificate: ${CURL_CA_BUNDLE} (will set SSL_CERT_FILE for agent)"
+    elif [[ -d "$CURL_CA_BUNDLE" ]]; then
+        fail "--cacert requires a PEM file, not a directory. Try: --cacert ${CURL_CA_BUNDLE}/<cert-name>.pem"
+    else
+        fail "--cacert path does not exist: ${CURL_CA_BUNDLE}"
+    fi
 fi
 
 # --- Platform Auto-Detection ---
@@ -872,6 +890,16 @@ if [[ "$OS" == "darwin" ]]; then
         <string>${pattern}</string>"
     done
 
+    PLIST_ENV=""
+    if [[ -n "$SSL_CERT_ENV_NAME" ]]; then
+        PLIST_ENV="
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>${SSL_CERT_ENV_NAME}</key>
+        <string>${SSL_CERT_ENV_VALUE}</string>
+    </dict>"
+    fi
+
     cat > "$PLIST" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -882,7 +910,7 @@ if [[ "$OS" == "darwin" ]]; then
     <key>ProgramArguments</key>
     <array>
 ${PLIST_ARGS}
-    </array>
+    </array>${PLIST_ENV}
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
@@ -920,6 +948,11 @@ if [[ -d /usr/syno ]] && [[ -f /etc/VERSION ]]; then
         UNIT="/etc/systemd/system/${AGENT_NAME}.service"
         log_info "Configuring systemd service at $UNIT (DSM 7+)..."
 
+        SYSTEMD_ENV=""
+        if [[ -n "$SSL_CERT_ENV_NAME" ]]; then
+            SYSTEMD_ENV=$'\n'"Environment=${SSL_CERT_ENV_NAME}=${SSL_CERT_ENV_VALUE}"
+        fi
+
         cat > "$UNIT" <<EOF
 [Unit]
 Description=Pulse Unified Agent
@@ -928,7 +961,7 @@ StartLimitIntervalSec=0
 
 [Service]
 Type=simple
-ExecStart=${INSTALL_DIR}/${BINARY_NAME} ${EXEC_ARGS}
+ExecStart=${INSTALL_DIR}/${BINARY_NAME} ${EXEC_ARGS}${SYSTEMD_ENV}
 Restart=always
 RestartSec=5s
 
@@ -943,6 +976,11 @@ EOF
         CONF="/etc/init/${AGENT_NAME}.conf"
         log_info "Configuring Upstart service at $CONF (DSM 6.x)..."
 
+        UPSTART_ENV=""
+        if [[ -n "$SSL_CERT_ENV_NAME" ]]; then
+            UPSTART_ENV=$'\n'"env ${SSL_CERT_ENV_NAME}=${SSL_CERT_ENV_VALUE}"
+        fi
+
         cat > "$CONF" <<EOF
 description "Pulse Unified Agent"
 author "Pulse"
@@ -951,7 +989,7 @@ start on syno.network.ready
 stop on runlevel [06]
 
 respawn
-respawn limit 5 10
+respawn limit 5 10${UPSTART_ENV}
 
 exec ${INSTALL_DIR}/${BINARY_NAME} ${EXEC_ARGS} >> ${LOG_FILE} 2>&1
 EOF
@@ -1006,6 +1044,10 @@ if [[ -f /etc/unraid-version ]]; then
 
     # Create a wrapper script that will be called from /boot/config/go
     # This script copies from persistent storage to RAM disk on boot, then starts the agent
+    EXPORT_SSL_CERT_FILE=""
+    if [[ -n "$SSL_CERT_ENV_NAME" ]]; then
+        EXPORT_SSL_CERT_FILE=$'\n'"export ${SSL_CERT_ENV_NAME}=\"${SSL_CERT_ENV_VALUE}\""
+    fi
     WRAPPER_SCRIPT="${UNRAID_STORAGE_DIR}/start-pulse-agent.sh"
     cat > "$WRAPPER_SCRIPT" <<EOF
 #!/bin/bash
@@ -1021,7 +1063,7 @@ sleep 2
 
 # Copy binary from persistent storage to RAM disk (needed after reboot)
 cp "${UNRAID_STORED_BINARY}" "${RUNTIME_BINARY}"
-chmod +x "${RUNTIME_BINARY}"
+chmod +x "${RUNTIME_BINARY}"${EXPORT_SSL_CERT_FILE}
 
 # Watchdog loop: restart agent if it exits
 # Uses exponential backoff to prevent rapid restart loops
@@ -1177,6 +1219,11 @@ if [[ "$TRUENAS" == true ]]; then
             TRUENAS_LOG_TARGET="$TRUENAS_LOG_FILE"
         fi
 
+        SYSTEMD_ENV=""
+        if [[ -n "$SSL_CERT_ENV_NAME" ]]; then
+            SYSTEMD_ENV=$'\n'"Environment=${SSL_CERT_ENV_NAME}=${SSL_CERT_ENV_VALUE}"
+        fi
+
         cat > "$TRUENAS_SERVICE_STORAGE" <<EOF
 [Unit]
 Description=Pulse Unified Agent
@@ -1186,7 +1233,7 @@ StartLimitIntervalSec=0
 
 [Service]
 Type=simple
-ExecStart=${TRUENAS_RUNTIME_BINARY} ${EXEC_ARGS}
+ExecStart=${TRUENAS_RUNTIME_BINARY} ${EXEC_ARGS}${SYSTEMD_ENV}
 Restart=always
 RestartSec=5s
 User=root
@@ -1221,6 +1268,7 @@ pulse_agent_start()
 {
     if checkyesno ${rcvar}; then
         echo "Starting ${name}."
+        SSL_CERT_FILE_PLACEHOLDER
         /usr/sbin/daemon -r -p ${pidfile} -f ${command} ${command_args}
     fi
 }
@@ -1254,6 +1302,12 @@ RCEOF
             sed -i "s|RUNTIME_BINARY_PLACEHOLDER|${TRUENAS_RUNTIME_BINARY}|g" "$TRUENAS_SERVICE_STORAGE"
         sed -i '' "s|EXEC_ARGS_PLACEHOLDER|${EXEC_ARGS}|g" "$TRUENAS_SERVICE_STORAGE" 2>/dev/null || \
             sed -i "s|EXEC_ARGS_PLACEHOLDER|${EXEC_ARGS}|g" "$TRUENAS_SERVICE_STORAGE"
+        SSL_CERT_LINE=""
+        if [[ -n "$SSL_CERT_ENV_NAME" ]]; then
+            SSL_CERT_LINE="export ${SSL_CERT_ENV_NAME}=\"${SSL_CERT_ENV_VALUE}\""
+        fi
+        sed -i '' "s|SSL_CERT_FILE_PLACEHOLDER|${SSL_CERT_LINE}|g" "$TRUENAS_SERVICE_STORAGE" 2>/dev/null || \
+            sed -i "s|SSL_CERT_FILE_PLACEHOLDER|${SSL_CERT_LINE}|g" "$TRUENAS_SERVICE_STORAGE"
 
         chmod +x "$TRUENAS_SERVICE_STORAGE"
     fi
@@ -1464,6 +1518,7 @@ error_log="/var/log/pulse-agent.log"
 
 # Ensure log file exists
 start_pre() {
+    SSL_CERT_FILE_PLACEHOLDER
     touch "$output_log"
 }
 
@@ -1477,6 +1532,11 @@ INITEOF
     sed -i "s|INSTALL_DIR_PLACEHOLDER|${INSTALL_DIR}|g" "$INITSCRIPT"
     sed -i "s|BINARY_NAME_PLACEHOLDER|${BINARY_NAME}|g" "$INITSCRIPT"
     sed -i "s|EXEC_ARGS_PLACEHOLDER|${EXEC_ARGS}|g" "$INITSCRIPT"
+    SSL_CERT_LINE=""
+    if [[ -n "$SSL_CERT_ENV_NAME" ]]; then
+        SSL_CERT_LINE="export ${SSL_CERT_ENV_NAME}=\"${SSL_CERT_ENV_VALUE}\""
+    fi
+    sed -i "s|SSL_CERT_FILE_PLACEHOLDER|${SSL_CERT_LINE}|g" "$INITSCRIPT"
 
     chmod +x "$INITSCRIPT"
     rc-service "${AGENT_NAME}" stop 2>/dev/null || true
@@ -1524,6 +1584,7 @@ pulse_agent_start()
 {
     if checkyesno ${rcvar}; then
         echo "Starting ${name}."
+        SSL_CERT_FILE_PLACEHOLDER
         /usr/sbin/daemon -r -p ${pidfile} -f ${command} ${command_args}
     fi
 }
@@ -1560,6 +1621,12 @@ RCEOF
         sed -i "s|BINARY_NAME_PLACEHOLDER|${BINARY_NAME}|g" "$RCSCRIPT"
     sed -i '' "s|EXEC_ARGS_PLACEHOLDER|${EXEC_ARGS}|g" "$RCSCRIPT" 2>/dev/null || \
         sed -i "s|EXEC_ARGS_PLACEHOLDER|${EXEC_ARGS}|g" "$RCSCRIPT"
+    SSL_CERT_LINE=""
+    if [[ -n "$SSL_CERT_ENV_NAME" ]]; then
+        SSL_CERT_LINE="export ${SSL_CERT_ENV_NAME}=\"${SSL_CERT_ENV_VALUE}\""
+    fi
+    sed -i '' "s|SSL_CERT_FILE_PLACEHOLDER|${SSL_CERT_LINE}|g" "$RCSCRIPT" 2>/dev/null || \
+        sed -i "s|SSL_CERT_FILE_PLACEHOLDER|${SSL_CERT_LINE}|g" "$RCSCRIPT"
 
     chmod +x "$RCSCRIPT"
 
@@ -1640,6 +1707,11 @@ if command -v systemctl >/dev/null 2>&1; then
         EXEC_ARGS="$EXEC_ARGS --disk-exclude '${pattern}'"
     done
 
+    SYSTEMD_ENV=""
+    if [[ -n "$SSL_CERT_ENV_NAME" ]]; then
+        SYSTEMD_ENV=$'\n'"Environment=${SSL_CERT_ENV_NAME}=${SSL_CERT_ENV_VALUE}"
+    fi
+
     cat > "$UNIT" <<EOF
 [Unit]
 Description=Pulse Unified Agent
@@ -1649,7 +1721,7 @@ StartLimitIntervalSec=0
 
 [Service]
 Type=simple
-ExecStart=${INSTALL_DIR}/${BINARY_NAME} ${EXEC_ARGS}
+ExecStart=${INSTALL_DIR}/${BINARY_NAME} ${EXEC_ARGS}${SYSTEMD_ENV}
 Restart=always
 RestartSec=5s
 User=root
@@ -1704,6 +1776,7 @@ DAEMON="INSTALL_DIR_PLACEHOLDER/BINARY_NAME_PLACEHOLDER"
 DAEMON_ARGS="EXEC_ARGS_PLACEHOLDER"
 PIDFILE="/var/run/${NAME}.pid"
 LOGFILE="/var/log/${NAME}.log"
+SSL_CERT_FILE_PLACEHOLDER
 
 # Exit if the binary is not installed
 [ -x "$DAEMON" ] || exit 0
@@ -1803,6 +1876,11 @@ INITEOF
     sed -i "s|INSTALL_DIR_PLACEHOLDER|${INSTALL_DIR}|g" "$INITSCRIPT"
     sed -i "s|BINARY_NAME_PLACEHOLDER|${BINARY_NAME}|g" "$INITSCRIPT"
     sed -i "s|EXEC_ARGS_PLACEHOLDER|${EXEC_ARGS}|g" "$INITSCRIPT"
+    SSL_CERT_LINE=""
+    if [[ -n "$SSL_CERT_ENV_NAME" ]]; then
+        SSL_CERT_LINE="export ${SSL_CERT_ENV_NAME}=\"${SSL_CERT_ENV_VALUE}\""
+    fi
+    sed -i "s|SSL_CERT_FILE_PLACEHOLDER|${SSL_CERT_LINE}|g" "$INITSCRIPT"
 
     chmod +x "$INITSCRIPT"
 
