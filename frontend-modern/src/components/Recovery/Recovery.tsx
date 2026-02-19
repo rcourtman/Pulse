@@ -1321,7 +1321,7 @@ const Recovery: Component = () => {
                   class="absolute bottom-0 left-10 right-10 top-2 overflow-x-auto"
                   style="scrollbar-width: none; -ms-overflow-style: none;"
                 >
-                  <div class="relative h-full min-w-[700px] px-2">
+                  <div class="relative h-full px-2">
                     <div class="absolute inset-x-0 bottom-6 top-0">
                       <For each={timeline().axisTicks}>
                         {(tick) => {
