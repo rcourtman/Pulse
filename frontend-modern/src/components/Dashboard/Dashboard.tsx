@@ -843,9 +843,20 @@ export function Dashboard(props: DashboardProps) {
   );
   const visibleColumns = columnVisibility.visibleColumns;
   const visibleColumnIds = createMemo(() => visibleColumns().map(c => c.id));
+  // Mobile: restrict to the essential columns only so the table fits without horizontal scroll.
+  // Secondary data (uptime, IP, node, I/O, etc.) is accessible via the row detail drawer.
+  const MOBILE_ESSENTIAL_COLS = new Set(['name', 'cpu', 'memory', 'disk', 'link']);
+  const mobileVisibleColumns = createMemo(() =>
+    isMobile()
+      ? visibleColumns().filter(c => MOBILE_ESSENTIAL_COLS.has(c.id))
+      : visibleColumns()
+  );
+  const mobileVisibleColumnIds = createMemo(() =>
+    isMobile() ? mobileVisibleColumns().map(c => c.id) : visibleColumnIds()
+  );
 
   // Total columns for colspan calculations
-  const totalColumns = createMemo(() => visibleColumns().length);
+  const totalColumns = createMemo(() => mobileVisibleColumns().length);
 
   // Helper function to refresh guest metadata from server
   const refreshGuestMetadata = async () => {
@@ -1587,10 +1598,10 @@ export function Dashboard(props: DashboardProps) {
               class="overflow-x-auto"
               style={{ '-webkit-overflow-scrolling': 'touch' }}
             >
-              <table class="w-full border-collapse whitespace-nowrap" style={{ "table-layout": "fixed", "min-width": isMobile() ? "940px" : "900px" }}>
+              <table class="w-full border-collapse whitespace-nowrap" style={{ "table-layout": "fixed", "min-width": isMobile() ? "330px" : "900px" }}>
                 <thead>
                   <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
-                    <For each={visibleColumns()}>
+                    <For each={mobileVisibleColumns()}>
                       {(col) => {
                         const isFirst = () => col.id === visibleColumns()[0]?.id;
                         const sortKeyForCol = col.sortKey as WorkloadSortKey | undefined;
@@ -1604,9 +1615,11 @@ export function Dashboard(props: DashboardProps) {
                                   ${isSortable ? 'cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600' : ''}`}
                             style={{
                               ...((['cpu', 'memory', 'disk'].includes(col.id))
-                                ? { "width": isMobile() ? "80px" : "140px" }
+                                ? { "width": isMobile() ? "70px" : "140px" }
                                 : (['netIo', 'diskIo'].includes(col.id))
                                   ? { "width": isMobile() ? "170px" : "170px" }
+                                : (isMobile() && col.id === 'name')
+                                  ? { "width": "100%", "min-width": "120px" }
                                 : (col.width ? { "width": col.width } : {})),
                               "vertical-align": 'middle',
                             }}
@@ -1697,7 +1710,7 @@ export function Dashboard(props: DashboardProps) {
                                     parentNodeOnline={parentNodeOnline()}
                                     onCustomUrlUpdate={handleCustomUrlUpdate}
                                     isGroupedView={groupingMode() === 'grouped'}
-                                    visibleColumnIds={visibleColumnIds()}
+                                    visibleColumnIds={mobileVisibleColumnIds()}
                                     onClick={() => setSelectedGuestId(selectedGuestId() === guestId() ? null : guestId())}
                                     isExpanded={selectedGuestId() === guestId()}
                                     ioEmphasis={workloadIOEmphasis()}
