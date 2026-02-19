@@ -9,6 +9,15 @@ import {
   computeWorkloadStats,
 } from '../workloadSelectors';
 
+// Stub ResizeObserver for jsdom
+if (typeof globalThis.ResizeObserver === 'undefined') {
+  globalThis.ResizeObserver = class ResizeObserver {
+    observe() { }
+    unobserve() { }
+    disconnect() { }
+  } as unknown as typeof ResizeObserver;
+}
+
 let mockLocationSearch = '';
 let mockWorkloads: Array<Record<string, unknown>> = [];
 let setMockWorkloadsSignal: ((next: Array<Record<string, unknown>>) => void) | null = null;

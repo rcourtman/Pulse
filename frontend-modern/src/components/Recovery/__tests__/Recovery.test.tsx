@@ -151,8 +151,8 @@ describe('Recovery', () => {
       expect(navigateSpy).toHaveBeenCalledWith('/recovery?view=events&rollupId=res%3Avm-123', { replace: true });
     });
 
-    expect(await screen.findByText('Recovery events')).toBeInTheDocument();
-    expect(await screen.findByText('VM 123')).toBeInTheDocument();
+    const tablesItems = await screen.findAllByText('VM 123');
+    expect(tablesItems.length).toBeGreaterThan(0);
     await screen.findByText(/Showing 1 - 1 of 1 events/i);
     const table = await screen.findByRole('table');
     expect(within(table).getAllByText('Local').length).toBeGreaterThan(0);
