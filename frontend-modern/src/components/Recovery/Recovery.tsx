@@ -1349,7 +1349,7 @@ const Recovery: Component = () => {
 
                     <div
                       class="absolute inset-x-0 bottom-6 top-0 flex items-stretch gap-[3px]"
-                      style="touch-action: pan-y;"
+                      style="touch-action: none;"
                       onTouchStart={(e) => {
                         const rect = e.currentTarget.getBoundingClientRect();
                         const x = Math.max(0, e.touches[0].clientX - rect.left);
@@ -1382,7 +1382,7 @@ const Recovery: Component = () => {
                             <div class="flex-1">
                               <button
                                 type="button"
-                                class={`h-full w-full rounded-sm transition-colors ${
+                                class={`h-full w-full rounded-sm ${
                                   isSelected ? 'bg-blue-100 dark:bg-blue-900/30' : 'hover:bg-gray-200 dark:hover:bg-gray-700/70'
                                 }`}
                                 aria-label={`${prettyDateLabel(point.key)}: ${total} recovery points`}
