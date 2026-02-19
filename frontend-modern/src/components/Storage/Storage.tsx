@@ -567,7 +567,7 @@ const Storage: Component = () => {
                           <th class="px-1.5 sm:px-2 py-1">Node</th>
                         </Show>
                         <th class="px-1.5 sm:px-2 py-1 hidden md:table-cell">Type</th>
-                        <th class="px-1.5 sm:px-2 py-1 min-w-[120px] md:min-w-[180px]">Capacity</th>
+                        <th class="px-1.5 sm:px-2 py-1 md:min-w-[180px]">Capacity</th>
                         <th class="px-1.5 sm:px-2 py-1 w-[120px] hidden md:table-cell">Trend</th>
                         <th class="px-1.5 sm:px-2 py-1">Health</th>
                         <th class="px-1.5 sm:px-2 py-1 w-10" />

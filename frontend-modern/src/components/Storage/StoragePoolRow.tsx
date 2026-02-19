@@ -128,7 +128,7 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
         </td>
 
         {/* Capacity bar */}
-        <td class="px-1.5 sm:px-2 py-1 min-w-[120px] md:min-w-[180px]">
+        <td class="px-1.5 sm:px-2 py-1 md:min-w-[180px]">
           <Show
             when={totalBytes() > 0}
             fallback={<span class="text-xs text-gray-400">n/a</span>}

@@ -1060,7 +1060,7 @@ const Recovery: Component = () => {
                   <tr class="border-b border-gray-200 bg-gray-50 text-left text-[10px] uppercase tracking-wide text-gray-500 dark:border-gray-700 dark:bg-gray-800/70 dark:text-gray-400">
                     {([['subject', 'Subject'], ['source', 'Source'], ['lastBackup', 'Last Backup'], ['outcome', 'Outcome']] as const).map(([col, label]) => (
                       <th
-                        class="px-1.5 sm:px-2 py-1 cursor-pointer select-none hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                        class={`px-1.5 sm:px-2 py-1 cursor-pointer select-none hover:text-gray-700 dark:hover:text-gray-200 transition-colors${col === 'source' ? ' hidden md:table-cell' : ''}`}
                         onClick={() => toggleProtectedSort(col)}
                       >
                         <span class="inline-flex items-center gap-1">
@@ -1126,7 +1126,7 @@ const Recovery: Component = () => {
                               </Show>
                             </div>
                           </td>
-                          <td class="whitespace-nowrap px-1.5 sm:px-2 py-1">
+                          <td class="hidden md:table-cell whitespace-nowrap px-1.5 sm:px-2 py-1">
                             <div class="flex flex-wrap gap-1.5">
                               <For each={providers}>
                                 {(p) => {
