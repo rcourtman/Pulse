@@ -762,7 +762,7 @@ export function AIIntelligence() {
             </button>
 
             <Show when={showAdvancedSettings()}>
-              <div class="absolute right-0 top-10 z-50 w-[340px] p-5 bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-slate-200/80 dark:border-slate-700/80 animate-slide-up transform origin-top-right">
+              <div class="absolute right-0 top-10 z-50 w-[340px] p-5 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 animate-slide-up transform origin-top-right">
                 <div class="flex items-center justify-between mb-5 pb-3 border-b border-slate-100 dark:border-slate-700">
                   <h4 class="text-base font-semibold tracking-tight text-slate-900 dark:text-white">Patrol Configuration</h4>
                   <button
@@ -827,7 +827,7 @@ export function AIIntelligence() {
                         Operational Mode
                         <div class="relative group">
                           <CircleHelpIcon class="w-3.5 h-3.5 text-slate-400 cursor-help" />
-                          <div class="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover:block w-64 p-3 bg-slate-800 text-white rounded-lg shadow-xl text-xs z-50 pointer-events-none before:absolute before:top-full before:left-1/2 before:-translate-x-1/2 before:border-4 before:border-transparent before:border-t-slate-800">
+                          <div class="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover:block w-64 p-3 bg-slate-800 text-white rounded-md shadow-md text-xs z-50 pointer-events-none before:absolute before:top-full before:left-1/2 before:-translate-x-1/2 before:border-4 before:border-transparent before:border-t-slate-800">
                             <strong>Monitor:</strong> Detect only.<br />
                             <strong>Investigate:</strong> Detect & propose fixes.<br />
                             <strong>Auto-fix:</strong> Execute safe fixes automatically.

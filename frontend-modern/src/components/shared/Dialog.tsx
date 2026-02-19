@@ -116,7 +116,7 @@ export const Dialog: Component<DialogProps> = (props) => {
       <Portal mount={document.body}>
         <div class="fixed inset-0 z-[1000]">
           <div
-            class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity duration-300"
+            class="absolute inset-0 bg-slate-900/50 transition-opacity duration-300"
             data-dialog-backdrop
             onClick={handleBackdropClick}
           />
@@ -133,7 +133,7 @@ export const Dialog: Component<DialogProps> = (props) => {
                 aria-describedby={props.ariaDescribedBy}
                 tabindex="-1"
                 data-dialog-panel
-                class={`relative flex w-full max-h-[calc(100dvh-2rem)] flex-col overflow-hidden rounded-xl bg-white/95 dark:bg-slate-900/90 backdrop-blur-xl border border-white/20 dark:border-white/10 shadow-2xl outline-none pointer-events-auto animate-slide-up ${props.panelClass ?? 'max-w-lg'
+                class={`relative flex w-full max-h-[calc(100dvh-2rem)] flex-col overflow-hidden rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl outline-none pointer-events-auto animate-slide-up ${props.panelClass ?? 'max-w-lg'
                   }`.trim()}
                 onClick={(event) => event.stopPropagation()}
               >

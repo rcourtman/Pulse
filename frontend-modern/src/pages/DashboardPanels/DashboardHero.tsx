@@ -23,32 +23,32 @@ import type { DashboardRecoverySummary } from '@/hooks/useDashboardRecovery';
 
 const CARD_THEMES = {
     blue: {
-        iconBg: 'bg-gradient-to-br from-blue-500/10 to-blue-600/5 dark:from-blue-400/20 dark:to-blue-600/10',
+        iconBg: 'bg-blue-50 dark:bg-blue-900',
         iconColor: 'text-blue-600 dark:text-blue-400',
-        hoverBorder: 'hover:border-blue-400/60 dark:hover:border-blue-500/60 hover:shadow-[0_4px_20px_rgba(59,130,246,0.15)] dark:hover:shadow-[0_4px_20px_rgba(59,130,246,0.1)]',
-        hoverIconBg: 'group-hover:from-blue-500/20 group-hover:to-blue-600/10 dark:group-hover:from-blue-400/30 dark:group-hover:to-blue-600/20',
-        glowBg: 'group-hover:bg-blue-50/50 dark:group-hover:bg-blue-900/5',
+        hoverBorder: 'hover:border-blue-300 dark:hover:border-blue-700 hover:shadow-sm dark:hover:shadow-none',
+        hoverIconBg: 'group-hover:bg-blue-100 dark:group-hover:bg-blue-800',
+        glowBg: 'group-hover:bg-slate-50 dark:group-hover:bg-slate-900',
     },
     purple: {
-        iconBg: 'bg-gradient-to-br from-purple-500/10 to-purple-600/5 dark:from-purple-400/20 dark:to-purple-600/10',
+        iconBg: 'bg-purple-50 dark:bg-purple-900',
         iconColor: 'text-purple-600 dark:text-purple-400',
-        hoverBorder: 'hover:border-purple-400/60 dark:hover:border-purple-500/60 hover:shadow-[0_4px_20px_rgba(168,85,247,0.15)] dark:hover:shadow-[0_4px_20px_rgba(168,85,247,0.1)]',
-        hoverIconBg: 'group-hover:from-purple-500/20 group-hover:to-purple-600/10 dark:group-hover:from-purple-400/30 dark:group-hover:to-purple-600/20',
-        glowBg: 'group-hover:bg-purple-50/50 dark:group-hover:bg-purple-900/5',
+        hoverBorder: 'hover:border-purple-300 dark:hover:border-purple-700 hover:shadow-sm dark:hover:shadow-none',
+        hoverIconBg: 'group-hover:bg-purple-100 dark:group-hover:bg-purple-800',
+        glowBg: 'group-hover:bg-slate-50 dark:group-hover:bg-slate-900',
     },
     cyan: {
-        iconBg: 'bg-gradient-to-br from-cyan-500/10 to-cyan-600/5 dark:from-cyan-400/20 dark:to-cyan-600/10',
+        iconBg: 'bg-cyan-50 dark:bg-cyan-900',
         iconColor: 'text-cyan-600 dark:text-cyan-400',
-        hoverBorder: 'hover:border-cyan-400/60 dark:hover:border-cyan-500/60 hover:shadow-[0_4px_20px_rgba(6,182,212,0.15)] dark:hover:shadow-[0_4px_20px_rgba(6,182,212,0.1)]',
-        hoverIconBg: 'group-hover:from-cyan-500/20 group-hover:to-cyan-600/10 dark:group-hover:from-cyan-400/30 dark:group-hover:to-cyan-600/20',
-        glowBg: 'group-hover:bg-cyan-50/50 dark:group-hover:bg-cyan-900/5',
+        hoverBorder: 'hover:border-cyan-300 dark:hover:border-cyan-700 hover:shadow-sm dark:hover:shadow-none',
+        hoverIconBg: 'group-hover:bg-cyan-100 dark:group-hover:bg-cyan-800',
+        glowBg: 'group-hover:bg-slate-50 dark:group-hover:bg-slate-900',
     },
     emerald: {
-        iconBg: 'bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 dark:from-emerald-400/20 dark:to-emerald-600/10',
+        iconBg: 'bg-emerald-50 dark:bg-emerald-900',
         iconColor: 'text-emerald-600 dark:text-emerald-400',
-        hoverBorder: 'hover:border-emerald-400/60 dark:hover:border-emerald-500/60 hover:shadow-[0_4px_20px_rgba(16,185,129,0.15)] dark:hover:shadow-[0_4px_20px_rgba(16,185,129,0.1)]',
-        hoverIconBg: 'group-hover:from-emerald-500/20 group-hover:to-emerald-600/10 dark:group-hover:from-emerald-400/30 dark:group-hover:to-emerald-600/20',
-        glowBg: 'group-hover:bg-emerald-50/50 dark:group-hover:bg-emerald-900/5',
+        hoverBorder: 'hover:border-emerald-300 dark:hover:border-emerald-700 hover:shadow-sm dark:hover:shadow-none',
+        hoverIconBg: 'group-hover:bg-emerald-100 dark:group-hover:bg-emerald-800',
+        glowBg: 'group-hover:bg-slate-50 dark:group-hover:bg-slate-900',
     },
 } as const;
 
@@ -56,9 +56,9 @@ function SeverityChip(props: { severity: 'warning' | 'critical' }) {
     const isWarning = () => props.severity === 'warning';
     return (
         <span
-            class={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${isWarning()
-                    ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
-                    : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+            class={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold border ${isWarning()
+                ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900 dark:text-amber-300 dark:border-amber-800'
+                : 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900 dark:text-red-300 dark:border-red-800'
                 }`}
         >
             <span class={`w-1.5 h-1.5 rounded-full ${isWarning() ? 'bg-amber-500' : 'bg-red-500'}`} />
@@ -98,7 +98,7 @@ export function DashboardHero(props: DashboardHeroProps) {
                     label: 'Critical Status',
                     icon: XCircle,
                     color: 'text-red-600 dark:text-red-400',
-                    bg: 'bg-red-50 dark:bg-red-900/20',
+                    bg: 'bg-red-50 dark:bg-red-900',
                     pulseColor: 'bg-red-500',
                 };
             case 'warning':
@@ -106,7 +106,7 @@ export function DashboardHero(props: DashboardHeroProps) {
                     label: 'System Warning',
                     icon: AlertTriangle,
                     color: 'text-amber-600 dark:text-amber-400',
-                    bg: 'bg-amber-50 dark:bg-amber-900/20',
+                    bg: 'bg-amber-50 dark:bg-amber-900',
                     pulseColor: 'bg-amber-500',
                 };
             default:
@@ -114,7 +114,7 @@ export function DashboardHero(props: DashboardHeroProps) {
                     label: 'All Systems Operational',
                     icon: CheckCircle,
                     color: 'text-emerald-600 dark:text-emerald-400',
-                    bg: 'bg-emerald-50 dark:bg-emerald-900/20',
+                    bg: 'bg-emerald-50 dark:bg-emerald-900',
                     pulseColor: 'bg-emerald-500',
                 };
         }
@@ -142,11 +142,11 @@ export function DashboardHero(props: DashboardHeroProps) {
     });
 
     const badgeBase =
-        'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold border';
+        'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold border';
 
     return (
         <div class="space-y-4">
-            <Card padding="none" tone="glass">
+            <Card padding="none" tone="default">
                 <div class="px-4 py-2.5 flex items-center justify-between gap-3">
                     <div class="flex items-center gap-2.5 min-w-0">
                         <div class={`relative rounded-md p-1.5 ${statusConfig().bg}`}>
@@ -154,7 +154,7 @@ export function DashboardHero(props: DashboardHeroProps) {
                             <Show when={status() === 'critical'}>
                                 <span class="absolute -right-0.5 -top-0.5 flex h-2.5 w-2.5">
                                     <span
-                                        class={`absolute inline-flex h-full w-full rounded-full opacity-75 animate-ping ${statusConfig().pulseColor}`}
+                                        class={`absolute inline-flex h-full w-full rounded-full opacity-50 animate-ping ${statusConfig().pulseColor}`}
                                     />
                                     <span
                                         class={`relative inline-flex h-2.5 w-2.5 rounded-full ${statusConfig().pulseColor}`}

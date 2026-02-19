@@ -13,10 +13,10 @@ type EmptyStateProps = {
 
 const iconBgClass: Record<EmptyStateTone, string> = {
   default: 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400',
-  info: 'bg-blue-50 dark:bg-blue-900/30 text-blue-500',
-  success: 'bg-green-50 dark:bg-green-900/30 text-green-500',
-  warning: 'bg-amber-50 dark:bg-amber-900/30 text-amber-500',
-  danger: 'bg-red-50 dark:bg-red-900/30 text-red-500',
+  info: 'bg-blue-50 dark:bg-blue-900 text-blue-500',
+  success: 'bg-green-50 dark:bg-green-900 text-green-500',
+  warning: 'bg-amber-50 dark:bg-amber-900 text-amber-500',
+  danger: 'bg-red-50 dark:bg-red-900 text-red-500',
 };
 
 const titleToneClass: Record<EmptyStateTone, string> = {
@@ -60,7 +60,7 @@ export function EmptyState(props: EmptyStateProps) {
   return (
     <div class={containerClass} {...others}>
       <Show when={local.icon}>
-        <div class={`w-16 h-16 sm:w-20 sm:h-20 mb-6 rounded-2xl flex items-center justify-center ${iconBgClass[tone]}`}>
+        <div class={`w-16 h-16 sm:w-20 sm:h-20 mb-6 rounded-lg flex items-center justify-center ${iconBgClass[tone]}`}>
           <div class="scale-125">
             {local.icon}
           </div>

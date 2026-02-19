@@ -12,13 +12,13 @@ type CardProps = {
 
 const toneClassMap: Record<Tone, string> = {
   default: 'bg-white dark:bg-slate-800',
-  muted: 'bg-slate-50 dark:bg-slate-800',
-  info: 'bg-blue-50/70 dark:bg-blue-900/20',
-  success: 'bg-green-50/70 dark:bg-green-900/20',
-  warning: 'bg-amber-50/80 dark:bg-amber-900/20',
-  danger: 'bg-red-50/80 dark:bg-red-900/20',
-  card: 'card',
-  glass: 'bg-white/80 dark:bg-slate-900/60 backdrop-blur-xl border-white/20 dark:border-white/10',
+  muted: 'bg-slate-50 dark:bg-slate-900',
+  info: 'bg-blue-50 dark:bg-blue-900',
+  success: 'bg-emerald-50 dark:bg-emerald-900',
+  warning: 'bg-amber-50 dark:bg-amber-900',
+  danger: 'bg-red-50 dark:bg-red-900',
+  card: 'bg-white dark:bg-slate-800 shadow-sm',
+  glass: 'bg-slate-50 dark:bg-slate-900',
 };
 
 const paddingClassMap: Record<Padding, string> = {

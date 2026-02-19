@@ -63,15 +63,15 @@ export const OperationsPage: Component = () => {
 
             {/* Modern Tabs Navigation */}
             <div class="mb-6">
-                <nav class="flex space-x-2 bg-slate-100/80 dark:bg-slate-800/80 p-1.5 rounded-2xl sm:w-max backdrop-blur-sm border border-slate-200 dark:border-slate-700/50 shadow-inner overflow-x-auto scrollbar-hide" aria-label="Tabs" style="-webkit-overflow-scrolling: touch;">
+                <nav class="flex space-x-2 bg-slate-100 dark:bg-slate-900 p-1.5 rounded-lg sm:w-max border border-slate-200 dark:border-slate-800 overflow-x-auto scrollbar-hide" aria-label="Tabs" style="-webkit-overflow-scrolling: touch;">
                     {tabs.map((tab) => {
                         const isActive = () => activeTab() === tab.id;
                         return (
                             <button
                                 onClick={() => handleTabChange(tab.id)}
-                                class={`flex items-center gap-2.5 whitespace-nowrap px-4 py-2 rounded-xl font-medium text-sm transition-all outline-none relative overflow-hidden group ${isActive()
-                                    ? 'bg-white text-blue-700 dark:bg-slate-700 dark:text-blue-300 shadow-sm border border-slate-200/50 dark:border-slate-600/50'
-                                    : 'text-slate-600 hover:bg-white/60 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-700/50 dark:hover:text-slate-200'
+                                class={`flex items-center gap-2.5 whitespace-nowrap px-4 py-2 rounded-md font-medium text-sm transition-all outline-none relative overflow-hidden group ${isActive()
+                                    ? 'bg-white text-blue-700 dark:bg-slate-800 dark:text-blue-300 shadow-sm border border-slate-200 dark:border-slate-700'
+                                    : 'text-slate-600 hover:bg-white hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200 border border-transparent'
                                     }`}
                                 aria-current={isActive() ? 'page' : undefined}
                                 title={tab.desc}
