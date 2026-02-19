@@ -8044,7 +8044,13 @@ func (r *Router) handleDiagnosticsDockerPrepareToken(w http.ResponseWriter, req 
 	config.Mu.Unlock()
 
 	baseURL := strings.TrimRight(r.resolvePublicURL(req), "/")
-	installCommand := fmt.Sprintf("curl -fSL '%s/install-docker-agent.sh' -o /tmp/pulse-install-docker-agent.sh && sudo bash /tmp/pulse-install-docker-agent.sh --url '%s' --token '%s' && rm -f /tmp/pulse-install-docker-agent.sh", baseURL, baseURL, rawToken)
+	installScriptURL := baseURL + "/install-docker-agent.sh"
+	installCommand := fmt.Sprintf(
+		"curl -fSL %s -o /tmp/pulse-install-docker-agent.sh && sudo bash /tmp/pulse-install-docker-agent.sh --url %s --token %s && rm -f /tmp/pulse-install-docker-agent.sh",
+		posixShellQuote(installScriptURL),
+		posixShellQuote(baseURL),
+		posixShellQuote(rawToken),
+	)
 	systemdSnippet := fmt.Sprintf("[Service]\nType=simple\nEnvironment=\"PULSE_URL=%s\"\nEnvironment=\"PULSE_TOKEN=%s\"\nExecStart=/usr/local/bin/pulse-docker-agent --url %s --interval 30s\nRestart=always\nRestartSec=5s\nUser=root", baseURL, rawToken, baseURL)
 
 	response := map[string]any{

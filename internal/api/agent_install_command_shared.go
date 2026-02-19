@@ -92,17 +92,23 @@ type agentInstallCommandOptions struct {
 	IncludeInstallType bool
 }
 
+func posixShellQuote(value string) string {
+	escaped := strings.ReplaceAll(value, "'", `'"'"'`)
+	return "'" + escaped + "'"
+}
+
 func buildProxmoxAgentInstallCommand(opts agentInstallCommandOptions) string {
 	baseURL := strings.TrimRight(strings.TrimSpace(opts.BaseURL), "/")
-	command := fmt.Sprintf(`curl -fsSL %s/install.sh | bash -s -- \
+	installScriptURL := baseURL + "/install.sh"
+	command := fmt.Sprintf(`curl -fsSL %s | bash -s -- \
   --url %s \
   --token %s \
   --enable-proxmox`,
-		baseURL, baseURL, opts.Token)
+		posixShellQuote(installScriptURL), posixShellQuote(baseURL), posixShellQuote(opts.Token))
 
 	if opts.IncludeInstallType {
 		command += fmt.Sprintf(` \
-  --proxmox-type %s`, opts.InstallType)
+  --proxmox-type %s`, posixShellQuote(opts.InstallType))
 	}
 
 	return command

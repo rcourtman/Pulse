@@ -60,8 +60,8 @@ func TestHostedTenantAgentInstallCommand_GeneratesOrgBoundTokenAndCommand(t *tes
 
 	require.Equal(t, orgID, resp.OrgID)
 	require.Contains(t, resp.Command, "https://cloud.example.com/install.sh")
-	require.Contains(t, resp.Command, "--token "+resp.Token)
-	require.Contains(t, resp.Command, "--proxmox-type pbs")
+	require.Contains(t, resp.Command, "--token "+posixShellQuote(resp.Token))
+	require.Contains(t, resp.Command, "--proxmox-type "+posixShellQuote("pbs"))
 
 	require.Regexp(t, regexp.MustCompile(`^[a-f0-9]{64}$`), resp.Token)
 

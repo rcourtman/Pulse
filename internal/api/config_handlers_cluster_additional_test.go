@@ -455,7 +455,7 @@ func TestHandleAgentInstallCommand(t *testing.T) {
 	if !bytes.Contains([]byte(resp.Command), []byte(resp.Token)) {
 		t.Fatalf("expected command to include token")
 	}
-	if !bytes.Contains([]byte(resp.Command), []byte("--proxmox-type pve")) {
+	if !bytes.Contains([]byte(resp.Command), []byte("--proxmox-type "+posixShellQuote("pve"))) {
 		t.Fatalf("expected command to include proxmox type")
 	}
 	if len(cfg.APITokens) != 1 {
@@ -481,7 +481,7 @@ func TestHandleAgentInstallCommand_NormalizesType(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
-	if !bytes.Contains([]byte(resp.Command), []byte("--proxmox-type pbs")) {
+	if !bytes.Contains([]byte(resp.Command), []byte("--proxmox-type "+posixShellQuote("pbs"))) {
 		t.Fatalf("expected normalized proxmox type in command, got: %s", resp.Command)
 	}
 }

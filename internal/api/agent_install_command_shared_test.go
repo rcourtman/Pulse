@@ -26,9 +26,25 @@ func TestBuildProxmoxAgentInstallCommand(t *testing.T) {
 		InstallType:        "pbs",
 		IncludeInstallType: true,
 	})
-	require.Contains(t, command, "https://pulse.example.com/install.sh")
-	require.Contains(t, command, "--token token-123")
-	require.Contains(t, command, "--proxmox-type pbs")
+	require.Contains(t, command, posixShellQuote("https://pulse.example.com/install.sh"))
+	require.Contains(t, command, "--token "+posixShellQuote("token-123"))
+	require.Contains(t, command, "--proxmox-type "+posixShellQuote("pbs"))
+}
+
+func TestBuildProxmoxAgentInstallCommand_ShellEscapesArguments(t *testing.T) {
+	baseURL := "https://pulse.example.com' && touch /tmp/pwned #"
+	token := "tok'en"
+	command := buildProxmoxAgentInstallCommand(agentInstallCommandOptions{
+		BaseURL:            baseURL,
+		Token:              token,
+		InstallType:        "pve",
+		IncludeInstallType: true,
+	})
+
+	require.Contains(t, command, posixShellQuote(baseURL+"/install.sh"))
+	require.Contains(t, command, "--url "+posixShellQuote(baseURL))
+	require.Contains(t, command, "--token "+posixShellQuote(token))
+	require.Contains(t, command, "--proxmox-type "+posixShellQuote("pve"))
 }
 
 func TestResolveConfigAgentInstallBaseURL(t *testing.T) {
