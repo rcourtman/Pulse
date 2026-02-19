@@ -1347,7 +1347,27 @@ const Recovery: Component = () => {
                       </For>
                     </div>
 
-                    <div class="absolute inset-x-0 bottom-6 top-0 flex items-stretch gap-[3px]">
+                    <div
+                      class="absolute inset-x-0 bottom-6 top-0 flex items-stretch gap-[3px]"
+                      style="touch-action: pan-y;"
+                      onTouchStart={(e) => {
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        const x = Math.max(0, e.touches[0].clientX - rect.left);
+                        const pts = timeline().points;
+                        const idx = Math.min(Math.floor((x / rect.width) * pts.length), pts.length - 1);
+                        const pt = pts[idx];
+                        if (pt) { setSelectedDateKey(pt.key); setCurrentPage(1); }
+                      }}
+                      onTouchMove={(e) => {
+                        e.preventDefault();
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        const x = Math.max(0, Math.min(e.touches[0].clientX - rect.left, rect.width - 1));
+                        const pts = timeline().points;
+                        const idx = Math.min(Math.floor((x / rect.width) * pts.length), pts.length - 1);
+                        const pt = pts[idx];
+                        if (pt && pt.key !== selectedDateKey()) { setSelectedDateKey(pt.key); setCurrentPage(1); }
+                      }}
+                    >
                       <For each={timeline().points}>
                         {(point) => {
                           const total = point.total;
