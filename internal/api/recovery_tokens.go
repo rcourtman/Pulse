@@ -89,6 +89,23 @@ func (r *RecoveryTokenStore) GenerateRecoveryToken(duration time.Duration) (stri
 	return tokenStr, nil
 }
 
+// IsRecoveryTokenValidConstantTime checks token validity without consuming it.
+// This is intended for preflight decisions (e.g., CSRF skip routing).
+func (r *RecoveryTokenStore) IsRecoveryTokenValidConstantTime(providedToken string) bool {
+	providedBytes := []byte(providedToken)
+
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	for tokenStr, token := range r.tokens {
+		if subtle.ConstantTimeCompare(providedBytes, []byte(tokenStr)) == 1 {
+			return !time.Now().After(token.ExpiresAt) && !token.Used
+		}
+	}
+
+	return false
+}
+
 // ValidateRecoveryTokenConstantTime validates token with constant-time comparison
 func (r *RecoveryTokenStore) ValidateRecoveryTokenConstantTime(providedToken string, ip string) bool {
 	// Use constant-time comparison to prevent timing attacks

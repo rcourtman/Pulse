@@ -170,6 +170,49 @@ func TestRecoveryTokenStore_ValidateRecoveryTokenConstantTime_ValidToken(t *test
 	}
 }
 
+func TestRecoveryTokenStore_IsRecoveryTokenValidConstantTime_DoesNotConsume(t *testing.T) {
+	store := newTestRecoveryStore(t)
+
+	token, err := store.GenerateRecoveryToken(time.Hour)
+	if err != nil {
+		t.Fatalf("GenerateRecoveryToken failed: %v", err)
+	}
+
+	if !store.IsRecoveryTokenValidConstantTime(token) {
+		t.Fatal("IsRecoveryTokenValidConstantTime returned false for valid token")
+	}
+
+	store.mu.RLock()
+	stored := store.tokens[token]
+	store.mu.RUnlock()
+	if stored.Used {
+		t.Fatal("IsRecoveryTokenValidConstantTime must not mark token as used")
+	}
+
+	if !store.ValidateRecoveryTokenConstantTime(token, "10.0.0.1") {
+		t.Fatal("ValidateRecoveryTokenConstantTime should still succeed after non-consuming check")
+	}
+}
+
+func TestRecoveryTokenStore_IsRecoveryTokenValidConstantTime_InvalidOrUsed(t *testing.T) {
+	store := newTestRecoveryStore(t)
+
+	if store.IsRecoveryTokenValidConstantTime("missing-token") {
+		t.Fatal("IsRecoveryTokenValidConstantTime returned true for missing token")
+	}
+
+	token, err := store.GenerateRecoveryToken(time.Hour)
+	if err != nil {
+		t.Fatalf("GenerateRecoveryToken failed: %v", err)
+	}
+	if !store.ValidateRecoveryTokenConstantTime(token, "10.0.0.1") {
+		t.Fatal("ValidateRecoveryTokenConstantTime should succeed")
+	}
+	if store.IsRecoveryTokenValidConstantTime(token) {
+		t.Fatal("IsRecoveryTokenValidConstantTime returned true for used token")
+	}
+}
+
 func TestRecoveryTokenStore_ValidateRecoveryTokenConstantTime_InvalidToken(t *testing.T) {
 	store := newTestRecoveryStore(t)
 

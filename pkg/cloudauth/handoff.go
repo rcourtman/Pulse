@@ -72,8 +72,14 @@ func Sign(key []byte, email, tenantID string, ttl time.Duration) (string, error)
 
 // Verify decodes and validates a handoff token. Returns the email and tenant ID on success.
 func Verify(key []byte, tokenStr string) (email, tenantID string, err error) {
+	email, tenantID, _, err = VerifyWithExpiry(key, tokenStr)
+	return email, tenantID, err
+}
+
+// VerifyWithExpiry decodes and validates a handoff token and also returns its expiry.
+func VerifyWithExpiry(key []byte, tokenStr string) (email, tenantID string, expiresAt time.Time, err error) {
 	if len(key) == 0 || tokenStr == "" {
-		return "", "", ErrHandoffInvalid
+		return "", "", time.Time{}, ErrHandoffInvalid
 	}
 
 	// Split into payload.signature
@@ -85,7 +91,7 @@ func Verify(key []byte, tokenStr string) (email, tenantID string, err error) {
 		}
 	}
 	if dotIdx < 1 || dotIdx >= len(tokenStr)-1 {
-		return "", "", ErrHandoffInvalid
+		return "", "", time.Time{}, ErrHandoffInvalid
 	}
 
 	payloadB64 := tokenStr[:dotIdx]
@@ -93,35 +99,35 @@ func Verify(key []byte, tokenStr string) (email, tenantID string, err error) {
 
 	payloadBytes, err := base64.RawURLEncoding.DecodeString(payloadB64)
 	if err != nil {
-		return "", "", ErrHandoffInvalid
+		return "", "", time.Time{}, ErrHandoffInvalid
 	}
 	sigBytes, err := base64.RawURLEncoding.DecodeString(sigB64)
 	if err != nil {
-		return "", "", ErrHandoffInvalid
+		return "", "", time.Time{}, ErrHandoffInvalid
 	}
 
 	// Verify HMAC
 	expected := computeHMAC(key, payloadBytes)
 	if !hmac.Equal(sigBytes, expected) {
-		return "", "", ErrHandoffInvalid
+		return "", "", time.Time{}, ErrHandoffInvalid
 	}
 
 	// Decode payload
 	var p handoffPayload
 	if err := json.Unmarshal(payloadBytes, &p); err != nil {
-		return "", "", ErrHandoffInvalid
+		return "", "", time.Time{}, ErrHandoffInvalid
 	}
 
 	// Check expiry
 	if time.Now().UTC().Unix() > p.Expiry {
-		return "", "", ErrHandoffExpired
+		return "", "", time.Time{}, ErrHandoffExpired
 	}
 
 	if p.Email == "" || p.TenantID == "" {
-		return "", "", ErrHandoffInvalid
+		return "", "", time.Time{}, ErrHandoffInvalid
 	}
 
-	return p.Email, p.TenantID, nil
+	return p.Email, p.TenantID, time.Unix(p.Expiry, 0).UTC(), nil
 }
 
 func computeHMAC(key, data []byte) []byte {

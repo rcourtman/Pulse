@@ -1,6 +1,8 @@
 package api
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -18,6 +20,8 @@ import (
 // Self-guards: returns 404 if the handoff key file does not exist in dataPath,
 // meaning this is not a cloud-managed tenant.
 func HandleCloudHandoff(dataPath string) http.HandlerFunc {
+	replay := &jtiReplayStore{configDir: dataPath}
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -38,10 +42,23 @@ func HandleCloudHandoff(dataPath string) http.HandlerFunc {
 			return
 		}
 
-		email, _, err := cloudauth.Verify(handoffKey, tokenStr)
+		email, _, expiresAt, err := cloudauth.VerifyWithExpiry(handoffKey, tokenStr)
 		if err != nil {
 			log.Warn().Err(err).Msg("Cloud handoff token verification failed")
 			http.Redirect(w, r, "/login?error=handoff_invalid", http.StatusTemporaryRedirect)
+			return
+		}
+		tokenHash := sha256.Sum256([]byte(tokenStr))
+		replayID := "handoff:" + hex.EncodeToString(tokenHash[:])
+		stored, storeErr := replay.checkAndStore(replayID, expiresAt)
+		if storeErr != nil {
+			log.Error().Err(storeErr).Msg("Cloud handoff replay-store failure")
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+		if !stored {
+			log.Warn().Str("replay_id_prefix", replayID[:24]).Msg("Cloud handoff token replay blocked")
+			http.Redirect(w, r, "/login?error=handoff_replayed", http.StatusTemporaryRedirect)
 			return
 		}
 

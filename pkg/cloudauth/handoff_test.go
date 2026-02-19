@@ -97,6 +97,33 @@ func TestVerifyTamperedPayload(t *testing.T) {
 	}
 }
 
+func TestVerifyWithExpiryReturnsTokenExpiry(t *testing.T) {
+	key, _ := GenerateHandoffKey()
+	ttl := 2 * time.Minute
+	before := time.Now().UTC()
+	token, err := Sign(key, "eve@example.com", "t-expiry", ttl)
+	if err != nil {
+		t.Fatalf("Sign: %v", err)
+	}
+
+	email, tenantID, expiresAt, err := VerifyWithExpiry(key, token)
+	if err != nil {
+		t.Fatalf("VerifyWithExpiry: %v", err)
+	}
+	if email != "eve@example.com" {
+		t.Fatalf("email = %q, want eve@example.com", email)
+	}
+	if tenantID != "t-expiry" {
+		t.Fatalf("tenantID = %q, want t-expiry", tenantID)
+	}
+
+	lowerBound := before.Add(ttl - 5*time.Second)
+	upperBound := before.Add(ttl + 5*time.Second)
+	if expiresAt.Before(lowerBound) || expiresAt.After(upperBound) {
+		t.Fatalf("expiresAt = %s, expected between %s and %s", expiresAt, lowerBound, upperBound)
+	}
+}
+
 func TestVerifyEmptyInputs(t *testing.T) {
 	key, _ := GenerateHandoffKey()
 

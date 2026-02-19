@@ -2886,8 +2886,12 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			r.config.HasAPITokens() ||
 			r.config.ProxyAuthSecret != "" ||
 			(r.config.OIDC != nil && r.config.OIDC.Enabled)
+		validRecoveryToken := false
+		if recoveryToken := strings.TrimSpace(req.Header.Get("X-Recovery-Token")); recoveryToken != "" {
+			validRecoveryToken = GetRecoveryTokenStore().IsRecoveryTokenValidConstantTime(recoveryToken)
+		}
 		if req.URL.Path == "/api/security/quick-setup" &&
-			(!authConfigured || strings.TrimSpace(req.Header.Get("X-Recovery-Token")) != "") {
+			(!authConfigured || validRecoveryToken) {
 			skipCSRF = true
 		}
 		// Skip CSRF for setup-script-url endpoint (generates temporary tokens, not a state change)
