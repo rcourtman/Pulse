@@ -15,7 +15,6 @@ import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import { formatRelativeTime } from '@/utils/format';
 import {
-  apiFetch,
   apiFetchJSON,
   getApiToken as getApiClientToken,
   setApiToken as setApiClientToken,
@@ -28,8 +27,6 @@ import { OIDCPanel } from './OIDCPanel';
 import { SSOProvidersPanel } from './SSOProvidersPanel';
 import { AISettings } from './AISettings';
 import { AICostDashboard } from '@/components/AI/AICostDashboard';
-import { DiagnosticsPanel } from './DiagnosticsPanel';
-import { SystemLogsPanel } from './SystemLogsPanel';
 import { GeneralSettingsPanel } from './GeneralSettingsPanel';
 import { NetworkSettingsPanel } from './NetworkSettingsPanel';
 import { UpdatesSettingsPanel } from './UpdatesSettingsPanel';
@@ -43,7 +40,7 @@ import AuditLogPanel from './AuditLogPanel';
 import { AuditWebhookPanel } from './AuditWebhookPanel';
 import RolesPanel from './RolesPanel';
 import UserAssignmentsPanel from './UserAssignmentsPanel';
-import { ReportingPanel } from './ReportingPanel';
+
 import {
   PveNodesTable,
   PbsNodesTable,
@@ -65,7 +62,6 @@ import Shield from 'lucide-solid/icons/shield';
 import ShieldCheck from 'lucide-solid/icons/shield-check';
 import Lock from 'lucide-solid/icons/lock';
 import Key from 'lucide-solid/icons/key';
-import Activity from 'lucide-solid/icons/activity';
 import Loader from 'lucide-solid/icons/loader';
 import Network from 'lucide-solid/icons/network';
 import Bot from 'lucide-solid/icons/bot';
@@ -74,7 +70,6 @@ import Sliders from 'lucide-solid/icons/sliders-horizontal';
 import RefreshCw from 'lucide-solid/icons/refresh-cw';
 import Clock from 'lucide-solid/icons/clock';
 import Sparkles from 'lucide-solid/icons/sparkles';
-import FileText from 'lucide-solid/icons/file-text';
 import Globe from 'lucide-solid/icons/globe';
 import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
 import { PulseLogoIcon } from '@/components/icons/PulseLogoIcon';
@@ -114,130 +109,6 @@ interface ClusterEndpoint {
   IP?: string;
 }
 
-interface DiagnosticsNode {
-  id: string;
-  name: string;
-  host: string;
-  type: string;
-  authMethod: string;
-  connected: boolean;
-  error?: string;
-  details?: Record<string, unknown>;
-  lastPoll?: string;
-  clusterInfo?: Record<string, unknown>;
-}
-
-interface DiagnosticsPBS {
-  id: string;
-  name: string;
-  host: string;
-  connected: boolean;
-  error?: string;
-  details?: Record<string, unknown>;
-}
-
-interface SystemDiagnostic {
-  os: string;
-  arch: string;
-  goVersion: string;
-  numCPU: number;
-  numGoroutine: number;
-  memoryMB: number;
-}
-
-interface APITokenSummary {
-  id: string;
-  name: string;
-  hint?: string;
-  createdAt?: string;
-  lastUsedAt?: string;
-  source?: string;
-}
-
-interface APITokenUsage {
-  tokenId: string;
-  hostCount: number;
-  hosts?: string[];
-}
-
-interface APITokenDiagnostic {
-  enabled: boolean;
-  tokenCount: number;
-  hasEnvTokens: boolean;
-  hasLegacyToken: boolean;
-  recommendTokenSetup: boolean;
-  recommendTokenRotation: boolean;
-  legacyDockerHostCount?: number;
-  unusedTokenCount?: number;
-  notes?: string[];
-  tokens?: APITokenSummary[];
-  usage?: APITokenUsage[];
-}
-
-interface DockerAgentAttention {
-  hostId: string;
-  name: string;
-  status: string;
-  agentVersion?: string;
-  tokenHint?: string;
-  lastSeen?: string;
-  issues: string[];
-}
-
-interface DockerAgentDiagnostic {
-  hostsTotal: number;
-  hostsOnline: number;
-  hostsReportingVersion: number;
-  hostsWithTokenBinding: number;
-  hostsWithoutTokenBinding: number;
-  hostsWithoutVersion?: number;
-  hostsOutdatedVersion?: number;
-  hostsWithStaleCommand?: number;
-  hostsPendingUninstall?: number;
-  hostsNeedingAttention: number;
-  recommendedAgentVersion?: string;
-  attention?: DockerAgentAttention[];
-  notes?: string[];
-}
-
-interface DiscoveryDiagnostic {
-  enabled: boolean;
-  configuredSubnet?: string;
-  activeSubnet?: string;
-  environmentOverride?: string;
-  subnetAllowlist?: string[];
-  subnetBlocklist?: string[];
-  scanning?: boolean;
-  scanInterval?: string;
-  lastScanStartedAt?: string;
-  lastResultTimestamp?: string;
-  lastResultServers?: number;
-  lastResultErrors?: number;
-}
-
-interface AlertsDiagnostic {
-  legacyThresholdsDetected: boolean;
-  legacyThresholdSources?: string[];
-  legacyScheduleSettings?: string[];
-  missingCooldown: boolean;
-  missingGroupingWindow: boolean;
-  notes?: string[];
-}
-
-interface DiagnosticsData {
-  version: string;
-  runtime: string;
-  uptime: number;
-  nodes: DiagnosticsNode[];
-  pbs: DiagnosticsPBS[];
-  system: SystemDiagnostic;
-  apiTokens?: APITokenDiagnostic | null;
-  dockerAgents?: DockerAgentDiagnostic | null;
-  alerts?: AlertsDiagnostic | null;
-  discovery?: DiscoveryDiagnostic | null;
-  errors: string[];
-}
-
 interface DiscoveryScanStatus {
   scanning: boolean;
   subnet?: string;
@@ -256,7 +127,6 @@ type SettingsTab =
   | 'system-updates'
   | 'system-backups'
   | 'system-ai'
-  | 'system-logs'
   | 'system-pro'
   | 'api'
   | 'security-overview'
@@ -265,11 +135,8 @@ type SettingsTab =
   | 'security-roles'
   | 'security-users'
   | 'security-audit'
-  | 'diagnostics'
   | 'updates'
-  | 'reporting'
-  | 'security-webhooks'
-  | 'system-logs';
+  | 'security-webhooks';
 
 type AgentKey = 'pve' | 'pbs' | 'pmg';
 
@@ -350,22 +217,9 @@ const SETTINGS_HEADER_META: Record<SettingsTab, { title: string; description: st
     title: 'Audit Webhooks',
     description: 'Configure real-time delivery of audit events to external systems.',
   },
-  diagnostics: {
-    title: 'Diagnostics',
-    description:
-      'Inspect discovery scans, connection health, and runtime metrics for troubleshooting.',
-  },
   updates: {
     title: 'Update History',
     description: 'Review past software updates, rollback events, and upgrade audit logs.',
-  },
-  reporting: {
-    title: 'Detailed Reporting',
-    description: 'Generate and export comprehensive infrastructure reports in PDF and CSV formats.',
-  },
-  'system-logs': {
-    title: 'System Logs',
-    description: 'View real-time system logs and download support bundles.',
   },
 };
 
@@ -428,7 +282,6 @@ const Settings: Component<SettingsProps> = (props) => {
     if (path.includes('/settings/system-backups')) return 'system-backups';
     if (path.includes('/settings/system-ai')) return 'system-ai';
     if (path.includes('/settings/system-pro')) return 'system-pro';
-    if (path.includes('/settings/system-logs')) return 'system-logs';
     // Generic /settings/system fallback must come AFTER specific system-* paths
     // because /settings/system-logs contains /settings/system as a substring
     if (path.includes('/settings/system')) return 'system-general';
@@ -443,8 +296,6 @@ const Settings: Component<SettingsProps> = (props) => {
     // Generic /settings/security fallback must come AFTER specific security-* paths
     if (path.includes('/settings/security')) return 'security-overview';
     if (path.includes('/settings/updates')) return 'updates';
-    if (path.includes('/settings/diagnostics')) return 'diagnostics';
-    if (path.includes('/settings/reporting')) return 'reporting';
     // Legacy platform paths map to the Proxmox tab
     if (
       path.includes('/settings/pve') ||
@@ -836,10 +687,6 @@ const Settings: Component<SettingsProps> = (props) => {
     return `Pulse checks backups every ${minutes === 1 ? 'minute' : `${minutes} minutes`}.`;
   };
 
-  // Diagnostics
-  const [_diagnosticsData, setDiagnosticsData] = createSignal<DiagnosticsData | null>(null);
-  const [_runningDiagnostics, setRunningDiagnostics] = createSignal(false);
-
   // Security
   const [securityStatus, setSecurityStatus] = createSignal<SecurityStatusInfo | null>(null);
   const [securityStatusLoading, setSecurityStatusLoading] = createSignal(true);
@@ -858,38 +705,6 @@ const Settings: Component<SettingsProps> = (props) => {
   const authDisabledByEnv = createMemo(() => Boolean(securityStatus()?.deprecatedDisableAuth));
   const [showQuickSecurityWizard, setShowQuickSecurityWizard] = createSignal(false);
 
-
-
-  const runDiagnostics = async () => {
-    setRunningDiagnostics(true);
-    try {
-      const response = await apiFetch('/api/diagnostics');
-      const diag = await response.json();
-      setDiagnosticsData(diag);
-    } catch (err) {
-      logger.error('Failed to fetch diagnostics', err);
-      notificationStore.error('Failed to run diagnostics');
-    } finally {
-      setRunningDiagnostics(false);
-    }
-  };
-
-  createEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-    const shouldPoll = currentTab() === 'proxmox';
-    if (!shouldPoll) {
-      return;
-    }
-    void runDiagnostics();
-    const intervalId = window.setInterval(() => {
-      void runDiagnostics();
-    }, 60000);
-    onCleanup(() => {
-      window.clearInterval(intervalId);
-    });
-  });
 
   const tabGroups: {
     id: 'platforms' | 'operations' | 'system' | 'security';
@@ -919,12 +734,6 @@ const Settings: Component<SettingsProps> = (props) => {
         label: 'Operations',
         items: [
           { id: 'api', label: 'API Tokens', icon: BadgeCheck },
-          {
-            id: 'diagnostics',
-            label: 'Diagnostics',
-            icon: Activity,
-            iconProps: { strokeWidth: 2 },
-          },
         ],
       },
       {
@@ -966,19 +775,6 @@ const Settings: Component<SettingsProps> = (props) => {
             label: 'Pulse Pro',
             icon: PulseLogoIcon,
           },
-          {
-            id: 'reporting',
-            label: 'Reporting',
-            icon: FileText,
-            iconProps: { strokeWidth: 2 },
-            features: ['advanced_reporting'],
-          },
-          {
-            id: 'system-logs',
-            label: 'System Logs',
-            icon: Terminal,
-            iconProps: { strokeWidth: 2 },
-          },
         ],
       },
       {
@@ -1018,7 +814,7 @@ const Settings: Component<SettingsProps> = (props) => {
           {
             id: 'security-audit',
             label: 'Audit Log',
-            icon: Activity,
+            icon: Terminal,
             iconProps: { strokeWidth: 2 },
           },
           {
@@ -1039,7 +835,6 @@ const Settings: Component<SettingsProps> = (props) => {
     loadNodes();
     loadDiscoveredNodes();
     loadSecurityStatus();
-    runDiagnostics();
   });
 
   const loadNodes = async () => {
@@ -2568,8 +2363,8 @@ const Settings: Component<SettingsProps> = (props) => {
                           <Show when={pveNodes().length > 0}>
                             <PveNodesTable
                               nodes={pveNodes()}
-                              stateNodes={state.nodes ?? []}
-                              stateHosts={state.hosts ?? []}
+                              stateNodes={(state.resources ?? []).filter(r => r.type === 'node')}
+                              stateHosts={(state.resources ?? []).filter(r => r.type === 'host')}
                               globalTemperatureMonitoringEnabled={temperatureMonitoringEnabled()}
                               onTestConnection={testNodeConnection}
                               onEdit={(node) => {
@@ -3393,11 +3188,6 @@ const Settings: Component<SettingsProps> = (props) => {
                 </Card>
               </Show>
 
-              {/* System Logs Tab */}
-              <Show when={activeTab() === 'system-logs'}>
-                <SystemLogsPanel />
-              </Show>
-
               {/* System General Tab */}
               <Show when={activeTab() === 'system-general'}>
                 <GeneralSettingsPanel
@@ -3411,6 +3201,17 @@ const Settings: Component<SettingsProps> = (props) => {
                   setPVEPollingCustomSeconds={setPVEPollingCustomSeconds}
                   pvePollingEnvLocked={pvePollingEnvLocked}
                   setHasUnsavedChanges={setHasUnsavedChanges}
+                  disableLegacyRouteRedirects={disableLegacyRouteRedirects}
+                  disableLegacyRouteRedirectsLocked={disableLegacyRouteRedirectsLocked}
+                  savingLegacyRedirects={savingLegacyRedirects}
+                  handleDisableLegacyRouteRedirectsChange={handleDisableLegacyRouteRedirectsChange}
+                  reduceProUpsellNoise={reduceProUpsellNoise}
+                  savingReduceUpsells={savingReduceUpsells}
+                  handleReduceProUpsellNoiseChange={handleReduceProUpsellNoiseChange}
+                  disableLocalUpgradeMetrics={disableLocalUpgradeMetrics}
+                  disableLocalUpgradeMetricsLocked={disableLocalUpgradeMetricsLocked}
+                  savingUpgradeMetrics={savingUpgradeMetrics}
+                  handleDisableLocalUpgradeMetricsChange={handleDisableLocalUpgradeMetricsChange}
                 />
               </Show>
 
@@ -3577,16 +3378,6 @@ const Settings: Component<SettingsProps> = (props) => {
               {/* Security Webhooks Tab */}
               <Show when={activeTab() === 'security-webhooks'}>
                 <AuditWebhookPanel />
-              </Show>
-
-              {/* Diagnostics Tab */}
-              <Show when={activeTab() === 'diagnostics'}>
-                <DiagnosticsPanel />
-              </Show>
-
-              {/* Reporting Tab */}
-              <Show when={activeTab() === 'reporting'}>
-                <ReportingPanel />
               </Show>
             </div>
           </div >

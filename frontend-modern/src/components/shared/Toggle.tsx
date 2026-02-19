@@ -44,10 +44,10 @@ export function TogglePrimitive(props: BaseToggleProps): JSX.Element {
   const size = props.size ?? 'sm';
   const config = sizeConfig[size];
   const isDisabled = () => Boolean(props.disabled);
-  const checkedClass = 'bg-blue-500 dark:bg-blue-500';
-  const uncheckedClass = 'bg-slate-300 dark:bg-slate-600';
-  const disabledClass = 'bg-slate-200 dark:bg-slate-700 cursor-not-allowed opacity-60';
-  const knobBase = 'bg-white shadow-sm';
+  const checkedClass = 'bg-blue-500 shadow-inner shadow-blue-600/50 dark:bg-blue-500';
+  const uncheckedClass = 'bg-slate-200/50 shadow-inner shadow-slate-300/50 dark:bg-slate-700/50 dark:shadow-slate-800/50';
+  const disabledClass = 'bg-slate-100 dark:bg-slate-800 cursor-not-allowed opacity-50';
+  const knobBase = 'bg-white shadow-[0_2px_4px_rgba(0,0,0,0.1),0_0_1px_rgba(0,0,0,0.1)]';
 
   const handleClick = () => {
     if (isDisabled()) return;
@@ -76,9 +76,8 @@ export function TogglePrimitive(props: BaseToggleProps): JSX.Element {
   return (
     <button
       type="button"
-      class={`relative inline-flex ${config.track} shrink-0 items-center rounded-full p-0.5 transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900 ${
-        isDisabled() ? disabledClass : props.checked ? checkedClass : uncheckedClass
-      } ${props.class ?? ''}`.trim()}
+      class={`relative inline-flex ${config.track} shrink-0 items-center rounded-full p-0.5 transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900 ${isDisabled() ? disabledClass : props.checked ? checkedClass : uncheckedClass
+        } ${props.class ?? ''}`.trim()}
       onClick={handleClick}
       disabled={props.disabled}
       title={props.title}
@@ -86,10 +85,9 @@ export function TogglePrimitive(props: BaseToggleProps): JSX.Element {
       aria-label={props.ariaLabel}
     >
       <span
-        class={`inline-block ${config.knob} rounded-full transition-transform duration-200 ease-in-out ${knobBase} ${
-          props.checked ? config.translateOn : 'translate-x-0'
-        } ${isDisabled() ? 'opacity-60' : ''
-        }`}
+        class={`inline-block ${config.knob} rounded-full transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${knobBase} ${props.checked ? config.translateOn : 'translate-x-0'
+          } ${isDisabled() ? 'opacity-60' : ''
+          }`}
       />
     </button>
   );

@@ -15,6 +15,7 @@ import (
 	"math"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -2918,6 +2919,11 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		if req.URL.Path == "/auth/cloud-handoff" {
 			skipCSRF = true
 		}
+		if strings.HasPrefix(req.URL.Path, "/api/") && !skipCSRF && isValidProxyAuthRequest(r.config, req) && isCrossSiteBrowserRequest(req) {
+			http.Error(w, "CSRF origin validation failed", http.StatusForbidden)
+			LogAuditEventForTenant(GetOrgID(req.Context()), "csrf_failure", "", GetClientIP(req), req.URL.Path, false, "Cross-site browser mutation blocked for proxy auth")
+			return
+		}
 		if strings.HasPrefix(req.URL.Path, "/api/") && !skipCSRF && !CheckCSRF(w, req) {
 			http.Error(w, "CSRF token validation failed", http.StatusForbidden)
 			LogAuditEventForTenant(GetOrgID(req.Context()), "csrf_failure", "", GetClientIP(req), req.URL.Path, false, "Invalid CSRF token")
@@ -3154,6 +3160,99 @@ func shouldAppendForwardedPort(port, scheme string) bool {
 		return false
 	}
 	return true
+}
+
+func isValidProxyAuthRequest(cfg *config.Config, req *http.Request) bool {
+	if cfg == nil || req == nil || cfg.ProxyAuthSecret == "" {
+		return false
+	}
+	if strings.TrimSpace(req.Header.Get("X-Proxy-Secret")) == "" {
+		return false
+	}
+	valid, _, _ := CheckProxyAuth(cfg, req)
+	return valid
+}
+
+func requestOrigin(req *http.Request) string {
+	if req == nil {
+		return ""
+	}
+	host := strings.TrimSpace(req.Host)
+	if host == "" {
+		return ""
+	}
+
+	scheme := "http"
+	if isConnectionSecure(req) {
+		scheme = "https"
+	}
+	return scheme + "://" + host
+}
+
+func canonicalOrigin(raw string) (scheme, host, port string, ok bool) {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || u == nil {
+		return "", "", "", false
+	}
+
+	scheme = strings.ToLower(strings.TrimSpace(u.Scheme))
+	host = strings.ToLower(strings.TrimSpace(u.Hostname()))
+	port = strings.TrimSpace(u.Port())
+	if scheme == "" || host == "" {
+		return "", "", "", false
+	}
+	if port == "" {
+		switch scheme {
+		case "https":
+			port = "443"
+		case "http":
+			port = "80"
+		}
+	}
+	return scheme, host, port, true
+}
+
+func sameOrigin(left, right string) bool {
+	schemeL, hostL, portL, okL := canonicalOrigin(left)
+	schemeR, hostR, portR, okR := canonicalOrigin(right)
+	if !okL || !okR {
+		return false
+	}
+	return schemeL == schemeR && hostL == hostR && portL == portR
+}
+
+// isCrossSiteBrowserRequest detects browser-originated cross-site requests.
+// It is used as an additional safeguard for sessionless proxy-auth flows.
+func isCrossSiteBrowserRequest(req *http.Request) bool {
+	if req == nil {
+		return false
+	}
+
+	switch strings.ToLower(strings.TrimSpace(req.Header.Get("Sec-Fetch-Site"))) {
+	case "cross-site":
+		return true
+	case "same-origin", "same-site", "none":
+		return false
+	}
+
+	expected := requestOrigin(req)
+	if expected == "" {
+		return false
+	}
+
+	if origin := strings.TrimSpace(req.Header.Get("Origin")); origin != "" {
+		if strings.EqualFold(origin, "null") {
+			return true
+		}
+		return !sameOrigin(origin, expected)
+	}
+
+	if referer := strings.TrimSpace(req.Header.Get("Referer")); referer != "" {
+		return !sameOrigin(referer, expected)
+	}
+
+	// Allow non-browser or legacy clients with neither Origin nor Referer.
+	return false
 }
 
 func canCapturePublicURL(cfg *config.Config, req *http.Request) bool {

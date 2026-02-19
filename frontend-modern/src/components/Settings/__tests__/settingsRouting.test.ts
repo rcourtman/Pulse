@@ -20,7 +20,6 @@ const canonicalTabPaths = {
   'system-recovery': '/settings/system-recovery',
   'system-ai': '/settings/system-ai',
   'system-relay': '/settings/system-relay',
-  'system-logs': '/settings/operations/logs',
   'system-pro': '/settings/system-pro',
   'organization-overview': '/settings/organization',
   'organization-access': '/settings/organization/access',
@@ -35,14 +34,12 @@ const canonicalTabPaths = {
   'security-users': '/settings/security-users',
   'security-audit': '/settings/security-audit',
   'security-webhooks': '/settings/security-webhooks',
-  diagnostics: '/settings/operations/diagnostics',
-  reporting: '/settings/operations/reporting',
 } as const satisfies Record<SettingsTab, string>;
 
 const hasFeatures =
   (features: string[]) =>
-  (feature: string): boolean =>
-    features.includes(feature);
+    (feature: string): boolean =>
+      features.includes(feature);
 
 describe('settingsRouting', () => {
   it('uses Unified Agents as the default /settings landing tab', () => {
@@ -91,8 +88,6 @@ describe('settingsRouting', () => {
       ['/settings/integrations/relay', '/settings/system-relay'],
       ['/settings/billing', '/settings/organization/billing'],
       ['/settings/api', '/settings/integrations/api'],
-      ['/settings/diagnostics', '/settings/operations/diagnostics'],
-      ['/settings/reporting', '/settings/operations/reporting'],
       ['/settings/security', '/settings/security-overview'],
       ['/settings/pve', '/settings/infrastructure/pve'],
       ['/settings/pbs', '/settings/infrastructure/pbs'],
@@ -156,7 +151,6 @@ describe('settingsRouting', () => {
   it('locks gated tabs based on features and license state', () => {
     const gatedTabs: Array<[SettingsTab, string]> = [
       ['system-relay', 'relay'],
-      ['reporting', 'advanced_reporting'],
       ['security-webhooks', 'audit_logging'],
       ['organization-overview', 'multi_tenant'],
       ['organization-access', 'multi_tenant'],

@@ -13,9 +13,6 @@ import type { SecurityOverviewPanel as SecurityOverviewPanelType } from './Secur
 import type { SecurityAuthPanel as SecurityAuthPanelType } from './SecurityAuthPanel';
 import type { SettingsTab } from './settingsTypes';
 
-const SystemLogsPanel = lazy(() =>
-  import('./SystemLogsPanel').then((m) => ({ default: m.SystemLogsPanel })),
-);
 const GeneralSettingsPanel = lazy(() =>
   import('./GeneralSettingsPanel').then((m) => ({ default: m.GeneralSettingsPanel })),
 );
@@ -54,12 +51,6 @@ const AuditLogPanel = lazy(() => import('./AuditLogPanel'));
 const AuditWebhookPanel = lazy(() =>
   import('./AuditWebhookPanel').then((m) => ({ default: m.AuditWebhookPanel })),
 );
-const DiagnosticsPanel = lazy(() =>
-  import('./DiagnosticsPanel').then((m) => ({ default: m.DiagnosticsPanel })),
-);
-const ReportingPanel = lazy(() =>
-  import('./ReportingPanel').then((m) => ({ default: m.ReportingPanel })),
-);
 
 export interface SettingsPanelRegistryEntry {
   component: Component<any>;
@@ -96,9 +87,6 @@ export const createSettingsPanelRegistry = (
   },
   docker: {
     component: context.dockerPanel,
-  },
-  'system-logs': {
-    component: SystemLogsPanel,
   },
   'system-general': {
     component: GeneralSettingsPanel,
@@ -170,11 +158,5 @@ export const createSettingsPanelRegistry = (
   },
   'security-webhooks': {
     component: AuditWebhookPanel,
-  },
-  diagnostics: {
-    component: DiagnosticsPanel,
-  },
-  reporting: {
-    component: ReportingPanel,
   },
 });

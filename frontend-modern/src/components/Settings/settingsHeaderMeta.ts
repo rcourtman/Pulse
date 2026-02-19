@@ -96,17 +96,4 @@ export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
     title: 'Audit Webhooks',
     description: 'Configure real-time delivery of audit events to external systems.',
   },
-  diagnostics: {
-    title: 'Diagnostics',
-    description:
-      'Inspect discovery scans, connection health, and runtime metrics for troubleshooting.',
-  },
-  reporting: {
-    title: 'Reporting',
-    description: 'Generate and export infrastructure reports in PDF and CSV formats.',
-  },
-  'system-logs': {
-    title: 'System Logs',
-    description: 'View real-time system logs and download support bundles.',
-  },
 };

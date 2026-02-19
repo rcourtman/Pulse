@@ -23,28 +23,32 @@ import type { DashboardRecoverySummary } from '@/hooks/useDashboardRecovery';
 
 const CARD_THEMES = {
     blue: {
-        iconBg: 'bg-blue-50 dark:bg-blue-900/20',
-        iconColor: 'text-blue-500 dark:text-blue-400',
-        hoverBorder: 'hover:border-blue-400 dark:hover:border-blue-500',
-        hoverIconBg: 'group-hover:bg-blue-100 dark:group-hover:bg-blue-900/30',
+        iconBg: 'bg-gradient-to-br from-blue-500/10 to-blue-600/5 dark:from-blue-400/20 dark:to-blue-600/10',
+        iconColor: 'text-blue-600 dark:text-blue-400',
+        hoverBorder: 'hover:border-blue-400/60 dark:hover:border-blue-500/60 hover:shadow-[0_4px_20px_rgba(59,130,246,0.15)] dark:hover:shadow-[0_4px_20px_rgba(59,130,246,0.1)]',
+        hoverIconBg: 'group-hover:from-blue-500/20 group-hover:to-blue-600/10 dark:group-hover:from-blue-400/30 dark:group-hover:to-blue-600/20',
+        glowBg: 'group-hover:bg-blue-50/50 dark:group-hover:bg-blue-900/5',
     },
     purple: {
-        iconBg: 'bg-purple-50 dark:bg-purple-900/20',
-        iconColor: 'text-purple-500 dark:text-purple-400',
-        hoverBorder: 'hover:border-purple-400 dark:hover:border-purple-500',
-        hoverIconBg: 'group-hover:bg-purple-100 dark:group-hover:bg-purple-900/30',
+        iconBg: 'bg-gradient-to-br from-purple-500/10 to-purple-600/5 dark:from-purple-400/20 dark:to-purple-600/10',
+        iconColor: 'text-purple-600 dark:text-purple-400',
+        hoverBorder: 'hover:border-purple-400/60 dark:hover:border-purple-500/60 hover:shadow-[0_4px_20px_rgba(168,85,247,0.15)] dark:hover:shadow-[0_4px_20px_rgba(168,85,247,0.1)]',
+        hoverIconBg: 'group-hover:from-purple-500/20 group-hover:to-purple-600/10 dark:group-hover:from-purple-400/30 dark:group-hover:to-purple-600/20',
+        glowBg: 'group-hover:bg-purple-50/50 dark:group-hover:bg-purple-900/5',
     },
     cyan: {
-        iconBg: 'bg-cyan-50 dark:bg-cyan-900/20',
+        iconBg: 'bg-gradient-to-br from-cyan-500/10 to-cyan-600/5 dark:from-cyan-400/20 dark:to-cyan-600/10',
         iconColor: 'text-cyan-600 dark:text-cyan-400',
-        hoverBorder: 'hover:border-cyan-400 dark:hover:border-cyan-500',
-        hoverIconBg: 'group-hover:bg-cyan-100 dark:group-hover:bg-cyan-900/30',
+        hoverBorder: 'hover:border-cyan-400/60 dark:hover:border-cyan-500/60 hover:shadow-[0_4px_20px_rgba(6,182,212,0.15)] dark:hover:shadow-[0_4px_20px_rgba(6,182,212,0.1)]',
+        hoverIconBg: 'group-hover:from-cyan-500/20 group-hover:to-cyan-600/10 dark:group-hover:from-cyan-400/30 dark:group-hover:to-cyan-600/20',
+        glowBg: 'group-hover:bg-cyan-50/50 dark:group-hover:bg-cyan-900/5',
     },
     emerald: {
-        iconBg: 'bg-emerald-50 dark:bg-emerald-900/20',
+        iconBg: 'bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 dark:from-emerald-400/20 dark:to-emerald-600/10',
         iconColor: 'text-emerald-600 dark:text-emerald-400',
-        hoverBorder: 'hover:border-emerald-400 dark:hover:border-emerald-500',
-        hoverIconBg: 'group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900/30',
+        hoverBorder: 'hover:border-emerald-400/60 dark:hover:border-emerald-500/60 hover:shadow-[0_4px_20px_rgba(16,185,129,0.15)] dark:hover:shadow-[0_4px_20px_rgba(16,185,129,0.1)]',
+        hoverIconBg: 'group-hover:from-emerald-500/20 group-hover:to-emerald-600/10 dark:group-hover:from-emerald-400/30 dark:group-hover:to-emerald-600/20',
+        glowBg: 'group-hover:bg-emerald-50/50 dark:group-hover:bg-emerald-900/5',
     },
 } as const;
 
@@ -52,11 +56,10 @@ function SeverityChip(props: { severity: 'warning' | 'critical' }) {
     const isWarning = () => props.severity === 'warning';
     return (
         <span
-            class={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${
-                isWarning()
+            class={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${isWarning()
                     ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
                     : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
-            }`}
+                }`}
         >
             <span class={`w-1.5 h-1.5 rounded-full ${isWarning() ? 'bg-amber-500' : 'bg-red-500'}`} />
             {isWarning() ? 'Warning' : 'Critical'}
@@ -142,8 +145,8 @@ export function DashboardHero(props: DashboardHeroProps) {
         'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold border';
 
     return (
-        <div class="space-y-3">
-            <Card padding="none" class="border border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800">
+        <div class="space-y-4">
+            <Card padding="none" tone="glass">
                 <div class="px-4 py-2.5 flex items-center justify-between gap-3">
                     <div class="flex items-center gap-2.5 min-w-0">
                         <div class={`relative rounded-md p-1.5 ${statusConfig().bg}`}>
@@ -197,7 +200,8 @@ export function DashboardHero(props: DashboardHeroProps) {
                 <a href={INFRASTRUCTURE_PATH} class="group block">
                     <Card
                         padding="none"
-                        class={`h-full p-4 ${CARD_THEMES.blue.hoverBorder} transition-all duration-300 cursor-pointer hover:shadow-sm hover:-translate-y-0.5 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700`}
+                        tone="glass"
+                        class={`h-full p-5 ${CARD_THEMES.blue.hoverBorder} ${CARD_THEMES.blue.glowBg} transition-all duration-300 cursor-pointer hover:-translate-y-1 relative overflow-hidden`}
                     >
                         <div class="flex items-start justify-between gap-2 mb-3">
                             <div class="flex items-center gap-2 min-w-0">
@@ -241,7 +245,8 @@ export function DashboardHero(props: DashboardHeroProps) {
                 <a href={WORKLOADS_PATH} class="group block">
                     <Card
                         padding="none"
-                        class={`h-full p-4 ${CARD_THEMES.purple.hoverBorder} transition-all duration-300 cursor-pointer hover:shadow-sm hover:-translate-y-0.5 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700`}
+                        tone="glass"
+                        class={`h-full p-5 ${CARD_THEMES.purple.hoverBorder} ${CARD_THEMES.purple.glowBg} transition-all duration-300 cursor-pointer hover:-translate-y-1 relative overflow-hidden`}
                     >
                         <div class="flex items-start justify-between gap-2 mb-3">
                             <div class="flex items-center gap-2 min-w-0">
@@ -271,7 +276,8 @@ export function DashboardHero(props: DashboardHeroProps) {
                 <a href={buildStoragePath()} class="group block">
                     <Card
                         padding="none"
-                        class={`h-full p-4 ${CARD_THEMES.cyan.hoverBorder} transition-all duration-300 cursor-pointer hover:shadow-sm hover:-translate-y-0.5 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700`}
+                        tone="glass"
+                        class={`h-full p-5 ${CARD_THEMES.cyan.hoverBorder} ${CARD_THEMES.cyan.glowBg} transition-all duration-300 cursor-pointer hover:-translate-y-1 relative overflow-hidden`}
                     >
                         <div class="flex items-start justify-between gap-2 mb-3">
                             <div class="flex items-center gap-2 min-w-0">
@@ -305,7 +311,8 @@ export function DashboardHero(props: DashboardHeroProps) {
                 <a href={buildRecoveryPath()} class="group block">
                     <Card
                         padding="none"
-                        class={`h-full p-4 ${CARD_THEMES.emerald.hoverBorder} transition-all duration-300 cursor-pointer hover:shadow-sm hover:-translate-y-0.5 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700`}
+                        tone="glass"
+                        class={`h-full p-5 ${CARD_THEMES.emerald.hoverBorder} ${CARD_THEMES.emerald.glowBg} transition-all duration-300 cursor-pointer hover:-translate-y-1 relative overflow-hidden`}
                     >
                         <div class="flex items-start justify-between gap-2 mb-3">
                             <div class="flex items-center gap-2 min-w-0">

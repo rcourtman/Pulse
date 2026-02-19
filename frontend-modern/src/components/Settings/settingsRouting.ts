@@ -8,7 +8,6 @@ export type SettingsTab =
   | 'system-recovery'
   | 'system-ai'
   | 'system-relay'
-  | 'system-logs'
   | 'system-pro'
   | 'organization-overview'
   | 'organization-access'
@@ -22,9 +21,7 @@ export type SettingsTab =
   | 'security-roles'
   | 'security-users'
   | 'security-audit'
-  | 'security-webhooks'
-  | 'diagnostics'
-  | 'reporting';
+  | 'security-webhooks';
 
 export type AgentKey = 'pve' | 'pbs' | 'pmg';
 
@@ -62,9 +59,6 @@ const SETTINGS_PATH_ALIASES: Record<string, string> = {
   '/settings/updates': '/settings/system-updates',
   '/settings/operations/updates': '/settings/system-updates',
   '/settings/integrations/relay': '/settings/system-relay',
-  '/settings/system-logs': '/settings/operations/logs',
-  '/settings/diagnostics': '/settings/operations/diagnostics',
-  '/settings/reporting': '/settings/operations/reporting',
   '/settings/security': '/settings/security-overview',
   '/settings/api': '/settings/integrations/api',
   '/settings/billing': '/settings/organization/billing',
@@ -119,8 +113,6 @@ export function deriveTabFromPath(path: string): SettingsTab {
   if (canonicalPath.includes('/settings/plan')) return 'organization-billing';
   if (canonicalPath.includes('/settings/organization/billing')) return 'organization-billing';
   if (canonicalPath.includes('/settings/organization')) return 'organization-overview';
-  if (canonicalPath.includes('/settings/operations/logs')) return 'system-logs';
-  if (canonicalPath.includes('/settings/system-logs')) return 'system-logs';
 
   if (canonicalPath.includes('/settings/integrations/api')) return 'api';
   if (canonicalPath.includes('/settings/api')) return 'api';
@@ -136,10 +128,6 @@ export function deriveTabFromPath(path: string): SettingsTab {
 
   if (canonicalPath.includes('/settings/operations/updates')) return 'system-updates';
   if (canonicalPath.includes('/settings/updates')) return 'system-updates';
-  if (canonicalPath.includes('/settings/operations/diagnostics')) return 'diagnostics';
-  if (canonicalPath.includes('/settings/diagnostics')) return 'diagnostics';
-  if (canonicalPath.includes('/settings/operations/reporting')) return 'reporting';
-  if (canonicalPath.includes('/settings/reporting')) return 'reporting';
 
   // Legacy platform paths map to Proxmox connections.
   if (
@@ -227,10 +215,6 @@ export function deriveTabFromQuery(search: string): SettingsTab | null {
       return 'security-audit';
     case 'security-webhooks':
       return 'security-webhooks';
-    case 'diagnostics':
-      return 'diagnostics';
-    case 'reporting':
-      return 'reporting';
     default:
       return null;
   }
@@ -260,12 +244,6 @@ export function settingsTabPath(tab: SettingsTab): string {
       return '/settings/integrations/api';
     case 'system-relay':
       return '/settings/system-relay';
-    case 'diagnostics':
-      return '/settings/operations/diagnostics';
-    case 'reporting':
-      return '/settings/operations/reporting';
-    case 'system-logs':
-      return '/settings/operations/logs';
     default:
       return `/settings/${tab}`;
   }

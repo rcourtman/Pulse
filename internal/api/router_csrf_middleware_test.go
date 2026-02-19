@@ -42,6 +42,28 @@ func newRouterWithSession(t *testing.T) (*Router, string) {
 	return router, token
 }
 
+func newRouterWithProxyAuth(t *testing.T) *Router {
+	t.Helper()
+	t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "")
+	resetTrustedProxyConfig()
+
+	dir := t.TempDir()
+	InitSessionStore(dir)
+	InitCSRFStore(dir)
+
+	cfg := &config.Config{
+		ProxyAuthSecret:     "proxy-secret",
+		ProxyAuthUserHeader: "X-Proxy-User",
+		DataPath:            dir,
+		ConfigPath:          dir,
+	}
+
+	return &Router{
+		mux:    http.NewServeMux(),
+		config: cfg,
+	}
+}
+
 func TestRouterCSRFEnforcedForSessionRequests(t *testing.T) {
 	router, sessionToken := newRouterWithSession(t)
 
@@ -71,6 +93,48 @@ func TestRouterCSRFAllowsValidToken(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/secure", nil)
 	req.AddCookie(&http.Cookie{Name: "pulse_session", Value: sessionToken})
 	req.Header.Set("X-CSRF-Token", csrfToken)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d (%s)", http.StatusOK, rec.Code, rec.Body.String())
+	}
+}
+
+func TestRouterCSRFBlocksCrossSiteProxyAuthMutation(t *testing.T) {
+	router := newRouterWithProxyAuth(t)
+
+	router.mux.HandleFunc("/api/secure", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/secure", nil)
+	req.Host = "pulse.example.com"
+	req.Header.Set("X-Proxy-Secret", "proxy-secret")
+	req.Header.Set("X-Proxy-User", "alice")
+	req.Header.Set("Origin", "https://evil.example.com")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected status %d, got %d (%s)", http.StatusForbidden, rec.Code, rec.Body.String())
+	}
+}
+
+func TestRouterCSRFAcceptsSameOriginProxyAuthMutation(t *testing.T) {
+	router := newRouterWithProxyAuth(t)
+
+	router.mux.HandleFunc("/api/secure", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/secure", nil)
+	req.Host = "pulse.example.com"
+	req.Header.Set("X-Proxy-Secret", "proxy-secret")
+	req.Header.Set("X-Proxy-User", "alice")
+	req.Header.Set("Origin", "http://pulse.example.com")
 	rec := httptest.NewRecorder()
 
 	router.ServeHTTP(rec, req)

@@ -2,6 +2,7 @@ import { Component, createSignal, Show } from 'solid-js';
 import { showError, showSuccess } from '@/utils/toast';
 import { apiFetch, apiFetchJSON } from '@/utils/apiClient';
 import { logger } from '@/utils/logger';
+import { Copy, Check, Terminal } from 'lucide-solid';
 
 interface WelcomeStepProps {
     onNext: () => void;
@@ -17,6 +18,18 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
     const [isDocker, setIsDocker] = createSignal(false);
     const [inContainer, setInContainer] = createSignal(false);
     const [lxcCtid, setLxcCtid] = createSignal('');
+    const [copied, setCopied] = createSignal(false);
+
+    const copyCommand = async () => {
+        try {
+            await navigator.clipboard.writeText(getTokenCommand());
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+            showSuccess('Command copied to clipboard');
+        } catch (err) {
+            showError('Failed to copy command');
+        }
+    };
 
     // Fetch bootstrap info on mount
     const fetchBootstrapInfo = async () => {
@@ -110,16 +123,41 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
                             Run the following command on your host to retrieve the secure bootstrap token:
                         </p>
 
-                        <div class="bg-slate-50 dark:bg-black/40 rounded-xl p-4 font-mono text-sm text-slate-800 dark:text-emerald-400 mb-6 border border-slate-200/80 dark:border-slate-700/50 shadow-inner overflow-x-auto flex items-center">
-                            <span class="opacity-50 select-none mr-3 text-slate-400 dark:text-slate-500">$</span>
-                            <code class="whitespace-nowrap">{getTokenCommand()}</code>
+                        <div class="relative group mb-8">
+                            <div class="absolute -inset-0.5 bg-gradient-to-r from-blue-500 to-emerald-500 rounded-xl blur opacity-20 group-hover:opacity-40 transition duration-500"></div>
+                            <div class="relative bg-slate-900 dark:bg-black/80 rounded-xl p-4 font-mono text-sm text-emerald-400 border border-slate-800 shadow-inner flex items-center justify-between">
+                                <div class="flex items-center space-x-3 overflow-x-auto scrollbar-hide">
+                                    <Terminal class="w-4 h-4 text-slate-500 flex-shrink-0" />
+                                    <code class="whitespace-nowrap select-all">{getTokenCommand()}</code>
+                                </div>
+                                <button
+                                    onClick={copyCommand}
+                                    class="ml-4 flex-shrink-0 p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-all focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                                    title="Copy command"
+                                >
+                                    <Show when={copied()} fallback={<Copy class="w-4 h-4" />}>
+                                        <Check class="w-4 h-4 text-emerald-400" />
+                                    </Show>
+                                </button>
+                            </div>
                         </div>
 
                         <div class="space-y-4">
                             <input
                                 type="text"
                                 value={props.bootstrapToken}
-                                onInput={(e) => props.setBootstrapToken(e.currentTarget.value)}
+                                onInput={(e) => {
+                                    const val = e.currentTarget.value;
+                                    props.setBootstrapToken(val);
+                                    // Premium UX: Auto-submit if we detect a pasted token (length heuristic)
+                                    if (val.length > 20) {
+                                        setTimeout(() => {
+                                            if (props.bootstrapToken === val && !isValidating()) {
+                                                handleUnlock();
+                                            }
+                                        }, 400);
+                                    }
+                                }}
                                 onKeyPress={(e) => e.key === 'Enter' && handleUnlock()}
                                 class="w-full px-5 py-3.5 bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all font-mono shadow-sm"
                                 placeholder="Paste your bootstrap token"

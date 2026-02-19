@@ -12,7 +12,6 @@ const canonicalTabPaths = {
   'system-recovery': '/settings/system-recovery',
   'system-ai': '/settings/system-ai',
   'system-relay': '/settings/system-relay',
-  'system-logs': '/settings/operations/logs',
   'system-pro': '/settings/system-pro',
   'organization-overview': '/settings/organization',
   'organization-access': '/settings/organization/access',
@@ -27,18 +26,15 @@ const canonicalTabPaths = {
   'security-users': '/settings/security-users',
   'security-audit': '/settings/security-audit',
   'security-webhooks': '/settings/security-webhooks',
-  diagnostics: '/settings/operations/diagnostics',
-  reporting: '/settings/operations/reporting',
 } as const satisfies Record<SettingsTab, string>;
 
 const hasFeatures =
   (features: string[]) =>
-  (feature: string): boolean =>
-    features.includes(feature);
+    (feature: string): boolean =>
+      features.includes(feature);
 
 const gatedTabs: Array<[SettingsTab, string]> = [
   ['system-relay', 'relay'],
-  ['reporting', 'advanced_reporting'],
   ['security-webhooks', 'audit_logging'],
   ['organization-overview', 'multi_tenant'],
   ['organization-access', 'multi_tenant'],
@@ -109,9 +105,7 @@ describe('settingsNavigation integration scaffold', () => {
     expect(onMountMatch).toBeTruthy();
     const onMountBody = onMountMatch![1];
     expect(onMountBody).toContain('loadLicenseStatus');
-    expect(onMountBody).not.toContain('loadNodes');
-    expect(onMountBody).not.toContain('loadDiscoveredNodes');
-    expect(onMountBody).not.toContain('loadSecurityStatus');
+    expect(onMountBody).not.toContain('runDiagnostics');
   });
 
   it('panel registry covers all dispatchable tabs', async () => {

@@ -3,7 +3,6 @@ import { trackPaywallViewed } from '@/utils/upgradeMetrics';
 
 export const tabFeatureRequirements: Partial<Record<SettingsTab, string[]>> = {
   'system-relay': ['relay'],
-  reporting: ['advanced_reporting'],
   'security-webhooks': ['audit_logging'],
   'organization-overview': ['multi_tenant'],
   'organization-access': ['multi_tenant'],
