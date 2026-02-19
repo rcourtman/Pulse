@@ -1312,13 +1312,13 @@ const Recovery: Component = () => {
               </div>
 
               <div class="relative h-32 overflow-hidden rounded bg-gray-100 dark:bg-gray-800/80">
-                <div class="absolute bottom-8 left-1 top-2 z-10 w-8 text-[10px] text-gray-500 dark:text-gray-400">
+                <div class="absolute bottom-8 left-1 top-2 hidden w-8 text-[10px] text-gray-500 dark:text-gray-400 md:block">
                   <div class="flex h-full flex-col justify-between text-right">
                     <For each={[...timeline().axisTicks].reverse()}>{(tick) => <span>{tick}</span>}</For>
                   </div>
                 </div>
                 <div
-                  class="absolute bottom-0 left-0 right-0 top-2 overflow-x-auto"
+                  class="absolute bottom-0 left-0 right-0 top-2 overflow-x-auto md:left-10"
                   style="scrollbar-width: none; -ms-overflow-style: none;"
                 >
                   <div class="relative h-full px-2">
