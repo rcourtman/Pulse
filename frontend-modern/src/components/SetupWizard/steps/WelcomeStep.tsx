@@ -92,17 +92,12 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
 
     return (
         <div class="text-center relative">
-            {/* Background Glow */}
-            <div class="absolute inset-0 flex items-center justify-center pointer-events-none -z-10 opacity-50 dark:opacity-30">
-                <div class="w-[500px] h-[500px] bg-blue-500 rounded-full blur-[120px] animate-pulse-slow"></div>
-            </div>
-
             {/* Logo */}
             <div class="mb-10 relative z-10">
                 <img
                     src="/logo.svg"
                     alt="Pulse Logo"
-                    class="w-24 h-24 rounded-lg mb-8 mx-auto animate-pulse-logo shadow-xl dark:shadow-blue-900/20"
+                    class="w-24 h-24 rounded-lg mb-8 mx-auto animate-pulse-logo dark:shadow-none"
                 />
                 <h1 class="text-4xl sm:text-5xl font-bold tracking-tight text-slate-900 dark:text-white mb-4 animate-fade-in delay-100">
                     Welcome to Pulse
@@ -114,18 +109,15 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
 
             {/* Bootstrap token unlock */}
             <Show when={!props.isUnlocked}>
-                <div class="card p-8 max-w-lg mx-auto backdrop-blur-xl bg-white/70 dark:bg-slate-800/70 border border-slate-200/50 dark:border-slate-700/50 text-left shadow-2xl animate-slide-up delay-300 relative overflow-hidden group rounded-2xl">
-                    <div class="absolute inset-0 bg-gradient-to-br from-white/40 to-transparent dark:from-white/5 dark:to-transparent pointer-events-none"></div>
-
+                <div class="p-8 max-w-lg mx-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-left animate-slide-up delay-300 relative group">
                     <div class="relative z-10">
                         <h3 class="text-xl font-semibold text-slate-900 dark:text-white mb-2 tracking-tight">Unlock Setup</h3>
                         <p class="text-sm text-slate-500 dark:text-slate-300 mb-6">
                             Run the following command on your host to retrieve the secure bootstrap token:
                         </p>
 
-                        <div class="relative group mb-8">
-                            <div class="absolute -inset-0.5 bg-gradient-to-r from-blue-500 to-emerald-500 rounded-xl blur opacity-20 group-hover:opacity-40 transition duration-500"></div>
-                            <div class="relative bg-slate-900 dark:bg-black/80 rounded-xl p-4 font-mono text-sm text-emerald-400 border border-slate-800 shadow-inner flex items-center justify-between">
+                        <div class="mb-8">
+                            <div class="bg-slate-900 rounded-lg p-4 font-mono text-sm text-emerald-400 border border-slate-800 flex items-center justify-between">
                                 <div class="flex items-center space-x-3 overflow-x-auto scrollbar-hide">
                                     <Terminal class="w-4 h-4 text-slate-500 flex-shrink-0" />
                                     <code class="whitespace-nowrap select-all">{getTokenCommand()}</code>
@@ -159,7 +151,7 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
                                     }
                                 }}
                                 onKeyPress={(e) => e.key === 'Enter' && handleUnlock()}
-                                class="w-full px-5 py-3.5 bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all font-mono shadow-sm"
+                                class="w-full px-5 py-3.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all font-mono"
                                 placeholder="Paste your bootstrap token"
                                 autofocus
                             />
@@ -167,7 +159,7 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
                             <button
                                 onClick={handleUnlock}
                                 disabled={isValidating() || !props.bootstrapToken.trim()}
-                                class="w-full py-3.5 px-6 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:bg-slate-300 dark:disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed text-white font-medium rounded-xl shadow-[0_4px_14px_0_rgba(37,99,235,0.39)] hover:shadow-[0_6px_20px_rgba(37,99,235,0.23)] transition-all flex justify-center items-center gap-2 duration-200"
+                                class="w-full py-3.5 px-6 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:bg-slate-300 dark:disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-all flex justify-center items-center gap-2 duration-200"
                             >
                                 {isValidating() ? (
                                     <>
@@ -188,7 +180,7 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
                 <div class="animate-enter delay-200">
                     <button
                         onClick={props.onNext}
-                        class="py-4 px-10 bg-blue-600 hover:bg-blue-700 text-white text-lg font-medium rounded-xl shadow-[0_4px_14px_0_rgba(37,99,235,0.39)] hover:shadow-[0_6px_20px_rgba(37,99,235,0.23)] transition-all duration-300 hover:-translate-y-1"
+                        class="py-4 px-10 bg-blue-600 hover:bg-blue-700 text-white text-lg font-medium rounded-lg transition-all duration-300 hover:-translate-y-1"
                     >
                         Get Started →
                     </button>

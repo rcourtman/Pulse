@@ -479,6 +479,14 @@ const Settings: Component<SettingsProps> = (props) => {
   const [disableDockerUpdateActions, setDisableDockerUpdateActions] = createSignal(false);
   const [savingDockerUpdateActions, setSavingDockerUpdateActions] = createSignal(false);
 
+  // Miscellaneous System settings 
+  const [disableLegacyRouteRedirects, setDisableLegacyRouteRedirects] = createSignal(false);
+  const [savingLegacyRedirects, setSavingLegacyRedirects] = createSignal(false);
+  const [reduceProUpsellNoise, setReduceProUpsellNoise] = createSignal(false);
+  const [savingReduceUpsells, setSavingReduceUpsells] = createSignal(false);
+  const [disableLocalUpgradeMetrics, setDisableLocalUpgradeMetrics] = createSignal(false);
+  const [savingUpgradeMetrics, setSavingUpgradeMetrics] = createSignal(false);
+
   const temperatureMonitoringLocked = () =>
     Boolean(
       envOverrides().temperatureMonitoringEnabled || envOverrides()['ENABLE_TEMPERATURE_MONITORING'],
@@ -487,6 +495,10 @@ const Settings: Component<SettingsProps> = (props) => {
     Boolean(envOverrides().hideLocalLogin || envOverrides()['PULSE_AUTH_HIDE_LOCAL_LOGIN']);
   const disableDockerUpdateActionsLocked = () =>
     Boolean(envOverrides().disableDockerUpdateActions || envOverrides()['PULSE_DISABLE_DOCKER_UPDATE_ACTIONS']);
+  const disableLegacyRouteRedirectsLocked = () =>
+    Boolean(envOverrides().disableLegacyRouteRedirects || envOverrides()['PULSE_DISABLE_LEGACY_ROUTE_REDIRECTS']);
+  const disableLocalUpgradeMetricsLocked = () =>
+    Boolean(envOverrides().disableLocalUpgradeMetrics || envOverrides()['PULSE_DISABLE_LOCAL_UPGRADE_METRICS']);
 
   const pvePollingEnvLocked = () =>
     Boolean(envOverrides().pvePollingInterval || envOverrides().PVE_POLLING_INTERVAL);
@@ -608,6 +620,63 @@ const Settings: Component<SettingsProps> = (props) => {
       setDisableDockerUpdateActions(previous);
     } finally {
       setSavingDockerUpdateActions(false);
+    }
+  };
+
+  const handleDisableLegacyRouteRedirectsChange = async (disabled: boolean): Promise<void> => {
+    if (disableLegacyRouteRedirectsLocked() || savingLegacyRedirects()) return;
+    const previous = disableLegacyRouteRedirects();
+    setDisableLegacyRouteRedirects(disabled);
+    setSavingLegacyRedirects(true);
+    try {
+      await SettingsAPI.updateSystemSettings({ disableLegacyRouteRedirects: disabled });
+      const { updateLegacyRouteRedirectsSetting } = await import('@/stores/systemSettings');
+      updateLegacyRouteRedirectsSetting(disabled);
+      notificationStore.success(disabled ? 'Legacy URL redirects disabled' : 'Legacy URL redirects enabled', 2000);
+    } catch (error) {
+      logger.error('Failed to update legacy route redirects setting', error);
+      notificationStore.error(error instanceof Error ? error.message : 'Failed to update legacy route redirects setting');
+      setDisableLegacyRouteRedirects(previous);
+    } finally {
+      setSavingLegacyRedirects(false);
+    }
+  };
+
+  const handleReduceProUpsellNoiseChange = async (enabled: boolean): Promise<void> => {
+    if (savingReduceUpsells()) return;
+    const previous = reduceProUpsellNoise();
+    setReduceProUpsellNoise(enabled);
+    setSavingReduceUpsells(true);
+    try {
+      await SettingsAPI.updateSystemSettings({ reduceProUpsellNoise: enabled });
+      const { updateReduceProUpsellNoiseSetting } = await import('@/stores/systemSettings');
+      updateReduceProUpsellNoiseSetting(enabled);
+      notificationStore.success(enabled ? 'Pro prompts reduced' : 'Pro prompts restored', 2000);
+    } catch (error) {
+      logger.error('Failed to update reduce upsell noise setting', error);
+      notificationStore.error(error instanceof Error ? error.message : 'Failed to update reduce upsell noise setting');
+      setReduceProUpsellNoise(previous);
+    } finally {
+      setSavingReduceUpsells(false);
+    }
+  };
+
+  const handleDisableLocalUpgradeMetricsChange = async (disabled: boolean): Promise<void> => {
+    if (disableLocalUpgradeMetricsLocked() || savingUpgradeMetrics()) return;
+    const previous = disableLocalUpgradeMetrics();
+    setDisableLocalUpgradeMetrics(disabled);
+    setSavingUpgradeMetrics(true);
+    try {
+      await SettingsAPI.updateSystemSettings({ disableLocalUpgradeMetrics: disabled });
+      const { updateDisableLocalUpgradeMetricsSetting } = await import('@/stores/systemSettings');
+      updateDisableLocalUpgradeMetricsSetting(disabled);
+      notificationStore.success(disabled ? 'Local upgrade metrics disabled' : 'Local upgrade metrics enabled', 2000);
+    } catch (error) {
+      logger.error('Failed to update local upgrade metrics setting', error);
+      notificationStore.error(error instanceof Error ? error.message : 'Failed to update local upgrade metrics setting');
+      setDisableLocalUpgradeMetrics(previous);
+    } finally {
+      setSavingUpgradeMetrics(false);
     }
   };
 
@@ -1532,6 +1601,10 @@ const Settings: Component<SettingsProps> = (props) => {
 
         // Load Docker update actions setting
         setDisableDockerUpdateActions(systemSettings.disableDockerUpdateActions ?? false);
+
+        setDisableLegacyRouteRedirects(systemSettings.disableLegacyRouteRedirects ?? false);
+        setReduceProUpsellNoise(systemSettings.reduceProUpsellNoise ?? false);
+        setDisableLocalUpgradeMetrics(systemSettings.disableLocalUpgradeMetrics ?? false);
 
         // Backup polling controls
         if (typeof systemSettings.backupPollingEnabled === 'boolean') {
