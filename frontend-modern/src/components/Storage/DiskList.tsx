@@ -277,31 +277,31 @@ export const DiskList: Component<DiskListProps> = (props) => {
       <Show when={filteredDisks().length > 0}>
         <Card padding="none" tone="glass" class="overflow-hidden">
           <div class="overflow-x-auto" style={{ '-webkit-overflow-scrolling': 'touch' }}>
-            <table class="w-full" style={{ "min-width": "800px" }}>
+            <table class="w-full">
               <thead>
                 <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
                   <th class="px-1 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
                     Node
                   </th>
-                  <th class="px-1 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[9%]">
+                  <th class="hidden md:table-cell px-1 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[9%]">
                     Device
                   </th>
                   <th class="px-1 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[19%]">
                     Model
                   </th>
-                  <th class="px-1 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[7%]">
+                  <th class="hidden md:table-cell px-1 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[7%]">
                     Type
                   </th>
-                  <th class="px-1 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[7%]">
+                  <th class="hidden md:table-cell px-1 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[7%]">
                     FS
                   </th>
                   <th class="px-1 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
                     Health
                   </th>
-                  <th class="px-1 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[13%]">
+                  <th class="hidden md:table-cell px-1 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[13%]">
                     SSD Life
                   </th>
-                  <th class="px-1 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[8%]">
+                  <th class="hidden md:table-cell px-1 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[8%]">
                     Power-On
                   </th>
                   <th class="px-1 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[7%]">
@@ -349,7 +349,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
                               </span>
                             </div>
                           </td>
-                          <td class="px-1 py-1.5 text-xs">
+                          <td class="hidden md:table-cell px-1 py-1.5 text-xs">
                             <span class="font-mono text-gray-600 dark:text-gray-400">
                               {data.devPath}
                             </span>
@@ -359,14 +359,14 @@ export const DiskList: Component<DiskListProps> = (props) => {
                               {data.model || 'Unknown'}
                             </span>
                           </td>
-                          <td class="px-1 py-1.5 text-xs">
+                          <td class="hidden md:table-cell px-1 py-1.5 text-xs">
                             <span
                               class={`inline-block px-1.5 py-0.5 text-[10px] font-medium rounded ${getDiskTypeBadge(data.type)}`}
                             >
                               {data.type.toUpperCase()}
                             </span>
                           </td>
-                          <td class="px-1 py-1.5 text-xs">
+                          <td class="hidden md:table-cell px-1 py-1.5 text-xs">
                             <Show
                               when={data.used && data.used !== 'unknown'}
                               fallback={<span class="text-gray-400">-</span>}
@@ -388,7 +388,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
                               </span>
                             </Show>
                           </td>
-                          <td class="px-1 py-1.5 text-xs">
+                          <td class="hidden md:table-cell px-1 py-1.5 text-xs">
                             <Show
                               when={data.wearout > 0}
                               fallback={<span class="text-gray-400">-</span>}
@@ -411,7 +411,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
                               </div>
                             </Show>
                           </td>
-                          <td class="px-1 py-1.5 text-xs">
+                          <td class="hidden md:table-cell px-1 py-1.5 text-xs">
                             <Show
                               when={data.smartAttributes?.powerOnHours != null}
                               fallback={<span class="text-gray-400">-</span>}
