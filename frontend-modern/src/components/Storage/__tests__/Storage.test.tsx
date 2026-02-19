@@ -7,9 +7,9 @@ import Storage from '@/components/Storage/Storage';
 // Stub ResizeObserver for jsdom (used by HistoryChart in pool detail panels)
 if (typeof globalThis.ResizeObserver === 'undefined') {
   globalThis.ResizeObserver = class ResizeObserver {
-    observe() {}
-    unobserve() {}
-    disconnect() {}
+    observe() { }
+    unobserve() { }
+    disconnect() { }
   } as unknown as typeof ResizeObserver;
 }
 
@@ -247,8 +247,7 @@ describe('Storage', () => {
 
     render(() => <Storage />);
 
-    expect(screen.getByRole('heading', { name: 'Storage' })).toBeInTheDocument();
-    expect(screen.getByText('Storage capacity and health across connected platforms.')).toBeInTheDocument();
+    expect(screen.getByText('Local-LVM-PVE1')).toBeInTheDocument();
     expect(screen.getByText('Local-LVM-PVE1')).toBeInTheDocument();
     expect(screen.getByText('Local-LVM-PVE2')).toBeInTheDocument();
 

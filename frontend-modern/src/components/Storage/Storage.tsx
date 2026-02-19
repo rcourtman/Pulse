@@ -474,17 +474,17 @@ const Storage: Component = () => {
               <div class="h-5 w-px bg-slate-200 dark:bg-slate-600 hidden sm:block"></div>
               <select
                 value={selectedNodeId()}
-              onChange={(event) => setSelectedNodeId(event.currentTarget.value)}
-              class="px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-              aria-label="Node"
-            >
-              <option value="all">All Nodes</option>
-              <For each={nodeOptions()}>{(node) => <option value={node.id}>{node.label}</option>}</For>
-            </select>
-            <div class="h-5 w-px bg-slate-200 dark:bg-slate-600 hidden sm:block"></div>
-          </>
-        }
-      />
+                onChange={(event) => setSelectedNodeId(event.currentTarget.value)}
+                class="px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                aria-label="Node"
+              >
+                <option value="all">All Nodes</option>
+                <For each={nodeOptions()}>{(node) => <option value={node.id}>{node.label}</option>}</For>
+              </select>
+              <div class="h-5 w-px bg-slate-200 dark:bg-slate-600 hidden sm:block"></div>
+            </>
+          }
+        />
       </Show>
 
       <Show when={reconnecting()}>
@@ -582,104 +582,103 @@ const Storage: Component = () => {
                           );
                           const groupItems = createMemo(() => group().items);
                           return (
-                          <>
-                            <StorageGroupRow
-                              group={group()}
-                              groupBy={groupBy()}
-                              expanded={expandedGroups().has(groupKey)}
-                              onToggle={() => toggleGroup(groupKey)}
-                            />
-                            <Show when={expandedGroups().has(groupKey)}>
-                            {/* Inner <Index> tracks by position — updates props reactively instead of recreating DOM */}
-                            <Index each={groupItems()}>
-                              {(record) => {
-                                const isExpanded = () => expandedPoolId() === record().id;
-                                const alertState = createMemo(() => getRecordAlertState(record().id));
-                                const nodeLabel = createMemo(() => getRecordNodeLabel(record()).trim().toLowerCase());
-                                const parentNodeOnline = createMemo(() => {
-                                  const label = nodeLabel();
-                                  if (!label) return true;
-                                  const nodeStatus = nodeOnlineByLabel().get(label);
-                                  return nodeStatus === undefined ? true : nodeStatus;
-                                });
-                                const showAlertHighlight = createMemo(
-                                  () => alertState().hasUnacknowledgedAlert && parentNodeOnline(),
-                                );
-                                const hasAcknowledgedOnlyAlert = createMemo(
-                                  () => alertState().hasAcknowledgedOnlyAlert && parentNodeOnline(),
-                                );
-                                const isResourceHighlighted = () => highlightedRecordId() === record().id;
-                                const rowClass = createMemo(() => {
-                                  const classes = [
-                                    'transition-all duration-200',
-                                    'hover:bg-slate-50 dark:hover:bg-slate-800/30',
-                                  ];
-
-                                  if (showAlertHighlight()) {
-                                    classes.push(
-                                      alertState().severity === 'critical'
-                                        ? 'bg-red-50 dark:bg-red-950/30'
-                                        : 'bg-yellow-50 dark:bg-yellow-950/20',
+                            <>
+                              <StorageGroupRow
+                                group={group()}
+                                groupBy={groupBy()}
+                                expanded={expandedGroups().has(groupKey)}
+                                onToggle={() => toggleGroup(groupKey)}
+                              />
+                              <Show when={expandedGroups().has(groupKey)}>
+                                {/* Inner <Index> tracks by position — updates props reactively instead of recreating DOM */}
+                                <Index each={groupItems()}>
+                                  {(record) => {
+                                    const isExpanded = () => expandedPoolId() === record().id;
+                                    const alertState = createMemo(() => getRecordAlertState(record().id));
+                                    const nodeLabel = createMemo(() => getRecordNodeLabel(record()).trim().toLowerCase());
+                                    const parentNodeOnline = createMemo(() => {
+                                      const label = nodeLabel();
+                                      if (!label) return true;
+                                      const nodeStatus = nodeOnlineByLabel().get(label);
+                                      return nodeStatus === undefined ? true : nodeStatus;
+                                    });
+                                    const showAlertHighlight = createMemo(
+                                      () => alertState().hasUnacknowledgedAlert && parentNodeOnline(),
                                     );
-                                  } else if (isResourceHighlighted()) {
-                                    classes.push('bg-blue-50/60 dark:bg-blue-900/20 ring-1 ring-blue-300 dark:ring-blue-600');
-                                  } else if (hasAcknowledgedOnlyAlert()) {
-                                    classes.push('bg-slate-50/40 dark:bg-slate-800');
-                                  }
+                                    const hasAcknowledgedOnlyAlert = createMemo(
+                                      () => alertState().hasAcknowledgedOnlyAlert && parentNodeOnline(),
+                                    );
+                                    const isResourceHighlighted = () => highlightedRecordId() === record().id;
+                                    const rowClass = createMemo(() => {
+                                      const classes = [
+                                        'transition-all duration-200',
+                                        'hover:bg-slate-50 dark:hover:bg-slate-800/30',
+                                      ];
 
-                                  if (isExpanded()) {
-                                    classes.push('bg-slate-50 dark:bg-slate-800');
-                                  }
+                                      if (showAlertHighlight()) {
+                                        classes.push(
+                                          alertState().severity === 'critical'
+                                            ? 'bg-red-50 dark:bg-red-950/30'
+                                            : 'bg-yellow-50 dark:bg-yellow-950/20',
+                                        );
+                                      } else if (isResourceHighlighted()) {
+                                        classes.push('bg-blue-50/60 dark:bg-blue-900/20 ring-1 ring-blue-300 dark:ring-blue-600');
+                                      } else if (hasAcknowledgedOnlyAlert()) {
+                                        classes.push('bg-slate-50/40 dark:bg-slate-800');
+                                      }
 
-                                  return classes.join(' ');
-                                });
+                                      if (isExpanded()) {
+                                        classes.push('bg-slate-50 dark:bg-slate-800');
+                                      }
 
-                                const rowStyle = createMemo(() => {
-                                  if (showAlertHighlight()) {
-                                    return {
-                                      'box-shadow': `inset 4px 0 0 0 ${
-                                        alertState().severity === 'critical' ? '#ef4444' : '#eab308'
-                                      }`,
-                                    };
-                                  }
-                                  if (hasAcknowledgedOnlyAlert()) {
-                                    return {
-                                      'box-shadow': 'inset 4px 0 0 0 rgba(156, 163, 175, 0.8)',
-                                    };
-                                  }
-                                  return {} as Record<string, string>;
-                                });
+                                      return classes.join(' ');
+                                    });
 
-                                return (
-                                  <StoragePoolRow
-                                    record={record()}
-                                    groupBy={groupBy()}
-                                    expanded={isExpanded()}
-                                    groupExpanded={expandedGroups().has(groupKey)}
-                                    onToggleExpand={() =>
-                                      setExpandedPoolId((current) =>
-                                        current === record().id ? null : record().id,
-                                      )
-                                    }
-                                    rowClass={rowClass()}
-                                    rowStyle={rowStyle()}
-                                    physicalDisks={physicalDisks()}
-                                    alertDataAttrs={{
-                                      'data-row-id': record().id,
-                                      'data-alert-state': showAlertHighlight()
-                                        ? 'unacknowledged'
-                                        : hasAcknowledgedOnlyAlert()
-                                          ? 'acknowledged'
-                                          : 'none',
-                                      'data-alert-severity': alertState().severity || 'none',
-                                      'data-resource-highlighted': isResourceHighlighted() ? 'true' : 'false',
-                                    }}
-                                  />
-                                );
-                              }}
-                            </Index>
-                            </Show>
-                          </>
+                                    const rowStyle = createMemo(() => {
+                                      if (showAlertHighlight()) {
+                                        return {
+                                          'box-shadow': `inset 4px 0 0 0 ${alertState().severity === 'critical' ? '#ef4444' : '#eab308'
+                                            }`,
+                                        };
+                                      }
+                                      if (hasAcknowledgedOnlyAlert()) {
+                                        return {
+                                          'box-shadow': 'inset 4px 0 0 0 rgba(156, 163, 175, 0.8)',
+                                        };
+                                      }
+                                      return {} as Record<string, string>;
+                                    });
+
+                                    return (
+                                      <StoragePoolRow
+                                        record={record()}
+                                        groupBy={groupBy()}
+                                        expanded={isExpanded()}
+                                        groupExpanded={expandedGroups().has(groupKey)}
+                                        onToggleExpand={() =>
+                                          setExpandedPoolId((current) =>
+                                            current === record().id ? null : record().id,
+                                          )
+                                        }
+                                        rowClass={rowClass()}
+                                        rowStyle={rowStyle()}
+                                        physicalDisks={physicalDisks()}
+                                        alertDataAttrs={{
+                                          'data-row-id': record().id,
+                                          'data-alert-state': showAlertHighlight()
+                                            ? 'unacknowledged'
+                                            : hasAcknowledgedOnlyAlert()
+                                              ? 'acknowledged'
+                                              : 'none',
+                                          'data-alert-severity': alertState().severity || 'none',
+                                          'data-resource-highlighted': isResourceHighlighted() ? 'true' : 'false',
+                                        }}
+                                      />
+                                    );
+                                  }}
+                                </Index>
+                              </Show>
+                            </>
                           );
                         }}
                       </For>
