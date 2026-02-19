@@ -1055,12 +1055,12 @@ const Recovery: Component = () => {
 
           <Show when={filteredRollups().length > 0}>
             <div class="overflow-x-auto">
-              <table class="w-full text-xs">
+              <table class="w-full table-fixed text-xs">
                 <thead>
                   <tr class="border-b border-gray-200 bg-gray-50 text-left text-[10px] uppercase tracking-wide text-gray-500 dark:border-gray-700 dark:bg-gray-800/70 dark:text-gray-400">
                     {([['subject', 'Subject'], ['source', 'Source'], ['lastBackup', 'Last Backup'], ['outcome', 'Outcome']] as const).map(([col, label]) => (
                       <th
-                        class={`px-1.5 sm:px-2 py-1 cursor-pointer select-none hover:text-gray-700 dark:hover:text-gray-200 transition-colors${col === 'source' ? ' hidden md:table-cell' : ''}`}
+                        class={`px-1.5 sm:px-2 py-1 cursor-pointer select-none hover:text-gray-700 dark:hover:text-gray-200 transition-colors${col === 'source' ? ' hidden md:table-cell w-[110px]' : col === 'lastBackup' ? ' w-[75px]' : col === 'outcome' ? ' w-[70px]' : ''}`}
                         onClick={() => toggleProtectedSort(col)}
                       >
                         <span class="inline-flex items-center gap-1">
