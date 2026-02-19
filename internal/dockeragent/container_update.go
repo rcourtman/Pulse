@@ -19,6 +19,8 @@ import (
 type ContainerUpdateResult struct {
 	Success         bool   `json:"success"`
 	ContainerID     string `json:"containerId"`
+	OldContainerID  string `json:"oldContainerId,omitempty"`
+	NewContainerID  string `json:"newContainerId,omitempty"`
 	ContainerName   string `json:"containerName"`
 	OldImageDigest  string `json:"oldImageDigest,omitempty"`
 	NewImageDigest  string `json:"newImageDigest,omitempty"`
@@ -108,7 +110,20 @@ func (a *Agent) handleUpdateContainerCommand(ctx context.Context, target TargetC
 		message = result.Error
 	}
 
-	if err := a.sendCommandAck(ctx, target, command.ID, status, message); err != nil {
+	var payload map[string]any
+	if result.Success && result.OldContainerID != "" && result.NewContainerID != "" && result.OldContainerID != result.NewContainerID {
+		payload = map[string]any{
+			"oldContainerId": result.OldContainerID,
+			"newContainerId": result.NewContainerID,
+		}
+	}
+
+	if payload != nil {
+		err = a.sendCommandAckWithPayload(ctx, target, command.ID, status, message, payload)
+	} else {
+		err = a.sendCommandAck(ctx, target, command.ID, status, message)
+	}
+	if err != nil {
 		a.logger.Error().
 			Err(err).
 			Str("commandID", command.ID).
@@ -137,7 +152,8 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 	ctx = updateCtx
 
 	result := ContainerUpdateResult{
-		ContainerID: containerID,
+		ContainerID:    containerID,
+		OldContainerID: containerID,
 	}
 
 	// Helper to report progress (handles nil progressFn)
@@ -284,6 +300,8 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 	}
 
 	newContainerID := createResp.ID
+	result.NewContainerID = newContainerID
+	result.ContainerID = newContainerID
 	a.logger.Info().Str("newContainerId", newContainerID).Msg("New container created")
 
 	// 7. Connect to additional networks (if more than one)

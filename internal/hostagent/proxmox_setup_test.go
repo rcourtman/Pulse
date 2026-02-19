@@ -520,6 +520,7 @@ func TestProxmoxSetup_RunAll(t *testing.T) {
 
 	t.Run("forced type", func(t *testing.T) {
 		p := NewProxmoxSetup(zerolog.Nop(), http.DefaultClient, mc, "https://pulse", "token", "pbs", "host", "", false)
+		p.retryBackoffs = []time.Duration{} // disable retries so registration fails immediately in test
 		mc.statFn = func(name string) (os.FileInfo, error) { return nil, os.ErrNotExist }
 		mc.commandCombinedOutputFn = func(ctx context.Context, name string, arg ...string) (string, error) {
 			if name == "proxmox-backup-manager" && len(arg) > 1 && arg[1] == "generate-token" {

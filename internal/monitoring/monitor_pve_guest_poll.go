@@ -30,8 +30,18 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 	// if container config fetching intermittently fails (permissions or transient API errors).
 	prevState := m.GetState()
 	prevContainerIsOCI := seedPrevContainerOCI(instanceName, prevState)
+	// Build a lookup map from VM guest ID -> linked host agent.
+	// When a Pulse agent runs inside a VM, it reads /proc/meminfo directly
+	// and gets accurate MemAvailable (excluding page cache). We use this as
+	// a memory fallback before the inflated status.Mem value. Refs: #1270
+	vmIDToHostAgent := make(map[string]models.Host)
+	for _, h := range prevState.Hosts {
+		if h.LinkedVMID != "" && h.Status == "online" && h.Memory.Total > 0 {
+			vmIDToHostAgent[h.LinkedVMID] = h
+		}
+	}
 
-	allVMs, allContainers := m.collectGuestsFromClusterResources(ctx, instanceName, resources, client, prevContainerIsOCI)
+	allVMs, allContainers := m.collectGuestsFromClusterResources(ctx, instanceName, resources, client, prevContainerIsOCI, vmIDToHostAgent)
 
 	allVMs, allContainers = m.preserveGuestsForGracePeriod(instanceName, resources, prevState, nodeEffectiveStatus, allVMs, allContainers)
 
@@ -63,6 +73,7 @@ func (m *Monitor) collectGuestsFromClusterResources(
 	resources []proxmox.ClusterResource,
 	client PVEClientInterface,
 	prevContainerIsOCI map[int]bool,
+	vmIDToHostAgent map[string]models.Host,
 ) ([]models.VM, []models.Container) {
 	allVMs := make([]models.VM, 0, len(resources))
 	allContainers := make([]models.Container, 0, len(resources))
@@ -81,7 +92,7 @@ func (m *Monitor) collectGuestsFromClusterResources(
 
 		switch res.Type {
 		case "qemu":
-			vm, ok := m.handleClusterVMResource(ctx, instanceName, res, guestID, client)
+			vm, ok := m.handleClusterVMResource(ctx, instanceName, res, guestID, client, vmIDToHostAgent)
 			if !ok {
 				continue
 			}
@@ -104,8 +115,9 @@ func (m *Monitor) handleClusterVMResource(
 	res proxmox.ClusterResource,
 	guestID string,
 	client PVEClientInterface,
+	vmIDToHostAgent map[string]models.Host,
 ) (models.VM, bool) {
-	vm, guestRaw, memorySource, sampleTime, ok := m.buildVMFromClusterResource(ctx, instanceName, res, client)
+	vm, guestRaw, memorySource, sampleTime, ok := m.buildVMFromClusterResource(ctx, instanceName, res, client, guestID, vmIDToHostAgent)
 	if !ok {
 		return models.VM{}, false
 	}

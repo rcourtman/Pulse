@@ -1965,6 +1965,12 @@ func (m *Monitor) cleanupRRDCache(now time.Time) {
 				Msg("Cleaned up stale RRD cache entry")
 		}
 	}
+
+	for key, entry := range m.vmRRDMemCache {
+		if now.Sub(entry.fetchedAt) > maxAge {
+			delete(m.vmRRDMemCache, key)
+		}
+	}
 }
 
 // cleanupMetricsHistory removes stale entries from the metrics history.

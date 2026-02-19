@@ -60,6 +60,8 @@ type VMMemoryRaw struct {
 	MemInfoCached         uint64 `json:"meminfoCached,omitempty"`
 	MemInfoShared         uint64 `json:"meminfoShared,omitempty"`
 	MemInfoTotalMinusUsed uint64 `json:"meminfoTotalMinusUsed,omitempty"`
+	HostAgentTotal        uint64 `json:"hostAgentTotal,omitempty"`
+	HostAgentUsed         uint64 `json:"hostAgentUsed,omitempty"`
 	Agent                 int    `json:"agent,omitempty"`
 	DerivedFromBall       bool   `json:"derivedFromBalloon,omitempty"`
 }

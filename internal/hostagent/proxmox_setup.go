@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -27,6 +28,7 @@ type ProxmoxSetup struct {
 	reportIP           string
 	insecureSkipVerify bool
 	collector          SystemCollector
+	retryBackoffs      []time.Duration // overridable for testing; nil uses defaults
 }
 
 // ProxmoxSetupResult contains the result of a successful Proxmox setup.
@@ -783,6 +785,53 @@ func scoreIPv4(ip string) int {
 	}
 }
 
+// clientError represents a non-retryable HTTP client error (4xx).
+type clientError struct {
+	statusCode int
+	body       string
+}
+
+func (e *clientError) Error() string {
+	return fmt.Sprintf("auto-register returned HTTP %d: %s", e.statusCode, e.body)
+}
+
+// permanentError wraps an error that should not be retried (e.g. malformed URL).
+type permanentError struct {
+	err error
+}
+
+func (e *permanentError) Error() string { return e.err.Error() }
+func (e *permanentError) Unwrap() error { return e.err }
+
+func (p *ProxmoxSetup) doRegisterRequest(ctx context.Context, body []byte) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.pulseURL+"/api/auto-register", bytes.NewReader(body))
+	if err != nil {
+		return &permanentError{fmt.Errorf("create request: %w", err)}
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-API-Token", p.apiToken)
+
+	resp, err := p.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("request failed: %w", err)
+	}
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			p.logger.Debug().Err(closeErr).Msg("Failed to close auto-register response body")
+		}
+	}()
+
+	if resp.StatusCode >= 400 {
+		bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		bodyStr := strings.TrimSpace(string(bodyBytes))
+		if resp.StatusCode < 500 {
+			return &clientError{statusCode: resp.StatusCode, body: bodyStr}
+		}
+		return fmt.Errorf("auto-register returned HTTP %d: %s", resp.StatusCode, bodyStr)
+	}
+	return nil
+}
+
 // registerWithPulse calls the auto-register endpoint to add the node.
 func (p *ProxmoxSetup) registerWithPulse(ctx context.Context, ptype proxmoxProductType, hostURL, tokenID, tokenValue string) error {
 	payload := autoRegisterRequest{
@@ -799,29 +848,50 @@ func (p *ProxmoxSetup) registerWithPulse(ctx context.Context, ptype proxmoxProdu
 		return fmt.Errorf("marshal payload: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.pulseURL+"/api/auto-register", bytes.NewReader(body))
-	if err != nil {
-		return fmt.Errorf("create request: %w", err)
+	backoffs := p.retryBackoffs
+	if backoffs == nil {
+		backoffs = []time.Duration{5 * time.Second, 10 * time.Second, 20 * time.Second, 40 * time.Second, 60 * time.Second}
 	}
 
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-API-Token", p.apiToken)
-
-	resp, err := p.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("request failed: %w", err)
-	}
-	defer func() {
-		if closeErr := resp.Body.Close(); closeErr != nil {
-			p.logger.Debug().Err(closeErr).Msg("Failed to close auto-register response body")
+	var lastErr error
+	for attempt := 0; attempt <= len(backoffs); attempt++ {
+		if attempt > 0 {
+			p.logger.Info().
+				Int("attempt", attempt+1).
+				Int("max_attempts", len(backoffs)+1).
+				Str("type", string(ptype)).
+				Msg("Retrying Proxmox auto-registration with Pulse")
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(backoffs[attempt-1]):
+			}
 		}
-	}()
 
-	if resp.StatusCode >= 400 {
-		return fmt.Errorf("auto-register returned %d", resp.StatusCode)
+		err := p.doRegisterRequest(ctx, body)
+		if err == nil {
+			if attempt > 0 {
+				p.logger.Info().Int("attempt", attempt+1).Str("type", string(ptype)).Msg("Proxmox auto-registration succeeded after retry")
+			}
+			return nil
+		}
+		lastErr = err
+
+		// Don't retry client errors (4xx) or permanent errors (e.g. malformed URL).
+		var ce *clientError
+		var pe *permanentError
+		if errors.As(err, &ce) || errors.As(err, &pe) {
+			return err
+		}
+
+		p.logger.Warn().Err(err).
+			Int("attempt", attempt+1).
+			Int("max_attempts", len(backoffs)+1).
+			Str("type", string(ptype)).
+			Msg("Proxmox auto-registration attempt failed")
 	}
 
-	return nil
+	return fmt.Errorf("all %d registration attempts failed: %w", len(backoffs)+1, lastErr)
 }
 
 func isAlreadyExistsOutput(output string) bool {

@@ -101,7 +101,9 @@ func (m *Monitor) handleAlertResolved(alertID string) {
 		}
 	}
 
-	// Handle notifications (may be suppressed by quiet hours)
+	// Handle notifications — recovery notifications are always sent regardless of quiet hours.
+	// Quiet hours suppress noisy firing alerts, not all-clear messages. If the user received
+	// the alert, they should always receive the recovery.
 	if m.notificationMgr != nil {
 		m.notificationMgr.CancelAlert(alertID)
 		if m.notificationMgr.GetNotifyOnResolve() {
@@ -109,14 +111,6 @@ func (m *Monitor) handleAlertResolved(alertID string) {
 				resolvedAlert = m.alertManager.GetResolvedAlert(alertID)
 			}
 			if resolvedAlert != nil {
-				// Check if recovery notification should be suppressed during quiet hours
-				if m.alertManager.ShouldSuppressResolvedNotification(resolvedAlert.Alert) {
-					log.Info().
-						Str("alertID", alertID).
-						Str("type", resolvedAlert.Alert.Type).
-						Msg("Resolved notification skipped - suppressed by quiet hours")
-					return
-				}
 				go m.notificationMgr.SendResolvedAlert(resolvedAlert)
 			}
 		} else {

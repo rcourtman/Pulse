@@ -36,6 +36,17 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 		}
 	}
 
+	// Build a lookup map from VM guest ID -> linked host agent.
+	// When a Pulse agent runs inside a VM, it can provide more accurate
+	// available memory than status.Mem when guest agent meminfo is incomplete.
+	vmIDToHostAgent := make(map[string]models.Host)
+	prevState := m.GetState()
+	for _, h := range prevState.Hosts {
+		if h.LinkedVMID != "" && h.Status == "online" && h.Memory.Total > 0 {
+			vmIDToHostAgent[h.LinkedVMID] = h
+		}
+	}
+
 	log.Debug().
 		Str("instance", instanceName).
 		Int("totalNodes", len(nodes)).
@@ -177,6 +188,32 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 										memAvailable = availableFromUsed
 										memorySource = "meminfo-total-minus-used"
 									}
+								}
+							}
+						}
+						// Fallback: use linked Pulse host agent's memory data.
+						// gopsutil's Used = Total - Available (excludes page cache),
+						// so we can derive accurate available memory. Refs: #1270
+						if memAvailable == 0 {
+							if agentHost, ok := vmIDToHostAgent[guestID]; ok &&
+								agentHost.Memory.Total > 0 &&
+								agentHost.Memory.Used >= 0 &&
+								agentHost.Memory.Total >= agentHost.Memory.Used {
+								agentAvailable := uint64(agentHost.Memory.Total - agentHost.Memory.Used)
+								if agentAvailable > 0 {
+									memAvailable = agentAvailable
+									memorySource = "host-agent"
+									guestRaw.HostAgentTotal = uint64(agentHost.Memory.Total)
+									guestRaw.HostAgentUsed = uint64(agentHost.Memory.Used)
+									log.Debug().
+										Str("vm", vm.Name).
+										Str("node", n.Node).
+										Int("vmid", vm.VMID).
+										Uint64("total", memTotal).
+										Uint64("available", memAvailable).
+										Int64("agentTotal", agentHost.Memory.Total).
+										Int64("agentUsed", agentHost.Memory.Used).
+										Msg("QEMU memory: using linked Pulse host agent memory (excludes page cache)")
 								}
 							}
 						}

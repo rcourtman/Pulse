@@ -407,12 +407,24 @@ func (s *KnowledgeStore) saveToDisk() {
 	}
 
 	path := filepath.Join(s.dataDir, "knowledge_store.json")
-	// Use atomic write (temp file + rename) to prevent corruption from concurrent saves.
+	// Use atomic write (temp file + fsync + rename) to prevent empty reads after a crash.
 	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0600); err != nil {
+	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	if err != nil {
+		log.Warn().Err(err).Str("path", tmp).Msg("ai.adapters.KnowledgeStore.saveToDisk: failed to open temp store file")
+		return
+	}
+	if _, err := f.Write(data); err != nil {
+		f.Close()
 		log.Warn().Err(err).Str("path", tmp).Msg("ai.adapters.KnowledgeStore.saveToDisk: failed to write temp store file")
 		return
 	}
+	if err := f.Sync(); err != nil {
+		f.Close()
+		log.Warn().Err(err).Str("path", tmp).Msg("ai.adapters.KnowledgeStore.saveToDisk: failed to fsync temp store file")
+		return
+	}
+	f.Close()
 	if err := os.Rename(tmp, path); err != nil {
 		log.Warn().Err(err).Str("from", tmp).Str("to", path).Msg("ai.adapters.KnowledgeStore.saveToDisk: failed to atomically replace store file")
 		if removeErr := os.Remove(tmp); removeErr != nil && !os.IsNotExist(removeErr) {

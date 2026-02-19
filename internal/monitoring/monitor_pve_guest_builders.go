@@ -39,6 +39,8 @@ func (m *Monitor) applyVMStatusDetails(
 	instanceName string,
 	res proxmox.ClusterResource,
 	client PVEClientInterface,
+	guestID string,
+	vmIDToHostAgent map[string]models.Host,
 	status *proxmox.VMStatus,
 	state *vmBuildState,
 ) {
@@ -71,6 +73,58 @@ func (m *Monitor) applyVMStatusDetails(
 		case status.MemInfo.Free > 0 || status.MemInfo.Buffers > 0 || status.MemInfo.Cached > 0:
 			memAvailable = status.MemInfo.Free + status.MemInfo.Buffers + status.MemInfo.Cached
 			state.memorySource = "meminfo-derived"
+		}
+	}
+
+	// Fallback for Linux VMs when the guest agent doesn't provide MemInfo.Available:
+	// try Proxmox RRD's memavailable (cache-aware) before falling back to status.Mem
+	// which can include reclaimable page cache (inflating usage). Refs: #1270
+	if memAvailable == 0 {
+		if rrdAvailable, rrdErr := m.getVMRRDMetrics(ctx, client, res.Node, res.VMID); rrdErr == nil && rrdAvailable > 0 {
+			memAvailable = rrdAvailable
+			state.memorySource = "rrd-memavailable"
+			state.guestRaw.MemInfoAvailable = memAvailable
+			log.Debug().
+				Str("vm", res.Name).
+				Str("node", res.Node).
+				Int("vmid", res.VMID).
+				Uint64("total", state.memTotal).
+				Uint64("available", memAvailable).
+				Msg("QEMU memory: using RRD memavailable fallback (excludes reclaimable cache)")
+		} else if rrdErr != nil {
+			log.Debug().
+				Err(rrdErr).
+				Str("instance", instanceName).
+				Str("vm", res.Name).
+				Int("vmid", res.VMID).
+				Msg("RRD memory data unavailable for VM, using status/cluster resources values")
+		}
+	}
+
+	// Fallback: use linked Pulse host agent's memory data.
+	// gopsutil's Used = Total - Available (excludes page cache),
+	// so we can derive accurate available memory. Refs: #1270
+	if memAvailable == 0 {
+		if agentHost, ok := vmIDToHostAgent[guestID]; ok &&
+			agentHost.Memory.Total > 0 &&
+			agentHost.Memory.Used >= 0 &&
+			agentHost.Memory.Total >= agentHost.Memory.Used {
+			agentAvailable := uint64(agentHost.Memory.Total - agentHost.Memory.Used)
+			if agentAvailable > 0 {
+				memAvailable = agentAvailable
+				state.memorySource = "host-agent"
+				state.guestRaw.HostAgentTotal = uint64(agentHost.Memory.Total)
+				state.guestRaw.HostAgentUsed = uint64(agentHost.Memory.Used)
+				log.Debug().
+					Str("vm", res.Name).
+					Str("node", res.Node).
+					Int("vmid", res.VMID).
+					Uint64("total", state.memTotal).
+					Uint64("available", memAvailable).
+					Int64("agentTotal", agentHost.Memory.Total).
+					Int64("agentUsed", agentHost.Memory.Used).
+					Msg("QEMU memory: using linked Pulse host agent memory (excludes page cache)")
+			}
 		}
 	}
 
@@ -167,13 +221,17 @@ func (m *Monitor) buildVMFromClusterResource(
 	instanceName string,
 	res proxmox.ClusterResource,
 	client PVEClientInterface,
+	guestID string,
+	vmIDToHostAgent map[string]models.Host,
 ) (models.VM, VMMemoryRaw, string, time.Time, bool) {
 	// Skip templates if configured
 	if res.Template == 1 {
 		return models.VM{}, VMMemoryRaw{}, "", time.Time{}, false
 	}
 
-	guestID := makeGuestID(instanceName, res.Node, res.VMID)
+	if guestID == "" {
+		guestID = makeGuestID(instanceName, res.Node, res.VMID)
+	}
 
 	state := vmBuildState{
 		memTotal:        res.MaxMem,
@@ -210,7 +268,7 @@ func (m *Monitor) buildVMFromClusterResource(
 				Int("vmid", res.VMID).
 				Msg("Could not get VM status to check guest agent availability")
 		} else if status != nil {
-			m.applyVMStatusDetails(ctx, instanceName, res, client, status, &state)
+			m.applyVMStatusDetails(ctx, instanceName, res, client, guestID, vmIDToHostAgent, status, &state)
 		} else {
 			// No vmStatus available - keep cluster/resources data
 			log.Debug().

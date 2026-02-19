@@ -260,7 +260,8 @@ func TestProxmoxSetup_registerWithPulse(t *testing.T) {
 
 	t.Run("transport failure returns wrapped error", func(t *testing.T) {
 		p := &ProxmoxSetup{
-			pulseURL: "https://pulse.example",
+			pulseURL:      "https://pulse.example",
+			retryBackoffs: []time.Duration{}, // disable retries for unit test
 			httpClient: &http.Client{
 				Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
 					return nil, errors.New("network down")
@@ -279,7 +280,8 @@ func TestProxmoxSetup_registerWithPulse(t *testing.T) {
 
 	t.Run("server status >= 400 returns error", func(t *testing.T) {
 		p := &ProxmoxSetup{
-			pulseURL: "https://pulse.example",
+			pulseURL:      "https://pulse.example",
+			retryBackoffs: []time.Duration{}, // disable retries for unit test
 			httpClient: &http.Client{
 				Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
 					return &http.Response{
@@ -295,7 +297,7 @@ func TestProxmoxSetup_registerWithPulse(t *testing.T) {
 		if err == nil {
 			t.Fatalf("expected error")
 		}
-		if !strings.Contains(err.Error(), "auto-register returned 502") {
+		if !strings.Contains(err.Error(), "502") {
 			t.Fatalf("unexpected error: %v", err)
 		}
 	})
