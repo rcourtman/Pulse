@@ -1318,7 +1318,7 @@ const Recovery: Component = () => {
                   </div>
                 </div>
                 <div
-                  class="absolute bottom-0 left-10 right-10 top-2 overflow-x-auto"
+                  class="absolute bottom-0 left-10 right-0 top-2 overflow-x-auto"
                   style="scrollbar-width: none; -ms-overflow-style: none;"
                 >
                   <div class="relative h-full min-w-[700px] px-2">
