@@ -331,7 +331,7 @@ const Recovery: Component = () => {
   const recoveryPoints = useRecoveryPoints(() => {
     if (view() !== 'events') return null;
     const rid = rollupId().trim();
-    const window = tableWindow();
+    const window = chartWindow();
     const vf = verificationFilter();
     return {
       page: currentPage(),
@@ -701,7 +701,18 @@ const Recovery: Component = () => {
     return count;
   });
 
-  const filteredPoints = createMemo<RecoveryPoint[]>(() => recoveryPoints.points() || []);
+  const filteredPoints = createMemo<RecoveryPoint[]>(() => {
+    const points = recoveryPoints.points() || [];
+    const dateKey = selectedDateKey();
+    if (!dateKey) return points;
+    const { from, to } = tableWindow();
+    const fromMs = Date.parse(from);
+    const toMs = Date.parse(to);
+    return points.filter((p) => {
+      const ts = pointTimestampMs(p);
+      return ts >= fromMs && ts <= toMs;
+    });
+  });
 
   const sortedPoints = createMemo<RecoveryPoint[]>(() => {
     const resIndex = resourcesById();
