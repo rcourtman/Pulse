@@ -57,7 +57,7 @@ func TestPVESetupScriptArgumentAlignment(t *testing.T) {
 
 	// Use sentinel values to verify fmt.Sprintf argument alignment
 	req := httptest.NewRequest(http.MethodGet,
-		"/api/setup-script?type=pve&host=http://SENTINEL_HOST:8006&pulse_url=http://SENTINEL_URL:7656&auth_token=deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef", nil)
+		"/api/setup-script?type=pve&host=http://sentinel-host:8006&pulse_url=http://sentinel-url:7656&auth_token=deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef", nil)
 	rr := httptest.NewRecorder()
 
 	handlers.HandleSetupScript(rr, req)
@@ -82,12 +82,12 @@ func TestPVESetupScriptArgumentAlignment(t *testing.T) {
 		},
 		{
 			name:     "bash_variables_defined",
-			contains: `PULSE_URL="http://SENTINEL_URL:7656"`,
+			contains: `PULSE_URL="http://sentinel-url:7656"`,
 			desc:     "Bash variable PULSE_URL should be defined at top of script",
 		},
 		{
 			name:     "token_name_variable_defined",
-			contains: `TOKEN_NAME="pulse-SENTINEL_URL-`,
+			contains: `TOKEN_NAME="pulse-sentinel-url-`,
 			desc:     "Bash variable TOKEN_NAME should be defined with correct format",
 		},
 	}
@@ -117,7 +117,7 @@ func TestPVESetupScript_ConfiguresPulseMonitorRoleSafely(t *testing.T) {
 	handlers := newTestConfigHandlers(t, cfg)
 
 	req := httptest.NewRequest(http.MethodGet,
-		"/api/setup-script?type=pve&host=http://SENTINEL_HOST:8006&pulse_url=http://SENTINEL_URL:7656&auth_token=deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef", nil)
+		"/api/setup-script?type=pve&host=http://sentinel-host:8006&pulse_url=http://sentinel-url:7656&auth_token=deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef", nil)
 	rr := httptest.NewRecorder()
 
 	handlers.HandleSetupScript(rr, req)
@@ -219,6 +219,25 @@ func TestHandleSetupScript_InvalidHostParameter(t *testing.T) {
 
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 Bad Request for invalid host, got %d (%s)", rr.Code, rr.Body.String())
+	}
+}
+
+func TestHandleSetupScript_RejectsShellExpansionHost(t *testing.T) {
+	tempDir := t.TempDir()
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+	}
+
+	handlers := newTestConfigHandlers(t, cfg)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/setup-script?type=pve&host=https://example$(id).com:8006", nil)
+	rr := httptest.NewRecorder()
+
+	handlers.HandleSetupScript(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 Bad Request for shell-expansion host, got %d (%s)", rr.Code, rr.Body.String())
 	}
 }
 

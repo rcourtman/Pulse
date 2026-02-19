@@ -24,7 +24,8 @@ import (
 )
 
 var (
-	setupAuthTokenPattern = regexp.MustCompile(`^[A-Fa-f0-9]{32,128}$`)
+	setupAuthTokenPattern   = regexp.MustCompile(`^[A-Fa-f0-9]{32,128}$`)
+	installerURLHostPattern = regexp.MustCompile(`^[A-Za-z0-9.-]+$`)
 )
 
 func sanitizeInstallerURL(raw string) (string, error) {
@@ -45,8 +46,44 @@ func sanitizeInstallerURL(raw string) (string, error) {
 	if parsed.Host == "" {
 		return "", fmt.Errorf("host component is required")
 	}
-	parsed.Fragment = ""
-	return parsed.String(), nil
+
+	// Installer URLs are embedded into shell scripts; reject credentials and
+	// query/fragment components to reduce injection and ambiguity risk.
+	if parsed.User != nil {
+		return "", fmt.Errorf("userinfo is not allowed")
+	}
+	if parsed.RawQuery != "" {
+		return "", fmt.Errorf("query parameters are not allowed")
+	}
+	if parsed.Fragment != "" {
+		return "", fmt.Errorf("fragment is not allowed")
+	}
+
+	host := strings.TrimSpace(parsed.Hostname())
+	if host == "" {
+		return "", fmt.Errorf("host component is required")
+	}
+	if strings.ContainsAny(host, "$`\\\"' \t\r\n") {
+		return "", fmt.Errorf("host contains invalid characters")
+	}
+	if ip := net.ParseIP(host); ip == nil {
+		if !installerURLHostPattern.MatchString(host) {
+			return "", fmt.Errorf("host contains invalid characters")
+		}
+	}
+	if port := strings.TrimSpace(parsed.Port()); port != "" {
+		parsedPort, err := strconv.Atoi(port)
+		if err != nil || parsedPort < 1 || parsedPort > 65535 {
+			return "", fmt.Errorf("port must be between 1 and 65535")
+		}
+	}
+
+	sanitized := parsed.String()
+	if strings.ContainsAny(sanitized, "$`\\") {
+		return "", fmt.Errorf("URL contains unsupported shell-expansion characters")
+	}
+
+	return sanitized, nil
 }
 
 func sanitizeSetupAuthToken(token string) (string, error) {

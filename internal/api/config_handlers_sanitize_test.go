@@ -54,22 +54,22 @@ func TestSanitizeInstallerURL(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:    "URL with query params preserves them",
+			name:    "URL with query params rejected",
 			input:   "https://example.com/installer?version=1.0&arch=amd64",
-			want:    "https://example.com/installer?version=1.0&arch=amd64",
-			wantErr: false,
+			wantErr: true,
+			errMsg:  "query parameters are not allowed",
 		},
 		{
-			name:    "URL with fragment strips fragment",
+			name:    "URL with fragment rejected",
 			input:   "https://example.com/installer#section",
-			want:    "https://example.com/installer",
-			wantErr: false,
+			wantErr: true,
+			errMsg:  "fragment is not allowed",
 		},
 		{
-			name:    "URL with fragment and query preserves query, strips fragment",
+			name:    "URL with fragment and query rejected",
 			input:   "https://example.com/installer?version=1.0#section",
-			want:    "https://example.com/installer?version=1.0",
-			wantErr: false,
+			wantErr: true,
+			errMsg:  "query parameters are not allowed",
 		},
 		{
 			name:    "URL with leading/trailing whitespace is trimmed",
@@ -78,10 +78,10 @@ func TestSanitizeInstallerURL(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:    "URL with authentication",
+			name:    "URL with authentication rejected",
 			input:   "https://user:pass@example.com/installer",
-			want:    "https://user:pass@example.com/installer",
-			wantErr: false,
+			wantErr: true,
+			errMsg:  "userinfo is not allowed",
 		},
 
 		// Error cases
@@ -156,6 +156,18 @@ func TestSanitizeInstallerURL(t *testing.T) {
 			input:   "https://",
 			wantErr: true,
 			errMsg:  "host component is required",
+		},
+		{
+			name:    "URL host with shell expansion rejected",
+			input:   "https://example$(id).com",
+			wantErr: true,
+			errMsg:  "invalid characters",
+		},
+		{
+			name:    "URL path with shell expansion rejected",
+			input:   "https://example.com/path$(id)",
+			wantErr: true,
+			errMsg:  "shell-expansion characters",
 		},
 	}
 
