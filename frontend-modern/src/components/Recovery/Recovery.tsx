@@ -1412,10 +1412,11 @@ const Recovery: Component = () => {
                         {(point, index) => {
                           const showLabel = index() % timeline().labelEvery === 0 || index() === timeline().points.length - 1;
                           const isSelected = selectedDateKey() === point.key;
-                          const barMinWidth =
-                            chartRangeDays() === 7 ? 'min-w-[28px]' : chartRangeDays() === 30 ? 'min-w-[14px]' : 'min-w-[8px]';
+                          const barMinWidth = isMobile()
+                            ? ''
+                            : chartRangeDays() === 7 ? 'min-w-[28px]' : chartRangeDays() === 30 ? 'min-w-[14px]' : 'min-w-[8px]';
                           return (
-                            <div class={`relative flex-1 shrink-0 ${barMinWidth}`}>
+                            <div class={`relative flex-1 ${isMobile() ? '' : 'shrink-0'} ${barMinWidth}`}>
                               <Show when={showLabel}>
                                 <span
                                   class={`absolute bottom-0 left-1/2 -translate-x-1/2 whitespace-nowrap text-[9px] ${
