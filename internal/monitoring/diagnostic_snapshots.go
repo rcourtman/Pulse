@@ -62,6 +62,8 @@ type VMMemoryRaw struct {
 	MemInfoTotalMinusUsed uint64 `json:"meminfoTotalMinusUsed,omitempty"`
 	Agent                 int    `json:"agent,omitempty"`
 	DerivedFromBall       bool   `json:"derivedFromBalloon,omitempty"`
+	HostAgentTotal        uint64 `json:"hostAgentTotal,omitempty"`
+	HostAgentUsed         uint64 `json:"hostAgentUsed,omitempty"`
 }
 
 // GuestMemorySnapshot records the memory calculation for a guest (VM/LXC).

@@ -214,6 +214,18 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 		Int("onlineNodes", onlineNodes).
 		Msg("Starting parallel VM polling")
 
+	// Build a lookup map from VM guest ID → linked host agent.
+	// When a Pulse agent runs inside a VM, it reads /proc/meminfo directly
+	// and gets accurate MemAvailable (excluding page cache). We use this as
+	// a memory fallback before the inflated status.Mem value. Refs: #1270
+	prevState := m.GetState()
+	vmIDToHostAgent := make(map[string]models.Host)
+	for _, h := range prevState.Hosts {
+		if h.LinkedVMID != "" && h.Status == "online" && h.Memory.Total > 0 {
+			vmIDToHostAgent[h.LinkedVMID] = h
+		}
+	}
+
 	// Launch a goroutine for each online node
 	for _, node := range nodes {
 		// Skip offline nodes
@@ -358,6 +370,31 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 						// confusion (showing 1GB/1GB at 100% when VM is configured for 4GB)
 						// and makes the frontend's balloon marker logic ineffective.
 						// Refs: #1070
+
+						// Fallback: use linked Pulse host agent's memory data.
+						// gopsutil's Used = Total - Available (excludes page cache),
+						// so we can derive accurate available memory. Refs: #1270
+						if memAvailable == 0 {
+							if agentHost, ok := vmIDToHostAgent[guestID]; ok {
+								agentAvailable := agentHost.Memory.Total - agentHost.Memory.Used
+								if agentAvailable > 0 {
+									memAvailable = uint64(agentAvailable)
+									memorySource = "host-agent"
+									guestRaw.HostAgentTotal = uint64(agentHost.Memory.Total)
+									guestRaw.HostAgentUsed = uint64(agentHost.Memory.Used)
+									log.Debug().
+										Str("vm", vm.Name).
+										Str("node", n.Node).
+										Int("vmid", vm.VMID).
+										Uint64("total", memTotal).
+										Uint64("available", memAvailable).
+										Int64("agentTotal", agentHost.Memory.Total).
+										Int64("agentUsed", agentHost.Memory.Used).
+										Msg("QEMU memory: using linked Pulse host agent memory (excludes page cache)")
+								}
+							}
+						}
+
 						switch {
 						case memAvailable > 0:
 							if memAvailable > memTotal {

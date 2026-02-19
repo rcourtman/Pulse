@@ -6707,6 +6707,17 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 		}
 	}
 
+	// Build a lookup map from VM guest ID → linked host agent.
+	// When a Pulse agent runs inside a VM, it reads /proc/meminfo directly
+	// and gets accurate MemAvailable (excluding page cache). We use this as
+	// a memory fallback before the inflated status.Mem value. Refs: #1270
+	vmIDToHostAgent := make(map[string]models.Host)
+	for _, h := range prevState.Hosts {
+		if h.LinkedVMID != "" && h.Status == "online" && h.Memory.Total > 0 {
+			vmIDToHostAgent[h.LinkedVMID] = h
+		}
+	}
+
 	var allVMs []models.VM
 	var allContainers []models.Container
 
@@ -6842,6 +6853,30 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 								Str("vm", res.Name).
 								Int("vmid", res.VMID).
 								Msg("RRD memory data unavailable for VM, using status/cluster resources values")
+						}
+					}
+
+					// Fallback: use linked Pulse host agent's memory data.
+					// gopsutil's Used = Total - Available (excludes page cache),
+					// so we can derive accurate available memory. Refs: #1270
+					if memAvailable == 0 {
+						if agentHost, ok := vmIDToHostAgent[guestID]; ok {
+							agentAvailable := agentHost.Memory.Total - agentHost.Memory.Used
+							if agentAvailable > 0 {
+								memAvailable = uint64(agentAvailable)
+								memorySource = "host-agent"
+								guestRaw.HostAgentTotal = uint64(agentHost.Memory.Total)
+								guestRaw.HostAgentUsed = uint64(agentHost.Memory.Used)
+								log.Debug().
+									Str("vm", res.Name).
+									Str("node", res.Node).
+									Int("vmid", res.VMID).
+									Uint64("total", memTotal).
+									Uint64("available", memAvailable).
+									Int64("agentTotal", agentHost.Memory.Total).
+									Int64("agentUsed", agentHost.Memory.Used).
+									Msg("QEMU memory: using linked Pulse host agent memory (excludes page cache)")
+							}
 						}
 					}
 
