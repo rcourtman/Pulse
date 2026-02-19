@@ -121,14 +121,14 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
         </Show>
 
         {/* Type badge */}
-        <td class="px-1.5 sm:px-2 py-1">
+        <td class="px-1.5 sm:px-2 py-1 hidden md:table-cell">
           <span class={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${getTypeBadgeClass(type())}`}>
             {type()}
           </span>
         </td>
 
         {/* Capacity bar */}
-        <td class="px-1.5 sm:px-2 py-1 min-w-[180px]">
+        <td class="px-1.5 sm:px-2 py-1 min-w-[120px] md:min-w-[180px]">
           <Show
             when={totalBytes() > 0}
             fallback={<span class="text-xs text-gray-400">n/a</span>}

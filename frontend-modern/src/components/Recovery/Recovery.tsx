@@ -796,8 +796,17 @@ const Recovery: Component = () => {
   );
 
   const visibleArtifactColumns = createMemo(() => artifactColumnVisibility.visibleColumns());
-  const tableColumnCount = createMemo(() => visibleArtifactColumns().length);
-  const tableMinWidth = createMemo(() => `${Math.max(980, tableColumnCount() * 140)}px`);
+  // Mobile: show only the 3 essential columns — secondary data is in the expand drawer.
+  const MOBILE_RECOVERY_COLS = new Set(['time', 'subject', 'outcome']);
+  const mobileVisibleArtifactColumns = createMemo(() =>
+    isMobile()
+      ? visibleArtifactColumns().filter(c => MOBILE_RECOVERY_COLS.has(c.id))
+      : visibleArtifactColumns()
+  );
+  const tableColumnCount = createMemo(() => mobileVisibleArtifactColumns().length);
+  const tableMinWidth = createMemo(() =>
+    isMobile() ? 'auto' : `${Math.max(980, tableColumnCount() * 140)}px`
+  );
 
   createEffect(() => {
     if (currentPage() > totalPages()) setCurrentPage(totalPages());
@@ -1809,7 +1818,7 @@ const Recovery: Component = () => {
                 <table class="w-full text-xs" style={{ 'min-width': tableMinWidth() }}>
                   <thead>
                     <tr class="border-b border-gray-200 bg-gray-50 text-left text-[10px] uppercase tracking-wide text-gray-500 dark:border-gray-700 dark:bg-gray-800/70 dark:text-gray-400">
-                      <For each={visibleArtifactColumns()}>{(col) => <th class="px-1.5 sm:px-2 py-1">{col.label}</th>}</For>
+                      <For each={mobileVisibleArtifactColumns()}>{(col) => <th class="px-1.5 sm:px-2 py-1">{col.label}</th>}</For>
                     </tr>
                   </thead>
                   <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
@@ -1853,7 +1862,7 @@ const Recovery: Component = () => {
                                   class="cursor-pointer border-b border-gray-200 hover:bg-gray-50/70 dark:border-gray-700 dark:hover:bg-gray-800/35"
                                   onClick={() => setSelectedPoint(p)}
                                 >
-                                  <For each={visibleArtifactColumns()}>
+                                  <For each={mobileVisibleArtifactColumns()}>
                                     {(col) => {
                                       switch (col.id) {
                                         case 'time':
