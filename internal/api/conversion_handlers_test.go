@@ -405,6 +405,102 @@ func TestConversionHandleRecordEventReturnsAcceptedWhenCollectionDisabled(t *tes
 	}
 }
 
+func TestConversionHandleRecordEventRejectsCrossTenantOrgIDSpoof(t *testing.T) {
+	tmp := t.TempDir()
+	store, err := conversion.NewConversionStore(filepath.Join(tmp, "conversion.db"))
+	if err != nil {
+		t.Fatalf("NewConversionStore() error = %v", err)
+	}
+	defer store.Close()
+
+	recorder := conversion.NewRecorder(nil, store)
+	handlers := NewConversionHandlers(recorder, nil, nil, store, nil)
+
+	body := []byte(fmt.Sprintf(`{
+		"type":"paywall_viewed",
+		"org_id":"org-b",
+		"capability":"long_term_metrics",
+		"surface":"history_chart",
+		"tenant_mode":"multi",
+		"timestamp":%d,
+		"idempotency_key":"org-spoof-attempt-1"
+	}`, time.Now().UnixMilli()))
+
+	req := httptest.NewRequest(http.MethodPost, "/api/conversion/events", bytes.NewReader(body))
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "org-a"))
+	rec := httptest.NewRecorder()
+
+	handlers.HandleRecordEvent(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d (%s)", rec.Code, http.StatusForbidden, rec.Body.String())
+	}
+
+	var resp map[string]string
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed decoding response: %v", err)
+	}
+	if resp["error"] != "org_mismatch" {
+		t.Fatalf("error = %q, want org_mismatch", resp["error"])
+	}
+
+	orgAEvents, err := store.Query("org-a", time.Time{}, time.Time{}, "")
+	if err != nil {
+		t.Fatalf("Query(org-a) error = %v", err)
+	}
+	if len(orgAEvents) != 0 {
+		t.Fatalf("expected no org-a events, got %d", len(orgAEvents))
+	}
+
+	orgBEvents, err := store.Query("org-b", time.Time{}, time.Time{}, "")
+	if err != nil {
+		t.Fatalf("Query(org-b) error = %v", err)
+	}
+	if len(orgBEvents) != 0 {
+		t.Fatalf("expected no org-b events, got %d", len(orgBEvents))
+	}
+}
+
+func TestConversionHandleRecordEventAllowsMatchingOrgID(t *testing.T) {
+	tmp := t.TempDir()
+	store, err := conversion.NewConversionStore(filepath.Join(tmp, "conversion.db"))
+	if err != nil {
+		t.Fatalf("NewConversionStore() error = %v", err)
+	}
+	defer store.Close()
+
+	recorder := conversion.NewRecorder(nil, store)
+	handlers := NewConversionHandlers(recorder, nil, nil, store, nil)
+
+	body := []byte(fmt.Sprintf(`{
+		"type":"paywall_viewed",
+		"org_id":"org-a",
+		"capability":"long_term_metrics",
+		"surface":"history_chart",
+		"tenant_mode":"multi",
+		"timestamp":%d,
+		"idempotency_key":"org-matching-1"
+	}`, time.Now().UnixMilli()))
+
+	req := httptest.NewRequest(http.MethodPost, "/api/conversion/events", bytes.NewReader(body))
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "org-a"))
+	rec := httptest.NewRecorder()
+
+	handlers.HandleRecordEvent(rec, req)
+
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, want %d (%s)", rec.Code, http.StatusAccepted, rec.Body.String())
+	}
+
+	orgAEvents, err := store.Query("org-a", time.Time{}, time.Time{}, "")
+	if err != nil {
+		t.Fatalf("Query(org-a) error = %v", err)
+	}
+	if len(orgAEvents) != 1 {
+		t.Fatalf("expected one org-a event, got %d", len(orgAEvents))
+	}
+}
+
 func TestConversionHandleConfigMethodNotAllowed(t *testing.T) {
 	handlers := NewConversionHandlers(nil, nil, conversion.NewCollectionConfig(), nil, nil)
 

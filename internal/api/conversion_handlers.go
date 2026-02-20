@@ -51,15 +51,39 @@ func (h *ConversionHandlers) HandleRecordEvent(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	contextOrgID := strings.TrimSpace(GetOrgID(r.Context()))
+	if contextOrgID == "" {
+		contextOrgID = "default"
+	}
+	if !isValidOrganizationID(contextOrgID) {
+		conversion.GetConversionMetrics().RecordInvalid("invalid_context_org_id")
+		writeConversionValidationError(w, "invalid tenant context")
+		return
+	}
+
+	event.OrgID = strings.TrimSpace(event.OrgID)
+	if event.OrgID == "" {
+		event.OrgID = contextOrgID
+	} else {
+		if !isValidOrganizationID(event.OrgID) {
+			conversion.GetConversionMetrics().RecordInvalid("invalid_event_org_id")
+			writeConversionValidationError(w, "invalid org_id")
+			return
+		}
+		if event.OrgID != contextOrgID {
+			conversion.GetConversionMetrics().RecordInvalid("org_id_mismatch")
+			writeConversionJSONResponse(w, http.StatusForbidden, map[string]string{
+				"error":   "org_mismatch",
+				"message": "org_id does not match authenticated tenant",
+			}, "HandleRecordEvent")
+			return
+		}
+	}
+
 	if h != nil && h.disableAll != nil && h.disableAll() {
 		conversion.GetConversionMetrics().RecordSkipped("system_disabled")
 		writeConversionAccepted(w)
 		return
-	}
-
-	// Persisted conversion telemetry must always be tenant-aware; use request context when clients omit org_id.
-	if strings.TrimSpace(event.OrgID) == "" {
-		event.OrgID = GetOrgID(r.Context())
 	}
 
 	if h != nil && h.config != nil && !h.config.IsSurfaceEnabled(event.Surface) {
