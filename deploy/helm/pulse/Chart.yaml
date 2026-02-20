@@ -2,8 +2,8 @@ apiVersion: v2
 name: pulse
 description: Helm chart for deploying the Pulse hub and optional Docker monitoring agent.
 type: application
-version: 5.1.11
-appVersion: "5.1.11"
+version: 5.1.12
+appVersion: "5.1.12"
 icon: https://raw.githubusercontent.com/rcourtman/Pulse/main/docs/images/pulse-logo.svg
 keywords:
   - monitoring
