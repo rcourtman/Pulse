@@ -9,6 +9,7 @@ import { showTokenReveal, useTokenRevealState } from '@/stores/tokenReveal';
 import { logger } from '@/utils/logger';
 import { Card } from '@/components/shared/Card';
 import { SectionHeader } from '@/components/shared/SectionHeader';
+import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
 import { useResources } from '@/hooks/useResources';
 import type { Resource } from '@/types/resource';
 import BadgeCheck from 'lucide-solid/icons/badge-check';
@@ -612,132 +613,137 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
             </button>
           </div>
 
-          <div class="overflow-x-auto">
-            <table class="w-full text-sm">
-              <thead class="bg-slate-100 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
-                <tr>
-                  <th class="px-5 py-3">Name</th>
-                  <th class="px-5 py-3">Hint</th>
-                  <th class="px-5 py-3">Scopes</th>
-                  <th class="px-5 py-3">Usage</th>
-                  <th class="px-5 py-3">Created</th>
-                  <th class="px-5 py-3">Last used</th>
-                  <th class="px-5 py-3 text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-gray-200 dark:divide-gray-800">
-                <For each={sortedTokens()}>
-                  {(token) => {
-                    const dockerUsageEntry = dockerTokenUsage().get(token.id);
-                    const hostUsageEntry = hostTokenUsage().get(token.id);
-                    const usageSegments: string[] = [];
-                    const usageTitleSegments: string[] = [];
-                    if (dockerUsageEntry) {
-                      usageSegments.push(
-                        dockerUsageEntry.count === 1
-                          ? dockerUsageEntry.hosts[0]?.label ?? 'Container host'
-                          : `${dockerUsageEntry.count} container hosts`,
-                      );
-                      usageTitleSegments.push(
-                        `Container hosts: ${dockerUsageEntry.hosts.map((host) => host.label).join(', ')}`,
-                      );
-                    }
-                    if (hostUsageEntry) {
-                      usageSegments.push(
-                        hostUsageEntry.count === 1
-                          ? `${hostUsageEntry.hosts[0]?.label ?? 'Host agent'} (agent)`
-                          : `${hostUsageEntry.count} host agents`,
-                      );
-                      usageTitleSegments.push(
-                        `Host agents: ${hostUsageEntry.hosts.map((host) => host.label).join(', ')}`,
-                      );
-                    }
-                    const hostSummary = usageSegments.length > 0 ? usageSegments.join(' • ') : '—';
-                    const rawScopes = token.scopes && token.scopes.length > 0 ? token.scopes : ['*'];
-                    const scopeBadges = rawScopes.includes('*')
-                      ? [{ value: '*', label: 'Full' }]
-                      : rawScopes.map((scope) => ({
-                        value: scope,
-                        label: API_SCOPE_LABELS[scope] ?? scope,
-                      }));
-                    const rowIsWildcard = scopeBadges.some((scope) => scope.value === '*');
-
-                    return (
-                      <tr
-                        class={`transition-colors ${rowIsWildcard
-                          ? 'bg-amber-50 dark:bg-amber-900'
-                          : 'bg-white dark:bg-slate-800'
-                          } hover:bg-blue-50 dark:hover:bg-slate-800`}
-                      >
-                        <td class="whitespace-nowrap px-5 py-3 font-medium text-slate-900 dark:text-slate-100">
-                          {token.name || 'Untitled'}
-                        </td>
-                        <td class="px-5 py-3 font-mono text-xs text-slate-600 dark:text-slate-400">
-                          {tokenHint(token)}
-                        </td>
-                        <td class="px-5 py-3">
-                          <div class="flex flex-wrap gap-1.5">
-                            <For each={scopeBadges}>
-                              {(scope) => {
-                                const isWildcard = scope.value === '*';
-                                return (
-                                  <span
-                                    class={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${isWildcard
-                                      ? 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200'
-                                      : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
-                                      }`}
-                                    title={scope.value}
-                                  >
-                                    {scope.label}
-                                  </span>
-                                );
-                              }}
-                            </For>
-                          </div>
-                        </td>
-                        <td
-                          class="px-5 py-3 text-slate-600 dark:text-slate-400"
-                          title={usageTitleSegments.length > 0 ? usageTitleSegments.join('\n') : undefined}
-                        >
-                          <div class="flex flex-wrap items-center gap-2">
-                            <span>{hostSummary}</span>
-                            <Show when={hostUsageEntry && hostUsageEntry.count > 1}>
-                              <span class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800 dark:bg-amber-900 dark:text-amber-200">
-                                <svg class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
-                                  <path
-                                    fill-rule="evenodd"
-                                    d="M8.257 3.099c.764-1.36 2.722-1.36 3.486 0l6.518 11.62c.75 1.338-.213 3.005-1.743 3.005H3.482c-1.53 0-2.493-1.667-1.743-3.005l6.518-11.62ZM11 5a1 1 0 1 0-2 0v4.5a1 1 0 1 0 2 0V5Zm0 8a1 1 0 1 0-2 0 1 1 0 0 0 2 0Z"
-                                    clip-rule="evenodd"
-                                  />
-                                </svg>
-                                Host agents sharing this token ({hostUsageEntry!.count})
-                              </span>
-                            </Show>
-                          </div>
-                        </td>
-                        <td class="px-5 py-3 text-slate-600 dark:text-slate-400">
-                          {formatRelativeTime(new Date(token.createdAt).getTime())}
-                        </td>
-                        <td class="px-5 py-3 text-slate-600 dark:text-slate-400">
-                          {token.lastUsedAt
-                            ? formatRelativeTime(new Date(token.lastUsedAt).getTime())
-                            : 'Never'}
-                        </td>
-                        <td class="px-5 py-3 text-right">
-                          <button
-                            onClick={() => handleDelete(token)}
-                            class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-2.5 py-1.5 text-sm font-semibold text-red-600 transition hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-900 dark:hover:text-red-300"
-                          >
-                            Revoke
-                          </button>
-                        </td>
-                      </tr>
+          <PulseDataGrid
+            data={sortedTokens()}
+            columns={[
+              {
+                key: 'name',
+                label: 'Name',
+                render: (token) => <span class="font-medium text-slate-900 dark:text-slate-100">{token.name || 'Untitled'}</span>
+              },
+              {
+                key: 'hint',
+                label: 'Hint',
+                render: (token) => <span class="font-mono text-xs text-slate-600 dark:text-slate-400">{tokenHint(token)}</span>
+              },
+              {
+                key: 'scopes',
+                label: 'Scopes',
+                render: (token) => {
+                  const rawScopes = token.scopes && token.scopes.length > 0 ? token.scopes : ['*'];
+                  const scopeBadges = rawScopes.includes('*')
+                    ? [{ value: '*', label: 'Full' }]
+                    : rawScopes.map((scope) => ({
+                      value: scope,
+                      label: API_SCOPE_LABELS[scope] ?? scope,
+                    }));
+                  return (
+                    <div class="flex flex-wrap gap-1.5">
+                      <For each={scopeBadges}>
+                        {(scope) => {
+                          const isWildcard = scope.value === '*';
+                          return (
+                            <span
+                              class={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${isWildcard
+                                ? 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200'
+                                : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                                }`}
+                              title={scope.value}
+                            >
+                              {scope.label}
+                            </span>
+                          );
+                        }}
+                      </For>
+                    </div>
+                  );
+                }
+              },
+              {
+                key: 'usage',
+                label: 'Usage',
+                render: (token) => {
+                  const dockerUsageEntry = dockerTokenUsage().get(token.id);
+                  const hostUsageEntry = hostTokenUsage().get(token.id);
+                  const usageSegments: string[] = [];
+                  const usageTitleSegments: string[] = [];
+                  if (dockerUsageEntry) {
+                    usageSegments.push(
+                      dockerUsageEntry.count === 1
+                        ? dockerUsageEntry.hosts[0]?.label ?? 'Container host'
+                        : `${dockerUsageEntry.count} container hosts`,
                     );
-                  }}
-                </For>
-              </tbody>
-            </table>
-          </div>
+                    usageTitleSegments.push(
+                      `Container hosts: ${dockerUsageEntry.hosts.map((host) => host.label).join(', ')}`,
+                    );
+                  }
+                  if (hostUsageEntry) {
+                    usageSegments.push(
+                      hostUsageEntry.count === 1
+                        ? `${hostUsageEntry.hosts[0]?.label ?? 'Host agent'} (agent)`
+                        : `${hostUsageEntry.count} host agents`,
+                    );
+                    usageTitleSegments.push(
+                      `Host agents: ${hostUsageEntry.hosts.map((host) => host.label).join(', ')}`,
+                    );
+                  }
+                  const hostSummary = usageSegments.length > 0 ? usageSegments.join(' • ') : '—';
+                  return (
+                    <div
+                      class="flex flex-wrap items-center gap-2"
+                      title={usageTitleSegments.length > 0 ? usageTitleSegments.join('\n') : undefined}
+                    >
+                      <span class="text-slate-600 dark:text-slate-400">{hostSummary}</span>
+                      <Show when={hostUsageEntry && hostUsageEntry.count > 1}>
+                        <span class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+                          <svg class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                            <path
+                              fill-rule="evenodd"
+                              d="M8.257 3.099c.764-1.36 2.722-1.36 3.486 0l6.518 11.62c.75 1.338-.213 3.005-1.743 3.005H3.482c-1.53 0-2.493-1.667-1.743-3.005l6.518-11.62ZM11 5a1 1 0 1 0-2 0v4.5a1 1 0 1 0 2 0V5Zm0 8a1 1 0 1 0-2 0 1 1 0 0 0 2 0Z"
+                              clip-rule="evenodd"
+                            />
+                          </svg>
+                          Host agents sharing this token ({hostUsageEntry!.count})
+                        </span>
+                      </Show>
+                    </div>
+                  );
+                }
+              },
+              {
+                key: 'createdAt',
+                label: 'Created',
+                render: (token) => <span class="text-slate-600 dark:text-slate-400">{formatRelativeTime(new Date(token.createdAt).getTime())}</span>
+              },
+              {
+                key: 'lastUsedAt',
+                label: 'Last used',
+                render: (token) => (
+                  <span class="text-slate-600 dark:text-slate-400">
+                    {token.lastUsedAt
+                      ? formatRelativeTime(new Date(token.lastUsedAt).getTime())
+                      : 'Never'}
+                  </span>
+                )
+              },
+              {
+                key: 'action',
+                label: 'Action',
+                align: 'right',
+                render: (token) => (
+                  <button
+                    onClick={() => handleDelete(token)}
+                    class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-2.5 py-1.5 text-sm font-semibold text-red-600 transition hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-900 dark:hover:text-red-300"
+                  >
+                    Revoke
+                  </button>
+                )
+              }
+            ]}
+            keyExtractor={(token) => token.id}
+            desktopMinWidth="1000px"
+            class="border-t-0 rounded-t-none border-x-0"
+          />
         </Card>
       </Show>
 

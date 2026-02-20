@@ -9,6 +9,7 @@ import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import Users from 'lucide-solid/icons/users';
 import Trash2 from 'lucide-solid/icons/trash-2';
+import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
 
 interface OrganizationAccessPanelProps {
   currentUser?: string;
@@ -211,84 +212,83 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
                     </div>
                   </Show>
 
-                  <div class="overflow-x-auto rounded-md border border-slate-200 dark:border-slate-700">
-                    <table class="min-w-[700px] w-full text-sm">
-                      <thead class="bg-slate-50 dark:bg-slate-800">
-                        <tr>
-                          <th class="px-3 py-2 text-left font-medium text-slate-600 dark:text-slate-300">User</th>
-                          <th class="px-3 py-2 text-left font-medium text-slate-600 dark:text-slate-300">Role</th>
-                          <th class="px-3 py-2 text-left font-medium text-slate-600 dark:text-slate-300">Added</th>
-                          <th class="px-3 py-2 text-right font-medium text-slate-600 dark:text-slate-300">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <Show
-                          when={members().length > 0}
-                          fallback={
-                            <tr>
-                              <td colSpan={4} class="px-3 py-4 text-center text-sm text-slate-500 dark:text-slate-400">
-                                No organization members found.
-                              </td>
-                            </tr>
+                  <div class="mt-4">
+                    <PulseDataGrid
+                      data={members()}
+                      columns={[
+                        {
+                          key: 'userId',
+                          label: 'User',
+                          render: (member) => <span class="text-slate-900 dark:text-slate-100">{member.userId}</span>
+                        },
+                        {
+                          key: 'role',
+                          label: 'Role',
+                          render: (member) => {
+                            const role = normalizeRole(member.role);
+                            const isOwner = () => member.userId === currentOrg().ownerUserId;
+                            return (
+                              <Show
+                                when={canManageOrg(currentOrg(), props.currentUser)}
+                                fallback={
+                                  <span class={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${roleBadgeClass(role)}`}>
+                                    {role}
+                                  </span>
+                                }
+                              >
+                                <select
+                                  value={role}
+                                  onChange={(event) => {
+                                    void updateRole(member, event.currentTarget.value as Exclude<OrganizationRole, 'member'>);
+                                  }}
+                                  disabled={saving() || (isOwner() && props.currentUser !== currentOrg().ownerUserId)}
+                                  class="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                                >
+                                  <For
+                                    each={roleOptions.filter(
+                                      (option) => option.value !== 'owner' || props.currentUser === currentOrg().ownerUserId,
+                                    )}
+                                  >
+                                    {(option) => <option value={option.value}>{option.label}</option>}
+                                  </For>
+                                </select>
+                              </Show>
+                            );
                           }
-                        >
-                          <For each={members()}>
-                            {(member) => {
-                              const role = normalizeRole(member.role);
-                              const isOwner = () => member.userId === currentOrg().ownerUserId;
-                              return (
-                                <tr class="border-t border-slate-100 dark:border-slate-800">
-                                  <td class="px-3 py-2 text-slate-900 dark:text-slate-100">{member.userId}</td>
-                                  <td class="px-3 py-2">
-                                    <Show
-                                      when={canManageOrg(currentOrg(), props.currentUser)}
-                                      fallback={
-                                        <span class={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${roleBadgeClass(role)}`}>
-                                          {role}
-                                        </span>
-                                      }
-                                    >
-                                      <select
-                                        value={role}
-                                        onChange={(event) => {
-                                          void updateRole(member, event.currentTarget.value as Exclude<OrganizationRole, 'member'>);
-                                        }}
-                                        disabled={saving() || (isOwner() && props.currentUser !== currentOrg().ownerUserId)}
-                                        class="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
-                                      >
-                                        <For
-                                          each={roleOptions.filter(
-                                            (option) => option.value !== 'owner' || props.currentUser === currentOrg().ownerUserId,
-                                          )}
-                                        >
-                                          {(option) => <option value={option.value}>{option.label}</option>}
-                                        </For>
-                                      </select>
-                                    </Show>
-                                  </td>
-                                  <td class="px-3 py-2 text-slate-600 dark:text-slate-400">{new Date(member.addedAt).toLocaleDateString()}</td>
-                                  <td class="px-3 py-2 text-right">
-                                    <Show when={canManageOrg(currentOrg(), props.currentUser) && !isOwner()}>
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          void removeMember(member);
-                                        }}
-                                        disabled={saving()}
-                                        class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-60"
-                                      >
-                                        <Trash2 class="w-3.5 h-3.5" />
-                                        Remove
-                                      </button>
-                                    </Show>
-                                  </td>
-                                </tr>
-                              );
-                            }}
-                          </For>
-                        </Show>
-                      </tbody>
-                    </table>
+                        },
+                        {
+                          key: 'addedAt',
+                          label: 'Added',
+                          render: (member) => <span class="text-slate-600 dark:text-slate-400">{new Date(member.addedAt).toLocaleDateString()}</span>
+                        },
+                        {
+                          key: 'actions',
+                          label: 'Actions',
+                          align: 'right',
+                          render: (member) => {
+                            const isOwner = () => member.userId === currentOrg().ownerUserId;
+                            return (
+                              <Show when={canManageOrg(currentOrg(), props.currentUser) && !isOwner()}>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    void removeMember(member);
+                                  }}
+                                  disabled={saving()}
+                                  class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                  <Trash2 class="w-3.5 h-3.5" />
+                                  Remove
+                                </button>
+                              </Show>
+                            );
+                          }
+                        }
+                      ]}
+                      keyExtractor={(member) => member.userId}
+                      emptyState="No organization members found."
+                      desktopMinWidth="700px"
+                    />
                   </div>
                 </>
               )}

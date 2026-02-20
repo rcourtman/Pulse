@@ -324,7 +324,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
     return sortDirection() === 'asc' ? '▲' : '▼';
   };
 
-  const thClassBase = "px-2 py-1 text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 whitespace-nowrap";
+  const thClassBase = "px-1.5 sm:px-2 py-0.5 text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 whitespace-nowrap";
   const thClass = `${thClassBase} text-center`;
 
   // Cell class constants for consistency

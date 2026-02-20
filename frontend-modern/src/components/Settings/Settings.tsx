@@ -76,6 +76,7 @@ import { PulseLogoIcon } from '@/components/icons/PulseLogoIcon';
 import BadgeCheck from 'lucide-solid/icons/badge-check';
 import Terminal from 'lucide-solid/icons/terminal';
 import Container from 'lucide-solid/icons/container';
+import Search from 'lucide-solid/icons/search';
 import type { NodeConfig } from '@/types/nodes';
 import type { UpdateInfo, VersionInfo } from '@/api/updates';
 import type { SecurityStatus as SecurityStatusInfo } from '@/types/config';
@@ -773,6 +774,8 @@ const Settings: Component<SettingsProps> = (props) => {
   const [showQuickSecuritySetup, setShowQuickSecuritySetup] = createSignal(false);
   const authDisabledByEnv = createMemo(() => Boolean(securityStatus()?.deprecatedDisableAuth));
   const [showQuickSecurityWizard, setShowQuickSecurityWizard] = createSignal(false);
+  const [searchQuery, setSearchQuery] = createSignal('');
+  let searchInputRef: HTMLInputElement | undefined;
 
 
   const tabGroups: {
@@ -898,6 +901,50 @@ const Settings: Component<SettingsProps> = (props) => {
     ];
 
   const flatTabs = tabGroups.flatMap((group) => group.items);
+
+  const filteredTabGroups = createMemo(() => {
+    const q = searchQuery().trim().toLowerCase();
+    if (!q) return tabGroups;
+
+    return tabGroups.map(group => {
+      const filteredItems = group.items.filter(item => {
+        const matchLabel = item.label.toLowerCase().includes(q);
+        const description = SETTINGS_HEADER_META[item.id]?.description?.toLowerCase() || '';
+        const matchDesc = description.includes(q);
+        return matchLabel || matchDesc;
+      });
+      return { ...group, items: filteredItems };
+    }).filter(group => group.items.length > 0);
+  });
+
+  createEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setSearchQuery('');
+        searchInputRef?.blur();
+        return;
+      }
+
+      if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') {
+        return;
+      }
+      if (e.metaKey || e.ctrlKey || e.altKey || e.key.length > 1) {
+        if (e.key !== 'Backspace') return;
+      }
+
+      if (searchInputRef) {
+        e.preventDefault();
+        searchInputRef.focus();
+        if (e.key === 'Backspace') {
+          setSearchQuery((prev) => prev.slice(0, -1));
+        } else {
+          setSearchQuery((prev) => prev + e.key);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    onCleanup(() => window.removeEventListener('keydown', handleKeyDown));
+  });
 
   onMount(() => {
     loadLicenseStatus();
@@ -2190,53 +2237,83 @@ const Settings: Component<SettingsProps> = (props) => {
                   </svg>
                 </button>
               </Show>
-              <div id="settings-sidebar-menu" class="space-y-5">
-                <For each={tabGroups}>
-                  {(group) => (
-                    <div class="space-y-2">
-                      <Show when={!sidebarCollapsed()}>
-                        <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                          {group.label}
-                        </p>
+              <div id="settings-sidebar-menu" class="space-y-4">
+                <Show when={!sidebarCollapsed()}>
+                  <div class="px-2 pb-2">
+                    <div class="relative group">
+                      <Search class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                      <input
+                        ref={searchInputRef}
+                        type="search"
+                        placeholder="Search settings..."
+                        value={searchQuery()}
+                        onInput={(e) => setSearchQuery(e.currentTarget.value)}
+                        class="w-full pl-9 pr-3 py-1.5 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-sm text-gray-900 dark:text-gray-100 placeholder-gray-400"
+                      />
+                      <Show when={!searchQuery()}>
+                        <div class="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none hidden sm:flex items-center">
+                          <kbd class="px-1.5 py-0.5 text-[10px] font-semibold text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700">Any key</kbd>
+                        </div>
                       </Show>
-                      <div class="space-y-1.5">
-                        <For each={group.items}>
-                          {(item) => {
-                            const isActive = () => activeTab() === item.id;
-                            return (
-                              <button
-                                type="button"
-                                aria-current={isActive() ? 'page' : undefined}
-                                disabled={item.disabled}
-                                class={`flex w-full items-center ${sidebarCollapsed() ? 'justify-center' : 'gap-2.5'} rounded-md ${sidebarCollapsed() ? 'px-2 py-2.5' : 'px-3 py-2'
-                                  } text-sm font-medium transition-colors ${item.disabled
-                                    ? 'opacity-60 cursor-not-allowed text-gray-400 dark:text-gray-600'
-                                    : isActive()
-                                      ? 'bg-blue-50 text-blue-600 dark:bg-blue-900 dark:text-blue-200'
-                                      : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-gray-100'
-                                  }`}
-                                onClick={() => {
-                                  if (item.disabled) return;
-                                  setActiveTab(item.id);
-                                }}
-                                title={sidebarCollapsed() ? item.label : undefined}
-                              >
-                                <item.icon class="w-4 h-4" {...(item.iconProps || {})} />
-                                <Show when={!sidebarCollapsed()}>
-                                  <span class="truncate">{item.label}</span>
-                                  <Show when={item.badge && !isPro()}>
-                                    <span class="ml-auto px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-indigo-500 text-white rounded-md shadow-sm">
-                                      {item.badge}
-                                    </span>
-                                  </Show>
-                                </Show>
-                              </button>
-                            );
-                          }}
-                        </For>
-                      </div>
                     </div>
-                  )}
+                  </div>
+                </Show>
+
+                <Show when={searchQuery().trim().length > 0 && filteredTabGroups().length === 0}>
+                  <div class="py-4 px-4 text-center text-sm text-gray-500 dark:text-gray-400">
+                    No settings found for "{searchQuery()}"
+                  </div>
+                </Show>
+
+                <For each={filteredTabGroups()}>
+                  {(group) => {
+                    return (
+                      <div class="space-y-2">
+                        <Show when={!sidebarCollapsed()}>
+                          <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                            {group.label}
+                          </p>
+                        </Show>
+                        <div class="space-y-1.5">
+                          <For each={group.items}>
+                            {(item) => {
+                              const isActive = () => activeTab() === item.id;
+                              return (
+                                <button
+                                  type="button"
+                                  aria-current={isActive() ? 'page' : undefined}
+                                  disabled={item.disabled}
+                                  class={`flex w-full items-center ${sidebarCollapsed() ? 'justify-center' : 'gap-2.5'
+                                    } rounded-md ${sidebarCollapsed() ? 'px-2 py-2.5' : 'px-3 py-2'
+                                    } text-sm font-medium transition-colors ${item.disabled
+                                      ? 'opacity-60 cursor-not-allowed text-gray-400 dark:text-gray-600'
+                                      : isActive()
+                                        ? 'bg-blue-50 text-blue-600 dark:bg-blue-900 dark:text-blue-200'
+                                        : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-gray-100'
+                                    }`}
+                                  onClick={() => {
+                                    if (item.disabled) return;
+                                    setActiveTab(item.id);
+                                  }}
+                                  title={sidebarCollapsed() ? item.label : undefined}
+                                >
+                                  <item.icon class="w-4 h-4" {...(item.iconProps || {})} />
+                                  <Show when={!sidebarCollapsed()}>
+                                    <span class="truncate">{item.label}</span>
+                                    <Show when={item.badge && !isPro()}>
+                                      <span class="ml-auto px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-indigo-500 text-white rounded-md shadow-sm">
+                                        {item.badge}
+                                      </span>
+                                    </Show>
+                                  </Show>
+                                </button>
+                              );
+                            }}
+                          </For>
+                        </div>
+                      </div>
+                    );
+                  }}
                 </For>
               </div>
             </div>

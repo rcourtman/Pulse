@@ -10,6 +10,7 @@ import X from 'lucide-solid/icons/x';
 import ShieldAlert from 'lucide-solid/icons/shield-alert';
 import { showTooltip, hideTooltip } from '@/components/shared/Tooltip';
 import Toggle from '@/components/shared/Toggle';
+import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
 import {
     createLocalStorageBooleanSignal,
     createLocalStorageNumberSignal,
@@ -774,79 +775,86 @@ export default function AuditLogPanel() {
                         {pageRangeText()} • Page {pageNumber()} of {totalPages()}
                     </span>
                 </div>
-                <div class="overflow-x-auto">
-                    <table class="min-w-[760px] w-full divide-y divide-gray-200 dark:divide-gray-700">
-                        <thead class="bg-slate-50 dark:bg-slate-800">
-                            <tr>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Timestamp</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Event</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">User</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">IP</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Details</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Verification</th>
-                            </tr>
-                        </thead>
-                        <tbody class="bg-white dark:bg-slate-900 divide-y divide-gray-200 dark:divide-gray-700">
-                            <For each={filteredEvents()}>
-                                {(event) => (
-                                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800">
-                                        <td class="px-4 py-3 whitespace-nowrap">
-                                            {getEventIcon(event.event, event.success)}
-                                        </td>
-                                        <td class="px-4 py-3 whitespace-nowrap text-sm text-slate-600 dark:text-slate-300">
-                                            {formatTimestamp(event.timestamp)}
-                                        </td>
-                                        <td class="px-4 py-3 whitespace-nowrap">
-                                            <span class={`px-2 py-1 text-xs font-medium rounded-full ${getEventTypeBadge(event.event)}`}>
-                                                {event.event}
-                                            </span>
-                                        </td>
-                                        <td class="px-4 py-3 whitespace-nowrap text-sm text-slate-900 dark:text-white">
-                                            {event.user || '-'}
-                                        </td>
-                                        <td class="px-4 py-3 whitespace-nowrap text-sm text-slate-500 dark:text-slate-400 font-mono">
-                                            {event.ip || '-'}
-                                        </td>
-                                        <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-300 max-w-xs break-all sm:truncate">
-                                            {event.details || '-'}
-                                        </td>
-                                        <td class="px-4 py-3 whitespace-nowrap">
+                <div class="mt-4">
+                    <PulseDataGrid
+                        data={filteredEvents()}
+                        columns={[
+                            {
+                                key: 'success',
+                                label: 'Status',
+                                width: '64px',
+                                align: 'center',
+                                render: (event) => getEventIcon(event.event, event.success)
+                            },
+                            {
+                                key: 'timestamp',
+                                label: 'Timestamp',
+                                render: (event) => <span class="text-slate-600 dark:text-slate-300">{formatTimestamp(event.timestamp)}</span>
+                            },
+                            {
+                                key: 'event',
+                                label: 'Event',
+                                render: (event) => (
+                                    <span class={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getEventTypeBadge(event.event)}`}>
+                                        {event.event}
+                                    </span>
+                                )
+                            },
+                            {
+                                key: 'user',
+                                label: 'User',
+                                render: (event) => <span class="text-slate-900 dark:text-white">{event.user || '-'}</span>
+                            },
+                            {
+                                key: 'ip',
+                                label: 'IP',
+                                hiddenOnMobile: true,
+                                render: (event) => <span class="text-slate-600 dark:text-slate-400 font-mono text-xs">{event.ip || '-'}</span>
+                            },
+                            {
+                                key: 'details',
+                                label: 'Details',
+                                hiddenOnMobile: true,
+                                render: (event) => <span class="text-slate-500 dark:text-slate-400 truncate max-w-xs">{event.details || '-'}</span>
+                            },
+                            {
+                                key: 'verification',
+                                label: 'Verification',
+                                render: (event) => {
+                                    if (!event.signature) {
+                                        return <span class="text-xs text-slate-400">Unsigned</span>;
+                                    }
+                                    const state = verification()[event.id];
+                                    const isVerifying = verifying()[event.id];
+                                    const badge = getVerificationBadge(state);
+
+                                    return (
+                                        <div class="flex items-center gap-2">
                                             <Show
-                                                when={event.signature}
-                                                fallback={<span class="text-slate-400">Unsigned</span>}
+                                                when={isVerifying}
+                                                fallback={
+                                                    <span class={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${badge.class}`}>
+                                                        {badge.label}
+                                                    </span>
+                                                }
                                             >
-                                                {(() => {
-                                                    const badge = getVerificationBadge(verification()[event.id]);
-                                                    return (
-                                                        <div class="flex items-center gap-2">
-                                                            <Show
-                                                                when={verifying()[event.id]}
-                                                                fallback={
-                                                                    <span class={`px-2 py-0.5 text-xs font-medium rounded-full ${badge.class}`}>
-                                                                        {badge.label}
-                                                                    </span>
-                                                                }
-                                                            >
-                                                                <span class="text-xs text-slate-500 dark:text-slate-400">Verifying…</span>
-                                                            </Show>
-                                                            <button
-                                                                onClick={() => verifyEvent(event)}
-                                                                disabled={verifying()[event.id]}
-                                                                class="inline-flex min-h-10 sm:min-h-10 items-center rounded-md border border-blue-200 dark:border-blue-700 px-3 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900 disabled:opacity-50"
-                                                            >
-                                                                Verify
-                                                            </button>
-                                                        </div>
-                                                    );
-                                                })()}
+                                                <span class="text-xs text-slate-500 dark:text-slate-400">Verifying…</span>
                                             </Show>
-                                        </td>
-                                    </tr>
-                                )}
-                            </For>
-                        </tbody>
-                    </table>
+                                            <button
+                                                onClick={() => verifyEvent(event)}
+                                                disabled={isVerifying}
+                                                class="inline-flex min-h-10 sm:min-h-10 items-center rounded-md border border-blue-200 dark:border-blue-700 px-3 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900 disabled:opacity-50"
+                                            >
+                                                Verify
+                                            </button>
+                                        </div>
+                                    );
+                                }
+                            }
+                        ]}
+                        keyExtractor={(event) => event.id}
+                        desktopMinWidth="900px"
+                    />
                 </div>
             </Show>
 

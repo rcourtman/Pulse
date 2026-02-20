@@ -754,17 +754,17 @@ export function ResourceTable(props: ResourceTableProps) {
         <div class="overflow-x-auto" style={{ '-webkit-overflow-scrolling': 'touch' }}>
           <table class="w-full">
             <thead>
-              <tr class="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700">
-                <th class="px-3 py-2 text-center text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider w-16">
+              <tr class="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400">
+                <th class="px-1.5 sm:px-2 py-0.5 text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap text-center w-16">
                   Alerts
                 </th>
-                <th class="px-3 py-2 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                <th class="px-1.5 sm:px-2 py-0.5 text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap text-left">
                   Resource
                 </th>
                 <For each={props.columns}>
                   {(column) => (
                     <th
-                      class="px-3 py-2 text-center text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider"
+                      class="px-1.5 sm:px-2 py-0.5 text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap text-center"
                       title={getColumnHeaderTooltip(column)}
                     >
                       {column}
@@ -773,18 +773,18 @@ export function ResourceTable(props: ResourceTableProps) {
                 </For>
                 <Show when={props.showOfflineAlertsColumn}>
                   <th
-                    class="px-3 py-2 text-center text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider"
+                    class="px-1.5 sm:px-2 py-0.5 text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap text-center"
                     title={OFFLINE_ALERTS_TOOLTIP}
                   >
                     Offline Alerts
                   </th>
                 </Show>
-                <th class="px-3 py-2 text-center text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                <th class="px-1.5 sm:px-2 py-0.5 text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap text-center">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody class="divide-y divide-slate-100 dark:divide-slate-800/60">
+            <tbody class="divide-y divide-slate-200/50 dark:divide-slate-700/50">
               {/* Global Defaults Row */}
               <Show
                 when={props.globalDefaults && props.setGlobalDefaults && props.setHasUnsavedChanges}

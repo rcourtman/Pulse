@@ -747,7 +747,7 @@ export function GuestRow(props: GuestRowProps) {
 
   const rowStyle = createMemo(() => {
     const styles: Record<string, string> = {
-      'min-height': '36px',
+      'min-height': '32px',
     };
 
     // Alert styling
@@ -777,7 +777,7 @@ export function GuestRow(props: GuestRowProps) {
       >
         {/* Name - always visible */}
         <td
-          class={`pr-1.5 sm:pr-2 py-1 align-middle whitespace-nowrap ${props.isGroupedView ? GROUPED_FIRST_CELL_INDENT : DEFAULT_FIRST_CELL_INDENT}`}
+          class={`pr-1.5 sm:pr-2 py-0.5 align-middle whitespace-nowrap ${props.isGroupedView ? GROUPED_FIRST_CELL_INDENT : DEFAULT_FIRST_CELL_INDENT}`}
         >
           <div class="flex items-center gap-2 min-w-0">
             <div class={`transition-transform duration-200 ${props.isExpanded ? 'rotate-90' : ''}`}>
@@ -822,7 +822,7 @@ export function GuestRow(props: GuestRowProps) {
 
         {/* Type */}
         <Show when={isColVisible('type')}>
-          <td class="px-1.5 sm:px-2 py-1 align-middle">
+          <td class="px-1.5 sm:px-2 py-0.5 align-middle">
             <div class="flex justify-center">
               <span
                 class={`inline-flex items-center px-1 py-0.5 text-[10px] font-medium rounded whitespace-nowrap ${typeInfo().className}`}
@@ -836,7 +836,7 @@ export function GuestRow(props: GuestRowProps) {
 
         {/* Info - merged identifier (VMID / image / namespace) for mixed-type views */}
         <Show when={isColVisible('info')}>
-          <td class="px-1.5 sm:px-2 py-1 align-middle">
+          <td class="px-1.5 sm:px-2 py-0.5 align-middle">
             <div class="flex justify-center text-xs text-slate-600 dark:text-slate-400 whitespace-nowrap">
               <Show when={infoValue()} fallback={<span class="text-slate-400">—</span>}>
                 <InfoTooltipCell value={infoValue()} tooltip={infoTooltip()} type={workloadType()} />
@@ -847,7 +847,7 @@ export function GuestRow(props: GuestRowProps) {
 
         {/* VMID */}
         <Show when={isColVisible('vmid')}>
-          <td class="px-1.5 sm:px-2 py-1 align-middle">
+          <td class="px-1.5 sm:px-2 py-0.5 align-middle">
             <div class="flex justify-center text-xs text-slate-600 dark:text-slate-400 whitespace-nowrap">
               <Show when={displayId()} fallback={<span class="text-slate-400">—</span>}>
                 {displayId()}
@@ -858,7 +858,7 @@ export function GuestRow(props: GuestRowProps) {
 
         {/* CPU */}
         <Show when={isColVisible('cpu')}>
-          <td class="px-1.5 sm:px-2 py-1 align-middle" style={isMobile() ? { "min-width": "60px" } : { width: "140px", "min-width": "140px", "max-width": "140px" }}>
+          <td class="px-1.5 sm:px-2 py-0.5 align-middle" style={isMobile() ? { "min-width": "60px" } : { width: "140px", "min-width": "140px", "max-width": "140px" }}>
             <div class="h-4">
               <EnhancedCPUBar
                 usage={cpuPercent()}
@@ -872,7 +872,7 @@ export function GuestRow(props: GuestRowProps) {
 
         {/* Memory */}
         <Show when={isColVisible('memory')}>
-          <td class="px-1.5 sm:px-2 py-1 align-middle" style={isMobile() ? { "min-width": "60px" } : { width: "140px", "min-width": "140px", "max-width": "140px" }}>
+          <td class="px-1.5 sm:px-2 py-0.5 align-middle" style={isMobile() ? { "min-width": "60px" } : { width: "140px", "min-width": "140px", "max-width": "140px" }}>
             <div title={memoryTooltip() ?? undefined}>
               <StackedMemoryBar
                 used={props.guest.memory?.used || 0}
@@ -890,7 +890,7 @@ export function GuestRow(props: GuestRowProps) {
 
         {/* Disk */}
         <Show when={isColVisible('disk')}>
-          <td class="px-1.5 sm:px-2 py-1 align-middle" style={isMobile() ? { "min-width": "60px" } : { width: "140px", "min-width": "140px", "max-width": "140px" }}>
+          <td class="px-1.5 sm:px-2 py-0.5 align-middle" style={isMobile() ? { "min-width": "60px" } : { width: "140px", "min-width": "140px", "max-width": "140px" }}>
             <Show
               when={hasDiskUsage()}
               fallback={
@@ -912,7 +912,7 @@ export function GuestRow(props: GuestRowProps) {
 
         {/* IP Address with Network Tooltip */}
         <Show when={isColVisible('ip')}>
-          <td class="px-1.5 sm:px-2 py-1 align-middle">
+          <td class="px-1.5 sm:px-2 py-0.5 align-middle">
             <div class="flex justify-center">
               <Show when={ipAddresses().length > 0 || hasNetworkInterfaces()} fallback={<span class="text-xs text-slate-400">—</span>}>
                 <NetworkInfoCell
@@ -926,7 +926,7 @@ export function GuestRow(props: GuestRowProps) {
 
         {/* Uptime */}
         <Show when={isColVisible('uptime')}>
-          <td class="px-1.5 sm:px-2 py-1 align-middle">
+          <td class="px-1.5 sm:px-2 py-0.5 align-middle">
             <div class="flex justify-center">
               <Show when={isRunning()} fallback={<span class="text-xs text-slate-400">—</span>}>
                 <span class={`text-xs whitespace-nowrap ${props.guest.uptime > 0 && props.guest.uptime < 3600 ? 'text-orange-500' : 'text-slate-600 dark:text-slate-400'}`}>
@@ -941,7 +941,7 @@ export function GuestRow(props: GuestRowProps) {
 
         {/* Node - NEW */}
         <Show when={isColVisible('node')}>
-          <td class="px-1.5 sm:px-2 py-1 align-middle">
+          <td class="px-1.5 sm:px-2 py-0.5 align-middle">
             <div class="flex justify-center">
               <Show when={props.guest.node} fallback={<span class="text-xs text-slate-400">—</span>}>
                 <button
@@ -962,7 +962,7 @@ export function GuestRow(props: GuestRowProps) {
 
         {/* Image */}
         <Show when={isColVisible('image')}>
-          <td class="px-1.5 sm:px-2 py-1 align-middle">
+          <td class="px-1.5 sm:px-2 py-0.5 align-middle">
             <div class="flex justify-center">
               <Show
                 when={workloadType() === 'docker' && dockerImage()}
@@ -981,7 +981,7 @@ export function GuestRow(props: GuestRowProps) {
 
         {/* Namespace */}
         <Show when={isColVisible('namespace')}>
-          <td class="px-1.5 sm:px-2 py-1 align-middle">
+          <td class="px-1.5 sm:px-2 py-0.5 align-middle">
             <div class="flex justify-center">
               <Show
                 when={workloadType() === 'k8s' && namespace()}
@@ -1000,7 +1000,7 @@ export function GuestRow(props: GuestRowProps) {
 
         {/* Context */}
         <Show when={isColVisible('context')}>
-          <td class="px-1.5 sm:px-2 py-1 align-middle">
+          <td class="px-1.5 sm:px-2 py-0.5 align-middle">
             <div class="flex justify-center">
               <Show
                 when={contextLabel()}
@@ -1019,7 +1019,7 @@ export function GuestRow(props: GuestRowProps) {
 
         {/* Backup Status */}
         <Show when={isColVisible('backup')}>
-          <td class="px-1.5 sm:px-2 py-1 align-middle">
+          <td class="px-1.5 sm:px-2 py-0.5 align-middle">
             <div class="flex justify-center">
               <Show when={supportsBackup()} fallback={<span class="text-xs text-slate-400">—</span>}>
                 <Show when={!props.guest.template}>
@@ -1035,7 +1035,7 @@ export function GuestRow(props: GuestRowProps) {
 
         {/* Tags */}
         <Show when={isColVisible('tags')}>
-          <td class="px-1.5 sm:px-2 py-1 align-middle">
+          <td class="px-1.5 sm:px-2 py-0.5 align-middle">
             <div class="flex justify-center" onClick={(event) => event.stopPropagation()}>
               <TagBadges
                 tags={Array.isArray(props.guest.tags) ? props.guest.tags : []}
@@ -1049,7 +1049,7 @@ export function GuestRow(props: GuestRowProps) {
 
         {/* OS */}
         <Show when={isColVisible('os')}>
-          <td class="px-1.5 sm:px-2 py-1 align-middle">
+          <td class="px-1.5 sm:px-2 py-0.5 align-middle">
             <div class="flex justify-center">
               <Show
                 when={hasOsInfo()}
@@ -1080,7 +1080,7 @@ export function GuestRow(props: GuestRowProps) {
 
         {/* Net I/O */}
         <Show when={isColVisible('netIo')}>
-          <td class="px-1.5 sm:px-2 py-1 align-middle">
+          <td class="px-1.5 sm:px-2 py-0.5 align-middle">
             <Show when={isRunning()} fallback={<div class="text-center"><span class="text-xs text-slate-400">—</span></div>}>
               <div class="grid w-full min-w-0 grid-cols-[0.75rem_minmax(0,1fr)_0.75rem_minmax(0,1fr)] items-center gap-x-1 overflow-hidden text-[11px] tabular-nums">
                 <span class="inline-flex w-3 justify-center text-emerald-500">↓</span>
@@ -1104,7 +1104,7 @@ export function GuestRow(props: GuestRowProps) {
 
         {/* Disk I/O */}
         <Show when={isColVisible('diskIo')}>
-          <td class="px-1.5 sm:px-2 py-1 align-middle">
+          <td class="px-1.5 sm:px-2 py-0.5 align-middle">
             <Show when={isRunning()} fallback={<div class="text-center"><span class="text-xs text-slate-400">—</span></div>}>
               <div class="grid w-full min-w-0 grid-cols-[0.75rem_minmax(0,1fr)_0.75rem_minmax(0,1fr)] items-center gap-x-1 overflow-hidden text-[11px] tabular-nums">
                 <span class="inline-flex w-3 justify-center font-mono text-blue-500">R</span>
@@ -1128,7 +1128,7 @@ export function GuestRow(props: GuestRowProps) {
 
         {/* Update (Docker only) */}
         <Show when={isColVisible('update')}>
-          <td class="px-1.5 sm:px-2 py-1 align-middle">
+          <td class="px-1.5 sm:px-2 py-0.5 align-middle">
             <div class="flex justify-center">
               <Show when={props.guest.type === 'docker'}>
                 <UpdateButton
@@ -1145,7 +1145,7 @@ export function GuestRow(props: GuestRowProps) {
 
         {/* Link Column - at the end like NodeSummaryTable */}
         <Show when={isColVisible('link')}>
-          <td class="px-0 py-1 align-middle text-center">
+          <td class="px-0 py-0.5 align-middle text-center">
             <Show
               when={customUrl() && customUrl() !== ''}
               fallback={

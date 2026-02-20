@@ -338,9 +338,18 @@ export function Infrastructure() {
   return (
     <div data-testid="infrastructure-page" class="space-y-4">
       <Show when={!loading() || initialLoadComplete()} fallback={
-        <Card class="p-6">
-          <div class="text-sm text-slate-600 dark:text-slate-300">Loading infrastructure resources...</div>
-        </Card>
+        <div class="space-y-3 animate-pulse pointer-events-none select-none">
+          <div class="hidden lg:block h-[124px] w-full bg-slate-100 dark:bg-slate-800/80 rounded-md border border-slate-200 dark:border-slate-700"></div>
+          <Card padding="sm" class="h-[52px] bg-slate-100 dark:bg-slate-800/80"></Card>
+          <Card padding="none" tone="card" class="h-[600px] overflow-hidden">
+            <div class="h-8 border-b border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800"></div>
+            <div class="space-y-4 p-4">
+              <div class="h-4 w-1/4 rounded bg-slate-200 dark:bg-slate-700"></div>
+              <div class="h-4 w-1/2 rounded bg-slate-200 dark:bg-slate-700"></div>
+              <div class="h-4 w-1/3 rounded bg-slate-200 dark:bg-slate-700"></div>
+            </div>
+          </Card>
+        </div>
       }>
         <Show
           when={!error()}

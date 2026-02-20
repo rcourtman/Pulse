@@ -116,11 +116,22 @@ export const getRecordZfsPool = (record: StorageRecord): ZFSPool | null =>
   toZfsPool(getRecordDetails(record).zfsPool);
 
 const computeGroupStats = (items: StorageRecord[]): StorageGroupStats => {
+  const seenShared = new Set<string>();
   const totals = items.reduce(
     (acc, record) => {
+      acc.byHealth[record.health] = (acc.byHealth[record.health] || 0) + 1;
+
+      const isShared = getRecordShared(record) === true;
+      if (isShared) {
+        const sharedKey = `${record.source.platform}|${record.name}`;
+        if (seenShared.has(sharedKey)) {
+          return acc;
+        }
+        seenShared.add(sharedKey);
+      }
+
       acc.total += record.capacity.totalBytes || 0;
       acc.used += record.capacity.usedBytes || 0;
-      acc.byHealth[record.health] = (acc.byHealth[record.health] || 0) + 1;
       return acc;
     },
     {
@@ -238,13 +249,24 @@ export const useStorageModel = (options: UseStorageModelOptions) => {
 
   const summary = createMemo<StorageSummary>(() => {
     const list = filteredRecords();
+    const seenShared = new Set<string>();
     const totals = list.reduce(
       (acc, record) => {
+        acc.byHealth[record.health] = (acc.byHealth[record.health] || 0) + 1;
+
+        const isShared = getRecordShared(record) === true;
+        if (isShared) {
+          const sharedKey = `${record.source.platform}|${record.name}`;
+          if (seenShared.has(sharedKey)) {
+            return acc;
+          }
+          seenShared.add(sharedKey);
+        }
+
         const total = record.capacity.totalBytes || 0;
         const used = record.capacity.usedBytes || 0;
         acc.total += total;
         acc.used += used;
-        acc.byHealth[record.health] = (acc.byHealth[record.health] || 0) + 1;
         return acc;
       },
       {

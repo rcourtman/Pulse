@@ -8,6 +8,7 @@ import { eventBus } from '@/stores/events';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import Building2 from 'lucide-solid/icons/building-2';
+import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
 
 interface OrganizationOverviewPanelProps {
   currentUser?: string;
@@ -180,43 +181,37 @@ export const OrganizationOverviewPanel: Component<OrganizationOverviewPanelProps
 
                   <div class="space-y-2">
                     <h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Membership</h4>
-                    <div class="overflow-x-auto rounded-md border border-slate-200 dark:border-slate-700">
-                      <table class="min-w-[560px] w-full text-sm">
-                        <thead class="bg-slate-50 dark:bg-slate-800">
-                          <tr>
-                            <th class="px-3 py-2 text-left font-medium text-slate-600 dark:text-slate-300">User</th>
-                            <th class="px-3 py-2 text-left font-medium text-slate-600 dark:text-slate-300">Role</th>
-                            <th class="px-3 py-2 text-left font-medium text-slate-600 dark:text-slate-300">Added</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          <Show
-                            when={members().length > 0}
-                            fallback={
-                              <tr>
-                                <td colSpan={3} class="px-3 py-4 text-center text-sm text-slate-500 dark:text-slate-400">
-                                  No members found.
-                                </td>
-                              </tr>
-                            }
-                          >
-                            {members().map((member) => {
+                    <div class="mt-4">
+                      <PulseDataGrid
+                        data={members()}
+                        columns={[
+                          {
+                            key: 'userId',
+                            label: 'User',
+                            render: (member) => <span class="text-slate-900 dark:text-slate-100">{member.userId}</span>
+                          },
+                          {
+                            key: 'role',
+                            label: 'Role',
+                            render: (member) => {
                               const role = normalizeRole(member.role);
                               return (
-                                <tr class="border-t border-slate-100 dark:border-slate-800">
-                                  <td class="px-3 py-2 text-slate-900 dark:text-slate-100">{member.userId}</td>
-                                  <td class="px-3 py-2">
-                                    <span class={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${roleBadgeClass(role)}`}>
-                                      {role}
-                                    </span>
-                                  </td>
-                                  <td class="px-3 py-2 text-slate-600 dark:text-slate-400">{formatOrgDate(member.addedAt)}</td>
-                                </tr>
+                                <span class={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${roleBadgeClass(role)}`}>
+                                  {role}
+                                </span>
                               );
-                            })}
-                          </Show>
-                        </tbody>
-                      </table>
+                            }
+                          },
+                          {
+                            key: 'addedAt',
+                            label: 'Added',
+                            render: (member) => <span class="text-slate-600 dark:text-slate-400">{formatOrgDate(member.addedAt)}</span>
+                          }
+                        ]}
+                        keyExtractor={(member) => member.userId}
+                        emptyState="No members found."
+                        desktopMinWidth="560px"
+                      />
                     </div>
                   </div>
                 </>

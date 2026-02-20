@@ -93,7 +93,7 @@ const guestMetadataStorageKeyForOrg = (orgScope: string): string =>
   `${STORAGE_KEYS.GUEST_METADATA}.${encodeURIComponent(orgScope)}`;
 
 const instrumentationEnabled = import.meta.env.DEV && typeof performance !== 'undefined';
-const DASHBOARD_TABLE_ESTIMATED_ROW_HEIGHT = 40;
+const DASHBOARD_TABLE_ESTIMATED_ROW_HEIGHT = 32;
 
 const workloadMetricPercent = (value: number | null | undefined): number => {
   if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
@@ -1593,12 +1593,15 @@ export function Dashboard(props: DashboardProps) {
       <Show when={connected() && initialDataReceived() && filteredGuests().length > 0}>
         <ComponentErrorBoundary name="Guest Table">
           <Card padding="none" tone="card" class="mb-4 overflow-hidden">
+            <div class="border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+              Workloads
+            </div>
             <div
               ref={tableRef}
               class="overflow-x-auto"
               style={{ '-webkit-overflow-scrolling': 'touch' }}
             >
-              <table class="w-full border-collapse whitespace-nowrap" style={{ "table-layout": "fixed", "min-width": isMobile() ? "330px" : "900px" }}>
+              <table class="w-full border-collapse whitespace-nowrap" style={{ "table-layout": "fixed", "min-width": isMobile() ? "100%" : "900px" }}>
                 <thead>
                   <tr class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
                     <For each={mobileVisibleColumns()}>
@@ -1610,7 +1613,7 @@ export function Dashboard(props: DashboardProps) {
 
                         return (
                           <th
-                            class={`py-1 text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap
+                            class={`py-0.5 text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap
                                   ${isFirst() ? 'pl-2 sm:pl-3 pr-1.5 sm:pr-2 text-left' : 'px-1.5 sm:px-2 text-center'}
                                   ${isSortable ? 'cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600' : ''}`}
                             style={{
@@ -1640,7 +1643,7 @@ export function Dashboard(props: DashboardProps) {
                     </For>
                   </tr>
                 </thead>
-                <tbody ref={setTableBodyRef} class="divide-y divide-slate-100 dark:divide-slate-800/60">
+                <tbody ref={setTableBodyRef} class="divide-y divide-slate-200/50 dark:divide-slate-700/50">
                   <Show when={groupedWindowing.isWindowed() && topSpacerHeight() > 0}>
                     <tr aria-hidden="true">
                       <td colspan={totalColumns()} style={{ height: `${topSpacerHeight()}px`, padding: '0', border: '0' }} />
@@ -1661,7 +1664,7 @@ export function Dashboard(props: DashboardProps) {
                                 <tr class="bg-slate-50 dark:bg-slate-800">
                                   <td
                                     colspan={totalColumns()}
-                                    class="py-1 pr-1.5 sm:pr-2 pl-2 sm:pl-3 text-[12px] sm:text-sm font-semibold text-slate-700 dark:text-slate-100"
+                                    class="py-0.5 pr-1.5 sm:pr-2 pl-2 sm:pl-3 text-[12px] sm:text-sm font-semibold text-slate-700 dark:text-slate-100"
                                   >
                                     {(() => {
                                       const label = getGroupLabel(groupKey, fullGroupGuests());
@@ -1669,7 +1672,7 @@ export function Dashboard(props: DashboardProps) {
                                         <div class="flex items-center gap-3">
                                           <span>{label.name}</span>
                                           <Show when={label.type}>
-                                            <span class="rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                                            <span class="inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
                                               {label.type}
                                             </span>
                                           </Show>

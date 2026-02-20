@@ -342,9 +342,9 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
     });
   });
 
-  const thClassBase = 'px-1.5 sm:px-2 py-1 text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 whitespace-nowrap';
+  const thClassBase = 'px-1.5 sm:px-2 py-0.5 text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 whitespace-nowrap';
   const thClass = `${thClassBase} text-center`;
-  const tdClass = 'px-1.5 sm:px-2 py-1 align-middle';
+  const tdClass = 'px-1.5 sm:px-2 py-0.5 align-middle';
   const resourceColumnStyle = createMemo(() =>
     isMobile()
       ? { width: '100%', 'min-width': '120px' }
@@ -384,7 +384,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
   const showHostTable = createMemo(() =>
     hostResources().length > 0 || serviceResources().length === 0,
   );
-  const staticThClass = 'px-1.5 sm:px-2 py-1 text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap text-center';
+  const staticThClass = 'px-1.5 sm:px-2 py-0.5 text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap text-center';
   const serviceCountColumnStyle = createMemo(() =>
     isMobile()
       ? { width: '80px', 'min-width': '80px', 'max-width': '90px' }
@@ -417,7 +417,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
             class="overflow-x-auto"
             style={{ '-webkit-overflow-scrolling': 'touch' }}
           >
-            <table class="w-full border-collapse whitespace-nowrap" style={{ 'table-layout': 'fixed', 'min-width': isMobile() ? '330px' : '600px' }}>
+            <table class="w-full border-collapse whitespace-nowrap" style={{ 'table-layout': 'fixed', 'min-width': isMobile() ? '100%' : '600px' }}>
               <thead>
                 <tr class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
                   <th class={`${thClassBase} text-left pl-2 sm:pl-3`} style={resourceColumnStyle()} onClick={() => handleSort('name')}>
@@ -449,7 +449,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                   </th>
                 </tr>
               </thead>
-              <tbody ref={setHostBodyRef} class="divide-y divide-slate-100 dark:divide-slate-800/60">
+              <tbody ref={setHostBodyRef} class="divide-y divide-slate-200/50 dark:divide-slate-700/50">
                 <Show when={hostWindowing.isWindowed() && hostTopSpacerHeight() > 0}>
                   <tr aria-hidden="true">
                     <td colspan={9} style={{ height: `${hostTopSpacerHeight()}px`, padding: '0', border: '0' }} />
@@ -559,12 +559,12 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                             }
                           }}
                           class={rowClass()}
-                          style={{ 'min-height': '36px' }}
+                          style={{ 'min-height': '32px' }}
                           onClick={() => toggleExpand(resource.id)}
                           onMouseEnter={() => props.onHoverChange?.(resource.id)}
                           onMouseLeave={() => props.onHoverChange?.(null)}
                         >
-                          <td class="pr-1.5 sm:pr-2 py-1 align-middle overflow-hidden pl-2 sm:pl-3">
+                          <td class="pr-1.5 sm:pr-2 py-0.5 align-middle overflow-hidden pl-2 sm:pl-3">
                             <div class="flex items-center gap-1.5 min-w-0">
                               <div
                                 class={`shrink-0 transition-transform duration-200 ${isExpanded() ? 'rotate-90' : ''}`}
@@ -786,7 +786,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
               PBS Services
             </div>
             <div class="overflow-x-auto" style={{ '-webkit-overflow-scrolling': 'touch' }}>
-              <table class="w-full border-collapse whitespace-nowrap" style={{ 'table-layout': 'fixed', 'min-width': isMobile() ? '660px' : '500px' }}>
+              <table class="w-full border-collapse whitespace-nowrap" style={{ 'table-layout': 'fixed', 'min-width': isMobile() ? '100%' : '500px' }}>
                 <thead>
                   <tr class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
                     <th class={`${staticThClass} text-left pl-2 sm:pl-3`} style={resourceColumnStyle()}>
@@ -812,7 +812,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                     </th>
                   </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-100 dark:divide-slate-800/60">
+                <tbody class="divide-y divide-slate-200/50 dark:divide-slate-700/50">
                   <For each={sortedPBSResources()}>
                     {(resource) => {
                       const isExpanded = createMemo(() => props.expandedResourceId === resource.id);
@@ -867,12 +867,12 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                               }
                             }}
                             class={rowClass()}
-                            style={{ 'min-height': '36px' }}
+                            style={{ 'min-height': '32px' }}
                             onClick={() => toggleExpand(resource.id)}
                             onMouseEnter={() => props.onHoverChange?.(resource.id)}
                             onMouseLeave={() => props.onHoverChange?.(null)}
                           >
-                            <td class="pr-1.5 sm:pr-2 py-1 align-middle overflow-hidden pl-2 sm:pl-3">
+                            <td class="pr-1.5 sm:pr-2 py-0.5 align-middle overflow-hidden pl-2 sm:pl-3">
                               <div class="flex items-center gap-1.5 min-w-0">
                                 <div class={`shrink-0 transition-transform duration-200 ${isExpanded() ? 'rotate-90' : ''}`}>
                                   <svg class="w-3.5 h-3.5 text-slate-500 group-hover:text-slate-700 dark:group-hover:text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1003,7 +1003,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
               PMG Services
             </div>
             <div class="overflow-x-auto" style={{ '-webkit-overflow-scrolling': 'touch' }}>
-              <table class="w-full border-collapse whitespace-nowrap" style={{ 'table-layout': 'fixed', 'min-width': isMobile() ? '840px' : '500px' }}>
+              <table class="w-full border-collapse whitespace-nowrap" style={{ 'table-layout': 'fixed', 'min-width': isMobile() ? '100%' : '500px' }}>
                 <thead>
                   <tr class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
                     <th class={`${staticThClass} text-left pl-2 sm:pl-3`} style={resourceColumnStyle()}>
@@ -1035,7 +1035,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                     </th>
                   </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-100 dark:divide-slate-800/60">
+                <tbody class="divide-y divide-slate-200/50 dark:divide-slate-700/50">
                   <For each={sortedPMGResources()}>
                     {(resource) => {
                       const isExpanded = createMemo(() => props.expandedResourceId === resource.id);
@@ -1095,12 +1095,12 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                               }
                             }}
                             class={rowClass()}
-                            style={{ 'min-height': '36px' }}
+                            style={{ 'min-height': '32px' }}
                             onClick={() => toggleExpand(resource.id)}
                             onMouseEnter={() => props.onHoverChange?.(resource.id)}
                             onMouseLeave={() => props.onHoverChange?.(null)}
                           >
-                            <td class="pr-1.5 sm:pr-2 py-1 align-middle overflow-hidden pl-2 sm:pl-3">
+                            <td class="pr-1.5 sm:pr-2 py-0.5 align-middle overflow-hidden pl-2 sm:pl-3">
                               <div class="flex items-center gap-1.5 min-w-0">
                                 <div class={`shrink-0 transition-transform duration-200 ${isExpanded() ? 'rotate-90' : ''}`}>
                                   <svg class="w-3.5 h-3.5 text-slate-500 group-hover:text-slate-700 dark:group-hover:text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">

@@ -12,6 +12,7 @@ import BadgeCheck from 'lucide-solid/icons/badge-check';
 import X from 'lucide-solid/icons/x';
 import Pencil from 'lucide-solid/icons/pencil';
 import Search from 'lucide-solid/icons/search';
+import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
 
 export const UserAssignmentsPanel: Component = () => {
     const [assignments, setAssignments] = createSignal<UserRoleAssignment[]>([]);
@@ -182,52 +183,54 @@ export const UserAssignmentsPanel: Component = () => {
                 </Show>
 
                 <Show when={!loading() && filteredAssignments().length > 0}>
-                    <div class="overflow-x-auto">
-                        <table class="min-w-[620px] w-full text-sm">
-                            <thead>
-                                <tr class="border-b border-slate-200 dark:border-slate-700">
-                                    <th class="text-left py-2 px-3 font-medium text-slate-600 dark:text-slate-400">Username</th>
-                                    <th class="text-left py-2 px-3 font-medium text-slate-600 dark:text-slate-400">Assigned Roles</th>
-                                    <th class="text-right py-2 px-3 font-medium text-slate-600 dark:text-slate-400">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <For each={filteredAssignments()}>
-                                    {(assignment) => (
-                                        <tr class="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800">
-                                            <td class="py-3 px-3">
-                                                <span class="font-medium text-slate-900 dark:text-slate-100">{assignment.username}</span>
-                                            </td>
-                                            <td class="py-3 px-3">
-                                                <div class="flex flex-wrap gap-1">
-                                                    <Show when={assignment.roleIds.length === 0}>
-                                                        <span class="text-xs text-slate-400 italic">No roles assigned</span>
-                                                    </Show>
-                                                    <For each={assignment.roleIds}>
-                                                        {(roleId) => (
-                                                            <span class="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-                                                                <Shield class="w-3 h-3" />
-                                                                {getRoleName(roleId)}
-                                                            </span>
-                                                        )}
-                                                    </For>
-                                                </div>
-                                            </td>
-                                            <td class="py-3 px-3 text-right">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleEditRoles(assignment)}
-                                                    class="inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                                                >
-                                                    <Pencil class="w-4 h-4" />
-                                                    Manage Access
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    )}
-                                </For>
-                            </tbody>
-                        </table>
+                    <div class="mt-4">
+                        <PulseDataGrid
+                            data={filteredAssignments()}
+                            columns={[
+                                {
+                                    key: 'username',
+                                    label: 'Username',
+                                    render: (assignment) => <span class="font-medium text-slate-900 dark:text-slate-100">{assignment.username}</span>
+                                },
+                                {
+                                    key: 'assignedRoles',
+                                    label: 'Assigned Roles',
+                                    render: (assignment) => (
+                                        <div class="flex flex-wrap gap-1">
+                                            <Show when={assignment.roleIds.length === 0}>
+                                                <span class="text-xs text-slate-400 italic">No roles assigned</span>
+                                            </Show>
+                                            <For each={assignment.roleIds}>
+                                                {(roleId) => (
+                                                    <span class="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                                                        <Shield class="w-3 h-3" />
+                                                        {getRoleName(roleId)}
+                                                    </span>
+                                                )}
+                                            </For>
+                                        </div>
+                                    )
+                                },
+                                {
+                                    key: 'actions',
+                                    label: 'Actions',
+                                    align: 'right',
+                                    render: (assignment) => (
+                                        <button
+                                            type="button"
+                                            onClick={() => handleEditRoles(assignment)}
+                                            class="inline-flex min-h-10 sm:min-h-9 items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                                        >
+                                            <Pencil class="w-4 h-4" />
+                                            Manage Access
+                                        </button>
+                                    )
+                                }
+                            ]}
+                            keyExtractor={(assignment) => assignment.username}
+                            emptyState="No users yet"
+                            desktopMinWidth="620px"
+                        />
                     </div>
                 </Show>
             </SettingsPanel>

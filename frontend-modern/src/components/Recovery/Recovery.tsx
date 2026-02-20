@@ -2,7 +2,6 @@ import { Component, For, Show, createEffect, createMemo, createSignal, onMount, 
 import { useLocation, useNavigate } from '@solidjs/router';
 import { Card } from '@/components/shared/Card';
 import { ColumnPicker } from '@/components/shared/ColumnPicker';
-import { Dialog } from '@/components/shared/Dialog';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { SearchInput } from '@/components/shared/SearchInput';
 import { getSourcePlatformBadge, getSourcePlatformLabel } from '@/components/shared/sourcePlatformBadges';
@@ -226,9 +225,9 @@ const ISSUE_RAIL_CLASS: Record<Exclude<IssueTone, 'none'>, string> = {
 
 const isRollupStale = (r: ProtectionRollup, nowMs: number): boolean => {
   const successMs = r.lastSuccessAt ? Date.parse(r.lastSuccessAt) : 0;
-  if (Number.isFinite(successMs) && successMs > 0) return nowMs-successMs >= STALE_ISSUE_THRESHOLD_MS;
+  if (Number.isFinite(successMs) && successMs > 0) return nowMs - successMs >= STALE_ISSUE_THRESHOLD_MS;
   const attemptMs = r.lastAttemptAt ? Date.parse(r.lastAttemptAt) : 0;
-  if (Number.isFinite(attemptMs) && attemptMs > 0) return nowMs-attemptMs >= STALE_ISSUE_THRESHOLD_MS;
+  if (Number.isFinite(attemptMs) && attemptMs > 0) return nowMs - attemptMs >= STALE_ISSUE_THRESHOLD_MS;
   return false;
 };
 
@@ -1019,11 +1018,10 @@ const Recovery: Component = () => {
                     type="button"
                     aria-pressed={protectedStaleOnly()}
                     onClick={() => setProtectedStaleOnly((v) => !v)}
-                    class={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${
-                      protectedStaleOnly()
-                        ? 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-100'
-                        : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'
-                    }`}
+                    class={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${protectedStaleOnly()
+                      ? 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-100'
+                      : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'
+                      }`}
                   >
                     Stale only
                   </button>
@@ -1045,33 +1043,40 @@ const Recovery: Component = () => {
           </Card>
         </Show>
 
-        <Card padding="sm">
+        <Card padding="none" tone="card" class="mb-4 overflow-hidden">
+          <div class="border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+            Protected Items
+          </div>
           <Show when={recoveryRollups.rollups.loading && filteredRollups().length === 0}>
-            <div class="px-3 py-6 text-sm text-slate-500 dark:text-slate-400">Loading protection rollups...</div>
+            <div class="px-6 py-6 text-sm text-slate-500 dark:text-slate-400">Loading protected items...</div>
           </Show>
 
           <Show when={!recoveryRollups.rollups.loading && recoveryRollups.rollups.error}>
-            <EmptyState
-              title="Failed to load protected items"
-              description={String((recoveryRollups.rollups.error as Error)?.message || recoveryRollups.rollups.error)}
-            />
+            <div class="p-6">
+              <EmptyState
+                title="Failed to load protected items"
+                description={String((recoveryRollups.rollups.error as Error)?.message || recoveryRollups.rollups.error)}
+              />
+            </div>
           </Show>
 
           <Show when={!recoveryRollups.rollups.loading && !recoveryRollups.rollups.error && filteredRollups().length === 0}>
-            <EmptyState
-              title="No protected items yet"
-              description="Pulse hasn’t received any recovery events for this org yet."
-            />
+            <div class="p-6">
+              <EmptyState
+                title="No protected items yet"
+                description="Pulse hasn’t received any recovery events for this org yet."
+              />
+            </div>
           </Show>
 
           <Show when={filteredRollups().length > 0}>
             <div class="overflow-x-auto">
-              <table class="w-full table-fixed text-xs">
+              <table class="w-full border-collapse whitespace-nowrap" style={{ 'table-layout': 'fixed', 'min-width': isMobile() ? '100%' : '500px' }}>
                 <thead>
-                  <tr class="border-b border-slate-200 bg-slate-50 text-left text-[10px] uppercase tracking-wide text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
+                  <tr class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
                     {([['subject', 'Subject'], ['source', 'Source'], ['lastBackup', 'Last Backup'], ['outcome', 'Outcome']] as const).map(([col, label]) => (
                       <th
-                        class={`px-1.5 sm:px-2 py-1 cursor-pointer select-none hover:text-slate-700 dark:hover:text-slate-200 transition-colors${col === 'source' ? ' hidden md:table-cell w-[110px]' : col === 'lastBackup' ? ' w-[75px]' : col === 'outcome' ? ' w-[70px]' : ''}`}
+                        class={`py-0.5 px-3 whitespace-nowrap text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer select-none hover:text-slate-700 dark:hover:text-slate-200 transition-colors${col === 'source' ? ' hidden md:table-cell w-[110px]' : col === 'lastBackup' ? ' w-[120px]' : col === 'outcome' ? ' w-[70px]' : ''}`}
                         onClick={() => toggleProtectedSort(col)}
                       >
                         <span class="inline-flex items-center gap-1">
@@ -1088,7 +1093,7 @@ const Recovery: Component = () => {
                     ))}
                   </tr>
                 </thead>
-                <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                <tbody class="divide-y divide-slate-200/50 dark:divide-slate-700/50">
                   <For each={sortedRollups()}>
                     {(r) => {
                       const resIndex = resourcesById();
@@ -1115,13 +1120,12 @@ const Recovery: Component = () => {
                           }}
                         >
                           <td
-                            class={`relative max-w-[420px] truncate whitespace-nowrap px-1.5 sm:px-2 py-1 text-slate-900 ${
-                              issueTone === 'rose' || issueTone === 'blue'
-                                ? 'font-medium dark:text-slate-100'
-                                : issueTone === 'amber'
-                                  ? 'dark:text-slate-200'
-                                  : 'dark:text-slate-300'
-                            }`}
+                            class={`relative max-w-[420px] truncate whitespace-nowrap px-3 py-0.5 text-slate-900 ${issueTone === 'rose' || issueTone === 'blue'
+                              ? 'font-medium dark:text-slate-100'
+                              : issueTone === 'amber'
+                                ? 'dark:text-slate-200'
+                                : 'dark:text-slate-300'
+                              }`}
                             title={label}
                           >
                             <Show when={issueTone !== 'none'}>
@@ -1137,7 +1141,7 @@ const Recovery: Component = () => {
                               </Show>
                             </div>
                           </td>
-                          <td class="hidden md:table-cell whitespace-nowrap px-1.5 sm:px-2 py-1">
+                          <td class="hidden md:table-cell whitespace-nowrap px-3 py-0.5">
                             <div class="flex flex-wrap gap-1.5">
                               <For each={providers}>
                                 {(p) => {
@@ -1148,14 +1152,14 @@ const Recovery: Component = () => {
                             </div>
                           </td>
                           <td
-                            class={`whitespace-nowrap px-1.5 sm:px-2 py-1 ${rollupAgeTextClass(r, nowMs)}`}
+                            class={`whitespace-nowrap px-3 py-0.5 ${rollupAgeTextClass(r, nowMs)}`}
                             title={successMs > 0 ? formatAbsoluteTime(successMs) : attemptMs > 0 ? formatAbsoluteTime(attemptMs) : undefined}
                           >
                             {successMs > 0 ? formatRelativeTime(successMs) : neverSucceeded ? (
                               <span class="text-amber-600 dark:text-amber-400">never</span>
                             ) : '—'}
                           </td>
-                          <td class="whitespace-nowrap px-1.5 sm:px-2 py-1">
+                          <td class="whitespace-nowrap px-3 py-0.5">
                             <span
                               class={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-medium ${OUTCOME_BADGE_CLASS[outcome]}`}
                             >
@@ -1309,11 +1313,10 @@ const Recovery: Component = () => {
                           setSelectedDateKey(null);
                           setCurrentPage(1);
                         }}
-                        class={`rounded px-2 py-1 ${
-                          chartRangeDays() === range
-                            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
-                            : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700'
-                        }`}
+                        class={`rounded px-2 py-1 ${chartRangeDays() === range
+                          ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
+                          : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700'
+                          }`}
                       >
                         {range === 365 ? '1y' : `${range}d`}
                       </button>
@@ -1382,9 +1385,8 @@ const Recovery: Component = () => {
                             <div class="flex-1">
                               <button
                                 type="button"
-                                class={`h-full w-full rounded-sm ${
-                                  isSelected ? 'bg-blue-100 dark:bg-blue-900' : 'hover:bg-slate-200 dark:hover:bg-slate-700'
-                                }`}
+                                class={`h-full w-full rounded-sm ${isSelected ? 'bg-blue-100 dark:bg-blue-900' : 'hover:bg-slate-200 dark:hover:bg-slate-700'
+                                  }`}
                                 aria-label={`${prettyDateLabel(point.key)}: ${total} recovery points`}
                                 onClick={() => {
                                   setSelectedDateKey((prev) => (prev === point.key ? null : point.key));
@@ -1450,9 +1452,8 @@ const Recovery: Component = () => {
                             <div class={`relative flex-1 ${isMobile() ? '' : 'shrink-0'} ${barMinWidth}`}>
                               <Show when={showLabel}>
                                 <span
-                                  class={`absolute bottom-0 left-1/2 -translate-x-1/2 whitespace-nowrap text-[9px] ${
-                                    isSelected ? 'font-semibold text-blue-700 dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'
-                                  }`}
+                                  class={`absolute bottom-0 left-1/2 -translate-x-1/2 whitespace-nowrap text-[9px] ${isSelected ? 'font-semibold text-blue-700 dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'
+                                    }`}
                                 >
                                   {compactAxisLabel(point.key, chartRangeDays())}
                                 </span>
@@ -1823,7 +1824,10 @@ const Recovery: Component = () => {
             </Card>
           </Show>
 
-          <Card padding="none" class="overflow-hidden">
+          <Card padding="none" tone="card" class="mb-4 overflow-hidden">
+            <div class="border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+              Recovery Events
+            </div>
             <Show
               when={groupedByDay().length > 0}
               fallback={
@@ -1847,13 +1851,13 @@ const Recovery: Component = () => {
               }
             >
               <div class="overflow-x-auto">
-                <table class="w-full text-xs" style={{ 'min-width': tableMinWidth() }}>
+                <table class="w-full border-collapse text-xs whitespace-nowrap" style={{ 'min-width': tableMinWidth() }}>
                   <thead>
-                    <tr class="border-b border-slate-200 bg-slate-50 text-left text-[10px] uppercase tracking-wide text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
-                      <For each={mobileVisibleArtifactColumns()}>{(col) => <th class="px-1.5 sm:px-2 py-1">{col.label}</th>}</For>
+                    <tr class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
+                      <For each={mobileVisibleArtifactColumns()}>{(col) => <th class="py-0.5 px-3 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap">{col.label}</th>}</For>
                     </tr>
                   </thead>
-                  <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                  <tbody class="divide-y divide-slate-200/50 dark:divide-slate-700/50">
                     <For each={groupedByDay()}>
                       {(group) => (
                         <>
@@ -1890,127 +1894,150 @@ const Recovery: Component = () => {
 
 
                               return (
-                                <tr
-                                  class="cursor-pointer border-b border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800/35"
-                                  onClick={() => setSelectedPoint(p)}
-                                >
-                                  <For each={mobileVisibleArtifactColumns()}>
-                                    {(col) => {
-                                      switch (col.id) {
-                                        case 'time':
-                                          return (
-                                            <td class="whitespace-nowrap px-1.5 sm:px-2 py-1 text-slate-500 dark:text-slate-400">
-                                              {timeOnly}
-                                            </td>
-                                          );
-                                        case 'subject':
-                                          return (
-                                            <td
-                                              class="max-w-[420px] truncate whitespace-nowrap px-1.5 sm:px-2 py-1 text-slate-900 dark:text-slate-100"
-                                              title={subject}
-                                            >
-                                              {subject}
-                                            </td>
-                                          );
-                                        case 'entityId':
-                                          return (
-                                            <td class="whitespace-nowrap px-1.5 sm:px-2 py-1 text-slate-600 dark:text-slate-400 font-mono">
-                                              {entityId || '—'}
-                                            </td>
-                                          );
-                                        case 'cluster':
-                                          return (
-                                            <td class="whitespace-nowrap px-1.5 sm:px-2 py-1 text-slate-600 dark:text-slate-400 font-mono">
-                                              {cluster || '—'}
-                                            </td>
-                                          );
-                                        case 'nodeHost':
-                                          return (
-                                            <td class="whitespace-nowrap px-1.5 sm:px-2 py-1 text-slate-600 dark:text-slate-400 font-mono">
-                                              {nodeHost || '—'}
-                                            </td>
-                                          );
-                                        case 'namespace':
-                                          return (
-                                            <td class="whitespace-nowrap px-1.5 sm:px-2 py-1 text-slate-600 dark:text-slate-400 font-mono">
-                                              {namespace || '—'}
-                                            </td>
-                                          );
-                                        case 'source': {
-                                          const badge = getSourcePlatformBadge(provider);
-                                          return (
-                                            <td class="whitespace-nowrap px-1.5 sm:px-2 py-1">
-                                              <span class={badge?.classes || ''}>{badge?.label || sourceLabel(provider)}</span>
-                                            </td>
-                                          );
-                                        }
-                                        case 'verified':
-                                          return (
-                                            <td class="whitespace-nowrap px-1.5 sm:px-2 py-1">
-                                              {typeof p.verified === 'boolean' ? (
-                                                p.verified ? (
-                                                  <span class="inline-flex items-center gap-1 text-green-600 dark:text-green-400" title="Verified">
-                                                    <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
-                                                    </svg>
-                                                  </span>
+                                <>
+                                  <tr
+                                    class={`cursor-pointer border-b ${selectedPoint()?.id === p.id ? 'bg-blue-50/50 border-blue-200 dark:bg-blue-900/30 dark:border-blue-800' : 'border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800/35'}`}
+                                    onClick={() => setSelectedPoint(selectedPoint()?.id === p.id ? null : p)}
+                                  >
+                                    <For each={mobileVisibleArtifactColumns()}>
+                                      {(col) => {
+                                        switch (col.id) {
+                                          case 'time':
+                                            return (
+                                              <td class="whitespace-nowrap px-3 py-0.5 text-slate-500 dark:text-slate-400">
+                                                {timeOnly}
+                                              </td>
+                                            );
+                                          case 'subject':
+                                            return (
+                                              <td
+                                                class="max-w-[420px] truncate whitespace-nowrap px-3 py-0.5 text-slate-900 dark:text-slate-100"
+                                                title={subject}
+                                              >
+                                                {subject}
+                                              </td>
+                                            );
+                                          case 'entityId':
+                                            return (
+                                              <td class="whitespace-nowrap px-3 py-0.5 text-slate-600 dark:text-slate-400 font-mono">
+                                                {entityId || '—'}
+                                              </td>
+                                            );
+                                          case 'cluster':
+                                            return (
+                                              <td class="whitespace-nowrap px-3 py-0.5 text-slate-600 dark:text-slate-400 font-mono">
+                                                {cluster || '—'}
+                                              </td>
+                                            );
+                                          case 'nodeHost':
+                                            return (
+                                              <td class="whitespace-nowrap px-3 py-0.5 text-slate-600 dark:text-slate-400 font-mono">
+                                                {nodeHost || '—'}
+                                              </td>
+                                            );
+                                          case 'namespace':
+                                            return (
+                                              <td class="whitespace-nowrap px-3 py-0.5 text-slate-600 dark:text-slate-400 font-mono">
+                                                {namespace || '—'}
+                                              </td>
+                                            );
+                                          case 'source': {
+                                            const badge = getSourcePlatformBadge(provider);
+                                            return (
+                                              <td class="whitespace-nowrap px-3 py-0.5">
+                                                <span class={badge?.classes || ''}>{badge?.label || sourceLabel(provider)}</span>
+                                              </td>
+                                            );
+                                          }
+                                          case 'verified':
+                                            return (
+                                              <td class="whitespace-nowrap px-3 py-0.5">
+                                                {typeof p.verified === 'boolean' ? (
+                                                  p.verified ? (
+                                                    <span class="inline-flex items-center gap-1 text-green-600 dark:text-green-400" title="Verified">
+                                                      <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
+                                                      </svg>
+                                                    </span>
+                                                  ) : (
+                                                    <span class="inline-flex items-center gap-1 text-amber-500 dark:text-amber-400" title="Unverified">
+                                                      <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 9v2m0 4h.01M12 3a9 9 0 100 18 9 9 0 000-18z" />
+                                                      </svg>
+                                                    </span>
+                                                  )
                                                 ) : (
-                                                  <span class="inline-flex items-center gap-1 text-amber-500 dark:text-amber-400" title="Unverified">
-                                                    <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 9v2m0 4h.01M12 3a9 9 0 100 18 9 9 0 000-18z" />
-                                                    </svg>
-                                                  </span>
-                                                )
-                                              ) : (
-                                                <span class="text-slate-400 dark:text-slate-600">—</span>
-                                              )}
-                                            </td>
-                                          );
-                                        case 'size':
-                                          return (
-                                            <td class="whitespace-nowrap px-1.5 sm:px-2 py-1 text-slate-500 dark:text-slate-400">
-                                              {p.sizeBytes && p.sizeBytes > 0 ? formatBytes(p.sizeBytes) : '—'}
-                                            </td>
-                                          );
-                                        case 'method':
-                                          return (
-                                            <td class="whitespace-nowrap px-1.5 sm:px-2 py-1">
-                                              <span
-                                                class={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-medium ${MODE_BADGE_CLASS[mode]}`}
+                                                  <span class="text-slate-400 dark:text-slate-600">—</span>
+                                                )}
+                                              </td>
+                                            );
+                                          case 'size':
+                                            return (
+                                              <td class="whitespace-nowrap px-3 py-0.5 text-slate-500 dark:text-slate-400">
+                                                {p.sizeBytes && p.sizeBytes > 0 ? formatBytes(p.sizeBytes) : '—'}
+                                              </td>
+                                            );
+                                          case 'method':
+                                            return (
+                                              <td class="whitespace-nowrap px-3 py-0.5">
+                                                <span
+                                                  class={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-medium ${MODE_BADGE_CLASS[mode]}`}
+                                                >
+                                                  {MODE_LABELS[mode]}
+                                                </span>
+                                              </td>
+                                            );
+                                          case 'repository':
+                                            return (
+                                              <td
+                                                class="max-w-[220px] truncate whitespace-nowrap px-3 py-0.5 text-[11px] leading-4 text-slate-600 dark:text-slate-400"
+                                                title={repoLabel}
                                               >
-                                                {MODE_LABELS[mode]}
-                                              </span>
-                                            </td>
-                                          );
-                                        case 'repository':
-                                          return (
-                                            <td
-                                              class="max-w-[220px] truncate whitespace-nowrap px-1.5 sm:px-2 py-1 text-[11px] leading-4 text-slate-600 dark:text-slate-400"
-                                              title={repoLabel}
-                                            >
-                                              {repoLabel || '—'}
-                                            </td>
-                                          );
-                                        case 'outcome':
-                                          return (
-                                            <td class="whitespace-nowrap px-1.5 sm:px-2 py-1">
-                                              <span
-                                                class={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                                                  OUTCOME_BADGE_CLASS[outcome]
-                                                }`}
-                                              >
-                                                {titleize(outcome)}
-                                              </span>
-                                            </td>
-                                          );
-                                        default:
-                                          return (
-                                            <td class="whitespace-nowrap px-1.5 sm:px-2 py-1 text-slate-500 dark:text-slate-400">-</td>
-                                          );
-                                      }
-                                    }}
-                                  </For>
-                                </tr>
+                                                {repoLabel || '—'}
+                                              </td>
+                                            );
+                                          case 'outcome':
+                                            return (
+                                              <td class="whitespace-nowrap px-3 py-0.5">
+                                                <span
+                                                  class={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-medium ${OUTCOME_BADGE_CLASS[outcome]
+                                                    }`}
+                                                >
+                                                  {titleize(outcome)}
+                                                </span>
+                                              </td>
+                                            );
+                                          default:
+                                            return (
+                                              <td class="whitespace-nowrap px-3 py-0.5 text-slate-500 dark:text-slate-400">-</td>
+                                            );
+                                        }
+                                      }}
+                                    </For>
+                                  </tr>
+                                  <Show when={selectedPoint()?.id === p.id}>
+                                    <tr>
+                                      <td colSpan={tableColumnCount()} class="bg-slate-50 dark:bg-slate-800 px-0 sm:px-4 py-4 border-b border-slate-200 dark:border-slate-700 shadow-inner relative">
+                                        <div class="flex items-center justify-between px-4 pb-2 mb-2 border-b border-slate-200 dark:border-slate-700">
+                                          <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Recovery Point Details</h2>
+                                          <button
+                                            type="button"
+                                            onClick={(e) => { e.stopPropagation(); setSelectedPoint(null); }}
+                                            class="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300"
+                                            aria-label="Close details"
+                                          >
+                                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                            </svg>
+                                          </button>
+                                        </div>
+                                        <div class="px-4">
+                                          <RecoveryPointDetails point={p} />
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  </Show>
+                                </>
                               );
                             }}
                           </For>
@@ -2054,31 +2081,7 @@ const Recovery: Component = () => {
             </Show>
           </Card>
 
-          <Dialog
-            isOpen={Boolean(selectedPoint())}
-            onClose={() => setSelectedPoint(null)}
-            panelClass="w-[min(920px,92vw)]"
-            ariaLabel="Recovery point details"
-          >
-            <div class="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-700">
-              <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Recovery Point Details</h2>
-              <button
-                type="button"
-                onClick={() => setSelectedPoint(null)}
-                class="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300"
-                aria-label="Close details"
-              >
-                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <div class="flex-1 overflow-y-auto p-4">
-              <Show when={selectedPoint()}>
-                {(p) => <RecoveryPointDetails point={p()!} />}
-              </Show>
-            </div>
-          </Dialog>
+
         </Show>
       </Show>
     </div>

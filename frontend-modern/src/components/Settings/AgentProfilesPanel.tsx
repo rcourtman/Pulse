@@ -18,6 +18,7 @@ import Crown from 'lucide-solid/icons/crown';
 import Users from 'lucide-solid/icons/users';
 import Settings from 'lucide-solid/icons/settings';
 import Lightbulb from 'lucide-solid/icons/lightbulb';
+import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
 
 
 export const AgentProfilesPanel: Component = () => {
@@ -336,57 +337,60 @@ export const AgentProfilesPanel: Component = () => {
                         </Show>
 
                         <Show when={!loading() && profiles().length > 0}>
-                            <div class="overflow-x-auto">
-                                <table class="w-full text-sm">
-                                    <thead>
-                                        <tr class="border-b border-slate-200 dark:border-slate-700">
-                                            <th class="text-left py-2 px-3 font-medium text-slate-600 dark:text-slate-400">Name</th>
-                                            <th class="text-left py-2 px-3 font-medium text-slate-600 dark:text-slate-400">Settings</th>
-                                            <th class="text-left py-2 px-3 font-medium text-slate-600 dark:text-slate-400">Agents</th>
-                                            <th class="text-right py-2 px-3 font-medium text-slate-600 dark:text-slate-400">Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <For each={profiles()}>
-                                            {(profile) => (
-                                                <tr class="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800">
-                                                    <td class="py-3 px-3">
-                                                        <span class="font-medium text-slate-900 dark:text-slate-100">{profile.name}</span>
-                                                    </td>
-                                                    <td class="py-3 px-3">
-                                                        <span class="text-slate-600 dark:text-slate-400">{getSettingsCount(profile)}</span>
-                                                    </td>
-                                                    <td class="py-3 px-3">
-                                                        <span class="inline-flex items-center gap-1 text-slate-600 dark:text-slate-400">
-                                                            <Users class="w-4 h-4" />
-                                                            {getAssignmentCount(profile.id)}
-                                                        </span>
-                                                    </td>
-                                                    <td class="py-3 px-3 text-right">
-                                                        <div class="inline-flex items-center gap-1">
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => handleEdit(profile)}
-                                                                class="p-1.5 rounded-md text-slate-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:text-blue-400 dark:hover:bg-blue-900"
-                                                                title="Edit profile"
-                                                            >
-                                                                <Pencil class="w-4 h-4" />
-                                                            </button>
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => handleDelete(profile)}
-                                                                class="p-1.5 rounded-md text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-900"
-                                                                title="Delete profile"
-                                                            >
-                                                                <Trash2 class="w-4 h-4" />
-                                                            </button>
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            )}
-                                        </For>
-                                    </tbody>
-                                </table>
+                            <div class="mt-4">
+                                <PulseDataGrid
+                                    data={profiles()}
+                                    columns={[
+                                        {
+                                            key: 'name',
+                                            label: 'Name',
+                                            render: (profile) => <span class="font-medium text-slate-900 dark:text-slate-100">{profile.name}</span>
+                                        },
+                                        {
+                                            key: 'settings',
+                                            label: 'Settings',
+                                            render: (profile) => <span class="text-slate-600 dark:text-slate-400">{getSettingsCount(profile)}</span>
+                                        },
+                                        {
+                                            key: 'agents',
+                                            label: 'Agents',
+                                            render: (profile) => (
+                                                <span class="inline-flex items-center gap-1 text-slate-600 dark:text-slate-400">
+                                                    <Users class="w-4 h-4" />
+                                                    {getAssignmentCount(profile.id)}
+                                                </span>
+                                            )
+                                        },
+                                        {
+                                            key: 'actions',
+                                            label: 'Actions',
+                                            align: 'right',
+                                            render: (profile) => (
+                                                <div class="inline-flex items-center gap-1">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleEdit(profile)}
+                                                        class="p-1.5 rounded-md text-slate-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:text-blue-400 dark:hover:bg-blue-900"
+                                                        title="Edit profile"
+                                                    >
+                                                        <Pencil class="w-4 h-4" />
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleDelete(profile)}
+                                                        class="p-1.5 rounded-md text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-900"
+                                                        title="Delete profile"
+                                                    >
+                                                        <Trash2 class="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            )
+                                        }
+                                    ]}
+                                    keyExtractor={(profile) => profile.id}
+                                    emptyState="No profiles yet. Create one to get started."
+                                    desktopMinWidth="600px"
+                                />
                             </div>
                         </Show>
                     </SettingsPanel>
@@ -406,67 +410,77 @@ export const AgentProfilesPanel: Component = () => {
                         </Show>
 
                         <Show when={connectedAgents().length > 0}>
-                            <div class="overflow-x-auto">
-                                <table class="w-full text-sm">
-                                    <thead>
-                                        <tr class="border-b border-slate-200 dark:border-slate-700">
-                                            <th class="text-left py-2 px-3 font-medium text-slate-600 dark:text-slate-400">Agent</th>
-                                            <th class="text-left py-2 px-3 font-medium text-slate-600 dark:text-slate-400">Profile</th>
-                                            <th class="text-left py-2 px-3 font-medium text-slate-600 dark:text-slate-400">Status</th>
-                                            <th class="text-left py-2 px-3 font-medium text-slate-600 dark:text-slate-400">Last Seen</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <For each={connectedAgents()}>
-                                            {(agent) => {
+                            <div class="mt-4">
+                                <PulseDataGrid
+                                    data={connectedAgents()}
+                                    columns={[
+                                        {
+                                            key: 'agent',
+                                            label: 'Agent',
+                                            render: (agent) => (
+                                                <div>
+                                                    <span class="font-medium text-slate-900 dark:text-slate-100">
+                                                        {agent.displayName || agent.hostname}
+                                                    </span>
+                                                    <Show when={agent.displayName && agent.hostname !== agent.displayName}>
+                                                        <span class="ml-2 text-xs text-slate-500 dark:text-slate-400">
+                                                            ({agent.hostname})
+                                                        </span>
+                                                    </Show>
+                                                </div>
+                                            )
+                                        },
+                                        {
+                                            key: 'profile',
+                                            label: 'Profile',
+                                            render: (agent) => {
                                                 const assignment = () => getAgentAssignment(agent.id);
-                                                const isOnline = () => agent.status?.toLowerCase() === 'online' || agent.status?.toLowerCase() === 'running';
-
                                                 return (
-                                                    <tr class="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800">
-                                                        <td class="py-3 px-3">
-                                                            <div>
-                                                                <span class="font-medium text-slate-900 dark:text-slate-100">
-                                                                    {agent.displayName || agent.hostname}
-                                                                </span>
-                                                                <Show when={agent.displayName && agent.hostname !== agent.displayName}>
-                                                                    <span class="ml-2 text-xs text-slate-500 dark:text-slate-400">
-                                                                        ({agent.hostname})
-                                                                    </span>
-                                                                </Show>
-                                                            </div>
-                                                        </td>
-                                                        <td class="py-3 px-3">
-                                                            <select
-                                                                value={assignment()?.profile_id || ''}
-                                                                onChange={(e) => handleAssign(agent.id, e.currentTarget.value)}
-                                                                class="min-h-10 sm:min-h-9 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
-                                                            >
-                                                                <option value="">No profile</option>
-                                                                <For each={profiles()}>
-                                                                    {(profile) => (
-                                                                        <option value={profile.id}>{profile.name}</option>
-                                                                    )}
-                                                                </For>
-                                                            </select>
-                                                        </td>
-                                                        <td class="py-3 px-3">
-                                                            <span class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${isOnline()
-                                                                ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
-                                                                : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
-                                                                }`}>
-                                                                {isOnline() ? 'Online' : 'Offline'}
-                                                            </span>
-                                                        </td>
-                                                        <td class="py-3 px-3 text-slate-600 dark:text-slate-400">
-                                                            {agent.lastSeen ? formatRelativeTime(agent.lastSeen) : 'Never'}
-                                                        </td>
-                                                    </tr>
+                                                    <select
+                                                        value={assignment()?.profile_id || ''}
+                                                        onChange={(e) => handleAssign(agent.id, e.currentTarget.value)}
+                                                        class="min-h-10 sm:min-h-9 w-full sm:max-w-xs rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                                                    >
+                                                        <option value="">No profile</option>
+                                                        <For each={profiles()}>
+                                                            {(profile) => (
+                                                                <option value={profile.id}>{profile.name}</option>
+                                                            )}
+                                                        </For>
+                                                    </select>
                                                 );
-                                            }}
-                                        </For>
-                                    </tbody>
-                                </table>
+                                            }
+                                        },
+                                        {
+                                            key: 'status',
+                                            label: 'Status',
+                                            render: (agent) => {
+                                                const isOnline = () => agent.status?.toLowerCase() === 'online' || agent.status?.toLowerCase() === 'running';
+                                                return (
+                                                    <span class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${isOnline()
+                                                        ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
+                                                        : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                                                        }`}>
+                                                        {isOnline() ? 'Online' : 'Offline'}
+                                                    </span>
+                                                );
+                                            }
+                                        },
+                                        {
+                                            key: 'lastSeen',
+                                            label: 'Last Seen',
+                                            hiddenOnMobile: true,
+                                            render: (agent) => (
+                                                <span class="text-slate-600 dark:text-slate-400">
+                                                    {agent.lastSeen ? formatRelativeTime(agent.lastSeen) : 'Never'}
+                                                </span>
+                                            )
+                                        }
+                                    ]}
+                                    keyExtractor={(agent) => agent.id}
+                                    emptyState="No agents connected. Install an agent to assign profiles."
+                                    desktopMinWidth="800px"
+                                />
                             </div>
                         </Show>
                     </SettingsPanel>

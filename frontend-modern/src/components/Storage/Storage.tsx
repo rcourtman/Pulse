@@ -536,6 +536,9 @@ const Storage: Component = () => {
       </Show>
 
       <Card padding="none" class="overflow-hidden">
+        <div class="border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+          {view() === 'pools' ? 'Storage Pools' : 'Physical Disks'}
+        </div>
         <Show when={view() === 'disks'}>
           <div class="p-2">
             <DiskList
@@ -561,19 +564,19 @@ const Storage: Component = () => {
                 <div class="overflow-x-auto">
                   <table class="w-full text-xs">
                     <thead>
-                      <tr class="border-b border-slate-200 bg-slate-50 text-left text-[10px] uppercase tracking-wide text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
-                        <th class="px-1.5 sm:px-2 py-1">Name</th>
+                      <tr class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
+                        <th class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">Name</th>
                         <Show when={groupBy() !== 'node'}>
-                          <th class="px-1.5 sm:px-2 py-1">Node</th>
+                          <th class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">Node</th>
                         </Show>
-                        <th class="px-1.5 sm:px-2 py-1 hidden md:table-cell">Type</th>
-                        <th class="px-1.5 sm:px-2 py-1 md:min-w-[180px]">Capacity</th>
-                        <th class="px-1.5 sm:px-2 py-1 w-[120px] hidden md:table-cell">Trend</th>
-                        <th class="px-1.5 sm:px-2 py-1">Health</th>
-                        <th class="px-1.5 sm:px-2 py-1 w-10" />
+                        <th class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider hidden md:table-cell">Type</th>
+                        <th class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider md:min-w-[180px]">Capacity</th>
+                        <th class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[120px] hidden md:table-cell">Trend</th>
+                        <th class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">Health</th>
+                        <th class="px-1.5 sm:px-2 py-0.5 w-10" />
                       </tr>
                     </thead>
-                    <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                    <tbody class="divide-y divide-slate-200/50 dark:divide-slate-700/50">
                       {/* Outer <For> uses string keys — strings compare by value so DOM is stable across data updates */}
                       <For each={groupedRecords().map((g) => g.key)}>
                         {(groupKey) => {

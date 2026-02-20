@@ -16,6 +16,7 @@ import { logger } from '@/utils/logger';
 import { useResources, getDisplayName } from '@/hooks/useResources';
 import Share2 from 'lucide-solid/icons/share-2';
 import Trash2 from 'lucide-solid/icons/trash-2';
+import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
 
 interface OrganizationSharingPanelProps {
   currentUser?: string;
@@ -531,125 +532,117 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
 
             <div class="space-y-2">
               <h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Outgoing Shares</h4>
-              <div class="overflow-x-auto rounded-md border border-slate-200 dark:border-slate-700">
-                <table class="min-w-[760px] w-full text-sm">
-                  <thead class="bg-slate-50 dark:bg-slate-800">
-                    <tr>
-                      <th class="px-3 py-2 text-left font-medium text-slate-600 dark:text-slate-300">Resource</th>
-                      <th class="px-3 py-2 text-left font-medium text-slate-600 dark:text-slate-300">Target Org</th>
-                      <th class="px-3 py-2 text-left font-medium text-slate-600 dark:text-slate-300">Access</th>
-                      <th class="px-3 py-2 text-left font-medium text-slate-600 dark:text-slate-300">Created</th>
-                      <th class="px-3 py-2 text-right font-medium text-slate-600 dark:text-slate-300">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <Show
-                      when={outgoingShares().length > 0}
-                      fallback={
-                        <tr>
-                          <td colSpan={5} class="px-3 py-4 text-center text-sm text-slate-500 dark:text-slate-400">
-                            No outgoing shares configured.
-                          </td>
-                        </tr>
+              <div class="mt-4">
+                <PulseDataGrid
+                  data={outgoingShares()}
+                  columns={[
+                    {
+                      key: 'resourceName',
+                      label: 'Resource',
+                      render: (share) => (
+                        <div class="flex flex-col">
+                          <span class="text-slate-900 dark:text-slate-100">{share.resourceName || share.resourceId}</span>
+                          <span class="text-xs text-slate-500 dark:text-slate-400">
+                            {share.resourceType}:{share.resourceId}
+                          </span>
+                        </div>
+                      )
+                    },
+                    {
+                      key: 'targetOrgId',
+                      label: 'Target Org',
+                      render: (share) => <span class="text-slate-700 dark:text-slate-300">{orgNameById().get(share.targetOrgId) || share.targetOrgId}</span>
+                    },
+                    {
+                      key: 'accessRole',
+                      label: 'Access',
+                      render: (share) => {
+                        const role = normalizeShareRole(share.accessRole);
+                        return (
+                          <span class={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${roleBadgeClass(role)}`}>
+                            {role}
+                          </span>
+                        );
                       }
-                    >
-                      <For each={outgoingShares()}>
-                        {(share) => {
-                          const role = normalizeShareRole(share.accessRole);
-                          return (
-                            <tr class="border-t border-slate-100 dark:border-slate-800">
-                              <td class="px-3 py-2 text-slate-900 dark:text-slate-100">
-                                <div class="flex flex-col">
-                                  <span>{share.resourceName || share.resourceId}</span>
-                                  <span class="text-xs text-slate-500 dark:text-slate-400">
-                                    {share.resourceType}:{share.resourceId}
-                                  </span>
-                                </div>
-                              </td>
-                              <td class="px-3 py-2 text-slate-700 dark:text-slate-300">
-                                {orgNameById().get(share.targetOrgId) || share.targetOrgId}
-                              </td>
-                              <td class="px-3 py-2">
-                                <span class={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${roleBadgeClass(role)}`}>
-                                  {role}
-                                </span>
-                              </td>
-                              <td class="px-3 py-2 text-slate-600 dark:text-slate-400">{formatOrgDate(share.createdAt)}</td>
-                              <td class="px-3 py-2 text-right">
-                                <Show when={canManageOrg(org(), props.currentUser)}>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      void deleteShare(share);
-                                    }}
-                                    disabled={saving()}
-                                    class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-60"
-                                  >
-                                    <Trash2 class="w-3.5 h-3.5" />
-                                    Remove
-                                  </button>
-                                </Show>
-                              </td>
-                            </tr>
-                          );
-                        }}
-                      </For>
-                    </Show>
-                  </tbody>
-                </table>
+                    },
+                    {
+                      key: 'createdAt',
+                      label: 'Created',
+                      render: (share) => <span class="text-slate-600 dark:text-slate-400">{formatOrgDate(share.createdAt)}</span>
+                    },
+                    {
+                      key: 'actions',
+                      label: 'Actions',
+                      align: 'right',
+                      render: (share) => (
+                        <Show when={canManageOrg(org(), props.currentUser)}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void deleteShare(share);
+                            }}
+                            disabled={saving()}
+                            class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            <Trash2 class="w-3.5 h-3.5" />
+                            Remove
+                          </button>
+                        </Show>
+                      )
+                    }
+                  ]}
+                  keyExtractor={(share) => share.id}
+                  emptyState="No outgoing shares configured."
+                  desktopMinWidth="760px"
+                />
               </div>
             </div>
 
             <div class="space-y-2">
               <h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Incoming Shares</h4>
-              <div class="overflow-x-auto rounded-md border border-slate-200 dark:border-slate-700">
-                <table class="min-w-[620px] w-full text-sm">
-                  <thead class="bg-slate-50 dark:bg-slate-800">
-                    <tr>
-                      <th class="px-3 py-2 text-left font-medium text-slate-600 dark:text-slate-300">Source Org</th>
-                      <th class="px-3 py-2 text-left font-medium text-slate-600 dark:text-slate-300">Resource</th>
-                      <th class="px-3 py-2 text-left font-medium text-slate-600 dark:text-slate-300">Access</th>
-                      <th class="px-3 py-2 text-left font-medium text-slate-600 dark:text-slate-300">Shared</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <Show
-                      when={incomingShares().length > 0}
-                      fallback={
-                        <tr>
-                          <td colSpan={4} class="px-3 py-4 text-center text-sm text-slate-500 dark:text-slate-400">
-                            No incoming shares from other organizations.
-                          </td>
-                        </tr>
+              <div class="mt-4">
+                <PulseDataGrid
+                  data={incomingShares()}
+                  columns={[
+                    {
+                      key: 'sourceOrg',
+                      label: 'Source Org',
+                      render: (share) => <span class="text-slate-700 dark:text-slate-300">{share.sourceOrgName || share.sourceOrgId}</span>
+                    },
+                    {
+                      key: 'resource',
+                      label: 'Resource',
+                      render: (share) => (
+                        <div class="flex flex-col">
+                          <span class="text-slate-900 dark:text-slate-100">{share.resourceName || share.resourceId}</span>
+                          <span class="text-xs text-slate-500 dark:text-slate-400">
+                            {share.resourceType}:{share.resourceId}
+                          </span>
+                        </div>
+                      )
+                    },
+                    {
+                      key: 'accessRole',
+                      label: 'Access',
+                      render: (share) => {
+                        const role = normalizeShareRole(share.accessRole);
+                        return (
+                          <span class={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${roleBadgeClass(role)}`}>
+                            {role}
+                          </span>
+                        );
                       }
-                    >
-                      <For each={incomingShares()}>
-                        {(share) => {
-                          const role = normalizeShareRole(share.accessRole);
-                          return (
-                            <tr class="border-t border-slate-100 dark:border-slate-800">
-                              <td class="px-3 py-2 text-slate-700 dark:text-slate-300">{share.sourceOrgName || share.sourceOrgId}</td>
-                              <td class="px-3 py-2 text-slate-900 dark:text-slate-100">
-                                <div class="flex flex-col">
-                                  <span>{share.resourceName || share.resourceId}</span>
-                                  <span class="text-xs text-slate-500 dark:text-slate-400">
-                                    {share.resourceType}:{share.resourceId}
-                                  </span>
-                                </div>
-                              </td>
-                              <td class="px-3 py-2">
-                                <span class={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${roleBadgeClass(role)}`}>
-                                  {role}
-                                </span>
-                              </td>
-                              <td class="px-3 py-2 text-slate-600 dark:text-slate-400">{formatOrgDate(share.createdAt)}</td>
-                            </tr>
-                          );
-                        }}
-                      </For>
-                    </Show>
-                  </tbody>
-                </table>
+                    },
+                    {
+                      key: 'createdAt',
+                      label: 'Shared',
+                      render: (share) => <span class="text-slate-600 dark:text-slate-400">{formatOrgDate(share.createdAt)}</span>
+                    }
+                  ]}
+                  keyExtractor={(share) => share.id}
+                  emptyState="No incoming shares from other organizations."
+                  desktopMinWidth="620px"
+                />
               </div>
             </div>
           </Show>

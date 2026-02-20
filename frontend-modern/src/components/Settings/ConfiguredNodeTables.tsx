@@ -133,7 +133,7 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
             </tr>
           </thead>
           <tbody
-            class="divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-slate-800 relative"
+            class="divide-y divide-slate-200/50 dark:divide-slate-700/50 bg-white dark:bg-slate-800 relative"
             style={{ height: `${virtualizer().getTotalSize()}px` }}
           >
             <For each={virtualizer().getVirtualItems()}>
@@ -426,7 +426,7 @@ export const PbsNodesTable: Component<PbsNodesTableProps> = (props) => {
             </th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-slate-800">
+        <tbody class="divide-y divide-slate-200/50 dark:divide-slate-700/50 bg-white dark:bg-slate-800">
           <For each={props.nodes}>
             {(node) => {
               const statusMeta = createMemo(() => resolvePbsStatusMeta(node, props.statePbs));
@@ -622,7 +622,7 @@ export const PmgNodesTable: Component<PmgNodesTableProps> = (props) => {
             </th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-slate-800">
+        <tbody class="divide-y divide-slate-200/50 dark:divide-slate-700/50 bg-white dark:bg-slate-800">
           <For each={props.nodes}>
             {(node) => {
               const statusMeta = createMemo(() => resolvePmgStatusMeta(node, props.statePmg));

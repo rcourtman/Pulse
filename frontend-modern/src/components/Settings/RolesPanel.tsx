@@ -12,6 +12,7 @@ import Trash2 from 'lucide-solid/icons/trash-2';
 import Shield from 'lucide-solid/icons/shield';
 import BadgeCheck from 'lucide-solid/icons/badge-check';
 import X from 'lucide-solid/icons/x';
+import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
 
 const ACTIONS = ['read', 'write', 'delete', 'admin', '*'];
 const RESOURCES = ['settings', 'audit_logs', 'nodes', 'users', 'license', '*'];
@@ -181,71 +182,75 @@ export const RolesPanel: Component = () => {
                 </Show>
 
                 <Show when={!loading()}>
-                    <div class="overflow-x-auto">
-                        <table class="min-w-[620px] w-full text-sm">
-                            <thead>
-                                <tr class="border-b border-slate-200 dark:border-slate-700">
-                                    <th class="text-left py-2 px-3 font-medium text-slate-600 dark:text-slate-400">Role</th>
-                                    <th class="text-left py-2 px-3 font-medium text-slate-600 dark:text-slate-400">Permissions</th>
-                                    <th class="text-right py-2 px-3 font-medium text-slate-600 dark:text-slate-400">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <For each={roles()}>
-                                    {(role) => (
-                                        <tr class="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800">
-                                            <td class="py-3 px-3">
-                                                <div class="flex flex-col">
-                                                    <span class="font-medium text-slate-900 dark:text-slate-100 flex items-center gap-1">
-                                                        {role.name}
-                                                        <Show when={role.isBuiltIn}>
-                                                            <BadgeCheck class="w-4 h-4 text-blue-500" />
-                                                        </Show>
-                                                    </span>
-                                                    <span class="text-xs text-slate-500 dark:text-slate-400">{role.description}</span>
-                                                </div>
-                                            </td>
-                                            <td class="py-3 px-3">
-                                                <div class="flex flex-wrap gap-1">
-                                                    <For each={role.permissions}>
-                                                        {(perm) => (
-                                                            <span class="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
-                                                                {perm.action}:{perm.resource}
-                                                            </span>
-                                                        )}
-                                                    </For>
-                                                </div>
-                                            </td>
-                                            <td class="py-3 px-3 text-right">
-                                                <Show when={!role.isBuiltIn}>
-                                                    <div class="inline-flex items-center gap-1">
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => handleEdit(role)}
-                                                            class="p-1.5 rounded-md text-slate-500 hover:text-blue-600 hover:bg-slate-100 dark:hover:text-blue-300 dark:hover:bg-slate-800"
-                                                            title="Edit role"
-                                                        >
-                                                            <Pencil class="w-4 h-4" />
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => handleDelete(role)}
-                                                            class="p-1.5 rounded-md text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-900"
-                                                            title="Delete role"
-                                                        >
-                                                            <Trash2 class="w-4 h-4" />
-                                                        </button>
-                                                    </div>
-                                                </Show>
+                    <div class="mt-4">
+                        <PulseDataGrid
+                            data={roles()}
+                            columns={[
+                                {
+                                    key: 'role',
+                                    label: 'Role',
+                                    render: (role) => (
+                                        <div class="flex flex-col">
+                                            <span class="font-medium text-slate-900 dark:text-slate-100 flex items-center gap-1">
+                                                {role.name}
                                                 <Show when={role.isBuiltIn}>
-                                                    <span class="text-xs text-slate-400 italic">Read-only</span>
+                                                    <BadgeCheck class="w-4 h-4 text-blue-500" />
                                                 </Show>
-                                            </td>
-                                        </tr>
-                                    )}
-                                </For>
-                            </tbody>
-                        </table>
+                                            </span>
+                                            <span class="text-xs text-slate-500 dark:text-slate-400">{role.description}</span>
+                                        </div>
+                                    )
+                                },
+                                {
+                                    key: 'permissions',
+                                    label: 'Permissions',
+                                    render: (role) => (
+                                        <div class="flex flex-wrap gap-1">
+                                            <For each={role.permissions}>
+                                                {(perm) => (
+                                                    <span class="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                                                        {perm.action}:{perm.resource}
+                                                    </span>
+                                                )}
+                                            </For>
+                                        </div>
+                                    )
+                                },
+                                {
+                                    key: 'actions',
+                                    label: 'Actions',
+                                    align: 'right',
+                                    render: (role) => (
+                                        <div class="inline-flex items-center gap-1">
+                                            <Show when={!role.isBuiltIn}>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleEdit(role)}
+                                                    class="p-1.5 rounded-md text-slate-500 hover:text-blue-600 hover:bg-slate-100 dark:hover:text-blue-300 dark:hover:bg-slate-800"
+                                                    title="Edit role"
+                                                >
+                                                    <Pencil class="w-4 h-4" />
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleDelete(role)}
+                                                    class="p-1.5 rounded-md text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-900"
+                                                    title="Delete role"
+                                                >
+                                                    <Trash2 class="w-4 h-4" />
+                                                </button>
+                                            </Show>
+                                            <Show when={role.isBuiltIn}>
+                                                <span class="text-xs text-slate-400 italic">Read-only</span>
+                                            </Show>
+                                        </div>
+                                    )
+                                }
+                            ]}
+                            keyExtractor={(role) => role.id}
+                            emptyState="No roles available."
+                            desktopMinWidth="620px"
+                        />
                     </div>
                 </Show>
             </SettingsPanel>

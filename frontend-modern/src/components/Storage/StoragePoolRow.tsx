@@ -72,12 +72,13 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
   return (
     <>
       <tr
-        class={props.rowClass}
-        style={props.rowStyle}
+        class={`group cursor-pointer ${props.rowClass} ${props.expanded ? 'bg-slate-50 dark:bg-slate-800' : ''}`}
+        style={{ ...props.rowStyle, 'min-height': '32px' }}
+        onClick={props.onToggleExpand}
         {...props.alertDataAttrs}
       >
         {/* Name + badges */}
-        <td class="px-1.5 sm:px-2 py-1 text-slate-900 dark:text-slate-100">
+        <td class="px-1.5 sm:px-2 py-0.5 text-slate-900 dark:text-slate-100">
           <div class="flex items-center gap-1.5 min-w-0">
             <span class="truncate max-w-[220px] text-[11px]" title={props.record.name}>
               {props.record.name}
@@ -89,11 +90,10 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
             </Show>
             <Show when={zfsPool() && zfsPool()!.state !== 'ONLINE'}>
               <span
-                class={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                  zfsPool()?.state === 'DEGRADED'
+                class={`px-1.5 py-0.5 rounded text-[10px] font-medium ${zfsPool()?.state === 'DEGRADED'
                     ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300'
                     : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
-                }`}
+                  }`}
               >
                 {zfsPool()?.state}
               </span>
@@ -115,20 +115,20 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
 
         {/* Node (only when not grouped by node) */}
         <Show when={props.groupBy !== 'node'}>
-          <td class="px-1.5 sm:px-2 py-1 text-xs text-slate-600 dark:text-slate-400">
+          <td class="px-1.5 sm:px-2 py-0.5 text-xs text-slate-600 dark:text-slate-400">
             {getRecordNodeLabel(props.record)}
           </td>
         </Show>
 
         {/* Type badge */}
-        <td class="px-1.5 sm:px-2 py-1 hidden md:table-cell">
+        <td class="px-1.5 sm:px-2 py-0.5 hidden md:table-cell">
           <span class={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${getTypeBadgeClass(type())}`}>
             {type()}
           </span>
         </td>
 
         {/* Capacity bar */}
-        <td class="px-1.5 sm:px-2 py-1 md:min-w-[180px]">
+        <td class="px-1.5 sm:px-2 py-0.5 md:min-w-[180px]">
           <Show
             when={totalBytes() > 0}
             fallback={<span class="text-xs text-slate-400">n/a</span>}
@@ -143,21 +143,21 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
         </td>
 
         {/* Sparkline: 7-day usage trend */}
-        <td class="px-1.5 sm:px-2 py-1 w-[120px] hidden md:table-cell">
+        <td class="px-1.5 sm:px-2 py-0.5 w-[120px] hidden md:table-cell">
           <Show when={sparklineData().length > 0} fallback={<div class="h-4 w-full" />}>
             <Sparkline data={sparklineData()} metric="disk" width={100} height={20} />
           </Show>
         </td>
 
         {/* Health */}
-        <td class="px-1.5 sm:px-2 py-1">
+        <td class="px-1.5 sm:px-2 py-0.5">
           <span class={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${healthBadge().bg} ${healthBadge().text}`}>
             {props.record.health}
           </span>
         </td>
 
         {/* Expand chevron */}
-        <td class="px-1.5 sm:px-2 py-1 text-right">
+        <td class="px-1.5 sm:px-2 py-0.5 text-right">
           <button
             type="button"
             onClick={(e) => {
@@ -168,9 +168,8 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
             aria-label={`Toggle details for ${props.record.name}`}
           >
             <svg
-              class={`w-3.5 h-3.5 text-slate-400 dark:text-slate-500 transition-transform duration-150 ${
-                props.expanded ? 'rotate-90' : ''
-              }`}
+              class={`w-3.5 h-3.5 text-slate-400 dark:text-slate-500 transition-transform duration-150 ${props.expanded ? 'rotate-90' : ''
+                }`}
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"

@@ -1,10 +1,11 @@
-import { Component, For, Show, createEffect, createMemo, createSignal } from 'solid-js';
+import { Component, Show, createEffect, createMemo, createSignal } from 'solid-js';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { BillingAdminAPI, type BillingState, type HostedOrganizationSummary } from '@/api/billingAdmin';
 import { isHostedModeEnabled, isMultiTenantEnabled } from '@/stores/license';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import CreditCard from 'lucide-solid/icons/credit-card';
+import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
 
 type BillingStateCache = Record<string, BillingState | undefined>;
 
@@ -189,175 +190,166 @@ export const BillingAdminPanel: Component = () => {
           </div>
         </Show>
 
-        <div class="overflow-x-auto rounded-md border border-slate-200 dark:border-slate-700">
-          <table class="min-w-[920px] w-full text-sm">
-            <thead class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
-              <tr>
-                <th class="text-left py-2 px-3 font-medium">Organization</th>
-                <th class="text-left py-2 px-3 font-medium">Owner</th>
-                <th class="text-left py-2 px-3 font-medium">Subscription</th>
-                <th class="text-left py-2 px-3 font-medium">Trial</th>
-                <th class="text-left py-2 px-3 font-medium">Stripe Customer</th>
-                <th class="text-right py-2 px-3 font-medium">Actions</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-slate-900">
-              <Show
-                when={!loadingOrgs()}
-                fallback={
-                  <tr>
-                    <td colSpan={6} class="py-6 px-3 text-center text-slate-500">
-                      Loading organizations...
-                    </td>
-                  </tr>
+        <div class="mt-4">
+          <PulseDataGrid
+            data={orgs()}
+            isLoading={loadingOrgs()}
+            emptyState="No organizations found."
+            desktopMinWidth="920px"
+            columns={[
+              {
+                key: 'organization',
+                label: 'Organization',
+                render: (org) => {
+                  const orgID = () => (org.org_id || '').trim();
+                  return (
+                    <button
+                      type="button"
+                      class="text-left w-full"
+                      onClick={() => {
+                        const id = orgID();
+                        if (!id) return;
+                        setExpandedOrgID((prev) => (prev === id ? null : id));
+                        void ensureBillingState(id);
+                      }}
+                    >
+                      <div class="font-medium text-slate-900 dark:text-slate-100">
+                        {org.display_name || org.org_id}
+                      </div>
+                      <div class="text-xs text-slate-500 dark:text-slate-400">
+                        <span class="font-mono">{org.org_id}</span>
+                        <Show when={org.soft_deleted}>
+                          <span class="ml-2 rounded px-1.5 py-0.5 bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-200">
+                            soft-deleted
+                          </span>
+                        </Show>
+                        <Show when={org.suspended && !org.soft_deleted}>
+                          <span class="ml-2 rounded px-1.5 py-0.5 bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-200">
+                            suspended
+                          </span>
+                        </Show>
+                      </div>
+                    </button>
+                  );
                 }
-              >
-                <Show
-                  when={orgs().length > 0}
-                  fallback={
-                    <tr>
-                      <td colSpan={6} class="py-6 px-3 text-center text-slate-500">
-                        No organizations found.
-                      </td>
-                    </tr>
-                  }
-                >
-                  <For each={orgs()}>
-                    {(org) => {
-                      const orgID = () => (org.org_id || '').trim();
-                      const billing = () => billingByOrgID()[orgID()];
-                      const expanded = () => expandedOrgID() === orgID();
-
-                      const currentSubState = () =>
-                        (billing()?.subscription_state || '').toLowerCase() || 'unknown';
-
-                      const rowMuted = () =>
-                        org.soft_deleted || org.suspended ? 'bg-slate-50 dark:bg-slate-800' : '';
-
-                      return (
-                        <>
-                          <tr class={rowMuted()}>
-                            <td class="py-2.5 px-3">
-                              <button
-                                type="button"
-                                class="text-left w-full"
-                                onClick={() => {
-                                  const id = orgID();
-                                  if (!id) return;
-                                  setExpandedOrgID((prev) => (prev === id ? null : id));
-                                  void ensureBillingState(id);
-                                }}
-                              >
-                                <div class="font-medium text-slate-900 dark:text-slate-100">
-                                  {org.display_name || org.org_id}
-                                </div>
-                                <div class="text-xs text-slate-500 dark:text-slate-400">
-                                  <span class="font-mono">{org.org_id}</span>
-                                  <Show when={org.soft_deleted}>
-                                    <span class="ml-2 rounded px-1.5 py-0.5 bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-200">
-                                      soft-deleted
-                                    </span>
-                                  </Show>
-                                  <Show when={org.suspended && !org.soft_deleted}>
-                                    <span class="ml-2 rounded px-1.5 py-0.5 bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-200">
-                                      suspended
-                                    </span>
-                                  </Show>
-                                </div>
-                              </button>
-                            </td>
-                            <td class="py-2.5 px-3 text-slate-700 dark:text-slate-200">
-                              <span class="font-mono text-xs">{org.owner_user_id || 'N/A'}</span>
-                            </td>
-                            <td class="py-2.5 px-3">
-                              <span class="font-mono text-xs text-slate-700 dark:text-slate-200">
-                                {currentSubState()}
-                              </span>
-                            </td>
-                            <td class="py-2.5 px-3 text-slate-700 dark:text-slate-200">
-                              <span class="text-xs">{trialStatus(billing())}</span>
-                            </td>
-                            <td class="py-2.5 px-3">
-                              <span
-                                class="font-mono text-xs text-slate-700 dark:text-slate-200"
-                                title={stripeCustomerCell(billing())}
-                              >
-                                {stripeCustomerCell(billing())}
-                              </span>
-                            </td>
-                            <td class="py-2.5 px-3 text-right">
-                              <div class="inline-flex flex-col sm:flex-row sm:items-center gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const id = orgID();
-                                    if (!id) return;
-                                    void updateSubscriptionState(id, 'suspended');
-                                  }}
-                                  disabled={
-                                    savingByOrgID()[orgID()] ||
-                                    billingLoadingByOrgID()[orgID()] ||
-                                    currentSubState() === 'suspended'
-                                  }
-                                  class="px-2.5 py-1.5 text-xs font-medium rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
-                                >
-                                  Suspend Org
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const id = orgID();
-                                    if (!id) return;
-                                    void updateSubscriptionState(id, 'active');
-                                  }}
-                                  disabled={
-                                    savingByOrgID()[orgID()] ||
-                                    billingLoadingByOrgID()[orgID()] ||
-                                    currentSubState() === 'active'
-                                  }
-                                  class="px-2.5 py-1.5 text-xs font-medium rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
-                                >
-                                  Activate Org
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                          <Show when={expanded()}>
-                            <tr class={rowMuted()}>
-                              <td colSpan={6} class="px-3 pb-3">
-                                <div class="mt-2 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-3">
-                                  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-2">
-                                    <div class="text-xs font-semibold text-slate-600 dark:text-slate-300">
-                                      Billing state JSON
-                                    </div>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        const id = orgID();
-                                        if (!id) return;
-                                        setBillingByOrgID((prev) => ({ ...prev, [id]: undefined }));
-                                        void ensureBillingState(id);
-                                      }}
-                                      class="px-2 py-1 text-xs rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800"
-                                    >
-                                      Reload
-                                    </button>
-                                  </div>
-                                  <pre class="text-xs overflow-x-auto whitespace-pre-wrap font-mono text-slate-800 dark:text-slate-100">
-                                    {JSON.stringify(billing() ?? { loading: true }, null, 2)}
-                                  </pre>
-                                </div>
-                              </td>
-                            </tr>
-                          </Show>
-                        </>
-                      );
-                    }}
-                  </For>
-                </Show>
-              </Show>
-            </tbody>
-          </table>
+              },
+              {
+                key: 'owner',
+                label: 'Owner',
+                render: (org) => <span class="font-mono text-xs text-slate-700 dark:text-slate-200">{org.owner_user_id || 'N/A'}</span>
+              },
+              {
+                key: 'subscription',
+                label: 'Subscription',
+                render: (org) => {
+                  const orgID = () => (org.org_id || '').trim();
+                  const billing = () => billingByOrgID()[orgID()];
+                  const currentSubState = () => (billing()?.subscription_state || '').toLowerCase() || 'unknown';
+                  return <span class="font-mono text-xs text-slate-700 dark:text-slate-200">{currentSubState()}</span>;
+                }
+              },
+              {
+                key: 'trial',
+                label: 'Trial',
+                render: (org) => {
+                  const orgID = () => (org.org_id || '').trim();
+                  const billing = () => billingByOrgID()[orgID()];
+                  return <span class="text-xs text-slate-700 dark:text-slate-200">{trialStatus(billing())}</span>;
+                }
+              },
+              {
+                key: 'stripeCustomer',
+                label: 'Stripe Customer',
+                render: (org) => {
+                  const orgID = () => (org.org_id || '').trim();
+                  const billing = () => billingByOrgID()[orgID()];
+                  return (
+                    <span class="font-mono text-xs text-slate-700 dark:text-slate-200" title={stripeCustomerCell(billing())}>
+                      {stripeCustomerCell(billing())}
+                    </span>
+                  );
+                }
+              },
+              {
+                key: 'actions',
+                label: 'Actions',
+                align: 'right',
+                render: (org) => {
+                  const orgID = () => (org.org_id || '').trim();
+                  const billing = () => billingByOrgID()[orgID()];
+                  const currentSubState = () => (billing()?.subscription_state || '').toLowerCase() || 'unknown';
+                  return (
+                    <div class="inline-flex flex-col sm:flex-row sm:items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const id = orgID();
+                          if (!id) return;
+                          void updateSubscriptionState(id, 'suspended');
+                        }}
+                        disabled={
+                          savingByOrgID()[orgID()] ||
+                          billingLoadingByOrgID()[orgID()] ||
+                          currentSubState() === 'suspended'
+                        }
+                        class="px-2.5 py-1.5 text-xs font-medium rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
+                      >
+                        Suspend Org
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const id = orgID();
+                          if (!id) return;
+                          void updateSubscriptionState(id, 'active');
+                        }}
+                        disabled={
+                          savingByOrgID()[orgID()] ||
+                          billingLoadingByOrgID()[orgID()] ||
+                          currentSubState() === 'active'
+                        }
+                        class="px-2.5 py-1.5 text-xs font-medium rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
+                      >
+                        Activate Org
+                      </button>
+                    </div>
+                  );
+                }
+              }
+            ]}
+            keyExtractor={(org) => org.org_id}
+            isRowExpanded={(org) => expandedOrgID() === (org.org_id || '').trim()}
+            expandedRender={(org) => {
+              const orgID = () => (org.org_id || '').trim();
+              const billing = () => billingByOrgID()[orgID()];
+              return (
+                <div class="px-3 pb-3 bg-slate-50/50 dark:bg-slate-800/50">
+                  <div class="rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-3">
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-2">
+                      <div class="text-xs font-semibold text-slate-600 dark:text-slate-300">
+                        Billing state JSON
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const id = orgID();
+                          if (!id) return;
+                          setBillingByOrgID((prev) => ({ ...prev, [id]: undefined }));
+                          void ensureBillingState(id);
+                        }}
+                        class="px-2 py-1 text-xs rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800"
+                      >
+                        Reload
+                      </button>
+                    </div>
+                    <pre class="text-xs overflow-x-auto whitespace-pre-wrap font-mono text-slate-800 dark:text-slate-100">
+                      {JSON.stringify(billing() ?? { loading: true }, null, 2)}
+                    </pre>
+                  </div>
+                </div>
+              );
+            }}
+          />
         </div>
       </SettingsPanel>
     </Show>
