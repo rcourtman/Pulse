@@ -51,6 +51,7 @@ export function EmptyState(props: EmptyStateProps) {
   const tone = local.tone;
   const containerClass = [
     'flex flex-col py-10 px-6 sm:py-16 sm:px-8 w-full animate-fade-in',
+    'bg-slate-50 dark:bg-slate-900 border border-dashed border-slate-300 dark:border-slate-800 rounded-md',
     alignment === 'center' ? 'items-center text-center' : 'items-start text-left',
     local.class ?? '',
   ]

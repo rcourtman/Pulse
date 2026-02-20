@@ -2,12 +2,12 @@ const baseField = 'flex flex-col gap-1';
 const baseLabel = 'text-sm font-medium text-slate-700 dark:text-slate-300';
 const baseHelp = 'text-xs text-slate-500 dark:text-slate-400';
 const baseControl = [
-  'w-full min-h-10 sm:min-h-9 rounded-md border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm',
-  'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500',
-  'dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100',
+  'w-full min-h-10 sm:min-h-9 rounded-md border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900',
+  'focus:outline-none focus:ring-0 focus:border-blue-500 transition-colors',
+  'dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-blue-500',
 ].join(' ');
 const baseCheckbox =
-  'h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:focus:ring-blue-400';
+  'h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-0 focus:ring-offset-0 dark:border-slate-600 dark:bg-slate-800 transition-colors';
 
 const join = (base: string, extra?: string) => (extra ? `${base} ${extra}`.trim() : base);
 
