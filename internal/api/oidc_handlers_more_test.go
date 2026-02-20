@@ -2,13 +2,18 @@ package api
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/go-jose/go-jose/v4"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"golang.org/x/oauth2"
 )
@@ -316,7 +321,8 @@ func TestHandleOIDCCallback_MissingCode(t *testing.T) {
 }
 
 func TestHandleOIDCCallback_ExchangeFailed(t *testing.T) {
-	tokenServer := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	var tokenServer *httptest.Server
+	tokenServer = newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer tokenServer.Close()
@@ -343,7 +349,8 @@ func TestHandleOIDCCallback_ExchangeFailed(t *testing.T) {
 }
 
 func TestHandleOIDCCallback_MissingIDToken(t *testing.T) {
-	tokenServer := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	var tokenServer *httptest.Server
+	tokenServer = newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"access_token":"access","token_type":"Bearer","expires_in":3600}`))
 	}))
@@ -366,6 +373,98 @@ func TestHandleOIDCCallback_MissingIDToken(t *testing.T) {
 	}
 	location := rec.Header().Get("Location")
 	if !strings.Contains(location, "oidc_error=missing_id_token") {
+		t.Fatalf("unexpected redirect location: %q", location)
+	}
+}
+
+func TestHandleOIDCCallback_NonceMismatch(t *testing.T) {
+	InitSessionStore(t.TempDir())
+
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("generate rsa key: %v", err)
+	}
+
+	const kid = "test-kid"
+	expectedNonce := ""
+
+	var tokenServer *httptest.Server
+	tokenServer = newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/.well-known/openid-configuration":
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"issuer":                                tokenServer.URL,
+				"authorization_endpoint":                tokenServer.URL + "/authorize",
+				"token_endpoint":                        tokenServer.URL + "/token",
+				"jwks_uri":                              tokenServer.URL + "/keys",
+				"response_types_supported":              []string{"code"},
+				"subject_types_supported":               []string{"public"},
+				"id_token_signing_alg_values_supported": []string{"RS256"},
+			})
+		case "/keys":
+			w.Header().Set("Content-Type", "application/json")
+			jwk := jose.JSONWebKey{
+				Key:       &privateKey.PublicKey,
+				KeyID:     kid,
+				Use:       "sig",
+				Algorithm: string(jose.RS256),
+			}
+			_ = json.NewEncoder(w).Encode(jose.JSONWebKeySet{Keys: []jose.JSONWebKey{jwk}})
+		case "/token":
+			token := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
+				"iss":   tokenServer.URL,
+				"sub":   "user-123",
+				"aud":   "client-id",
+				"exp":   time.Now().Add(5 * time.Minute).Unix(),
+				"iat":   time.Now().Add(-time.Minute).Unix(),
+				"nonce": "mismatched-" + expectedNonce,
+				"email": "user@example.com",
+			})
+			token.Header["kid"] = kid
+			signedIDToken, signErr := token.SignedString(privateKey)
+			if signErr != nil {
+				http.Error(w, "failed to sign id token", http.StatusInternalServerError)
+				return
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"access_token": "access-token",
+				"token_type":   "Bearer",
+				"expires_in":   300,
+				"id_token":     signedIDToken,
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer tokenServer.Close()
+
+	cfg := newTestOIDCConfig()
+	cfg.IssuerURL = tokenServer.URL
+
+	router := &Router{config: &config.Config{OIDC: cfg}}
+	service, err := router.getOIDCService(context.Background(), cfg.RedirectURL)
+	if err != nil {
+		t.Fatalf("getOIDCService error: %v", err)
+	}
+	state, entry, err := service.newStateEntry("", "/dashboard")
+	if err != nil {
+		t.Fatalf("newStateEntry error: %v", err)
+	}
+	expectedNonce = entry.Nonce
+
+	req := httptest.NewRequest(http.MethodGet, "/api/oidc/callback?state="+url.QueryEscape(state)+"&code=abc", nil)
+	rec := httptest.NewRecorder()
+
+	router.handleOIDCCallback(rec, req)
+
+	if rec.Code != http.StatusFound {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusFound)
+	}
+	location := rec.Header().Get("Location")
+	if !strings.Contains(location, "oidc_error=nonce_mismatch") {
 		t.Fatalf("unexpected redirect location: %q", location)
 	}
 }

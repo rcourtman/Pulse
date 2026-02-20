@@ -189,6 +189,15 @@ func (r *Router) handleOIDCCallback(w http.ResponseWriter, req *http.Request) {
 
 	log.Debug().Str("subject", idToken.Subject).Msg("ID token verified successfully")
 
+	// Verify nonce matches the authorization request state entry.
+	// Without this, an ID token replay/mix-up could be accepted for the wrong login flow.
+	if idToken.Nonce != entry.Nonce {
+		log.Warn().Msg("OIDC nonce mismatch — possible token replay")
+		LogAuditEventForTenant(GetOrgID(req.Context()), "oidc_login", "", GetClientIP(req), req.URL.Path, false, "Nonce mismatch")
+		r.redirectOIDCError(w, req, entry.ReturnTo, "nonce_mismatch")
+		return
+	}
+
 	claims := make(map[string]any)
 	if err := idToken.Claims(&claims); err != nil {
 		log.Error().Err(err).Msg("Failed to parse ID token claims")
