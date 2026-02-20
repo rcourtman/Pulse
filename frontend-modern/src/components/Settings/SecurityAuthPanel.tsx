@@ -49,9 +49,9 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
           border={false}
         >
           {/* Header */}
-          <div class="bg-amber-50 dark:bg-amber-900/20 px-6 py-4 border-b border-amber-200 dark:border-amber-700">
+          <div class="bg-amber-50 dark:bg-amber-900 px-6 py-4 border-b border-amber-200 dark:border-amber-700">
             <div class="flex items-center gap-3">
-              <div class="p-2 bg-amber-100 dark:bg-amber-900/50 rounded-md">
+              <div class="p-2 bg-amber-100 dark:bg-amber-900 rounded-md">
                 <svg
                   class="w-5 h-5 text-amber-600 dark:text-amber-400"
                   fill="none"
@@ -70,7 +70,7 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
               <Show
                 when={!props.authDisabledByEnv()}
                 fallback={
-                  <span class="px-3 py-1.5 text-xs font-semibold rounded-md border border-amber-300 text-amber-800 bg-amber-100/60 dark:border-amber-700 dark:text-amber-100 dark:bg-amber-900/40 whitespace-nowrap">
+                  <span class="px-3 py-1.5 text-xs font-semibold rounded-md border border-amber-300 text-amber-800 bg-amber-100 dark:border-amber-700 dark:text-amber-100 dark:bg-amber-900 whitespace-nowrap">
                     Controlled by DISABLE_AUTH
                   </span>
                 }
@@ -78,7 +78,7 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
                 <button
                   type="button"
                   onClick={() => props.setShowQuickSecuritySetup(!props.showQuickSecuritySetup())}
-                  class="px-3 py-1.5 text-xs font-medium rounded-md border border-amber-300 text-amber-800 bg-amber-100/50 hover:bg-amber-100 transition-colors dark:border-amber-700 dark:text-amber-200 dark:bg-amber-900/30 dark:hover:bg-amber-900/40 whitespace-nowrap"
+                  class="px-3 py-1.5 text-xs font-medium rounded-md border border-amber-300 text-amber-800 bg-amber-100 hover:bg-amber-200 transition-colors dark:border-amber-700 dark:text-amber-200 dark:bg-amber-900 dark:hover:bg-amber-800 whitespace-nowrap"
                 >
                   Setup
                 </button>
@@ -148,7 +148,7 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
               <Show
                 when={!props.authDisabledByEnv()}
                 fallback={
-                  <span class="w-full sm:w-auto min-h-10 sm:min-h-10 inline-flex items-center justify-center px-4 py-2.5 text-sm font-semibold border border-amber-300 text-amber-800 bg-amber-50 dark:border-amber-700 dark:text-amber-200 dark:bg-amber-900/30 rounded-md">
+                  <span class="w-full sm:w-auto min-h-10 sm:min-h-10 inline-flex items-center justify-center px-4 py-2.5 text-sm font-semibold border border-amber-300 text-amber-800 bg-amber-50 dark:border-amber-700 dark:text-amber-200 dark:bg-amber-900 rounded-md">
                     Remove DISABLE_AUTH to rotate credentials
                   </span>
                 }
@@ -199,7 +199,7 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
 
       {/* Show pending restart message if configured but not loaded */}
       <Show when={props.securityStatus()?.configuredButPendingRestart}>
-        <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md p-4">
+        <div class="bg-amber-50 dark:bg-amber-900 border border-amber-200 dark:border-amber-800 rounded-md p-4">
           <div class="flex items-start space-x-3">
             <div class="flex-shrink-0">
               <svg
@@ -291,7 +291,7 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
                 </Show>
               </div>
 
-              <div class="mt-3 p-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded">
+              <div class="mt-3 p-2 bg-green-50 dark:bg-green-900 border border-green-200 dark:border-green-800 rounded">
                 <p class="text-xs text-green-700 dark:text-green-300">
                   <strong>Tip:</strong> Make sure you've saved your credentials before restarting!
                 </p>
