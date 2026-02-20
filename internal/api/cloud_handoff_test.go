@@ -52,3 +52,66 @@ func TestHandleCloudHandoffRejectsReplay(t *testing.T) {
 		t.Fatalf("replay redirect = %q, want %q", got, "/login?error=handoff_replayed")
 	}
 }
+
+func TestHandleCloudHandoffSetsTenantOrgCookie(t *testing.T) {
+	dataPath := t.TempDir()
+	key := []byte("0123456789abcdef0123456789abcdef")
+	if err := os.WriteFile(filepath.Join(dataPath, cloudauth.HandoffKeyFile), key, 0o600); err != nil {
+		t.Fatalf("write handoff key: %v", err)
+	}
+
+	token, err := cloudauth.Sign(key, "alice@example.com", "tenant-1", 5*time.Minute)
+	if err != nil {
+		t.Fatalf("sign handoff token: %v", err)
+	}
+
+	handler := HandleCloudHandoff(dataPath)
+
+	req := httptest.NewRequest(http.MethodGet, "/auth/cloud-handoff?token="+url.QueryEscape(token), nil)
+	rec := httptest.NewRecorder()
+	handler(rec, req)
+
+	if rec.Code != http.StatusTemporaryRedirect {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusTemporaryRedirect)
+	}
+
+	var orgCookie *http.Cookie
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == "pulse_org_id" {
+			orgCookie = c
+			break
+		}
+	}
+	if orgCookie == nil {
+		t.Fatal("expected pulse_org_id cookie to be set")
+	}
+	if orgCookie.Value != "tenant-1" {
+		t.Fatalf("pulse_org_id cookie = %q, want %q", orgCookie.Value, "tenant-1")
+	}
+}
+
+func TestHandleCloudHandoffRejectsInvalidTenantID(t *testing.T) {
+	dataPath := t.TempDir()
+	key := []byte("0123456789abcdef0123456789abcdef")
+	if err := os.WriteFile(filepath.Join(dataPath, cloudauth.HandoffKeyFile), key, 0o600); err != nil {
+		t.Fatalf("write handoff key: %v", err)
+	}
+
+	token, err := cloudauth.Sign(key, "alice@example.com", "../tenant-1", 5*time.Minute)
+	if err != nil {
+		t.Fatalf("sign handoff token: %v", err)
+	}
+
+	handler := HandleCloudHandoff(dataPath)
+
+	req := httptest.NewRequest(http.MethodGet, "/auth/cloud-handoff?token="+url.QueryEscape(token), nil)
+	rec := httptest.NewRecorder()
+	handler(rec, req)
+
+	if rec.Code != http.StatusTemporaryRedirect {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusTemporaryRedirect)
+	}
+	if got := rec.Header().Get("Location"); got != "/login?error=handoff_invalid" {
+		t.Fatalf("redirect = %q, want %q", got, "/login?error=handoff_invalid")
+	}
+}

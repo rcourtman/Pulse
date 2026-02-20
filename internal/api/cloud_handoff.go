@@ -42,9 +42,15 @@ func HandleCloudHandoff(dataPath string) http.HandlerFunc {
 			return
 		}
 
-		email, _, expiresAt, err := cloudauth.VerifyWithExpiry(handoffKey, tokenStr)
+		email, tenantID, expiresAt, err := cloudauth.VerifyWithExpiry(handoffKey, tokenStr)
 		if err != nil {
 			log.Warn().Err(err).Msg("Cloud handoff token verification failed")
+			http.Redirect(w, r, "/login?error=handoff_invalid", http.StatusTemporaryRedirect)
+			return
+		}
+		tenantID = strings.TrimSpace(tenantID)
+		if !isValidOrganizationID(tenantID) {
+			log.Warn().Str("tenant_id", tenantID).Msg("Cloud handoff token rejected due to invalid tenant ID")
 			http.Redirect(w, r, "/login?error=handoff_invalid", http.StatusTemporaryRedirect)
 			return
 		}
@@ -98,7 +104,7 @@ func HandleCloudHandoff(dataPath string) http.HandlerFunc {
 		})
 		http.SetCookie(w, &http.Cookie{
 			Name:     "pulse_org_id",
-			Value:    "default",
+			Value:    tenantID,
 			Path:     "/",
 			Secure:   isSecure,
 			SameSite: sameSitePolicy,
