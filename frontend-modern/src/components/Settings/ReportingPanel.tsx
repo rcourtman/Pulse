@@ -163,7 +163,7 @@ export function ReportingPanel() {
                                 {(r) => (
                                     <button
                                         class={`w-full sm:w-auto min-h-10 sm:min-h-9 px-4 py-2.5 rounded-md border transition-all ${range() === r
-                                            ? 'bg-blue-50 border-blue-500 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-500'
+                                            ? 'bg-blue-50 border-blue-500 text-blue-700 dark:bg-blue-900 dark:text-blue-300 dark:border-blue-500'
                                             : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700'
                                             }`}
                                         onClick={() => setRange(r)}
@@ -179,7 +179,7 @@ export function ReportingPanel() {
                         <div class="grid grid-cols-1 sm:flex gap-2">
                             <button
                                 class={`w-full sm:w-auto min-h-10 sm:min-h-9 flex items-center justify-center gap-2 px-4 py-2.5 rounded-md border transition-all ${format() === 'pdf'
-                                    ? 'bg-blue-50 border-blue-500 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-500'
+                                    ? 'bg-blue-50 border-blue-500 text-blue-700 dark:bg-blue-900 dark:text-blue-300 dark:border-blue-500'
                                     : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700'
                                     }`}
                                 onClick={() => setFormat('pdf')}
@@ -189,7 +189,7 @@ export function ReportingPanel() {
                             </button>
                             <button
                                 class={`w-full sm:w-auto min-h-10 sm:min-h-9 flex items-center justify-center gap-2 px-4 py-2.5 rounded-md border transition-all ${format() === 'csv'
-                                    ? 'bg-blue-50 border-blue-500 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-500'
+                                    ? 'bg-blue-50 border-blue-500 text-blue-700 dark:bg-blue-900 dark:text-blue-300 dark:border-blue-500'
                                     : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700'
                                     }`}
                                 onClick={() => setFormat('csv')}
@@ -211,7 +211,7 @@ export function ReportingPanel() {
                         onClick={handleGenerate}
                     >
                         <Show when={generating()} fallback={<Download size={20} />}>
-                            <div class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            <div class="w-5 h-5 border-2 border-white/50 border-t-white rounded-full animate-spin" />
                         </Show>
                         {generating()
                             ? 'Generating...'
@@ -223,9 +223,9 @@ export function ReportingPanel() {
                 </div>
             </SettingsPanel>
 
-            <div class="rounded-md border border-blue-200 bg-blue-50 p-6 dark:border-blue-800 dark:bg-blue-900/20">
+            <div class="rounded-md border border-blue-200 bg-blue-50 p-6 dark:border-blue-800 dark:bg-blue-900">
                 <div class="flex flex-col sm:flex-row gap-4">
-                    <div class="p-3 rounded-md h-fit text-blue-600 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/40">
+                    <div class="p-3 rounded-md h-fit text-blue-600 dark:text-blue-300 bg-blue-100 dark:bg-blue-900">
                         <BarChart size={24} />
                     </div>
                     <div>
