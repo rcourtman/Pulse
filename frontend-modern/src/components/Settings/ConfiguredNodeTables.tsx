@@ -148,7 +148,7 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
                 );
                 return (
                   <tr
-                    class="absolute top-0 left-0 w-full even:bg-slate-50/60 dark:even:bg-slate-800/30 hover:bg-blue-50/40 dark:hover:bg-blue-900/20 transition-colors"
+                    class="absolute top-0 left-0 w-full even:bg-slate-50 dark:even:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900 transition-colors"
                     style={{
                       height: `${virtualRow.size}px`,
                       transform: `translateY(${virtualRow.start}px)`,
@@ -188,11 +188,11 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
                                         : 'unreachable';
 
                                     const statusColor = endpoint.Online && pulseStatus === 'reachable'
-                                      ? 'border-green-200 bg-green-50 text-green-700 dark:border-green-700 dark:bg-green-900/20 dark:text-green-300'
+                                      ? 'border-green-200 bg-green-50 text-green-700 dark:border-green-700 dark:bg-green-900 dark:text-green-300'
                                       : pulseStatus === 'unreachable'
-                                        ? 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-300'
+                                        ? 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-300'
                                         : endpoint.Online
-                                          ? 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-900/20 dark:text-blue-300'
+                                          ? 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-300'
                                           : 'border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400';
 
                                     return (
@@ -213,7 +213,7 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
                                             </span>
                                           </div>
                                           <Show when={pulseStatus === 'unreachable' && endpoint.PulseError}>
-                                            <div class="mt-1 pt-1 border-t border-current/20">
+                                            <div class="mt-1 pt-1 border-t border-current opacity-20">
                                               <span class="font-medium">Error: </span>
                                               <span class="opacity-80">{endpoint.PulseError}</span>
                                             </div>
@@ -431,7 +431,7 @@ export const PbsNodesTable: Component<PbsNodesTableProps> = (props) => {
             {(node) => {
               const statusMeta = createMemo(() => resolvePbsStatusMeta(node, props.statePbs));
               return (
-                <tr class="even:bg-slate-50/60 dark:even:bg-slate-800/30 hover:bg-blue-50/40 dark:hover:bg-blue-900/20 transition-colors">
+                <tr class="even:bg-slate-50 dark:even:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900 transition-colors">
                   <td class="align-top py-3 pl-4 pr-3">
                     <div class="min-w-0 space-y-1">
                       <div class="flex items-start gap-3">
@@ -627,7 +627,7 @@ export const PmgNodesTable: Component<PmgNodesTableProps> = (props) => {
             {(node) => {
               const statusMeta = createMemo(() => resolvePmgStatusMeta(node, props.statePmg));
               return (
-                <tr class="even:bg-slate-50/60 dark:even:bg-slate-800/30 hover:bg-blue-50/40 dark:hover:bg-blue-900/20 transition-colors">
+                <tr class="even:bg-slate-50 dark:even:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900 transition-colors">
                   <td class="align-top py-3 pl-4 pr-3">
                     <div class="min-w-0 space-y-1">
                       <div class="flex items-start gap-3">
