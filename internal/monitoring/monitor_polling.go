@@ -371,6 +371,22 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 						// and makes the frontend's balloon marker logic ineffective.
 						// Refs: #1070
 
+						// Fallback: try RRD memavailable (cached). Refs: #1270
+						if memAvailable == 0 {
+							if rrdAvailable, rrdErr := m.getVMRRDMetrics(ctx, client, instanceName, n.Node, vm.VMID); rrdErr == nil && rrdAvailable > 0 {
+								memAvailable = rrdAvailable
+								memorySource = "rrd-memavailable"
+								guestRaw.MemInfoAvailable = memAvailable
+								log.Debug().
+									Str("vm", vm.Name).
+									Str("node", n.Node).
+									Int("vmid", vm.VMID).
+									Uint64("total", memTotal).
+									Uint64("available", memAvailable).
+									Msg("QEMU memory: using RRD memavailable fallback (excludes reclaimable cache)")
+							}
+						}
+
 						// Fallback: use linked Pulse host agent's memory data.
 						// gopsutil's Used = Total - Available (excludes page cache),
 						// so we can derive accurate available memory. Refs: #1270
@@ -395,6 +411,23 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 							}
 						}
 
+						// Last-resort fallback before status-mem: read /proc/meminfo via the
+						// QEMU guest agent file-read endpoint. Refs: #1270
+						if memAvailable == 0 && status.Agent.Value > 0 {
+							if agentAvail, agentErr := m.getVMAgentMemAvailable(ctx, client, instanceName, n.Node, vm.VMID); agentErr == nil && agentAvail > 0 {
+								memAvailable = agentAvail
+								memorySource = "guest-agent-meminfo"
+								guestRaw.MemInfoAvailable = memAvailable
+								log.Debug().
+									Str("vm", vm.Name).
+									Str("node", n.Node).
+									Int("vmid", vm.VMID).
+									Uint64("total", memTotal).
+									Uint64("available", memAvailable).
+									Msg("QEMU memory: using guest agent /proc/meminfo fallback (excludes reclaimable cache)")
+							}
+						}
+
 						switch {
 						case memAvailable > 0:
 							if memAvailable > memTotal {
@@ -411,7 +444,7 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 							// Refs: #1185
 							memUsed = vmStatus.Mem
 							memorySource = "status-mem"
-						case vmStatus.FreeMem > 0:
+						case vmStatus.FreeMem > 0 && memTotal >= vmStatus.FreeMem:
 							memUsed = memTotal - vmStatus.FreeMem
 							memorySource = "status-freemem"
 						default:

@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"testing"
 	"time"
@@ -114,6 +115,10 @@ func (s *stubPVEClient) GetVMAgentInfo(ctx context.Context, node string, vmid in
 
 func (s *stubPVEClient) GetVMAgentVersion(ctx context.Context, node string, vmid int) (string, error) {
 	return "", nil
+}
+
+func (s *stubPVEClient) GetVMMemAvailableFromAgent(ctx context.Context, node string, vmid int) (uint64, error) {
+	return 0, fmt.Errorf("not implemented")
 }
 
 func (s *stubPVEClient) GetZFSPoolStatus(ctx context.Context, node string) ([]proxmox.ZFSPoolStatus, error) {

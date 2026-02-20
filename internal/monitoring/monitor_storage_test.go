@@ -116,6 +116,10 @@ func (f *fakeStorageClient) GetVMAgentVersion(ctx context.Context, node string, 
 	return "", nil
 }
 
+func (f *fakeStorageClient) GetVMMemAvailableFromAgent(ctx context.Context, node string, vmid int) (uint64, error) {
+	return 0, fmt.Errorf("not implemented")
+}
+
 func (f *fakeStorageClient) GetZFSPoolStatus(ctx context.Context, node string) ([]proxmox.ZFSPoolStatus, error) {
 	return nil, nil
 }

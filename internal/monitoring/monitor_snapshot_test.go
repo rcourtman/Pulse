@@ -27,6 +27,10 @@ func (m *mockPVEClientSnapshots) GetContainerSnapshots(ctx context.Context, node
 	return m.snapshots, nil
 }
 
+func (m *mockPVEClientSnapshots) GetVMMemAvailableFromAgent(ctx context.Context, node string, vmid int) (uint64, error) {
+	return 0, fmt.Errorf("not implemented")
+}
+
 func TestMonitor_PollGuestSnapshots_Coverage(t *testing.T) {
 	m := &Monitor{
 		state: models.NewState(),

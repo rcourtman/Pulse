@@ -295,6 +295,10 @@ func (m *mockPVEClientExtra) GetVMAgentVersion(ctx context.Context, node string,
 	return "1.0", nil
 }
 
+func (m *mockPVEClientExtra) GetVMMemAvailableFromAgent(ctx context.Context, node string, vmid int) (uint64, error) {
+	return 0, fmt.Errorf("not implemented")
+}
+
 func (m *mockPVEClientExtra) GetLXCRRDData(ctx context.Context, node string, vmid int, timeframe string, cf string, ds []string) ([]proxmox.GuestRRDPoint, error) {
 	return nil, nil
 }
@@ -345,6 +349,9 @@ func TestMonitor_PollVMsAndContainersEfficient_Extra(t *testing.T) {
 		metricsHistory:           NewMetricsHistory(100, time.Hour),
 		alertManager:             alerts.NewManager(),
 		stalenessTracker:         NewStalenessTracker(nil),
+		nodeRRDMemCache:          make(map[string]rrdMemCacheEntry),
+		vmRRDMemCache:            make(map[string]rrdMemCacheEntry),
+		vmAgentMemCache:          make(map[string]agentMemCacheEntry),
 	}
 	defer m.alertManager.Stop()
 
@@ -503,6 +510,10 @@ func (m *mockPVEClientStorage) GetStorage(ctx context.Context, node string) ([]p
 
 func (m *mockPVEClientStorage) GetStorageContent(ctx context.Context, node, storage string) ([]proxmox.StorageContent, error) {
 	return m.content, nil
+}
+
+func (m *mockPVEClientStorage) GetVMMemAvailableFromAgent(ctx context.Context, node string, vmid int) (uint64, error) {
+	return 0, fmt.Errorf("not implemented")
 }
 
 func TestMonitor_RetryPVEPortFallback_Extra(t *testing.T) {
@@ -863,6 +874,10 @@ type mockPVEClientFailNodes struct {
 
 func (m *mockPVEClientFailNodes) GetNodes(ctx context.Context) ([]proxmox.Node, error) {
 	return nil, fmt.Errorf("nodes failed")
+}
+
+func (m *mockPVEClientFailNodes) GetVMMemAvailableFromAgent(ctx context.Context, node string, vmid int) (uint64, error) {
+	return 0, fmt.Errorf("not implemented")
 }
 
 type mockExecutor struct {

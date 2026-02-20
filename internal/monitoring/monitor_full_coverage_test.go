@@ -27,6 +27,10 @@ type mockPVEClient struct {
 
 func (m *mockPVEClient) GetNodes(ctx context.Context) ([]proxmox.Node, error) { return nil, nil }
 
+func (m *mockPVEClient) GetVMMemAvailableFromAgent(ctx context.Context, node string, vmid int) (uint64, error) {
+	return 0, fmt.Errorf("not implemented")
+}
+
 func TestMonitor_GetConnectionStatuses(t *testing.T) {
 	// Real Mode
 	m := &Monitor{
@@ -696,6 +700,10 @@ func (m *mockPVEClientExtended) GetVMAgentInfo(ctx context.Context, node string,
 
 func (m *mockPVEClientExtended) GetVMAgentVersion(ctx context.Context, node string, vmid int) (string, error) {
 	return "", nil
+}
+
+func (m *mockPVEClientExtended) GetVMMemAvailableFromAgent(ctx context.Context, node string, vmid int) (uint64, error) {
+	return 0, fmt.Errorf("not implemented")
 }
 
 func (m *mockPVEClientExtended) GetZFSPoolStatus(ctx context.Context, node string) ([]proxmox.ZFSPoolStatus, error) {

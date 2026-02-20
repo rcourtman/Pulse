@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -85,6 +86,9 @@ func (f fakeSnapshotClient) GetVMAgentInfo(ctx context.Context, node string, vmi
 
 func (f fakeSnapshotClient) GetVMAgentVersion(ctx context.Context, node string, vmid int) (string, error) {
 	return "", nil
+}
+func (f fakeSnapshotClient) GetVMMemAvailableFromAgent(ctx context.Context, node string, vmid int) (uint64, error) {
+	return 0, fmt.Errorf("not implemented")
 }
 func (f fakeSnapshotClient) GetZFSPoolStatus(ctx context.Context, node string) ([]proxmox.ZFSPoolStatus, error) {
 	return nil, nil

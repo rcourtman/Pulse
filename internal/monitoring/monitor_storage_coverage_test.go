@@ -30,6 +30,10 @@ func (m *mockPVEClientForStorage) GetStorage(ctx context.Context, node string) (
 	return m.Storages, nil
 }
 
+func (m *mockPVEClientForStorage) GetVMMemAvailableFromAgent(ctx context.Context, node string, vmid int) (uint64, error) {
+	return 0, fmt.Errorf("not implemented")
+}
+
 func (m *mockPVEClientForStorage) GetStorageContent(ctx context.Context, node, storage string) ([]proxmox.StorageContent, error) {
 	if m.StorageToFail != nil && m.StorageToFail[storage] {
 		return nil, fmt.Errorf("failed to get content")

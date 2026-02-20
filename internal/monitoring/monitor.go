@@ -79,6 +79,7 @@ type PVEClientInterface interface {
 	IsClusterMember(ctx context.Context) (bool, error)
 	GetVMFSInfo(ctx context.Context, node string, vmid int) ([]proxmox.VMFileSystem, error)
 	GetVMNetworkInterfaces(ctx context.Context, node string, vmid int) ([]proxmox.VMNetworkInterface, error)
+	GetVMMemAvailableFromAgent(ctx context.Context, node string, vmid int) (uint64, error)
 	GetVMAgentInfo(ctx context.Context, node string, vmid int) (map[string]interface{}, error)
 	GetVMAgentVersion(ctx context.Context, node string, vmid int) (string, error)
 	GetZFSPoolStatus(ctx context.Context, node string) ([]proxmox.ZFSPoolStatus, error)
@@ -803,11 +804,12 @@ type Monitor struct {
 	rrdCacheMu                 sync.RWMutex // Protects RRD memavailable cache
 	nodeRRDMemCache            map[string]rrdMemCacheEntry
 	vmRRDMemCache              map[string]rrdMemCacheEntry
-	removedDockerHosts         map[string]time.Time // Track deliberately removed Docker hosts (ID -> removal time)
-	dockerTokenBindings        map[string]string    // Track token ID -> agent ID bindings to enforce uniqueness
-	removedKubernetesClusters  map[string]time.Time // Track deliberately removed Kubernetes clusters (ID -> removal time)
-	kubernetesTokenBindings    map[string]string    // Track token ID -> agent ID bindings to enforce uniqueness
-	hostTokenBindings          map[string]string    // Track tokenID:hostname -> host identity bindings
+	vmAgentMemCache            map[string]agentMemCacheEntry // Guest agent /proc/meminfo cache
+	removedDockerHosts         map[string]time.Time          // Track deliberately removed Docker hosts (ID -> removal time)
+	dockerTokenBindings        map[string]string             // Track token ID -> agent ID bindings to enforce uniqueness
+	removedKubernetesClusters  map[string]time.Time          // Track deliberately removed Kubernetes clusters (ID -> removal time)
+	kubernetesTokenBindings    map[string]string             // Track token ID -> agent ID bindings to enforce uniqueness
+	hostTokenBindings          map[string]string             // Track tokenID:hostname -> host identity bindings
 	dockerCommands             map[string]*dockerHostCommand
 	dockerCommandIndex         map[string]string
 	guestMetadataMu            sync.RWMutex
@@ -847,6 +849,14 @@ type rrdMemCacheEntry struct {
 	available uint64
 	used      uint64
 	total     uint64
+	fetchedAt time.Time
+}
+
+// agentMemCacheEntry caches MemAvailable read via guest agent file-read of /proc/meminfo.
+// A zero available with negative=true means the VM doesn't support this (e.g. Windows, agent off).
+type agentMemCacheEntry struct {
+	available uint64
+	negative  bool // true = read failed, don't retry until TTL expires
 	fetchedAt time.Time
 }
 
@@ -1154,6 +1164,9 @@ const (
 	nodeOfflineGracePeriod           = 60 * time.Second // Grace period before marking Proxmox nodes offline
 	nodeRRDCacheTTL                  = 30 * time.Second
 	nodeRRDRequestTimeout            = 2 * time.Second
+	vmAgentMemCacheTTL               = 60 * time.Second // Cache guest-agent /proc/meminfo reads
+	vmAgentMemRequestTimeout         = 3 * time.Second  // Timeout for guest-agent file-read calls
+	vmAgentMemNegativeTTL            = 5 * time.Minute  // Backoff for VMs where guest-agent read fails
 )
 
 type taskOutcome struct {
@@ -1239,12 +1252,12 @@ func (m *Monitor) getNodeRRDMetrics(ctx context.Context, client PVEClientInterfa
 // getVMRRDMetrics fetches Proxmox RRD memavailable for a single VM with a
 // short-lived cache to avoid a live API call on every poll for VMs that
 // consistently lack guest-agent memory data (e.g. Windows VMs).
-func (m *Monitor) getVMRRDMetrics(ctx context.Context, client PVEClientInterface, node string, vmid int) (uint64, error) {
+func (m *Monitor) getVMRRDMetrics(ctx context.Context, client PVEClientInterface, instance, node string, vmid int) (uint64, error) {
 	if client == nil || node == "" || vmid <= 0 {
 		return 0, fmt.Errorf("invalid arguments for VM RRD lookup")
 	}
 
-	cacheKey := fmt.Sprintf("%s/%d", node, vmid)
+	cacheKey := fmt.Sprintf("%s/%s/%d", instance, node, vmid)
 	now := time.Now()
 
 	m.rrdCacheMu.RLock()
@@ -1283,6 +1296,52 @@ func (m *Monitor) getVMRRDMetrics(ctx context.Context, client PVEClientInterface
 	m.rrdCacheMu.Unlock()
 
 	return memAvailable, nil
+}
+
+// getVMAgentMemAvailable reads MemAvailable via the QEMU guest agent file-read
+// endpoint (/proc/meminfo). Results are cached; failed reads use a longer
+// negative-cache TTL to avoid hammering VMs that don't support it.
+func (m *Monitor) getVMAgentMemAvailable(ctx context.Context, client PVEClientInterface, instance, node string, vmid int) (uint64, error) {
+	if client == nil || node == "" || vmid <= 0 {
+		return 0, fmt.Errorf("invalid arguments for guest agent mem lookup")
+	}
+
+	cacheKey := fmt.Sprintf("%s/%s/%d", instance, node, vmid)
+	now := time.Now()
+
+	m.rrdCacheMu.RLock()
+	if entry, ok := m.vmAgentMemCache[cacheKey]; ok {
+		ttl := vmAgentMemCacheTTL
+		if entry.negative {
+			ttl = vmAgentMemNegativeTTL
+		}
+		if now.Sub(entry.fetchedAt) < ttl {
+			m.rrdCacheMu.RUnlock()
+			if entry.negative {
+				return 0, fmt.Errorf("guest agent mem read previously failed (negative cache)")
+			}
+			return entry.available, nil
+		}
+	}
+	m.rrdCacheMu.RUnlock()
+
+	requestCtx, cancel := context.WithTimeout(ctx, vmAgentMemRequestTimeout)
+	defer cancel()
+
+	available, err := client.GetVMMemAvailableFromAgent(requestCtx, node, vmid)
+	if err != nil {
+		// Negative cache: don't retry for a while
+		m.rrdCacheMu.Lock()
+		m.vmAgentMemCache[cacheKey] = agentMemCacheEntry{negative: true, fetchedAt: now}
+		m.rrdCacheMu.Unlock()
+		return 0, err
+	}
+
+	m.rrdCacheMu.Lock()
+	m.vmAgentMemCache[cacheKey] = agentMemCacheEntry{available: available, fetchedAt: now}
+	m.rrdCacheMu.Unlock()
+
+	return available, nil
 }
 
 // RemoveDockerHost removes a docker host from the shared state and clears related alerts.
@@ -3149,6 +3208,14 @@ func (m *Monitor) cleanupRRDCache(now time.Time) {
 			delete(m.vmRRDMemCache, key)
 		}
 	}
+
+	// Clean up guest-agent memory cache (use longer TTL for negative entries)
+	agentMaxAge := 2 * vmAgentMemNegativeTTL
+	for key, entry := range m.vmAgentMemCache {
+		if now.Sub(entry.fetchedAt) > agentMaxAge {
+			delete(m.vmAgentMemCache, key)
+		}
+	}
 }
 
 // cleanupMetricsHistory removes stale entries from the metrics history.
@@ -3803,6 +3870,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		guestSnapshots:             make(map[string]GuestMemorySnapshot),
 		nodeRRDMemCache:            make(map[string]rrdMemCacheEntry),
 		vmRRDMemCache:              make(map[string]rrdMemCacheEntry),
+		vmAgentMemCache:            make(map[string]agentMemCacheEntry),
 		removedDockerHosts:         make(map[string]time.Time),
 		dockerTokenBindings:        make(map[string]string),
 		removedKubernetesClusters:  make(map[string]time.Time),
@@ -6872,7 +6940,7 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 					// try Proxmox RRD's memavailable (cache-aware) before falling back to status.Mem
 					// which can include reclaimable page cache (inflating usage). Refs: #1270
 					if memAvailable == 0 {
-						if rrdAvailable, rrdErr := m.getVMRRDMetrics(ctx, client, res.Node, res.VMID); rrdErr == nil && rrdAvailable > 0 {
+						if rrdAvailable, rrdErr := m.getVMRRDMetrics(ctx, client, instanceName, res.Node, res.VMID); rrdErr == nil && rrdAvailable > 0 {
 							memAvailable = rrdAvailable
 							memorySource = "rrd-memavailable"
 							guestRaw.MemInfoAvailable = memAvailable
@@ -6914,6 +6982,25 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 									Int64("agentUsed", agentHost.Memory.Used).
 									Msg("QEMU memory: using linked Pulse host agent memory (excludes page cache)")
 							}
+						}
+					}
+
+					// Last-resort fallback before status-mem: read /proc/meminfo via the
+					// QEMU guest agent's file-read endpoint. This works for Linux VMs with
+					// the guest agent running even when the balloon driver doesn't populate
+					// the meminfo fields. Results are cached with negative backoff. Refs: #1270
+					if memAvailable == 0 && detailedStatus.Agent.Value > 0 {
+						if agentAvail, agentErr := m.getVMAgentMemAvailable(ctx, client, instanceName, res.Node, res.VMID); agentErr == nil && agentAvail > 0 {
+							memAvailable = agentAvail
+							memorySource = "guest-agent-meminfo"
+							guestRaw.MemInfoAvailable = memAvailable
+							log.Debug().
+								Str("vm", res.Name).
+								Str("node", res.Node).
+								Int("vmid", res.VMID).
+								Uint64("total", memTotal).
+								Uint64("available", memAvailable).
+								Msg("QEMU memory: using guest agent /proc/meminfo fallback (excludes reclaimable cache)")
 						}
 					}
 

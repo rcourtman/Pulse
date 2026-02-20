@@ -33,6 +33,10 @@ func (m *mockCephPVEClient) GetCephDF(ctx context.Context) (*proxmox.CephDF, err
 	return args.Get(0).(*proxmox.CephDF), args.Error(1)
 }
 
+func (m *mockCephPVEClient) GetVMMemAvailableFromAgent(ctx context.Context, node string, vmid int) (uint64, error) {
+	return 0, fmt.Errorf("not implemented")
+}
+
 func TestPollCephCluster(t *testing.T) {
 	t.Run("clears state when ceph not detected", func(t *testing.T) {
 		m := &Monitor{state: models.NewState()}

@@ -1245,6 +1245,20 @@ func (cc *ClusterClient) GetVMNetworkInterfaces(ctx context.Context, node string
 	return result, err
 }
 
+// GetVMMemAvailableFromAgent reads /proc/meminfo via the QEMU guest agent to get MemAvailable.
+func (cc *ClusterClient) GetVMMemAvailableFromAgent(ctx context.Context, node string, vmid int) (uint64, error) {
+	var result uint64
+	err := cc.executeWithFailover(ctx, func(client *Client) error {
+		available, err := client.GetVMMemAvailableFromAgent(ctx, node, vmid)
+		if err != nil {
+			return err
+		}
+		result = available
+		return nil
+	})
+	return result, err
+}
+
 // GetClusterResources returns all resources (VMs, containers) across the cluster in a single call
 func (cc *ClusterClient) GetClusterResources(ctx context.Context, resourceType string) ([]ClusterResource, error) {
 	var result []ClusterResource
