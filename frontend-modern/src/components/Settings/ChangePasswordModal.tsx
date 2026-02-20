@@ -171,7 +171,7 @@ export const ChangePasswordModal: Component<ChangePasswordModalProps> = (props) 
               </div>
 
               <Show when={error()}>
-                <div class="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
+                <div class="p-3 bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-800 rounded-md">
                   <p class="text-sm text-red-600 dark:text-red-400">{error()}</p>
                 </div>
               </Show>

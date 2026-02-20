@@ -126,7 +126,7 @@ export const SystemLogsPanel: Component = () => {
                         <button
                             onClick={() => setIsPaused(!isPaused())}
                             class={`min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 p-2.5 rounded transition-colors ${isPaused()
-                                ? 'bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400'
+                                ? 'bg-amber-100 text-amber-600 dark:bg-amber-900 dark:text-amber-400'
                                 : 'hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400'
                                 }`}
                             title={isPaused() ? "Resume Stream" : "Pause Stream"}
@@ -157,7 +157,7 @@ export const SystemLogsPanel: Component = () => {
                     class="bg-slate-950 text-slate-300 font-mono text-xs p-4 rounded-md h-[500px] overflow-y-auto whitespace-pre-wrap leading-relaxed shadow-inner border border-slate-800 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent"
                 >
                     <For each={logs()}>{(log) =>
-                        <div class="border-b border-slate-900/50 last:border-0 pb-0.5 mb-0.5 hover:bg-slate-900/50 px-1 -mx-1 rounded">
+                        <div class="border-b border-slate-900 last:border-0 pb-0.5 mb-0.5 hover:bg-slate-900 px-1 -mx-1 rounded">
                             {/* Basic highlighting for log levels */}
                             {log.includes('"level":"error"') || log.includes('ERR') || log.includes('[ERROR]') ? (
                                 <span class="text-red-400">{log}</span>

@@ -302,359 +302,356 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
           icon={<Share2 class="w-5 h-5" />}
           bodyClass="space-y-5"
         >
-        <Show
-          when={!loading()}
-          fallback={
-            <div class="space-y-5">
-              <div class="rounded-md border border-slate-200 dark:border-slate-700 p-4 space-y-3">
-                <div class="h-4 w-24 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+          <Show
+            when={!loading()}
+            fallback={
+              <div class="space-y-5">
+                <div class="rounded-md border border-slate-200 dark:border-slate-700 p-4 space-y-3">
+                  <div class="h-4 w-24 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
 
-                <div class="grid gap-3 lg:grid-cols-2">
-                  <div class="space-y-2">
-                    <div class="h-3 w-28 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
-                    <div class="h-10 w-full animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
-                  </div>
-                  <div class="space-y-2">
-                    <div class="h-3 w-20 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
-                    <div class="h-10 w-full animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
-                  </div>
-                </div>
-
-                <div class="rounded-md border border-slate-200 dark:border-slate-700 p-3 space-y-2">
-                  <div class="h-3 w-32 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
-                  <div class="h-10 w-full animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
-                </div>
-
-                <div class="grid gap-3 lg:grid-cols-3">
-                  {Array.from({ length: 3 }).map(() => (
+                  <div class="grid gap-3 lg:grid-cols-2">
                     <div class="space-y-2">
-                      <div class="h-3 w-24 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                      <div class="h-3 w-28 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
                       <div class="h-10 w-full animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
                     </div>
-                  ))}
-                </div>
-
-                <div class="flex justify-end">
-                  <div class="h-10 w-28 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
-                </div>
-              </div>
-
-              <div class="space-y-2">
-                <div class="h-4 w-28 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
-                <div class="overflow-hidden rounded-md border border-slate-200 dark:border-slate-700">
-                  <div class="h-10 w-full animate-pulse bg-slate-100 dark:bg-slate-800" />
-                  {Array.from({ length: 3 }).map(() => (
-                    <div class="border-t border-slate-100 dark:border-slate-800 px-3 py-3">
-                      <div class="flex items-center gap-3">
-                        <div class="h-4 w-40 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
-                        <div class="h-4 w-24 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
-                        <div class="h-4 w-14 animate-pulse rounded-full bg-slate-200 dark:bg-slate-700" />
-                        <div class="h-4 w-24 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
-                      </div>
+                    <div class="space-y-2">
+                      <div class="h-3 w-20 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                      <div class="h-10 w-full animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
                     </div>
-                  ))}
-                </div>
-              </div>
+                  </div>
 
-              <div class="space-y-2">
-                <div class="h-4 w-28 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
-                <div class="overflow-hidden rounded-md border border-slate-200 dark:border-slate-700">
-                  <div class="h-10 w-full animate-pulse bg-slate-100 dark:bg-slate-800" />
-                  {Array.from({ length: 3 }).map(() => (
-                    <div class="border-t border-slate-100 dark:border-slate-800 px-3 py-3">
-                      <div class="flex items-center gap-3">
-                        <div class="h-4 w-24 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
-                        <div class="h-4 w-40 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
-                        <div class="h-4 w-14 animate-pulse rounded-full bg-slate-200 dark:bg-slate-700" />
-                        <div class="h-4 w-24 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                  <div class="rounded-md border border-slate-200 dark:border-slate-700 p-3 space-y-2">
+                    <div class="h-3 w-32 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                    <div class="h-10 w-full animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                  </div>
+
+                  <div class="grid gap-3 lg:grid-cols-3">
+                    {Array.from({ length: 3 }).map(() => (
+                      <div class="space-y-2">
+                        <div class="h-3 w-24 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                        <div class="h-10 w-full animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
+
+                  <div class="flex justify-end">
+                    <div class="h-10 w-28 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                  </div>
+                </div>
+
+                <div class="space-y-2">
+                  <div class="h-4 w-28 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                  <div class="overflow-hidden rounded-md border border-slate-200 dark:border-slate-700">
+                    <div class="h-10 w-full animate-pulse bg-slate-100 dark:bg-slate-800" />
+                    {Array.from({ length: 3 }).map(() => (
+                      <div class="border-t border-slate-100 dark:border-slate-800 px-3 py-3">
+                        <div class="flex items-center gap-3">
+                          <div class="h-4 w-40 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                          <div class="h-4 w-24 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                          <div class="h-4 w-14 animate-pulse rounded-full bg-slate-200 dark:bg-slate-700" />
+                          <div class="h-4 w-24 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div class="space-y-2">
+                  <div class="h-4 w-28 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                  <div class="overflow-hidden rounded-md border border-slate-200 dark:border-slate-700">
+                    <div class="h-10 w-full animate-pulse bg-slate-100 dark:bg-slate-800" />
+                    {Array.from({ length: 3 }).map(() => (
+                      <div class="border-t border-slate-100 dark:border-slate-800 px-3 py-3">
+                        <div class="flex items-center gap-3">
+                          <div class="h-4 w-24 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                          <div class="h-4 w-40 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                          <div class="h-4 w-14 animate-pulse rounded-full bg-slate-200 dark:bg-slate-700" />
+                          <div class="h-4 w-24 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
-            </div>
-          }
-        >
-          <Show when={canManageOrg(org(), props.currentUser)}>
-            <div class="rounded-md border border-slate-200 dark:border-slate-700 p-4 space-y-3">
-              <h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Create Share</h4>
+            }
+          >
+            <Show when={canManageOrg(org(), props.currentUser)}>
+              <div class="rounded-md border border-slate-200 dark:border-slate-700 p-4 space-y-3">
+                <h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Create Share</h4>
 
-              <div class="grid gap-3 lg:grid-cols-2">
-                <label class="space-y-1">
-                  <span class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                    Target Organization
-                  </span>
-                  <select
-                    value={targetOrgId()}
-                    onChange={(event) => updateTargetOrg(event.currentTarget.value)}
-                    class={`w-full rounded-md border bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-800 dark:text-slate-100 ${
-                      targetOrgError() ? 'border-red-400 dark:border-red-500' : 'border-slate-300 dark:border-slate-600'
-                    }`}
-                  >
-                    <option value="">Select organization</option>
-                    <For each={targetOrgOptions()}>
-                      {(target) => <option value={target.id}>{target.displayName || target.id}</option>}
-                    </For>
-                  </select>
-                  <Show when={targetOrgError() !== ''}>
-                    <p class="text-xs text-red-600 dark:text-red-400">{targetOrgError()}</p>
-                  </Show>
-                </label>
-
-                <label class="space-y-1">
-                  <span class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                    Access Role
-                  </span>
-                  <select
-                    value={accessRole()}
-                    onChange={(event) => setAccessRole(event.currentTarget.value as ShareAccessRole)}
-                    class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
-                  >
-                    <For each={accessRoleOptions}>
-                      {(option) => <option value={option.value}>{option.label}</option>}
-                    </For>
-                  </select>
-                </label>
-              </div>
-
-              <Show when={unifiedResourceOptions().length > 0}>
-                <div class="rounded-md border border-blue-200 bg-blue-50/50 p-3 space-y-2 dark:border-blue-900 dark:bg-blue-900/10">
-                  <label class="space-y-1 block">
-                    <span class="text-xs font-medium uppercase tracking-wide text-blue-700 dark:text-blue-300">
-                      Quick Pick Resource
+                <div class="grid gap-3 lg:grid-cols-2">
+                  <label class="space-y-1">
+                    <span class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                      Target Organization
                     </span>
                     <select
-                      value={selectedQuickPick()}
-                      onChange={(event) => applyResourceQuickPick(event.currentTarget.value)}
-                      class="w-full rounded-md border border-blue-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-blue-700 dark:bg-slate-800 dark:text-slate-100"
+                      value={targetOrgId()}
+                      onChange={(event) => updateTargetOrg(event.currentTarget.value)}
+                      class={`w-full rounded-md border bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-800 dark:text-slate-100 ${targetOrgError() ? 'border-red-400 dark:border-red-500' : 'border-slate-300 dark:border-slate-600'
+                        }`}
                     >
-                      <option value="">Select resource</option>
-                      <For each={unifiedResourceOptions()}>
-                        {(resource) => (
-                          <option value={`${resource.type}::${resource.id}`}>
-                            {resource.name} ({resource.type})
-                          </option>
-                        )}
+                      <option value="">Select organization</option>
+                      <For each={targetOrgOptions()}>
+                        {(target) => <option value={target.id}>{target.displayName || target.id}</option>}
+                      </For>
+                    </select>
+                    <Show when={targetOrgError() !== ''}>
+                      <p class="text-xs text-red-600 dark:text-red-400">{targetOrgError()}</p>
+                    </Show>
+                  </label>
+
+                  <label class="space-y-1">
+                    <span class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                      Access Role
+                    </span>
+                    <select
+                      value={accessRole()}
+                      onChange={(event) => setAccessRole(event.currentTarget.value as ShareAccessRole)}
+                      class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                    >
+                      <For each={accessRoleOptions}>
+                        {(option) => <option value={option.value}>{option.label}</option>}
                       </For>
                     </select>
                   </label>
-                  <div class="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <p class="text-xs text-blue-700 dark:text-blue-300">
-                      Choose a discovered resource, or switch to manual entry.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={toggleManualEntry}
-                      class="text-xs font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200"
-                    >
-                      {manualEntryExpanded() ? 'Hide manual entry' : 'Enter manually'}
-                    </button>
+                </div>
+
+                <Show when={unifiedResourceOptions().length > 0}>
+                  <div class="rounded-md border border-blue-200 bg-blue-50 p-3 space-y-2 dark:border-blue-900 dark:bg-blue-900">
+                    <label class="space-y-1 block">
+                      <span class="text-xs font-medium uppercase tracking-wide text-blue-700 dark:text-blue-300">
+                        Quick Pick Resource
+                      </span>
+                      <select
+                        value={selectedQuickPick()}
+                        onChange={(event) => applyResourceQuickPick(event.currentTarget.value)}
+                        class="w-full rounded-md border border-blue-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-blue-700 dark:bg-slate-800 dark:text-slate-100"
+                      >
+                        <option value="">Select resource</option>
+                        <For each={unifiedResourceOptions()}>
+                          {(resource) => (
+                            <option value={`${resource.type}::${resource.id}`}>
+                              {resource.name} ({resource.type})
+                            </option>
+                          )}
+                        </For>
+                      </select>
+                    </label>
+                    <div class="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <p class="text-xs text-blue-700 dark:text-blue-300">
+                        Choose a discovered resource, or switch to manual entry.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={toggleManualEntry}
+                        class="text-xs font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200"
+                      >
+                        {manualEntryExpanded() ? 'Hide manual entry' : 'Enter manually'}
+                      </button>
+                    </div>
                   </div>
-                </div>
-              </Show>
+                </Show>
 
-              <Show
-                when={unifiedResourceOptions().length === 0 || manualEntryExpanded()}
-                fallback={
-                  <p class="text-xs text-slate-500 dark:text-slate-400">
-                    Manual entry is hidden while quick pick is active.
-                  </p>
-                }
-              >
-                <div class="grid gap-3 lg:grid-cols-3">
-                  <label class="space-y-1">
-                    <span class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                      Resource Type
-                    </span>
-                    <input
-                      type="text"
-                      value={resourceType()}
-                      onInput={(event) => updateResourceType(event.currentTarget.value)}
-                      placeholder={VALID_RESOURCE_TYPES.join(' | ')}
-                      class={`w-full rounded-md border bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-800 dark:text-slate-100 ${
-                        resourceTypeError() ? 'border-red-400 dark:border-red-500' : 'border-slate-300 dark:border-slate-600'
-                      }`}
-                    />
-                    <Show when={resourceTypeError() !== ''}>
-                      <p class="text-xs text-red-600 dark:text-red-400">{resourceTypeError()}</p>
-                    </Show>
-                  </label>
-
-                  <label class="space-y-1">
-                    <span class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                      Resource ID
-                    </span>
-                    <input
-                      type="text"
-                      value={resourceId()}
-                      onInput={(event) => updateResourceId(event.currentTarget.value)}
-                      placeholder="resource identifier"
-                      class={`w-full rounded-md border bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-800 dark:text-slate-100 ${
-                        resourceIdError() ? 'border-red-400 dark:border-red-500' : 'border-slate-300 dark:border-slate-600'
-                      }`}
-                    />
-                    <Show when={resourceIdError() !== ''}>
-                      <p class="text-xs text-red-600 dark:text-red-400">{resourceIdError()}</p>
-                    </Show>
-                  </label>
-
-                  <label class="space-y-1">
-                    <span class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                      Resource Name
-                    </span>
-                    <input
-                      type="text"
-                      value={resourceName()}
-                      onInput={(event) => updateResourceName(event.currentTarget.value)}
-                      placeholder="optional display name"
-                      class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
-                    />
-                  </label>
-                </div>
-              </Show>
-
-              <div class="flex justify-end">
-                <button
-                  type="button"
-                  onClick={createShare}
-                  disabled={!canCreateShare()}
-                  class="inline-flex w-full sm:w-auto items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                <Show
+                  when={unifiedResourceOptions().length === 0 || manualEntryExpanded()}
+                  fallback={
+                    <p class="text-xs text-slate-500 dark:text-slate-400">
+                      Manual entry is hidden while quick pick is active.
+                    </p>
+                  }
                 >
-                  {saving() ? 'Saving...' : 'Create Share'}
-                </button>
+                  <div class="grid gap-3 lg:grid-cols-3">
+                    <label class="space-y-1">
+                      <span class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        Resource Type
+                      </span>
+                      <input
+                        type="text"
+                        value={resourceType()}
+                        onInput={(event) => updateResourceType(event.currentTarget.value)}
+                        placeholder={VALID_RESOURCE_TYPES.join(' | ')}
+                        class={`w-full rounded-md border bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-800 dark:text-slate-100 ${resourceTypeError() ? 'border-red-400 dark:border-red-500' : 'border-slate-300 dark:border-slate-600'
+                          }`}
+                      />
+                      <Show when={resourceTypeError() !== ''}>
+                        <p class="text-xs text-red-600 dark:text-red-400">{resourceTypeError()}</p>
+                      </Show>
+                    </label>
+
+                    <label class="space-y-1">
+                      <span class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        Resource ID
+                      </span>
+                      <input
+                        type="text"
+                        value={resourceId()}
+                        onInput={(event) => updateResourceId(event.currentTarget.value)}
+                        placeholder="resource identifier"
+                        class={`w-full rounded-md border bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-800 dark:text-slate-100 ${resourceIdError() ? 'border-red-400 dark:border-red-500' : 'border-slate-300 dark:border-slate-600'
+                          }`}
+                      />
+                      <Show when={resourceIdError() !== ''}>
+                        <p class="text-xs text-red-600 dark:text-red-400">{resourceIdError()}</p>
+                      </Show>
+                    </label>
+
+                    <label class="space-y-1">
+                      <span class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        Resource Name
+                      </span>
+                      <input
+                        type="text"
+                        value={resourceName()}
+                        onInput={(event) => updateResourceName(event.currentTarget.value)}
+                        placeholder="optional display name"
+                        class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                      />
+                    </label>
+                  </div>
+                </Show>
+
+                <div class="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={createShare}
+                    disabled={!canCreateShare()}
+                    class="inline-flex w-full sm:w-auto items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {saving() ? 'Saving...' : 'Create Share'}
+                  </button>
+                </div>
+              </div>
+            </Show>
+
+            <Show when={!canManageOrg(org(), props.currentUser)}>
+              <div class="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-300">
+                Admin or owner role required to create or remove organization shares.
+              </div>
+            </Show>
+
+            <div class="space-y-2">
+              <h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Outgoing Shares</h4>
+              <div class="overflow-x-auto rounded-md border border-slate-200 dark:border-slate-700">
+                <table class="min-w-[760px] w-full text-sm">
+                  <thead class="bg-slate-50 dark:bg-slate-800">
+                    <tr>
+                      <th class="px-3 py-2 text-left font-medium text-slate-600 dark:text-slate-300">Resource</th>
+                      <th class="px-3 py-2 text-left font-medium text-slate-600 dark:text-slate-300">Target Org</th>
+                      <th class="px-3 py-2 text-left font-medium text-slate-600 dark:text-slate-300">Access</th>
+                      <th class="px-3 py-2 text-left font-medium text-slate-600 dark:text-slate-300">Created</th>
+                      <th class="px-3 py-2 text-right font-medium text-slate-600 dark:text-slate-300">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <Show
+                      when={outgoingShares().length > 0}
+                      fallback={
+                        <tr>
+                          <td colSpan={5} class="px-3 py-4 text-center text-sm text-slate-500 dark:text-slate-400">
+                            No outgoing shares configured.
+                          </td>
+                        </tr>
+                      }
+                    >
+                      <For each={outgoingShares()}>
+                        {(share) => {
+                          const role = normalizeShareRole(share.accessRole);
+                          return (
+                            <tr class="border-t border-slate-100 dark:border-slate-800">
+                              <td class="px-3 py-2 text-slate-900 dark:text-slate-100">
+                                <div class="flex flex-col">
+                                  <span>{share.resourceName || share.resourceId}</span>
+                                  <span class="text-xs text-slate-500 dark:text-slate-400">
+                                    {share.resourceType}:{share.resourceId}
+                                  </span>
+                                </div>
+                              </td>
+                              <td class="px-3 py-2 text-slate-700 dark:text-slate-300">
+                                {orgNameById().get(share.targetOrgId) || share.targetOrgId}
+                              </td>
+                              <td class="px-3 py-2">
+                                <span class={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${roleBadgeClass(role)}`}>
+                                  {role}
+                                </span>
+                              </td>
+                              <td class="px-3 py-2 text-slate-600 dark:text-slate-400">{formatOrgDate(share.createdAt)}</td>
+                              <td class="px-3 py-2 text-right">
+                                <Show when={canManageOrg(org(), props.currentUser)}>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      void deleteShare(share);
+                                    }}
+                                    disabled={saving()}
+                                    class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-60"
+                                  >
+                                    <Trash2 class="w-3.5 h-3.5" />
+                                    Remove
+                                  </button>
+                                </Show>
+                              </td>
+                            </tr>
+                          );
+                        }}
+                      </For>
+                    </Show>
+                  </tbody>
+                </table>
               </div>
             </div>
-          </Show>
 
-          <Show when={!canManageOrg(org(), props.currentUser)}>
-            <div class="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
-              Admin or owner role required to create or remove organization shares.
-            </div>
-          </Show>
-
-          <div class="space-y-2">
-            <h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Outgoing Shares</h4>
-            <div class="overflow-x-auto rounded-md border border-slate-200 dark:border-slate-700">
-              <table class="min-w-[760px] w-full text-sm">
-                <thead class="bg-slate-50 dark:bg-slate-800">
-                  <tr>
-                    <th class="px-3 py-2 text-left font-medium text-slate-600 dark:text-slate-300">Resource</th>
-                    <th class="px-3 py-2 text-left font-medium text-slate-600 dark:text-slate-300">Target Org</th>
-                    <th class="px-3 py-2 text-left font-medium text-slate-600 dark:text-slate-300">Access</th>
-                    <th class="px-3 py-2 text-left font-medium text-slate-600 dark:text-slate-300">Created</th>
-                    <th class="px-3 py-2 text-right font-medium text-slate-600 dark:text-slate-300">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <Show
-                    when={outgoingShares().length > 0}
-                    fallback={
-                      <tr>
-                        <td colSpan={5} class="px-3 py-4 text-center text-sm text-slate-500 dark:text-slate-400">
-                          No outgoing shares configured.
-                        </td>
-                      </tr>
-                    }
-                  >
-                    <For each={outgoingShares()}>
-                      {(share) => {
-                        const role = normalizeShareRole(share.accessRole);
-                        return (
-                          <tr class="border-t border-slate-100 dark:border-slate-800">
-                            <td class="px-3 py-2 text-slate-900 dark:text-slate-100">
-                              <div class="flex flex-col">
-                                <span>{share.resourceName || share.resourceId}</span>
-                                <span class="text-xs text-slate-500 dark:text-slate-400">
-                                  {share.resourceType}:{share.resourceId}
+            <div class="space-y-2">
+              <h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Incoming Shares</h4>
+              <div class="overflow-x-auto rounded-md border border-slate-200 dark:border-slate-700">
+                <table class="min-w-[620px] w-full text-sm">
+                  <thead class="bg-slate-50 dark:bg-slate-800">
+                    <tr>
+                      <th class="px-3 py-2 text-left font-medium text-slate-600 dark:text-slate-300">Source Org</th>
+                      <th class="px-3 py-2 text-left font-medium text-slate-600 dark:text-slate-300">Resource</th>
+                      <th class="px-3 py-2 text-left font-medium text-slate-600 dark:text-slate-300">Access</th>
+                      <th class="px-3 py-2 text-left font-medium text-slate-600 dark:text-slate-300">Shared</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <Show
+                      when={incomingShares().length > 0}
+                      fallback={
+                        <tr>
+                          <td colSpan={4} class="px-3 py-4 text-center text-sm text-slate-500 dark:text-slate-400">
+                            No incoming shares from other organizations.
+                          </td>
+                        </tr>
+                      }
+                    >
+                      <For each={incomingShares()}>
+                        {(share) => {
+                          const role = normalizeShareRole(share.accessRole);
+                          return (
+                            <tr class="border-t border-slate-100 dark:border-slate-800">
+                              <td class="px-3 py-2 text-slate-700 dark:text-slate-300">{share.sourceOrgName || share.sourceOrgId}</td>
+                              <td class="px-3 py-2 text-slate-900 dark:text-slate-100">
+                                <div class="flex flex-col">
+                                  <span>{share.resourceName || share.resourceId}</span>
+                                  <span class="text-xs text-slate-500 dark:text-slate-400">
+                                    {share.resourceType}:{share.resourceId}
+                                  </span>
+                                </div>
+                              </td>
+                              <td class="px-3 py-2">
+                                <span class={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${roleBadgeClass(role)}`}>
+                                  {role}
                                 </span>
-                              </div>
-                            </td>
-                            <td class="px-3 py-2 text-slate-700 dark:text-slate-300">
-                              {orgNameById().get(share.targetOrgId) || share.targetOrgId}
-                            </td>
-                            <td class="px-3 py-2">
-                              <span class={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${roleBadgeClass(role)}`}>
-                                {role}
-                              </span>
-                            </td>
-                            <td class="px-3 py-2 text-slate-600 dark:text-slate-400">{formatOrgDate(share.createdAt)}</td>
-                            <td class="px-3 py-2 text-right">
-                              <Show when={canManageOrg(org(), props.currentUser)}>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    void deleteShare(share);
-                                  }}
-                                  disabled={saving()}
-                                  class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-900/20 disabled:cursor-not-allowed disabled:opacity-60"
-                                >
-                                  <Trash2 class="w-3.5 h-3.5" />
-                                  Remove
-                                </button>
-                              </Show>
-                            </td>
-                          </tr>
-                        );
-                      }}
-                    </For>
-                  </Show>
-                </tbody>
-              </table>
+                              </td>
+                              <td class="px-3 py-2 text-slate-600 dark:text-slate-400">{formatOrgDate(share.createdAt)}</td>
+                            </tr>
+                          );
+                        }}
+                      </For>
+                    </Show>
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
-
-          <div class="space-y-2">
-            <h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Incoming Shares</h4>
-            <div class="overflow-x-auto rounded-md border border-slate-200 dark:border-slate-700">
-              <table class="min-w-[620px] w-full text-sm">
-                <thead class="bg-slate-50 dark:bg-slate-800">
-                  <tr>
-                    <th class="px-3 py-2 text-left font-medium text-slate-600 dark:text-slate-300">Source Org</th>
-                    <th class="px-3 py-2 text-left font-medium text-slate-600 dark:text-slate-300">Resource</th>
-                    <th class="px-3 py-2 text-left font-medium text-slate-600 dark:text-slate-300">Access</th>
-                    <th class="px-3 py-2 text-left font-medium text-slate-600 dark:text-slate-300">Shared</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <Show
-                    when={incomingShares().length > 0}
-                    fallback={
-                      <tr>
-                        <td colSpan={4} class="px-3 py-4 text-center text-sm text-slate-500 dark:text-slate-400">
-                          No incoming shares from other organizations.
-                        </td>
-                      </tr>
-                    }
-                  >
-                    <For each={incomingShares()}>
-                      {(share) => {
-                        const role = normalizeShareRole(share.accessRole);
-                        return (
-                          <tr class="border-t border-slate-100 dark:border-slate-800">
-                            <td class="px-3 py-2 text-slate-700 dark:text-slate-300">{share.sourceOrgName || share.sourceOrgId}</td>
-                            <td class="px-3 py-2 text-slate-900 dark:text-slate-100">
-                              <div class="flex flex-col">
-                                <span>{share.resourceName || share.resourceId}</span>
-                                <span class="text-xs text-slate-500 dark:text-slate-400">
-                                  {share.resourceType}:{share.resourceId}
-                                </span>
-                              </div>
-                            </td>
-                            <td class="px-3 py-2">
-                              <span class={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${roleBadgeClass(role)}`}>
-                                {role}
-                              </span>
-                            </td>
-                            <td class="px-3 py-2 text-slate-600 dark:text-slate-400">{formatOrgDate(share.createdAt)}</td>
-                          </tr>
-                        );
-                      }}
-                    </For>
-                  </Show>
-                </tbody>
-              </table>
-            </div>
-          </div>
           </Show>
         </SettingsPanel>
       </div>
