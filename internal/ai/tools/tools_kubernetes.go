@@ -454,6 +454,17 @@ func validateKubernetesResourceID(value string) error {
 	return nil
 }
 
+// buildKubectlExecCommand builds a kubectl exec command safely.
+// It runs the command via "sh -c" inside the pod and shell-escapes all
+// user-controlled values to prevent host shell injection.
+func buildKubectlExecCommand(namespace, pod, container, command string) string {
+	base := fmt.Sprintf("kubectl -n %s exec %s", shellEscape(namespace), shellEscape(pod))
+	if container != "" {
+		base += fmt.Sprintf(" -c %s", shellEscape(container))
+	}
+	return base + fmt.Sprintf(" -- sh -c %s", shellEscape(command))
+}
+
 // executeKubernetesScale scales a deployment
 func (e *PulseToolExecutor) executeKubernetesScale(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
 	clusterArg, _ := args["cluster"].(string)
@@ -730,13 +741,8 @@ func (e *PulseToolExecutor) executeKubernetesExec(ctx context.Context, args map[
 	// Check if pre-approved
 	preApproved := isPreApproved(args)
 
-	// Build kubectl command
-	var kubectlCmd string
-	if container != "" {
-		kubectlCmd = fmt.Sprintf("kubectl -n %s exec %s -c %s -- %s", namespace, pod, container, command)
-	} else {
-		kubectlCmd = fmt.Sprintf("kubectl -n %s exec %s -- %s", namespace, pod, command)
-	}
+	// Build kubectl command safely to prevent shell metacharacter breakout on the host.
+	kubectlCmd := buildKubectlExecCommand(namespace, pod, container, command)
 
 	// Request approval if needed
 	if !preApproved && !e.isAutonomous && e.controlLevel == ControlLevelControlled {

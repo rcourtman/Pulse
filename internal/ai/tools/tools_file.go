@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -295,12 +296,12 @@ func (e *PulseToolExecutor) executeFileAppend(ctx context.Context, path, content
 	encoded := base64.StdEncoding.EncodeToString([]byte(content))
 	var command string
 	if dockerContainer != "" {
-		// Append inside Docker container - docker exec needs its own sh -c
-		command = fmt.Sprintf("docker exec %s sh -c 'echo %s | base64 -d >> %s'",
-			shellEscape(dockerContainer), encoded, shellEscape(path))
+		// Append inside Docker container - escape the full inner command to avoid nested quote breakage.
+		innerCommand := fmt.Sprintf("echo %s | base64 -d >> %s", shellEscape(encoded), shellEscape(path))
+		command = fmt.Sprintf("docker exec %s sh -c %s", shellEscape(dockerContainer), shellEscape(innerCommand))
 	} else {
 		// For host/LXC/VM targets - agent handles sh -c wrapping for LXC/VM
-		command = fmt.Sprintf("echo '%s' | base64 -d >> %s", encoded, shellEscape(path))
+		command = fmt.Sprintf("echo %s | base64 -d >> %s", shellEscape(encoded), shellEscape(path))
 	}
 
 	result, err := e.agentServer.ExecuteCommand(ctx, routing.AgentID, agentexec.ExecuteCommandPayload{
@@ -428,12 +429,12 @@ func (e *PulseToolExecutor) executeFileWrite(ctx context.Context, path, content,
 	encoded := base64.StdEncoding.EncodeToString([]byte(content))
 	var command string
 	if dockerContainer != "" {
-		// Write inside Docker container - docker exec needs its own sh -c
-		command = fmt.Sprintf("docker exec %s sh -c 'echo %s | base64 -d > %s'",
-			shellEscape(dockerContainer), encoded, shellEscape(path))
+		// Write inside Docker container - escape the full inner command to avoid nested quote breakage.
+		innerCommand := fmt.Sprintf("echo %s | base64 -d > %s", shellEscape(encoded), shellEscape(path))
+		command = fmt.Sprintf("docker exec %s sh -c %s", shellEscape(dockerContainer), shellEscape(innerCommand))
 	} else {
 		// For host/LXC/VM targets - agent handles sh -c wrapping for LXC/VM
-		command = fmt.Sprintf("echo '%s' | base64 -d > %s", encoded, shellEscape(path))
+		command = fmt.Sprintf("echo %s | base64 -d > %s", shellEscape(encoded), shellEscape(path))
 	}
 
 	result, err := e.agentServer.ExecuteCommand(ctx, routing.AgentID, agentexec.ExecuteCommandPayload{
@@ -689,6 +690,15 @@ func shellEscape(s string) string {
 
 // formatFileApprovalNeeded formats an approval-required response for file operations
 func formatFileApprovalNeeded(path, host, action string, size int, approvalID string) string {
-	return fmt.Sprintf(`APPROVAL_REQUIRED: {"type":"approval_required","approval_id":"%s","action":"file_%s","path":"%s","host":"%s","size":%d,"message":"File %s operation requires approval"}`,
-		approvalID, action, path, host, size, action)
+	payload := map[string]interface{}{
+		"type":        "approval_required",
+		"approval_id": approvalID,
+		"action":      "file_" + action,
+		"path":        path,
+		"host":        host,
+		"size":        size,
+		"message":     fmt.Sprintf("File %s operation requires approval", action),
+	}
+	b, _ := json.Marshal(payload)
+	return "APPROVAL_REQUIRED: " + string(b)
 }

@@ -344,7 +344,7 @@ func TestExecuteKubernetesExec(t *testing.T) {
 			agents: []agentexec.ConnectedAgent{{AgentID: "agent-1", Hostname: "k8s-host"}},
 		}
 		mockAgent.On("ExecuteCommand", mock.Anything, "agent-1", mock.MatchedBy(func(cmd agentexec.ExecuteCommandPayload) bool {
-			return cmd.Command == "kubectl -n default exec nginx-pod -- cat /etc/nginx/nginx.conf"
+			return cmd.Command == "kubectl -n 'default' exec 'nginx-pod' -- sh -c 'cat /etc/nginx/nginx.conf'"
 		})).Return(&agentexec.CommandResultPayload{
 			ExitCode: 0,
 			Stdout:   "server { listen 80; }",
@@ -376,7 +376,7 @@ func TestExecuteKubernetesExec(t *testing.T) {
 			agents: []agentexec.ConnectedAgent{{AgentID: "agent-1", Hostname: "k8s-host"}},
 		}
 		mockAgent.On("ExecuteCommand", mock.Anything, "agent-1", mock.MatchedBy(func(cmd agentexec.ExecuteCommandPayload) bool {
-			return cmd.Command == "kubectl -n kube-system exec coredns-pod -c coredns -- cat /etc/coredns/Corefile"
+			return cmd.Command == "kubectl -n 'kube-system' exec 'coredns-pod' -c 'coredns' -- sh -c 'cat /etc/coredns/Corefile'"
 		})).Return(&agentexec.CommandResultPayload{
 			ExitCode: 0,
 			Stdout:   ".:53 { forward . /etc/resolv.conf }",
@@ -398,6 +398,37 @@ func TestExecuteKubernetesExec(t *testing.T) {
 			"pod":       "coredns-pod",
 			"container": "coredns",
 			"command":   "cat /etc/coredns/Corefile",
+		})
+		require.NoError(t, err)
+		assert.Contains(t, result.Content[0].Text, "Command executed")
+		mockAgent.AssertExpectations(t)
+	})
+
+	t.Run("ExecEscapesMetacharacters", func(t *testing.T) {
+		mockAgent := &mockAgentServer{
+			agents: []agentexec.ConnectedAgent{{AgentID: "agent-1", Hostname: "k8s-host"}},
+		}
+		mockAgent.On("ExecuteCommand", mock.Anything, "agent-1", mock.MatchedBy(func(cmd agentexec.ExecuteCommandPayload) bool {
+			return cmd.Command == "kubectl -n 'default' exec 'nginx-pod' -- sh -c 'cat /etc/nginx/nginx.conf; id'"
+		})).Return(&agentexec.CommandResultPayload{
+			ExitCode: 0,
+			Stdout:   "ok",
+		}, nil)
+
+		state := models.StateSnapshot{
+			KubernetesClusters: []models.KubernetesCluster{
+				{ID: "c1", Name: "cluster-1", AgentID: "agent-1"},
+			},
+		}
+		exec := NewPulseToolExecutor(ExecutorConfig{
+			StateProvider: &mockStateProvider{state: state},
+			AgentServer:   mockAgent,
+			ControlLevel:  ControlLevelAutonomous,
+		})
+		result, err := exec.executeKubernetesExec(ctx, map[string]interface{}{
+			"cluster": "cluster-1",
+			"pod":     "nginx-pod",
+			"command": "cat /etc/nginx/nginx.conf; id",
 		})
 		require.NoError(t, err)
 		assert.Contains(t, result.Content[0].Text, "Command executed")

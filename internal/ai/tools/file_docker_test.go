@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -139,6 +140,11 @@ func TestExecuteFileWriteDocker(t *testing.T) {
 	t.Run("WriteToDockerContainer", func(t *testing.T) {
 		content := `{"new": "config"}`
 		encodedContent := base64.StdEncoding.EncodeToString([]byte(content))
+		expectedWriteCmd := fmt.Sprintf(
+			"docker exec %s sh -c %s",
+			shellEscape("nginx"),
+			shellEscape(fmt.Sprintf("echo %s | base64 -d > %s", shellEscape(encodedContent), shellEscape("/etc/nginx/nginx.conf"))),
+		)
 		expected := sha256.Sum256([]byte(content))
 		expectedHex := hex.EncodeToString(expected[:])
 
@@ -146,13 +152,7 @@ func TestExecuteFileWriteDocker(t *testing.T) {
 		mockAgent := &mockAgentServer{}
 		mockAgent.On("GetConnectedAgents").Return(agents)
 		mockAgent.On("ExecuteCommand", mock.Anything, "agent-1", mock.MatchedBy(func(cmd agentexec.ExecuteCommandPayload) bool {
-			// Should wrap with docker exec and use base64
-			return strings.Contains(cmd.Command, "docker exec") &&
-				strings.Contains(cmd.Command, "nginx") &&
-				strings.Contains(cmd.Command, "sh -c") &&
-				strings.Contains(cmd.Command, encodedContent) &&
-				strings.Contains(cmd.Command, "base64 -d") &&
-				strings.Contains(cmd.Command, "/etc/nginx/nginx.conf")
+			return cmd.Command == expectedWriteCmd
 		})).Return(&agentexec.CommandResultPayload{
 			ExitCode: 0,
 			Stdout:   "",
@@ -210,6 +210,11 @@ func TestExecuteFileAppendDocker(t *testing.T) {
 	t.Run("AppendToDockerContainer", func(t *testing.T) {
 		content := "\nnew line"
 		encodedContent := base64.StdEncoding.EncodeToString([]byte(content))
+		expectedAppendCmd := fmt.Sprintf(
+			"docker exec %s sh -c %s",
+			shellEscape("logcontainer"),
+			shellEscape(fmt.Sprintf("echo %s | base64 -d >> %s", shellEscape(encodedContent), shellEscape("/var/log/app.log"))),
+		)
 		expected := sha256.Sum256([]byte(content))
 		expectedHex := hex.EncodeToString(expected[:])
 
@@ -217,12 +222,7 @@ func TestExecuteFileAppendDocker(t *testing.T) {
 		mockAgent := &mockAgentServer{}
 		mockAgent.On("GetConnectedAgents").Return(agents)
 		mockAgent.On("ExecuteCommand", mock.Anything, "agent-1", mock.MatchedBy(func(cmd agentexec.ExecuteCommandPayload) bool {
-			// Should use >> for append
-			return strings.Contains(cmd.Command, "docker exec") &&
-				strings.Contains(cmd.Command, "logcontainer") &&
-				strings.Contains(cmd.Command, encodedContent) &&
-				strings.Contains(cmd.Command, ">>") &&
-				strings.Contains(cmd.Command, "/var/log/app.log")
+			return cmd.Command == expectedAppendCmd
 		})).Return(&agentexec.CommandResultPayload{
 			ExitCode: 0,
 			Stdout:   "",

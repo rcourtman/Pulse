@@ -2,6 +2,8 @@ package tools
 
 import (
 	"context"
+	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
@@ -135,4 +137,18 @@ func TestValidateWriteExecutionContext_Blocked(t *testing.T) {
 
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Message, "write would execute on the Proxmox node instead of inside the lxc")
+}
+
+func TestFormatFileApprovalNeeded_JSONSafe(t *testing.T) {
+	formatted := formatFileApprovalNeeded(`/tmp/"cfg".json`, `host"name`, "write", 42, "approval-1")
+	assert.True(t, strings.HasPrefix(formatted, "APPROVAL_REQUIRED: "))
+
+	raw := strings.TrimPrefix(formatted, "APPROVAL_REQUIRED: ")
+	var payload map[string]interface{}
+	assert.NoError(t, json.Unmarshal([]byte(raw), &payload))
+	assert.Equal(t, "approval_required", payload["type"])
+	assert.Equal(t, "file_write", payload["action"])
+	assert.Equal(t, `/tmp/"cfg".json`, payload["path"])
+	assert.Equal(t, `host"name`, payload["host"])
+	assert.Equal(t, float64(42), payload["size"])
 }
