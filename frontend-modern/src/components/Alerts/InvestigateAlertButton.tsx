@@ -109,13 +109,13 @@ Please:
                 onMouseEnter={() => setIsHovered(true)}
                 onMouseLeave={() => setIsHovered(false)}
                 class={`${baseButtonClass} ${sizeClasses[props.size || 'sm']}
-          bg-purple-500/10
-          hover:bg-purple-500/20
+          bg-purple-100 dark:bg-purple-950
+          hover:bg-purple-900
           text-purple-600 dark:text-purple-400
           hover:text-purple-700 dark:hover:text-purple-300
-          border border-purple-200/50 dark:border-purple-700/50
+          border border-purple-200 dark:border-purple-700
           hover:border-purple-300 dark:hover:border-purple-600
-          ${isLocked() ? 'opacity-60 cursor-not-allowed hover:bg-purple-500/10' : ''}
+          ${isLocked() ? 'opacity-60 cursor-not-allowed hover:bg-purple-100 dark:hover:bg-purple-950' : ''}
           ${props.class || ''}`}
                 title={isLocked() ? 'Pro required to investigate alerts with Pulse Assistant' : 'Ask Pulse Assistant to investigate this alert'}
                 aria-disabled={isLocked()}
@@ -146,14 +146,14 @@ Please:
                 onMouseEnter={() => setIsHovered(true)}
                 onMouseLeave={() => setIsHovered(false)}
                 class={`${baseButtonClass} px-2 py-1
-          bg-purple-500/10
-          hover:bg-purple-500/20
+          bg-purple-100 dark:bg-purple-950
+          hover:bg-purple-900
           text-purple-600 dark:text-purple-400
           hover:text-purple-700 dark:hover:text-purple-300
-          border border-purple-200/50 dark:border-purple-700/50
+          border border-purple-200 dark:border-purple-700
           hover:border-purple-300 dark:hover:border-purple-600
           gap-1.5
-          ${isLocked() ? 'opacity-60 cursor-not-allowed hover:bg-purple-500/10' : ''}
+          ${isLocked() ? 'opacity-60 cursor-not-allowed hover:bg-purple-100 dark:hover:bg-purple-950' : ''}
           ${props.class || ''}`}
                 title={isLocked() ? 'Pro required to investigate alerts with Pulse Assistant' : 'Ask Pulse Assistant to investigate this alert'}
                 aria-disabled={isLocked()}
