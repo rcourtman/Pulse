@@ -52,6 +52,26 @@ func isRunningAsRoot() bool {
 	return os.Geteuid() == 0
 }
 
+func ensureAdminSession(cfg *config.Config, w http.ResponseWriter, req *http.Request) bool {
+	// Session users must match configured admin identity for privileged operations.
+	if cookie, err := req.Cookie("pulse_session"); err == nil && cookie.Value != "" && ValidateSession(cookie.Value) {
+		sessionUser := strings.TrimSpace(GetSessionUsername(cookie.Value))
+		configuredAdmin := ""
+		if cfg != nil {
+			configuredAdmin = strings.TrimSpace(cfg.AuthUser)
+		}
+		if configuredAdmin == "" || !strings.EqualFold(sessionUser, configuredAdmin) {
+			log.Warn().
+				Str("path", req.URL.Path).
+				Str("user", sessionUser).
+				Msg("Session user missing admin privileges for privileged operation")
+			http.Error(w, "Admin privileges required", http.StatusForbidden)
+			return false
+		}
+	}
+	return true
+}
+
 func ensureSettingsScope(cfg *config.Config, w http.ResponseWriter, req *http.Request, scope string) bool {
 	record := getAPITokenRecordFromRequest(req)
 	if record != nil {
@@ -68,22 +88,8 @@ func ensureSettingsScope(cfg *config.Config, w http.ResponseWriter, req *http.Re
 		return false
 	}
 
-	// Session users must match configured admin identity for privileged operations.
-	if cookie, err := req.Cookie("pulse_session"); err == nil && cookie.Value != "" && ValidateSession(cookie.Value) {
-		sessionUser := strings.TrimSpace(GetSessionUsername(cookie.Value))
-		configuredAdmin := ""
-		if cfg != nil {
-			configuredAdmin = strings.TrimSpace(cfg.AuthUser)
-		}
-		if configuredAdmin == "" || !strings.EqualFold(sessionUser, configuredAdmin) {
-			log.Warn().
-				Str("path", req.URL.Path).
-				Str("user", sessionUser).
-				Msg("Session user missing admin privileges for settings write operation")
-			http.Error(w, "Admin privileges required", http.StatusForbidden)
-			return false
-		}
-		return true
+	if !ensureAdminSession(cfg, w, req) {
+		return false
 	}
 
 	return true
