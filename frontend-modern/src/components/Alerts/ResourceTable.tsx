@@ -4,6 +4,7 @@ import { TogglePrimitive } from '@/components/shared/Toggle';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import type { Alert } from '@/types/api';
 import { Card } from '@/components/shared/Card';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/shared/Table';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { ThresholdSlider } from '@/components/Dashboard/ThresholdSlider';
 import { HelpIcon } from '@/components/shared/HelpIcon';
@@ -751,48 +752,47 @@ export function ResourceTable(props: ResourceTableProps) {
         <div class="px-4 py-3 border-b border-slate-200 dark:border-slate-700">
           <SectionHeader title={props.title} size="sm" />
         </div>
-        <div class="overflow-x-auto" style={{ '-webkit-overflow-scrolling': 'touch' }}>
-          <table class="w-full">
-            <thead>
-              <tr class="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400">
-                <th class="px-1.5 sm:px-2 py-0.5 text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap text-center w-16">
+        <Table class="w-full">
+            <TableHeader>
+              <TableRow class="text-slate-500 dark:text-slate-400">
+                <TableHead class="text-center w-16">
                   Alerts
-                </th>
-                <th class="px-1.5 sm:px-2 py-0.5 text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap text-left">
+                </TableHead>
+                <TableHead class="text-left">
                   Resource
-                </th>
+                </TableHead>
                 <For each={props.columns}>
                   {(column) => (
-                    <th
-                      class="px-1.5 sm:px-2 py-0.5 text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap text-center"
+                    <TableHead
+                      class="text-center"
                       title={getColumnHeaderTooltip(column)}
                     >
                       {column}
-                    </th>
+                    </TableHead>
                   )}
                 </For>
                 <Show when={props.showOfflineAlertsColumn}>
-                  <th
-                    class="px-1.5 sm:px-2 py-0.5 text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap text-center"
+                  <TableHead
+                    class="text-center"
                     title={OFFLINE_ALERTS_TOOLTIP}
                   >
                     Offline Alerts
-                  </th>
+                  </TableHead>
                 </Show>
-                <th class="px-1.5 sm:px-2 py-0.5 text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap text-center">
+                <TableHead class="text-center">
                   Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody class="divide-y divide-slate-200 dark:divide-slate-700">
               {/* Global Defaults Row */}
               <Show
                 when={props.globalDefaults && props.setGlobalDefaults && props.setHasUnsavedChanges}
               >
-                <tr
+                <TableRow
                   class={`bg-slate-50 dark:bg-slate-800 ${props.globalDisableFlag?.() ? 'opacity-40' : ''}`}
                 >
-                  <td class="p-1 px-2 text-center align-middle">
+                  <TableCell class="p-1 px-2 text-center align-middle">
                     <Show
                       when={props.onToggleGlobalDisable}
                       fallback={<span class="text-sm text-slate-400">-</span>}
@@ -811,8 +811,8 @@ export function ResourceTable(props: ResourceTableProps) {
                         />
                       </div>
                     </Show>
-                  </td>
-                  <td class="p-1 px-2">
+                  </TableCell>
+                  <TableCell class="p-1 px-2">
                     <div class="flex items-center gap-2">
                       <span class="text-sm font-semibold text-slate-700 dark:text-slate-300">
                         Global Defaults
@@ -823,7 +823,7 @@ export function ResourceTable(props: ResourceTableProps) {
                         </span>
                       </Show>
                     </div>
-                  </td>
+                  </TableCell>
                   <For each={props.columns}>
                     {(column) => {
                       const metric = normalizeMetricKey(column);
@@ -832,7 +832,7 @@ export function ResourceTable(props: ResourceTableProps) {
                       const isOff = () => val() === -1;
 
                       return (
-                        <td class="p-1 px-2 text-center align-middle">
+                        <TableCell class="p-1 px-2 text-center align-middle">
                           <div class="relative flex justify-center w-full">
                             <input
                               type="number"
@@ -882,12 +882,12 @@ export function ResourceTable(props: ResourceTableProps) {
                               </button>
                             </Show>
                           </div>
-                        </td>
+                        </TableCell>
                       );
                     }}
                   </For>
                   <Show when={props.showOfflineAlertsColumn}>
-                    <td class="p-1 px-2 text-center align-middle">
+                    <TableCell class="p-1 px-2 text-center align-middle">
                       <Show
                         when={props.onSetGlobalOfflineState}
                         fallback={
@@ -932,9 +932,9 @@ export function ResourceTable(props: ResourceTableProps) {
                           });
                         })()}
                       </Show>
-                    </td>
+                    </TableCell>
                   </Show>
-                  <td class="p-1 px-2 text-center align-middle">
+                  <TableCell class="p-1 px-2 text-center align-middle">
                     <div class="flex items-center justify-center gap-1">
                       <Show
                         when={
@@ -989,8 +989,8 @@ export function ResourceTable(props: ResourceTableProps) {
                         <span class="text-sm text-slate-400">-</span>
                       </Show>
                     </div>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               </Show>
               <Show
                 when={
@@ -999,18 +999,18 @@ export function ResourceTable(props: ResourceTableProps) {
                   typeof props.onMetricDelayChange === 'function'
                 }
               >
-                <tr
+                <TableRow
                   class={`bg-slate-50 dark:bg-slate-800 ${props.globalDisableFlag?.() ? 'opacity-40' : ''}`}
                 >
-                  <td class="p-1 px-2 text-center align-middle">
+                  <TableCell class="p-1 px-2 text-center align-middle">
                     <span class="text-sm text-slate-400">-</span>
-                  </td>
-                  <td class="p-1 px-2 align-middle">
+                  </TableCell>
+                  <TableCell class="p-1 px-2 align-middle">
                     <span class="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300 inline-flex items-center gap-1">
                       Alert Delay (s)
                       <HelpIcon contentId="alerts.thresholds.delay" size="xs" />
                     </span>
-                  </td>
+                  </TableCell>
                   <For each={props.columns}>
                     {(column) => {
                       const metric = normalizeMetricKey(column);
@@ -1018,7 +1018,7 @@ export function ResourceTable(props: ResourceTableProps) {
                       const overrideDelay = metricDelayOverride(metric);
 
                       return (
-                        <td class="p-1 px-2 text-center align-middle">
+                        <TableCell class="p-1 px-2 text-center align-middle">
                           <div class="relative flex justify-center w-full">
                             <input
                               type="number"
@@ -1050,19 +1050,19 @@ export function ResourceTable(props: ResourceTableProps) {
                               }}
                             />
                           </div>
-                        </td>
+                        </TableCell>
                       );
                     }}
                   </For>
                   <Show when={props.showOfflineAlertsColumn}>
-                    <td class="p-1 px-2 text-center align-middle">
+                    <TableCell class="p-1 px-2 text-center align-middle">
                       <span class="text-sm text-slate-400">-</span>
-                    </td>
+                    </TableCell>
                   </Show>
-                  <td class="p-1 px-2 text-center align-middle">
+                  <TableCell class="p-1 px-2 text-center align-middle">
                     <span class="text-sm text-slate-400">-</span>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               </Show>
               <Show when={props.groupedResources}>
                 <For
@@ -1076,14 +1076,14 @@ export function ResourceTable(props: ResourceTableProps) {
                     return (
                       <>
                         {/* Node group header */}
-                        <tr class="bg-slate-50 dark:bg-slate-800">
-                          <td
+                        <TableRow class="bg-slate-50 dark:bg-slate-800">
+                          <TableCell
                             colspan={totalColumnCount()}
                             class="p-1 px-2 text-xs font-medium text-slate-600 dark:text-slate-400"
                           >
                             {renderGroupHeader(nodeName, headerMeta)}
-                          </td>
-                        </tr>
+                          </TableCell>
+                        </TableRow>
                         {/* Resources in this group */}
                         <For each={resources}>
                           {(resource) => {
@@ -1136,11 +1136,11 @@ export function ResourceTable(props: ResourceTableProps) {
                             };
 
                             return (
-                              <tr
+                              <TableRow
                                 class={`hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors ${resource.disabled || props.globalDisableFlag?.() ? 'opacity-40' : ''}`}
                               >
                                 {/* Alert toggle column */}
-                                <td class="p-1 px-2 text-center align-middle">
+                                <TableCell class="p-1 px-2 text-center align-middle">
                                   <Show when={props.onToggleDisabled}>
                                     {(() => {
                                       const globallyDisabled = props.globalDisableFlag?.() ?? false;
@@ -1173,8 +1173,8 @@ export function ResourceTable(props: ResourceTableProps) {
                                       );
                                     })()}
                                   </Show>
-                                </td>
-                                <td class="p-1 px-2">
+                                </TableCell>
+                                <TableCell class="p-1 px-2">
                                   <div class="flex items-center gap-2 min-w-0">
                                     <Show
                                       when={resource.type === 'node'}
@@ -1263,7 +1263,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                       </p>
                                     </Show>
                                   </div>
-                                </td>
+                                </TableCell>
                                 {/* Metric columns - dynamically rendered based on resource type */}
                                 <For each={props.columns}>
                                   {(column) => {
@@ -1281,7 +1281,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                       const titlePrefix = metric === 'backup' ? 'Backup' : 'Snapshot';
 
                                       return (
-                                        <td class="p-1 px-2 text-center align-middle">
+                                        <TableCell class="p-1 px-2 text-center align-middle">
                                           <Show when={onToggle} fallback={<span class="text-sm text-slate-400">-</span>}>
                                             <div class="flex items-center justify-center">
                                               <StatusBadge
@@ -1292,7 +1292,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                               />
                                             </div>
                                           </Show>
-                                        </td>
+                                        </TableCell>
                                       );
                                     }
 
@@ -1308,7 +1308,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                     };
 
                                     return (
-                                      <td class="p-1 px-2 text-center align-middle">
+                                      <TableCell class="p-1 px-2 text-center align-middle">
                                         <Show
                                           when={showMetric()}
                                           fallback={
@@ -1451,14 +1451,14 @@ export function ResourceTable(props: ResourceTableProps) {
                                             </div>
                                           </Show>
                                         </Show>
-                                      </td>
+                                      </TableCell>
                                     );
                                   }}
                                 </For>
 
                                 {/* Offline Alerts column - Connectivity/powered-off alerts */}
                                 <Show when={props.showOfflineAlertsColumn}>
-                                  <td class="p-1 px-2 text-center align-middle">
+                                  <TableCell class="p-1 px-2 text-center align-middle">
                                     {(() => {
                                       const disabledGlobally = props.globalDisableFlag?.() ?? false;
                                       const supportsTriState =
@@ -1516,11 +1516,11 @@ export function ResourceTable(props: ResourceTableProps) {
                                         titleWhenDisabled: 'Offline alerts controlled globally',
                                       });
                                     })()}
-                                  </td>
+                                  </TableCell>
                                 </Show>
 
                                 {/* Actions column */}
-                                <td class="p-1 px-2">
+                                <TableCell class="p-1 px-2">
                                   <div class="flex items-center justify-center gap-1">
                                     <Show
                                       when={!isEditing()}
@@ -1613,8 +1613,8 @@ export function ResourceTable(props: ResourceTableProps) {
                                       </Show>
                                     </Show>
                                   </div>
-                                </td>
-                              </tr>
+                                </TableCell>
+                              </TableRow>
                             );
                           }}
                         </For>
@@ -1676,11 +1676,11 @@ export function ResourceTable(props: ResourceTableProps) {
                         };
 
                         return (
-                          <tr
+                          <TableRow
                             class={`hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors ${resource.disabled || props.globalDisableFlag?.() ? 'opacity-40' : ''}`}
                           >
                             {/* Alert toggle column */}
-                            <td class="p-1 px-2 text-center align-middle">
+                            <TableCell class="p-1 px-2 text-center align-middle">
                               <Show when={props.onToggleDisabled}>
                                 {(() => {
                                   const globallyDisabled = props.globalDisableFlag?.() ?? false;
@@ -1712,8 +1712,8 @@ export function ResourceTable(props: ResourceTableProps) {
                                   );
                                 })()}
                               </Show>
-                            </td>
-                            <td class="p-1 px-2">
+                            </TableCell>
+                            <TableCell class="p-1 px-2">
                               <Show
                                 when={resource.type === 'node'}
                                 fallback={
@@ -1777,7 +1777,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                   </Show>
                                 </div>
                               </Show>
-                            </td>
+                            </TableCell>
                             {/* Metric columns - dynamically rendered based on resource type */}
                             <For each={props.columns}>
                               {(column) => {
@@ -1820,7 +1820,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                 };
 
                                 return (
-                                  <td class="p-1 px-2 text-center align-middle">
+                                  <TableCell class="p-1 px-2 text-center align-middle">
                                     <Show
                                       when={showMetric()}
                                       fallback={
@@ -1905,14 +1905,14 @@ export function ResourceTable(props: ResourceTableProps) {
                                         </div>
                                       </Show>
                                     </Show>
-                                  </td>
+                                  </TableCell>
                                 );
                               }}
                             </For>
 
                             {/* Offline Alerts column - Connectivity/powered-off alerts */}
                             <Show when={props.showOfflineAlertsColumn}>
-                              <td class="p-1 px-2 text-center align-middle">
+                              <TableCell class="p-1 px-2 text-center align-middle">
                                 <Show when={props.onToggleNodeConnectivity}>
                                   {(() => {
                                     const defaultOfflineDisabled =
@@ -1933,11 +1933,11 @@ export function ResourceTable(props: ResourceTableProps) {
                                     );
                                   })()}
                                 </Show>
-                              </td>
+                              </TableCell>
                             </Show>
 
                             {/* Actions column */}
-                            <td class="p-1 px-2">
+                            <TableCell class="p-1 px-2">
                               <div class="flex items-center justify-center gap-1">
                                 <Show when={typeof resource.toggleEnabled === 'function'}>
                                   <StatusBadge
@@ -2046,36 +2046,35 @@ export function ResourceTable(props: ResourceTableProps) {
                                   </Show>
                                 </Show>
                               </div>
-                            </td>
-                          </tr>
+                            </TableCell>
+                          </TableRow>
                         );
                       }}
                     </For>
                   }
                 >
-                  <tr>
-                    <td
+                  <TableRow>
+                    <TableCell
                       colspan={totalColumnCount()}
                       class="px-4 py-8 text-center text-sm text-slate-500 dark:text-slate-400"
                     >
                       No {props.title.toLowerCase()} found
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 </Show>
               </Show>
               <Show when={!hasRows()}>
-                <tr>
-                  <td
+                <TableRow>
+                  <TableCell
                     colspan={totalColumnCount()}
                     class="px-4 py-6 text-sm text-center text-slate-500 dark:text-slate-400"
                   >
                     {props.emptyMessage || 'No resources available.'}
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               </Show>
-            </tbody>
-          </table>
-        </div>
+            </TableBody>
+          </Table>
       </Card>
     </Show>
   );
