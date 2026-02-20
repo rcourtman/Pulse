@@ -5,6 +5,7 @@ import type { PBSInstance, PMGInstance } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import { unwrap } from 'solid-js/store';
 import { Card } from '@/components/shared/Card';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/shared/Table';
 
 interface PveNodesTableProps {
   nodes: NodeConfigWithStatus[];
@@ -112,27 +113,27 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
         class="overflow-auto max-h-[600px] w-full"
         style={{ "contain": "strict" }}
       >
-        <table class="min-w-[900px] w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
-          <thead class="bg-slate-50 dark:bg-slate-800">
-            <tr>
-              <th scope="col" class="py-2 pl-4 pr-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+        <Table class="min-w-[900px] w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
+          <TableHeader class="bg-slate-50 dark:bg-slate-800">
+            <TableRow>
+              <TableHead class="py-2 pl-4 pr-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                 Node
-              </th>
-              <th scope="col" class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              </TableHead>
+              <TableHead class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                 Credentials
-              </th>
-              <th scope="col" class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              </TableHead>
+              <TableHead class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                 Capabilities
-              </th>
-              <th scope="col" class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              </TableHead>
+              <TableHead class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                 Status
-              </th>
-              <th scope="col" class="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              </TableHead>
+              <TableHead class="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                 Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody
             class="divide-y divide-slate-200/50 dark:divide-slate-700/50 bg-white dark:bg-slate-800 relative"
             style={{ height: `${virtualizer().getTotalSize()}px` }}
           >
@@ -147,7 +148,7 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
                   'clusterName' in node && node.clusterName ? node.clusterName : 'Unknown',
                 );
                 return (
-                  <tr
+                  <TableRow
                     class="absolute top-0 left-0 w-full even:bg-slate-50 dark:even:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900 transition-colors"
                     style={{
                       height: `${virtualRow.size}px`,
@@ -156,7 +157,7 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
                     data-index={virtualRow.index}
                     ref={(el) => virtualizer().measureElement(el)}
                   >
-                    <td class="align-top py-3 pl-4 pr-3">
+                    <TableCell class="align-top py-3 pl-4 pr-3">
                       <div class="min-w-0 space-y-1">
                         <div class="flex items-start gap-3">
                           <div class={`mt-1.5 h-3 w-3 rounded-full ${statusMeta().dotClass}`}></div>
@@ -251,8 +252,8 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
                           </div>
                         </Show>
                       </div>
-                    </td>
-                    <td class="align-top px-3 py-3">
+                    </TableCell>
+                    <TableCell class="align-top px-3 py-3">
                       <div class="flex flex-col gap-1">
                         <span class="text-xs text-slate-600 dark:text-slate-400">
                           {node.user ? `User: ${node.user}` : `Token: ${node.tokenName}`}
@@ -269,8 +270,8 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
                           </span>
                         </Show>
                       </div>
-                    </td>
-                    <td class="align-top px-3 py-3">
+                    </TableCell>
+                    <TableCell class="align-top px-3 py-3">
                       <div class="flex flex-wrap gap-1">
                         {node.type === 'pve' && 'monitorVMs' in node && node.monitorVMs && (
                           <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
@@ -306,14 +307,14 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
                             </span>
                           )}
                       </div>
-                    </td>
-                    <td class="align-top px-3 py-3 whitespace-nowrap">
+                    </TableCell>
+                    <TableCell class="align-top px-3 py-3 whitespace-nowrap">
                       <span class={`inline-flex items-center gap-2 text-xs font-medium ${statusMeta().labelClass}`}>
                         <span class={`h-2.5 w-2.5 rounded-full ${statusMeta().dotClass}`}></span>
                         {statusMeta().label}
                       </span>
-                    </td>
-                    <td class="align-top px-3 py-3">
+                    </TableCell>
+                    <TableCell class="align-top px-3 py-3">
                       <div class="flex items-center justify-end gap-1 sm:gap-2">
                         <button
                           type="button"
@@ -348,13 +349,13 @@ export const PveNodesTable: Component<PveNodesTableProps> = (props) => {
                           </svg>
                         </button>
                       </div>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 );
               }}
             </For>
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
     </Card>
   );
@@ -406,33 +407,33 @@ const resolvePbsStatusMeta = (
 export const PbsNodesTable: Component<PbsNodesTableProps> = (props) => {
   return (
     <Card padding="none" tone="card" class="overflow-x-auto rounded-md">
-      <table class="min-w-[900px] divide-y divide-gray-200 dark:divide-gray-700 text-sm">
-        <thead class="bg-slate-50 dark:bg-slate-800">
-          <tr>
-            <th scope="col" class="py-2 pl-4 pr-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+      <Table class="min-w-[900px] divide-y divide-gray-200 dark:divide-gray-700 text-sm">
+        <TableHeader class="bg-slate-50 dark:bg-slate-800">
+          <TableRow>
+            <TableHead class="py-2 pl-4 pr-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
               Node
-            </th>
-            <th scope="col" class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            </TableHead>
+            <TableHead class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
               Credentials
-            </th>
-            <th scope="col" class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            </TableHead>
+            <TableHead class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
               Capabilities
-            </th>
-            <th scope="col" class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            </TableHead>
+            <TableHead class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
               Status
-            </th>
-            <th scope="col" class="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            </TableHead>
+            <TableHead class="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
               Actions
-            </th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-200/50 dark:divide-slate-700/50 bg-white dark:bg-slate-800">
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody class="divide-y divide-slate-200/50 dark:divide-slate-700/50 bg-white dark:bg-slate-800">
           <For each={props.nodes}>
             {(node) => {
               const statusMeta = createMemo(() => resolvePbsStatusMeta(node, props.statePbs));
               return (
-                <tr class="even:bg-slate-50 dark:even:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900 transition-colors">
-                  <td class="align-top py-3 pl-4 pr-3">
+                <TableRow class="even:bg-slate-50 dark:even:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900 transition-colors">
+                  <TableCell class="align-top py-3 pl-4 pr-3">
                     <div class="min-w-0 space-y-1">
                       <div class="flex items-start gap-3">
                         <div class={`mt-1.5 h-3 w-3 rounded-full ${statusMeta().dotClass}`}></div>
@@ -446,8 +447,8 @@ export const PbsNodesTable: Component<PbsNodesTableProps> = (props) => {
                         </div>
                       </div>
                     </div>
-                  </td>
-                  <td class="align-top px-3 py-3">
+                  </TableCell>
+                  <TableCell class="align-top px-3 py-3">
                     <div class="flex flex-col gap-1">
                       <span class="text-xs text-slate-600 dark:text-slate-400">
                         {node.user ? `User: ${node.user}` : `Token: ${node.tokenName}`}
@@ -464,8 +465,8 @@ export const PbsNodesTable: Component<PbsNodesTableProps> = (props) => {
                         </span>
                       </Show>
                     </div>
-                  </td>
-                  <td class="align-top px-3 py-3">
+                  </TableCell>
+                  <TableCell class="align-top px-3 py-3">
                     <div class="flex flex-wrap gap-1">
                       {node.type === 'pbs' && 'monitorDatastores' in node && node.monitorDatastores && (
                         <span class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
@@ -503,14 +504,14 @@ export const PbsNodesTable: Component<PbsNodesTableProps> = (props) => {
                           </span>
                         )}
                     </div>
-                  </td>
-                  <td class="align-top px-3 py-3 whitespace-nowrap">
+                  </TableCell>
+                  <TableCell class="align-top px-3 py-3 whitespace-nowrap">
                     <span class={`inline-flex items-center gap-2 text-xs font-medium ${statusMeta().labelClass}`}>
                       <span class={`h-2.5 w-2.5 rounded-full ${statusMeta().dotClass}`}></span>
                       {statusMeta().label}
                     </span>
-                  </td>
-                  <td class="align-top px-3 py-3">
+                  </TableCell>
+                  <TableCell class="align-top px-3 py-3">
                     <div class="flex items-center justify-end gap-1 sm:gap-2">
                       <button
                         type="button"
@@ -545,13 +546,13 @@ export const PbsNodesTable: Component<PbsNodesTableProps> = (props) => {
                         </svg>
                       </button>
                     </div>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               );
             }}
           </For>
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
     </Card>
   );
 };
@@ -602,33 +603,33 @@ const resolvePmgStatusMeta = (
 export const PmgNodesTable: Component<PmgNodesTableProps> = (props) => {
   return (
     <Card padding="none" tone="card" class="overflow-x-auto rounded-md">
-      <table class="min-w-[900px] divide-y divide-gray-200 dark:divide-gray-700 text-sm">
-        <thead class="bg-slate-50 dark:bg-slate-800">
-          <tr>
-            <th scope="col" class="py-2 pl-4 pr-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+      <Table class="min-w-[900px] divide-y divide-gray-200 dark:divide-gray-700 text-sm">
+        <TableHeader class="bg-slate-50 dark:bg-slate-800">
+          <TableRow>
+            <TableHead class="py-2 pl-4 pr-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
               Node
-            </th>
-            <th scope="col" class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            </TableHead>
+            <TableHead class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
               Credentials
-            </th>
-            <th scope="col" class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            </TableHead>
+            <TableHead class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
               Capabilities
-            </th>
-            <th scope="col" class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            </TableHead>
+            <TableHead class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
               Status
-            </th>
-            <th scope="col" class="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            </TableHead>
+            <TableHead class="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
               Actions
-            </th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-200/50 dark:divide-slate-700/50 bg-white dark:bg-slate-800">
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody class="divide-y divide-slate-200/50 dark:divide-slate-700/50 bg-white dark:bg-slate-800">
           <For each={props.nodes}>
             {(node) => {
               const statusMeta = createMemo(() => resolvePmgStatusMeta(node, props.statePmg));
               return (
-                <tr class="even:bg-slate-50 dark:even:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900 transition-colors">
-                  <td class="align-top py-3 pl-4 pr-3">
+                <TableRow class="even:bg-slate-50 dark:even:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900 transition-colors">
+                  <TableCell class="align-top py-3 pl-4 pr-3">
                     <div class="min-w-0 space-y-1">
                       <div class="flex items-start gap-3">
                         <div class={`mt-1.5 h-3 w-3 rounded-full ${statusMeta().dotClass}`}></div>
@@ -642,8 +643,8 @@ export const PmgNodesTable: Component<PmgNodesTableProps> = (props) => {
                         </div>
                       </div>
                     </div>
-                  </td>
-                  <td class="align-top px-3 py-3">
+                  </TableCell>
+                  <TableCell class="align-top px-3 py-3">
                     <div class="flex flex-col gap-1">
                       <span class="text-xs text-slate-600 dark:text-slate-400">
                         {node.user ? `User: ${node.user}` : `Token: ${node.tokenName}`}
@@ -660,8 +661,8 @@ export const PmgNodesTable: Component<PmgNodesTableProps> = (props) => {
                         </span>
                       </Show>
                     </div>
-                  </td>
-                  <td class="align-top px-3 py-3">
+                  </TableCell>
+                  <TableCell class="align-top px-3 py-3">
                     <div class="flex flex-wrap gap-1">
                       {node.type === 'pmg' &&
                         (node as NodeConfig & { monitorMailStats?: boolean }).monitorMailStats && (
@@ -688,14 +689,14 @@ export const PmgNodesTable: Component<PmgNodesTableProps> = (props) => {
                           </span>
                         )}
                     </div>
-                  </td>
-                  <td class="align-top px-3 py-3 whitespace-nowrap">
+                  </TableCell>
+                  <TableCell class="align-top px-3 py-3 whitespace-nowrap">
                     <span class={`inline-flex items-center gap-2 text-xs font-medium ${statusMeta().labelClass}`}>
                       <span class={`h-2.5 w-2.5 rounded-full ${statusMeta().dotClass}`}></span>
                       {statusMeta().label}
                     </span>
-                  </td>
-                  <td class="align-top px-3 py-3">
+                  </TableCell>
+                  <TableCell class="align-top px-3 py-3">
                     <div class="flex items-center justify-end gap-1 sm:gap-2">
                       <button
                         type="button"
@@ -730,13 +731,13 @@ export const PmgNodesTable: Component<PmgNodesTableProps> = (props) => {
                         </svg>
                       </button>
                     </div>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               );
             }}
           </For>
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
     </Card>
   );
 };

@@ -1,5 +1,6 @@
 import { For, Show, createMemo, createSignal, onMount } from 'solid-js';
 import { Card } from '@/components/shared/Card';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/shared/Table';
 import { trackPaywallViewed } from '@/utils/upgradeMetrics';
 import { getUpgradeActionUrlOrFallback, loadLicenseStatus, entitlements } from '@/stores/license';
 import { LicenseAPI } from '@/api/license';
@@ -264,39 +265,39 @@ export default function Pricing() {
       <Card padding="lg" class="overflow-hidden">
         <h2 class="text-base font-semibold text-slate-900 dark:text-slate-100">Feature Comparison</h2>
         <div class="mt-4 overflow-x-auto">
-          <table class="min-w-[720px] w-full border-collapse">
-            <thead>
-              <tr class="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
-                <th class="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">
+          <Table class="min-w-[720px] w-full border-collapse">
+            <TableHeader>
+              <TableRow class="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+                <TableHead class="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">
                   Feature
-                </th>
-                <th class="px-3 py-2 text-center text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">
+                </TableHead>
+                <TableHead class="px-3 py-2 text-center text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">
                   Community
-                </th>
-                <th class="px-3 py-2 text-center text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">
+                </TableHead>
+                <TableHead class="px-3 py-2 text-center text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">
                   Pro
-                </th>
-                <th class="px-3 py-2 text-center text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">
+                </TableHead>
+                <TableHead class="px-3 py-2 text-center text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">
                   Cloud
-                </th>
-              </tr>
-            </thead>
-            <tbody class="bg-white dark:bg-slate-800 divide-y divide-gray-100 dark:divide-gray-700">
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody class="bg-white dark:bg-slate-800 divide-y divide-gray-100 dark:divide-gray-700">
               <For each={FEATURE_ROWS}>
                 {(row) => (
-                  <tr>
-                    <td class="px-4 py-2">
+                  <TableRow>
+                    <TableCell class="px-4 py-2">
                       <div class="text-sm font-medium text-slate-900 dark:text-slate-100">{row.name}</div>
                       <div class="mt-0.5 text-xs font-mono text-slate-500 dark:text-slate-400">{row.key}</div>
-                    </td>
-                    <td class="px-3 py-2"><CheckCell enabled={row.community} tier="community" featureKey={row.key} /></td>
-                    <td class="px-3 py-2"><CheckCell enabled={row.pro} tier="pro" featureKey={row.key} /></td>
-                    <td class="px-3 py-2"><CheckCell enabled={row.cloud} tier="cloud" featureKey={row.key} /></td>
-                  </tr>
+                    </TableCell>
+                    <TableCell class="px-3 py-2"><CheckCell enabled={row.community} tier="community" featureKey={row.key} /></TableCell>
+                    <TableCell class="px-3 py-2"><CheckCell enabled={row.pro} tier="pro" featureKey={row.key} /></TableCell>
+                    <TableCell class="px-3 py-2"><CheckCell enabled={row.cloud} tier="cloud" featureKey={row.key} /></TableCell>
+                  </TableRow>
                 )}
               </For>
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
       </Card>
     </div>

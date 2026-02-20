@@ -1,5 +1,6 @@
 import { Component, Show, createMemo, createSignal, onMount, For } from 'solid-js';
 import { Card } from '@/components/shared/Card';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/shared/Table';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { AIAPI } from '@/api/ai';
 import { formatNumber } from '@/utils/format';
@@ -511,88 +512,88 @@ export const AICostDashboard: Component = () => {
 
               <Show when={(data().targets?.length ?? 0) > 0}>
                 <div class="overflow-x-auto">
-                  <table class="min-w-full text-sm">
-                    <thead class="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-                      <tr class="border-b border-slate-200 dark:border-slate-700">
-                        <th class="text-left py-2 pr-4">Top targets</th>
-                        <th class="text-right py-2 px-2">Est. USD</th>
-                        <th class="text-right py-2 px-2">Calls</th>
-                        <th class="text-right py-2 px-2">Tokens</th>
-                      </tr>
-                    </thead>
-                    <tbody>
+                  <Table class="min-w-full text-sm">
+                    <TableHeader class="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                      <TableRow class="border-b border-slate-200 dark:border-slate-700">
+                        <TableHead class="text-left py-2 pr-4">Top targets</TableHead>
+                        <TableHead class="text-right py-2 px-2">Est. USD</TableHead>
+                        <TableHead class="text-right py-2 px-2">Calls</TableHead>
+                        <TableHead class="text-right py-2 px-2">Tokens</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
                       <For each={data().targets}>
                         {(t) => (
-                          <tr class="border-b border-slate-100 dark:border-slate-800">
-                            <td class="py-2 pr-4 text-slate-700 dark:text-slate-300 font-mono text-xs">
+                          <TableRow class="border-b border-slate-100 dark:border-slate-800">
+                            <TableCell class="py-2 pr-4 text-slate-700 dark:text-slate-300 font-mono text-xs">
                               {t.target_type}:{t.target_id}
-                            </td>
-                            <td class="py-2 px-2 text-right text-slate-900 dark:text-slate-100">
+                            </TableCell>
+                            <TableCell class="py-2 px-2 text-right text-slate-900 dark:text-slate-100">
                               <Show
                                 when={t.pricing_known}
                                 fallback={<span class="text-slate-500 dark:text-slate-500">—</span>}
                               >
                                 {formatUSD(t.estimated_usd ?? 0)}
                               </Show>
-                            </td>
-                            <td class="py-2 px-2 text-right text-slate-700 dark:text-slate-300">
+                            </TableCell>
+                            <TableCell class="py-2 px-2 text-right text-slate-700 dark:text-slate-300">
                               {formatNumber(t.calls)}
-                            </td>
-                            <td class="py-2 px-2 text-right text-slate-900 dark:text-slate-100">
+                            </TableCell>
+                            <TableCell class="py-2 px-2 text-right text-slate-900 dark:text-slate-100">
                               {formatNumber(t.total_tokens)}
-                            </td>
-                          </tr>
+                            </TableCell>
+                          </TableRow>
                         )}
                       </For>
-                    </tbody>
-                  </table>
+                    </TableBody>
+                  </Table>
                 </div>
               </Show>
 
               <div class="overflow-x-auto">
-                <table class="min-w-full text-sm">
-                  <thead class="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-                    <tr class="border-b border-slate-200 dark:border-slate-700">
-                      <th class="text-left py-2 pr-4">Provider</th>
-                      <th class="text-left py-2 pr-4">Model</th>
-                      <th class="text-right py-2 px-2">Est. USD</th>
-                      <th class="text-right py-2 px-2">Input</th>
-                      <th class="text-right py-2 px-2">Output</th>
-                      <th class="text-right py-2 px-2">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+                <Table class="min-w-full text-sm">
+                  <TableHeader class="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                    <TableRow class="border-b border-slate-200 dark:border-slate-700">
+                      <TableHead class="text-left py-2 pr-4">Provider</TableHead>
+                      <TableHead class="text-left py-2 pr-4">Model</TableHead>
+                      <TableHead class="text-right py-2 px-2">Est. USD</TableHead>
+                      <TableHead class="text-right py-2 px-2">Input</TableHead>
+                      <TableHead class="text-right py-2 px-2">Output</TableHead>
+                      <TableHead class="text-right py-2 px-2">Total</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     <For each={data().provider_models}>
                       {(pm) => (
-                        <tr class="border-b border-slate-100 dark:border-slate-800">
-                          <td class="py-2 pr-4 font-medium text-slate-900 dark:text-slate-100">
+                        <TableRow class="border-b border-slate-100 dark:border-slate-800">
+                          <TableCell class="py-2 pr-4 font-medium text-slate-900 dark:text-slate-100">
                             {PROVIDER_NAMES[pm.provider as keyof typeof PROVIDER_NAMES] || pm.provider}
-                          </td>
-                          <td class="py-2 pr-4 text-slate-700 dark:text-slate-300 font-mono text-xs">
+                          </TableCell>
+                          <TableCell class="py-2 pr-4 text-slate-700 dark:text-slate-300 font-mono text-xs">
                             {pm.model}
-                          </td>
-                          <td class="py-2 px-2 text-right text-slate-900 dark:text-slate-100">
+                          </TableCell>
+                          <TableCell class="py-2 px-2 text-right text-slate-900 dark:text-slate-100">
                             <Show
                               when={pm.pricing_known}
                               fallback={<span class="text-slate-500 dark:text-slate-500">—</span>}
                             >
                               {formatUSD(pm.estimated_usd ?? 0)}
                             </Show>
-                          </td>
-                          <td class="py-2 px-2 text-right text-slate-700 dark:text-slate-300">
+                          </TableCell>
+                          <TableCell class="py-2 px-2 text-right text-slate-700 dark:text-slate-300">
                             {formatNumber(pm.input_tokens)}
-                          </td>
-                          <td class="py-2 px-2 text-right text-slate-700 dark:text-slate-300">
+                          </TableCell>
+                          <TableCell class="py-2 px-2 text-right text-slate-700 dark:text-slate-300">
                             {formatNumber(pm.output_tokens)}
-                          </td>
-                          <td class="py-2 px-2 text-right text-slate-900 dark:text-slate-100">
+                          </TableCell>
+                          <TableCell class="py-2 px-2 text-right text-slate-900 dark:text-slate-100">
                             {formatNumber(pm.total_tokens)}
-                          </td>
-                        </tr>
+                          </TableCell>
+                        </TableRow>
                       )}
                     </For>
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
             </>
           )}

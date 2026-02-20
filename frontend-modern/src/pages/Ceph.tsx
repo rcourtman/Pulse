@@ -3,6 +3,7 @@ import { Portal } from 'solid-js/web';
 import { useWebSocket } from '@/App';
 import { useResources } from '@/hooks/useResources';
 import { Card } from '@/components/shared/Card';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/shared/Table';
 import { EmptyState } from '@/components/shared/EmptyState';
 import type { CephCluster, CephPool, CephServiceStatus } from '@/types/api';
 import { formatBytes } from '@/utils/format';
@@ -538,23 +539,23 @@ const Ceph: Component = () => {
                             </div>
                             <div class="overflow-x-auto" style="scrollbar-width: none; -ms-overflow-style: none;">
                                 <style>{`.overflow-x-auto::-webkit-scrollbar { display: none; }`}</style>
-                                <table class="w-full border-collapse whitespace-nowrap" style={{ "min-width": "700px" }}>
-                                    <thead>
-                                        <tr class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
-                                            <th class={`${thClass} pl-4`}>Cluster</th>
-                                            <th class={thClass}>Health</th>
-                                            <th class={thClass}>Monitors</th>
-                                            <th class={thClass}>Managers</th>
-                                            <th class={thClass}>OSDs</th>
-                                            <th class={thClass}>PGs</th>
-                                            <th class={`${thClass} min-w-[160px]`}>Capacity</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                                <Table class="w-full border-collapse whitespace-nowrap" style={{ "min-width": "700px" }}>
+                                    <TableHeader>
+                                        <TableRow class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
+                                            <TableHead class={`${thClass} pl-4`}>Cluster</TableHead>
+                                            <TableHead class={thClass}>Health</TableHead>
+                                            <TableHead class={thClass}>Monitors</TableHead>
+                                            <TableHead class={thClass}>Managers</TableHead>
+                                            <TableHead class={thClass}>OSDs</TableHead>
+                                            <TableHead class={thClass}>PGs</TableHead>
+                                            <TableHead class={`${thClass} min-w-[160px]`}>Capacity</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody class="divide-y divide-gray-100 dark:divide-gray-700">
                                         <For each={clusters()}>
                                             {(cluster) => (
-                                                <tr class="hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
-                                                    <td class="px-4 py-2.5">
+                                                <TableRow class="hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                                                    <TableCell class="px-4 py-2.5">
                                                         <div class="font-medium text-sm text-slate-900 dark:text-slate-100">
                                                             {cluster.name || 'Ceph Cluster'}
                                                         </div>
@@ -563,23 +564,23 @@ const Ceph: Component = () => {
                                                                 {cluster.fsid}
                                                             </div>
                                                         </Show>
-                                                    </td>
-                                                    <td class="px-2 py-2.5">
+                                                    </TableCell>
+                                                    <TableCell class="px-2 py-2.5">
                                                         <HealthBadge health={cluster.health || ''} message={cluster.healthMessage} />
-                                                    </td>
-                                                    <td class="px-2 py-2.5">
+                                                    </TableCell>
+                                                    <TableCell class="px-2 py-2.5">
                                                         <span class="inline-flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400">
                                                             <ServiceIcon type="mon" class="w-3.5 h-3.5" />
                                                             <span class="font-semibold">{cluster.numMons || 0}</span>
                                                         </span>
-                                                    </td>
-                                                    <td class="px-2 py-2.5">
+                                                    </TableCell>
+                                                    <TableCell class="px-2 py-2.5">
                                                         <span class="inline-flex items-center gap-1 text-xs text-purple-600 dark:text-purple-400">
                                                             <ServiceIcon type="mgr" class="w-3.5 h-3.5" />
                                                             <span class="font-semibold">{cluster.numMgrs || 0}</span>
                                                         </span>
-                                                    </td>
-                                                    <td class="px-2 py-2.5">
+                                                    </TableCell>
+                                                    <TableCell class="px-2 py-2.5">
                                                         <span class="inline-flex items-center gap-1 text-xs">
                                                             <ServiceIcon type="osd" class="w-3.5 h-3.5 text-green-600 dark:text-green-400" />
                                                             <span class={`font-semibold ${(cluster.numOsdsUp || 0) < (cluster.numOsds || 0) ? 'text-yellow-600 dark:text-yellow-400' : 'text-green-600 dark:text-green-400'}`}>
@@ -589,13 +590,13 @@ const Ceph: Component = () => {
                                                                 /{cluster.numOsds || 0}
                                                             </span>
                                                         </span>
-                                                    </td>
-                                                    <td class="px-2 py-2.5">
+                                                    </TableCell>
+                                                    <TableCell class="px-2 py-2.5">
                                                         <span class="text-xs text-slate-700 dark:text-slate-300 font-medium">
                                                             {(cluster.numPGs || 0).toLocaleString()}
                                                         </span>
-                                                    </td>
-                                                    <td class="px-2 py-2.5">
+                                                    </TableCell>
+                                                    <TableCell class="px-2 py-2.5">
                                                         <div class="w-full max-w-[160px]">
                                                             <UsageBar percent={cluster.usagePercent || 0} size="sm" />
                                                             <div class="flex justify-between text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
@@ -603,12 +604,12 @@ const Ceph: Component = () => {
                                                                 <span>{(cluster.usagePercent || 0).toFixed(1)}%</span>
                                                             </div>
                                                         </div>
-                                                    </td>
-                                                </tr>
+                                                    </TableCell>
+                                                </TableRow>
                                             )}
                                         </For>
-                                    </tbody>
-                                </table>
+                                    </TableBody>
+                                </Table>
                             </div>
                         </Card>
                     </Show>
@@ -666,37 +667,37 @@ const Ceph: Component = () => {
                             >
                                 <div class="overflow-x-auto" style="scrollbar-width: none; -ms-overflow-style: none;">
                                     <style>{`.overflow-x-auto::-webkit-scrollbar { display: none; }`}</style>
-                                    <table class="w-full border-collapse whitespace-nowrap" style={{ "min-width": "650px" }}>
-                                        <thead>
-                                            <tr class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
-                                                <th class={`${thClass} pl-4`}>Pool</th>
-                                                <th class={thClass}>Cluster</th>
-                                                <th class={thClass}>Used</th>
-                                                <th class={thClass}>Available</th>
-                                                <th class={thClass}>Objects</th>
-                                                <th class={`${thClass} min-w-[120px]`}>Usage</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                                    <Table class="w-full border-collapse whitespace-nowrap" style={{ "min-width": "650px" }}>
+                                        <TableHeader>
+                                            <TableRow class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
+                                                <TableHead class={`${thClass} pl-4`}>Pool</TableHead>
+                                                <TableHead class={thClass}>Cluster</TableHead>
+                                                <TableHead class={thClass}>Used</TableHead>
+                                                <TableHead class={thClass}>Available</TableHead>
+                                                <TableHead class={thClass}>Objects</TableHead>
+                                                <TableHead class={`${thClass} min-w-[120px]`}>Usage</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody class="divide-y divide-gray-100 dark:divide-gray-700">
                                             <For each={filteredPools()}>
                                                 {(pool) => (
-                                                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
-                                                        <td class="px-4 py-2.5 font-medium text-sm text-slate-900 dark:text-slate-100">
+                                                    <TableRow class="hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                                                        <TableCell class="px-4 py-2.5 font-medium text-sm text-slate-900 dark:text-slate-100">
                                                             {pool.name}
-                                                        </td>
-                                                        <td class="px-2 py-2.5 text-xs text-slate-600 dark:text-slate-400">
+                                                        </TableCell>
+                                                        <TableCell class="px-2 py-2.5 text-xs text-slate-600 dark:text-slate-400">
                                                             {pool.clusterName}
-                                                        </td>
-                                                        <td class="px-2 py-2.5 text-xs text-slate-700 dark:text-slate-300 font-mono">
+                                                        </TableCell>
+                                                        <TableCell class="px-2 py-2.5 text-xs text-slate-700 dark:text-slate-300 font-mono">
                                                             {formatBytes(pool.storedBytes || 0)}
-                                                        </td>
-                                                        <td class="px-2 py-2.5 text-xs text-slate-700 dark:text-slate-300 font-mono">
+                                                        </TableCell>
+                                                        <TableCell class="px-2 py-2.5 text-xs text-slate-700 dark:text-slate-300 font-mono">
                                                             {formatBytes(pool.availableBytes || 0)}
-                                                        </td>
-                                                        <td class="px-2 py-2.5 text-xs text-slate-700 dark:text-slate-300 font-mono">
+                                                        </TableCell>
+                                                        <TableCell class="px-2 py-2.5 text-xs text-slate-700 dark:text-slate-300 font-mono">
                                                             {(pool.objects || 0).toLocaleString()}
-                                                        </td>
-                                                        <td class="px-2 py-2.5">
+                                                        </TableCell>
+                                                        <TableCell class="px-2 py-2.5">
                                                             <div class="flex items-center gap-2">
                                                                 <div class="w-16">
                                                                     <UsageBar percent={pool.percentUsed || 0} size="sm" />
@@ -705,12 +706,12 @@ const Ceph: Component = () => {
                                                                     {(pool.percentUsed || 0).toFixed(1)}%
                                                                 </span>
                                                             </div>
-                                                        </td>
-                                                    </tr>
+                                                        </TableCell>
+                                                    </TableRow>
                                                 )}
                                             </For>
-                                        </tbody>
-                                    </table>
+                                        </TableBody>
+                                    </Table>
                                 </div>
                             </Show>
                         </Card>

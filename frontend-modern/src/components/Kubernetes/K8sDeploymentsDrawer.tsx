@@ -3,6 +3,7 @@ import { For, Show, createMemo, createResource, createSignal, createEffect } fro
 import { useNavigate } from '@solidjs/router';
 import { apiFetchJSON } from '@/utils/apiClient';
 import { Card } from '@/components/shared/Card';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/shared/Table';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { buildWorkloadsPath } from '@/routing/resourceLinks';
 
@@ -224,19 +225,19 @@ export const K8sDeploymentsDrawer: Component<{ cluster: string; initialNamespace
           >
             <Card padding="none" tone="card" class="overflow-hidden">
               <div class="overflow-x-auto">
-                <table class="w-full min-w-[760px] border-collapse text-xs">
-                  <thead class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
-                    <tr class="text-left text-[10px] uppercase tracking-wide">
-                      <th class="px-3 py-2 font-medium">Deployment</th>
-                      <th class="px-3 py-2 font-medium">Namespace</th>
-                      <th class="px-3 py-2 font-medium">Desired</th>
-                      <th class="px-3 py-2 font-medium">Updated</th>
-                      <th class="px-3 py-2 font-medium">Ready</th>
-                      <th class="px-3 py-2 font-medium">Available</th>
-                      <th class="px-3 py-2 font-medium">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                <Table class="w-full min-w-[760px] border-collapse text-xs">
+                  <TableHeader class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
+                    <TableRow class="text-left text-[10px] uppercase tracking-wide">
+                      <TableHead class="px-3 py-2 font-medium">Deployment</TableHead>
+                      <TableHead class="px-3 py-2 font-medium">Namespace</TableHead>
+                      <TableHead class="px-3 py-2 font-medium">Desired</TableHead>
+                      <TableHead class="px-3 py-2 font-medium">Updated</TableHead>
+                      <TableHead class="px-3 py-2 font-medium">Ready</TableHead>
+                      <TableHead class="px-3 py-2 font-medium">Available</TableHead>
+                      <TableHead class="px-3 py-2 font-medium">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody class="divide-y divide-gray-100 dark:divide-gray-700">
                     <For each={filteredDeployments()}>
                       {(dep) => {
                         const name = () => normalize(dep.name) || dep.id;
@@ -247,21 +248,21 @@ export const K8sDeploymentsDrawer: Component<{ cluster: string; initialNamespace
                         const available = () => dep.kubernetes?.availableReplicas ?? 0;
 
                         return (
-                          <tr class="hover:bg-slate-50 dark:hover:bg-slate-800">
-                            <td class="px-3 py-2">
+                          <TableRow class="hover:bg-slate-50 dark:hover:bg-slate-800">
+                            <TableCell class="px-3 py-2">
                               <div class="flex items-center gap-2 min-w-0">
                                 <span class={`h-2 w-2 rounded-full ${statusTone(dep.status)}`} title={dep.status || 'unknown'} />
                                 <span class="font-semibold text-slate-900 dark:text-slate-100 truncate" title={name()}>
                                   {name()}
                                 </span>
                               </div>
-                            </td>
-                            <td class="px-3 py-2 text-slate-700 dark:text-slate-200">{ns()}</td>
-                            <td class="px-3 py-2 text-slate-700 dark:text-slate-200">{desired()}</td>
-                            <td class="px-3 py-2 text-slate-700 dark:text-slate-200">{updated()}</td>
-                            <td class="px-3 py-2 text-slate-700 dark:text-slate-200">{ready()}</td>
-                            <td class="px-3 py-2 text-slate-700 dark:text-slate-200">{available()}</td>
-                            <td class="px-3 py-2">
+                            </TableCell>
+                            <TableCell class="px-3 py-2 text-slate-700 dark:text-slate-200">{ns()}</TableCell>
+                            <TableCell class="px-3 py-2 text-slate-700 dark:text-slate-200">{desired()}</TableCell>
+                            <TableCell class="px-3 py-2 text-slate-700 dark:text-slate-200">{updated()}</TableCell>
+                            <TableCell class="px-3 py-2 text-slate-700 dark:text-slate-200">{ready()}</TableCell>
+                            <TableCell class="px-3 py-2 text-slate-700 dark:text-slate-200">{available()}</TableCell>
+                            <TableCell class="px-3 py-2">
                               <button
                                 type="button"
                                 onClick={() => openPods(dep.kubernetes?.namespace)}
@@ -269,13 +270,13 @@ export const K8sDeploymentsDrawer: Component<{ cluster: string; initialNamespace
                               >
                                 View Pods
                               </button>
-                            </td>
-                          </tr>
+                            </TableCell>
+                          </TableRow>
                         );
                       }}
                     </For>
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
             </Card>
           </Show>

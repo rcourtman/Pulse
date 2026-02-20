@@ -2,7 +2,6 @@ import { createSignal, createMemo, Show, For, onMount, onCleanup, createEffect }
 import { useNavigate, useLocation } from '@solidjs/router';
 import Toggle from '@/components/shared/Toggle';
 import { Card } from '@/components/shared/Card';
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/shared/Table';
 import { CollapsibleSection } from './Thresholds/sections/CollapsibleSection';
 import { useCollapsedSections } from './Thresholds/hooks/useCollapsedSections';
 import Server from 'lucide-solid/icons/server';

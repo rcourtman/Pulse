@@ -8,6 +8,7 @@ import { getNodeDisplayName, hasAlternateDisplayName } from '@/utils/nodes';
 import { getCpuTemperature, formatTemperature } from '@/utils/temperature';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { buildMetricKey } from '@/utils/metricsKeys';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/shared/Table';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { getNodeStatusIndicator, getPBSStatusIndicator } from '@/utils/status';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
@@ -333,480 +334,478 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
 
   return (
     <Card padding="none" tone="card" class="mb-4 overflow-hidden">
-      <div class="overflow-x-auto">
-        <table class="w-full border-collapse whitespace-nowrap" style={{ "table-layout": "fixed", "min-width": "800px" }}>
-          <thead>
-            <tr class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
+      <Table class="w-full border-collapse whitespace-nowrap" style={{ "table-layout": "fixed", "min-width": "800px" }}>
+        <TableHeader>
+          <TableRow class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
 
-              <th
-                class={`${thClassBase} text-left pl-3`}
-                onClick={() => handleSort('name')}
-              >
-                {props.currentTab === 'recovery' ? 'Node / PBS' : 'Node'} {renderSortIndicator('name')}
-              </th>
+            <TableHead
+              class={`${thClassBase} text-left pl-3`}
+              onClick={() => handleSort('name')}
+            >
+              {props.currentTab === 'recovery' ? 'Node / PBS' : 'Node'} {renderSortIndicator('name')}
+            </TableHead>
 
-              <th class={thClass} style={{ width: '80px', "min-width": '80px', "max-width": '80px' }} onClick={() => handleSort('uptime')}>
-                Uptime {renderSortIndicator('uptime')}
-              </th>
-              <th class={thClass} style={isMobile() ? { "min-width": "80px" } : { "min-width": "140px", "max-width": "180px" }} onClick={() => handleSort('cpu')}>
-                CPU {renderSortIndicator('cpu')}
-              </th>
-              <th class={thClass} style={isMobile() ? { "min-width": "80px" } : { "min-width": "140px", "max-width": "180px" }} onClick={() => handleSort('memory')}>
-                Memory {renderSortIndicator('memory')}
-              </th>
-              <th class={thClass} style={isMobile() ? { "min-width": "80px" } : { "min-width": "140px", "max-width": "180px" }} onClick={() => handleSort('disk')}>
-                Disk {renderSortIndicator('disk')}
-              </th>
-              <Show when={hasAnyTemperatureData()}>
-                <th class={thClass} style={{ width: '60px', "min-width": '60px', "max-width": '60px' }} onClick={() => handleSort('temperature')}>
-                  Temp {renderSortIndicator('temperature')}
-                </th>
-              </Show>
-              <Show when={props.currentTab === 'dashboard'}>
-                <th class={thClass} style={{ width: '50px', "min-width": '50px', "max-width": '50px' }} onClick={() => handleSort('vmCount')}>
-                  VMs {renderSortIndicator('vmCount')}
-                </th>
-                <th class={thClass} style={{ width: '50px', "min-width": '50px', "max-width": '50px' }} onClick={() => handleSort('containerCount')}>
-                  CTs {renderSortIndicator('containerCount')}
-                </th>
-              </Show>
-              <Show when={props.currentTab === 'storage'}>
-                <th class={thClass} style={{ width: '70px', "min-width": '70px', "max-width": '70px' }} onClick={() => handleSort('storageCount')}>
-                  Storage {renderSortIndicator('storageCount')}
-                </th>
-                <th class={thClass} style={{ width: '60px', "min-width": '60px', "max-width": '60px' }} onClick={() => handleSort('diskCount')}>
-                  Disks {renderSortIndicator('diskCount')}
-                </th>
-              </Show>
-              <Show when={props.currentTab === 'recovery'}>
-                <th class={thClass} style={{ width: '70px', "min-width": '70px', "max-width": '70px' }} onClick={() => handleSort('backupCount')}>
-                  Recovery {renderSortIndicator('backupCount')}
-                </th>
-              </Show>
-              {/* Link icon column moved to end */}
-              <th class={thClass} style={{ width: '28px', "min-width": '28px', "max-width": '28px' }}>
-                {/* Link icon column */}
-              </th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-            <For each={sortedItems()}>
-              {(item) => {
-                const isPVEItem = isPVE(item);
-                const isPBSItem = !isPVEItem;
-                const node = isPVEItem ? (item as Node) : null;
-                const pbs = isPBSItem ? (item as PBSInstance) : null;
+            <TableHead class={thClass} style={{ width: '80px', "min-width": '80px', "max-width": '80px' }} onClick={() => handleSort('uptime')}>
+              Uptime {renderSortIndicator('uptime')}
+            </TableHead>
+            <TableHead class={thClass} style={isMobile() ? { "min-width": "80px" } : { "min-width": "140px", "max-width": "180px" }} onClick={() => handleSort('cpu')}>
+              CPU {renderSortIndicator('cpu')}
+            </TableHead>
+            <TableHead class={thClass} style={isMobile() ? { "min-width": "80px" } : { "min-width": "140px", "max-width": "180px" }} onClick={() => handleSort('memory')}>
+              Memory {renderSortIndicator('memory')}
+            </TableHead>
+            <TableHead class={thClass} style={isMobile() ? { "min-width": "80px" } : { "min-width": "140px", "max-width": "180px" }} onClick={() => handleSort('disk')}>
+              Disk {renderSortIndicator('disk')}
+            </TableHead>
+            <Show when={hasAnyTemperatureData()}>
+              <TableHead class={thClass} style={{ width: '60px', "min-width": '60px', "max-width": '60px' }} onClick={() => handleSort('temperature')}>
+                Temp {renderSortIndicator('temperature')}
+              </TableHead>
+            </Show>
+            <Show when={props.currentTab === 'dashboard'}>
+              <TableHead class={thClass} style={{ width: '50px', "min-width": '50px', "max-width": '50px' }} onClick={() => handleSort('vmCount')}>
+                VMs {renderSortIndicator('vmCount')}
+              </TableHead>
+              <TableHead class={thClass} style={{ width: '50px', "min-width": '50px', "max-width": '50px' }} onClick={() => handleSort('containerCount')}>
+                CTs {renderSortIndicator('containerCount')}
+              </TableHead>
+            </Show>
+            <Show when={props.currentTab === 'storage'}>
+              <TableHead class={thClass} style={{ width: '70px', "min-width": '70px', "max-width": '70px' }} onClick={() => handleSort('storageCount')}>
+                Storage {renderSortIndicator('storageCount')}
+              </TableHead>
+              <TableHead class={thClass} style={{ width: '60px', "min-width": '60px', "max-width": '60px' }} onClick={() => handleSort('diskCount')}>
+                Disks {renderSortIndicator('diskCount')}
+              </TableHead>
+            </Show>
+            <Show when={props.currentTab === 'recovery'}>
+              <TableHead class={thClass} style={{ width: '70px', "min-width": '70px', "max-width": '70px' }} onClick={() => handleSort('backupCount')}>
+                Recovery {renderSortIndicator('backupCount')}
+              </TableHead>
+            </Show>
+            {/* Link icon column moved to end */}
+            <TableHead class={thClass} style={{ width: '28px', "min-width": '28px', "max-width": '28px' }}>
+              {/* Link icon column */}
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody class="divide-y divide-gray-200 dark:divide-gray-700">
+          <For each={sortedItems()}>
+            {(item) => {
+              const isPVEItem = isPVE(item);
+              const isPBSItem = !isPVEItem;
+              const node = isPVEItem ? (item as Node) : null;
+              const pbs = isPBSItem ? (item as PBSInstance) : null;
 
-                const online = isItemOnline(item);
-                const statusIndicator = createMemo(() =>
-                  isPVEItem ? getNodeStatusIndicator(node as Node) : getPBSStatusIndicator(pbs as PBSInstance),
+              const online = isItemOnline(item);
+              const statusIndicator = createMemo(() =>
+                isPVEItem ? getNodeStatusIndicator(node as Node) : getPBSStatusIndicator(pbs as PBSInstance),
+              );
+              const cpuPercentValue = getCpuPercent(item);
+              const memoryPercentValue = getMemoryPercent(item);
+              const diskPercentValue = getDiskPercent(item);
+              const diskSublabel = getDiskSublabel(item);
+              const cpuTemperatureValue = getCpuTemperatureValue(item);
+              const uptimeValue = isPVEItem ? node?.uptime ?? 0 : isPBSItem ? pbs?.uptime ?? 0 : 0;
+              const displayName = () => {
+                if (isPVEItem) return getNodeDisplayName(node as Node);
+                return (pbs as PBSInstance).name;
+              };
+              const showActualName = () => isPVEItem && hasAlternateDisplayName(node as Node);
+
+              const nodeId = isPVEItem ? node!.id : pbs!.name;
+              const isSelected = () => props.selectedNode === nodeId;
+              const isExpanded = () => expandedNodeId() === nodeId;
+              const resourceId = isPVEItem ? node!.id || node!.name : pbs!.id || pbs!.name;
+              const linkedHostForDrawer = (): Host | undefined => {
+                if (!isPVEItem || !node) return undefined;
+                const hosts = props.hosts ?? [];
+
+                if (node.linkedHostAgentId) {
+                  const byId = hosts.find((host) => host.id === node.linkedHostAgentId);
+                  if (byId) return byId;
+                }
+
+                return hosts.find(
+                  (host) => host.linkedNodeId === node.id || host.hostname === node.name,
                 );
-                const cpuPercentValue = getCpuPercent(item);
-                const memoryPercentValue = getMemoryPercent(item);
-                const diskPercentValue = getDiskPercent(item);
-                const diskSublabel = getDiskSublabel(item);
-                const cpuTemperatureValue = getCpuTemperatureValue(item);
-                const uptimeValue = isPVEItem ? node?.uptime ?? 0 : isPBSItem ? pbs?.uptime ?? 0 : 0;
-                const displayName = () => {
-                  if (isPVEItem) return getNodeDisplayName(node as Node);
-                  return (pbs as PBSInstance).name;
-                };
-                const showActualName = () => isPVEItem && hasAlternateDisplayName(node as Node);
+              };
+              const metricsKey = buildMetricKey('node', resourceId);
+              const alertStyles = createMemo(() =>
+                getAlertStyles(resourceId, activeAlerts, alertsEnabled()),
+              );
+              const showAlertHighlight = createMemo(
+                () => alertStyles().hasUnacknowledgedAlert && online,
+              );
 
-                const nodeId = isPVEItem ? node!.id : pbs!.name;
-                const isSelected = () => props.selectedNode === nodeId;
-                const isExpanded = () => expandedNodeId() === nodeId;
-                const resourceId = isPVEItem ? node!.id || node!.name : pbs!.id || pbs!.name;
-                const linkedHostForDrawer = (): Host | undefined => {
-                  if (!isPVEItem || !node) return undefined;
-                  const hosts = props.hosts ?? [];
+              const rowStyle = createMemo(() => {
+                const styles: Record<string, string> = {};
+                const shadows: string[] = [];
 
-                  if (node.linkedHostAgentId) {
-                    const byId = hosts.find((host) => host.id === node.linkedHostAgentId);
-                    if (byId) return byId;
-                  }
+                if (showAlertHighlight()) {
+                  const color = alertStyles().severity === 'critical' ? '#ef4444' : '#eab308';
+                  shadows.push(`inset 4px 0 0 0 ${color}`);
+                }
 
-                  return hosts.find(
-                    (host) => host.linkedNodeId === node.id || host.hostname === node.name,
-                  );
-                };
-                const metricsKey = buildMetricKey('node', resourceId);
-                const alertStyles = createMemo(() =>
-                  getAlertStyles(resourceId, activeAlerts, alertsEnabled()),
-                );
-                const showAlertHighlight = createMemo(
-                  () => alertStyles().hasUnacknowledgedAlert && online,
-                );
+                if (isSelected()) {
+                  shadows.push('0 0 0 1px rgba(59, 130, 246, 0.5)');
+                  shadows.push('0 2px 4px -1px rgba(0, 0, 0, 0.1)');
+                }
 
-                const rowStyle = createMemo(() => {
-                  const styles: Record<string, string> = {};
-                  const shadows: string[] = [];
+                if (shadows.length > 0) {
+                  styles['box-shadow'] = shadows.join(', ');
+                }
 
-                  if (showAlertHighlight()) {
-                    const color = alertStyles().severity === 'critical' ? '#ef4444' : '#eab308';
-                    shadows.push(`inset 4px 0 0 0 ${color}`);
-                  }
+                return styles;
+              });
 
-                  if (isSelected()) {
-                    shadows.push('0 0 0 1px rgba(59, 130, 246, 0.5)');
-                    shadows.push('0 2px 4px -1px rgba(0, 0, 0, 0.1)');
-                  }
+              const rowClass = createMemo(() => {
+                const baseHover = 'cursor-pointer transition-all duration-200 relative hover:shadow-sm group';
 
-                  if (shadows.length > 0) {
-                    styles['box-shadow'] = shadows.join(', ');
-                  }
+                if (isSelected()) {
+                  return `cursor-pointer transition-all duration-200 relative hover:shadow-sm z-10 group bg-blue-50 dark:bg-blue-900`;
+                }
 
-                  return styles;
-                });
+                if (showAlertHighlight()) {
+                  const alertBg = alertStyles().severity === 'critical'
+                    ? 'bg-red-50 dark:bg-red-950'
+                    : 'bg-yellow-50 dark:bg-yellow-950';
+                  return `cursor-pointer transition-all duration-200 relative hover:shadow-sm group ${alertBg}`;
+                }
 
-                const rowClass = createMemo(() => {
-                  const baseHover = 'cursor-pointer transition-all duration-200 relative hover:shadow-sm group';
+                let className = baseHover;
 
-                  if (isSelected()) {
-                    return `cursor-pointer transition-all duration-200 relative hover:shadow-sm z-10 group bg-blue-50 dark:bg-blue-900`;
-                  }
+                if (props.selectedNode && props.selectedNode !== nodeId) {
+                  className += ' opacity-50 hover:opacity-80';
+                }
 
-                  if (showAlertHighlight()) {
-                    const alertBg = alertStyles().severity === 'critical'
-                      ? 'bg-red-50 dark:bg-red-950'
-                      : 'bg-yellow-50 dark:bg-yellow-950';
-                    return `cursor-pointer transition-all duration-200 relative hover:shadow-sm group ${alertBg}`;
-                  }
+                if (!online) {
+                  className += ' opacity-60';
+                }
 
-                  let className = baseHover;
+                return className;
+              });
 
-                  if (props.selectedNode && props.selectedNode !== nodeId) {
-                    className += ' opacity-50 hover:opacity-80';
-                  }
-
-                  if (!online) {
-                    className += ' opacity-60';
-                  }
-
-                  return className;
-                });
-
-                return (
-                  <>
-                    <tr
-                      class={rowClass()}
-                      style={{ ...rowStyle(), 'min-height': '36px' }}
-                      onClick={() => props.onNodeClick(nodeId, isPVEItem ? 'pve' : 'pbs')}
-                    >
-                      {/* Name */}
-                      <td class={`pr-2 py-1 align-middle overflow-hidden ${showAlertHighlight() ? 'pl-4' : 'pl-3'}`}>
-                        <div class="flex items-center gap-1.5 min-w-0">
-                          <Show when={isPVEItem}>
-                            <div
-                              class={`cursor-pointer transition-transform duration-200 ${isExpanded() ? 'rotate-90' : ''}`}
-                              onClick={(e) => toggleNodeExpand(nodeId, e)}
-                            >
-                              <svg class="w-3.5 h-3.5 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                              </svg>
-                            </div>
-                          </Show>
-                          <StatusDot
-                            variant={statusIndicator().variant}
-                            title={statusIndicator().label}
-                            ariaLabel={statusIndicator().label}
-                            size="xs"
-                          />
-                          <span
-                            class="font-medium text-[11px] text-slate-900 dark:text-slate-100 whitespace-nowrap select-text"
-                            title={displayName()}
+              return (
+                <>
+                  <TableRow
+                    class={rowClass()}
+                    style={{ ...rowStyle(), 'min-height': '36px' }}
+                    onClick={() => props.onNodeClick(nodeId, isPVEItem ? 'pve' : 'pbs')}
+                  >
+                    {/* Name */}
+                    <TableCell class={`pr-2 py-1 align-middle overflow-hidden ${showAlertHighlight() ? 'pl-4' : 'pl-3'}`}>
+                      <div class="flex items-center gap-1.5 min-w-0">
+                        <Show when={isPVEItem}>
+                          <div
+                            class={`cursor-pointer transition-transform duration-200 ${isExpanded() ? 'rotate-90' : ''}`}
+                            onClick={(e) => toggleNodeExpand(nodeId, e)}
                           >
-                            {displayName()}
+                            <svg class="w-3.5 h-3.5 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                            </svg>
+                          </div>
+                        </Show>
+                        <StatusDot
+                          variant={statusIndicator().variant}
+                          title={statusIndicator().label}
+                          ariaLabel={statusIndicator().label}
+                          size="xs"
+                        />
+                        <span
+                          class="font-medium text-[11px] text-slate-900 dark:text-slate-100 whitespace-nowrap select-text"
+                          title={displayName()}
+                        >
+                          {displayName()}
+                        </span>
+                        <Show when={showActualName()}>
+                          <span class="text-[9px] text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                            ({(node as Node).name})
                           </span>
-                          <Show when={showActualName()}>
-                            <span class="text-[9px] text-slate-500 dark:text-slate-400 whitespace-nowrap">
-                              ({(node as Node).name})
+                        </Show>
+                        <div class="hidden xl:flex items-center gap-1.5 ml-1 flex-shrink min-w-0 overflow-hidden">
+                          <Show when={isPVEItem}>
+                            <span class="text-[9px] px-1 py-0 rounded font-medium bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-400">
+                              PVE
                             </span>
                           </Show>
-                          <div class="hidden xl:flex items-center gap-1.5 ml-1 flex-shrink min-w-0 overflow-hidden">
-                            <Show when={isPVEItem}>
-                              <span class="text-[9px] px-1 py-0 rounded font-medium bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-400">
-                                PVE
-                              </span>
-                            </Show>
-                            <Show when={isPVEItem && node!.pveVersion}>
-                              <span class="text-[9px] text-slate-500 dark:text-slate-400 whitespace-nowrap">
-                                v{node!.pveVersion.split('/')[1] || node!.pveVersion}
-                              </span>
-                            </Show>
-                            <Show when={isPVEItem && node!.isClusterMember !== undefined}>
-                              <span
-                                class={`text-[9px] px-1 py-0 rounded font-medium whitespace-nowrap ${node!.isClusterMember
-                                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-400'
-                                  : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
-                                  }`}
-                              >
-                                {node!.isClusterMember ? node!.clusterName : 'Standalone'}
-                              </span>
-                            </Show>
-                            <Show when={isPVEItem && node!.linkedHostAgentId}>
-                              <span
-                                class="text-[9px] px-1 py-0 rounded font-medium whitespace-nowrap bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-400"
-                                title="Pulse host agent installed for enhanced metrics"
-                              >
-                                +Agent
-                              </span>
-                            </Show>
-                            <Show when={isPVEItem && online && node!.pendingUpdates !== undefined && node!.pendingUpdates > 0}>
-                              <span
-                                class={`text-[9px] px-1 py-0 rounded font-medium whitespace-nowrap ${(node!.pendingUpdates ?? 0) >= 10
-                                  ? 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-400'
-                                  : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-400'
-                                  }`}
-                                title={`${node!.pendingUpdates} pending apt update${node!.pendingUpdates !== 1 ? 's' : ''}`}
-                              >
-                                {node!.pendingUpdates} updates
-                              </span>
-                            </Show>
-                            <Show when={isPBSItem}>
-                              <span class="text-[9px] px-1 py-0 rounded font-medium bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-400">
-                                PBS
-                              </span>
-                            </Show>
-                            <Show when={isPBSItem && pbs!.version}>
-                              <span class="text-[9px] text-slate-500 dark:text-slate-400 whitespace-nowrap">
-                                v{pbs!.version}
-                              </span>
-                            </Show>
-                          </div>
+                          <Show when={isPVEItem && node!.pveVersion}>
+                            <span class="text-[9px] text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                              v{node!.pveVersion.split('/')[1] || node!.pveVersion}
+                            </span>
+                          </Show>
+                          <Show when={isPVEItem && node!.isClusterMember !== undefined}>
+                            <span
+                              class={`text-[9px] px-1 py-0 rounded font-medium whitespace-nowrap ${node!.isClusterMember
+                                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-400'
+                                : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                                }`}
+                            >
+                              {node!.isClusterMember ? node!.clusterName : 'Standalone'}
+                            </span>
+                          </Show>
+                          <Show when={isPVEItem && node!.linkedHostAgentId}>
+                            <span
+                              class="text-[9px] px-1 py-0 rounded font-medium whitespace-nowrap bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-400"
+                              title="Pulse host agent installed for enhanced metrics"
+                            >
+                              +Agent
+                            </span>
+                          </Show>
+                          <Show when={isPVEItem && online && node!.pendingUpdates !== undefined && node!.pendingUpdates > 0}>
+                            <span
+                              class={`text-[9px] px-1 py-0 rounded font-medium whitespace-nowrap ${(node!.pendingUpdates ?? 0) >= 10
+                                ? 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-400'
+                                : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-400'
+                                }`}
+                              title={`${node!.pendingUpdates} pending apt update${node!.pendingUpdates !== 1 ? 's' : ''}`}
+                            >
+                              {node!.pendingUpdates} updates
+                            </span>
+                          </Show>
+                          <Show when={isPBSItem}>
+                            <span class="text-[9px] px-1 py-0 rounded font-medium bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-400">
+                              PBS
+                            </span>
+                          </Show>
+                          <Show when={isPBSItem && pbs!.version}>
+                            <span class="text-[9px] text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                              v{pbs!.version}
+                            </span>
+                          </Show>
                         </div>
-                      </td>
+                      </div>
+                    </TableCell>
 
 
 
-                      {/* Uptime */}
-                      <td class={tdClass}>
-                        <div class="flex justify-center">
-                          <span
-                            class={`text-xs whitespace-nowrap ${isPVEItem && (node?.uptime ?? 0) < 3600
-                              ? 'text-orange-500'
-                              : 'text-slate-600 dark:text-slate-400'
-                              }`}
-                          >
-                            <Show when={online && uptimeValue} fallback="-">
-                              <Show when={isMobile()} fallback={formatUptime(uptimeValue)}>
-                                {formatUptime(uptimeValue, true)}
-                              </Show>
+                    {/* Uptime */}
+                    <TableCell class={tdClass}>
+                      <div class="flex justify-center">
+                        <span
+                          class={`text-xs whitespace-nowrap ${isPVEItem && (node?.uptime ?? 0) < 3600
+                            ? 'text-orange-500'
+                            : 'text-slate-600 dark:text-slate-400'
+                            }`}
+                        >
+                          <Show when={online && uptimeValue} fallback="-">
+                            <Show when={isMobile()} fallback={formatUptime(uptimeValue)}>
+                              {formatUptime(uptimeValue, true)}
                             </Show>
-                          </span>
-                        </div>
-                      </td>
+                          </Show>
+                        </span>
+                      </div>
+                    </TableCell>
 
-                      {/* CPU */}
-                      <td class={tdClass} style={isMobile() ? { "min-width": "80px" } : metricColumnStyle}>
-                        <div class="h-5">
-                          <EnhancedCPUBar
-                            usage={cpuPercentValue}
-                            loadAverage={isPVEItem ? node!.loadAverage?.[0] : undefined}
-                            cores={isMobile() ? undefined : (isPVEItem ? node!.cpuInfo?.cores : undefined)}
-                            model={isPVEItem ? node!.cpuInfo?.model : undefined}
+                    {/* CPU */}
+                    <TableCell class={tdClass} style={isMobile() ? { "min-width": "80px" } : metricColumnStyle}>
+                      <div class="h-5">
+                        <EnhancedCPUBar
+                          usage={cpuPercentValue}
+                          loadAverage={isPVEItem ? node!.loadAverage?.[0] : undefined}
+                          cores={isMobile() ? undefined : (isPVEItem ? node!.cpuInfo?.cores : undefined)}
+                          model={isPVEItem ? node!.cpuInfo?.model : undefined}
+                          resourceId={metricsKey}
+                        />
+                      </div>
+                    </TableCell>
+
+                    {/* Memory */}
+                    <TableCell class={tdClass} style={isMobile() ? { "min-width": "80px" } : metricColumnStyle}>
+                      <div class="h-5">
+                        <Show when={isPVEItem} fallback={
+                          <ResponsiveMetricCell
+                            value={memoryPercentValue}
+                            type="memory"
+                            resourceId={metricsKey}
+                            sublabel={pbs!.memoryTotal ? `${formatBytes(pbs!.memoryUsed)}/${formatBytes(pbs!.memoryTotal)}` : undefined}
+                            isRunning={online}
+                            showMobile={false}
+                          />
+                        }>
+                          <StackedMemoryBar
+                            used={node!.memory?.used || 0}
+                            total={node!.memory?.total || 0}
+                            balloon={node!.memory?.balloon || 0}
+                            swapUsed={node!.memory?.swapUsed || 0}
+                            swapTotal={node!.memory?.swapTotal || 0}
                             resourceId={metricsKey}
                           />
-                        </div>
-                      </td>
+                        </Show>
+                      </div>
+                    </TableCell>
 
-                      {/* Memory */}
-                      <td class={tdClass} style={isMobile() ? { "min-width": "80px" } : metricColumnStyle}>
-                        <div class="h-5">
-                          <Show when={isPVEItem} fallback={
-                            <ResponsiveMetricCell
-                              value={memoryPercentValue}
-                              type="memory"
-                              resourceId={metricsKey}
-                              sublabel={pbs!.memoryTotal ? `${formatBytes(pbs!.memoryUsed)}/${formatBytes(pbs!.memoryTotal)}` : undefined}
-                              isRunning={online}
-                              showMobile={false}
-                            />
-                          }>
-                            <StackedMemoryBar
-                              used={node!.memory?.used || 0}
-                              total={node!.memory?.total || 0}
-                              balloon={node!.memory?.balloon || 0}
-                              swapUsed={node!.memory?.swapUsed || 0}
-                              swapTotal={node!.memory?.swapTotal || 0}
-                              resourceId={metricsKey}
-                            />
-                          </Show>
-                        </div>
-                      </td>
+                    {/* Disk */}
+                    <TableCell class={tdClass} style={isMobile() ? { "min-width": "80px" } : metricColumnStyle}>
+                      <div class="h-5">
+                        <Show when={isPVEItem} fallback={
+                          <ResponsiveMetricCell
+                            value={diskPercentValue}
+                            type="disk"
+                            resourceId={metricsKey}
+                            sublabel={diskSublabel}
+                            isRunning={online}
+                            showMobile={false}
+                          />
+                        }>
+                          <StackedDiskBar
+                            aggregateDisk={{
+                              total: node!.disk?.total || 0,
+                              used: node!.disk?.used || 0,
+                              free: (node!.disk?.total || 0) - (node!.disk?.used || 0),
+                              usage: node!.disk?.total ? (node!.disk.used / node!.disk.total) : 0
+                            }}
+                          />
+                        </Show>
+                      </div>
+                    </TableCell>
 
-                      {/* Disk */}
-                      <td class={tdClass} style={isMobile() ? { "min-width": "80px" } : metricColumnStyle}>
-                        <div class="h-5">
-                          <Show when={isPVEItem} fallback={
-                            <ResponsiveMetricCell
-                              value={diskPercentValue}
-                              type="disk"
-                              resourceId={metricsKey}
-                              sublabel={diskSublabel}
-                              isRunning={online}
-                              showMobile={false}
-                            />
-                          }>
-                            <StackedDiskBar
-                              aggregateDisk={{
-                                total: node!.disk?.total || 0,
-                                used: node!.disk?.used || 0,
-                                free: (node!.disk?.total || 0) - (node!.disk?.used || 0),
-                                usage: node!.disk?.total ? (node!.disk.used / node!.disk.total) : 0
-                              }}
-                            />
-                          </Show>
-                        </div>
-                      </td>
+                    {/* Temperature */}
+                    <Show when={hasAnyTemperatureData()}>
+                      <TableCell class={tdClass}>
+                        <div class="flex justify-center">
+                          <Show
+                            when={
+                              online &&
+                              isPVEItem &&
+                              cpuTemperatureValue !== null &&
+                              (node!.temperature?.hasCPU ?? node!.temperature?.hasGPU ?? node!.temperature?.available) &&
+                              isTemperatureMonitoringEnabled(node!)
+                            }
+                            fallback={<span class="text-xs text-slate-400 dark:text-slate-500">-</span>}
+                          >
+                            {(() => {
+                              const value = cpuTemperatureValue as number;
+                              const temp = node!.temperature;
+                              const cpuMinValue =
+                                typeof temp?.cpuMin === 'number' && temp.cpuMin > 0 ? temp.cpuMin : null;
+                              const cpuMaxValue =
+                                typeof temp?.cpuMaxRecord === 'number' && temp.cpuMaxRecord > 0
+                                  ? temp.cpuMaxRecord
+                                  : null;
+                              const hasMinMax = cpuMinValue !== null && cpuMaxValue !== null;
 
-                      {/* Temperature */}
-                      <Show when={hasAnyTemperatureData()}>
-                        <td class={tdClass}>
-                          <div class="flex justify-center">
-                            <Show
-                              when={
-                                online &&
-                                isPVEItem &&
-                                cpuTemperatureValue !== null &&
-                                (node!.temperature?.hasCPU ?? node!.temperature?.hasGPU ?? node!.temperature?.available) &&
-                                isTemperatureMonitoringEnabled(node!)
-                              }
-                              fallback={<span class="text-xs text-slate-400 dark:text-slate-500">-</span>}
-                            >
-                              {(() => {
-                                const value = cpuTemperatureValue as number;
-                                const temp = node!.temperature;
-                                const cpuMinValue =
-                                  typeof temp?.cpuMin === 'number' && temp.cpuMin > 0 ? temp.cpuMin : null;
-                                const cpuMaxValue =
-                                  typeof temp?.cpuMaxRecord === 'number' && temp.cpuMaxRecord > 0
-                                    ? temp.cpuMaxRecord
-                                    : null;
-                                const hasMinMax = cpuMinValue !== null && cpuMaxValue !== null;
+                              const gpus = temp?.gpu ?? [];
+                              const hasGPU = gpus.length > 0;
 
-                                const gpus = temp?.gpu ?? [];
-                                const hasGPU = gpus.length > 0;
-
-                                if (hasMinMax || hasGPU) {
-                                  const min = typeof cpuMinValue === 'number' ? Math.round(cpuMinValue) : undefined;
-                                  const max = typeof cpuMaxValue === 'number' ? Math.round(cpuMaxValue) : undefined;
-
-                                  return (
-                                    <div title={`Min: ${min !== undefined ? formatTemperature(min) : '-'}, Max: ${max !== undefined ? formatTemperature(max) : '-'}${hasGPU ? `\nGPU: ${gpus.map(g => formatTemperature(g.edge ?? g.junction ?? g.mem)).join(', ')}` : ''}`}>
-                                      <TemperatureGauge
-                                        value={value}
-                                        min={min}
-                                        max={max}
-                                        critical={temperatureThreshold()}
-                                        warning={Math.max(0, temperatureThreshold() - 5)}
-                                      />
-                                    </div>
-                                  );
-                                }
+                              if (hasMinMax || hasGPU) {
+                                const min = typeof cpuMinValue === 'number' ? Math.round(cpuMinValue) : undefined;
+                                const max = typeof cpuMaxValue === 'number' ? Math.round(cpuMaxValue) : undefined;
 
                                 return (
-                                  <TemperatureGauge
-                                    value={value}
-                                    critical={temperatureThreshold()}
-                                    warning={Math.max(0, temperatureThreshold() - 5)}
-                                  />
+                                  <div title={`Min: ${min !== undefined ? formatTemperature(min) : '-'}, Max: ${max !== undefined ? formatTemperature(max) : '-'}${hasGPU ? `\nGPU: ${gpus.map(g => formatTemperature(g.edge ?? g.junction ?? g.mem)).join(', ')}` : ''}`}>
+                                    <TemperatureGauge
+                                      value={value}
+                                      min={min}
+                                      max={max}
+                                      critical={temperatureThreshold()}
+                                      warning={Math.max(0, temperatureThreshold() - 5)}
+                                    />
+                                  </div>
                                 );
-                              })()}
-                            </Show>
-                          </div>
-                        </td>
-                      </Show>
+                              }
 
-                      {/* Dashboard tab: VMs and CTs */}
-                      <Show when={props.currentTab === 'dashboard'}>
-                        <td class={tdClass}>
-                          <div class="flex justify-center">
-                            <span class={online ? 'text-xs text-slate-700 dark:text-slate-300' : 'text-xs text-slate-400 dark:text-slate-500'}>
-                              {online ? getCountValue(item, 'vmCount') ?? '-' : '-'}
-                            </span>
-                          </div>
-                        </td>
-                        <td class={tdClass}>
-                          <div class="flex justify-center">
-                            <span class={online ? 'text-xs text-slate-700 dark:text-slate-300' : 'text-xs text-slate-400 dark:text-slate-500'}>
-                              {online ? getCountValue(item, 'containerCount') ?? '-' : '-'}
-                            </span>
-                          </div>
-                        </td>
-                      </Show>
-
-                      {/* Storage tab: Storage and Disks */}
-                      <Show when={props.currentTab === 'storage'}>
-                        <td class={tdClass}>
-                          <div class="flex justify-center">
-                            <span class={online ? 'text-xs text-slate-700 dark:text-slate-300' : 'text-xs text-slate-400 dark:text-slate-500'}>
-                              {online ? getCountValue(item, 'storageCount') ?? '-' : '-'}
-                            </span>
-                          </div>
-                        </td>
-                        <td class={tdClass}>
-                          <div class="flex justify-center">
-                            <span class={online ? 'text-xs text-slate-700 dark:text-slate-300' : 'text-xs text-slate-400 dark:text-slate-500'}>
-                              {online ? getCountValue(item, 'diskCount') ?? '-' : '-'}
-                            </span>
-                          </div>
-                        </td>
-                      </Show>
-
-                      {/* Recovery tab */}
-                      <Show when={props.currentTab === 'recovery'}>
-                        <td class={tdClass}>
-                          <div class="flex justify-center">
-                            <span class={online ? 'text-xs text-slate-700 dark:text-slate-300' : 'text-xs text-slate-400 dark:text-slate-500'}>
-                              {online ? getCountValue(item, 'backupCount') ?? '-' : '-'}
-                            </span>
-                          </div>
-                        </td>
-                      </Show>
-
-                      {/* Link Column (Moved to end) */}
-                      <td class="px-0 py-1 align-middle text-center">
-                        <Show when={
-                          isPVEItem
-                            ? (node!.guestURL || node!.host)
-                            : (pbs!.guestURL || pbs!.host)
-                        }>
-                          <a
-                            href={
-                              isPVEItem
-                                ? node!.guestURL || node!.host || `https://${node!.name}:8006`
-                                : pbs!.guestURL || pbs!.host || `https://${pbs!.name}:8007`
-                            }
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={(e) => e.stopPropagation()}
-                            class="inline-flex justify-center items-center text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
-                            title={`Open ${displayName()} web interface`}
-                          >
-                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                            </svg>
-                          </a>
-                        </Show>
-                      </td>
-                    </tr>
-                    <Show when={isExpanded() && isPVEItem}>
-                      <tr>
-                        <td colspan={totalColumnCount()} class="bg-slate-50 dark:bg-slate-800 px-4 py-4 border-b border-slate-100 dark:border-slate-700 shadow-inner">
-                          <Suspense fallback={<div class="flex justify-center p-4">Loading stats...</div>}>
-                            <NodeDrawer node={node!} host={linkedHostForDrawer()} />
-                          </Suspense>
-                        </td>
-                      </tr>
+                              return (
+                                <TemperatureGauge
+                                  value={value}
+                                  critical={temperatureThreshold()}
+                                  warning={Math.max(0, temperatureThreshold() - 5)}
+                                />
+                              );
+                            })()}
+                          </Show>
+                        </div>
+                      </TableCell>
                     </Show>
-                  </>
-                );
-              }}
-            </For>
-          </tbody>
-        </table>
-      </div>
-    </Card >
+
+                    {/* Dashboard tab: VMs and CTs */}
+                    <Show when={props.currentTab === 'dashboard'}>
+                      <TableCell class={tdClass}>
+                        <div class="flex justify-center">
+                          <span class={online ? 'text-xs text-slate-700 dark:text-slate-300' : 'text-xs text-slate-400 dark:text-slate-500'}>
+                            {online ? getCountValue(item, 'vmCount') ?? '-' : '-'}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell class={tdClass}>
+                        <div class="flex justify-center">
+                          <span class={online ? 'text-xs text-slate-700 dark:text-slate-300' : 'text-xs text-slate-400 dark:text-slate-500'}>
+                            {online ? getCountValue(item, 'containerCount') ?? '-' : '-'}
+                          </span>
+                        </div>
+                      </TableCell>
+                    </Show>
+
+                    {/* Storage tab: Storage and Disks */}
+                    <Show when={props.currentTab === 'storage'}>
+                      <TableCell class={tdClass}>
+                        <div class="flex justify-center">
+                          <span class={online ? 'text-xs text-slate-700 dark:text-slate-300' : 'text-xs text-slate-400 dark:text-slate-500'}>
+                            {online ? getCountValue(item, 'storageCount') ?? '-' : '-'}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell class={tdClass}>
+                        <div class="flex justify-center">
+                          <span class={online ? 'text-xs text-slate-700 dark:text-slate-300' : 'text-xs text-slate-400 dark:text-slate-500'}>
+                            {online ? getCountValue(item, 'diskCount') ?? '-' : '-'}
+                          </span>
+                        </div>
+                      </TableCell>
+                    </Show>
+
+                    {/* Recovery tab */}
+                    <Show when={props.currentTab === 'recovery'}>
+                      <TableCell class={tdClass}>
+                        <div class="flex justify-center">
+                          <span class={online ? 'text-xs text-slate-700 dark:text-slate-300' : 'text-xs text-slate-400 dark:text-slate-500'}>
+                            {online ? getCountValue(item, 'backupCount') ?? '-' : '-'}
+                          </span>
+                        </div>
+                      </TableCell>
+                    </Show>
+
+                    {/* Link Column (Moved to end) */}
+                    <TableCell class="px-0 py-1 align-middle text-center">
+                      <Show when={
+                        isPVEItem
+                          ? (node!.guestURL || node!.host)
+                          : (pbs!.guestURL || pbs!.host)
+                      }>
+                        <a
+                          href={
+                            isPVEItem
+                              ? node!.guestURL || node!.host || `https://${node!.name}:8006`
+                              : pbs!.guestURL || pbs!.host || `https://${pbs!.name}:8007`
+                          }
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          class="inline-flex justify-center items-center text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+                          title={`Open ${displayName()} web interface`}
+                        >
+                          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
+                        </a>
+                      </Show>
+                    </TableCell>
+                  </TableRow>
+                  <Show when={isExpanded() && isPVEItem}>
+                    <TableRow>
+                      <TableCell colspan={totalColumnCount()} class="bg-slate-50 dark:bg-slate-800 px-4 py-4 border-b border-slate-100 dark:border-slate-700 shadow-inner">
+                        <Suspense fallback={<div class="flex justify-center p-4">Loading stats...</div>}>
+                          <NodeDrawer node={node!} host={linkedHostForDrawer()} />
+                        </Suspense>
+                      </TableCell>
+                    </TableRow>
+                  </Show>
+                </>
+              );
+            }}
+          </For>
+        </TableBody>
+      </Table>
+    </Card>
   );
 };

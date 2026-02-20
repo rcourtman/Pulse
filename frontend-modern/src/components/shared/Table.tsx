@@ -2,12 +2,13 @@ import { JSX, splitProps } from 'solid-js';
 
 export interface TableProps extends JSX.HTMLAttributes<HTMLTableElement> {
     wrapperClass?: string;
+    wrapperRef?: (el: HTMLDivElement) => void;
 }
 
 export function Table(props: TableProps) {
-    const [local, rest] = splitProps(props, ['class', 'children', 'wrapperClass']);
+    const [local, rest] = splitProps(props, ['class', 'children', 'wrapperClass', 'wrapperRef']);
     return (
-        <div class={`w-full overflow-x-auto ${local.wrapperClass || ''}`} style={{ "-webkit-overflow-scrolling": "touch" }}>
+        <div ref={local.wrapperRef} class={`w-full overflow-x-auto ${local.wrapperClass || ''}`} style={{ "-webkit-overflow-scrolling": "touch" }}>
             <table class={`w-full border-collapse text-left whitespace-nowrap ${local.class || ''}`} {...rest}>
                 {local.children}
             </table>

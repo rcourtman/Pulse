@@ -14,6 +14,7 @@ import { SettingsPanel } from '@/components/shared/SettingsPanel';
 import { Toggle } from '@/components/shared/Toggle';
 import { formField, formControl, formHelpText, labelClass, controlClass } from '@/components/shared/Form';
 import { ScrollableTable } from '@/components/shared/ScrollableTable';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/shared/Table';
 import { useWebSocket } from '@/App';
 import { useResources } from '@/hooks/useResources';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
@@ -5809,49 +5810,49 @@ function HistoryTab(props: {
             {/* Table */}
             <div class="mb-2 border border-slate-200 dark:border-slate-700 rounded overflow-hidden">
               <ScrollableTable minWidth="800px">
-                <table class="w-full min-w-[800px] text-[11px] sm:text-sm">
-                  <thead>
-                    <tr class="bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border-b border-slate-300 dark:border-slate-600">
-                      <th class="p-1 sm:p-1.5 px-1 sm:px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">
+                <Table class="w-full min-w-[800px] text-[11px] sm:text-sm">
+                  <TableHeader>
+                    <TableRow class="bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border-b border-slate-300 dark:border-slate-600">
+                      <TableHead class="p-1 sm:p-1.5 px-1 sm:px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">
                         Timestamp
-                      </th>
-                      <th class="p-1 sm:p-1.5 px-1 sm:px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">
+                      </TableHead>
+                      <TableHead class="p-1 sm:p-1.5 px-1 sm:px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">
                         Source
-                      </th>
-                      <th class="p-1 sm:p-1.5 px-1 sm:px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">
+                      </TableHead>
+                      <TableHead class="p-1 sm:p-1.5 px-1 sm:px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">
                         Resource
-                      </th>
-                      <th class="p-1 sm:p-1.5 px-1 sm:px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">
+                      </TableHead>
+                      <TableHead class="p-1 sm:p-1.5 px-1 sm:px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">
                         Type
-                      </th>
-                      <th class="p-1 sm:p-1.5 px-1 sm:px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">
+                      </TableHead>
+                      <TableHead class="p-1 sm:p-1.5 px-1 sm:px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">
                         Severity
-                      </th>
-                      <th class="p-1 sm:p-1.5 px-1 sm:px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">
+                      </TableHead>
+                      <TableHead class="p-1 sm:p-1.5 px-1 sm:px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">
                         Message
-                      </th>
-                      <th class="p-1 sm:p-1.5 px-1 sm:px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">
+                      </TableHead>
+                      <TableHead class="p-1 sm:p-1.5 px-1 sm:px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">
                         Duration
-                      </th>
-                      <th class="p-1 sm:p-1.5 px-1 sm:px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">
+                      </TableHead>
+                      <TableHead class="p-1 sm:p-1.5 px-1 sm:px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">
                         Status
-                      </th>
-                      <th class="p-1 sm:p-1.5 px-1 sm:px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">
+                      </TableHead>
+                      <TableHead class="p-1 sm:p-1.5 px-1 sm:px-2 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider">
                         Node
-                      </th>
-                      <th class="p-1 sm:p-1.5 px-1 sm:px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">
+                      </TableHead>
+                      <TableHead class="p-1 sm:p-1.5 px-1 sm:px-2 text-center text-[10px] sm:text-xs font-medium uppercase tracking-wider">
                         Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     <For each={groupedAlerts()}>
                       {(group) => (
                         <>
                           {/* Date divider */}
-                          <tr class="bg-slate-50 dark:bg-slate-800">
-                            <td
-                              colspan="10"
+                          <TableRow class="bg-slate-50 dark:bg-slate-800">
+                            <TableCell
+                              colspan={10}
                               class="py-1.5 pr-3 pl-4 text-[12px] sm:text-sm font-semibold text-slate-700 dark:text-slate-100"
                             >
                               <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
@@ -5869,8 +5870,8 @@ function HistoryTab(props: {
                                   })()}
                                 </span>
                               </div>
-                            </td>
-                          </tr>
+                            </TableCell>
+                          </TableRow>
 
                           {/* Alerts for this day */}
                           <For each={group.alerts}>
@@ -5878,20 +5879,20 @@ function HistoryTab(props: {
                               const rowKey = getIncidentRowKey(alert);
                               return (
                                 <>
-                                  <tr
+                                  <TableRow
                                     class={`border-b border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 ${alert.status === 'active' ? 'bg-red-50 dark:bg-red-900' : ''
                                       }`}
                                   >
                                     {/* Timestamp */}
-                                    <td class="p-1 sm:p-1.5 px-1 sm:px-2 text-slate-600 dark:text-slate-400 font-mono whitespace-nowrap">
+                                    <TableCell class="p-1 sm:p-1.5 px-1 sm:px-2 text-slate-600 dark:text-slate-400 font-mono whitespace-nowrap">
                                       {new Date(alert.startTime).toLocaleTimeString('en-US', {
                                         hour: '2-digit',
                                         minute: '2-digit',
                                       })}
-                                    </td>
+                                    </TableCell>
 
                                     {/* Source */}
-                                    <td class="p-1 sm:p-1.5 px-1 sm:px-2 text-center">
+                                    <TableCell class="p-1 sm:p-1.5 px-1 sm:px-2 text-center">
                                       <span
                                         class={`text-[10px] px-1.5 py-0.5 rounded font-medium ${alert.source === 'ai'
                                           ? 'bg-violet-100 dark:bg-violet-900 text-violet-700 dark:text-violet-300'
@@ -5900,15 +5901,15 @@ function HistoryTab(props: {
                                       >
                                         {alert.source === 'ai' ? 'Patrol' : 'Alert'}
                                       </span>
-                                    </td>
+                                    </TableCell>
 
                                     {/* Resource */}
-                                    <td class="p-1 sm:p-1.5 px-1 sm:px-2 font-medium text-slate-900 dark:text-slate-100 truncate max-w-[150px]">
+                                    <TableCell class="p-1 sm:p-1.5 px-1 sm:px-2 font-medium text-slate-900 dark:text-slate-100 truncate max-w-[150px]">
                                       {alert.resourceName}
-                                    </td>
+                                    </TableCell>
 
                                     {/* Type */}
-                                    <td class="p-1 sm:p-1.5 px-1 sm:px-2">
+                                    <TableCell class="p-1 sm:p-1.5 px-1 sm:px-2">
                                       <span
                                         class={`text-xs px-1 py-0.5 rounded ${alert.resourceType === 'VM'
                                           ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
@@ -5923,10 +5924,10 @@ function HistoryTab(props: {
                                       >
                                         {alert.type}
                                       </span>
-                                    </td>
+                                    </TableCell>
 
                                     {/* Severity */}
-                                    <td class="p-1 sm:p-1.5 px-1 sm:px-2 text-center">
+                                    <TableCell class="p-1 sm:p-1.5 px-1 sm:px-2 text-center">
                                       <span
                                         class={`text-xs px-2 py-0.5 rounded font-medium ${alert.level === 'critical'
                                           ? 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300'
@@ -5935,23 +5936,23 @@ function HistoryTab(props: {
                                       >
                                         {alert.level}
                                       </span>
-                                    </td>
+                                    </TableCell>
 
                                     {/* Message */}
-                                    <td
+                                    <TableCell
                                       class="p-1 sm:p-1.5 px-1 sm:px-2 text-slate-700 dark:text-slate-300 truncate max-w-[300px]"
                                       title={alert.message}
                                     >
                                       {alert.message}
-                                    </td>
+                                    </TableCell>
 
                                     {/* Duration */}
-                                    <td class="p-1 sm:p-1.5 px-1 sm:px-2 text-center text-slate-600 dark:text-slate-400">
+                                    <TableCell class="p-1 sm:p-1.5 px-1 sm:px-2 text-center text-slate-600 dark:text-slate-400">
                                       {alert.duration}
-                                    </td>
+                                    </TableCell>
 
                                     {/* Status */}
-                                    <td class="p-1 sm:p-1.5 px-1 sm:px-2 text-center">
+                                    <TableCell class="p-1 sm:p-1.5 px-1 sm:px-2 text-center">
                                       <span
                                         class={`text-xs px-2 py-0.5 rounded ${alert.status === 'active'
                                           ? 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 font-medium'
@@ -5962,15 +5963,15 @@ function HistoryTab(props: {
                                       >
                                         {alert.status}
                                       </span>
-                                    </td>
+                                    </TableCell>
 
                                     {/* Node */}
-                                    <td class="p-1 sm:p-1.5 px-1 sm:px-2 text-slate-600 dark:text-slate-400 truncate">
+                                    <TableCell class="p-1 sm:p-1.5 px-1 sm:px-2 text-slate-600 dark:text-slate-400 truncate">
                                       {alert.nodeDisplayName || alert.node || '—'}
-                                    </td>
+                                    </TableCell>
 
                                     {/* Actions */}
-                                    <td class="p-1 sm:p-1.5 px-1 sm:px-2 text-center">
+                                    <TableCell class="p-1 sm:p-1.5 px-1 sm:px-2 text-center">
                                       <div class="flex items-center justify-center gap-1">
                                         <Show when={alert.source === 'alert'}>
                                           <button
@@ -6019,11 +6020,11 @@ function HistoryTab(props: {
                                           />
                                         </Show>
                                       </div>
-                                    </td>
-                                  </tr>
+                                    </TableCell>
+                                  </TableRow>
                                   <Show when={alert.source === 'alert' && expandedIncidents().has(rowKey)}>
-                                    <tr class="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
-                                      <td colspan="11" class="p-3">
+                                    <TableRow class="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+                                      <TableCell colspan={11} class="p-3">
                                         <Show when={incidentLoading()[rowKey]}>
                                           <p class="text-xs text-slate-500 dark:text-slate-400">Loading timeline...</p>
                                         </Show>
@@ -6129,8 +6130,8 @@ function HistoryTab(props: {
                                             <p class="text-xs text-slate-500 dark:text-slate-400">No incident timeline available.</p>
                                           </Show>
                                         </Show>
-                                      </td>
-                                    </tr>
+                                      </TableCell>
+                                    </TableRow>
                                   </Show>
                                 </>
                               );
@@ -6139,8 +6140,8 @@ function HistoryTab(props: {
                         </>
                       )}
                     </For>
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </ScrollableTable>
             </div>
           </Show>

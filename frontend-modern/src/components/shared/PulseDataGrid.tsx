@@ -1,5 +1,6 @@
 import { JSX, For, Show, createMemo, splitProps } from 'solid-js';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/shared/Table';
 
 export interface TableColumn<T> {
     key: keyof T | string;
@@ -110,30 +111,30 @@ export function PulseDataGrid<T>(props: PulseDataGridProps<T>) {
                     {`.overflow-x-auto::-webkit-scrollbar { display: none; }`}
                 </style>
 
-                <table
+                <Table
                     class="w-full border-collapse"
                     style={{ 'min-width': effectiveMinWidth() }}
                 >
-                    <thead class="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
-                        <tr>
+                    <TableHeader class="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+                        <TableRow>
                             <For each={local.columns}>
                                 {(col) => (
-                                    <th
+                                    <TableHead
                                         class={`
-                      px-3 sm:px-4 py-2.5 
-                      text-[11px] sm:text-xs font-semibold uppercase tracking-wider whitespace-nowrap text-slate-500 dark:text-slate-400
-                      ${getAlignClass(col.align)}
-                      ${col.hiddenOnMobile ? 'hidden sm:table-cell' : ''}
-                    `}
+                                            px-3 sm:px-4 py-2.5 
+                                            text-[11px] sm:text-xs font-semibold uppercase tracking-wider whitespace-nowrap text-slate-500 dark:text-slate-400
+                                            ${getAlignClass(col.align)}
+                                            ${col.hiddenOnMobile ? 'hidden sm:table-cell' : ''}
+                                        `}
                                         style={col.width ? { width: col.width } : {}}
                                     >
                                         {col.label}
-                                    </th>
+                                    </TableHead>
                                 )}
                             </For>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100 dark:divide-slate-800/60 transition-colors">
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody class="divide-y divide-slate-100 dark:divide-slate-800/60 transition-colors">
                         <Show when={!local.isLoading && local.data.length > 0}>
                             <For each={local.data}>
                                 {(row) => {
@@ -141,7 +142,7 @@ export function PulseDataGrid<T>(props: PulseDataGridProps<T>) {
 
                                     return (
                                         <>
-                                            <tr
+                                            <TableRow
                                                 class={`
                                                     group transition-colors duration-150
                                                     ${local.onRowClick
@@ -153,7 +154,7 @@ export function PulseDataGrid<T>(props: PulseDataGridProps<T>) {
                                             >
                                                 <For each={local.columns}>
                                                     {(col) => (
-                                                        <td
+                                                        <TableCell
                                                             class={`
                                                                 px-3 sm:px-4 py-2 sm:py-3.5 
                                                                 text-sm text-slate-700 dark:text-slate-300 align-middle
@@ -167,16 +168,16 @@ export function PulseDataGrid<T>(props: PulseDataGridProps<T>) {
                                                             >
                                                                 {col.render!(row)}
                                                             </Show>
-                                                        </td>
+                                                        </TableCell>
                                                     )}
                                                 </For>
-                                            </tr>
+                                            </TableRow>
                                             <Show when={expanded() && local.expandedRender}>
-                                                <tr class={local.onRowClick ? 'bg-slate-50/30 dark:bg-slate-800/20 hover:bg-blue-50/50 dark:hover:bg-blue-900/20' : 'bg-slate-50/30 dark:bg-slate-800/20 hover:bg-slate-50/50 dark:hover:bg-slate-800/30'}>
-                                                    <td colspan={local.columns.length} class="px-0 py-0 border-t-0">
+                                                <TableRow class={local.onRowClick ? 'bg-slate-50/30 dark:bg-slate-800/20 hover:bg-blue-50/50 dark:hover:bg-blue-900/20' : 'bg-slate-50/30 dark:bg-slate-800/20 hover:bg-slate-50/50 dark:hover:bg-slate-800/30'}>
+                                                    <TableCell colspan={local.columns.length} class="px-0 py-0 border-t-0">
                                                         {local.expandedRender!(row)}
-                                                    </td>
-                                                </tr>
+                                                    </TableCell>
+                                                </TableRow>
                                             </Show>
                                         </>
                                     );
@@ -185,27 +186,27 @@ export function PulseDataGrid<T>(props: PulseDataGridProps<T>) {
                         </Show>
 
                         <Show when={local.isLoading}>
-                            <tr>
-                                <td colspan={local.columns.length} class="px-4 py-8 text-center text-sm text-slate-500">
+                            <TableRow>
+                                <TableCell colspan={local.columns.length} class="px-4 py-8 text-center text-sm text-slate-500">
                                     <div class="flex items-center justify-center gap-2">
                                         <div class="w-4 h-4 rounded-full border-2 border-slate-300 border-t-blue-600 animate-spin"></div>
                                         Loading...
                                     </div>
-                                </td>
-                            </tr>
+                                </TableCell>
+                            </TableRow>
                         </Show>
 
                         <Show when={!local.isLoading && local.data.length === 0}>
-                            <tr>
-                                <td colspan={local.columns.length} class="px-4 py-8 text-center text-sm text-slate-500 italic bg-slate-50/50 dark:bg-slate-800/20">
+                            <TableRow>
+                                <TableCell colspan={local.columns.length} class="px-4 py-8 text-center text-sm text-slate-500 italic bg-slate-50/50 dark:bg-slate-800/20">
                                     <Show when={local.emptyState} fallback="No items available.">
                                         {local.emptyState}
                                     </Show>
-                                </td>
-                            </tr>
+                                </TableCell>
+                            </TableRow>
                         </Show>
-                    </tbody>
-                </table>
+                    </TableBody>
+                </Table>
             </div>
         </div>
     );

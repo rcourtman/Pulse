@@ -1598,7 +1598,7 @@ export function Dashboard(props: DashboardProps) {
               Workloads
             </div>
             <Table
-              ref={tableRef}
+              wrapperRef={(el) => (tableRef = el)}
               class="whitespace-nowrap"
               style={{ 'table-layout': 'fixed', 'min-width': isMobile() ? '100%' : '900px' }}
             >

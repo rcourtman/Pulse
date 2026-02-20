@@ -1,5 +1,6 @@
 import { Component, For, Show, createMemo, createSignal } from 'solid-js';
 import { Card } from '@/components/shared/Card';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/shared/Table';
 import { formatBytes, formatPowerOnHours } from '@/utils/format';
 import { formatTemperature } from '@/utils/temperature';
 import type { Resource } from '@/types/resource';
@@ -277,51 +278,51 @@ export const DiskList: Component<DiskListProps> = (props) => {
       <Show when={filteredDisks().length > 0}>
         <Card padding="none" tone="card" class="overflow-hidden">
           <div class="overflow-x-auto" style={{ '-webkit-overflow-scrolling': 'touch' }}>
-            <table class="w-full">
-              <thead>
-                <tr class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-600">
-                  <th class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
+            <Table class="w-full">
+              <TableHeader>
+                <TableRow class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-600">
+                  <TableHead class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
                     Node
-                  </th>
-                  <th class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[9%]">
+                  </TableHead>
+                  <TableHead class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[9%]">
                     Device
-                  </th>
-                  <th class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[19%]">
+                  </TableHead>
+                  <TableHead class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[19%]">
                     Model
-                  </th>
-                  <th class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[7%]">
+                  </TableHead>
+                  <TableHead class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[7%]">
                     Type
-                  </th>
-                  <th class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[7%]">
+                  </TableHead>
+                  <TableHead class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[7%]">
                     FS
-                  </th>
-                  <th class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
+                  </TableHead>
+                  <TableHead class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
                     Health
-                  </th>
-                  <th class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[13%]">
+                  </TableHead>
+                  <TableHead class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[13%]">
                     SSD Life
-                  </th>
-                  <th class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[8%]">
+                  </TableHead>
+                  <TableHead class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[8%]">
                     Power-On
-                  </th>
-                  <th class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[7%]">
+                  </TableHead>
+                  <TableHead class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[7%]">
                     Temp
-                  </th>
-                  <th class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[8%]">
+                  </TableHead>
+                  <TableHead class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[8%]">
                     Read
-                  </th>
-                  <th class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[8%]">
+                  </TableHead>
+                  <TableHead class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[8%]">
                     Write
-                  </th>
-                  <th class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[6%]">
+                  </TableHead>
+                  <TableHead class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[6%]">
                     Busy
-                  </th>
-                  <th class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
+                  </TableHead>
+                  <TableHead class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[10%]">
                     Size
-                  </th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-slate-200/50 dark:divide-slate-700/50">
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody class="divide-y divide-slate-200/50 dark:divide-slate-700/50">
                 <For each={filteredDisks()}>
                   {(disk) => {
                     const data = getDiskData(disk);
@@ -331,11 +332,11 @@ export const DiskList: Component<DiskListProps> = (props) => {
 
                     return (
                       <>
-                        <tr
+                        <TableRow
                           class={`cursor-pointer transition-colors ${isSelected() ? 'bg-blue-50 dark:bg-blue-900' : 'hover:bg-slate-50 dark:hover:bg-slate-700'}`}
                           onClick={() => handleRowClick(disk)}
                         >
-                          <td class="px-1.5 sm:px-2 py-0.5 text-xs whitespace-nowrap">
+                          <TableCell class="px-1.5 sm:px-2 py-0.5 text-xs whitespace-nowrap">
                             <div class="flex items-center gap-1.5 min-w-0">
                               <div
                                 class={`cursor-pointer transition-transform duration-200 ${isSelected() ? 'rotate-90' : ''}`}
@@ -348,25 +349,25 @@ export const DiskList: Component<DiskListProps> = (props) => {
                                 {data.node}
                               </span>
                             </div>
-                          </td>
-                          <td class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 text-xs">
+                          </TableCell>
+                          <TableCell class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 text-xs">
                             <span class="font-mono text-slate-600 dark:text-slate-400">
                               {data.devPath}
                             </span>
-                          </td>
-                          <td class="px-1.5 sm:px-2 py-0.5 text-xs">
+                          </TableCell>
+                          <TableCell class="px-1.5 sm:px-2 py-0.5 text-xs">
                             <span class="text-slate-700 dark:text-slate-300">
                               {data.model || 'Unknown'}
                             </span>
-                          </td>
-                          <td class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 text-xs">
+                          </TableCell>
+                          <TableCell class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 text-xs">
                             <span
                               class={`inline-block px-1.5 py-0.5 text-[10px] font-medium rounded ${getDiskTypeBadge(data.type)}`}
                             >
                               {data.type.toUpperCase()}
                             </span>
-                          </td>
-                          <td class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 text-xs">
+                          </TableCell>
+                          <TableCell class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 text-xs">
                             <Show
                               when={data.used && data.used !== 'unknown'}
                               fallback={<span class="text-slate-400">-</span>}
@@ -375,8 +376,8 @@ export const DiskList: Component<DiskListProps> = (props) => {
                                 {data.used}
                               </span>
                             </Show>
-                          </td>
-                          <td class="px-1.5 sm:px-2 py-0.5 text-xs">
+                          </TableCell>
+                          <TableCell class="px-1.5 sm:px-2 py-0.5 text-xs">
                             <span
                               class={`inline-block px-1.5 py-0.5 text-[10px] font-medium rounded ${health.bgColor} ${health.color}`}
                             >
@@ -387,8 +388,8 @@ export const DiskList: Component<DiskListProps> = (props) => {
                                 &#9888;
                               </span>
                             </Show>
-                          </td>
-                          <td class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 text-xs">
+                          </TableCell>
+                          <TableCell class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 text-xs">
                             <Show
                               when={data.wearout > 0}
                               fallback={<span class="text-slate-400">-</span>}
@@ -410,8 +411,8 @@ export const DiskList: Component<DiskListProps> = (props) => {
                                 </span>
                               </div>
                             </Show>
-                          </td>
-                          <td class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 text-xs">
+                          </TableCell>
+                          <TableCell class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 text-xs">
                             <Show
                               when={data.smartAttributes?.powerOnHours != null}
                               fallback={<span class="text-slate-400">-</span>}
@@ -420,8 +421,8 @@ export const DiskList: Component<DiskListProps> = (props) => {
                                 {formatPowerOnHours(data.smartAttributes!.powerOnHours!, true)}
                               </span>
                             </Show>
-                          </td>
-                          <td class="px-1.5 sm:px-2 py-0.5 text-xs">
+                          </TableCell>
+                          <TableCell class="px-1.5 sm:px-2 py-0.5 text-xs">
                             <Show
                               when={typeof data.temperature === 'number'}
                               fallback={<span class="font-medium text-slate-400">-</span>}
@@ -437,47 +438,47 @@ export const DiskList: Component<DiskListProps> = (props) => {
                                 {formatTemperature(data.temperature)}
                               </span>
                             </Show>
-                          </td>
-                          <td class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 align-middle">
+                          </TableCell>
+                          <TableCell class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 align-middle">
                             <Show when={getMetricResourceId(disk)} fallback={<span class="text-slate-300">-</span>}>
                               {(resourceId) => (
                                 <DiskLiveMetric resourceId={resourceId()} type="read" />
                               )}
                             </Show>
-                          </td>
-                          <td class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 align-middle">
+                          </TableCell>
+                          <TableCell class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 align-middle">
                             <Show when={getMetricResourceId(disk)} fallback={<span class="text-slate-300">-</span>}>
                               {(resourceId) => (
                                 <DiskLiveMetric resourceId={resourceId()} type="write" />
                               )}
                             </Show>
-                          </td>
-                          <td class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 align-middle">
+                          </TableCell>
+                          <TableCell class="hidden md:table-cell px-1.5 sm:px-2 py-0.5 align-middle">
                             <Show when={getMetricResourceId(disk)} fallback={<span class="text-slate-300">-</span>}>
                               {(resourceId) => (
                                 <DiskLiveMetric resourceId={resourceId()} type="ioTime" />
                               )}
                             </Show>
-                          </td>
-                          <td class="px-1.5 sm:px-2 py-0.5 text-xs whitespace-nowrap">
+                          </TableCell>
+                          <TableCell class="px-1.5 sm:px-2 py-0.5 text-xs whitespace-nowrap">
                             <span class="text-slate-700 dark:text-slate-300">
                               {formatBytes(data.size)}
                             </span>
-                          </td>
-                        </tr>
+                          </TableCell>
+                        </TableRow>
                         <Show when={isSelected()}>
-                          <tr>
-                            <td colSpan={13} class="bg-slate-50 dark:bg-slate-800 px-4 py-4 border-b border-slate-100 dark:border-slate-700 shadow-inner">
+                          <TableRow>
+                            <TableCell colSpan={13} class="bg-slate-50 dark:bg-slate-800 px-4 py-4 border-b border-slate-100 dark:border-slate-700 shadow-inner">
                               <DiskDetail disk={disk} nodes={props.nodes} />
-                            </td>
-                          </tr>
+                            </TableCell>
+                          </TableRow>
                         </Show>
                       </>
                     );
                   }}
                 </For>
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         </Card>
       </Show>

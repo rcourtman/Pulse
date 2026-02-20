@@ -2,6 +2,7 @@ import type { Component } from 'solid-js';
 import { For, Show, createMemo, createResource, createSignal } from 'solid-js';
 import { apiFetchJSON } from '@/utils/apiClient';
 import { Card } from '@/components/shared/Card';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/shared/Table';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { formatBytes, formatRelativeTime } from '@/utils/format';
 
@@ -282,30 +283,30 @@ export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
                 <Card padding="lg">
                   <div class="text-xs font-semibold text-slate-900 dark:text-slate-100">Nodes</div>
                   <div class="mt-2 overflow-x-auto">
-                    <table class="min-w-full text-xs">
-                      <thead class="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                        <tr>
-                          <th class="text-left py-2 pr-3">Node</th>
-                          <th class="text-left py-2 pr-3">Role</th>
-                          <th class="text-left py-2 pr-3">Status</th>
-                          <th class="text-right py-2 pl-3">Queue</th>
-                        </tr>
-                      </thead>
-                      <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
+                    <Table class="min-w-full text-xs">
+                      <TableHeader class="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        <TableRow>
+                          <TableHead class="text-left py-2 pr-3">Node</TableHead>
+                          <TableHead class="text-left py-2 pr-3">Role</TableHead>
+                          <TableHead class="text-left py-2 pr-3">Status</TableHead>
+                          <TableHead class="text-right py-2 pl-3">Queue</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody class="divide-y divide-gray-100 dark:divide-gray-800">
                         <For each={pmgData().nodes || []}>
                           {(node) => (
-                            <tr>
-                              <td class="py-2 pr-3 font-medium text-slate-900 dark:text-slate-100">{node.name}</td>
-                              <td class="py-2 pr-3 text-slate-600 dark:text-slate-300">{node.role || '—'}</td>
-                              <td class="py-2 pr-3 text-slate-600 dark:text-slate-300">{node.status || '—'}</td>
-                              <td class="py-2 pl-3 text-right text-slate-600 dark:text-slate-300">
+                            <TableRow>
+                              <TableCell class="py-2 pr-3 font-medium text-slate-900 dark:text-slate-100">{node.name}</TableCell>
+                              <TableCell class="py-2 pr-3 text-slate-600 dark:text-slate-300">{node.role || '—'}</TableCell>
+                              <TableCell class="py-2 pr-3 text-slate-600 dark:text-slate-300">{node.status || '—'}</TableCell>
+                              <TableCell class="py-2 pl-3 text-right text-slate-600 dark:text-slate-300">
                                 {formatCompact(node.queueStatus?.total ?? 0)}
-                              </td>
-                            </tr>
+                              </TableCell>
+                            </TableRow>
                           )}
                         </For>
-                      </tbody>
-                    </table>
+                      </TableBody>
+                    </Table>
                   </div>
                 </Card>
               </Show>
@@ -322,24 +323,24 @@ export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
                     />
                   </div>
                   <div class="mt-2 overflow-x-auto">
-                    <table class="min-w-full text-xs">
-                      <thead class="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                        <tr>
-                          <th class="text-left py-2 pr-3">Domain</th>
-                          <th class="text-left py-2 pr-3">Comment</th>
-                        </tr>
-                      </thead>
-                      <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
+                    <Table class="min-w-full text-xs">
+                      <TableHeader class="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        <TableRow>
+                          <TableHead class="text-left py-2 pr-3">Domain</TableHead>
+                          <TableHead class="text-left py-2 pr-3">Comment</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody class="divide-y divide-gray-100 dark:divide-gray-800">
                         <For each={relayDomains()}>
                           {(row) => (
-                            <tr>
-                              <td class="py-2 pr-3 font-medium text-slate-900 dark:text-slate-100">{row.domain}</td>
-                              <td class="py-2 pr-3 text-slate-600 dark:text-slate-300">{row.comment || '—'}</td>
-                            </tr>
+                            <TableRow>
+                              <TableCell class="py-2 pr-3 font-medium text-slate-900 dark:text-slate-100">{row.domain}</TableCell>
+                              <TableCell class="py-2 pr-3 text-slate-600 dark:text-slate-300">{row.comment || '—'}</TableCell>
+                            </TableRow>
                           )}
                         </For>
-                      </tbody>
-                    </table>
+                      </TableBody>
+                    </Table>
                   </div>
                 </Card>
               </Show>
@@ -363,32 +364,32 @@ export const PMGInstanceDrawer: Component<PMGInstanceDrawerProps> = (props) => {
                     />
                   </div>
                   <div class="mt-2 overflow-x-auto">
-                    <table class="min-w-full text-xs">
-                      <thead class="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                        <tr>
-                          <th class="text-left py-2 pr-3">Domain</th>
-                          <th class="text-right py-2 pl-3">Mail</th>
-                          <th class="text-right py-2 pl-3">Spam</th>
-                          <th class="text-right py-2 pl-3">Virus</th>
-                          <th class="text-right py-2 pl-3">Bytes</th>
-                        </tr>
-                      </thead>
-                      <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
+                    <Table class="min-w-full text-xs">
+                      <TableHeader class="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        <TableRow>
+                          <TableHead class="text-left py-2 pr-3">Domain</TableHead>
+                          <TableHead class="text-right py-2 pl-3">Mail</TableHead>
+                          <TableHead class="text-right py-2 pl-3">Spam</TableHead>
+                          <TableHead class="text-right py-2 pl-3">Virus</TableHead>
+                          <TableHead class="text-right py-2 pl-3">Bytes</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody class="divide-y divide-gray-100 dark:divide-gray-800">
                         <For each={domainStats()}>
                           {(row) => (
-                            <tr>
-                              <td class="py-2 pr-3 font-medium text-slate-900 dark:text-slate-100">{row.domain}</td>
-                              <td class="py-2 pl-3 text-right text-slate-600 dark:text-slate-300">{formatCompact(row.mailCount)}</td>
-                              <td class="py-2 pl-3 text-right text-slate-600 dark:text-slate-300">{formatCompact(row.spamCount)}</td>
-                              <td class="py-2 pl-3 text-right text-slate-600 dark:text-slate-300">{formatCompact(row.virusCount)}</td>
-                              <td class="py-2 pl-3 text-right text-slate-600 dark:text-slate-300">
+                            <TableRow>
+                              <TableCell class="py-2 pr-3 font-medium text-slate-900 dark:text-slate-100">{row.domain}</TableCell>
+                              <TableCell class="py-2 pl-3 text-right text-slate-600 dark:text-slate-300">{formatCompact(row.mailCount)}</TableCell>
+                              <TableCell class="py-2 pl-3 text-right text-slate-600 dark:text-slate-300">{formatCompact(row.spamCount)}</TableCell>
+                              <TableCell class="py-2 pl-3 text-right text-slate-600 dark:text-slate-300">{formatCompact(row.virusCount)}</TableCell>
+                              <TableCell class="py-2 pl-3 text-right text-slate-600 dark:text-slate-300">
                                 {row.bytes ? formatBytes(row.bytes) : '—'}
-                              </td>
-                            </tr>
+                              </TableCell>
+                            </TableRow>
                           )}
                         </For>
-                      </tbody>
-                    </table>
+                      </TableBody>
+                    </Table>
                   </div>
                 </Card>
               </Show>

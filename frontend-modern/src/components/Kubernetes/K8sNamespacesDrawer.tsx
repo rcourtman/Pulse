@@ -3,6 +3,7 @@ import { For, Show, createMemo, createResource, createSignal } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
 import { apiFetchJSON } from '@/utils/apiClient';
 import { Card } from '@/components/shared/Card';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/shared/Table';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { buildWorkloadsPath } from '@/routing/resourceLinks';
 
@@ -148,42 +149,42 @@ export const K8sNamespacesDrawer: Component<{
           >
             <Card padding="none" tone="card" class="overflow-hidden">
               <div class="overflow-x-auto">
-                <table class="w-full min-w-[720px] border-collapse text-xs">
-                  <thead class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
-                    <tr class="text-left text-[10px] uppercase tracking-wide">
-                      <th class="px-3 py-2 font-medium">Namespace</th>
-                      <th class="px-3 py-2 font-medium">Pods</th>
-                      <th class="px-3 py-2 font-medium">Deployments</th>
-                      <th class="px-3 py-2 font-medium">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                <Table class="w-full min-w-[720px] border-collapse text-xs">
+                  <TableHeader class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
+                    <TableRow class="text-left text-[10px] uppercase tracking-wide">
+                      <TableHead class="px-3 py-2 font-medium">Namespace</TableHead>
+                      <TableHead class="px-3 py-2 font-medium">Pods</TableHead>
+                      <TableHead class="px-3 py-2 font-medium">Deployments</TableHead>
+                      <TableHead class="px-3 py-2 font-medium">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody class="divide-y divide-gray-100 dark:divide-gray-700">
                     <For each={filteredRows()}>
                       {(row) => (
-                        <tr class="hover:bg-slate-50 dark:hover:bg-slate-800">
-                          <td class="px-3 py-2">
+                        <TableRow class="hover:bg-slate-50 dark:hover:bg-slate-800">
+                          <TableCell class="px-3 py-2">
                             <div class="flex items-center gap-2 min-w-0">
                               <span class={`h-2 w-2 rounded-full ${statusTone(row.pods)}`} />
                               <span class="font-semibold text-slate-900 dark:text-slate-100 truncate" title={row.namespace}>
                                 {row.namespace}
                               </span>
                             </div>
-                          </td>
-                          <td class="px-3 py-2 text-slate-700 dark:text-slate-200">
+                          </TableCell>
+                          <TableCell class="px-3 py-2 text-slate-700 dark:text-slate-200">
                             <span class="font-semibold">{formatInteger(row.pods.total)}</span>
                             <span class="ml-2 text-[11px] text-slate-500 dark:text-slate-400">
                               {row.pods.offline > 0 ? `${formatInteger(row.pods.offline)} off` : ''}
                               {row.pods.warning > 0 ? `${row.pods.offline > 0 ? ' · ' : ''}${formatInteger(row.pods.warning)} warn` : ''}
                             </span>
-                          </td>
-                          <td class="px-3 py-2 text-slate-700 dark:text-slate-200">
+                          </TableCell>
+                          <TableCell class="px-3 py-2 text-slate-700 dark:text-slate-200">
                             <span class="font-semibold">{formatInteger(row.deployments.total)}</span>
                             <span class="ml-2 text-[11px] text-slate-500 dark:text-slate-400">
                               {row.deployments.warning > 0 ? `${formatInteger(row.deployments.warning)} warn` : ''}
                               {row.deployments.offline > 0 ? `${row.deployments.warning > 0 ? ' · ' : ''}${formatInteger(row.deployments.offline)} off` : ''}
                             </span>
-                          </td>
-                          <td class="px-3 py-2">
+                          </TableCell>
+                          <TableCell class="px-3 py-2">
                             <div class="flex flex-wrap items-center gap-2">
                               <button
                                 type="button"
@@ -202,12 +203,12 @@ export const K8sNamespacesDrawer: Component<{
                                 </button>
                               </Show>
                             </div>
-                          </td>
-                        </tr>
+                          </TableCell>
+                        </TableRow>
                       )}
                     </For>
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
             </Card>
           </Show>

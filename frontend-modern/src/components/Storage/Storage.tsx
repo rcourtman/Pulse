@@ -3,6 +3,7 @@ import { Component, For, Index, Show, createEffect, createMemo, createSignal, on
 import { useWebSocket } from '@/App';
 import { useResources } from '@/hooks/useResources';
 import { Card } from '@/components/shared/Card';
+import { Table, TableHeader, TableBody, TableRow, TableHead } from '@/components/shared/Table';
 import { DiskList } from '@/components/Storage/DiskList';
 import { EnhancedStorageBar } from '@/components/Storage/EnhancedStorageBar';
 import { StorageHero } from '@/components/Storage/StorageHero';
@@ -562,21 +563,21 @@ const Storage: Component = () => {
                 }
               >
                 <div class="overflow-x-auto">
-                  <table class="w-full text-xs">
-                    <thead>
-                      <tr class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
-                        <th class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">Name</th>
+                  <Table class="w-full text-xs">
+                    <TableHeader>
+                      <TableRow class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
+                        <TableHead class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">Name</TableHead>
                         <Show when={groupBy() !== 'node'}>
-                          <th class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">Node</th>
+                          <TableHead class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">Node</TableHead>
                         </Show>
-                        <th class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider hidden md:table-cell">Type</th>
-                        <th class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider md:min-w-[180px]">Capacity</th>
-                        <th class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[120px] hidden md:table-cell">Trend</th>
-                        <th class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">Health</th>
-                        <th class="px-1.5 sm:px-2 py-0.5 w-10" />
-                      </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-200/50 dark:divide-slate-700/50">
+                        <TableHead class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider hidden md:table-cell">Type</TableHead>
+                        <TableHead class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider md:min-w-[180px]">Capacity</TableHead>
+                        <TableHead class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[120px] hidden md:table-cell">Trend</TableHead>
+                        <TableHead class="px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">Health</TableHead>
+                        <TableHead class="px-1.5 sm:px-2 py-0.5 w-10" />
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody class="divide-y divide-slate-200/50 dark:divide-slate-700/50">
                       {/* Outer <For> uses string keys — strings compare by value so DOM is stable across data updates */}
                       <For each={groupedRecords().map((g) => g.key)}>
                         {(groupKey) => {
@@ -685,8 +686,8 @@ const Storage: Component = () => {
                           );
                         }}
                       </For>
-                    </tbody>
-                  </table>
+                    </TableBody>
+                  </Table>
                 </div>
               </Show>
             }

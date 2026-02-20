@@ -3,6 +3,7 @@ import { useTooltip } from '@/hooks/useTooltip';
 import { TooltipPortal } from '@/components/shared/TooltipPortal';
 import { useWebSocket } from '@/App';
 import { Card } from '@/components/shared/Card';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/shared/Table';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { formatRelativeTime, formatBytes } from '@/utils/format';
 
@@ -659,45 +660,45 @@ const MailGateway: Component = () => {
                               Cluster Nodes ({pmg.nodes?.length})
                             </div>
                             <div class="overflow-x-auto -mx-4 px-4">
-                              <table class="w-full min-w-[600px] text-xs">
-                                <thead>
-                                  <tr class="text-left text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
-                                    <th class="pb-1.5 font-medium">Node</th>
-                                    <th class="pb-1.5 font-medium">Status</th>
-                                    <th class="pb-1.5 font-medium">Uptime</th>
-                                    <th class="pb-1.5 font-medium">Load</th>
-                                    <th class="pb-1.5 font-medium">Queue</th>
-                                  </tr>
-                                </thead>
-                                <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                              <Table class="w-full min-w-[600px] text-xs">
+                                <TableHeader>
+                                  <TableRow class="text-left text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
+                                    <TableHead class="pb-1.5 font-medium">Node</TableHead>
+                                    <TableHead class="pb-1.5 font-medium">Status</TableHead>
+                                    <TableHead class="pb-1.5 font-medium">Uptime</TableHead>
+                                    <TableHead class="pb-1.5 font-medium">Load</TableHead>
+                                    <TableHead class="pb-1.5 font-medium">Queue</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody class="divide-y divide-gray-100 dark:divide-gray-700">
                                   <For each={pmg.nodes}>
                                     {(node) => {
                                       const isOnline = (node.status || '').toLowerCase() === 'online';
 
                                       return (
-                                        <tr class="hover:bg-slate-50 dark:hover:bg-slate-800">
-                                          <td class="py-1.5 font-medium text-slate-900 dark:text-slate-100">{node.name}</td>
-                                          <td class="py-1.5">
+                                        <TableRow class="hover:bg-slate-50 dark:hover:bg-slate-800">
+                                          <TableCell class="py-1.5 font-medium text-slate-900 dark:text-slate-100">{node.name}</TableCell>
+                                          <TableCell class="py-1.5">
                                             <span class={`inline-flex items-center gap-1 ${isOnline ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                                               <span class={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'}`} />
                                               {node.status || 'unknown'}
                                             </span>
-                                          </td>
-                                          <td class="py-1.5 text-slate-600 dark:text-slate-400">
+                                          </TableCell>
+                                          <TableCell class="py-1.5 text-slate-600 dark:text-slate-400">
                                             <Show when={node.uptime} fallback="—">
                                               {Math.floor((node.uptime ?? 0) / 86400)}d {Math.floor(((node.uptime ?? 0) % 86400) / 3600)}h
                                             </Show>
-                                          </td>
-                                          <td class="py-1.5 text-slate-600 dark:text-slate-400">{node.loadAvg || '—'}</td>
-                                          <td class="py-1.5">
+                                          </TableCell>
+                                          <TableCell class="py-1.5 text-slate-600 dark:text-slate-400">{node.loadAvg || '—'}</TableCell>
+                                          <TableCell class="py-1.5">
                                             <QueueIndicator queue={node.queueStatus} />
-                                          </td>
-                                        </tr>
+                                          </TableCell>
+                                        </TableRow>
                                       );
                                     }}
                                   </For>
-                                </tbody>
-                              </table>
+                                </TableBody>
+                              </Table>
                             </div>
                           </div>
                         </Show>

@@ -21,6 +21,7 @@ import type { ProtectionRollup, RecoveryPoint } from '@/types/recovery';
 import type { Resource } from '@/types/resource';
 import { RecoveryPointDetails } from '@/components/Recovery/RecoveryPointDetails';
 import { ProtectionHero } from './ProtectionHero';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/shared/Table';
 import type { ColumnDef } from '@/hooks/useColumnVisibility';
 import ListFilterIcon from 'lucide-solid/icons/list-filter';
 import { segmentedButtonClass } from '@/utils/segmentedButton';
@@ -1071,11 +1072,11 @@ const Recovery: Component = () => {
 
           <Show when={filteredRollups().length > 0}>
             <div class="overflow-x-auto">
-              <table class="w-full border-collapse whitespace-nowrap" style={{ 'table-layout': 'fixed', 'min-width': isMobile() ? '100%' : '500px' }}>
-                <thead>
-                  <tr class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
+              <Table class="w-full border-collapse whitespace-nowrap" style={{ 'table-layout': 'fixed', 'min-width': isMobile() ? '100%' : '500px' }}>
+                <TableHeader>
+                  <TableRow class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
                     {([['subject', 'Subject'], ['source', 'Source'], ['lastBackup', 'Last Backup'], ['outcome', 'Outcome']] as const).map(([col, label]) => (
-                      <th
+                      <TableHead
                         class={`py-0.5 px-3 whitespace-nowrap text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer select-none hover:text-slate-700 dark:hover:text-slate-200 transition-colors${col === 'source' ? ' hidden md:table-cell w-[110px]' : col === 'lastBackup' ? ' w-[120px]' : col === 'outcome' ? ' w-[70px]' : ''}`}
                         onClick={() => toggleProtectedSort(col)}
                       >
@@ -1089,11 +1090,11 @@ const Recovery: Component = () => {
                             </svg>
                           </Show>
                         </span>
-                      </th>
+                      </TableHead>
                     ))}
-                  </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-200/50 dark:divide-slate-700/50">
+                  </TableRow>
+                </TableHeader>
+                <TableBody class="divide-y divide-slate-200/50 dark:divide-slate-700/50">
                   <For each={sortedRollups()}>
                     {(r) => {
                       const resIndex = resourcesById();
@@ -1112,14 +1113,14 @@ const Recovery: Component = () => {
                       const stale = isRollupStale(r, nowMs);
                       const neverSucceeded = (!Number.isFinite(successMs) || successMs <= 0) && Number.isFinite(attemptMs) && attemptMs > 0;
                       return (
-                        <tr
+                        <TableRow
                           class="cursor-pointer border-b border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800/35"
                           onClick={() => {
                             setView('events');
                             setRollupId(r.rollupId);
                           }}
                         >
-                          <td
+                          <TableCell
                             class={`relative max-w-[420px] truncate whitespace-nowrap px-3 py-0.5 text-slate-900 ${issueTone === 'rose' || issueTone === 'blue'
                               ? 'font-medium dark:text-slate-100'
                               : issueTone === 'amber'
@@ -1140,8 +1141,8 @@ const Recovery: Component = () => {
                                 <span class="whitespace-nowrap rounded px-1 py-0.5 text-[10px] font-medium text-amber-700 bg-amber-50 dark:text-amber-300 dark:bg-amber-900">stale</span>
                               </Show>
                             </div>
-                          </td>
-                          <td class="hidden md:table-cell whitespace-nowrap px-3 py-0.5">
+                          </TableCell>
+                          <TableCell class="hidden md:table-cell whitespace-nowrap px-3 py-0.5">
                             <div class="flex flex-wrap gap-1.5">
                               <For each={providers}>
                                 {(p) => {
@@ -1150,28 +1151,28 @@ const Recovery: Component = () => {
                                 }}
                               </For>
                             </div>
-                          </td>
-                          <td
+                          </TableCell>
+                          <TableCell
                             class={`whitespace-nowrap px-3 py-0.5 ${rollupAgeTextClass(r, nowMs)}`}
                             title={successMs > 0 ? formatAbsoluteTime(successMs) : attemptMs > 0 ? formatAbsoluteTime(attemptMs) : undefined}
                           >
                             {successMs > 0 ? formatRelativeTime(successMs) : neverSucceeded ? (
                               <span class="text-amber-600 dark:text-amber-400">never</span>
                             ) : '—'}
-                          </td>
-                          <td class="whitespace-nowrap px-3 py-0.5">
+                          </TableCell>
+                          <TableCell class="whitespace-nowrap px-3 py-0.5">
                             <span
                               class={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-medium ${OUTCOME_BADGE_CLASS[outcome]}`}
                             >
                               {titleize(outcome)}
                             </span>
-                          </td>
-                        </tr>
+                          </TableCell>
+                        </TableRow>
                       );
                     }}
                   </For>
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
           </Show>
         </Card>
@@ -1851,18 +1852,18 @@ const Recovery: Component = () => {
               }
             >
               <div class="overflow-x-auto">
-                <table class="w-full border-collapse text-xs whitespace-nowrap" style={{ 'min-width': tableMinWidth() }}>
-                  <thead>
-                    <tr class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
-                      <For each={mobileVisibleArtifactColumns()}>{(col) => <th class="py-0.5 px-3 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap">{col.label}</th>}</For>
-                    </tr>
-                  </thead>
-                  <tbody class="divide-y divide-slate-200/50 dark:divide-slate-700/50">
+                <Table class="w-full border-collapse text-xs whitespace-nowrap" style={{ 'min-width': tableMinWidth() }}>
+                  <TableHeader>
+                    <TableRow class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
+                      <For each={mobileVisibleArtifactColumns()}>{(col) => <TableHead class="py-0.5 px-3 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap">{col.label}</TableHead>}</For>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody class="divide-y divide-slate-200/50 dark:divide-slate-700/50">
                     <For each={groupedByDay()}>
                       {(group) => (
                         <>
-                          <tr class={groupHeaderRowClass()}>
-                            <td colSpan={tableColumnCount()} class={groupHeaderTextClass()}>
+                          <TableRow class={groupHeaderRowClass()}>
+                            <TableCell colSpan={tableColumnCount()} class={groupHeaderTextClass()}>
                               <div class="flex items-center gap-2">
                                 <span>{group.label}</span>
                                 <Show when={group.tone === 'recent'}>
@@ -1871,8 +1872,8 @@ const Recovery: Component = () => {
                                   </span>
                                 </Show>
                               </div>
-                            </td>
-                          </tr>
+                            </TableCell>
+                          </TableRow>
 
                           <For each={group.items}>
                             {(p) => {
@@ -1895,7 +1896,7 @@ const Recovery: Component = () => {
 
                               return (
                                 <>
-                                  <tr
+                                  <TableRow
                                     class={`cursor-pointer border-b ${selectedPoint()?.id === p.id ? 'bg-blue-50/50 border-blue-200 dark:bg-blue-900/30 dark:border-blue-800' : 'border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800/35'}`}
                                     onClick={() => setSelectedPoint(selectedPoint()?.id === p.id ? null : p)}
                                   >
@@ -1904,54 +1905,54 @@ const Recovery: Component = () => {
                                         switch (col.id) {
                                           case 'time':
                                             return (
-                                              <td class="whitespace-nowrap px-3 py-0.5 text-slate-500 dark:text-slate-400">
+                                              <TableCell class="whitespace-nowrap px-3 py-0.5 text-slate-500 dark:text-slate-400">
                                                 {timeOnly}
-                                              </td>
+                                              </TableCell>
                                             );
                                           case 'subject':
                                             return (
-                                              <td
+                                              <TableCell
                                                 class="max-w-[420px] truncate whitespace-nowrap px-3 py-0.5 text-slate-900 dark:text-slate-100"
                                                 title={subject}
                                               >
                                                 {subject}
-                                              </td>
+                                              </TableCell>
                                             );
                                           case 'entityId':
                                             return (
-                                              <td class="whitespace-nowrap px-3 py-0.5 text-slate-600 dark:text-slate-400 font-mono">
+                                              <TableCell class="whitespace-nowrap px-3 py-0.5 text-slate-600 dark:text-slate-400 font-mono">
                                                 {entityId || '—'}
-                                              </td>
+                                              </TableCell>
                                             );
                                           case 'cluster':
                                             return (
-                                              <td class="whitespace-nowrap px-3 py-0.5 text-slate-600 dark:text-slate-400 font-mono">
+                                              <TableCell class="whitespace-nowrap px-3 py-0.5 text-slate-600 dark:text-slate-400 font-mono">
                                                 {cluster || '—'}
-                                              </td>
+                                              </TableCell>
                                             );
                                           case 'nodeHost':
                                             return (
-                                              <td class="whitespace-nowrap px-3 py-0.5 text-slate-600 dark:text-slate-400 font-mono">
+                                              <TableCell class="whitespace-nowrap px-3 py-0.5 text-slate-600 dark:text-slate-400 font-mono">
                                                 {nodeHost || '—'}
-                                              </td>
+                                              </TableCell>
                                             );
                                           case 'namespace':
                                             return (
-                                              <td class="whitespace-nowrap px-3 py-0.5 text-slate-600 dark:text-slate-400 font-mono">
+                                              <TableCell class="whitespace-nowrap px-3 py-0.5 text-slate-600 dark:text-slate-400 font-mono">
                                                 {namespace || '—'}
-                                              </td>
+                                              </TableCell>
                                             );
                                           case 'source': {
                                             const badge = getSourcePlatformBadge(provider);
                                             return (
-                                              <td class="whitespace-nowrap px-3 py-0.5">
+                                              <TableCell class="whitespace-nowrap px-3 py-0.5">
                                                 <span class={badge?.classes || ''}>{badge?.label || sourceLabel(provider)}</span>
-                                              </td>
+                                              </TableCell>
                                             );
                                           }
                                           case 'verified':
                                             return (
-                                              <td class="whitespace-nowrap px-3 py-0.5">
+                                              <TableCell class="whitespace-nowrap px-3 py-0.5">
                                                 {typeof p.verified === 'boolean' ? (
                                                   p.verified ? (
                                                     <span class="inline-flex items-center gap-1 text-green-600 dark:text-green-400" title="Verified">
@@ -1969,55 +1970,55 @@ const Recovery: Component = () => {
                                                 ) : (
                                                   <span class="text-slate-400 dark:text-slate-600">—</span>
                                                 )}
-                                              </td>
+                                              </TableCell>
                                             );
                                           case 'size':
                                             return (
-                                              <td class="whitespace-nowrap px-3 py-0.5 text-slate-500 dark:text-slate-400">
+                                              <TableCell class="whitespace-nowrap px-3 py-0.5 text-slate-500 dark:text-slate-400">
                                                 {p.sizeBytes && p.sizeBytes > 0 ? formatBytes(p.sizeBytes) : '—'}
-                                              </td>
+                                              </TableCell>
                                             );
                                           case 'method':
                                             return (
-                                              <td class="whitespace-nowrap px-3 py-0.5">
+                                              <TableCell class="whitespace-nowrap px-3 py-0.5">
                                                 <span
                                                   class={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-medium ${MODE_BADGE_CLASS[mode]}`}
                                                 >
                                                   {MODE_LABELS[mode]}
                                                 </span>
-                                              </td>
+                                              </TableCell>
                                             );
                                           case 'repository':
                                             return (
-                                              <td
+                                              <TableCell
                                                 class="max-w-[220px] truncate whitespace-nowrap px-3 py-0.5 text-[11px] leading-4 text-slate-600 dark:text-slate-400"
                                                 title={repoLabel}
                                               >
                                                 {repoLabel || '—'}
-                                              </td>
+                                              </TableCell>
                                             );
                                           case 'outcome':
                                             return (
-                                              <td class="whitespace-nowrap px-3 py-0.5">
+                                              <TableCell class="whitespace-nowrap px-3 py-0.5">
                                                 <span
                                                   class={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-medium ${OUTCOME_BADGE_CLASS[outcome]
                                                     }`}
                                                 >
                                                   {titleize(outcome)}
                                                 </span>
-                                              </td>
+                                              </TableCell>
                                             );
                                           default:
                                             return (
-                                              <td class="whitespace-nowrap px-3 py-0.5 text-slate-500 dark:text-slate-400">-</td>
+                                              <TableCell class="whitespace-nowrap px-3 py-0.5 text-slate-500 dark:text-slate-400">-</TableCell>
                                             );
                                         }
                                       }}
                                     </For>
-                                  </tr>
+                                  </TableRow>
                                   <Show when={selectedPoint()?.id === p.id}>
-                                    <tr>
-                                      <td colSpan={tableColumnCount()} class="bg-slate-50 dark:bg-slate-800 px-0 sm:px-4 py-4 border-b border-slate-200 dark:border-slate-700 shadow-inner relative">
+                                    <TableRow>
+                                      <TableCell colSpan={tableColumnCount()} class="bg-slate-50 dark:bg-slate-800 px-0 sm:px-4 py-4 border-b border-slate-200 dark:border-slate-700 shadow-inner relative">
                                         <div class="flex items-center justify-between px-4 pb-2 mb-2 border-b border-slate-200 dark:border-slate-700">
                                           <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Recovery Point Details</h2>
                                           <button
@@ -2034,8 +2035,8 @@ const Recovery: Component = () => {
                                         <div class="px-4">
                                           <RecoveryPointDetails point={p} />
                                         </div>
-                                      </td>
-                                    </tr>
+                                      </TableCell>
+                                    </TableRow>
                                   </Show>
                                 </>
                               );
@@ -2044,8 +2045,8 @@ const Recovery: Component = () => {
                         </>
                       )}
                     </For>
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
 
               <div class="flex items-center justify-between gap-2 px-3 py-2 text-xs text-slate-500 dark:text-slate-400 border-t border-slate-200 dark:border-slate-700">

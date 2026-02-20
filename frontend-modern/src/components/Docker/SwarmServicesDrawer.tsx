@@ -2,6 +2,7 @@ import type { Component } from 'solid-js';
 import { For, Show, createMemo, createResource, createSignal } from 'solid-js';
 import { apiFetchJSON } from '@/utils/apiClient';
 import { Card } from '@/components/shared/Card';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/shared/Table';
 import { EmptyState } from '@/components/shared/EmptyState';
 
 const PAGE_LIMIT = 100;
@@ -236,20 +237,20 @@ export const SwarmServicesDrawer: Component<{ cluster: string; swarm?: SwarmInfo
           >
             <Card padding="none" tone="card" class="overflow-hidden">
               <div class="overflow-x-auto">
-                <table class="w-full min-w-[900px] border-collapse text-xs">
-                  <thead class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
-                    <tr class="text-left text-[10px] uppercase tracking-wide">
-                      <th class="px-3 py-2 font-medium">Service</th>
-                      <th class="px-3 py-2 font-medium">Stack</th>
-                      <th class="px-3 py-2 font-medium">Image</th>
-                      <th class="px-3 py-2 font-medium">Mode</th>
-                      <th class="px-3 py-2 font-medium">Desired</th>
-                      <th class="px-3 py-2 font-medium">Running</th>
-                      <th class="px-3 py-2 font-medium">Update</th>
-                      <th class="px-3 py-2 font-medium">Ports</th>
-                    </tr>
-                  </thead>
-                  <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                <Table class="w-full min-w-[900px] border-collapse text-xs">
+                  <TableHeader class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
+                    <TableRow class="text-left text-[10px] uppercase tracking-wide">
+                      <TableHead class="px-3 py-2 font-medium">Service</TableHead>
+                      <TableHead class="px-3 py-2 font-medium">Stack</TableHead>
+                      <TableHead class="px-3 py-2 font-medium">Image</TableHead>
+                      <TableHead class="px-3 py-2 font-medium">Mode</TableHead>
+                      <TableHead class="px-3 py-2 font-medium">Desired</TableHead>
+                      <TableHead class="px-3 py-2 font-medium">Running</TableHead>
+                      <TableHead class="px-3 py-2 font-medium">Update</TableHead>
+                      <TableHead class="px-3 py-2 font-medium">Ports</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody class="divide-y divide-gray-100 dark:divide-gray-700">
                     <For each={filteredServices()}>
                       {(svc) => {
                         const name = () => normalize(svc.name) || svc.id;
@@ -262,34 +263,34 @@ export const SwarmServicesDrawer: Component<{ cluster: string; swarm?: SwarmInfo
                         const ports = () => formatPorts(svc.docker?.endpointPorts);
 
                         return (
-                          <tr class="hover:bg-slate-50 dark:hover:bg-slate-800">
-                            <td class="px-3 py-2">
+                          <TableRow class="hover:bg-slate-50 dark:hover:bg-slate-800">
+                            <TableCell class="px-3 py-2">
                               <div class="flex items-center gap-2 min-w-0">
                                 <span class={`h-2 w-2 rounded-full ${statusTone(svc.status)}`} title={svc.status || 'unknown'} />
                                 <span class="font-semibold text-slate-900 dark:text-slate-100 truncate" title={name()}>
                                   {name()}
                                 </span>
                               </div>
-                            </td>
-                            <td class="px-3 py-2 text-slate-700 dark:text-slate-200">{stack()}</td>
-                            <td class="px-3 py-2 text-slate-700 dark:text-slate-200 truncate" title={image()}>
+                            </TableCell>
+                            <TableCell class="px-3 py-2 text-slate-700 dark:text-slate-200">{stack()}</TableCell>
+                            <TableCell class="px-3 py-2 text-slate-700 dark:text-slate-200 truncate" title={image()}>
                               {image()}
-                            </td>
-                            <td class="px-3 py-2 text-slate-700 dark:text-slate-200">{mode()}</td>
-                            <td class="px-3 py-2 text-slate-700 dark:text-slate-200">{desired()}</td>
-                            <td class="px-3 py-2 text-slate-700 dark:text-slate-200">{running()}</td>
-                            <td class="px-3 py-2 text-slate-700 dark:text-slate-200 truncate" title={update()}>
+                            </TableCell>
+                            <TableCell class="px-3 py-2 text-slate-700 dark:text-slate-200">{mode()}</TableCell>
+                            <TableCell class="px-3 py-2 text-slate-700 dark:text-slate-200">{desired()}</TableCell>
+                            <TableCell class="px-3 py-2 text-slate-700 dark:text-slate-200">{running()}</TableCell>
+                            <TableCell class="px-3 py-2 text-slate-700 dark:text-slate-200 truncate" title={update()}>
                               {update()}
-                            </td>
-                            <td class="px-3 py-2 text-slate-700 dark:text-slate-200 truncate" title={ports()}>
+                            </TableCell>
+                            <TableCell class="px-3 py-2 text-slate-700 dark:text-slate-200 truncate" title={ports()}>
                               {ports()}
-                            </td>
-                          </tr>
+                            </TableCell>
+                          </TableRow>
                         );
                       }}
                     </For>
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
             </Card>
           </Show>
