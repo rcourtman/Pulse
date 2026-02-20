@@ -127,12 +127,12 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 	r.mux.HandleFunc("/api/security/tokens", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
 		case http.MethodGet:
-			if !ensureScope(w, req, config.ScopeSettingsRead) {
+			if !ensureSettingsReadScope(r.config, w, req) {
 				return
 			}
 			r.handleListAPITokens(w, req)
 		case http.MethodPost:
-			if !ensureScope(w, req, config.ScopeSettingsWrite) {
+			if !ensureSettingsWriteScope(r.config, w, req) {
 				return
 			}
 			r.handleCreateAPIToken(w, req)
@@ -141,7 +141,7 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 		}
 	}))
 	r.mux.HandleFunc("/api/security/tokens/", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, func(w http.ResponseWriter, req *http.Request) {
-		if !ensureScope(w, req, config.ScopeSettingsWrite) {
+		if !ensureSettingsWriteScope(r.config, w, req) {
 			return
 		}
 		if strings.HasSuffix(req.URL.Path, "/rotate") && req.Method == http.MethodPost {

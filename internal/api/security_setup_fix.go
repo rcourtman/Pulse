@@ -52,18 +52,19 @@ func isRunningAsRoot() bool {
 	return os.Geteuid() == 0
 }
 
-func ensureSettingsWriteScope(cfg *config.Config, w http.ResponseWriter, req *http.Request) bool {
+func ensureSettingsScope(cfg *config.Config, w http.ResponseWriter, req *http.Request, scope string) bool {
 	record := getAPITokenRecordFromRequest(req)
 	if record != nil {
-		if record.HasScope(config.ScopeSettingsWrite) {
+		if record.HasScope(scope) {
 			return true
 		}
 
 		log.Warn().
 			Str("token_id", record.ID).
 			Str("path", req.URL.Path).
-			Msg("API token missing settings:write scope for privileged operation")
-		respondMissingScope(w, config.ScopeSettingsWrite)
+			Str("required_scope", scope).
+			Msg("API token missing required settings scope for privileged operation")
+		respondMissingScope(w, scope)
 		return false
 	}
 
@@ -86,6 +87,14 @@ func ensureSettingsWriteScope(cfg *config.Config, w http.ResponseWriter, req *ht
 	}
 
 	return true
+}
+
+func ensureSettingsReadScope(cfg *config.Config, w http.ResponseWriter, req *http.Request) bool {
+	return ensureSettingsScope(cfg, w, req, config.ScopeSettingsRead)
+}
+
+func ensureSettingsWriteScope(cfg *config.Config, w http.ResponseWriter, req *http.Request) bool {
+	return ensureSettingsScope(cfg, w, req, config.ScopeSettingsWrite)
 }
 
 // handleQuickSecuritySetupFixed is the fixed version of the Quick Security Setup

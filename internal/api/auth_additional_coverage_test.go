@@ -111,3 +111,18 @@ func TestCheckAuth_AcceptsBearerToken(t *testing.T) {
 		t.Fatalf("expected X-Auth-Method api_token, got %q", rr.Header().Get("X-Auth-Method"))
 	}
 }
+
+func TestCheckAuth_NilConfigFailsClosed(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+	rr := httptest.NewRecorder()
+
+	if CheckAuth(nil, rr, req) {
+		t.Fatalf("expected CheckAuth to fail when config is nil")
+	}
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d", rr.Code)
+	}
+	if !strings.Contains(rr.Body.String(), "Authentication unavailable") {
+		t.Fatalf("expected authentication unavailable message, got %q", rr.Body.String())
+	}
+}

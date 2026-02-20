@@ -401,6 +401,7 @@ func (r *Router) setupRoutes() {
 
 	// AI settings endpoints
 	r.aiSettingsHandler = NewAISettingsHandler(r.multiTenant, r.mtMonitor, r.agentExecServer)
+	r.aiSettingsHandler.SetConfig(r.config)
 	// Inject state provider so AI has access to full infrastructure context (VMs, containers, IPs)
 	if r.monitor != nil {
 		r.aiSettingsHandler.SetStateProvider(r.monitor)
@@ -945,6 +946,9 @@ func (r *Router) SetConfig(cfg *config.Config) {
 	}
 	if r.systemSettingsHandler != nil {
 		r.systemSettingsHandler.SetConfig(r.config)
+	}
+	if r.aiSettingsHandler != nil {
+		r.aiSettingsHandler.SetConfig(r.config)
 	}
 }
 

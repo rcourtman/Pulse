@@ -3117,16 +3117,22 @@ func TestPrivilegedSecurityEndpointsRejectNonAdminSession(t *testing.T) {
 
 	sessionToken := "security-member-session-" + strconv.FormatInt(time.Now().UnixNano(), 10)
 	GetSessionStore().CreateSession(sessionToken, time.Hour, "agent", "127.0.0.1", "member")
-	csrfToken := generateCSRFToken(sessionToken)
-
 	tests := []struct {
 		method string
 		path   string
 		body   string
 	}{
+		{method: http.MethodGet, path: "/api/system/settings", body: ``},
+		{method: http.MethodPost, path: "/api/system/settings/update", body: `{}`},
+		{method: http.MethodGet, path: "/api/settings/ai", body: ``},
+		{method: http.MethodGet, path: "/api/security/tokens", body: ``},
+		{method: http.MethodDelete, path: "/api/security/tokens/token-1", body: ``},
 		{method: http.MethodPost, path: "/api/security/apply-restart", body: `{}`},
 		{method: http.MethodPost, path: "/api/security/regenerate-token", body: `{}`},
 		{method: http.MethodPost, path: "/api/security/validate-token", body: `{"token":"abc"}`},
+		{method: http.MethodPost, path: "/api/settings/ai/update", body: `{}`},
+		{method: http.MethodPost, path: "/api/ai/test", body: `{}`},
+		{method: http.MethodPost, path: "/api/ai/test/openai", body: `{}`},
 		{method: http.MethodPost, path: "/api/security/reset-lockout", body: `{"identifier":"admin"}`},
 		{method: http.MethodPost, path: "/api/system/verify-temperature-ssh", body: `{}`},
 		{method: http.MethodPost, path: "/api/system/ssh-config", body: `{}`},
@@ -3136,7 +3142,9 @@ func TestPrivilegedSecurityEndpointsRejectNonAdminSession(t *testing.T) {
 		req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
 		req.RemoteAddr = "127.0.0.1:1234"
 		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("X-CSRF-Token", csrfToken)
+		if tc.method != http.MethodGet && tc.method != http.MethodHead {
+			req.Header.Set("X-CSRF-Token", generateCSRFToken(sessionToken))
+		}
 		req.AddCookie(&http.Cookie{Name: "pulse_session", Value: sessionToken})
 
 		rec := httptest.NewRecorder()

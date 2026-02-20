@@ -425,6 +425,11 @@ func (h *SystemSettingsHandler) HandleGetSystemSettings(w http.ResponseWriter, r
 		return
 	}
 
+	// SECURITY: Session users must match configured admin identity for settings reads.
+	if !ensureSettingsReadScope(h.config, w, r) {
+		return
+	}
+
 	settings, err := h.persistence.LoadSystemSettings()
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to load system settings")
@@ -502,6 +507,11 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 				return
 			}
 		}
+	}
+
+	// SECURITY: Session users must match configured admin identity for settings writes.
+	if !ensureSettingsWriteScope(h.config, w, r) {
+		return
 	}
 
 	// Load existing settings first to preserve fields not in the request

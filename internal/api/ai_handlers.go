@@ -1020,6 +1020,9 @@ func (h *AISettingsHandler) HandleGetAISettings(w http.ResponseWriter, r *http.R
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	if !ensureSettingsReadScope(h.getConfig(r.Context()), w, r) {
+		return
+	}
 
 	ctx := r.Context()
 	persistence := h.getPersistence(ctx)
@@ -1114,6 +1117,9 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 			_ = json.NewEncoder(w).Encode(map[string]string{"error": "Admin privileges required"})
 			return
 		}
+	}
+	if !ensureSettingsWriteScope(h.getConfig(r.Context()), w, r) {
+		return
 	}
 
 	// Load existing settings
@@ -1510,6 +1516,9 @@ func (h *AISettingsHandler) HandleTestAIConnection(w http.ResponseWriter, r *htt
 			return
 		}
 	}
+	if !ensureSettingsWriteScope(h.getConfig(r.Context()), w, r) {
+		return
+	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
@@ -1564,6 +1573,9 @@ func (h *AISettingsHandler) HandleTestProvider(w http.ResponseWriter, r *http.Re
 			_ = json.NewEncoder(w).Encode(map[string]string{"error": "Admin privileges required"})
 			return
 		}
+	}
+	if !ensureSettingsWriteScope(h.getConfig(r.Context()), w, r) {
+		return
 	}
 
 	// Get provider from URL path (e.g., /api/ai/test/anthropic -> anthropic)

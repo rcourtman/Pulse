@@ -201,6 +201,20 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 		return true
 	}
 
+	if cfg == nil {
+		path := ""
+		if r != nil && r.URL != nil {
+			path = r.URL.Path
+		}
+		log.Error().
+			Str("path", path).
+			Msg("CheckAuth called without configuration")
+		if w != nil {
+			http.Error(w, "Authentication unavailable", http.StatusServiceUnavailable)
+		}
+		return false
+	}
+
 	config.Mu.RLock()
 	defer config.Mu.RUnlock()
 
