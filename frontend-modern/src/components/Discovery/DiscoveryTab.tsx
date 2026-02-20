@@ -58,10 +58,15 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
         const trimmed = urlValue().trim();
         setUrlSaving(true);
         try {
-            await GuestMetadataAPI.updateMetadata(props.guestId, { customUrl: trimmed });
-            props.onCustomUrlChange?.(trimmed);
+            // For hosts, the parent callback handles the correct API (HostMetadataAPI).
+            // For guests, use GuestMetadataAPI directly as before.
+            if (props.onCustomUrlChange) {
+                props.onCustomUrlChange(trimmed);
+            } else {
+                await GuestMetadataAPI.updateMetadata(props.guestId, { customUrl: trimmed });
+            }
         } catch (err) {
-            console.error('Failed to save guest URL:', err);
+            console.error('Failed to save URL:', err);
         } finally {
             setUrlSaving(false);
         }
@@ -71,11 +76,14 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
         if (!props.guestId) return;
         setUrlSaving(true);
         try {
-            await GuestMetadataAPI.updateMetadata(props.guestId, { customUrl: '' });
+            if (props.onCustomUrlChange) {
+                props.onCustomUrlChange('');
+            } else {
+                await GuestMetadataAPI.updateMetadata(props.guestId, { customUrl: '' });
+            }
             setUrlValue('');
-            props.onCustomUrlChange?.('');
         } catch (err) {
-            console.error('Failed to remove guest URL:', err);
+            console.error('Failed to remove URL:', err);
         } finally {
             setUrlSaving(false);
         }

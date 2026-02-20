@@ -17,6 +17,8 @@ interface HostDrawerProps {
 export const HostDrawer: Component<HostDrawerProps> = (props) => {
     const [activeTab, setActiveTab] = createSignal<'overview' | 'discovery'>('overview');
     const [historyRange, setHistoryRange] = createSignal<HistoryTimeRange>('1h');
+    const [editingUrl, setEditingUrl] = createSignal(false);
+    const [urlInput, setUrlInput] = createSignal('');
 
     // For unified host agents, the backend stores metrics with resourceType 'host'
     const metricsResource = { type: 'host' as ResourceType, id: props.host.id };
@@ -101,6 +103,97 @@ export const HostDrawer: Component<HostDrawerProps> = (props) => {
                                     <span class="font-medium text-gray-700 dark:text-gray-200">{formatUptime(props.host.uptimeSeconds!)}</span>
                                 </div>
                             </Show>
+                            {/* Web Interface URL */}
+                            <div class="pt-1.5 mt-1.5 border-t border-gray-100 dark:border-gray-700/50">
+                                <Show when={editingUrl()} fallback={
+                                    <div class="flex items-center justify-between gap-2 min-w-0">
+                                        <span class="text-gray-500 dark:text-gray-400 shrink-0">URL</span>
+                                        <Show when={props.customUrl} fallback={
+                                            <button
+                                                onClick={() => { setUrlInput(''); setEditingUrl(true); }}
+                                                class="text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 font-medium cursor-pointer"
+                                            >
+                                                + Add
+                                            </button>
+                                        }>
+                                            <div class="flex items-center gap-1.5 min-w-0">
+                                                <a
+                                                    href={props.customUrl}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    class="text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 font-medium truncate max-w-[150px]"
+                                                    title={props.customUrl}
+                                                    onClick={(e) => e.stopPropagation()}
+                                                >
+                                                    {props.customUrl!.replace(/^https?:\/\//, '')}
+                                                </a>
+                                                <button
+                                                    onClick={() => { setUrlInput(props.customUrl || ''); setEditingUrl(true); }}
+                                                    class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 shrink-0"
+                                                    title="Edit URL"
+                                                >
+                                                    <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                                                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                                                    </svg>
+                                                </button>
+                                            </div>
+                                        </Show>
+                                    </div>
+                                }>
+                                    <div class="space-y-1.5">
+                                        <div class="flex items-center justify-between">
+                                            <span class="text-gray-500 dark:text-gray-400 shrink-0">URL</span>
+                                        </div>
+                                        <input
+                                            type="url"
+                                            value={urlInput()}
+                                            onInput={(e) => setUrlInput(e.currentTarget.value)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    const val = urlInput().trim();
+                                                    if (val) props.onCustomUrlChange?.(props.host.id, val);
+                                                    setEditingUrl(false);
+                                                } else if (e.key === 'Escape') {
+                                                    setEditingUrl(false);
+                                                }
+                                            }}
+                                            placeholder="https://192.168.1.100:8006"
+                                            class="w-full px-2 py-1 text-[11px] rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                                            autofocus
+                                        />
+                                        <div class="flex items-center gap-1.5">
+                                            <button
+                                                onClick={() => {
+                                                    const val = urlInput().trim();
+                                                    if (val) props.onCustomUrlChange?.(props.host.id, val);
+                                                    setEditingUrl(false);
+                                                }}
+                                                class="px-2 py-0.5 text-[10px] font-medium rounded bg-blue-500 hover:bg-blue-600 text-white"
+                                            >
+                                                Save
+                                            </button>
+                                            <Show when={props.customUrl}>
+                                                <button
+                                                    onClick={() => {
+                                                        props.onCustomUrlChange?.(props.host.id, '');
+                                                        setEditingUrl(false);
+                                                    }}
+                                                    class="px-2 py-0.5 text-[10px] font-medium rounded text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                                                >
+                                                    Remove
+                                                </button>
+                                            </Show>
+                                            <button
+                                                onClick={() => setEditingUrl(false)}
+                                                class="px-2 py-0.5 text-[10px] font-medium rounded text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                                            >
+                                                Cancel
+                                            </button>
+                                        </div>
+                                    </div>
+                                </Show>
+                            </div>
                         </div>
                     </div>
 
