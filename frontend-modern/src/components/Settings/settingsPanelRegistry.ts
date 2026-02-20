@@ -22,35 +22,12 @@ const NetworkSettingsPanel = lazy(() =>
 const UpdatesSettingsPanel = lazy(() =>
   import('./UpdatesSettingsPanel').then((m) => ({ default: m.UpdatesSettingsPanel })),
 );
-const RecoverySettingsPanel = lazy(() =>
-  import('./RecoverySettingsPanel').then((m) => ({ default: m.RecoverySettingsPanel })),
-);
-const RelaySettingsPanel = lazy(() =>
-  import('./RelaySettingsPanel').then((m) => ({ default: m.RelaySettingsPanel })),
-);
-const ProLicensePanel = lazy(() =>
-  import('./ProLicensePanel').then((m) => ({ default: m.ProLicensePanel })),
-);
-const OrganizationOverviewPanel = lazy(() => import('./OrganizationOverviewPanel'));
-const OrganizationAccessPanel = lazy(() => import('./OrganizationAccessPanel'));
-const OrganizationSharingPanel = lazy(() => import('./OrganizationSharingPanel'));
-const OrganizationBillingPanel = lazy(() => import('./OrganizationBillingPanel'));
-const BillingAdminPanel = lazy(() => import('./BillingAdminPanel'));
-const APIAccessPanel = lazy(() =>
-  import('./APIAccessPanel').then((m) => ({ default: m.APIAccessPanel })),
-);
+
 const SecurityOverviewPanel = lazy(() =>
   import('./SecurityOverviewPanel').then((m) => ({ default: m.SecurityOverviewPanel })),
 );
-const SecurityAuthPanel = lazy(() =>
-  import('./SecurityAuthPanel').then((m) => ({ default: m.SecurityAuthPanel })),
-);
-const RolesPanel = lazy(() => import('./RolesPanel'));
 const UserAssignmentsPanel = lazy(() => import('./UserAssignmentsPanel'));
 const AuditLogPanel = lazy(() => import('./AuditLogPanel'));
-const AuditWebhookPanel = lazy(() =>
-  import('./AuditWebhookPanel').then((m) => ({ default: m.AuditWebhookPanel })),
-);
 
 export interface SettingsPanelRegistryEntry {
   component: Component<any>;
@@ -88,75 +65,26 @@ export const createSettingsPanelRegistry = (
   docker: {
     component: context.dockerPanel,
   },
-  'system-general': {
+  workspace: {
     component: GeneralSettingsPanel,
     getProps: context.getGeneralPanelProps,
   },
-  'system-network': {
+  integrations: {
     component: NetworkSettingsPanel,
     getProps: context.getNetworkPanelProps,
   },
-  'system-updates': {
+  maintenance: {
     component: UpdatesSettingsPanel,
     getProps: context.getUpdatesPanelProps,
   },
-  'system-recovery': {
-    component: RecoverySettingsPanel,
-    getProps: context.getRecoveryPanelProps,
-  },
-  'system-ai': {
-    component: context.systemAiPanel,
-  },
-  'system-relay': {
-    component: RelaySettingsPanel,
-  },
-  'system-pro': {
-    component: ProLicensePanel,
-  },
-  'organization-overview': {
-    component: OrganizationOverviewPanel,
-    getProps: context.getOrganizationOverviewPanelProps,
-  },
-  'organization-access': {
-    component: OrganizationAccessPanel,
-    getProps: context.getOrganizationAccessPanelProps,
-  },
-  'organization-sharing': {
-    component: OrganizationSharingPanel,
-    getProps: context.getOrganizationSharingPanelProps,
-  },
-  'organization-billing': {
-    component: OrganizationBillingPanel,
-    getProps: context.getOrganizationBillingPanelProps,
-  },
-  'organization-billing-admin': {
-    component: BillingAdminPanel,
-  },
-  api: {
-    component: APIAccessPanel,
-    getProps: context.getApiAccessPanelProps,
-  },
-  'security-overview': {
+  authentication: {
     component: SecurityOverviewPanel,
     getProps: context.getSecurityOverviewPanelProps,
   },
-  'security-auth': {
-    component: SecurityAuthPanel,
-    getProps: context.getSecurityAuthPanelProps,
-  },
-  'security-sso': {
-    component: context.securitySsoPanel,
-  },
-  'security-roles': {
-    component: RolesPanel,
-  },
-  'security-users': {
+  team: {
     component: UserAssignmentsPanel,
   },
-  'security-audit': {
+  audit: {
     component: AuditLogPanel,
-  },
-  'security-webhooks': {
-    component: AuditWebhookPanel,
-  },
+  }
 });

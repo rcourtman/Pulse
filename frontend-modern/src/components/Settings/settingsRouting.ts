@@ -46,9 +46,11 @@ const SETTINGS_PATH_ALIASES: Record<string, string> = {
   '/settings/operations/updates': '/settings/system-updates',
   '/settings/integrations/relay': '/settings/system-relay',
   '/settings/security': '/settings/security-overview',
-  '/settings/api': '/settings/integrations/api',
+  '/settings/api': '/settings/integrations',
   '/settings/billing': '/settings/organization/billing',
   '/settings/plan': '/settings/organization/billing',
+  '/settings/system-general': '/settings/workspace',
+  '/settings/system-network': '/settings/integrations',
 };
 
 export function resolveCanonicalSettingsPath(path: string): string | null {
@@ -103,12 +105,12 @@ export function deriveTabFromPath(path: string): SettingsTab {
   if (canonicalPath.includes('/settings/security-overview')) return 'authentication';
   if (canonicalPath.includes('/settings/security-auth')) return 'authentication';
   if (canonicalPath.includes('/settings/security-sso')) return 'authentication';
-  if (canonicalPath.includes('/settings/security')) return 'authentication';
+  if (canonicalPath.includes('/settings/security') && !canonicalPath.includes('/settings/security-roles') && !canonicalPath.includes('/settings/security-users') && !canonicalPath.includes('/settings/security-audit') && !canonicalPath.includes('/settings/security-webhooks')) return 'authentication';
 
   if (canonicalPath.includes('/settings/team')) return 'team';
   if (canonicalPath.includes('/settings/security-roles')) return 'team';
   if (canonicalPath.includes('/settings/security-users')) return 'team';
-  if (canonicalPath.includes('/settings/organization')) return 'team';
+  if (canonicalPath.includes('/settings/organization') || canonicalPath.includes('/settings/team')) return 'team';
   if (canonicalPath.includes('/settings/organization/access')) return 'team';
 
   if (canonicalPath.includes('/settings/audit')) return 'audit';
@@ -168,6 +170,7 @@ export function deriveTabFromQuery(search: string): SettingsTab | null {
     case 'maintenance':
       return 'maintenance';
     case 'network':
+    case 'api':
     case 'integrations':
       return 'integrations';
     case 'general':
@@ -216,11 +219,11 @@ export function settingsTabPath(tab: SettingsTab): string {
     case 'docker':
       return '/settings/workloads/docker';
     case 'maintenance':
-      return '/settings/system-recovery';
+      return '/settings/maintenance';
     case 'team':
-      return '/settings/organization';
+      return '/settings/team';
     case 'integrations':
-      return '/settings/integrations/api';
+      return '/settings/integrations';
     default:
       return `/settings/${tab}`;
   }
