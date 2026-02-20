@@ -3279,8 +3279,13 @@ function DestinationsTab(props: DestinationsTabProps) {
     setTestingWebhook(webhookId);
     try {
       if (webhookData) {
-        // Test unsaved webhook with provided configuration
-        await NotificationsAPI.testWebhook(webhookData);
+        // Test unsaved webhook with provided configuration.
+        // Include the ID so the backend can merge redacted header/field values
+        // with the saved originals (headers are masked with ***REDACTED*** on load).
+        const payload = webhookId && webhookId !== 'temp-new-webhook'
+          ? { ...webhookData, id: webhookId }
+          : webhookData;
+        await NotificationsAPI.testWebhook(payload);
       } else {
         // Test existing webhook by ID
         await NotificationsAPI.testNotification({ type: 'webhook', webhookId });

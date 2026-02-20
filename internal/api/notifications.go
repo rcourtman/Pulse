@@ -657,6 +657,33 @@ func (h *NotificationHandlers) TestWebhook(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// If testing an existing webhook, merge redacted header/custom field values
+	// with the saved originals (the frontend masks them with ***REDACTED*** on load)
+	if basicWebhook.ID != "" {
+		existingWebhooks := h.getMonitor(r.Context()).GetNotificationManager().GetWebhooks()
+		for _, existing := range existingWebhooks {
+			if existing.ID == basicWebhook.ID {
+				if len(basicWebhook.Headers) > 0 && len(existing.Headers) > 0 {
+					for _, v := range basicWebhook.Headers {
+						if v == "***REDACTED***" {
+							basicWebhook.Headers = existing.Headers
+							break
+						}
+					}
+				}
+				if len(basicWebhook.CustomFields) > 0 && len(existing.CustomFields) > 0 {
+					for _, v := range basicWebhook.CustomFields {
+						if v == "***REDACTED***" {
+							basicWebhook.CustomFields = existing.CustomFields
+							break
+						}
+					}
+				}
+				break
+			}
+		}
+	}
+
 	// Convert to enhanced webhook for testing
 	webhook := notifications.EnhancedWebhookConfig{
 		WebhookConfig: basicWebhook,
