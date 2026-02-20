@@ -782,6 +782,87 @@ func TestWebSocketAllowsTokenQueryParam(t *testing.T) {
 	conn.Close()
 }
 
+func TestWebSocketRejectsOrgQueryMismatchWithTenantContext(t *testing.T) {
+	rawToken := "ws-org-mismatch-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+
+	hub := pulsews.NewHub(nil)
+	go hub.Run()
+	defer hub.Stop()
+
+	router := NewRouter(cfg, nil, nil, hub, nil, "1.0.0")
+	ts := newIPv4HTTPServer(t, router.Handler())
+	defer ts.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws?org_id=tenant-b&token=" + rawToken
+	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err == nil {
+		conn.Close()
+		t.Fatalf("expected websocket org mismatch rejection")
+	}
+	if resp == nil {
+		t.Fatalf("expected HTTP response for websocket org mismatch")
+	}
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403 for websocket org mismatch, got %d", resp.StatusCode)
+	}
+}
+
+func TestSocketIOWebSocketRejectsOrgQueryMismatchWithTenantContext(t *testing.T) {
+	rawToken := "socket-org-mismatch-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+
+	hub := pulsews.NewHub(nil)
+	go hub.Run()
+	defer hub.Stop()
+
+	router := NewRouter(cfg, nil, nil, hub, nil, "1.0.0")
+	ts := newIPv4HTTPServer(t, router.Handler())
+	defer ts.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/socket.io/?transport=websocket&org_id=tenant-b&token=" + rawToken
+	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err == nil {
+		conn.Close()
+		t.Fatalf("expected socket.io websocket org mismatch rejection")
+	}
+	if resp == nil {
+		t.Fatalf("expected HTTP response for socket.io org mismatch")
+	}
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403 for socket.io websocket org mismatch, got %d", resp.StatusCode)
+	}
+}
+
+func TestWebSocketRejectsInvalidOrgQueryID(t *testing.T) {
+	rawToken := "ws-invalid-org-query-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+
+	hub := pulsews.NewHub(nil)
+	go hub.Run()
+	defer hub.Stop()
+
+	router := NewRouter(cfg, nil, nil, hub, nil, "1.0.0")
+	ts := newIPv4HTTPServer(t, router.Handler())
+	defer ts.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws?org_id=../tenant-b&token=" + rawToken
+	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err == nil {
+		conn.Close()
+		t.Fatalf("expected websocket invalid org rejection")
+	}
+	if resp == nil {
+		t.Fatalf("expected HTTP response for websocket invalid org")
+	}
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400 for websocket invalid org, got %d", resp.StatusCode)
+	}
+}
+
 func TestQueryTokenIgnoredForHTTPRequests(t *testing.T) {
 	rawToken := "query-token-ignored-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)

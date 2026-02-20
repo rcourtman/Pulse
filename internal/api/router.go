@@ -7178,7 +7178,13 @@ func (r *Router) handleWebSocket(w http.ResponseWriter, req *http.Request) {
 	if !ensureScope(w, req, config.ScopeMonitoringRead) {
 		return
 	}
-	r.wsHub.HandleWebSocket(w, req)
+
+	boundReq, ok := bindWebSocketOrgToTenantContext(w, req)
+	if !ok {
+		return
+	}
+
+	r.wsHub.HandleWebSocket(w, boundReq)
 }
 
 // handleSimpleStats serves a simple stats page
@@ -7417,7 +7423,11 @@ func (r *Router) handleSocketIO(w http.ResponseWriter, req *http.Request) {
 	// For other socket.io endpoints, use our WebSocket
 	// This provides basic compatibility
 	if strings.Contains(req.URL.RawQuery, "transport=websocket") {
-		r.wsHub.HandleWebSocket(w, req)
+		boundReq, ok := bindWebSocketOrgToTenantContext(w, req)
+		if !ok {
+			return
+		}
+		r.wsHub.HandleWebSocket(w, boundReq)
 		return
 	}
 
@@ -7443,6 +7453,56 @@ func (r *Router) handleSocketIO(w http.ResponseWriter, req *http.Request) {
 
 	// Default: redirect to WebSocket
 	http.Redirect(w, req, "/ws", http.StatusFound)
+}
+
+func resolveExplicitWebSocketOrgID(req *http.Request) (string, bool) {
+	if req == nil {
+		return "", false
+	}
+
+	if headerOrg := strings.TrimSpace(req.Header.Get("X-Pulse-Org-ID")); headerOrg != "" {
+		return headerOrg, true
+	}
+
+	if cookie, err := req.Cookie("pulse_org_id"); err == nil {
+		if cookieOrg := strings.TrimSpace(cookie.Value); cookieOrg != "" {
+			return cookieOrg, true
+		}
+	}
+
+	if queryOrg := strings.TrimSpace(req.URL.Query().Get("org_id")); queryOrg != "" {
+		return queryOrg, true
+	}
+
+	return "", false
+}
+
+func bindWebSocketOrgToTenantContext(w http.ResponseWriter, req *http.Request) (*http.Request, bool) {
+	if req == nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return nil, false
+	}
+
+	contextOrgID := strings.TrimSpace(GetOrgID(req.Context()))
+	if contextOrgID == "" {
+		contextOrgID = "default"
+	}
+
+	if requestedOrgID, explicit := resolveExplicitWebSocketOrgID(req); explicit {
+		if !isValidOrganizationID(requestedOrgID) {
+			http.Error(w, "Invalid organization ID", http.StatusBadRequest)
+			return nil, false
+		}
+		if requestedOrgID != contextOrgID {
+			http.Error(w, "Unauthorized organization context", http.StatusForbidden)
+			return nil, false
+		}
+	}
+
+	cloned := req.Clone(req.Context())
+	cloned.Header = req.Header.Clone()
+	cloned.Header.Set("X-Pulse-Org-ID", contextOrgID)
+	return cloned, true
 }
 
 // forwardUpdateProgress forwards update progress to WebSocket clients
