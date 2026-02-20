@@ -110,9 +110,10 @@ func writeDiscoveryError(w http.ResponseWriter, statusCode int, message string) 
 	})
 }
 
-// isAdminRequest checks if the current request is from an admin user.
-// In Pulse, all authenticated users have admin privileges except non-admin
-// proxy auth users. This method checks all authentication methods.
+// isAdminRequest checks whether the request has privileged admin access for
+// discovery secret operations. This is intentionally stricter than general
+// authentication: session users must match configured admin identity and
+// API tokens must include settings:write.
 func (h *DiscoveryHandlers) isAdminRequest(r *http.Request) bool {
 	// Dev mode bypass - treat all requests as admin when enabled
 	if adminBypassEnabled() {
@@ -136,20 +137,40 @@ func (h *DiscoveryHandlers) isAdminRequest(r *http.Request) bool {
 		return true
 	}
 
-	// 3. Check for valid session cookie (OIDC/SAML sessions)
+	// 3. Check for configured admin session (OIDC/SAML/local session)
 	if cookie, err := r.Cookie("pulse_session"); err == nil && cookie.Value != "" {
 		if ValidateSession(cookie.Value) {
-			return true // Valid session = admin
+			configuredAdmin := strings.TrimSpace(h.config.AuthUser)
+			if configuredAdmin != "" {
+				sessionUser := strings.TrimSpace(GetSessionUsername(cookie.Value))
+				if strings.EqualFold(sessionUser, configuredAdmin) {
+					return true
+				}
+			}
 		}
 	}
 
-	// 4. Check for valid API token (read-only check, safe under RLock)
-	if token := r.Header.Get("X-API-Token"); token != "" {
-		config.Mu.RLock()
-		ok := h.config.IsValidAPIToken(token)
-		config.Mu.RUnlock()
-		if ok {
-			return true // Valid API token = admin
+	// 4. Check API tokens; only settings:write tokens are admin-capable here.
+	if tokenRecord := getAPITokenRecordFromRequest(r); tokenRecord != nil {
+		return tokenRecord.HasScope(config.ScopeSettingsWrite)
+	}
+	validateTokenAsAdmin := func(raw string) bool {
+		if strings.TrimSpace(raw) == "" {
+			return false
+		}
+		config.Mu.Lock()
+		record, ok := h.config.ValidateAPIToken(raw)
+		config.Mu.Unlock()
+		return ok && record != nil && record.HasScope(config.ScopeSettingsWrite)
+	}
+	if token := strings.TrimSpace(r.Header.Get("X-API-Token")); token != "" {
+		if validateTokenAsAdmin(token) {
+			return true
+		}
+	}
+	if bearer := extractBearerToken(r.Header.Get("Authorization")); bearer != "" {
+		if validateTokenAsAdmin(bearer) {
+			return true
 		}
 	}
 

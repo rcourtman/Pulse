@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
@@ -144,6 +145,88 @@ func TestHandleGetDiscovery(t *testing.T) {
 	var resultRedacted servicediscovery.ResourceDiscovery
 	require.NoError(t, json.NewDecoder(w.Body).Decode(&resultRedacted))
 	assert.Nil(t, resultRedacted.UserSecrets)
+}
+
+func TestHandleGetDiscovery_SessionAdminRequiresConfiguredAdminUser(t *testing.T) {
+	h, _, store := setupDiscoveryHandlers(t)
+	h.config.AuthUser = "admin"
+
+	discovery := &servicediscovery.ResourceDiscovery{
+		ID:           "vm:node1:101",
+		ResourceType: servicediscovery.ResourceTypeVM,
+		ResourceID:   "101",
+		HostID:       "node1",
+		ServiceName:  "Session Test Service",
+		UserSecrets:  map[string]string{"key": "secret"},
+	}
+	require.NoError(t, store.Save(discovery))
+
+	memberSession := "discovery-member-session"
+	GetSessionStore().CreateSession(memberSession, time.Hour, "agent", "127.0.0.1", "member")
+
+	req := httptest.NewRequest("GET", "/api/discovery/vm/node1/101", nil)
+	req.AddCookie(&http.Cookie{Name: "pulse_session", Value: memberSession})
+	w := httptest.NewRecorder()
+	h.HandleGetDiscovery(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var redacted servicediscovery.ResourceDiscovery
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&redacted))
+	assert.Nil(t, redacted.UserSecrets)
+
+	adminSession := "discovery-admin-session"
+	GetSessionStore().CreateSession(adminSession, time.Hour, "agent", "127.0.0.1", "admin")
+
+	req = httptest.NewRequest("GET", "/api/discovery/vm/node1/101", nil)
+	req.AddCookie(&http.Cookie{Name: "pulse_session", Value: adminSession})
+	w = httptest.NewRecorder()
+	h.HandleGetDiscovery(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var full servicediscovery.ResourceDiscovery
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&full))
+	assert.Equal(t, "secret", full.UserSecrets["key"])
+}
+
+func TestHandleGetDiscovery_TokenAdminRequiresSettingsWriteScope(t *testing.T) {
+	h, _, store := setupDiscoveryHandlers(t)
+
+	readToken, err := config.NewAPITokenRecord("discovery-read-token-123.12345678", "read", []string{config.ScopeMonitoringRead})
+	require.NoError(t, err)
+	writeToken, err := config.NewAPITokenRecord("discovery-write-token-123.12345678", "write", []string{config.ScopeSettingsWrite})
+	require.NoError(t, err)
+	h.config.APITokens = []config.APITokenRecord{*readToken, *writeToken}
+	h.config.SortAPITokens()
+
+	discovery := &servicediscovery.ResourceDiscovery{
+		ID:           "vm:node1:102",
+		ResourceType: servicediscovery.ResourceTypeVM,
+		ResourceID:   "102",
+		HostID:       "node1",
+		ServiceName:  "Token Test Service",
+		UserSecrets:  map[string]string{"key": "secret"},
+	}
+	require.NoError(t, store.Save(discovery))
+
+	req := httptest.NewRequest("GET", "/api/discovery/vm/node1/102", nil)
+	req.Header.Set("X-API-Token", "discovery-read-token-123.12345678")
+	w := httptest.NewRecorder()
+	h.HandleGetDiscovery(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var redacted servicediscovery.ResourceDiscovery
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&redacted))
+	assert.Nil(t, redacted.UserSecrets)
+
+	req = httptest.NewRequest("GET", "/api/discovery/vm/node1/102", nil)
+	req.Header.Set("X-API-Token", "discovery-write-token-123.12345678")
+	w = httptest.NewRecorder()
+	h.HandleGetDiscovery(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var full servicediscovery.ResourceDiscovery
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&full))
+	assert.Equal(t, "secret", full.UserSecrets["key"])
 }
 
 func TestHandleGetDiscovery_NotFound(t *testing.T) {
