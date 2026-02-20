@@ -149,7 +149,7 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
                   {/* Auto mode */}
                   <label
                     class={`flex items-start gap-3 rounded-md border p-2 transition-colors ${props.discoveryMode() === 'auto'
-                      ? 'border-blue-200 bg-blue-50/80 dark:border-blue-700 dark:bg-blue-900/20'
+                      ? 'border-blue-200 bg-blue-50 dark:border-blue-700 dark:bg-blue-900'
                       : 'border-transparent hover:border-slate-200 dark:hover:border-slate-600'
                       }`}
                   >
@@ -183,7 +183,7 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
                   {/* Custom mode */}
                   <label
                     class={`flex items-start gap-3 rounded-md border p-2 transition-colors ${props.discoveryMode() === 'custom'
-                      ? 'border-blue-200 bg-blue-50/80 dark:border-blue-700 dark:bg-blue-900/20'
+                      ? 'border-blue-200 bg-blue-50 dark:border-blue-700 dark:bg-blue-900'
                       : 'border-transparent hover:border-slate-200 dark:hover:border-slate-600'
                       }`}
                   >
@@ -229,7 +229,7 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
                               type="button"
                               class={`rounded border px-2.5 py-1 text-[0.7rem] transition-colors ${isActive
                                 ? 'border-blue-500 bg-blue-600 text-white dark:border-blue-400 dark:bg-blue-500'
-                                : 'border-slate-300 text-slate-700 hover:border-blue-400 hover:bg-blue-50 dark:border-slate-600 dark:text-slate-300 dark:hover:border-blue-500 dark:hover:bg-blue-900/30'
+                                : 'border-slate-300 text-slate-700 hover:border-blue-400 hover:bg-blue-50 dark:border-slate-600 dark:text-slate-300 dark:hover:border-blue-500 dark:hover:bg-blue-900'
                                 }`}
                               onClick={async () => {
                                 if (props.envOverrides().discoverySubnet) {
@@ -313,7 +313,7 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
                       : '192.168.1.0/24, 10.0.0.0/24'
                   }
                   class={`w-full min-h-10 sm:min-h-10 rounded-md border px-3 py-2.5 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${props.envOverrides().discoverySubnet
-                    ? 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-600 dark:bg-amber-900/20 dark:text-amber-200 cursor-not-allowed opacity-60'
+                    ? 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-600 dark:bg-amber-900 dark:text-amber-200 cursor-not-allowed opacity-60'
                     : 'border-slate-300 bg-white dark:border-slate-600 dark:bg-slate-800'
                     }`}
                   disabled={props.envOverrides().discoverySubnet}
@@ -395,7 +395,7 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
 
           {/* Env override warning */}
           <Show when={props.envOverrides().discoveryEnabled || props.envOverrides().discoverySubnet}>
-            <div class="rounded-md border border-amber-200 bg-amber-100/80 p-3 text-xs text-amber-800 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">
+            <div class="rounded-md border border-amber-200 bg-amber-100 p-3 text-xs text-amber-800 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-200">
               Discovery settings are locked by environment variables. Update the service
               configuration and restart Pulse to change them here.
             </div>
@@ -438,12 +438,12 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
                 disabled={props.envOverrides().publicURL}
                 placeholder="http://192.168.1.100:8080"
                 class={`w-full min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border rounded-md ${props.envOverrides().publicURL
-                  ? 'border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/20 cursor-not-allowed opacity-75'
+                  ? 'border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-900 cursor-not-allowed opacity-75'
                   : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800'
                   }`}
               />
               {props.envOverrides().publicURL && (
-                <div class="mt-2 p-2 bg-amber-100 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700 rounded text-xs text-amber-800 dark:text-amber-200">
+                <div class="mt-2 p-2 bg-amber-100 dark:bg-amber-900 border border-amber-300 dark:border-amber-700 rounded text-xs text-amber-800 dark:text-amber-200">
                   <div class="flex items-center gap-1">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path
@@ -504,12 +504,12 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
                 disabled={props.envOverrides().allowedOrigins}
                 placeholder="* or https://example.com"
                 class={`w-full min-h-10 sm:min-h-10 px-3 py-2.5 text-sm border rounded-md ${props.envOverrides().allowedOrigins
-                  ? 'border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/20 cursor-not-allowed opacity-75'
+                  ? 'border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-900 cursor-not-allowed opacity-75'
                   : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800'
                   }`}
               />
               {props.envOverrides().allowedOrigins && (
-                <div class="mt-2 p-2 bg-amber-100 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700 rounded text-xs text-amber-800 dark:text-amber-200">
+                <div class="mt-2 p-2 bg-amber-100 dark:bg-amber-900 border border-amber-300 dark:border-amber-700 rounded text-xs text-amber-800 dark:text-amber-200">
                   <div class="flex items-center gap-1">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path
