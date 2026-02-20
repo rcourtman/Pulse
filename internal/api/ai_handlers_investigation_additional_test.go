@@ -489,8 +489,79 @@ func TestHandleReapproveInvestigationFix(t *testing.T) {
 	if approvalID == "" {
 		t.Fatalf("expected approval_id in response")
 	}
-	if _, ok := store.GetApproval(approvalID); !ok {
+	appr, ok := store.GetApproval(approvalID)
+	if !ok {
 		t.Fatalf("expected approval %s to exist", approvalID)
+	}
+	if appr.OrgID != "default" {
+		t.Fatalf("expected approval OrgID to be default, got %q", appr.OrgID)
+	}
+}
+
+func TestHandleReapproveInvestigationFix_SetsOrgIDFromContext(t *testing.T) {
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
+
+	prevStore := approval.GetStore()
+	t.Cleanup(func() { approval.SetStore(prevStore) })
+
+	store, err := approval.NewStore(approval.StoreConfig{
+		DataDir:            tmp,
+		DisablePersistence: true,
+	})
+	if err != nil {
+		t.Fatalf("failed to create approval store: %v", err)
+	}
+	approval.SetStore(store)
+
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, "org-a")
+	svc := handler.GetAIService(ctx)
+	svc.SetStateProvider(&MockStateProvider{})
+	patrol := svc.GetPatrolService()
+	if patrol == nil {
+		t.Fatalf("expected patrol service")
+	}
+
+	session := &ai.InvestigationSession{
+		ID:        "inv-1",
+		FindingID: "finding-1",
+		SessionID: "session-1",
+		Status:    "completed",
+		StartedAt: time.Now(),
+		ProposedFix: &ai.InvestigationFix{
+			ID:          "fix-1",
+			Description: "Restart service",
+			Commands:    []string{"systemctl restart foo"},
+		},
+	}
+	orchestrator := &stubInvestigationOrchestrator{session: session}
+	patrol.SetInvestigationOrchestrator(orchestrator)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/findings/finding-1/reapprove", nil)
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "org-a"))
+	rec := httptest.NewRecorder()
+	handler.HandleReapproveInvestigationFix(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status OK, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp map[string]string
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	approvalID := resp["approval_id"]
+	if approvalID == "" {
+		t.Fatalf("expected approval_id in response")
+	}
+	appr, ok := store.GetApproval(approvalID)
+	if !ok {
+		t.Fatalf("expected approval %s to exist", approvalID)
+	}
+	if appr.OrgID != "org-a" {
+		t.Fatalf("expected approval OrgID org-a, got %q", appr.OrgID)
 	}
 }
 

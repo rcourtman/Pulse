@@ -5764,6 +5764,7 @@ func (h *AISettingsHandler) HandleReapproveInvestigationFix(w http.ResponseWrite
 		targetName = inv.ProposedFix.Description
 	}
 	req := &approval.ApprovalRequest{
+		OrgID:      approval.NormalizeOrgID(GetOrgID(r.Context())),
 		ToolID:     "investigation_fix",
 		Command:    inv.ProposedFix.Commands[0],
 		TargetType: "investigation",
