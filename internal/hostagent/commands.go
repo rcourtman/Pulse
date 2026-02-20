@@ -23,9 +23,9 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// safeTargetIDPattern validates target IDs to prevent shell injection.
-// Allows alphanumeric, dash, underscore, period (no colons or special chars).
-var safeTargetIDPattern = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
+// safeTargetIDPattern validates Proxmox VM/LXC IDs used by pct/qm exec wrappers.
+// These must be numeric to avoid option injection or shell metacharacter abuse.
+var safeTargetIDPattern = regexp.MustCompile(`^[0-9]{1,9}$`)
 
 var execCommandContext = exec.CommandContext
 
@@ -567,13 +567,19 @@ func (c *CommandClient) handleExecuteCommand(ctx context.Context, conn *websocke
 }
 
 func wrapCommand(payload executeCommandPayload) string {
+	targetType := strings.ToLower(strings.TrimSpace(payload.TargetType))
+	targetID := strings.TrimSpace(payload.TargetID)
+
 	// Only validate TargetID when it will be interpolated into the command
 	// (container and vm types). Host type doesn't use TargetID in the command.
-	needsTargetID := (payload.TargetType == "container" || payload.TargetType == "vm") && payload.TargetID != ""
+	needsTargetID := targetType == "container" || targetType == "vm"
 
 	if needsTargetID {
+		if targetID == "" {
+			return "sh -c 'echo \"Error: missing target ID\" >&2; exit 1'"
+		}
 		// Validate TargetID to prevent shell injection - defense in depth
-		if !safeTargetIDPattern.MatchString(payload.TargetID) {
+		if !safeTargetIDPattern.MatchString(targetID) {
 			// Return a command that fails with non-zero exit and error message
 			return "sh -c 'echo \"Error: invalid target ID\" >&2; exit 1'"
 		}
@@ -584,11 +590,11 @@ func wrapCommand(payload executeCommandPayload) string {
 		// expand the glob on the host (where /var/log/*.log doesn't exist).
 		quotedCmd := shellQuote(payload.Command)
 
-		if payload.TargetType == "container" {
-			return fmt.Sprintf("pct exec %s -- sh -c %s", payload.TargetID, quotedCmd)
+		if targetType == "container" {
+			return fmt.Sprintf("pct exec %s -- sh -c %s", targetID, quotedCmd)
 		}
-		if payload.TargetType == "vm" {
-			return fmt.Sprintf("qm guest exec %s -- sh -c %s", payload.TargetID, quotedCmd)
+		if targetType == "vm" {
+			return fmt.Sprintf("qm guest exec %s -- sh -c %s", targetID, quotedCmd)
 		}
 	}
 

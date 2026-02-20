@@ -43,13 +43,13 @@ func TestWrapCommand_TargetWrapping(t *testing.T) {
 			want: "qm guest exec 900 -- sh -c 'echo ok'",
 		},
 		{
-			name: "missing target id does not wrap",
+			name: "missing target id fails closed",
 			payload: executeCommandPayload{
 				Command:    "echo ok",
 				TargetType: "container",
 				TargetID:   "",
 			},
-			want: "echo ok",
+			want: `sh -c 'echo "Error: missing target ID" >&2; exit 1'`,
 		},
 	}
 

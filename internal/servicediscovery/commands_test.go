@@ -109,3 +109,29 @@ func TestDockerMountsCommandAvoidsExtraTextUtilities(t *testing.T) {
 		t.Fatalf("expected shell-native container name trimming, got: %s", lxcMounts)
 	}
 }
+
+func TestValidateResourceID_RejectsOptionLikeIDs(t *testing.T) {
+	cases := []string{
+		"-bad",
+		"--help",
+		"-1",
+	}
+
+	for _, tc := range cases {
+		if err := ValidateResourceID(tc); err == nil {
+			t.Fatalf("expected error for option-like resource ID %q", tc)
+		}
+	}
+}
+
+func TestBuildCommands_RejectOptionLikeIdentifiers(t *testing.T) {
+	if cmd := BuildDockerCommand("-bad", "echo hi"); !strings.Contains(cmd, "invalid container name") {
+		t.Fatalf("expected invalid container name error command, got %q", cmd)
+	}
+	if cmd := BuildK8sCommand("-ns", "pod", "", "echo hi"); !strings.Contains(cmd, "invalid namespace") {
+		t.Fatalf("expected invalid namespace error command, got %q", cmd)
+	}
+	if cmd := BuildVMCommand("-1", "echo hi"); !strings.Contains(cmd, "invalid VM ID") {
+		t.Fatalf("expected invalid VM ID error command, got %q", cmd)
+	}
+}

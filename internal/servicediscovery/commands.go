@@ -6,9 +6,9 @@ import (
 	"strings"
 )
 
-// safeResourceIDPattern matches valid resource IDs: alphanumeric, dash, underscore, period, colon
-// This prevents shell injection via malicious resource names.
-var safeResourceIDPattern = regexp.MustCompile(`^[a-zA-Z0-9._:-]+$`)
+// safeResourceIDPattern matches valid resource IDs: alphanumeric, dash, underscore, period, colon.
+// The first character must be alphanumeric so values cannot be interpreted as CLI flags.
+var safeResourceIDPattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._:-]*$`)
 
 // ValidateResourceID checks if a resource ID is safe to use in shell commands.
 // Returns an error if the ID contains potentially dangerous characters.

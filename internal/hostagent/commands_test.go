@@ -210,13 +210,26 @@ func TestWrapCommand(t *testing.T) {
 			},
 		},
 		{
-			name: "EmptyTargetIDPassedThrough",
+			name: "EmptyTargetIDReturnsError",
 			payload: executeCommandPayload{
 				Command:    "ls",
 				TargetType: "container",
 				TargetID:   "",
 			},
-			wantCmd: "ls", // No wrapping when TargetID is empty
+			checkFn: func(cmd string) bool {
+				return strings.Contains(cmd, "missing target ID")
+			},
+		},
+		{
+			name: "OptionLikeTargetIDReturnsError",
+			payload: executeCommandPayload{
+				Command:    "ls",
+				TargetType: "vm",
+				TargetID:   "-1",
+			},
+			checkFn: func(cmd string) bool {
+				return strings.Contains(cmd, "invalid target ID")
+			},
 		},
 	}
 
