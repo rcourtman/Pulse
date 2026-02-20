@@ -568,8 +568,8 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
                     <Show when={source() && source() !== 'store'}>
                         <span
                             class={`text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wide ${source() === 'live'
-                                ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
-                                : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+                                ? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
+                                : 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300'
                                 }`}
                             title={source() === 'live' ? 'Live sample shown because history is not available yet.' : 'In-memory buffer shown while history is warming up.'}
                         >

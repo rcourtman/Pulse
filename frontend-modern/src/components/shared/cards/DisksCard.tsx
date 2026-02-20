@@ -11,7 +11,7 @@ export const DisksCard: Component<DisksCardProps> = (props) => {
   if (!props.disks || props.disks.length === 0) return null;
 
   return (
-    <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600/70 dark:bg-slate-800">
+    <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
       <div class="text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 mb-2">Disks</div>
       <div class="max-h-[140px] overflow-y-auto custom-scrollbar space-y-2">
         <For each={props.disks}>

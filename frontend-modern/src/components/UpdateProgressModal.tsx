@@ -349,7 +349,7 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
 
   return (
     <Show when={props.isOpen}>
-      <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div class="fixed inset-0 bg-black flex items-center justify-center z-50 p-4">
         <div class="bg-white dark:bg-slate-800 rounded-md shadow-sm max-w-2xl w-full">
           {/* Header */}
           <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
@@ -405,7 +405,7 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
 
             {/* Error Message */}
             <Show when={hasError() && status()?.error}>
-              <div class="mt-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-4">
+              <div class="mt-6 bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-800 rounded-md p-4">
                 <div class="text-sm text-red-800 dark:text-red-200">
                   <div class="font-medium mb-1">Error Details:</div>
                   <div class="text-red-700 dark:text-red-300">{status()!.error}</div>
@@ -416,7 +416,7 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
             {/* Warning / Info */}
             <Show when={!isComplete()}>
               <Show when={isRestarting()}>
-                <div class="mt-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md p-3">
+                <div class="mt-6 bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-800 rounded-md p-3">
                   <div class="flex items-start gap-2">
                     <svg class="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -442,7 +442,7 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
                 </div>
               </Show>
               <Show when={!isRestarting()}>
-                <div class="mt-6 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md p-3">
+                <div class="mt-6 bg-yellow-50 dark:bg-yellow-900 border border-yellow-200 dark:border-yellow-800 rounded-md p-3">
                   <div class="flex items-start gap-2">
                     <svg class="w-5 h-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />

@@ -463,13 +463,13 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                   const baseHover = 'cursor-pointer transition-all duration-200 relative hover:shadow-sm group';
 
                   if (isSelected()) {
-                    return `cursor-pointer transition-all duration-200 relative hover:shadow-sm z-10 group bg-blue-50 dark:bg-blue-900/20`;
+                    return `cursor-pointer transition-all duration-200 relative hover:shadow-sm z-10 group bg-blue-50 dark:bg-blue-900`;
                   }
 
                   if (showAlertHighlight()) {
                     const alertBg = alertStyles().severity === 'critical'
-                      ? 'bg-red-50 dark:bg-red-950/30'
-                      : 'bg-yellow-50 dark:bg-yellow-950/20';
+                      ? 'bg-red-50 dark:bg-red-950'
+                      : 'bg-yellow-50 dark:bg-yellow-950';
                     return `cursor-pointer transition-all duration-200 relative hover:shadow-sm group ${alertBg}`;
                   }
 
@@ -525,7 +525,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                           </Show>
                           <div class="hidden xl:flex items-center gap-1.5 ml-1 flex-shrink min-w-0 overflow-hidden">
                             <Show when={isPVEItem}>
-                              <span class="text-[9px] px-1 py-0 rounded font-medium bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">
+                              <span class="text-[9px] px-1 py-0 rounded font-medium bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-400">
                                 PVE
                               </span>
                             </Show>
@@ -537,7 +537,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                             <Show when={isPVEItem && node!.isClusterMember !== undefined}>
                               <span
                                 class={`text-[9px] px-1 py-0 rounded font-medium whitespace-nowrap ${node!.isClusterMember
-                                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-400'
                                   : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
                                   }`}
                               >
@@ -546,7 +546,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                             </Show>
                             <Show when={isPVEItem && node!.linkedHostAgentId}>
                               <span
-                                class="text-[9px] px-1 py-0 rounded font-medium whitespace-nowrap bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400"
+                                class="text-[9px] px-1 py-0 rounded font-medium whitespace-nowrap bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-400"
                                 title="Pulse host agent installed for enhanced metrics"
                               >
                                 +Agent
@@ -555,8 +555,8 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                             <Show when={isPVEItem && online && node!.pendingUpdates !== undefined && node!.pendingUpdates > 0}>
                               <span
                                 class={`text-[9px] px-1 py-0 rounded font-medium whitespace-nowrap ${(node!.pendingUpdates ?? 0) >= 10
-                                  ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
-                                  : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
+                                  ? 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-400'
+                                  : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-400'
                                   }`}
                                 title={`${node!.pendingUpdates} pending apt update${node!.pendingUpdates !== 1 ? 's' : ''}`}
                               >
@@ -564,7 +564,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                               </span>
                             </Show>
                             <Show when={isPBSItem}>
-                              <span class="text-[9px] px-1 py-0 rounded font-medium bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
+                              <span class="text-[9px] px-1 py-0 rounded font-medium bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-400">
                                 PBS
                               </span>
                             </Show>
@@ -793,7 +793,7 @@ export const NodeSummaryTable: Component<NodeSummaryTableProps> = (props) => {
                     </tr>
                     <Show when={isExpanded() && isPVEItem}>
                       <tr>
-                        <td colspan={totalColumnCount()} class="bg-slate-50/50 dark:bg-slate-800 px-4 py-4 border-b border-slate-100 dark:border-slate-700 shadow-inner">
+                        <td colspan={totalColumnCount()} class="bg-slate-50 dark:bg-slate-800 px-4 py-4 border-b border-slate-100 dark:border-slate-700 shadow-inner">
                           <Suspense fallback={<div class="flex justify-center p-4">Loading stats...</div>}>
                             <NodeDrawer node={node!} host={linkedHostForDrawer()} />
                           </Suspense>

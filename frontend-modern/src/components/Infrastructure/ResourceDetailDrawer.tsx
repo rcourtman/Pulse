@@ -540,7 +540,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
     const capabilities = kubernetesMeta()?.metricCapabilities;
     if (!capabilities) return [];
 
-    const supportedBadge = 'inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400';
+    const supportedBadge = 'inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-cyan-100 text-cyan-700 dark:bg-cyan-900 dark:text-cyan-400';
     const unsupportedBadge = 'inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300';
     const badges: { label: string; classes: string; title: string }[] = [];
 
@@ -1023,7 +1023,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
               <a
                 href={link.href}
                 aria-label={link.ariaLabel}
-                class="inline-flex items-center rounded border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700/60 dark:bg-blue-900/30 dark:text-blue-200 dark:hover:bg-blue-900/50"
+                class="inline-flex items-center rounded border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200 dark:hover:bg-blue-900"
               >
                 {link.label}
               </a>
@@ -1080,7 +1080,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
 	        </Show>
 
         <div class="grid gap-3 md:grid-cols-2 lg:grid-cols-3 mt-3">
-          <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600/70 dark:bg-slate-800">
+          <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
             <div class="text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 mb-2">Runtime</div>
             <div class="space-y-1.5 text-[11px]">
               <div class="flex items-center justify-between gap-2">
@@ -1135,7 +1135,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
             </div>
           </div>
 
-	          <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600/70 dark:bg-slate-800">
+	          <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
 	            <div class="text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 mb-2">Identity</div>
 	            <div class="space-y-1.5 text-[11px]">
               <For each={primaryIdentityRows()}>
@@ -1155,7 +1155,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                     <For each={props.resource.identity?.ips ?? []}>
                       {(ip) => (
                         <span
-                          class="inline-flex items-center rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700 dark:bg-blue-900/40 dark:text-blue-200"
+                          class="inline-flex items-center rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700 dark:bg-blue-900 dark:text-blue-200"
                           title={ip}
                         >
                           {ip}
@@ -1189,12 +1189,12 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                     </div>
                   }
                 >
-                  <details class="rounded border border-slate-200/80 bg-white px-2 py-1.5 dark:border-slate-600/60 dark:bg-slate-800">
+                  <details class="rounded border border-slate-200 bg-white px-2 py-1.5 dark:border-slate-600 dark:bg-slate-800">
                     <summary class="flex cursor-pointer list-none items-center justify-between text-[10px] font-medium text-slate-600 dark:text-slate-300">
                       <span>Aliases</span>
                       <span class="text-slate-500 dark:text-slate-400">{identityAliasValues().length}</span>
                     </summary>
-                    <div class="mt-2 flex flex-wrap gap-1 border-t border-slate-200/80 pt-2 dark:border-slate-600/50">
+                    <div class="mt-2 flex flex-wrap gap-1 border-t border-slate-200 pt-2 dark:border-slate-600">
                       <For each={identityAliasValues()}>
                         {(value) => (
                           <span class="inline-flex items-center rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-700 dark:bg-slate-800 dark:text-slate-200" title={value}>
@@ -1207,7 +1207,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                 </Show>
 		              </Show>
 		              <Show when={!identityCardHasRichData()}>
-		                <div class="rounded border border-dashed border-slate-300 bg-slate-50/70 px-2 py-1.5 text-[10px] text-slate-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-400">
+		                <div class="rounded border border-dashed border-slate-300 bg-slate-50 px-2 py-1.5 text-[10px] text-slate-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-400">
 		                  No enriched identity metadata yet.
 		                </div>
 		              </Show>
@@ -1215,11 +1215,11 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
 		          </div>
 
               <Show when={props.resource.type === 'docker-host'}>
-                <div class="rounded border border-sky-200 bg-sky-50/50 p-3 shadow-sm dark:border-sky-700/50 dark:bg-sky-900/20">
+                <div class="rounded border border-sky-200 bg-sky-50 p-3 shadow-sm dark:border-sky-700 dark:bg-sky-900">
                   <div class="mb-2 flex items-center justify-between gap-2">
                     <div class="text-[11px] font-medium uppercase tracking-wide text-sky-700 dark:text-sky-300">Container Updates</div>
                     <Show when={dockerHostData()?.runtime}>
-                      <span class="max-w-[55%] truncate text-[10px] text-sky-700/80 dark:text-sky-300/80" title={dockerHostData()?.runtime}>
+                      <span class="max-w-[55%] truncate text-[10px] text-sky-700 dark:text-sky-300" title={dockerHostData()?.runtime}>
                         {dockerHostData()?.runtime}
                       </span>
                     </Show>
@@ -1244,7 +1244,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                     </Show>
 
                     <Show when={dockerHostCommand()?.type || dockerHostCommand()?.status}>
-                      <div class="rounded border border-sky-200/60 bg-white px-2 py-1.5 text-[10px] dark:border-sky-700/40 dark:bg-slate-800">
+                      <div class="rounded border border-sky-200 bg-white px-2 py-1.5 text-[10px] dark:border-sky-700 dark:bg-slate-800">
                         <div class="flex items-center justify-between gap-2">
                           <span class="text-slate-500 dark:text-slate-400">Command</span>
                           <span class="font-medium text-slate-700 dark:text-slate-200">
@@ -1271,12 +1271,12 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                     </Show>
 
                     <Show when={dockerActionError()}>
-                      <div class="rounded border border-red-200 bg-red-50/60 px-2 py-1.5 text-[10px] text-red-700 dark:border-red-700/50 dark:bg-red-900/20 dark:text-red-200">
+                      <div class="rounded border border-red-200 bg-red-50 px-2 py-1.5 text-[10px] text-red-700 dark:border-red-700 dark:bg-red-900 dark:text-red-200">
                         {dockerActionError()}
                       </div>
                     </Show>
                     <Show when={dockerActionNote()}>
-                      <div class="rounded border border-sky-200/60 bg-white px-2 py-1.5 text-[10px] text-slate-700 dark:border-sky-700/40 dark:bg-slate-800 dark:text-slate-200">
+                      <div class="rounded border border-sky-200 bg-white px-2 py-1.5 text-[10px] text-slate-700 dark:border-sky-700 dark:bg-slate-800 dark:text-slate-200">
                         {dockerActionNote()}
                       </div>
                     </Show>
@@ -1306,7 +1306,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                             setDockerActionBusy(false);
                           }
                         }}
-                        class="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-60 disabled:hover:bg-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-800 dark:disabled:hover:bg-slate-900/50"
+                        class="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-60 disabled:hover:bg-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-800 dark:disabled:hover:bg-slate-900"
                         title={dockerUpdateActionsLoading() ? 'Loading server settings...' : undefined}
                       >
                         Check Updates
@@ -1345,7 +1345,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                             setConfirmUpdateAll(false);
                           }
                         }}
-                        class="rounded-md border border-sky-200 bg-sky-600 px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm hover:bg-sky-700 disabled:opacity-60 disabled:hover:bg-sky-600 dark:border-sky-700/60 dark:bg-sky-600 dark:hover:bg-sky-500 dark:disabled:hover:bg-sky-600"
+                        class="rounded-md border border-sky-200 bg-sky-600 px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm hover:bg-sky-700 disabled:opacity-60 disabled:hover:bg-sky-600 dark:border-sky-700 dark:bg-sky-600 dark:hover:bg-sky-500 dark:disabled:hover:bg-sky-600"
                         title={dockerUpdateActionsDisabled() ? 'Docker updates are disabled by server configuration.' : undefined}
                       >
                         {confirmUpdateAll() ? 'Confirm Update All' : `Update All${dockerUpdatesAvailable() > 0 ? ` (${dockerUpdatesAvailable()})` : ''}`}
@@ -1357,11 +1357,11 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
 
 		          <Show when={pbsData()}>
 		            {(pbs) => (
-		              <div class="rounded border border-indigo-200 bg-indigo-50/60 p-3 shadow-sm dark:border-indigo-700/60 dark:bg-indigo-900/20">
+		              <div class="rounded border border-indigo-200 bg-indigo-50 p-3 shadow-sm dark:border-indigo-700 dark:bg-indigo-900">
 		                <div class="mb-2 flex items-center justify-between gap-2">
                   <div class="text-[11px] font-medium uppercase tracking-wide text-indigo-700 dark:text-indigo-300">PBS Service</div>
                   <Show when={pbs().hostname}>
-                    <span class="max-w-[55%] truncate text-[10px] text-indigo-700/80 dark:text-indigo-300/80" title={pbs().hostname}>
+                    <span class="max-w-[55%] truncate text-[10px] text-indigo-700 dark:text-indigo-300" title={pbs().hostname}>
                       {pbs().hostname}
                     </span>
                   </Show>
@@ -1388,21 +1388,21 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                     </div>
                   </Show>
                   <div class="grid grid-cols-2 gap-2 pt-1">
-                    <div class="rounded border border-indigo-200/70 bg-white px-2 py-1.5 dark:border-indigo-700/50 dark:bg-slate-800">
+                    <div class="rounded border border-indigo-200 bg-white px-2 py-1.5 dark:border-indigo-700 dark:bg-slate-800">
                       <div class="text-[10px] text-slate-500 dark:text-slate-400">Datastores</div>
                       <div class="text-sm font-semibold text-slate-700 dark:text-slate-200">{formatInteger(pbs().datastoreCount)}</div>
                     </div>
-                    <div class="rounded border border-indigo-200/70 bg-white px-2 py-1.5 dark:border-indigo-700/50 dark:bg-slate-800">
+                    <div class="rounded border border-indigo-200 bg-white px-2 py-1.5 dark:border-indigo-700 dark:bg-slate-800">
                       <div class="text-[10px] text-slate-500 dark:text-slate-400">Total Jobs</div>
                       <div class="text-sm font-semibold text-slate-700 dark:text-slate-200">{formatInteger(pbsJobTotal())}</div>
                     </div>
                   </div>
-                  <details class="rounded border border-indigo-200/70 bg-white px-2 py-1.5 dark:border-indigo-700/50 dark:bg-slate-800">
+                  <details class="rounded border border-indigo-200 bg-white px-2 py-1.5 dark:border-indigo-700 dark:bg-slate-800">
                     <summary class="flex cursor-pointer list-none items-center justify-between text-[10px] font-medium text-slate-600 dark:text-slate-300">
                       <span>Job breakdown</span>
                       <span class="text-slate-500 dark:text-slate-400">{pbsVisibleJobBreakdown().length} types</span>
                     </summary>
-                    <div class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 border-t border-indigo-200/60 pt-2 text-[10px] dark:border-indigo-700/40">
+                    <div class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 border-t border-indigo-200 pt-2 text-[10px] dark:border-indigo-700">
                       <For each={pbsVisibleJobBreakdown()}>
                         {(entry) => (
                           <span class="text-slate-500 dark:text-slate-400">
@@ -1420,11 +1420,11 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
 
           <Show when={pmgData()}>
             {(pmg) => (
-              <div class="rounded border border-rose-200 bg-rose-50/60 p-3 shadow-sm dark:border-rose-700/60 dark:bg-rose-900/20">
+              <div class="rounded border border-rose-200 bg-rose-50 p-3 shadow-sm dark:border-rose-700 dark:bg-rose-900">
                 <div class="mb-2 flex items-center justify-between gap-2">
                   <div class="text-[11px] font-medium uppercase tracking-wide text-rose-700 dark:text-rose-300">Mail Gateway</div>
                   <Show when={pmg().hostname}>
-                    <span class="max-w-[55%] truncate text-[10px] text-rose-700/80 dark:text-rose-300/80" title={pmg().hostname}>
+                    <span class="max-w-[55%] truncate text-[10px] text-rose-700 dark:text-rose-300" title={pmg().hostname}>
                       {pmg().hostname}
                     </span>
                   </Show>
@@ -1451,29 +1451,29 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                     </div>
                   </Show>
                   <div class="grid grid-cols-3 gap-2 pt-1">
-                    <div class="rounded border border-rose-200/70 bg-white px-2 py-1.5 dark:border-rose-700/50 dark:bg-slate-800">
+                    <div class="rounded border border-rose-200 bg-white px-2 py-1.5 dark:border-rose-700 dark:bg-slate-800">
                       <div class="text-[10px] text-slate-500 dark:text-slate-400">Nodes</div>
                       <div class="text-sm font-semibold text-slate-700 dark:text-slate-200">{formatInteger(pmg().nodeCount)}</div>
                     </div>
-                    <div class="rounded border border-rose-200/70 bg-white px-2 py-1.5 dark:border-rose-700/50 dark:bg-slate-800">
+                    <div class="rounded border border-rose-200 bg-white px-2 py-1.5 dark:border-rose-700 dark:bg-slate-800">
                       <div class="text-[10px] text-slate-500 dark:text-slate-400">Queue Total</div>
                       <div class={`text-sm font-semibold ${pmgQueueBacklog() > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-700 dark:text-slate-200'}`}>
                         {formatInteger(pmg().queueTotal)}
                       </div>
                     </div>
-                    <div class="rounded border border-rose-200/70 bg-white px-2 py-1.5 dark:border-rose-700/50 dark:bg-slate-800">
+                    <div class="rounded border border-rose-200 bg-white px-2 py-1.5 dark:border-rose-700 dark:bg-slate-800">
                       <div class="text-[10px] text-slate-500 dark:text-slate-400">Backlog</div>
                       <div class={`text-sm font-semibold ${pmgQueueBacklog() > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-700 dark:text-slate-200'}`}>
                         {formatInteger(pmgQueueBacklog())}
                       </div>
                     </div>
                   </div>
-                  <details class="rounded border border-rose-200/70 bg-white px-2 py-1.5 dark:border-rose-700/50 dark:bg-slate-800">
+                  <details class="rounded border border-rose-200 bg-white px-2 py-1.5 dark:border-rose-700 dark:bg-slate-800">
                     <summary class="flex cursor-pointer list-none items-center justify-between text-[10px] font-medium text-slate-600 dark:text-slate-300">
                       <span>Queue breakdown</span>
                       <span class="text-slate-500 dark:text-slate-400">{pmgVisibleQueueBreakdown().length} signals</span>
                     </summary>
-                    <div class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 border-t border-rose-200/60 pt-2 text-[10px] dark:border-rose-700/40">
+                    <div class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 border-t border-rose-200 pt-2 text-[10px] dark:border-rose-700">
                       <For each={pmgVisibleQueueBreakdown()}>
                         {(entry) => (
                           <span class="text-slate-500 dark:text-slate-400">
@@ -1486,12 +1486,12 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                       </For>
                     </div>
                   </details>
-                  <details class="rounded border border-rose-200/70 bg-white px-2 py-1.5 dark:border-rose-700/50 dark:bg-slate-800">
+                  <details class="rounded border border-rose-200 bg-white px-2 py-1.5 dark:border-rose-700 dark:bg-slate-800">
                     <summary class="flex cursor-pointer list-none items-center justify-between text-[10px] font-medium text-slate-600 dark:text-slate-300">
                       <span>Mail processing</span>
                       <span class="text-slate-500 dark:text-slate-400">{pmgVisibleMailBreakdown().length} signals</span>
                     </summary>
-                    <div class="mt-2 grid grid-cols-3 gap-x-3 gap-y-1 border-t border-rose-200/60 pt-2 text-[10px] dark:border-rose-700/40">
+                    <div class="mt-2 grid grid-cols-3 gap-x-3 gap-y-1 border-t border-rose-200 pt-2 text-[10px] dark:border-rose-700">
                       <For each={pmgVisibleMailBreakdown()}>
                         {(entry) => (
                           <span class="text-slate-500 dark:text-slate-400">
@@ -1502,7 +1502,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                       </For>
                     </div>
                     <Show when={pmgUpdatedRelative()}>
-                      <div class="mt-2 flex items-center justify-between gap-2 border-t border-rose-200/60 pt-2 text-[10px] dark:border-rose-700/40">
+                      <div class="mt-2 flex items-center justify-between gap-2 border-t border-rose-200 pt-2 text-[10px] dark:border-rose-700">
                         <span class="text-slate-500 dark:text-slate-400">Updated</span>
                         <span class="font-medium text-slate-700 dark:text-slate-200">{pmgUpdatedRelative()}</span>
                       </div>
@@ -1532,7 +1532,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
         <Show
           when={discoveryConfig()}
           fallback={
-            <div class="rounded border border-dashed border-slate-300 bg-slate-50/70 p-4 text-sm text-slate-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300">
+            <div class="rounded border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300">
               Discovery is not available for this resource type yet.
             </div>
           }
@@ -1564,7 +1564,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
           <Show
             when={props.resource.type === 'pmg'}
             fallback={
-              <div class="rounded border border-dashed border-slate-300 bg-slate-50/70 p-4 text-sm text-slate-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300">
+              <div class="rounded border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300">
                 Mail details are only available for PMG resources.
               </div>
             }
@@ -1584,7 +1584,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
           <Show
             when={props.resource.type === 'k8s-cluster'}
             fallback={
-              <div class="rounded border border-dashed border-slate-300 bg-slate-50/70 p-4 text-sm text-slate-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300">
+              <div class="rounded border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300">
                 Namespaces are only available for Kubernetes cluster resources.
               </div>
             }
@@ -1607,7 +1607,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
           <Show
             when={props.resource.type === 'k8s-cluster'}
             fallback={
-              <div class="rounded border border-dashed border-slate-300 bg-slate-50/70 p-4 text-sm text-slate-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300">
+              <div class="rounded border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300">
                 Deployments are only available for Kubernetes cluster resources.
               </div>
             }
@@ -1627,7 +1627,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
           <Show
             when={props.resource.type === 'docker-host' && dockerSwarmClusterKey()}
             fallback={
-              <div class="rounded border border-dashed border-slate-300 bg-slate-50/70 p-4 text-sm text-slate-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300">
+              <div class="rounded border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300">
                 Swarm details are only available for Docker hosts reporting Swarm metadata.
               </div>
             }
@@ -1656,14 +1656,14 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
           <div class="mt-3 space-y-4">
             <div>
               <div class="text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 mb-2">Unified Resource</div>
-              <pre class="max-h-[280px] overflow-auto rounded-md bg-slate-900/90 p-3 text-[11px] text-slate-100">
+              <pre class="max-h-[280px] overflow-auto rounded-md bg-slate-900 p-3 text-[11px] text-slate-100">
                 {JSON.stringify(props.resource, null, 2)}
               </pre>
             </div>
 
             <div>
               <div class="text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 mb-2">Identity Matching</div>
-              <pre class="max-h-[220px] overflow-auto rounded-md bg-slate-900/90 p-3 text-[11px] text-slate-100">
+              <pre class="max-h-[220px] overflow-auto rounded-md bg-slate-900 p-3 text-[11px] text-slate-100">
                 {JSON.stringify(
                   {
                     identity: props.resource.identity,
@@ -1696,7 +1696,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
                             {status?.error}
                           </div>
                         </Show>
-                        <pre class="mt-3 max-h-[220px] overflow-auto rounded-md bg-slate-900/90 p-3 text-[11px] text-slate-100">
+                        <pre class="mt-3 max-h-[220px] overflow-auto rounded-md bg-slate-900 p-3 text-[11px] text-slate-100">
                           {JSON.stringify(section.payload ?? {}, null, 2)}
                         </pre>
                       </details>

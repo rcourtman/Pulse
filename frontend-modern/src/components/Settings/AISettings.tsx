@@ -356,11 +356,11 @@ export const AISettings: Component = () => {
   const diffStatusClasses = (status: FileChange['status']) => {
     switch (status) {
       case 'added':
-        return 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-200';
+        return 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200';
       case 'modified':
-        return 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200';
+        return 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-200';
       case 'deleted':
-        return 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-200';
+        return 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-200';
       default:
         return 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200';
     }
@@ -932,7 +932,7 @@ export const AISettings: Component = () => {
 
           <Show when={!loading()}>
             <Show when={form.enabled}>
-              <div class="flex items-start gap-2 text-xs text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md p-3 mb-4">
+              <div class="flex items-start gap-2 text-xs text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-800 rounded-md p-3 mb-4">
                 <svg class="w-4 h-4 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
@@ -1038,7 +1038,7 @@ export const AISettings: Component = () => {
               <div class="border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden">
                 <button
                   type="button"
-                  class="w-full min-h-10 sm:min-h-9 px-3 py-2.5 flex items-center justify-between bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors text-left"
+                  class="w-full min-h-10 sm:min-h-9 px-3 py-2.5 flex items-center justify-between bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors text-left"
                   onClick={() => setShowAdvancedModels(!showAdvancedModels())}
                 >
                   <div class="flex items-center gap-2">
@@ -1165,7 +1165,7 @@ export const AISettings: Component = () => {
                     </p>
                   </Show>
                   <Show when={providerIssueCount() > 0}>
-                    <div class="rounded border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 px-2 py-1.5">
+                    <div class="rounded border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900 px-2 py-1.5">
                       <p class="text-xs text-red-700 dark:text-red-300">
                         {providerIssueCount()} provider{providerIssueCount() === 1 ? '' : 's'} configured but currently not usable.
                       </p>
@@ -1186,7 +1186,7 @@ export const AISettings: Component = () => {
                   <div class={`border rounded-md overflow-hidden ${settings()?.anthropic_configured ? 'border-green-300 dark:border-green-700' : 'border-slate-200 dark:border-slate-700'}`}>
                     <button
                       type="button"
-                      class="w-full min-h-10 sm:min-h-9 px-3 py-2.5 flex items-center justify-between bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
+                      class="w-full min-h-10 sm:min-h-9 px-3 py-2.5 flex items-center justify-between bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
                       onClick={() => {
                         const current = expandedProviders();
                         const next = new Set(current);
@@ -1259,7 +1259,7 @@ export const AISettings: Component = () => {
                   <div class={`border rounded-md overflow-hidden ${settings()?.openai_configured ? 'border-green-300 dark:border-green-700' : 'border-slate-200 dark:border-slate-700'}`}>
                     <button
                       type="button"
-                      class="w-full min-h-10 sm:min-h-9 px-3 py-2.5 flex items-center justify-between bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
+                      class="w-full min-h-10 sm:min-h-9 px-3 py-2.5 flex items-center justify-between bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
                       onClick={() => {
                         const current = expandedProviders();
                         const next = new Set(current);
@@ -1346,7 +1346,7 @@ export const AISettings: Component = () => {
                   <div class={`border rounded-md overflow-hidden ${settings()?.openrouter_configured ? 'border-green-300 dark:border-green-700' : 'border-slate-200 dark:border-slate-700'}`}>
                     <button
                       type="button"
-                      class="w-full min-h-10 sm:min-h-9 px-3 py-2.5 flex items-center justify-between bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
+                      class="w-full min-h-10 sm:min-h-9 px-3 py-2.5 flex items-center justify-between bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
                       onClick={() => {
                         const current = expandedProviders();
                         const next = new Set(current);
@@ -1422,7 +1422,7 @@ export const AISettings: Component = () => {
                   <div class={`border rounded-md overflow-hidden ${settings()?.deepseek_configured ? 'border-green-300 dark:border-green-700' : 'border-slate-200 dark:border-slate-700'}`}>
                     <button
                       type="button"
-                      class="w-full min-h-10 sm:min-h-9 px-3 py-2.5 flex items-center justify-between bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
+                      class="w-full min-h-10 sm:min-h-9 px-3 py-2.5 flex items-center justify-between bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
                       onClick={() => {
                         const current = expandedProviders();
                         const next = new Set(current);
@@ -1495,7 +1495,7 @@ export const AISettings: Component = () => {
                   <div class={`border rounded-md overflow-hidden ${settings()?.gemini_configured ? 'border-green-300 dark:border-green-700' : 'border-slate-200 dark:border-slate-700'}`}>
                     <button
                       type="button"
-                      class="w-full min-h-10 sm:min-h-9 px-3 py-2.5 flex items-center justify-between bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
+                      class="w-full min-h-10 sm:min-h-9 px-3 py-2.5 flex items-center justify-between bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
                       onClick={() => {
                         const current = expandedProviders();
                         const next = new Set(current);
@@ -1568,7 +1568,7 @@ export const AISettings: Component = () => {
                   <div class={`border rounded-md overflow-hidden ${settings()?.ollama_configured ? 'border-green-300 dark:border-green-700' : 'border-slate-200 dark:border-slate-700'}`}>
                     <button
                       type="button"
-                      class="w-full min-h-10 sm:min-h-9 px-3 py-2.5 flex items-center justify-between bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
+                      class="w-full min-h-10 sm:min-h-9 px-3 py-2.5 flex items-center justify-between bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
                       onClick={() => {
                         const current = expandedProviders();
                         const next = new Set(current);
@@ -1650,7 +1650,7 @@ export const AISettings: Component = () => {
               <div class="rounded-md border border-blue-200 dark:border-blue-800 overflow-hidden">
                 <button
                   type="button"
-                  class="w-full min-h-10 sm:min-h-9 px-3 py-2.5 flex items-center justify-between bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors text-left"
+                  class="w-full min-h-10 sm:min-h-9 px-3 py-2.5 flex items-center justify-between bg-blue-50 dark:bg-blue-900 hover:bg-blue-100 dark:hover:bg-blue-900 transition-colors text-left"
                   onClick={() => setShowDiscoverySettings(!showDiscoverySettings())}
                 >
                   <div class="flex items-center gap-2">
@@ -1780,7 +1780,7 @@ export const AISettings: Component = () => {
               </p>
 
               {/* Pulse Permission Level */}
-              <div class={`space-y-3 p-4 rounded-md border ${form.controlLevel === 'autonomous' ? 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20' : 'border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20'}`}>
+              <div class={`space-y-3 p-4 rounded-md border ${form.controlLevel === 'autonomous' ? 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900' : 'border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900'}`}>
                 <div class="flex items-center gap-2">
                   <svg class="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
@@ -1818,7 +1818,7 @@ export const AISettings: Component = () => {
                   {form.controlLevel === 'autonomous' && 'Autonomous mode: Pulse Assistant executes commands and control actions without confirmation.'}
                 </p>
                 <Show when={form.controlLevel === 'autonomous'}>
-                  <div class="p-2 bg-amber-100/50 dark:bg-amber-900/30 rounded border border-amber-200 dark:border-amber-800 text-[10px] text-amber-800 dark:text-amber-200">
+                  <div class="p-2 bg-amber-100 dark:bg-amber-900 rounded border border-amber-200 dark:border-amber-800 text-[10px] text-amber-800 dark:text-amber-200">
                     <strong>Legal Disclaimer:</strong> Model-driven systems can hallucinate. You are responsible for any damage caused by autonomous actions. See <a href="https://github.com/rcourtman/Pulse/blob/main/TERMS.md" target="_blank" rel="noopener noreferrer" class="inline-flex min-h-10 sm:min-h-9 items-center rounded px-1 underline">Terms of Service</a>.
                   </div>
                 </Show>
@@ -1862,7 +1862,7 @@ export const AISettings: Component = () => {
               <div class="border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden">
                 <button
                   type="button"
-                  class="w-full min-h-10 sm:min-h-9 px-3 py-2.5 flex items-center justify-between bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors text-left"
+                  class="w-full min-h-10 sm:min-h-9 px-3 py-2.5 flex items-center justify-between bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors text-left"
                   onClick={() => {
                     const next = !showChatMaintenance();
                     setShowChatMaintenance(next);
@@ -1958,7 +1958,7 @@ export const AISettings: Component = () => {
                         type="button"
                         onClick={handleSessionRevert}
                         disabled={!selectedSessionId() || sessionActionLoading() !== null}
-                        class="w-full sm:w-auto min-h-10 sm:min-h-9 px-3 py-2 text-sm font-medium rounded border border-red-200 dark:border-red-700 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/40 disabled:opacity-50"
+                        class="w-full sm:w-auto min-h-10 sm:min-h-9 px-3 py-2 text-sm font-medium rounded border border-red-200 dark:border-red-700 bg-red-50 dark:bg-red-900 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900 disabled:opacity-50"
                       >
                         {sessionActionLoading() === 'revert' ? 'Reverting...' : 'Revert changes'}
                       </button>
@@ -1976,8 +1976,8 @@ export const AISettings: Component = () => {
             <Show when={settings()}>
               <div
                 class={`flex items-center gap-2 p-3 rounded-md ${settings()?.configured
-                  ? 'bg-green-50 dark:bg-green-900/30 text-green-800 dark:text-green-200'
-                  : 'bg-amber-50 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200'
+                  ? 'bg-green-50 dark:bg-green-900 text-green-800 dark:text-green-200'
+                  : 'bg-amber-50 dark:bg-amber-900 text-amber-800 dark:text-amber-200'
                   }`}
               >
                 <div
@@ -2004,7 +2004,7 @@ export const AISettings: Component = () => {
               <Show when={settings()?.api_key_set || settings()?.oauth_connected}>
                 <button
                   type="button"
-                  class="w-full sm:w-auto min-h-10 sm:min-h-9 px-4 py-2.5 text-sm border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                  class="w-full sm:w-auto min-h-10 sm:min-h-9 px-4 py-2.5 text-sm border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900 disabled:opacity-50 disabled:cursor-not-allowed"
                   onClick={handleTest}
                   disabled={testing() || saving() || loading()}
                 >
@@ -2036,7 +2036,7 @@ export const AISettings: Component = () => {
       {/* Session Diff Modal */}
       <Show when={showDiffModal()}>
         <div
-          class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          class="fixed inset-0 z-50 flex items-center justify-center bg-black p-4"
           onClick={() => setShowDiffModal(false)}
         >
           <div
@@ -2089,7 +2089,7 @@ export const AISettings: Component = () => {
 
       {/* First-time Setup Modal */}
       <Show when={showSetupModal()}>
-        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black">
           <div class="bg-white dark:bg-slate-800 rounded-md shadow-sm max-w-md w-full mx-4 overflow-hidden">
             {/* Header */}
             <div class="bg-blue-600 px-6 py-4">
@@ -2104,7 +2104,7 @@ export const AISettings: Component = () => {
                   type="button"
                   onClick={() => setSetupProvider('anthropic')}
                   class={`p-3 rounded-md border-2 transition-all text-center ${setupProvider() === 'anthropic'
-                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
+                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900'
                     : 'border-slate-200 dark:border-slate-700 hover:border-blue-300'
                     }`}
                 >
@@ -2115,7 +2115,7 @@ export const AISettings: Component = () => {
                   type="button"
                   onClick={() => setSetupProvider('openai')}
                   class={`p-3 rounded-md border-2 transition-all text-center ${setupProvider() === 'openai'
-                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
+                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900'
                     : 'border-slate-200 dark:border-slate-700 hover:border-blue-300'
                     }`}
                 >
@@ -2126,7 +2126,7 @@ export const AISettings: Component = () => {
                   type="button"
                   onClick={() => setSetupProvider('openrouter')}
                   class={`p-3 rounded-md border-2 transition-all text-center ${setupProvider() === 'openrouter'
-                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
+                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900'
                     : 'border-slate-200 dark:border-slate-700 hover:border-blue-300'
                     }`}
                 >
@@ -2137,7 +2137,7 @@ export const AISettings: Component = () => {
                   type="button"
                   onClick={() => setSetupProvider('deepseek')}
                   class={`p-3 rounded-md border-2 transition-all text-center ${setupProvider() === 'deepseek'
-                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
+                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900'
                     : 'border-slate-200 dark:border-slate-700 hover:border-blue-300'
                     }`}
                 >
@@ -2148,7 +2148,7 @@ export const AISettings: Component = () => {
                   type="button"
                   onClick={() => setSetupProvider('gemini')}
                   class={`p-3 rounded-md border-2 transition-all text-center ${setupProvider() === 'gemini'
-                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
+                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900'
                     : 'border-slate-200 dark:border-slate-700 hover:border-blue-300'
                     }`}
                 >
@@ -2159,7 +2159,7 @@ export const AISettings: Component = () => {
                   type="button"
                   onClick={() => setSetupProvider('ollama')}
                   class={`p-3 rounded-md border-2 transition-all text-center ${setupProvider() === 'ollama'
-                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
+                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900'
                     : 'border-slate-200 dark:border-slate-700 hover:border-blue-300'
                     }`}
                 >

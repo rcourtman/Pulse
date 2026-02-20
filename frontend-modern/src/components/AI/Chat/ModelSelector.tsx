@@ -165,7 +165,7 @@ export const ModelSelector: Component<ModelSelectorProps> = (props) => {
                             onInput={(e) => setSearchQuery(e.currentTarget.value)}
                             onKeyDown={handleKeyDown}
                             placeholder="Search or enter model ID"
-                            class="flex-1 text-xs px-2 py-1.5 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-purple-400/50"
+                            class="flex-1 text-xs px-2 py-1.5 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-purple-400"
                         />
                         <Show when={props.onRefresh}>
                             <button
@@ -194,7 +194,7 @@ export const ModelSelector: Component<ModelSelectorProps> = (props) => {
                         {/* Default option */}
                         <button
                             onClick={() => handleSelect('')}
-                            class={`w-full px-3 py-2 text-left text-sm hover:bg-slate-50 dark:hover:bg-slate-700 ${!props.selectedModel ? 'bg-purple-50 dark:bg-purple-900/30' : ''}`}
+                            class={`w-full px-3 py-2 text-left text-sm hover:bg-slate-50 dark:hover:bg-slate-700 ${!props.selectedModel ? 'bg-purple-50 dark:bg-purple-900' : ''}`}
                         >
                             <div class="font-medium text-slate-900 dark:text-slate-100">Default</div>
                             <div class="text-[11px] text-slate-500 dark:text-slate-400">
@@ -206,7 +206,7 @@ export const ModelSelector: Component<ModelSelectorProps> = (props) => {
                         <Show when={props.chatOverrideModel}>
                             <button
                                 onClick={() => handleSelect(props.chatOverrideModel!)}
-                                class={`w-full px-3 py-2 text-left text-sm hover:bg-slate-50 dark:hover:bg-slate-700 ${props.selectedModel === props.chatOverrideModel ? 'bg-purple-50 dark:bg-purple-900/30' : ''}`}
+                                class={`w-full px-3 py-2 text-left text-sm hover:bg-slate-50 dark:hover:bg-slate-700 ${props.selectedModel === props.chatOverrideModel ? 'bg-purple-50 dark:bg-purple-900' : ''}`}
                             >
                                 <div class="font-medium text-slate-900 dark:text-slate-100">Chat override</div>
                                 <div class="text-[11px] text-slate-500 dark:text-slate-400">
@@ -246,7 +246,7 @@ export const ModelSelector: Component<ModelSelectorProps> = (props) => {
                                         {(model) => (
                                             <button
                                                 onClick={() => handleSelect(model.id)}
-                                                class={`w-full px-3 py-2 text-left text-sm hover:bg-slate-50 dark:hover:bg-slate-700 ${props.selectedModel === model.id ? 'bg-purple-50 dark:bg-purple-900/30' : ''}`}
+                                                class={`w-full px-3 py-2 text-left text-sm hover:bg-slate-50 dark:hover:bg-slate-700 ${props.selectedModel === model.id ? 'bg-purple-50 dark:bg-purple-900' : ''}`}
                                             >
                                                 <div class="flex items-center gap-1.5">
                                                     <span class="font-medium text-slate-900 dark:text-slate-100">

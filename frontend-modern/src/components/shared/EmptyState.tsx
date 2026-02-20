@@ -29,10 +29,10 @@ const titleToneClass: Record<EmptyStateTone, string> = {
 
 const descriptionToneClass: Record<EmptyStateTone, string> = {
   default: 'text-slate-500 dark:text-slate-400',
-  info: 'text-blue-600/80 dark:text-blue-300/80',
-  success: 'text-green-600/80 dark:text-green-300/80',
-  warning: 'text-amber-600/80 dark:text-amber-300/80',
-  danger: 'text-red-600/80 dark:text-red-300/80',
+  info: 'text-blue-600 dark:text-blue-300',
+  success: 'text-green-600 dark:text-green-300',
+  warning: 'text-amber-600 dark:text-amber-300',
+  danger: 'text-red-600 dark:text-red-300',
 };
 
 export function EmptyState(props: EmptyStateProps) {
@@ -60,7 +60,7 @@ export function EmptyState(props: EmptyStateProps) {
   return (
     <div class={containerClass} {...others}>
       <Show when={local.icon}>
-        <div class={`w-16 h-16 sm:w-20 sm:h-20 mb-6 rounded-lg flex items-center justify-center ${iconBgClass[tone]}`}>
+        <div class={`w-16 h-16 sm:w-20 sm:h-20 mb-6 rounded-md flex items-center justify-center ${iconBgClass[tone]}`}>
           <div class="scale-125">
             {local.icon}
           </div>

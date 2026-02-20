@@ -423,7 +423,7 @@ const LoginForm: Component<{
               <div class="flex-1">
                 <div class="font-semibold text-sm text-slate-900 dark:text-white">Demo Mode</div>
                 <div class="text-sm text-slate-600 dark:text-slate-300">
-                  Login with <code class="bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded font-mono text-xs">demo</code> / <code class="bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded font-mono text-xs">demo</code>
+                  Login with <code class="bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded font-mono text-xs">demo</code> / <code class="bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded font-mono text-xs">demo</code>
                 </div>
               </div>
             </div>
@@ -462,7 +462,7 @@ const LoginForm: Component<{
                 {(provider) => (
                   <button
                     type="button"
-                    class={`w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-md border border-blue-500 text-blue-600 hover:bg-blue-50 transition dark:border-blue-400 dark:text-blue-200 dark:hover:bg-blue-900/40 ${oidcLoading() ? 'opacity-75 cursor-wait' : ''}`}
+                    class={`w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-md border border-blue-500 text-blue-600 hover:bg-blue-50 transition dark:border-blue-400 dark:text-blue-200 dark:hover:bg-blue-900 ${oidcLoading() ? 'opacity-75 cursor-wait' : ''}`}
                     disabled={oidcLoading()}
                     onClick={() => {
                       window.location.href = provider.loginUrl;
@@ -491,12 +491,12 @@ const LoginForm: Component<{
                 )}
               </For>
               <Show when={oidcError()}>
-                <div class="rounded-md bg-red-50 dark:bg-red-900/40 border border-red-200 dark:border-red-800 px-3 py-2 text-sm text-red-600 dark:text-red-300">
+                <div class="rounded-md bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-800 px-3 py-2 text-sm text-red-600 dark:text-red-300">
                   {oidcError()}
                 </div>
               </Show>
               <Show when={oidcMessage()}>
-                <div class="rounded-md bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700 px-3 py-2 text-sm text-green-600 dark:text-green-300">
+                <div class="rounded-md bg-green-50 dark:bg-green-900 border border-green-200 dark:border-green-700 px-3 py-2 text-sm text-green-600 dark:text-green-300">
                   {oidcMessage()}
                 </div>
               </Show>
@@ -519,7 +519,7 @@ const LoginForm: Component<{
             <div class="space-y-3">
               <button
                 type="button"
-                class={`w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-md border border-blue-500 text-blue-600 hover:bg-blue-50 transition dark:border-blue-400 dark:text-blue-200 dark:hover:bg-blue-900/40 ${oidcLoading() ? 'opacity-75 cursor-wait' : ''}`}
+                class={`w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-md border border-blue-500 text-blue-600 hover:bg-blue-50 transition dark:border-blue-400 dark:text-blue-200 dark:hover:bg-blue-900 ${oidcLoading() ? 'opacity-75 cursor-wait' : ''}`}
                 disabled={oidcLoading()}
                 onClick={() => startOidcLogin()}
               >
@@ -539,12 +539,12 @@ const LoginForm: Component<{
                 </Show>
               </button>
               <Show when={oidcError()}>
-                <div class="rounded-md bg-red-50 dark:bg-red-900/40 border border-red-200 dark:border-red-800 px-3 py-2 text-sm text-red-600 dark:text-red-300">
+                <div class="rounded-md bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-800 px-3 py-2 text-sm text-red-600 dark:text-red-300">
                   {oidcError()}
                 </div>
               </Show>
               <Show when={oidcMessage()}>
-                <div class="rounded-md bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700 px-3 py-2 text-sm text-green-600 dark:text-green-300">
+                <div class="rounded-md bg-green-50 dark:bg-green-900 border border-green-200 dark:border-green-700 px-3 py-2 text-sm text-green-600 dark:text-green-300">
                   {oidcMessage()}
                 </div>
               </Show>
@@ -647,8 +647,8 @@ const LoginForm: Component<{
             <Show when={error()}>
               <div
                 class={`rounded-md p-4 ${error().includes('locked')
-                  ? 'bg-orange-50 dark:bg-orange-900/20'
-                  : 'bg-red-50 dark:bg-red-900/20'
+                  ? 'bg-orange-50 dark:bg-orange-900'
+                  : 'bg-red-50 dark:bg-red-900'
                   }`}
               >
                 <div class="flex">

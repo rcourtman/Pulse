@@ -65,7 +65,7 @@ export const SearchTipsPopover: Component<SearchTipsPopoverProps> = (props) => {
   const buttonLabel = props.buttonLabel ?? 'Search tips';
 
   const triggerBaseClasses =
-    'text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:ring-offset-1 focus:ring-offset-white dark:focus:ring-blue-400/40 dark:focus:ring-offset-gray-900';
+    'text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:ring-offset-white dark:focus:ring-blue-400 dark:focus:ring-offset-gray-900';
 
   const triggerClasses =
     triggerVariant === 'button'
@@ -166,9 +166,9 @@ export const SearchTipsPopover: Component<SearchTipsPopoverProps> = (props) => {
               </For>
             </div>
             <Show when={props.footerText || props.footerHighlight}>
-              <div class="mt-3 rounded-md bg-blue-50 px-3 py-2 text-[11px] text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
+              <div class="mt-3 rounded-md bg-blue-50 px-3 py-2 text-[11px] text-blue-700 dark:bg-blue-900 dark:text-blue-200">
                 <Show when={props.footerHighlight}>
-                  <code class="mr-1 rounded bg-blue-100 px-1 py-0.5 font-mono text-[11px] text-blue-700 dark:bg-blue-800/60 dark:text-blue-100">
+                  <code class="mr-1 rounded bg-blue-100 px-1 py-0.5 font-mono text-[11px] text-blue-700 dark:bg-blue-800 dark:text-blue-100">
                     {props.footerHighlight}
                   </code>
                 </Show>

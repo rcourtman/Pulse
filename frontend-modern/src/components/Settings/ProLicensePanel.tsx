@@ -264,7 +264,7 @@ export const ProLicensePanel: Component = () => {
         <Show when={subscriptionState() === 'expired'}>
           <div class="mb-4 rounded-md border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-900 p-3 text-sm text-red-900 dark:text-red-100">
             <p class="font-medium">Your Pro trial has ended</p>
-            <p class="text-xs text-red-800/80 dark:text-red-200/80 mt-1">
+            <p class="text-xs text-red-800 dark:text-red-200 mt-1">
               Upgrade to keep Pro features.
             </p>
             <a

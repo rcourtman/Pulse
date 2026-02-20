@@ -279,10 +279,10 @@ Keep these credentials secure!
     };
 
     return (
-        <div class="max-w-2xl mx-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 overflow-hidden animate-fade-in relative rounded-lg p-6 sm:p-8 text-center text-slate-900 dark:text-white">            <div class="relative z-10">
+        <div class="max-w-2xl mx-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 overflow-hidden animate-fade-in relative rounded-md p-6 sm:p-8 text-center text-slate-900 dark:text-white">            <div class="relative z-10">
             {/* Success animation */}
             <div class="mb-8">
-                <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 mb-6 shadow-sm border border-emerald-200 dark:border-emerald-800/50">
+                <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-900 text-emerald-600 dark:text-emerald-400 mb-6 shadow-sm border border-emerald-200 dark:border-emerald-800">
                     <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
                     </svg>
@@ -296,7 +296,7 @@ Keep these credentials secure!
             </div>
 
             <Show when={connectedAgents().length > 0}>
-                <div class="bg-emerald-50 dark:bg-emerald-900 rounded-lg border border-emerald-200 dark:border-emerald-800 p-5 text-left mb-6 shadow-sm">
+                <div class="bg-emerald-50 dark:bg-emerald-900 rounded-md border border-emerald-200 dark:border-emerald-800 p-5 text-left mb-6 shadow-sm">
                     <h3 class="text-sm font-semibold text-emerald-800 dark:text-emerald-400 mb-3 flex items-center gap-2">
                         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
@@ -306,13 +306,13 @@ Keep these credentials secure!
                     <div class="space-y-2">
                         <For each={connectedAgents()}>
                             {(agent) => (
-                                <div class="flex items-center justify-between bg-white dark:bg-slate-900 rounded-lg px-3 py-2.5 border border-slate-100 dark:border-slate-800 shadow-sm">
+                                <div class="flex items-center justify-between bg-white dark:bg-slate-900 rounded-md px-3 py-2.5 border border-slate-100 dark:border-slate-800 shadow-sm">
                                     <div class="flex items-center gap-2.5">
                                         <span class="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]"></span>
                                         <span class="text-slate-800 dark:text-white text-sm font-medium">{agent.name}</span>
                                     </div>
                                     <div class="flex items-center gap-2">
-                                        <span class="text-[10px] text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900/50 border border-emerald-200 dark:border-emerald-800 px-2 py-0.5 rounded-full font-medium">{agent.type}</span>
+                                        <span class="text-[10px] text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900 border border-emerald-200 dark:border-emerald-800 px-2 py-0.5 rounded-full font-medium">{agent.type}</span>
                                         <Show when={agent.host}>
                                             <span class="text-[10px] text-slate-400 dark:text-slate-500 font-mono">{agent.host}</span>
                                         </Show>
@@ -325,7 +325,7 @@ Keep these credentials secure!
             </Show>
 
             {/* Auto-detection info */}
-            <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm p-6 text-left mb-6">
+            <div class="bg-white dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-700 shadow-sm p-6 text-left mb-6">
                 <h3 class="text-sm font-semibold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
                     <svg class="w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
@@ -338,28 +338,28 @@ Keep these credentials secure!
                 </p>
 
                 <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-                    <div class="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 rounded-lg p-3 text-center transition-all hover:shadow-md">
+                    <div class="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md p-3 text-center transition-all hover:shadow-md">
                         <div class="h-6 flex items-center justify-center mb-2">
                             <span class="text-xl">🐳</span>
                         </div>
                         <div class="text-slate-800 dark:text-slate-200 font-semibold text-xs mb-0.5">Docker</div>
                         <p class="text-[9px] text-slate-500 dark:text-slate-400">Container monitoring</p>
                     </div>
-                    <div class="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 rounded-lg p-3 text-center transition-all hover:shadow-md">
+                    <div class="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md p-3 text-center transition-all hover:shadow-md">
                         <div class="h-6 flex items-center justify-center mb-2">
                             <span class="text-xl">☸️</span>
                         </div>
                         <div class="text-slate-800 dark:text-slate-200 font-semibold text-xs mb-0.5">Kubernetes</div>
                         <p class="text-[9px] text-slate-500 dark:text-slate-400">Cluster monitoring</p>
                     </div>
-                    <div class="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 rounded-lg p-3 text-center transition-all hover:shadow-md">
+                    <div class="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md p-3 text-center transition-all hover:shadow-md">
                         <div class="h-6 flex items-center justify-center mb-2">
                             <ProxmoxIcon class="w-5 h-5 text-orange-500" />
                         </div>
                         <div class="text-slate-800 dark:text-slate-200 font-semibold text-xs mb-0.5">Proxmox</div>
                         <p class="text-[9px] text-slate-500 dark:text-slate-400">VM & container API</p>
                     </div>
-                    <div class="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 rounded-lg p-3 text-center transition-all hover:shadow-md">
+                    <div class="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md p-3 text-center transition-all hover:shadow-md">
                         <div class="h-6 flex items-center justify-center mb-2">
                             <span class="text-[13px] text-cyan-600 dark:text-cyan-400 font-bold tracking-tight">NAS</span>
                         </div>
@@ -368,7 +368,7 @@ Keep these credentials secure!
                     </div>
                 </div>
 
-                <div class="bg-emerald-50/50 dark:bg-emerald-900/10 border border-emerald-200/50 dark:border-emerald-800/30 rounded-lg p-3">
+                <div class="bg-emerald-50 dark:bg-emerald-900 border border-emerald-200 dark:border-emerald-800 rounded-md p-3">
                     <div class="flex items-center gap-3">
                         <div class="w-5 h-5 rounded-full bg-emerald-100 dark:bg-emerald-800 flex items-center justify-center shrink-0">
                             <svg class="w-3 h-3 text-emerald-600 dark:text-emerald-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
@@ -378,7 +378,7 @@ Keep these credentials secure!
                         <div class="flex-1">
                             <div class="flex items-center gap-2 mb-0.5">
                                 <span class="text-slate-800 dark:text-slate-200 font-semibold text-xs">Host Metrics</span>
-                                <span class="text-[9px] text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900/40 px-1.5 py-0.5 rounded-sm font-medium">Always included</span>
+                                <span class="text-[9px] text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900 px-1.5 py-0.5 rounded-sm font-medium">Always included</span>
                             </div>
                             <p class="text-[10px] text-slate-500 dark:text-slate-400">CPU, memory, disk, network on any Linux/macOS/Windows</p>
                         </div>
@@ -387,7 +387,7 @@ Keep these credentials secure!
             </div>
 
             {/* Agent installation */}
-            <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm p-6 text-left mb-6">
+            <div class="bg-white dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-700 shadow-sm p-6 text-left mb-6">
                 <div class="flex items-center justify-between mb-3">
                     <h3 class="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2">
                         <svg class="w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -400,7 +400,7 @@ Keep these credentials secure!
                             void generateNewToken('manual');
                         }}
                         disabled={generatingToken()}
-                        class="text-xs bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 disabled:opacity-50 transition-colors border border-transparent dark:border-slate-700"
+                        class="text-xs bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white px-2.5 py-1.5 rounded-md flex items-center gap-1.5 disabled:opacity-50 transition-colors border border-transparent dark:border-slate-700"
                         title="Generate a new token for the next host"
                     >
                         {generatingToken() ? (
@@ -420,11 +420,11 @@ Keep these credentials secure!
                     Copy and run on each host you want monitored. <span class="text-emerald-600 dark:text-emerald-400 font-medium">A new token is generated automatically after each copy.</span>
                 </p>
 
-                <div class="bg-slate-50 dark:bg-slate-950 rounded-lg p-4 font-mono text-xs mb-3 relative group border border-slate-200 dark:border-slate-700 shadow-inner">
+                <div class="bg-slate-50 dark:bg-slate-950 rounded-md p-4 font-mono text-xs mb-3 relative group border border-slate-200 dark:border-slate-700 shadow-inner">
                     <code class="text-emerald-600 dark:text-emerald-400 break-all block leading-relaxed pr-8">{getInstallCommand()}</code>
                     <button
                         onClick={handleCopyInstall}
-                        class="absolute top-2.5 right-2.5 p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg transition-all shadow-sm group-hover:opacity-100 sm:opacity-0 focus:opacity-100"
+                        class="absolute top-2.5 right-2.5 p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-md transition-all shadow-sm group-hover:opacity-100 sm:opacity-0 focus:opacity-100"
                         title="Copy command"
                     >
                         {copied() === 'install' ? (
@@ -445,13 +445,13 @@ Keep these credentials secure!
             </div>
 
             {/* Credentials section (collapsible) */}
-            <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 mb-8 overflow-hidden shadow-sm">
+            <div class="bg-white dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-700 mb-8 overflow-hidden shadow-sm">
                 <button
                     onClick={() => setShowCredentials(!showCredentials())}
                     class="w-full p-4 flex items-center justify-between text-left hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors group"
                 >
                     <div class="flex items-center gap-3">
-                        <div class="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-900/40 flex items-center justify-center border border-amber-100 dark:border-amber-800/50">
+                        <div class="w-8 h-8 rounded-md bg-amber-50 dark:bg-amber-900 flex items-center justify-center border border-amber-100 dark:border-amber-800">
                             <svg class="w-4 h-4 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
                             </svg>
@@ -459,7 +459,7 @@ Keep these credentials secure!
                         <div>
                             <span class="text-slate-800 dark:text-slate-200 font-semibold text-sm flex items-center gap-2">
                                 Your Credentials
-                                <span class="text-[10px] text-amber-700 dark:text-amber-400 bg-amber-100 dark:bg-amber-900/50 border border-amber-200 dark:border-amber-800/50 px-2 py-0.5 rounded-full">Save these</span>
+                                <span class="text-[10px] text-amber-700 dark:text-amber-400 bg-amber-100 dark:bg-amber-900 border border-amber-200 dark:border-amber-800 px-2 py-0.5 rounded-full">Save these</span>
                             </span>
                         </div>
                     </div>
@@ -470,12 +470,12 @@ Keep these credentials secure!
 
                 <Show when={showCredentials()}>
                     <div class="p-4 pt-0 space-y-3 border-t border-slate-100 dark:border-slate-800 mt-2">
-                        <div class="bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-slate-800 rounded-lg p-3">
+                        <div class="bg-slate-50 dark:bg-black border border-slate-200 dark:border-slate-800 rounded-md p-3">
                             <div class="text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wider">Username</div>
                             <div class="text-slate-900 dark:text-white font-mono text-sm">{props.state.username}</div>
                         </div>
 
-                        <div class="bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-slate-800 rounded-lg p-3">
+                        <div class="bg-slate-50 dark:bg-black border border-slate-200 dark:border-slate-800 rounded-md p-3">
                             <div class="text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wider">Password</div>
                             <div class="flex items-center justify-between">
                                 <code class="text-slate-900 dark:text-white font-mono text-sm break-all">{props.state.password}</code>
@@ -496,7 +496,7 @@ Keep these credentials secure!
                             </div>
                         </div>
 
-                        <div class="bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-slate-800 rounded-lg p-3">
+                        <div class="bg-slate-50 dark:bg-black border border-slate-200 dark:border-slate-800 rounded-md p-3">
                             <div class="text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wider">API Token (for web login)</div>
                             <div class="flex items-center justify-between">
                                 <code class="text-slate-900 dark:text-white font-mono text-xs break-all pr-4">{props.state.apiToken}</code>
@@ -519,7 +519,7 @@ Keep these credentials secure!
 
                         <button
                             onClick={downloadCredentials}
-                            class="w-full mt-2 py-2.5 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 flex items-center justify-center gap-1.5 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 rounded-lg transition-colors border border-blue-100 dark:border-blue-900/50"
+                            class="w-full mt-2 py-2.5 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 flex items-center justify-center gap-1.5 bg-blue-50 dark:bg-blue-900 hover:bg-blue-100 dark:hover:bg-blue-900 rounded-md transition-colors border border-blue-100 dark:border-blue-900"
                         >
                             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -534,7 +534,7 @@ Keep these credentials secure!
             <div class="pt-4 border-t border-slate-200 dark:border-slate-800">
                 <button
                     onClick={props.onComplete}
-                    class="w-full py-4 px-6 bg-blue-600 hover:bg-blue-700 text-white text-base font-semibold rounded-lg transition-all duration-200"
+                    class="w-full py-4 px-6 bg-blue-600 hover:bg-blue-700 text-white text-base font-semibold rounded-md transition-all duration-200"
                 >
                     {connectedAgents().length > 0 ? 'Go to Dashboard' : 'Skip for Now'}
                 </button>
@@ -545,16 +545,16 @@ Keep these credentials secure!
 
             {/* Optional upsell after core agent onboarding is complete */}
             <Show when={connectedAgents().length > 0}>
-                <div class="bg-indigo-50 dark:bg-indigo-900 rounded-lg border border-indigo-100 dark:border-indigo-800 p-5 text-left mt-8 shadow-sm overflow-hidden relative">
+                <div class="bg-indigo-50 dark:bg-indigo-900 rounded-md border border-indigo-100 dark:border-indigo-800 p-5 text-left mt-8 shadow-sm overflow-hidden relative">
                     <div class="flex items-start gap-4 relative z-10">
-                        <div class="flex h-12 w-12 items-center justify-center rounded-lg bg-indigo-600 text-white shrink-0 shadow-sm border border-indigo-500">
+                        <div class="flex h-12 w-12 items-center justify-center rounded-md bg-indigo-600 text-white shrink-0 shadow-sm border border-indigo-500">
                             <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
                             </svg>
                         </div>
                         <div class="flex-1 min-w-0">
                             <h3 class="text-sm font-bold text-slate-900 dark:text-white mb-1">Monitor from Anywhere</h3>
-                            <p class="text-xs text-slate-600 dark:text-indigo-200/80 mb-4 leading-relaxed">
+                            <p class="text-xs text-slate-600 dark:text-indigo-200 mb-4 leading-relaxed">
                                 Get push notifications and manage your infrastructure from your phone with Pulse Relay.
                             </p>
                             <Show
@@ -563,7 +563,7 @@ Keep these credentials secure!
                                     <button
                                         type="button"
                                         onClick={handleSetupRelay}
-                                        class="inline-flex items-center gap-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 px-4 py-2 text-xs font-semibold text-white shadow-sm transition-all"
+                                        class="inline-flex items-center gap-2 rounded-md bg-indigo-600 hover:bg-indigo-700 px-4 py-2 text-xs font-semibold text-white shadow-sm transition-all"
                                     >
                                         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                             <path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
@@ -576,7 +576,7 @@ Keep these credentials secure!
                                     type="button"
                                     onClick={() => void handleStartTrial()}
                                     disabled={trialStarting()}
-                                    class="inline-flex items-center gap-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 px-4 py-2 text-xs font-semibold text-white shadow-sm transition-all disabled:opacity-50"
+                                    class="inline-flex items-center gap-2 rounded-md bg-indigo-600 hover:bg-indigo-700 px-4 py-2 text-xs font-semibold text-white shadow-sm transition-all disabled:opacity-50"
                                 >
                                     {trialStarting() ? (
                                         <>
@@ -591,7 +591,7 @@ Keep these credentials secure!
                                     )}
                                 </button>
                             </Show>
-                            <p class="mt-3 text-[10px] text-slate-500 dark:text-indigo-300/60 font-medium tracking-wide">14-DAY PRO TRIAL &middot; NO CREDIT CARD REQUIRED</p>
+                            <p class="mt-3 text-[10px] text-slate-500 dark:text-indigo-300 font-medium tracking-wide">14-DAY PRO TRIAL &middot; NO CREDIT CARD REQUIRED</p>
                         </div>
                     </div>
                 </div>

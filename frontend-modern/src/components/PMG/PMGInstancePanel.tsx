@@ -91,7 +91,7 @@ const StatusBadge: Component<{ status: string; health?: string }> = (props) => {
     const status = (props.health || props.status || '').toLowerCase();
     if (status.includes('healthy') || status === 'online') {
       return {
-        bg: 'bg-green-100 dark:bg-green-900/30',
+        bg: 'bg-green-100 dark:bg-green-900',
         text: 'text-green-700 dark:text-green-400',
         dot: 'bg-green-500',
         label: 'Healthy',
@@ -99,7 +99,7 @@ const StatusBadge: Component<{ status: string; health?: string }> = (props) => {
     }
     if (status.includes('degraded') || status.includes('warning')) {
       return {
-        bg: 'bg-yellow-100 dark:bg-yellow-900/30',
+        bg: 'bg-yellow-100 dark:bg-yellow-900',
         text: 'text-yellow-700 dark:text-yellow-400',
         dot: 'bg-yellow-500',
         label: 'Degraded',
@@ -107,7 +107,7 @@ const StatusBadge: Component<{ status: string; health?: string }> = (props) => {
     }
     if (status.includes('error') || status === 'offline') {
       return {
-        bg: 'bg-red-100 dark:bg-red-900/30',
+        bg: 'bg-red-100 dark:bg-red-900',
         text: 'text-red-700 dark:text-red-400',
         dot: 'bg-red-500',
         label: 'Offline',
@@ -360,7 +360,7 @@ export const PMGInstancePanel: Component<{ pmg: PMGInstance }> = (props) => {
 
   return (
     <Card padding="none" tone="card" class="overflow-hidden">
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 py-3 bg-slate-50/50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 py-3 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
         <div class="flex items-center gap-3">
           <a
             href={props.pmg.host || `https://${props.pmg.name}:8006`}
@@ -407,20 +407,20 @@ export const PMGInstancePanel: Component<{ pmg: PMGInstance }> = (props) => {
             <div class="text-[10px] text-slate-400">{formatBytes(stats().bytesOut)}</div>
           </div>
 
-          <div class="bg-orange-50 dark:bg-orange-900/20 rounded-md p-3">
+          <div class="bg-orange-50 dark:bg-orange-900 rounded-md p-3">
             <div class="text-xs text-orange-600 dark:text-orange-400 mb-1">Spam</div>
             <div class="text-lg font-bold text-orange-600 dark:text-orange-400">{formatCompact(stats().spam)}</div>
-            <div class="text-[10px] text-orange-500/70">{formatPct(stats().spamPct)} rate</div>
+            <div class="text-[10px] text-orange-500">{formatPct(stats().spamPct)} rate</div>
           </div>
-          <div class="bg-red-50 dark:bg-red-900/20 rounded-md p-3">
+          <div class="bg-red-50 dark:bg-red-900 rounded-md p-3">
             <div class="text-xs text-red-600 dark:text-red-400 mb-1">Viruses</div>
             <div class="text-lg font-bold text-red-600 dark:text-red-400">{formatCompact(stats().virus)}</div>
-            <div class="text-[10px] text-red-500/70">{formatPct(stats().virusPct)} rate</div>
+            <div class="text-[10px] text-red-500">{formatPct(stats().virusPct)} rate</div>
           </div>
-          <div class="bg-yellow-50 dark:bg-yellow-900/20 rounded-md p-3">
+          <div class="bg-yellow-50 dark:bg-yellow-900 rounded-md p-3">
             <div class="text-xs text-yellow-600 dark:text-yellow-400 mb-1">Quarantine</div>
             <div class="text-lg font-bold text-yellow-600 dark:text-yellow-400">{formatCompact(stats().qTotal)}</div>
-            <div class="text-[10px] text-yellow-500/70">{formatPct(stats().quarantinePct)} of inbound</div>
+            <div class="text-[10px] text-yellow-500">{formatPct(stats().quarantinePct)} of inbound</div>
           </div>
         </div>
 
@@ -468,13 +468,13 @@ export const PMGInstancePanel: Component<{ pmg: PMGInstance }> = (props) => {
                     <th class="pb-1.5 font-medium">Queue</th>
                   </tr>
                 </thead>
-                <tbody class="divide-y divide-gray-100 dark:divide-gray-700/50">
+                <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
                   <For each={props.pmg.nodes}>
                     {(node) => {
                       const isOnline = (node.status || '').toLowerCase() === 'online';
 
                       return (
-                        <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                        <tr class="hover:bg-slate-50 dark:hover:bg-slate-800">
                           <td class="py-1.5 font-medium text-slate-900 dark:text-slate-100">{node.name}</td>
                           <td class="py-1.5">
                             <span class={`inline-flex items-center gap-1 ${isOnline ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
@@ -549,14 +549,14 @@ export const PMGInstancePanel: Component<{ pmg: PMGInstance }> = (props) => {
                     <th class="px-3 py-2 font-medium">Comment</th>
                   </tr>
                 </thead>
-                <tbody class="divide-y divide-gray-100 dark:divide-gray-700/50">
+                <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
                   <For each={relayDomainsWithStats()}>
                     {(row) => (
-                      <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                      <tr class="hover:bg-slate-50 dark:hover:bg-slate-800">
                         <td class="px-3 py-2 font-medium text-slate-900 dark:text-slate-100">{row.domain}</td>
                         <td class="px-3 py-2 text-slate-700 dark:text-slate-200">{row.hasStats ? fmtMaybe(row.mail) : '—'}</td>
-                        <td class="px-3 py-2 text-orange-700/90 dark:text-orange-300/90">{row.hasStats ? fmtMaybe(row.spam) : '—'}</td>
-                        <td class="px-3 py-2 text-red-700/90 dark:text-red-300/90">{row.hasStats ? fmtMaybe(row.virus) : '—'}</td>
+                        <td class="px-3 py-2 text-orange-700 dark:text-orange-300">{row.hasStats ? fmtMaybe(row.spam) : '—'}</td>
+                        <td class="px-3 py-2 text-red-700 dark:text-red-300">{row.hasStats ? fmtMaybe(row.virus) : '—'}</td>
                         <td class="px-3 py-2 text-slate-700 dark:text-slate-200">
                           {row.hasStats ? formatPct(row.spamRate) : '—'}
                         </td>
@@ -605,14 +605,14 @@ export const PMGInstancePanel: Component<{ pmg: PMGInstance }> = (props) => {
                       <th class="px-3 py-2 font-medium">Bytes</th>
                     </tr>
                   </thead>
-                  <tbody class="divide-y divide-gray-100 dark:divide-gray-700/50">
+                  <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
                     <For each={otherDomainStatsRows()}>
                       {(row) => (
-                        <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                        <tr class="hover:bg-slate-50 dark:hover:bg-slate-800">
                           <td class="px-3 py-2 font-medium text-slate-900 dark:text-slate-100">{row.domain}</td>
                           <td class="px-3 py-2 text-slate-700 dark:text-slate-200">{fmtMaybe(row.mail)}</td>
-                          <td class="px-3 py-2 text-orange-700/90 dark:text-orange-300/90">{fmtMaybe(row.spam)}</td>
-                          <td class="px-3 py-2 text-red-700/90 dark:text-red-300/90">{fmtMaybe(row.virus)}</td>
+                          <td class="px-3 py-2 text-orange-700 dark:text-orange-300">{fmtMaybe(row.spam)}</td>
+                          <td class="px-3 py-2 text-red-700 dark:text-red-300">{fmtMaybe(row.virus)}</td>
                           <td class="px-3 py-2 text-slate-700 dark:text-slate-200">{formatPct(row.spamRate)}</td>
                           <td class="px-3 py-2 text-slate-600 dark:text-slate-300">{row.bytes > 0 ? formatBytes(row.bytes) : '—'}</td>
                         </tr>
@@ -651,14 +651,14 @@ export const PMGInstancePanel: Component<{ pmg: PMGInstance }> = (props) => {
                     <th class="px-3 py-2 font-medium">Bytes</th>
                   </tr>
                 </thead>
-                <tbody class="divide-y divide-gray-100 dark:divide-gray-700/50">
+                <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
                   <For each={domainStatsRows()}>
                     {(row) => (
-                      <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                      <tr class="hover:bg-slate-50 dark:hover:bg-slate-800">
                         <td class="px-3 py-2 font-medium text-slate-900 dark:text-slate-100">{row.domain}</td>
                         <td class="px-3 py-2 text-slate-700 dark:text-slate-200">{fmtMaybe(row.mail)}</td>
-                        <td class="px-3 py-2 text-orange-700/90 dark:text-orange-300/90">{fmtMaybe(row.spam)}</td>
-                        <td class="px-3 py-2 text-red-700/90 dark:text-red-300/90">{fmtMaybe(row.virus)}</td>
+                        <td class="px-3 py-2 text-orange-700 dark:text-orange-300">{fmtMaybe(row.spam)}</td>
+                        <td class="px-3 py-2 text-red-700 dark:text-red-300">{fmtMaybe(row.virus)}</td>
                         <td class="px-3 py-2 text-slate-700 dark:text-slate-200">{formatPct(row.spamRate)}</td>
                         <td class="px-3 py-2 text-slate-600 dark:text-slate-300">{row.bytes > 0 ? formatBytes(row.bytes) : '—'}</td>
                       </tr>

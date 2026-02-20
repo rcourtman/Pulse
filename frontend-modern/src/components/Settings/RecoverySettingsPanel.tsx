@@ -187,7 +187,7 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
 
             {/* Env override warning */}
             <Show when={props.backupPollingEnvLocked()}>
-              <div class="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 dark:border-amber-700 dark:bg-amber-900/20 p-3 text-xs text-amber-700 dark:text-amber-200">
+              <div class="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 dark:border-amber-700 dark:bg-amber-900 p-3 text-xs text-amber-700 dark:text-amber-200">
                 <svg
                   class="w-4 h-4 flex-shrink-0 mt-0.5"
                   fill="none"
@@ -224,9 +224,9 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Export Section */}
-          <div class="group border border-slate-200 dark:border-slate-700 rounded-md p-5 bg-blue-50/50 dark:bg-blue-900/10 hover:border-blue-300 dark:hover:border-blue-700 transition-all duration-200">
+          <div class="group border border-slate-200 dark:border-slate-700 rounded-md p-5 bg-blue-50 dark:bg-blue-900 hover:border-blue-300 dark:hover:border-blue-700 transition-all duration-200">
             <div class="flex items-start gap-4">
-              <div class="flex-shrink-0 w-12 h-12 bg-blue-500 rounded-md flex items-center justify-center shadow-sm shadow-blue-500/20">
+              <div class="flex-shrink-0 w-12 h-12 bg-blue-500 rounded-md flex items-center justify-center shadow-sm shadow-blue-500">
                 {/* Archive/Download Box Icon */}
                 <svg
                   class="w-6 h-6 text-white"
@@ -296,9 +296,9 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
           </div>
 
           {/* Import Section */}
-          <div class="group border border-slate-200 dark:border-slate-700 rounded-md p-5 bg-slate-50/50 dark:bg-slate-800 hover:border-slate-400 dark:hover:border-slate-600 transition-all duration-200">
+          <div class="group border border-slate-200 dark:border-slate-700 rounded-md p-5 bg-slate-50 dark:bg-slate-800 hover:border-slate-400 dark:hover:border-slate-600 transition-all duration-200">
             <div class="flex items-start gap-4">
-              <div class="flex-shrink-0 w-12 h-12 bg-slate-500 rounded-md flex items-center justify-center shadow-sm shadow-gray-500/20">
+              <div class="flex-shrink-0 w-12 h-12 bg-slate-500 rounded-md flex items-center justify-center shadow-sm shadow-gray-500">
                 {/* Upload/Restore Icon */}
                 <svg
                   class="w-6 h-6 text-white"
@@ -365,10 +365,10 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
         </div>
 
         {/* Security Tips */}
-        <div class="mt-6 p-4 bg-amber-50 dark:bg-amber-900/20 rounded-md border border-amber-200 dark:border-amber-800/50">
+        <div class="mt-6 p-4 bg-amber-50 dark:bg-amber-900 rounded-md border border-amber-200 dark:border-amber-800">
           <div class="flex gap-3">
             {/* Shield Icon */}
-            <div class="flex-shrink-0 w-10 h-10 bg-amber-100 dark:bg-amber-900/40 rounded-md flex items-center justify-center">
+            <div class="flex-shrink-0 w-10 h-10 bg-amber-100 dark:bg-amber-900 rounded-md flex items-center justify-center">
               <svg
                 class="w-5 h-5 text-amber-600 dark:text-amber-400"
                 fill="none"

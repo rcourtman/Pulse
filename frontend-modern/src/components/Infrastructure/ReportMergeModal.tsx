@@ -132,7 +132,7 @@ export const ReportMergeModal: Component<ReportMergeModalProps> = (props) => {
           <div class="mt-2 flex flex-wrap gap-2">
             <For each={sourceLabels()}>
               {(label) => (
-                <span class="rounded-full bg-blue-100 px-2.5 py-1 text-[11px] font-semibold text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
+                <span class="rounded-full bg-blue-100 px-2.5 py-1 text-[11px] font-semibold text-blue-700 dark:bg-blue-900 dark:text-blue-200">
                   {label}
                 </span>
               )}
@@ -154,7 +154,7 @@ export const ReportMergeModal: Component<ReportMergeModalProps> = (props) => {
         </div>
 
         <Show when={error()}>
-          <div class="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-900/50 dark:bg-red-900/30 dark:text-red-200">
+          <div class="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-900 dark:bg-red-900 dark:text-red-200">
             {error()}
           </div>
         </Show>

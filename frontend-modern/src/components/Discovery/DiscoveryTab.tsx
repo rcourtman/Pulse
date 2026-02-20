@@ -343,7 +343,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                     <Show
                         when={discoveryInfo()?.ai_provider?.is_local}
                         fallback={
-                            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
                                 {/* Cloud icon */}
                                 <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
@@ -352,7 +352,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                             </span>
                         }
                     >
-                        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">
+                        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300">
                             {/* Server/local icon */}
                             <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
@@ -365,7 +365,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
 
             {/* "What Discovery Does" Explanation - Shown when no discovery yet */}
             <Show when={!discovery() && !isScanning() && !showLoadingSpinner() && showExplanation()}>
-                <div class="rounded border border-amber-200 bg-amber-50/80 p-3 shadow-sm dark:border-amber-800/50 dark:bg-amber-900/20">
+                <div class="rounded border border-amber-200 bg-amber-50 p-3 shadow-sm dark:border-amber-800 dark:bg-amber-900">
                     <div class="flex items-start justify-between gap-3">
                         <div class="flex items-start gap-2.5">
                             <svg class="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -394,9 +394,9 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
 
             {/* Commands Preview - Expandable before first scan */}
             <Show when={!discovery() && !isScanning() && !discovery.loading && !discoveryInfo.loading && discoveryInfo()?.commands && discoveryInfo()!.commands!.length > 0}>
-                <details class="rounded border border-slate-200 bg-white shadow-sm dark:border-slate-600/70 dark:bg-slate-800" open={showCommandsPreview()}>
+                <details class="rounded border border-slate-200 bg-white shadow-sm dark:border-slate-600 dark:bg-slate-800" open={showCommandsPreview()}>
                     <summary
-                        class="p-2.5 text-xs font-medium text-slate-700 dark:text-slate-300 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 flex items-center gap-2"
+                        class="p-2.5 text-xs font-medium text-slate-700 dark:text-slate-300 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2"
                         onClick={(e) => { e.preventDefault(); setShowCommandsPreview(!showCommandsPreview()); }}
                     >
                         <svg class={`w-3.5 h-3.5 transition-transform ${showCommandsPreview() ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -433,7 +433,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
 
             {/* Scan Progress Bar */}
             <Show when={scanProgress() && isScanning()}>
-                <div class="rounded border border-blue-200 bg-blue-50 p-3 shadow-sm dark:border-blue-800 dark:bg-blue-900/30">
+                <div class="rounded border border-blue-200 bg-blue-50 p-3 shadow-sm dark:border-blue-800 dark:bg-blue-900">
                     <div class="flex items-center justify-between mb-2">
                         <div class="flex items-center gap-2">
                             <div class="animate-spin h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
@@ -466,7 +466,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
 
             {/* Scanning state without WebSocket progress - show live timer */}
             <Show when={isScanning() && !scanProgress()}>
-                <div class="rounded border border-blue-200 bg-blue-50 p-3 shadow-sm dark:border-blue-800 dark:bg-blue-900/30">
+                <div class="rounded border border-blue-200 bg-blue-50 p-3 shadow-sm dark:border-blue-800 dark:bg-blue-900">
                     <div class="flex items-center gap-2 mb-2">
                         <div class="animate-spin h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
                         <span class="text-sm font-medium text-blue-700 dark:text-blue-300">
@@ -482,7 +482,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
 
             {/* Scan Success */}
             <Show when={scanSuccess()}>
-                <div class="mb-4 rounded-md border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-900/20">
+                <div class="mb-4 rounded-md border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-900">
                     <div class="flex items-center gap-2">
                         <svg class="w-5 h-5 text-green-500 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
@@ -494,7 +494,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
 
             {/* Scan Error */}
             <Show when={scanError()}>
-                <div class="mb-4 rounded-md border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20">
+                <div class="mb-4 rounded-md border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900">
                     <div class="flex items-start gap-3">
                         <svg class="w-5 h-5 text-red-500 dark:text-red-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -543,7 +543,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                     {/* Connection Status Warning - Show when commands are needed but not available */}
                     <Show when={props.resourceType === 'host' && !connectedAgents.loading}>
                         <Show when={props.commandsEnabled === false}>
-                            <div class="mb-4 mx-auto max-w-md rounded-md border border-amber-200 bg-amber-50 p-3 text-left dark:border-amber-800/50 dark:bg-amber-900/20">
+                            <div class="mb-4 mx-auto max-w-md rounded-md border border-amber-200 bg-amber-50 p-3 text-left dark:border-amber-800 dark:bg-amber-900">
                                 <div class="flex items-start gap-2">
                                     <svg class="w-4 h-4 text-amber-500 dark:text-amber-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -559,7 +559,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                             </div>
                         </Show>
                         <Show when={props.commandsEnabled === true && !hasConnectedAgent()}>
-                            <div class="mb-4 mx-auto max-w-md rounded-md border border-amber-200 bg-amber-50 p-3 text-left dark:border-amber-800/50 dark:bg-amber-900/20">
+                            <div class="mb-4 mx-auto max-w-md rounded-md border border-amber-200 bg-amber-50 p-3 text-left dark:border-amber-800 dark:bg-amber-900">
                                 <div class="flex items-start gap-2">
                                     <svg class="w-4 h-4 text-amber-500 dark:text-amber-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -568,7 +568,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                                         <p class="font-medium text-amber-800 dark:text-amber-200">Agent not connected for commands</p>
                                         <p class="text-amber-700 dark:text-amber-300 mt-0.5">
                                             Commands are enabled, but the agent isn't connected via WebSocket. Check that the API token has the{' '}
-                                            <code class="px-1 py-0.5 bg-amber-100 dark:bg-amber-800/50 rounded">agent:exec</code>{' '}
+                                            <code class="px-1 py-0.5 bg-amber-100 dark:bg-amber-800 rounded">agent:exec</code>{' '}
                                             scope in <a href="/settings/integrations/api" class="underline hover:no-underline">Settings → API Tokens</a>.
                                         </p>
                                     </div>
@@ -576,7 +576,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                             </div>
                         </Show>
                         <Show when={props.commandsEnabled === true && hasConnectedAgent()}>
-                            <div class="mb-4 mx-auto max-w-md rounded-md border border-green-200 bg-green-50 p-3 text-left dark:border-green-800/50 dark:bg-green-900/20">
+                            <div class="mb-4 mx-auto max-w-md rounded-md border border-green-200 bg-green-50 p-3 text-left dark:border-green-800 dark:bg-green-900">
                                 <div class="flex items-center gap-2">
                                     <svg class="w-4 h-4 text-green-500 dark:text-green-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
@@ -645,7 +645,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                 {(d) => (
                     <div class="space-y-4">
                         {/* Service Header */}
-                        <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600/70 dark:bg-slate-800">
+                        <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
                             <div class="flex items-start justify-between">
                                 <div>
                                     <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100">
@@ -658,7 +658,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                                     </Show>
                                 </div>
                                 <Show when={d().category && d().category !== 'unknown'}>
-                                    <span class="inline-block rounded bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
+                                    <span class="inline-block rounded bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900 dark:text-blue-200">
                                         {getCategoryDisplayName(d().category)}
                                     </span>
                                 </Show>
@@ -674,7 +674,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                         </div>
 
                         <Show when={d().suggested_url || d().suggested_url_diagnostic}>
-                            <div class="rounded border border-blue-200 bg-blue-50/50 p-3 shadow-sm dark:border-blue-800/60 dark:bg-blue-900/20">
+                            <div class="rounded border border-blue-200 bg-blue-50 p-3 shadow-sm dark:border-blue-800 dark:bg-blue-900">
                                 <div class="text-[11px] font-medium uppercase tracking-wide text-blue-800 dark:text-blue-200 mb-1">
                                     Web Interface Suggestion
                                 </div>
@@ -689,7 +689,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                                 >
                                     <Show when={suggestedURLReasonText()}>
                                         <p
-                                            class="mb-1 text-[10px] text-blue-700/90 dark:text-blue-300/90"
+                                            class="mb-1 text-[10px] text-blue-700 dark:text-blue-300"
                                             title={suggestedURLReasonTitle()}
                                         >
                                             Why this URL: {suggestedURLReasonText()}
@@ -707,7 +707,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
 
                         {/* CLI Access */}
                         <Show when={d().cli_access}>
-                            <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600/70 dark:bg-slate-800">
+                            <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
                                 <div class="text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 mb-2">
                                     CLI Access
                                 </div>
@@ -719,7 +719,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
 
                         {/* Configuration, Data & Log Paths */}
                         <Show when={d().config_paths?.length > 0 || d().data_paths?.length > 0 || d().log_paths?.length > 0}>
-                            <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600/70 dark:bg-slate-800">
+                            <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
                                 <Show when={d().config_paths?.length > 0}>
                                     <div class="mb-3">
                                         <div class="text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 mb-1">
@@ -773,7 +773,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
 
                         {/* Ports */}
                         <Show when={d().ports?.length > 0}>
-                            <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600/70 dark:bg-slate-800">
+                            <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
                                 <div class="text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 mb-2">
                                     Listening Ports
                                 </div>
@@ -794,7 +794,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
 
                         {/* Key Facts */}
                         <Show when={d().facts?.length > 0}>
-                            <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600/70 dark:bg-slate-800">
+                            <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
                                 <div class="text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 mb-2">
                                     Discovered Facts
                                 </div>
@@ -814,7 +814,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                         </Show>
 
                         {/* User Notes */}
-                        <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600/70 dark:bg-slate-800">
+                        <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
                             <div class="flex items-center justify-between mb-2">
                                 <div class="text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200">
                                     Your Notes
@@ -876,8 +876,8 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
 
                         {/* AI Reasoning (collapsible) */}
                         <Show when={d().ai_reasoning}>
-                            <details class="rounded border border-slate-200 bg-white shadow-sm dark:border-slate-600/70 dark:bg-slate-800">
-                                <summary class="p-3 text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                            <details class="rounded border border-slate-200 bg-white shadow-sm dark:border-slate-600 dark:bg-slate-800">
+                                <summary class="p-3 text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800">
                                     AI Reasoning
                                 </summary>
                                 <div class="px-3 pb-3">
@@ -890,8 +890,8 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
 
                         {/* Scan Details / Raw Command Outputs (collapsible) */}
                         <Show when={d().raw_command_output && Object.keys(d().raw_command_output!).length > 0}>
-                            <details class="rounded border border-slate-200 bg-white shadow-sm dark:border-slate-600/70 dark:bg-slate-800">
-                                <summary class="p-3 text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                            <details class="rounded border border-slate-200 bg-white shadow-sm dark:border-slate-600 dark:bg-slate-800">
+                                <summary class="p-3 text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800">
                                     Scan Details ({Object.keys(d().raw_command_output!).length} commands)
                                 </summary>
                                 <div class="px-3 pb-3 space-y-3">
@@ -913,7 +913,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
 
                         {/* Commands Run (for non-admin users who can't see full output) */}
                         <Show when={!d().raw_command_output && d().scan_duration && d().scan_duration > 0}>
-                            <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600/70 dark:bg-slate-800">
+                            <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
                                 <div class="text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 mb-1">
                                     Scan Info
                                 </div>

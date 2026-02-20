@@ -168,7 +168,7 @@ export const K8sDeploymentsDrawer: Component<{ cluster: string; initialNamespace
               value={search()}
               onInput={(e) => setSearch(e.currentTarget.value)}
               placeholder="Search deployments..."
-              class="w-[12rem] rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+              class="w-[12rem] rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
             />
 
             <Show when={namespaceOptions().length > 0}>
@@ -183,7 +183,7 @@ export const K8sDeploymentsDrawer: Component<{ cluster: string; initialNamespace
                   id="k8s-deployments-namespace"
                   value={namespace()}
                   onChange={(e) => setNamespace(e.currentTarget.value)}
-                  class="min-w-[10rem] rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                  class="min-w-[10rem] rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                 >
                   <option value="">All namespaces</option>
                   <For each={namespaceOptions()}>
@@ -236,7 +236,7 @@ export const K8sDeploymentsDrawer: Component<{ cluster: string; initialNamespace
                       <th class="px-3 py-2 font-medium">Actions</th>
                     </tr>
                   </thead>
-                  <tbody class="divide-y divide-gray-100 dark:divide-gray-700/50">
+                  <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
                     <For each={filteredDeployments()}>
                       {(dep) => {
                         const name = () => normalize(dep.name) || dep.id;
@@ -247,7 +247,7 @@ export const K8sDeploymentsDrawer: Component<{ cluster: string; initialNamespace
                         const available = () => dep.kubernetes?.availableReplicas ?? 0;
 
                         return (
-                          <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                          <tr class="hover:bg-slate-50 dark:hover:bg-slate-800">
                             <td class="px-3 py-2">
                               <div class="flex items-center gap-2 min-w-0">
                                 <span class={`h-2 w-2 rounded-full ${statusTone(dep.status)}`} title={dep.status || 'unknown'} />

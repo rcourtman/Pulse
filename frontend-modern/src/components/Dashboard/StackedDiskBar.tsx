@@ -321,7 +321,7 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
                   <span class="text-[8px] text-slate-500 dark:text-slate-400 truncate" title={disk.label}>
                     {disk.label}
                   </span>
-                  <div class="relative h-2.5 rounded-sm bg-slate-300/70 dark:bg-slate-800 overflow-hidden">
+                  <div class="relative h-2.5 rounded-sm bg-slate-300 dark:bg-slate-800 overflow-hidden">
                     <div
                       class="h-full"
                       style={{
@@ -345,7 +345,7 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
           </div>
           <For each={tooltipContent()}>
             {(item, idx) => (
-              <div class="flex flex-col gap-1 py-0.5" classList={{ 'border-t border-slate-700/50': idx() > 0 }}>
+              <div class="flex flex-col gap-1 py-0.5" classList={{ 'border-t border-slate-700': idx() > 0 }}>
                 <div class="flex justify-between gap-3">
                   <span
                     class="truncate max-w-[100px]"
@@ -357,7 +357,7 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
                     {item.percent} ({item.used}/{item.total})
                   </span>
                 </div>
-                <div class="h-1.5 w-full rounded bg-slate-700/70 overflow-hidden">
+                <div class="h-1.5 w-full rounded bg-slate-700 overflow-hidden">
                   <div
                     class="h-full"
                     style={{

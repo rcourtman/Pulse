@@ -166,10 +166,10 @@ const DiagnosticCard: Component<{
     children: JSX.Element;
 }> = (props) => {
     const statusColors = {
-        success: 'border-green-200 dark:border-green-800 bg-green-50/50 dark:bg-green-900/20',
-        warning: 'border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-900/20',
-        error: 'border-red-200 dark:border-red-800 bg-red-50/50 dark:bg-red-900/20',
-        info: 'border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-900/20',
+        success: 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900',
+        warning: 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900',
+        error: 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900',
+        info: 'border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900',
     };
 
     const iconColors = {
@@ -200,9 +200,9 @@ const StatusBadge: Component<{
     label?: string;
 }> = (props) => {
     const colors = {
-        online: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
-        offline: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
-        warning: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+        online: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
+        offline: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
+        warning: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
         unknown: 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300',
     };
 
@@ -220,7 +220,7 @@ const MetricRow: Component<{
     value: string | number | undefined;
     mono?: boolean;
 }> = (props) => (
-    <div class="flex items-center justify-between py-1.5 border-b border-slate-100 dark:border-slate-700/50 last:border-0">
+    <div class="flex items-center justify-between py-1.5 border-b border-slate-100 dark:border-slate-700 last:border-0">
         <span class="text-slate-500 dark:text-slate-400">{props.label}</span>
         <span class={`text-slate-900 dark:text-slate-100 ${props.mono ? 'font-mono text-[11px]' : 'font-medium'}`}>
             {props.value ?? 'Unknown'}
@@ -423,38 +423,38 @@ export const DiagnosticsPanel: Component = () => {
         const health = systemHealth();
         if (health === 'healthy') {
             return {
-                headerBg: 'bg-emerald-50 dark:bg-emerald-950/20',
-                headerBorder: 'border-b border-emerald-200 dark:border-emerald-800/60',
-                iconWrap: 'bg-emerald-100 dark:bg-emerald-900/40',
+                headerBg: 'bg-emerald-50 dark:bg-emerald-950',
+                headerBorder: 'border-b border-emerald-200 dark:border-emerald-800',
+                iconWrap: 'bg-emerald-100 dark:bg-emerald-900',
                 icon: 'text-emerald-700 dark:text-emerald-300',
                 subtitle: 'text-emerald-700 dark:text-emerald-300',
                 meta: 'text-emerald-700 dark:text-emerald-300',
                 button:
-                    'border border-emerald-300 dark:border-emerald-700 bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-100 hover:bg-emerald-200 dark:hover:bg-emerald-900/60',
+                    'border border-emerald-300 dark:border-emerald-700 bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-100 hover:bg-emerald-200 dark:hover:bg-emerald-900',
             };
         }
         if (health === 'warning') {
             return {
-                headerBg: 'bg-amber-50 dark:bg-amber-950/20',
-                headerBorder: 'border-b border-amber-200 dark:border-amber-800/60',
-                iconWrap: 'bg-amber-100 dark:bg-amber-900/40',
+                headerBg: 'bg-amber-50 dark:bg-amber-950',
+                headerBorder: 'border-b border-amber-200 dark:border-amber-800',
+                iconWrap: 'bg-amber-100 dark:bg-amber-900',
                 icon: 'text-amber-700 dark:text-amber-300',
                 subtitle: 'text-amber-700 dark:text-amber-300',
                 meta: 'text-amber-700 dark:text-amber-300',
                 button:
-                    'border border-amber-300 dark:border-amber-700 bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-100 hover:bg-amber-200 dark:hover:bg-amber-900/60',
+                    'border border-amber-300 dark:border-amber-700 bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-100 hover:bg-amber-200 dark:hover:bg-amber-900',
             };
         }
         if (health === 'critical') {
             return {
-                headerBg: 'bg-rose-50 dark:bg-rose-950/20',
-                headerBorder: 'border-b border-rose-200 dark:border-rose-800/60',
-                iconWrap: 'bg-rose-100 dark:bg-rose-900/40',
+                headerBg: 'bg-rose-50 dark:bg-rose-950',
+                headerBorder: 'border-b border-rose-200 dark:border-rose-800',
+                iconWrap: 'bg-rose-100 dark:bg-rose-900',
                 icon: 'text-rose-700 dark:text-rose-300',
                 subtitle: 'text-rose-700 dark:text-rose-300',
                 meta: 'text-rose-700 dark:text-rose-300',
                 button:
-                    'border border-rose-300 dark:border-rose-700 bg-rose-100 dark:bg-rose-900/40 text-rose-800 dark:text-rose-100 hover:bg-rose-200 dark:hover:bg-rose-900/60',
+                    'border border-rose-300 dark:border-rose-700 bg-rose-100 dark:bg-rose-900 text-rose-800 dark:text-rose-100 hover:bg-rose-200 dark:hover:bg-rose-900',
             };
         }
         return {
@@ -531,7 +531,7 @@ export const DiagnosticsPanel: Component = () => {
                                 type="button"
                                 onClick={() => exportDiagnostics(true)}
                                 disabled={exportLoading()}
-                                class="flex min-h-10 sm:min-h-9 items-center gap-1.5 px-3 py-2 text-sm font-medium text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-md hover:bg-green-100 dark:hover:bg-green-900/50 transition-colors"
+                                class="flex min-h-10 sm:min-h-9 items-center gap-1.5 px-3 py-2 text-sm font-medium text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900 border border-green-200 dark:border-green-800 rounded-md hover:bg-green-100 dark:hover:bg-green-900 transition-colors"
                             >
                                 <Download class="w-3.5 h-3.5" />
                                 GitHub
@@ -594,7 +594,7 @@ export const DiagnosticsPanel: Component = () => {
                         <div class="space-y-1">
                             <For each={diagnosticsData()?.nodes || []}>
                                 {(node) => (
-                                    <div class="flex items-center justify-between py-1 border-b border-slate-100 dark:border-slate-700/50 last:border-0">
+                                    <div class="flex items-center justify-between py-1 border-b border-slate-100 dark:border-slate-700 last:border-0">
                                         <span class="truncate max-w-[120px]" title={node.host}>{node.name}</span>
                                         <StatusBadge status={node.connected ? 'online' : 'offline'} />
                                     </div>
@@ -623,7 +623,7 @@ export const DiagnosticsPanel: Component = () => {
                             <div class="space-y-1">
                                 <For each={diagnosticsData()?.pbs || []}>
                                     {(pbs) => (
-                                        <div class="flex items-center justify-between py-1 border-b border-slate-100 dark:border-slate-700/50 last:border-0">
+                                        <div class="flex items-center justify-between py-1 border-b border-slate-100 dark:border-slate-700 last:border-0">
                                             <span class="truncate max-w-[120px]" title={pbs.host}>{pbs.name}</span>
                                             <StatusBadge status={pbs.connected ? 'online' : 'offline'} />
                                         </div>
@@ -669,7 +669,7 @@ export const DiagnosticsPanel: Component = () => {
                     <Show when={diagnosticsData()?.metricsStore}>
                         <Card padding="md">
                             <div class="flex items-center gap-3 mb-4 pb-3 border-b border-slate-200 dark:border-slate-700">
-                                <div class="p-2 rounded-md bg-blue-100 dark:bg-blue-900/30">
+                                <div class="p-2 rounded-md bg-blue-100 dark:bg-blue-900">
                                     <Database class="w-4 h-4 text-blue-600 dark:text-blue-400" />
                                 </div>
                                 <div>
@@ -702,7 +702,7 @@ export const DiagnosticsPanel: Component = () => {
                                 <MetricRow label="Buffer Size" value={diagnosticsData()?.metricsStore?.bufferSize ?? 0} />
                             </div>
                             <Show when={(diagnosticsData()?.metricsStore?.notes?.length || 0) > 0}>
-                                <div class="mt-3 rounded-md bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-2">
+                                <div class="mt-3 rounded-md bg-amber-50 dark:bg-amber-900 border border-amber-200 dark:border-amber-800 p-2">
                                     <div class="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-300">
                                         <AlertTriangle class="w-4 h-4 flex-shrink-0 mt-0.5" />
                                         <div class="space-y-1">
@@ -714,7 +714,7 @@ export const DiagnosticsPanel: Component = () => {
                                 </div>
                             </Show>
                             <Show when={diagnosticsData()?.metricsStore?.error}>
-                                <div class="mt-3 rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-2 text-xs text-red-700 dark:text-red-300">
+                                <div class="mt-3 rounded-md bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-800 p-2 text-xs text-red-700 dark:text-red-300">
                                     {diagnosticsData()?.metricsStore?.error}
                                 </div>
                             </Show>
@@ -725,7 +725,7 @@ export const DiagnosticsPanel: Component = () => {
                     <Show when={diagnosticsData()?.apiTokens}>
                         <Card padding="md">
                             <div class="flex items-center gap-3 mb-4 pb-3 border-b border-slate-200 dark:border-slate-700">
-                                <div class="p-2 rounded-md bg-blue-100 dark:bg-blue-900/30">
+                                <div class="p-2 rounded-md bg-blue-100 dark:bg-blue-900">
                                     <Shield class="w-4 h-4 text-blue-600 dark:text-blue-400" />
                                 </div>
                                 <div>
@@ -745,7 +745,7 @@ export const DiagnosticsPanel: Component = () => {
                                 <MetricRow label="Legacy Docker Hosts" value={diagnosticsData()?.apiTokens?.legacyDockerHostCount ?? 0} />
                             </div>
                             <Show when={diagnosticsData()?.apiTokens?.hasLegacyToken}>
-                                <div class="mt-3 p-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded text-xs text-amber-700 dark:text-amber-300">
+                                <div class="mt-3 p-2 bg-amber-50 dark:bg-amber-900 border border-amber-200 dark:border-amber-800 rounded text-xs text-amber-700 dark:text-amber-300">
                                     Legacy token detected. Consider migrating to scoped tokens.
                                 </div>
                             </Show>
@@ -756,7 +756,7 @@ export const DiagnosticsPanel: Component = () => {
                     <Show when={diagnosticsData()?.dockerAgents}>
                         <Card padding="md">
                             <div class="flex items-center gap-3 mb-4 pb-3 border-b border-slate-200 dark:border-slate-700">
-                                <div class="p-2 rounded-md bg-blue-100 dark:bg-blue-900/30">
+                                <div class="p-2 rounded-md bg-blue-100 dark:bg-blue-900">
                                     <Database class="w-4 h-4 text-blue-600 dark:text-blue-400" />
                                 </div>
                                 <div>
@@ -776,7 +776,7 @@ export const DiagnosticsPanel: Component = () => {
                                 <MetricRow label="Outdated Version" value={diagnosticsData()?.dockerAgents?.hostsOutdatedVersion ?? 0} />
                             </div>
                             <Show when={diagnosticsData()?.dockerAgents?.recommendedAgentVersion}>
-                                <div class="mt-3 pt-2 border-t border-slate-100 dark:border-slate-700/50 text-xs text-slate-500 dark:text-slate-400">
+                                <div class="mt-3 pt-2 border-t border-slate-100 dark:border-slate-700 text-xs text-slate-500 dark:text-slate-400">
                                     Recommended version: {diagnosticsData()?.dockerAgents?.recommendedAgentVersion}
                                 </div>
                             </Show>
@@ -787,7 +787,7 @@ export const DiagnosticsPanel: Component = () => {
                     <Show when={diagnosticsData()?.alerts}>
                         <Card padding="md">
                             <div class="flex items-center gap-3 mb-4 pb-3 border-b border-slate-200 dark:border-slate-700">
-                                <div class="p-2 rounded-md bg-rose-100 dark:bg-rose-900/30">
+                                <div class="p-2 rounded-md bg-rose-100 dark:bg-rose-900">
                                     <AlertTriangle class="w-4 h-4 text-rose-600 dark:text-rose-400" />
                                 </div>
                                 <div>
@@ -797,26 +797,26 @@ export const DiagnosticsPanel: Component = () => {
                             </div>
                             <div class="flex flex-wrap gap-2">
                                 <span class={`px-2 py-1 rounded text-xs font-medium ${diagnosticsData()?.alerts?.legacyThresholdsDetected
-                                    ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
-                                    : 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+                                    ? 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300'
+                                    : 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
                                     }`}>
                                     Legacy thresholds: {diagnosticsData()?.alerts?.legacyThresholdsDetected ? 'Detected' : 'Migrated'}
                                 </span>
                                 <span class={`px-2 py-1 rounded text-xs font-medium ${diagnosticsData()?.alerts?.missingCooldown
-                                    ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
-                                    : 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+                                    ? 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300'
+                                    : 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
                                     }`}>
                                     Cooldown: {diagnosticsData()?.alerts?.missingCooldown ? 'Missing' : 'Configured'}
                                 </span>
                                 <span class={`px-2 py-1 rounded text-xs font-medium ${diagnosticsData()?.alerts?.missingGroupingWindow
-                                    ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
-                                    : 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+                                    ? 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300'
+                                    : 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
                                     }`}>
                                     Grouping: {diagnosticsData()?.alerts?.missingGroupingWindow ? 'Disabled' : 'Enabled'}
                                 </span>
                             </div>
                             <Show when={(diagnosticsData()?.alerts?.notes?.length || 0) > 0}>
-                                <ul class="mt-3 pt-2 border-t border-slate-100 dark:border-slate-700/50 space-y-1 text-xs text-slate-500 dark:text-slate-400 list-disc pl-4">
+                                <ul class="mt-3 pt-2 border-t border-slate-100 dark:border-slate-700 space-y-1 text-xs text-slate-500 dark:text-slate-400 list-disc pl-4">
                                     <For each={diagnosticsData()?.alerts?.notes || []}>
                                         {(note) => <li>{note}</li>}
                                     </For>
@@ -829,7 +829,7 @@ export const DiagnosticsPanel: Component = () => {
                     <Show when={diagnosticsData()?.aiChat}>
                         <Card padding="md">
                             <div class="flex items-center gap-3 mb-4 pb-3 border-b border-slate-200 dark:border-slate-700">
-                                <div class="p-2 rounded-md bg-blue-100 dark:bg-blue-900/30">
+                                <div class="p-2 rounded-md bg-blue-100 dark:bg-blue-900">
                                     <Sparkles class="w-4 h-4 text-blue-600 dark:text-blue-400" />
                                 </div>
                                 <div>
@@ -848,7 +848,7 @@ export const DiagnosticsPanel: Component = () => {
                                 <MetricRow label="Port" value={diagnosticsData()?.aiChat?.port} mono />
                                 <MetricRow label="Status" value={diagnosticsData()?.aiChat?.healthy ? 'Healthy' : 'Unhealthy'} />
                             </div>
-                            <div class="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700/50 flex items-center justify-between text-xs">
+                            <div class="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between text-xs">
                                 <span class="text-slate-500 dark:text-slate-400">MCP Connection</span>
                                 <div class="flex items-center gap-1.5">
                                     {diagnosticsData()?.aiChat?.mcpConnected ?
@@ -861,7 +861,7 @@ export const DiagnosticsPanel: Component = () => {
                                 </div>
                             </div>
                             <Show when={(diagnosticsData()?.aiChat?.notes?.length || 0) > 0}>
-                                <ul class="mt-3 bg-amber-50 dark:bg-amber-900/10 p-2 rounded text-xs text-amber-700 dark:text-amber-400 list-disc pl-4">
+                                <ul class="mt-3 bg-amber-50 dark:bg-amber-900 p-2 rounded text-xs text-amber-700 dark:text-amber-400 list-disc pl-4">
                                     <For each={diagnosticsData()?.aiChat?.notes || []}>
                                         {(note) => <li>{note}</li>}
                                     </For>
@@ -873,7 +873,7 @@ export const DiagnosticsPanel: Component = () => {
 
                 {/* Errors Section */}
                 <Show when={(diagnosticsData()?.errors?.length || 0) > 0}>
-                    <Card padding="md" class="border-red-200 dark:border-red-800 bg-red-50/50 dark:bg-red-900/20">
+                    <Card padding="md" class="border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900">
                         <div class="flex items-center gap-3 mb-3">
                             <XCircle class="w-5 h-5 text-red-600 dark:text-red-400" />
                             <h4 class="text-sm font-semibold text-red-900 dark:text-red-100">Errors Detected</h4>
@@ -881,7 +881,7 @@ export const DiagnosticsPanel: Component = () => {
                         <ul class="space-y-2 text-xs text-red-700 dark:text-red-300">
                             <For each={diagnosticsData()?.errors || []}>
                                 {(error) => (
-                                    <li class="flex items-start gap-2 p-2 bg-red-100 dark:bg-red-900/40 rounded">
+                                    <li class="flex items-start gap-2 p-2 bg-red-100 dark:bg-red-900 rounded">
                                         <span class="text-rose-400">•</span>
                                         <span>{error}</span>
                                     </li>

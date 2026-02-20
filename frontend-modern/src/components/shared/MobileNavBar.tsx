@@ -143,7 +143,7 @@ export function MobileNavBar(props: MobileNavBarProps) {
     <>
       {/* Bottom navigation bar */}
       <nav
-        class="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200/90 bg-white dark:border-slate-700/90 dark:bg-slate-800 md:hidden pb-safe"
+        class="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800 md:hidden pb-safe"
       >
         <div class="relative">
           <div
@@ -160,7 +160,7 @@ export function MobileNavBar(props: MobileNavBarProps) {
                   onClick={() => handlePlatformClick(platform)}
                   title={platform.tooltip}
                   class={`relative flex min-h-10 shrink-0 flex-col items-center gap-1 rounded-md px-2 py-1.5 text-[11px] font-medium transition-colors ${props.activeTab() === platform.id
-                    ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+                    ? 'bg-blue-50 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
                     : 'text-slate-500 dark:text-slate-400'
                     } ${platform.enabled ? '' : 'opacity-70'}`}
                 >
@@ -169,7 +169,7 @@ export function MobileNavBar(props: MobileNavBarProps) {
                   </span>
                   <span class="whitespace-nowrap">{platform.label}</span>
                   <Show when={!platform.enabled}>
-                    <span class="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700 dark:bg-amber-900/40 dark:text-amber-200">
+                    <span class="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700 dark:bg-amber-900 dark:text-amber-200">
                       Setup
                     </span>
                   </Show>
@@ -190,7 +190,7 @@ export function MobileNavBar(props: MobileNavBarProps) {
                   onClick={() => handleUtilityClick(tab)}
                   title={tab.tooltip}
                   class={`relative flex min-h-10 shrink-0 flex-col items-center gap-1 rounded-md px-2 py-1.5 text-[11px] font-medium transition-colors ${props.activeTab() === tab.id
-                    ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+                    ? 'bg-blue-50 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
                     : 'text-slate-500 dark:text-slate-400'
                     }`}
                 >
@@ -203,7 +203,7 @@ export function MobileNavBar(props: MobileNavBarProps) {
                     <span class="mt-0.5 h-1.5 w-1.5 rounded-full bg-red-500"></span>
                   </Show>
                   <Show when={tab.badge === 'pro'}>
-                    <span class="rounded-full bg-blue-100 px-1.5 py-0.5 text-[9px] font-semibold text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                    <span class="rounded-full bg-blue-100 px-1.5 py-0.5 text-[9px] font-semibold text-blue-700 dark:bg-blue-900 dark:text-blue-300">
                       Pro
                     </span>
                   </Show>

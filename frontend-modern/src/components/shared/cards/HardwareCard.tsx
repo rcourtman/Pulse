@@ -10,7 +10,7 @@ export const HardwareCard: Component<HardwareCardProps> = (props) => {
   if (props.variant === 'node') {
     const node = props.node;
     return (
-      <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600/70 dark:bg-slate-800">
+      <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
         <div class="text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 mb-2">Hardware</div>
         <div class="space-y-1.5 text-[11px]">
           <div class="flex items-center justify-between">
@@ -36,7 +36,7 @@ export const HardwareCard: Component<HardwareCardProps> = (props) => {
 
   const host = props.host;
   return (
-    <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600/70 dark:bg-slate-800">
+    <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
       <div class="text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 mb-2">Hardware</div>
       <div class="space-y-1.5 text-[11px]">
         <div class="flex items-center justify-between">

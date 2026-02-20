@@ -87,7 +87,7 @@ export function EnhancedStorageBar(props: EnhancedStorageBarProps) {
                         <span class="text-slate-400">Free</span>
                         <span class="text-slate-200">{formatBytes(props.free)}</span>
                     </div>
-                    <div class="flex justify-between gap-3 py-0.5 border-t border-slate-700/50 mt-0.5 pt-0.5">
+                    <div class="flex justify-between gap-3 py-0.5 border-t border-slate-700 mt-0.5 pt-0.5">
                         <span class="text-slate-400">Total</span>
                         <span class="text-slate-200">{formatBytes(props.total)}</span>
                     </div>

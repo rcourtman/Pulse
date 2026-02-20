@@ -2094,7 +2094,7 @@ const Settings: Component<SettingsProps> = (props) => {
               activeTab() === 'system-backups')
           }
         >
-          <div class="bg-amber-50 dark:bg-amber-900/30 border-l-4 border-amber-500 dark:border-amber-400 rounded-r-lg shadow-sm p-4">
+          <div class="bg-amber-50 dark:bg-amber-900 border-l-4 border-amber-500 dark:border-amber-400 rounded-r-lg shadow-sm p-4">
             <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div class="flex items-start gap-3">
                 <svg
@@ -2120,7 +2120,7 @@ const Settings: Component<SettingsProps> = (props) => {
               <div class="flex w-full sm:w-auto gap-3">
                 <button
                   type="button"
-                  class="flex-1 sm:flex-initial px-5 py-2.5 text-sm font-medium bg-amber-600 text-white rounded-lg hover:bg-amber-700 shadow-sm transition-colors"
+                  class="flex-1 sm:flex-initial px-5 py-2.5 text-sm font-medium bg-amber-600 text-white rounded-md hover:bg-amber-700 shadow-sm transition-colors"
                   onClick={saveSettings}
                 >
                   Save Changes
@@ -2212,8 +2212,8 @@ const Settings: Component<SettingsProps> = (props) => {
                                   } text-sm font-medium transition-colors ${item.disabled
                                     ? 'opacity-60 cursor-not-allowed text-gray-400 dark:text-gray-600'
                                     : isActive()
-                                      ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-200'
-                                      : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700/60 dark:hover:text-gray-100'
+                                      ? 'bg-blue-50 text-blue-600 dark:bg-blue-900 dark:text-blue-200'
+                                      : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-gray-100'
                                   }`}
                                 onClick={() => {
                                   if (item.disabled) return;
@@ -2261,7 +2261,7 @@ const Settings: Component<SettingsProps> = (props) => {
                             ? 'opacity-60 cursor-not-allowed text-gray-400 dark:text-gray-600 border-transparent'
                             : isActive()
                               ? 'text-blue-600 dark:text-blue-300 border-blue-500 dark:border-blue-400'
-                              : 'text-gray-600 dark:text-gray-400 border-transparent hover:text-blue-500 dark:hover:text-blue-300 hover:border-blue-300/70 dark:hover:border-blue-500/50'
+                              : 'text-gray-600 dark:text-gray-400 border-transparent hover:text-blue-500 dark:hover:text-blue-300 hover:border-blue-300 dark:hover:border-blue-500'
                             }`}
                           onClick={() => {
                             if (disabled) return;
@@ -2288,7 +2288,7 @@ const Settings: Component<SettingsProps> = (props) => {
 
               {/* Recommendation banner for Proxmox tab */}
               <Show when={activeTab() === 'proxmox'}>
-                <div class="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 mb-6 dark:border-blue-800 dark:bg-blue-900/20">
+                <div class="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 mb-6 dark:border-blue-800 dark:bg-blue-900">
                   <div class="flex items-start gap-3">
                     <svg
                       class="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0"
@@ -2327,7 +2327,7 @@ const Settings: Component<SettingsProps> = (props) => {
                 <div class="space-y-6 mt-6">
                   <div class="space-y-4">
                     <Show when={!initialLoadComplete()}>
-                      <div class="flex items-center justify-center rounded-lg border border-dashed border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 py-12 text-sm text-gray-500 dark:text-gray-400">
+                      <div class="flex items-center justify-center rounded-md border border-dashed border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 py-12 text-sm text-gray-500 dark:text-gray-400">
                         Loading configuration...
                       </div>
                     </Show>
@@ -2387,7 +2387,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                       await loadDiscoveredNodes();
                                     }
                                   }}
-                                  class="px-2 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-1"
+                                  class="px-2 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors flex items-center gap-1"
                                   title="Refresh discovered servers"
                                 >
                                   <svg
@@ -2414,7 +2414,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                   setModalResetKey((prev) => prev + 1);
                                   setShowNodeModal(true);
                                 }}
-                                class="px-2 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1"
+                                class="px-2 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-1"
                               >
                                 <svg
                                   width="16"
@@ -2504,7 +2504,7 @@ const Settings: Component<SettingsProps> = (props) => {
                             discoveryScanStatus().errors && discoveryScanStatus().errors!.length
                           }
                         >
-                          <div class="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-2">
+                          <div class="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900 border border-amber-200 dark:border-amber-800 rounded-md p-2">
                             <span class="font-medium">Discovery issues:</span>
                             <ul class="list-disc ml-4 mt-1 space-y-0.5">
                               <For each={discoveryScanStatus().errors || []}>
@@ -2543,7 +2543,7 @@ const Settings: Component<SettingsProps> = (props) => {
                         <For each={discoveredNodes().filter((n) => n.type === 'pve')}>
                           {(server) => (
                             <div
-                              class="bg-gray-50/50 dark:bg-gray-700/30 rounded-lg p-4 border border-gray-200/50 dark:border-gray-600/50 opacity-75 hover:opacity-100 transition-opacity cursor-pointer"
+                              class="bg-gray-50 dark:bg-gray-700 rounded-md p-4 border border-gray-200 dark:border-gray-600 opacity-75 hover:opacity-100 transition-opacity cursor-pointer"
                               onClick={() => {
                                 // Pre-fill the modal with discovered server info
                                 setEditingNode({
@@ -2578,7 +2578,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                         {server.ip}:{server.port}
                                       </p>
                                       <div class="flex items-center gap-2 mt-2">
-                                        <span class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded">
+                                        <span class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-400 rounded">
                                           Discovered
                                         </span>
                                         <span class="text-xs text-gray-500 dark:text-gray-400">
@@ -2617,7 +2617,7 @@ const Settings: Component<SettingsProps> = (props) => {
                 <div class="space-y-6 mt-6">
                   <div class="space-y-4">
                     <Show when={!initialLoadComplete()}>
-                      <div class="flex items-center justify-center rounded-lg border border-dashed border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 py-12 text-sm text-gray-500 dark:text-gray-400">
+                      <div class="flex items-center justify-center rounded-md border border-dashed border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 py-12 text-sm text-gray-500 dark:text-gray-400">
                         Loading configuration...
                       </div>
                     </Show>
@@ -2677,7 +2677,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                       await loadDiscoveredNodes();
                                     }
                                   }}
-                                  class="px-2 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-1"
+                                  class="px-2 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors flex items-center gap-1"
                                   title="Refresh discovered servers"
                                 >
                                   <svg
@@ -2704,7 +2704,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                   setModalResetKey((prev) => prev + 1);
                                   setShowNodeModal(true);
                                 }}
-                                class="px-2 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1"
+                                class="px-2 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-1"
                               >
                                 <svg
                                   width="16"
@@ -2792,7 +2792,7 @@ const Settings: Component<SettingsProps> = (props) => {
                             discoveryScanStatus().errors && discoveryScanStatus().errors!.length
                           }
                         >
-                          <div class="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-2">
+                          <div class="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900 border border-amber-200 dark:border-amber-800 rounded-md p-2">
                             <span class="font-medium">Discovery issues:</span>
                             <ul class="list-disc ml-4 mt-1 space-y-0.5">
                               <For each={discoveryScanStatus().errors || []}>
@@ -2831,7 +2831,7 @@ const Settings: Component<SettingsProps> = (props) => {
                         <For each={discoveredNodes().filter((n) => n.type === 'pbs')}>
                           {(server) => (
                             <div
-                              class="bg-gray-50/50 dark:bg-gray-700/30 rounded-lg p-4 border border-gray-200/50 dark:border-gray-600/50 opacity-75 hover:opacity-100 transition-opacity cursor-pointer"
+                              class="bg-gray-50 dark:bg-gray-700 rounded-md p-4 border border-gray-200 dark:border-gray-600 opacity-75 hover:opacity-100 transition-opacity cursor-pointer"
                               onClick={() => {
                                 // Pre-fill the modal with discovered server info
                                 setEditingNode({
@@ -2866,7 +2866,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                         {server.ip}:{server.port}
                                       </p>
                                       <div class="flex items-center gap-2 mt-2">
-                                        <span class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded">
+                                        <span class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-400 rounded">
                                           Discovered
                                         </span>
                                         <span class="text-xs text-gray-500 dark:text-gray-400">
@@ -2904,7 +2904,7 @@ const Settings: Component<SettingsProps> = (props) => {
                 <div class="space-y-6 mt-6">
                   <div class="space-y-4">
                     <Show when={!initialLoadComplete()}>
-                      <div class="flex items-center justify-center rounded-lg border border-dashed border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 py-12 text-sm text-gray-500 dark:text-gray-400">
+                      <div class="flex items-center justify-center rounded-md border border-dashed border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 py-12 text-sm text-gray-500 dark:text-gray-400">
                         Loading configuration...
                       </div>
                     </Show>
@@ -2965,7 +2965,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                       await loadDiscoveredNodes();
                                     }
                                   }}
-                                  class="px-2 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-1"
+                                  class="px-2 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors flex items-center gap-1"
                                   title="Refresh discovered servers"
                                 >
                                   <svg
@@ -2992,7 +2992,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                   setModalResetKey((prev) => prev + 1);
                                   setShowNodeModal(true);
                                 }}
-                                class="px-2 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1"
+                                class="px-2 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-1"
                               >
                                 <svg
                                   width="16"
@@ -3076,7 +3076,7 @@ const Settings: Component<SettingsProps> = (props) => {
                             discoveryScanStatus().errors && discoveryScanStatus().errors!.length
                           }
                         >
-                          <div class="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-2">
+                          <div class="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900 border border-amber-200 dark:border-amber-800 rounded-md p-2">
                             <span class="font-medium">Discovery issues:</span>
                             <ul class="list-disc ml-4 mt-1 space-y-0.5">
                               <For each={discoveryScanStatus().errors || []}>
@@ -3104,7 +3104,7 @@ const Settings: Component<SettingsProps> = (props) => {
                             discoveredNodes().filter((n) => n.type === 'pmg').length === 0
                           }
                         >
-                          <div class="text-center py-6 text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800/50 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600">
+                          <div class="text-center py-6 text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 rounded-md border-2 border-dashed border-gray-300 dark:border-gray-600">
                             <svg
                               class="h-8 w-8 mx-auto mb-2 animate-pulse text-purple-500"
                               viewBox="0 0 24 24"
@@ -3121,7 +3121,7 @@ const Settings: Component<SettingsProps> = (props) => {
                         <For each={discoveredNodes().filter((n) => n.type === 'pmg')}>
                           {(server) => (
                             <div
-                              class="bg-purple-50 dark:bg-purple-900/20 border-l-4 border-purple-500 rounded-lg p-4 cursor-pointer hover:shadow-md transition-all"
+                              class="bg-purple-50 dark:bg-purple-900 border-l-4 border-purple-500 rounded-md p-4 cursor-pointer hover:shadow-md transition-all"
                               onClick={() => {
                                 setEditingNode(null);
                                 setCurrentNodeType('pmg');
@@ -3160,7 +3160,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                       {server.ip}:{server.port}
                                     </p>
                                     <div class="flex items-center gap-2 mt-2">
-                                      <span class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded">
+                                      <span class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-400 rounded">
                                         Discovered
                                       </span>
                                       <span class="text-xs text-gray-500 dark:text-gray-400">
@@ -3213,14 +3213,14 @@ const Settings: Component<SettingsProps> = (props) => {
                     </div>
 
                     {/* Hide Docker Update Buttons Toggle */}
-                    <div class="flex items-start justify-between gap-4 p-4 rounded-lg border border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800/50">
+                    <div class="flex items-start justify-between gap-4 p-4 rounded-md border border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800">
                       <div class="flex-1 space-y-1">
                         <div class="flex items-center gap-2">
                           <span class="text-sm font-medium text-gray-900 dark:text-gray-100">
                             Hide Docker Update Buttons
                           </span>
                           <Show when={disableDockerUpdateActionsLocked()}>
-                            <span class="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" title="Locked by environment variable PULSE_DISABLE_DOCKER_UPDATE_ACTIONS">
+                            <span class="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300" title="Locked by environment variable PULSE_DISABLE_DOCKER_UPDATE_ACTIONS">
                               <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                               </svg>
@@ -3459,7 +3459,7 @@ const Settings: Component<SettingsProps> = (props) => {
 
       {/* Delete Node Modal */}
       < Show when={showDeleteNodeModal()} >
-        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black p-4">
           <Card padding="lg" class="w-full max-w-lg space-y-5">
             <SectionHeader title={`Remove ${nodePendingDeleteLabel()}`} size="md" class="mb-1" />
             <div class="space-y-3 text-sm text-gray-600 dark:text-gray-300">
@@ -3468,7 +3468,7 @@ const Settings: Component<SettingsProps> = (props) => {
                 footprint on the host — the proxy service, SSH key, API token, and bind mount are
                 all cleaned up automatically.
               </p>
-              <div class="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm leading-relaxed dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-100">
+              <div class="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm leading-relaxed dark:border-blue-800 dark:bg-blue-900 dark:text-blue-100">
                 <p class="font-medium text-blue-900 dark:text-blue-100">What happens next</p>
                 <ul class="mt-2 list-disc space-y-1 pl-4 text-blue-800 dark:text-blue-200 text-sm">
                   <li>Pulse removes the node entry and clears related alerts.</li>
@@ -3754,7 +3754,7 @@ const Settings: Component<SettingsProps> = (props) => {
             <div class="space-y-4">
               {/* Password Choice Section - Only show if auth is enabled */}
               <Show when={securityStatus()?.hasAuthentication}>
-                <div class="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                <div class="bg-gray-50 dark:bg-gray-900 rounded-md p-4 border border-gray-200 dark:border-gray-700">
                   <div class="space-y-3">
                     <label class="flex items-start gap-3 cursor-pointer">
                       <input
@@ -3830,7 +3830,7 @@ const Settings: Component<SettingsProps> = (props) => {
                 </Show>
               </div>
 
-              <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+              <div class="bg-amber-50 dark:bg-amber-900 border border-amber-200 dark:border-amber-800 rounded-md p-3">
                 <div class="flex gap-2">
                   <svg
                     class="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5"
@@ -3989,7 +3989,7 @@ const Settings: Component<SettingsProps> = (props) => {
                 </p>
               </div>
 
-              <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded p-3">
+              <div class="bg-yellow-50 dark:bg-yellow-900 border border-yellow-200 dark:border-yellow-800 rounded p-3">
                 <p class="text-xs text-yellow-700 dark:text-yellow-300">
                   <strong>Warning:</strong> Importing will replace all current configuration. This
                   action cannot be undone.

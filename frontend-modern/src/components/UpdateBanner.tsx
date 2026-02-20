@@ -99,7 +99,7 @@ export function UpdateBanner() {
 
   return (
     <Show when={updateStore.isUpdateVisible()}>
-      <div class="bg-blue-50 dark:bg-blue-900/20 border-b border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-200 relative animate-slideDown">
+      <div class="bg-blue-50 dark:bg-blue-900 border-b border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-200 relative animate-slideDown">
         <div class="px-4 py-1.5">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-3">
@@ -138,7 +138,7 @@ export function UpdateBanner() {
 
                 {/* Manual Steps Badge (non-automated deployments) */}
                 <Show when={updatePlan() && !updatePlan()?.canAutoUpdate && !isExpanded()}>
-                  <span class="px-2 py-0.5 text-xs font-medium bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-200 rounded">
+                  <span class="px-2 py-0.5 text-xs font-medium bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200 rounded">
                     Manual steps required
                   </span>
                 </Show>
@@ -168,7 +168,7 @@ export function UpdateBanner() {
               {/* Expand/Collapse button */}
               <button
                 onClick={() => setIsExpanded(!isExpanded())}
-                class="p-1 hover:bg-blue-100 dark:hover:bg-blue-800/30 rounded transition-colors"
+                class="p-1 hover:bg-blue-100 dark:hover:bg-blue-800 rounded transition-colors"
                 title={isExpanded() ? 'Show less' : 'Show more'}
               >
                 <svg
@@ -185,7 +185,7 @@ export function UpdateBanner() {
               {/* Dismiss button */}
               <button
                 onClick={() => updateStore.dismissUpdate()}
-                class="p-1 hover:bg-blue-100 dark:hover:bg-blue-800/30 rounded transition-colors"
+                class="p-1 hover:bg-blue-100 dark:hover:bg-blue-800 rounded transition-colors"
                 title="Dismiss this update"
               >
                 <svg
@@ -237,7 +237,7 @@ export function UpdateBanner() {
                               </code>
                               <button
                                 onClick={() => handleCopy(instruction, index())}
-                                class="flex-shrink-0 p-1 hover:bg-blue-100 dark:hover:bg-blue-800/30 rounded transition-colors"
+                                class="flex-shrink-0 p-1 hover:bg-blue-100 dark:hover:bg-blue-800 rounded transition-colors"
                                 title="Copy to clipboard"
                               >
                                 <Show when={copiedIndex() === index()} fallback={
@@ -281,7 +281,7 @@ export function UpdateBanner() {
                   </a>
                   <button
                     onClick={() => updateStore.dismissUpdate()}
-                    class="text-blue-600/70 dark:text-blue-400/70 hover:text-blue-700 dark:hover:text-blue-300 text-xs underline"
+                    class="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 text-xs underline"
                   >
                     Don't show again for this version
                   </button>

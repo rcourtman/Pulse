@@ -9,7 +9,7 @@ export const NetworkInterfacesCard: Component<NetworkInterfacesCardProps> = (pro
   if (!props.interfaces || props.interfaces.length === 0) return null;
 
   return (
-    <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600/70 dark:bg-slate-800">
+    <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
       <div class="text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 mb-2">Network</div>
       <div class="max-h-[140px] overflow-y-auto custom-scrollbar space-y-2">
         <For each={props.interfaces}>
@@ -25,7 +25,7 @@ export const NetworkInterfacesCard: Component<NetworkInterfacesCardProps> = (pro
                 <div class="flex flex-wrap gap-1 mt-1">
                   <For each={iface.addresses}>
                     {(ip) => (
-                      <span class="inline-block rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700 dark:bg-blue-900/40 dark:text-blue-200 max-w-full truncate" title={ip}>
+                      <span class="inline-block rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700 dark:bg-blue-900 dark:text-blue-200 max-w-full truncate" title={ip}>
                         {ip}
                       </span>
                     )}

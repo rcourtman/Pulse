@@ -206,7 +206,7 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
                   </Show>
 
                   <Show when={!canManageOrg(currentOrg(), props.currentUser)}>
-                    <div class="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
+                    <div class="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-300">
                       Admin or owner role required to manage organization access.
                     </div>
                   </Show>
@@ -275,7 +275,7 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
                                           void removeMember(member);
                                         }}
                                         disabled={saving()}
-                                        class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-900/20 disabled:cursor-not-allowed disabled:opacity-60"
+                                        class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-60"
                                       >
                                         <Trash2 class="w-3.5 h-3.5" />
                                         Remove

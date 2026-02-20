@@ -72,7 +72,7 @@ export const TokenRevealDialog: Component = () => {
         return (
           <div class="fixed inset-0 z-[60] flex items-center justify-center px-4 py-6">
             <div
-              class="absolute inset-0 bg-slate-900/70"
+              class="absolute inset-0 bg-slate-900"
               role="presentation"
               onClick={handleDismiss}
             />
@@ -88,7 +88,7 @@ export const TokenRevealDialog: Component = () => {
                 </button>
 
                 <div class="flex items-start gap-3">
-                  <div class="flex-shrink-0 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 p-2">
+                  <div class="flex-shrink-0 rounded-full bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300 p-2">
                     <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                       <path
                         stroke-linecap="round"
@@ -104,7 +104,7 @@ export const TokenRevealDialog: Component = () => {
                         API token ready
                       </h2>
                       <Show when={sourceLabel}>
-                        <span class="inline-flex items-center rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide">
+                        <span class="inline-flex items-center rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide">
                           {sourceLabel}
                         </span>
                       </Show>

@@ -213,7 +213,7 @@ export function CommandPaletteModal(props: CommandPaletteModalProps) {
       ariaLabel="Command palette"
     >
       <div class="border-b border-slate-200 px-5 py-4 dark:border-slate-700">
-        <div class="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:focus-within:border-blue-400">
+        <div class="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:focus-within:border-blue-400">
           <svg class="h-4 w-4 text-slate-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
@@ -251,7 +251,7 @@ export function CommandPaletteModal(props: CommandPaletteModalProps) {
             {(command) => (
               <button
                 type="button"
-                class="flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm text-slate-700 hover:bg-blue-50 dark:text-slate-200 dark:hover:bg-blue-900/30"
+                class="flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm text-slate-700 hover:bg-blue-50 dark:text-slate-200 dark:hover:bg-blue-900"
                 onClick={() => handleSelect(command)}
               >
                 <div>

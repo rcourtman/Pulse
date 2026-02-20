@@ -14,8 +14,8 @@ interface RecentAlertsPanelProps {
 const severityBadgeClass = (level: Alert['level']): string => {
   const base = 'inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase';
   return level === 'critical'
-    ? `${base} bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300`
-    : `${base} bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300`;
+    ? `${base} bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300`
+    : `${base} bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300`;
 };
 
 function sortByStartTimeDesc(alerts: Alert[]): Alert[] {
@@ -32,7 +32,7 @@ export function RecentAlertsPanel(props: RecentAlertsPanelProps) {
   const recent = createMemo(() => sortByStartTimeDesc(props.alerts).slice(0, 4));
 
   return (
-    <Card padding="none" tone="glass" class="px-4 py-3.5 border-slate-100 dark:border-slate-700/50">
+    <Card padding="none" tone="glass" class="px-4 py-3.5 border-slate-100 dark:border-slate-700">
       <div class="flex items-center justify-between gap-2">
         <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Alerts</h2>
         <div class="flex items-center gap-2">
@@ -67,7 +67,7 @@ export function RecentAlertsPanel(props: RecentAlertsPanelProps) {
           <ul class="space-y-0.5" role="list">
             <For each={recent()}>
               {(alert) => (
-                <li class="flex items-center gap-2 -mx-1 px-1 py-0.5 rounded hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors">
+                <li class="flex items-center gap-2 -mx-1 px-1 py-0.5 rounded hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
                   <span class={severityBadgeClass(alert.level)}>
                     {alert.level === 'critical' ? 'CRIT' : 'WARN'}
                   </span>

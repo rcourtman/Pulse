@@ -440,7 +440,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
         <div class="fixed inset-0 z-50 overflow-y-auto">
           <div class="flex min-h-screen items-center justify-center p-4">
             {/* Backdrop */}
-            <div class="fixed inset-0 bg-black/50 transition-opacity" onClick={props.onClose} />
+            <div class="fixed inset-0 bg-black transition-opacity" onClick={props.onClose} />
 
             {/* Modal */}
             <div class="relative w-full max-w-2xl bg-white dark:bg-slate-800 rounded-md shadow-sm">
@@ -660,7 +660,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                     <Show when={formData().authType === 'token'}>
                       <div class="space-y-4">
                         {/* Token Creation Guide */}
-                        <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md p-4">
+                        <div class="bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-800 rounded-md p-4">
                           <h5 class="text-sm font-medium text-blue-900 dark:text-blue-100 mb-3 flex items-center gap-2">
                             <svg
                               width="16"
@@ -685,11 +685,11 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                   onClick={() => updateField('setupMode', 'agent')}
                                   class={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md border border-transparent transition-colors ${formData().setupMode === 'agent'
                                     ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-300 border-slate-300 dark:border-slate-600 shadow-sm'
-                                    : 'text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-slate-200/60 dark:hover:bg-slate-700/60'
+                                    : 'text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-slate-200 dark:hover:bg-slate-700'
                                     }`}
                                 >
                                   Agent Install
-                                  <span class="ml-1.5 px-1.5 py-0.5 text-[10px] font-semibold bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 rounded">
+                                  <span class="ml-1.5 px-1.5 py-0.5 text-[10px] font-semibold bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">
                                     Recommended
                                   </span>
                                 </button>
@@ -702,7 +702,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                   }}
                                   class={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md border border-transparent transition-colors ${isAdvancedSetupMode()
                                     ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-300 border-slate-300 dark:border-slate-600 shadow-sm'
-                                    : 'text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-slate-200/60 dark:hover:bg-slate-700/60'
+                                    : 'text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-slate-200 dark:hover:bg-slate-700'
                                     }`}
                                 >
                                   Advanced
@@ -716,7 +716,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                     onClick={() => updateField('setupMode', 'auto')}
                                     class={`inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-md border border-transparent transition-colors ${formData().setupMode === 'auto'
                                       ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-300 border-slate-300 dark:border-slate-600 shadow-sm'
-                                      : 'text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-slate-200/60 dark:hover:bg-slate-700/60'
+                                      : 'text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-slate-200 dark:hover:bg-slate-700'
                                       }`}
                                   >
                                     API Only
@@ -726,7 +726,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                     onClick={() => updateField('setupMode', 'manual')}
                                     class={`inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-md border border-transparent transition-colors ${formData().setupMode === 'manual'
                                       ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-300 border-slate-300 dark:border-slate-600 shadow-sm'
-                                      : 'text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-slate-200/60 dark:hover:bg-slate-700/60'
+                                      : 'text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-slate-200 dark:hover:bg-slate-700'
                                       }`}
                                   >
                                     Manual
@@ -815,7 +815,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
 
                               {/* API Only Tab (formerly Quick Setup) */}
                               <Show when={formData().setupMode === 'auto'}>
-                                <div class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 mb-3 dark:border-amber-700 dark:bg-amber-900/20">
+                                <div class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 mb-3 dark:border-amber-700 dark:bg-amber-900">
                                   <p class="text-xs text-amber-800 dark:text-amber-200">
                                     <strong>Limited functionality:</strong> API-only mode does not include temperature monitoring or Pulse Patrol automation.
                                     For full functionality, use the Agent Install tab instead.
@@ -944,7 +944,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                     </Show>
                                   </div>
 
-                                  <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md p-3">
+                                  <div class="bg-amber-50 dark:bg-amber-900 border border-amber-200 dark:border-amber-800 rounded-md p-3">
                                     <div class="flex items-start space-x-2">
                                       <svg
                                         class="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0"
@@ -1036,7 +1036,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                   </details>
                                 </div>
 
-                                <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md p-3">
+                                <div class="bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-800 rounded-md p-3">
                                   <p class="text-sm font-semibold text-blue-800 dark:text-blue-200 mb-2">
                                     What this does:
                                   </p>
@@ -1045,7 +1045,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                       <span class="text-emerald-400 mr-2 mt-0.5">✓</span>
                                       <span>
                                         Creates monitoring user{' '}
-                                        <code class="bg-blue-100 dark:bg-blue-800/50 px-1 rounded">
+                                        <code class="bg-blue-100 dark:bg-blue-800 px-1 rounded">
                                           pulse-monitor@pam
                                         </code>
                                       </span>
@@ -1259,7 +1259,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                   </div>
 
                                   {/* Step 4: Use in Pulse */}
-                                  <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md p-2">
+                                  <div class="bg-green-50 dark:bg-green-900 border border-green-200 dark:border-green-800 rounded-md p-2">
                                     <p class="text-sm font-medium text-green-900 dark:text-green-100 mb-1">
                                       4. Add to Pulse with:
                                     </p>
@@ -1290,11 +1290,11 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                   onClick={() => updateField('setupMode', 'agent')}
                                   class={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md border border-transparent transition-colors ${formData().setupMode === 'agent'
                                     ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-300 border-slate-300 dark:border-slate-600 shadow-sm'
-                                    : 'text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-slate-200/60 dark:hover:bg-slate-700/60'
+                                    : 'text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-slate-200 dark:hover:bg-slate-700'
                                     }`}
                                 >
                                   Agent Install
-                                  <span class="text-[10px] px-1.5 py-0.5 bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 rounded">Recommended</span>
+                                  <span class="text-[10px] px-1.5 py-0.5 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">Recommended</span>
                                 </button>
                                 <button
                                   type="button"
@@ -1305,7 +1305,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                   }}
                                   class={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md border border-transparent transition-colors ${isAdvancedSetupMode()
                                     ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-300 border-slate-300 dark:border-slate-600 shadow-sm'
-                                    : 'text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-slate-200/60 dark:hover:bg-slate-700/60'
+                                    : 'text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-slate-200 dark:hover:bg-slate-700'
                                     }`}
                                 >
                                   Advanced
@@ -1319,7 +1319,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                     onClick={() => updateField('setupMode', 'auto')}
                                     class={`inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-md border border-transparent transition-colors ${formData().setupMode === 'auto'
                                       ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-300 border-slate-300 dark:border-slate-600 shadow-sm'
-                                      : 'text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-slate-200/60 dark:hover:bg-slate-700/60'
+                                      : 'text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-slate-200 dark:hover:bg-slate-700'
                                       }`}
                                   >
                                     API Only
@@ -1329,7 +1329,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                     onClick={() => updateField('setupMode', 'manual')}
                                     class={`inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-md border border-transparent transition-colors ${formData().setupMode === 'manual'
                                       ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-300 border-slate-300 dark:border-slate-600 shadow-sm'
-                                      : 'text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-slate-200/60 dark:hover:bg-slate-700/60'
+                                      : 'text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-slate-200 dark:hover:bg-slate-700'
                                       }`}
                                   >
                                     Manual Setup
@@ -1517,7 +1517,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                     </Show>
                                   </div>
 
-                                  <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md p-3">
+                                  <div class="bg-amber-50 dark:bg-amber-900 border border-amber-200 dark:border-amber-800 rounded-md p-3">
                                     <div class="flex items-start space-x-2">
                                       <svg
                                         class="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0"
@@ -1609,7 +1609,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                   </details>
                                 </div>
 
-                                <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md p-3">
+                                <div class="bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-800 rounded-md p-3">
                                   <p class="text-sm font-semibold text-blue-800 dark:text-blue-200 mb-2">
                                     What this does:
                                   </p>
@@ -1618,7 +1618,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                       <span class="text-emerald-400 mr-2 mt-0.5">✓</span>
                                       <span>
                                         Creates monitoring user{' '}
-                                        <code class="bg-blue-100 dark:bg-blue-800/50 px-1 rounded">
+                                        <code class="bg-blue-100 dark:bg-blue-800 px-1 rounded">
                                           pulse-monitor@pbs
                                         </code>
                                       </span>
@@ -1824,7 +1824,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                   </div>
 
                                   {/* Step 4: Use in Pulse */}
-                                  <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md p-2">
+                                  <div class="bg-green-50 dark:bg-green-900 border border-green-200 dark:border-green-800 rounded-md p-2">
                                     <p class="text-sm font-medium text-green-900 dark:text-green-100 mb-1">
                                       4. Add to Pulse with:
                                     </p>
@@ -1843,7 +1843,7 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                                   </div>
 
                                   {/* Permission Info Box */}
-                                  <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md p-2 mt-3">
+                                  <div class="bg-amber-50 dark:bg-amber-900 border border-amber-200 dark:border-amber-800 rounded-md p-2 mt-3">
                                     <p class="text-xs font-semibold text-amber-800 dark:text-amber-200 mb-1">
                                       About PBS Permissions:
                                     </p>
@@ -2051,12 +2051,12 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                             />
                           </div>
                           <Show when={!temperatureMonitoringEnabledValue()}>
-                            <p class="mt-3 rounded border border-blue-200 bg-blue-50 p-2 text-xs text-blue-700 dark:border-blue-700 dark:bg-blue-900/20 dark:text-blue-200">
+                            <p class="mt-3 rounded border border-blue-200 bg-blue-50 p-2 text-xs text-blue-700 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200">
                               Pulse will skip SSH temperature polling for this node. Existing dashboard readings will stop refreshing.
                             </p>
                           </Show>
                           <Show when={props.temperatureMonitoringLocked}>
-                            <p class="mt-3 rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">
+                            <p class="mt-3 rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-200">
                               Locked by environment variables. Remove the override (ENABLE_TEMPERATURE_MONITORING) and restart Pulse to manage it in the UI.
                             </p>
                           </Show>
@@ -2151,10 +2151,10 @@ export const NodeModal: Component<NodeModalProps> = (props) => {
                   })()}
                   <div
                     class={`mx-6 p-3 rounded-md text-sm ${testResult()?.status === 'success'
-                      ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-200'
+                      ? 'bg-green-50 dark:bg-green-900 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-200'
                       : testResult()?.status === 'warning'
-                        ? 'bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200'
-                        : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200'
+                        ? 'bg-amber-50 dark:bg-amber-900 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200'
+                        : 'bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200'
                       }`}
                   >
                     <div class="flex items-start gap-2">

@@ -18,12 +18,12 @@ export const TrialBanner: Component = () => {
   const tone = createMemo(() => {
     const days = daysRemaining();
     if (days !== null && days <= 1) {
-      return 'border-red-200 bg-red-50 text-red-900 dark:border-red-900/50 dark:bg-red-900/20 dark:text-red-100';
+      return 'border-red-200 bg-red-50 text-red-900 dark:border-red-900 dark:bg-red-900 dark:text-red-100';
     }
     if (days !== null && days <= 3) {
-      return 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900/50 dark:bg-amber-900/20 dark:text-amber-100';
+      return 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-900 dark:text-amber-100';
     }
-    return 'border-blue-200 bg-blue-50 text-blue-900 dark:border-blue-900/50 dark:bg-blue-900/20 dark:text-blue-100';
+    return 'border-blue-200 bg-blue-50 text-blue-900 dark:border-blue-900 dark:bg-blue-900 dark:text-blue-100';
   });
 
   return (

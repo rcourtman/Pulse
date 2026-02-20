@@ -397,7 +397,7 @@ const Storage: Component = () => {
           <div class="mt-3 grid gap-3 sm:grid-cols-2">
             <For each={cephSummaryStats().clusters}>
               {(cluster) => (
-                <div class="rounded-md border border-slate-200/70 dark:border-slate-700/70 bg-white dark:bg-slate-800 p-3">
+                <div class="rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-3">
                   <div class="flex items-start justify-between gap-2">
                     <div class="min-w-0">
                       <div class="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">
@@ -475,7 +475,7 @@ const Storage: Component = () => {
               <select
                 value={selectedNodeId()}
                 onChange={(event) => setSelectedNodeId(event.currentTarget.value)}
-                class="px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                class="px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 aria-label="Node"
               >
                 <option value="all">All Nodes</option>
@@ -494,7 +494,7 @@ const Storage: Component = () => {
             <button
               type="button"
               onClick={() => reconnect()}
-              class="rounded border border-amber-300 bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800 hover:bg-amber-200 dark:border-amber-700 dark:bg-amber-900/40 dark:text-amber-200 dark:hover:bg-amber-900/60"
+              class="rounded border border-amber-300 bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800 hover:bg-amber-200 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-200 dark:hover:bg-amber-900"
             >
               Retry now
             </button>
@@ -519,7 +519,7 @@ const Storage: Component = () => {
             <button
               type="button"
               onClick={() => reconnect()}
-              class="rounded border border-amber-300 bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800 hover:bg-amber-200 dark:border-amber-700 dark:bg-amber-900/40 dark:text-amber-200 dark:hover:bg-amber-900/60"
+              class="rounded border border-amber-300 bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800 hover:bg-amber-200 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-200 dark:hover:bg-amber-900"
             >
               Reconnect
             </button>
@@ -612,19 +612,19 @@ const Storage: Component = () => {
                                     const rowClass = createMemo(() => {
                                       const classes = [
                                         'transition-all duration-200',
-                                        'hover:bg-slate-50 dark:hover:bg-slate-800/30',
+                                        'hover:bg-slate-50 dark:hover:bg-slate-800',
                                       ];
 
                                       if (showAlertHighlight()) {
                                         classes.push(
                                           alertState().severity === 'critical'
-                                            ? 'bg-red-50 dark:bg-red-950/30'
-                                            : 'bg-yellow-50 dark:bg-yellow-950/20',
+                                            ? 'bg-red-50 dark:bg-red-950'
+                                            : 'bg-yellow-50 dark:bg-yellow-950',
                                         );
                                       } else if (isResourceHighlighted()) {
-                                        classes.push('bg-blue-50/60 dark:bg-blue-900/20 ring-1 ring-blue-300 dark:ring-blue-600');
+                                        classes.push('bg-blue-50 dark:bg-blue-900 ring-1 ring-blue-300 dark:ring-blue-600');
                                       } else if (hasAcknowledgedOnlyAlert()) {
-                                        classes.push('bg-slate-50/40 dark:bg-slate-800');
+                                        classes.push('bg-slate-50 dark:bg-slate-800');
                                       }
 
                                       if (isExpanded()) {

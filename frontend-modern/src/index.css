@@ -497,15 +497,15 @@ body,
 
 /* Glassmorphism Utilities */
 .card {
-  @apply bg-white dark:bg-slate-800  border border-white/20 dark:border-slate-700/30 shadow-sm;
+  @apply bg-white dark:bg-slate-800  border border-white dark:border-slate-700 shadow-sm;
 }
 
 .card {
-  @apply bg-white dark:bg-slate-800  border border-slate-200/50 dark:border-slate-700/50;
+  @apply bg-white dark:bg-slate-800  border border-slate-200 dark:border-slate-700;
 }
 
 .card-hover {
-  @apply hover:bg-white dark:hover:bg-slate-800/90 transition-colors duration-200;
+  @apply hover:bg-white dark:hover:bg-slate-800 transition-colors duration-200;
 }
 
 /* Staggered Entry Animation */

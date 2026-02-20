@@ -18,8 +18,8 @@ export const RemediationStatus: Component<RemediationStatusProps> = (props) => {
   return (
     <div class={`mt-2 p-2 rounded text-xs ${
       props.result.success
-        ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
-        : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
+        ? 'bg-green-50 dark:bg-green-900 border border-green-200 dark:border-green-800'
+        : 'bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-800'
     }`}>
       <div class="flex items-center gap-2">
         <Show when={props.result.success}>

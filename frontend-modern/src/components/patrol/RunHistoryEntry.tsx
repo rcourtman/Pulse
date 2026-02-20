@@ -73,8 +73,8 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
     };
     return (
       <div class={`rounded-md border transition-colors ${hasError()
-        ? 'border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/20'
-        : 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20'
+        ? 'border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900'
+        : 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900'
         }`}>
         <div class="px-3 py-2">
           <div class="flex flex-wrap items-center gap-2 text-xs">
@@ -88,7 +88,7 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
             <Show when={!hasError() && (props.patrolStream.resynced() || props.patrolStream.reconnectCount() > 0)}>
               <span
                 title={resyncTitle()}
-                class="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300"
+                class="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300"
               >
                 <RefreshCwIcon class="w-3 h-3" />
                 <span>
@@ -106,7 +106,7 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
               <span class="text-blue-700 dark:text-blue-300">{props.patrolStream.phase()}</span>
             </Show>
             <Show when={!hasError() && props.patrolStream.currentTool()}>
-              <span class="font-mono text-[11px] bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded">
+              <span class="font-mono text-[11px] bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded">
                 {props.patrolStream.currentTool()}
               </span>
             </Show>
@@ -133,25 +133,25 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
 
   return (
     <div class={`rounded-md border transition-colors ${props.selected
-      ? 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20'
+      ? 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900'
       : 'border-slate-200 dark:border-slate-700'
       }`}>
       <button
         type="button"
         onClick={() => props.onSelect(props.selected ? null : run)}
-        class={`w-full text-left px-3 py-2 rounded-md transition-colors ${!props.selected ? 'hover:bg-slate-50 dark:hover:bg-slate-700/40' : ''}`}
+        class={`w-full text-left px-3 py-2 rounded-md transition-colors ${!props.selected ? 'hover:bg-slate-50 dark:hover:bg-slate-700' : ''}`}
       >
         <div class="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
           <span class="text-slate-900 dark:text-slate-100 font-medium">
             {formatRelativeTime(run.started_at, { compact: true })}
           </span>
           <span class={`px-1.5 py-0.5 rounded ${run.status === 'critical'
-            ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+            ? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
             : run.status === 'issues_found'
-              ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+              ? 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300'
               : run.status === 'error'
-                ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
-                : 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+                ? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
+                : 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
             }`}>
             {run.status.replace(/_/g, ' ')}
           </span>
@@ -207,42 +207,42 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
               </div>
               <div class="flex flex-wrap gap-1.5">
                 <Show when={run.nodes_checked > 0}>
-                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
                     <ServerIcon class="w-3 h-3" /> {run.nodes_checked} node{run.nodes_checked !== 1 ? 's' : ''}
                   </span>
                 </Show>
                 <Show when={run.guests_checked > 0}>
-                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">
+                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-purple-50 text-purple-700 dark:bg-purple-900 dark:text-purple-300">
                     <MonitorIcon class="w-3 h-3" /> {run.guests_checked} VM{run.guests_checked !== 1 ? 's' : ''}
                   </span>
                 </Show>
                 <Show when={run.docker_checked > 0}>
-                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-cyan-50 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300">
+                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-cyan-50 text-cyan-700 dark:bg-cyan-900 dark:text-cyan-300">
                     <BoxIcon class="w-3 h-3" /> {run.docker_checked} container{run.docker_checked !== 1 ? 's' : ''}
                   </span>
                 </Show>
                 <Show when={run.storage_checked > 0}>
-                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 dark:bg-amber-900 dark:text-amber-300">
                     <HardDriveIcon class="w-3 h-3" /> {run.storage_checked} storage
                   </span>
                 </Show>
                 <Show when={run.hosts_checked > 0}>
-                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300">
+                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700 dark:bg-green-900 dark:text-green-300">
                     <GlobeIcon class="w-3 h-3" /> {run.hosts_checked} host{run.hosts_checked !== 1 ? 's' : ''}
                   </span>
                 </Show>
                 <Show when={run.pbs_checked > 0}>
-                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">
+                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300">
                     <DatabaseIcon class="w-3 h-3" /> {run.pbs_checked} PBS
                   </span>
                 </Show>
                 <Show when={run.pmg_checked > 0}>
-                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300">
+                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-orange-50 text-orange-700 dark:bg-orange-900 dark:text-orange-300">
                     <MailIcon class="w-3 h-3" /> {run.pmg_checked} PMG
                   </span>
                 </Show>
                 <Show when={run.kubernetes_checked > 0}>
-                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-sky-50 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300">
+                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-sky-50 text-sky-700 dark:bg-sky-900 dark:text-sky-300">
                     <ActivityIcon class="w-3 h-3" /> {run.kubernetes_checked} K8s
                   </span>
                 </Show>
@@ -260,7 +260,7 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
             </div>
             <div class="flex flex-wrap gap-1.5">
               <Show when={run.new_findings > 0}>
-                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-300">
                   <AlertTriangleIcon class="w-3 h-3" /> {run.new_findings} new
                 </span>
               </Show>
@@ -270,12 +270,12 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
                 </span>
               </Show>
               <Show when={run.resolved_findings > 0}>
-                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300">
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
                   <CheckCircleIcon class="w-3 h-3" /> {run.resolved_findings} resolved
                 </span>
               </Show>
               <Show when={run.auto_fix_count > 0}>
-                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300">
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">
                   <WrenchIcon class="w-3 h-3" /> {run.auto_fix_count} auto-fixed
                 </span>
               </Show>
@@ -285,7 +285,7 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
                 </span>
               </Show>
               <Show when={run.status === 'healthy' && run.new_findings === 0}>
-                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300">
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
                   <CheckCircleIcon class="w-3 h-3" /> All clear
                 </span>
               </Show>
@@ -310,7 +310,7 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
               </span>
             </Show>
             <Show when={run.type === 'scoped'}>
-              <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 text-[10px] font-medium">
+              <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 dark:bg-blue-900 dark:text-blue-400 text-[10px] font-medium">
                 {formatScope(run) || 'Scoped'}
               </span>
             </Show>

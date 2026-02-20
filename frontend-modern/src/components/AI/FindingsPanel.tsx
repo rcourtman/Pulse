@@ -42,43 +42,43 @@ const sourceLabels: Record<string, string> = {
 
 // Severity badge colors
 const severityColors: Record<string, string> = {
-  critical: 'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300',
-  warning: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-300',
-  info: 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-300',
+  critical: 'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900 dark:text-red-300',
+  warning: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-300',
+  info: 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-300',
   watch: 'border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300',
 };
 
 // Source badge colors
 const sourceColors: Record<string, string> = {
-  'threshold': 'border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-800 dark:bg-orange-900/20 dark:text-orange-300',
-  'ai-patrol': 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-300',
-  'anomaly': 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-300',
-  'ai-chat': 'border-teal-200 bg-teal-50 text-teal-700 dark:border-teal-800 dark:bg-teal-900/20 dark:text-teal-300',
-  'correlation': 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-300',
-  'forecast': 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300',
+  'threshold': 'border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-800 dark:bg-orange-900 dark:text-orange-300',
+  'ai-patrol': 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-300',
+  'anomaly': 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-300',
+  'ai-chat': 'border-teal-200 bg-teal-50 text-teal-700 dark:border-teal-800 dark:bg-teal-900 dark:text-teal-300',
+  'correlation': 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-900 dark:text-sky-300',
+  'forecast': 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900 dark:text-emerald-300',
 };
 
 // Investigation status badge colors
 const investigationStatusColors: Record<InvestigationStatus, string> = {
   pending: 'border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400',
-  running: 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-300',
-  completed: 'border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-900/20 dark:text-green-300',
-  failed: 'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300',
-  needs_attention: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-300',
+  running: 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-300',
+  completed: 'border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-900 dark:text-green-300',
+  failed: 'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900 dark:text-red-300',
+  needs_attention: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-300',
 };
 
 // Patrol loop state badge colors (best-effort; state is optional)
 const loopStateColors: Record<string, string> = {
-  detected: 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-300',
-  investigating: 'border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-800 dark:bg-indigo-900/20 dark:text-indigo-300',
-  remediation_planned: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-300',
-  remediating: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-300',
-  remediation_failed: 'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300',
-  needs_attention: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-300',
+  detected: 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-300',
+  investigating: 'border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-800 dark:bg-indigo-900 dark:text-indigo-300',
+  remediation_planned: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-300',
+  remediating: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-300',
+  remediation_failed: 'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900 dark:text-red-300',
+  needs_attention: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-300',
   timed_out: 'border-slate-300 bg-slate-100 text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300',
-  resolved: 'border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-900/20 dark:text-green-300',
+  resolved: 'border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-900 dark:text-green-300',
   dismissed: 'border-slate-300 bg-slate-100 text-slate-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300',
-  snoozed: 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-300',
+  snoozed: 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-300',
   suppressed: 'border-slate-300 bg-slate-100 text-slate-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300',
 };
 
@@ -480,9 +480,9 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       id={`finding-${finding.id}`}
       class={`p-3 cursor-pointer transition-colors ${finding.status === 'active'
         ? finding.acknowledgedAt
-          ? 'opacity-60 hover:opacity-80 bg-slate-50/30 dark:bg-slate-800'
-          : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'
-        : 'opacity-60 bg-slate-50/50 dark:bg-slate-800 hover:opacity-80'
+          ? 'opacity-60 hover:opacity-80 bg-slate-50 dark:bg-slate-800'
+          : 'hover:bg-slate-50 dark:hover:bg-slate-800'
+        : 'opacity-60 bg-slate-50 dark:bg-slate-800 hover:opacity-80'
         }`}
       onClick={() => {
         if (expandedId() === finding.id) {
@@ -500,9 +500,9 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             {/* Status badge for non-active findings */}
             <Show when={finding.status !== 'active'}>
               <span class={`px-1.5 py-0.5 border text-[10px] font-medium rounded ${finding.status === 'resolved'
-                ? 'border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-900/20 dark:text-green-300'
+                ? 'border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-900 dark:text-green-300'
                 : finding.status === 'snoozed'
-                  ? 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-300'
+                  ? 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-300'
                   : 'border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
                 }`}>
                 {finding.status === 'resolved' ? 'Resolved' : finding.status === 'snoozed' ? 'Snoozed' : 'Dismissed'}
@@ -521,7 +521,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             {/* Alert-triggered badge */}
             <Show when={finding.alertId}>
               <span
-                class="px-1.5 py-0.5 border text-[10px] font-medium rounded border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-900/10 text-amber-700 dark:text-amber-300"
+                class="px-1.5 py-0.5 border text-[10px] font-medium rounded border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-900 text-amber-700 dark:text-amber-300"
                 title={finding.alertType ? `Alert: ${finding.alertType}` : `Alert ID: ${finding.alertId}`}
               >
                 Alert-triggered
@@ -542,7 +542,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             </Show>
             <Show when={isOutOfScope(finding)}>
               <span
-                class="px-1.5 py-0.5 border text-[10px] font-medium rounded border-amber-300 bg-amber-100 text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-100"
+                class="px-1.5 py-0.5 border text-[10px] font-medium rounded border-amber-300 bg-amber-100 text-amber-900 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-100"
                 title="This finding references a resource outside the selected run scope."
               >
                 Out of scope
@@ -716,7 +716,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
 
       {/* User note display / editor */}
       <Show when={editingNoteId() === finding.id}>
-        <div class="mt-3 p-2 rounded border border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-900/20" onClick={(e) => e.stopPropagation()}>
+        <div class="mt-3 p-2 rounded border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900" onClick={(e) => e.stopPropagation()}>
           <textarea
             class="w-full text-sm rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-2 py-1.5 resize-none focus:outline-none focus:ring-1 focus:ring-blue-500"
             rows={3}
@@ -779,7 +779,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
         <button
           type="button"
           onClick={(e) => handleDiscussWithAssistant(finding, e)}
-          class="px-2 py-1 rounded bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/40 flex items-center gap-1 transition-colors"
+          class="px-2 py-1 rounded bg-blue-50 text-blue-700 dark:bg-blue-900 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900 flex items-center gap-1 transition-colors"
         >
           <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
@@ -827,7 +827,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
           <button
             type="button"
             onClick={(e) => handleStartDismiss(finding, 'not_an_issue', e)}
-            class="px-2 py-1 rounded border border-slate-200 text-red-600 dark:border-slate-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+            class="px-2 py-1 rounded border border-slate-200 text-red-600 dark:border-slate-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900"
             disabled={actionLoading() === finding.id}
           >
             Dismiss: Not an issue
@@ -852,7 +852,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       </Show>
       {/* Inline dismiss confirmation */}
       <Show when={dismissingId() === finding.id}>
-        <div class="mt-2 p-2 rounded border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20">
+        <div class="mt-2 p-2 rounded border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900">
           <div class="flex items-center gap-2 mb-1.5">
             <span class="text-xs font-medium text-red-700 dark:text-red-300">
               Dismiss as: {dismissReason().replace(/_/g, ' ')}
@@ -929,9 +929,9 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
               </svg>
               <span class="text-sm font-medium text-slate-900 dark:text-slate-100">Remediation Plan</span>
-              <span class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${plan().risk_level === 'high' ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' :
-                plan().risk_level === 'medium' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' :
-                  'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+              <span class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${plan().risk_level === 'high' ? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300' :
+                plan().risk_level === 'medium' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300' :
+                  'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
                 }`}>
                 {plan().risk_level} risk
               </span>
@@ -1022,7 +1022,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                 type="button"
                 onClick={() => setFilter('attention')}
                 class={`px-2 py-1 border-y border-r ${filter() === 'attention'
-                  ? 'bg-amber-50 dark:bg-amber-900/10 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700 shadow-sm'
+                  ? 'bg-amber-50 dark:bg-amber-900 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700 shadow-sm'
                   : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                   } ${aiIntelligenceStore.pendingApprovalCount > 0 ? '' : 'rounded-r border-r'}`}
               >
@@ -1034,7 +1034,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                 type="button"
                 onClick={() => setFilter('approvals')}
                 class={`px-2 py-1 rounded-r border-y border-r ${filter() === 'approvals'
-                  ? 'bg-amber-50 dark:bg-amber-900/10 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700 shadow-sm'
+                  ? 'bg-amber-50 dark:bg-amber-900 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700 shadow-sm'
                   : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                   }`}
               >
@@ -1071,7 +1071,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       <Show when={!aiIntelligenceStore.findingsLoading}>
         <Card padding="none" class="overflow-hidden">
           {/* Header */}
-          <div class="bg-blue-50 dark:bg-blue-900/20 px-4 py-3 border-b border-slate-200 dark:border-slate-700">
+          <div class="bg-blue-50 dark:bg-blue-900 px-4 py-3 border-b border-slate-200 dark:border-slate-700">
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-2">
                 <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">

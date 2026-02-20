@@ -305,7 +305,7 @@ export const OIDCPanel: Component<Props> = (props) => {
 
         <Show when={!loading()}>
           <Show when={isEnvLocked()}>
-            <div class="bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded p-3 text-xs text-amber-800 dark:text-amber-200">
+            <div class="bg-amber-50 dark:bg-amber-900 border border-amber-200 dark:border-amber-700 rounded p-3 text-xs text-amber-800 dark:text-amber-200">
               <strong>Managed by environment variables:</strong> OIDC settings are currently defined
               through environment variables. Edit the deployment configuration to make changes.
             </div>

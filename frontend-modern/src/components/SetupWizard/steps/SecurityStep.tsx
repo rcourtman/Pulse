@@ -103,9 +103,9 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
     };
 
     return (
-        <div class="max-w-lg mx-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 overflow-hidden animate-fade-in relative rounded-lg">            <div class="p-8 border-b border-slate-200 dark:border-slate-700 relative z-10 text-center">
+        <div class="max-w-lg mx-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 overflow-hidden animate-fade-in relative rounded-md">            <div class="p-8 border-b border-slate-200 dark:border-slate-700 relative z-10 text-center">
             <h2 class="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">Secure Your Dashboard</h2>
-            <p class="text-slate-500 dark:text-blue-200/80 mt-2 font-light">Create your root administrator account</p>
+            <p class="text-slate-500 dark:text-blue-200 mt-2 font-light">Create your root administrator account</p>
         </div>
 
             <div class="p-8 space-y-6 relative z-10">
@@ -116,7 +116,7 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
                         type="text"
                         value={username()}
                         onInput={(e) => setUsername(e.currentTarget.value)}
-                        class="w-full px-5 py-3.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all font-mono"
+                        class="w-full px-5 py-3.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-mono"
                         placeholder="admin"
                     />
                 </div>
@@ -128,7 +128,7 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
                         <button
                             type="button"
                             onClick={() => setUseCustomPassword(false)}
-                            class={`py-3 px-4 rounded-lg text-sm font-medium transition-all duration-200 border ${!useCustomPassword()
+                            class={`py-3 px-4 rounded-md text-sm font-medium transition-all duration-200 border ${!useCustomPassword()
                                 ? 'bg-blue-600 border-blue-600 text-white'
                                 : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
                                 }`}
@@ -138,7 +138,7 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
                         <button
                             type="button"
                             onClick={() => setUseCustomPassword(true)}
-                            class={`py-3 px-4 rounded-lg text-sm font-medium transition-all duration-200 border ${useCustomPassword()
+                            class={`py-3 px-4 rounded-md text-sm font-medium transition-all duration-200 border ${useCustomPassword()
                                 ? 'bg-blue-600 border-blue-600 text-white'
                                 : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
                                 }`}
@@ -153,21 +153,21 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
                                 type="password"
                                 value={password()}
                                 onInput={(e) => setPassword(e.currentTarget.value)}
-                                class="w-full px-5 py-3.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all font-mono"
+                                class="w-full px-5 py-3.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-mono"
                                 placeholder="Password"
                             />
                             <input
                                 type="password"
                                 value={confirmPassword()}
                                 onInput={(e) => setConfirmPassword(e.currentTarget.value)}
-                                class="w-full px-5 py-3.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all font-mono"
+                                class="w-full px-5 py-3.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-mono"
                                 placeholder="Confirm password"
                             />
                         </div>
                     </Show>
 
                     <Show when={!useCustomPassword()}>
-                        <div class="bg-blue-50 dark:bg-slate-800 border border-blue-200 dark:border-blue-900/50 rounded-lg p-4 animate-fade-in shadow-inner">
+                        <div class="bg-blue-50 dark:bg-slate-800 border border-blue-200 dark:border-blue-900 rounded-md p-4 animate-fade-in shadow-inner">
                             <p class="text-sm text-blue-800 dark:text-blue-200 font-medium">
                                 A secure 16-character password will be generated and shown after setup.
                             </p>
@@ -176,7 +176,7 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
                 </div>
 
                 {/* Info */}
-                <div class="bg-slate-50 dark:bg-slate-900 rounded-lg p-4 border border-slate-200 dark:border-slate-700">
+                <div class="bg-slate-50 dark:bg-slate-900 rounded-md p-4 border border-slate-200 dark:border-slate-700">
                     <p class="text-sm text-slate-600 dark:text-slate-300">
                         This creates your admin account and an API token for automation.
                         Credentials will be displayed once - save them securely!
@@ -188,14 +188,14 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
             <div class="p-8 bg-slate-50 dark:bg-slate-900 flex gap-4 border-t border-slate-200 dark:border-slate-700 relative z-10">
                 <button
                     onClick={props.onBack}
-                    class="px-6 py-3.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium rounded-lg transition-all"
+                    class="px-6 py-3.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium rounded-md transition-all"
                 >
                     ← Back
                 </button>
                 <button
                     onClick={handleSetup}
                     disabled={isSettingUp()}
-                    class="flex-1 py-3.5 px-6 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:bg-slate-300 dark:disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-all flex justify-center items-center gap-2 duration-200"
+                    class="flex-1 py-3.5 px-6 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:bg-slate-300 dark:disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed text-white font-medium rounded-md transition-all flex justify-center items-center gap-2 duration-200"
                 >
                     {isSettingUp() ? (
                         <>

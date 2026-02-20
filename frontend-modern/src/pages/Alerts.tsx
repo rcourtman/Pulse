@@ -186,7 +186,7 @@ function IncidentEventFilters(props: {
             <button
               type="button"
               class={`px-2 py-0.5 rounded border text-[10px] ${selected()
-                ? 'border-blue-300 bg-blue-100 text-blue-700 dark:border-blue-800 dark:bg-blue-900/40 dark:text-blue-300'
+                ? 'border-blue-300 bg-blue-100 text-blue-700 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-300'
                 : 'border-slate-300 text-slate-500 dark:border-slate-600 dark:text-slate-300'
                 }`}
               onClick={() => toggleFilter(type)}
@@ -2160,10 +2160,10 @@ export function Alerts() {
                               aria-disabled={areAlertsDisabled()}
                               disabled={areAlertsDisabled()}
                               class={`flex w-full items-center ${sidebarCollapsed() ? 'justify-center' : 'gap-2.5'} rounded-md ${sidebarCollapsed() ? 'px-2 py-2.5' : 'px-3 py-2'} text-sm font-medium transition-colors ${areAlertsDisabled()
-                                ? 'cursor-not-allowed text-slate-400 dark:text-slate-500 bg-slate-100/60 dark:bg-slate-800'
+                                ? 'cursor-not-allowed text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800'
                                 : activeTab() === item.id
-                                  ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-200'
-                                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-700/60 dark:hover:text-slate-100'
+                                  ? 'bg-blue-50 text-blue-600 dark:bg-blue-900 dark:text-blue-200'
+                                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-slate-100'
                                 }`}
                               onClick={() => handleTabChange(item.id)}
                               title={sidebarCollapsed() ? item.label : undefined}
@@ -2198,7 +2198,7 @@ export function Alerts() {
                           aria-disabled={areAlertsDisabled()}
                           disabled={areAlertsDisabled()}
                           class={`flex-1 min-w-0 px-2 py-1.5 sm:px-4 sm:py-2 text-[11px] sm:text-xs font-medium rounded-md transition-all ${areAlertsDisabled()
-                            ? 'cursor-not-allowed text-slate-400 dark:text-slate-500 bg-slate-200/60 dark:bg-slate-800'
+                            ? 'cursor-not-allowed text-slate-400 dark:text-slate-500 bg-slate-200 dark:bg-slate-800'
                             : activeTab() === tab.id
                               ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 shadow-sm'
                               : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
@@ -2564,7 +2564,7 @@ function OverviewTab(props: {
                 {alertStats().acknowledged}
               </p>
             </div>
-            <div class="w-8 h-8 sm:w-10 sm:h-10 bg-yellow-100 dark:bg-yellow-900/50 rounded-full flex items-center justify-center">
+            <div class="w-8 h-8 sm:w-10 sm:h-10 bg-yellow-100 dark:bg-yellow-900 rounded-full flex items-center justify-center">
               <svg
                 width="16"
                 height="16"
@@ -2614,7 +2614,7 @@ function OverviewTab(props: {
                 {alertStats().overrides}
               </p>
             </div>
-            <div class="w-8 h-8 sm:w-10 sm:h-10 bg-blue-100 dark:bg-blue-900/50 rounded-full flex items-center justify-center">
+            <div class="w-8 h-8 sm:w-10 sm:h-10 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center">
               <svg
                 width="16"
                 height="16"
@@ -2663,7 +2663,7 @@ function OverviewTab(props: {
               <Show when={alertStats().active > 0}>
                 <button
                   type="button"
-                  class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md border border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/40 text-blue-700 dark:text-blue-200 transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/60 disabled:opacity-60 disabled:cursor-not-allowed"
+                  class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md border border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900 text-blue-700 dark:text-blue-200 transition-colors hover:bg-blue-100 dark:hover:bg-blue-900 disabled:opacity-60 disabled:cursor-not-allowed"
                   disabled={bulkAckProcessing()}
                   onClick={async () => {
                     if (bulkAckProcessing()) return;
@@ -2724,8 +2724,8 @@ function OverviewTab(props: {
                     } ${alert.acknowledged
                       ? 'opacity-60 border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800'
                       : alert.level === 'critical'
-                        ? 'border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900/20'
-                        : 'border-yellow-300 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900/20'
+                        ? 'border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900'
+                        : 'border-yellow-300 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900'
                     }`}
                 >
                   <div class="flex flex-col sm:flex-row sm:items-start">
@@ -2807,7 +2807,7 @@ function OverviewTab(props: {
                       <button
                         class={`px-3 py-1.5 text-xs font-medium border rounded-md transition-all disabled:opacity-50 disabled:cursor-not-allowed ${alert.acknowledged
                           ? 'bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600'
-                          : 'bg-white dark:bg-slate-700 text-yellow-700 dark:text-yellow-300 border-yellow-300 dark:border-yellow-700 hover:bg-yellow-50 dark:hover:bg-yellow-900/20'
+                          : 'bg-white dark:bg-slate-700 text-yellow-700 dark:text-yellow-300 border-yellow-300 dark:border-yellow-700 hover:bg-yellow-50 dark:hover:bg-yellow-900'
                           }`}
                         disabled={processingAlerts().has(alert.id)}
                         onClick={async (e) => {
@@ -2902,7 +2902,7 @@ function OverviewTab(props: {
                                 <span class="font-medium text-slate-700 dark:text-slate-200">Incident</span>
                                 <span>{timeline().status}</span>
                                 <Show when={timeline().acknowledged}>
-                                  <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                                  <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300">
                                     acknowledged
                                   </span>
                                 </Show>
@@ -4009,7 +4009,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                     {(option) => (
                       <label
                         class={`flex cursor-pointer items-start gap-3 rounded-md border px-3 py-2 transition-colors ${quietHours().suppress[option.key]
-                          ? 'border-blue-500 bg-blue-50 dark:border-blue-400 dark:bg-blue-500/10'
+                          ? 'border-blue-500 bg-blue-50 dark:border-blue-400 dark:bg-blue-500'
                           : 'border-slate-200 hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-700'
                           }`}
                       >
@@ -4212,7 +4212,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                 <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <label
                     class={`relative flex items-center gap-2 rounded-md border-2 p-3 transition-all ${grouping().byNode
-                      ? 'border-blue-500 bg-blue-50 shadow-sm dark:bg-blue-900/20'
+                      ? 'border-blue-500 bg-blue-50 shadow-sm dark:bg-blue-900'
                       : 'border-slate-200 hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-700'
                       }`}
                   >
@@ -4250,7 +4250,7 @@ function ScheduleTab(props: ScheduleTabProps) {
 
                   <label
                     class={`relative flex items-center gap-2 rounded-md border-2 p-3 transition-all ${grouping().byGuest
-                      ? 'border-blue-500 bg-blue-50 shadow-sm dark:bg-blue-900/20'
+                      ? 'border-blue-500 bg-blue-50 shadow-sm dark:bg-blue-900'
                       : 'border-slate-200 hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-700'
                       }`}
                   >
@@ -4398,7 +4398,7 @@ function ScheduleTab(props: ScheduleTabProps) {
                         setEscalation({ ...escalation(), levels: newLevels });
                         props.setHasUnsavedChanges(true);
                       }}
-                      class="rounded-md p-1.5 text-red-600 transition-colors hover:bg-red-100 dark:hover:bg-red-900/30"
+                      class="rounded-md p-1.5 text-red-600 transition-colors hover:bg-red-100 dark:hover:bg-red-900"
                       title="Remove escalation level"
                     >
                       <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -5396,7 +5396,7 @@ function HistoryTab(props: {
           <div class="flex flex-col items-start gap-2 sm:items-end">
             <Show when={selectedBucketDetails()}>
               {(selection) => (
-                <div class="inline-flex items-center gap-2 rounded-full border border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/30 px-3 py-1 text-xs text-blue-700 dark:text-blue-200">
+                <div class="inline-flex items-center gap-2 rounded-full border border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900 px-3 py-1 text-xs text-blue-700 dark:text-blue-200">
                   <span class="font-medium uppercase tracking-wide text-[10px] text-blue-600 dark:text-blue-300">
                     Filtered Range
                   </span>
@@ -5425,7 +5425,7 @@ function HistoryTab(props: {
                 <button
                   type="button"
                   onClick={() => setSelectedBarIndex(null)}
-                  class="px-2 py-0.5 text-xs bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800/50 transition-colors"
+                  class="px-2 py-0.5 text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors"
                 >
                   Clear filter
                 </button>
@@ -5583,7 +5583,7 @@ function HistoryTab(props: {
                   id="alert-time-filter"
                   value={timeFilter()}
                   onChange={(e) => setTimeFilter(e.currentTarget.value as '24h' | '7d' | '30d' | 'all')}
-                  class="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                  class="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                 >
                   <option value="24h">Last 24h</option>
                   <option value="7d">Last 7d</option>
@@ -5597,7 +5597,7 @@ function HistoryTab(props: {
                   id="alert-severity-filter"
                   value={severityFilter()}
                   onChange={(e) => setSeverityFilter(e.currentTarget.value as 'warning' | 'critical' | 'all')}
-                  class="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                  class="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                 >
                   <option value="all">All</option>
                   <option value="critical">Critical</option>
@@ -5675,14 +5675,14 @@ function HistoryTab(props: {
                             : incident.status;
                         const statusClasses =
                           statusLabel === 'acknowledged'
-                            ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300'
+                            ? 'bg-emerald-100 dark:bg-emerald-900 text-emerald-700 dark:text-emerald-300'
                             : statusLabel === 'open'
-                              ? 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300'
+                              ? 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300'
                               : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300';
                         const levelClasses =
                           incident.level === 'critical'
-                            ? 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300'
-                            : 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-300';
+                            ? 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300'
+                            : 'bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300';
                         const isExpanded = expandedResourceIncidentIds().has(incident.id);
                         const events = incident.events || [];
                         const filteredEvents = filterIncidentEvents(events, resourceIncidentEventFilters());
@@ -5879,7 +5879,7 @@ function HistoryTab(props: {
                               return (
                                 <>
                                   <tr
-                                    class={`border-b border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 ${alert.status === 'active' ? 'bg-red-50 dark:bg-red-900/10' : ''
+                                    class={`border-b border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 ${alert.status === 'active' ? 'bg-red-50 dark:bg-red-900' : ''
                                       }`}
                                   >
                                     {/* Timestamp */}
@@ -5894,8 +5894,8 @@ function HistoryTab(props: {
                                     <td class="p-1 sm:p-1.5 px-1 sm:px-2 text-center">
                                       <span
                                         class={`text-[10px] px-1.5 py-0.5 rounded font-medium ${alert.source === 'ai'
-                                          ? 'bg-violet-100 dark:bg-violet-900/50 text-violet-700 dark:text-violet-300'
-                                          : 'bg-sky-100 dark:bg-sky-900/50 text-sky-700 dark:text-sky-300'
+                                          ? 'bg-violet-100 dark:bg-violet-900 text-violet-700 dark:text-violet-300'
+                                          : 'bg-sky-100 dark:bg-sky-900 text-sky-700 dark:text-sky-300'
                                           }`}
                                       >
                                         {alert.source === 'ai' ? 'Patrol' : 'Alert'}
@@ -5911,13 +5911,13 @@ function HistoryTab(props: {
                                     <td class="p-1 sm:p-1.5 px-1 sm:px-2">
                                       <span
                                         class={`text-xs px-1 py-0.5 rounded ${alert.resourceType === 'VM'
-                                          ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300'
+                                          ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
                                           : alert.resourceType === 'CT'
-                                            ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300'
+                                            ? 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300'
                                             : alert.resourceType === 'Node'
-                                              ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300'
+                                              ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
                                               : alert.resourceType === 'Storage'
-                                                ? 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300'
+                                                ? 'bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300'
                                                 : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
                                           }`}
                                       >
@@ -5929,8 +5929,8 @@ function HistoryTab(props: {
                                     <td class="p-1 sm:p-1.5 px-1 sm:px-2 text-center">
                                       <span
                                         class={`text-xs px-2 py-0.5 rounded font-medium ${alert.level === 'critical'
-                                          ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300'
-                                          : 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300'
+                                          ? 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300'
+                                          : 'bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300'
                                           }`}
                                       >
                                         {alert.level}
@@ -5954,9 +5954,9 @@ function HistoryTab(props: {
                                     <td class="p-1 sm:p-1.5 px-1 sm:px-2 text-center">
                                       <span
                                         class={`text-xs px-2 py-0.5 rounded ${alert.status === 'active'
-                                          ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 font-medium'
+                                          ? 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 font-medium'
                                           : alert.status === 'acknowledged'
-                                            ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300'
+                                            ? 'bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300'
                                             : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
                                           }`}
                                       >
@@ -6035,7 +6035,7 @@ function HistoryTab(props: {
                                                   <span class="font-medium text-slate-700 dark:text-slate-200">Incident</span>
                                                   <span>{timeline().status}</span>
                                                   <Show when={timeline().acknowledged}>
-                                                    <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                                                    <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300">
                                                       acknowledged
                                                     </span>
                                                   </Show>
@@ -6185,7 +6185,7 @@ function HistoryTab(props: {
                     }
                   }
                 }}
-                class="px-3 py-2 text-xs border border-red-300 dark:border-red-600 text-red-600 dark:text-red-400 rounded-md hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors flex-shrink-0"
+                class="px-3 py-2 text-xs border border-red-300 dark:border-red-600 text-red-600 dark:text-red-400 rounded-md hover:bg-red-50 dark:hover:bg-red-900 transition-colors flex-shrink-0"
               >
                 Clear All History
               </button>

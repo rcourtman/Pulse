@@ -11,8 +11,8 @@ export const ApprovalCard: Component<ApprovalCardProps> = (props) => {
   return (
     <div class="rounded-md border border-amber-300 dark:border-amber-700 overflow-hidden shadow-sm">
       {/* Header */}
-      <div class="px-3 py-2 text-xs font-medium flex items-center gap-2 bg-amber-50 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 border-b border-amber-200 dark:border-amber-800">
-        <div class="p-1 rounded bg-amber-100 dark:bg-amber-800/50">
+      <div class="px-3 py-2 text-xs font-medium flex items-center gap-2 bg-amber-50 dark:bg-amber-900 text-amber-800 dark:text-amber-200 border-b border-amber-200 dark:border-amber-800">
+        <div class="p-1 rounded bg-amber-100 dark:bg-amber-800">
           <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
           </svg>
@@ -31,8 +31,8 @@ export const ApprovalCard: Component<ApprovalCardProps> = (props) => {
       </div>
 
       {/* Command */}
-      <div class="px-3 py-3 bg-amber-50/50 dark:bg-amber-900/10">
-        <div class="mb-3 p-2 bg-white dark:bg-slate-800 rounded border border-amber-200 dark:border-amber-700/50">
+      <div class="px-3 py-3 bg-amber-50 dark:bg-amber-900">
+        <div class="mb-3 p-2 bg-white dark:bg-slate-800 rounded border border-amber-200 dark:border-amber-700">
           <code class="text-xs font-mono text-slate-800 dark:text-slate-200 break-all">
             {props.approval.command}
           </code>

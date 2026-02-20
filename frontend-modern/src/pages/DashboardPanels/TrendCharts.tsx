@@ -94,7 +94,7 @@ export function TrendCharts(props: TrendChartsProps) {
               const className = () =>
                 active()
                   ? 'px-2 py-0.5 rounded bg-blue-600 text-white text-[11px] font-medium'
-                  : 'px-2 py-0.5 rounded border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 text-[11px] font-medium hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors';
+                  : 'px-2 py-0.5 rounded border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 text-[11px] font-medium hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors';
 
               return (
                 <button type="button" class={className()} onClick={() => props.setTrendRange(range)}>
@@ -107,7 +107,7 @@ export function TrendCharts(props: TrendChartsProps) {
       </div>
 
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
-        <Card padding="none" tone="glass" class="px-4 py-3 border-slate-100 dark:border-slate-700/50">
+        <Card padding="none" tone="glass" class="px-4 py-3 border-slate-100 dark:border-slate-700">
           <p class="text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">CPU</p>
           <div class="h-[240px] mt-1">
             <InteractiveSparkline
@@ -120,7 +120,7 @@ export function TrendCharts(props: TrendChartsProps) {
           </div>
         </Card>
 
-        <Card padding="none" tone="glass" class="px-4 py-3 border-slate-100 dark:border-slate-700/50">
+        <Card padding="none" tone="glass" class="px-4 py-3 border-slate-100 dark:border-slate-700">
           <p class="text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Memory</p>
           <div class="h-[240px] mt-1">
             <InteractiveSparkline

@@ -120,7 +120,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
       {/* Assistant message - card style */}
       <Show when={!isUser()}>
         <div class="w-full pl-2 pr-2">
-          <div class="group relative bg-slate-50/80 dark:bg-slate-800 rounded-md border border-slate-200/60 dark:border-slate-700/60 p-5 shadow-sm transition-all hover:border-slate-300 dark:hover:border-slate-600">
+          <div class="group relative bg-slate-50 dark:bg-slate-800 rounded-md border border-slate-200 dark:border-slate-700 p-5 shadow-sm transition-all hover:border-slate-300 dark:hover:border-slate-600">
             {/* Assistant indicator */}
             <div class="flex items-center gap-2.5 mb-3">
               <div class="w-6 h-6 rounded-md bg-white dark:bg-slate-700 border border-slate-100 dark:border-slate-600 shadow-sm flex items-center justify-center shrink-0">
@@ -173,7 +173,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                       {/* Content/text block */}
                       <Match when={evt.type === 'content' && evt.content}>
                         <div
-                          class="text-sm prose prose-slate prose-sm dark:prose-invert max-w-none prose-p:leading-relaxed prose-p:my-2 prose-pre:bg-slate-900 prose-pre:text-slate-100 prose-pre:rounded-md prose-pre:text-xs prose-pre:border prose-pre:border-slate-800 prose-code:text-blue-700 dark:prose-code:text-blue-300 prose-code:bg-blue-50/50 dark:prose-code:bg-blue-900/20 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-md prose-code:font-mono prose-code:text-[0.9em] prose-code:border prose-code:border-blue-100 dark:prose-code:border-blue-800/30 prose-code:before:content-none prose-code:after:content-none prose-headings:font-semibold prose-headings:tracking-tight prose-hr:border-slate-200 dark:prose-hr:border-slate-700 prose-ul:my-2 prose-ol:my-2 prose-li:my-1"
+                          class="text-sm prose prose-slate prose-sm dark:prose-invert max-w-none prose-p:leading-relaxed prose-p:my-2 prose-pre:bg-slate-900 prose-pre:text-slate-100 prose-pre:rounded-md prose-pre:text-xs prose-pre:border prose-pre:border-slate-800 prose-code:text-blue-700 dark:prose-code:text-blue-300 prose-code:bg-blue-50 dark:prose-code:bg-blue-900 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-md prose-code:font-mono prose-code:text-[0.9em] prose-code:border prose-code:border-blue-100 dark:prose-code:border-blue-800 prose-code:before:content-none prose-code:after:content-none prose-headings:font-semibold prose-headings:tracking-tight prose-hr:border-slate-200 dark:prose-hr:border-slate-700 prose-ul:my-2 prose-ol:my-2 prose-li:my-1"
                           // eslint-disable-next-line solid/no-innerhtml
                           innerHTML={renderMarkdown(evt.content || '')}
                         />
@@ -206,7 +206,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
               {/* Fallback */}
               <Show when={props.message.content && !hasStreamEvents()}>
                 <div
-                  class="text-sm prose prose-slate prose-sm dark:prose-invert max-w-none prose-p:leading-relaxed prose-p:my-2 prose-pre:bg-slate-900 prose-pre:text-slate-100 prose-pre:rounded-md prose-pre:text-xs prose-pre:border prose-pre:border-slate-800 prose-code:text-blue-700 dark:prose-code:text-blue-300 prose-code:bg-blue-50/50 dark:prose-code:bg-blue-900/20 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-md prose-code:font-mono prose-code:text-[0.9em] prose-code:border prose-code:border-blue-100 dark:prose-code:border-blue-800/30 prose-code:before:content-none prose-code:after:content-none prose-headings:font-semibold prose-headings:tracking-tight prose-hr:border-slate-200 dark:prose-hr:border-slate-700 prose-ul:my-2 prose-ol:my-2 prose-li:my-1"
+                  class="text-sm prose prose-slate prose-sm dark:prose-invert max-w-none prose-p:leading-relaxed prose-p:my-2 prose-pre:bg-slate-900 prose-pre:text-slate-100 prose-pre:rounded-md prose-pre:text-xs prose-pre:border prose-pre:border-slate-800 prose-code:text-blue-700 dark:prose-code:text-blue-300 prose-code:bg-blue-50 dark:prose-code:bg-blue-900 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-md prose-code:font-mono prose-code:text-[0.9em] prose-code:border prose-code:border-blue-100 dark:prose-code:border-blue-800 prose-code:before:content-none prose-code:after:content-none prose-headings:font-semibold prose-headings:tracking-tight prose-hr:border-slate-200 dark:prose-hr:border-slate-700 prose-ul:my-2 prose-ol:my-2 prose-li:my-1"
                   // eslint-disable-next-line solid/no-innerhtml
                   innerHTML={renderMarkdown(props.message.content)}
                 />
@@ -218,7 +218,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
               </Show>
 
               <Show when={!props.message.isStreaming && contextTools().length > 0}>
-                <div class="mt-4 pt-3 border-t border-slate-100 dark:border-slate-700/50 flex flex-wrap gap-2">
+                <div class="mt-4 pt-3 border-t border-slate-100 dark:border-slate-700 flex flex-wrap gap-2">
                   <span class="text-[10px] uppercase font-semibold text-slate-400 dark:text-slate-500 tracking-wider">Context used</span>
                   <div class="flex flex-wrap gap-1.5">
                     {contextTools().map((name) => (

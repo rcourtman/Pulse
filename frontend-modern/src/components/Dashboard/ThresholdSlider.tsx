@@ -79,12 +79,12 @@ export function ThresholdSlider(props: ThresholdSliderProps) {
       {/* Colored fill */}
       <div
         class={`absolute left-0 h-3.5 rounded ${props.type === 'cpu'
-            ? 'bg-blue-500/30'
+            ? 'bg-blue-500'
             : props.type === 'memory'
-              ? 'bg-green-500/30'
+              ? 'bg-green-500'
               : props.type === 'disk'
-                ? 'bg-amber-500/30'
-                : 'bg-rose-500/30'
+                ? 'bg-amber-500'
+                : 'bg-rose-500'
           }`}
         style={{ width: `${calculateVisualPosition(props.value)}%` }}
       ></div>

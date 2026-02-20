@@ -163,20 +163,20 @@ export const DiskList: Component<DiskListProps> = (props) => {
       if (disk.wearout > 0 && disk.wearout < 10) {
         return {
           color: 'text-yellow-700 dark:text-yellow-400',
-          bgColor: 'bg-yellow-100 dark:bg-yellow-900/30',
+          bgColor: 'bg-yellow-100 dark:bg-yellow-900',
           text: 'LOW LIFE',
         };
       }
       const label = normalizedHealth === 'PASSED' ? 'HEALTHY' : normalizedHealth;
       return {
         color: 'text-green-700 dark:text-green-400',
-        bgColor: 'bg-green-100 dark:bg-green-900/30',
+        bgColor: 'bg-green-100 dark:bg-green-900',
         text: label,
       };
     } else if (normalizedHealth === 'FAILED') {
       return {
         color: 'text-red-700 dark:text-red-400',
-        bgColor: 'bg-red-100 dark:bg-red-900/30',
+        bgColor: 'bg-red-100 dark:bg-red-900',
         text: 'FAILED',
       };
     }
@@ -191,11 +191,11 @@ export const DiskList: Component<DiskListProps> = (props) => {
   const getDiskTypeBadge = (type: string) => {
     switch (type.toLowerCase()) {
       case 'nvme':
-        return 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300';
+        return 'bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-300';
       case 'sata':
-        return 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300';
+        return 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-300';
       case 'sas':
-        return 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300';
+        return 'bg-indigo-100 dark:bg-indigo-900 text-indigo-800 dark:text-indigo-300';
       default:
         return 'bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-300';
     }
@@ -256,7 +256,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
                 </div>
               }
             >
-              <div class="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md text-left">
+              <div class="mt-4 p-4 bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-800 rounded-md text-left">
                 <p class="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
                   Physical disk monitoring requirements:
                 </p>
@@ -332,7 +332,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
                     return (
                       <>
                         <tr
-                          class={`cursor-pointer transition-colors ${isSelected() ? 'bg-blue-50 dark:bg-blue-900/20' : 'hover:bg-slate-50 dark:hover:bg-slate-700/30'}`}
+                          class={`cursor-pointer transition-colors ${isSelected() ? 'bg-blue-50 dark:bg-blue-900' : 'hover:bg-slate-50 dark:hover:bg-slate-700'}`}
                           onClick={() => handleRowClick(disk)}
                         >
                           <td class="px-1 py-1.5 text-xs">
@@ -396,12 +396,12 @@ export const DiskList: Component<DiskListProps> = (props) => {
                               <div class="relative w-24 h-3.5 rounded overflow-hidden bg-slate-200 dark:bg-slate-600">
                                 <div
                                   class={`absolute top-0 left-0 h-full ${data.wearout >= 50
-                                    ? 'bg-green-500/60 dark:bg-green-500/50'
+                                    ? 'bg-green-500 dark:bg-green-500'
                                     : data.wearout >= 20
-                                      ? 'bg-yellow-500/60 dark:bg-yellow-500/50'
+                                      ? 'bg-yellow-500 dark:bg-yellow-500'
                                       : data.wearout >= 10
-                                        ? 'bg-orange-500/60 dark:bg-orange-500/50'
-                                        : 'bg-red-500/60 dark:bg-red-500/50'
+                                        ? 'bg-orange-500 dark:bg-orange-500'
+                                        : 'bg-red-500 dark:bg-red-500'
                                     }`}
                                   style={{ width: `${data.wearout}%` }}
                                 />
@@ -467,7 +467,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
                         </tr>
                         <Show when={isSelected()}>
                           <tr>
-                            <td colSpan={13} class="bg-slate-50/50 dark:bg-slate-800 px-4 py-4 border-b border-slate-100 dark:border-slate-700 shadow-inner">
+                            <td colSpan={13} class="bg-slate-50 dark:bg-slate-800 px-4 py-4 border-b border-slate-100 dark:border-slate-700 shadow-inner">
                               <DiskDetail disk={disk} nodes={props.nodes} />
                             </td>
                           </tr>

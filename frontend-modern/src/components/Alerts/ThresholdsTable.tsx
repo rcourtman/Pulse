@@ -2747,7 +2747,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
               <span class="inline-flex items-center px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded text-xs">
                 Custom
               </span>{' '}
-              badge. <span class="text-blue-600/70 dark:text-blue-400/70">Click sections to collapse/expand.</span>
+              badge. <span class="text-blue-600 dark:text-blue-400">Click sections to collapse/expand.</span>
             </div>
           </div>
         </div>

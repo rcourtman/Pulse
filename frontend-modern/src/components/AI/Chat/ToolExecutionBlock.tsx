@@ -141,7 +141,7 @@ export const PendingToolBlock: Component<PendingToolBlockProps> = (props) => {
   });
 
   return (
-    <div class="my-0.5 font-mono text-[11px] flex items-center gap-1.5 px-2 py-1 rounded bg-purple-50 dark:bg-purple-900/20">
+    <div class="my-0.5 font-mono text-[11px] flex items-center gap-1.5 px-2 py-1 rounded bg-purple-50 dark:bg-purple-900">
       {/* Spinner */}
       <svg class="w-3 h-3 text-purple-500 dark:text-purple-400 animate-spin" fill="none" viewBox="0 0 24 24">
         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" />
@@ -188,7 +188,7 @@ export const PendingToolsList: Component<PendingToolsListProps> = (props) => {
       <Show when={shouldCollapse() && !expanded()}>
         <button
           onClick={() => setExpanded(true)}
-          class="w-full mt-0.5 py-1 text-[10px] text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded text-center font-medium"
+          class="w-full mt-0.5 py-1 text-[10px] text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900 rounded text-center font-medium"
         >
           + {hiddenCount()} more tools running...
         </button>

@@ -224,9 +224,9 @@ export const AICostDashboard: Component = () => {
 
   return (
     <Card padding="none" class="overflow-hidden border border-slate-200 dark:border-slate-700" border={false}>
-      <div class="bg-blue-50 dark:bg-blue-900/20 px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+      <div class="bg-blue-50 dark:bg-blue-900 px-6 py-4 border-b border-slate-200 dark:border-slate-700">
         <div class="flex items-center gap-3">
-          <div class="p-2 bg-blue-100 dark:bg-blue-900/40 rounded-md">
+          <div class="p-2 bg-blue-100 dark:bg-blue-900 rounded-md">
             <svg class="w-5 h-5 text-blue-600 dark:text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 1.343-3 3v1a3 3 0 006 0v-1c0-1.657-1.343-3-3-3zM5 12a7 7 0 0114 0v3a2 2 0 01-2 2H7a2 2 0 01-2-2v-3z" />
             </svg>
@@ -246,7 +246,7 @@ export const AICostDashboard: Component = () => {
               disabled={loading()}
               onClick={() => handleRangeClick(1)}
               class={`min-h-10 sm:min-h-9 min-w-10 px-2.5 py-2 text-sm border rounded transition-colors ${days() === 1
-                ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
+                ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
                 : 'border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700'
                 } ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
             >
@@ -257,7 +257,7 @@ export const AICostDashboard: Component = () => {
               disabled={loading()}
               onClick={() => handleRangeClick(7)}
               class={`min-h-10 sm:min-h-9 min-w-10 px-2.5 py-2 text-sm border rounded transition-colors ${days() === 7
-                ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
+                ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
                 : 'border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700'
                 } ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
             >
@@ -268,7 +268,7 @@ export const AICostDashboard: Component = () => {
               disabled={loading()}
               onClick={() => handleRangeClick(30)}
               class={`min-h-10 sm:min-h-9 min-w-10 px-2.5 py-2 text-sm border rounded transition-colors ${days() === 30
-                ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
+                ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
                 : 'border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700'
                 } ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
             >
@@ -279,7 +279,7 @@ export const AICostDashboard: Component = () => {
               disabled={loading()}
               onClick={() => handleRangeClick(90)}
               class={`min-h-10 sm:min-h-9 min-w-10 px-2.5 py-2 text-sm border rounded transition-colors ${days() === 90
-                ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
+                ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
                 : 'border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700'
                 } ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
             >
@@ -290,7 +290,7 @@ export const AICostDashboard: Component = () => {
               disabled={loading()}
               onClick={() => handleRangeClick(365)}
               class={`min-h-10 sm:min-h-9 min-w-10 px-2.5 py-2 text-sm border rounded transition-colors ${days() === 365
-                ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
+                ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
                 : 'border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700'
                 } ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
             >
@@ -306,19 +306,19 @@ export const AICostDashboard: Component = () => {
         </Show>
 
         <Show when={summary()?.truncated}>
-          <div class="text-xs px-3 py-2 rounded border border-blue-200 dark:border-blue-800/60 bg-blue-50 dark:bg-blue-900/20 text-blue-900 dark:text-blue-100">
+          <div class="text-xs px-3 py-2 rounded border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900 text-blue-900 dark:text-blue-100">
             Showing the last {summary()?.effective_days} days due to a {summary()?.retention_days}-day retention window.
           </div>
         </Show>
 
         <Show when={isOverBudget()}>
-          <div class="text-xs px-3 py-2 rounded border border-red-200 dark:border-red-800/60 bg-red-50 dark:bg-red-900/20 text-red-900 dark:text-red-100">
+          <div class="text-xs px-3 py-2 rounded border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900 text-red-900 dark:text-red-100">
             Estimated spend ({formatUSD(estimatedTotalUSD() ?? 0)}) is above your budget ({formatUSD(budgetForRange() ?? 0)}).
           </div>
         </Show>
 
         <Show when={loadError() && summary()}>
-          <div class="flex items-center justify-between gap-3 text-xs px-3 py-2 rounded border border-amber-200 dark:border-amber-800/60 bg-amber-50 dark:bg-amber-900/20 text-amber-900 dark:text-amber-100">
+          <div class="flex items-center justify-between gap-3 text-xs px-3 py-2 rounded border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900 text-amber-900 dark:text-amber-100">
             <div class="truncate">
               Couldn’t refresh. Showing last loaded data. {loadError()}
             </div>
@@ -326,7 +326,7 @@ export const AICostDashboard: Component = () => {
               type="button"
               disabled={loading()}
               onClick={() => loadSummary(days())}
-              class={`shrink-0 px-2 py-1 rounded border border-amber-300 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900/40 ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
+              class={`shrink-0 px-2 py-1 rounded border border-amber-300 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900 ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
             >
               Retry
             </button>

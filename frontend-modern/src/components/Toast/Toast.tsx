@@ -125,7 +125,7 @@ export const Toast: Component<ToastProps> = (props) => {
       <div
         class={`
            bg-white dark:bg-slate-800
-          border border-white/20 dark:border-slate-700/30
+          border border-white dark:border-slate-700
           px-5 py-4 rounded-md shadow-sm 
           flex items-center gap-4 
           min-w-[320px] max-w-[500px]

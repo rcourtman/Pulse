@@ -232,7 +232,7 @@ export const BillingAdminPanel: Component = () => {
                         (billing()?.subscription_state || '').toLowerCase() || 'unknown';
 
                       const rowMuted = () =>
-                        org.soft_deleted || org.suspended ? 'bg-slate-50/70 dark:bg-slate-800' : '';
+                        org.soft_deleted || org.suspended ? 'bg-slate-50 dark:bg-slate-800' : '';
 
                       return (
                         <>

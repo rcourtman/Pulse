@@ -211,7 +211,7 @@ export function ReportingPanel() {
                         onClick={handleGenerate}
                     >
                         <Show when={generating()} fallback={<Download size={20} />}>
-                            <div class="w-5 h-5 border-2 border-white/50 border-t-white rounded-full animate-spin" />
+                            <div class="w-5 h-5 border-2 border-white border-t-white rounded-full animate-spin" />
                         </Show>
                         {generating()
                             ? 'Generating...'

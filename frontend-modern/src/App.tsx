@@ -1932,9 +1932,9 @@ function AppLayout(props: {
                     return `${baseClasses} bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 border-slate-300 dark:border-slate-700 border-b border-b-white dark:border-b-gray-800 shadow-sm font-semibold`;
                   }
                   if (disabled()) {
-                    return `${baseClasses} cursor-not-allowed text-slate-400 dark:text-slate-600 opacity-70 bg-slate-100/40 dark:bg-slate-800`;
+                    return `${baseClasses} cursor-not-allowed text-slate-400 dark:text-slate-600 opacity-70 bg-slate-100 dark:bg-slate-800`;
                   }
-                  return `${baseClasses} text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-200/60 dark:hover:bg-slate-700/60`;
+                  return `${baseClasses} text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700`;
                 };
 
                 const title = () =>
@@ -1954,7 +1954,7 @@ function AppLayout(props: {
                     <span class="hidden xs:inline-flex items-center gap-1">
                       <span>{platform.label}</span>
                       <Show when={platform.badge}>
-                        <span class="px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 bg-slate-200/70 dark:bg-slate-800 rounded">
+                        <span class="px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 bg-slate-200 dark:bg-slate-800 rounded">
                           {platform.badge}
                         </span>
                       </Show>
@@ -1977,7 +1977,7 @@ function AppLayout(props: {
                     if (isActive()) {
                       return `${baseClasses} bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 border-slate-300 dark:border-slate-700 border-b border-b-white dark:border-b-gray-800 shadow-sm font-semibold`;
                     }
-                    return `${baseClasses} text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-200/60 dark:hover:bg-slate-700/60`;
+                    return `${baseClasses} text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700`;
                   };
 
                   return (
@@ -2005,7 +2005,7 @@ function AppLayout(props: {
                                 </span>
                               )}
                               {tab.breakdown && tab.breakdown.warning > 0 && (
-                                <span class="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-semibold text-amber-900 dark:text-amber-100 bg-amber-200 dark:bg-amber-500/80 rounded-full">
+                                <span class="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-semibold text-amber-900 dark:text-amber-100 bg-amber-200 dark:bg-amber-500 rounded-full">
                                   {tab.breakdown.warning}
                                 </span>
                               )}
@@ -2020,7 +2020,7 @@ function AppLayout(props: {
                         </span>
                       </Show>
                       <Show when={tab.badge === 'pro'}>
-                        <span class="ml-1.5 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/50 rounded">
+                        <span class="ml-1.5 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900 rounded">
                           Pro
                         </span>
                       </Show>

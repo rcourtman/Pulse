@@ -189,7 +189,7 @@ export const SearchInput: Component<SearchInputProps> = (props) => {
         }}
         class={`w-full pl-8 sm:pl-9 ${inputPaddingRight()} py-1.5 sm:py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-md
                bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 placeholder-gray-400 dark:placeholder-gray-500
-               focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:focus:border-blue-400 outline-none transition-all`}
+               focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:focus:border-blue-400 outline-none transition-all`}
         title={props.title}
         data-global-search
       />
@@ -213,7 +213,7 @@ export const SearchInput: Component<SearchInputProps> = (props) => {
           type="button"
           class={`absolute top-1/2 -translate-y-1/2 transform p-1 rounded-full
                  bg-slate-200 dark:bg-slate-600 text-slate-500 dark:text-slate-300
-                 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/50 dark:hover:text-red-400
+                 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900 dark:hover:text-red-400
                  transition-all duration-150 active:scale-90 ${isSimple() ? 'right-2' : 'right-12 sm:right-14'}`}
           onClick={() => props.onChange('')}
           onMouseDown={hasHistory() ? markSuppressCommit : undefined}
@@ -238,7 +238,7 @@ export const SearchInput: Component<SearchInputProps> = (props) => {
               type="button"
               class={`flex h-7 w-7 items-center justify-center rounded-md transition-colors
                      ${isHistoryOpen()
-                  ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400'
+                  ? 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400'
                   : 'text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-600 dark:hover:text-slate-300'
                 }`}
               onClick={() =>
@@ -297,7 +297,7 @@ export const SearchInput: Component<SearchInputProps> = (props) => {
             <div class="max-h-52 overflow-y-auto py-1">
               <For each={searchHistory()}>
                 {(entry) => (
-                  <div class="flex items-center justify-between px-2 py-1.5 hover:bg-blue-50 dark:hover:bg-blue-900/20">
+                  <div class="flex items-center justify-between px-2 py-1.5 hover:bg-blue-50 dark:hover:bg-blue-900">
                     <button
                       type="button"
                       class="flex-1 truncate pr-2 text-left text-sm text-slate-700 transition-colors hover:text-blue-600 focus:outline-none dark:text-slate-200 dark:hover:text-blue-300"
@@ -313,7 +313,7 @@ export const SearchInput: Component<SearchInputProps> = (props) => {
                     </button>
                     <button
                       type="button"
-                      class="ml-1 flex h-6 w-6 items-center justify-center rounded text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 focus:outline-none dark:text-slate-500 dark:hover:bg-slate-700/70 dark:hover:text-slate-200"
+                      class="ml-1 flex h-6 w-6 items-center justify-center rounded text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 focus:outline-none dark:text-slate-500 dark:hover:bg-slate-700 dark:hover:text-slate-200"
                       title="Remove from history"
                       onClick={() => deleteHistoryEntry(entry)}
                       onMouseDown={markSuppressCommit}
@@ -333,7 +333,7 @@ export const SearchInput: Component<SearchInputProps> = (props) => {
             </div>
             <button
               type="button"
-              class="flex w-full items-center justify-center gap-2 border-t border-slate-200 px-3 py-2 text-xs font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-700/80 dark:hover:text-slate-200"
+              class="flex w-full items-center justify-center gap-2 border-t border-slate-200 px-3 py-2 text-xs font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200"
               onClick={clearHistory}
               onMouseDown={markSuppressCommit}
             >

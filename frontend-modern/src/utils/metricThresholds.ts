@@ -27,9 +27,9 @@ export function getMetricSeverity(value: number, metric: MetricType): MetricSeve
 // -- Tailwind background classes (progress bars) --
 
 const BG_CLASSES: Record<MetricSeverity, string> = {
-  critical: 'bg-red-500/60 dark:bg-red-500/50',
-  warning:  'bg-yellow-500/60 dark:bg-yellow-500/50',
-  normal:   'bg-green-500/60 dark:bg-green-500/50',
+  critical: 'bg-red-500 dark:bg-red-500',
+  warning:  'bg-yellow-500 dark:bg-yellow-500',
+  normal:   'bg-green-500 dark:bg-green-500',
 };
 
 export function getMetricColorClass(value: number, metric: MetricType): string {

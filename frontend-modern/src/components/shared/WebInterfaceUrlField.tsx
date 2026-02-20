@@ -171,7 +171,7 @@ export const WebInterfaceUrlField: Component<WebInterfaceUrlFieldProps> = (props
 
   return (
     <Show when={metadataId()}>
-      <div class={`rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600/70 dark:bg-slate-800 ${props.class ?? ''}`}>
+      <div class={`rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800 ${props.class ?? ''}`}>
         <div class="text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 mb-2">
           Web Interface URL
         </div>
@@ -202,7 +202,7 @@ export const WebInterfaceUrlField: Component<WebInterfaceUrlFieldProps> = (props
               href={normalizedCurrentUrl()}
               target="_blank"
               rel="noopener noreferrer"
-              class="px-2.5 py-1.5 text-xs font-medium rounded-md text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20 transition-colors"
+              class="px-2.5 py-1.5 text-xs font-medium rounded-md text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900 transition-colors"
               title="Open URL"
             >
               Open
@@ -211,7 +211,7 @@ export const WebInterfaceUrlField: Component<WebInterfaceUrlFieldProps> = (props
           <Show when={normalizedCurrentUrl()}>
             <button
               type="button"
-              class="px-2.5 py-1.5 text-xs font-medium rounded-md text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20 disabled:opacity-50 transition-colors"
+              class="px-2.5 py-1.5 text-xs font-medium rounded-md text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900 disabled:opacity-50 transition-colors"
               disabled={urlSaving()}
               onClick={() => void handleDeleteUrl()}
               title="Remove URL"
@@ -229,20 +229,20 @@ export const WebInterfaceUrlField: Component<WebInterfaceUrlFieldProps> = (props
         </Show>
 
         <Show when={showSuggestedDiagnostic()}>
-          <div class="mt-2 rounded border border-amber-200 bg-amber-50/80 p-2 text-[11px] text-amber-800 dark:border-amber-800/50 dark:bg-amber-900/20 dark:text-amber-200">
+          <div class="mt-2 rounded border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-800 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-200">
             <p class="font-medium">No suggested URL found</p>
             <p class="mt-0.5">{props.suggestedUrlDiagnostic}</p>
           </div>
         </Show>
 
         <Show when={showSuggestedUrl()}>
-          <div class="mt-2 p-2 rounded bg-blue-50 border border-blue-200 dark:bg-blue-900/20 dark:border-blue-800/50">
+          <div class="mt-2 p-2 rounded bg-blue-50 border border-blue-200 dark:bg-blue-900 dark:border-blue-800">
             <div class="text-[10px] font-medium text-blue-700 dark:text-blue-300 mb-1">
               {normalizedCurrentUrl() ? 'Discovered URL' : 'Suggested URL'}
             </div>
             <Show when={props.suggestedUrlReasonText}>
               <p
-                class="mb-1 text-[10px] text-blue-700/90 dark:text-blue-300/90"
+                class="mb-1 text-[10px] text-blue-700 dark:text-blue-300"
                 title={props.suggestedUrlReasonTitle}
               >
                 Why this URL: {props.suggestedUrlReasonText}

@@ -452,7 +452,7 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
         <Show when={props.hosts.length > 0}>
             <div data-testid="infrastructure-summary" class="space-y-2">
                 <div class="rounded-md border border-slate-200 bg-white p-2 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-3">
-                    <div class="mb-2 flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-1 pb-2 text-[11px] text-slate-500 dark:border-slate-700/80 dark:text-slate-400">
+                    <div class="mb-2 flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-1 pb-2 text-[11px] text-slate-500 dark:border-slate-700 dark:text-slate-400">
                         <div class="flex items-center gap-3">
                             <span class="font-medium text-slate-700 dark:text-slate-200">
                                 {hostCounts().total} {hostCounts().total === 1 ? 'resource' : 'resources'}
@@ -473,8 +473,8 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
                                             onClick={() => props.onTimeRangeChange?.(range)}
                                             class={`rounded px-2 py-1 ${
                                                 selectedRange() === range
-                                                    ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-200'
-                                                    : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700/60'
+                                                    ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
+                                                    : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700'
                                             }`}
                                         >
                                             {SUMMARY_TIME_RANGE_LABEL[range]}

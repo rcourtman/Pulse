@@ -15,13 +15,13 @@ const outcomeBadgeClass = (outcome: ProtectionOutcome): string => {
   const base = 'inline-flex items-center rounded-full px-2 py-1 text-xs font-medium';
   switch (outcome) {
     case 'success':
-      return `${base} bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300`;
+      return `${base} bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300`;
     case 'warning':
-      return `${base} bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300`;
+      return `${base} bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300`;
     case 'failed':
-      return `${base} bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300`;
+      return `${base} bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300`;
     case 'running':
-      return `${base} bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300`;
+      return `${base} bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300`;
     default:
       return `${base} bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300`;
   }

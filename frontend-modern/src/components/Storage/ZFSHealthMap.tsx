@@ -19,10 +19,10 @@ export const ZFSHealthMap: Component<ZFSHealthMapProps> = (props) => {
 
     const getDeviceColor = (device: ZFSDevice) => {
         const state = device.state?.toUpperCase();
-        if (state === 'ONLINE') return 'bg-green-500/80 dark:bg-green-500/70 hover:bg-green-400';
-        if (state === 'DEGRADED') return 'bg-yellow-500/80 dark:bg-yellow-500/70 hover:bg-yellow-400';
-        if (state === 'FAULTED' || state === 'UNAVAIL' || state === 'OFFLINE') return 'bg-red-500/80 dark:bg-red-500/70 hover:bg-red-400';
-        return 'bg-slate-400/80 dark:bg-slate-800 hover:bg-slate-300';
+        if (state === 'ONLINE') return 'bg-green-500 dark:bg-green-500 hover:bg-green-400';
+        if (state === 'DEGRADED') return 'bg-yellow-500 dark:bg-yellow-500 hover:bg-yellow-400';
+        if (state === 'FAULTED' || state === 'UNAVAIL' || state === 'OFFLINE') return 'bg-red-500 dark:bg-red-500 hover:bg-red-400';
+        return 'bg-slate-400 dark:bg-slate-800 hover:bg-slate-300';
     };
 
     const isResilvering = (device: ZFSDevice) => {
@@ -70,7 +70,7 @@ export const ZFSHealthMap: Component<ZFSHealthMapProps> = (props) => {
                             <div class="text-slate-400 mb-1">
                                 {hoveredDevice()?.type}
                             </div>
-                            <div class="flex items-center gap-2 border-t border-slate-700/50 pt-1">
+                            <div class="flex items-center gap-2 border-t border-slate-700 pt-1">
                                 <span class={`font-semibold ${hoveredDevice()?.state === 'ONLINE' ? 'text-green-400' :
                                     hoveredDevice()?.state === 'DEGRADED' ? 'text-yellow-400' :
                                         'text-red-400'

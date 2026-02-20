@@ -165,7 +165,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
               </span>
               <Show when={props.disableLegacyRouteRedirectsLocked()}>
                 <span
-                  class="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
+                  class="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300"
                   title="Locked by environment variable PULSE_DISABLE_LEGACY_ROUTE_REDIRECTS"
                 >
                   ENV
@@ -210,7 +210,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
               </span>
               <Show when={props.disableLocalUpgradeMetricsLocked()}>
                 <span
-                  class="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
+                  class="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300"
                   title="Locked by environment variable PULSE_DISABLE_LOCAL_UPGRADE_METRICS"
                 >
                   ENV
@@ -261,7 +261,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
                 <button
                   type="button"
                   class={`min-h-10 sm:min-h-10 rounded-md border px-3 py-2.5 text-left text-sm transition-colors ${props.pvePollingSelection() === option.value
-                    ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-900/30 dark:text-blue-100'
+                    ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-900 dark:text-blue-100'
                     : 'border-slate-200 bg-white text-slate-700 hover:border-blue-400 hover:text-blue-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200'
                     } ${props.pvePollingEnvLocked() ? 'opacity-60 cursor-not-allowed' : ''}`}
                   disabled={props.pvePollingEnvLocked()}
@@ -279,7 +279,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
             <button
               type="button"
               class={`min-h-10 sm:min-h-10 rounded-md border px-3 py-2.5 text-left text-sm transition-colors ${props.pvePollingSelection() === 'custom'
-                ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-900/30 dark:text-blue-100'
+                ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-900 dark:text-blue-100'
                 : 'border-slate-200 bg-white text-slate-700 hover:border-blue-400 hover:text-blue-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200'
                 } ${props.pvePollingEnvLocked() ? 'opacity-60 cursor-not-allowed' : ''}`}
               disabled={props.pvePollingEnvLocked()}
@@ -330,7 +330,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
 
           {/* Env override warning */}
           <Show when={props.pvePollingEnvLocked()}>
-            <div class="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-900/30 dark:text-amber-200">
+            <div class="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-200">
               <svg
                 class="h-4 w-4 flex-shrink-0"
                 viewBox="0 0 24 24"

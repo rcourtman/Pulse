@@ -170,7 +170,7 @@ export function DashboardHero(props: DashboardHeroProps) {
                     <div class="flex items-center gap-2 shrink-0">
                         <Show when={props.alerts.activeCritical > 0}>
                             <span
-                                class={`${badgeBase} bg-red-50 text-red-700 border-red-100 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800`}
+                                class={`${badgeBase} bg-red-50 text-red-700 border-red-100 dark:bg-red-900 dark:text-red-300 dark:border-red-800`}
                             >
                                 <span class="w-1.5 h-1.5 rounded-full bg-red-500" />
                                 {props.alerts.activeCritical} Critical
@@ -179,7 +179,7 @@ export function DashboardHero(props: DashboardHeroProps) {
 
                         <Show when={props.alerts.activeWarning > 0}>
                             <span
-                                class={`${badgeBase} bg-amber-50 text-amber-700 border-amber-100 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800`}
+                                class={`${badgeBase} bg-amber-50 text-amber-700 border-amber-100 dark:bg-amber-900 dark:text-amber-300 dark:border-amber-800`}
                             >
                                 <span class="w-1.5 h-1.5 rounded-full bg-amber-500" />
                                 {props.alerts.activeWarning} Warning

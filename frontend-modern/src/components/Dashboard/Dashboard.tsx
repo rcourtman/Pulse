@@ -1718,7 +1718,7 @@ export function Dashboard(props: DashboardProps) {
                                   />
                                   <Show when={selectedGuestId() === guestId()}>
                                     <tr>
-                                      <td colspan={totalColumns()} class="p-0 border-b border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800">
+                                      <td colspan={totalColumns()} class="p-0 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
                                         <div class="p-4" onClick={(e) => e.stopPropagation()}>
                                           <GuestDrawer
                                             guest={guest()}

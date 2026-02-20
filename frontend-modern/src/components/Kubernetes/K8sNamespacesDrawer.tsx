@@ -102,7 +102,7 @@ export const K8sNamespacesDrawer: Component<{
               value={search()}
               onInput={(e) => setSearch(e.currentTarget.value)}
               placeholder="Search namespaces..."
-              class="w-[12rem] rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+              class="w-[12rem] rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
             />
             <button
               type="button"
@@ -157,10 +157,10 @@ export const K8sNamespacesDrawer: Component<{
                       <th class="px-3 py-2 font-medium">Actions</th>
                     </tr>
                   </thead>
-                  <tbody class="divide-y divide-gray-100 dark:divide-gray-700/50">
+                  <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
                     <For each={filteredRows()}>
                       {(row) => (
-                        <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                        <tr class="hover:bg-slate-50 dark:hover:bg-slate-800">
                           <td class="px-3 py-2">
                             <div class="flex items-center gap-2 min-w-0">
                               <span class={`h-2 w-2 rounded-full ${statusTone(row.pods)}`} />

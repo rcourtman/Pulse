@@ -53,7 +53,7 @@ export const InvestigationMessages: Component<InvestigationMessagesProps> = (pro
                 <div class={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                   <div class={`max-w-[85%] rounded-md px-3 py-2 ${
                     msg.role === 'user'
-                      ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-900 dark:text-blue-100'
+                      ? 'bg-blue-100 dark:bg-blue-900 text-blue-900 dark:text-blue-100'
                       : msg.role === 'system'
                       ? 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-xs'
                       : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200'
@@ -80,7 +80,7 @@ export const InvestigationMessages: Component<InvestigationMessagesProps> = (pro
                       <div class="space-y-1">
                         <For each={msg.tool_calls}>
                           {(tc) => (
-                            <div class="text-xs rounded border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-1">
+                            <div class="text-xs rounded border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900 px-2 py-1">
                               <span class="font-semibold text-indigo-700 dark:text-indigo-300">{tc.name}</span>
                               <Show when={tc.input && Object.keys(tc.input).length > 0}>
                                 <pre class="mt-1 text-[10px] text-slate-600 dark:text-slate-400 overflow-x-auto max-h-24 overflow-y-auto">
@@ -97,8 +97,8 @@ export const InvestigationMessages: Component<InvestigationMessagesProps> = (pro
                     <Show when={msg.tool_result}>
                       <div class={`text-xs rounded border px-2 py-1 ${
                         msg.tool_result!.is_error
-                          ? 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/30'
-                          : 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/30'
+                          ? 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900'
+                          : 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900'
                       }`}>
                         <span class={`font-semibold text-[10px] ${
                           msg.tool_result!.is_error

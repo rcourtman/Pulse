@@ -63,7 +63,7 @@ export const OperationsPage: Component = () => {
 
             {/* Modern Tabs Navigation */}
             <div class="mb-6">
-                <nav class="flex space-x-2 bg-slate-100 dark:bg-slate-900 p-1.5 rounded-lg sm:w-max border border-slate-200 dark:border-slate-800 overflow-x-auto scrollbar-hide" aria-label="Tabs" style="-webkit-overflow-scrolling: touch;">
+                <nav class="flex space-x-2 bg-slate-100 dark:bg-slate-900 p-1.5 rounded-md sm:w-max border border-slate-200 dark:border-slate-800 overflow-x-auto scrollbar-hide" aria-label="Tabs" style="-webkit-overflow-scrolling: touch;">
                     {tabs.map((tab) => {
                         const isActive = () => activeTab() === tab.id;
                         return (

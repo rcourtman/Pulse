@@ -38,7 +38,7 @@ export function KPIStrip(props: KPIStripProps) {
   return (
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
       <a href={INFRASTRUCTURE_PATH} class="group block">
-        <Card hoverable border={false} padding="none" class="h-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 group-hover:bg-slate-100 dark:group-hover:bg-slate-700/50 transition-colors">
+        <Card hoverable border={false} padding="none" class="h-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 group-hover:bg-slate-100 dark:group-hover:bg-slate-700 transition-colors">
           <p class="text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Infrastructure</p>
           <p class="text-2xl font-mono font-semibold text-slate-900 dark:text-slate-100 mt-0.5">
             {props.infrastructure.total}
@@ -50,7 +50,7 @@ export function KPIStrip(props: KPIStripProps) {
       </a>
 
       <a href={WORKLOADS_PATH} class="group block">
-        <Card hoverable border={false} padding="none" class="h-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 group-hover:bg-slate-100 dark:group-hover:bg-slate-700/50 transition-colors">
+        <Card hoverable border={false} padding="none" class="h-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 group-hover:bg-slate-100 dark:group-hover:bg-slate-700 transition-colors">
           <p class="text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Workloads</p>
           <p class="text-2xl font-mono font-semibold text-slate-900 dark:text-slate-100 mt-0.5">
             {props.workloads.total}
@@ -62,7 +62,7 @@ export function KPIStrip(props: KPIStripProps) {
       </a>
 
       <a href={buildStoragePath()} class="group block">
-        <Card hoverable border={false} padding="none" class="h-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 group-hover:bg-slate-100 dark:group-hover:bg-slate-700/50 transition-colors">
+        <Card hoverable border={false} padding="none" class="h-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 group-hover:bg-slate-100 dark:group-hover:bg-slate-700 transition-colors">
           <p class="text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Storage</p>
           <p class="text-2xl font-mono font-semibold text-slate-900 dark:text-slate-100 mt-0.5">
             {Math.round(props.storage.capacityPercent)}%

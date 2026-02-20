@@ -28,7 +28,7 @@ export function UpdateConfirmationModal(props: UpdateConfirmationModalProps) {
 
   return (
     <Show when={props.isOpen}>
-      <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div class="fixed inset-0 bg-black flex items-center justify-center z-50 p-4">
         <div class="bg-white dark:bg-slate-800 rounded-md shadow-sm max-w-2xl w-full max-h-[90vh] overflow-y-auto">
           {/* Header */}
           <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
@@ -51,7 +51,7 @@ export function UpdateConfirmationModal(props: UpdateConfirmationModalProps) {
           {/* Body */}
           <div class="px-6 py-4 space-y-4">
             {/* Version Jump */}
-            <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md p-4">
+            <div class="bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-800 rounded-md p-4">
               <div class="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
                 Version Update
               </div>
@@ -97,7 +97,7 @@ export function UpdateConfirmationModal(props: UpdateConfirmationModalProps) {
 
             {/* Root Required Warning */}
             <Show when={props.plan.requiresRoot}>
-              <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md p-3">
+              <div class="bg-yellow-50 dark:bg-yellow-900 border border-yellow-200 dark:border-yellow-800 rounded-md p-3">
                 <div class="flex items-start gap-2">
                   <svg class="w-5 h-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />

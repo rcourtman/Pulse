@@ -59,7 +59,7 @@ const getHealthInfo = (health: string) => {
     const h = health?.toUpperCase() || '';
     if (h === 'OK' || h === 'HEALTH_OK') {
         return {
-            bgClass: 'bg-green-100 dark:bg-green-900/30',
+            bgClass: 'bg-green-100 dark:bg-green-900',
             textClass: 'text-green-700 dark:text-green-400',
             borderClass: 'border-green-200 dark:border-green-700',
             dotClass: 'bg-green-500',
@@ -68,7 +68,7 @@ const getHealthInfo = (health: string) => {
     }
     if (h === 'WARN' || h === 'HEALTH_WARN' || h === 'WARNING') {
         return {
-            bgClass: 'bg-yellow-100 dark:bg-yellow-900/30',
+            bgClass: 'bg-yellow-100 dark:bg-yellow-900',
             textClass: 'text-yellow-700 dark:text-yellow-400',
             borderClass: 'border-yellow-200 dark:border-yellow-700',
             dotClass: 'bg-yellow-500',
@@ -77,7 +77,7 @@ const getHealthInfo = (health: string) => {
     }
     if (h === 'ERR' || h === 'HEALTH_ERR' || h === 'ERROR' || h === 'CRITICAL') {
         return {
-            bgClass: 'bg-red-100 dark:bg-red-900/30',
+            bgClass: 'bg-red-100 dark:bg-red-900',
             textClass: 'text-red-700 dark:text-red-400',
             borderClass: 'border-red-200 dark:border-red-700',
             dotClass: 'bg-red-500',
@@ -383,7 +383,7 @@ const Ceph: Component = () => {
 
     const isLoading = createMemo(() => connected() && !initialDataReceived());
 
-    const thClass = "px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-600/50 whitespace-nowrap transition-colors";
+    const thClass = "px-2 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-600 whitespace-nowrap transition-colors";
 
     return (
         <div class="space-y-4">
@@ -531,7 +531,7 @@ const Ceph: Component = () => {
                     {/* Cluster Details Table */}
                     <Show when={clusters().length > 0}>
                         <Card padding="none" tone="card" class="overflow-hidden">
-                            <div class="px-4 py-3 border-b border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800">
+                            <div class="px-4 py-3 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
                                 <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100">
                                     Cluster Overview
                                 </h3>
@@ -553,7 +553,7 @@ const Ceph: Component = () => {
                                     <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
                                         <For each={clusters()}>
                                             {(cluster) => (
-                                                <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-700/30 transition-colors">
+                                                <tr class="hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
                                                     <td class="px-4 py-2.5">
                                                         <div class="font-medium text-sm text-slate-900 dark:text-slate-100">
                                                             {cluster.name || 'Ceph Cluster'}
@@ -616,7 +616,7 @@ const Ceph: Component = () => {
                     {/* Pools Table */}
                     <Show when={allPools().length > 0}>
                         <Card padding="none" tone="card" class="overflow-hidden">
-                            <div class="px-4 py-3 border-b border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+                            <div class="px-4 py-3 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
                                 <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100">
                                     Storage Pools ({filteredPools().length})
                                 </h3>
@@ -630,7 +630,7 @@ const Ceph: Component = () => {
                                             aria-label="Search storage pools"
                                             value={searchTerm()}
                                             onInput={(e) => setSearchTerm(e.currentTarget.value)}
-                                            class="w-full pl-8 pr-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:focus:border-blue-400 outline-none transition-all"
+                                            class="w-full pl-8 pr-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:focus:border-blue-400 outline-none transition-all"
                                         />
                                         <svg
                                             class="absolute left-2.5 top-2 h-4 w-4 text-slate-400 dark:text-slate-500"
@@ -680,7 +680,7 @@ const Ceph: Component = () => {
                                         <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
                                             <For each={filteredPools()}>
                                                 {(pool) => (
-                                                    <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-700/30 transition-colors">
+                                                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
                                                         <td class="px-4 py-2.5 font-medium text-sm text-slate-900 dark:text-slate-100">
                                                             {pool.name}
                                                         </td>

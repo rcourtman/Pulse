@@ -50,9 +50,9 @@ export const ApprovalBanner: Component<ApprovalBannerProps> = (props) => {
 
   const riskBadgeColor = (level: string) => {
     switch (level) {
-      case 'high': return 'bg-red-200 text-red-800 dark:bg-red-900/50 dark:text-red-300';
-      case 'medium': return 'bg-amber-200 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300';
-      default: return 'bg-green-200 text-green-800 dark:bg-green-900/50 dark:text-green-300';
+      case 'high': return 'bg-red-200 text-red-800 dark:bg-red-900 dark:text-red-300';
+      case 'medium': return 'bg-amber-200 text-amber-800 dark:bg-amber-900 dark:text-amber-300';
+      default: return 'bg-green-200 text-green-800 dark:bg-green-900 dark:text-green-300';
     }
   };
 
@@ -93,10 +93,10 @@ export const ApprovalBanner: Component<ApprovalBannerProps> = (props) => {
 
   return (
     <Show when={pending().length > 0}>
-      <div class="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-md px-4 py-3">
+      <div class="bg-amber-50 dark:bg-amber-900 border border-amber-200 dark:border-amber-800 rounded-md px-4 py-3">
         <div class="flex items-center justify-between gap-3 flex-wrap">
           <div class="flex items-center gap-3">
-            <div class="flex-shrink-0 p-1.5 border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-900/10 rounded-md">
+            <div class="flex-shrink-0 p-1.5 border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-900 rounded-md">
               <ShieldAlertIcon class="w-4 h-4 text-amber-500 dark:text-amber-400" />
             </div>
             <div>

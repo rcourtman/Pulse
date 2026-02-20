@@ -212,7 +212,7 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
                     </Show>
 
                     <Show when={props.total > 0 && (props.balloon || 0) > 0 && (props.balloon || 0) < props.total}>
-                        <div class="flex justify-between gap-3 py-0.5 border-t border-slate-700/50">
+                        <div class="flex justify-between gap-3 py-0.5 border-t border-slate-700">
                             <span class="text-blue-400">Balloon Limit</span>
                             <span class="whitespace-nowrap text-slate-300">
                                 {formatBytes(props.balloon || 0)}
@@ -223,13 +223,13 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
                     <Show
                         when={props.total > 0}
                         fallback={
-                            <div class="flex justify-between gap-3 py-0.5 border-t border-slate-700/50">
+                            <div class="flex justify-between gap-3 py-0.5 border-t border-slate-700">
                                 <span class="text-blue-300">Utilization</span>
                                 <span class="whitespace-nowrap text-slate-300">{displayLabel()}</span>
                             </div>
                         }
                     >
-                        <div class="flex justify-between gap-3 py-0.5 border-t border-slate-700/50">
+                        <div class="flex justify-between gap-3 py-0.5 border-t border-slate-700">
                             <span class="text-slate-400">Free</span>
                             <span class="whitespace-nowrap text-slate-300">
                                 {formatBytes(props.total - props.used)}

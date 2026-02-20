@@ -27,25 +27,25 @@ interface StoragePoolRowProps {
 }
 
 const HEALTH_BADGE: Record<NormalizedHealth, { bg: string; text: string }> = {
-  healthy: { bg: 'bg-green-100 dark:bg-green-900/40', text: 'text-green-700 dark:text-green-300' },
-  warning: { bg: 'bg-yellow-100 dark:bg-yellow-900/40', text: 'text-yellow-700 dark:text-yellow-300' },
-  critical: { bg: 'bg-red-100 dark:bg-red-900/40', text: 'text-red-700 dark:text-red-300' },
+  healthy: { bg: 'bg-green-100 dark:bg-green-900', text: 'text-green-700 dark:text-green-300' },
+  warning: { bg: 'bg-yellow-100 dark:bg-yellow-900', text: 'text-yellow-700 dark:text-yellow-300' },
+  critical: { bg: 'bg-red-100 dark:bg-red-900', text: 'text-red-700 dark:text-red-300' },
   offline: { bg: 'bg-slate-100 dark:bg-slate-800', text: 'text-slate-600 dark:text-slate-300' },
   unknown: { bg: 'bg-slate-100 dark:bg-slate-800', text: 'text-slate-500 dark:text-slate-400' },
 };
 
 const TYPE_BADGE: Record<string, string> = {
-  zfspool: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+  zfspool: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
   dir: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
-  lvm: 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300',
-  lvmthin: 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300',
-  nfs: 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300',
-  cifs: 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300',
-  cephfs: 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300',
-  rbd: 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300',
-  btrfs: 'bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300',
-  iscsi: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300',
-  pbs: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
+  lvm: 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300',
+  lvmthin: 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300',
+  nfs: 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300',
+  cifs: 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300',
+  cephfs: 'bg-violet-100 text-violet-700 dark:bg-violet-900 dark:text-violet-300',
+  rbd: 'bg-violet-100 text-violet-700 dark:bg-violet-900 dark:text-violet-300',
+  btrfs: 'bg-teal-100 text-teal-700 dark:bg-teal-900 dark:text-teal-300',
+  iscsi: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900 dark:text-cyan-300',
+  pbs: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300',
 };
 
 const getTypeBadgeClass = (type: string): string => {

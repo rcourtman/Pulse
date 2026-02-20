@@ -29,10 +29,10 @@ interface InvestigationSectionProps {
 
 const statusColors: Record<string, string> = {
   pending: 'border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400',
-  running: 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900/10 dark:text-blue-300',
-  completed: 'border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-900/10 dark:text-green-300',
-  failed: 'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900/10 dark:text-red-300',
-  needs_attention: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/10 dark:text-amber-300',
+  running: 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-300',
+  completed: 'border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-900 dark:text-green-300',
+  failed: 'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900 dark:text-red-300',
+  needs_attention: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-300',
 };
 
 
@@ -124,7 +124,7 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
             type="button"
             onClick={handleReinvestigate}
             disabled={reinvestigating()}
-            class="flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors disabled:opacity-50"
+            class="flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900 rounded transition-colors disabled:opacity-50"
           >
             <RefreshCwIcon class={`w-3 h-3 ${reinvestigating() ? 'animate-spin' : ''}`} />
             Re-investigate
@@ -156,7 +156,7 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
           <div class="space-y-2">
             {/* Error message for failed investigations */}
             <Show when={inv().error && (inv().status === 'failed' || inv().outcome === 'timed_out' || inv().outcome === 'fix_failed' || inv().outcome === 'fix_verification_failed' || inv().outcome === 'fix_verification_unknown' || inv().outcome === 'needs_attention' || inv().outcome === 'cannot_fix')}>
-              <div class="text-xs text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded p-2">
+              <div class="text-xs text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-800 rounded p-2">
                 {inv().error}
               </div>
             </Show>

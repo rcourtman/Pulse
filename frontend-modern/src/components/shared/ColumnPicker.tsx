@@ -45,7 +45,7 @@ export const ColumnPicker: Component<ColumnPickerProps> = (props) => {
         onClick={() => setIsOpen(!isOpen())}
         class={`inline-flex items-center gap-1.5 whitespace-nowrap px-2.5 py-1.5 text-xs font-medium rounded-md transition-all
           ${isOpen()
-            ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300'
+            ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
             : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
           }`}
         title="Choose which columns to display"
@@ -87,7 +87,7 @@ export const ColumnPicker: Component<ColumnPickerProps> = (props) => {
                 const isChecked = () => !props.isHidden(col.id);
                 return (
                   <label
-                    class="flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
+                    class="flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
                   >
                     <input
                       type="checkbox"

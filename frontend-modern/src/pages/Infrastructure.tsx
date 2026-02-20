@@ -437,7 +437,7 @@ export function Infrastructure() {
                             id="infra-source-filter"
                             value={selectedSource()}
                             onChange={(e) => setSelectedSource(e.currentTarget.value)}
-                            class="min-w-[8rem] rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                            class="min-w-[8rem] rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                           >
                             <option value="">All</option>
                             <For each={sourceOptions.filter((s) => availableSources().has(s.key))}>
@@ -452,7 +452,7 @@ export function Infrastructure() {
                             id="infra-status-filter"
                             value={selectedStatus()}
                             onChange={(e) => setSelectedStatus(e.currentTarget.value)}
-                            class="min-w-[7rem] rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                            class="min-w-[7rem] rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                           >
                             <option value="">All</option>
                             <For each={statusOptions()}>
@@ -509,7 +509,7 @@ export function Infrastructure() {
                           <button
                             type="button"
                             onClick={clearFilters}
-                            class="ml-auto rounded-md bg-blue-100 px-2.5 py-1.5 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:hover:bg-blue-900/60"
+                            class="ml-auto rounded-md bg-blue-100 px-2.5 py-1.5 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-200 dark:bg-blue-900 dark:text-blue-300 dark:hover:bg-blue-900"
                           >
                             Clear
                           </button>

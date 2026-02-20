@@ -23,14 +23,14 @@ const phaseLabel = (phase: string): string => {
 const phaseClasses = (phase: string): string => {
   switch (phase) {
     case 'completed':
-      return 'border-emerald-200/80 bg-emerald-50/70 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-900/20 dark:text-emerald-200';
+      return 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500 dark:bg-emerald-900 dark:text-emerald-200';
     case 'failed':
-      return 'border-rose-200/80 bg-rose-50/70 text-rose-700 dark:border-rose-500/30 dark:bg-rose-900/20 dark:text-rose-200';
+      return 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-500 dark:bg-rose-900 dark:text-rose-200';
     case 'skipped':
-      return 'border-amber-200/80 bg-amber-50/70 text-amber-700 dark:border-amber-500/30 dark:bg-amber-900/20 dark:text-amber-200';
+      return 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500 dark:bg-amber-900 dark:text-amber-200';
     case 'started':
     default:
-      return 'border-sky-200/80 bg-sky-50/70 text-sky-700 dark:border-sky-500/30 dark:bg-sky-900/20 dark:text-sky-200';
+      return 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-500 dark:bg-sky-900 dark:text-sky-200';
   }
 };
 

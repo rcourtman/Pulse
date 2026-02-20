@@ -56,7 +56,7 @@ export const UpdateBadge: Component<UpdateBadgeProps> = (props) => {
                 }
             >
                 <span
-                    class="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 cursor-help"
+                    class="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 cursor-help"
                     onMouseEnter={(e) => {
                         const rect = e.currentTarget.getBoundingClientRect();
                         const current = props.updateStatus?.currentDigest?.slice(0, 19) || 'unknown';
@@ -100,7 +100,7 @@ export const UpdateIcon: Component<{ updateStatus?: DockerContainerUpdateStatus 
     return (
         <Show when={hasUpdate()}>
             <span
-                class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 cursor-help"
+                class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 cursor-help"
                 onMouseEnter={(e) => {
                     const rect = e.currentTarget.getBoundingClientRect();
                     showTooltip(getTooltip(), rect.left + rect.width / 2, rect.top, {
@@ -240,15 +240,15 @@ export const UpdateButton: Component<UpdateButtonProps> = (props) => {
         const base = 'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium transition-all';
         switch (currentState()) {
             case 'confirming':
-                return `${base} bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 cursor-pointer hover:bg-amber-200 dark:hover:bg-amber-900/60`;
+                return `${base} bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300 cursor-pointer hover:bg-amber-200 dark:hover:bg-amber-900`;
             case 'updating':
-                return `${base} bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 cursor-wait`;
+                return `${base} bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 cursor-wait`;
             case 'success':
-                return `${base} bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300`;
+                return `${base} bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300`;
             case 'error':
-                return `${base} bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 cursor-help`;
+                return `${base} bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300 cursor-help`;
             default:
-                return `${base} bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 cursor-pointer hover:bg-blue-200 dark:hover:bg-blue-900/60`;
+                return `${base} bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 cursor-pointer hover:bg-blue-200 dark:hover:bg-blue-900`;
         }
     };
 

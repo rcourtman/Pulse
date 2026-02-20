@@ -37,7 +37,7 @@ const DefaultErrorFallback: Component<{ error: Error; reset: () => void }> = (pr
           </div>
         </div>
 
-        <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded p-3 mb-4">
+        <div class="bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-800 rounded p-3 mb-4">
           <p class="text-sm text-red-800 dark:text-red-200">
             Please try again or reload the page. If the problem persists, contact your administrator.
           </p>
@@ -101,7 +101,7 @@ export const ComponentErrorBoundary: Component<{
   return (
     <ErrorBoundary
       fallback={(error, reset) => (
-        <div class="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded">
+        <div class="p-4 bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-800 rounded">
           <div class="flex items-center mb-2">
             <svg
               class="w-5 h-5 text-red-500 mr-2"

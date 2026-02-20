@@ -32,7 +32,7 @@ export function WhatsNewModal() {
 
   return (
     <Show when={isOpen()}>
-      <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div class="fixed inset-0 z-50 flex items-center justify-center bg-black p-4">
         <div class="w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden rounded-md bg-white shadow-sm dark:bg-slate-800">
           <div class="flex-shrink-0 flex items-start justify-between border-b border-slate-200 px-6 py-4 dark:border-slate-700">
             <div>
@@ -54,42 +54,42 @@ export function WhatsNewModal() {
 
           <div class="flex-1 overflow-y-auto space-y-4 sm:space-y-6 px-4 sm:px-6 py-4 sm:py-5">
             <div class="grid gap-3 sm:gap-4 sm:grid-cols-2">
-              <div class="rounded-md border border-blue-200 bg-blue-50/70 p-3 sm:p-4 dark:border-blue-800/60 dark:bg-blue-900/20">
+              <div class="rounded-md border border-blue-200 bg-blue-50 p-3 sm:p-4 dark:border-blue-800 dark:bg-blue-900">
                 <div class="flex items-center gap-2 text-sm font-semibold text-blue-900 dark:text-blue-100">
                   <ServerIcon class="h-4 w-4" />
                   Infrastructure
                 </div>
-                <p class="mt-1.5 sm:mt-2 text-xs text-blue-900/80 dark:text-blue-100/80">
+                <p class="mt-1.5 sm:mt-2 text-xs text-blue-900 dark:text-blue-100">
                   Proxmox nodes, Hosts, and container hosts live together in one unified view.
                 </p>
               </div>
 
-              <div class="rounded-md border border-purple-200 bg-purple-50/70 p-3 sm:p-4 dark:border-purple-800/60 dark:bg-purple-900/20">
+              <div class="rounded-md border border-purple-200 bg-purple-50 p-3 sm:p-4 dark:border-purple-800 dark:bg-purple-900">
                 <div class="flex items-center gap-2 text-sm font-semibold text-purple-900 dark:text-purple-100">
                   <BoxesIcon class="h-4 w-4" />
                   Workloads
                 </div>
-                <p class="mt-1.5 sm:mt-2 text-xs text-purple-900/80 dark:text-purple-100/80">
+                <p class="mt-1.5 sm:mt-2 text-xs text-purple-900 dark:text-purple-100">
                   All VMs, containers, and Kubernetes workloads now share a single list.
                 </p>
               </div>
 
-              <div class="rounded-md border border-emerald-200 bg-emerald-50/70 p-3 sm:p-4 dark:border-emerald-800/60 dark:bg-emerald-900/20">
+              <div class="rounded-md border border-emerald-200 bg-emerald-50 p-3 sm:p-4 dark:border-emerald-800 dark:bg-emerald-900">
                 <div class="flex items-center gap-2 text-sm font-semibold text-emerald-900 dark:text-emerald-100">
                   <HardDriveIcon class="h-4 w-4" />
                   Storage
                 </div>
-                <p class="mt-1.5 sm:mt-2 text-xs text-emerald-900/80 dark:text-emerald-100/80">
+                <p class="mt-1.5 sm:mt-2 text-xs text-emerald-900 dark:text-emerald-100">
                   Storage is now a top-level destination across all systems.
                 </p>
               </div>
 
-              <div class="rounded-md border border-amber-200 bg-amber-50/70 p-3 sm:p-4 dark:border-amber-800/60 dark:bg-amber-900/20">
+              <div class="rounded-md border border-amber-200 bg-amber-50 p-3 sm:p-4 dark:border-amber-800 dark:bg-amber-900">
                 <div class="flex items-center gap-2 text-sm font-semibold text-amber-900 dark:text-amber-100">
                   <ShieldCheckIcon class="h-4 w-4" />
                   Recovery
                 </div>
-                <p class="mt-1.5 sm:mt-2 text-xs text-amber-900/80 dark:text-amber-100/80">
+                <p class="mt-1.5 sm:mt-2 text-xs text-amber-900 dark:text-amber-100">
                   Recovery events (backups, snapshots, and replication) are now first-class pages.
                 </p>
               </div>

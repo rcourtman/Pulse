@@ -178,7 +178,7 @@ export const SwarmServicesDrawer: Component<{ cluster: string; swarm?: SwarmInfo
               value={search()}
               onInput={(e) => setSearch(e.currentTarget.value)}
               placeholder="Search services..."
-              class="w-[12rem] rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+              class="w-[12rem] rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
             />
           </div>
         </div>
@@ -210,7 +210,7 @@ export const SwarmServicesDrawer: Component<{ cluster: string; swarm?: SwarmInfo
         </Show>
 
         <Show when={normalize(swarm()?.error)}>
-          <div class="mt-2 rounded border border-amber-200 bg-amber-50/70 px-2 py-1.5 text-[10px] text-amber-800 dark:border-amber-700/50 dark:bg-amber-900/20 dark:text-amber-200">
+          <div class="mt-2 rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-[10px] text-amber-800 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-200">
             {normalize(swarm()?.error)}
           </div>
         </Show>
@@ -249,7 +249,7 @@ export const SwarmServicesDrawer: Component<{ cluster: string; swarm?: SwarmInfo
                       <th class="px-3 py-2 font-medium">Ports</th>
                     </tr>
                   </thead>
-                  <tbody class="divide-y divide-gray-100 dark:divide-gray-700/50">
+                  <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
                     <For each={filteredServices()}>
                       {(svc) => {
                         const name = () => normalize(svc.name) || svc.id;
@@ -262,7 +262,7 @@ export const SwarmServicesDrawer: Component<{ cluster: string; swarm?: SwarmInfo
                         const ports = () => formatPorts(svc.docker?.endpointPorts);
 
                         return (
-                          <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                          <tr class="hover:bg-slate-50 dark:hover:bg-slate-800">
                             <td class="px-3 py-2">
                               <div class="flex items-center gap-2 min-w-0">
                                 <span class={`h-2 w-2 rounded-full ${statusTone(svc.status)}`} title={svc.status || 'unknown'} />

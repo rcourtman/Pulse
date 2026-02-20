@@ -157,7 +157,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
                 {/* Flex layout - items grow to fill space, max ~4 per row */}
                 <div class="flex flex-wrap gap-3 [&>*]:flex-1 [&>*]:basis-[calc(25%-0.75rem)] [&>*]:min-w-[200px] [&>*]:max-w-full [&>*]:overflow-hidden">
                     {/* System Info - always show */}
-                    <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600/70 dark:bg-slate-800">
+                    <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
                         <div class="text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 mb-2">System</div>
                         <div class="space-y-1.5 text-[11px]">
                             <Show when={props.guest.cpus}>
@@ -191,7 +191,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
 
                     {/* Guest Info - OS and IPs */}
                     <Show when={hasOsInfo() || ipAddresses().length > 0}>
-                        <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600/70 dark:bg-slate-800">
+                        <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
                             <div class="text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 mb-2">Guest Info</div>
                             <div class="space-y-2">
                                 <Show when={hasOsInfo()}>
@@ -211,7 +211,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
                                     <div class="flex flex-wrap gap-1">
                                         <For each={ipAddresses()}>
                                             {(ip) => (
-                                                <span class="inline-block rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700 dark:bg-blue-900/40 dark:text-blue-200 max-w-full truncate" title={ip}>
+                                                <span class="inline-block rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700 dark:bg-blue-900 dark:text-blue-200 max-w-full truncate" title={ip}>
                                                     {ip}
                                                 </span>
                                             )}
@@ -224,7 +224,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
 
                     {/* Memory Details */}
                     <Show when={memoryExtraLines() && memoryExtraLines()!.length > 0}>
-                        <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600/70 dark:bg-slate-800">
+                        <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
                             <div class="text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 mb-2">Memory</div>
                             <div class="space-y-1 text-[11px] text-slate-600 dark:text-slate-300">
                                 <For each={memoryExtraLines()!}>{(line) => <div>{line}</div>}</For>
@@ -234,7 +234,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
 
                     {/* Backup Info */}
                     <Show when={props.guest.lastBackup}>
-                        <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600/70 dark:bg-slate-800">
+                        <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
                             <div class="text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 mb-2">Backup</div>
                             <div class="space-y-1 text-[11px]">
                                 {(() => {
@@ -263,7 +263,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
 
                     {/* Tags */}
                     <Show when={props.guest.tags && (Array.isArray(props.guest.tags) ? props.guest.tags.length > 0 : props.guest.tags.length > 0)}>
-                        <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600/70 dark:bg-slate-800">
+                        <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
                             <div class="text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 mb-2">Tags</div>
                             <div class="flex flex-wrap gap-1">
                                 <For each={Array.isArray(props.guest.tags) ? props.guest.tags : (props.guest.tags?.split(',') || [])}>
@@ -279,7 +279,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
 
                     {/* Filesystems */}
                     <Show when={hasFilesystemDetails() && props.guest.disks && props.guest.disks.length > 0}>
-                        <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600/70 dark:bg-slate-800">
+                        <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
                             <div class="text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 mb-2">Filesystems</div>
                             <div class="text-[11px] text-slate-600 dark:text-slate-300">
                                 <DiskList
@@ -292,7 +292,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
 
                     {/* Network Interfaces */}
                     <Show when={hasNetworkInterfaces()}>
-                        <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600/70 dark:bg-slate-800">
+                        <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
                             <div class="text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 mb-2">Network</div>
                             <div class="space-y-2">
                                 <For each={networkInterfaces().slice(0, 4)}>
@@ -311,7 +311,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
                                                     <div class="flex flex-wrap gap-1 mt-1">
                                                         <For each={addresses}>
                                                             {(ip) => (
-                                                                <span class="inline-block rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700 dark:bg-blue-900/40 dark:text-blue-200 max-w-full truncate" title={ip}>
+                                                                <span class="inline-block rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700 dark:bg-blue-900 dark:text-blue-200 max-w-full truncate" title={ip}>
                                                                     {ip}
                                                                 </span>
                                                             )}

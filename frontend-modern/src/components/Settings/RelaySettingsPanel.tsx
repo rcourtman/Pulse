@@ -231,7 +231,7 @@ export const RelaySettingsPanel: Component = () => {
             </div>
           </div>
           <Show when={status()?.last_error}>
-            <div class="mt-2 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded px-2 py-1">
+            <div class="mt-2 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900 rounded px-2 py-1">
               {status()!.last_error}
             </div>
           </Show>
@@ -360,8 +360,8 @@ export const RelaySettingsPanel: Component = () => {
                           <div
                             class={`rounded px-2 py-1 text-xs ${
                               diagnostic.severity === 'error'
-                                ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300'
-                                : 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300'
+                                ? 'bg-red-50 dark:bg-red-900 text-red-700 dark:text-red-300'
+                                : 'bg-amber-50 dark:bg-amber-900 text-amber-700 dark:text-amber-300'
                             }`}
                           >
                             <p class="font-medium">{diagnostic.message}</p>

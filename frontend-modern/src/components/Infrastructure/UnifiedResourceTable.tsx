@@ -410,7 +410,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
     <div class="space-y-4">
       <Show when={showHostTable()}>
         <Card padding="none" tone="card" class="mb-0 overflow-hidden">
-          <div class="border-b border-slate-200/70 bg-slate-50/70 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+          <div class="border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
             Host Infrastructure
           </div>
           <div
@@ -778,7 +778,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
 
       <Show when={sortedPBSResources().length > 0 || sortedPMGResources().length > 0}>
         <Card padding="none" tone="card" class="mb-0 overflow-hidden">
-          <div class="border-b border-slate-200/70 bg-slate-50/70 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+          <div class="border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
             Service Infrastructure
           </div>
 

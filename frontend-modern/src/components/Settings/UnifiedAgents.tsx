@@ -928,14 +928,14 @@ export const UnifiedAgents: Component = () => {
                 bodyClass="space-y-5"
             >
 
-                <div class="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 dark:border-blue-700 dark:bg-blue-900/20 dark:text-blue-100">
+                <div class="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-100">
                     <p class="font-semibold">Unified Agent is the default monitoring gateway.</p>
                     <p class="mt-1 text-xs text-blue-800 dark:text-blue-200">
                         Install it on each host you want Pulse to monitor. The installer auto-detects available platforms on that machine and enables the right integrations.
                     </p>
                 </div>
 
-                <div class="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-100">
+                <div class="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900 dark:text-emerald-100">
                     <div class="flex items-start gap-3">
                         <ProxmoxIcon class="w-5 h-5 text-amber-500 mt-0.5 shrink-0" />
                         <div class="flex-1">
@@ -945,7 +945,7 @@ export const UnifiedAgents: Component = () => {
                             <button
                                 type="button"
                                 onClick={() => navigate('/settings/infrastructure')}
-                                class="mt-2 inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-2 py-1.5 text-sm font-medium text-emerald-800 hover:bg-emerald-100 hover:text-emerald-900 dark:text-emerald-200 dark:hover:bg-emerald-900/30 dark:hover:text-emerald-100 underline"
+                                class="mt-2 inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-2 py-1.5 text-sm font-medium text-emerald-800 hover:bg-emerald-100 hover:text-emerald-900 dark:text-emerald-200 dark:hover:bg-emerald-900 dark:hover:text-emerald-100 underline"
                             >
                                 Prefer API-only? Use manual setup →
                             </button>
@@ -977,7 +977,7 @@ export const UnifiedAgents: Component = () => {
                                         }
                                     }}
                                     placeholder="Token name (optional)"
-                                    class="flex-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-blue-400 dark:focus:ring-blue-900/60"
+                                    class="flex-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-blue-400 dark:focus:ring-blue-900"
                                 />
                                 <button
                                     type="button"
@@ -1203,7 +1203,7 @@ export const UnifiedAgents: Component = () => {
                                                                             <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
                                                                         </svg>
                                                                     </button>
-                                                                    <pre class="overflow-x-auto rounded-md bg-slate-900/90 p-3 pr-12 text-xs text-slate-100">
+                                                                    <pre class="overflow-x-auto rounded-md bg-slate-900 p-3 pr-12 text-xs text-slate-100">
                                                                         <code>{copyCommand()}</code>
                                                                     </pre>
                                                                 </div>
@@ -1336,7 +1336,7 @@ export const UnifiedAgents: Component = () => {
                                                 notificationStore.error('Failed to copy');
                                             }
                                         }}
-                                        class="absolute right-2 top-2 inline-flex min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 items-center justify-center rounded-md bg-slate-700/50 p-2 text-slate-400 transition-colors hover:bg-slate-700 hover:text-slate-200"
+                                        class="absolute right-2 top-2 inline-flex min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 items-center justify-center rounded-md bg-slate-700 p-2 text-slate-400 transition-colors hover:bg-slate-700 hover:text-slate-200"
                                         title="Copy command"
                                     >
                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1363,7 +1363,7 @@ export const UnifiedAgents: Component = () => {
                                                 notificationStore.error('Failed to copy');
                                             }
                                         }}
-                                        class="absolute right-2 top-2 inline-flex min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 items-center justify-center rounded-md bg-slate-700/50 p-2 text-slate-400 transition-colors hover:bg-slate-700 hover:text-slate-200"
+                                        class="absolute right-2 top-2 inline-flex min-h-10 sm:min-h-9 min-w-10 sm:min-w-9 items-center justify-center rounded-md bg-slate-700 p-2 text-slate-400 transition-colors hover:bg-slate-700 hover:text-slate-200"
                                         title="Copy command"
                                     >
                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

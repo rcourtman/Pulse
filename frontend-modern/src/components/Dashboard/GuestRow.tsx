@@ -97,9 +97,9 @@ const isVM = (guest: Guest): guest is VM => {
 
 // Backup status indicator colors and icons
 const BACKUP_STATUS_CONFIG: Record<BackupStatus, { color: string; bgColor: string; icon: 'check' | 'warning' | 'x' }> = {
-  fresh: { color: 'text-green-600 dark:text-green-400', bgColor: 'bg-green-100 dark:bg-green-900/40', icon: 'check' },
-  stale: { color: 'text-yellow-600 dark:text-yellow-400', bgColor: 'bg-yellow-100 dark:bg-yellow-900/40', icon: 'warning' },
-  critical: { color: 'text-red-600 dark:text-red-400', bgColor: 'bg-red-100 dark:bg-red-900/40', icon: 'x' },
+  fresh: { color: 'text-green-600 dark:text-green-400', bgColor: 'bg-green-100 dark:bg-green-900', icon: 'check' },
+  stale: { color: 'text-yellow-600 dark:text-yellow-400', bgColor: 'bg-yellow-100 dark:bg-yellow-900', icon: 'warning' },
+  critical: { color: 'text-red-600 dark:text-red-400', bgColor: 'bg-red-100 dark:bg-red-900', icon: 'x' },
   never: { color: 'text-slate-400 dark:text-slate-500', bgColor: 'bg-slate-100 dark:bg-slate-800', icon: 'x' },
 };
 
@@ -183,7 +183,7 @@ function NetworkInfoCell(props: { ipAddresses: string[]; networkInterfaces: Gues
           <Show when={hasInterfaces()}>
             <For each={props.networkInterfaces}>
               {(iface, idx) => (
-                <div class="py-1" classList={{ 'border-t border-slate-700/50': idx() > 0 }}>
+                <div class="py-1" classList={{ 'border-t border-slate-700': idx() > 0 }}>
                   <div class="flex items-center gap-2 text-blue-400 font-medium">
                     <span>{iface.name || 'eth' + idx()}</span>
                     <Show when={iface.mac}>
@@ -304,7 +304,7 @@ function OSInfoCell(props: { osName: string; osVersion: string; agentVersion: st
               <div class="text-slate-400">Version: {props.osVersion}</div>
             </Show>
             <Show when={props.agentVersion}>
-              <div class="text-slate-500 text-[9px] mt-1 pt-1 border-t border-slate-700/50">
+              <div class="text-slate-500 text-[9px] mt-1 pt-1 border-t border-slate-700">
                 Agent: {props.agentVersion}
               </div>
             </Show>
@@ -368,7 +368,7 @@ function BackupStatusCell(props: { lastBackup: string | number | null | undefine
                 {new Date(props.lastBackup!).toLocaleTimeString()}
               </div>
             </div>
-            <div class="pt-1 mt-1 border-t border-slate-700/50">
+            <div class="pt-1 mt-1 border-t border-slate-700">
               <span class={config().color}>{info().ageFormatted} ago</span>
             </div>
           </Show>
@@ -729,12 +729,12 @@ export function GuestRow(props: GuestRowProps) {
     const hover = 'hover:shadow-sm';
     const alertBg = hasUnacknowledgedAlert()
       ? props.alertStyles?.severity === 'critical'
-        ? 'bg-red-50 dark:bg-red-950/30'
-        : 'bg-yellow-50 dark:bg-yellow-950/20'
+        ? 'bg-red-50 dark:bg-red-950'
+        : 'bg-yellow-50 dark:bg-yellow-950'
       : 'bg-white dark:bg-slate-800';
     const defaultHover = hasUnacknowledgedAlert()
       ? ''
-      : 'hover:bg-slate-50 dark:hover:bg-slate-700/30';
+      : 'hover:bg-slate-50 dark:hover:bg-slate-700';
     const stoppedDimming = !isRunning() ? 'opacity-60' : '';
     return `${base} ${hover} ${defaultHover} ${alertBg} ${stoppedDimming}`;
   });

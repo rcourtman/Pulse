@@ -26,19 +26,19 @@ const raidStateTextClass = (state?: string) => {
 const deviceToneClass = (device: HostRAIDDevice) => {
   const s = normalize(device.state);
   if (s === 'active' || s === 'in_sync' || s === 'online') {
-    return 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-200 dark:border-emerald-800/40';
+    return 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900 dark:text-emerald-200 dark:border-emerald-800';
   }
   if (s.includes('fail') || s.includes('fault') || s.includes('offline') || s.includes('removed')) {
-    return 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-200 dark:border-red-800/40';
+    return 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900 dark:text-red-200 dark:border-red-800';
   }
-  return 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-200 dark:border-amber-800/40';
+  return 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900 dark:text-amber-200 dark:border-amber-800';
 };
 
 export const RaidCard: Component<RaidCardProps> = (props) => {
   if (!props.arrays || props.arrays.length === 0) return null;
 
   return (
-    <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600/70 dark:bg-slate-800">
+    <div class="rounded border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
       <div class="text-[11px] font-medium uppercase tracking-wide text-slate-700 dark:text-slate-200 mb-2">
         {props.title || 'RAID'}
       </div>

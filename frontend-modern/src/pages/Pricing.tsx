@@ -199,7 +199,7 @@ export default function Pricing() {
 
         <Card
           padding="lg"
-          class="relative overflow-hidden ring-2 ring-blue-600 dark:ring-blue-500 border-blue-200 dark:border-blue-900/40"
+          class="relative overflow-hidden ring-2 ring-blue-600 dark:ring-blue-500 border-blue-200 dark:border-blue-900"
         >
           <div class="absolute right-4 top-4">
             <span class="inline-flex items-center rounded-full bg-blue-600 px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm">
@@ -250,7 +250,7 @@ export default function Pricing() {
           </ul>
           <div class="mt-6">
             <a
-              class="w-full inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700/60"
+              class="w-full inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
               href={getUpgradeActionUrlOrFallback('cloud')}
               target="_blank"
               rel="noopener noreferrer"
@@ -281,7 +281,7 @@ export default function Pricing() {
                 </th>
               </tr>
             </thead>
-            <tbody class="bg-white dark:bg-slate-800 divide-y divide-gray-100 dark:divide-gray-700/70">
+            <tbody class="bg-white dark:bg-slate-800 divide-y divide-gray-100 dark:divide-gray-700">
               <For each={FEATURE_ROWS}>
                 {(row) => (
                   <tr>

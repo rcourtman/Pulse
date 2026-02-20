@@ -151,9 +151,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const controlTone = createMemo(() => {
     switch (controlLevel()) {
       case 'autonomous':
-        return 'border-red-200 text-red-700 bg-red-50 dark:border-red-800 dark:text-red-200 dark:bg-red-900/20';
+        return 'border-red-200 text-red-700 bg-red-50 dark:border-red-800 dark:text-red-200 dark:bg-red-900';
       case 'controlled':
-        return 'border-amber-200 text-amber-700 bg-amber-50 dark:border-amber-800 dark:text-amber-200 dark:bg-amber-900/20';
+        return 'border-amber-200 text-amber-700 bg-amber-50 dark:border-amber-800 dark:text-amber-200 dark:bg-amber-900';
       default:
         return 'border-slate-200 text-slate-600 bg-white dark:border-slate-700 dark:text-slate-200 dark:bg-slate-800';
     }
@@ -773,21 +773,21 @@ export const AIChat: Component<AIChatProps> = (props) => {
                     Control mode for this chat
                   </div>
                   <button
-                    class={`w-full text-left px-3 py-2.5 text-xs hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors ${controlLevel() === 'read_only' ? 'bg-slate-50 dark:bg-slate-800' : ''}`}
+                    class={`w-full text-left px-3 py-2.5 text-xs hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors ${controlLevel() === 'read_only' ? 'bg-slate-50 dark:bg-slate-800' : ''}`}
                     onClick={() => updateControlLevel('read_only')}
                   >
                     <div class="font-medium text-slate-800 dark:text-slate-200">Read-only</div>
                     <div class="text-[11px] text-slate-500 dark:text-slate-400">No commands or control actions</div>
                   </button>
                   <button
-                    class={`w-full text-left px-3 py-2.5 text-xs hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors ${controlLevel() === 'controlled' ? 'bg-amber-50 dark:bg-amber-900/20' : ''}`}
+                    class={`w-full text-left px-3 py-2.5 text-xs hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors ${controlLevel() === 'controlled' ? 'bg-amber-50 dark:bg-amber-900' : ''}`}
                     onClick={() => updateControlLevel('controlled')}
                   >
                     <div class="font-medium text-slate-800 dark:text-slate-200">Approval</div>
                     <div class="text-[11px] text-slate-500 dark:text-slate-400">Ask before running commands</div>
                   </button>
                   <button
-                    class={`w-full text-left px-3 py-2.5 text-xs hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors ${controlLevel() === 'autonomous' ? 'bg-red-50 dark:bg-red-900/20' : ''}`}
+                    class={`w-full text-left px-3 py-2.5 text-xs hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors ${controlLevel() === 'autonomous' ? 'bg-red-50 dark:bg-red-900' : ''}`}
                     onClick={() => updateControlLevel('autonomous')}
                   >
                     <div class="font-medium text-slate-800 dark:text-slate-200">Autonomous</div>
@@ -827,7 +827,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 >
                   <button
                     onClick={handleNewConversation}
-                    class="w-full px-3 py-2.5 text-left text-sm flex items-center gap-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 border-b border-slate-200 dark:border-slate-700"
+                    class="w-full px-3 py-2.5 text-left text-sm flex items-center gap-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900 border-b border-slate-200 dark:border-slate-700"
                   >
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -844,7 +844,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                       <For each={sessions()}>
                         {(session) => (
                           <div
-                            class={`group relative px-3 py-2.5 flex items-start gap-2 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer ${chat.sessionId() === session.id ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
+                            class={`group relative px-3 py-2.5 flex items-start gap-2 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer ${chat.sessionId() === session.id ? 'bg-blue-50 dark:bg-blue-900' : ''}`}
                             onClick={() => handleLoadSession(session.id)}
                           >
                             <div class="flex-1 min-w-0">
@@ -857,7 +857,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                             </div>
                             <button
                               type="button"
-                              class="flex-shrink-0 p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-red-100 dark:hover:bg-red-900/30 text-slate-400 hover:text-red-500 transition-opacity"
+                              class="flex-shrink-0 p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-red-100 dark:hover:bg-red-900 text-slate-400 hover:text-red-500 transition-opacity"
                               onClick={(e) => handleDeleteSession(session.id, e)}
                             >
                               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -890,7 +890,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
         </div>
 
         <Show when={controlLevel() === 'autonomous' && !autonomousBannerDismissed()}>
-          <div class="px-4 py-2 border-b border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 flex items-center justify-between gap-3 text-[11px] text-red-700 dark:text-red-200">
+          <div class="px-4 py-2 border-b border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900 flex items-center justify-between gap-3 text-[11px] text-red-700 dark:text-red-200">
             <div class="flex items-center gap-2">
               <span class="inline-flex h-2 w-2 rounded-full bg-red-500" />
               <span class="font-medium">Autonomous mode</span>
@@ -899,13 +899,13 @@ export const AIChat: Component<AIChatProps> = (props) => {
             <div class="flex items-center gap-2">
               <button
                 onClick={() => updateControlLevel('controlled')}
-                class="px-2 py-1 rounded-md border border-red-200 dark:border-red-800 bg-white dark:bg-red-900/30 text-[10px] font-medium text-red-700 dark:text-red-200 hover:bg-white dark:hover:bg-red-900/40"
+                class="px-2 py-1 rounded-md border border-red-200 dark:border-red-800 bg-white dark:bg-red-900 text-[10px] font-medium text-red-700 dark:text-red-200 hover:bg-white dark:hover:bg-red-900"
               >
                 Switch to Approval
               </button>
               <button
                 onClick={() => setAutonomousBannerDismissed(true)}
-                class="p-1 rounded-md text-red-400 hover:text-red-600 dark:hover:text-red-200 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"
+                class="p-1 rounded-md text-red-400 hover:text-red-600 dark:hover:text-red-200 hover:bg-red-100 dark:hover:bg-red-900 transition-colors"
                 title="Dismiss"
               >
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -918,7 +918,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
         {/* Discovery hint - show when discovery is disabled */}
         <Show when={discoveryEnabled() === false && !discoveryHintDismissed()}>
-          <div class="px-4 py-2 border-b border-cyan-200 dark:border-cyan-800 bg-cyan-50 dark:bg-cyan-900/20 flex items-center justify-between gap-3 text-[11px] text-cyan-700 dark:text-cyan-200">
+          <div class="px-4 py-2 border-b border-cyan-200 dark:border-cyan-800 bg-cyan-50 dark:bg-cyan-900 flex items-center justify-between gap-3 text-[11px] text-cyan-700 dark:text-cyan-200">
             <div class="flex items-center gap-2">
               <svg class="w-4 h-4 text-cyan-500 dark:text-cyan-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -930,7 +930,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
             </div>
             <button
               onClick={() => setDiscoveryHintDismissed(true)}
-              class="p-1 rounded hover:bg-cyan-100 dark:hover:bg-cyan-800/50 text-cyan-500 dark:text-cyan-400"
+              class="p-1 rounded hover:bg-cyan-100 dark:hover:bg-cyan-800 text-cyan-500 dark:text-cyan-400"
               title="Dismiss"
             >
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

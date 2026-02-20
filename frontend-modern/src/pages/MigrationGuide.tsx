@@ -81,7 +81,7 @@ export function MigrationGuide() {
               <th class="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">Status</th>
             </tr>
           </thead>
-          <tbody class="bg-white dark:bg-slate-800 divide-y divide-gray-100 dark:divide-gray-700/70">
+          <tbody class="bg-white dark:bg-slate-800 divide-y divide-gray-100 dark:divide-gray-700">
             <For each={ROUTE_MAPPINGS}>
               {(item) => (
                 <tr>

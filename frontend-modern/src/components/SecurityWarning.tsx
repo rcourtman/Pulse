@@ -121,8 +121,8 @@ export const SecurityWarning: Component = () => {
     <Portal>
       <div
         class={`fixed top-0 left-0 right-0 z-50 border-b shadow-sm ${status()!.publicAccess && !status()!.hasAuthentication
-          ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
-          : 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800'
+          ? 'bg-red-50 dark:bg-red-900 border-red-200 dark:border-red-800'
+          : 'bg-yellow-50 dark:bg-yellow-900 border-yellow-200 dark:border-yellow-800'
           }`}
       >
         <div class="max-w-7xl mx-auto px-4 py-3">

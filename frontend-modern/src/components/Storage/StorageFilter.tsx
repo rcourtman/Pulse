@@ -166,7 +166,7 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
                   id="storage-source-filter"
                   value={props.sourceFilter!()}
                   onChange={(e) => props.setSourceFilter!(e.currentTarget.value)}
-                  class="min-w-[8rem] rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                  class="min-w-[8rem] rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                 >
                   {sourceOptions().map((option) => (
                     <option value={option.key}>{option.label}</option>
@@ -183,7 +183,7 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
                 id="storage-status-filter"
                 value={props.statusFilter?.() ?? 'all'}
                 onChange={(e) => props.setStatusFilter?.(e.currentTarget.value as StorageStatusFilter)}
-                class="min-w-[8rem] rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                class="min-w-[8rem] rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
               >
                 <option value="all">All</option>
                 <option value="available">Healthy</option>
@@ -203,7 +203,7 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
               onChange={(e) => props.setSortKey(e.currentTarget.value)}
               disabled={props.sortDisabled}
               aria-label="Sort By"
-              class="px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+              class="px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               {sortOptions.map((option) => (
                 <option value={option.value}>{option.label}</option>
@@ -257,7 +257,7 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
                 if (props.setSourceFilter) props.setSourceFilter('all');
               }}
               title="Reset all filters"
-              class="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/50 hover:bg-blue-200 dark:hover:bg-blue-900/70"
+              class="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900 hover:bg-blue-200 dark:hover:bg-blue-900"
             >
               <svg
                 width="12"

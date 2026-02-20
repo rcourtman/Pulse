@@ -26,7 +26,7 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
             setCopied(true);
             setTimeout(() => setCopied(false), 2000);
             showSuccess('Command copied to clipboard');
-        } catch (err) {
+        } catch (_err) {
             showError('Failed to copy command');
         }
     };
@@ -97,19 +97,19 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
                 <img
                     src="/logo.svg"
                     alt="Pulse Logo"
-                    class="w-24 h-24 rounded-lg mb-8 mx-auto animate-pulse-logo dark:shadow-none"
+                    class="w-24 h-24 rounded-md mb-8 mx-auto animate-pulse-logo dark:shadow-none"
                 />
                 <h1 class="text-4xl sm:text-5xl font-bold tracking-tight text-slate-900 dark:text-white mb-4 animate-fade-in delay-100">
                     Welcome to Pulse
                 </h1>
-                <p class="text-xl text-slate-500 dark:text-blue-200/80 font-light animate-fade-in delay-200 max-w-md mx-auto">
+                <p class="text-xl text-slate-500 dark:text-blue-200 font-light animate-fade-in delay-200 max-w-md mx-auto">
                     Unified infrastructure intelligence
                 </p>
             </div>
 
             {/* Bootstrap token unlock */}
             <Show when={!props.isUnlocked}>
-                <div class="p-8 max-w-lg mx-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-left animate-slide-up delay-300 relative group">
+                <div class="p-8 max-w-lg mx-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md text-left animate-slide-up delay-300 relative group">
                     <div class="relative z-10">
                         <h3 class="text-xl font-semibold text-slate-900 dark:text-white mb-2 tracking-tight">Unlock Setup</h3>
                         <p class="text-sm text-slate-500 dark:text-slate-300 mb-6">
@@ -117,14 +117,14 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
                         </p>
 
                         <div class="mb-8">
-                            <div class="bg-slate-900 rounded-lg p-4 font-mono text-sm text-emerald-400 border border-slate-800 flex items-center justify-between">
+                            <div class="bg-slate-900 rounded-md p-4 font-mono text-sm text-emerald-400 border border-slate-800 flex items-center justify-between">
                                 <div class="flex items-center space-x-3 overflow-x-auto scrollbar-hide">
                                     <Terminal class="w-4 h-4 text-slate-500 flex-shrink-0" />
                                     <code class="whitespace-nowrap select-all">{getTokenCommand()}</code>
                                 </div>
                                 <button
                                     onClick={copyCommand}
-                                    class="ml-4 flex-shrink-0 p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-all focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                                    class="ml-4 flex-shrink-0 p-2 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-all focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     title="Copy command"
                                 >
                                     <Show when={copied()} fallback={<Copy class="w-4 h-4" />}>
@@ -151,7 +151,7 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
                                     }
                                 }}
                                 onKeyPress={(e) => e.key === 'Enter' && handleUnlock()}
-                                class="w-full px-5 py-3.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all font-mono"
+                                class="w-full px-5 py-3.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-mono"
                                 placeholder="Paste your bootstrap token"
                                 autofocus
                             />
@@ -159,7 +159,7 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
                             <button
                                 onClick={handleUnlock}
                                 disabled={isValidating() || !props.bootstrapToken.trim()}
-                                class="w-full py-3.5 px-6 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:bg-slate-300 dark:disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-all flex justify-center items-center gap-2 duration-200"
+                                class="w-full py-3.5 px-6 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:bg-slate-300 dark:disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed text-white font-medium rounded-md transition-all flex justify-center items-center gap-2 duration-200"
                             >
                                 {isValidating() ? (
                                     <>
@@ -180,7 +180,7 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
                 <div class="animate-enter delay-200">
                     <button
                         onClick={props.onNext}
-                        class="py-4 px-10 bg-blue-600 hover:bg-blue-700 text-white text-lg font-medium rounded-lg transition-all duration-300 hover:-translate-y-1"
+                        class="py-4 px-10 bg-blue-600 hover:bg-blue-700 text-white text-lg font-medium rounded-md transition-all duration-300 hover:-translate-y-1"
                     >
                         Get Started →
                     </button>

@@ -81,13 +81,13 @@ const StatusBadge: Component<{ status: string; health?: string }> = (props) => {
   const statusInfo = createMemo(() => {
     const status = (props.health || props.status || '').toLowerCase();
     if (status.includes('healthy') || status === 'online') {
-      return { bg: 'bg-green-100 dark:bg-green-900/30', text: 'text-green-700 dark:text-green-400', dot: 'bg-green-500', label: 'Healthy' };
+      return { bg: 'bg-green-100 dark:bg-green-900', text: 'text-green-700 dark:text-green-400', dot: 'bg-green-500', label: 'Healthy' };
     }
     if (status.includes('degraded') || status.includes('warning')) {
-      return { bg: 'bg-yellow-100 dark:bg-yellow-900/30', text: 'text-yellow-700 dark:text-yellow-400', dot: 'bg-yellow-500', label: 'Degraded' };
+      return { bg: 'bg-yellow-100 dark:bg-yellow-900', text: 'text-yellow-700 dark:text-yellow-400', dot: 'bg-yellow-500', label: 'Degraded' };
     }
     if (status.includes('error') || status === 'offline') {
-      return { bg: 'bg-red-100 dark:bg-red-900/30', text: 'text-red-700 dark:text-red-400', dot: 'bg-red-500', label: 'Offline' };
+      return { bg: 'bg-red-100 dark:bg-red-900', text: 'text-red-700 dark:text-red-400', dot: 'bg-red-500', label: 'Offline' };
     }
     return { bg: 'bg-slate-100 dark:bg-slate-800', text: 'text-slate-600 dark:text-slate-400', dot: 'bg-slate-400', label: status || 'Unknown' };
   });
@@ -333,7 +333,7 @@ const MailGateway: Component = () => {
                     ~{formatNum(Math.round(aggregateStats().totalMail / 24))}/hr
                   </div>
                 </div>
-                <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-md">
+                <div class="p-2 bg-blue-100 dark:bg-blue-900 rounded-md">
                   <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
                   </svg>
@@ -353,7 +353,7 @@ const MailGateway: Component = () => {
                     {formatCompact(aggregateStats().totalSpam)} caught
                   </div>
                 </div>
-                <div class={`p-2 rounded-md ${aggregateStats().spamRate > 50 ? 'bg-orange-100 dark:bg-orange-900/30' : 'bg-orange-100 dark:bg-orange-900/30'}`}>
+                <div class={`p-2 rounded-md ${aggregateStats().spamRate > 50 ? 'bg-orange-100 dark:bg-orange-900' : 'bg-orange-100 dark:bg-orange-900'}`}>
                   <svg class="w-5 h-5 text-orange-600 dark:text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
                   </svg>
@@ -373,7 +373,7 @@ const MailGateway: Component = () => {
                     blocked today
                   </div>
                 </div>
-                <div class={`p-2 rounded-md ${aggregateStats().totalVirus > 0 ? 'bg-red-100 dark:bg-red-900/30' : 'bg-slate-100 dark:bg-slate-800'}`}>
+                <div class={`p-2 rounded-md ${aggregateStats().totalVirus > 0 ? 'bg-red-100 dark:bg-red-900' : 'bg-slate-100 dark:bg-slate-800'}`}>
                   <svg class={`w-5 h-5 ${aggregateStats().totalVirus > 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m0-10.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.75c0 5.592 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.57-.598-3.75h-.152c-3.196 0-6.1-1.249-8.25-3.286zm0 13.036h.008v.008H12v-.008z" />
                   </svg>
@@ -393,7 +393,7 @@ const MailGateway: Component = () => {
                     items held
                   </div>
                 </div>
-                <div class="p-2 bg-yellow-100 dark:bg-yellow-900/30 rounded-md">
+                <div class="p-2 bg-yellow-100 dark:bg-yellow-900 rounded-md">
                   <svg class="w-5 h-5 text-yellow-600 dark:text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5m6 4.125l2.25 2.25m0 0l2.25 2.25M12 13.875l2.25-2.25M12 13.875l-2.25 2.25M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
                   </svg>
@@ -416,7 +416,7 @@ const MailGateway: Component = () => {
                     {aggregateStats().totalQueue === 0 ? 'all clear' : 'pending'}
                   </div>
                 </div>
-                <div class={`p-2 rounded-md ${aggregateStats().totalQueue > 50 ? 'bg-yellow-100 dark:bg-yellow-900/30' : 'bg-green-100 dark:bg-green-900/30'
+                <div class={`p-2 rounded-md ${aggregateStats().totalQueue > 50 ? 'bg-yellow-100 dark:bg-yellow-900' : 'bg-green-100 dark:bg-green-900'
                   }`}>
                   <svg class={`w-5 h-5 ${aggregateStats().totalQueue > 50 ? 'text-yellow-600 dark:text-yellow-400' : 'text-green-600 dark:text-green-400'
                     }`} fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
@@ -437,7 +437,7 @@ const MailGateway: Component = () => {
                   placeholder="Search gateways..."
                   value={searchTerm()}
                   onInput={(e) => setSearchTerm(e.currentTarget.value)}
-                  class="w-full pl-9 pr-8 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:focus:border-blue-400 outline-none transition-all"
+                  class="w-full pl-9 pr-8 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:focus:border-blue-400 outline-none transition-all"
                 />
                 <svg class="absolute left-3 top-2 h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -539,7 +539,7 @@ const MailGateway: Component = () => {
                   return (
                     <Card padding="none" tone="card" class="overflow-hidden">
                       {/* Instance Header */}
-                      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 py-3 bg-slate-50/50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+                      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 py-3 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
                         <div class="flex items-center gap-3">
                           <a
                             href={pmg.host || `https://${pmg.name}:8006`}
@@ -606,20 +606,20 @@ const MailGateway: Component = () => {
                           </div>
 
                           {/* Threats */}
-                          <div class="bg-orange-50 dark:bg-orange-900/20 rounded-md p-3">
+                          <div class="bg-orange-50 dark:bg-orange-900 rounded-md p-3">
                             <div class="text-xs text-orange-600 dark:text-orange-400 mb-1">Spam</div>
                             <div class="text-lg font-bold text-orange-600 dark:text-orange-400">{formatCompact(stats().spam)}</div>
-                            <div class="text-[10px] text-orange-500/70">{formatPct(stats().spamPct)} rate</div>
+                            <div class="text-[10px] text-orange-500">{formatPct(stats().spamPct)} rate</div>
                           </div>
-                          <div class="bg-red-50 dark:bg-red-900/20 rounded-md p-3">
+                          <div class="bg-red-50 dark:bg-red-900 rounded-md p-3">
                             <div class="text-xs text-red-600 dark:text-red-400 mb-1">Viruses</div>
                             <div class="text-lg font-bold text-red-600 dark:text-red-400">{formatCompact(stats().virus)}</div>
-                            <div class="text-[10px] text-red-500/70">{formatPct(stats().virusPct)} rate</div>
+                            <div class="text-[10px] text-red-500">{formatPct(stats().virusPct)} rate</div>
                           </div>
-                          <div class="bg-yellow-50 dark:bg-yellow-900/20 rounded-md p-3">
+                          <div class="bg-yellow-50 dark:bg-yellow-900 rounded-md p-3">
                             <div class="text-xs text-yellow-600 dark:text-yellow-400 mb-1">Quarantine</div>
                             <div class="text-lg font-bold text-yellow-600 dark:text-yellow-400">{formatCompact(stats().qTotal)}</div>
-                            <div class="text-[10px] text-yellow-500/70">{formatPct(stats().quarantinePct)} of inbound</div>
+                            <div class="text-[10px] text-yellow-500">{formatPct(stats().quarantinePct)} of inbound</div>
                           </div>
                         </div>
 
@@ -669,13 +669,13 @@ const MailGateway: Component = () => {
                                     <th class="pb-1.5 font-medium">Queue</th>
                                   </tr>
                                 </thead>
-                                <tbody class="divide-y divide-gray-100 dark:divide-gray-700/50">
+                                <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
                                   <For each={pmg.nodes}>
                                     {(node) => {
                                       const isOnline = (node.status || '').toLowerCase() === 'online';
 
                                       return (
-                                        <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                                        <tr class="hover:bg-slate-50 dark:hover:bg-slate-800">
                                           <td class="py-1.5 font-medium text-slate-900 dark:text-slate-100">{node.name}</td>
                                           <td class="py-1.5">
                                             <span class={`inline-flex items-center gap-1 ${isOnline ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>

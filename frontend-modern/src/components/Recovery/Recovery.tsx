@@ -55,9 +55,9 @@ const MODE_LABELS: Record<ArtifactMode, string> = {
 };
 
 const MODE_BADGE_CLASS: Record<ArtifactMode, string> = {
-  snapshot: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-300',
-  local: 'bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300',
-  remote: 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300',
+  snapshot: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300',
+  local: 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300',
+  remote: 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300',
 };
 
 const CHART_SEGMENT_CLASS: Record<ArtifactMode, string> = {
@@ -67,10 +67,10 @@ const CHART_SEGMENT_CLASS: Record<ArtifactMode, string> = {
 };
 
 const OUTCOME_BADGE_CLASS: Record<KnownOutcome, string> = {
-  success: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
-  warning: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300',
-  failed: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
-  running: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+  success: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
+  warning: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300',
+  failed: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
+  running: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
   unknown: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
 };
 
@@ -1021,7 +1021,7 @@ const Recovery: Component = () => {
                     onClick={() => setProtectedStaleOnly((v) => !v)}
                     class={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${
                       protectedStaleOnly()
-                        ? 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-100'
+                        ? 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-100'
                         : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'
                     }`}
                   >
@@ -1029,13 +1029,13 @@ const Recovery: Component = () => {
                   </button>
 
                   <Show when={rollupsSummary().stale > 0}>
-                    <span class="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-100">
+                    <span class="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900 dark:text-amber-100">
                       {rollupsSummary().stale} stale
                     </span>
                   </Show>
 
                   <Show when={rollupsSummary().neverSucceeded > 0}>
-                    <span class="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-medium text-rose-700 dark:bg-rose-900/40 dark:text-rose-200">
+                    <span class="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-medium text-rose-700 dark:bg-rose-900 dark:text-rose-200">
                       {rollupsSummary().neverSucceeded} never succeeded
                     </span>
                   </Show>
@@ -1108,7 +1108,7 @@ const Recovery: Component = () => {
                       const neverSucceeded = (!Number.isFinite(successMs) || successMs <= 0) && Number.isFinite(attemptMs) && attemptMs > 0;
                       return (
                         <tr
-                          class="cursor-pointer border-b border-slate-200 hover:bg-slate-50/70 dark:border-slate-700 dark:hover:bg-slate-800/35"
+                          class="cursor-pointer border-b border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800/35"
                           onClick={() => {
                             setView('events');
                             setRollupId(r.rollupId);
@@ -1130,10 +1130,10 @@ const Recovery: Component = () => {
                             <div class="flex items-center gap-2">
                               <span class="truncate">{label}</span>
                               <Show when={neverSucceeded}>
-                                <span class="whitespace-nowrap rounded px-1 py-0.5 text-[10px] font-medium text-amber-700 bg-amber-50 dark:text-amber-300 dark:bg-amber-900/30">never succeeded</span>
+                                <span class="whitespace-nowrap rounded px-1 py-0.5 text-[10px] font-medium text-amber-700 bg-amber-50 dark:text-amber-300 dark:bg-amber-900">never succeeded</span>
                               </Show>
                               <Show when={!neverSucceeded && stale}>
-                                <span class="whitespace-nowrap rounded px-1 py-0.5 text-[10px] font-medium text-amber-700 bg-amber-50 dark:text-amber-300 dark:bg-amber-900/30">stale</span>
+                                <span class="whitespace-nowrap rounded px-1 py-0.5 text-[10px] font-medium text-amber-700 bg-amber-50 dark:text-amber-300 dark:bg-amber-900">stale</span>
                               </Show>
                             </div>
                           </td>
@@ -1194,7 +1194,7 @@ const Recovery: Component = () => {
             <Show when={selectedDateKey() || activeClusterLabel() || activeNodeLabel() || activeNamespaceLabel()}>
               <div class="mb-1 flex flex-wrap items-center gap-1.5">
                 <Show when={selectedDateKey()}>
-                  <div class="inline-flex max-w-full items-center gap-1 rounded border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] text-blue-700 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-200">
+                  <div class="inline-flex max-w-full items-center gap-1 rounded border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] text-blue-700 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200">
                     <span class="font-medium uppercase tracking-wide">Day</span>
                     <span class="truncate font-mono text-[10px]" title={selectedDateLabel()}>
                       {selectedDateLabel()}
@@ -1205,14 +1205,14 @@ const Recovery: Component = () => {
                         setSelectedDateKey(null);
                         setCurrentPage(1);
                       }}
-                      class="rounded px-1 py-0.5 text-[10px] hover:bg-blue-100 dark:hover:bg-blue-900/50"
+                      class="rounded px-1 py-0.5 text-[10px] hover:bg-blue-100 dark:hover:bg-blue-900"
                     >
                       Clear
                     </button>
                   </div>
                 </Show>
                 <Show when={activeClusterLabel()}>
-                  <div class="inline-flex max-w-full items-center gap-1 rounded border border-cyan-200 bg-cyan-50 px-2 py-0.5 text-[10px] text-cyan-700 dark:border-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-200">
+                  <div class="inline-flex max-w-full items-center gap-1 rounded border border-cyan-200 bg-cyan-50 px-2 py-0.5 text-[10px] text-cyan-700 dark:border-cyan-700 dark:bg-cyan-900 dark:text-cyan-200">
                     <span class="font-medium uppercase tracking-wide">Cluster</span>
                     <span class="truncate font-mono text-[10px]" title={activeClusterLabel()}>
                       {activeClusterLabel()}
@@ -1223,14 +1223,14 @@ const Recovery: Component = () => {
                         setClusterFilter('all');
                         setCurrentPage(1);
                       }}
-                      class="rounded px-1 py-0.5 text-[10px] hover:bg-cyan-100 dark:hover:bg-cyan-900/50"
+                      class="rounded px-1 py-0.5 text-[10px] hover:bg-cyan-100 dark:hover:bg-cyan-900"
                     >
                       Clear
                     </button>
                   </div>
                 </Show>
                 <Show when={activeNodeLabel()}>
-                  <div class="inline-flex max-w-full items-center gap-1 rounded border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] text-emerald-700 dark:border-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200">
+                  <div class="inline-flex max-w-full items-center gap-1 rounded border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] text-emerald-700 dark:border-emerald-700 dark:bg-emerald-900 dark:text-emerald-200">
                     <span class="font-medium uppercase tracking-wide">Node/Host</span>
                     <span class="truncate font-mono text-[10px]" title={activeNodeLabel()}>
                       {activeNodeLabel()}
@@ -1241,7 +1241,7 @@ const Recovery: Component = () => {
                         setNodeFilter('all');
                         setCurrentPage(1);
                       }}
-                      class="rounded px-1 py-0.5 text-[10px] hover:bg-emerald-100 dark:hover:bg-emerald-900/50"
+                      class="rounded px-1 py-0.5 text-[10px] hover:bg-emerald-100 dark:hover:bg-emerald-900"
                     >
                       Clear
                     </button>
@@ -1250,7 +1250,7 @@ const Recovery: Component = () => {
                 <Show when={activeNamespaceLabel()}>
                   <div
                     data-testid="active-namespace-chip"
-                    class="inline-flex max-w-full items-center gap-1 rounded border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] text-violet-700 dark:border-violet-700 dark:bg-violet-900/30 dark:text-violet-200"
+                    class="inline-flex max-w-full items-center gap-1 rounded border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] text-violet-700 dark:border-violet-700 dark:bg-violet-900 dark:text-violet-200"
                   >
                     <span class="font-medium uppercase tracking-wide">Namespace</span>
                     <span class="truncate font-mono text-[10px]" title={activeNamespaceLabel()}>
@@ -1262,7 +1262,7 @@ const Recovery: Component = () => {
                         setNamespaceFilter('all');
                         setCurrentPage(1);
                       }}
-                      class="rounded px-1 py-0.5 text-[10px] hover:bg-violet-100 dark:hover:bg-violet-900/50"
+                      class="rounded px-1 py-0.5 text-[10px] hover:bg-violet-100 dark:hover:bg-violet-900"
                     >
                       Clear
                     </button>
@@ -1311,8 +1311,8 @@ const Recovery: Component = () => {
                         }}
                         class={`rounded px-2 py-1 ${
                           chartRangeDays() === range
-                            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-200'
-                            : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700/60'
+                            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
+                            : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700'
                         }`}
                       >
                         {range === 365 ? '1y' : `${range}d`}
@@ -1339,7 +1339,7 @@ const Recovery: Component = () => {
                           const bottom = timeline().axisMax > 0 ? (tick / timeline().axisMax) * 100 : 0;
                           return (
                             <div
-                              class="pointer-events-none absolute inset-x-0 border-t border-slate-200/80 dark:border-slate-700/70"
+                              class="pointer-events-none absolute inset-x-0 border-t border-slate-200 dark:border-slate-700"
                               style={{ bottom: `${bottom}%` }}
                             />
                           );
@@ -1383,7 +1383,7 @@ const Recovery: Component = () => {
                               <button
                                 type="button"
                                 class={`h-full w-full rounded-sm ${
-                                  isSelected ? 'bg-blue-100 dark:bg-blue-900/30' : 'hover:bg-slate-200 dark:hover:bg-slate-700/70'
+                                  isSelected ? 'bg-blue-100 dark:bg-blue-900' : 'hover:bg-slate-200 dark:hover:bg-slate-700'
                                 }`}
                                 aria-label={`${prettyDateLabel(point.key)}: ${total} recovery points`}
                                 onClick={() => {
@@ -1688,7 +1688,7 @@ const Recovery: Component = () => {
                       <button
                         type="button"
                         onClick={resetAllArtifactFilters}
-                        class="shrink-0 rounded-md bg-blue-100 px-2.5 py-1.5 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:hover:bg-blue-900/60"
+                        class="shrink-0 rounded-md bg-blue-100 px-2.5 py-1.5 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-200 dark:bg-blue-900 dark:text-blue-300 dark:hover:bg-blue-900"
                       >
                         Clear
                       </button>
@@ -1862,7 +1862,7 @@ const Recovery: Component = () => {
                               <div class="flex items-center gap-2">
                                 <span>{group.label}</span>
                                 <Show when={group.tone === 'recent'}>
-                                  <span class="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
+                                  <span class="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900 dark:text-blue-200">
                                     recent
                                   </span>
                                 </Show>
@@ -1891,7 +1891,7 @@ const Recovery: Component = () => {
 
                               return (
                                 <tr
-                                  class="cursor-pointer border-b border-slate-200 hover:bg-slate-50/70 dark:border-slate-700 dark:hover:bg-slate-800/35"
+                                  class="cursor-pointer border-b border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800/35"
                                   onClick={() => setSelectedPoint(p)}
                                 >
                                   <For each={mobileVisibleArtifactColumns()}>

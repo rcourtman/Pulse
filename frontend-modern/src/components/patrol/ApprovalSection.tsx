@@ -102,9 +102,9 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
 
   const riskBadgeColor = (level?: string) => {
     switch (level) {
-      case 'high': case 'critical': return 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300';
-      case 'medium': return 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300';
-      default: return 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300';
+      case 'high': case 'critical': return 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300';
+      case 'medium': return 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300';
+      default: return 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300';
     }
   };
 
@@ -249,7 +249,7 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
                   <span class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${riskBadgeColor(fix.risk_level)}`}>
                     {fix.risk_level || 'unknown'} risk
                   </span>
-                  <span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+                  <span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300">
                     approval expired
                   </span>
                 </div>

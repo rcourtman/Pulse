@@ -38,8 +38,8 @@ export const QuestionCard: Component<QuestionCardProps> = (props) => {
   return (
     <div class="rounded-md border border-blue-300 dark:border-blue-700 overflow-hidden shadow-sm">
       {/* Header */}
-      <div class="px-3 py-2 text-xs font-medium flex items-center gap-2 bg-blue-50 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 border-b border-blue-200 dark:border-blue-800">
-        <div class="p-1 rounded bg-blue-100 dark:bg-blue-800/50">
+      <div class="px-3 py-2 text-xs font-medium flex items-center gap-2 bg-blue-50 dark:bg-blue-900 text-blue-800 dark:text-blue-200 border-b border-blue-200 dark:border-blue-800">
+        <div class="p-1 rounded bg-blue-100 dark:bg-blue-800">
           <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
@@ -48,7 +48,7 @@ export const QuestionCard: Component<QuestionCardProps> = (props) => {
       </div>
 
       {/* Questions */}
-      <div class="px-3 py-3 bg-blue-50/50 dark:bg-blue-900/10 space-y-4">
+      <div class="px-3 py-3 bg-blue-50 dark:bg-blue-900 space-y-4">
         <For each={props.question.questions}>
           {(q) => (
             <div class="space-y-2">
@@ -83,7 +83,7 @@ export const QuestionCard: Component<QuestionCardProps> = (props) => {
                         class={`w-full px-3 py-2 text-sm text-left rounded-md border transition-colors ${
                           answers()[q.id] === option.value
                             ? 'bg-blue-100 dark:bg-blue-800 border-blue-400 dark:border-blue-600 text-blue-800 dark:text-blue-200'
-                            : 'bg-white dark:bg-slate-800 border-blue-200 dark:border-blue-700 text-slate-700 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-blue-900/30'
+                            : 'bg-white dark:bg-slate-800 border-blue-200 dark:border-blue-700 text-slate-700 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-blue-900'
                         } ${props.question.isAnswering ? 'opacity-50 cursor-not-allowed' : ''}`}
                       >
                         <div class="flex flex-col gap-0.5">
