@@ -673,8 +673,8 @@ func (r *Router) handleVerifyTemperatureSSH(w http.ResponseWriter, req *http.Req
 		}
 	}
 
-	// Require settings:write scope for API tokens (SSH probes are a privileged operation)
-	if !ensureScope(w, req, config.ScopeSettingsWrite) {
+	// Require admin session identity or settings:write token for privileged SSH probes.
+	if !ensureSettingsWriteScope(r.config, w, req) {
 		return
 	}
 
@@ -724,8 +724,8 @@ func (r *Router) handleSSHConfig(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	// Require settings:write scope for API tokens (SSH config writes are a privileged operation)
-	if !ensureScope(w, req, config.ScopeSettingsWrite) {
+	// Require admin session identity or settings:write token for privileged SSH config writes.
+	if !ensureSettingsWriteScope(r.config, w, req) {
 		return
 	}
 
@@ -4005,7 +4005,7 @@ func (r *Router) handleResetLockout(w http.ResponseWriter, req *http.Request) {
 
 	// Use RequireAdmin to ensure proper admin checks (including proxy auth) for session users
 	RequireAdmin(r.config, func(w http.ResponseWriter, req *http.Request) {
-		if !ensureSettingsWriteScope(w, req) {
+		if !ensureSettingsWriteScope(r.config, w, req) {
 			return
 		}
 

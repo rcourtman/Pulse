@@ -3104,6 +3104,52 @@ func TestApplyRestartRequiresProxyAdmin(t *testing.T) {
 	}
 }
 
+func TestPrivilegedSecurityEndpointsRejectNonAdminSession(t *testing.T) {
+	hashed, err := auth.HashPassword("Password!1")
+	if err != nil {
+		t.Fatalf("HashPassword: %v", err)
+	}
+
+	cfg := newTestConfigWithTokens(t)
+	cfg.AuthUser = "admin"
+	cfg.AuthPass = hashed
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	sessionToken := "security-member-session-" + strconv.FormatInt(time.Now().UnixNano(), 10)
+	GetSessionStore().CreateSession(sessionToken, time.Hour, "agent", "127.0.0.1", "member")
+	csrfToken := generateCSRFToken(sessionToken)
+
+	tests := []struct {
+		method string
+		path   string
+		body   string
+	}{
+		{method: http.MethodPost, path: "/api/security/apply-restart", body: `{}`},
+		{method: http.MethodPost, path: "/api/security/regenerate-token", body: `{}`},
+		{method: http.MethodPost, path: "/api/security/validate-token", body: `{"token":"abc"}`},
+		{method: http.MethodPost, path: "/api/security/reset-lockout", body: `{"identifier":"admin"}`},
+		{method: http.MethodPost, path: "/api/system/verify-temperature-ssh", body: `{}`},
+		{method: http.MethodPost, path: "/api/system/ssh-config", body: `{}`},
+	}
+
+	for _, tc := range tests {
+		req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
+		req.RemoteAddr = "127.0.0.1:1234"
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-CSRF-Token", csrfToken)
+		req.AddCookie(&http.Cookie{Name: "pulse_session", Value: sessionToken})
+
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected 403 for non-admin session on %s %s, got %d: %s", tc.method, tc.path, rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), "Admin privileges required") {
+			t.Fatalf("expected admin privilege error on %s %s, got %q", tc.method, tc.path, rec.Body.String())
+		}
+	}
+}
+
 func TestVerifyTemperatureSSHRequiresAuthInAPIMode(t *testing.T) {
 	record := newTokenRecord(t, "verify-ssh-token-123.12345678", []string{config.ScopeSettingsWrite}, nil)
 	cfg := newTestConfigWithTokens(t, record)

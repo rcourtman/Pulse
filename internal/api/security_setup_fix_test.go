@@ -434,13 +434,60 @@ func TestEnsureSettingsWriteScopeWithValidScope(t *testing.T) {
 	attachAPITokenRecord(req, record)
 
 	rr := httptest.NewRecorder()
-	result := ensureSettingsWriteScope(rr, req)
+	result := ensureSettingsWriteScope(cfg, rr, req)
 
 	if !result {
 		t.Error("ensureSettingsWriteScope should return true when token has settings:write scope")
 	}
 	if rr.Code != http.StatusOK {
 		t.Errorf("expected no error response, got status %d", rr.Code)
+	}
+}
+
+func TestEnsureSettingsWriteScopeRejectsNonAdminSession(t *testing.T) {
+	cfg := &config.Config{
+		AuthUser: "admin",
+	}
+
+	sessionToken := "settings-write-member-" + time.Now().Format("150405.000000000")
+	GetSessionStore().CreateSession(sessionToken, time.Hour, "agent", "127.0.0.1", "member")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/security/test", nil)
+	req.AddCookie(&http.Cookie{Name: "pulse_session", Value: sessionToken})
+
+	rr := httptest.NewRecorder()
+	result := ensureSettingsWriteScope(cfg, rr, req)
+
+	if result {
+		t.Fatal("ensureSettingsWriteScope should reject non-admin session users")
+	}
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for non-admin session, got %d", rr.Code)
+	}
+	if !strings.Contains(rr.Body.String(), "Admin privileges required") {
+		t.Fatalf("expected admin privileges error, got %q", rr.Body.String())
+	}
+}
+
+func TestEnsureSettingsWriteScopeAllowsConfiguredAdminSession(t *testing.T) {
+	cfg := &config.Config{
+		AuthUser: "admin",
+	}
+
+	sessionToken := "settings-write-admin-" + time.Now().Format("150405.000000001")
+	GetSessionStore().CreateSession(sessionToken, time.Hour, "agent", "127.0.0.1", "admin")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/security/test", nil)
+	req.AddCookie(&http.Cookie{Name: "pulse_session", Value: sessionToken})
+
+	rr := httptest.NewRecorder()
+	result := ensureSettingsWriteScope(cfg, rr, req)
+
+	if !result {
+		t.Fatal("ensureSettingsWriteScope should allow configured admin session users")
+	}
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 for admin session, got %d", rr.Code)
 	}
 }
 

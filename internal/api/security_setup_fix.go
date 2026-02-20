@@ -52,21 +52,40 @@ func isRunningAsRoot() bool {
 	return os.Geteuid() == 0
 }
 
-func ensureSettingsWriteScope(w http.ResponseWriter, req *http.Request) bool {
+func ensureSettingsWriteScope(cfg *config.Config, w http.ResponseWriter, req *http.Request) bool {
 	record := getAPITokenRecordFromRequest(req)
-	if record == nil {
-		return true
+	if record != nil {
+		if record.HasScope(config.ScopeSettingsWrite) {
+			return true
+		}
+
+		log.Warn().
+			Str("token_id", record.ID).
+			Str("path", req.URL.Path).
+			Msg("API token missing settings:write scope for privileged operation")
+		respondMissingScope(w, config.ScopeSettingsWrite)
+		return false
 	}
-	if record.HasScope(config.ScopeSettingsWrite) {
+
+	// Session users must match configured admin identity for privileged operations.
+	if cookie, err := req.Cookie("pulse_session"); err == nil && cookie.Value != "" && ValidateSession(cookie.Value) {
+		sessionUser := strings.TrimSpace(GetSessionUsername(cookie.Value))
+		configuredAdmin := ""
+		if cfg != nil {
+			configuredAdmin = strings.TrimSpace(cfg.AuthUser)
+		}
+		if configuredAdmin == "" || !strings.EqualFold(sessionUser, configuredAdmin) {
+			log.Warn().
+				Str("path", req.URL.Path).
+				Str("user", sessionUser).
+				Msg("Session user missing admin privileges for settings write operation")
+			http.Error(w, "Admin privileges required", http.StatusForbidden)
+			return false
+		}
 		return true
 	}
 
-	log.Warn().
-		Str("token_id", record.ID).
-		Str("path", req.URL.Path).
-		Msg("API token missing settings:write scope for privileged operation")
-	respondMissingScope(w, config.ScopeSettingsWrite)
-	return false
+	return true
 }
 
 // handleQuickSecuritySetupFixed is the fixed version of the Quick Security Setup
@@ -220,7 +239,7 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 			return
 		}
 
-		if authorized && !ensureSettingsWriteScope(w, req) {
+		if authorized && !ensureSettingsWriteScope(r.config, w, req) {
 			return
 		}
 
@@ -548,7 +567,7 @@ func (r *Router) HandleRegenerateAPIToken(w http.ResponseWriter, rq *http.Reques
 		}
 	}
 
-	if !ensureSettingsWriteScope(w, rq) {
+	if !ensureSettingsWriteScope(r.config, w, rq) {
 		return
 	}
 
@@ -678,7 +697,7 @@ func (r *Router) HandleValidateAPIToken(w http.ResponseWriter, rq *http.Request)
 		}
 	}
 
-	if !ensureSettingsWriteScope(w, rq) {
+	if !ensureSettingsWriteScope(r.config, w, rq) {
 		return
 	}
 

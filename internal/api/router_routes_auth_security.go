@@ -406,7 +406,7 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 					}
 				}
 				// Require settings:write scope for API tokens
-				if !ensureSettingsWriteScope(w, req) {
+				if !ensureSettingsWriteScope(r.config, w, req) {
 					return
 				}
 			}
