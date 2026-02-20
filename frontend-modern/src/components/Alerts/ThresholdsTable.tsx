@@ -2711,11 +2711,11 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
 
       {/* Help Banner - Dismissible */}
       <Show when={!helpBannerDismissed()}>
-        <div class="rounded-md border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30 p-3 relative group">
+        <div class="rounded-md border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-900 p-3 relative group">
           <button
             type="button"
             onClick={dismissHelpBanner}
-            class="absolute top-2 right-2 p-1 rounded-md text-blue-400 hover:text-blue-600 dark:text-blue-500 dark:hover:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 opacity-0 group-hover:opacity-100 transition-opacity"
+            class="absolute top-2 right-2 p-1 rounded-md text-blue-400 hover:text-blue-600 dark:text-blue-500 dark:hover:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900 opacity-0 group-hover:opacity-100 transition-opacity"
             title="Dismiss tips"
             aria-label="Dismiss tips"
           >
@@ -2739,12 +2739,12 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
             </svg>
             <div class="text-sm text-blue-900 dark:text-blue-100">
               <span class="font-medium">Quick tips:</span> Set any threshold to{' '}
-              <code class="px-1 py-0.5 bg-blue-100 dark:bg-blue-900/50 rounded text-xs font-mono">
+              <code class="px-1 py-0.5 bg-blue-100 dark:bg-blue-900 rounded text-xs font-mono">
                 0
               </code>{' '}
               to disable alerts for that metric. Click on disabled thresholds showing{' '}
               <span class="italic">Off</span> to re-enable them. Resources with custom settings show a{' '}
-              <span class="inline-flex items-center px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded text-xs">
+              <span class="inline-flex items-center px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded text-xs">
                 Custom
               </span>{' '}
               badge. <span class="text-blue-600/70 dark:text-blue-400/70">Click sections to collapse/expand.</span>
@@ -3200,7 +3200,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                         }
                       }}
                       rows={5}
-                      class="mt-3 w-full rounded-md border border-slate-300 bg-white p-3 text-sm text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-sky-400 dark:focus:ring-sky-600/40"
+                      class="mt-3 w-full rounded-md border border-slate-300 bg-white p-3 text-sm text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-sky-400 dark:focus:ring-sky-600"
                       placeholder="100\n200\n10*"
                     />
                   </div>
@@ -3549,7 +3549,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
               }}
               placeholder="runner-"
               rows={4}
-              class="mt-4 w-full rounded-md border border-slate-300 bg-white p-3 text-sm text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-sky-400 dark:focus:ring-sky-600/40"
+              class="mt-4 w-full rounded-md border border-slate-300 bg-white p-3 text-sm text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-sky-400 dark:focus:ring-sky-600"
             />
           </Card>
 
@@ -3596,7 +3596,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                     }));
                     props.setHasUnsavedChanges(true);
                   }}
-                  class="mt-1 w-full rounded-md border border-slate-300 bg-white p-2 text-sm text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-sky-400 dark:focus:ring-sky-600/40"
+                  class="mt-1 w-full rounded-md border border-slate-300 bg-white p-2 text-sm text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-sky-400 dark:focus:ring-sky-600"
                 />
                 <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
                   Convert to warning when at least this percentage of replicas are missing.
@@ -3624,7 +3624,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                     }));
                     props.setHasUnsavedChanges(true);
                   }}
-                  class="mt-1 w-full rounded-md border border-slate-300 bg-white p-2 text-sm text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-sky-400 dark:focus:ring-sky-600/40"
+                  class="mt-1 w-full rounded-md border border-slate-300 bg-white p-2 text-sm text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-sky-400 dark:focus:ring-sky-600"
                 />
                 <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
                   Raise a critical alert when the missing replica gap meets or exceeds this value.
