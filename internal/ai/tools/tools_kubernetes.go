@@ -512,7 +512,7 @@ func (e *PulseToolExecutor) executeKubernetesScale(ctx context.Context, args map
 	approvalTargetID := fmt.Sprintf("%s:%s:deployment:%s", clusterScope, namespace, deployment)
 
 	// Check if pre-approved (validated + single-use).
-	preApproved := consumeApprovalWithValidation(args, command, "kubernetes", approvalTargetID)
+	preApproved := consumeApprovalWithValidation(args, e.orgID, command, "kubernetes", approvalTargetID)
 
 	// Request approval if needed
 	if !preApproved && !e.isAutonomous && e.controlLevel == ControlLevelControlled {
@@ -592,7 +592,7 @@ func (e *PulseToolExecutor) executeKubernetesRestart(ctx context.Context, args m
 	approvalTargetID := fmt.Sprintf("%s:%s:deployment:%s", clusterScope, namespace, deployment)
 
 	// Check if pre-approved (validated + single-use).
-	preApproved := consumeApprovalWithValidation(args, command, "kubernetes", approvalTargetID)
+	preApproved := consumeApprovalWithValidation(args, e.orgID, command, "kubernetes", approvalTargetID)
 
 	// Request approval if needed
 	if !preApproved && !e.isAutonomous && e.controlLevel == ControlLevelControlled {
@@ -672,7 +672,7 @@ func (e *PulseToolExecutor) executeKubernetesDeletePod(ctx context.Context, args
 	approvalTargetID := fmt.Sprintf("%s:%s:pod:%s", clusterScope, namespace, pod)
 
 	// Check if pre-approved (validated + single-use).
-	preApproved := consumeApprovalWithValidation(args, command, "kubernetes", approvalTargetID)
+	preApproved := consumeApprovalWithValidation(args, e.orgID, command, "kubernetes", approvalTargetID)
 
 	// Request approval if needed
 	if !preApproved && !e.isAutonomous && e.controlLevel == ControlLevelControlled {
@@ -762,7 +762,7 @@ func (e *PulseToolExecutor) executeKubernetesExec(ctx context.Context, args map[
 	approvalTargetID := fmt.Sprintf("%s:%s:pod:%s", clusterScope, namespace, pod)
 
 	// Check if pre-approved (validated + single-use).
-	preApproved := consumeApprovalWithValidation(args, kubectlCmd, "kubernetes", approvalTargetID)
+	preApproved := consumeApprovalWithValidation(args, e.orgID, kubectlCmd, "kubernetes", approvalTargetID)
 
 	// Request approval if needed
 	if !preApproved && !e.isAutonomous && e.controlLevel == ControlLevelControlled {

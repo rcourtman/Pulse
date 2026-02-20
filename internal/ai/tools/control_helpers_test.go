@@ -60,6 +60,62 @@ func TestIsPreApproved(t *testing.T) {
 	assert.True(t, isPreApproved(map[string]interface{}{"_approval_id": "app-1"}))
 }
 
+func TestConsumeApprovalWithValidation_RejectsCrossOrg(t *testing.T) {
+	store, err := approval.NewStore(approval.StoreConfig{
+		DataDir:            t.TempDir(),
+		DisablePersistence: true,
+	})
+	require.NoError(t, err)
+	approval.SetStore(store)
+	defer approval.SetStore(nil)
+
+	req := &approval.ApprovalRequest{
+		ID:         "app-1",
+		OrgID:      "org-a",
+		Command:    "ls",
+		TargetType: "host",
+		TargetID:   "h1",
+	}
+	require.NoError(t, store.CreateApproval(req))
+	_, err = store.Approve("app-1", "tester")
+	require.NoError(t, err)
+
+	ok := consumeApprovalWithValidation(map[string]interface{}{"_approval_id": "app-1"}, "org-b", "ls", "host", "h1")
+	assert.False(t, ok)
+
+	stored, found := store.GetApproval("app-1")
+	require.True(t, found)
+	assert.False(t, stored.Consumed)
+}
+
+func TestConsumeApprovalWithValidation_AllowsMatchingOrg(t *testing.T) {
+	store, err := approval.NewStore(approval.StoreConfig{
+		DataDir:            t.TempDir(),
+		DisablePersistence: true,
+	})
+	require.NoError(t, err)
+	approval.SetStore(store)
+	defer approval.SetStore(nil)
+
+	req := &approval.ApprovalRequest{
+		ID:         "app-2",
+		OrgID:      "org-a",
+		Command:    "ls",
+		TargetType: "host",
+		TargetID:   "h1",
+	}
+	require.NoError(t, store.CreateApproval(req))
+	_, err = store.Approve("app-2", "tester")
+	require.NoError(t, err)
+
+	ok := consumeApprovalWithValidation(map[string]interface{}{"_approval_id": "app-2"}, "org-a", "ls", "host", "h1")
+	assert.True(t, ok)
+
+	stored, found := store.GetApproval("app-2")
+	require.True(t, found)
+	assert.True(t, stored.Consumed)
+}
+
 func TestFormattingHelpers(t *testing.T) {
 	t.Run("formatApprovalNeeded", func(t *testing.T) {
 		payload := decodePayload(t, formatApprovalNeeded("ls", "ok", "id-1"), "APPROVAL_REQUIRED: ")

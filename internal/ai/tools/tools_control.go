@@ -153,7 +153,7 @@ func (e *PulseToolExecutor) executeRunCommand(ctx context.Context, args map[stri
 
 	// Check if this is a pre-approved execution with command hash validation.
 	// This validates the approval matches this exact command+target and marks it as consumed.
-	preApproved := consumeApprovalWithValidation(args, command, approvalTargetType, approvalTargetID)
+	preApproved := consumeApprovalWithValidation(args, e.orgID, command, approvalTargetType, approvalTargetID)
 
 	// Skip approval checks if pre-approved or in autonomous mode.
 	if !preApproved && !e.isAutonomous && e.controlLevel == ControlLevelControlled {
@@ -328,7 +328,7 @@ func (e *PulseToolExecutor) executeControlGuest(ctx context.Context, args map[st
 
 	// Check if this is a pre-approved execution (agentic loop re-executing after user approval).
 	// Use consumeApprovalWithValidation to enforce command-bound, single-use approvals.
-	preApproved := consumeApprovalWithValidation(args, command, guest.Type, approvalTargetID)
+	preApproved := consumeApprovalWithValidation(args, e.orgID, command, guest.Type, approvalTargetID)
 
 	// Check security policy (skip if pre-approved)
 	if !preApproved && e.policy != nil {
@@ -999,7 +999,7 @@ func isPreApproved(args map[string]interface{}) bool {
 // consumeApprovalWithValidation validates and consumes an approval for a specific command.
 // It verifies the command hash matches the approval and marks it as consumed (single-use).
 // Returns true if the approval is valid and was consumed, false otherwise.
-func consumeApprovalWithValidation(args map[string]interface{}, command, targetType, targetID string) bool {
+func consumeApprovalWithValidation(args map[string]interface{}, orgID, command, targetType, targetID string) bool {
 	approvalID, ok := args["_approval_id"].(string)
 	if !ok || approvalID == "" {
 		return false
@@ -1007,6 +1007,21 @@ func consumeApprovalWithValidation(args map[string]interface{}, command, targetT
 
 	store := approval.GetStore()
 	if store == nil {
+		return false
+	}
+
+	req, found := store.GetApproval(approvalID)
+	if !found {
+		log.Warn().Str("approval_id", approvalID).Msg("failed to find approval for pre-approved execution")
+		return false
+	}
+
+	if !approval.BelongsToOrg(req, orgID) {
+		log.Warn().
+			Str("approval_id", approvalID).
+			Str("request_org", approval.NormalizeOrgID(req.OrgID)).
+			Str("requested_org", approval.NormalizeOrgID(orgID)).
+			Msg("cross-org pre-approved execution rejected")
 		return false
 	}
 

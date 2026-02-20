@@ -128,7 +128,7 @@ func (e *PulseToolExecutor) executeDockerControl(ctx context.Context, args map[s
 	}
 
 	// Check if this is a pre-approved execution (validated + single-use).
-	preApproved := consumeApprovalWithValidation(args, command, "docker", approvalTargetID)
+	preApproved := consumeApprovalWithValidation(args, e.orgID, command, "docker", approvalTargetID)
 
 	// Get the agent hostname for approval records
 	agentHostname := e.getAgentHostnameForDockerHost(dockerHost)
