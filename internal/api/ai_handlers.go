@@ -2821,8 +2821,55 @@ func (h *AISettingsHandler) SetAlertResolver(resolver ai.AlertResolver) {
 
 // oauthSessions stores active OAuth sessions (state -> session)
 // In production, consider using a more robust session store with expiry
-var oauthSessions = make(map[string]*providers.OAuthSession)
+type oauthSessionBinding struct {
+	session *providers.OAuthSession
+	orgID   string
+}
+
+const oauthSessionTTL = 15 * time.Minute
+
+var oauthSessions = make(map[string]*oauthSessionBinding)
 var oauthSessionsMu sync.Mutex
+var exchangeOAuthCodeForTokens = providers.ExchangeCodeForTokens
+var createAPIKeyFromOAuth = providers.CreateAPIKeyFromOAuth
+
+func storeOAuthSession(session *providers.OAuthSession, orgID string) {
+	oauthSessionsMu.Lock()
+	defer oauthSessionsMu.Unlock()
+
+	cutoff := time.Now().Add(-oauthSessionTTL)
+	for state, binding := range oauthSessions {
+		if binding == nil || binding.session == nil || binding.session.CreatedAt.Before(cutoff) {
+			delete(oauthSessions, state)
+		}
+	}
+
+	oauthSessions[session.State] = &oauthSessionBinding{
+		session: session,
+		orgID:   orgID,
+	}
+}
+
+func consumeOAuthSession(state string) (*oauthSessionBinding, bool) {
+	oauthSessionsMu.Lock()
+	binding, ok := oauthSessions[state]
+	if ok {
+		delete(oauthSessions, state) // One-time use
+	}
+	oauthSessionsMu.Unlock()
+
+	if !ok || binding == nil || binding.session == nil {
+		return nil, false
+	}
+	if time.Since(binding.session.CreatedAt) > oauthSessionTTL {
+		return nil, false
+	}
+	if !isValidOrganizationID(binding.orgID) {
+		return nil, false
+	}
+
+	return binding, true
+}
 
 // HandleOAuthStart initiates the OAuth flow for Claude Pro/Max subscription (POST /api/ai/oauth/start)
 // Returns an authorization URL for the user to visit manually
@@ -2840,22 +2887,20 @@ func (h *AISettingsHandler) HandleOAuthStart(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Store session (with cleanup of old sessions)
-	oauthSessionsMu.Lock()
-	// Clean up sessions older than 15 minutes
-	for state, s := range oauthSessions {
-		if time.Since(s.CreatedAt) > 15*time.Minute {
-			delete(oauthSessions, state)
-		}
+	orgID := strings.TrimSpace(GetOrgID(r.Context()))
+	if !isValidOrganizationID(orgID) {
+		orgID = "default"
 	}
-	oauthSessions[session.State] = session
-	oauthSessionsMu.Unlock()
+
+	// Store session, bound to the tenant context that initiated OAuth.
+	storeOAuthSession(session, orgID)
 
 	// Get authorization URL
 	authURL := providers.GetAuthorizationURL(session)
 
 	log.Info().
 		Str("state", safePrefixForLog(session.State, 8)+"...").
+		Str("org_id", orgID).
 		Str("verifier_len", fmt.Sprintf("%d", len(session.CodeVerifier))).
 		Str("auth_url", authURL).
 		Msg("Starting Claude OAuth flow - user must visit URL and paste code back")
@@ -2908,25 +2953,22 @@ func (h *AISettingsHandler) HandleOAuthExchange(w http.ResponseWriter, r *http.R
 		Str("state_prefix", req.State[:min(8, len(req.State))]).
 		Msg("Processing OAuth code exchange")
 
-	// Look up session
-	oauthSessionsMu.Lock()
-	session, ok := oauthSessions[req.State]
-	if ok {
-		delete(oauthSessions, req.State) // One-time use
-	}
-	oauthSessionsMu.Unlock()
+	// Consume one-time OAuth session and enforce TTL.
+	binding, ok := consumeOAuthSession(req.State)
 
 	if !ok {
 		log.Error().Str("state", req.State[:min(8, len(req.State))]+"...").Msg("OAuth exchange with unknown state")
 		http.Error(w, "Invalid or expired session. Please start the OAuth flow again.", http.StatusBadRequest)
 		return
 	}
+	orgID := binding.orgID
+	oauthCtx := context.WithValue(r.Context(), OrgIDContextKey, orgID)
 
 	// Exchange code for tokens
-	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(oauthCtx, 30*time.Second)
 	defer cancel()
 
-	tokens, err := providers.ExchangeCodeForTokens(ctx, code, session)
+	tokens, err := exchangeOAuthCodeForTokens(ctx, code, binding.session)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to exchange OAuth code for tokens")
 		http.Error(w, "Failed to exchange authorization code: "+err.Error(), http.StatusBadRequest)
@@ -2936,7 +2978,7 @@ func (h *AISettingsHandler) HandleOAuthExchange(w http.ResponseWriter, r *http.R
 	// Try to create an API key from the OAuth access token
 	// Team/Enterprise users get org:create_api_key scope and can create API keys
 	// Pro/Max users don't have this scope and will use OAuth tokens directly
-	apiKey, err := providers.CreateAPIKeyFromOAuth(ctx, tokens.AccessToken)
+	apiKey, err := createAPIKeyFromOAuth(ctx, tokens.AccessToken)
 	if err != nil {
 		// Check if it's a permission error (Pro/Max users)
 		if strings.Contains(err.Error(), "org:create_api_key") || strings.Contains(err.Error(), "403") {
@@ -2954,7 +2996,12 @@ func (h *AISettingsHandler) HandleOAuthExchange(w http.ResponseWriter, r *http.R
 	}
 
 	// Load existing settings
-	settings, err := h.getPersistence(r.Context()).LoadAIConfig()
+	persistence := h.getPersistence(oauthCtx)
+	if persistence == nil {
+		http.Error(w, "Tenant persistence unavailable", http.StatusInternalServerError)
+		return
+	}
+	settings, err := persistence.LoadAIConfig()
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to load Pulse Assistant settings for OAuth")
 		settings = config.NewDefaultAIConfig()
@@ -2980,14 +3027,14 @@ func (h *AISettingsHandler) HandleOAuthExchange(w http.ResponseWriter, r *http.R
 	}
 
 	// Save settings
-	if err := h.getPersistence(r.Context()).SaveAIConfig(*settings); err != nil {
+	if err := persistence.SaveAIConfig(*settings); err != nil {
 		log.Error().Err(err).Msg("Failed to save OAuth tokens")
 		http.Error(w, "Failed to save OAuth credentials", http.StatusInternalServerError)
 		return
 	}
 
 	// Reload the AI service with new settings
-	if err := h.GetAIService(r.Context()).Reload(); err != nil {
+	if err := h.GetAIService(oauthCtx).Reload(); err != nil {
 		log.Warn().Err(err).Msg("Failed to reload AI service after OAuth setup")
 	}
 
@@ -3034,25 +3081,22 @@ func (h *AISettingsHandler) HandleOAuthCallback(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	// Look up session
-	oauthSessionsMu.Lock()
-	session, ok := oauthSessions[state]
-	if ok {
-		delete(oauthSessions, state) // One-time use
-	}
-	oauthSessionsMu.Unlock()
+	// Consume one-time OAuth session and enforce TTL.
+	binding, ok := consumeOAuthSession(state)
 
 	if !ok {
 		log.Error().Str("state", state).Msg("OAuth callback with unknown state")
 		http.Redirect(w, r, "/settings?ai_oauth_error=invalid_state", http.StatusTemporaryRedirect)
 		return
 	}
+	orgID := binding.orgID
+	oauthCtx := context.WithValue(r.Context(), OrgIDContextKey, orgID)
 
 	// Exchange code for tokens
-	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(oauthCtx, 30*time.Second)
 	defer cancel()
 
-	tokens, err := providers.ExchangeCodeForTokens(ctx, code, session)
+	tokens, err := exchangeOAuthCodeForTokens(ctx, code, binding.session)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to exchange OAuth code for tokens")
 		http.Redirect(w, r, "/settings?ai_oauth_error=token_exchange_failed", http.StatusTemporaryRedirect)
@@ -3060,7 +3104,12 @@ func (h *AISettingsHandler) HandleOAuthCallback(w http.ResponseWriter, r *http.R
 	}
 
 	// Load existing settings
-	settings, err := h.getPersistence(r.Context()).LoadAIConfig()
+	persistence := h.getPersistence(oauthCtx)
+	if persistence == nil {
+		http.Redirect(w, r, "/settings?ai_oauth_error=save_failed", http.StatusTemporaryRedirect)
+		return
+	}
+	settings, err := persistence.LoadAIConfig()
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to load Pulse Assistant settings for OAuth")
 		settings = config.NewDefaultAIConfig()
@@ -3080,14 +3129,14 @@ func (h *AISettingsHandler) HandleOAuthCallback(w http.ResponseWriter, r *http.R
 	settings.ClearAPIKey()
 
 	// Save settings
-	if err := h.getPersistence(r.Context()).SaveAIConfig(*settings); err != nil {
+	if err := persistence.SaveAIConfig(*settings); err != nil {
 		log.Error().Err(err).Msg("Failed to save OAuth tokens")
 		http.Redirect(w, r, "/settings?ai_oauth_error=save_failed", http.StatusTemporaryRedirect)
 		return
 	}
 
 	// Reload the AI service with new settings
-	if err := h.GetAIService(r.Context()).Reload(); err != nil {
+	if err := h.GetAIService(oauthCtx).Reload(); err != nil {
 		log.Warn().Err(err).Msg("Failed to reload AI service after OAuth setup")
 	}
 
