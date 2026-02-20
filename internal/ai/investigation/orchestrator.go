@@ -102,6 +102,7 @@ type Approval struct {
 	FindingID   string    `json:"finding_id"`
 	SessionID   string    `json:"session_id"`
 	Description string    `json:"description"`
+	TargetHost  string    `json:"target_host,omitempty"`
 	Command     string    `json:"command"`
 	RiskLevel   string    `json:"risk_level"`
 	CreatedAt   time.Time `json:"created_at"`
@@ -738,6 +739,7 @@ func (o *Orchestrator) processResult(ctx context.Context, investigation *Investi
 				FindingID:   finding.ID,
 				SessionID:   investigation.SessionID,
 				Description: fix.Description,
+				TargetHost:  fix.TargetHost,
 				Command:     strings.Join(fix.Commands, "\n"),
 				RiskLevel:   fix.RiskLevel,
 				CreatedAt:   time.Now(),

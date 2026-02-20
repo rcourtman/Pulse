@@ -4944,10 +4944,40 @@ func (h *AISettingsHandler) executeInvestigationFix(w http.ResponseWriter, r *ht
 		return
 	}
 
-	// Get target host from the proposed fix and clean it up
-	var targetHost string
+	// Resolve target host. Prefer the approved target host stored with the approval request.
+	// Legacy approvals may have TargetName as a free-text description; ignore those and
+	// fall back to the investigation's proposed fix target.
+	approvedTargetHost := ""
+	if raw := strings.TrimSpace(req.TargetName); raw != "" && !strings.ContainsAny(raw, " \t\r\n") {
+		approvedTargetHost = h.cleanTargetHost(raw)
+	}
+
+	sessionTargetHost := ""
 	if session.ProposedFix != nil {
-		targetHost = h.cleanTargetHost(session.ProposedFix.TargetHost)
+		sessionTargetHost = h.cleanTargetHost(session.ProposedFix.TargetHost)
+	}
+
+	// Fail closed on drift: if the approved target and latest investigation target differ,
+	// do not execute until a fresh approval is requested.
+	if approvedTargetHost != "" && sessionTargetHost != "" && !strings.EqualFold(approvedTargetHost, sessionTargetHost) {
+		log.Warn().
+			Str("findingID", findingID).
+			Str("approved_target", approvedTargetHost).
+			Str("current_target", sessionTargetHost).
+			Msg("Investigation fix target drift detected; blocking execution")
+		writeErrorResponse(
+			w,
+			http.StatusConflict,
+			"target_mismatch",
+			fmt.Sprintf("Approved target '%s' no longer matches current investigation target '%s'. Re-run investigation and request approval again.", approvedTargetHost, sessionTargetHost),
+			nil,
+		)
+		return
+	}
+
+	targetHost := approvedTargetHost
+	if targetHost == "" {
+		targetHost = sessionTargetHost
 	}
 
 	var output string
@@ -5631,12 +5661,17 @@ func (h *AISettingsHandler) HandleReapproveInvestigationFix(w http.ResponseWrite
 	}
 
 	// Create new approval request
+	targetName := h.cleanTargetHost(inv.ProposedFix.TargetHost)
+	if targetName == "" {
+		// Legacy fallback for fixes created before target_host was populated.
+		targetName = inv.ProposedFix.Description
+	}
 	req := &approval.ApprovalRequest{
 		ToolID:     "investigation_fix",
 		Command:    inv.ProposedFix.Commands[0],
 		TargetType: "investigation",
 		TargetID:   findingID,
-		TargetName: inv.ProposedFix.Description,
+		TargetName: targetName,
 		Context:    fmt.Sprintf("Re-approval of fix from investigation: %s", inv.ProposedFix.Description),
 		RiskLevel:  approval.AssessRiskLevel(inv.ProposedFix.Commands[0], "investigation"),
 	}

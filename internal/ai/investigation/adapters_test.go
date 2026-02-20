@@ -91,6 +91,7 @@ func TestApprovalAdapter(t *testing.T) {
 		Command:     "echo ok",
 		FindingID:   "f1",
 		Description: "desc",
+		TargetHost:  "node-1",
 	}); err != nil {
 		t.Fatalf("unexpected create error: %v", err)
 	}
@@ -101,6 +102,9 @@ func TestApprovalAdapter(t *testing.T) {
 	}
 	if req.RiskLevel != approval.RiskHigh {
 		t.Fatalf("expected risk high, got %s", req.RiskLevel)
+	}
+	if req.TargetName != "node-1" {
+		t.Fatalf("expected target name node-1, got %q", req.TargetName)
 	}
 }
 

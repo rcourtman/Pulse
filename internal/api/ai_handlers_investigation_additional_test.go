@@ -612,6 +612,67 @@ func TestExecuteInvestigationFix_MCPTool(t *testing.T) {
 	}
 }
 
+func TestExecuteInvestigationFix_TargetDriftBlocked(t *testing.T) {
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
+
+	svc := handler.GetAIService(context.Background())
+	svc.SetStateProvider(&MockStateProvider{})
+	patrol := svc.GetPatrolService()
+	if patrol == nil {
+		t.Fatalf("expected patrol service")
+	}
+
+	findingID := "finding-drift"
+	findings := patrol.GetFindings()
+	findings.Add(&ai.Finding{
+		ID:           findingID,
+		Severity:     ai.FindingSeverityWarning,
+		Category:     ai.FindingCategoryPerformance,
+		ResourceID:   "res-1",
+		ResourceName: "res-1",
+		ResourceType: "host",
+		Title:        "title",
+		Description:  "desc",
+	})
+
+	store := investigation.NewStore("")
+	session := store.Create(findingID, "session-1")
+	session.ProposedFix = &investigation.Fix{
+		ID:          "fix-1",
+		Description: "Restart service",
+		Commands:    []string{"echo ok"},
+		TargetHost:  "node-b",
+	}
+	if !store.Update(session) {
+		t.Fatalf("failed to update investigation session")
+	}
+	handler.investigationStores = map[string]*investigation.Store{"default": store}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/approvals/exec", nil)
+	rec := httptest.NewRecorder()
+	handler.executeInvestigationFix(rec, req, &approval.ApprovalRequest{
+		ID:         "approval-1",
+		ToolID:     "investigation_fix",
+		Command:    "echo ok",
+		TargetID:   findingID,
+		TargetName: "node-a",
+	})
+
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("expected status conflict, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var resp map[string]interface{}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if resp["code"] != "target_mismatch" {
+		t.Fatalf("expected target_mismatch code, got %v", resp["code"])
+	}
+}
+
 func wsURLForHTTP(url string) string {
 	if strings.HasPrefix(url, "https://") {
 		return "wss://" + strings.TrimPrefix(url, "https://")

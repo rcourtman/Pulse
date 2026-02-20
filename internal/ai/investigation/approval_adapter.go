@@ -1,6 +1,8 @@
 package investigation
 
 import (
+	"strings"
+
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
 )
 
@@ -37,9 +39,12 @@ func (a *ApprovalAdapter) Create(appr *Approval) error {
 		Command:    appr.Command,
 		TargetType: "investigation",
 		TargetID:   appr.FindingID,
-		TargetName: appr.Description,
+		TargetName: strings.TrimSpace(appr.TargetHost),
 		Context:    "Automated fix from patrol investigation: " + appr.Description,
 		RiskLevel:  riskLevel,
+	}
+	if req.TargetName == "" {
+		req.TargetName = appr.Description
 	}
 
 	return a.store.CreateApproval(req)
