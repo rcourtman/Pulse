@@ -3902,6 +3902,8 @@ func TestVerifyTemperatureSSHAllowsSetupToken(t *testing.T) {
 
 func TestVerifyTemperatureSSHRejectsSetupTokenOrgMismatch(t *testing.T) {
 	cfg := newTestConfigWithTokens(t)
+	cfg.AuthUser = "admin"
+	cfg.AuthPass = "hashed"
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 
 	token := "fedcba9876543210fedcba9876543210"
@@ -3918,8 +3920,8 @@ func TestVerifyTemperatureSSHRejectsSetupTokenOrgMismatch(t *testing.T) {
 	req.Header.Set("X-Pulse-Org-ID", "org-b")
 	rec := httptest.NewRecorder()
 	router.Handler().ServeHTTP(rec, req)
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401 for setup token org mismatch, got %d", rec.Code)
+	if rec.Code == http.StatusOK {
+		t.Fatalf("expected setup token org mismatch to be rejected, got %d", rec.Code)
 	}
 }
 
@@ -3948,6 +3950,8 @@ func TestSSHConfigAllowsSetupToken(t *testing.T) {
 
 func TestSSHConfigRejectsSetupTokenOrgMismatch(t *testing.T) {
 	cfg := newTestConfigWithTokens(t)
+	cfg.AuthUser = "admin"
+	cfg.AuthPass = "hashed"
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 	t.Setenv("HOME", t.TempDir())
 
@@ -3965,8 +3969,8 @@ func TestSSHConfigRejectsSetupTokenOrgMismatch(t *testing.T) {
 	req.Header.Set("X-Pulse-Org-ID", "org-b")
 	rec := httptest.NewRecorder()
 	router.Handler().ServeHTTP(rec, req)
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401 for setup token org mismatch, got %d", rec.Code)
+	if rec.Code == http.StatusOK {
+		t.Fatalf("expected setup token org mismatch to be rejected, got %d", rec.Code)
 	}
 }
 

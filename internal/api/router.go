@@ -768,7 +768,15 @@ func (r *Router) isValidSetupTokenForRequest(req *http.Request) bool {
 		return false
 	}
 
-	return r.configHandlers.ValidateSetupTokenForOrg(token, GetOrgID(req.Context()))
+	requestOrgID := GetOrgID(req.Context())
+	if explicitOrgID, explicit := resolveExplicitWebSocketOrgID(req); explicit {
+		requestOrgID = explicitOrgID
+	}
+	if !isValidOrganizationID(requestOrgID) {
+		return false
+	}
+
+	return r.configHandlers.ValidateSetupTokenForOrg(token, requestOrgID)
 }
 
 func extractBearerToken(header string) string {
