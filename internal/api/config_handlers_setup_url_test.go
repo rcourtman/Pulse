@@ -48,10 +48,25 @@ func TestHandleSetupScriptURL(t *testing.T) {
 				if !ok || token == "" {
 					t.Errorf("expected valid setupToken, got %v", resp["setupToken"])
 				}
+				command, ok := resp["command"].(string)
+				if !ok || command == "" {
+					t.Errorf("expected command in response, got %v", resp["command"])
+				}
+				commandWithoutEnv, ok := resp["commandWithoutEnv"].(string)
+				if !ok || commandWithoutEnv == "" {
+					t.Errorf("expected commandWithoutEnv in response, got %v", resp["commandWithoutEnv"])
+				}
 
 				// Verify URL construction uses public URL host
 				if !strings.Contains(url, "pulse.example.com") {
 					t.Errorf("expected URL to contain public host, got %s", url)
+				}
+				quotedURL := posixShellQuote(url)
+				if !strings.Contains(command, "curl -sSL "+quotedURL+" | PULSE_SETUP_TOKEN="+posixShellQuote(token)+" bash") {
+					t.Errorf("expected shell-quoted command, got %s", command)
+				}
+				if !strings.Contains(commandWithoutEnv, "curl -sSL "+quotedURL+" | bash") {
+					t.Errorf("expected shell-quoted commandWithoutEnv, got %s", commandWithoutEnv)
 				}
 			},
 		},

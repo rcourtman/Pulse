@@ -1198,7 +1198,7 @@ func (h *ConfigHandlers) handleSetupScriptURL(w http.ResponseWriter, r *http.Req
 		tokenHint = fmt.Sprintf("%s…%s", token[:3], token[len(token)-3:])
 	}
 
-	command := fmt.Sprintf(`curl -sSL "%s" | PULSE_SETUP_TOKEN=%s bash`, scriptURL, token)
+	command := fmt.Sprintf("curl -sSL %s | PULSE_SETUP_TOKEN=%s bash", posixShellQuote(scriptURL), posixShellQuote(token))
 
 	response := map[string]interface{}{
 		"url":               scriptURL,
@@ -1207,7 +1207,7 @@ func (h *ConfigHandlers) handleSetupScriptURL(w http.ResponseWriter, r *http.Req
 		"setupToken":        token,
 		"tokenHint":         tokenHint,
 		"commandWithEnv":    command,
-		"commandWithoutEnv": fmt.Sprintf(`curl -sSL "%s" | bash`, scriptURL),
+		"commandWithoutEnv": fmt.Sprintf("curl -sSL %s | bash", posixShellQuote(scriptURL)),
 	}
 
 	w.Header().Set("Content-Type", "application/json")
