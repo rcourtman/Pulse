@@ -359,7 +359,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
               <button
                 onClick={() => toggleAllWebhooks(true)}
                 disabled={allEnabled()}
-                class="w-full rounded border border-green-500 px-3 py-1 text-xs text-green-700 transition-colors hover:bg-green-50 dark:border-green-600 dark:text-green-400 dark:hover:bg-green-900/20 sm:w-auto"
+                class="w-full rounded border border-green-500 px-3 py-1 text-xs text-green-700 transition-colors hover:bg-green-50 dark:border-green-600 dark:text-green-400 dark:hover:bg-green-900 sm:w-auto"
               >
                 Enable All
               </button>
@@ -373,7 +373,7 @@ export function WebhookConfig(props: WebhookConfigProps) {
                   <button
                     onClick={() => props.onUpdate({ ...webhook, enabled: !webhook.enabled })}
                     class={`rounded border px-3 py-1 text-xs font-medium transition-colors ${webhook.enabled
-                      ? 'border-green-500 text-green-700 hover:bg-green-50 dark:border-green-600 dark:text-green-400 dark:hover:bg-green-900/20'
+                      ? 'border-green-500 text-green-700 hover:bg-green-50 dark:border-green-600 dark:text-green-400 dark:hover:bg-green-900'
                       : 'border-slate-300 text-slate-600 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700'
                       }`}
                   >
@@ -404,13 +404,13 @@ export function WebhookConfig(props: WebhookConfigProps) {
                   </button>
                   <button
                     onClick={() => editWebhook(webhook)}
-                    class="rounded border border-blue-300 px-3 py-1 text-xs text-blue-600 transition-colors hover:bg-blue-50 dark:border-blue-500 dark:text-blue-300 dark:hover:bg-blue-900/20"
+                    class="rounded border border-blue-300 px-3 py-1 text-xs text-blue-600 transition-colors hover:bg-blue-50 dark:border-blue-500 dark:text-blue-300 dark:hover:bg-blue-900"
                   >
                     Edit
                   </button>
                   <button
                     onClick={() => webhook.id && props.onDelete(webhook.id)}
-                    class="rounded border border-red-300 px-3 py-1 text-xs text-red-600 transition-colors hover:bg-red-50 dark:border-red-500 dark:text-red-300 dark:hover:bg-red-900/20"
+                    class="rounded border border-red-300 px-3 py-1 text-xs text-red-600 transition-colors hover:bg-red-50 dark:border-red-500 dark:text-red-300 dark:hover:bg-red-900"
                   >
                     Delete
                   </button>
@@ -461,8 +461,8 @@ export function WebhookConfig(props: WebhookConfigProps) {
                       type="button"
                       onClick={() => selectService(service)}
                       class={`px-2 py-1.5 text-left border transition-colors text-xs ${formData().service === service
-                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                        : 'border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700/30'
+                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900'
+                        : 'border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700'
                         }`}
                     >
                       <div class="font-medium text-xs text-slate-800 dark:text-slate-200">

@@ -81,7 +81,7 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
   };
 
   const currentProvider = () => providers().find((p) => p.name === props.config.provider);
-  const instructionBoxClass = "mt-2 rounded border border-blue-200 bg-blue-50 px-3 py-2 text-xs leading-relaxed text-blue-900 dark:border-blue-700 dark:bg-blue-900/20 dark:text-blue-200";
+  const instructionBoxClass = "mt-2 rounded border border-blue-200 bg-blue-50 px-3 py-2 text-xs leading-relaxed text-blue-900 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200";
 
   return (
     <div class="space-y-4 text-sm overflow-hidden">
@@ -325,7 +325,7 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
           type="button"
           onClick={props.onTest}
           disabled={props.testing || !props.config.enabled}
-          class="rounded border border-blue-500 px-3 py-1.5 text-xs font-medium text-blue-600 transition-colors hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed dark:border-blue-400 dark:text-blue-300 dark:hover:bg-blue-900/30"
+          class="rounded border border-blue-500 px-3 py-1.5 text-xs font-medium text-blue-600 transition-colors hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed dark:border-blue-400 dark:text-blue-300 dark:hover:bg-blue-900"
         >
           {props.testing ? 'Sending test email…' : 'Send test email'}
         </button>
