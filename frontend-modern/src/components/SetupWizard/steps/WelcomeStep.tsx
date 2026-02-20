@@ -109,7 +109,7 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
 
             {/* Bootstrap token unlock */}
             <Show when={!props.isUnlocked}>
-                <div class="p-8 max-w-lg mx-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-left animate-slide-up delay-300 relative group">
+                <div class="p-8 max-w-lg mx-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-left animate-slide-up delay-300 relative group">
                     <div class="relative z-10">
                         <h3 class="text-xl font-semibold text-slate-900 dark:text-white mb-2 tracking-tight">Unlock Setup</h3>
                         <p class="text-sm text-slate-500 dark:text-slate-300 mb-6">

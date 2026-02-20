@@ -103,7 +103,7 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
     };
 
     return (
-        <div class="max-w-lg mx-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 overflow-hidden animate-fade-in relative rounded-xl">            <div class="p-8 border-b border-slate-200 dark:border-slate-700 relative z-10 text-center">
+        <div class="max-w-lg mx-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 overflow-hidden animate-fade-in relative rounded-lg">            <div class="p-8 border-b border-slate-200 dark:border-slate-700 relative z-10 text-center">
             <h2 class="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">Secure Your Dashboard</h2>
             <p class="text-slate-500 dark:text-blue-200/80 mt-2 font-light">Create your root administrator account</p>
         </div>

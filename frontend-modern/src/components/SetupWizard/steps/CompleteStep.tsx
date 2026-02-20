@@ -279,7 +279,7 @@ Keep these credentials secure!
     };
 
     return (
-        <div class="max-w-2xl mx-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 overflow-hidden animate-fade-in relative rounded-xl p-6 sm:p-8 text-center text-slate-900 dark:text-white">            <div class="relative z-10">
+        <div class="max-w-2xl mx-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 overflow-hidden animate-fade-in relative rounded-lg p-6 sm:p-8 text-center text-slate-900 dark:text-white">            <div class="relative z-10">
             {/* Success animation */}
             <div class="mb-8">
                 <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 mb-6 shadow-sm border border-emerald-200 dark:border-emerald-800/50">
@@ -547,7 +547,7 @@ Keep these credentials secure!
             <Show when={connectedAgents().length > 0}>
                 <div class="bg-indigo-50 dark:bg-indigo-900 rounded-lg border border-indigo-100 dark:border-indigo-800 p-5 text-left mt-8 shadow-sm overflow-hidden relative">
                     <div class="flex items-start gap-4 relative z-10">
-                        <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-600 text-white shrink-0 shadow-sm border border-indigo-500">
+                        <div class="flex h-12 w-12 items-center justify-center rounded-lg bg-indigo-600 text-white shrink-0 shadow-sm border border-indigo-500">
                             <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
                             </svg>
