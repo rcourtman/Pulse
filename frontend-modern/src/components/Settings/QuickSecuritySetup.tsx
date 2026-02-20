@@ -276,7 +276,7 @@ Important:
             </Show>
           </div>
 
-          <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md p-3">
+          <div class="bg-yellow-50 dark:bg-yellow-900 border border-yellow-200 dark:border-yellow-800 rounded-md p-3">
             <div class="flex">
               <svg
                 class="h-5 w-5 text-yellow-600 dark:text-yellow-400 mr-2 flex-shrink-0"
@@ -364,7 +364,7 @@ Important:
             </button>
           </div>
 
-          <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md p-3">
+          <div class="bg-green-50 dark:bg-green-900 border border-green-200 dark:border-green-800 rounded-md p-3">
             <p class="text-sm font-semibold text-green-800 dark:text-green-200 mb-2">
               Save these credentials now - they won't be shown again!
             </p>
@@ -426,7 +426,7 @@ Important:
             </div>
           </div>
 
-          <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md p-3">
+          <div class="bg-green-50 dark:bg-green-900 border border-green-200 dark:border-green-800 rounded-md p-3">
             <p class="text-sm font-semibold text-green-800 dark:text-green-200 mb-2">
               Credentials saved
             </p>

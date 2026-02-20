@@ -36,7 +36,7 @@ async function promisePool<T>(items: T[], concurrency: number, fn: (item: T) => 
   const limit = Math.max(1, Math.min(concurrency, items.length));
   let idx = 0;
   const workers = Array.from({ length: limit }).map(async () => {
-    for (;;) {
+    for (; ;) {
       const current = idx;
       idx += 1;
       if (current >= items.length) return;
@@ -184,7 +184,7 @@ export const BillingAdminPanel: Component = () => {
         bodyClass="space-y-4"
       >
         <Show when={orgsError()}>
-          <div class="rounded-md border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-900/20 p-3 text-sm text-red-800 dark:text-red-200">
+          <div class="rounded-md border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-900 p-3 text-sm text-red-800 dark:text-red-200">
             {orgsError()}
           </div>
         </Show>
@@ -254,12 +254,12 @@ export const BillingAdminPanel: Component = () => {
                                 <div class="text-xs text-slate-500 dark:text-slate-400">
                                   <span class="font-mono">{org.org_id}</span>
                                   <Show when={org.soft_deleted}>
-                                    <span class="ml-2 rounded px-1.5 py-0.5 bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-200">
+                                    <span class="ml-2 rounded px-1.5 py-0.5 bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-200">
                                       soft-deleted
                                     </span>
                                   </Show>
                                   <Show when={org.suspended && !org.soft_deleted}>
-                                    <span class="ml-2 rounded px-1.5 py-0.5 bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-200">
+                                    <span class="ml-2 rounded px-1.5 py-0.5 bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-200">
                                       suspended
                                     </span>
                                   </Show>

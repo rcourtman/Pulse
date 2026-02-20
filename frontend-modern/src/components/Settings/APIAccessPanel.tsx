@@ -26,7 +26,7 @@ export const APIAccessPanel: Component<APIAccessPanelProps> = (props) => {
             href="https://github.com/rcourtman/Pulse/blob/main/docs/CONFIGURATION.md#token-scopes"
             target="_blank"
             rel="noreferrer"
-            class="inline-flex min-h-10 sm:min-h-10 w-fit items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-200"
+            class="inline-flex min-h-10 sm:min-h-10 w-fit items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200"
           >
             View scope reference
           </a>

@@ -193,7 +193,7 @@ export const RolesPanel: Component = () => {
                             <tbody>
                                 <For each={roles()}>
                                     {(role) => (
-                                        <tr class="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                                        <tr class="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800">
                                             <td class="py-3 px-3">
                                                 <div class="flex flex-col">
                                                     <span class="font-medium text-slate-900 dark:text-slate-100 flex items-center gap-1">
@@ -230,7 +230,7 @@ export const RolesPanel: Component = () => {
                                                         <button
                                                             type="button"
                                                             onClick={() => handleDelete(role)}
-                                                            class="p-1.5 rounded-md text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-900/30"
+                                                            class="p-1.5 rounded-md text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-900"
                                                             title="Delete role"
                                                         >
                                                             <Trash2 class="w-4 h-4" />
@@ -252,7 +252,7 @@ export const RolesPanel: Component = () => {
 
             {/* Role Modal */}
             <Show when={showModal()}>
-                <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+                <div class="fixed inset-0 z-50 flex items-center justify-center bg-black opacity-50">
                     <div class="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-md shadow-sm border border-slate-200 dark:border-slate-700 mx-4 max-h-[92vh] overflow-hidden">
                         <div class="flex items-start justify-between gap-3 px-4 sm:px-6 py-4 border-b border-slate-200 dark:border-slate-700">
                             <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">
@@ -279,7 +279,7 @@ export const RolesPanel: Component = () => {
                                         onInput={(e) => setFormId(e.currentTarget.value)}
                                         placeholder="e.g., custom-auditor"
                                         disabled={!!editingRole()}
-                                        class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-blue-400 dark:focus:ring-blue-900/40 disabled:opacity-50"
+                                        class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-blue-400 dark:focus:ring-blue-900 disabled:opacity-50"
                                     />
                                 </div>
                                 <div class="space-y-1">
@@ -291,7 +291,7 @@ export const RolesPanel: Component = () => {
                                         value={formName()}
                                         onInput={(e) => setFormName(e.currentTarget.value)}
                                         placeholder="e.g., Custom Auditor"
-                                        class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-blue-400 dark:focus:ring-blue-900/40"
+                                        class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-blue-400 dark:focus:ring-blue-900"
                                     />
                                 </div>
                             </div>
@@ -304,7 +304,7 @@ export const RolesPanel: Component = () => {
                                     value={formDescription()}
                                     onInput={(e) => setFormDescription(e.currentTarget.value)}
                                     placeholder="Brief description of this role's purpose"
-                                    class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-blue-400 dark:focus:ring-blue-900/40"
+                                    class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-blue-400 dark:focus:ring-blue-900"
                                 />
                             </div>
 
