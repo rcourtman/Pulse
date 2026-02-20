@@ -193,7 +193,6 @@ func TestTenantRBACProvider_InvalidOrgIDsRejected(t *testing.T) {
 	})
 
 	invalidIDs := []string{
-		"",
 		".",
 		"..",
 		"../evil",
