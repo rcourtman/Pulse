@@ -57,7 +57,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
         noPadding
         bodyClass="divide-y divide-slate-100 dark:divide-slate-800"
       >
-        <div class="flex items-center justify-between gap-4 p-4 sm:p-6 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+        <div class="flex items-center justify-between gap-4 p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
           <div class="flex items-center gap-3 min-w-0">
             {/* Animated theme icon */}
             <div class={`shrink-0 relative p-2.5 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 transition-all duration-300`}>
@@ -90,7 +90,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
         </div>
 
         {/* Temperature Unit Selector */}
-        <div class="flex items-center justify-between gap-4 p-4 sm:p-6 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+        <div class="flex items-center justify-between gap-4 p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
           <div class="flex items-center gap-3 min-w-0">
             <div class="shrink-0 p-2.5 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
               <Thermometer class="w-5 h-5 text-slate-500" strokeWidth={2} />
@@ -129,7 +129,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
         </div>
 
         {/* Full-width Mode Toggle */}
-        <div class="flex items-center justify-between gap-4 p-4 sm:p-6 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+        <div class="flex items-center justify-between gap-4 p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
           <div class="flex items-center gap-3 min-w-0">
             <div class="shrink-0 p-2.5 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
               <Maximize2 class="w-5 h-5 text-slate-500" strokeWidth={2} />
@@ -159,7 +159,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
         noPadding
         bodyClass="divide-y divide-slate-100 dark:divide-slate-800"
       >
-        <div class="flex items-center justify-between gap-4 p-4 sm:p-6 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+        <div class="flex items-center justify-between gap-4 p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
           <div class="flex-1 min-w-0 space-y-1">
             <div class="flex items-center gap-2">
               <span class="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
@@ -186,7 +186,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
           />
         </div>
 
-        <div class="flex items-center justify-between gap-4 p-4 sm:p-6 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+        <div class="flex items-center justify-between gap-4 p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
           <div class="flex-1 min-w-0 space-y-1">
             <div class="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
               Reduce Pro prompts
@@ -203,7 +203,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
           />
         </div>
 
-        <div class="flex items-center justify-between gap-4 p-4 sm:p-6 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+        <div class="flex items-center justify-between gap-4 p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
           <div class="flex-1 min-w-0 space-y-1">
             <div class="flex items-center gap-2">
               <span class="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
@@ -239,7 +239,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
         noPadding
         bodyClass="divide-y divide-slate-100 dark:divide-slate-800"
       >
-        <div class="p-4 sm:p-6 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+        <div class="p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
           <div class="space-y-4">
             <div class="space-y-2">
               <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
@@ -265,8 +265,8 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
                     <button
                       type="button"
                       class={`min-h-10 sm:min-h-10 rounded-md border px-3 py-2.5 text-center text-sm font-medium transition-colors ${props.pvePollingSelection() === option.value
-                        ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-900/40 dark:text-blue-200'
-                        : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:border-slate-600 dark:hover:bg-slate-700/50'
+                        ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-900 dark:text-blue-200'
+                        : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:border-slate-600 dark:hover:bg-slate-700'
                         } ${props.pvePollingEnvLocked() ? 'opacity-60 cursor-not-allowed' : ''}`}
                       disabled={props.pvePollingEnvLocked()}
                       onClick={() => {
@@ -283,8 +283,8 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
                 <button
                   type="button"
                   class={`min-h-10 sm:min-h-10 rounded-md border px-3 py-2.5 text-center text-sm font-medium transition-colors ${props.pvePollingSelection() === 'custom'
-                    ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-900/40 dark:text-blue-200'
-                    : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:border-slate-600 dark:hover:bg-slate-700/50'
+                    ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-900 dark:text-blue-200'
+                    : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:border-slate-600 dark:hover:bg-slate-700'
                     } ${props.pvePollingEnvLocked() ? 'opacity-60 cursor-not-allowed' : ''}`}
                   disabled={props.pvePollingEnvLocked()}
                   onClick={() => {
@@ -300,7 +300,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
 
               {/* Custom interval input */}
               <Show when={props.pvePollingSelection() === 'custom'}>
-                <div class="mt-4 flex flex-col sm:flex-row sm:items-center gap-4 rounded-xl border border-dashed border-slate-300 bg-slate-50/50 p-4 dark:border-slate-700 dark:bg-slate-800/50 transition-all animate-in fade-in slide-in-from-top-1">
+                <div class="mt-4 flex flex-col sm:flex-row sm:items-center gap-4 rounded-md border border-dashed border-slate-300 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800 transition-all animate-in fade-in slide-in-from-top-1">
                   <div class="flex-1 min-w-0">
                     <label class="block text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
                       Custom polling interval
@@ -336,7 +336,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
 
               {/* Env override warning */}
               <Show when={props.pvePollingEnvLocked()}>
-                <div class="flex items-center gap-3 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
+                <div class="flex items-center gap-3 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-200">
                   <svg class="h-4 w-4 shrink-0 mt-0.5 self-start" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <circle cx="12" cy="12" r="10" />
                     <line x1="12" y1="8" x2="12" y2="12" />

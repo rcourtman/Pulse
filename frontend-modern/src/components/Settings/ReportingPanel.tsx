@@ -125,7 +125,7 @@ export function ReportingPanel() {
                 noPadding
                 bodyClass="divide-y divide-slate-100 dark:divide-slate-800"
             >
-                <div class="space-y-6 p-4 sm:p-6 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                <div class="space-y-6 p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                     {/* Resource Picker */}
                     <FormField label="Resources" helpText="Select the resources to include in the report">
                         <ResourcePicker
@@ -205,7 +205,7 @@ export function ReportingPanel() {
 
                 </div>
 
-                <div class="flex justify-end p-4 sm:p-6 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                <div class="flex justify-end p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                     <button
                         class={`w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 rounded-md font-semibold transition-all ${generating()
                             ? 'bg-slate-300 text-slate-500 cursor-not-allowed dark:bg-slate-700 dark:text-slate-400'

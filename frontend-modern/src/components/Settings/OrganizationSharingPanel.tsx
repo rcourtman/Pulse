@@ -307,7 +307,7 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
           <Show
             when={!loading()}
             fallback={
-              <div class="space-y-5 p-4 sm:p-6 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+              <div class="space-y-5 p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                 <div class="rounded-md border border-slate-200 dark:border-slate-700 p-4 space-y-3">
                   <div class="h-4 w-24 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
 
@@ -378,7 +378,7 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
             }
           >
             <Show when={canManageOrg(org(), props.currentUser)}>
-              <div class="p-4 sm:p-6 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+              <div class="p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                 <div class="rounded-md border border-slate-200 dark:border-slate-700 p-4 space-y-3">
                   <h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Create Share</h4>
 
@@ -528,14 +528,14 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
             </Show>
 
             <Show when={!canManageOrg(org(), props.currentUser)}>
-              <div class="p-4 sm:p-6 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+              <div class="p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                 <div class="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-300">
                   Admin or owner role required to create or remove organization shares.
                 </div>
               </div>
             </Show>
 
-            <div class="space-y-2 p-4 sm:p-6 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+            <div class="space-y-2 p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
               <h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Outgoing Shares</h4>
               <div class="mt-4 -mx-4 sm:mx-0 overflow-x-auto w-full">
                 <PulseDataGrid
@@ -604,7 +604,7 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
               </div>
             </div>
 
-            <div class="space-y-2 p-4 sm:p-6 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+            <div class="space-y-2 p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
               <h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Incoming Shares</h4>
               <div class="mt-4 -mx-4 sm:mx-0 overflow-x-auto w-full">
                 <PulseDataGrid

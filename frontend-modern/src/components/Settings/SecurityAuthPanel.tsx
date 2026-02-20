@@ -134,7 +134,7 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
           bodyClass="divide-y divide-slate-100 dark:divide-slate-800"
         >
           {/* Content */}
-          <div class="p-4 sm:p-6 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors flex flex-col gap-3 sm:gap-4">
+          <div class="p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex flex-col gap-3 sm:gap-4">
             <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
               <button
                 type="button"
@@ -170,7 +170,7 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
             </div>
           </div>
 
-          <div class="p-4 sm:p-6 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+          <div class="p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
             <Toggle
               label="Hide local login form"
               description="Hide the username/password form on the login page. Users will only see SSO options unless ?show_local=true is used."

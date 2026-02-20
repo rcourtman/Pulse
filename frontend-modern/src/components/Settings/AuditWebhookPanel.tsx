@@ -113,7 +113,7 @@ export function AuditWebhookPanel() {
                 noPadding
                 bodyClass="divide-y divide-slate-100 dark:divide-slate-800"
             >
-                <div class="space-y-6 p-4 sm:p-6 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                <div class="space-y-6 p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                     <p class="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
                         Pulse can send a signed event payload whenever security-relevant activity occurs
                         (logins, settings changes, RBAC updates, and similar audit events).

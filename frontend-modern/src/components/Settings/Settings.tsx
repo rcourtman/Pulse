@@ -2251,7 +2251,7 @@ const Settings: Component<SettingsProps> = (props) => {
                         placeholder="Search settings..."
                         value={searchQuery()}
                         onInput={(e) => setSearchQuery(e.currentTarget.value)}
-                        class="w-full pl-9 pr-3 py-1.5 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-sm text-gray-900 dark:text-gray-100 placeholder-gray-400"
+                        class="w-full pl-9 pr-3 py-1.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-sm text-gray-900 dark:text-gray-100 placeholder-gray-400"
                       />
                       <Show when={!searchQuery()}>
                         <div class="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none hidden sm:flex items-center">
@@ -2277,7 +2277,7 @@ const Settings: Component<SettingsProps> = (props) => {
                             {group.label}
                           </p>
                         </Show>
-                        <div class="bg-white lg:bg-transparent dark:bg-[#1a1c23] lg:dark:bg-transparent border-y lg:border-none border-gray-200 dark:border-gray-800 divide-y lg:divide-y-0 divide-gray-100 dark:divide-gray-800/60 flex flex-col lg:space-y-1.5">
+                        <div class="bg-white lg:bg-transparent dark:bg-[#1a1c23] lg:dark:bg-transparent border-y lg:border-none border-gray-200 dark:border-gray-800 divide-y lg:divide-y-0 divide-gray-100 dark:divide-gray-800 flex flex-col lg:space-y-1.5">
                           <For each={group.items}>
                             {(item) => {
                               const isActive = () => activeTab() === item.id;
@@ -2291,8 +2291,8 @@ const Settings: Component<SettingsProps> = (props) => {
                                     } text-[15px] lg:text-sm font-medium transition-colors ${item.disabled
                                       ? 'opacity-60 cursor-not-allowed text-gray-400 dark:text-gray-500'
                                       : isActive()
-                                        ? 'lg:bg-blue-50 text-blue-600 dark:lg:bg-blue-900/40 dark:text-blue-300 lg:dark:text-blue-200 bg-white dark:bg-[#1a1c23]'
-                                        : 'text-gray-700 lg:hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700/50 dark:hover:text-gray-100 active:bg-gray-50 dark:active:bg-gray-800 lg:active:bg-transparent'
+                                        ? 'lg:bg-blue-50 text-blue-600 dark:lg:bg-blue-900 dark:text-blue-300 lg:dark:text-blue-200 bg-white dark:bg-[#1a1c23]'
+                                        : 'text-gray-700 lg:hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-gray-100 active:bg-gray-50 dark:active:bg-gray-800 lg:active:bg-transparent'
                                     }`}
                                   onClick={() => {
                                     if (item.disabled) return;
@@ -2302,7 +2302,7 @@ const Settings: Component<SettingsProps> = (props) => {
                                   title={sidebarCollapsed() ? item.label : undefined}
                                 >
                                   <div class="flex items-center gap-3.5 lg:gap-2.5 w-full">
-                                    <div class={`flex items-center justify-center rounded-lg lg:rounded-none w-8 h-8 lg:w-auto lg:h-auto ${isActive() ? 'bg-blue-100 dark:bg-blue-900/60 lg:bg-transparent lg:dark:bg-transparent text-blue-600 dark:text-blue-400' : 'bg-gray-100 dark:bg-gray-800 lg:bg-transparent lg:dark:bg-transparent text-gray-500 dark:text-gray-400 lg:text-inherit'}`}>
+                                    <div class={`flex items-center justify-center rounded-md lg:rounded-none w-8 h-8 lg:w-auto lg:h-auto ${isActive() ? 'bg-blue-100 dark:bg-blue-900 lg:bg-transparent lg:dark:bg-transparent text-blue-600 dark:text-blue-400' : 'bg-gray-100 dark:bg-gray-800 lg:bg-transparent lg:dark:bg-transparent text-gray-500 dark:text-gray-400 lg:text-inherit'}`}>
                                       <item.icon class="w-5 h-5 lg:w-4 lg:h-4" {...(item.iconProps || {})} />
                                     </div>
                                     <Show when={!sidebarCollapsed()}>
@@ -2331,11 +2331,11 @@ const Settings: Component<SettingsProps> = (props) => {
           {/* Settings Content Area */}
           <div class={`flex-1 overflow-hidden ${isMobileMenuOpen() ? 'hidden lg:block' : 'block animate-slideInRight lg:animate-none'}`}>
             <Show when={flatTabs.length > 0}>
-              <div class="lg:hidden sticky top-0 z-40 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 px-3 py-2.5 flex items-center shadow-none">
+              <div class="lg:hidden sticky top-0 z-40 bg-white/95 dark:bg-gray-900/95  border-b border-gray-100 dark:border-gray-800 px-3 py-2.5 flex items-center shadow-none">
                 <button
                   type="button"
                   onClick={() => setIsMobileMenuOpen(true)}
-                  class="flex items-center gap-1.5 text-blue-600 dark:text-blue-400 font-medium active:bg-blue-50 dark:active:bg-blue-900/30 px-2 py-1.5 rounded-md transition-colors"
+                  class="flex items-center gap-1.5 text-blue-600 dark:text-blue-400 font-medium active:bg-blue-50 dark:active:bg-blue-900 px-2 py-1.5 rounded-md transition-colors"
                 >
                   <svg class="h-5 w-5 -ml-1 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />

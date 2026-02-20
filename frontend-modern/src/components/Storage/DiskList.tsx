@@ -322,7 +322,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
                   </TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody class="divide-y divide-slate-200/50 dark:divide-slate-700/50">
+              <TableBody class="divide-y divide-slate-200 dark:divide-slate-700">
                 <For each={filteredDisks()}>
                   {(disk) => {
                     const data = getDiskData(disk);
@@ -397,12 +397,12 @@ export const DiskList: Component<DiskListProps> = (props) => {
                               <div class="relative w-24 h-3.5 rounded overflow-hidden bg-slate-200 dark:bg-slate-600">
                                 <div
                                   class={`absolute top-0 left-0 h-full ${data.wearout >= 50
-                                    ? 'bg-green-500/60 dark:bg-green-500/50'
+                                    ? 'bg-green-500 dark:bg-green-500'
                                     : data.wearout >= 20
-                                      ? 'bg-yellow-500/60 dark:bg-yellow-500/50'
+                                      ? 'bg-yellow-500 dark:bg-yellow-500'
                                       : data.wearout >= 10
-                                        ? 'bg-orange-500/60 dark:bg-orange-500/50'
-                                        : 'bg-red-500/60 dark:bg-red-500/50'
+                                        ? 'bg-orange-500 dark:bg-orange-500'
+                                        : 'bg-red-500 dark:bg-red-500'
                                     }`}
                                   style={{ width: `${data.wearout}%` }}
                                 />

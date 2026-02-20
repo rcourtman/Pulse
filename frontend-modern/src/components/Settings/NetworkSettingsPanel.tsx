@@ -101,7 +101,7 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
         bodyClass="divide-y divide-slate-100 dark:divide-slate-800"
       >
         {/* Network Discovery Section */}
-        <section class="p-4 sm:p-6 space-y-5 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+        <section class="p-4 sm:p-6 space-y-5 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
           <SectionHeader
             title="Network discovery"
             description="Control how Pulse scans for Proxmox services on your network."
@@ -404,7 +404,7 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
         </section>
 
         {/* Public URL Setting */}
-        <section class="p-4 sm:p-6 space-y-4 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+        <section class="p-4 sm:p-6 space-y-4 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
           <h4 class="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
             <svg
               width="16"
@@ -470,7 +470,7 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
         </section>
 
         {/* CORS Settings Section */}
-        <section class="p-4 sm:p-6 space-y-4 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+        <section class="p-4 sm:p-6 space-y-4 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
           <h4 class="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
             <svg
               width="16"
@@ -532,7 +532,7 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
         </section>
 
         {/* Embedding Section */}
-        <section class="p-4 sm:p-6 space-y-4 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+        <section class="p-4 sm:p-6 space-y-4 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
           <h4 class="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
             <svg
               width="16"
@@ -596,7 +596,7 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
         </section>
 
         {/* Webhook Security Section */}
-        <section class="p-4 sm:p-6 space-y-4 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+        <section class="p-4 sm:p-6 space-y-4 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
           <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
             <svg
               xmlns="http://www.w3.org/2000/svg"

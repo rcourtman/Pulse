@@ -37,7 +37,7 @@ const allSections: Array<{
 export const SettingsSectionNav: Component<SettingsSectionNavProps> = (props) => {
   return (
     <div
-      class={`flex p-1 space-x-1 bg-gray-100 dark:bg-gray-800/80 rounded-xl overflow-x-auto scrollbar-hide ${props.class ?? ''}`}
+      class={`flex p-1 space-x-1 bg-gray-100 dark:bg-gray-800 rounded-md overflow-x-auto scrollbar-hide ${props.class ?? ''}`}
       style="-webkit-overflow-scrolling: touch;"
       aria-label="Settings sections"
     >
@@ -50,9 +50,9 @@ export const SettingsSectionNav: Component<SettingsSectionNavProps> = (props) =>
             <button
               type="button"
               onClick={() => props.onSelect(section.id)}
-              class={`flex flex-1 justify-center sm:flex-none sm:justify-start items-center gap-2 px-3 sm:px-4 py-2.5 sm:py-2 text-sm font-medium rounded-lg transition-all whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900 ${isActive()
+              class={`flex flex-1 justify-center sm:flex-none sm:justify-start items-center gap-2 px-3 sm:px-4 py-2.5 sm:py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900 ${isActive()
                 ? 'bg-white dark:bg-[#1a1c23] border border-gray-200 dark:border-gray-700 text-blue-600 dark:text-blue-400'
-                : 'text-gray-600 dark:text-gray-400 border border-transparent hover:text-gray-900 dark:hover:text-gray-200 hover:bg-white/50 dark:hover:bg-gray-800'
+                : 'text-gray-600 dark:text-gray-400 border border-transparent hover:text-gray-900 dark:hover:text-gray-200 hover:bg-white dark:hover:bg-gray-800'
                 }`}
               aria-pressed={isActive()}
             >

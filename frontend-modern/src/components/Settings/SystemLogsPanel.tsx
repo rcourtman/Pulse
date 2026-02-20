@@ -108,7 +108,7 @@ export const SystemLogsPanel: Component = () => {
                 bodyClass="divide-y divide-slate-100 dark:divide-slate-800"
             >
                 {/* Controls */}
-                <div class="p-4 sm:p-6 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                <div class="p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                     <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                         <div class="flex items-center space-x-3">
                             <label class="text-sm font-medium text-slate-700 dark:text-slate-300">Log Level:</label>
@@ -155,7 +155,7 @@ export const SystemLogsPanel: Component = () => {
                 </div>
 
                 {/* Terminal View */}
-                <div class="p-4 sm:p-6 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                <div class="p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                     <div
                         ref={logContainer}
                         class="bg-slate-950 text-slate-300 font-mono text-xs p-4 rounded-md h-[500px] overflow-y-auto whitespace-pre-wrap leading-relaxed shadow-inner border border-slate-800 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent"

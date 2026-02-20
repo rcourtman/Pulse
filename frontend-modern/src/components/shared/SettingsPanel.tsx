@@ -35,7 +35,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
       border={false}
       {...rest}
     >
-      <div class="px-3 py-3 sm:px-6 sm:py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50">
+      <div class="px-3 py-3 sm:px-6 sm:py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
           <div class="flex min-w-0 items-center gap-3 flex-1">
             <Show when={local.icon}>

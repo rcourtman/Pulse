@@ -134,7 +134,7 @@ export function PulseDataGrid<T>(props: PulseDataGridProps<T>) {
                             </For>
                         </TableRow>
                     </TableHeader>
-                    <TableBody class="divide-y divide-slate-100 dark:divide-slate-800/60 transition-colors">
+                    <TableBody class="divide-y divide-slate-100 dark:divide-slate-800 transition-colors">
                         <Show when={!local.isLoading && local.data.length > 0}>
                             <For each={local.data}>
                                 {(row) => {
@@ -146,8 +146,8 @@ export function PulseDataGrid<T>(props: PulseDataGridProps<T>) {
                                                 class={`
                                                     group transition-colors duration-150
                                                     ${local.onRowClick
-                                                        ? 'cursor-pointer hover:bg-blue-50/50 dark:hover:bg-blue-900/20'
-                                                        : 'hover:bg-slate-50/50 dark:hover:bg-slate-800/30'
+                                                        ? 'cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900'
+                                                        : 'hover:bg-slate-50 dark:hover:bg-slate-800'
                                                     }
                                                 `}
                                                 onClick={() => local.onRowClick?.(row)}
@@ -173,7 +173,7 @@ export function PulseDataGrid<T>(props: PulseDataGridProps<T>) {
                                                 </For>
                                             </TableRow>
                                             <Show when={expanded() && local.expandedRender}>
-                                                <TableRow class={local.onRowClick ? 'bg-slate-50/30 dark:bg-slate-800/20 hover:bg-blue-50/50 dark:hover:bg-blue-900/20' : 'bg-slate-50/30 dark:bg-slate-800/20 hover:bg-slate-50/50 dark:hover:bg-slate-800/30'}>
+                                                <TableRow class={local.onRowClick ? 'bg-slate-50 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900' : 'bg-slate-50 dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800'}>
                                                     <TableCell colspan={local.columns.length} class="px-0 py-0 border-t-0">
                                                         {local.expandedRender!(row)}
                                                     </TableCell>
@@ -198,7 +198,7 @@ export function PulseDataGrid<T>(props: PulseDataGridProps<T>) {
 
                         <Show when={!local.isLoading && local.data.length === 0}>
                             <TableRow>
-                                <TableCell colspan={local.columns.length} class="px-4 py-8 text-center text-sm text-slate-500 italic bg-slate-50/50 dark:bg-slate-800/20">
+                                <TableCell colspan={local.columns.length} class="px-4 py-8 text-center text-sm text-slate-500 italic bg-slate-50 dark:bg-slate-800">
                                     <Show when={local.emptyState} fallback="No items available.">
                                         {local.emptyState}
                                     </Show>

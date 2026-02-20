@@ -427,7 +427,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
         padding="none"
         class="border border-slate-200 bg-slate-50 shadow-sm dark:border-slate-700 dark:bg-slate-800"
       >
-        <div class="flex flex-col gap-6 p-4 sm:p-6 lg:p-8 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+        <div class="flex flex-col gap-6 p-4 sm:p-6 lg:p-8 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
           <div class="flex flex-wrap items-center justify-between gap-4">
             <div class="flex flex-wrap items-center gap-3">
               <div class="flex h-10 w-10 items-center justify-center rounded-md bg-blue-600 text-blue-600 dark:bg-blue-500 dark:text-blue-200">
@@ -757,7 +757,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
           createSectionRef = el;
         }}
       >
-        <div class="flex flex-col gap-6 p-4 sm:p-6 lg:p-8 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+        <div class="flex flex-col gap-6 p-4 sm:p-6 lg:p-8 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
           <div class="flex flex-wrap items-start justify-between gap-4">
             <SectionHeader
               size="sm"

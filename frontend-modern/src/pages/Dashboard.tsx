@@ -139,7 +139,7 @@ export default function Dashboard() {
             <div class="flex items-center gap-3">
               <h1 id="dashboard-title" class="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">System Overview</h1>
               <Show when={connected()}>
-                <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-semibold tracking-wide uppercase dark:bg-emerald-900/30 dark:border-emerald-800 dark:text-emerald-400">
+                <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-semibold tracking-wide uppercase dark:bg-emerald-900 dark:border-emerald-800 dark:text-emerald-400">
                   <span class="relative flex h-1.5 w-1.5">
                     <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
                     <span class="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>

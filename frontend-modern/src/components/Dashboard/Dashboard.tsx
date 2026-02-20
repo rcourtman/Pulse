@@ -1643,7 +1643,7 @@ export function Dashboard(props: DashboardProps) {
                   </For>
                 </TableRow>
               </TableHeader>
-              <TableBody ref={setTableBodyRef} class="divide-y divide-slate-200/50 dark:divide-slate-700/50">
+              <TableBody ref={setTableBodyRef} class="divide-y divide-slate-200 dark:divide-slate-700">
                 <Show when={groupedWindowing.isWindowed() && topSpacerHeight() > 0}>
                   <TableRow aria-hidden="true">
                     <TableCell colspan={totalColumns()} style={{ height: `${topSpacerHeight()}px`, padding: '0', border: '0' }} />

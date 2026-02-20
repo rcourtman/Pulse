@@ -1094,7 +1094,7 @@ const Recovery: Component = () => {
                     ))}
                   </TableRow>
                 </TableHeader>
-                <TableBody class="divide-y divide-slate-200/50 dark:divide-slate-700/50">
+                <TableBody class="divide-y divide-slate-200 dark:divide-slate-700">
                   <For each={sortedRollups()}>
                     {(r) => {
                       const resIndex = resourcesById();
@@ -1858,7 +1858,7 @@ const Recovery: Component = () => {
                       <For each={mobileVisibleArtifactColumns()}>{(col) => <TableHead class="py-0.5 px-3 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap">{col.label}</TableHead>}</For>
                     </TableRow>
                   </TableHeader>
-                  <TableBody class="divide-y divide-slate-200/50 dark:divide-slate-700/50">
+                  <TableBody class="divide-y divide-slate-200 dark:divide-slate-700">
                     <For each={groupedByDay()}>
                       {(group) => (
                         <>
@@ -1897,7 +1897,7 @@ const Recovery: Component = () => {
                               return (
                                 <>
                                   <TableRow
-                                    class={`cursor-pointer border-b ${selectedPoint()?.id === p.id ? 'bg-blue-50/50 border-blue-200 dark:bg-blue-900/30 dark:border-blue-800' : 'border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800/35'}`}
+                                    class={`cursor-pointer border-b ${selectedPoint()?.id === p.id ? 'bg-blue-50 border-blue-200 dark:bg-blue-900 dark:border-blue-800' : 'border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800/35'}`}
                                     onClick={() => setSelectedPoint(selectedPoint()?.id === p.id ? null : p)}
                                   >
                                     <For each={mobileVisibleArtifactColumns()}>

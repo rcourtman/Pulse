@@ -339,8 +339,8 @@ export function Infrastructure() {
     <div data-testid="infrastructure-page" class="space-y-4">
       <Show when={!loading() || initialLoadComplete()} fallback={
         <div class="space-y-3 animate-pulse pointer-events-none select-none">
-          <div class="hidden lg:block h-[124px] w-full bg-slate-100 dark:bg-slate-800/80 rounded-md border border-slate-200 dark:border-slate-700"></div>
-          <Card padding="sm" class="h-[52px] bg-slate-100 dark:bg-slate-800/80"></Card>
+          <div class="hidden lg:block h-[124px] w-full bg-slate-100 dark:bg-slate-800 rounded-md border border-slate-200 dark:border-slate-700"></div>
+          <Card padding="sm" class="h-[52px] bg-slate-100 dark:bg-slate-800"></Card>
           <Card padding="none" tone="card" class="h-[600px] overflow-hidden">
             <div class="h-8 border-b border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800"></div>
             <div class="space-y-4 p-4">

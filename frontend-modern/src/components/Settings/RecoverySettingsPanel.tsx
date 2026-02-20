@@ -49,7 +49,7 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
         bodyClass="divide-y divide-slate-100 dark:divide-slate-800"
       >
         {/* Backup Polling Section */}
-        <div class="p-4 sm:p-6 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+        <div class="p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
           <section class="space-y-3">
             <h4 class="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
               <svg
@@ -218,7 +218,7 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
         </div>
 
         {/* Backup & Restore Section */}
-        <div class="p-4 sm:p-6 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+        <div class="p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
           <SectionHeader
             title="Backup & restore"
             description="Backup your node configurations and credentials or restore from a previous backup."

@@ -32,7 +32,7 @@ export type TableBodyProps = JSX.HTMLAttributes<HTMLTableSectionElement>;
 export function TableBody(props: TableBodyProps) {
     const [local, rest] = splitProps(props, ['class', 'children']);
     return (
-        <tbody class={`divide-y divide-slate-200/50 dark:divide-slate-700/50 ${local.class || ''}`} {...rest}>
+        <tbody class={`divide-y divide-slate-200 dark:divide-slate-700 ${local.class || ''}`} {...rest}>
             {local.children}
         </tbody>
     );
@@ -43,7 +43,7 @@ export type TableRowProps = JSX.HTMLAttributes<HTMLTableRowElement>;
 export function TableRow(props: TableRowProps) {
     const [local, rest] = splitProps(props, ['class', 'children']);
     return (
-        <tr class={`group transition-colors duration-150 hover:bg-slate-50 dark:hover:bg-slate-700/40 ${local.class || ''}`} {...rest}>
+        <tr class={`group transition-colors duration-150 hover:bg-slate-50 dark:hover:bg-slate-700 ${local.class || ''}`} {...rest}>
             {local.children}
         </tr>
     );

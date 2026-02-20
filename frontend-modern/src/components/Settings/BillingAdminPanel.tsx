@@ -323,7 +323,7 @@ export const BillingAdminPanel: Component = () => {
               const orgID = () => (org.org_id || '').trim();
               const billing = () => billingByOrgID()[orgID()];
               return (
-                <div class="px-3 pb-3 bg-slate-50/50 dark:bg-slate-800/50">
+                <div class="px-3 pb-3 bg-slate-50 dark:bg-slate-800">
                   <div class="rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-3">
                     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-2">
                       <div class="text-xs font-semibold text-slate-600 dark:text-slate-300">

@@ -577,7 +577,7 @@ const Storage: Component = () => {
                         <TableHead class="px-1.5 sm:px-2 py-0.5 w-10" />
                       </TableRow>
                     </TableHeader>
-                    <TableBody class="divide-y divide-slate-200/50 dark:divide-slate-700/50">
+                    <TableBody class="divide-y divide-slate-200 dark:divide-slate-700">
                       {/* Outer <For> uses string keys — strings compare by value so DOM is stable across data updates */}
                       <For each={groupedRecords().map((g) => g.key)}>
                         {(groupKey) => {
