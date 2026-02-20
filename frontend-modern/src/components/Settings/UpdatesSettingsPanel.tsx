@@ -54,7 +54,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                 {/* Current Version */}
                 <div class="bg-slate-50 dark:bg-slate-800 p-4">
                   <div class="flex items-start gap-3">
-                    <div class="p-2 bg-blue-100 dark:bg-blue-900/50 rounded-md">
+                    <div class="p-2 bg-blue-100 dark:bg-blue-900 rounded-md">
                       <Package class="w-5 h-5 text-blue-600 dark:text-blue-400" />
                     </div>
                     <div class="flex-1 min-w-0">
@@ -66,12 +66,12 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                       </p>
                       <div class="mt-1.5 flex flex-wrap items-center gap-1.5">
                         <Show when={props.versionInfo()?.isDevelopment}>
-                          <span class="inline-flex items-center px-2 py-0.5 text-[10px] font-medium rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300">
+                          <span class="inline-flex items-center px-2 py-0.5 text-[10px] font-medium rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300">
                             Development
                           </span>
                         </Show>
                         <Show when={props.versionInfo()?.isDocker}>
-                          <span class="inline-flex items-center px-2 py-0.5 text-[10px] font-medium rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300">
+                          <span class="inline-flex items-center px-2 py-0.5 text-[10px] font-medium rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
                             Docker
                           </span>
                         </Show>
@@ -87,7 +87,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
 
                 {/* Update Status / Arrow */}
                 <Show when={props.updateInfo()?.available}>
-                  <div class="bg-green-50 dark:bg-green-900/30 p-4 flex items-center justify-center">
+                  <div class="bg-green-50 dark:bg-green-900 p-4 flex items-center justify-center">
                     <div class="flex flex-col items-center gap-1.5">
                       <div class="flex items-center gap-2 text-green-600 dark:text-green-400">
                         <ArrowRight class="w-5 h-5" />
@@ -101,12 +101,12 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
 
                 {/* Latest Version / Status */}
                 <div class={`p-4 ${props.updateInfo()?.available
-                  ? 'bg-green-50 dark:bg-green-900/20'
+                  ? 'bg-green-50 dark:bg-green-900'
                   : 'bg-slate-50 dark:bg-slate-800'
                   }`}>
                   <div class="flex items-start gap-3">
                     <div class={`p-2 rounded-md ${props.updateInfo()?.available
-                      ? 'bg-green-100 dark:bg-green-900/50'
+                      ? 'bg-green-100 dark:bg-green-800'
                       : 'bg-slate-100 dark:bg-slate-700'
                       }`}>
                       <Show when={props.updateInfo()?.available} fallback={
@@ -177,7 +177,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
 
             {/* Docker installation notice - enhanced with copy-able commands */}
             <Show when={props.versionInfo()?.isDocker && !props.updateInfo()?.available}>
-              <div class="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md space-y-3">
+              <div class="p-4 bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-800 rounded-md space-y-3">
                 <div class="flex items-center gap-2">
                   <svg class="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M13.983 11.078h2.119a.186.186 0 00.186-.185V9.006a.186.186 0 00-.186-.186h-2.119a.186.186 0 00-.185.186v1.887c0 .102.083.185.185.185m-2.954-5.43h2.118a.186.186 0 00.186-.186V3.574a.186.186 0 00-.186-.185h-2.118a.186.186 0 00-.185.185v1.888c0 .102.082.186.185.186m0 2.716h2.118a.187.187 0 00.186-.186V6.29a.186.186 0 00-.186-.185h-2.118a.186.186 0 00-.185.185v1.888c0 .102.082.185.185.186m-2.93 0h2.12a.186.186 0 00.184-.186V6.29a.185.185 0 00-.185-.185H8.1a.185.185 0 00-.185.185v1.888c0 .102.083.185.185.186m-2.964 0h2.119a.186.186 0 00.185-.186V6.29a.186.186 0 00-.185-.185H5.136a.186.186 0 00-.186.185v1.888c0 .102.084.185.186.186m5.893 2.715h2.118a.186.186 0 00.186-.185V9.006a.186.186 0 00-.186-.186h-2.118a.186.186 0 00-.185.186v1.887c0 .102.082.185.185.185m-2.93 0h2.12a.185.185 0 00.184-.185V9.006a.185.185 0 00-.184-.186h-2.12a.185.185 0 00-.184.186v1.887c0 .102.083.185.185.185m-2.964 0h2.119a.185.185 0 00.185-.185V9.006a.185.185 0 00-.185-.186h-2.119a.186.186 0 00-.186.186v1.887c0 .102.084.185.186.185m-2.92 0h2.12a.185.185 0 00.184-.185V9.006a.185.185 0 00-.184-.186h-2.12a.186.186 0 00-.186.186v1.887c0 .102.084.185.186.185m-.001 2.716h2.118a.185.185 0 00.185-.185v-1.888a.185.185 0 00-.185-.185H2.136a.185.185 0 00-.186.185v1.888c0 .102.084.185.186.185m23.063-3.167a.509.509 0 00-.376-.25.431.431 0 00-.116-.01.431.431 0 00-.114.01 3.6 3.6 0 00-1.618.877c-.186.166-.356.36-.509.577a6.6 6.6 0 00-1.117-1.474 6.6 6.6 0 00-9.336 0 6.6 6.6 0 00-1.938 4.684 6.6 6.6 0 001.938 4.684 6.6 6.6 0 004.668 1.938 6.6 6.6 0 004.668-1.938 6.6 6.6 0 001.938-4.684 6.6 6.6 0 00-.185-1.41 3.6 3.6 0 001.587-.904.509.509 0 00.134-.459" />
@@ -206,7 +206,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                     </button>
                   </div>
                   <p class="text-[10px] text-blue-600 dark:text-blue-400">
-                    Or with Docker Compose: <code class="px-1 py-0.5 bg-blue-100 dark:bg-blue-800/50 rounded text-[10px]">docker-compose pull && docker-compose up -d</code>
+                    Or with Docker Compose: <code class="px-1 py-0.5 bg-blue-100 dark:bg-blue-800 rounded text-[10px]">docker-compose pull && docker-compose up -d</code>
                   </p>
                 </div>
               </div>
@@ -214,7 +214,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
 
             {/* Source build notice */}
             <Show when={props.versionInfo()?.isSourceBuild}>
-              <div class="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md">
+              <div class="p-3 bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-800 rounded-md">
                 <p class="text-xs text-blue-800 dark:text-blue-200">
                   <strong>Built from source:</strong> Pull the latest code from git and rebuild to
                   update.
@@ -224,7 +224,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
 
             {/* Warning message */}
             <Show when={Boolean(props.updateInfo()?.warning)}>
-              <div class="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-md">
+              <div class="p-3 bg-amber-50 dark:bg-amber-900 border border-amber-200 dark:border-amber-700 rounded-md">
                 <p class="text-xs text-amber-800 dark:text-amber-200">
                   {props.updateInfo()?.warning}
                 </p>
@@ -233,12 +233,12 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
 
             {/* Update available */}
             <Show when={props.updateInfo()?.available}>
-              <div class="rounded-md border border-green-200 dark:border-green-700 overflow-hidden bg-green-50 dark:bg-green-900/20">
+              <div class="rounded-md border border-green-200 dark:border-green-700 overflow-hidden bg-green-50 dark:bg-green-900">
                 {/* Header */}
-                <div class="px-5 py-4 border-b border-green-200 dark:border-green-800/50 bg-green-100/80 dark:bg-green-900/40">
+                <div class="px-5 py-4 border-b border-green-200 dark:border-green-800 bg-green-100 dark:bg-green-800">
                   <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div class="flex items-center gap-3">
-                      <div class="p-2 bg-green-100 dark:bg-green-900/40 rounded-md">
+                      <div class="p-2 bg-green-100 dark:bg-green-900 rounded-md">
                         <svg class="w-5 h-5 text-green-700 dark:text-green-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                           <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                         </svg>
@@ -261,7 +261,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                         disabled={props.isInstalling()}
                         class={`w-full justify-center sm:w-auto px-4 py-2.5 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${props.isInstalling()
                           ? 'bg-green-400 dark:bg-green-600 text-white cursor-not-allowed'
-                          : 'bg-green-600 hover:bg-green-700 text-white shadow-sm shadow-green-500/25 hover:shadow-green-500/40'
+                          : 'bg-green-600 hover:bg-green-700 text-white'
                           }`}
                       >
                         <Show when={props.isInstalling()} fallback={
@@ -486,7 +486,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
 
                 {/* Release notes footer */}
                 <Show when={props.updateInfo()?.releaseNotes}>
-                  <div class="px-5 py-3 border-t border-green-200 dark:border-green-800/50 bg-white dark:bg-slate-800">
+                  <div class="px-5 py-3 border-t border-green-200 dark:border-green-800 bg-white dark:bg-slate-800">
                     <details class="group">
                       <summary class="flex items-center gap-2 text-sm font-medium text-green-700 dark:text-green-300 cursor-pointer hover:text-green-800 dark:hover:text-green-200 transition-colors">
                         <svg class="w-4 h-4 transition-transform group-open:rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -524,13 +524,13 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                   }}
                   disabled={props.versionInfo()?.isSourceBuild}
                   class={`p-4 rounded-md border-2 transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed ${props.updateChannel() === 'stable'
-                    ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
+                    ? 'border-green-500 bg-green-50 dark:bg-green-900'
                     : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
                     }`}
                 >
                   <div class="flex items-center gap-3">
                     <div class={`p-2 rounded-md ${props.updateChannel() === 'stable'
-                      ? 'bg-green-100 dark:bg-green-900/40'
+                      ? 'bg-green-100 dark:bg-green-800'
                       : 'bg-slate-100 dark:bg-slate-800'
                       }`}>
                       <svg class={`w-5 h-5 ${props.updateChannel() === 'stable'
@@ -560,13 +560,13 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                   }}
                   disabled={props.versionInfo()?.isSourceBuild}
                   class={`p-4 rounded-md border-2 transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed ${props.updateChannel() === 'rc'
-                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900'
                     : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
                     }`}
                 >
                   <div class="flex items-center gap-3">
                     <div class={`p-2 rounded-md ${props.updateChannel() === 'rc'
-                      ? 'bg-blue-100 dark:bg-blue-900/40'
+                      ? 'bg-blue-100 dark:bg-blue-800'
                       : 'bg-slate-100 dark:bg-slate-800'
                       }`}>
                       <svg class={`w-5 h-5 ${props.updateChannel() === 'rc'
@@ -590,10 +590,10 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
               </div>
 
               {/* Auto Update Toggle */}
-              <div class="p-4 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800">
+              <div class="p-4 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
                 <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                   <div class="flex items-center gap-3">
-                    <div class="p-2 bg-blue-100 dark:bg-blue-900/40 rounded-md">
+                    <div class="p-2 bg-blue-100 dark:bg-blue-900 rounded-md">
                       <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
