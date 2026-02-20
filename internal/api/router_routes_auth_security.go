@@ -57,13 +57,13 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 		}
 	})
 	r.mux.HandleFunc("/api/security/sso/providers/test", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, func(w http.ResponseWriter, req *http.Request) {
-		if !ensureScope(w, req, config.ScopeSettingsWrite) {
+		if !ensureSettingsWriteScope(r.config, w, req) {
 			return
 		}
 		r.handleTestSSOProvider(w, req)
 	}))
 	r.mux.HandleFunc("/api/security/sso/providers/metadata/preview", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, func(w http.ResponseWriter, req *http.Request) {
-		if !ensureScope(w, req, config.ScopeSettingsRead) {
+		if !ensureSettingsReadScope(r.config, w, req) {
 			return
 		}
 		r.handleMetadataPreview(w, req)
@@ -71,11 +71,11 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 	r.mux.HandleFunc("/api/security/sso/providers", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
 		case http.MethodGet:
-			if !ensureScope(w, req, config.ScopeSettingsRead) {
+			if !ensureSettingsReadScope(r.config, w, req) {
 				return
 			}
 		case http.MethodPost:
-			if !ensureScope(w, req, config.ScopeSettingsWrite) {
+			if !ensureSettingsWriteScope(r.config, w, req) {
 				return
 			}
 		default:
@@ -87,11 +87,11 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 	r.mux.HandleFunc("/api/security/sso/providers/", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
 		case http.MethodGet:
-			if !ensureScope(w, req, config.ScopeSettingsRead) {
+			if !ensureSettingsReadScope(r.config, w, req) {
 				return
 			}
 		case http.MethodPut, http.MethodDelete:
-			if !ensureScope(w, req, config.ScopeSettingsWrite) {
+			if !ensureSettingsWriteScope(r.config, w, req) {
 				return
 			}
 		default:
