@@ -387,7 +387,7 @@ export function ResourceTable(props: ResourceTableProps) {
           )}
         </Show>
         <Show when={meta.clusterName}>
-          <span class="rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+          <span class="rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
             {meta.clusterName}
           </span>
         </Show>
@@ -455,13 +455,13 @@ export function ResourceTable(props: ResourceTableProps) {
     warning: {
       label: 'Warn',
       className:
-        'bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-500/20 dark:text-blue-200 dark:hover:bg-blue-500/30',
+        'bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-900 dark:text-blue-200 dark:hover:bg-blue-800',
       title: 'Offline alerts will raise warning-level notifications.',
     },
     critical: {
       label: 'Crit',
       className:
-        'bg-red-50 text-red-700 hover:bg-red-100 dark:bg-red-500/20 dark:text-red-200 dark:hover:bg-red-500/30',
+        'bg-red-50 text-red-700 hover:bg-red-100 dark:bg-red-900 dark:text-red-200 dark:hover:bg-red-800',
       title: 'Offline alerts will raise critical-level notifications.',
     },
   };
@@ -497,7 +497,7 @@ export function ResourceTable(props: ResourceTableProps) {
     <div class="space-y-4">
       {/* Global Defaults - Mobile Card */}
       <Show when={props.globalDefaults && props.setGlobalDefaults && props.setHasUnsavedChanges}>
-        <Card padding="sm" class="border border-blue-200 dark:border-blue-800 bg-blue-50/30 dark:bg-blue-900/10">
+        <Card padding="sm" class="border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900">
           <div class="flex justify-between items-center mb-3">
             <div class="flex items-center gap-2">
               <span class="font-semibold text-sm">Global Defaults</span>
@@ -628,7 +628,7 @@ export function ResourceTable(props: ResourceTableProps) {
                           <button
                             type="button"
                             onClick={() => props.onEdit(resource.id, resource.thresholds ? { ...resource.thresholds } : {}, resource.defaults ? { ...resource.defaults } : {}, resource.note)}
-                            class="p-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 rounded"
+                            class="p-1.5 bg-blue-50 dark:bg-blue-900 text-blue-600 rounded"
                             aria-label={`Edit thresholds for ${resource.displayName || resource.name}`}
                           >
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
@@ -646,7 +646,7 @@ export function ResourceTable(props: ResourceTableProps) {
                           <button
                             type="button"
                             onClick={() => { props.onSaveEdit(resource.id); setActiveMetricInput(null); }}
-                            class="p-1.5 bg-green-50 dark:bg-green-900/30 text-green-600 rounded"
+                            class="p-1.5 bg-green-50 dark:bg-green-900 text-green-600 rounded"
                             aria-label={`Save threshold edits for ${resource.displayName || resource.name}`}
                           >
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
@@ -656,7 +656,7 @@ export function ResourceTable(props: ResourceTableProps) {
                           <button
                             type="button"
                             onClick={() => props.onRemoveOverride(resource.id)}
-                            class="p-1.5 bg-red-50 dark:bg-red-900/30 text-red-600 rounded"
+                            class="p-1.5 bg-red-50 dark:bg-red-900 text-red-600 rounded"
                             aria-label={`Remove override for ${resource.displayName || resource.name}`}
                           >
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
@@ -677,7 +677,7 @@ export function ResourceTable(props: ResourceTableProps) {
                     </Show>
 
                     {/* Metrics Grid */}
-                    <div class="grid grid-cols-2 gap-2 text-sm border-t pt-2 dark:border-slate-700/50">
+                    <div class="grid grid-cols-2 gap-2 text-sm border-t pt-2 dark:border-slate-800">
                       <For each={props.columns}>
                         {(column) => {
                           const metric = normalizeMetricKey(column);
@@ -818,7 +818,7 @@ export function ResourceTable(props: ResourceTableProps) {
                         Global Defaults
                       </span>
                       <Show when={hasCustomGlobalDefaults()}>
-                        <span class="text-xs px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded">
+                        <span class="text-xs px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
                           Custom
                         </span>
                       </Show>
@@ -1137,7 +1137,7 @@ export function ResourceTable(props: ResourceTableProps) {
 
                             return (
                               <tr
-                                class={`hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors ${resource.disabled || props.globalDisableFlag?.() ? 'opacity-40' : ''}`}
+                                class={`hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors ${resource.disabled || props.globalDisableFlag?.() ? 'opacity-40' : ''}`}
                               >
                                 {/* Alert toggle column */}
                                 <td class="p-1 px-2 text-center align-middle">
@@ -1221,12 +1221,12 @@ export function ResourceTable(props: ResourceTableProps) {
                                           )}
                                         </Show>
                                         <Show when={resource.clusterName}>
-                                          <span class="rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                                          <span class="rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
                                             {resource.clusterName}
                                           </span>
                                         </Show>
                                         <Show when={resource.type === 'storage' && resource.node}>
-                                          <span class="rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">
+                                          <span class="rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300">
                                             {resource.node}
                                           </span>
                                         </Show>
@@ -1238,7 +1238,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                       </span>
                                     </Show>
                                     <Show when={resource.hasOverride || resource.disableConnectivity}>
-                                      <span class="text-xs px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded">
+                                      <span class="text-xs px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
                                         Custom
                                       </span>
                                     </Show>
@@ -1677,7 +1677,7 @@ export function ResourceTable(props: ResourceTableProps) {
 
                         return (
                           <tr
-                            class={`hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors ${resource.disabled || props.globalDisableFlag?.() ? 'opacity-40' : ''}`}
+                            class={`hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors ${resource.disabled || props.globalDisableFlag?.() ? 'opacity-40' : ''}`}
                           >
                             {/* Alert toggle column */}
                             <td class="p-1 px-2 text-center align-middle">
@@ -1724,7 +1724,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                       {resource.name}
                                     </span>
                                     <Show when={resource.hasOverride || resource.disableConnectivity}>
-                                      <span class="text-xs px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded">
+                                      <span class="text-xs px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
                                         Custom
                                       </span>
                                     </Show>
@@ -1766,12 +1766,12 @@ export function ResourceTable(props: ResourceTableProps) {
                                     )}
                                   </Show>
                                   <Show when={resource.clusterName}>
-                                    <span class="rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                                    <span class="rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
                                       {resource.clusterName}
                                     </span>
                                   </Show>
                                   <Show when={resource.hasOverride || resource.disableConnectivity}>
-                                    <span class="text-xs px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded">
+                                    <span class="text-xs px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
                                       Custom
                                     </span>
                                   </Show>
