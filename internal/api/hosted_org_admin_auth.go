@@ -15,8 +15,9 @@ import (
 // - Proxy auth admin role
 // - Dev bypass
 //
-// Session/OIDC users and API tokens are denied to prevent tenant users from
-// invoking hosted control-plane operations.
+// Session/OIDC are allowed only for the configured platform admin user.
+// API tokens are denied to prevent tenant users from invoking hosted
+// control-plane operations with bearer credentials.
 func RequirePlatformAdmin(cfg *config.Config, handler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if adminBypassEnabled() {
@@ -35,10 +36,21 @@ func RequirePlatformAdmin(cfg *config.Config, handler http.HandlerFunc) http.Han
 			return
 		}
 
-		switch strings.TrimSpace(w.Header().Get("X-Auth-Method")) {
+		authMethod := strings.TrimSpace(w.Header().Get("X-Auth-Method"))
+		authUser := strings.TrimSpace(w.Header().Get("X-Authenticated-User"))
+
+		switch authMethod {
 		case "basic", "bypass":
 			handler(w, r)
 			return
+		case "session", "oidc":
+			if cfg != nil {
+				configuredAdmin := strings.TrimSpace(cfg.AuthUser)
+				if configuredAdmin != "" && authUser == configuredAdmin {
+					handler(w, r)
+					return
+				}
+			}
 		case "proxy":
 			if cfg != nil && cfg.ProxyAuthSecret != "" {
 				if valid, username, isAdmin := CheckProxyAuth(cfg, r); valid && isAdmin {

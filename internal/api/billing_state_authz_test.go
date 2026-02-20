@@ -127,3 +127,19 @@ func TestHostedOrganizationsList_SessionUserGets403(t *testing.T) {
 		t.Fatalf("expected 403 for non-platform session on hosted organizations, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
+
+func TestHostedOrganizationsList_ConfiguredAdminSessionGets200(t *testing.T) {
+	router := newHostedAuthzTestRouter(t)
+
+	sessionToken := "billing-authz-admin-session"
+	GetSessionStore().CreateSession(sessionToken, time.Hour, "agent", "127.0.0.1", "admin")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/hosted/organizations", nil)
+	req.AddCookie(&http.Cookie{Name: "pulse_session", Value: sessionToken})
+	rec := httptest.NewRecorder()
+	router.mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for configured admin session, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
