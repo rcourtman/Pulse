@@ -180,8 +180,23 @@ func (r *Router) handleGetSSOProvider(w http.ResponseWriter, req *http.Request, 
 		return
 	}
 
+	// Return the full provider config so the edit form can populate all fields.
+	// We make a shallow copy and redact sensitive secrets.
+	safe := *provider
+	if safe.OIDC != nil {
+		oidcCopy := *safe.OIDC
+		oidcCopy.ClientSecretSet = oidcCopy.ClientSecret != "" || oidcCopy.ClientSecretSet
+		oidcCopy.ClientSecret = "" // Never expose the secret
+		safe.OIDC = &oidcCopy
+	}
+	if safe.SAML != nil {
+		samlCopy := *safe.SAML
+		samlCopy.SPPrivateKey = "" // Never expose private key
+		safe.SAML = &samlCopy
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(providerToResponse(provider, r.config.PublicURL))
+	json.NewEncoder(w).Encode(safe)
 }
 
 func (r *Router) handleCreateSSOProvider(w http.ResponseWriter, req *http.Request) {
@@ -269,6 +284,11 @@ func (r *Router) handleCreateSSOProvider(w http.ResponseWriter, req *http.Reques
 	if r.ssoConfig.GetProvider(provider.ID) != nil {
 		writeErrorResponse(w, http.StatusConflict, "duplicate_id", "Provider with this ID already exists", nil)
 		return
+	}
+
+	// Track whether secrets are configured (so updates can preserve them)
+	if provider.OIDC != nil && provider.OIDC.ClientSecret != "" {
+		provider.OIDC.ClientSecretSet = true
 	}
 
 	// Add provider
@@ -379,9 +399,19 @@ func (r *Router) handleUpdateSSOProvider(w http.ResponseWriter, req *http.Reques
 
 	// Preserve secrets if not provided in update
 	if updated.Type == config.SSOProviderTypeOIDC && updated.OIDC != nil && existing.OIDC != nil {
-		if updated.OIDC.ClientSecret == "" && existing.OIDC.ClientSecretSet {
+		if updated.OIDC.ClientSecret == "" && (existing.OIDC.ClientSecretSet || existing.OIDC.ClientSecret != "") {
 			updated.OIDC.ClientSecret = existing.OIDC.ClientSecret
 			updated.OIDC.ClientSecretSet = true
+		} else if updated.OIDC.ClientSecret != "" {
+			updated.OIDC.ClientSecretSet = true
+		}
+	}
+	if updated.Type == config.SSOProviderTypeSAML && updated.SAML != nil && existing.SAML != nil {
+		if updated.SAML.SPPrivateKey == "" && existing.SAML.SPPrivateKey != "" {
+			updated.SAML.SPPrivateKey = existing.SAML.SPPrivateKey
+		}
+		if updated.SAML.SPCertificate == "" && existing.SAML.SPCertificate != "" {
+			updated.SAML.SPCertificate = existing.SAML.SPCertificate
 		}
 	}
 

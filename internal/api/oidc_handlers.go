@@ -247,7 +247,7 @@ func (r *Router) handleOIDCCallback(w http.ResponseWriter, req *http.Request) {
 		log.Debug().Msg("User group membership verified")
 	}
 
-	// RBAC Integration: Map OIDC groups to Pulse roles
+	// RBAC Integration: Map OIDC groups to Pulse roles and ensure user is registered
 	if authManager := internalauth.GetManager(); authManager != nil {
 		groups := extractStringSliceClaim(claims, cfg.GroupsClaim)
 		var rolesToAssign []string
@@ -274,6 +274,9 @@ func (r *Router) handleOIDCCallback(w http.ResponseWriter, req *http.Request) {
 			} else {
 				LogAuditEventForTenant(GetOrgID(req.Context()), "oidc_role_assignment", username, GetClientIP(req), req.URL.Path, true, "Auto-assigned roles: "+strings.Join(rolesToAssign, ", "))
 			}
+		} else if _, exists := authManager.GetUserAssignment(username); !exists {
+			// Ensure SSO user appears in the Users list even without role mappings
+			_ = authManager.UpdateUserRoles(username, []string{})
 		}
 	}
 

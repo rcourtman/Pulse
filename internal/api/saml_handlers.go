@@ -205,16 +205,18 @@ func (r *Router) handleSAMLACS(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	// RBAC Integration: Map SAML groups to Pulse roles
-	if authManager := internalauth.GetManager(); authManager != nil && len(provider.GroupRoleMappings) > 0 {
+	// RBAC Integration: Map SAML groups to Pulse roles and ensure user is registered
+	if authManager := internalauth.GetManager(); authManager != nil {
 		var rolesToAssign []string
 		seenRoles := make(map[string]bool)
 
-		for _, group := range result.Groups {
-			if roleID, ok := provider.GroupRoleMappings[group]; ok {
-				if !seenRoles[roleID] {
-					rolesToAssign = append(rolesToAssign, roleID)
-					seenRoles[roleID] = true
+		if len(provider.GroupRoleMappings) > 0 {
+			for _, group := range result.Groups {
+				if roleID, ok := provider.GroupRoleMappings[group]; ok {
+					if !seenRoles[roleID] {
+						rolesToAssign = append(rolesToAssign, roleID)
+						seenRoles[roleID] = true
+					}
 				}
 			}
 		}
@@ -230,6 +232,9 @@ func (r *Router) handleSAMLACS(w http.ResponseWriter, req *http.Request) {
 			} else {
 				LogAuditEventForTenant(GetOrgID(req.Context()), "saml_role_assignment", result.Username, GetClientIP(req), req.URL.Path, true, "Auto-assigned roles: "+strings.Join(rolesToAssign, ", "))
 			}
+		} else if _, exists := authManager.GetUserAssignment(result.Username); !exists {
+			// Ensure SSO user appears in the Users list even without role mappings
+			_ = authManager.UpdateUserRoles(result.Username, []string{})
 		}
 	}
 
