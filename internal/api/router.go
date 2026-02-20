@@ -768,10 +768,7 @@ func (r *Router) isValidSetupTokenForRequest(req *http.Request) bool {
 		return false
 	}
 
-	requestOrgID := GetOrgID(req.Context())
-	if explicitOrgID, explicit := resolveExplicitWebSocketOrgID(req); explicit {
-		requestOrgID = explicitOrgID
-	}
+	requestOrgID := resolveTenantOrgID(req)
 	if !isValidOrganizationID(requestOrgID) {
 		return false
 	}

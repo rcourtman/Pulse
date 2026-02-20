@@ -3925,6 +3925,30 @@ func TestVerifyTemperatureSSHRejectsSetupTokenOrgMismatch(t *testing.T) {
 	}
 }
 
+func TestVerifyTemperatureSSHRejectsSetupTokenOrgIDQueryBypass(t *testing.T) {
+	cfg := newTestConfigWithTokens(t)
+	cfg.AuthUser = "admin"
+	cfg.AuthPass = "hashed"
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	token := "11223344556677889900aabbccddeeff"
+	tokenHash := auth.HashAPIToken(token)
+	router.configHandlers.codeMutex.Lock()
+	router.configHandlers.setupCodes[tokenHash] = &SetupCode{
+		ExpiresAt: time.Now().Add(time.Minute),
+		OrgID:     "org-a",
+	}
+	router.configHandlers.codeMutex.Unlock()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/system/verify-temperature-ssh?org_id=org-a", strings.NewReader(`{"nodes":""}`))
+	req.Header.Set("X-Setup-Token", token)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code == http.StatusOK {
+		t.Fatalf("expected org_id query bypass attempt to be rejected, got %d", rec.Code)
+	}
+}
+
 func TestSSHConfigAllowsSetupToken(t *testing.T) {
 	cfg := newTestConfigWithTokens(t)
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
