@@ -37,68 +37,68 @@ describe('MetricBar', () => {
 
   it('renders correct color classes for CPU', () => {
     let result = render(() => <MetricBar value={50} label="val" type="cpu" />);
-    let bar = result.container.querySelector('.bg-green-500');
+    let bar = result.container.querySelector('.bg-green-500\\/60');
     expect(bar).toBeInTheDocument();
     result.unmount();
 
     result = render(() => <MetricBar value={80} label="val" type="cpu" />);
-    bar = result.container.querySelector('.bg-yellow-500');
+    bar = result.container.querySelector('.bg-yellow-500\\/60');
     expect(bar).toBeInTheDocument();
     result.unmount();
 
     result = render(() => <MetricBar value={90} label="val" type="cpu" />);
-    bar = result.container.querySelector('.bg-red-500');
+    bar = result.container.querySelector('.bg-red-500\\/60');
     expect(bar).toBeInTheDocument();
     result.unmount();
   });
 
   it('renders correct color classes for Memory', () => {
     let result = render(() => <MetricBar value={50} label="val" type="memory" />);
-    let bar = result.container.querySelector('.bg-green-500');
+    let bar = result.container.querySelector('.bg-green-500\\/60');
     expect(bar).toBeInTheDocument();
     result.unmount();
 
     result = render(() => <MetricBar value={75} label="val" type="memory" />);
-    bar = result.container.querySelector('.bg-yellow-500');
+    bar = result.container.querySelector('.bg-yellow-500\\/60');
     expect(bar).toBeInTheDocument();
     result.unmount();
 
     result = render(() => <MetricBar value={85} label="val" type="memory" />);
-    bar = result.container.querySelector('.bg-red-500');
+    bar = result.container.querySelector('.bg-red-500\\/60');
     expect(bar).toBeInTheDocument();
     result.unmount();
   });
 
   it('renders correct color classes for Disk', () => {
     let result = render(() => <MetricBar value={50} label="val" type="disk" />);
-    let bar = result.container.querySelector('.bg-green-500');
+    let bar = result.container.querySelector('.bg-green-500\\/60');
     expect(bar).toBeInTheDocument();
     result.unmount();
 
     result = render(() => <MetricBar value={80} label="val" type="disk" />);
-    bar = result.container.querySelector('.bg-yellow-500');
+    bar = result.container.querySelector('.bg-yellow-500\\/60');
     expect(bar).toBeInTheDocument();
     result.unmount();
 
     result = render(() => <MetricBar value={90} label="val" type="disk" />);
-    bar = result.container.querySelector('.bg-red-500');
+    bar = result.container.querySelector('.bg-red-500\\/60');
     expect(bar).toBeInTheDocument();
     result.unmount();
   });
 
   it('renders correct color classes for Generic/Default (uses CPU thresholds)', () => {
     let result = render(() => <MetricBar value={50} label="val" />);
-    let bar = result.container.querySelector('.bg-green-500');
+    let bar = result.container.querySelector('.bg-green-500\\/60');
     expect(bar).toBeInTheDocument();
     result.unmount();
 
     result = render(() => <MetricBar value={80} label="val" />);
-    bar = result.container.querySelector('.bg-yellow-500');
+    bar = result.container.querySelector('.bg-yellow-500\\/60');
     expect(bar).toBeInTheDocument();
     result.unmount();
 
     result = render(() => <MetricBar value={90} label="val" />);
-    bar = result.container.querySelector('.bg-red-500');
+    bar = result.container.querySelector('.bg-red-500\\/60');
     expect(bar).toBeInTheDocument();
     result.unmount();
   });

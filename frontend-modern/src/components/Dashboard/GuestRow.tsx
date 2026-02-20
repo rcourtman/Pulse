@@ -746,7 +746,9 @@ export function GuestRow(props: GuestRowProps) {
   });
 
   const rowStyle = createMemo(() => {
-    const styles: Record<string, string> = {};
+    const styles: Record<string, string> = {
+      'min-height': '36px',
+    };
 
     // Alert styling
     if (showAlertHighlight()) {

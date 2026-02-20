@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { deriveTabFromPath, settingsTabPath, type SettingsTab } from '../settingsRouting';
+import * as fs from 'fs';
+import * as path from 'path';
 import { getTabLockReason, isTabLocked } from '../settingsFeatureGates';
 
 const canonicalTabPaths = {
@@ -87,8 +89,9 @@ describe('settingsNavigation integration scaffold', () => {
     expect(onMountBody).not.toContain('runDiagnostics');
   });
 
-  it('panel registry covers all dispatchable tabs', async () => {
-    const registrySource = (await import('../settingsPanelRegistry.ts?raw')).default;
+  it('panel registry covers all dispatchable tabs', () => {
+    const registryPath = path.join(__dirname, '..', 'settingsPanelRegistry.ts');
+    const registrySource = fs.readFileSync(registryPath, 'utf8');
     const allTabs = Object.keys(canonicalTabPaths) as SettingsTab[];
     const dispatchableTabs = allTabs.filter((tab) => tab !== 'proxmox');
     for (const tab of dispatchableTabs) {

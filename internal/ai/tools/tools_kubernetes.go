@@ -8,6 +8,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 // registerKubernetesTools registers the pulse_kubernetes tool
@@ -107,96 +108,109 @@ func (e *PulseToolExecutor) executeKubernetes(ctx context.Context, args map[stri
 }
 
 func (e *PulseToolExecutor) executeGetKubernetesClusters(_ context.Context) (CallToolResult, error) {
-	if e.stateProvider == nil {
-		return NewTextResult("State provider not available."), nil
+	rs, err := e.readStateForControl()
+	if err != nil {
+		return NewErrorResult(err), nil
 	}
 
-	state := e.stateProvider.GetState()
-
-	if len(state.KubernetesClusters) == 0 {
+	clusters := rs.K8sClusters()
+	if len(clusters) == 0 {
 		return NewTextResult("No Kubernetes clusters found. Kubernetes monitoring may not be configured."), nil
 	}
 
-	var clusters []KubernetesClusterSummary
-	for _, c := range state.KubernetesClusters {
+	var summaries []KubernetesClusterSummary
+	for _, c := range clusters {
+		var clusterNodes []unifiedresources.K8sNodeView
+		for _, node := range rs.K8sNodes() {
+			if node.ParentID() == c.ID() {
+				clusterNodes = append(clusterNodes, *node)
+			}
+		}
+
 		readyNodes := 0
-		for _, node := range c.Nodes {
-			if node.Ready {
+		for _, node := range clusterNodes {
+			if node.Ready() {
 				readyNodes++
 			}
 		}
 
-		displayName := c.DisplayName
-		if c.CustomDisplayName != "" {
-			displayName = c.CustomDisplayName
+		podCount := 0
+		for _, pod := range rs.Pods() {
+			if pod.ParentID() == c.ID() {
+				podCount++
+			}
 		}
 
-		clusters = append(clusters, KubernetesClusterSummary{
-			ID:              c.ID,
-			Name:            c.Name,
-			DisplayName:     displayName,
-			Server:          c.Server,
-			Version:         c.Version,
-			Status:          c.Status,
-			NodeCount:       len(c.Nodes),
-			PodCount:        len(c.Pods),
-			DeploymentCount: len(c.Deployments),
+		depCount := 0
+		for _, dep := range rs.K8sDeployments() {
+			if dep.ParentID() == c.ID() {
+				depCount++
+			}
+		}
+
+		summaries = append(summaries, KubernetesClusterSummary{
+			ID:              c.ID(),
+			Name:            c.SourceName(),
+			DisplayName:     c.ClusterName(),
+			Server:          c.Server(),
+			Version:         c.Version(),
+			Status:          string(c.Status()),
+			NodeCount:       len(clusterNodes),
+			PodCount:        podCount,
+			DeploymentCount: depCount,
 			ReadyNodes:      readyNodes,
 		})
 	}
 
 	response := KubernetesClustersResponse{
-		Clusters: clusters,
-		Total:    len(clusters),
+		Clusters: summaries,
+		Total:    len(summaries),
 	}
 
 	return NewJSONResult(response), nil
 }
 
 func (e *PulseToolExecutor) executeGetKubernetesNodes(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
-	if e.stateProvider == nil {
-		return NewTextResult("State provider not available."), nil
-	}
-
 	clusterArg, _ := args["cluster"].(string)
 	if clusterArg == "" {
 		return NewErrorResult(fmt.Errorf("cluster is required")), nil
 	}
 
-	state := e.stateProvider.GetState()
+	rs, err := e.readStateForControl()
+	if err != nil {
+		return NewErrorResult(err), nil
+	}
 
-	// Find the cluster (also match CustomDisplayName)
 	var cluster *KubernetesClusterSummary
-	for _, c := range state.KubernetesClusters {
-		if c.ID == clusterArg || c.Name == clusterArg || c.DisplayName == clusterArg || c.CustomDisplayName == clusterArg {
-			displayName := c.DisplayName
-			if c.CustomDisplayName != "" {
-				displayName = c.CustomDisplayName
-			}
+	for _, c := range rs.K8sClusters() {
+		if c.ID() == clusterArg || c.Name() == clusterArg || c.ClusterName() == clusterArg {
 			cluster = &KubernetesClusterSummary{
-				ID:          c.ID,
-				Name:        c.Name,
-				DisplayName: displayName,
+				ID:          c.ID(),
+				Name:        c.SourceName(),
+				DisplayName: c.ClusterName(),
 			}
 
 			var nodes []KubernetesNodeSummary
-			for _, node := range c.Nodes {
+			for _, node := range rs.K8sNodes() {
+				if node.ParentID() != c.ID() {
+					continue
+				}
 				nodes = append(nodes, KubernetesNodeSummary{
-					UID:                     node.UID,
-					Name:                    node.Name,
-					Ready:                   node.Ready,
-					Unschedulable:           node.Unschedulable,
-					Roles:                   node.Roles,
-					KubeletVersion:          node.KubeletVersion,
-					ContainerRuntimeVersion: node.ContainerRuntimeVersion,
-					OSImage:                 node.OSImage,
-					Architecture:            node.Architecture,
-					CapacityCPU:             node.CapacityCPU,
-					CapacityMemoryBytes:     node.CapacityMemoryBytes,
-					CapacityPods:            node.CapacityPods,
-					AllocatableCPU:          node.AllocCPU,
-					AllocatableMemoryBytes:  node.AllocMemoryBytes,
-					AllocatablePods:         node.AllocPods,
+					UID:                     node.UID(),
+					Name:                    node.Name(),
+					Ready:                   node.Ready(),
+					Unschedulable:           node.Unschedulable(),
+					Roles:                   node.Roles(),
+					KubeletVersion:          node.KubeletVersion(),
+					ContainerRuntimeVersion: node.ContainerRuntimeVersion(),
+					OSImage:                 node.OSImage(),
+					Architecture:            node.Architecture(),
+					CapacityCPU:             node.CapacityCPU(),
+					CapacityMemoryBytes:     node.CapacityMemoryBytes(),
+					CapacityPods:            node.CapacityPods(),
+					AllocatableCPU:          node.AllocCPU(),
+					AllocatableMemoryBytes:  node.AllocMemoryBytes(),
+					AllocatablePods:         node.AllocPods(),
 				})
 			}
 
@@ -216,10 +230,6 @@ func (e *PulseToolExecutor) executeGetKubernetesNodes(_ context.Context, args ma
 }
 
 func (e *PulseToolExecutor) executeGetKubernetesPods(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
-	if e.stateProvider == nil {
-		return NewTextResult("State provider not available."), nil
-	}
-
 	clusterArg, _ := args["cluster"].(string)
 	if clusterArg == "" {
 		return NewErrorResult(fmt.Errorf("cluster is required")), nil
@@ -230,72 +240,85 @@ func (e *PulseToolExecutor) executeGetKubernetesPods(_ context.Context, args map
 	limit := intArg(args, "limit", 100)
 	offset := intArg(args, "offset", 0)
 
-	state := e.stateProvider.GetState()
+	rs, err := e.readStateForControl()
+	if err != nil {
+		return NewErrorResult(err), nil
+	}
 
-	// Find the cluster (also match CustomDisplayName)
-	for _, c := range state.KubernetesClusters {
-		if c.ID == clusterArg || c.Name == clusterArg || c.DisplayName == clusterArg || c.CustomDisplayName == clusterArg {
-			displayName := c.DisplayName
-			if c.CustomDisplayName != "" {
-				displayName = c.CustomDisplayName
-			}
-
+	for _, c := range rs.K8sClusters() {
+		if c.ID() == clusterArg || c.Name() == clusterArg || c.ClusterName() == clusterArg {
 			var pods []KubernetesPodSummary
-			totalPods := 0
+			totalClusterPods := 0
 			filteredCount := 0
 
-			for _, pod := range c.Pods {
-				// Apply filters
-				if namespaceFilter != "" && pod.Namespace != namespaceFilter {
+			for _, pod := range rs.Pods() {
+				if pod.ParentID() != c.ID() {
 					continue
 				}
-				if statusFilter != "" && !strings.EqualFold(pod.Phase, statusFilter) {
+				totalClusterPods++
+
+				// Apply filters
+				if namespaceFilter != "" && pod.Namespace() != namespaceFilter {
+					continue
+				}
+				if statusFilter != "" && !strings.EqualFold(pod.Phase(), statusFilter) {
 					continue
 				}
 
 				filteredCount++
+			}
 
-				// Apply pagination
-				if totalPods < offset {
-					totalPods++
+			// Do proper pagination over filtered
+			currentFilteredIndex := 0
+			addedCount := 0
+
+			for _, pod := range rs.Pods() {
+				if pod.ParentID() != c.ID() {
 					continue
 				}
-				if len(pods) >= limit {
-					totalPods++
+
+				if namespaceFilter != "" && pod.Namespace() != namespaceFilter {
+					continue
+				}
+				if statusFilter != "" && !strings.EqualFold(pod.Phase(), statusFilter) {
 					continue
 				}
 
-				var containers []KubernetesPodContainerSummary
-				for _, container := range pod.Containers {
-					containers = append(containers, KubernetesPodContainerSummary{
-						Name:         container.Name,
-						Ready:        container.Ready,
-						State:        container.State,
-						RestartCount: container.RestartCount,
-						Reason:       container.Reason,
-					})
+				if currentFilteredIndex < offset {
+					currentFilteredIndex++
+					continue
 				}
+				if addedCount >= limit {
+					break // Stop processing once limit is reached
+				}
+
+				currentFilteredIndex++
+				addedCount++
+
+				var containers []KubernetesPodContainerSummary // Not populated natively via PodView yet (might need adjustments, let's keep it empty or assume we adapt if needed - actually K8sData doesn't store containers for PodView)
 
 				pods = append(pods, KubernetesPodSummary{
-					UID:        pod.UID,
-					Name:       pod.Name,
-					Namespace:  pod.Namespace,
-					NodeName:   pod.NodeName,
-					Phase:      pod.Phase,
-					Reason:     pod.Reason,
-					Restarts:   pod.Restarts,
-					QoSClass:   pod.QoSClass,
-					OwnerKind:  pod.OwnerKind,
-					OwnerName:  pod.OwnerName,
-					Containers: containers,
+					UID:           pod.UID(),
+					Name:          pod.Name(),
+					Namespace:     pod.Namespace(),
+					Phase:         pod.Phase(),
+					HostIP:        "", // PodView doesn't expose HostIP natively, omit for now
+					PodIP:         "", // Omit
+					UptimeSeconds: pod.UptimeSeconds(),
+					Containers:    containers,
+					Condition:     pod.Phase(),
+					TargetHost:    pod.NodeName(),
+					Metrics: KubernetesMetricsSummary{
+						CPUPercent:    pod.CPUPercent(),
+						MemoryPercent: pod.MemoryPercent(),
+					},
 				})
-				totalPods++
 			}
 
 			response := KubernetesPodsResponse{
-				Cluster:  displayName,
+				Cluster:  c.ClusterName(),
 				Pods:     pods,
-				Total:    len(c.Pods),
+				Total:    totalClusterPods,
 				Filtered: filteredCount,
 			}
 			if response.Pods == nil {
@@ -309,10 +332,6 @@ func (e *PulseToolExecutor) executeGetKubernetesPods(_ context.Context, args map
 }
 
 func (e *PulseToolExecutor) executeGetKubernetesDeployments(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
-	if e.stateProvider == nil {
-		return NewTextResult("State provider not available."), nil
-	}
-
 	clusterArg, _ := args["cluster"].(string)
 	if clusterArg == "" {
 		return NewErrorResult(fmt.Errorf("cluster is required")), nil
@@ -322,54 +341,62 @@ func (e *PulseToolExecutor) executeGetKubernetesDeployments(_ context.Context, a
 	limit := intArg(args, "limit", 100)
 	offset := intArg(args, "offset", 0)
 
-	state := e.stateProvider.GetState()
+	rs, err := e.readStateForControl()
+	if err != nil {
+		return NewErrorResult(err), nil
+	}
 
-	// Find the cluster (also match CustomDisplayName)
-	for _, c := range state.KubernetesClusters {
-		if c.ID == clusterArg || c.Name == clusterArg || c.DisplayName == clusterArg || c.CustomDisplayName == clusterArg {
-			displayName := c.DisplayName
-			if c.CustomDisplayName != "" {
-				displayName = c.CustomDisplayName
+	for _, c := range rs.K8sClusters() {
+		if c.ID() == clusterArg || c.Name() == clusterArg || c.ClusterName() == clusterArg {
+			var deployments []KubernetesDeploymentSummary
+
+			totalClusterDeployments := 0
+			for _, dep := range rs.K8sDeployments() {
+				if dep.ParentID() == c.ID() {
+					totalClusterDeployments++
+				}
 			}
 
-			var deployments []KubernetesDeploymentSummary
 			filteredCount := 0
-			count := 0
+			currentFilteredIndex := 0
 
-			for _, dep := range c.Deployments {
+			for _, dep := range rs.K8sDeployments() {
+				if dep.ParentID() != c.ID() {
+					continue
+				}
 				// Apply namespace filter
-				if namespaceFilter != "" && dep.Namespace != namespaceFilter {
+				if namespaceFilter != "" && dep.Namespace() != namespaceFilter {
 					continue
 				}
 
 				filteredCount++
 
 				// Apply pagination
-				if count < offset {
-					count++
+				if currentFilteredIndex < offset {
+					currentFilteredIndex++
 					continue
 				}
 				if len(deployments) >= limit {
-					count++
-					continue
+					break // Stop processing once limit is reached
 				}
 
+				currentFilteredIndex++
+
 				deployments = append(deployments, KubernetesDeploymentSummary{
-					UID:               dep.UID,
-					Name:              dep.Name,
-					Namespace:         dep.Namespace,
-					DesiredReplicas:   dep.DesiredReplicas,
-					ReadyReplicas:     dep.ReadyReplicas,
-					AvailableReplicas: dep.AvailableReplicas,
-					UpdatedReplicas:   dep.UpdatedReplicas,
+					UID:               dep.UID(),
+					Name:              dep.Name(),
+					Namespace:         dep.Namespace(),
+					DesiredReplicas:   dep.DesiredReplicas(),
+					UpdatedReplicas:   dep.UpdatedReplicas(),
+					ReadyReplicas:     dep.ReadyReplicas(),
+					AvailableReplicas: dep.AvailableReplicas(),
 				})
-				count++
 			}
 
 			response := KubernetesDeploymentsResponse{
-				Cluster:     displayName,
+				Cluster:     c.ClusterName(),
 				Deployments: deployments,
-				Total:       len(c.Deployments),
+				Total:       totalClusterDeployments,
 				Filtered:    filteredCount,
 			}
 			if response.Deployments == nil {
@@ -399,17 +426,25 @@ func (e *PulseToolExecutor) findAgentForKubernetesCluster(clusterArg string) (st
 
 			// Try to return the real models.KubernetesCluster when available (richer display name fields).
 			if e.stateProvider != nil {
-				state := e.stateProvider.GetState()
-				for i := range state.KubernetesClusters {
-					sc := &state.KubernetesClusters[i]
-					if sc.ID == clusterArg || sc.Name == clusterArg || sc.DisplayName == clusterArg || sc.CustomDisplayName == clusterArg {
-						return agentID, sc, nil
-					}
-					// Also match by agent ID + server/context when the arg was an ID-like value.
-					if sc.AgentID == agentID && (sc.ID == c.ClusterID() || sc.Name == c.ClusterName()) {
-						return agentID, sc, nil
-					}
+				// No fast check because we dropped dependency on StateProvider.
+				// For the minimal cluster struct fallback:
+				display := c.ClusterName()
+				if display == "" {
+					display = c.Name()
 				}
+				if display == "" {
+					display = c.ID()
+				}
+				return agentID, &models.KubernetesCluster{
+					ID:          c.ID(),
+					AgentID:     agentID,
+					Name:        c.ClusterName(),
+					DisplayName: display,
+					Server:      c.Server(),
+					Context:     c.Context(),
+					Version:     c.Version(),
+					Status:      string(c.Status()),
+				}, nil
 			}
 
 			// Fallback: synthesize a minimal cluster struct for approval labels.
