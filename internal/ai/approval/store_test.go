@@ -255,6 +255,73 @@ func TestDeny(t *testing.T) {
 	}
 }
 
+func TestConsumeApproval_LegacyWithoutCommandHash_MatchingTuple(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "approval-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	store, _ := NewStore(StoreConfig{
+		DataDir:        tmpDir,
+		DefaultTimeout: 1 * time.Minute,
+	})
+
+	req := &ApprovalRequest{
+		Command:    "docker restart web",
+		TargetType: "docker",
+		TargetID:   "host-1:web",
+	}
+	_ = store.CreateApproval(req)
+	req.CommandHash = "" // Simulate legacy persisted approval without hash
+	_, _ = store.Approve(req.ID, "admin")
+
+	consumed, err := store.ConsumeApproval(req.ID, "docker restart web", "docker", "host-1:web")
+	if err != nil {
+		t.Fatalf("ConsumeApproval() error = %v", err)
+	}
+	if !consumed.Consumed {
+		t.Fatal("expected approval to be consumed")
+	}
+	if consumed.CommandHash == "" {
+		t.Fatal("expected legacy command hash to be backfilled on consume")
+	}
+}
+
+func TestConsumeApproval_LegacyWithoutCommandHash_MismatchRejected(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "approval-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	store, _ := NewStore(StoreConfig{
+		DataDir:        tmpDir,
+		DefaultTimeout: 1 * time.Minute,
+	})
+
+	req := &ApprovalRequest{
+		Command:    "docker restart web",
+		TargetType: "docker",
+		TargetID:   "host-1:web",
+	}
+	_ = store.CreateApproval(req)
+	req.CommandHash = "" // Simulate legacy persisted approval without hash
+	_, _ = store.Approve(req.ID, "admin")
+
+	if _, err := store.ConsumeApproval(req.ID, "docker restart db", "docker", "host-1:db"); err == nil {
+		t.Fatal("expected mismatch for legacy approval without command hash")
+	}
+
+	stored, ok := store.GetApproval(req.ID)
+	if !ok {
+		t.Fatal("expected approval to exist")
+	}
+	if stored.Consumed {
+		t.Fatal("expected approval to remain unconsumed after mismatch")
+	}
+}
+
 func TestGetStats(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "approval-test-*")
 	if err != nil {

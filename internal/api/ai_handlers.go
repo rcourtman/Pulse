@@ -2180,13 +2180,9 @@ func (h *AISettingsHandler) HandleRunCommand(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	approvalReq, ok := store.GetApproval(req.ApprovalID)
+	_, ok := store.GetApproval(req.ApprovalID)
 	if !ok {
 		http.Error(w, "Approval request not found", http.StatusNotFound)
-		return
-	}
-	if strings.TrimSpace(approvalReq.CommandHash) == "" {
-		http.Error(w, "Approval is missing command binding. Request approval again.", http.StatusConflict)
 		return
 	}
 	if _, err := store.ConsumeApproval(req.ApprovalID, req.Command, approvalTargetType, approvalTargetID); err != nil {

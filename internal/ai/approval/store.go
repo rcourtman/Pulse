@@ -330,13 +330,23 @@ func (s *Store) ConsumeApproval(id, command, targetType, targetID string) (*Appr
 
 	// Verify command hash matches
 	expectedHash := ComputeCommandHash(command, targetType, targetID)
-	if req.CommandHash != "" && req.CommandHash != expectedHash {
+	approvedHash := req.CommandHash
+	if approvedHash == "" {
+		// Legacy approvals created before CommandHash existed are still bound to their
+		// original command+target tuple by deriving the canonical hash on consume.
+		approvedHash = ComputeCommandHash(req.Command, req.TargetType, req.TargetID)
+	}
+	if approvedHash != expectedHash {
 		log.Warn().
 			Str("id", id).
-			Str("expected_hash", req.CommandHash).
+			Str("expected_hash", approvedHash).
 			Str("actual_hash", expectedHash).
 			Msg("Approval command hash mismatch - possible replay attack")
 		return nil, fmt.Errorf("approval command mismatch - this approval is for a different command/target")
+	}
+	// Backfill missing hash for legacy approvals once validated.
+	if req.CommandHash == "" {
+		req.CommandHash = approvedHash
 	}
 
 	// Mark as consumed (single-use)
