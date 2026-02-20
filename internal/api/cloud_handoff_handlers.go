@@ -128,20 +128,46 @@ func isSQLiteUniqueViolation(err error) bool {
 
 func tenantIDFromRequest(r *http.Request) string {
 	if v := strings.TrimSpace(os.Getenv("PULSE_TENANT_ID")); v != "" {
-		return v
+		if isValidOrganizationID(v) {
+			return v
+		}
+		return ""
 	}
-	host := strings.TrimSpace(r.Host)
+	if r == nil {
+		return ""
+	}
+
+	peerIP := extractRemoteIP(r.RemoteAddr)
+	trustedProxy := isTrustedProxyIP(peerIP)
+
+	rawHost := ""
+	if trustedProxy {
+		rawHost = firstForwardedValue(r.Header.Get("X-Forwarded-Host"))
+	}
+	if rawHost == "" {
+		// Only trust direct Host for loopback requests (local development/tests).
+		if ip := net.ParseIP(peerIP); ip != nil && ip.IsLoopback() {
+			rawHost = strings.TrimSpace(r.Host)
+		}
+	}
+	if rawHost == "" {
+		return ""
+	}
+
+	_, host := sanitizeForwardedHost(rawHost)
 	if host == "" {
 		return ""
 	}
-	if h, _, err := net.SplitHostPort(host); err == nil {
-		host = h
-	}
+
+	tenantID := host
 	// Host is expected to be "<tenant-id>.<baseDomain>".
 	if i := strings.IndexByte(host, '.'); i > 0 {
-		return host[:i]
+		tenantID = host[:i]
 	}
-	return host
+	if !isValidOrganizationID(tenantID) {
+		return ""
+	}
+	return tenantID
 }
 
 // HandleHandoffExchange verifies a control-plane-minted handoff JWT and records its jti to prevent replay.

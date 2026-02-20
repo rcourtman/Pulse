@@ -34,6 +34,7 @@ func makeExchangeRequest(t *testing.T, handler http.HandlerFunc, host, token str
 	req := httptest.NewRequest(http.MethodPost, "/api/cloud/handoff/exchange", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Host = host
+	req.RemoteAddr = "127.0.0.1:12345"
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 	return rec
@@ -56,32 +57,68 @@ func TestIsSQLiteUniqueViolation(t *testing.T) {
 
 func TestTenantIDFromRequest(t *testing.T) {
 	t.Run("uses env var when present", func(t *testing.T) {
+		t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "")
+		resetTrustedProxyConfig()
 		t.Setenv("PULSE_TENANT_ID", "env-tenant")
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
 		req.Host = "host-tenant.example.com"
+		req.RemoteAddr = "198.51.100.10:4567"
 
 		if got := tenantIDFromRequest(req); got != "env-tenant" {
 			t.Fatalf("tenantIDFromRequest() = %q, want %q", got, "env-tenant")
 		}
 	})
 
-	t.Run("extracts subdomain from host", func(t *testing.T) {
+	t.Run("extracts subdomain from loopback host", func(t *testing.T) {
+		t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "")
+		resetTrustedProxyConfig()
 		t.Setenv("PULSE_TENANT_ID", "")
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
 		req.Host = "tenant.example.com:8443"
+		req.RemoteAddr = "127.0.0.1:8080"
 
 		if got := tenantIDFromRequest(req); got != "tenant" {
 			t.Fatalf("tenantIDFromRequest() = %q, want %q", got, "tenant")
 		}
 	})
 
-	t.Run("returns full host when no dot exists", func(t *testing.T) {
+	t.Run("returns full loopback host when no dot exists", func(t *testing.T) {
+		t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "")
+		resetTrustedProxyConfig()
 		t.Setenv("PULSE_TENANT_ID", "")
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
 		req.Host = "localhost"
+		req.RemoteAddr = "127.0.0.1:8080"
 
 		if got := tenantIDFromRequest(req); got != "localhost" {
 			t.Fatalf("tenantIDFromRequest() = %q, want %q", got, "localhost")
+		}
+	})
+
+	t.Run("extracts tenant from trusted proxy forwarded host", func(t *testing.T) {
+		t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "203.0.113.0/24")
+		resetTrustedProxyConfig()
+		t.Setenv("PULSE_TENANT_ID", "")
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.RemoteAddr = "203.0.113.10:9443"
+		req.Host = "ignored.example.com"
+		req.Header.Set("X-Forwarded-Host", "proxy-tenant.example.com")
+
+		if got := tenantIDFromRequest(req); got != "proxy-tenant" {
+			t.Fatalf("tenantIDFromRequest() = %q, want %q", got, "proxy-tenant")
+		}
+	})
+
+	t.Run("ignores untrusted remote host header", func(t *testing.T) {
+		t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "")
+		resetTrustedProxyConfig()
+		t.Setenv("PULSE_TENANT_ID", "")
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.RemoteAddr = "198.51.100.20:1234"
+		req.Host = "tenant.example.com"
+
+		if got := tenantIDFromRequest(req); got != "" {
+			t.Fatalf("tenantIDFromRequest() = %q, want empty", got)
 		}
 	})
 }
