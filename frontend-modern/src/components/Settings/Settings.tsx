@@ -255,7 +255,8 @@ type NodeConfigWithStatus = NodeConfig & {
 
 interface SettingsProps {
   darkMode: () => boolean;
-  toggleDarkMode: () => void;
+  themePreference: () => 'light' | 'dark' | 'system';
+  setThemePreference: (pref: 'light' | 'dark' | 'system') => void;
 }
 
 const Settings: Component<SettingsProps> = (props) => {
@@ -3338,7 +3339,8 @@ const Settings: Component<SettingsProps> = (props) => {
               <Show when={activeTab() === 'system-general'}>
                 <GeneralSettingsPanel
                   darkMode={props.darkMode}
-                  toggleDarkMode={props.toggleDarkMode}
+                  themePreference={props.themePreference}
+                  setThemePreference={props.setThemePreference}
                   pvePollingInterval={pvePollingInterval}
                   setPVEPollingInterval={setPVEPollingInterval}
                   pvePollingSelection={pvePollingSelection}

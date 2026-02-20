@@ -153,6 +153,7 @@ export const STORAGE_KEYS = {
   SETUP_CREDENTIALS: 'pulse_setup_credentials',
 
   // UI preferences
+  THEME_PREFERENCE: 'pulseThemePreference',
   DARK_MODE: 'darkMode',
   SIDEBAR_COLLAPSED: 'sidebarCollapsed',
   FULL_WIDTH_MODE: 'fullWidthMode',

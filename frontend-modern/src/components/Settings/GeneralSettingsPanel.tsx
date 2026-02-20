@@ -10,6 +10,8 @@ import Maximize2 from 'lucide-solid/icons/maximize-2';
 import { temperatureStore } from '@/utils/temperature';
 import { layoutStore } from '@/utils/layout';
 
+import Laptop from 'lucide-solid/icons/laptop';
+
 const PVE_POLLING_MIN_SECONDS = 10;
 const PVE_POLLING_MAX_SECONDS = 3600;
 const PVE_POLLING_PRESETS = [
@@ -21,7 +23,8 @@ const PVE_POLLING_PRESETS = [
 
 interface GeneralSettingsPanelProps {
   darkMode: Accessor<boolean>;
-  toggleDarkMode: () => void;
+  themePreference: Accessor<'light' | 'dark' | 'system'>;
+  setThemePreference: (pref: 'light' | 'dark' | 'system') => void;
   pvePollingInterval: Accessor<number>;
   setPVEPollingInterval: Setter<number>;
   pvePollingSelection: Accessor<number | 'custom'>;
@@ -57,36 +60,59 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
         noPadding
         bodyClass="divide-y divide-slate-100 dark:divide-slate-800"
       >
-        <div class="flex items-center justify-between gap-4 p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 sm:p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
           <div class="flex items-center gap-3 min-w-0">
             {/* Animated theme icon */}
             <div class={`shrink-0 relative p-2.5 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 transition-all duration-300`}>
               <div class="relative w-5 h-5">
-                <Sun class={`absolute inset-0 w-5 h-5 text-slate-500 transition-all duration-300 ${props.darkMode() ? 'opacity-0 rotate-90 scale-50' : 'opacity-100 rotate-0 scale-100'
-                  }`} strokeWidth={2} />
-                <Moon class={`absolute inset-0 w-5 h-5 text-slate-500 transition-all duration-300 ${props.darkMode() ? 'opacity-100 rotate-0 scale-100' : 'opacity-0 -rotate-90 scale-50'
-                  }`} strokeWidth={2} />
+                <Sun class={`absolute inset-0 w-5 h-5 text-slate-500 transition-all duration-300 ${props.darkMode() ? 'opacity-0 rotate-90 scale-50' : 'opacity-100 rotate-0 scale-100'}`} strokeWidth={2} />
+                <Moon class={`absolute inset-0 w-5 h-5 text-slate-500 transition-all duration-300 ${props.darkMode() ? 'opacity-100 rotate-0 scale-100' : 'opacity-0 -rotate-90 scale-50'}`} strokeWidth={2} />
               </div>
             </div>
             <div class="text-sm text-slate-600 dark:text-slate-400 min-w-0">
               <p class="font-medium text-slate-900 dark:text-slate-100 truncate">
-                {props.darkMode() ? 'Dark mode' : 'Light mode'}
+                Theme preference
               </p>
               <p class="text-xs text-slate-500 dark:text-slate-400 line-clamp-2">
-                Toggle to match your environment. Pulse remembers this preference on each browser.
+                Choose light, dark, or sync with your system theme.
               </p>
             </div>
           </div>
-          <Toggle
-            checked={props.darkMode()}
-            class="shrink-0"
-            onChange={(event) => {
-              const desired = (event.currentTarget as HTMLInputElement).checked;
-              if (desired !== props.darkMode()) {
-                props.toggleDarkMode();
-              }
-            }}
-          />
+          <div class="shrink-0 flex self-start sm:self-auto items-center gap-1 bg-slate-100 dark:bg-slate-800 rounded-md p-1 ml-12 sm:ml-0">
+            <button
+              type="button"
+              class={`flex items-center gap-1.5 min-h-10 sm:min-h-9 px-3 py-2 text-sm font-medium rounded-md transition-all ${props.themePreference() === 'light'
+                  ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                }`}
+              onClick={() => props.setThemePreference('light')}
+            >
+              <Sun class="w-4 h-4" strokeWidth={2.5} />
+              <span class="hidden lg:inline">Light</span>
+            </button>
+            <button
+              type="button"
+              class={`flex items-center gap-1.5 min-h-10 sm:min-h-9 px-3 py-2 text-sm font-medium rounded-md transition-all ${props.themePreference() === 'dark'
+                  ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                }`}
+              onClick={() => props.setThemePreference('dark')}
+            >
+              <Moon class="w-4 h-4" strokeWidth={2.5} />
+              <span class="hidden lg:inline">Dark</span>
+            </button>
+            <button
+              type="button"
+              class={`flex items-center gap-1.5 min-h-10 sm:min-h-9 px-3 py-2 text-sm font-medium rounded-md transition-all ${props.themePreference() === 'system'
+                  ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                }`}
+              onClick={() => props.setThemePreference('system')}
+            >
+              <Laptop class="w-4 h-4" strokeWidth={2.5} />
+              <span class="hidden lg:inline">System</span>
+            </button>
+          </div>
         </div>
 
         {/* Temperature Unit Selector */}
