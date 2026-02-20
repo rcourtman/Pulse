@@ -341,7 +341,7 @@ func TestExtractVMIDFromCommand(t *testing.T) {
 }
 
 func TestFormatApprovalNeededToolResult(t *testing.T) {
-	result := formatApprovalNeededToolResult("rm -rf /", "tool-123", "Dangerous command")
+	result := formatApprovalNeededToolResult("rm -rf /", "tool-123", "Dangerous command", "approval-1")
 
 	if result == "" {
 		t.Error("Expected non-empty result")
@@ -373,7 +373,7 @@ func TestFormatPolicyBlockedToolResult(t *testing.T) {
 
 func TestParseApprovalNeededMarker(t *testing.T) {
 	// Valid approval needed response
-	validResult := formatApprovalNeededToolResult("rm -rf /", "tool-123", "test")
+	validResult := formatApprovalNeededToolResult("rm -rf /", "tool-123", "test", "approval-1")
 	data, found := parseApprovalNeededMarker(validResult)
 	if !found {
 		t.Error("Expected to parse approval needed marker")
@@ -383,6 +383,9 @@ func TestParseApprovalNeededMarker(t *testing.T) {
 	}
 	if data.ToolID != "tool-123" {
 		t.Errorf("Expected tool ID 'tool-123', got '%s'", data.ToolID)
+	}
+	if data.ApprovalID != "approval-1" {
+		t.Errorf("Expected approval ID 'approval-1', got '%s'", data.ApprovalID)
 	}
 
 	// Invalid input

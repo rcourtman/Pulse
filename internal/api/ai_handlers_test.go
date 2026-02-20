@@ -878,6 +878,96 @@ func TestHandleRunCommand_InvalidBody(t *testing.T) {
 	}
 }
 
+func TestHandleRunCommand_RequiresApprovalID(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
+
+	body := []byte(`{"command":"uptime","target_type":"vm","target_id":"vm-101","run_on_host":false}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/run-command", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleRunCommand(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+}
+
+func TestHandleRunCommand_ConsumesApproval(t *testing.T) {
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := newTestAISettingsHandler(cfg, persistence, agentexec.NewServer(nil))
+
+	store, err := approval.NewStore(approval.StoreConfig{
+		DataDir:            tmp,
+		DisablePersistence: true,
+	})
+	require.NoError(t, err)
+	approval.SetStore(store)
+	defer approval.SetStore(nil)
+
+	appReq := &approval.ApprovalRequest{
+		ID:         "approval-1",
+		Command:    "uptime",
+		TargetType: "vm",
+		TargetID:   "vm-101",
+	}
+	require.NoError(t, store.CreateApproval(appReq))
+	_, err = store.Approve(appReq.ID, "tester")
+	require.NoError(t, err)
+
+	body := []byte(`{"approval_id":"approval-1","command":"uptime","target_type":"vm","target_id":"vm-101","run_on_host":false}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/run-command", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleRunCommand(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, "body=%s", rec.Body.String())
+
+	stored, found := store.GetApproval(appReq.ID)
+	require.True(t, found)
+	require.True(t, stored.Consumed)
+}
+
+func TestHandleRunCommand_RejectsCommandMismatch(t *testing.T) {
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := newTestAISettingsHandler(cfg, persistence, agentexec.NewServer(nil))
+
+	store, err := approval.NewStore(approval.StoreConfig{
+		DataDir:            tmp,
+		DisablePersistence: true,
+	})
+	require.NoError(t, err)
+	approval.SetStore(store)
+	defer approval.SetStore(nil)
+
+	appReq := &approval.ApprovalRequest{
+		ID:         "approval-2",
+		Command:    "uptime",
+		TargetType: "vm",
+		TargetID:   "vm-101",
+	}
+	require.NoError(t, store.CreateApproval(appReq))
+	_, err = store.Approve(appReq.ID, "tester")
+	require.NoError(t, err)
+
+	body := []byte(`{"approval_id":"approval-2","command":"whoami","target_type":"vm","target_id":"vm-101","run_on_host":false}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/run-command", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleRunCommand(rec, req)
+
+	require.Equal(t, http.StatusConflict, rec.Code)
+
+	stored, found := store.GetApproval(appReq.ID)
+	require.True(t, found)
+	require.False(t, stored.Consumed)
+}
+
 // ========================================
 // HandleAnalyzeKubernetesCluster tests
 // ========================================

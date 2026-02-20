@@ -18,6 +18,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/baseline"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/cost"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/infradiscovery"
@@ -1064,7 +1065,7 @@ func extractVMIDFromCommand(command string) (vmID int, requiresOwnerNode bool, f
 
 // formatApprovalNeededToolResult returns a structured tool result for commands that require approval.
 // It is encoded as a marker + JSON so the LLM can reliably detect it.
-func formatApprovalNeededToolResult(command, toolID, reason string) string {
+func formatApprovalNeededToolResult(command, toolID, reason, approvalID string) string {
 	payload := map[string]interface{}{
 		"type":           "approval_required",
 		"command":        command,
@@ -1073,12 +1074,76 @@ func formatApprovalNeededToolResult(command, toolID, reason string) string {
 		"how_to_approve": "Ask the user to click the approval button shown in the UI.",
 		"do_not_retry":   true,
 	}
+	if strings.TrimSpace(approvalID) != "" {
+		payload["approval_id"] = strings.TrimSpace(approvalID)
+	}
 	b, err := json.Marshal(payload)
 	if err != nil {
 		// Fallback to a safe plain-text marker.
 		return fmt.Sprintf("APPROVAL_REQUIRED: %s", command)
 	}
 	return "APPROVAL_REQUIRED: " + string(b)
+}
+
+func resolveRunCommandApprovalTarget(req ExecuteRequest, runOnHost bool, targetHost string) (targetType, targetID, targetName string) {
+	normalizedTargetHost := strings.ToLower(strings.TrimSpace(targetHost))
+	targetType = strings.ToLower(strings.TrimSpace(req.TargetType))
+	targetID = strings.TrimSpace(req.TargetID)
+
+	if runOnHost {
+		targetType = "host"
+		if normalizedTargetHost != "" {
+			targetID = normalizedTargetHost
+			targetName = normalizedTargetHost
+		}
+	}
+
+	if targetType == "" {
+		targetType = "host"
+	}
+
+	if targetType == "host" && targetID == "" {
+		if node, ok := req.Context["node"].(string); ok && node != "" {
+			targetID = strings.ToLower(strings.TrimSpace(node))
+		} else if node, ok := req.Context["hostname"].(string); ok && node != "" {
+			targetID = strings.ToLower(strings.TrimSpace(node))
+		} else if node, ok := req.Context["host_name"].(string); ok && node != "" {
+			targetID = strings.ToLower(strings.TrimSpace(node))
+		}
+	}
+
+	if targetName == "" {
+		targetName = strings.TrimSpace(targetHost)
+	}
+	if targetName == "" {
+		targetName = targetID
+	}
+
+	return targetType, targetID, targetName
+}
+
+func createRunCommandApprovalRecord(command, toolID string, req ExecuteRequest, runOnHost bool, targetHost, reason string) string {
+	store := approval.GetStore()
+	if store == nil {
+		log.Debug().Msg("approval store not available, run_command approval will not be persisted")
+		return ""
+	}
+
+	targetType, targetID, targetName := resolveRunCommandApprovalTarget(req, runOnHost, targetHost)
+	approvalReq := &approval.ApprovalRequest{
+		ToolID:     toolID,
+		Command:    command,
+		TargetType: targetType,
+		TargetID:   targetID,
+		TargetName: targetName,
+		Context:    reason,
+	}
+	if err := store.CreateApproval(approvalReq); err != nil {
+		log.Warn().Err(err).Msg("failed to create run_command approval record")
+		return ""
+	}
+
+	return approvalReq.ID
 }
 
 // formatPolicyBlockedToolResult returns a structured tool result for commands blocked by policy.
@@ -1107,10 +1172,11 @@ func parseApprovalNeededMarker(content string) (ApprovalNeededData, bool) {
 	}
 
 	var payload struct {
-		Type    string `json:"type"`
-		Command string `json:"command"`
-		ToolID  string `json:"tool_id"`
-		Reason  string `json:"reason"`
+		Type       string `json:"type"`
+		Command    string `json:"command"`
+		ToolID     string `json:"tool_id"`
+		Reason     string `json:"reason"`
+		ApprovalID string `json:"approval_id"`
 	}
 	if err := json.Unmarshal([]byte(trimmed), &payload); err != nil {
 		return ApprovalNeededData{}, false
@@ -1120,8 +1186,9 @@ func parseApprovalNeededMarker(content string) (ApprovalNeededData, bool) {
 	}
 
 	return ApprovalNeededData{
-		Command: payload.Command,
-		ToolID:  payload.ToolID,
+		Command:    payload.Command,
+		ToolID:     payload.ToolID,
+		ApprovalID: strings.TrimSpace(payload.ApprovalID),
 	}, true
 }
 
@@ -1133,6 +1200,7 @@ func approvalNeededFromToolCall(req ExecuteRequest, tc providers.ToolCall, resul
 		return ApprovalNeededData{}, false
 	}
 
+	parsed, parsedOK := parseApprovalNeededMarker(result)
 	cmd, _ := tc.Input["command"].(string)
 	runOnHost, _ := tc.Input["run_on_host"].(bool)
 	targetHost, _ := tc.Input["target_host"].(string)
@@ -1145,6 +1213,24 @@ func approvalNeededFromToolCall(req ExecuteRequest, tc providers.ToolCall, resul
 		} else if node, ok := req.Context["host_name"].(string); ok && node != "" {
 			targetHost = node
 		}
+	}
+
+	if parsedOK {
+		if parsed.Command != "" {
+			cmd = parsed.Command
+		}
+		toolID := parsed.ToolID
+		if toolID == "" {
+			toolID = tc.ID
+		}
+		return ApprovalNeededData{
+			Command:    cmd,
+			ToolID:     toolID,
+			ToolName:   tc.Name,
+			RunOnHost:  runOnHost,
+			TargetHost: targetHost,
+			ApprovalID: parsed.ApprovalID,
+		}, true
 	}
 
 	return ApprovalNeededData{
@@ -1952,6 +2038,7 @@ Always execute the commands rather than telling the user how to do it.`
 
 			// Check if this command needs approval
 			needsApproval := false
+			approvalID := ""
 			if tc.Name == "run_command" {
 				cmd, _ := tc.Input["command"].(string)
 				runOnHost, _ := tc.Input["run_on_host"].(bool)
@@ -2013,6 +2100,14 @@ Always execute the commands rather than telling the user how to do it.`
 				if !isAuto && policyDecision == agentexec.PolicyRequireApproval {
 					needsApproval = true
 					anyNeedsApproval = true
+					approvalID = createRunCommandApprovalRecord(
+						cmd,
+						tc.ID,
+						req,
+						runOnHost,
+						targetHost,
+						"Security policy requires approval",
+					)
 					callback(StreamEvent{
 						Type: "approval_needed",
 						Data: ApprovalNeededData{
@@ -2021,6 +2116,7 @@ Always execute the commands rather than telling the user how to do it.`
 							ToolName:   tc.Name,
 							RunOnHost:  runOnHost,
 							TargetHost: targetHost,
+							ApprovalID: approvalID,
 						},
 					})
 				}
@@ -2035,7 +2131,7 @@ Always execute the commands rather than telling the user how to do it.`
 				// Note: We don't add to toolExecutions here because the approval_needed event
 				// already tells the frontend to show the approval UI
 				cmd, _ := tc.Input["command"].(string)
-				result = formatApprovalNeededToolResult(cmd, tc.ID, "Command requires user approval")
+				result = formatApprovalNeededToolResult(cmd, tc.ID, "Command requires user approval", approvalID)
 				execution = ToolExecution{
 					Name:    tc.Name,
 					Input:   toolInput,
@@ -2660,7 +2756,15 @@ func (s *Service) executeTool(ctx context.Context, req ExecuteRequest, tc provid
 			return execution.Output, execution
 		}
 		if decision == agentexec.PolicyRequireApproval && !s.IsAutonomous() {
-			execution.Output = formatApprovalNeededToolResult(command, tc.ID, "Security policy requires approval")
+			approvalID := createRunCommandApprovalRecord(
+				command,
+				tc.ID,
+				req,
+				runOnHost,
+				targetHost,
+				"Security policy requires approval",
+			)
+			execution.Output = formatApprovalNeededToolResult(command, tc.ID, "Security policy requires approval", approvalID)
 			execution.Success = true // Not an error, just needs approval
 			return execution.Output, execution
 		}
@@ -3444,7 +3548,8 @@ func (s *Service) executeOnAgent(ctx context.Context, req ExecuteRequest, comman
 // RunCommandRequest represents a request to run a single command
 type RunCommandRequest struct {
 	Command    string `json:"command"`
-	TargetType string `json:"target_type"` // "host", "container", "vm"
+	ApprovalID string `json:"approval_id,omitempty"` // Consumed by API handler before execution
+	TargetType string `json:"target_type"`           // "host", "container", "vm"
 	TargetID   string `json:"target_id"`
 	RunOnHost  bool   `json:"run_on_host"` // If true, run on host instead of target
 	VMID       string `json:"vmid,omitempty"`

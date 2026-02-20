@@ -2116,6 +2116,7 @@ func (h *AISettingsHandler) HandleExecuteStream(w http.ResponseWriter, r *http.R
 // AIRunCommandRequest is the request body for POST /api/ai/run-command
 type AIRunCommandRequest struct {
 	Command    string `json:"command"`
+	ApprovalID string `json:"approval_id"`
 	TargetType string `json:"target_type"`
 	TargetID   string `json:"target_id"`
 	RunOnHost  bool   `json:"run_on_host"`
@@ -2162,9 +2163,40 @@ func (h *AISettingsHandler) HandleRunCommand(w http.ResponseWriter, r *http.Requ
 		http.Error(w, "Command is required", http.StatusBadRequest)
 		return
 	}
+	if strings.TrimSpace(req.ApprovalID) == "" {
+		http.Error(w, "approval_id is required", http.StatusBadRequest)
+		return
+	}
+
+	approvalTargetType, approvalTargetID, targetErr := normalizeRunCommandApprovalTarget(req)
+	if targetErr != nil {
+		http.Error(w, targetErr.Error(), http.StatusBadRequest)
+		return
+	}
+
+	store := approval.GetStore()
+	if store == nil {
+		http.Error(w, "Approval store not initialized", http.StatusServiceUnavailable)
+		return
+	}
+
+	approvalReq, ok := store.GetApproval(req.ApprovalID)
+	if !ok {
+		http.Error(w, "Approval request not found", http.StatusNotFound)
+		return
+	}
+	if strings.TrimSpace(approvalReq.CommandHash) == "" {
+		http.Error(w, "Approval is missing command binding. Request approval again.", http.StatusConflict)
+		return
+	}
+	if _, err := store.ConsumeApproval(req.ApprovalID, req.Command, approvalTargetType, approvalTargetID); err != nil {
+		http.Error(w, "Failed to consume approval: "+err.Error(), http.StatusConflict)
+		return
+	}
 
 	log.Info().
 		Str("command", req.Command).
+		Str("approval_id", req.ApprovalID).
 		Str("target_type", req.TargetType).
 		Str("target_id", req.TargetID).
 		Bool("run_on_host", req.RunOnHost).
@@ -2177,6 +2209,7 @@ func (h *AISettingsHandler) HandleRunCommand(w http.ResponseWriter, r *http.Requ
 
 	resp, err := h.GetAIService(r.Context()).RunCommand(ctx, ai.RunCommandRequest{
 		Command:    req.Command,
+		ApprovalID: req.ApprovalID,
 		TargetType: req.TargetType,
 		TargetID:   req.TargetID,
 		RunOnHost:  req.RunOnHost,
@@ -2193,6 +2226,44 @@ func (h *AISettingsHandler) HandleRunCommand(w http.ResponseWriter, r *http.Requ
 	if err := utils.WriteJSONResponse(w, resp); err != nil {
 		log.Error().Err(err).Msg("Failed to write run command response")
 	}
+}
+
+func normalizeRunCommandApprovalTarget(req AIRunCommandRequest) (string, string, error) {
+	targetType := strings.ToLower(strings.TrimSpace(req.TargetType))
+	targetID := strings.TrimSpace(req.TargetID)
+	targetHost := strings.ToLower(strings.TrimSpace(req.TargetHost))
+
+	if req.RunOnHost {
+		targetType = "host"
+		if targetHost == "" {
+			return "", "", errors.New("target_host is required when run_on_host is true")
+		}
+		targetID = targetHost
+	}
+
+	if targetType == "" {
+		targetType = "host"
+	}
+
+	if (targetType == "container" || targetType == "vm") && strings.TrimSpace(req.VMID) != "" {
+		targetID = strings.TrimSpace(req.VMID)
+	}
+
+	if targetType == "host" {
+		if targetID == "" {
+			targetID = targetHost
+		}
+		if targetID == "" {
+			return "", "", errors.New("target_id or target_host is required for host commands")
+		}
+		targetID = strings.ToLower(targetID)
+	}
+
+	if targetID == "" {
+		return "", "", fmt.Errorf("target_id is required for target_type '%s'", targetType)
+	}
+
+	return targetType, targetID, nil
 }
 
 // HandleGetGuestKnowledge returns all notes for a guest
