@@ -127,7 +127,7 @@ export const UserAssignmentsPanel: Component = () => {
                             placeholder="Search users..."
                             value={searchQuery()}
                             onInput={(e) => setSearchQuery(e.currentTarget.value)}
-                            class="min-h-10 sm:min-h-9 pl-9 pr-3 py-2.5 text-sm rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-900/40"
+                            class="min-h-10 sm:min-h-9 pl-9 pr-3 py-2.5 text-sm rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800"
                         />
                     </div>
                 }
@@ -194,7 +194,7 @@ export const UserAssignmentsPanel: Component = () => {
                             <tbody>
                                 <For each={filteredAssignments()}>
                                     {(assignment) => (
-                                        <tr class="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                                        <tr class="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800">
                                             <td class="py-3 px-3">
                                                 <span class="font-medium text-slate-900 dark:text-slate-100">{assignment.username}</span>
                                             </td>
@@ -234,7 +234,7 @@ export const UserAssignmentsPanel: Component = () => {
 
             {/* Assignments Modal */}
             <Show when={showModal()}>
-                <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+                <div class="fixed inset-0 z-50 flex items-center justify-center bg-black opacity-50">
                     <div class="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-md shadow-sm border border-slate-200 dark:border-slate-700 mx-4 max-h-[92vh] overflow-hidden">
                         <div class="flex items-start justify-between gap-3 px-4 sm:px-6 py-4 border-b border-slate-200 dark:border-slate-700">
                             <div>
@@ -263,7 +263,7 @@ export const UserAssignmentsPanel: Component = () => {
                                     <For each={roles()}>
                                         {(role) => (
                                             <label class={`flex flex-col p-3 rounded-md border transition-all cursor-pointer ${formRoleIds().includes(role.id)
-                                                ? 'bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-800'
+                                                ? 'bg-blue-50 border-blue-200 dark:bg-blue-900 dark:border-blue-800'
                                                 : 'bg-white border-slate-200 hover:border-blue-100 dark:bg-slate-800 dark:border-slate-700 dark:hover:border-blue-900'
                                                 }`}>
                                                 <div class="flex items-start justify-between gap-2 mb-1">
@@ -326,7 +326,7 @@ export const UserAssignmentsPanel: Component = () => {
                             </div>
                         </div>
 
-                        <div class="grid grid-cols-1 sm:flex sm:items-center sm:justify-end gap-3 px-4 sm:px-6 py-5 border-t border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800 rounded-b-xl">
+                        <div class="grid grid-cols-1 sm:flex sm:items-center sm:justify-end gap-3 px-4 sm:px-6 py-5 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 rounded-b-xl">
                             <button
                                 type="button"
                                 onClick={() => setShowModal(false)}
