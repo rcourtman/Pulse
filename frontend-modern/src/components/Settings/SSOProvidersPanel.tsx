@@ -525,7 +525,7 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
   return (
     <div class="space-y-6">
       <Show when={showSamlUpsell()}>
-        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black opacity-50">
           <div class="w-full max-w-lg bg-white dark:bg-slate-900 rounded-md shadow-sm border border-slate-200 dark:border-slate-700 mx-4">
             <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700">
               <div>
@@ -695,7 +695,7 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
                       <button
                         type="button"
                         onClick={() => setDeleteConfirm(provider.id)}
-                        class="p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
+                        class="p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900 rounded-md transition-colors"
                         title="Delete provider"
                       >
                         <Trash2 class="w-4 h-4" />
@@ -741,7 +741,7 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
 
       {/* Add/Edit Modal */}
       <Show when={showModal()}>
-        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setShowModal(false)}>
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black opacity-50 p-4" onClick={() => setShowModal(false)}>
           <div
             class="bg-white dark:bg-slate-800 rounded-md shadow-sm max-w-2xl w-full max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
@@ -979,8 +979,8 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
               <Show when={testResult()}>
                 <div
                   class={`p-4 rounded-md border ${testResult()?.success
-                      ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
-                      : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
+                    ? 'bg-green-50 dark:bg-green-900 border-green-200 dark:border-green-800'
+                    : 'bg-red-50 dark:bg-red-900 border-red-200 dark:border-red-800'
                     }`}
                 >
                   <div class="flex items-start gap-3">
@@ -992,8 +992,8 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
                     <div class="flex-1 min-w-0">
                       <p
                         class={`text-sm font-medium ${testResult()?.success
-                            ? 'text-green-800 dark:text-green-200'
-                            : 'text-red-800 dark:text-red-200'
+                          ? 'text-green-800 dark:text-green-200'
+                          : 'text-red-800 dark:text-red-200'
                           }`}
                       >
                         {testResult()?.message}
@@ -1027,7 +1027,7 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
                               <dd class="space-y-1">
                                 <For each={testResult()?.details?.certificates}>
                                   {(cert) => (
-                                    <div class={`text-xs px-2 py-1 rounded ${cert.isExpired ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}>
+                                    <div class={`text-xs px-2 py-1 rounded ${cert.isExpired ? 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}>
                                       <span class="font-medium">{cert.subject}</span>
                                       <span class="mx-1">•</span>
                                       <span>Expires: {new Date(cert.notAfter).toLocaleDateString()}</span>
@@ -1140,7 +1140,7 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
 
       {/* Delete confirmation modal */}
       <Show when={deleteConfirm()}>
-        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setDeleteConfirm(null)}>
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black opacity-50 p-4" onClick={() => setDeleteConfirm(null)}>
           <div
             class="bg-white dark:bg-slate-800 rounded-md shadow-sm max-w-md w-full p-6"
             onClick={(e) => e.stopPropagation()}
@@ -1171,7 +1171,7 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
 
       {/* Metadata Preview modal */}
       <Show when={showMetadataPreview() && metadataPreview()}>
-        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setShowMetadataPreview(false)}>
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black opacity-50 p-4" onClick={() => setShowMetadataPreview(false)}>
           <div
             class="bg-white dark:bg-slate-800 rounded-md shadow-sm max-w-4xl w-full max-h-[90vh] flex flex-col"
             onClick={(e) => e.stopPropagation()}
@@ -1218,7 +1218,7 @@ export const SSOProvidersPanel: Component<Props> = (props) => {
                     <dd class="space-y-1">
                       <For each={metadataPreview()?.parsed.certificates}>
                         {(cert) => (
-                          <div class={`text-xs px-2 py-1 rounded ${cert.isExpired ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}>
+                          <div class={`text-xs px-2 py-1 rounded ${cert.isExpired ? 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}>
                             <span class="font-medium">{cert.subject}</span>
                             <span class="mx-1">•</span>
                             <span>Expires: {new Date(cert.notAfter).toLocaleDateString()}</span>
