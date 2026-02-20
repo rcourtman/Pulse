@@ -1379,6 +1379,14 @@ func normalizeNodeHost(rawHost, nodeType string) (string, error) {
 
 // extractHostIP extracts the IP address from a host URL if it's an IP-based URL.
 // Returns empty string if the URL uses a hostname instead of an IP.
+// isPulseAgentToken returns true if the token ID was created by the Pulse agent.
+// Agent tokens follow the pattern "pulse-monitor@pam!pulse-<timestamp>" (PVE)
+// or "pulse-monitor@pbs!pulse-<timestamp>" (PBS).
+func isPulseAgentToken(tokenID string) bool {
+	return strings.HasPrefix(tokenID, "pulse-monitor@pam!pulse-") ||
+		strings.HasPrefix(tokenID, "pulse-monitor@pbs!pulse-")
+}
+
 func extractHostIP(hostURL string) string {
 	parsed, err := url.Parse(hostURL)
 	if err != nil {
@@ -5241,6 +5249,24 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 					Msg("Detected IP change for existing node - updating host")
 				break
 			}
+			// Agent re-registration: same server name + both tokens created by Pulse agent.
+			// On reinstall/update the agent creates a new token (different timestamp), so the
+			// exact token match above fails. Match by server name when both entries are
+			// agent-created Pulse tokens to prevent duplicates. (#1245)
+			if req.Source == "agent" && node.Source == "agent" && req.ServerName != "" &&
+				strings.EqualFold(node.Name, req.ServerName) &&
+				isPulseAgentToken(node.TokenName) && isPulseAgentToken(req.TokenID) {
+				existingIndex = i
+				preserveHost = true
+				log.Info().
+					Str("oldHost", node.Host).
+					Str("newHost", host).
+					Str("node", req.ServerName).
+					Str("oldToken", node.TokenName).
+					Str("newToken", req.TokenID).
+					Msg("Agent re-registration detected by server name + Pulse token pattern - merging")
+				break
+			}
 			// Agent registration: check if existing hostname resolves to the new IP
 			// This catches the case where a node was manually added by hostname and
 			// then the agent registers using the IP address. (Issue #924)
@@ -5278,6 +5304,21 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 					Str("newHost", host).
 					Str("node", req.ServerName).
 					Msg("Detected IP change for existing node - updating host")
+				break
+			}
+			// Agent re-registration: same server name + both Pulse agent tokens (#1245)
+			if req.Source == "agent" && node.Source == "agent" && req.ServerName != "" &&
+				strings.EqualFold(node.Name, req.ServerName) &&
+				isPulseAgentToken(node.TokenName) && isPulseAgentToken(req.TokenID) {
+				existingIndex = i
+				preserveHost = true
+				log.Info().
+					Str("oldHost", node.Host).
+					Str("newHost", host).
+					Str("node", req.ServerName).
+					Str("oldToken", node.TokenName).
+					Str("newToken", req.TokenID).
+					Msg("Agent re-registration detected by server name + Pulse token pattern - merging")
 				break
 			}
 			// Agent registration: check if existing hostname resolves to the new IP

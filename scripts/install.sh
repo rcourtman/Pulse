@@ -826,9 +826,9 @@ fi
 
 # --- Service Installation ---
 
-# If Proxmox mode is enabled, clear the state files to ensure fresh registration
-# This allows re-installation to re-create the Proxmox API tokens
-if [[ "$ENABLE_PROXMOX" == "true" ]]; then
+# If Proxmox mode is enabled on a FRESH install, clear state files for fresh registration.
+# On upgrades, preserve state to avoid creating duplicate PVE entries (#1245).
+if [[ "$ENABLE_PROXMOX" == "true" && "$UPGRADE_MODE" != "true" ]]; then
     log_info "Clearing Proxmox state for fresh registration..."
     rm -f /var/lib/pulse-agent/proxmox-registered 2>/dev/null || true
     rm -f /var/lib/pulse-agent/proxmox-pve-registered 2>/dev/null || true

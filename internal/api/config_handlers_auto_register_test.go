@@ -318,3 +318,158 @@ func TestExtractHostIP(t *testing.T) {
 		})
 	}
 }
+
+func TestIsPulseAgentToken(t *testing.T) {
+	tests := []struct {
+		token string
+		want  bool
+	}{
+		{"pulse-monitor@pam!pulse-1234567890", true},
+		{"pulse-monitor@pbs!pulse-1234567890", true},
+		{"pulse-monitor@pam!pulse-", true},
+		{"pulse-monitor@pam!token1", false},
+		{"root@pam!mytoken", false},
+		{"", false},
+	}
+	for _, tt := range tests {
+		if got := isPulseAgentToken(tt.token); got != tt.want {
+			t.Errorf("isPulseAgentToken(%q) = %v, want %v", tt.token, got, tt.want)
+		}
+	}
+}
+
+// TestAutoRegisterAgentReRegistrationMerges verifies that an agent re-registering
+// with a new Pulse token (e.g., after an update) merges with the existing entry
+// instead of creating a duplicate. Regression test for Issue #1245.
+func TestAutoRegisterAgentReRegistrationMerges(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+
+	originalDetectPVECluster := detectPVECluster
+	detectPVECluster = func(clientConfig proxmox.ClientConfig, nodeName string, existingEndpoints []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
+		return false, "", nil
+	}
+	defer func() { detectPVECluster = originalDetectPVECluster }()
+
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+		// Pre-existing agent-registered node with an old Pulse token
+		PVEInstances: []config.PVEInstance{
+			{
+				Name:       "pve",
+				Host:       "https://10.0.1.100:8006",
+				TokenName:  "pulse-monitor@pam!pulse-1700000000",
+				TokenValue: "old-secret",
+				Source:     "agent",
+			},
+		},
+	}
+
+	handler := newTestConfigHandlers(t, cfg)
+
+	const tokenValue = "TEMP-TOKEN"
+	tokenHash := internalauth.HashAPIToken(tokenValue)
+	handler.codeMutex.Lock()
+	handler.setupCodes[tokenHash] = &SetupCode{
+		ExpiresAt: time.Now().Add(5 * time.Minute),
+		NodeType:  "pve",
+	}
+	handler.codeMutex.Unlock()
+
+	// Agent re-registers with a NEW Pulse token (different timestamp) and possibly different IP
+	reqBody := AutoRegisterRequest{
+		Type:       "pve",
+		Host:       "https://10.0.1.200:8006", // IP may have changed
+		TokenID:    "pulse-monitor@pam!pulse-1700099999",
+		TokenValue: "new-secret",
+		ServerName: "pve",
+		Source:     "agent",
+		AuthToken:  tokenValue,
+	}
+
+	body, _ := json.Marshal(reqBody)
+	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleAutoRegister(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("re-registration failed: status=%d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	// Should still be exactly 1 node (merged, not duplicated)
+	if len(cfg.PVEInstances) != 1 {
+		t.Fatalf("expected 1 PVE instance after re-registration, got %d (duplicate created!)", len(cfg.PVEInstances))
+	}
+
+	// Token should be updated to the new one
+	node := cfg.PVEInstances[0]
+	if node.TokenName != "pulse-monitor@pam!pulse-1700099999" {
+		t.Errorf("token not updated: got %q, want %q", node.TokenName, "pulse-monitor@pam!pulse-1700099999")
+	}
+}
+
+// TestAutoRegisterAgentDifferentHostsSameNameStaySeparate verifies that two
+// genuinely different hosts with the same name but non-Pulse tokens (e.g.,
+// manually created tokens) are NOT merged. Regression test for Issue #891.
+func TestAutoRegisterAgentDifferentHostsSameNameStaySeparate(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+
+	originalDetectPVECluster := detectPVECluster
+	detectPVECluster = func(clientConfig proxmox.ClientConfig, nodeName string, existingEndpoints []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
+		return false, "", nil
+	}
+	defer func() { detectPVECluster = originalDetectPVECluster }()
+
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+		// Existing node with a manually-created (non-Pulse) token
+		PVEInstances: []config.PVEInstance{
+			{
+				Name:       "pve",
+				Host:       "https://10.0.1.100:8006",
+				TokenName:  "root@pam!my-manual-token",
+				TokenValue: "manual-secret",
+				Source:     "agent",
+			},
+		},
+	}
+
+	handler := newTestConfigHandlers(t, cfg)
+
+	const tokenValue = "TEMP-TOKEN"
+	tokenHash := internalauth.HashAPIToken(tokenValue)
+	handler.codeMutex.Lock()
+	handler.setupCodes[tokenHash] = &SetupCode{
+		ExpiresAt: time.Now().Add(5 * time.Minute),
+		NodeType:  "pve",
+	}
+	handler.codeMutex.Unlock()
+
+	// Different physical host registers with same name but Pulse agent token
+	reqBody := AutoRegisterRequest{
+		Type:       "pve",
+		Host:       "https://10.0.2.200:8006",
+		TokenID:    "pulse-monitor@pam!pulse-1700099999",
+		TokenValue: "new-secret",
+		ServerName: "pve",
+		Source:     "agent",
+		AuthToken:  tokenValue,
+	}
+
+	body, _ := json.Marshal(reqBody)
+	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleAutoRegister(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("registration failed: status=%d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	// Should be 2 separate nodes (one has manual token, other has Pulse token)
+	if len(cfg.PVEInstances) != 2 {
+		t.Fatalf("expected 2 PVE instances (different hosts), got %d", len(cfg.PVEInstances))
+	}
+}
