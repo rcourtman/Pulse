@@ -164,6 +164,56 @@ func TestHostedSignupRateLimit(t *testing.T) {
 	}
 }
 
+func TestHostedSignupRateLimit_NoProvisioningSideEffects(t *testing.T) {
+	baseDir := t.TempDir()
+	persistence := config.NewMultiTenantPersistence(baseDir)
+	rbacProvider := NewTenantRBACProvider(baseDir)
+	t.Cleanup(func() {
+		_ = rbacProvider.Close()
+	})
+
+	router, emailer := newHostedSignupTestRouterWithDepsAndPublicURLAndMagicLinkLimit(
+		t,
+		true,
+		persistence,
+		rbacProvider,
+		"https://pulse.example.test",
+		1,
+	)
+
+	first := doHostedSignupRequest(router, `{"email":"owner@example.com","org_name":"Org One"}`)
+	if first.Code != http.StatusCreated {
+		t.Fatalf("first request expected 201, got %d: %s", first.Code, first.Body.String())
+	}
+
+	orgsBefore, err := persistence.ListOrganizations()
+	if err != nil {
+		t.Fatalf("list orgs before rate-limit check: %v", err)
+	}
+	beforeCount := len(orgsBefore)
+
+	second := doHostedSignupRequest(router, `{"email":"owner@example.com","org_name":"Org Two"}`)
+	if second.Code != http.StatusTooManyRequests {
+		t.Fatalf("second request expected 429, got %d: %s", second.Code, second.Body.String())
+	}
+
+	orgsAfter, err := persistence.ListOrganizations()
+	if err != nil {
+		t.Fatalf("list orgs after rate-limit check: %v", err)
+	}
+	afterCount := len(orgsAfter)
+
+	if afterCount != beforeCount {
+		t.Fatalf("expected org count unchanged on rate limit, before=%d after=%d", beforeCount, afterCount)
+	}
+
+	emailer.mu.Lock()
+	defer emailer.mu.Unlock()
+	if emailer.calls != 1 {
+		t.Fatalf("expected exactly one magic-link email, got %d", emailer.calls)
+	}
+}
+
 func TestHostedSignupCleanupOnRBACFailure(t *testing.T) {
 	baseDir := t.TempDir()
 	persistence := config.NewMultiTenantPersistence(baseDir)
@@ -243,10 +293,16 @@ func newHostedSignupTestRouterWithDeps(t *testing.T, hostedMode bool, persistenc
 func newHostedSignupTestRouterWithDepsAndPublicURL(t *testing.T, hostedMode bool, persistence *config.MultiTenantPersistence, rbacProvider HostedRBACProvider, publicURL string) (*Router, *captureMagicLinkEmailer) {
 	t.Helper()
 
+	return newHostedSignupTestRouterWithDepsAndPublicURLAndMagicLinkLimit(t, hostedMode, persistence, rbacProvider, publicURL, 1000)
+}
+
+func newHostedSignupTestRouterWithDepsAndPublicURLAndMagicLinkLimit(t *testing.T, hostedMode bool, persistence *config.MultiTenantPersistence, rbacProvider HostedRBACProvider, publicURL string, magicLinkLimit int) (*Router, *captureMagicLinkEmailer) {
+	t.Helper()
+
 	emailer := &captureMagicLinkEmailer{}
 	// Use a stable key to avoid flakiness.
 	key := []byte("0123456789abcdef0123456789abcdef")
-	magicLinks := NewMagicLinkServiceWithKey(key, nil, emailer, NewRateLimiter(1000, 1*time.Hour))
+	magicLinks := NewMagicLinkServiceWithKey(key, nil, emailer, NewRateLimiter(magicLinkLimit, 1*time.Hour))
 	t.Cleanup(func() { magicLinks.Stop() })
 
 	router := &Router{

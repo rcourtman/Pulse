@@ -108,6 +108,12 @@ func (h *HostedSignupHandlers) HandlePublicSignup(w http.ResponseWriter, r *http
 		return
 	}
 
+	// Enforce per-email rate limit before any provisioning side effects.
+	if !h.magicLinks.AllowRequest(req.Email) {
+		writeErrorResponse(w, http.StatusTooManyRequests, "rate_limited", "Too many magic link requests. Please wait and try again.", nil)
+		return
+	}
+
 	orgID := uuid.NewString()
 	userID := req.Email
 
@@ -188,11 +194,6 @@ func (h *HostedSignupHandlers) HandlePublicSignup(w http.ResponseWriter, r *http
 	}
 
 	// Issue a magic link for passwordless sign-in.
-	// Rate limiting is enforced per-email to prevent abuse.
-	if !h.magicLinks.AllowRequest(userID) {
-		writeErrorResponse(w, http.StatusTooManyRequests, "rate_limited", "Too many magic link requests. Please wait and try again.", nil)
-		return
-	}
 	token, err := h.magicLinks.GenerateToken(userID, orgID)
 	if err != nil {
 		cleanupProvisioning()
