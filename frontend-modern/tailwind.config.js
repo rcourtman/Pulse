@@ -20,6 +20,20 @@ export default {
         gray: {
           750: '#2d3748',
         },
+        metric: {
+          critical: {
+            DEFAULT: '#ef4444',
+            bg: 'rgba(239, 68, 68, 0.6)',
+          },
+          warning: {
+            DEFAULT: '#eab308',
+            bg: 'rgba(234, 179, 8, 0.6)',
+          },
+          normal: {
+            DEFAULT: '#22c55e',
+            bg: 'rgba(34, 197, 94, 0.6)',
+          }
+        },
         red: { 900: 'rgba(127, 29, 29, 0.25)', 950: 'rgba(69, 10, 10, 0.25)' },
         amber: { 900: 'rgba(120, 53, 15, 0.25)', 950: 'rgba(67, 20, 7, 0.25)' },
         yellow: { 900: 'rgba(113, 63, 18, 0.25)', 950: 'rgba(66, 32, 6, 0.25)' },
