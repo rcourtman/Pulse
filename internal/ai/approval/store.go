@@ -82,7 +82,7 @@ func BelongsToOrg(req *ApprovalRequest, orgID string) bool {
 	if requestOrg == "" {
 		return normalizedOrg == DefaultOrgID
 	}
-	return strings.EqualFold(requestOrg, normalizedOrg)
+	return requestOrg == normalizedOrg
 }
 
 // ExecutionState stores the AI conversation state for resumption after approval.

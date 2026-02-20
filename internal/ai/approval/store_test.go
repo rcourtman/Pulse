@@ -187,9 +187,12 @@ func TestBelongsToOrg(t *testing.T) {
 		t.Fatal("legacy approvals should not belong to non-default org")
 	}
 
-	scoped := &ApprovalRequest{ID: "scoped", OrgID: "Org-A"}
+	scoped := &ApprovalRequest{ID: "scoped", OrgID: "org-a"}
 	if !BelongsToOrg(scoped, "org-a") {
-		t.Fatal("org comparison should be case-insensitive")
+		t.Fatal("expected approval to belong to matching org")
+	}
+	if BelongsToOrg(scoped, "Org-A") {
+		t.Fatal("org comparison should be case-sensitive")
 	}
 }
 
