@@ -151,6 +151,11 @@ func (h *MagicLinkHandlers) HandlePublicMagicLinkVerify(w http.ResponseWriter, r
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_magic_link", "Invalid or expired magic link", nil)
 		return
 	}
+	if !isValidOrganizationID(token.OrgID) {
+		// Reject malformed org IDs from storage to avoid cookie/context poisoning.
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_magic_link", "Invalid or expired magic link", nil)
+		return
+	}
 
 	// Create a session (reusing the existing session infrastructure).
 	sessionToken := generateSessionToken()

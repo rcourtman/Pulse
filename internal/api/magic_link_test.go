@@ -106,3 +106,12 @@ func TestMagicLinkRateLimiting(t *testing.T) {
 		t.Fatalf("4th request allowed, expected rate limited")
 	}
 }
+
+func TestMagicLinkGenerateTokenRejectsInvalidOrgID(t *testing.T) {
+	svc := NewMagicLinkServiceWithKey([]byte("0123456789abcdef0123456789abcdef"), nil, nil, nil)
+	t.Cleanup(func() { svc.Stop() })
+
+	if _, err := svc.GenerateToken("user@example.com", "../org"); err == nil {
+		t.Fatalf("expected invalid orgID to be rejected")
+	}
+}

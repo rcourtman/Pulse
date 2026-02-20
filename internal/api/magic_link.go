@@ -241,6 +241,9 @@ func (s *MagicLinkService) GenerateToken(email, orgID string) (string, error) {
 	if email == "" || orgID == "" {
 		return "", fmt.Errorf("email and orgID are required")
 	}
+	if !isValidOrganizationID(orgID) {
+		return "", fmt.Errorf("orgID is invalid")
+	}
 
 	expiresAt := s.now().UTC().Add(s.ttl)
 	// Store expiry at second precision for stable comparisons across stores.
