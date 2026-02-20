@@ -3900,6 +3900,29 @@ func TestVerifyTemperatureSSHAllowsSetupToken(t *testing.T) {
 	}
 }
 
+func TestVerifyTemperatureSSHRejectsSetupTokenOrgMismatch(t *testing.T) {
+	cfg := newTestConfigWithTokens(t)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	token := "fedcba9876543210fedcba9876543210"
+	tokenHash := auth.HashAPIToken(token)
+	router.configHandlers.codeMutex.Lock()
+	router.configHandlers.setupCodes[tokenHash] = &SetupCode{
+		ExpiresAt: time.Now().Add(time.Minute),
+		OrgID:     "org-a",
+	}
+	router.configHandlers.codeMutex.Unlock()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/system/verify-temperature-ssh", strings.NewReader(`{"nodes":""}`))
+	req.Header.Set("X-Setup-Token", token)
+	req.Header.Set("X-Pulse-Org-ID", "org-b")
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for setup token org mismatch, got %d", rec.Code)
+	}
+}
+
 func TestSSHConfigAllowsSetupToken(t *testing.T) {
 	cfg := newTestConfigWithTokens(t)
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
@@ -3920,6 +3943,30 @@ func TestSSHConfigAllowsSetupToken(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), `"success":true`) {
 		t.Fatalf("expected success response, got %q", rec.Body.String())
+	}
+}
+
+func TestSSHConfigRejectsSetupTokenOrgMismatch(t *testing.T) {
+	cfg := newTestConfigWithTokens(t)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	t.Setenv("HOME", t.TempDir())
+
+	token := "00112233445566778899aabbccddeeff"
+	tokenHash := auth.HashAPIToken(token)
+	router.configHandlers.codeMutex.Lock()
+	router.configHandlers.setupCodes[tokenHash] = &SetupCode{
+		ExpiresAt: time.Now().Add(time.Minute),
+		OrgID:     "org-a",
+	}
+	router.configHandlers.codeMutex.Unlock()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/system/ssh-config", strings.NewReader("Host example\nHostname example\n"))
+	req.Header.Set("X-Setup-Token", token)
+	req.Header.Set("X-Pulse-Org-ID", "org-b")
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for setup token org mismatch, got %d", rec.Code)
 	}
 }
 

@@ -317,6 +317,41 @@ func (h *ConfigHandlers) ValidateSetupToken(token string) bool {
 	return false
 }
 
+// ValidateSetupTokenForOrg checks whether the provided setup token is valid for
+// the requested organization context. Tokens without explicit org binding are
+// treated as default-org tokens for backward compatibility.
+func (h *ConfigHandlers) ValidateSetupTokenForOrg(token, orgID string) bool {
+	if token == "" {
+		return false
+	}
+
+	requestOrgID := strings.TrimSpace(orgID)
+	if requestOrgID == "" {
+		requestOrgID = "default"
+	}
+
+	tokenHash := internalauth.HashAPIToken(token)
+	now := time.Now()
+
+	h.codeMutex.RLock()
+	defer h.codeMutex.RUnlock()
+
+	if code, exists := h.setupCodes[tokenHash]; exists {
+		if code.Used || !now.Before(code.ExpiresAt) {
+			return false
+		}
+		tokenOrgID := strings.TrimSpace(code.OrgID)
+		if tokenOrgID == "" {
+			tokenOrgID = "default"
+		}
+		return tokenOrgID == requestOrgID
+	}
+
+	// Recent setup token grace entries are intentionally not accepted here
+	// because they do not carry org binding information.
+	return false
+}
+
 func (h *ConfigHandlers) markAutoRegistered(nodeType, nodeName string) {
 	if nodeType == "" || nodeName == "" {
 		return

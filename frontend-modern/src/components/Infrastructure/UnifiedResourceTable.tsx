@@ -449,7 +449,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                   </th>
                 </tr>
               </thead>
-              <tbody ref={setHostBodyRef} class="bg-white dark:bg-slate-800">
+              <tbody ref={setHostBodyRef} class="divide-y divide-slate-100 dark:divide-slate-800/60">
                 <Show when={hostWindowing.isWindowed() && hostTopSpacerHeight() > 0}>
                   <tr aria-hidden="true">
                     <td colspan={9} style={{ height: `${hostTopSpacerHeight()}px`, padding: '0', border: '0' }} />
@@ -812,7 +812,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                     </th>
                   </tr>
                 </thead>
-                <tbody class="bg-white dark:bg-slate-800">
+                <tbody class="divide-y divide-slate-100 dark:divide-slate-800/60">
                   <For each={sortedPBSResources()}>
                     {(resource) => {
                       const isExpanded = createMemo(() => props.expandedResourceId === resource.id);
@@ -1035,7 +1035,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                     </th>
                   </tr>
                 </thead>
-                <tbody class="bg-white dark:bg-slate-800">
+                <tbody class="divide-y divide-slate-100 dark:divide-slate-800/60">
                   <For each={sortedPMGResources()}>
                     {(resource) => {
                       const isExpanded = createMemo(() => props.expandedResourceId === resource.id);

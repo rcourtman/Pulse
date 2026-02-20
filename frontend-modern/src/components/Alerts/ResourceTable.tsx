@@ -784,13 +784,13 @@ export function ResourceTable(props: ResourceTableProps) {
                 </th>
               </tr>
             </thead>
-            <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+            <tbody class="divide-y divide-slate-100 dark:divide-slate-800/60">
               {/* Global Defaults Row */}
               <Show
                 when={props.globalDefaults && props.setGlobalDefaults && props.setHasUnsavedChanges}
               >
                 <tr
-                  class={`bg-slate-50 dark:bg-slate-800 border-b border-slate-300 dark:border-slate-600 ${props.globalDisableFlag?.() ? 'opacity-40' : ''}`}
+                  class={`bg-slate-50 dark:bg-slate-800 ${props.globalDisableFlag?.() ? 'opacity-40' : ''}`}
                 >
                   <td class="p-1 px-2 text-center align-middle">
                     <Show
@@ -1000,7 +1000,7 @@ export function ResourceTable(props: ResourceTableProps) {
                 }
               >
                 <tr
-                  class={`bg-slate-50 dark:bg-slate-800 border-b border-slate-300 dark:border-slate-600 ${props.globalDisableFlag?.() ? 'opacity-40' : ''}`}
+                  class={`bg-slate-50 dark:bg-slate-800 ${props.globalDisableFlag?.() ? 'opacity-40' : ''}`}
                 >
                   <td class="p-1 px-2 text-center align-middle">
                     <span class="text-sm text-slate-400">-</span>

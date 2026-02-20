@@ -3,6 +3,8 @@ package unifiedresources
 import (
 	"fmt"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
 // Metric helpers (nil-safe).
@@ -904,6 +906,22 @@ func (v DockerHostView) Swarm() *DockerSwarmInfo {
 		return nil
 	}
 	return cloneDockerSwarmInfo(v.r.Docker.Swarm)
+}
+
+func (v DockerHostView) Services() []models.DockerService {
+	if v.r == nil || v.r.Docker == nil {
+		return nil
+	}
+	// Note: these are not deep-cloned since this package doesn't define clones for models.DockerService
+	return append([]models.DockerService(nil), v.r.Docker.Services...)
+}
+
+func (v DockerHostView) Tasks() []models.DockerTask {
+	if v.r == nil || v.r.Docker == nil {
+		return nil
+	}
+	// Note: these are not deep-cloned
+	return append([]models.DockerTask(nil), v.r.Docker.Tasks...)
 }
 
 func (v DockerHostView) NetworkInterfaces() []NetworkInterface {

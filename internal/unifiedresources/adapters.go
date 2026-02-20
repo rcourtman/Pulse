@@ -261,6 +261,8 @@ func resourceFromDockerHost(host models.DockerHost) (Resource, ResourceIdentity)
 		Swarm:                 convertSwarm(host.Swarm),
 		NetworkInterfaces:     convertInterfaces(host.NetworkInterfaces),
 		Disks:                 convertDisks(host.Disks),
+		Services:              append([]models.DockerService(nil), host.Services...),
+		Tasks:                 append([]models.DockerTask(nil), host.Tasks...),
 	}
 
 	metrics := metricsFromDockerHost(host)

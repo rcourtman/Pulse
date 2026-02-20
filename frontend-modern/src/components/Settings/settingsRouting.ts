@@ -85,12 +85,12 @@ export function deriveTabFromPath(path: string): SettingsTab {
   if (canonicalPath.includes('/settings/system-general')) return 'workspace';
   if (canonicalPath.includes('/settings/system-ai')) return 'workspace';
   if (canonicalPath.includes('/settings/system-pro')) return 'workspace';
-  
+
   if (canonicalPath.includes('/settings/integrations')) return 'integrations';
   if (canonicalPath.includes('/settings/system-network')) return 'integrations';
   if (canonicalPath.includes('/settings/api')) return 'integrations';
   if (canonicalPath.includes('/settings/integrations/api')) return 'integrations';
-  
+
   if (canonicalPath.includes('/settings/maintenance')) return 'maintenance';
   if (canonicalPath.includes('/settings/system-updates')) return 'maintenance';
   if (canonicalPath.includes('/settings/updates')) return 'maintenance';
@@ -173,14 +173,12 @@ export function deriveTabFromQuery(search: string): SettingsTab | null {
     case 'general':
     case 'workspace':
       return 'workspace';
-    
+
     case 'organization':
     case 'org':
       return 'team';
     case 'team':
     case 'org-access':
-      return 'team';
-    case 'team':
     case 'sharing':
       return 'team';
     case 'billing':
@@ -197,9 +195,7 @@ export function deriveTabFromQuery(search: string): SettingsTab | null {
     case 'security-sso':
       return 'authentication';
     case 'security-roles':
-      return 'team';
     case 'security-users':
-    case 'team':
       return 'team';
     case 'security-audit':
     case 'audit':
@@ -223,18 +219,8 @@ export function settingsTabPath(tab: SettingsTab): string {
       return '/settings/system-recovery';
     case 'team':
       return '/settings/organization';
-    case 'team':
-      return '/settings/organization/access';
-    case 'team':
-      return '/settings/organization/sharing';
-    case 'team':
-      return '/settings/organization/billing';
-    case 'team':
-      return '/settings/organization/billing-admin';
     case 'integrations':
       return '/settings/integrations/api';
-    case 'integrations':
-      return '/settings/system-relay';
     default:
       return `/settings/${tab}`;
   }

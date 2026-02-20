@@ -750,3 +750,26 @@ func TestValidateSetupToken(t *testing.T) {
 		}
 	})
 }
+
+func TestValidateSetupTokenForOrg(t *testing.T) {
+	token := "org-bound-token-12345"
+	tokenHash := auth.HashAPIToken(token)
+
+	h := &ConfigHandlers{
+		setupCodes: map[string]*SetupCode{
+			tokenHash: {
+				ExpiresAt: time.Now().Add(1 * time.Hour),
+				Used:      false,
+				OrgID:     "org-a",
+			},
+		},
+		recentSetupTokens: make(map[string]time.Time),
+	}
+
+	if !h.ValidateSetupTokenForOrg(token, "org-a") {
+		t.Fatal("expected org-bound token to validate for matching org")
+	}
+	if h.ValidateSetupTokenForOrg(token, "org-b") {
+		t.Fatal("expected org-bound token to fail for different org")
+	}
+}

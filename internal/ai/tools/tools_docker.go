@@ -568,33 +568,33 @@ func trimLeadingSlash(name string) string {
 // ========== Docker Swarm Handler Implementations ==========
 
 func (e *PulseToolExecutor) executeGetSwarmStatus(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
-	if e.stateProvider == nil {
-		return NewTextResult("State provider not available."), nil
-	}
-
 	hostArg, _ := args["host"].(string)
 	if hostArg == "" {
 		return NewErrorResult(fmt.Errorf("host is required")), nil
 	}
 
-	state := e.stateProvider.GetState()
+	rs, err := e.readStateForControl()
+	if err != nil {
+		return NewErrorResult(err), nil
+	}
 
-	for _, host := range state.DockerHosts {
-		if host.ID == hostArg || host.Hostname == hostArg || host.DisplayName == hostArg || host.CustomDisplayName == hostArg {
-			if host.Swarm == nil {
-				return NewTextResult(fmt.Sprintf("Docker host '%s' is not part of a Swarm cluster.", host.Hostname)), nil
+	for _, host := range rs.DockerHosts() {
+		if host.ID() == hostArg || host.Hostname() == hostArg {
+			swarm := host.Swarm()
+			if swarm == nil {
+				return NewTextResult(fmt.Sprintf("Docker host '%s' is not part of a Swarm cluster.", host.Hostname())), nil
 			}
 
 			response := SwarmStatusResponse{
-				Host: host.Hostname,
+				Host: host.Hostname(),
 				Status: DockerSwarmSummary{
-					NodeID:           host.Swarm.NodeID,
-					NodeRole:         host.Swarm.NodeRole,
-					LocalState:       host.Swarm.LocalState,
-					ControlAvailable: host.Swarm.ControlAvailable,
-					ClusterID:        host.Swarm.ClusterID,
-					ClusterName:      host.Swarm.ClusterName,
-					Error:            host.Swarm.Error,
+					NodeID:           swarm.NodeID,
+					NodeRole:         swarm.NodeRole,
+					LocalState:       swarm.LocalState,
+					ControlAvailable: swarm.ControlAvailable,
+					ClusterID:        swarm.ClusterID,
+					ClusterName:      swarm.ClusterName,
+					Error:            swarm.Error,
 				},
 			}
 
@@ -606,10 +606,6 @@ func (e *PulseToolExecutor) executeGetSwarmStatus(_ context.Context, args map[st
 }
 
 func (e *PulseToolExecutor) executeListDockerServices(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
-	if e.stateProvider == nil {
-		return NewTextResult("State provider not available."), nil
-	}
-
 	hostArg, _ := args["host"].(string)
 	if hostArg == "" {
 		return NewErrorResult(fmt.Errorf("host is required")), nil
@@ -617,18 +613,22 @@ func (e *PulseToolExecutor) executeListDockerServices(_ context.Context, args ma
 
 	stackFilter, _ := args["stack"].(string)
 
-	state := e.stateProvider.GetState()
+	rs, err := e.readStateForControl()
+	if err != nil {
+		return NewErrorResult(err), nil
+	}
 
-	for _, host := range state.DockerHosts {
-		if host.ID == hostArg || host.Hostname == hostArg || host.DisplayName == hostArg || host.CustomDisplayName == hostArg {
-			if len(host.Services) == 0 {
-				return NewTextResult(fmt.Sprintf("No Docker services found on host '%s'. The host may not be a Swarm manager.", host.Hostname)), nil
+	for _, host := range rs.DockerHosts() {
+		if host.ID() == hostArg || host.Hostname() == hostArg {
+			services := host.Services()
+			if len(services) == 0 {
+				return NewTextResult(fmt.Sprintf("No Docker services found on host '%s'. The host may not be a Swarm manager.", host.Hostname())), nil
 			}
 
-			var services []DockerServiceSummary
+			var summaries []DockerServiceSummary
 			filteredCount := 0
 
-			for _, svc := range host.Services {
+			for _, svc := range services {
 				if stackFilter != "" && svc.Stack != stackFilter {
 					continue
 				}
@@ -640,7 +640,7 @@ func (e *PulseToolExecutor) executeListDockerServices(_ context.Context, args ma
 					updateStatus = svc.UpdateStatus.State
 				}
 
-				services = append(services, DockerServiceSummary{
+				summaries = append(summaries, DockerServiceSummary{
 					ID:           svc.ID,
 					Name:         svc.Name,
 					Stack:        svc.Stack,
@@ -652,14 +652,14 @@ func (e *PulseToolExecutor) executeListDockerServices(_ context.Context, args ma
 				})
 			}
 
-			if services == nil {
-				services = []DockerServiceSummary{}
+			if summaries == nil {
+				summaries = []DockerServiceSummary{}
 			}
 
 			response := DockerServicesResponse{
-				Host:     host.Hostname,
-				Services: services,
-				Total:    len(host.Services),
+				Host:     host.Hostname(),
+				Services: summaries,
+				Total:    len(services),
 				Filtered: filteredCount,
 			}
 
@@ -671,10 +671,6 @@ func (e *PulseToolExecutor) executeListDockerServices(_ context.Context, args ma
 }
 
 func (e *PulseToolExecutor) executeListDockerTasks(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
-	if e.stateProvider == nil {
-		return NewTextResult("State provider not available."), nil
-	}
-
 	hostArg, _ := args["host"].(string)
 	if hostArg == "" {
 		return NewErrorResult(fmt.Errorf("host is required")), nil
@@ -682,22 +678,26 @@ func (e *PulseToolExecutor) executeListDockerTasks(_ context.Context, args map[s
 
 	serviceFilter, _ := args["service"].(string)
 
-	state := e.stateProvider.GetState()
+	rs, err := e.readStateForControl()
+	if err != nil {
+		return NewErrorResult(err), nil
+	}
 
-	for _, host := range state.DockerHosts {
-		if host.ID == hostArg || host.Hostname == hostArg || host.DisplayName == hostArg || host.CustomDisplayName == hostArg {
-			if len(host.Tasks) == 0 {
-				return NewTextResult(fmt.Sprintf("No Docker tasks found on host '%s'. The host may not be a Swarm manager.", host.Hostname)), nil
+	for _, host := range rs.DockerHosts() {
+		if host.ID() == hostArg || host.Hostname() == hostArg {
+			tasks := host.Tasks()
+			if len(tasks) == 0 {
+				return NewTextResult(fmt.Sprintf("No Docker tasks found on host '%s'. The host may not be a Swarm manager.", host.Hostname())), nil
 			}
 
-			var tasks []DockerTaskSummary
+			var summaries []DockerTaskSummary
 
-			for _, task := range host.Tasks {
+			for _, task := range tasks {
 				if serviceFilter != "" && task.ServiceID != serviceFilter && task.ServiceName != serviceFilter {
 					continue
 				}
 
-				tasks = append(tasks, DockerTaskSummary{
+				summaries = append(summaries, DockerTaskSummary{
 					ID:           task.ID,
 					ServiceName:  task.ServiceName,
 					NodeName:     task.NodeName,
@@ -708,15 +708,15 @@ func (e *PulseToolExecutor) executeListDockerTasks(_ context.Context, args map[s
 				})
 			}
 
-			if tasks == nil {
-				tasks = []DockerTaskSummary{}
+			if summaries == nil {
+				summaries = []DockerTaskSummary{}
 			}
 
 			response := DockerTasksResponse{
-				Host:    host.Hostname,
+				Host:    host.Hostname(),
 				Service: serviceFilter,
-				Tasks:   tasks,
-				Total:   len(tasks),
+				Tasks:   summaries,
+				Total:   len(summaries),
 			}
 
 			return NewJSONResult(response), nil

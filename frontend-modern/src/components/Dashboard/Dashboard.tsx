@@ -1640,7 +1640,7 @@ export function Dashboard(props: DashboardProps) {
                     </For>
                   </tr>
                 </thead>
-                <tbody ref={setTableBodyRef}>
+                <tbody ref={setTableBodyRef} class="divide-y divide-slate-100 dark:divide-slate-800/60">
                   <Show when={groupedWindowing.isWindowed() && topSpacerHeight() > 0}>
                     <tr aria-hidden="true">
                       <td colspan={totalColumns()} style={{ height: `${topSpacerHeight()}px`, padding: '0', border: '0' }} />

@@ -435,6 +435,10 @@ type DockerData struct {
 	Swarm             *DockerSwarmInfo   `json:"swarm,omitempty"`
 	NetworkInterfaces []NetworkInterface `json:"networkInterfaces,omitempty"`
 	Disks             []DiskInfo         `json:"disks,omitempty"`
+
+	// These hold raw data for tools access
+	Services []models.DockerService `json:"-"`
+	Tasks    []models.DockerTask    `json:"-"`
 }
 
 // PBSData contains Proxmox Backup Server data.

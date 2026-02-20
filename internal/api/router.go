@@ -638,11 +638,9 @@ func (r *Router) handleVerifyTemperatureSSH(w http.ResponseWriter, req *http.Req
 	}
 
 	// Check setup token first (for setup scripts)
-	if token := extractSetupToken(req); token != "" {
-		if r.configHandlers.ValidateSetupToken(token) {
-			r.configHandlers.HandleVerifyTemperatureSSH(w, req)
-			return
-		}
+	if r.isValidSetupTokenForRequest(req) {
+		r.configHandlers.HandleVerifyTemperatureSSH(w, req)
+		return
 	}
 
 	// Require authentication
@@ -691,11 +689,9 @@ func (r *Router) handleSSHConfig(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// Check setup token first (for setup scripts)
-	if token := extractSetupToken(req); token != "" {
-		if r.configHandlers != nil && r.configHandlers.ValidateSetupToken(token) {
-			r.systemSettingsHandler.HandleSSHConfig(w, req)
-			return
-		}
+	if r.isValidSetupTokenForRequest(req) {
+		r.systemSettingsHandler.HandleSSHConfig(w, req)
+		return
 	}
 
 	// Require authentication
@@ -760,6 +756,19 @@ func extractSetupToken(req *http.Request) string {
 		return token
 	}
 	return ""
+}
+
+func (r *Router) isValidSetupTokenForRequest(req *http.Request) bool {
+	if r == nil || r.configHandlers == nil || req == nil {
+		return false
+	}
+
+	token := extractSetupToken(req)
+	if token == "" {
+		return false
+	}
+
+	return r.configHandlers.ValidateSetupTokenForOrg(token, GetOrgID(req.Context()))
 }
 
 func extractBearerToken(header string) string {
@@ -2834,14 +2843,14 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 			// Allow temperature verification endpoint when a setup token is provided
 			if normalizedPath == "/api/system/verify-temperature-ssh" && r.configHandlers != nil {
-				if token := extractSetupToken(req); token != "" && r.configHandlers.ValidateSetupToken(token) {
+				if r.isValidSetupTokenForRequest(req) {
 					isPublic = true
 				}
 			}
 
 			// Allow SSH config endpoint when a setup token is provided
 			if normalizedPath == "/api/system/ssh-config" && r.configHandlers != nil {
-				if token := extractSetupToken(req); token != "" && r.configHandlers.ValidateSetupToken(token) {
+				if r.isValidSetupTokenForRequest(req) {
 					isPublic = true
 				}
 			}
