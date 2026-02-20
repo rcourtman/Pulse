@@ -16,8 +16,9 @@ export const APIAccessPanel: Component<APIAccessPanelProps> = (props) => {
         title="API Access"
         description="Generate and manage scoped tokens for agents and automation."
         icon={<BadgeCheck class="w-5 h-5" strokeWidth={2} />}
+        noPadding
       >
-        <div class="space-y-3">
+        <div class="space-y-3 p-4 sm:p-6 pb-6 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
           <p class="text-sm text-slate-600 dark:text-slate-400">
             Generate scoped tokens for Docker agents, host agents, and automation pipelines. Tokens
             are shown once—store them securely and rotate when infrastructure changes.

@@ -30,7 +30,6 @@
   },
   "dependencies": {
     "@solidjs/router": "^0.10.10",
-    "@tanstack/solid-virtual": "^3.13.18",
     "dompurify": "^3.3.1",
     "lucide-solid": "^0.545.0",
     "marked": "^17.0.1",
@@ -45,6 +44,7 @@
     "@eslint/js": "^9.39.2",
     "@solidjs/testing-library": "^0.8.5",
     "@tailwindcss/typography": "^0.5.19",
+    "@tanstack/solid-virtual": "^3.13.18",
     "@testing-library/jest-dom": "^6.5.0",
     "@types/node": "^20.10.0",
     "@types/qrcode": "^1.5.6",

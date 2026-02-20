@@ -10,6 +10,7 @@ type SettingsPanelProps = {
   bodyClass?: string;
   tone?: 'default' | 'muted' | 'info' | 'success' | 'warning' | 'danger';
   padding?: 'none' | 'sm' | 'md' | 'lg';
+  noPadding?: boolean;
 } & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'title'>;
 
 export function SettingsPanel(props: SettingsPanelProps) {
@@ -23,17 +24,18 @@ export function SettingsPanel(props: SettingsPanelProps) {
     'class',
     'tone',
     'padding',
+    'noPadding'
   ]);
 
   return (
     <Card
       padding="none"
       tone={local.tone ?? 'default'}
-      class={`overflow-hidden border border-slate-200 dark:border-slate-700 ${local.class ?? ''}`.trim()}
+      class={`overflow-hidden border border-slate-200 dark:border-slate-800 ${local.class ?? ''}`.trim()}
       border={false}
       {...rest}
     >
-      <div class="px-3 py-3 sm:px-6 sm:py-4 border-b border-slate-200 dark:border-slate-800">
+      <div class="px-3 py-3 sm:px-6 sm:py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
           <div class="flex min-w-0 items-center gap-3 flex-1">
             <Show when={local.icon}>
@@ -53,7 +55,9 @@ export function SettingsPanel(props: SettingsPanelProps) {
           </Show>
         </div>
       </div>
-      <div class={`p-3 sm:p-6 ${local.bodyClass ?? 'space-y-6'}`}>{local.children}</div>
+      <div class={`${local.noPadding ? '' : 'p-4 sm:p-6'} ${local.bodyClass ?? (local.noPadding ? '' : 'space-y-6')}`}>
+        {local.children}
+      </div>
     </Card>
   );
 }

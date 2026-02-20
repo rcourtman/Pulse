@@ -89,12 +89,13 @@ export const OrganizationOverviewPanel: Component<OrganizationOverviewPanelProps
           title="Organization Overview"
           description="Review organization metadata, membership footprint, and edit the display name."
           icon={<Building2 class="w-5 h-5" />}
-          bodyClass="space-y-5"
+          noPadding
+          bodyClass="divide-y divide-slate-100 dark:divide-slate-800"
         >
           <Show
             when={!loading()}
             fallback={
-              <div class="space-y-5">
+              <div class="space-y-5 p-4 sm:p-6 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
                 <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   {Array.from({ length: 4 }).map(() => (
                     <div class="rounded-md border border-slate-200 dark:border-slate-700 p-3 space-y-2">
@@ -133,55 +134,58 @@ export const OrganizationOverviewPanel: Component<OrganizationOverviewPanelProps
             <Show when={org()}>
               {(currentOrg) => (
                 <>
-                  <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                    <div class="rounded-md border border-slate-200 dark:border-slate-700 p-3">
-                      <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Organization</p>
-                      <p class="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{currentOrg().displayName || currentOrg().id}</p>
+                  <div class="space-y-6 p-4 sm:p-6 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                    <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                      <div class="rounded-md border border-slate-200 dark:border-slate-700 p-3">
+                        <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Organization</p>
+                        <p class="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{currentOrg().displayName || currentOrg().id}</p>
+                      </div>
+                      <div class="rounded-md border border-slate-200 dark:border-slate-700 p-3">
+                        <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Org ID</p>
+                        <p class="mt-1 text-sm font-mono break-all text-slate-900 dark:text-slate-100">{currentOrg().id}</p>
+                      </div>
+                      <div class="rounded-md border border-slate-200 dark:border-slate-700 p-3">
+                        <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Created</p>
+                        <p class="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{formatOrgDate(currentOrg().createdAt)}</p>
+                      </div>
+                      <div class="rounded-md border border-slate-200 dark:border-slate-700 p-3">
+                        <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Members</p>
+                        <p class="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{members().length}</p>
+                      </div>
                     </div>
-                    <div class="rounded-md border border-slate-200 dark:border-slate-700 p-3">
-                      <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Org ID</p>
-                      <p class="mt-1 text-sm font-mono break-all text-slate-900 dark:text-slate-100">{currentOrg().id}</p>
+
+                    <div class="space-y-2">
+                      <label class="block text-sm font-medium text-slate-700 dark:text-slate-300" for="org-display-name-input">
+                        Display Name
+                      </label>
+                      <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+                        <input
+                          id="org-display-name-input"
+                          type="text"
+                          value={displayNameDraft()}
+                          onInput={(event) => setDisplayNameDraft(event.currentTarget.value)}
+                          disabled={!canManageOrg(currentOrg(), props.currentUser) || saving()}
+                          class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                        />
+                        <button
+                          type="button"
+                          onClick={saveDisplayName}
+                          disabled={!canManageOrg(currentOrg(), props.currentUser) || saving()}
+                          class="inline-flex w-full sm:w-auto items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {saving() ? 'Saving...' : 'Save'}
+                        </button>
+                      </div>
+                      <Show when={!canManageOrg(currentOrg(), props.currentUser)}>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Admin or owner role required to update organization details.</p>
+                      </Show>
                     </div>
-                    <div class="rounded-md border border-slate-200 dark:border-slate-700 p-3">
-                      <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Created</p>
-                      <p class="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{formatOrgDate(currentOrg().createdAt)}</p>
-                    </div>
-                    <div class="rounded-md border border-slate-200 dark:border-slate-700 p-3">
-                      <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Members</p>
-                      <p class="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{members().length}</p>
-                    </div>
+
                   </div>
 
-                  <div class="space-y-2">
-                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300" for="org-display-name-input">
-                      Display Name
-                    </label>
-                    <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
-                      <input
-                        id="org-display-name-input"
-                        type="text"
-                        value={displayNameDraft()}
-                        onInput={(event) => setDisplayNameDraft(event.currentTarget.value)}
-                        disabled={!canManageOrg(currentOrg(), props.currentUser) || saving()}
-                        class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
-                      />
-                      <button
-                        type="button"
-                        onClick={saveDisplayName}
-                        disabled={!canManageOrg(currentOrg(), props.currentUser) || saving()}
-                        class="inline-flex w-full sm:w-auto items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {saving() ? 'Saving...' : 'Save'}
-                      </button>
-                    </div>
-                    <Show when={!canManageOrg(currentOrg(), props.currentUser)}>
-                      <p class="text-xs text-slate-500 dark:text-slate-400">Admin or owner role required to update organization details.</p>
-                    </Show>
-                  </div>
-
-                  <div class="space-y-2">
+                  <div class="space-y-2 p-4 sm:p-6 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
                     <h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Membership</h4>
-                    <div class="mt-4">
+                    <div class="mt-4 -mx-4 sm:mx-0 overflow-x-auto w-full">
                       <PulseDataGrid
                         data={members()}
                         columns={[
@@ -211,6 +215,7 @@ export const OrganizationOverviewPanel: Component<OrganizationOverviewPanelProps
                         keyExtractor={(member) => member.userId}
                         emptyState="No members found."
                         desktopMinWidth="560px"
+                        class="border-x-0 sm:border-x sm:border-t sm:border-b sm:rounded-md border-y border-slate-200 dark:border-slate-800"
                       />
                     </div>
                   </div>

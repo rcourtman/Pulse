@@ -122,86 +122,90 @@ export function ReportingPanel() {
                 title="Detailed Reporting"
                 description="Generate reports across infrastructure, workloads, storage, and backup resources."
                 icon={<BarChart class="w-5 h-5" strokeWidth={2} />}
-                bodyClass="space-y-6"
+                noPadding
+                bodyClass="divide-y divide-slate-100 dark:divide-slate-800"
             >
-                {/* Resource Picker */}
-                <FormField label="Resources" helpText="Select the resources to include in the report">
-                    <ResourcePicker
-                        selected={selectedResources}
-                        onSelectionChange={setSelectedResources}
-                    />
-                </FormField>
-
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <FormField label="Metric Type (Optional)" helpText="Filter by specific metric type">
-                        <input
-                            id="metric-type"
-                            type="text"
-                            class={formControl}
-                            placeholder="e.g. cpu, memory, disk, temperature (leave empty for all)"
-                            value={metricType()}
-                            onInput={(e) => setMetricType(e.currentTarget.value)}
+                <div class="space-y-6 p-4 sm:p-6 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                    {/* Resource Picker */}
+                    <FormField label="Resources" helpText="Select the resources to include in the report">
+                        <ResourcePicker
+                            selected={selectedResources}
+                            onSelectionChange={setSelectedResources}
                         />
                     </FormField>
 
-                    <FormField label="Report Title" helpText="Custom title for the PDF report">
-                        <input
-                            id="report-title"
-                            type="text"
-                            class={formControl}
-                            placeholder="Auto-generated if empty"
-                            value={title()}
-                            onInput={(e) => setTitle(e.currentTarget.value)}
-                        />
-                    </FormField>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <FormField label="Metric Type (Optional)" helpText="Filter by specific metric type">
+                            <input
+                                id="metric-type"
+                                type="text"
+                                class={formControl}
+                                placeholder="e.g. cpu, memory, disk, temperature (leave empty for all)"
+                                value={metricType()}
+                                onInput={(e) => setMetricType(e.currentTarget.value)}
+                            />
+                        </FormField>
+
+                        <FormField label="Report Title" helpText="Custom title for the PDF report">
+                            <input
+                                id="report-title"
+                                type="text"
+                                class={formControl}
+                                placeholder="Auto-generated if empty"
+                                value={title()}
+                                onInput={(e) => setTitle(e.currentTarget.value)}
+                            />
+                        </FormField>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <FormField label="Time Range">
+                            <div class="grid grid-cols-1 sm:flex gap-2">
+                                <For each={['24h', '7d', '30d']}>
+                                    {(r) => (
+                                        <button
+                                            class={`w-full sm:w-auto min-h-10 sm:min-h-9 px-4 py-2.5 rounded-md border transition-all ${range() === r
+                                                ? 'bg-blue-50 border-blue-500 text-blue-700 dark:bg-blue-900 dark:text-blue-300 dark:border-blue-500'
+                                                : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700'
+                                                }`}
+                                            onClick={() => setRange(r)}
+                                        >
+                                            {r === '24h' ? 'Last 24 Hours' : r === '7d' ? 'Last 7 Days' : 'Last 30 Days'}
+                                        </button>
+                                    )}
+                                </For>
+                            </div>
+                        </FormField>
+
+                        <FormField label="Export Format">
+                            <div class="grid grid-cols-1 sm:flex gap-2">
+                                <button
+                                    class={`w-full sm:w-auto min-h-10 sm:min-h-9 flex items-center justify-center gap-2 px-4 py-2.5 rounded-md border transition-all ${format() === 'pdf'
+                                        ? 'bg-blue-50 border-blue-500 text-blue-700 dark:bg-blue-900 dark:text-blue-300 dark:border-blue-500'
+                                        : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700'
+                                        }`}
+                                    onClick={() => setFormat('pdf')}
+                                >
+                                    <FileText size={16} />
+                                    PDF Report
+                                </button>
+                                <button
+                                    class={`w-full sm:w-auto min-h-10 sm:min-h-9 flex items-center justify-center gap-2 px-4 py-2.5 rounded-md border transition-all ${format() === 'csv'
+                                        ? 'bg-blue-50 border-blue-500 text-blue-700 dark:bg-blue-900 dark:text-blue-300 dark:border-blue-500'
+                                        : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700'
+                                        }`}
+                                    onClick={() => setFormat('csv')}
+                                >
+                                    <BarChart size={16} />
+                                    CSV Data
+                                </button>
+                            </div>
+                        </FormField>
+                    </div>
+
                 </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <FormField label="Time Range">
-                        <div class="grid grid-cols-1 sm:flex gap-2">
-                            <For each={['24h', '7d', '30d']}>
-                                {(r) => (
-                                    <button
-                                        class={`w-full sm:w-auto min-h-10 sm:min-h-9 px-4 py-2.5 rounded-md border transition-all ${range() === r
-                                            ? 'bg-blue-50 border-blue-500 text-blue-700 dark:bg-blue-900 dark:text-blue-300 dark:border-blue-500'
-                                            : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700'
-                                            }`}
-                                        onClick={() => setRange(r)}
-                                    >
-                                        {r === '24h' ? 'Last 24 Hours' : r === '7d' ? 'Last 7 Days' : 'Last 30 Days'}
-                                    </button>
-                                )}
-                            </For>
-                        </div>
-                    </FormField>
-
-                    <FormField label="Export Format">
-                        <div class="grid grid-cols-1 sm:flex gap-2">
-                            <button
-                                class={`w-full sm:w-auto min-h-10 sm:min-h-9 flex items-center justify-center gap-2 px-4 py-2.5 rounded-md border transition-all ${format() === 'pdf'
-                                    ? 'bg-blue-50 border-blue-500 text-blue-700 dark:bg-blue-900 dark:text-blue-300 dark:border-blue-500'
-                                    : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700'
-                                    }`}
-                                onClick={() => setFormat('pdf')}
-                            >
-                                <FileText size={16} />
-                                PDF Report
-                            </button>
-                            <button
-                                class={`w-full sm:w-auto min-h-10 sm:min-h-9 flex items-center justify-center gap-2 px-4 py-2.5 rounded-md border transition-all ${format() === 'csv'
-                                    ? 'bg-blue-50 border-blue-500 text-blue-700 dark:bg-blue-900 dark:text-blue-300 dark:border-blue-500'
-                                    : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700'
-                                    }`}
-                                onClick={() => setFormat('csv')}
-                            >
-                                <BarChart size={16} />
-                                CSV Data
-                            </button>
-                        </div>
-                    </FormField>
-                </div>
-
-                <div class="flex justify-end pt-4 border-t border-slate-200 dark:border-slate-700">
+                <div class="flex justify-end p-4 sm:p-6 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
                     <button
                         class={`w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 rounded-md font-semibold transition-all ${generating()
                             ? 'bg-slate-300 text-slate-500 cursor-not-allowed dark:bg-slate-700 dark:text-slate-400'
@@ -236,6 +240,6 @@ export function ReportingPanel() {
                     </div>
                 </div>
             </div>
-        </div>
+        </div >
     );
 }

@@ -668,10 +668,10 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
   };
 
   return (
-      <div
-        data-testid="workloads-summary"
-        class="overflow-hidden rounded-md border border-slate-200 bg-white p-2 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-3"
-      >
+    <div
+      data-testid="workloads-summary"
+      class="overflow-hidden rounded-md border border-slate-200 bg-white p-2 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-3"
+    >
       <div class="mb-2 flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-1 pb-2 text-[11px] text-slate-500 dark:border-slate-700 dark:text-slate-400">
         <div class="flex items-center gap-3">
           <span class="font-medium text-slate-700 dark:text-slate-200">
@@ -691,11 +691,10 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
                 <button
                   type="button"
                   onClick={() => props.onTimeRangeChange?.(range)}
-                  class={`rounded px-2 py-1 ${
-                    selectedRange() === range
+                  class={`rounded px-2 py-1 ${selectedRange() === range
                       ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
                       : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700'
-                  }`}
+                    }`}
                 >
                   {SUMMARY_TIME_RANGE_LABEL[range]}
                 </button>
@@ -705,146 +704,146 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
         </Show>
       </div>
 
-        <div class="grid gap-2 sm:gap-3 grid-cols-2 lg:grid-cols-4">
-          <Card padding="sm" class="h-full">
-            <div class="flex flex-col h-full">
-              <div class="flex items-center justify-between mb-1.5">
-                <div class="flex items-center min-w-0">
-                  <span class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide shrink-0">CPU</span>
-                  <Show when={focusedWorkloadName()}>
-                    <span class="text-xs text-slate-400 dark:text-slate-500 ml-1.5 truncate">&mdash; {focusedWorkloadName()}</span>
-                  </Show>
-                </div>
+      <div class="grid gap-2 sm:gap-3 grid-cols-2 lg:grid-cols-4">
+        <Card padding="sm" class="h-full">
+          <div class="flex flex-col h-full">
+            <div class="flex items-center justify-between mb-1.5">
+              <div class="flex items-center min-w-0">
+                <span class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide shrink-0">CPU</span>
+                <Show when={focusedWorkloadName()}>
+                  <span class="text-xs text-slate-400 dark:text-slate-500 ml-1.5 truncate">&mdash; {focusedWorkloadName()}</span>
+                </Show>
               </div>
-              <Show
-                when={hasCpuData()}
-                fallback={
-                  <div class="flex h-[56px] items-center text-sm text-slate-400 dark:text-slate-500">
-                    {fallbackTrendMessage()}
-                  </div>
-                }
-              >
-                <div class="flex-1 min-h-0">
-                  <InteractiveSparkline
-                    series={cpuSeries()}
-                    rangeLabel={selectedRange()}
-                    timeRange={selectedRange()}
-                    yMode="percent"
-                    sortTooltipByValue
-                    maxTooltipRows={8}
-                    highlightNearestSeriesOnHover
-                    highlightSeriesId={props.hoveredWorkloadId}
-                  />
-                </div>
-              </Show>
             </div>
-          </Card>
+            <Show
+              when={hasCpuData()}
+              fallback={
+                <div class="flex h-[56px] items-center text-sm text-slate-400 dark:text-slate-500">
+                  {fallbackTrendMessage()}
+                </div>
+              }
+            >
+              <div class="flex-1 min-h-0">
+                <InteractiveSparkline
+                  series={cpuSeries()}
+                  rangeLabel={selectedRange()}
+                  timeRange={selectedRange()}
+                  yMode="percent"
+                  sortTooltipByValue
+                  maxTooltipRows={8}
+                  highlightNearestSeriesOnHover
+                  highlightSeriesId={props.hoveredWorkloadId}
+                />
+              </div>
+            </Show>
+          </div>
+        </Card>
 
-          <Card padding="sm" class="h-full">
-            <div class="flex flex-col h-full">
-              <div class="flex items-center justify-between mb-1.5">
-                <div class="flex items-center min-w-0">
-                  <span class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide shrink-0">Memory</span>
-                  <Show when={focusedWorkloadName()}>
-                    <span class="text-xs text-slate-400 dark:text-slate-500 ml-1.5 truncate">&mdash; {focusedWorkloadName()}</span>
-                  </Show>
-                </div>
+        <Card padding="sm" class="h-full">
+          <div class="flex flex-col h-full">
+            <div class="flex items-center justify-between mb-1.5">
+              <div class="flex items-center min-w-0">
+                <span class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide shrink-0">Memory</span>
+                <Show when={focusedWorkloadName()}>
+                  <span class="text-xs text-slate-400 dark:text-slate-500 ml-1.5 truncate">&mdash; {focusedWorkloadName()}</span>
+                </Show>
               </div>
-              <Show
-                when={hasMemoryData()}
-                fallback={
-                  <div class="flex h-[56px] items-center text-sm text-slate-400 dark:text-slate-500">
-                    {fallbackTrendMessage()}
-                  </div>
-                }
-              >
-                <div class="flex-1 min-h-0">
-                  <InteractiveSparkline
-                    series={memorySeries()}
-                    rangeLabel={selectedRange()}
-                    timeRange={selectedRange()}
-                    yMode="percent"
-                    sortTooltipByValue
-                    maxTooltipRows={8}
-                    highlightNearestSeriesOnHover
-                    highlightSeriesId={props.hoveredWorkloadId}
-                  />
-                </div>
-              </Show>
             </div>
-          </Card>
+            <Show
+              when={hasMemoryData()}
+              fallback={
+                <div class="flex h-[56px] items-center text-sm text-slate-400 dark:text-slate-500">
+                  {fallbackTrendMessage()}
+                </div>
+              }
+            >
+              <div class="flex-1 min-h-0">
+                <InteractiveSparkline
+                  series={memorySeries()}
+                  rangeLabel={selectedRange()}
+                  timeRange={selectedRange()}
+                  yMode="percent"
+                  sortTooltipByValue
+                  maxTooltipRows={8}
+                  highlightNearestSeriesOnHover
+                  highlightSeriesId={props.hoveredWorkloadId}
+                />
+              </div>
+            </Show>
+          </div>
+        </Card>
 
-          <Card padding="sm" class="h-full">
-            <div class="flex flex-col h-full">
-              <div class="flex items-center justify-between mb-1.5">
-                <div class="flex items-center min-w-0">
-                  <span class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide shrink-0">Storage</span>
-                  <Show when={focusedWorkloadName()}>
-                    <span class="text-xs text-slate-400 dark:text-slate-500 ml-1.5 truncate">&mdash; {focusedWorkloadName()}</span>
-                  </Show>
-                </div>
+        <Card padding="sm" class="h-full">
+          <div class="flex flex-col h-full">
+            <div class="flex items-center justify-between mb-1.5">
+              <div class="flex items-center min-w-0">
+                <span class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide shrink-0">Storage</span>
+                <Show when={focusedWorkloadName()}>
+                  <span class="text-xs text-slate-400 dark:text-slate-500 ml-1.5 truncate">&mdash; {focusedWorkloadName()}</span>
+                </Show>
               </div>
-              <Show
-                when={hasDiskData()}
-                fallback={
-                  <div class="flex h-[56px] items-center text-sm text-slate-400 dark:text-slate-500">
-                    {fallbackTrendMessage()}
-                  </div>
-                }
-              >
-                <div class="flex-1 min-h-0">
-                  <InteractiveSparkline
-                    series={diskSeries()}
-                    rangeLabel={selectedRange()}
-                    timeRange={selectedRange()}
-                    yMode="percent"
-                    sortTooltipByValue
-                    maxTooltipRows={8}
-                    highlightNearestSeriesOnHover
-                    highlightSeriesId={props.hoveredWorkloadId}
-                  />
-                </div>
-              </Show>
             </div>
-          </Card>
+            <Show
+              when={hasDiskData()}
+              fallback={
+                <div class="flex h-[56px] items-center text-sm text-slate-400 dark:text-slate-500">
+                  {fallbackTrendMessage()}
+                </div>
+              }
+            >
+              <div class="flex-1 min-h-0">
+                <InteractiveSparkline
+                  series={diskSeries()}
+                  rangeLabel={selectedRange()}
+                  timeRange={selectedRange()}
+                  yMode="percent"
+                  sortTooltipByValue
+                  maxTooltipRows={8}
+                  highlightNearestSeriesOnHover
+                  highlightSeriesId={props.hoveredWorkloadId}
+                />
+              </div>
+            </Show>
+          </div>
+        </Card>
 
-          <Card padding="sm" class="h-full">
-            <div class="flex flex-col h-full">
-              <div class="flex items-center justify-between mb-1.5">
-                <div class="flex items-center min-w-0">
-                  <span class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide shrink-0">Network</span>
-                  <Show when={focusedWorkloadName()}>
-                    <span class="text-xs text-slate-400 dark:text-slate-500 ml-1.5 truncate">&mdash; {focusedWorkloadName()}</span>
-                  </Show>
-                </div>
+        <Card padding="sm" class="h-full">
+          <div class="flex flex-col h-full">
+            <div class="flex items-center justify-between mb-1.5">
+              <div class="flex items-center min-w-0">
+                <span class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide shrink-0">Network</span>
+                <Show when={focusedWorkloadName()}>
+                  <span class="text-xs text-slate-400 dark:text-slate-500 ml-1.5 truncate">&mdash; {focusedWorkloadName()}</span>
+                </Show>
               </div>
-              <Show
-                when={hasNetworkData()}
-                fallback={
-                  <div class="flex h-[56px] items-center text-sm text-slate-400 dark:text-slate-500">
-                    {fallbackTrendMessage()}
-                  </div>
-                }
-              >
-                <div class="flex-1 min-h-0">
-                  <InteractiveSparkline
-                    series={networkSeries()}
-                    rangeLabel={selectedRange()}
-                    timeRange={selectedRange()}
-                    yMode="auto"
-                    formatValue={formatRate}
-                    formatTopLabel={formatRate}
-                    sortTooltipByValue
-                    maxTooltipRows={8}
-                    highlightNearestSeriesOnHover
-                    highlightSeriesId={props.hoveredWorkloadId}
-                  />
-                </div>
-              </Show>
             </div>
-          </Card>
-        </div>
+            <Show
+              when={hasNetworkData()}
+              fallback={
+                <div class="flex h-[56px] items-center text-sm text-slate-400 dark:text-slate-500">
+                  {fallbackTrendMessage()}
+                </div>
+              }
+            >
+              <div class="flex-1 min-h-0">
+                <InteractiveSparkline
+                  series={networkSeries()}
+                  rangeLabel={selectedRange()}
+                  timeRange={selectedRange()}
+                  yMode="auto"
+                  formatValue={formatRate}
+                  formatTopLabel={formatRate}
+                  sortTooltipByValue
+                  maxTooltipRows={8}
+                  highlightNearestSeriesOnHover
+                  highlightSeriesId={props.hoveredWorkloadId}
+                />
+              </div>
+            </Show>
+          </div>
+        </Card>
       </div>
+    </div>
   );
 };
 

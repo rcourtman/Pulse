@@ -296,7 +296,6 @@ export const AgentProfilesPanel: Component = () => {
                         title="Configuration Profiles"
                         description="Reusable agent configurations"
                         icon={<Settings class="w-5 h-5" strokeWidth={2} />}
-                        bodyClass="space-y-4"
                         action={
                             <div class="flex items-center gap-2">
                                 <button
@@ -322,6 +321,8 @@ export const AgentProfilesPanel: Component = () => {
                                 </Show>
                             </div>
                         }
+                        noPadding
+                        bodyClass="divide-y divide-slate-100 dark:divide-slate-800"
                     >
                         <Show when={loading()}>
                             <div class="flex items-center justify-center py-8">
@@ -337,7 +338,7 @@ export const AgentProfilesPanel: Component = () => {
                         </Show>
 
                         <Show when={!loading() && profiles().length > 0}>
-                            <div class="mt-4">
+                            <div class="w-full overflow-x-auto">
                                 <PulseDataGrid
                                     data={profiles()}
                                     columns={[
@@ -390,6 +391,7 @@ export const AgentProfilesPanel: Component = () => {
                                     keyExtractor={(profile) => profile.id}
                                     emptyState="No profiles yet. Create one to get started."
                                     desktopMinWidth="600px"
+                                    class="border-x-0 sm:border-x border-slate-200 dark:border-slate-800"
                                 />
                             </div>
                         </Show>
@@ -400,7 +402,8 @@ export const AgentProfilesPanel: Component = () => {
                         title="Agent Assignments"
                         description="Assign profiles to connected agents"
                         icon={<Users class="w-5 h-5" strokeWidth={2} />}
-                        bodyClass="space-y-4"
+                        noPadding
+                        bodyClass="divide-y divide-slate-100 dark:divide-slate-800"
                     >
                         <Show when={connectedAgents().length === 0}>
                             <div class="text-center py-8 text-slate-500 dark:text-slate-400">
@@ -410,7 +413,7 @@ export const AgentProfilesPanel: Component = () => {
                         </Show>
 
                         <Show when={connectedAgents().length > 0}>
-                            <div class="mt-4">
+                            <div class="w-full overflow-x-auto">
                                 <PulseDataGrid
                                     data={connectedAgents()}
                                     columns={[
@@ -480,6 +483,7 @@ export const AgentProfilesPanel: Component = () => {
                                     keyExtractor={(agent) => agent.id}
                                     emptyState="No agents connected. Install an agent to assign profiles."
                                     desktopMinWidth="800px"
+                                    class="border-x-0 sm:border-x border-slate-200 dark:border-slate-800"
                                 />
                             </div>
                         </Show>

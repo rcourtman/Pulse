@@ -17,7 +17,7 @@ const toneClassMap: Record<Tone, string> = {
   success: 'bg-emerald-50 dark:bg-emerald-900',
   warning: 'bg-amber-50 dark:bg-amber-900',
   danger: 'bg-red-50 dark:bg-red-900',
-  card: 'bg-white dark:bg-slate-800 shadow-sm',
+  card: 'bg-white dark:bg-slate-800',
   glass: 'bg-slate-50 dark:bg-slate-900',
 };
 
@@ -35,11 +35,11 @@ export function Card(props: CardProps) {
   );
   const [local, rest] = splitProps(merged, ['tone', 'padding', 'hoverable', 'border', 'class']);
 
-  const baseClass = 'rounded-md shadow-sm transition-shadow duration-200 max-w-full';
+  const baseClass = 'rounded-md transition-shadow duration-200 max-w-full';
   const toneClass = toneClassMap[local.tone];
   const paddingClass = paddingClassMap[local.padding];
   const borderClass = local.border ? 'border border-slate-200 dark:border-slate-700' : '';
-  const hoverClass = local.hoverable ? 'hover:shadow-sm' : '';
+  const hoverClass = local.hoverable ? '' : '';
 
   return (
     <div

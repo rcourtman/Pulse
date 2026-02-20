@@ -97,10 +97,11 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
         title="Network"
         description="Configure discovery, CORS, embedding, and webhook network boundaries."
         icon={<Network class="w-5 h-5" strokeWidth={2} />}
-        bodyClass="space-y-8"
+        noPadding
+        bodyClass="divide-y divide-slate-100 dark:divide-slate-800"
       >
         {/* Network Discovery Section */}
-        <section class="space-y-5">
+        <section class="p-4 sm:p-6 space-y-5 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
           <SectionHeader
             title="Network discovery"
             description="Control how Pulse scans for Proxmox services on your network."
@@ -403,7 +404,7 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
         </section>
 
         {/* Public URL Setting */}
-        <section class="space-y-3">
+        <section class="p-4 sm:p-6 space-y-4 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
           <h4 class="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
             <svg
               width="16"
@@ -469,7 +470,7 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
         </section>
 
         {/* CORS Settings Section */}
-        <section class="space-y-3">
+        <section class="p-4 sm:p-6 space-y-4 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
           <h4 class="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
             <svg
               width="16"
@@ -531,7 +532,7 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
         </section>
 
         {/* Embedding Section */}
-        <section class="space-y-3">
+        <section class="p-4 sm:p-6 space-y-4 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
           <h4 class="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
             <svg
               width="16"
@@ -595,7 +596,7 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
         </section>
 
         {/* Webhook Security Section */}
-        <section class="space-y-3">
+        <section class="p-4 sm:p-6 space-y-4 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
           <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -642,28 +643,30 @@ export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props
         </section>
 
         {/* Port Configuration Notice */}
-        <Card
-          tone="warning"
-          padding="sm"
-          border={false}
-          class="border border-amber-200 dark:border-amber-800"
-        >
-          <p class="text-xs text-amber-800 dark:text-amber-200 mb-2">
-            <strong>Port Configuration:</strong> Use{' '}
-            <code class="font-mono bg-amber-100 dark:bg-amber-800 px-1 rounded">
-              systemctl edit pulse
-            </code>
-          </p>
-          <p class="text-xs text-amber-700 dark:text-amber-300 font-mono">
-            [Service]
-            <br />
-            Environment="FRONTEND_PORT=8080"
-            <br />
-            <span class="text-xs text-amber-600 dark:text-amber-400">
-              Then restart: sudo systemctl restart pulse
-            </span>
-          </p>
-        </Card>
+        <div class="p-4 sm:p-6">
+          <Card
+            tone="warning"
+            padding="sm"
+            border={false}
+            class="border border-amber-200 dark:border-amber-800"
+          >
+            <p class="text-xs text-amber-800 dark:text-amber-200 mb-2">
+              <strong>Port Configuration:</strong> Use{' '}
+              <code class="font-mono bg-amber-100 dark:bg-amber-800 px-1 rounded">
+                systemctl edit pulse
+              </code>
+            </p>
+            <p class="text-xs text-amber-700 dark:text-amber-300 font-mono">
+              [Service]
+              <br />
+              Environment="FRONTEND_PORT=8080"
+              <br />
+              <span class="text-xs text-amber-600 dark:text-amber-400">
+                Then restart: sudo systemctl restart pulse
+              </span>
+            </p>
+          </Card>
+        </div>
       </SettingsPanel>
     </div>
   );

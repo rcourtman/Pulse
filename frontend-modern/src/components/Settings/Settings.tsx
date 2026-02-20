@@ -71,6 +71,7 @@ import RefreshCw from 'lucide-solid/icons/refresh-cw';
 import Clock from 'lucide-solid/icons/clock';
 import Sparkles from 'lucide-solid/icons/sparkles';
 import Globe from 'lucide-solid/icons/globe';
+import ChevronRight from 'lucide-solid/icons/chevron-right';
 import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
 import { PulseLogoIcon } from '@/components/icons/PulseLogoIcon';
 import BadgeCheck from 'lucide-solid/icons/badge-check';
@@ -429,6 +430,7 @@ const Settings: Component<SettingsProps> = (props) => {
   // Sidebar always starts expanded for discoverability (issue #764)
   // Users can collapse during session but it resets on page reload
   const [sidebarCollapsed, setSidebarCollapsed] = createSignal(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = createSignal(typeof window !== 'undefined' ? window.innerWidth < 1024 : false);
   const [nodes, setNodes] = createSignal<NodeConfigWithStatus[]>([]);
   const [discoveredNodes, setDiscoveredNodes] = createSignal<DiscoveredServer[]>([]);
   const [showNodeModal, setShowNodeModal] = createSignal(false);
@@ -2186,9 +2188,10 @@ const Settings: Component<SettingsProps> = (props) => {
           </div>
         </Show>
 
-        <Card padding="none" class="relative lg:flex overflow-hidden">
+        <Card padding="none" class="relative flex lg:flex-row overflow-hidden min-h-[600px]">
+          {/* Settings Sidebar / Mobile Drill-Down Menu */}
           <div
-            class={`hidden lg:flex lg:flex-col ${sidebarCollapsed() ? 'w-16' : 'w-72'} ${sidebarCollapsed() ? 'lg:min-w-[4rem] lg:max-w-[4rem] lg:basis-[4rem]' : 'lg:min-w-[18rem] lg:max-w-[18rem] lg:basis-[18rem]'} relative border-b border-gray-200 dark:border-gray-700 lg:border-b-0 lg:border-r lg:border-gray-200 dark:lg:border-gray-700 lg:align-top flex-shrink-0 transition-all duration-200`}
+            class={`${isMobileMenuOpen() ? 'flex flex-col w-full' : 'hidden lg:flex lg:flex-col'} ${sidebarCollapsed() ? 'lg:w-16 lg:min-w-[4rem] lg:max-w-[4rem] lg:basis-[4rem]' : 'lg:w-72 lg:min-w-[18rem] lg:max-w-[18rem] lg:basis-[18rem]'} relative border-b border-gray-200 dark:border-gray-700 lg:border-b-0 lg:border-r lg:border-gray-200 dark:lg:border-gray-700 lg:align-top flex-shrink-0 transition-all duration-200 bg-white dark:bg-gray-900 lg:bg-transparent z-10`}
             aria-label="Settings navigation"
             aria-expanded={!sidebarCollapsed()}
           >
@@ -2268,13 +2271,13 @@ const Settings: Component<SettingsProps> = (props) => {
                 <For each={filteredTabGroups()}>
                   {(group) => {
                     return (
-                      <div class="space-y-2">
+                      <div class="mb-6 lg:mb-2 lg:space-y-2">
                         <Show when={!sidebarCollapsed()}>
-                          <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                          <p class="px-4 lg:px-0 mb-2 lg:mb-0 text-[13px] lg:text-xs font-[500] uppercase tracking-wider text-gray-500 dark:text-gray-400">
                             {group.label}
                           </p>
                         </Show>
-                        <div class="space-y-1.5">
+                        <div class="bg-white lg:bg-transparent dark:bg-[#1a1c23] lg:dark:bg-transparent border-y lg:border-none border-gray-200 dark:border-gray-800 divide-y lg:divide-y-0 divide-gray-100 dark:divide-gray-800/60 flex flex-col lg:space-y-1.5">
                           <For each={group.items}>
                             {(item) => {
                               const isActive = () => activeTab() === item.id;
@@ -2283,29 +2286,35 @@ const Settings: Component<SettingsProps> = (props) => {
                                   type="button"
                                   aria-current={isActive() ? 'page' : undefined}
                                   disabled={item.disabled}
-                                  class={`flex w-full items-center ${sidebarCollapsed() ? 'justify-center' : 'gap-2.5'
-                                    } rounded-md ${sidebarCollapsed() ? 'px-2 py-2.5' : 'px-3 py-2'
-                                    } text-sm font-medium transition-colors ${item.disabled
-                                      ? 'opacity-60 cursor-not-allowed text-gray-400 dark:text-gray-600'
+                                  class={`group flex w-full items-center ${sidebarCollapsed() ? 'justify-center' : 'justify-between'
+                                    } lg:rounded-md ${sidebarCollapsed() ? 'px-2 py-2.5' : 'px-4 py-3.5 lg:px-3 lg:py-2'
+                                    } text-[15px] lg:text-sm font-medium transition-colors ${item.disabled
+                                      ? 'opacity-60 cursor-not-allowed text-gray-400 dark:text-gray-500'
                                       : isActive()
-                                        ? 'bg-blue-50 text-blue-600 dark:bg-blue-900 dark:text-blue-200'
-                                        : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-gray-100'
+                                        ? 'lg:bg-blue-50 text-blue-600 dark:lg:bg-blue-900/40 dark:text-blue-300 lg:dark:text-blue-200 bg-white dark:bg-[#1a1c23]'
+                                        : 'text-gray-700 lg:hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700/50 dark:hover:text-gray-100 active:bg-gray-50 dark:active:bg-gray-800 lg:active:bg-transparent'
                                     }`}
                                   onClick={() => {
                                     if (item.disabled) return;
                                     setActiveTab(item.id);
+                                    setIsMobileMenuOpen(false); // Navigate to content on mobile
                                   }}
                                   title={sidebarCollapsed() ? item.label : undefined}
                                 >
-                                  <item.icon class="w-4 h-4" {...(item.iconProps || {})} />
-                                  <Show when={!sidebarCollapsed()}>
-                                    <span class="truncate">{item.label}</span>
-                                    <Show when={item.badge && !isPro()}>
-                                      <span class="ml-auto px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-indigo-500 text-white rounded-md shadow-sm">
-                                        {item.badge}
-                                      </span>
+                                  <div class="flex items-center gap-3.5 lg:gap-2.5 w-full">
+                                    <div class={`flex items-center justify-center rounded-lg lg:rounded-none w-8 h-8 lg:w-auto lg:h-auto ${isActive() ? 'bg-blue-100 dark:bg-blue-900/60 lg:bg-transparent lg:dark:bg-transparent text-blue-600 dark:text-blue-400' : 'bg-gray-100 dark:bg-gray-800 lg:bg-transparent lg:dark:bg-transparent text-gray-500 dark:text-gray-400 lg:text-inherit'}`}>
+                                      <item.icon class="w-5 h-5 lg:w-4 lg:h-4" {...(item.iconProps || {})} />
+                                    </div>
+                                    <Show when={!sidebarCollapsed()}>
+                                      <span class={`truncate flex-1 text-left ${isActive() ? 'font-semibold lg:font-medium' : ''}`}>{item.label}</span>
+                                      <Show when={item.badge && !isPro()}>
+                                        <span class="ml-auto px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-indigo-500 text-white rounded-md shadow-none">
+                                          {item.badge}
+                                        </span>
+                                      </Show>
+                                      <ChevronRight class="w-4 h-4 lg:hidden text-gray-300 dark:text-gray-600 ml-1 flex-shrink-0" />
                                     </Show>
-                                  </Show>
+                                  </div>
                                 </button>
                               );
                             }}
@@ -2319,42 +2328,29 @@ const Settings: Component<SettingsProps> = (props) => {
             </div>
           </div>
 
-          <div class="flex-1 overflow-hidden">
+          {/* Settings Content Area */}
+          <div class={`flex-1 overflow-hidden ${isMobileMenuOpen() ? 'hidden lg:block' : 'block animate-slideInRight lg:animate-none'}`}>
             <Show when={flatTabs.length > 0}>
-              <div class="lg:hidden border-b border-gray-200 dark:border-gray-700">
-                <div
-                  class="flex gap-1 px-2 py-1 w-full overflow-x-auto"
-                  style="-webkit-overflow-scrolling: touch;"
+              <div class="lg:hidden sticky top-0 z-40 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 px-3 py-2.5 flex items-center shadow-none">
+                <button
+                  type="button"
+                  onClick={() => setIsMobileMenuOpen(true)}
+                  class="flex items-center gap-1.5 text-blue-600 dark:text-blue-400 font-medium active:bg-blue-50 dark:active:bg-blue-900/30 px-2 py-1.5 rounded-md transition-colors"
                 >
-                  <For each={flatTabs}>
-                    {(tab) => {
-                      const isActive = () => activeTab() === tab.id;
-                      const disabled = tab.disabled;
-                      return (
-                        <button
-                          type="button"
-                          disabled={disabled}
-                          class={`px-3 py-2 text-xs font-medium border-b-2 transition-colors whitespace-nowrap ${disabled
-                            ? 'opacity-60 cursor-not-allowed text-gray-400 dark:text-gray-600 border-transparent'
-                            : isActive()
-                              ? 'text-blue-600 dark:text-blue-300 border-blue-500 dark:border-blue-400'
-                              : 'text-gray-600 dark:text-gray-400 border-transparent hover:text-blue-500 dark:hover:text-blue-300 hover:border-blue-300 dark:hover:border-blue-500'
-                            }`}
-                          onClick={() => {
-                            if (disabled) return;
-                            setActiveTab(tab.id);
-                          }}
-                        >
-                          {tab.label}
-                        </button>
-                      );
-                    }}
-                  </For>
+                  <svg class="h-5 w-5 -ml-1 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+                  </svg>
+                  Settings
+                </button>
+                <div class="ml-auto font-semibold text-gray-900 dark:text-gray-100 pr-3">
+                  <Show when={flatTabs.find(t => t.id === activeTab())}>
+                    {(tab) => tab().label}
+                  </Show>
                 </div>
               </div>
             </Show>
 
-            <div class="p-6 lg:p-8">
+            <div class="p-4 sm:p-6 lg:p-8">
               <Show when={activeTab() === 'proxmox'}>
                 <SettingsSectionNav
                   current={selectedAgent()}

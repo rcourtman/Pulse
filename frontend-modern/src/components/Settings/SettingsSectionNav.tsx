@@ -35,33 +35,30 @@ const allSections: Array<{
   ];
 
 export const SettingsSectionNav: Component<SettingsSectionNavProps> = (props) => {
-  const baseClasses =
-    'inline-flex min-h-10 shrink-0 items-center gap-2 px-2.5 sm:px-3 py-2 text-sm font-medium border-b-2 border-transparent text-slate-600 dark:text-slate-400 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900';
-
   return (
     <div
-      class={`flex items-center gap-2 sm:gap-4 overflow-x-auto scrollbar-hide pb-1 ${props.class ?? ''}`}
+      class={`flex p-1 space-x-1 bg-gray-100 dark:bg-gray-800/80 rounded-xl overflow-x-auto scrollbar-hide ${props.class ?? ''}`}
       style="-webkit-overflow-scrolling: touch;"
       aria-label="Settings sections"
     >
       <For each={allSections}>
         {(section) => {
           const isActive = () => section.id === props.current;
-          const classes = () => isActive()
-            ? `${baseClasses} text-blue-600 dark:text-blue-300 border-blue-500 dark:border-blue-400`
-            : `${baseClasses} hover:text-blue-500 dark:hover:text-blue-300 hover:border-blue-300 dark:hover:border-blue-500`;
-
           const Icon = section.icon;
 
           return (
             <button
               type="button"
-              class={classes()}
               onClick={() => props.onSelect(section.id)}
+              class={`flex flex-1 justify-center sm:flex-none sm:justify-start items-center gap-2 px-3 sm:px-4 py-2.5 sm:py-2 text-sm font-medium rounded-lg transition-all whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900 ${isActive()
+                ? 'bg-white dark:bg-[#1a1c23] border border-gray-200 dark:border-gray-700 text-blue-600 dark:text-blue-400'
+                : 'text-gray-600 dark:text-gray-400 border border-transparent hover:text-gray-900 dark:hover:text-gray-200 hover:bg-white/50 dark:hover:bg-gray-800'
+                }`}
               aria-pressed={isActive()}
             >
-              <Icon size={18} stroke-width={2} class="sm:w-[18px] sm:h-[18px]" />
-              <span class="whitespace-nowrap">{section.label}</span>
+              <Icon size={18} stroke-width={2} class="w-4 h-4 sm:w-[18px] sm:h-[18px]" />
+              <span class="hidden sm:inline">{section.label}</span>
+              <span class="sm:hidden">{section.label.split(' ').pop()}</span>
             </button>
           );
         }}

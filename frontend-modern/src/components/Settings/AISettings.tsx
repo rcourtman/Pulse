@@ -921,10 +921,11 @@ export const AISettings: Component = () => {
             );
           })()
         }
+        noPadding
       >
-        <form class="space-y-6" onSubmit={handleSave}>
+        <form class="divide-y divide-slate-100 dark:divide-slate-800" onSubmit={handleSave}>
           <Show when={loading()}>
-            <div class="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-300">
+            <div class="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-300 p-4 sm:p-6">
               <span class="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
               Loading Pulse Assistant settings...
             </div>
@@ -932,27 +933,29 @@ export const AISettings: Component = () => {
 
           <Show when={!loading()}>
             <Show when={form.enabled}>
-              <div class="flex items-start gap-2 text-xs text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-800 rounded-md p-3 mb-4">
-                <svg class="w-4 h-4 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <span>
-                  Patrol runs automatically every{' '}
-                  {form.patrolIntervalMinutes >= 60
-                    ? `${Math.round(form.patrolIntervalMinutes / 60)} hour${Math.round(form.patrolIntervalMinutes / 60) === 1 ? '' : 's'}`
-                    : `${form.patrolIntervalMinutes} minute${form.patrolIntervalMinutes === 1 ? '' : 's'}`}{' '}
-                  to monitor your infrastructure.{' '}
-                  <button
-                    type="button"
-                    class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-1 py-1 text-sm underline hover:text-blue-800 dark:hover:text-blue-300"
-                    onClick={() => navigate('/ai')}
-                  >
-                    Configure schedule & autonomy
-                  </button>
-                </span>
+              <div class="p-4 sm:p-6 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                <div class="flex items-start gap-2 text-xs text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-800 rounded-md p-3">
+                  <svg class="w-4 h-4 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span>
+                    Patrol runs automatically every{' '}
+                    {form.patrolIntervalMinutes >= 60
+                      ? `${Math.round(form.patrolIntervalMinutes / 60)} hour${Math.round(form.patrolIntervalMinutes / 60) === 1 ? '' : 's'}`
+                      : `${form.patrolIntervalMinutes} minute${form.patrolIntervalMinutes === 1 ? '' : 's'}`}{' '}
+                    to monitor your infrastructure.{' '}
+                    <button
+                      type="button"
+                      class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-1 py-1 text-sm underline hover:text-blue-800 dark:hover:text-blue-300"
+                      onClick={() => navigate('/ai')}
+                    >
+                      Configure schedule & autonomy
+                    </button>
+                  </span>
+                </div>
               </div>
             </Show>
-            <div class="space-y-6">
+            <div class="space-y-6 p-4 sm:p-6 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
               {/* Default Model Selection - Always visible */}
               <div class={formField}>
                 <div class="flex items-center justify-between mb-1">
@@ -1974,33 +1977,35 @@ export const AISettings: Component = () => {
 
             {/* Status indicator */}
             <Show when={settings()}>
-              <div
-                class={`flex items-center gap-2 p-3 rounded-md ${settings()?.configured
-                  ? 'bg-green-50 dark:bg-green-900 text-green-800 dark:text-green-200'
-                  : 'bg-amber-50 dark:bg-amber-900 text-amber-800 dark:text-amber-200'
-                  }`}
-              >
+              <div class="p-4 sm:p-6 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
                 <div
-                  class={`w-2 h-2 rounded-full ${settings()?.configured ? 'bg-emerald-400' : 'bg-amber-400'
+                  class={`flex items-center gap-2 p-3 rounded-md ${settings()?.configured
+                    ? 'bg-green-50 dark:bg-green-900 text-green-800 dark:text-green-200'
+                    : 'bg-amber-50 dark:bg-amber-900 text-amber-800 dark:text-amber-200'
                     }`}
-                />
-                <div class="flex-1 min-w-0">
-                  <span class="text-xs font-medium">
-                    {settings()?.configured
-                      ? `Ready • ${settings()?.configured_providers?.length || 0} provider${(settings()?.configured_providers?.length || 0) !== 1 ? 's' : ''} • ${availableModels().length} models`
-                      : 'Configure at least one provider above to enable Pulse Assistant features'}
-                  </span>
-                  <Show when={settings()?.configured && settings()?.model}>
-                    <span class="block sm:inline text-xs opacity-75 sm:ml-2">
-                      • Default: {settings()?.model?.split(':').pop() || settings()?.model}
+                >
+                  <div
+                    class={`w-2 h-2 rounded-full ${settings()?.configured ? 'bg-emerald-400' : 'bg-amber-400'
+                      }`}
+                  />
+                  <div class="flex-1 min-w-0">
+                    <span class="text-xs font-medium">
+                      {settings()?.configured
+                        ? `Ready • ${settings()?.configured_providers?.length || 0} provider${(settings()?.configured_providers?.length || 0) !== 1 ? 's' : ''} • ${availableModels().length} models`
+                        : 'Configure at least one provider above to enable Pulse Assistant features'}
                     </span>
-                  </Show>
+                    <Show when={settings()?.configured && settings()?.model}>
+                      <span class="block sm:inline text-xs opacity-75 sm:ml-2">
+                        • Default: {settings()?.model?.split(':').pop() || settings()?.model}
+                      </span>
+                    </Show>
+                  </div>
                 </div>
               </div>
             </Show>
 
             {/* Actions - sticky at bottom for easy access */}
-            <div class="sticky bottom-0 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 -mx-4 sm:-mx-6 px-4 sm:px-6 py-4 mt-6 flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-between gap-3">
+            <div class="sticky bottom-0 bg-white dark:bg-slate-800 px-4 sm:px-6 py-4 flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-between gap-3">
               <Show when={settings()?.api_key_set || settings()?.oauth_connected}>
                 <button
                   type="button"
@@ -2321,7 +2326,7 @@ export const AISettings: Component = () => {
             </div>
           </div>
         </div>
-      </Show>
+      </Show >
     </>
   );
 };

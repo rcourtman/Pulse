@@ -150,13 +150,14 @@ export const RolesPanel: Component = () => {
                         New Role
                     </button>
                 }
-                bodyClass="space-y-4"
+                noPadding
+                bodyClass="divide-y divide-slate-100 dark:divide-slate-800"
             >
 
                 <Show when={licenseLoaded() && !hasFeature('rbac') && !loading()}>
-                    <div class="p-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md">
+                    <div class="bg-slate-50 dark:bg-slate-800 p-4 sm:p-6 transition-colors border-b border-slate-100 dark:border-slate-800">
                         <div class="flex flex-col sm:flex-row items-center gap-4">
-                            <div class="flex-1">
+                            <div class="flex-1 text-center sm:text-left">
                                 <h4 class="text-base font-semibold text-slate-900 dark:text-white">Custom Roles (Pro)</h4>
                                 <p class="text-sm text-slate-600 dark:text-slate-400 mt-1">
                                     Define granular permissions and custom access tiers for your team.
@@ -166,7 +167,7 @@ export const RolesPanel: Component = () => {
                                 href={getUpgradeActionUrlOrFallback('rbac')}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                class="px-5 py-2.5 text-sm font-semibold bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                                class="w-full sm:w-auto min-h-10 text-center sm:min-h-9 px-5 py-2.5 text-sm font-semibold bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
                                 onClick={() => trackUpgradeClicked('settings_roles_panel', 'rbac')}
                             >
                                 Upgrade to Pro
@@ -182,7 +183,7 @@ export const RolesPanel: Component = () => {
                 </Show>
 
                 <Show when={!loading()}>
-                    <div class="mt-4">
+                    <div class="w-full overflow-x-auto">
                         <PulseDataGrid
                             data={roles()}
                             columns={[
@@ -250,6 +251,7 @@ export const RolesPanel: Component = () => {
                             keyExtractor={(role) => role.id}
                             emptyState="No roles available."
                             desktopMinWidth="620px"
+                            class="border-x-0 sm:border-x border-slate-200 dark:border-slate-800"
                         />
                     </div>
                 </Show>

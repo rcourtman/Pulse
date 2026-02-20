@@ -130,9 +130,11 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
           title="Authentication"
           description="Manage password authentication and credential rotation."
           icon={<Lock class="w-5 h-5" strokeWidth={2} />}
+          noPadding
+          bodyClass="divide-y divide-slate-100 dark:divide-slate-800"
         >
           {/* Content */}
-          <div class="flex flex-col gap-3 sm:gap-4">
+          <div class="p-4 sm:p-6 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors flex flex-col gap-3 sm:gap-4">
             <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
               <button
                 type="button"
@@ -168,7 +170,7 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
             </div>
           </div>
 
-          <div class="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+          <div class="p-4 sm:p-6 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
             <Toggle
               label="Hide local login form"
               description="Hide the username/password form on the login page. Users will only see SSO options unless ?show_local=true is used."
@@ -183,7 +185,7 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
           </div>
 
           <Show when={!props.authDisabledByEnv() && props.showQuickSecurityWizard()}>
-            <div class="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+            <div class="p-4 sm:p-6">
               <QuickSecuritySetup
                 mode="rotate"
                 defaultUsername={props.securityStatus()?.authUsername || 'admin'}
@@ -300,6 +302,6 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
           </div>
         </div>
       </Show>
-    </div>
+    </div >
   );
 };

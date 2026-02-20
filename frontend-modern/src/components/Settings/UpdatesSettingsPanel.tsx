@@ -43,9 +43,10 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
         title="Updates"
         description="Manage version checks and automatic update preferences."
         icon={<RefreshCw class="w-5 h-5" strokeWidth={2} />}
-        bodyClass="space-y-6"
+        noPadding
+        bodyClass="divide-y divide-slate-100 dark:divide-slate-800"
       >
-        <section class="space-y-4">
+        <div class="p-4 sm:p-6 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
           <div class="space-y-4">
             {/* Version Status Section */}
             <div class="rounded-md border border-slate-200 dark:border-slate-700 overflow-hidden">
@@ -502,171 +503,172 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                 </Show>
               </div>
             </Show>
+          </div>
+        </div>
 
-            {/* Update settings */}
-            <div class="border-t border-slate-200 dark:border-slate-700 pt-6 space-y-5">
-              <h4 class="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
-                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-                Update Preferences
-                <HelpIcon contentId="updates.pulse.channel" size="xs" />
-              </h4>
+        <div class="p-4 sm:p-6 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+          <div class="space-y-5">
+            <h4 class="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              Update Preferences
+              <HelpIcon contentId="updates.pulse.channel" size="xs" />
+            </h4>
 
-              {/* Update Channel */}
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    props.setUpdateChannel('stable');
-                    props.setHasUnsavedChanges(true);
-                  }}
-                  disabled={props.versionInfo()?.isSourceBuild}
-                  class={`p-4 rounded-md border-2 transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed ${props.updateChannel() === 'stable'
-                    ? 'border-green-500 bg-green-50 dark:bg-green-900'
-                    : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
-                    }`}
-                >
-                  <div class="flex items-center gap-3">
-                    <div class={`p-2 rounded-md ${props.updateChannel() === 'stable'
-                      ? 'bg-green-100 dark:bg-green-800'
-                      : 'bg-slate-100 dark:bg-slate-800'
-                      }`}>
-                      <svg class={`w-5 h-5 ${props.updateChannel() === 'stable'
-                        ? 'text-green-600 dark:text-green-400'
-                        : 'text-slate-500 dark:text-slate-400'
-                        }`} fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                      </svg>
-                    </div>
-                    <div>
-                      <p class={`text-sm font-semibold ${props.updateChannel() === 'stable'
-                        ? 'text-green-900 dark:text-green-100'
-                        : 'text-slate-900 dark:text-slate-100'
-                        }`}>Stable</p>
-                      <p class="text-xs text-slate-500 dark:text-slate-400">
-                        Production-ready releases
-                      </p>
-                    </div>
+            {/* Update Channel */}
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  props.setUpdateChannel('stable');
+                  props.setHasUnsavedChanges(true);
+                }}
+                disabled={props.versionInfo()?.isSourceBuild}
+                class={`p-4 rounded-md border-2 transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed ${props.updateChannel() === 'stable'
+                  ? 'border-green-500 bg-green-50 dark:bg-green-900'
+                  : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+                  }`}
+              >
+                <div class="flex items-center gap-3">
+                  <div class={`p-2 rounded-md ${props.updateChannel() === 'stable'
+                    ? 'bg-green-100 dark:bg-green-800'
+                    : 'bg-slate-100 dark:bg-slate-800'
+                    }`}>
+                    <svg class={`w-5 h-5 ${props.updateChannel() === 'stable'
+                      ? 'text-green-600 dark:text-green-400'
+                      : 'text-slate-500 dark:text-slate-400'
+                      }`} fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                    </svg>
                   </div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    props.setUpdateChannel('rc');
-                    props.setHasUnsavedChanges(true);
-                  }}
-                  disabled={props.versionInfo()?.isSourceBuild}
-                  class={`p-4 rounded-md border-2 transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed ${props.updateChannel() === 'rc'
-                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900'
-                    : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
-                    }`}
-                >
-                  <div class="flex items-center gap-3">
-                    <div class={`p-2 rounded-md ${props.updateChannel() === 'rc'
-                      ? 'bg-blue-100 dark:bg-blue-800'
-                      : 'bg-slate-100 dark:bg-slate-800'
-                      }`}>
-                      <svg class={`w-5 h-5 ${props.updateChannel() === 'rc'
-                        ? 'text-blue-600 dark:text-blue-400'
-                        : 'text-slate-500 dark:text-slate-400'
-                        }`} fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
-                      </svg>
-                    </div>
-                    <div>
-                      <p class={`text-sm font-semibold ${props.updateChannel() === 'rc'
-                        ? 'text-blue-900 dark:text-blue-100'
-                        : 'text-slate-900 dark:text-slate-100'
-                        }`}>Release Candidate</p>
-                      <p class="text-xs text-slate-500 dark:text-slate-400">
-                        Preview upcoming features
-                      </p>
-                    </div>
+                  <div>
+                    <p class={`text-sm font-semibold ${props.updateChannel() === 'stable'
+                      ? 'text-green-900 dark:text-green-100'
+                      : 'text-slate-900 dark:text-slate-100'
+                      }`}>Stable</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">
+                      Production-ready releases
+                    </p>
                   </div>
-                </button>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  props.setUpdateChannel('rc');
+                  props.setHasUnsavedChanges(true);
+                }}
+                disabled={props.versionInfo()?.isSourceBuild}
+                class={`p-4 rounded-md border-2 transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed ${props.updateChannel() === 'rc'
+                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-900'
+                  : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+                  }`}
+              >
+                <div class="flex items-center gap-3">
+                  <div class={`p-2 rounded-md ${props.updateChannel() === 'rc'
+                    ? 'bg-blue-100 dark:bg-blue-800'
+                    : 'bg-slate-100 dark:bg-slate-800'
+                    }`}>
+                    <svg class={`w-5 h-5 ${props.updateChannel() === 'rc'
+                      ? 'text-blue-600 dark:text-blue-400'
+                      : 'text-slate-500 dark:text-slate-400'
+                      }`} fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p class={`text-sm font-semibold ${props.updateChannel() === 'rc'
+                      ? 'text-blue-900 dark:text-blue-100'
+                      : 'text-slate-900 dark:text-slate-100'
+                      }`}>Release Candidate</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">
+                      Preview upcoming features
+                    </p>
+                  </div>
+                </div>
+              </button>
+            </div>
+
+            {/* Auto Update Toggle */}
+            <div class="p-4 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
+              <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div class="flex items-center gap-3">
+                  <div class="p-2 bg-blue-100 dark:bg-blue-900 rounded-md">
+                    <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <label class="text-sm font-medium text-slate-900 dark:text-slate-100">
+                      Automatic Update Checks
+                    </label>
+                    <p class="text-xs text-slate-600 dark:text-slate-400">
+                      Periodically check for new versions (installation is always manual)
+                    </p>
+                  </div>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    data-testid="updates-auto-check-toggle"
+                    checked={props.autoUpdateEnabled()}
+                    onChange={(e) => {
+                      props.setAutoUpdateEnabled(e.currentTarget.checked);
+                      props.setHasUnsavedChanges(true);
+                    }}
+                    disabled={props.versionInfo()?.isSourceBuild}
+                    class="sr-only peer"
+                  />
+                  <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600 peer-disabled:opacity-50"></div>
+                </label>
               </div>
 
-              {/* Auto Update Toggle */}
-              <div class="p-4 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
-                <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div class="flex items-center gap-3">
-                    <div class="p-2 bg-blue-100 dark:bg-blue-900 rounded-md">
-                      <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                    </div>
-                    <div>
-                      <label class="text-sm font-medium text-slate-900 dark:text-slate-100">
-                        Automatic Update Checks
-                      </label>
-                      <p class="text-xs text-slate-600 dark:text-slate-400">
-                        Periodically check for new versions (installation is always manual)
-                      </p>
-                    </div>
-                  </div>
-                  <label class="relative inline-flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      data-testid="updates-auto-check-toggle"
-                      checked={props.autoUpdateEnabled()}
+              {/* Auto update options (shown when enabled) */}
+              <Show when={props.autoUpdateEnabled()}>
+                <div class="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Check Interval */}
+                  <div class="space-y-2">
+                    <label class="text-xs font-medium text-slate-700 dark:text-slate-300">
+                      Check Interval
+                    </label>
+                    <select
+                      value={props.autoUpdateCheckInterval()}
                       onChange={(e) => {
-                        props.setAutoUpdateEnabled(e.currentTarget.checked);
+                        props.setAutoUpdateCheckInterval(parseInt(e.currentTarget.value));
                         props.setHasUnsavedChanges(true);
                       }}
-                      disabled={props.versionInfo()?.isSourceBuild}
-                      class="sr-only peer"
-                    />
-                    <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600 peer-disabled:opacity-50"></div>
-                  </label>
-                </div>
-
-                {/* Auto update options (shown when enabled) */}
-                <Show when={props.autoUpdateEnabled()}>
-                  <div class="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {/* Check Interval */}
-                    <div class="space-y-2">
-                      <label class="text-xs font-medium text-slate-700 dark:text-slate-300">
-                        Check Interval
-                      </label>
-                      <select
-                        value={props.autoUpdateCheckInterval()}
-                        onChange={(e) => {
-                          props.setAutoUpdateCheckInterval(parseInt(e.currentTarget.value));
-                          props.setHasUnsavedChanges(true);
-                        }}
-                        class="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800"
-                      >
-                        <option value="6">Every 6 hours</option>
-                        <option value="12">Every 12 hours</option>
-                        <option value="24">Daily</option>
-                        <option value="168">Weekly</option>
-                      </select>
-                    </div>
-
-                    {/* Check Time */}
-                    <div class="space-y-2">
-                      <label class="text-xs font-medium text-slate-700 dark:text-slate-300">
-                        Preferred Time
-                      </label>
-                      <input
-                        type="time"
-                        value={props.autoUpdateTime()}
-                        onChange={(e) => {
-                          props.setAutoUpdateTime(e.currentTarget.value);
-                          props.setHasUnsavedChanges(true);
-                        }}
-                        class="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800"
-                      />
-                    </div>
+                      class="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800"
+                    >
+                      <option value="6">Every 6 hours</option>
+                      <option value="12">Every 12 hours</option>
+                      <option value="24">Daily</option>
+                      <option value="168">Weekly</option>
+                    </select>
                   </div>
-                </Show>
-              </div>
+
+                  {/* Check Time */}
+                  <div class="space-y-2">
+                    <label class="text-xs font-medium text-slate-700 dark:text-slate-300">
+                      Preferred Time
+                    </label>
+                    <input
+                      type="time"
+                      value={props.autoUpdateTime()}
+                      onChange={(e) => {
+                        props.setAutoUpdateTime(e.currentTarget.value);
+                        props.setHasUnsavedChanges(true);
+                      }}
+                      class="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800"
+                    />
+                  </div>
+                </div>
+              </Show>
             </div>
           </div>
-        </section>
+        </div>
       </SettingsPanel>
     </div>
   );

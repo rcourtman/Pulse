@@ -3028,7 +3028,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                     value={ignoredGuestInput()}
                     onInput={(e) => handleIgnoredGuestChange(e.currentTarget.value)}
                     rows={6}
-                    class="w-full rounded-md border border-slate-300 bg-white p-2 text-sm text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                    class="w-full rounded-md border border-slate-300 bg-white p-2 text-sm text-slate-900 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                     placeholder="dev-"
                   />
                 </Card>
@@ -3041,7 +3041,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                     value={guestTagWhitelistInput()}
                     onInput={(e) => handleGuestTagWhitelistChange(e.currentTarget.value)}
                     rows={6}
-                    class="w-full rounded-md border border-slate-300 bg-white p-2 text-sm text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                    class="w-full rounded-md border border-slate-300 bg-white p-2 text-sm text-slate-900 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                     placeholder="production"
                   />
                 </Card>
@@ -3054,7 +3054,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                     value={guestTagBlacklistInput()}
                     onInput={(e) => handleGuestTagBlacklistChange(e.currentTarget.value)}
                     rows={6}
-                    class="w-full rounded-md border border-slate-300 bg-white p-2 text-sm text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                    class="w-full rounded-md border border-slate-300 bg-white p-2 text-sm text-slate-900 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                     placeholder="maintenance"
                   />
                 </Card>
@@ -3200,7 +3200,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                         }
                       }}
                       rows={5}
-                      class="mt-3 w-full rounded-md border border-slate-300 bg-white p-3 text-sm text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-sky-400 dark:focus:ring-sky-600"
+                      class="mt-3 w-full rounded-md border border-slate-300 bg-white p-3 text-sm text-slate-900 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-sky-400 dark:focus:ring-sky-600"
                       placeholder="100\n200\n10*"
                     />
                   </div>
@@ -3549,7 +3549,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
               }}
               placeholder="runner-"
               rows={4}
-              class="mt-4 w-full rounded-md border border-slate-300 bg-white p-3 text-sm text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-sky-400 dark:focus:ring-sky-600"
+              class="mt-4 w-full rounded-md border border-slate-300 bg-white p-3 text-sm text-slate-900 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-sky-400 dark:focus:ring-sky-600"
             />
           </Card>
 
@@ -3596,7 +3596,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                     }));
                     props.setHasUnsavedChanges(true);
                   }}
-                  class="mt-1 w-full rounded-md border border-slate-300 bg-white p-2 text-sm text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-sky-400 dark:focus:ring-sky-600"
+                  class="mt-1 w-full rounded-md border border-slate-300 bg-white p-2 text-sm text-slate-900 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-sky-400 dark:focus:ring-sky-600"
                 />
                 <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
                   Convert to warning when at least this percentage of replicas are missing.
@@ -3624,7 +3624,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                     }));
                     props.setHasUnsavedChanges(true);
                   }}
-                  class="mt-1 w-full rounded-md border border-slate-300 bg-white p-2 text-sm text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-sky-400 dark:focus:ring-sky-600"
+                  class="mt-1 w-full rounded-md border border-slate-300 bg-white p-2 text-sm text-slate-900 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-sky-400 dark:focus:ring-sky-600"
                 />
                 <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
                   Raise a critical alert when the missing replica gap meets or exceeds this value.

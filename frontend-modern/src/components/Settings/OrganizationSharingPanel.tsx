@@ -301,12 +301,13 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
           title="Organization Sharing"
           description="Share views and resources across organizations with explicit role-based access."
           icon={<Share2 class="w-5 h-5" />}
-          bodyClass="space-y-5"
+          noPadding
+          bodyClass="divide-y divide-slate-100 dark:divide-slate-800"
         >
           <Show
             when={!loading()}
             fallback={
-              <div class="space-y-5">
+              <div class="space-y-5 p-4 sm:p-6 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
                 <div class="rounded-md border border-slate-200 dark:border-slate-700 p-4 space-y-3">
                   <div class="h-4 w-24 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
 
@@ -377,162 +378,166 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
             }
           >
             <Show when={canManageOrg(org(), props.currentUser)}>
-              <div class="rounded-md border border-slate-200 dark:border-slate-700 p-4 space-y-3">
-                <h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Create Share</h4>
+              <div class="p-4 sm:p-6 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                <div class="rounded-md border border-slate-200 dark:border-slate-700 p-4 space-y-3">
+                  <h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Create Share</h4>
 
-                <div class="grid gap-3 lg:grid-cols-2">
-                  <label class="space-y-1">
-                    <span class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                      Target Organization
-                    </span>
-                    <select
-                      value={targetOrgId()}
-                      onChange={(event) => updateTargetOrg(event.currentTarget.value)}
-                      class={`w-full rounded-md border bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-800 dark:text-slate-100 ${targetOrgError() ? 'border-red-400 dark:border-red-500' : 'border-slate-300 dark:border-slate-600'
-                        }`}
-                    >
-                      <option value="">Select organization</option>
-                      <For each={targetOrgOptions()}>
-                        {(target) => <option value={target.id}>{target.displayName || target.id}</option>}
-                      </For>
-                    </select>
-                    <Show when={targetOrgError() !== ''}>
-                      <p class="text-xs text-red-600 dark:text-red-400">{targetOrgError()}</p>
-                    </Show>
-                  </label>
-
-                  <label class="space-y-1">
-                    <span class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                      Access Role
-                    </span>
-                    <select
-                      value={accessRole()}
-                      onChange={(event) => setAccessRole(event.currentTarget.value as ShareAccessRole)}
-                      class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
-                    >
-                      <For each={accessRoleOptions}>
-                        {(option) => <option value={option.value}>{option.label}</option>}
-                      </For>
-                    </select>
-                  </label>
-                </div>
-
-                <Show when={unifiedResourceOptions().length > 0}>
-                  <div class="rounded-md border border-blue-200 bg-blue-50 p-3 space-y-2 dark:border-blue-900 dark:bg-blue-900">
-                    <label class="space-y-1 block">
-                      <span class="text-xs font-medium uppercase tracking-wide text-blue-700 dark:text-blue-300">
-                        Quick Pick Resource
+                  <div class="grid gap-3 lg:grid-cols-2">
+                    <label class="space-y-1">
+                      <span class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        Target Organization
                       </span>
                       <select
-                        value={selectedQuickPick()}
-                        onChange={(event) => applyResourceQuickPick(event.currentTarget.value)}
-                        class="w-full rounded-md border border-blue-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-blue-700 dark:bg-slate-800 dark:text-slate-100"
+                        value={targetOrgId()}
+                        onChange={(event) => updateTargetOrg(event.currentTarget.value)}
+                        class={`w-full rounded-md border bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-800 dark:text-slate-100 ${targetOrgError() ? 'border-red-400 dark:border-red-500' : 'border-slate-300 dark:border-slate-600'
+                          }`}
                       >
-                        <option value="">Select resource</option>
-                        <For each={unifiedResourceOptions()}>
-                          {(resource) => (
-                            <option value={`${resource.type}::${resource.id}`}>
-                              {resource.name} ({resource.type})
-                            </option>
-                          )}
+                        <option value="">Select organization</option>
+                        <For each={targetOrgOptions()}>
+                          {(target) => <option value={target.id}>{target.displayName || target.id}</option>}
+                        </For>
+                      </select>
+                      <Show when={targetOrgError() !== ''}>
+                        <p class="text-xs text-red-600 dark:text-red-400">{targetOrgError()}</p>
+                      </Show>
+                    </label>
+
+                    <label class="space-y-1">
+                      <span class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        Access Role
+                      </span>
+                      <select
+                        value={accessRole()}
+                        onChange={(event) => setAccessRole(event.currentTarget.value as ShareAccessRole)}
+                        class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                      >
+                        <For each={accessRoleOptions}>
+                          {(option) => <option value={option.value}>{option.label}</option>}
                         </For>
                       </select>
                     </label>
-                    <div class="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
-                      <p class="text-xs text-blue-700 dark:text-blue-300">
-                        Choose a discovered resource, or switch to manual entry.
-                      </p>
-                      <button
-                        type="button"
-                        onClick={toggleManualEntry}
-                        class="text-xs font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200"
-                      >
-                        {manualEntryExpanded() ? 'Hide manual entry' : 'Enter manually'}
-                      </button>
+                  </div>
+
+                  <Show when={unifiedResourceOptions().length > 0}>
+                    <div class="rounded-md border border-blue-200 bg-blue-50 p-3 space-y-2 dark:border-blue-900 dark:bg-blue-900">
+                      <label class="space-y-1 block">
+                        <span class="text-xs font-medium uppercase tracking-wide text-blue-700 dark:text-blue-300">
+                          Quick Pick Resource
+                        </span>
+                        <select
+                          value={selectedQuickPick()}
+                          onChange={(event) => applyResourceQuickPick(event.currentTarget.value)}
+                          class="w-full rounded-md border border-blue-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-blue-700 dark:bg-slate-800 dark:text-slate-100"
+                        >
+                          <option value="">Select resource</option>
+                          <For each={unifiedResourceOptions()}>
+                            {(resource) => (
+                              <option value={`${resource.type}::${resource.id}`}>
+                                {resource.name} ({resource.type})
+                              </option>
+                            )}
+                          </For>
+                        </select>
+                      </label>
+                      <div class="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <p class="text-xs text-blue-700 dark:text-blue-300">
+                          Choose a discovered resource, or switch to manual entry.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={toggleManualEntry}
+                          class="text-xs font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200"
+                        >
+                          {manualEntryExpanded() ? 'Hide manual entry' : 'Enter manually'}
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                </Show>
+                  </Show>
 
-                <Show
-                  when={unifiedResourceOptions().length === 0 || manualEntryExpanded()}
-                  fallback={
-                    <p class="text-xs text-slate-500 dark:text-slate-400">
-                      Manual entry is hidden while quick pick is active.
-                    </p>
-                  }
-                >
-                  <div class="grid gap-3 lg:grid-cols-3">
-                    <label class="space-y-1">
-                      <span class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                        Resource Type
-                      </span>
-                      <input
-                        type="text"
-                        value={resourceType()}
-                        onInput={(event) => updateResourceType(event.currentTarget.value)}
-                        placeholder={VALID_RESOURCE_TYPES.join(' | ')}
-                        class={`w-full rounded-md border bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-800 dark:text-slate-100 ${resourceTypeError() ? 'border-red-400 dark:border-red-500' : 'border-slate-300 dark:border-slate-600'
-                          }`}
-                      />
-                      <Show when={resourceTypeError() !== ''}>
-                        <p class="text-xs text-red-600 dark:text-red-400">{resourceTypeError()}</p>
-                      </Show>
-                    </label>
-
-                    <label class="space-y-1">
-                      <span class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                        Resource ID
-                      </span>
-                      <input
-                        type="text"
-                        value={resourceId()}
-                        onInput={(event) => updateResourceId(event.currentTarget.value)}
-                        placeholder="resource identifier"
-                        class={`w-full rounded-md border bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-800 dark:text-slate-100 ${resourceIdError() ? 'border-red-400 dark:border-red-500' : 'border-slate-300 dark:border-slate-600'
-                          }`}
-                      />
-                      <Show when={resourceIdError() !== ''}>
-                        <p class="text-xs text-red-600 dark:text-red-400">{resourceIdError()}</p>
-                      </Show>
-                    </label>
-
-                    <label class="space-y-1">
-                      <span class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                        Resource Name
-                      </span>
-                      <input
-                        type="text"
-                        value={resourceName()}
-                        onInput={(event) => updateResourceName(event.currentTarget.value)}
-                        placeholder="optional display name"
-                        class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
-                      />
-                    </label>
-                  </div>
-                </Show>
-
-                <div class="flex justify-end">
-                  <button
-                    type="button"
-                    onClick={createShare}
-                    disabled={!canCreateShare()}
-                    class="inline-flex w-full sm:w-auto items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  <Show
+                    when={unifiedResourceOptions().length === 0 || manualEntryExpanded()}
+                    fallback={
+                      <p class="text-xs text-slate-500 dark:text-slate-400">
+                        Manual entry is hidden while quick pick is active.
+                      </p>
+                    }
                   >
-                    {saving() ? 'Saving...' : 'Create Share'}
-                  </button>
+                    <div class="grid gap-3 lg:grid-cols-3">
+                      <label class="space-y-1">
+                        <span class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                          Resource Type
+                        </span>
+                        <input
+                          type="text"
+                          value={resourceType()}
+                          onInput={(event) => updateResourceType(event.currentTarget.value)}
+                          placeholder={VALID_RESOURCE_TYPES.join(' | ')}
+                          class={`w-full rounded-md border bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-800 dark:text-slate-100 ${resourceTypeError() ? 'border-red-400 dark:border-red-500' : 'border-slate-300 dark:border-slate-600'
+                            }`}
+                        />
+                        <Show when={resourceTypeError() !== ''}>
+                          <p class="text-xs text-red-600 dark:text-red-400">{resourceTypeError()}</p>
+                        </Show>
+                      </label>
+
+                      <label class="space-y-1">
+                        <span class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                          Resource ID
+                        </span>
+                        <input
+                          type="text"
+                          value={resourceId()}
+                          onInput={(event) => updateResourceId(event.currentTarget.value)}
+                          placeholder="resource identifier"
+                          class={`w-full rounded-md border bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-800 dark:text-slate-100 ${resourceIdError() ? 'border-red-400 dark:border-red-500' : 'border-slate-300 dark:border-slate-600'
+                            }`}
+                        />
+                        <Show when={resourceIdError() !== ''}>
+                          <p class="text-xs text-red-600 dark:text-red-400">{resourceIdError()}</p>
+                        </Show>
+                      </label>
+
+                      <label class="space-y-1">
+                        <span class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                          Resource Name
+                        </span>
+                        <input
+                          type="text"
+                          value={resourceName()}
+                          onInput={(event) => updateResourceName(event.currentTarget.value)}
+                          placeholder="optional display name"
+                          class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                        />
+                      </label>
+                    </div>
+                  </Show>
+
+                  <div class="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={createShare}
+                      disabled={!canCreateShare()}
+                      class="inline-flex w-full sm:w-auto items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {saving() ? 'Saving...' : 'Create Share'}
+                    </button>
+                  </div>
                 </div>
               </div>
             </Show>
 
             <Show when={!canManageOrg(org(), props.currentUser)}>
-              <div class="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-300">
-                Admin or owner role required to create or remove organization shares.
+              <div class="p-4 sm:p-6 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                <div class="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-300">
+                  Admin or owner role required to create or remove organization shares.
+                </div>
               </div>
             </Show>
 
-            <div class="space-y-2">
+            <div class="space-y-2 p-4 sm:p-6 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
               <h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Outgoing Shares</h4>
-              <div class="mt-4">
+              <div class="mt-4 -mx-4 sm:mx-0 overflow-x-auto w-full">
                 <PulseDataGrid
                   data={outgoingShares()}
                   columns={[
@@ -594,13 +599,14 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
                   keyExtractor={(share) => share.id}
                   emptyState="No outgoing shares configured."
                   desktopMinWidth="760px"
+                  class="border-x-0 sm:border-x sm:border-t sm:border-b sm:rounded-md border-y border-slate-200 dark:border-slate-800"
                 />
               </div>
             </div>
 
-            <div class="space-y-2">
+            <div class="space-y-2 p-4 sm:p-6 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
               <h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Incoming Shares</h4>
-              <div class="mt-4">
+              <div class="mt-4 -mx-4 sm:mx-0 overflow-x-auto w-full">
                 <PulseDataGrid
                   data={incomingShares()}
                   columns={[
@@ -642,6 +648,7 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
                   keyExtractor={(share) => share.id}
                   emptyState="No incoming shares from other organizations."
                   desktopMinWidth="620px"
+                  class="border-x-0 sm:border-x sm:border-t sm:border-b sm:rounded-md border-y border-slate-200 dark:border-slate-800"
                 />
               </div>
             </div>

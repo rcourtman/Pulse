@@ -784,7 +784,7 @@ export function ResourceTable(props: ResourceTableProps) {
                 </th>
               </tr>
             </thead>
-            <tbody class="divide-y divide-slate-200/50 dark:divide-slate-700/50">
+            <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
               {/* Global Defaults Row */}
               <Show
                 when={props.globalDefaults && props.setGlobalDefaults && props.setHasUnsavedChanges}
@@ -1249,7 +1249,7 @@ export function ResourceTable(props: ResourceTableProps) {
                                         </label>
                                         <textarea
                                           id={`note-${resource.id}`}
-                                          class="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
+                                          class="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
                                           rows={2}
                                           placeholder="Add a note about this override (optional)"
                                           value={props.editingNote()}
