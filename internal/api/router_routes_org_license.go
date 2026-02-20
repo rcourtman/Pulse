@@ -33,16 +33,36 @@ func (r *Router) registerOrgLicenseRoutesGroup(orgHandlers *OrgHandlers, rbacHan
 	r.mux.HandleFunc("POST /api/upgrade-metrics/events", RequireAuth(r.config, conversionHandlers.HandleRecordEvent))
 	r.mux.HandleFunc("GET /api/upgrade-metrics/stats", RequireAuth(r.config, conversionHandlers.HandleGetStats))
 	r.mux.HandleFunc("GET /api/upgrade-metrics/health", RequireAuth(r.config, conversionHandlers.HandleGetHealth))
-	r.mux.HandleFunc("GET /api/upgrade-metrics/config", RequireAuth(r.config, RequireScope(config.ScopeSettingsRead, conversionHandlers.HandleGetConfig)))
-	r.mux.HandleFunc("PUT /api/upgrade-metrics/config", RequireAuth(r.config, RequireScope(config.ScopeSettingsWrite, conversionHandlers.HandleUpdateConfig)))
+	r.mux.HandleFunc("GET /api/upgrade-metrics/config", RequireAuth(r.config, RequireScope(config.ScopeSettingsRead, func(w http.ResponseWriter, req *http.Request) {
+		if !ensureSettingsReadScope(r.config, w, req) {
+			return
+		}
+		conversionHandlers.HandleGetConfig(w, req)
+	})))
+	r.mux.HandleFunc("PUT /api/upgrade-metrics/config", RequireAuth(r.config, RequireScope(config.ScopeSettingsWrite, func(w http.ResponseWriter, req *http.Request) {
+		if !ensureSettingsWriteScope(r.config, w, req) {
+			return
+		}
+		conversionHandlers.HandleUpdateConfig(w, req)
+	})))
 	r.mux.HandleFunc("GET /api/admin/upgrade-metrics-funnel", RequireAdmin(r.config, conversionHandlers.HandleConversionFunnel))
 
 	// Legacy compatibility aliases (deprecated).
 	r.mux.HandleFunc("POST /api/conversion/events", RequireAuth(r.config, conversionHandlers.HandleRecordEvent))
 	r.mux.HandleFunc("GET /api/conversion/stats", RequireAuth(r.config, conversionHandlers.HandleGetStats))
 	r.mux.HandleFunc("GET /api/conversion/health", RequireAuth(r.config, conversionHandlers.HandleGetHealth))
-	r.mux.HandleFunc("GET /api/conversion/config", RequireAuth(r.config, RequireScope(config.ScopeSettingsRead, conversionHandlers.HandleGetConfig)))
-	r.mux.HandleFunc("PUT /api/conversion/config", RequireAuth(r.config, RequireScope(config.ScopeSettingsWrite, conversionHandlers.HandleUpdateConfig)))
+	r.mux.HandleFunc("GET /api/conversion/config", RequireAuth(r.config, RequireScope(config.ScopeSettingsRead, func(w http.ResponseWriter, req *http.Request) {
+		if !ensureSettingsReadScope(r.config, w, req) {
+			return
+		}
+		conversionHandlers.HandleGetConfig(w, req)
+	})))
+	r.mux.HandleFunc("PUT /api/conversion/config", RequireAuth(r.config, RequireScope(config.ScopeSettingsWrite, func(w http.ResponseWriter, req *http.Request) {
+		if !ensureSettingsWriteScope(r.config, w, req) {
+			return
+		}
+		conversionHandlers.HandleUpdateConfig(w, req)
+	})))
 	r.mux.HandleFunc("GET /api/admin/conversion-funnel", RequireAdmin(r.config, conversionHandlers.HandleConversionFunnel))
 
 	// Organization routes (multi-tenant foundation)
