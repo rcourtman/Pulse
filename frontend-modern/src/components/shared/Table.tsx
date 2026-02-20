@@ -54,7 +54,7 @@ export type TableHeadProps = JSX.HTMLAttributes<HTMLTableCellElement> & { colSpa
 export function TableHead(props: TableHeadProps) {
     const [local, rest] = splitProps(props, ['class', 'children']);
     return (
-        <th class={`px-2 sm:px-3 py-1.5 sm:py-2 text-[11px] sm:text-xs font-semibold uppercase tracking-wider align-middle ${local.class || ''}`} {...rest}>
+        <th class={`px-2 sm:px-3 py-1.5 text-[11px] sm:text-xs font-semibold uppercase tracking-wider align-middle ${local.class || ''}`} {...rest}>
             {local.children}
         </th>
     );
@@ -65,7 +65,7 @@ export type TableCellProps = JSX.HTMLAttributes<HTMLTableCellElement> & { colSpa
 export function TableCell(props: TableCellProps) {
     const [local, rest] = splitProps(props, ['class', 'children']);
     return (
-        <td class={`px-2 sm:px-3 py-1.5 sm:py-2 align-middle ${local.class || ''}`} {...rest}>
+        <td class={`px-2 sm:px-3 py-0.5 align-middle ${local.class || ''}`} {...rest}>
             {local.children}
         </td>
     );
