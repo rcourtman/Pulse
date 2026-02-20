@@ -8,6 +8,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
+	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rs/zerolog/log"
 )
 
@@ -133,8 +134,14 @@ func (h *DiscoveryHandlers) isAdminRequest(r *http.Request) bool {
 	}
 
 	// 2. Check for basic auth (Pulse single-user admin credential)
-	if _, _, ok := r.BasicAuth(); ok {
-		return true
+	if username, password, ok := r.BasicAuth(); ok {
+		configuredUser := strings.TrimSpace(h.config.AuthUser)
+		configuredHash := strings.TrimSpace(h.config.AuthPass)
+		if configuredUser != "" && configuredHash != "" &&
+			username == configuredUser &&
+			internalauth.CheckPasswordHash(password, configuredHash) {
+			return true
+		}
 	}
 
 	// 3. Check for configured admin session (OIDC/SAML/local session)

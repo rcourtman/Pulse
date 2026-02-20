@@ -11,6 +11,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
+	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -70,7 +71,12 @@ func setupDiscoveryHandlers(t *testing.T) (*DiscoveryHandlers, *servicediscovery
 	service := servicediscovery.NewService(store, scanner, mockState, cfg)
 
 	// Create config for handlers (needed for admin check)
-	apiCfg := &config.Config{}
+	hashed, err := internalauth.HashPassword("admin")
+	require.NoError(t, err)
+	apiCfg := &config.Config{
+		AuthUser: "admin",
+		AuthPass: hashed,
+	}
 
 	// Create handlers
 	handlers := NewDiscoveryHandlers(service, apiCfg)
@@ -227,6 +233,30 @@ func TestHandleGetDiscovery_TokenAdminRequiresSettingsWriteScope(t *testing.T) {
 	var full servicediscovery.ResourceDiscovery
 	require.NoError(t, json.NewDecoder(w.Body).Decode(&full))
 	assert.Equal(t, "secret", full.UserSecrets["key"])
+}
+
+func TestHandleGetDiscovery_ForgedBasicHeaderDoesNotBypassAdmin(t *testing.T) {
+	h, _, store := setupDiscoveryHandlers(t)
+
+	discovery := &servicediscovery.ResourceDiscovery{
+		ID:           "vm:node1:103",
+		ResourceType: servicediscovery.ResourceTypeVM,
+		ResourceID:   "103",
+		HostID:       "node1",
+		ServiceName:  "Forged Basic Test",
+		UserSecrets:  map[string]string{"key": "secret"},
+	}
+	require.NoError(t, store.Save(discovery))
+
+	req := httptest.NewRequest("GET", "/api/discovery/vm/node1/103", nil)
+	req.SetBasicAuth("admin", "wrong-password")
+	w := httptest.NewRecorder()
+	h.HandleGetDiscovery(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var redacted servicediscovery.ResourceDiscovery
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&redacted))
+	assert.Nil(t, redacted.UserSecrets)
 }
 
 func TestHandleGetDiscovery_NotFound(t *testing.T) {
