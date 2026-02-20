@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -67,7 +68,7 @@ func AdminKeyMiddleware(adminKey string, next http.Handler) http.Handler {
 			}
 		}
 
-		if key == "" || key != adminKey {
+		if key == "" || adminKey == "" || subtle.ConstantTimeCompare([]byte(key), []byte(adminKey)) != 1 {
 			log.Warn().
 				Str("audit_event", "cp_admin_auth").
 				Str("outcome", "failure").

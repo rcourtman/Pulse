@@ -157,4 +157,14 @@ func TestAdminKeyMiddleware(t *testing.T) {
 			t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
 		}
 	})
+
+	t.Run("trimmed X-Admin-Key", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/admin/tenants", nil)
+		req.Header.Set("X-Admin-Key", "  secret-key  ")
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+		}
+	})
 }
