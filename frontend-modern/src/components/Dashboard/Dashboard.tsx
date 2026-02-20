@@ -13,6 +13,7 @@ import { DashboardFilter } from './DashboardFilter';
 import { GuestMetadataAPI } from '@/api/guestMetadata';
 import type { GuestMetadata } from '@/api/guestMetadata';
 import { Card } from '@/components/shared/Card';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/shared/Table';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { NodeGroupHeader } from '@/components/shared/NodeGroupHeader';
 import { MigrationNoticeBanner } from '@/components/shared/MigrationNoticeBanner';
@@ -1596,159 +1597,157 @@ export function Dashboard(props: DashboardProps) {
             <div class="border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
               Workloads
             </div>
-            <div
+            <Table
               ref={tableRef}
-              class="overflow-x-auto"
-              style={{ '-webkit-overflow-scrolling': 'touch' }}
+              class="whitespace-nowrap"
+              style={{ 'table-layout': 'fixed', 'min-width': isMobile() ? '100%' : '900px' }}
             >
-              <table class="w-full border-collapse whitespace-nowrap" style={{ "table-layout": "fixed", "min-width": isMobile() ? "100%" : "900px" }}>
-                <thead>
-                  <tr class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
-                    <For each={mobileVisibleColumns()}>
-                      {(col) => {
-                        const isFirst = () => col.id === visibleColumns()[0]?.id;
-                        const sortKeyForCol = col.sortKey as WorkloadSortKey | undefined;
-                        const isSortable = !!sortKeyForCol;
-                        const isSorted = () => sortKeyForCol && sortKey() === sortKeyForCol;
+              <TableHeader>
+                <TableRow class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
+                  <For each={mobileVisibleColumns()}>
+                    {(col) => {
+                      const isFirst = () => col.id === visibleColumns()[0]?.id;
+                      const sortKeyForCol = col.sortKey as WorkloadSortKey | undefined;
+                      const isSortable = !!sortKeyForCol;
+                      const isSorted = () => sortKeyForCol && sortKey() === sortKeyForCol;
 
-                        return (
-                          <th
-                            class={`py-0.5 text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap
+                      return (
+                        <TableHead
+                          class={`py-0.5 text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap
                                   ${isFirst() ? 'pl-2 sm:pl-3 pr-1.5 sm:pr-2 text-left' : 'px-1.5 sm:px-2 text-center'}
                                   ${isSortable ? 'cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600' : ''}`}
-                            style={{
-                              ...((['cpu', 'memory', 'disk'].includes(col.id))
-                                ? { "width": isMobile() ? "70px" : "140px" }
-                                : (['netIo', 'diskIo'].includes(col.id))
-                                  ? { "width": isMobile() ? "170px" : "170px" }
-                                  : (isMobile() && col.id === 'name')
-                                    ? { "width": "100%", "min-width": "120px" }
-                                    : (col.width ? { "width": col.width } : {})),
-                              "vertical-align": 'middle',
-                            }}
-                            onClick={() => isSortable && handleSort(sortKeyForCol!)}
-                            title={col.icon ? col.label : undefined}
-                          >
-                            <div class={`flex items-center gap-0.5 ${isFirst() ? 'justify-start' : 'justify-center'}`} style={{ "min-height": "14px" }}>
-                              {col.icon ? (
-                                <span class="flex items-center">{col.icon}</span>
-                              ) : (
-                                col.label
-                              )}
-                              {isSorted() && (sortDirection() === 'asc' ? ' ▲' : ' ▼')}
-                            </div>
-                          </th>
-                        );
-                      }}
-                    </For>
-                  </tr>
-                </thead>
-                <tbody ref={setTableBodyRef} class="divide-y divide-slate-200/50 dark:divide-slate-700/50">
-                  <Show when={groupedWindowing.isWindowed() && topSpacerHeight() > 0}>
-                    <tr aria-hidden="true">
-                      <td colspan={totalColumns()} style={{ height: `${topSpacerHeight()}px`, padding: '0', border: '0' }} />
-                    </tr>
-                  </Show>
-                  {/* Outer <For> uses string keys — strings compare by value so DOM is stable across data updates */}
-                  <For each={visibleGroupKeys()} fallback={<></>}>
-                    {(groupKey) => {
-                      const groupGuests = () => windowedGroupedGuests()[groupKey] || [];
-                      const fullGroupGuests = () => groupedGuests()[groupKey] || [];
-                      const node = () => nodeByInstance()[groupKey];
-                      return (
-                        <>
-                          <Show when={groupingMode() === 'grouped'}>
-                            <Show
-                              when={node()}
-                              fallback={
-                                <tr class="bg-slate-50 dark:bg-slate-800">
-                                  <td
-                                    colspan={totalColumns()}
-                                    class="py-0.5 pr-1.5 sm:pr-2 pl-2 sm:pl-3 text-[12px] sm:text-sm font-semibold text-slate-700 dark:text-slate-100"
-                                  >
-                                    {(() => {
-                                      const label = getGroupLabel(groupKey, fullGroupGuests());
-                                      return (
-                                        <div class="flex items-center gap-3">
-                                          <span>{label.name}</span>
-                                          <Show when={label.type}>
-                                            <span class="inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
-                                              {label.type}
-                                            </span>
-                                          </Show>
-                                        </div>
-                                      );
-                                    })()}
-                                  </td>
-                                </tr>
-                              }
-                            >
-                              <NodeGroupHeader node={node()!} renderAs="tr" colspan={totalColumns()} />
-                            </Show>
-                          </Show>
-                          {/* Inner <Index> tracks by position — updates props reactively instead of recreating DOM */}
-                          <Index each={groupGuests()} fallback={<></>}>
-                            {(guest) => {
-                              const guestId = () => {
-                                const g = guest();
-                                return getCanonicalWorkloadId(g);
-                              };
-                              const getMetadata = () =>
-                                guestMetadata()[guestId()] ||
-                                guestMetadata()[`${guest().instance}:${guest().node}:${guest().vmid}`];
-                              const parentNode = () => node() ?? guestParentNodeMap()[guestId()];
-                              const parentNodeOnline = () => {
-                                const pn = parentNode();
-                                return pn ? isNodeOnline(pn) : true;
-                              };
-
-                              return (
-                                <ComponentErrorBoundary name="GuestRow">
-                                  <GuestRow
-                                    guest={guest()}
-                                    alertStyles={getAlertStyles(guestId(), activeAlerts, alertsEnabled())}
-                                    customUrl={getMetadata()?.customUrl}
-                                    onTagClick={handleTagClick}
-                                    activeSearch={search()}
-                                    parentNodeOnline={parentNodeOnline()}
-                                    onCustomUrlUpdate={handleCustomUrlUpdate}
-                                    isGroupedView={groupingMode() === 'grouped'}
-                                    visibleColumnIds={mobileVisibleColumnIds()}
-                                    onClick={() => setSelectedGuestId(selectedGuestId() === guestId() ? null : guestId())}
-                                    isExpanded={selectedGuestId() === guestId()}
-                                    ioEmphasis={workloadIOEmphasis()}
-                                    onHoverChange={setHoveredWorkloadId}
-                                  />
-                                  <Show when={selectedGuestId() === guestId()}>
-                                    <tr>
-                                      <td colspan={totalColumns()} class="p-0 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
-                                        <div class="px-2 sm:px-4 py-3 sm:py-4" onClick={(e) => e.stopPropagation()}>
-                                          <GuestDrawer
-                                            guest={guest()}
-                                            onClose={() => setSelectedGuestId(null)}
-                                            customUrl={getMetadata()?.customUrl}
-                                            onCustomUrlChange={handleCustomUrlUpdate}
-                                          />
-                                        </div>
-                                      </td>
-                                    </tr>
-                                  </Show>
-                                </ComponentErrorBoundary>
-                              );
-                            }}
-                          </Index>
-                        </>
+                          style={{
+                            ...((['cpu', 'memory', 'disk'].includes(col.id))
+                              ? { "width": isMobile() ? "70px" : "140px" }
+                              : (['netIo', 'diskIo'].includes(col.id))
+                                ? { "width": isMobile() ? "170px" : "170px" }
+                                : (isMobile() && col.id === 'name')
+                                  ? { "width": "100%", "min-width": "120px" }
+                                  : (col.width ? { "width": col.width } : {})),
+                            "vertical-align": 'middle',
+                          }}
+                          onClick={() => isSortable && handleSort(sortKeyForCol!)}
+                          title={col.icon ? col.label : undefined}
+                        >
+                          <div class={`flex items-center gap-0.5 ${isFirst() ? 'justify-start' : 'justify-center'}`} style={{ "min-height": "14px" }}>
+                            {col.icon ? (
+                              <span class="flex items-center">{col.icon}</span>
+                            ) : (
+                              col.label
+                            )}
+                            {isSorted() && (sortDirection() === 'asc' ? ' ▲' : ' ▼')}
+                          </div>
+                        </TableHead>
                       );
                     }}
                   </For>
-                  <Show when={groupedWindowing.isWindowed() && bottomSpacerHeight() > 0}>
-                    <tr aria-hidden="true">
-                      <td colspan={totalColumns()} style={{ height: `${bottomSpacerHeight()}px`, padding: '0', border: '0' }} />
-                    </tr>
-                  </Show>
-                </tbody>
-              </table>
-            </div>
+                </TableRow>
+              </TableHeader>
+              <TableBody ref={setTableBodyRef} class="divide-y divide-slate-200/50 dark:divide-slate-700/50">
+                <Show when={groupedWindowing.isWindowed() && topSpacerHeight() > 0}>
+                  <TableRow aria-hidden="true">
+                    <TableCell colspan={totalColumns()} style={{ height: `${topSpacerHeight()}px`, padding: '0', border: '0' }} />
+                  </TableRow>
+                </Show>
+                {/* Outer <For> uses string keys — strings compare by value so DOM is stable across data updates */}
+                <For each={visibleGroupKeys()} fallback={<></>}>
+                  {(groupKey) => {
+                    const groupGuests = () => windowedGroupedGuests()[groupKey] || [];
+                    const fullGroupGuests = () => groupedGuests()[groupKey] || [];
+                    const node = () => nodeByInstance()[groupKey];
+                    return (
+                      <>
+                        <Show when={groupingMode() === 'grouped'}>
+                          <Show
+                            when={node()}
+                            fallback={
+                              <TableRow class="bg-slate-50 dark:bg-slate-800">
+                                <TableCell
+                                  colspan={totalColumns()}
+                                  class="py-0.5 pr-1.5 sm:pr-2 pl-2 sm:pl-3 text-[12px] sm:text-sm font-semibold text-slate-700 dark:text-slate-100"
+                                >
+                                  {(() => {
+                                    const label = getGroupLabel(groupKey, fullGroupGuests());
+                                    return (
+                                      <div class="flex items-center gap-3">
+                                        <span>{label.name}</span>
+                                        <Show when={label.type}>
+                                          <span class="inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+                                            {label.type}
+                                          </span>
+                                        </Show>
+                                      </div>
+                                    );
+                                  })()}
+                                </TableCell>
+                              </TableRow>
+                            }
+                          >
+                            <NodeGroupHeader node={node()!} renderAs="tr" colspan={totalColumns()} />
+                          </Show>
+                        </Show>
+                        {/* Inner <Index> tracks by position — updates props reactively instead of recreating DOM */}
+                        <Index each={groupGuests()} fallback={<></>}>
+                          {(guest) => {
+                            const guestId = () => {
+                              const g = guest();
+                              return getCanonicalWorkloadId(g);
+                            };
+                            const getMetadata = () =>
+                              guestMetadata()[guestId()] ||
+                              guestMetadata()[`${guest().instance}:${guest().node}:${guest().vmid}`];
+                            const parentNode = () => node() ?? guestParentNodeMap()[guestId()];
+                            const parentNodeOnline = () => {
+                              const pn = parentNode();
+                              return pn ? isNodeOnline(pn) : true;
+                            };
+
+                            return (
+                              <ComponentErrorBoundary name="GuestRow">
+                                <GuestRow
+                                  guest={guest()}
+                                  alertStyles={getAlertStyles(guestId(), activeAlerts, alertsEnabled())}
+                                  customUrl={getMetadata()?.customUrl}
+                                  onTagClick={handleTagClick}
+                                  activeSearch={search()}
+                                  parentNodeOnline={parentNodeOnline()}
+                                  onCustomUrlUpdate={handleCustomUrlUpdate}
+                                  isGroupedView={groupingMode() === 'grouped'}
+                                  visibleColumnIds={mobileVisibleColumnIds()}
+                                  onClick={() => setSelectedGuestId(selectedGuestId() === guestId() ? null : guestId())}
+                                  isExpanded={selectedGuestId() === guestId()}
+                                  ioEmphasis={workloadIOEmphasis()}
+                                  onHoverChange={setHoveredWorkloadId}
+                                />
+                                <Show when={selectedGuestId() === guestId()}>
+                                  <TableRow>
+                                    <TableCell colspan={totalColumns()} class="p-0 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
+                                      <div class="px-2 sm:px-4 py-3 sm:py-4" onClick={(e) => e.stopPropagation()}>
+                                        <GuestDrawer
+                                          guest={guest()}
+                                          onClose={() => setSelectedGuestId(null)}
+                                          customUrl={getMetadata()?.customUrl}
+                                          onCustomUrlChange={handleCustomUrlUpdate}
+                                        />
+                                      </div>
+                                    </TableCell>
+                                  </TableRow>
+                                </Show>
+                              </ComponentErrorBoundary>
+                            );
+                          }}
+                        </Index>
+                      </>
+                    );
+                  }}
+                </For>
+                <Show when={groupedWindowing.isWindowed() && bottomSpacerHeight() > 0}>
+                  <TableRow aria-hidden="true">
+                    <TableCell colspan={totalColumns()} style={{ height: `${bottomSpacerHeight()}px`, padding: '0', border: '0' }} />
+                  </TableRow>
+                </Show>
+              </TableBody>
+            </Table>
           </Card>
         </ComponentErrorBoundary>
       </Show>
