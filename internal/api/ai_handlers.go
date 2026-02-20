@@ -2233,6 +2233,12 @@ func normalizeRunCommandApprovalTarget(req AIRunCommandRequest) (string, string,
 	targetID := strings.TrimSpace(req.TargetID)
 	targetHost := strings.ToLower(strings.TrimSpace(req.TargetHost))
 
+	allowedTargetTypes := map[string]struct{}{
+		"host":      {},
+		"container": {},
+		"vm":        {},
+	}
+
 	if req.RunOnHost {
 		targetType = "host"
 		if targetHost == "" {
@@ -2243,6 +2249,9 @@ func normalizeRunCommandApprovalTarget(req AIRunCommandRequest) (string, string,
 
 	if targetType == "" {
 		targetType = "host"
+	}
+	if _, ok := allowedTargetTypes[targetType]; !ok {
+		return "", "", fmt.Errorf("unsupported target_type %q (allowed: host, container, vm)", targetType)
 	}
 
 	if (targetType == "container" || targetType == "vm") && strings.TrimSpace(req.VMID) != "" {

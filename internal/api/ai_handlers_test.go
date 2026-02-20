@@ -968,6 +968,43 @@ func TestHandleRunCommand_RejectsCommandMismatch(t *testing.T) {
 	require.False(t, stored.Consumed)
 }
 
+func TestHandleRunCommand_RejectsUnsupportedTargetType(t *testing.T) {
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := newTestAISettingsHandler(cfg, persistence, agentexec.NewServer(nil))
+
+	store, err := approval.NewStore(approval.StoreConfig{
+		DataDir:            tmp,
+		DisablePersistence: true,
+	})
+	require.NoError(t, err)
+	approval.SetStore(store)
+	defer approval.SetStore(nil)
+
+	appReq := &approval.ApprovalRequest{
+		ID:         "approval-docker-1",
+		Command:    "docker restart web",
+		TargetType: "docker",
+		TargetID:   "host-1:web",
+	}
+	require.NoError(t, store.CreateApproval(appReq))
+	_, err = store.Approve(appReq.ID, "tester")
+	require.NoError(t, err)
+
+	body := []byte(`{"approval_id":"approval-docker-1","command":"docker restart web","target_type":"docker","target_id":"host-1:web","run_on_host":false}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/run-command", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleRunCommand(rec, req)
+
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+	require.Contains(t, rec.Body.String(), "unsupported target_type")
+
+	stored, found := store.GetApproval(appReq.ID)
+	require.True(t, found)
+	require.False(t, stored.Consumed)
+}
+
 // ========================================
 // HandleAnalyzeKubernetesCluster tests
 // ========================================
