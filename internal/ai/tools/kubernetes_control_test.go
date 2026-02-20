@@ -495,7 +495,7 @@ func TestExecuteKubernetesExec(t *testing.T) {
 			ID:         "approval-2",
 			Command:    kubeCmd,
 			TargetType: "kubernetes",
-			TargetID:   "nginx-pod",
+			TargetID:   "c1:default:pod:nginx-pod",
 		}
 		require.NoError(t, store.CreateApproval(req))
 		_, err = store.Approve("approval-2", "tester")

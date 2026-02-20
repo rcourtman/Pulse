@@ -274,9 +274,10 @@ func (e *PulseToolExecutor) executeFileAppend(ctx context.Context, path, content
 	}
 
 	approvalCommand := fmt.Sprintf("Append to file: %s", path)
+	approvalTargetID := fmt.Sprintf("host=%s|container=%s|path=%s", targetHost, dockerContainer, path)
 
 	// Check if pre-approved (validated + single-use).
-	preApproved := consumeApprovalWithValidation(args, approvalCommand, "file", path)
+	preApproved := consumeApprovalWithValidation(args, approvalCommand, "file", approvalTargetID)
 
 	// Skip approval checks if pre-approved or in autonomous mode
 	if !preApproved && !e.isAutonomous && e.controlLevel == ControlLevelControlled {
@@ -287,7 +288,7 @@ func (e *PulseToolExecutor) executeFileAppend(ctx context.Context, path, content
 		approvalID := createApprovalRecord(
 			approvalCommand,
 			"file",
-			path,
+			approvalTargetID,
 			target,
 			fmt.Sprintf("Append %d bytes to %s", len(content), path),
 		)
@@ -409,9 +410,10 @@ func (e *PulseToolExecutor) executeFileWrite(ctx context.Context, path, content,
 	}
 
 	approvalCommand := fmt.Sprintf("Write file: %s", path)
+	approvalTargetID := fmt.Sprintf("host=%s|container=%s|path=%s", targetHost, dockerContainer, path)
 
 	// Check if pre-approved (validated + single-use).
-	preApproved := consumeApprovalWithValidation(args, approvalCommand, "file", path)
+	preApproved := consumeApprovalWithValidation(args, approvalCommand, "file", approvalTargetID)
 
 	// Skip approval checks if pre-approved or in autonomous mode
 	if !preApproved && !e.isAutonomous && e.controlLevel == ControlLevelControlled {
@@ -422,7 +424,7 @@ func (e *PulseToolExecutor) executeFileWrite(ctx context.Context, path, content,
 		approvalID := createApprovalRecord(
 			approvalCommand,
 			"file",
-			path,
+			approvalTargetID,
 			target,
 			fmt.Sprintf("Write %d bytes to %s", len(content), path),
 		)

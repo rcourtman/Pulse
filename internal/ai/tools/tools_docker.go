@@ -122,9 +122,13 @@ func (e *PulseToolExecutor) executeDockerControl(ctx context.Context, args map[s
 	}
 
 	command := fmt.Sprintf("docker %s %s", operation, container.Name)
+	approvalTargetID := fmt.Sprintf("%s:%s", dockerHost.ID, container.Name)
+	if dockerHost.ID == "" {
+		approvalTargetID = fmt.Sprintf("%s:%s", dockerHost.Hostname, container.Name)
+	}
 
 	// Check if this is a pre-approved execution (validated + single-use).
-	preApproved := consumeApprovalWithValidation(args, command, "docker", container.Name)
+	preApproved := consumeApprovalWithValidation(args, command, "docker", approvalTargetID)
 
 	// Get the agent hostname for approval records
 	agentHostname := e.getAgentHostnameForDockerHost(dockerHost)
@@ -136,14 +140,14 @@ func (e *PulseToolExecutor) executeDockerControl(ctx context.Context, args map[s
 			return NewTextResult(formatPolicyBlocked(command, "This command is blocked by security policy")), nil
 		}
 		if decision == agentexec.PolicyRequireApproval && !e.isAutonomous {
-			approvalID := createApprovalRecord(command, "docker", container.Name, agentHostname, fmt.Sprintf("%s Docker container %s", operation, container.Name))
+			approvalID := createApprovalRecord(command, "docker", approvalTargetID, agentHostname, fmt.Sprintf("%s Docker container %s", operation, container.Name))
 			return NewTextResult(formatDockerApprovalNeeded(container.Name, dockerHost.Hostname, operation, command, approvalID)), nil
 		}
 	}
 
 	// Check control level
 	if !preApproved && e.controlLevel == ControlLevelControlled {
-		approvalID := createApprovalRecord(command, "docker", container.Name, agentHostname, fmt.Sprintf("%s Docker container %s", operation, container.Name))
+		approvalID := createApprovalRecord(command, "docker", approvalTargetID, agentHostname, fmt.Sprintf("%s Docker container %s", operation, container.Name))
 		return NewTextResult(formatDockerApprovalNeeded(container.Name, dockerHost.Hostname, operation, command, approvalID)), nil
 	}
 

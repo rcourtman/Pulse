@@ -505,9 +505,14 @@ func (e *PulseToolExecutor) executeKubernetesScale(ctx context.Context, args map
 
 	// Build command
 	command := fmt.Sprintf("kubectl -n %s scale deployment %s --replicas=%d", namespace, deployment, replicas)
+	clusterScope := cluster.ID
+	if clusterScope == "" {
+		clusterScope = clusterArg
+	}
+	approvalTargetID := fmt.Sprintf("%s:%s:deployment:%s", clusterScope, namespace, deployment)
 
 	// Check if pre-approved (validated + single-use).
-	preApproved := consumeApprovalWithValidation(args, command, "kubernetes", deployment)
+	preApproved := consumeApprovalWithValidation(args, command, "kubernetes", approvalTargetID)
 
 	// Request approval if needed
 	if !preApproved && !e.isAutonomous && e.controlLevel == ControlLevelControlled {
@@ -515,7 +520,7 @@ func (e *PulseToolExecutor) executeKubernetesScale(ctx context.Context, args map
 		if cluster.CustomDisplayName != "" {
 			displayName = cluster.CustomDisplayName
 		}
-		approvalID := createApprovalRecord(command, "kubernetes", deployment, displayName, fmt.Sprintf("Scale deployment %s to %d replicas", deployment, replicas))
+		approvalID := createApprovalRecord(command, "kubernetes", approvalTargetID, displayName, fmt.Sprintf("Scale deployment %s to %d replicas", deployment, replicas))
 		return NewTextResult(formatKubernetesApprovalNeeded("scale", deployment, namespace, displayName, command, approvalID)), nil
 	}
 
@@ -580,9 +585,14 @@ func (e *PulseToolExecutor) executeKubernetesRestart(ctx context.Context, args m
 
 	// Build command
 	command := fmt.Sprintf("kubectl -n %s rollout restart deployment/%s", namespace, deployment)
+	clusterScope := cluster.ID
+	if clusterScope == "" {
+		clusterScope = clusterArg
+	}
+	approvalTargetID := fmt.Sprintf("%s:%s:deployment:%s", clusterScope, namespace, deployment)
 
 	// Check if pre-approved (validated + single-use).
-	preApproved := consumeApprovalWithValidation(args, command, "kubernetes", deployment)
+	preApproved := consumeApprovalWithValidation(args, command, "kubernetes", approvalTargetID)
 
 	// Request approval if needed
 	if !preApproved && !e.isAutonomous && e.controlLevel == ControlLevelControlled {
@@ -590,7 +600,7 @@ func (e *PulseToolExecutor) executeKubernetesRestart(ctx context.Context, args m
 		if cluster.CustomDisplayName != "" {
 			displayName = cluster.CustomDisplayName
 		}
-		approvalID := createApprovalRecord(command, "kubernetes", deployment, displayName, fmt.Sprintf("Restart deployment %s", deployment))
+		approvalID := createApprovalRecord(command, "kubernetes", approvalTargetID, displayName, fmt.Sprintf("Restart deployment %s", deployment))
 		return NewTextResult(formatKubernetesApprovalNeeded("restart", deployment, namespace, displayName, command, approvalID)), nil
 	}
 
@@ -655,9 +665,14 @@ func (e *PulseToolExecutor) executeKubernetesDeletePod(ctx context.Context, args
 
 	// Build command
 	command := fmt.Sprintf("kubectl -n %s delete pod %s", namespace, pod)
+	clusterScope := cluster.ID
+	if clusterScope == "" {
+		clusterScope = clusterArg
+	}
+	approvalTargetID := fmt.Sprintf("%s:%s:pod:%s", clusterScope, namespace, pod)
 
 	// Check if pre-approved (validated + single-use).
-	preApproved := consumeApprovalWithValidation(args, command, "kubernetes", pod)
+	preApproved := consumeApprovalWithValidation(args, command, "kubernetes", approvalTargetID)
 
 	// Request approval if needed
 	if !preApproved && !e.isAutonomous && e.controlLevel == ControlLevelControlled {
@@ -665,7 +680,7 @@ func (e *PulseToolExecutor) executeKubernetesDeletePod(ctx context.Context, args
 		if cluster.CustomDisplayName != "" {
 			displayName = cluster.CustomDisplayName
 		}
-		approvalID := createApprovalRecord(command, "kubernetes", pod, displayName, fmt.Sprintf("Delete pod %s", pod))
+		approvalID := createApprovalRecord(command, "kubernetes", approvalTargetID, displayName, fmt.Sprintf("Delete pod %s", pod))
 		return NewTextResult(formatKubernetesApprovalNeeded("delete_pod", pod, namespace, displayName, command, approvalID)), nil
 	}
 
@@ -740,9 +755,14 @@ func (e *PulseToolExecutor) executeKubernetesExec(ctx context.Context, args map[
 
 	// Build kubectl command safely to prevent shell metacharacter breakout on the host.
 	kubectlCmd := buildKubectlExecCommand(namespace, pod, container, command)
+	clusterScope := cluster.ID
+	if clusterScope == "" {
+		clusterScope = clusterArg
+	}
+	approvalTargetID := fmt.Sprintf("%s:%s:pod:%s", clusterScope, namespace, pod)
 
 	// Check if pre-approved (validated + single-use).
-	preApproved := consumeApprovalWithValidation(args, kubectlCmd, "kubernetes", pod)
+	preApproved := consumeApprovalWithValidation(args, kubectlCmd, "kubernetes", approvalTargetID)
 
 	// Request approval if needed
 	if !preApproved && !e.isAutonomous && e.controlLevel == ControlLevelControlled {
@@ -750,7 +770,7 @@ func (e *PulseToolExecutor) executeKubernetesExec(ctx context.Context, args map[
 		if cluster.CustomDisplayName != "" {
 			displayName = cluster.CustomDisplayName
 		}
-		approvalID := createApprovalRecord(kubectlCmd, "kubernetes", pod, displayName, fmt.Sprintf("Execute command in pod %s", pod))
+		approvalID := createApprovalRecord(kubectlCmd, "kubernetes", approvalTargetID, displayName, fmt.Sprintf("Execute command in pod %s", pod))
 		return NewTextResult(formatKubernetesApprovalNeeded("exec", pod, namespace, displayName, kubectlCmd, approvalID)), nil
 	}
 

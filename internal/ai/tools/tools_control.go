@@ -324,9 +324,11 @@ func (e *PulseToolExecutor) executeControlGuest(ctx context.Context, args map[st
 		command = fmt.Sprintf("%s stop %d --skiplock", cmdTool, guest.VMID)
 	}
 
+	approvalTargetID := fmt.Sprintf("%s:%d", guest.Node, guest.VMID)
+
 	// Check if this is a pre-approved execution (agentic loop re-executing after user approval).
 	// Use consumeApprovalWithValidation to enforce command-bound, single-use approvals.
-	preApproved := consumeApprovalWithValidation(args, command, guest.Type, fmt.Sprintf("%d", guest.VMID))
+	preApproved := consumeApprovalWithValidation(args, command, guest.Type, approvalTargetID)
 
 	// Check security policy (skip if pre-approved)
 	if !preApproved && e.policy != nil {
@@ -336,7 +338,7 @@ func (e *PulseToolExecutor) executeControlGuest(ctx context.Context, args map[st
 		}
 		if decision == agentexec.PolicyRequireApproval && !e.isAutonomous {
 			// Use guest.Node (the Proxmox host) as targetName so approval execution can find the correct agent
-			approvalID := createApprovalRecord(command, guest.Type, fmt.Sprintf("%d", guest.VMID), guest.Node, fmt.Sprintf("%s guest %s", action, guest.Name))
+			approvalID := createApprovalRecord(command, guest.Type, approvalTargetID, guest.Node, fmt.Sprintf("%s guest %s", action, guest.Name))
 			return NewTextResult(formatControlApprovalNeeded(guest.Name, guest.VMID, action, command, approvalID)), nil
 		}
 	}
@@ -344,7 +346,7 @@ func (e *PulseToolExecutor) executeControlGuest(ctx context.Context, args map[st
 	// Check control level - this must be outside policy check since policy may be nil (skip if pre-approved)
 	if !preApproved && e.controlLevel == ControlLevelControlled {
 		// Use guest.Node (the Proxmox host) as targetName so approval execution can find the correct agent
-		approvalID := createApprovalRecord(command, guest.Type, fmt.Sprintf("%d", guest.VMID), guest.Node, fmt.Sprintf("%s guest %s", action, guest.Name))
+		approvalID := createApprovalRecord(command, guest.Type, approvalTargetID, guest.Node, fmt.Sprintf("%s guest %s", action, guest.Name))
 		return NewTextResult(formatControlApprovalNeeded(guest.Name, guest.VMID, action, command, approvalID)), nil
 	}
 
