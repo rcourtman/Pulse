@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 )
 
 // HandleRBACIntegrityCheck returns RBAC data integrity status for an org.
@@ -18,9 +19,23 @@ func (h *RBACHandlers) HandleRBACIntegrityCheck(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	orgID := r.URL.Query().Get("org_id")
+	contextOrgID := strings.TrimSpace(GetOrgID(r.Context()))
+	if contextOrgID == "" {
+		contextOrgID = "default"
+	}
+
+	orgID := strings.TrimSpace(r.URL.Query().Get("org_id"))
 	if orgID == "" {
-		orgID = "default"
+		orgID = contextOrgID
+	} else {
+		if !isValidOrganizationID(orgID) {
+			writeErrorResponse(w, http.StatusBadRequest, "invalid_org_id", "Invalid organization ID", nil)
+			return
+		}
+		if orgID != contextOrgID {
+			writeErrorResponse(w, http.StatusForbidden, "access_denied", "Token is not authorized for this organization", nil)
+			return
+		}
 	}
 
 	result := VerifyRBACIntegrity(h.rbacProvider, orgID)
@@ -64,8 +79,24 @@ func (h *RBACHandlers) HandleRBACAdminReset(w http.ResponseWriter, r *http.Reque
 		writeErrorResponse(w, http.StatusBadRequest, "missing_token", "Recovery token is required", nil)
 		return
 	}
+
+	contextOrgID := strings.TrimSpace(GetOrgID(r.Context()))
+	if contextOrgID == "" {
+		contextOrgID = "default"
+	}
+
+	req.OrgID = strings.TrimSpace(req.OrgID)
 	if req.OrgID == "" {
-		req.OrgID = "default"
+		req.OrgID = contextOrgID
+	} else {
+		if !isValidOrganizationID(req.OrgID) {
+			writeErrorResponse(w, http.StatusBadRequest, "invalid_org_id", "Invalid organization ID", nil)
+			return
+		}
+		if req.OrgID != contextOrgID {
+			writeErrorResponse(w, http.StatusForbidden, "access_denied", "Token is not authorized for this organization", nil)
+			return
+		}
 	}
 
 	store := GetRecoveryTokenStore()

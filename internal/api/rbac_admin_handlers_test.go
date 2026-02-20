@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -26,6 +27,7 @@ func TestRBACIntegrityCheck_HealthyOrg(t *testing.T) {
 	handlers := NewRBACHandlers(nil, provider)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/admin/rbac/integrity?org_id=test-org", nil)
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "test-org"))
 	rec := httptest.NewRecorder()
 	handlers.HandleRBACIntegrityCheck(rec, req)
 
@@ -143,6 +145,7 @@ func TestResetAdminRoleEndpoint_ValidToken(t *testing.T) {
 		"recovery_token": token,
 	})
 	req := httptest.NewRequest(http.MethodPost, "/api/admin/rbac/reset-admin", bytes.NewBuffer(body))
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "test-org"))
 	rec := httptest.NewRecorder()
 	handlers.HandleRBACAdminReset(rec, req)
 
@@ -174,6 +177,41 @@ func TestResetAdminRoleEndpoint_ValidToken(t *testing.T) {
 	}
 	if !containsRoleIDForAdminReset(assignment.RoleIDs, auth.RoleAdmin) {
 		t.Fatalf("expected admin role assignment, got %v", assignment.RoleIDs)
+	}
+}
+
+func TestRBACIntegrityCheck_RejectsCrossTenantQueryOrgID(t *testing.T) {
+	baseDir := t.TempDir()
+	provider := NewTenantRBACProvider(baseDir)
+	t.Cleanup(func() { _ = provider.Close() })
+
+	handlers := NewRBACHandlers(nil, provider)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/rbac/integrity?org_id=org-b", nil)
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "org-a"))
+	rec := httptest.NewRecorder()
+	handlers.HandleRBACIntegrityCheck(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for cross-tenant org_id, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestResetAdminRoleEndpoint_RejectsCrossTenantBodyOrgID(t *testing.T) {
+	baseDir := t.TempDir()
+	provider := NewTenantRBACProvider(baseDir)
+	t.Cleanup(func() { _ = provider.Close() })
+
+	handlers := NewRBACHandlers(nil, provider)
+
+	body := `{"org_id":"org-b","username":"admin","recovery_token":"dummy"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/rbac/reset-admin", bytes.NewBufferString(body))
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "org-a"))
+	rec := httptest.NewRecorder()
+	handlers.HandleRBACAdminReset(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for cross-tenant org_id, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 
