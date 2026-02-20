@@ -42,6 +42,77 @@ describe('mentionResources', () => {
     expect(hosts[0].status).toBe('online');
   });
 
+  it('deduplicates PVE node and linked host agent via linkedHostAgentId (#1252)', () => {
+    // Both sides of the link exist — node has linkedHostAgentId, host has linkedNodeId
+    const state = {
+      nodes: [
+        {
+          id: 'pve-instance-1-pve01',
+          instance: 'pve-instance-1',
+          name: 'pve01',
+          status: 'online',
+          clusterName: undefined,
+          linkedHostAgentId: 'host-agent-1',
+        },
+      ],
+      vms: [],
+      containers: [],
+      dockerHosts: [],
+      hosts: [
+        {
+          id: 'host-agent-1',
+          hostname: 'pve01',
+          displayName: 'pve01',
+          status: 'online',
+          lastSeen: Date.now(),
+          linkedNodeId: 'pve-instance-1-pve01',
+          memory: { total: 16, used: 8, free: 8, usage: 50 },
+        },
+      ],
+    } as unknown as State;
+
+    const resources = buildMentionResources(state);
+    // Should be 1 entry, not 2 (node + host agent)
+    const nodeOrHost = resources.filter((r) => r.type === 'node' || r.type === 'host');
+    expect(nodeOrHost).toHaveLength(1);
+    expect(nodeOrHost[0].name).toBe('pve01');
+  });
+
+  it('deduplicates via host linkedNodeId even when node has no linkedHostAgentId (#1252)', () => {
+    // Only the host-side link exists — tests the node-backend-id alias path
+    const state = {
+      nodes: [
+        {
+          id: 'pve-instance-1-pve01',
+          instance: 'pve-instance-1',
+          name: 'pve01',
+          status: 'online',
+          clusterName: undefined,
+          // no linkedHostAgentId — only host side has the link
+        },
+      ],
+      vms: [],
+      containers: [],
+      dockerHosts: [],
+      hosts: [
+        {
+          id: 'host-agent-1',
+          hostname: 'pve01',
+          displayName: 'pve01',
+          status: 'online',
+          lastSeen: Date.now(),
+          linkedNodeId: 'pve-instance-1-pve01',
+          memory: { total: 16, used: 8, free: 8, usage: 50 },
+        },
+      ],
+    } as unknown as State;
+
+    const resources = buildMentionResources(state);
+    const nodeOrHost = resources.filter((r) => r.type === 'node' || r.type === 'host');
+    expect(nodeOrHost).toHaveLength(1);
+    expect(nodeOrHost[0].name).toBe('pve01');
+  });
+
   it('deduplicates cluster node mentions from multiple instances and keeps the healthiest status', () => {
     const state = {
       nodes: [

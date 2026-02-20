@@ -192,6 +192,17 @@ export function buildMentionResources(state: MentionStateSubset): MentionResourc
   }
 
   for (const node of state.nodes || []) {
+    const aliases = [
+      `node-id:${node.instance}:${node.name}`,
+      nodeAlias(node.instance, node.clusterName, node.name),
+      // Register backend node ID so host agents with linkedNodeId can merge (#1252)
+      `node-backend-id:${node.id}`,
+    ];
+    // If this node has a linked host agent, add the agent's alias so they merge
+    // instead of appearing as separate entries (#1252)
+    if (node.linkedHostAgentId) {
+      aliases.push(`agent-host-id:${node.linkedHostAgentId}`);
+    }
     upsertMentionResource(
       byKey,
       aliasToKey,
@@ -201,15 +212,22 @@ export function buildMentionResources(state: MentionStateSubset): MentionResourc
         type: 'node',
         status: node.status,
       },
-      [
-        `node-id:${node.instance}:${node.name}`,
-        nodeAlias(node.instance, node.clusterName, node.name),
-      ],
+      aliases,
     );
   }
 
   for (const host of state.hosts || []) {
     const hostName = host.displayName || host.hostname || host.id;
+    const aliases = [
+      `agent-host-id:${host.id}`,
+      `host-name:${hostName}`,
+      `host-hostname:${host.hostname}`,
+    ];
+    // If this host agent is linked to a PVE node, add the node's backend ID alias so they merge (#1252).
+    // linkedNodeId is the node's backend ID (format: "instance-nodeName").
+    if (host.linkedNodeId) {
+      aliases.push(`node-backend-id:${host.linkedNodeId}`);
+    }
     upsertMentionResource(
       byKey,
       aliasToKey,
@@ -219,11 +237,7 @@ export function buildMentionResources(state: MentionStateSubset): MentionResourc
         type: 'host',
         status: host.status,
       },
-      [
-        `agent-host-id:${host.id}`,
-        `host-name:${hostName}`,
-        `host-hostname:${host.hostname}`,
-      ],
+      aliases,
     );
   }
 
