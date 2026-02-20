@@ -123,14 +123,14 @@ export function AuditWebhookPanel() {
                             {(url) => (
                                 <div class="flex items-center justify-between gap-3 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-3">
                                     <div class="flex items-center gap-3 overflow-hidden min-w-0">
-                                        <div class="p-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 rounded-md shrink-0">
+                                        <div class="p-2 bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300 rounded-md shrink-0">
                                             <ExternalLink size={16} />
                                         </div>
                                         <span class="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">{url}</span>
                                     </div>
                                     <button
                                         onClick={() => handleRemoveWebhook(url)}
-                                        class="p-2 text-slate-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-md transition-colors"
+                                        class="p-2 text-slate-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900 rounded-md transition-colors"
                                         title="Remove webhook endpoint"
                                     >
                                         <Trash2 size={16} />
@@ -170,7 +170,7 @@ export function AuditWebhookPanel() {
 
             <Card tone="warning" class="border border-amber-200 dark:border-amber-800">
                 <div class="p-5 flex gap-4">
-                    <div class="p-3 bg-amber-100 dark:bg-amber-900/40 rounded-md h-fit text-amber-600 dark:text-amber-300">
+                    <div class="p-3 bg-amber-100 dark:bg-amber-900 rounded-md h-fit text-amber-600 dark:text-amber-300">
                         <Shield size={22} />
                     </div>
                     <div>
