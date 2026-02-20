@@ -15,28 +15,85 @@ export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
     title: 'Unified Agents',
     description: 'Install and manage host, Docker, and Kubernetes agents from one workflow.',
   },
-  'workspace': {
-    title: 'Workspace Settings',
-    description: 'Configure appearance preferences, AI services, and Pulse Pro licensing.',
+  'system-general': {
+    title: 'General Settings',
+    description: 'Configure appearance, layout, and default monitoring cadence.',
   },
-  'integrations': {
-    title: 'Network & Integrations',
-    description: 'Manage network discovery, endpoints, API tokens, and webhook integrations.',
+  'system-network': {
+    title: 'Network Settings',
+    description: 'Configure discovery, CORS, embedding, and webhook network boundaries.',
   },
-  'maintenance': {
-    title: 'System Maintenance',
-    description: 'Check for updates, manage update channels, and configure backup polling.',
+  'system-updates': {
+    title: 'Updates',
+    description: 'Manage version checks, update channels, and automatic update behavior.',
   },
-  'authentication': {
+  'system-recovery': {
+    title: 'Recovery',
+    description: 'Manage backup/snapshot polling plus configuration export and import workflows.',
+  },
+  'system-ai': {
+    title: 'AI Settings',
+    description: 'Configure AI providers, model defaults, Pulse Assistant, and Patrol automation.',
+  },
+  'system-relay': {
+    title: 'Remote Access',
+    description: 'Configure Pulse relay connectivity for secure remote access.',
+  },
+  'system-pro': {
+    title: 'Pro',
+    description: 'Manage license activation and Pro feature access.',
+  },
+  'organization-overview': {
+    title: 'Organization Overview',
+    description: 'Review organization metadata, membership footprint, and ownership.',
+  },
+  'organization-access': {
+    title: 'Organization Access',
+    description: 'Manage organization members, roles, and ownership transfers.',
+  },
+  'organization-sharing': {
+    title: 'Organization Sharing',
+    description: 'Share resources between organizations with scoped access.',
+  },
+  'organization-billing': {
+    title: 'Organization Billing',
+    description: 'Track plan tier, usage, and upgrade options for multi-tenant deployments.',
+  },
+  'organization-billing-admin': {
+    title: 'Billing Admin',
+    description: 'Review and manage tenant billing state across all organizations (hosted mode only).',
+  },
+  api: {
+    title: 'API Access',
+    description:
+      'Generate and manage scoped tokens for agents, automation, and integrations.',
+  },
+  'security-overview': {
+    title: 'Security Overview',
+    description: 'View your security posture at a glance and monitor authentication status.',
+  },
+  'security-auth': {
     title: 'Authentication',
-    description: 'View security posture and configure password or Single Sign-On authentication.',
+    description: 'Manage password-based authentication and credential rotation.',
   },
-  'team': {
-    title: 'Team & Roles',
-    description: 'Manage users, assign functional roles, and view effective permissions across your infrastructure.',
+  'security-sso': {
+    title: 'Single Sign-On',
+    description: 'Configure OIDC providers for team authentication.',
   },
-  'audit': {
-    title: 'Audit Logs',
+  'security-roles': {
+    title: 'Roles',
+    description: 'Define custom roles and manage granular permissions for users and tokens.',
+  },
+  'security-users': {
+    title: 'User Access',
+    description: 'Assign roles to users and view effective permissions across your infrastructure.',
+  },
+  'security-audit': {
+    title: 'Audit Log',
     description: 'View security events, login attempts, and configuration changes.',
+  },
+  'security-webhooks': {
+    title: 'Audit Webhooks',
+    description: 'Configure real-time delivery of audit events to external systems.',
   },
 };

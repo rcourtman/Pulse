@@ -58,22 +58,22 @@ import { formField, labelClass, controlClass, formHelpText } from '@/components/
 import Server from 'lucide-solid/icons/server';
 import HardDrive from 'lucide-solid/icons/hard-drive';
 import Mail from 'lucide-solid/icons/mail';
-
-
+import Shield from 'lucide-solid/icons/shield';
+import ShieldCheck from 'lucide-solid/icons/shield-check';
 import Lock from 'lucide-solid/icons/lock';
-
+import Key from 'lucide-solid/icons/key';
 import Loader from 'lucide-solid/icons/loader';
 import Network from 'lucide-solid/icons/network';
 import Bot from 'lucide-solid/icons/bot';
 import Users from 'lucide-solid/icons/users';
 import Sliders from 'lucide-solid/icons/sliders-horizontal';
 import RefreshCw from 'lucide-solid/icons/refresh-cw';
-
-
-
+import Clock from 'lucide-solid/icons/clock';
+import Sparkles from 'lucide-solid/icons/sparkles';
+import Globe from 'lucide-solid/icons/globe';
 import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
-
-
+import { PulseLogoIcon } from '@/components/icons/PulseLogoIcon';
+import BadgeCheck from 'lucide-solid/icons/badge-check';
 import Terminal from 'lucide-solid/icons/terminal';
 import Container from 'lucide-solid/icons/container';
 import type { NodeConfig } from '@/types/nodes';
@@ -83,7 +83,6 @@ import { eventBus } from '@/stores/events';
 
 import { updateStore } from '@/stores/updates';
 import { isPro, loadLicenseStatus } from '@/stores/license';
-import { deriveTabFromPath, deriveAgentFromPath, settingsTabPath, type SettingsTab, type AgentKey } from './settingsRouting';
 
 // Type definitions
 interface DiscoveredServer {
@@ -118,9 +117,30 @@ interface DiscoveryScanStatus {
   errors?: string[];
 }
 
+type SettingsTab =
+  | 'proxmox'
+  | 'docker'
+  | 'hosts'
+  | 'agents'
+  | 'system-general'
+  | 'system-network'
+  | 'system-updates'
+  | 'system-backups'
+  | 'system-ai'
+  | 'system-pro'
+  | 'api'
+  | 'security-overview'
+  | 'security-auth'
+  | 'security-sso'
+  | 'security-roles'
+  | 'security-users'
+  | 'security-audit'
+  | 'updates'
+  | 'security-webhooks';
 
+type AgentKey = 'pve' | 'pbs' | 'pmg';
 
-const SETTINGS_HEADER_META: Partial<Record<SettingsTab, { title: string; description: string }>> = {
+const SETTINGS_HEADER_META: Record<SettingsTab, { title: string; description: string }> = {
   proxmox: {
     title: 'Proxmox',
     description:
@@ -131,33 +151,75 @@ const SETTINGS_HEADER_META: Partial<Record<SettingsTab, { title: string; descrip
     description:
       'Monitor Docker hosts, containers, images, and volumes across your infrastructure.',
   },
+  hosts: {
+    title: 'Hosts',
+    description: 'Monitor Linux, macOS, and Windows machines—servers, desktops, and laptops.',
+  },
   agents: {
     title: 'Agents',
     description: 'Install and manage the unified Pulse agent for host and Docker monitoring.',
   },
-  'workspace': {
-    title: 'Workspace Settings',
-    description: 'Configure appearance preferences, AI services, and Pulse Pro licensing.',
+  'system-general': {
+    title: 'General Settings',
+    description: 'Configure appearance preferences and UI behavior.',
   },
-  'integrations': {
-    title: 'Network & Integrations',
-    description: 'Manage network discovery, endpoints, API tokens, and webhook integrations.',
+  'system-network': {
+    title: 'Network Settings',
+    description: 'Manage CORS, embedding, and network discovery configuration.',
   },
-  'maintenance': {
-    title: 'System Maintenance',
-    description: 'Check for updates, manage update channels, and configure backup polling.',
+  'system-updates': {
+    title: 'Updates',
+    description:
+      'Check for updates, configure update channels, and manage automatic update checks.',
   },
-  'authentication': {
+  'system-backups': {
+    title: 'Backup Polling',
+    description: 'Control how often Pulse queries Proxmox for backup tasks and snapshots.',
+  },
+  'system-ai': {
+    title: 'AI',
+    description: 'Configure AI providers, models, Pulse Assistant, and Patrol.',
+  },
+  'system-pro': {
+    title: 'Pulse Pro',
+    description: 'Manage license activation and Pulse Pro feature access.',
+  },
+  api: {
+    title: 'API access',
+    description:
+      'Generate scoped tokens and manage automation credentials for agents and integrations.',
+  },
+  'security-overview': {
+    title: 'Security Overview',
+    description: 'View your security posture at a glance and monitor authentication status.',
+  },
+  'security-auth': {
     title: 'Authentication',
-    description: 'View security posture and configure password or Single Sign-On authentication.',
+    description: 'Manage password-based authentication and credential rotation.',
   },
-  'team': {
-    title: 'Team & Roles',
-    description: 'Manage users, assign functional roles, and view effective permissions across your infrastructure.',
+  'security-sso': {
+    title: 'Single Sign-On',
+    description: 'Configure OIDC providers for team authentication.',
   },
-  'audit': {
-    title: 'Audit Logs',
+  'security-roles': {
+    title: 'Roles',
+    description: 'Define custom roles and manage granular permissions for users and tokens.',
+  },
+  'security-users': {
+    title: 'User Access',
+    description: 'Assign roles to users and view effective permissions across your infrastructure.',
+  },
+  'security-audit': {
+    title: 'Audit Log',
     description: 'View security events, login attempts, and configuration changes.',
+  },
+  'security-webhooks': {
+    title: 'Audit Webhooks',
+    description: 'Configure real-time delivery of audit events to external systems.',
+  },
+  updates: {
+    title: 'Update History',
+    description: 'Review past software updates, rollback events, and upgrade audit logs.',
   },
 };
 
@@ -199,7 +261,62 @@ const Settings: Component<SettingsProps> = (props) => {
   const navigate = useNavigate();
   const location = useLocation();
 
+  const deriveTabFromPath = (path: string): SettingsTab => {
+    if (path.includes('/settings/proxmox')) return 'proxmox';
+    if (path.includes('/settings/agent-hub')) return 'proxmox';
+    if (path.includes('/settings/docker')) return 'docker';
+    if (path.includes('/settings/containers')) return 'agents';
+    if (
+      path.includes('/settings/hosts') ||
+      path.includes('/settings/host-agents') ||
+      path.includes('/settings/servers') ||
+      path.includes('/settings/linuxServers') ||
+      path.includes('/settings/windowsServers') ||
+      path.includes('/settings/macServers') ||
+      path.includes('/settings/agents')
+    )
+      return 'agents';
+    if (path.includes('/settings/system-general')) return 'system-general';
+    if (path.includes('/settings/system-network')) return 'system-network';
+    if (path.includes('/settings/system-updates')) return 'system-updates';
+    if (path.includes('/settings/system-backups')) return 'system-backups';
+    if (path.includes('/settings/system-ai')) return 'system-ai';
+    if (path.includes('/settings/system-pro')) return 'system-pro';
+    // Generic /settings/system fallback must come AFTER specific system-* paths
+    // because /settings/system-logs contains /settings/system as a substring
+    if (path.includes('/settings/system')) return 'system-general';
+    if (path.includes('/settings/api')) return 'api';
+    if (path.includes('/settings/security-overview')) return 'security-overview';
+    if (path.includes('/settings/security-auth')) return 'security-auth';
+    if (path.includes('/settings/security-sso')) return 'security-sso';
+    if (path.includes('/settings/security-roles')) return 'security-roles';
+    if (path.includes('/settings/security-users')) return 'security-users';
+    if (path.includes('/settings/security-audit')) return 'security-audit';
+    if (path.includes('/settings/security-webhooks')) return 'security-webhooks';
+    // Generic /settings/security fallback must come AFTER specific security-* paths
+    if (path.includes('/settings/security')) return 'security-overview';
+    if (path.includes('/settings/updates')) return 'updates';
+    // Legacy platform paths map to the Proxmox tab
+    if (
+      path.includes('/settings/pve') ||
+      path.includes('/settings/pbs') ||
+      path.includes('/settings/pmg') ||
+      path.includes('/settings/docker') ||
+      path.includes('/settings/linuxServers') ||
+      path.includes('/settings/windowsServers') ||
+      path.includes('/settings/macServers')
+    ) {
+      return 'proxmox';
+    }
+    return 'proxmox';
+  };
 
+  const deriveAgentFromPath = (path: string): AgentKey | null => {
+    if (path.includes('/settings/pve')) return 'pve';
+    if (path.includes('/settings/pbs')) return 'pbs';
+    if (path.includes('/settings/pmg')) return 'pmg';
+    return null;
+  };
 
   const [currentTab, setCurrentTab] = createSignal<SettingsTab>(
     deriveTabFromPath(location.pathname),
@@ -229,7 +346,7 @@ const Settings: Component<SettingsProps> = (props) => {
     if (tab === 'proxmox' && deriveAgentFromPath(location.pathname) === null) {
       setSelectedAgent('pve');
     }
-    const targetPath = settingsTabPath(tab);
+    const targetPath = `/settings/${tab}`;
     if (location.pathname !== targetPath) {
       navigate(targetPath, { scroll: false });
       return;
@@ -259,7 +376,7 @@ const Settings: Component<SettingsProps> = (props) => {
         }
 
         if (path.startsWith('/settings/agent-hub')) {
-          navigate(path.replace('/settings/agent-hub', '/settings/infrastructure'), {
+          navigate(path.replace('/settings/agent-hub', '/settings/proxmox'), {
             replace: true,
             scroll: false,
           });
@@ -267,7 +384,7 @@ const Settings: Component<SettingsProps> = (props) => {
         }
 
         if (path.startsWith('/settings/servers')) {
-          navigate(path.replace('/settings/servers', '/settings/workloads'), {
+          navigate(path.replace('/settings/servers', '/settings/hosts'), {
             replace: true,
             scroll: false,
           });
@@ -275,7 +392,7 @@ const Settings: Component<SettingsProps> = (props) => {
         }
 
         if (path.startsWith('/settings/containers')) {
-          navigate(path.replace('/settings/containers', '/settings/workloads/docker'), {
+          navigate(path.replace('/settings/containers', '/settings/docker'), {
             replace: true,
             scroll: false,
           });
@@ -285,10 +402,9 @@ const Settings: Component<SettingsProps> = (props) => {
         if (
           path.startsWith('/settings/linuxServers') ||
           path.startsWith('/settings/windowsServers') ||
-          path.startsWith('/settings/macServers') ||
-          path.startsWith('/settings/hosts')
+          path.startsWith('/settings/macServers')
         ) {
-          navigate('/settings/workloads', {
+          navigate('/settings/hosts', {
             replace: true,
             scroll: false,
           });
@@ -660,7 +776,7 @@ const Settings: Component<SettingsProps> = (props) => {
 
 
   const tabGroups: {
-    id: 'platforms' | 'system' | 'security';
+    id: 'platforms' | 'operations' | 'system' | 'security';
     label: string;
     items: {
       id: SettingsTab;
@@ -675,7 +791,7 @@ const Settings: Component<SettingsProps> = (props) => {
   }[] = [
       {
         id: 'platforms',
-        label: 'Infrastructure',
+        label: 'Platforms',
         items: [
           { id: 'proxmox', label: 'Proxmox', icon: ProxmoxIcon },
           { id: 'agents', label: 'Agents', icon: Bot, iconProps: { strokeWidth: 2 } },
@@ -683,50 +799,99 @@ const Settings: Component<SettingsProps> = (props) => {
         ],
       },
       {
+        id: 'operations',
+        label: 'Operations',
+        items: [
+          { id: 'api', label: 'API Tokens', icon: BadgeCheck },
+        ],
+      },
+      {
         id: 'system',
-        label: 'Workspace',
+        label: 'System',
         items: [
           {
-            id: 'workspace',
-            label: 'General Settings',
+            id: 'system-general',
+            label: 'General',
             icon: Sliders,
             iconProps: { strokeWidth: 2 },
           },
           {
-            id: 'integrations',
-            label: 'Integrations & API',
+            id: 'system-network',
+            label: 'Network',
             icon: Network,
             iconProps: { strokeWidth: 2 },
           },
           {
-            id: 'maintenance',
-            label: 'Maintenance',
+            id: 'system-updates',
+            label: 'Updates',
             icon: RefreshCw,
             iconProps: { strokeWidth: 2 },
+          },
+          {
+            id: 'system-backups',
+            label: 'Backups',
+            icon: Clock,
+            iconProps: { strokeWidth: 2 },
+          },
+          {
+            id: 'system-ai',
+            label: 'AI',
+            icon: Sparkles,
+            iconProps: { strokeWidth: 2 },
+          },
+          {
+            id: 'system-pro',
+            label: 'Pulse Pro',
+            icon: PulseLogoIcon,
           },
         ],
       },
       {
         id: 'security',
-        label: 'Security & Access',
+        label: 'Security',
         items: [
           {
-            id: 'authentication',
+            id: 'security-overview',
+            label: 'Overview',
+            icon: Shield,
+            iconProps: { strokeWidth: 2 },
+          },
+          {
+            id: 'security-auth',
             label: 'Authentication',
             icon: Lock,
             iconProps: { strokeWidth: 2 },
           },
           {
-            id: 'team',
-            label: 'Team & Roles',
+            id: 'security-sso',
+            label: 'Single Sign-On',
+            icon: Key,
+            iconProps: { strokeWidth: 2 },
+          },
+          {
+            id: 'security-roles',
+            label: 'Roles',
+            icon: ShieldCheck,
+            iconProps: { strokeWidth: 2 },
+          },
+          {
+            id: 'security-users',
+            label: 'Users',
             icon: Users,
             iconProps: { strokeWidth: 2 },
           },
           {
-            id: 'audit',
+            id: 'security-audit',
             label: 'Audit Log',
             icon: Terminal,
             iconProps: { strokeWidth: 2 },
+          },
+          {
+            id: 'security-webhooks',
+            label: 'Webhooks',
+            icon: Globe,
+            iconProps: { strokeWidth: 2 },
+            features: ['audit_logging'],
           },
         ],
       },
@@ -1552,9 +1717,10 @@ const Settings: Component<SettingsProps> = (props) => {
   const saveSettings = async () => {
     try {
       if (
-        activeTab() === 'workspace' ||
-        activeTab() === 'integrations' ||
-        activeTab() === 'maintenance'
+        activeTab() === 'system-general' ||
+        activeTab() === 'system-network' ||
+        activeTab() === 'system-updates' ||
+        activeTab() === 'system-backups'
       ) {
         // Save system settings using typed API
         await SettingsAPI.updateSystemSettings({
@@ -1922,9 +2088,10 @@ const Settings: Component<SettingsProps> = (props) => {
           when={
             hasUnsavedChanges() &&
             (activeTab() === 'proxmox' ||
-              activeTab() === 'workspace' ||
-              activeTab() === 'integrations' ||
-              activeTab() === 'maintenance')
+              activeTab() === 'system-general' ||
+              activeTab() === 'system-network' ||
+              activeTab() === 'system-updates' ||
+              activeTab() === 'system-backups')
           }
         >
           <div class="bg-amber-50 dark:bg-amber-900 border-l-4 border-amber-500 dark:border-amber-400 rounded-r-lg shadow-sm p-4">
@@ -3094,242 +3261,196 @@ const Settings: Component<SettingsProps> = (props) => {
                 </Card>
               </Show>
 
-              {/* Workspace Settings */}
-              <Show when={activeTab() === 'workspace'}>
-                <div class="space-y-12">
-                  <div>
-                    <SectionHeader title="General Configuration" description="Manage core platform behavior" />
-                    <div class="mt-6">
-                      <GeneralSettingsPanel
-                        darkMode={props.darkMode}
-                        toggleDarkMode={props.toggleDarkMode}
-                        pvePollingInterval={pvePollingInterval}
-                        setPVEPollingInterval={setPVEPollingInterval}
-                        pvePollingSelection={pvePollingSelection}
-                        setPVEPollingSelection={setPVEPollingSelection}
-                        pvePollingCustomSeconds={pvePollingCustomSeconds}
-                        setPVEPollingCustomSeconds={setPVEPollingCustomSeconds}
-                        pvePollingEnvLocked={pvePollingEnvLocked}
-                        setHasUnsavedChanges={setHasUnsavedChanges}
-                        disableLegacyRouteRedirects={disableLegacyRouteRedirects}
-                        disableLegacyRouteRedirectsLocked={disableLegacyRouteRedirectsLocked}
-                        savingLegacyRedirects={savingLegacyRedirects}
-                        handleDisableLegacyRouteRedirectsChange={handleDisableLegacyRouteRedirectsChange}
-                        reduceProUpsellNoise={reduceProUpsellNoise}
-                        savingReduceUpsells={savingReduceUpsells}
-                        handleReduceProUpsellNoiseChange={handleReduceProUpsellNoiseChange}
-                        disableLocalUpgradeMetrics={disableLocalUpgradeMetrics}
-                        disableLocalUpgradeMetricsLocked={disableLocalUpgradeMetricsLocked}
-                        savingUpgradeMetrics={savingUpgradeMetrics}
-                        handleDisableLocalUpgradeMetricsChange={handleDisableLocalUpgradeMetricsChange}
-                      />
-                    </div>
-                  </div>
+              {/* System General Tab */}
+              <Show when={activeTab() === 'system-general'}>
+                <GeneralSettingsPanel
+                  darkMode={props.darkMode}
+                  toggleDarkMode={props.toggleDarkMode}
+                  pvePollingInterval={pvePollingInterval}
+                  setPVEPollingInterval={setPVEPollingInterval}
+                  pvePollingSelection={pvePollingSelection}
+                  setPVEPollingSelection={setPVEPollingSelection}
+                  pvePollingCustomSeconds={pvePollingCustomSeconds}
+                  setPVEPollingCustomSeconds={setPVEPollingCustomSeconds}
+                  pvePollingEnvLocked={pvePollingEnvLocked}
+                  setHasUnsavedChanges={setHasUnsavedChanges}
+                  disableLegacyRouteRedirects={disableLegacyRouteRedirects}
+                  disableLegacyRouteRedirectsLocked={disableLegacyRouteRedirectsLocked}
+                  savingLegacyRedirects={savingLegacyRedirects}
+                  handleDisableLegacyRouteRedirectsChange={handleDisableLegacyRouteRedirectsChange}
+                  reduceProUpsellNoise={reduceProUpsellNoise}
+                  savingReduceUpsells={savingReduceUpsells}
+                  handleReduceProUpsellNoiseChange={handleReduceProUpsellNoiseChange}
+                  disableLocalUpgradeMetrics={disableLocalUpgradeMetrics}
+                  disableLocalUpgradeMetricsLocked={disableLocalUpgradeMetricsLocked}
+                  savingUpgradeMetrics={savingUpgradeMetrics}
+                  handleDisableLocalUpgradeMetricsChange={handleDisableLocalUpgradeMetricsChange}
+                />
+              </Show>
 
-                  <div class="border-t border-gray-200 dark:border-gray-700 pt-8 mt-12">
-                    <SectionHeader title="AI Services" description="Configure your AI assistant" />
-                    <div class="mt-6 space-y-6">
-                      <AISettings />
-                      <AICostDashboard />
-                    </div>
-                  </div>
+              {/* System Network Tab */}
+              <Show when={activeTab() === 'system-network'}>
+                <NetworkSettingsPanel
+                  discoveryEnabled={discoveryEnabled}
+                  discoveryMode={discoveryMode}
+                  discoverySubnetDraft={discoverySubnetDraft}
+                  discoverySubnetError={discoverySubnetError}
+                  savingDiscoverySettings={savingDiscoverySettings}
+                  envOverrides={envOverrides}
+                  allowedOrigins={allowedOrigins}
+                  setAllowedOrigins={setAllowedOrigins}
+                  allowEmbedding={allowEmbedding}
+                  setAllowEmbedding={setAllowEmbedding}
+                  allowedEmbedOrigins={allowedEmbedOrigins}
+                  setAllowedEmbedOrigins={setAllowedEmbedOrigins}
+                  webhookAllowedPrivateCIDRs={webhookAllowedPrivateCIDRs}
+                  setWebhookAllowedPrivateCIDRs={setWebhookAllowedPrivateCIDRs}
+                  publicURL={publicURL}
+                  setPublicURL={setPublicURL}
+                  handleDiscoveryEnabledChange={handleDiscoveryEnabledChange}
+                  handleDiscoveryModeChange={handleDiscoveryModeChange}
+                  setDiscoveryMode={setDiscoveryMode}
+                  setDiscoverySubnetDraft={setDiscoverySubnetDraft}
+                  setDiscoverySubnetError={setDiscoverySubnetError}
+                  setLastCustomSubnet={setLastCustomSubnet}
+                  commitDiscoverySubnet={commitDiscoverySubnet}
+                  setHasUnsavedChanges={setHasUnsavedChanges}
+                  parseSubnetList={parseSubnetList}
+                  normalizeSubnetList={normalizeSubnetList}
+                  isValidCIDR={isValidCIDR}
+                  currentDraftSubnetValue={currentDraftSubnetValue}
+                  discoverySubnetInputRef={(el) => {
+                    discoverySubnetInputRef = el;
+                  }}
+                />
+              </Show>
 
-                  <div class="border-t border-gray-200 dark:border-gray-700 pt-8 mt-12">
-                    <SectionHeader title="Pulse Pro" description="Manage your license" />
-                    <div class="mt-6">
-                      <ProLicensePanel />
-                    </div>
-                  </div>
+              {/* System Updates Tab */}
+              <Show when={activeTab() === 'system-updates'}>
+                <UpdatesSettingsPanel
+                  versionInfo={versionInfo}
+                  updateInfo={updateInfo}
+                  checkingForUpdates={checkingForUpdates}
+                  updateChannel={updateChannel}
+                  setUpdateChannel={setUpdateChannel}
+                  autoUpdateEnabled={autoUpdateEnabled}
+                  setAutoUpdateEnabled={setAutoUpdateEnabled}
+                  autoUpdateCheckInterval={autoUpdateCheckInterval}
+                  setAutoUpdateCheckInterval={setAutoUpdateCheckInterval}
+                  autoUpdateTime={autoUpdateTime}
+                  setAutoUpdateTime={setAutoUpdateTime}
+                  checkForUpdates={checkForUpdates}
+                  setHasUnsavedChanges={setHasUnsavedChanges}
+                  updatePlan={updatePlan}
+                  onInstallUpdate={handleInstallUpdate}
+                  isInstalling={isInstallingUpdate}
+                />
+              </Show>
+
+              {/* System Backups Tab */}
+              <Show when={activeTab() === 'system-backups'}>
+                <BackupsSettingsPanel
+                  backupPollingEnabled={backupPollingEnabled}
+                  setBackupPollingEnabled={setBackupPollingEnabled}
+                  backupPollingInterval={backupPollingInterval}
+                  setBackupPollingInterval={setBackupPollingInterval}
+                  backupPollingCustomMinutes={backupPollingCustomMinutes}
+                  setBackupPollingCustomMinutes={setBackupPollingCustomMinutes}
+                  backupPollingUseCustom={backupPollingUseCustom}
+                  setBackupPollingUseCustom={setBackupPollingUseCustom}
+                  backupPollingEnvLocked={backupPollingEnvLocked}
+                  backupIntervalSelectValue={backupIntervalSelectValue}
+                  backupIntervalSummary={backupIntervalSummary}
+                  setHasUnsavedChanges={setHasUnsavedChanges}
+                  showExportDialog={showExportDialog}
+                  setShowExportDialog={setShowExportDialog}
+                  showImportDialog={showImportDialog}
+                  setShowImportDialog={setShowImportDialog}
+                  setUseCustomPassphrase={setUseCustomPassphrase}
+                  securityStatus={securityStatus}
+                />
+              </Show>
+
+              {/* AI Assistant Tab */}
+              <Show when={activeTab() === 'system-ai'}>
+                <div class="space-y-6">
+                  <AISettings />
+                  <AICostDashboard />
                 </div>
               </Show>
 
-              {/* Network & Integrations */}
-              <Show when={activeTab() === 'integrations'}>
-                <div class="space-y-12">
-                  <div>
-                    <SectionHeader title="Network & Discovery" description="Manage local network and CORS settings" />
-                    <div class="mt-6">
-                      <NetworkSettingsPanel
-                        discoveryEnabled={discoveryEnabled}
-                        discoveryMode={discoveryMode}
-                        discoverySubnetDraft={discoverySubnetDraft}
-                        discoverySubnetError={discoverySubnetError}
-                        savingDiscoverySettings={savingDiscoverySettings}
-                        envOverrides={envOverrides}
-                        allowedOrigins={allowedOrigins}
-                        setAllowedOrigins={setAllowedOrigins}
-                        allowEmbedding={allowEmbedding}
-                        setAllowEmbedding={setAllowEmbedding}
-                        allowedEmbedOrigins={allowedEmbedOrigins}
-                        setAllowedEmbedOrigins={setAllowedEmbedOrigins}
-                        webhookAllowedPrivateCIDRs={webhookAllowedPrivateCIDRs}
-                        setWebhookAllowedPrivateCIDRs={setWebhookAllowedPrivateCIDRs}
-                        publicURL={publicURL}
-                        setPublicURL={setPublicURL}
-                        handleDiscoveryEnabledChange={handleDiscoveryEnabledChange}
-                        handleDiscoveryModeChange={handleDiscoveryModeChange}
-                        setDiscoveryMode={setDiscoveryMode}
-                        setDiscoverySubnetDraft={setDiscoverySubnetDraft}
-                        setDiscoverySubnetError={setDiscoverySubnetError}
-                        setLastCustomSubnet={setLastCustomSubnet}
-                        commitDiscoverySubnet={commitDiscoverySubnet}
-                        setHasUnsavedChanges={setHasUnsavedChanges}
-                        parseSubnetList={parseSubnetList}
-                        normalizeSubnetList={normalizeSubnetList}
-                        isValidCIDR={isValidCIDR}
-                        currentDraftSubnetValue={currentDraftSubnetValue}
-                        discoverySubnetInputRef={(el) => {
-                          discoverySubnetInputRef = el;
-                        }}
-                      />
-                    </div>
-                  </div>
+              {/* Pulse Pro License Tab */}
+              <Show when={activeTab() === 'system-pro'}>
+                <ProLicensePanel />
+              </Show>
 
-                  <div class="border-t border-gray-200 dark:border-gray-700 pt-8 mt-12">
-                    <SectionHeader title="API Access" description="Generate developer tokens" />
-                    <div class="mt-6">
-                      <APIAccessPanel
-                        currentTokenHint={securityStatus()?.apiTokenHint}
-                        onTokensChanged={() => {
-                          void loadSecurityStatus();
-                        }}
-                        refreshing={securityStatusLoading()}
-                      />
-                    </div>
-                  </div>
+              {/* API Access */}
+              <Show when={activeTab() === 'api'}>
+                <APIAccessPanel
+                  currentTokenHint={securityStatus()?.apiTokenHint}
+                  onTokensChanged={() => {
+                    void loadSecurityStatus();
+                  }}
+                  refreshing={securityStatusLoading()}
+                />
+              </Show>
 
-                  <div class="border-t border-gray-200 dark:border-gray-700 pt-8 mt-12">
-                    <SectionHeader title="Webhooks" description="Configure webhook integrations" />
-                    <div class="mt-6">
-                      <AuditWebhookPanel />
-                    </div>
-                  </div>
+              {/* Security Overview Tab */}
+              <Show when={activeTab() === 'security-overview'}>
+                <SecurityOverviewPanel
+                  securityStatus={securityStatus}
+                  securityStatusLoading={securityStatusLoading}
+                />
+              </Show>
+
+              {/* Security Authentication Tab */}
+              <Show when={activeTab() === 'security-auth'}>
+                <SecurityAuthPanel
+                  securityStatus={securityStatus}
+                  securityStatusLoading={securityStatusLoading}
+                  versionInfo={versionInfo}
+                  authDisabledByEnv={authDisabledByEnv}
+                  showQuickSecuritySetup={showQuickSecuritySetup}
+                  setShowQuickSecuritySetup={setShowQuickSecuritySetup}
+                  showQuickSecurityWizard={showQuickSecurityWizard}
+                  setShowQuickSecurityWizard={setShowQuickSecurityWizard}
+                  showPasswordModal={showPasswordModal}
+                  setShowPasswordModal={setShowPasswordModal}
+                  hideLocalLogin={hideLocalLogin}
+                  hideLocalLoginLocked={hideLocalLoginLocked}
+                  savingHideLocalLogin={savingHideLocalLogin}
+                  handleHideLocalLoginChange={handleHideLocalLoginChange}
+                  loadSecurityStatus={loadSecurityStatus}
+                />
+              </Show>
+
+              {/* Security Single Sign-On Tab */}
+              <Show when={activeTab() === 'security-sso'}>
+                <div class="space-y-6">
+                  <SSOProvidersPanel onConfigUpdated={loadSecurityStatus} />
+                  {/* Legacy OIDC panel for backward compatibility */}
+                  <OIDCPanel onConfigUpdated={loadSecurityStatus} />
                 </div>
               </Show>
 
-              {/* Maintenance */}
-              <Show when={activeTab() === 'maintenance'}>
-                <div class="space-y-12">
-                  <div>
-                    <SectionHeader title="System Updates" description="Check for and install updates" />
-                    <div class="mt-6">
-                      <UpdatesSettingsPanel
-                        versionInfo={versionInfo}
-                        updateInfo={updateInfo}
-                        checkingForUpdates={checkingForUpdates}
-                        updateChannel={updateChannel}
-                        setUpdateChannel={setUpdateChannel}
-                        autoUpdateEnabled={autoUpdateEnabled}
-                        setAutoUpdateEnabled={setAutoUpdateEnabled}
-                        autoUpdateCheckInterval={autoUpdateCheckInterval}
-                        setAutoUpdateCheckInterval={setAutoUpdateCheckInterval}
-                        autoUpdateTime={autoUpdateTime}
-                        setAutoUpdateTime={setAutoUpdateTime}
-                        checkForUpdates={checkForUpdates}
-                        setHasUnsavedChanges={setHasUnsavedChanges}
-                        updatePlan={updatePlan}
-                        onInstallUpdate={handleInstallUpdate}
-                        isInstalling={isInstallingUpdate}
-                      />
-                    </div>
-                  </div>
-
-                  <div class="border-t border-gray-200 dark:border-gray-700 pt-8 mt-12">
-                    <SectionHeader title="Backup Polling" description="Control backup sync frequency" />
-                    <div class="mt-6">
-                      <BackupsSettingsPanel
-                        backupPollingEnabled={backupPollingEnabled}
-                        setBackupPollingEnabled={setBackupPollingEnabled}
-                        backupPollingInterval={backupPollingInterval}
-                        setBackupPollingInterval={setBackupPollingInterval}
-                        backupPollingCustomMinutes={backupPollingCustomMinutes}
-                        setBackupPollingCustomMinutes={setBackupPollingCustomMinutes}
-                        backupPollingUseCustom={backupPollingUseCustom}
-                        setBackupPollingUseCustom={setBackupPollingUseCustom}
-                        backupPollingEnvLocked={backupPollingEnvLocked}
-                        backupIntervalSelectValue={backupIntervalSelectValue}
-                        backupIntervalSummary={backupIntervalSummary}
-                        setHasUnsavedChanges={setHasUnsavedChanges}
-                        showExportDialog={showExportDialog}
-                        setShowExportDialog={setShowExportDialog}
-                        showImportDialog={showImportDialog}
-                        setShowImportDialog={setShowImportDialog}
-                        setUseCustomPassphrase={setUseCustomPassphrase}
-                        securityStatus={securityStatus}
-                      />
-                    </div>
-                  </div>
-                </div>
+              {/* Security Roles Tab */}
+              <Show when={activeTab() === 'security-roles'}>
+                <RolesPanel />
               </Show>
 
-              {/* Security & Authentication */}
-              <Show when={activeTab() === 'authentication'}>
-                <div class="space-y-12">
-                  <div>
-                    <SectionHeader title="Security Overview" description="Health and status check" />
-                    <div class="mt-6">
-                      <SecurityOverviewPanel
-                        securityStatus={securityStatus}
-                        securityStatusLoading={securityStatusLoading}
-                      />
-                    </div>
-                  </div>
-
-                  <div class="border-t border-gray-200 dark:border-gray-700 pt-8 mt-12">
-                    <SectionHeader title="Local Authentication" description="Manage passwords and basic auth" />
-                    <div class="mt-6">
-                      <SecurityAuthPanel
-                        securityStatus={securityStatus}
-                        securityStatusLoading={securityStatusLoading}
-                        versionInfo={versionInfo}
-                        authDisabledByEnv={authDisabledByEnv}
-                        showQuickSecuritySetup={showQuickSecuritySetup}
-                        setShowQuickSecuritySetup={setShowQuickSecuritySetup}
-                        showQuickSecurityWizard={showQuickSecurityWizard}
-                        setShowQuickSecurityWizard={setShowQuickSecurityWizard}
-                        showPasswordModal={showPasswordModal}
-                        setShowPasswordModal={setShowPasswordModal}
-                        hideLocalLogin={hideLocalLogin}
-                        hideLocalLoginLocked={hideLocalLoginLocked}
-                        savingHideLocalLogin={savingHideLocalLogin}
-                        handleHideLocalLoginChange={handleHideLocalLoginChange}
-                        loadSecurityStatus={loadSecurityStatus}
-                      />
-                    </div>
-                  </div>
-
-                  <div class="border-t border-gray-200 dark:border-gray-700 pt-8 mt-12">
-                    <SectionHeader title="Single Sign-On" description="Configure external authentication providers" />
-                    <div class="mt-6 space-y-6">
-                      <SSOProvidersPanel onConfigUpdated={loadSecurityStatus} />
-                      <OIDCPanel onConfigUpdated={loadSecurityStatus} />
-                    </div>
-                  </div>
-                </div>
+              {/* Security User Assignments Tab */}
+              <Show when={activeTab() === 'security-users'}>
+                <UserAssignmentsPanel />
               </Show>
 
-              {/* Team & Roles */}
-              <Show when={activeTab() === 'team'}>
-                <div class="space-y-12">
-                  <div>
-                    <SectionHeader title="User Access" description="View and assign user permissions" />
-                    <div class="mt-6">
-                      <UserAssignmentsPanel />
-                    </div>
-                  </div>
-
-                  <div class="border-t border-gray-200 dark:border-gray-700 pt-8 mt-12">
-                    <SectionHeader title="Roles & Policies" description="Define custom capability roles" />
-                    <div class="mt-6">
-                      <RolesPanel />
-                    </div>
-                  </div>
-                </div>
-              </Show>
-
-              {/* Audit Log Tab */}
-              <Show when={activeTab() === 'audit'}>
+              {/* Security Audit Log Tab */}
+              <Show when={activeTab() === 'security-audit'}>
                 <AuditLogPanel />
+              </Show>
+
+              {/* Security Webhooks Tab */}
+              <Show when={activeTab() === 'security-webhooks'}>
+                <AuditWebhookPanel />
               </Show>
             </div>
           </div >

@@ -1,19 +1,31 @@
 import { describe, expect, it } from 'vitest';
 import { deriveTabFromPath, settingsTabPath, type SettingsTab } from '../settingsRouting';
-import * as fs from 'fs';
-import * as path from 'path';
 import { getTabLockReason, isTabLocked } from '../settingsFeatureGates';
 
 const canonicalTabPaths = {
   proxmox: '/settings/infrastructure',
   docker: '/settings/workloads/docker',
   agents: '/settings/workloads',
-  workspace: '/settings/workspace',
-  integrations: '/settings/integrations',
-  maintenance: '/settings/maintenance',
-  authentication: '/settings/authentication',
-  team: '/settings/team',
-  audit: '/settings/audit',
+  'system-general': '/settings/system-general',
+  'system-network': '/settings/system-network',
+  'system-updates': '/settings/system-updates',
+  'system-recovery': '/settings/system-recovery',
+  'system-ai': '/settings/system-ai',
+  'system-relay': '/settings/system-relay',
+  'system-pro': '/settings/system-pro',
+  'organization-overview': '/settings/organization',
+  'organization-access': '/settings/organization/access',
+  'organization-billing': '/settings/organization/billing',
+  'organization-billing-admin': '/settings/organization/billing-admin',
+  'organization-sharing': '/settings/organization/sharing',
+  api: '/settings/integrations/api',
+  'security-overview': '/settings/security-overview',
+  'security-auth': '/settings/security-auth',
+  'security-sso': '/settings/security-sso',
+  'security-roles': '/settings/security-roles',
+  'security-users': '/settings/security-users',
+  'security-audit': '/settings/security-audit',
+  'security-webhooks': '/settings/security-webhooks',
 } as const satisfies Record<SettingsTab, string>;
 
 const hasFeatures =
@@ -22,6 +34,13 @@ const hasFeatures =
       features.includes(feature);
 
 const gatedTabs: Array<[SettingsTab, string]> = [
+  ['system-relay', 'relay'],
+  ['security-webhooks', 'audit_logging'],
+  ['organization-overview', 'multi_tenant'],
+  ['organization-access', 'multi_tenant'],
+  ['organization-sharing', 'multi_tenant'],
+  ['organization-billing', 'multi_tenant'],
+  ['organization-billing-admin', 'multi_tenant'],
 ];
 
 describe('settingsNavigation integration scaffold', () => {
@@ -89,9 +108,8 @@ describe('settingsNavigation integration scaffold', () => {
     expect(onMountBody).not.toContain('runDiagnostics');
   });
 
-  it('panel registry covers all dispatchable tabs', () => {
-    const registryPath = path.join(__dirname, '..', 'settingsPanelRegistry.ts');
-    const registrySource = fs.readFileSync(registryPath, 'utf8');
+  it('panel registry covers all dispatchable tabs', async () => {
+    const registrySource = (await import('../settingsPanelRegistry.ts?raw')).default;
     const allTabs = Object.keys(canonicalTabPaths) as SettingsTab[];
     const dispatchableTabs = allTabs.filter((tab) => tab !== 'proxmox');
     for (const tab of dispatchableTabs) {
