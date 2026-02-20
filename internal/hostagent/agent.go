@@ -9,8 +9,10 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os/exec"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -499,8 +501,12 @@ func normalisePlatform(platform string) string {
 // collectTemperatures attempts to collect temperature data from the local system.
 // Returns an empty Sensors struct if collection fails (best-effort).
 func (a *Agent) collectTemperatures(ctx context.Context) agentshost.Sensors {
-	// Only collect on Linux for now (lm-sensors is Linux-specific)
-	if a.collector.GOOS() != "linux" {
+	switch a.collector.GOOS() {
+	case "linux":
+		// Continue below with lm-sensors path
+	case "freebsd":
+		return a.collectFreeBSDTemperatures(ctx)
+	default:
 		return agentshost.Sensors{}
 	}
 
@@ -590,6 +596,79 @@ func (a *Agent) collectTemperatures(ctx context.Context) agentshost.Sensors {
 		Int("powerCount", len(result.PowerWatts)).
 		Int("additionalCount", len(result.Additional)).
 		Msg("Collected sensor data")
+
+	return result
+}
+
+// collectFreeBSDTemperatures collects temperature data on FreeBSD via sysctl.
+// FreeBSD exposes CPU temperatures as dev.cpu.N.temperature and ACPI thermal
+// zones as hw.acpi.thermal.tzN.temperature.
+func (a *Agent) collectFreeBSDTemperatures(ctx context.Context) agentshost.Sensors {
+	cmdCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	// Query all sysctl values and filter for temperature in Go
+	// (avoids sh -c and handles grep exit-code-1 on no matches)
+	cmd := exec.CommandContext(cmdCtx, "sysctl", "-a")
+	output, err := cmd.Output()
+	if err != nil {
+		a.logger.Debug().Err(err).Msg("Failed to collect FreeBSD temperature data via sysctl")
+		return agentshost.Sensors{}
+	}
+
+	result := parseFreeBSDSysctlTemperatures(string(output))
+
+	if len(result.TemperatureCelsius) > 0 {
+		a.logger.Debug().
+			Int("temperatureCount", len(result.TemperatureCelsius)).
+			Msg("Collected FreeBSD temperature data via sysctl")
+	}
+
+	return result
+}
+
+// parseFreeBSDSysctlTemperatures parses FreeBSD sysctl output and extracts
+// temperature readings. Expects lines like:
+//
+//	dev.cpu.0.temperature: 45.0C
+//	hw.acpi.thermal.tz0.temperature: 38.0C
+func parseFreeBSDSysctlTemperatures(sysctlOutput string) agentshost.Sensors {
+	result := agentshost.Sensors{
+		TemperatureCelsius: make(map[string]float64),
+	}
+
+	for _, line := range strings.Split(sysctlOutput, "\n") {
+		if !strings.Contains(line, ".temperature:") {
+			continue
+		}
+		parts := strings.SplitN(line, ":", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		key := strings.TrimSpace(parts[0])
+		valStr := strings.TrimSpace(parts[1])
+		valStr = strings.TrimSuffix(valStr, "C")
+
+		temp, err := strconv.ParseFloat(valStr, 64)
+		if err != nil || temp <= 0 {
+			continue
+		}
+
+		// Convert sysctl keys to sensor names matching lm-sensors conventions
+		keyParts := strings.Split(key, ".")
+		switch {
+		case strings.HasPrefix(key, "dev.cpu.") && len(keyParts) >= 3:
+			// dev.cpu.0.temperature → cpu_core_0
+			result.TemperatureCelsius["cpu_core_"+keyParts[2]] = temp
+		case strings.HasPrefix(key, "hw.acpi.thermal.") && len(keyParts) >= 4:
+			// hw.acpi.thermal.tz0.temperature → acpi_tz0
+			result.TemperatureCelsius["acpi_"+keyParts[3]] = temp
+		default:
+			normalized := strings.ReplaceAll(key, ".", "_")
+			normalized = strings.TrimSuffix(normalized, "_temperature")
+			result.TemperatureCelsius[normalized] = temp
+		}
+	}
 
 	return result
 }
