@@ -409,6 +409,7 @@ func (s *Service) runExplorePrepass(
 
 	emitExploreStatus(callback, "started", "Explore pre-pass running (read-only context).", exploreModel, "")
 	exploreLoop := NewAgenticLoop(provider, executor, s.buildExploreSystemPrompt())
+	exploreLoop.SetOrgID(s.orgID)
 	exploreLoop.SetAutonomousMode(false)
 	// Isolate pre-pass state from the main loop to avoid cross-contamination
 	// of FSM enforcement/knowledge behavior.

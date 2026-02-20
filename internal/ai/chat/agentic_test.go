@@ -318,7 +318,7 @@ func TestWaitForApprovalDecision(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 		defer cancel()
 
-		_, err := waitForApprovalDecision(ctx, store, "missing")
+		_, err := waitForApprovalDecision(ctx, store, "missing", approval.DefaultOrgID)
 		require.Error(t, err)
 	})
 
@@ -326,7 +326,7 @@ func TestWaitForApprovalDecision(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 
-		_, err := waitForApprovalDecision(ctx, store, "missing")
+		_, err := waitForApprovalDecision(ctx, store, "missing", approval.DefaultOrgID)
 		require.Error(t, err)
 	})
 
@@ -345,7 +345,7 @@ func TestWaitForApprovalDecision(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 
-		decision, err := waitForApprovalDecision(ctx, store, "app-1")
+		decision, err := waitForApprovalDecision(ctx, store, "app-1", approval.DefaultOrgID)
 		require.NoError(t, err)
 		assert.Equal(t, approval.StatusApproved, decision.Status)
 	})

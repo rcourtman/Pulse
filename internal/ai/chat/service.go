@@ -206,6 +206,7 @@ func (s *Service) Start(ctx context.Context) error {
 	// Create agentic loop
 	systemPrompt := s.buildSystemPrompt()
 	s.agenticLoop = NewAgenticLoop(provider, s.executor, systemPrompt)
+	s.agenticLoop.SetOrgID(s.orgID)
 	s.provider = provider
 
 	s.started = true
@@ -258,6 +259,7 @@ func (s *Service) Restart(ctx context.Context, newCfg *config.AIConfig) error {
 	// Update agentic loop
 	systemPrompt := s.buildSystemPrompt()
 	s.agenticLoop = NewAgenticLoop(provider, s.executor, systemPrompt)
+	s.agenticLoop.SetOrgID(s.orgID)
 	s.provider = provider
 
 	log.Info().
@@ -364,6 +366,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		}
 		systemPrompt := s.buildSystemPrompt()
 		loop = NewAgenticLoop(provider, executor, systemPrompt)
+		loop.SetOrgID(s.orgID)
 	} else {
 		// Create a fresh loop with the configured provider for this request
 		s.mu.RLock()
@@ -374,6 +377,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		}
 		systemPrompt := s.buildSystemPrompt()
 		loop = NewAgenticLoop(provider, executor, systemPrompt)
+		loop.SetOrgID(s.orgID)
 	}
 	loop.SetAutonomousMode(autonomousMode)
 
@@ -652,6 +656,7 @@ func (s *Service) ExecutePatrolStream(ctx context.Context, req PatrolRequest, ca
 		systemPrompt = s.buildSystemPrompt()
 	}
 	tempLoop := NewAgenticLoop(provider, executor, systemPrompt)
+	tempLoop.SetOrgID(s.orgID)
 	tempLoop.SetAutonomousMode(true) // Patrol runs without approval prompts
 	if req.MaxTurns > 0 {
 		tempLoop.SetMaxTurns(req.MaxTurns)

@@ -115,6 +115,7 @@ type AgenticLoop struct {
 	tools            []providers.Tool
 	baseSystemPrompt string // Base prompt without mode context
 	maxTurns         int
+	orgID            string
 
 	// Provider info for telemetry (e.g., "anthropic", "claude-3-sonnet")
 	providerName string
@@ -153,6 +154,7 @@ func NewAgenticLoop(provider providers.StreamingProvider, executor *tools.PulseT
 		tools:            providerTools,
 		baseSystemPrompt: systemPrompt,
 		maxTurns:         MaxAgenticTurns,
+		orgID:            approval.DefaultOrgID,
 		aborted:          make(map[string]bool),
 		pendingQs:        make(map[string]chan []QuestionAnswer),
 	}
@@ -163,6 +165,13 @@ func (a *AgenticLoop) UpdateTools() {
 	mcpTools := a.executor.ListTools()
 	tools := ConvertMCPToolsToProvider(mcpTools)
 	a.tools = append(tools, userQuestionTool())
+}
+
+// SetOrgID sets the org scope used when validating approval decisions.
+func (a *AgenticLoop) SetOrgID(orgID string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.orgID = approval.NormalizeOrgID(orgID)
 }
 
 // Execute runs the agentic loop with streaming
@@ -1278,6 +1287,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 					// Instead, return with approval info so the orchestrator can queue it.
 					a.mu.Lock()
 					isAutonomous := a.autonomousMode
+					loopOrgID := approval.NormalizeOrgID(a.orgID)
 					a.mu.Unlock()
 
 					if isAutonomous {
@@ -1292,7 +1302,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 						store := approval.GetStore()
 						if store != nil {
 							approvalCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
-							decision, waitErr := waitForApprovalDecision(approvalCtx, store, approvalData.ApprovalID)
+							decision, waitErr := waitForApprovalDecision(approvalCtx, store, approvalData.ApprovalID, loopOrgID)
 							cancel()
 
 							if waitErr != nil {
