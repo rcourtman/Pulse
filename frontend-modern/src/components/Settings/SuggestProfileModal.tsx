@@ -51,10 +51,10 @@ const formatDisplayValue = (value: unknown) => {
 const formatValueBadgeClass = (value: unknown) => {
     if (typeof value === 'boolean') {
         return value
-            ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+            ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
             : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
     }
-    return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300';
+    return 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300';
 };
 
 const hasValue = (value: unknown) => value !== null && value !== undefined;
@@ -237,12 +237,12 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
     };
 
     return (
-        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black opacity-50">
             <div class="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-md shadow-sm border border-slate-200 dark:border-slate-700 mx-4 max-h-[90vh] overflow-hidden flex flex-col">
                 {/* Header */}
                 <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700 shrink-0">
                     <div class="flex items-center gap-3">
-                        <div class="flex items-center justify-center w-8 h-8 rounded-md bg-amber-100 dark:bg-amber-900/30">
+                        <div class="flex items-center justify-center w-8 h-8 rounded-md bg-amber-100 dark:bg-amber-900">
                             <Lightbulb class="w-4 h-4 text-amber-600 dark:text-amber-400" />
                         </div>
                         <div>
@@ -277,7 +277,7 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
                             onInput={(e) => setPrompt(e.currentTarget.value)}
                             placeholder="Describe the agents and use case for this profile..."
                             rows={3}
-                            class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-blue-400 dark:focus:ring-blue-800/60 resize-none"
+                            class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-blue-400 dark:focus:ring-blue-800 resize-none"
                             disabled={loading()}
                         />
                         <Show when={suggestion()}>
@@ -310,7 +310,7 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
 
                     {/* Error Message */}
                     <Show when={error()}>
-                        <div class="flex items-start gap-2 p-3 rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+                        <div class="flex items-start gap-2 p-3 rounded-md bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-800">
                             <AlertCircle class="w-4 h-4 text-red-600 dark:text-red-400 mt-0.5 shrink-0" />
                             <p class="text-sm text-red-700 dark:text-red-300">{error()}</p>
                         </div>
@@ -329,7 +329,7 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
                         {(sugg) => (
                             <div class="space-y-4">
                                 {/* Draft Warning */}
-                                <div class="flex items-start gap-2 p-3 rounded-md bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                                <div class="flex items-start gap-2 p-3 rounded-md bg-amber-50 dark:bg-amber-900 border border-amber-200 dark:border-amber-800">
                                     <AlertCircle class="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
                                     <p class="text-sm text-amber-700 dark:text-amber-300">
                                         Draft suggestion — review settings before creating the profile.
@@ -351,7 +351,7 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
                                 </Show>
 
                                 <Show when={validation()?.errors?.length}>
-                                    <div class="flex items-start gap-2 p-3 rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+                                    <div class="flex items-start gap-2 p-3 rounded-md bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-800">
                                         <AlertCircle class="w-4 h-4 text-red-600 dark:text-red-400 mt-0.5 shrink-0" />
                                         <div class="space-y-1">
                                             <p class="text-sm font-medium text-red-700 dark:text-red-300">
@@ -372,7 +372,7 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
                                 </Show>
 
                                 <Show when={validation()?.warnings?.length}>
-                                    <div class="flex items-start gap-2 p-3 rounded-md bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                                    <div class="flex items-start gap-2 p-3 rounded-md bg-amber-50 dark:bg-amber-900 border border-amber-200 dark:border-amber-800">
                                         <AlertCircle class="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
                                         <div class="space-y-1">
                                             <p class="text-sm font-medium text-amber-700 dark:text-amber-300">
@@ -393,7 +393,7 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
                                 </Show>
 
                                 <Show when={riskHints().length > 0}>
-                                    <div class="flex items-start gap-2 p-3 rounded-md bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                                    <div class="flex items-start gap-2 p-3 rounded-md bg-amber-50 dark:bg-amber-900 border border-amber-200 dark:border-amber-800">
                                         <AlertCircle class="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
                                         <div class="space-y-1">
                                             <p class="text-sm font-medium text-amber-700 dark:text-amber-300">
@@ -446,7 +446,7 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
                                                                                     {setting.key}
                                                                                 </span>
                                                                                 <Show when={!setting.known}>
-                                                                                    <span class="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+                                                                                    <span class="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300">
                                                                                         Unknown (ignored)
                                                                                     </span>
                                                                                 </Show>
@@ -557,7 +557,7 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
                                                     <button
                                                         type="button"
                                                         onClick={() => handleSelectHistory(item)}
-                                                        class="w-full text-left rounded-md border border-slate-200 dark:border-slate-700 p-3 hover:border-blue-300 hover:bg-blue-50 dark:hover:border-blue-700/60 dark:hover:bg-blue-900/20 transition-colors"
+                                                        class="w-full text-left rounded-md border border-slate-200 dark:border-slate-700 p-3 hover:border-blue-300 hover:bg-blue-50 dark:hover:border-blue-700 dark:hover:bg-blue-900 transition-colors"
                                                     >
                                                         <div class="flex items-center justify-between gap-3">
                                                             <span class="text-sm font-medium text-slate-900 dark:text-slate-100">
