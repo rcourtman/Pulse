@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -26,6 +27,8 @@ const (
 	StatusExpired  ApprovalStatus = "expired"
 )
 
+const DefaultOrgID = "default"
+
 // RiskLevel indicates the potential impact of a command.
 type RiskLevel string
 
@@ -38,8 +41,9 @@ const (
 // ApprovalRequest represents a pending command awaiting user approval.
 type ApprovalRequest struct {
 	ID          string         `json:"id"`
-	ExecutionID string         `json:"executionId"` // Groups related approvals
-	ToolID      string         `json:"toolId"`      // From LLM tool call
+	OrgID       string         `json:"orgId,omitempty"` // Tenant/org scope for multi-tenant isolation
+	ExecutionID string         `json:"executionId"`     // Groups related approvals
+	ToolID      string         `json:"toolId"`          // From LLM tool call
 	Command     string         `json:"command"`
 	TargetType  string         `json:"targetType"` // host, container, vm, node
 	TargetID    string         `json:"targetId"`
@@ -56,6 +60,29 @@ type ApprovalRequest struct {
 	CommandHash string `json:"commandHash,omitempty"`
 	// Consumed marks whether this approval has been used (single-use protection)
 	Consumed bool `json:"consumed,omitempty"`
+}
+
+// NormalizeOrgID normalizes tenant IDs used in approval records.
+func NormalizeOrgID(orgID string) string {
+	normalized := strings.TrimSpace(orgID)
+	if normalized == "" {
+		return DefaultOrgID
+	}
+	return normalized
+}
+
+// BelongsToOrg returns true when an approval request belongs to the provided org.
+// Legacy approvals without OrgID are treated as default-org only.
+func BelongsToOrg(req *ApprovalRequest, orgID string) bool {
+	if req == nil {
+		return false
+	}
+	requestOrg := strings.TrimSpace(req.OrgID)
+	normalizedOrg := NormalizeOrgID(orgID)
+	if requestOrg == "" {
+		return normalizedOrg == DefaultOrgID
+	}
+	return strings.EqualFold(requestOrg, normalizedOrg)
 }
 
 // ExecutionState stores the AI conversation state for resumption after approval.
@@ -147,6 +174,7 @@ func (s *Store) CreateApproval(req *ApprovalRequest) error {
 	}
 
 	// Set defaults
+	req.OrgID = strings.TrimSpace(req.OrgID)
 	req.Status = StatusPending
 	req.RequestedAt = time.Now()
 	if req.ExpiresAt.IsZero() {
@@ -207,6 +235,26 @@ func (s *Store) GetPendingApprovals() []*ApprovalRequest {
 	var pending []*ApprovalRequest
 
 	for _, req := range s.approvals {
+		if req.Status == StatusPending && now.Before(req.ExpiresAt) {
+			pending = append(pending, req)
+		}
+	}
+
+	return pending
+}
+
+// GetPendingApprovalsForOrg returns all pending approvals visible to an org.
+func (s *Store) GetPendingApprovalsForOrg(orgID string) []*ApprovalRequest {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	now := time.Now()
+	var pending []*ApprovalRequest
+
+	for _, req := range s.approvals {
+		if !BelongsToOrg(req, orgID) {
+			continue
+		}
 		if req.Status == StatusPending && now.Before(req.ExpiresAt) {
 			pending = append(pending, req)
 		}
@@ -463,6 +511,38 @@ func (s *Store) GetStats() map[string]int {
 	}
 
 	for _, req := range s.approvals {
+		switch req.Status {
+		case StatusPending:
+			stats["pending"]++
+		case StatusApproved:
+			stats["approved"]++
+		case StatusDenied:
+			stats["denied"]++
+		case StatusExpired:
+			stats["expired"]++
+		}
+	}
+
+	return stats
+}
+
+// GetStatsForOrg returns statistics scoped to approvals visible to an org.
+func (s *Store) GetStatsForOrg(orgID string) map[string]int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	stats := map[string]int{
+		"pending":    0,
+		"approved":   0,
+		"denied":     0,
+		"expired":    0,
+		"executions": 0,
+	}
+
+	for _, req := range s.approvals {
+		if !BelongsToOrg(req, orgID) {
+			continue
+		}
 		switch req.Status {
 		case StatusPending:
 			stats["pending"]++

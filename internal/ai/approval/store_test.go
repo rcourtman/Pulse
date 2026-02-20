@@ -165,6 +165,66 @@ func TestGetPendingApprovals(t *testing.T) {
 	}
 }
 
+func TestNormalizeOrgID(t *testing.T) {
+	if got := NormalizeOrgID(""); got != DefaultOrgID {
+		t.Fatalf("NormalizeOrgID(\"\") = %q, want %q", got, DefaultOrgID)
+	}
+	if got := NormalizeOrgID("  org-a  "); got != "org-a" {
+		t.Fatalf("NormalizeOrgID trims input, got %q", got)
+	}
+}
+
+func TestBelongsToOrg(t *testing.T) {
+	if BelongsToOrg(nil, "default") {
+		t.Fatal("BelongsToOrg should return false for nil request")
+	}
+
+	legacy := &ApprovalRequest{ID: "legacy"}
+	if !BelongsToOrg(legacy, "default") {
+		t.Fatal("legacy approvals should belong to default org")
+	}
+	if BelongsToOrg(legacy, "org-a") {
+		t.Fatal("legacy approvals should not belong to non-default org")
+	}
+
+	scoped := &ApprovalRequest{ID: "scoped", OrgID: "Org-A"}
+	if !BelongsToOrg(scoped, "org-a") {
+		t.Fatal("org comparison should be case-insensitive")
+	}
+}
+
+func TestGetPendingApprovalsForOrg(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "approval-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	store, _ := NewStore(StoreConfig{
+		DataDir:            tmpDir,
+		DefaultTimeout:     1 * time.Minute,
+		DisablePersistence: true,
+	})
+
+	_ = store.CreateApproval(&ApprovalRequest{OrgID: "org-a", Command: "pending-a"})
+	_ = store.CreateApproval(&ApprovalRequest{OrgID: "org-b", Command: "pending-b"})
+
+	expired := &ApprovalRequest{
+		OrgID:     "org-a",
+		Command:   "expired-a",
+		ExpiresAt: time.Now().Add(-1 * time.Minute),
+	}
+	_ = store.CreateApproval(expired)
+
+	pendingOrgA := store.GetPendingApprovalsForOrg("org-a")
+	if len(pendingOrgA) != 1 {
+		t.Fatalf("GetPendingApprovalsForOrg(org-a) count = %d, want 1", len(pendingOrgA))
+	}
+	if pendingOrgA[0].OrgID != "org-a" {
+		t.Fatalf("expected org-a approval, got %q", pendingOrgA[0].OrgID)
+	}
+}
+
 func TestGetApprovalsByExecution(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "approval-test-*")
 	if err != nil {
@@ -366,6 +426,55 @@ func TestGetStats(t *testing.T) {
 	}
 	if stats["executions"] != 1 {
 		t.Fatalf("GetStats() executions = %v, want %v", stats["executions"], 1)
+	}
+}
+
+func TestGetStatsForOrg(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "approval-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	store, _ := NewStore(StoreConfig{
+		DataDir:            tmpDir,
+		DefaultTimeout:     1 * time.Minute,
+		DisablePersistence: true,
+	})
+
+	pendingA := &ApprovalRequest{OrgID: "org-a", Command: "pending-a"}
+	_ = store.CreateApproval(pendingA)
+
+	approvedA := &ApprovalRequest{OrgID: "org-a", Command: "approved-a"}
+	_ = store.CreateApproval(approvedA)
+	if _, err := store.Approve(approvedA.ID, "admin"); err != nil {
+		t.Fatalf("Approve() error = %v", err)
+	}
+
+	deniedA := &ApprovalRequest{OrgID: "org-a", Command: "denied-a"}
+	_ = store.CreateApproval(deniedA)
+	if _, err := store.Deny(deniedA.ID, "admin", "no"); err != nil {
+		t.Fatalf("Deny() error = %v", err)
+	}
+
+	expiredA := &ApprovalRequest{
+		OrgID:     "org-a",
+		Command:   "expired-a",
+		ExpiresAt: time.Now().Add(-1 * time.Minute),
+	}
+	_ = store.CreateApproval(expiredA)
+
+	otherOrg := &ApprovalRequest{OrgID: "org-b", Command: "pending-b"}
+	_ = store.CreateApproval(otherOrg)
+
+	store.CleanupExpired()
+
+	stats := store.GetStatsForOrg("org-a")
+	if stats["pending"] != 1 || stats["approved"] != 1 || stats["denied"] != 1 || stats["expired"] != 1 {
+		t.Fatalf("GetStatsForOrg() unexpected counts: %+v", stats)
+	}
+	if stats["executions"] != 0 {
+		t.Fatalf("GetStatsForOrg() executions = %d, want 0", stats["executions"])
 	}
 }
 

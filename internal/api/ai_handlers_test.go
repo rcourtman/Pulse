@@ -1005,6 +1005,46 @@ func TestHandleRunCommand_RejectsUnsupportedTargetType(t *testing.T) {
 	require.False(t, stored.Consumed)
 }
 
+func TestHandleRunCommand_RejectsCrossOrgApproval(t *testing.T) {
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := newTestAISettingsHandler(cfg, persistence, agentexec.NewServer(nil))
+
+	store, err := approval.NewStore(approval.StoreConfig{
+		DataDir:            tmp,
+		DisablePersistence: true,
+	})
+	require.NoError(t, err)
+	prevStore := approval.GetStore()
+	t.Cleanup(func() { approval.SetStore(prevStore) })
+	approval.SetStore(store)
+
+	appReq := &approval.ApprovalRequest{
+		ID:         "approval-org-a",
+		OrgID:      "org-a",
+		Command:    "uptime",
+		TargetType: "vm",
+		TargetID:   "vm-101",
+	}
+	require.NoError(t, store.CreateApproval(appReq))
+	_, err = store.Approve(appReq.ID, "tester")
+	require.NoError(t, err)
+
+	body := []byte(`{"approval_id":"approval-org-a","command":"uptime","target_type":"vm","target_id":"vm-101","run_on_host":false}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/run-command", bytes.NewReader(body))
+	ctx := context.WithValue(req.Context(), OrgIDContextKey, "org-b")
+	req = req.WithContext(ctx)
+
+	rec := httptest.NewRecorder()
+	handler.HandleRunCommand(rec, req)
+
+	require.Equal(t, http.StatusNotFound, rec.Code)
+	stored, found := store.GetApproval(appReq.ID)
+	require.True(t, found)
+	require.False(t, stored.Consumed)
+}
+
 // ========================================
 // HandleAnalyzeKubernetesCluster tests
 // ========================================
@@ -1204,8 +1244,6 @@ func TestAISettingsHandler_SetPatrolRunHistoryPersistence(t *testing.T) {
 }
 
 func TestAISettingsHandler_Approvals(t *testing.T) {
-	t.Parallel()
-
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
@@ -1216,6 +1254,8 @@ func TestAISettingsHandler_Approvals(t *testing.T) {
 		DataDir:            tmp,
 		DisablePersistence: true,
 	})
+	prevStore := approval.GetStore()
+	t.Cleanup(func() { approval.SetStore(prevStore) })
 	approval.SetStore(approvalStore)
 
 	appID := "app-123"
@@ -1265,6 +1305,70 @@ func TestAISettingsHandler_Approvals(t *testing.T) {
 		assert.Equal(t, approval.StatusDenied, app.Status)
 		assert.Equal(t, "too dangerous", app.DenyReason)
 	})
+}
+
+func TestAISettingsHandler_Approvals_RejectCrossOrgAccess(t *testing.T) {
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
+
+	store, err := approval.NewStore(approval.StoreConfig{
+		DataDir:            tmp,
+		DisablePersistence: true,
+	})
+	require.NoError(t, err)
+
+	prevStore := approval.GetStore()
+	t.Cleanup(func() { approval.SetStore(prevStore) })
+	approval.SetStore(store)
+
+	withOrg := func(req *http.Request, orgID string) *http.Request {
+		ctx := context.WithValue(req.Context(), OrgIDContextKey, orgID)
+		return req.WithContext(ctx)
+	}
+
+	require.NoError(t, store.CreateApproval(&approval.ApprovalRequest{
+		ID:      "cross-org-get",
+		OrgID:   "org-a",
+		Command: "ls -la",
+	}))
+
+	getReq := withOrg(httptest.NewRequest(http.MethodGet, "/api/ai/approvals/cross-org-get", nil), "org-b")
+	getRec := httptest.NewRecorder()
+	handler.HandleGetApproval(getRec, getReq)
+	require.Equal(t, http.StatusNotFound, getRec.Code)
+
+	require.NoError(t, store.CreateApproval(&approval.ApprovalRequest{
+		ID:      "cross-org-approve",
+		OrgID:   "org-a",
+		Command: "uptime",
+	}))
+
+	approveReq := withOrg(httptest.NewRequest(http.MethodPost, "/api/ai/approvals/cross-org-approve/approve", nil), "org-b")
+	approveRec := httptest.NewRecorder()
+	handler.HandleApproveCommand(approveRec, approveReq)
+	require.Equal(t, http.StatusNotFound, approveRec.Code)
+	approveApp, ok := store.GetApproval("cross-org-approve")
+	require.True(t, ok)
+	require.Equal(t, approval.StatusPending, approveApp.Status)
+
+	require.NoError(t, store.CreateApproval(&approval.ApprovalRequest{
+		ID:      "cross-org-deny",
+		OrgID:   "org-a",
+		Command: "rm -rf /tmp",
+	}))
+
+	denyReq := withOrg(
+		httptest.NewRequest(http.MethodPost, "/api/ai/approvals/cross-org-deny/deny", bytes.NewReader([]byte(`{"reason":"no"}`))),
+		"org-b",
+	)
+	denyRec := httptest.NewRecorder()
+	handler.HandleDenyCommand(denyRec, denyReq)
+	require.Equal(t, http.StatusNotFound, denyRec.Code)
+	denyApp, ok := store.GetApproval("cross-org-deny")
+	require.True(t, ok)
+	require.Equal(t, approval.StatusPending, denyApp.Status)
 }
 func TestAISettingsHandler_ChatSessions(t *testing.T) {
 	t.Parallel()

@@ -9,11 +9,15 @@ import (
 // ApprovalAdapter adapts the approval.Store to the ApprovalStore interface
 type ApprovalAdapter struct {
 	store *approval.Store
+	orgID string
 }
 
 // NewApprovalAdapter creates a new approval adapter
-func NewApprovalAdapter(store *approval.Store) *ApprovalAdapter {
-	return &ApprovalAdapter{store: store}
+func NewApprovalAdapter(store *approval.Store, orgID string) *ApprovalAdapter {
+	return &ApprovalAdapter{
+		store: store,
+		orgID: approval.NormalizeOrgID(orgID),
+	}
 }
 
 // Create creates an approval request for an investigation fix
@@ -34,6 +38,7 @@ func (a *ApprovalAdapter) Create(appr *Approval) error {
 	}
 
 	req := &approval.ApprovalRequest{
+		OrgID:      a.orgID,
 		ID:         appr.ID,
 		ToolID:     "investigation_fix",
 		Command:    appr.Command,

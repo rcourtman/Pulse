@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
@@ -363,6 +364,7 @@ type ExecutorConfig struct {
 	// Control settings
 	ControlLevel    ControlLevel
 	ProtectedGuests []string // VMIDs that AI cannot control
+	OrgID           string   // Tenant/org scope for approval records
 }
 
 // PulseToolExecutor implements ToolExecutor for Pulse-specific tools
@@ -415,6 +417,7 @@ type PulseToolExecutor struct {
 	targetType   string
 	targetID     string
 	isAutonomous bool
+	orgID        string
 
 	// Session-scoped resolved context for resource validation
 	// This is set per-session by the agentic loop before tool execution
@@ -478,6 +481,7 @@ func NewPulseToolExecutor(cfg ExecutorConfig) *PulseToolExecutor {
 		readState:                cfg.ReadState,
 		controlLevel:             cfg.ControlLevel,
 		protectedGuests:          cfg.ProtectedGuests,
+		orgID:                    normalizeExecutorOrgID(cfg.OrgID),
 		registry:                 NewToolRegistry(),
 	}
 
@@ -485,6 +489,14 @@ func NewPulseToolExecutor(cfg ExecutorConfig) *PulseToolExecutor {
 	e.registerTools()
 
 	return e
+}
+
+func normalizeExecutorOrgID(orgID string) string {
+	normalized := strings.TrimSpace(orgID)
+	if normalized == "" {
+		return "default"
+	}
+	return normalized
 }
 
 func (e *PulseToolExecutor) getReadState() unifiedresources.ReadState {
@@ -496,6 +508,11 @@ func (e *PulseToolExecutor) SetContext(targetType, targetID string, autonomous b
 	e.targetType = targetType
 	e.targetID = targetID
 	e.isAutonomous = autonomous
+}
+
+// SetOrgID sets the org scope used when creating approval records.
+func (e *PulseToolExecutor) SetOrgID(orgID string) {
+	e.orgID = normalizeExecutorOrgID(orgID)
 }
 
 // SetControlLevel updates the control level

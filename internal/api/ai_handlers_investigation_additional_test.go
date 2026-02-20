@@ -268,6 +268,58 @@ func TestHandleListApprovals(t *testing.T) {
 	}
 }
 
+func TestHandleListApprovals_IsolatesByOrg(t *testing.T) {
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
+
+	prevStore := approval.GetStore()
+	t.Cleanup(func() { approval.SetStore(prevStore) })
+
+	store, err := approval.NewStore(approval.StoreConfig{
+		DataDir:            tmp,
+		DisablePersistence: true,
+	})
+	if err != nil {
+		t.Fatalf("failed to create approval store: %v", err)
+	}
+	approval.SetStore(store)
+
+	if err := store.CreateApproval(&approval.ApprovalRequest{OrgID: "org-a", Command: "echo org-a"}); err != nil {
+		t.Fatalf("failed to create org-a approval: %v", err)
+	}
+	if err := store.CreateApproval(&approval.ApprovalRequest{OrgID: "org-b", Command: "echo org-b"}); err != nil {
+		t.Fatalf("failed to create org-b approval: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/approvals", nil)
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "org-a"))
+	rec := httptest.NewRecorder()
+	handler.HandleListApprovals(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status OK, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp struct {
+		Approvals []approval.ApprovalRequest `json:"approvals"`
+		Stats     map[string]int             `json:"stats"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if len(resp.Approvals) != 1 {
+		t.Fatalf("expected 1 approval for org-a, got %d", len(resp.Approvals))
+	}
+	if resp.Approvals[0].OrgID != "org-a" {
+		t.Fatalf("expected org-a approval, got %q", resp.Approvals[0].OrgID)
+	}
+	if resp.Stats["pending"] != 1 {
+		t.Fatalf("expected pending approvals to be 1 for org-a, got %d", resp.Stats["pending"])
+	}
+}
+
 func TestHandlePatrolAutonomyGetAndUpdate(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}

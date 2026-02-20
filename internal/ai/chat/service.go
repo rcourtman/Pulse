@@ -66,6 +66,7 @@ type Config struct {
 	Policy        CommandPolicy
 	AgentServer   AgentServer
 	DataDir       string
+	OrgID         string
 
 	// Optional: provides access to persisted recovery points (backups/snapshots).
 	RecoveryPointsProvider tools.RecoveryPointsProvider
@@ -89,6 +90,7 @@ type Service struct {
 	autonomousMode    bool
 	contextPrefetcher *ContextPrefetcher
 	budgetChecker     func() error // Optional mid-run budget enforcement
+	orgID             string
 }
 
 // NewService creates a new chat service
@@ -114,6 +116,7 @@ func NewService(cfg Config) *Service {
 		Policy:                 policy,
 		AgentServer:            agentServer,
 		RecoveryPointsProvider: cfg.RecoveryPointsProvider,
+		OrgID:                  cfg.OrgID,
 	}
 
 	if cfg.AIConfig != nil {
@@ -133,6 +136,7 @@ func NewService(cfg Config) *Service {
 		readState:     cfg.ReadState,
 		agentServer:   cfg.AgentServer,
 		executor:      executor,
+		orgID:         strings.TrimSpace(cfg.OrgID),
 	}
 }
 

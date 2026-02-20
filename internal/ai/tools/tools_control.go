@@ -157,7 +157,7 @@ func (e *PulseToolExecutor) executeRunCommand(ctx context.Context, args map[stri
 
 	// Skip approval checks if pre-approved or in autonomous mode.
 	if !preApproved && !e.isAutonomous && e.controlLevel == ControlLevelControlled {
-		approvalID := createApprovalRecord(command, approvalTargetType, approvalTargetID, approvalTargetName, "Control level requires approval")
+		approvalID := createApprovalRecordForOrg(e.orgID, command, approvalTargetType, approvalTargetID, approvalTargetName, "Control level requires approval")
 		return NewTextResult(formatApprovalNeeded(command, "Control level requires approval", approvalID)), nil
 	}
 	if e.isAutonomous {
@@ -167,7 +167,7 @@ func (e *PulseToolExecutor) executeRunCommand(ctx context.Context, args map[stri
 			Msg("Auto-approving command for autonomous investigation")
 	}
 	if !preApproved && decision == agentexec.PolicyRequireApproval && !e.isAutonomous {
-		approvalID := createApprovalRecord(command, approvalTargetType, approvalTargetID, approvalTargetName, "Security policy requires approval")
+		approvalID := createApprovalRecordForOrg(e.orgID, command, approvalTargetType, approvalTargetID, approvalTargetName, "Security policy requires approval")
 		return NewTextResult(formatApprovalNeeded(command, "Security policy requires approval", approvalID)), nil
 	}
 
@@ -338,7 +338,7 @@ func (e *PulseToolExecutor) executeControlGuest(ctx context.Context, args map[st
 		}
 		if decision == agentexec.PolicyRequireApproval && !e.isAutonomous {
 			// Use guest.Node (the Proxmox host) as targetName so approval execution can find the correct agent
-			approvalID := createApprovalRecord(command, guest.Type, approvalTargetID, guest.Node, fmt.Sprintf("%s guest %s", action, guest.Name))
+			approvalID := createApprovalRecordForOrg(e.orgID, command, guest.Type, approvalTargetID, guest.Node, fmt.Sprintf("%s guest %s", action, guest.Name))
 			return NewTextResult(formatControlApprovalNeeded(guest.Name, guest.VMID, action, command, approvalID)), nil
 		}
 	}
@@ -346,7 +346,7 @@ func (e *PulseToolExecutor) executeControlGuest(ctx context.Context, args map[st
 	// Check control level - this must be outside policy check since policy may be nil (skip if pre-approved)
 	if !preApproved && e.controlLevel == ControlLevelControlled {
 		// Use guest.Node (the Proxmox host) as targetName so approval execution can find the correct agent
-		approvalID := createApprovalRecord(command, guest.Type, approvalTargetID, guest.Node, fmt.Sprintf("%s guest %s", action, guest.Name))
+		approvalID := createApprovalRecordForOrg(e.orgID, command, guest.Type, approvalTargetID, guest.Node, fmt.Sprintf("%s guest %s", action, guest.Name))
 		return NewTextResult(formatControlApprovalNeeded(guest.Name, guest.VMID, action, command, approvalID)), nil
 	}
 
@@ -939,6 +939,10 @@ func (e *PulseToolExecutor) resolveDockerHostRoutingFull(dockerHost *models.Dock
 // createApprovalRecord creates an approval record in the store and returns the approval ID.
 // Returns empty string if store is not available (approvals will still work, just without persistence).
 func createApprovalRecord(command, targetType, targetID, targetName, context string) string {
+	return createApprovalRecordForOrg("", command, targetType, targetID, targetName, context)
+}
+
+func createApprovalRecordForOrg(orgID, command, targetType, targetID, targetName, context string) string {
 	store := approval.GetStore()
 	if store == nil {
 		log.Debug().Msg("approval store not available, approval will not be persisted")
@@ -946,6 +950,7 @@ func createApprovalRecord(command, targetType, targetID, targetName, context str
 	}
 
 	req := &approval.ApprovalRequest{
+		OrgID:      strings.TrimSpace(orgID),
 		Command:    command,
 		TargetType: targetType,
 		TargetID:   targetID,

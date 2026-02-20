@@ -111,6 +111,7 @@ func NewAISettingsHandler(mtp *config.MultiTenantPersistence, mtm *monitoring.Mu
 
 	if defaultPersistence != nil {
 		defaultAIService = ai.NewService(defaultPersistence, agentServer)
+		defaultAIService.SetOrgID("default")
 		if err := defaultAIService.LoadConfig(); err != nil {
 			log.Warn().Err(err).Msg("Failed to load AI config on startup")
 		}
@@ -131,6 +132,9 @@ func NewAISettingsHandler(mtp *config.MultiTenantPersistence, mtm *monitoring.Mu
 func (h *AISettingsHandler) GetAIService(ctx context.Context) *ai.Service {
 	orgID := GetOrgID(ctx)
 	if orgID == "default" || orgID == "" {
+		return h.legacyAIService
+	}
+	if h.mtPersistence == nil {
 		return h.legacyAIService
 	}
 
@@ -158,6 +162,7 @@ func (h *AISettingsHandler) GetAIService(ctx context.Context) *ai.Service {
 	}
 
 	svc = ai.NewService(persistence, h.agentServer)
+	svc.SetOrgID(orgID)
 	if err := svc.LoadConfig(); err != nil {
 		log.Warn().Str("orgID", orgID).Err(err).Msg("Failed to load AI config for tenant")
 	}
@@ -784,7 +789,7 @@ func (h *AISettingsHandler) setupInvestigationOrchestrator(orgID string, svc *ai
 	// Create approval adapter from the global approval store
 	var approvalAdapter *investigation.ApprovalAdapter
 	if approvalStore := approval.GetStore(); approvalStore != nil {
-		approvalAdapter = investigation.NewApprovalAdapter(approvalStore)
+		approvalAdapter = investigation.NewApprovalAdapter(approvalStore, orgID)
 	}
 
 	// Get config for investigation settings
@@ -2180,8 +2185,9 @@ func (h *AISettingsHandler) HandleRunCommand(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	_, ok := store.GetApproval(req.ApprovalID)
-	if !ok {
+	orgID := approval.NormalizeOrgID(GetOrgID(r.Context()))
+	approvalReq, ok := store.GetApproval(req.ApprovalID)
+	if !ok || !approval.BelongsToOrg(approvalReq, orgID) {
 		http.Error(w, "Approval request not found", http.StatusNotFound)
 		return
 	}
@@ -4881,7 +4887,9 @@ func (h *AISettingsHandler) HandleListApprovals(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	approvals := store.GetPendingApprovals()
+	orgID := approval.NormalizeOrgID(GetOrgID(r.Context()))
+
+	approvals := store.GetPendingApprovalsForOrg(orgID)
 	if approvals == nil {
 		approvals = []*approval.ApprovalRequest{}
 	}
@@ -4889,7 +4897,7 @@ func (h *AISettingsHandler) HandleListApprovals(w http.ResponseWriter, r *http.R
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"approvals": approvals,
-		"stats":     store.GetStats(),
+		"stats":     store.GetStatsForOrg(orgID),
 	})
 }
 
@@ -4916,8 +4924,9 @@ func (h *AISettingsHandler) HandleGetApproval(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	orgID := approval.NormalizeOrgID(GetOrgID(r.Context()))
 	req, ok := store.GetApproval(approvalID)
-	if !ok {
+	if !ok || !approval.BelongsToOrg(req, orgID) {
 		writeErrorResponse(w, http.StatusNotFound, "not_found", "Approval request not found", nil)
 		return
 	}
@@ -4957,6 +4966,12 @@ func (h *AISettingsHandler) HandleApproveCommand(w http.ResponseWriter, r *http.
 	store := approval.GetStore()
 	if store == nil {
 		writeErrorResponse(w, http.StatusServiceUnavailable, "not_initialized", "Approval store not initialized", nil)
+		return
+	}
+	orgID := approval.NormalizeOrgID(GetOrgID(r.Context()))
+	existingReq, ok := store.GetApproval(approvalID)
+	if !ok || !approval.BelongsToOrg(existingReq, orgID) {
+		writeErrorResponse(w, http.StatusNotFound, "not_found", "Approval request not found", nil)
 		return
 	}
 
@@ -5438,6 +5453,12 @@ func (h *AISettingsHandler) HandleDenyCommand(w http.ResponseWriter, r *http.Req
 	store := approval.GetStore()
 	if store == nil {
 		writeErrorResponse(w, http.StatusServiceUnavailable, "not_initialized", "Approval store not initialized", nil)
+		return
+	}
+	orgID := approval.NormalizeOrgID(GetOrgID(r.Context()))
+	existingReq, ok := store.GetApproval(approvalID)
+	if !ok || !approval.BelongsToOrg(existingReq, orgID) {
+		writeErrorResponse(w, http.StatusNotFound, "not_found", "Approval request not found", nil)
 		return
 	}
 

@@ -71,7 +71,7 @@ func (m *mockAIFindingsStore) UpdateInvestigation(id, sessionID, status, outcome
 }
 
 func TestApprovalAdapter(t *testing.T) {
-	adapter := NewApprovalAdapter(nil)
+	adapter := NewApprovalAdapter(nil, "default")
 	if err := adapter.Create(&Approval{ID: "a1", RiskLevel: "low"}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -84,7 +84,7 @@ func TestApprovalAdapter(t *testing.T) {
 		t.Fatalf("unexpected store error: %v", err)
 	}
 
-	adapter = NewApprovalAdapter(store)
+	adapter = NewApprovalAdapter(store, "org-1")
 	if err := adapter.Create(&Approval{
 		ID:          "a1",
 		RiskLevel:   "critical",
@@ -105,6 +105,9 @@ func TestApprovalAdapter(t *testing.T) {
 	}
 	if req.TargetName != "node-1" {
 		t.Fatalf("expected target name node-1, got %q", req.TargetName)
+	}
+	if req.OrgID != "org-1" {
+		t.Fatalf("expected org id org-1, got %q", req.OrgID)
 	}
 }
 

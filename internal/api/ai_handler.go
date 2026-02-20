@@ -227,6 +227,7 @@ func (h *AIHandler) initTenantService(ctx context.Context, orgID string) AIServi
 		DataDir:     dataDir,
 		AgentServer: h.agentServer,
 		ReadState:   h.readState,
+		OrgID:       orgID,
 	}
 	if h.recoveryManager != nil {
 		chatCfg.RecoveryPointsProvider = tools.NewRecoveryPointsMCPAdapter(h.recoveryManager, orgID)
@@ -327,6 +328,7 @@ func (h *AIHandler) Start(ctx context.Context, stateProvider AIStateProvider) er
 		StateProvider: stateProvider,
 		AgentServer:   h.agentServer,
 		ReadState:     h.readState,
+		OrgID:         GetOrgID(ctx),
 	}
 	if h.recoveryManager != nil {
 		orgID := GetOrgID(ctx)

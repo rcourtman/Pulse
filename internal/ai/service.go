@@ -142,6 +142,7 @@ type PatrolStreamResponse struct {
 // Service orchestrates AI interactions
 type Service struct {
 	mu                      sync.RWMutex
+	orgID                   string
 	persistence             *config.ConfigPersistence
 	provider                providers.Provider
 	cfg                     *config.AIConfig
@@ -219,6 +220,7 @@ func NewService(persistence *config.ConfigPersistence, agentServer AgentServer) 
 	}
 
 	return &Service{
+		orgID:          "default",
 		persistence:    persistence,
 		agentServer:    agentServer,
 		policy:         agentexec.DefaultPolicy(),
@@ -234,6 +236,17 @@ func NewService(persistence *config.ConfigPersistence, agentServer AgentServer) 
 			providers: make(map[string]providerModelsEntry),
 		},
 	}
+}
+
+// SetOrgID sets the org scope used when creating approval records.
+func (s *Service) SetOrgID(orgID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	normalized := strings.TrimSpace(orgID)
+	if normalized == "" {
+		normalized = "default"
+	}
+	s.orgID = normalized
 }
 
 func (s *Service) acquireExecutionSlot(ctx context.Context, useCase string) (func(), error) {
@@ -1122,7 +1135,7 @@ func resolveRunCommandApprovalTarget(req ExecuteRequest, runOnHost bool, targetH
 	return targetType, targetID, targetName
 }
 
-func createRunCommandApprovalRecord(command, toolID string, req ExecuteRequest, runOnHost bool, targetHost, reason string) string {
+func createRunCommandApprovalRecord(orgID, command, toolID string, req ExecuteRequest, runOnHost bool, targetHost, reason string) string {
 	store := approval.GetStore()
 	if store == nil {
 		log.Debug().Msg("approval store not available, run_command approval will not be persisted")
@@ -1131,6 +1144,7 @@ func createRunCommandApprovalRecord(command, toolID string, req ExecuteRequest, 
 
 	targetType, targetID, targetName := resolveRunCommandApprovalTarget(req, runOnHost, targetHost)
 	approvalReq := &approval.ApprovalRequest{
+		OrgID:      strings.TrimSpace(orgID),
 		ToolID:     toolID,
 		Command:    command,
 		TargetType: targetType,
@@ -2043,6 +2057,9 @@ Always execute the commands rather than telling the user how to do it.`
 				cmd, _ := tc.Input["command"].(string)
 				runOnHost, _ := tc.Input["run_on_host"].(bool)
 				targetHost, _ := tc.Input["target_host"].(string)
+				s.mu.RLock()
+				approvalOrgID := s.orgID
+				s.mu.RUnlock()
 
 				// If AI didn't specify target_host, try to get it from request context
 				// This is crucial for proper routing when the command is approved
@@ -2101,6 +2118,7 @@ Always execute the commands rather than telling the user how to do it.`
 					needsApproval = true
 					anyNeedsApproval = true
 					approvalID = createRunCommandApprovalRecord(
+						approvalOrgID,
 						cmd,
 						tc.ID,
 						req,
@@ -2756,7 +2774,11 @@ func (s *Service) executeTool(ctx context.Context, req ExecuteRequest, tc provid
 			return execution.Output, execution
 		}
 		if decision == agentexec.PolicyRequireApproval && !s.IsAutonomous() {
+			s.mu.RLock()
+			approvalOrgID := s.orgID
+			s.mu.RUnlock()
 			approvalID := createRunCommandApprovalRecord(
+				approvalOrgID,
 				command,
 				tc.ID,
 				req,

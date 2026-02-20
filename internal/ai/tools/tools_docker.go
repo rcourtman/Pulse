@@ -140,14 +140,14 @@ func (e *PulseToolExecutor) executeDockerControl(ctx context.Context, args map[s
 			return NewTextResult(formatPolicyBlocked(command, "This command is blocked by security policy")), nil
 		}
 		if decision == agentexec.PolicyRequireApproval && !e.isAutonomous {
-			approvalID := createApprovalRecord(command, "docker", approvalTargetID, agentHostname, fmt.Sprintf("%s Docker container %s", operation, container.Name))
+			approvalID := createApprovalRecordForOrg(e.orgID, command, "docker", approvalTargetID, agentHostname, fmt.Sprintf("%s Docker container %s", operation, container.Name))
 			return NewTextResult(formatDockerApprovalNeeded(container.Name, dockerHost.Hostname, operation, command, approvalID)), nil
 		}
 	}
 
 	// Check control level
 	if !preApproved && e.controlLevel == ControlLevelControlled {
-		approvalID := createApprovalRecord(command, "docker", approvalTargetID, agentHostname, fmt.Sprintf("%s Docker container %s", operation, container.Name))
+		approvalID := createApprovalRecordForOrg(e.orgID, command, "docker", approvalTargetID, agentHostname, fmt.Sprintf("%s Docker container %s", operation, container.Name))
 		return NewTextResult(formatDockerApprovalNeeded(container.Name, dockerHost.Hostname, operation, command, approvalID)), nil
 	}
 
@@ -476,7 +476,7 @@ func (e *PulseToolExecutor) executeUpdateDockerContainer(ctx context.Context, ar
 	if e.controlLevel == ControlLevelControlled {
 		command := fmt.Sprintf("docker update %s", containerName)
 		agentHostname := e.getAgentHostnameForDockerHost(dockerHost)
-		approvalID := createApprovalRecord(command, "docker", container.ID, agentHostname, fmt.Sprintf("Update container %s to latest image", containerName))
+		approvalID := createApprovalRecordForOrg(e.orgID, command, "docker", container.ID, agentHostname, fmt.Sprintf("Update container %s to latest image", containerName))
 		return NewTextResult(formatDockerUpdateApprovalNeeded(containerName, dockerHost.Hostname, approvalID)), nil
 	}
 

@@ -285,7 +285,8 @@ func (e *PulseToolExecutor) executeFileAppend(ctx context.Context, path, content
 		if dockerContainer != "" {
 			target = fmt.Sprintf("%s (container: %s)", targetHost, dockerContainer)
 		}
-		approvalID := createApprovalRecord(
+		approvalID := createApprovalRecordForOrg(
+			e.orgID,
 			approvalCommand,
 			"file",
 			approvalTargetID,
@@ -421,7 +422,8 @@ func (e *PulseToolExecutor) executeFileWrite(ctx context.Context, path, content,
 		if dockerContainer != "" {
 			target = fmt.Sprintf("%s (container: %s)", targetHost, dockerContainer)
 		}
-		approvalID := createApprovalRecord(
+		approvalID := createApprovalRecordForOrg(
+			e.orgID,
 			approvalCommand,
 			"file",
 			approvalTargetID,
