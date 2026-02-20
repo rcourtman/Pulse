@@ -1,4 +1,4 @@
-import { Component, createMemo, For } from 'solid-js';
+import { Component, createMemo, For, Show } from 'solid-js';
 
 interface MiniDonutProps {
     data: Array<{ value: number; color: string; tooltip?: string }>;
@@ -102,6 +102,35 @@ export const MiniGauge: Component<MiniGaugeProps> = (props) => {
                     class={props.color || (props.percent > 90 ? 'text-red-500' : 'text-cyan-500')}
                 />
             </svg>
+        </div>
+    );
+};
+
+interface StackedBarProps {
+    data: Array<{ label: string; value: number; color: string }>;
+    height?: number;
+    className?: string; // Allow custom classes
+}
+
+export const StackedBar: Component<StackedBarProps> = (props) => {
+    const total = createMemo(() => props.data.reduce((sum, item) => sum + item.value, 0));
+
+    return (
+        <div class={`flex w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800 ${props.className || ''}`} style={{ height: `${props.height || 8}px` }}>
+            <For each={props.data}>
+                {(item) => {
+                    const percent = createMemo(() => (total() > 0 ? (item.value / total()) * 100 : 0));
+                    return (
+                        <Show when={percent() > 0}>
+                            <div
+                                class={`h-full ${item.color} transition-all duration-500`}
+                                style={{ width: `${percent()}%` }}
+                                title={`${item.label}: ${item.value} (${Math.round(percent())}%)`}
+                            />
+                        </Show>
+                    );
+                }}
+            </For>
         </div>
     );
 };

@@ -1849,8 +1849,7 @@ func (e *PulseToolExecutor) validateRoutingContext(targetHost string) RoutingVal
 	}
 
 	// Check if targetHost is a Proxmox node (host)
-	state := e.stateProvider.GetState()
-	loc := state.ResolveResource(targetHost)
+	loc := e.resolveResourceLocation(targetHost)
 
 	// Only check for mismatch if targetHost is a Proxmox node (host type)
 	if !loc.Found || loc.ResourceType != "node" {

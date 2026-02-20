@@ -622,8 +622,7 @@ func (e *PulseToolExecutor) validateWriteExecutionContext(targetHost string, rou
 		return nil // Can't validate without state
 	}
 
-	state := e.stateProvider.GetState()
-	loc := state.ResolveResource(targetHost)
+	loc := e.resolveResourceLocation(targetHost)
 	if !loc.Found {
 		return nil // Unknown resource, nothing to validate
 	}

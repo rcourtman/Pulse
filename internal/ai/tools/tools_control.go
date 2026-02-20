@@ -504,34 +504,72 @@ func (e *PulseToolExecutor) resolveTargetForCommandFull(targetHost string) Comma
 	// STEP 1: Consult topology (state) FIRST — this is authoritative.
 	// If the state knows about this resource, use topology-based routing.
 	// This prevents hostname collisions from masquerading as host targets.
-	if e.stateProvider != nil {
-		state := e.stateProvider.GetState()
-		loc := state.ResolveResource(targetHost)
+	loc := e.resolveResourceLocation(targetHost)
 
-		if loc.Found {
-			// Route based on resource type
-			switch loc.ResourceType {
-			case "node":
-				// Direct Proxmox node
-				nodeAgentID := e.findAgentForNode(loc.Node)
+	if loc.Found {
+		// Route based on resource type
+		switch loc.ResourceType {
+		case "node":
+			// Direct Proxmox node
+			nodeAgentID := e.findAgentForNode(loc.Node)
+			result.AgentID = nodeAgentID
+			result.ResolvedKind = "node"
+			result.ResolvedNode = loc.Node
+			for _, agent := range agents {
+				if agent.AgentID == nodeAgentID {
+					result.AgentHostname = agent.Hostname
+					break
+				}
+			}
+			return result
+
+		case "lxc":
+			// LXC container - route through Proxmox node agent via pct exec
+			nodeAgentID := e.findAgentForNode(loc.Node)
+			result.ResolvedKind = "lxc"
+			result.ResolvedNode = loc.Node
+			result.TargetType = "container"
+			result.TargetID = fmt.Sprintf("%d", loc.VMID)
+			result.Transport = "pct_exec"
+			if nodeAgentID != "" {
 				result.AgentID = nodeAgentID
-				result.ResolvedKind = "node"
-				result.ResolvedNode = loc.Node
 				for _, agent := range agents {
 					if agent.AgentID == nodeAgentID {
 						result.AgentHostname = agent.Hostname
 						break
 					}
 				}
-				return result
+			}
+			return result
 
-			case "lxc":
-				// LXC container - route through Proxmox node agent via pct exec
+		case "vm":
+			// VM - route through Proxmox node agent via qm guest exec
+			nodeAgentID := e.findAgentForNode(loc.Node)
+			result.ResolvedKind = "vm"
+			result.ResolvedNode = loc.Node
+			result.TargetType = "vm"
+			result.TargetID = fmt.Sprintf("%d", loc.VMID)
+			result.Transport = "qm_guest_exec"
+			if nodeAgentID != "" {
+				result.AgentID = nodeAgentID
+				for _, agent := range agents {
+					if agent.AgentID == nodeAgentID {
+						result.AgentHostname = agent.Hostname
+						break
+					}
+				}
+			}
+			return result
+
+		case "docker", "dockerhost":
+			// Docker container or Docker host
+			result.ResolvedKind = loc.ResourceType
+			result.ResolvedNode = loc.Node
+
+			if loc.DockerHostType == "lxc" {
 				nodeAgentID := e.findAgentForNode(loc.Node)
-				result.ResolvedKind = "lxc"
-				result.ResolvedNode = loc.Node
 				result.TargetType = "container"
-				result.TargetID = fmt.Sprintf("%d", loc.VMID)
+				result.TargetID = fmt.Sprintf("%d", loc.DockerHostVMID)
 				result.Transport = "pct_exec"
 				if nodeAgentID != "" {
 					result.AgentID = nodeAgentID
@@ -543,14 +581,11 @@ func (e *PulseToolExecutor) resolveTargetForCommandFull(targetHost string) Comma
 					}
 				}
 				return result
-
-			case "vm":
-				// VM - route through Proxmox node agent via qm guest exec
+			}
+			if loc.DockerHostType == "vm" {
 				nodeAgentID := e.findAgentForNode(loc.Node)
-				result.ResolvedKind = "vm"
-				result.ResolvedNode = loc.Node
 				result.TargetType = "vm"
-				result.TargetID = fmt.Sprintf("%d", loc.VMID)
+				result.TargetID = fmt.Sprintf("%d", loc.DockerHostVMID)
 				result.Transport = "qm_guest_exec"
 				if nodeAgentID != "" {
 					result.AgentID = nodeAgentID
@@ -562,51 +597,13 @@ func (e *PulseToolExecutor) resolveTargetForCommandFull(targetHost string) Comma
 					}
 				}
 				return result
-
-			case "docker", "dockerhost":
-				// Docker container or Docker host
-				result.ResolvedKind = loc.ResourceType
-				result.ResolvedNode = loc.Node
-
-				if loc.DockerHostType == "lxc" {
-					nodeAgentID := e.findAgentForNode(loc.Node)
-					result.TargetType = "container"
-					result.TargetID = fmt.Sprintf("%d", loc.DockerHostVMID)
-					result.Transport = "pct_exec"
-					if nodeAgentID != "" {
-						result.AgentID = nodeAgentID
-						for _, agent := range agents {
-							if agent.AgentID == nodeAgentID {
-								result.AgentHostname = agent.Hostname
-								break
-							}
-						}
-					}
+			}
+			// Standalone Docker host - find agent directly
+			for _, agent := range agents {
+				if agent.Hostname == loc.TargetHost || agent.AgentID == loc.TargetHost {
+					result.AgentID = agent.AgentID
+					result.AgentHostname = agent.Hostname
 					return result
-				}
-				if loc.DockerHostType == "vm" {
-					nodeAgentID := e.findAgentForNode(loc.Node)
-					result.TargetType = "vm"
-					result.TargetID = fmt.Sprintf("%d", loc.DockerHostVMID)
-					result.Transport = "qm_guest_exec"
-					if nodeAgentID != "" {
-						result.AgentID = nodeAgentID
-						for _, agent := range agents {
-							if agent.AgentID == nodeAgentID {
-								result.AgentHostname = agent.Hostname
-								break
-							}
-						}
-					}
-					return result
-				}
-				// Standalone Docker host - find agent directly
-				for _, agent := range agents {
-					if agent.Hostname == loc.TargetHost || agent.AgentID == loc.TargetHost {
-						result.AgentID = agent.AgentID
-						result.AgentHostname = agent.Hostname
-						return result
-					}
 				}
 			}
 		}
@@ -628,7 +625,7 @@ func (e *PulseToolExecutor) resolveTargetForCommandFull(targetHost string) Comma
 }
 
 // resolveTargetForCommand resolves a target_host to the correct agent and routing info.
-// Uses the authoritative ResolveResource function from models.StateSnapshot.
+// Uses the authoritative resolveResourceLocation function.
 // Returns: agentID, targetType ("host", "container", or "vm"), targetID (vmid for LXC/VM)
 //
 // CRITICAL ORDERING: Same as resolveTargetForCommandFull — topology first, agent fallback second.

@@ -1,4 +1,4 @@
-import { createMemo, Show } from 'solid-js';
+import { createMemo, Show, For } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 
 import Server from 'lucide-solid/icons/server';
@@ -17,7 +17,7 @@ import {
     buildStoragePath,
 } from '@/routing/resourceLinks';
 import { Card } from '@/components/shared/Card';
-import { MiniDonut, MiniGauge } from './Visualizations';
+import { MiniDonut, MiniGauge, StackedBar } from './Visualizations';
 import { formatBytes, formatRelativeTime } from '@/utils/format';
 import type { DashboardRecoverySummary } from '@/hooks/useDashboardRecovery';
 
@@ -25,30 +25,26 @@ const CARD_THEMES = {
     blue: {
         iconBg: 'bg-blue-50 dark:bg-blue-900',
         iconColor: 'text-blue-600 dark:text-blue-400',
-        hoverBorder: 'hover:border-blue-300 dark:hover:border-blue-700 hover:shadow-sm dark:hover:shadow-none',
+        hoverBorder: 'hover:border-blue-300 dark:hover:border-blue-700',
         hoverIconBg: 'group-hover:bg-blue-100 dark:group-hover:bg-blue-800',
-        glowBg: 'group-hover:bg-slate-50 dark:group-hover:bg-slate-900',
     },
     purple: {
         iconBg: 'bg-purple-50 dark:bg-purple-900',
         iconColor: 'text-purple-600 dark:text-purple-400',
-        hoverBorder: 'hover:border-purple-300 dark:hover:border-purple-700 hover:shadow-sm dark:hover:shadow-none',
+        hoverBorder: 'hover:border-purple-300 dark:hover:border-purple-700',
         hoverIconBg: 'group-hover:bg-purple-100 dark:group-hover:bg-purple-800',
-        glowBg: 'group-hover:bg-slate-50 dark:group-hover:bg-slate-900',
     },
     cyan: {
         iconBg: 'bg-cyan-50 dark:bg-cyan-900',
         iconColor: 'text-cyan-600 dark:text-cyan-400',
-        hoverBorder: 'hover:border-cyan-300 dark:hover:border-cyan-700 hover:shadow-sm dark:hover:shadow-none',
+        hoverBorder: 'hover:border-cyan-300 dark:hover:border-cyan-700',
         hoverIconBg: 'group-hover:bg-cyan-100 dark:group-hover:bg-cyan-800',
-        glowBg: 'group-hover:bg-slate-50 dark:group-hover:bg-slate-900',
     },
     emerald: {
         iconBg: 'bg-emerald-50 dark:bg-emerald-900',
         iconColor: 'text-emerald-600 dark:text-emerald-400',
-        hoverBorder: 'hover:border-emerald-300 dark:hover:border-emerald-700 hover:shadow-sm dark:hover:shadow-none',
+        hoverBorder: 'hover:border-emerald-300 dark:hover:border-emerald-700',
         hoverIconBg: 'group-hover:bg-emerald-100 dark:group-hover:bg-emerald-800',
-        glowBg: 'group-hover:bg-slate-50 dark:group-hover:bg-slate-900',
     },
 } as const;
 
@@ -70,8 +66,8 @@ function SeverityChip(props: { severity: 'warning' | 'critical' }) {
 interface DashboardHeroProps {
     criticalAlerts: number;
     warningAlerts: number;
-    infrastructure: { total: number; online: number };
-    workloads: { total: number; running: number; stopped: number };
+    infrastructure: { total: number; online: number; byType?: Record<string, number> };
+    workloads: { total: number; running: number; stopped: number; byType?: Record<string, number> };
     storage: {
         capacityPercent: number;
         totalUsed: number;
@@ -144,6 +140,30 @@ export function DashboardHero(props: DashboardHeroProps) {
     const badgeBase =
         'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold border';
 
+    const infraColors = ['bg-blue-500 dark:bg-blue-600', 'bg-blue-400 dark:bg-blue-500', 'bg-blue-300 dark:bg-blue-400', 'bg-slate-300 dark:bg-slate-600'];
+    const getInfraComposition = createMemo(() => {
+        if (!props.infrastructure.byType) return [];
+        return Object.entries(props.infrastructure.byType)
+            .sort((a, b) => b[1] - a[1])
+            .map(([label, value], i) => ({
+                label,
+                value,
+                color: infraColors[i % infraColors.length]
+            }));
+    });
+
+    const workloadColors = ['bg-purple-500 dark:bg-purple-600', 'bg-purple-400 dark:bg-purple-500', 'bg-purple-300 dark:bg-purple-400', 'bg-slate-300 dark:bg-slate-600'];
+    const getWorkloadComposition = createMemo(() => {
+        if (!props.workloads.byType) return [];
+        return Object.entries(props.workloads.byType)
+            .sort((a, b) => b[1] - a[1])
+            .map(([label, value], i) => ({
+                label,
+                value,
+                color: workloadColors[i % workloadColors.length]
+            }));
+    });
+
     return (
         <div class="space-y-4">
             <Card padding="none" tone="default">
@@ -197,87 +217,121 @@ export function DashboardHero(props: DashboardHeroProps) {
             </Card>
 
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <a href={INFRASTRUCTURE_PATH} class="group block">
+                <a href={INFRASTRUCTURE_PATH} class="group block h-full">
                     <Card
                         padding="none"
-                        tone="glass"
-                        class={`h-full p-5 ${CARD_THEMES.blue.hoverBorder} ${CARD_THEMES.blue.glowBg} transition-all duration-300 cursor-pointer hover:-translate-y-1 relative overflow-hidden`}
+                        tone="default"
+                        class={`h-full p-5 ${CARD_THEMES.blue.hoverBorder} transition-all duration-300 cursor-pointer hover:-translate-y-1 relative overflow-hidden flex flex-col justify-between`}
                     >
-                        <div class="flex items-start justify-between gap-2 mb-3">
-                            <div class="flex items-center gap-2 min-w-0">
-                                <div
-                                    class={`p-2 rounded-md transition-colors ${CARD_THEMES.blue.iconBg} ${CARD_THEMES.blue.iconColor} ${CARD_THEMES.blue.hoverIconBg}`}
-                                >
-                                    <Server class="w-5 h-5" />
+                        <div>
+                            <div class="flex items-start justify-between gap-2 mb-3">
+                                <div class="flex items-center gap-2 min-w-0">
+                                    <div
+                                        class={`p-2 rounded-md transition-colors ${CARD_THEMES.blue.iconBg} ${CARD_THEMES.blue.iconColor} ${CARD_THEMES.blue.hoverIconBg}`}
+                                    >
+                                        <Server class="w-5 h-5" />
+                                    </div>
+                                    <h3 class="text-sm font-semibold text-slate-900 dark:text-white truncate">Infrastructure</h3>
+                                    <Show when={infrastructureHasIssue()}>
+                                        <SeverityChip severity="critical" />
+                                    </Show>
                                 </div>
-                                <h3 class="text-sm font-semibold text-slate-900 dark:text-white truncate">Infrastructure</h3>
-                                <Show when={infrastructureHasIssue()}>
-                                    <SeverityChip severity="critical" />
+                                <MiniDonut
+                                    size={28}
+                                    strokeWidth={3}
+                                    data={[
+                                        { value: props.infrastructure.online, color: 'text-blue-500 dark:text-blue-400' },
+                                        {
+                                            value: props.infrastructure.total - props.infrastructure.online,
+                                            color: 'text-slate-200 dark:text-slate-700',
+                                        },
+                                    ]}
+                                />
+                            </div>
+
+                            <div class="text-2xl font-bold text-slate-900 dark:text-white">{props.infrastructure.total}</div>
+                            <div class="text-xs text-slate-500 dark:text-slate-400 mt-1">Total Nodes</div>
+                            <div class="text-xs text-slate-500 dark:text-slate-400 mt-2 truncate">
+                                {props.infrastructure.online} online
+                                <Show when={props.topCPU[0]}>
+                                    <span>
+                                        {' '}
+                                        · Top CPU: {props.topCPU[0].name} {Math.round(props.topCPU[0].percent)}%
+                                    </span>
                                 </Show>
                             </div>
-                            <MiniDonut
-                                size={28}
-                                strokeWidth={3}
-                                data={[
-                                    { value: props.infrastructure.online, color: 'text-blue-500 dark:text-blue-400' },
-                                    {
-                                        value: props.infrastructure.total - props.infrastructure.online,
-                                        color: 'text-slate-200 dark:text-slate-700',
-                                    },
-                                ]}
-                            />
                         </div>
+                        <Show when={getInfraComposition().length > 0}>
+                            <div class="mt-4">
+                                <StackedBar data={getInfraComposition()} height={6} />
+                                <div class="flex gap-2.5 mt-2 flex-wrap text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                                    <For each={getInfraComposition().slice(0, 3)}>
+                                        {(comp) => (
+                                            <div class="flex items-center gap-1.5"><div class={`w-1.5 h-1.5 rounded-full ${comp.color}`} />{comp.label}</div>
+                                        )}
+                                    </For>
+                                    <Show when={getInfraComposition().length > 3}>
+                                        <div class="flex items-center gap-1.5"><div class="w-1.5 h-1.5 rounded-full bg-slate-200 dark:bg-slate-700" />+{getInfraComposition().length - 3} more</div>
+                                    </Show>
+                                </div>
+                            </div>
+                        </Show>
+                    </Card>
+                </a>
 
-                        <div class="text-2xl font-bold text-slate-900 dark:text-white">{props.infrastructure.total}</div>
-                        <div class="text-xs text-slate-500 dark:text-slate-400 mt-1">Total Nodes</div>
-                        <div class="text-xs text-slate-500 dark:text-slate-400 mt-2 truncate">
-                            {props.infrastructure.online} online
-                            <Show when={props.topCPU[0]}>
-                                <span>
-                                    {' '}
-                                    · Top CPU: {props.topCPU[0].name} {Math.round(props.topCPU[0].percent)}%
+                <a href={WORKLOADS_PATH} class="group block h-full">
+                    <Card
+                        padding="none"
+                        tone="default"
+                        class={`h-full p-5 ${CARD_THEMES.purple.hoverBorder} transition-all duration-300 cursor-pointer hover:-translate-y-1 relative overflow-hidden flex flex-col justify-between`}
+                    >
+                        <div>
+                            <div class="flex items-start justify-between gap-2 mb-3">
+                                <div class="flex items-center gap-2 min-w-0">
+                                    <div
+                                        class={`p-2 rounded-md transition-colors ${CARD_THEMES.purple.iconBg} ${CARD_THEMES.purple.iconColor} ${CARD_THEMES.purple.hoverIconBg}`}
+                                    >
+                                        <Boxes class="w-5 h-5" />
+                                    </div>
+                                    <h3 class="text-sm font-semibold text-slate-900 dark:text-white truncate">Workloads</h3>
+                                    <Show when={workloadsHasIssue()}>
+                                        <SeverityChip severity="warning" />
+                                    </Show>
+                                </div>
+                                <span class="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-slate-50 border-slate-200 text-slate-600 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400">
+                                    {props.workloads.running} RUNNING
                                 </span>
-                            </Show>
-                        </div>
-                    </Card>
-                </a>
-
-                <a href={WORKLOADS_PATH} class="group block">
-                    <Card
-                        padding="none"
-                        tone="glass"
-                        class={`h-full p-5 ${CARD_THEMES.purple.hoverBorder} ${CARD_THEMES.purple.glowBg} transition-all duration-300 cursor-pointer hover:-translate-y-1 relative overflow-hidden`}
-                    >
-                        <div class="flex items-start justify-between gap-2 mb-3">
-                            <div class="flex items-center gap-2 min-w-0">
-                                <div
-                                    class={`p-2 rounded-md transition-colors ${CARD_THEMES.purple.iconBg} ${CARD_THEMES.purple.iconColor} ${CARD_THEMES.purple.hoverIconBg}`}
-                                >
-                                    <Boxes class="w-5 h-5" />
-                                </div>
-                                <h3 class="text-sm font-semibold text-slate-900 dark:text-white truncate">Workloads</h3>
-                                <Show when={workloadsHasIssue()}>
-                                    <SeverityChip severity="warning" />
-                                </Show>
                             </div>
-                            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-slate-50 border-slate-200 text-slate-600 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400">
-                                {props.workloads.running} RUNNING
-                            </span>
-                        </div>
 
-                        <div class="text-2xl font-bold text-slate-900 dark:text-white">{props.workloads.total}</div>
-                        <div class="text-xs text-slate-500 dark:text-slate-400 mt-1">Total</div>
-                        <div class="text-xs text-slate-500 dark:text-slate-400 mt-2">
-                            {props.workloads.running} running · {props.workloads.stopped} stopped
+                            <div class="text-2xl font-bold text-slate-900 dark:text-white">{props.workloads.total}</div>
+                            <div class="text-xs text-slate-500 dark:text-slate-400 mt-1">Total</div>
+                            <div class="text-xs text-slate-500 dark:text-slate-400 mt-2">
+                                {props.workloads.running} running · {props.workloads.stopped} stopped
+                            </div>
                         </div>
+                        <Show when={getWorkloadComposition().length > 0}>
+                            <div class="mt-4">
+                                <StackedBar data={getWorkloadComposition()} height={6} />
+                                <div class="flex gap-2.5 mt-2 flex-wrap text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                                    <For each={getWorkloadComposition().slice(0, 3)}>
+                                        {(comp) => (
+                                            <div class="flex items-center gap-1.5"><div class={`w-1.5 h-1.5 rounded-full ${comp.color}`} />{comp.label}</div>
+                                        )}
+                                    </For>
+                                    <Show when={getWorkloadComposition().length > 3}>
+                                        <div class="flex items-center gap-1.5"><div class="w-1.5 h-1.5 rounded-full bg-slate-200 dark:bg-slate-700" />+{getWorkloadComposition().length - 3} more</div>
+                                    </Show>
+                                </div>
+                            </div>
+                        </Show>
                     </Card>
                 </a>
 
-                <a href={buildStoragePath()} class="group block">
+                <a href={buildStoragePath()} class="group block h-full">
                     <Card
                         padding="none"
-                        tone="glass"
-                        class={`h-full p-5 ${CARD_THEMES.cyan.hoverBorder} ${CARD_THEMES.cyan.glowBg} transition-all duration-300 cursor-pointer hover:-translate-y-1 relative overflow-hidden`}
+                        tone="default"
+                        class={`h-full p-5 ${CARD_THEMES.cyan.hoverBorder} transition-all duration-300 cursor-pointer hover:-translate-y-1 relative overflow-hidden flex flex-col justify-between`}
                     >
                         <div class="flex items-start justify-between gap-2 mb-3">
                             <div class="flex items-center gap-2 min-w-0">
@@ -308,11 +362,11 @@ export function DashboardHero(props: DashboardHeroProps) {
                     </Card>
                 </a>
 
-                <a href={buildRecoveryPath()} class="group block">
+                <a href={buildRecoveryPath()} class="group block h-full">
                     <Card
                         padding="none"
-                        tone="glass"
-                        class={`h-full p-5 ${CARD_THEMES.emerald.hoverBorder} ${CARD_THEMES.emerald.glowBg} transition-all duration-300 cursor-pointer hover:-translate-y-1 relative overflow-hidden`}
+                        tone="default"
+                        class={`h-full p-5 ${CARD_THEMES.emerald.hoverBorder} transition-all duration-300 cursor-pointer hover:-translate-y-1 relative overflow-hidden flex flex-col justify-between`}
                     >
                         <div class="flex items-start justify-between gap-2 mb-3">
                             <div class="flex items-center gap-2 min-w-0">
