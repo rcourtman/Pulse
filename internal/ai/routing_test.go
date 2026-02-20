@@ -21,6 +21,8 @@ func TestExtractVMIDFromTargetID(t *testing.T) {
 		{"plain vmid", "106", 106},
 		{"node-vmid", "minipc-106", 106},
 		{"instance-node-vmid", "delly-minipc-106", 106},
+		{"colon-delimited", "delly:minipc:112", 112},
+		{"slash-delimited", "cluster/node/205", 205},
 
 		// Edge cases with hyphenated names
 		{"hyphenated-node-vmid", "pve-node-01-106", 106},
@@ -33,6 +35,7 @@ func TestExtractVMIDFromTargetID(t *testing.T) {
 
 		// Non-numeric - should return 0
 		{"non-numeric", "mycontainer", 0},
+		{"trailing-digits-without-separator", "mycontainer123", 0},
 		{"no-vmid", "node-name", 0},
 		{"empty", "", 0},
 

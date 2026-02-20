@@ -1346,6 +1346,99 @@ func TestService_ExecuteOnAgent_VMIDExtraction(t *testing.T) {
 	}
 }
 
+func TestService_ExecuteOnAgent_NormalizesTargetTypeAndColonVMID(t *testing.T) {
+	mockAgent := agentexec.ConnectedAgent{
+		AgentID:  "agent-1",
+		Hostname: "node-1",
+	}
+
+	var capturedCmd agentexec.ExecuteCommandPayload
+	mockServer := &mockAgentServer{
+		agents: []agentexec.ConnectedAgent{mockAgent},
+		executeFunc: func(ctx context.Context, agentID string, cmd agentexec.ExecuteCommandPayload) (*agentexec.CommandResultPayload, error) {
+			capturedCmd = cmd
+			return &agentexec.CommandResultPayload{
+				Success: true,
+				Stdout:  "ok",
+			}, nil
+		},
+	}
+	svc := NewService(nil, mockServer)
+
+	req := ExecuteRequest{
+		TargetType: "CONTAINER",
+		TargetID:   "delly:minipc:112",
+		Context: map[string]interface{}{
+			"node": "node-1",
+		},
+	}
+
+	_, err := svc.executeOnAgent(context.Background(), req, "uptime")
+	if err != nil {
+		t.Fatalf("executeOnAgent failed: %v", err)
+	}
+
+	if capturedCmd.TargetType != "container" {
+		t.Fatalf("Expected normalized TargetType 'container', got '%s'", capturedCmd.TargetType)
+	}
+	if capturedCmd.TargetID != "112" {
+		t.Fatalf("Expected extracted TargetID '112', got '%s'", capturedCmd.TargetID)
+	}
+}
+
+func TestService_ExecuteOnAgent_RejectsAmbiguousTargetTypeGuestWithTargetID(t *testing.T) {
+	mockServer := &mockAgentServer{
+		agents: []agentexec.ConnectedAgent{
+			{AgentID: "agent-1", Hostname: "node-1"},
+		},
+	}
+	svc := NewService(nil, mockServer)
+
+	_, err := svc.executeOnAgent(context.Background(), ExecuteRequest{
+		TargetType: "guest",
+		TargetID:   "delly:minipc:101",
+		Context:    map[string]interface{}{"node": "node-1"},
+	}, "uptime")
+	if err == nil {
+		t.Fatal("expected error for ambiguous target type")
+	}
+	if !strings.Contains(err.Error(), "ambiguous") {
+		t.Fatalf("expected ambiguous target type error, got: %v", err)
+	}
+}
+
+func TestService_ExecuteOnAgent_RejectsContainerWithoutNumericVMID(t *testing.T) {
+	mockAgent := agentexec.ConnectedAgent{
+		AgentID:  "agent-1",
+		Hostname: "node-1",
+	}
+
+	executeCalls := 0
+	mockServer := &mockAgentServer{
+		agents: []agentexec.ConnectedAgent{mockAgent},
+		executeFunc: func(ctx context.Context, agentID string, cmd agentexec.ExecuteCommandPayload) (*agentexec.CommandResultPayload, error) {
+			executeCalls++
+			return &agentexec.CommandResultPayload{Success: true, Stdout: "ok"}, nil
+		},
+	}
+	svc := NewService(nil, mockServer)
+
+	_, err := svc.executeOnAgent(context.Background(), ExecuteRequest{
+		TargetType: "container",
+		TargetID:   "mycontainer",
+		Context:    map[string]interface{}{"node": "node-1"},
+	}, "uptime")
+	if err == nil {
+		t.Fatal("expected error for missing numeric VMID")
+	}
+	if !strings.Contains(err.Error(), "requires numeric VMID") {
+		t.Fatalf("expected numeric VMID error, got: %v", err)
+	}
+	if executeCalls != 0 {
+		t.Fatalf("expected command dispatch to be blocked, executeCalls=%d", executeCalls)
+	}
+}
+
 func TestService_ExecuteOnAgent_AptNonInteractive(t *testing.T) {
 	mockAgent := agentexec.ConnectedAgent{
 		AgentID:  "agent-1",

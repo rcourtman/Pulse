@@ -297,21 +297,32 @@ func (s *Service) routeToAgent(req ExecuteRequest, command string, agents []agen
 // - "lxc-106" -> 106
 // - "vm-106" -> 106
 func extractVMIDFromTargetID(targetID string) int {
-	if targetID == "" {
+	trimmed := strings.TrimSpace(targetID)
+	if trimmed == "" {
 		return 0
 	}
 
 	// Try parsing the whole thing as a number first
-	if vmID, err := strconv.Atoi(targetID); err == nil && vmID > 0 {
+	if vmID, err := strconv.Atoi(trimmed); err == nil && vmID > 0 {
 		return vmID
 	}
 
-	// Split by hyphen and take the last numeric part
-	parts := strings.Split(targetID, "-")
-	for i := len(parts) - 1; i >= 0; i-- {
-		if vmID, err := strconv.Atoi(parts[i]); err == nil && vmID > 0 {
-			return vmID
-		}
+	// Accept IDs that end with a numeric VMID token, separated by a common
+	// delimiter used across Pulse IDs (e.g. "delly-minipc-106", "delly:minipc:106").
+	end := len(trimmed) - 1
+	start := end
+	for start >= 0 && trimmed[start] >= '0' && trimmed[start] <= '9' {
+		start--
+	}
+	if start == end {
+		return 0 // no trailing digits
+	}
+	digits := trimmed[start+1:]
+	if start >= 0 && !strings.ContainsRune("-:_/", rune(trimmed[start])) {
+		return 0
+	}
+	if vmID, err := strconv.Atoi(digits); err == nil && vmID > 0 {
+		return vmID
 	}
 
 	return 0

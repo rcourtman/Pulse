@@ -3276,17 +3276,92 @@ func sanitizeError(err error) error {
 	return err
 }
 
+func hasExplicitHostRoutingContext(ctx map[string]interface{}) bool {
+	if len(ctx) == 0 {
+		return false
+	}
+	for _, key := range []string{"node", "host", "guest_node", "hostname", "host_name", "target_host"} {
+		if value, ok := ctx[key].(string); ok && strings.TrimSpace(value) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+func normalizeExecuteTargetType(raw, targetID string, ctx map[string]interface{}) (string, error) {
+	targetType := strings.ToLower(strings.TrimSpace(raw))
+	switch targetType {
+	case "host", "node", "docker", "docker_host", "kubernetes_cluster", "kubernetes", "k8s":
+		return "host", nil
+	case "container", "lxc", "ct":
+		return "container", nil
+	case "vm", "qemu":
+		return "vm", nil
+	case "":
+		if strings.TrimSpace(targetID) == "" && hasExplicitHostRoutingContext(ctx) {
+			return "host", nil
+		}
+		return "", fmt.Errorf("target_type is required (host, container, or vm)")
+	case "guest":
+		if strings.TrimSpace(targetID) == "" {
+			return "host", nil
+		}
+		return "", fmt.Errorf("target_type 'guest' is ambiguous with target_id; use 'container' or 'vm'")
+	default:
+		return "", fmt.Errorf("unsupported target_type %q (allowed: host, container, vm)", raw)
+	}
+}
+
+func extractVMIDFromContext(ctx map[string]interface{}) (string, bool) {
+	if ctx == nil {
+		return "", false
+	}
+	vmID, ok := ctx["vmid"]
+	if !ok {
+		return "", false
+	}
+
+	switch v := vmID.(type) {
+	case float64:
+		if v > 0 {
+			return fmt.Sprintf("%.0f", v), true
+		}
+	case int:
+		if v > 0 {
+			return fmt.Sprintf("%d", v), true
+		}
+	case int64:
+		if v > 0 {
+			return fmt.Sprintf("%d", v), true
+		}
+	case string:
+		if parsed := extractVMIDFromTargetID(v); parsed > 0 {
+			return strconv.Itoa(parsed), true
+		}
+	}
+
+	return "", false
+}
+
 // executeOnAgent executes a command via the agent WebSocket
 func (s *Service) executeOnAgent(ctx context.Context, req ExecuteRequest, command string) (string, error) {
 	if s.agentServer == nil {
 		return "", fmt.Errorf("agent server not available")
 	}
 
+	normalizedTargetType, err := normalizeExecuteTargetType(req.TargetType, req.TargetID, req.Context)
+	if err != nil {
+		return "", err
+	}
+
+	normalizedReq := req
+	normalizedReq.TargetType = normalizedTargetType
+
 	// Find the appropriate agent using robust routing
 	agents := s.agentServer.GetConnectedAgents()
 
 	// Use the new robust routing logic
-	routeResult, err := s.routeToAgent(req, command, agents)
+	routeResult, err := s.routeToAgent(normalizedReq, command, agents)
 	if err != nil {
 		// Check if this is a routing error that should ask for clarification
 		if routingErr, ok := err.(*RoutingError); ok && routingErr.AskForClarification {
@@ -3313,29 +3388,14 @@ func (s *Service) executeOnAgent(ctx context.Context, req ExecuteRequest, comman
 		Bool("cluster_peer", routeResult.ClusterPeer).
 		Msg("Command routed to agent")
 
-	// Extract numeric VMID from target ID (e.g., "delly-135" -> "135")
-	targetID := req.TargetID
-	if req.TargetType == "container" || req.TargetType == "vm" {
-		// Look for vmid in context first
-		if vmID, ok := req.Context["vmid"]; ok {
-			switch v := vmID.(type) {
-			case float64:
-				targetID = fmt.Sprintf("%.0f", v)
-			case int:
-				targetID = fmt.Sprintf("%d", v)
-			case string:
-				targetID = v
-			}
-		} else if req.TargetID != "" {
-			// Extract number from end of ID like "delly-135" or "instance-135"
-			parts := strings.Split(req.TargetID, "-")
-			if len(parts) > 0 {
-				lastPart := parts[len(parts)-1]
-				// Check if it's numeric
-				if _, err := fmt.Sscanf(lastPart, "%d", new(int)); err == nil {
-					targetID = lastPart
-				}
-			}
+	targetID := strings.TrimSpace(req.TargetID)
+	if normalizedTargetType == "container" || normalizedTargetType == "vm" {
+		if vmID, ok := extractVMIDFromContext(req.Context); ok {
+			targetID = vmID
+		} else if extracted := extractVMIDFromTargetID(req.TargetID); extracted > 0 {
+			targetID = strconv.Itoa(extracted)
+		} else {
+			return "", fmt.Errorf("%s target requires numeric VMID in context.vmid or target_id", normalizedTargetType)
 		}
 	}
 
@@ -3352,7 +3412,7 @@ func (s *Service) executeOnAgent(ctx context.Context, req ExecuteRequest, comman
 	cmd := agentexec.ExecuteCommandPayload{
 		RequestID:  requestID,
 		Command:    command,
-		TargetType: req.TargetType,
+		TargetType: normalizedTargetType,
 		TargetID:   targetID,
 		Timeout:    300, // 5 minutes - commands like du, backups, etc. can take a while
 	}
