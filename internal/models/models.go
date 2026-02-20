@@ -199,6 +199,7 @@ type Host struct {
 	TokenLastUsedAt   *time.Time             `json:"tokenLastUsedAt,omitempty"`
 	Tags              []string               `json:"tags,omitempty"`
 	IsLegacy          bool                   `json:"isLegacy,omitempty"`
+	DiskExclude       []string               `json:"diskExclude,omitempty"` // Agent's --disk-exclude patterns
 
 	// Linking: When this host agent is running on a known PVE node/VM/container
 	LinkedNodeID      string `json:"linkedNodeId,omitempty"`      // ID of the PVE node this agent is running on

@@ -374,6 +374,7 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 			Hostname:        a.hostname,
 			UpdatedFrom:     a.updatedFrom,
 			CommandsEnabled: a.cfg.EnableCommands,
+			DiskExclude:     a.cfg.DiskExclude,
 		},
 		Host: agentshost.HostInfo{
 			ID:            a.machineID,

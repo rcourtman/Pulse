@@ -77,6 +77,10 @@ var virtualFSTypes = map[string]bool{
 	"overlay":    true, // Docker/container overlay filesystems (issue #942)
 	"overlayfs":  true, // Alternative overlay name
 	"autofs":     true, // Systemd automount placeholders (issue #942)
+	"fdescfs":    true, // FreeBSD file descriptor filesystem (issue #1142)
+	"devfs":      true, // FreeBSD device filesystem
+	"linprocfs":  true, // FreeBSD Linux proc compatibility
+	"linsysfs":   true, // FreeBSD Linux sys compatibility
 }
 
 // networkFSPatterns are substrings that indicate network/remote filesystems.
@@ -88,6 +92,7 @@ var specialMountPrefixes = []string{
 	"/proc",
 	"/sys",
 	"/run",
+	"/var/run/", // FreeBSD (not a symlink to /run like on Linux)
 	"/var/lib/containers",
 	"/snap",
 }

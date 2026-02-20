@@ -193,6 +193,14 @@ func TestShouldSkipFilesystem(t *testing.T) {
 		{"Windows C drive - should NOT skip", "NTFS", "C:\\", 500 * 1024 * 1024 * 1024, 200 * 1024 * 1024 * 1024, false},
 		{"Windows D drive - should NOT skip", "NTFS", "D:\\", 1000 * 1024 * 1024 * 1024, 500 * 1024 * 1024 * 1024, false},
 
+		// FreeBSD pseudo filesystems (issue #1142)
+		{"FreeBSD fdescfs", "fdescfs", "/var/run/samba/fd", 1024, 1024, true},
+		{"FreeBSD devfs", "devfs", "/dev", 1024, 100, true},
+		{"FreeBSD linprocfs", "linprocfs", "/compat/linux/proc", 0, 0, true},
+		{"FreeBSD linsysfs", "linsysfs", "/compat/linux/sys", 0, 0, true},
+		{"/var/run/ prefix FreeBSD", "ufs", "/var/run/something", 1024, 100, true},
+		{"/var/runtime should NOT skip", "ufs", "/var/runtime", 1000000, 500000, false},
+
 		// Regular filesystems that should NOT be skipped
 		{"ext4 root", "ext4", "/", 100 * 1024 * 1024 * 1024, 50 * 1024 * 1024 * 1024, false},
 		{"xfs data", "xfs", "/data", 500 * 1024 * 1024 * 1024, 200 * 1024 * 1024 * 1024, false},

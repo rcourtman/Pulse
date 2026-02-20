@@ -2679,6 +2679,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		ReportIP:        strings.TrimSpace(report.Host.ReportIP),
 		Tags:            append([]string(nil), report.Tags...),
 		IsLegacy:        isLegacyHostAgent(report.Agent.Type),
+		DiskExclude:     append([]string(nil), report.Agent.DiskExclude...),
 	}
 
 	// Apply any pending commands execution override from server config
@@ -6278,6 +6279,23 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 					}
 				}
 
+				// Build a map of node name -> disk exclusion patterns from linked host agents.
+				// This allows --disk-exclude on the agent to also suppress server-side
+				// Proxmox disk health/wearout alerts for the same disks.
+				diskExcludeByNode := make(map[string][]string)
+				hostByID := make(map[string]models.Host, len(currentState.Hosts))
+				for _, h := range currentState.Hosts {
+					hostByID[h.ID] = h
+				}
+				for _, n := range currentState.Nodes {
+					if n.LinkedHostAgentID == "" || n.Instance != inst {
+						continue
+					}
+					if linkedHost, ok := hostByID[n.LinkedHostAgentID]; ok && len(linkedHost.DiskExclude) > 0 && linkedHost.Status == "online" {
+						diskExcludeByNode[n.Name] = linkedHost.DiskExclude
+					}
+				}
+
 				var allDisks []models.PhysicalDisk
 				polledNodes := make(map[string]bool) // Track which nodes we successfully polled
 
@@ -6355,6 +6373,25 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 							Str("health", disk.Health).
 							Int("wearout", disk.Wearout).
 							Msg("Checking disk health")
+
+						// If the linked host agent has --disk-exclude for this disk, pass a
+						// synthetic healthy disk to CheckDiskHealth so any existing alerts
+						// get cleared naturally, then skip the normal health/wearout checks.
+						if excludePatterns, ok := diskExcludeByNode[node.Node]; ok {
+							if fsfilters.MatchesDeviceExclude(disk.DevPath, excludePatterns) {
+								log.Debug().
+									Str("node", node.Node).
+									Str("disk", disk.DevPath).
+									Msg("Disk matches agent --disk-exclude, clearing any alerts")
+								// Synthetic healthy disk: health="PASSED", wearout=100 (full life)
+								// This causes CheckDiskHealth to clear both health and wearout alerts.
+								healthyDisk := disk
+								healthyDisk.Health = "PASSED"
+								healthyDisk.Wearout = 100
+								m.alertManager.CheckDiskHealth(inst, node.Node, healthyDisk)
+								continue
+							}
+						}
 
 						normalizedHealth := strings.ToUpper(strings.TrimSpace(disk.Health))
 						if normalizedHealth != "" && normalizedHealth != "UNKNOWN" && normalizedHealth != "PASSED" && normalizedHealth != "OK" {
