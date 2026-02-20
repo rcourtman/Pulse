@@ -990,7 +990,7 @@ export const UnifiedAgents: Component = () => {
                             </div>
 
                             <Show when={latestRecord()}>
-                                <div class="flex items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-4 py-2 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-200">
+                                <div class="flex items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-4 py-2 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-200">
                                     <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
                                     </svg>
@@ -1005,7 +1005,7 @@ export const UnifiedAgents: Component = () => {
 
                     <Show when={!requiresToken()}>
                         <div class="space-y-3">
-                            <div class="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-200">
+                            <div class="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-200">
                                 Tokens are optional on this Pulse instance. Confirm to generate commands without embedding a token.
                             </div>
                             <button
@@ -1079,7 +1079,7 @@ export const UnifiedAgents: Component = () => {
                                     </p>
                                 </div>
                                 <Show when={insecureMode()}>
-                                    <div class="rounded-md border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">
+                                    <div class="rounded-md border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-200">
                                         <span class="font-medium">TLS verification disabled</span> — skip cert checks for self-signed setups. Not recommended for production.
                                     </div>
                                 </Show>
@@ -1102,11 +1102,11 @@ export const UnifiedAgents: Component = () => {
                                     Enable Pulse command execution (for Patrol auto-fix)
                                 </label>
                                 <Show when={enableCommands()}>
-                                    <div class="rounded-md border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-800 dark:border-blue-700 dark:bg-blue-900/20 dark:text-blue-200">
+                                    <div class="rounded-md border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-800 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200">
                                         <span class="font-medium">Pulse commands enabled</span> — The agent will accept diagnostic and fix commands from Pulse Patrol features.
                                     </div>
                                 </Show>
-                                <div class="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-100">
+                                <div class="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900 dark:text-emerald-100">
                                     <span class="font-medium">Config signing (optional)</span> — Require signed remote config payloads with <code>PULSE_AGENT_CONFIG_SIGNATURE_REQUIRED=true</code>. Provide keys via <code>PULSE_AGENT_CONFIG_SIGNING_KEY</code> (Pulse) and <code>PULSE_AGENT_CONFIG_PUBLIC_KEYS</code> (agents).
                                 </div>
                                 <div class="rounded-md border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-800">
@@ -1220,7 +1220,7 @@ export const UnifiedAgents: Component = () => {
                                 </For>
                             </div>
 
-                            <div class="space-y-3 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-100">
+                            <div class="space-y-3 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-100">
                                 <div class="flex items-center justify-between gap-3">
                                     <h5 class="text-sm font-semibold">Check installation status</h5>
                                     <button
@@ -1251,7 +1251,7 @@ export const UnifiedAgents: Component = () => {
                                             }
                                         }}
                                         placeholder="Hostname or host ID"
-                                        class="flex-1 rounded-md border border-blue-200 bg-white px-3 py-2 text-sm text-blue-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-100 dark:focus:border-blue-300 dark:focus:ring-blue-800/60"
+                                        class="flex-1 rounded-md border border-blue-200 bg-white px-3 py-2 text-sm text-blue-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-100 dark:focus:border-blue-300 dark:focus:ring-blue-800"
                                     />
                                 </div>
                                 <Show when={lookupError()}>
@@ -1262,10 +1262,10 @@ export const UnifiedAgents: Component = () => {
                                         const host = () => result().host;
                                         const statusBadgeClasses = () =>
                                             host().connected
-                                                ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
-                                                : 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200';
+                                                ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
+                                                : 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200';
                                         return (
-                                            <div class="space-y-1 rounded-md border border-blue-200 bg-white px-3 py-2 text-xs text-blue-900 dark:border-blue-700 dark:bg-blue-900/40 dark:text-blue-100">
+                                            <div class="space-y-1 rounded-md border border-blue-200 bg-white px-3 py-2 text-xs text-blue-900 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-100">
                                                 <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                                                     <div class="text-sm font-semibold">
                                                         {host().displayName || host().hostname}
@@ -1274,7 +1274,7 @@ export const UnifiedAgents: Component = () => {
                                                         <span class={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${statusBadgeClasses()}`}>
                                                             {host().connected ? 'Connected' : 'Not reporting yet'}
                                                         </span>
-                                                        <span class="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-700 dark:bg-blue-900/60 dark:text-blue-200">
+                                                        <span class="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-700 dark:bg-blue-900 dark:text-blue-200">
                                                             {host().status || 'unknown'}
                                                         </span>
                                                     </div>
@@ -1389,7 +1389,7 @@ export const UnifiedAgents: Component = () => {
             >
 
                 <Show when={hasLinkedAgents()}>
-                    <div class="flex items-start gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 dark:border-blue-800 dark:bg-blue-900/20">
+                    <div class="flex items-start gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 dark:border-blue-800 dark:bg-blue-900">
                         <svg class="h-4 w-4 mt-0.5 flex-shrink-0 text-blue-500 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
@@ -1400,7 +1400,7 @@ export const UnifiedAgents: Component = () => {
                 </Show>
 
                 <Show when={hasLegacyAgents()}>
-                    <div class="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-700 dark:bg-amber-900/20">
+                    <div class="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-700 dark:bg-amber-900">
                         <div class="flex items-start gap-3">
                             <svg class="h-5 w-5 flex-shrink-0 text-amber-500 dark:text-amber-400 mt-0.5" viewBox="0 0 20 20" fill="currentColor">
                                 <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
@@ -1522,19 +1522,19 @@ export const UnifiedAgents: Component = () => {
                                     const agentName = row.displayName || row.hostname || row.name;
                                     const typeBadgeClass = (type: UnifiedAgentType) => {
                                         if (type === 'host') {
-                                            return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300';
+                                            return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300';
                                         }
                                         if (type === 'docker') {
-                                            return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300';
+                                            return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300';
                                         }
-                                        return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300';
+                                        return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-300';
                                     };
                                     const statusBadgeClass = () => {
                                         if (isRemoved()) {
-                                            return 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200';
+                                            return 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200';
                                         }
                                         if (connectedFromStatus(row.healthStatus)) {
-                                            return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300';
+                                            return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300';
                                         }
                                         return 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300';
                                     };
@@ -1684,14 +1684,14 @@ export const UnifiedAgents: Component = () => {
                                                         <Show when={isKubernetes()} fallback={
                                                             <button
                                                                 onClick={() => handleRemoveAgent(row.id, row.types.filter(type => type !== 'kubernetes') as ('host' | 'docker')[])}
-                                                                class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-2.5 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 hover:text-red-900 dark:text-red-400 dark:hover:bg-red-900/20 dark:hover:text-red-300"
+                                                                class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-2.5 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 hover:text-red-900 dark:text-red-400 dark:hover:bg-red-900 dark:hover:text-red-300"
                                                             >
                                                                 Remove
                                                             </button>
                                                         }>
                                                             <button
                                                                 onClick={() => handleRemoveKubernetesCluster(row.id)}
-                                                                class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-2.5 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 hover:text-red-900 dark:text-red-400 dark:hover:bg-red-900/20 dark:hover:text-red-300"
+                                                                class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-2.5 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 hover:text-red-900 dark:text-red-400 dark:hover:bg-red-900 dark:hover:text-red-300"
                                                             >
                                                                 Remove
                                                             </button>
@@ -1700,14 +1700,14 @@ export const UnifiedAgents: Component = () => {
                                                         <Show when={row.types.includes('docker')} fallback={
                                                             <button
                                                                 onClick={() => handleAllowKubernetesReenroll(row.id, row.name)}
-                                                                class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-2.5 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-900 dark:text-blue-400 dark:hover:bg-blue-900/20 dark:hover:text-blue-300"
+                                                                class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-2.5 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-900 dark:text-blue-400 dark:hover:bg-blue-900 dark:hover:text-blue-300"
                                                             >
                                                                 Allow re-enroll
                                                             </button>
                                                         }>
                                                             <button
                                                                 onClick={() => handleAllowReenroll(row.id, row.hostname)}
-                                                                class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-2.5 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-900 dark:text-blue-400 dark:hover:bg-blue-900/20 dark:hover:text-blue-300"
+                                                                class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-2.5 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-900 dark:text-blue-400 dark:hover:bg-blue-900 dark:hover:text-blue-300"
                                                             >
                                                                 Allow re-enroll
                                                             </button>
@@ -1729,12 +1729,12 @@ export const UnifiedAgents: Component = () => {
                                                                         )}
                                                                     </For>
                                                                     <Show when={row.isLegacy}>
-                                                                        <span class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-200">
+                                                                        <span class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900 dark:text-amber-200">
                                                                             Legacy
                                                                         </span>
                                                                     </Show>
                                                                     <Show when={row.linkedNodeId}>
-                                                                        <span class="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                                                                        <span class="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900 dark:text-blue-300">
                                                                             Linked
                                                                         </span>
                                                                     </Show>
