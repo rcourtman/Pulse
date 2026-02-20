@@ -1254,6 +1254,44 @@ func (h *ConfigHandlers) handleAutoRegister(w http.ResponseWriter, r *http.Reque
 
 	// Check authentication - require either setup code or API token if auth is enabled
 	authenticated := false
+	requestOrgID := strings.TrimSpace(GetOrgID(r.Context()))
+	if requestOrgID == "" {
+		requestOrgID = "default"
+	}
+
+	bindAutoRegisterToken := func(record *config.APITokenRecord) (allowed bool, reason string) {
+		if record == nil {
+			return false, "invalid_token"
+		}
+		// Accept settings:write (admin tokens) or host-agent:report (agent tokens)
+		if !record.HasScope(config.ScopeSettingsWrite) && !record.HasScope(config.ScopeHostReport) {
+			return false, "missing_scope"
+		}
+
+		effectiveOrgID := requestOrgID
+		if !record.CanAccessOrg(effectiveOrgID) {
+			// Body-supplied tokens are not available to tenant middleware org fallback.
+			// Preserve single-org token UX while still enforcing strict tenant binding.
+			boundOrgs := record.GetBoundOrgs()
+			if effectiveOrgID == "default" && len(boundOrgs) == 1 {
+				candidateOrgID := strings.TrimSpace(boundOrgs[0])
+				if isValidOrganizationID(candidateOrgID) && record.CanAccessOrg(candidateOrgID) {
+					effectiveOrgID = candidateOrgID
+				} else {
+					return false, "org_mismatch"
+				}
+			} else {
+				return false, "org_mismatch"
+			}
+		}
+
+		if effectiveOrgID != requestOrgID {
+			r = r.WithContext(context.WithValue(r.Context(), OrgIDContextKey, effectiveOrgID))
+			requestOrgID = effectiveOrgID
+		}
+
+		return true, ""
+	}
 
 	// Support both setupCode (old) and authToken (new) fields
 	authCode := req.SetupCode
@@ -1272,19 +1310,29 @@ func (h *ConfigHandlers) handleAutoRegister(w http.ResponseWriter, r *http.Reque
 		matchedAPIToken := false
 		if h.getConfig(r.Context()).HasAPITokens() {
 			if record, ok := h.getConfig(r.Context()).ValidateAPIToken(authCode); ok {
-				// Accept settings:write (admin tokens) or host-agent:report (agent tokens)
-				if record.HasScope(config.ScopeSettingsWrite) || record.HasScope(config.ScopeHostReport) {
+				matchedAPIToken = true
+				if allowed, reason := bindAutoRegisterToken(record); allowed {
 					authenticated = true
-					matchedAPIToken = true
 					log.Info().
 						Str("type", req.Type).
 						Str("host", req.Host).
+						Str("org_id", requestOrgID).
 						Msg("Auto-register authenticated via direct API token")
+				} else if reason == "org_mismatch" {
+					log.Warn().
+						Str("type", req.Type).
+						Str("host", req.Host).
+						Str("org_id", requestOrgID).
+						Msg("Auto-register rejected: API token not authorized for organization")
+					http.Error(w, "Token is not authorized for this organization", http.StatusForbidden)
+					return
 				} else {
 					log.Warn().
 						Str("type", req.Type).
 						Str("host", req.Host).
 						Msg("Auto-register rejected: API token missing required scope")
+					http.Error(w, "Token is missing required scope", http.StatusForbidden)
+					return
 				}
 			}
 		}
@@ -1347,12 +1395,17 @@ func (h *ConfigHandlers) handleAutoRegister(w http.ResponseWriter, r *http.Reque
 	if !authenticated && h.getConfig(r.Context()).HasAPITokens() {
 		apiToken := r.Header.Get("X-API-Token")
 		if record, ok := h.getConfig(r.Context()).ValidateAPIToken(apiToken); ok {
-			// Accept settings:write (admin tokens) or host-agent:report (agent tokens)
-			if record.HasScope(config.ScopeSettingsWrite) || record.HasScope(config.ScopeHostReport) {
+			if allowed, reason := bindAutoRegisterToken(record); allowed {
 				authenticated = true
-				log.Info().Msg("Auto-register authenticated via API token")
+				log.Info().Str("org_id", requestOrgID).Msg("Auto-register authenticated via API token")
+			} else if reason == "org_mismatch" {
+				log.Warn().Str("org_id", requestOrgID).Msg("Auto-register rejected: API token org mismatch")
+				http.Error(w, "Token is not authorized for this organization", http.StatusForbidden)
+				return
 			} else {
 				log.Warn().Msg("Auto-register rejected: API token missing required scope")
+				http.Error(w, "Token is missing required scope", http.StatusForbidden)
+				return
 			}
 		}
 	}

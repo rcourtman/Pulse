@@ -237,8 +237,15 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 
 			// Check authentication - accept proxy auth, session auth or API token
 			hasValidSession := false
+			sessionUsername := ""
+			sessionIsAdmin := false
 			if cookie, err := req.Cookie("pulse_session"); err == nil && cookie.Value != "" {
 				hasValidSession = ValidateSession(cookie.Value)
+				if hasValidSession {
+					sessionUsername = strings.TrimSpace(GetSessionUsername(cookie.Value))
+					configuredAdmin := strings.TrimSpace(r.config.AuthUser)
+					sessionIsAdmin = configuredAdmin != "" && strings.EqualFold(sessionUsername, configuredAdmin)
+				}
 			}
 
 			validateAPIToken := func(token string) bool {
@@ -258,7 +265,7 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 			hasValidAPIToken := validateAPIToken(token)
 
 			// Check if any valid auth method is present
-			hasValidAuth := hasValidProxyAuth || hasValidSession || hasValidAPIToken
+			hasValidAuth := hasValidProxyAuth || sessionIsAdmin || hasValidAPIToken
 
 			// Determine if auth is required
 			authRequired := r.config.AuthUser != "" && r.config.AuthPass != "" ||
@@ -274,13 +281,22 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 				http.Error(w, "Admin privileges required for export/import", http.StatusForbidden)
 				return
 			}
+			if authRequired && hasValidSession && !sessionIsAdmin {
+				log.Warn().
+					Str("ip", req.RemoteAddr).
+					Str("path", req.URL.Path).
+					Str("user", sessionUsername).
+					Msg("Non-admin session user attempted export/import")
+				http.Error(w, "Admin privileges required for export/import", http.StatusForbidden)
+				return
+			}
 
 			if authRequired && !hasValidAuth {
 				log.Warn().
 					Str("ip", req.RemoteAddr).
 					Str("path", req.URL.Path).
 					Bool("proxyAuth", hasValidProxyAuth).
-					Bool("session", hasValidSession).
+					Bool("session", sessionIsAdmin).
 					Bool("apiToken", hasValidAPIToken).
 					Msg("Unauthorized export attempt")
 				http.Error(w, "Unauthorized - please log in or provide API token", http.StatusUnauthorized)
@@ -327,7 +343,7 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 			log.Info().
 				Str("ip", req.RemoteAddr).
 				Bool("proxy_auth", hasValidProxyAuth).
-				Bool("session_auth", hasValidSession).
+				Bool("session_auth", sessionIsAdmin).
 				Bool("api_token_auth", hasValidAPIToken).
 				Msg("Configuration export initiated")
 
@@ -351,8 +367,15 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 
 			// Check authentication - accept proxy auth, session auth or API token
 			hasValidSession := false
+			sessionUsername := ""
+			sessionIsAdmin := false
 			if cookie, err := req.Cookie("pulse_session"); err == nil && cookie.Value != "" {
 				hasValidSession = ValidateSession(cookie.Value)
+				if hasValidSession {
+					sessionUsername = strings.TrimSpace(GetSessionUsername(cookie.Value))
+					configuredAdmin := strings.TrimSpace(r.config.AuthUser)
+					sessionIsAdmin = configuredAdmin != "" && strings.EqualFold(sessionUsername, configuredAdmin)
+				}
 			}
 
 			validateAPIToken := func(token string) bool {
@@ -372,7 +395,7 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 			hasValidAPIToken := validateAPIToken(token)
 
 			// Check if any valid auth method is present
-			hasValidAuth := hasValidProxyAuth || hasValidSession || hasValidAPIToken
+			hasValidAuth := hasValidProxyAuth || sessionIsAdmin || hasValidAPIToken
 
 			// Determine if auth is required
 			authRequired := r.config.AuthUser != "" && r.config.AuthPass != "" ||
@@ -388,13 +411,22 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 				http.Error(w, "Admin privileges required for export/import", http.StatusForbidden)
 				return
 			}
+			if authRequired && hasValidSession && !sessionIsAdmin {
+				log.Warn().
+					Str("ip", req.RemoteAddr).
+					Str("path", req.URL.Path).
+					Str("user", sessionUsername).
+					Msg("Non-admin session user attempted export/import")
+				http.Error(w, "Admin privileges required for export/import", http.StatusForbidden)
+				return
+			}
 
 			if authRequired && !hasValidAuth {
 				log.Warn().
 					Str("ip", req.RemoteAddr).
 					Str("path", req.URL.Path).
 					Bool("proxyAuth", hasValidProxyAuth).
-					Bool("session", hasValidSession).
+					Bool("session", sessionIsAdmin).
 					Bool("apiToken", hasValidAPIToken).
 					Msg("Unauthorized import attempt")
 				http.Error(w, "Unauthorized - please log in or provide API token", http.StatusUnauthorized)
@@ -440,7 +472,7 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 			// Log successful import attempt
 			log.Info().
 				Str("ip", req.RemoteAddr).
-				Bool("session_auth", hasValidSession).
+				Bool("session_auth", sessionIsAdmin).
 				Bool("api_token_auth", hasValidAPIToken).
 				Msg("Configuration import initiated")
 

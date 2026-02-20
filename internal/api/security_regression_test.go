@@ -1882,6 +1882,62 @@ func TestConfigImportRequiresAuthInAPIMode(t *testing.T) {
 	}
 }
 
+func TestConfigExportImportRejectsNonAdminSession(t *testing.T) {
+	hashed, err := auth.HashPassword("Password!1")
+	if err != nil {
+		t.Fatalf("HashPassword: %v", err)
+	}
+
+	cfg := &config.Config{
+		DataPath:   t.TempDir(),
+		ConfigPath: t.TempDir(),
+		AuthUser:   "admin",
+		AuthPass:   hashed,
+	}
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	sessionToken := "config-member-session-" + strconv.FormatInt(time.Now().UnixNano(), 10)
+	GetSessionStore().CreateSession(sessionToken, time.Hour, "agent", "127.0.0.1", "member")
+	csrfToken := generateCSRFToken(sessionToken)
+
+	tests := []struct {
+		name string
+		path string
+		body string
+	}{
+		{
+			name: "export",
+			path: "/api/config/export",
+			body: `{"passphrase":"long-enough-passphrase"}`,
+		},
+		{
+			name: "import",
+			path: "/api/config/import",
+			body: `{"passphrase":"long-enough-passphrase","data":"invalid"}`,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, tc.path, strings.NewReader(tc.body))
+			req.RemoteAddr = "127.0.0.1:1234"
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("X-CSRF-Token", csrfToken)
+			req.AddCookie(&http.Cookie{Name: "pulse_session", Value: sessionToken})
+
+			rec := httptest.NewRecorder()
+			router.Handler().ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusForbidden {
+				t.Fatalf("expected 403 for non-admin session on %s, got %d: %s", tc.path, rec.Code, rec.Body.String())
+			}
+			if !strings.Contains(rec.Body.String(), "Admin privileges required") {
+				t.Fatalf("expected admin privileges error on %s, got %q", tc.path, rec.Body.String())
+			}
+		})
+	}
+}
+
 func TestConfigExportBlocksPublicNetworkWithoutAuth(t *testing.T) {
 	cfg := &config.Config{
 		DataPath:   t.TempDir(),
@@ -1940,8 +1996,8 @@ func TestAutoRegisterRejectsTokenMissingRequiredScope(t *testing.T) {
 	req.Header.Set("X-API-Token", rawToken)
 	rec := httptest.NewRecorder()
 	router.Handler().ServeHTTP(rec, req)
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401 for missing required scope, got %d", rec.Code)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for missing required scope, got %d", rec.Code)
 	}
 }
 

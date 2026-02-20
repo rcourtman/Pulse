@@ -165,6 +165,98 @@ func TestHandleAutoRegister_EnforcesMaxNodesLimit(t *testing.T) {
 	}
 }
 
+func TestHandleAutoRegisterRejectsBodyAPITokenOrgMismatch(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+
+	record, err := config.NewAPITokenRecord("org-bound-body-token-123.12345678", "org-bound", []string{config.ScopeHostReport})
+	if err != nil {
+		t.Fatalf("new api token record: %v", err)
+	}
+	record.OrgID = "org-a"
+
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+		APITokens:  []config.APITokenRecord{*record},
+	}
+
+	handler := newTestConfigHandlers(t, cfg)
+
+	reqBody := AutoRegisterRequest{
+		Type:       "pve",
+		Host:       "https://pve.local:8006",
+		TokenID:    "pulse-monitor@pam!token",
+		TokenValue: "secret-token",
+		ServerName: "pve.local",
+		AuthToken:  "org-bound-body-token-123.12345678",
+	}
+
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		t.Fatalf("failed to marshal request: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", bytes.NewReader(body))
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "org-b"))
+	rec := httptest.NewRecorder()
+
+	handler.HandleAutoRegister(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected status 403, got %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if len(cfg.PVEInstances) != 0 {
+		t.Fatalf("expected no PVE instances stored on org mismatch, got %d", len(cfg.PVEInstances))
+	}
+}
+
+func TestHandleAutoRegisterRejectsHeaderAPITokenOrgMismatch(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+
+	record, err := config.NewAPITokenRecord("org-bound-header-token-123.12345678", "org-bound", []string{config.ScopeHostReport})
+	if err != nil {
+		t.Fatalf("new api token record: %v", err)
+	}
+	record.OrgID = "org-a"
+
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+		APITokens:  []config.APITokenRecord{*record},
+	}
+
+	handler := newTestConfigHandlers(t, cfg)
+
+	reqBody := AutoRegisterRequest{
+		Type:       "pve",
+		Host:       "https://pve.local:8006",
+		TokenID:    "pulse-monitor@pam!token",
+		TokenValue: "secret-token",
+		ServerName: "pve.local",
+	}
+
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		t.Fatalf("failed to marshal request: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", bytes.NewReader(body))
+	req.Header.Set("X-API-Token", "org-bound-header-token-123.12345678")
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "org-b"))
+	rec := httptest.NewRecorder()
+
+	handler.HandleAutoRegister(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected status 403, got %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if len(cfg.PVEInstances) != 0 {
+		t.Fatalf("expected no PVE instances stored on org mismatch, got %d", len(cfg.PVEInstances))
+	}
+}
+
 // TestDisambiguateNodeName verifies that duplicate hostnames get disambiguated
 // with their IP address appended. Issue #891.
 func TestDisambiguateNodeName(t *testing.T) {

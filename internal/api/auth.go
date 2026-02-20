@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	cryptorand "crypto/rand"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -138,7 +139,7 @@ func CheckProxyAuth(cfg *config.Config, r *http.Request) (bool, string, bool) {
 
 	// Validate proxy secret header
 	proxySecret := r.Header.Get("X-Proxy-Secret")
-	if proxySecret != cfg.ProxyAuthSecret {
+	if subtle.ConstantTimeCompare([]byte(proxySecret), []byte(cfg.ProxyAuthSecret)) != 1 {
 		log.Debug().
 			Int("provided_secret_length", len(proxySecret)).
 			Msg("Invalid proxy secret")
