@@ -37,6 +37,8 @@ import { DiscoveryTab } from '@/components/Discovery/DiscoveryTab';
 import { HistoryChart } from '@/components/shared/HistoryChart';
 import type { HistoryTimeRange } from '@/api/charts';
 import { GuestMetadataAPI, type GuestMetadata } from '@/api/guestMetadata';
+import { UrlEditPopover, createUrlEditState } from '@/components/shared/UrlEditPopover';
+import { showSuccess, showError } from '@/utils/toast';
 import { logger } from '@/utils/logger';
 
 type GuestMetadataRecord = Record<string, GuestMetadata>;
@@ -163,6 +165,7 @@ export const DOCKER_COLUMNS: DockerColumnDef[] = [
   { id: 'memory', label: 'Memory', priority: 'essential', minWidth: '75px', maxWidth: '156px', sortKey: 'memory', width: '140px' },
   { id: 'tasks', label: 'Tasks', priority: 'essential', minWidth: 'auto', maxWidth: 'auto', sortKey: 'tasks', width: '80px' },
   { id: 'updated', label: 'Uptime', priority: 'essential', minWidth: 'auto', maxWidth: 'auto', sortKey: 'updated', width: '80px' },
+  { id: 'link', label: '', priority: 'essential', minWidth: 'auto', maxWidth: 'auto', width: '28px' },
 ];
 
 // Global state for currently expanded drawer (only one drawer open at a time)
@@ -898,7 +901,43 @@ const DockerContainerRow: Component<{
     );
   });
 
+  const containerCustomUrl = createMemo(() => props.guestMetadata?.[container.id]?.customUrl);
+  const urlEdit = createUrlEditState();
 
+  const handleStartEditingUrl = (event: MouseEvent) => {
+    urlEdit.startEditing(container.id, containerCustomUrl() || '', event);
+  };
+
+  const handleSaveUrl = async () => {
+    const newUrl = urlEdit.editingValue().trim();
+    urlEdit.setIsSaving(true);
+    try {
+      await GuestMetadataAPI.updateMetadata(container.id, { customUrl: newUrl });
+      if (props.onCustomUrlChange) props.onCustomUrlChange(container.id, newUrl);
+      showSuccess(newUrl ? 'Container URL saved' : 'Container URL cleared');
+      urlEdit.finishEditing();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to save container URL';
+      logger.error('Failed to save container URL:', err);
+      showError(message);
+      urlEdit.setIsSaving(false);
+    }
+  };
+
+  const handleDeleteUrl = async () => {
+    urlEdit.setIsSaving(true);
+    try {
+      await GuestMetadataAPI.updateMetadata(container.id, { customUrl: '' });
+      if (props.onCustomUrlChange) props.onCustomUrlChange(container.id, '');
+      showSuccess('Container URL removed');
+      urlEdit.finishEditing();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to remove container URL';
+      logger.error('Failed to remove container URL:', err);
+      showError(message);
+      urlEdit.setIsSaving(false);
+    }
+  };
 
   // Auto-focus the input when editing starts
 
@@ -1118,6 +1157,35 @@ const DockerContainerRow: Component<{
             </Show>
           </div>
         );
+      case 'link':
+        return (
+          <div class="inline-flex items-center justify-center gap-1" onClick={(event) => event.stopPropagation()}>
+            <Show when={containerCustomUrl() && containerCustomUrl() !== ''} fallback={<span class="text-xs text-gray-300 dark:text-gray-700">-</span>}>
+              <a
+                href={containerCustomUrl()}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="inline-flex justify-center items-center text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+                title={`Open ${containerCustomUrl()}`}
+                onClick={(event) => event.stopPropagation()}
+              >
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+              </a>
+            </Show>
+            <button
+              type="button"
+              onClick={handleStartEditingUrl}
+              class="inline-flex justify-center items-center text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors"
+              title={containerCustomUrl() ? 'Edit URL' : 'Add URL'}
+            >
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+              </svg>
+            </button>
+          </div>
+        );
       default:
         return null;
     }
@@ -1146,7 +1214,19 @@ const DockerContainerRow: Component<{
         </For>
       </tr>
 
-      {/* URL editing popover - using shared component */}
+      <UrlEditPopover
+        isOpen={urlEdit.isEditing() && urlEdit.editingId() === container.id}
+        value={urlEdit.editingValue()}
+        position={urlEdit.position()}
+        isSaving={urlEdit.isSaving()}
+        hasExistingUrl={!!containerCustomUrl()}
+        placeholder="https://192.168.1.100:8080"
+        helpText="Add a URL to quickly access this container's web interface"
+        onValueChange={urlEdit.setEditingValue}
+        onSave={handleSaveUrl}
+        onCancel={urlEdit.cancelEditing}
+        onDelete={handleDeleteUrl}
+      />
 
 
       <Show when={expanded() && hasDrawerContent()}>
@@ -1638,11 +1718,45 @@ const DockerServiceRow: Component<{
 
   const expanded = createMemo(() => currentlyExpandedRowId() === rowId);
 
-
   const hasTasks = () => tasks.length > 0;
 
+  const serviceCustomUrl = createMemo(() => props.guestMetadata?.[resourceId()]?.customUrl);
+  const svcUrlEdit = createUrlEditState();
 
+  const handleStartEditingSvcUrl = (event: MouseEvent) => {
+    svcUrlEdit.startEditing(resourceId(), serviceCustomUrl() || '', event);
+  };
 
+  const handleSaveSvcUrl = async () => {
+    const newUrl = svcUrlEdit.editingValue().trim();
+    svcUrlEdit.setIsSaving(true);
+    try {
+      await GuestMetadataAPI.updateMetadata(resourceId(), { customUrl: newUrl });
+      if (props.onCustomUrlChange) props.onCustomUrlChange(resourceId(), newUrl);
+      showSuccess(newUrl ? 'Service URL saved' : 'Service URL cleared');
+      svcUrlEdit.finishEditing();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to save service URL';
+      logger.error('Failed to save service URL:', err);
+      showError(message);
+      svcUrlEdit.setIsSaving(false);
+    }
+  };
+
+  const handleDeleteSvcUrl = async () => {
+    svcUrlEdit.setIsSaving(true);
+    try {
+      await GuestMetadataAPI.updateMetadata(resourceId(), { customUrl: '' });
+      if (props.onCustomUrlChange) props.onCustomUrlChange(resourceId(), '');
+      showSuccess('Service URL removed');
+      svcUrlEdit.finishEditing();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to remove service URL';
+      logger.error('Failed to remove service URL:', err);
+      showError(message);
+      svcUrlEdit.setIsSaving(false);
+    }
+  };
 
 
 
@@ -1773,6 +1887,35 @@ const DockerServiceRow: Component<{
             </Show>
           </div>
         );
+      case 'link':
+        return (
+          <div class="inline-flex items-center justify-center gap-1" onClick={(event) => event.stopPropagation()}>
+            <Show when={serviceCustomUrl() && serviceCustomUrl() !== ''} fallback={<span class="text-xs text-gray-300 dark:text-gray-700">-</span>}>
+              <a
+                href={serviceCustomUrl()}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="inline-flex justify-center items-center text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+                title={`Open ${serviceCustomUrl()}`}
+                onClick={(event) => event.stopPropagation()}
+              >
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+              </a>
+            </Show>
+            <button
+              type="button"
+              onClick={handleStartEditingSvcUrl}
+              class="inline-flex justify-center items-center text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors"
+              title={serviceCustomUrl() ? 'Edit URL' : 'Add URL'}
+            >
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+              </svg>
+            </button>
+          </div>
+        );
       default:
         return null;
     }
@@ -1800,6 +1943,20 @@ const DockerServiceRow: Component<{
           )}
         </For>
       </tr>
+
+      <UrlEditPopover
+        isOpen={svcUrlEdit.isEditing() && svcUrlEdit.editingId() === resourceId()}
+        value={svcUrlEdit.editingValue()}
+        position={svcUrlEdit.position()}
+        isSaving={svcUrlEdit.isSaving()}
+        hasExistingUrl={!!serviceCustomUrl()}
+        placeholder="https://192.168.1.100:8080"
+        helpText="Add a URL to quickly access this service's web interface"
+        onValueChange={svcUrlEdit.setEditingValue}
+        onSave={handleSaveSvcUrl}
+        onCancel={svcUrlEdit.cancelEditing}
+        onDelete={handleDeleteSvcUrl}
+      />
 
       <Show when={expanded()}>
         <tr>

@@ -27,6 +27,8 @@ import { ScrollableTable } from '@/components/shared/ScrollableTable';
 import { buildMetricKey } from '@/utils/metricsKeys';
 import { isKioskMode, subscribeToKioskMode } from '@/utils/url';
 import { HostDrawer } from './HostDrawer';
+import { UrlEditPopover, createUrlEditState } from '@/components/shared/UrlEditPopover';
+import { showSuccess, showError } from '@/utils/toast';
 
 // Column definition for hosts table
 export interface HostColumnDef {
@@ -56,6 +58,7 @@ export const HOST_COLUMNS: HostColumnDef[] = [
   { id: 'arch', label: 'Arch', priority: 'essential', width: '50px', toggleable: true },
   { id: 'kernel', label: 'Kernel', priority: 'essential', width: '80px', toggleable: true },
   { id: 'raid', label: 'RAID', priority: 'essential', width: '55px', toggleable: true },
+  { id: 'link', label: '', priority: 'essential', width: '28px' },
 ];
 
 // Network info cell with rich tooltip showing interfaces, IPs, and traffic (matches GuestRow pattern)
@@ -1050,6 +1053,9 @@ export const HostsOverview: Component = () => {
                           <Show when={isColVisible('raid')}>
                             <th class={thClass} title="Linux Software RAID (mdadm) Status">RAID</th>
                           </Show>
+                          <Show when={isColVisible('link')}>
+                            <th class={thClass}></th>
+                          </Show>
                         </tr>
                       </thead>
                       <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
@@ -1129,8 +1135,55 @@ const HostRow: Component<HostRowProps> = (props) => {
   // NOTE: Do NOT destructure props.host - it breaks SolidJS reactivity!
   // Always access props.host directly to ensure updates flow through.
 
+  const [localCustomUrl, setLocalCustomUrl] = createSignal<string | undefined>(props.customUrl);
+  // Sync local state when parent prop changes (e.g., drawer edits URL)
+  createEffect(() => setLocalCustomUrl(props.customUrl));
+  const urlEdit = createUrlEditState();
 
+  const handleStartEditingUrl = (event: MouseEvent) => {
+    urlEdit.startEditing(props.host.id, localCustomUrl() || '', event);
+  };
 
+  const handleSaveUrl = async () => {
+    const newUrl = urlEdit.editingValue().trim();
+    urlEdit.setIsSaving(true);
+    try {
+      const ok = await props.onUpdateCustomUrl(props.host.id, newUrl);
+      if (ok) {
+        setLocalCustomUrl(newUrl || undefined);
+        showSuccess(newUrl ? 'Host URL saved' : 'Host URL cleared');
+        urlEdit.finishEditing();
+      } else {
+        showError('Failed to save host URL');
+        urlEdit.setIsSaving(false);
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to save host URL';
+      logger.error('Failed to save host URL:', err);
+      showError(message);
+      urlEdit.setIsSaving(false);
+    }
+  };
+
+  const handleDeleteUrl = async () => {
+    urlEdit.setIsSaving(true);
+    try {
+      const ok = await props.onDeleteCustomUrl(props.host.id);
+      if (ok) {
+        setLocalCustomUrl(undefined);
+        showSuccess('Host URL removed');
+        urlEdit.finishEditing();
+      } else {
+        showError('Failed to remove host URL');
+        urlEdit.setIsSaving(false);
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to remove host URL';
+      logger.error('Failed to remove host URL:', err);
+      showError(message);
+      urlEdit.setIsSaving(false);
+    }
+  };
 
 
 
@@ -1184,34 +1237,6 @@ const HostRow: Component<HostRowProps> = (props) => {
                   </p>
                 </Show>
               </div>
-              {/* Custom URL link */}
-              <Show when={props.customUrl}>
-                <a
-                  href={props.customUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="flex-shrink-0 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
-                  title={`Open ${props.customUrl}`}
-                  onClick={(event) => event.stopPropagation()}
-                >
-                  <svg
-                    class="w-3.5 h-3.5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                    />
-                  </svg>
-                </a>
-              </Show>
-              {/* Edit URL button - shows on hover */}
-
-
             </div>
           </div>
         </td>
@@ -1359,10 +1384,53 @@ const HostRow: Component<HostRowProps> = (props) => {
             </div>
           </td>
         </Show>
+
+        {/* URL Link/Edit */}
+        <Show when={props.isColVisible('link')}>
+          <td class="px-0 py-1 align-middle text-center">
+            <div class="inline-flex items-center justify-center gap-1" onClick={(event) => event.stopPropagation()}>
+              <Show when={localCustomUrl() && localCustomUrl() !== ''} fallback={<span class="text-xs text-gray-300 dark:text-gray-700">-</span>}>
+                <a
+                  href={localCustomUrl()}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="inline-flex justify-center items-center text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+                  title={`Open ${localCustomUrl()}`}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                </a>
+              </Show>
+              <button
+                type="button"
+                onClick={handleStartEditingUrl}
+                class="inline-flex justify-center items-center text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors"
+                title={localCustomUrl() ? 'Edit URL' : 'Add URL'}
+              >
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                </svg>
+              </button>
+            </div>
+          </td>
+        </Show>
       </tr>
 
-      {/* URL editing popover - using shared component */}
-
+      <UrlEditPopover
+        isOpen={urlEdit.isEditing() && urlEdit.editingId() === props.host.id}
+        value={urlEdit.editingValue()}
+        position={urlEdit.position()}
+        isSaving={urlEdit.isSaving()}
+        hasExistingUrl={!!localCustomUrl()}
+        placeholder="https://192.168.1.100:8080"
+        helpText="Add a URL to quickly access this host's web interface"
+        onValueChange={urlEdit.setEditingValue}
+        onSave={handleSaveUrl}
+        onCancel={urlEdit.cancelEditing}
+        onDelete={handleDeleteUrl}
+      />
 
       {/* Drawer Row */}
       <Show when={props.isExpanded}>
