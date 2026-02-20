@@ -264,7 +264,7 @@ export const AgentProfilesPanel: Component = () => {
                 fallback={
                     <Card padding="lg" class="space-y-4">
                         <div class="flex items-center gap-3">
-                            <div class="flex items-center justify-center w-10 h-10 rounded-md bg-amber-100 dark:bg-amber-900/30">
+                            <div class="flex items-center justify-center w-10 h-10 rounded-md bg-amber-100 dark:bg-amber-900">
                                 <Crown class="w-5 h-5 text-amber-600 dark:text-amber-400" />
                             </div>
                             <div>
@@ -280,7 +280,7 @@ export const AgentProfilesPanel: Component = () => {
                             href={getUpgradeActionUrlOrFallback('agent_profiles')}
                             target="_blank"
                             rel="noopener noreferrer"
-                            class="inline-flex items-center gap-2 rounded-md border border-amber-300 dark:border-amber-700 bg-amber-100 dark:bg-amber-900/40 px-4 py-2 text-sm font-medium text-amber-800 dark:text-amber-100 transition-colors hover:bg-amber-200 dark:hover:bg-amber-900/60"
+                            class="inline-flex items-center gap-2 rounded-md border border-amber-300 dark:border-amber-700 bg-amber-100 dark:bg-amber-900 px-4 py-2 text-sm font-medium text-amber-800 dark:text-amber-100 transition-colors hover:bg-amber-200 dark:hover:bg-amber-800"
                             onClick={() => trackUpgradeClicked('settings_agent_profiles_panel', 'agent_profiles')}
                         >
                             <Crown class="w-4 h-4" />
@@ -349,7 +349,7 @@ export const AgentProfilesPanel: Component = () => {
                                     <tbody>
                                         <For each={profiles()}>
                                             {(profile) => (
-                                                <tr class="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                                                <tr class="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800">
                                                     <td class="py-3 px-3">
                                                         <span class="font-medium text-slate-900 dark:text-slate-100">{profile.name}</span>
                                                     </td>
@@ -367,7 +367,7 @@ export const AgentProfilesPanel: Component = () => {
                                                             <button
                                                                 type="button"
                                                                 onClick={() => handleEdit(profile)}
-                                                                class="p-1.5 rounded-md text-slate-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:text-blue-400 dark:hover:bg-blue-900/30"
+                                                                class="p-1.5 rounded-md text-slate-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:text-blue-400 dark:hover:bg-blue-900"
                                                                 title="Edit profile"
                                                             >
                                                                 <Pencil class="w-4 h-4" />
@@ -375,7 +375,7 @@ export const AgentProfilesPanel: Component = () => {
                                                             <button
                                                                 type="button"
                                                                 onClick={() => handleDelete(profile)}
-                                                                class="p-1.5 rounded-md text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-900/30"
+                                                                class="p-1.5 rounded-md text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-900"
                                                                 title="Delete profile"
                                                             >
                                                                 <Trash2 class="w-4 h-4" />
@@ -423,7 +423,7 @@ export const AgentProfilesPanel: Component = () => {
                                                 const isOnline = () => agent.status?.toLowerCase() === 'online' || agent.status?.toLowerCase() === 'running';
 
                                                 return (
-                                                    <tr class="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                                                    <tr class="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800">
                                                         <td class="py-3 px-3">
                                                             <div>
                                                                 <span class="font-medium text-slate-900 dark:text-slate-100">
@@ -452,7 +452,7 @@ export const AgentProfilesPanel: Component = () => {
                                                         </td>
                                                         <td class="py-3 px-3">
                                                             <span class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${isOnline()
-                                                                ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+                                                                ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
                                                                 : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
                                                                 }`}>
                                                                 {isOnline() ? 'Online' : 'Offline'}
@@ -473,7 +473,7 @@ export const AgentProfilesPanel: Component = () => {
 
                     {/* Profile Modal */}
                     <Show when={showModal()}>
-                        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+                        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black opacity-50">
                             <div class="w-full max-w-lg bg-white dark:bg-slate-900 rounded-md shadow-sm border border-slate-200 dark:border-slate-700 mx-4">
                                 <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700">
                                     <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">
@@ -501,7 +501,7 @@ export const AgentProfilesPanel: Component = () => {
                                             value={formName()}
                                             onInput={(e) => setFormName(e.currentTarget.value)}
                                             placeholder="e.g., Production Servers"
-                                            class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-blue-400 dark:focus:ring-blue-800/60"
+                                            class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-blue-400 dark:focus:ring-blue-800"
                                         />
                                     </div>
 
@@ -515,7 +515,7 @@ export const AgentProfilesPanel: Component = () => {
                                             onInput={(e) => setFormDescription(e.currentTarget.value)}
                                             placeholder="What is this profile for?"
                                             rows={2}
-                                            class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-blue-400 dark:focus:ring-blue-800/60 resize-none"
+                                            class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:focus:border-blue-400 dark:focus:ring-blue-800 resize-none"
                                         />
                                     </div>
 
@@ -606,7 +606,7 @@ export const AgentProfilesPanel: Component = () => {
                                                 </p>
                                                 <For each={unknownKeys()}>
                                                     {(key) => (
-                                                        <div class="rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-3 mb-2">
+                                                        <div class="rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900 p-3 mb-2">
                                                             <div class="flex items-center justify-between">
                                                                 <label class="text-sm font-medium text-slate-700 dark:text-slate-300 font-mono">
                                                                     {key}
@@ -629,7 +629,7 @@ export const AgentProfilesPanel: Component = () => {
                                                                     <button
                                                                         type="button"
                                                                         onClick={() => updateSetting(key, undefined)}
-                                                                        class="inline-flex min-h-10 min-w-10 sm:min-h-9 sm:min-w-9 items-center justify-center rounded text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30"
+                                                                        class="inline-flex min-h-10 min-w-10 sm:min-h-9 sm:min-w-9 items-center justify-center rounded text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900"
                                                                         title="Remove this setting"
                                                                     >
                                                                         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

@@ -76,9 +76,9 @@ export const SecurityOverviewPanel: Component<SecurityOverviewPanelProps> = (pro
           class="overflow-hidden border border-blue-200 dark:border-blue-800"
           border={false}
         >
-          <div class="bg-blue-50 dark:bg-blue-900/20 px-6 py-4 border-b border-blue-200 dark:border-blue-700">
+          <div class="bg-blue-50 dark:bg-blue-900 px-6 py-4 border-b border-blue-200 dark:border-blue-700">
             <div class="flex items-center gap-3">
-              <div class="p-2 bg-blue-100 dark:bg-blue-900/50 rounded-md">
+              <div class="p-2 bg-blue-100 dark:bg-blue-900 rounded-md">
                 <Shield class="w-5 h-5 text-blue-600 dark:text-blue-300" strokeWidth={2} />
               </div>
               <SectionHeader
@@ -108,7 +108,7 @@ export const SecurityOverviewPanel: Component<SecurityOverviewPanelProps> = (pro
               <Show when={props.securityStatus()?.proxyAuthLogoutURL}>
                 <a
                   href={props.securityStatus()?.proxyAuthLogoutURL}
-                  class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-blue-300 dark:border-blue-600 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-200 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
+                  class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-blue-300 dark:border-blue-600 bg-blue-50 dark:bg-blue-900 text-blue-700 dark:text-blue-200 hover:bg-blue-100 dark:hover:bg-blue-800 transition-colors"
                 >
                   <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
@@ -133,7 +133,7 @@ export const SecurityOverviewPanel: Component<SecurityOverviewPanelProps> = (pro
       <Show when={!props.securityStatusLoading() && props.securityStatus()}>
         <Card
           padding="md"
-          class="border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800"
+          class="border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
           border={false}
         >
           <div class="flex items-start gap-3">
