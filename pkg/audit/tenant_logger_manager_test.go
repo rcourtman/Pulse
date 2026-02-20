@@ -2,6 +2,7 @@ package audit
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -97,6 +98,42 @@ func TestTenantLoggerManager_GetLogger_InvalidOrgID(t *testing.T) {
 	}
 	if len(manager.GetAllLoggers()) != 0 {
 		t.Fatalf("expected invalid org ID logger not to be cached")
+	}
+}
+
+func TestTenantLoggerManager_GetLogger_InvalidOrgIDsRejected(t *testing.T) {
+	logger := &stubLogger{}
+	factory := &stubLoggerFactory{logger: logger}
+	manager := NewTenantLoggerManager("data", factory)
+
+	invalidIDs := []string{
+		"",
+		".",
+		"..",
+		"../org-1",
+		"org/one",
+		"org one",
+		"org\tone",
+		"org\none",
+		"org\\one",
+		"org:one",
+		strings.Repeat("x", 65),
+	}
+
+	for _, orgID := range invalidIDs {
+		got := manager.GetLogger(orgID)
+		if got == nil {
+			t.Fatalf("expected fallback logger for invalid orgID %q", orgID)
+		}
+		if got == logger {
+			t.Fatalf("expected invalid orgID %q to bypass tenant logger factory", orgID)
+		}
+		if len(factory.created) != 0 {
+			t.Fatalf("expected no tenant logger creation for invalid orgID %q, got %v", orgID, factory.created)
+		}
+		if len(manager.GetAllLoggers()) != 0 {
+			t.Fatalf("expected invalid orgID %q logger not to be cached", orgID)
+		}
 	}
 }
 

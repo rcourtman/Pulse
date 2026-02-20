@@ -122,19 +122,19 @@ type SettingsTab =
   | 'docker'
   | 'hosts'
   | 'agents'
-  | 'system-general'
-  | 'system-network'
-  | 'system-updates'
+  | 'workspace'
+  | 'integrations'
+  | 'maintenance'
   | 'system-backups'
   | 'system-ai'
   | 'system-pro'
   | 'api'
   | 'security-overview'
-  | 'security-auth'
+  | 'authentication'
   | 'security-sso'
   | 'security-roles'
-  | 'security-users'
-  | 'security-audit'
+  | 'team'
+  | 'audit'
   | 'updates'
   | 'security-webhooks';
 
@@ -159,27 +159,27 @@ const SETTINGS_HEADER_META: Partial<Record<SettingsTab, { title: string; descrip
     title: 'Agents',
     description: 'Install and manage the unified Pulse agent for host and Docker monitoring.',
   },
-  'system-general': {
+  'workspace': {
     title: 'Workspace Settings',
     description: 'Configure appearance preferences, AI services, and Pulse Pro licensing.',
   },
-  'system-network': {
+  'integrations': {
     title: 'Network & Integrations',
     description: 'Manage network discovery, endpoints, API tokens, and webhook integrations.',
   },
-  'system-updates': {
+  'maintenance': {
     title: 'System Maintenance',
     description: 'Check for updates, manage update channels, and configure backup polling.',
   },
-  'security-auth': {
+  'authentication': {
     title: 'Authentication',
     description: 'View security posture and configure password or Single Sign-On authentication.',
   },
-  'security-users': {
+  'team': {
     title: 'Team & Roles',
     description: 'Manage users, assign functional roles, and view effective permissions across your infrastructure.',
   },
-  'security-audit': {
+  'audit': {
     title: 'Audit Logs',
     description: 'View security events, login attempts, and configuration changes.',
   },
@@ -238,15 +238,15 @@ const Settings: Component<SettingsProps> = (props) => {
       path.includes('/settings/agents')
     )
       return 'agents';
-    if (path.includes('/settings/system-general') || path.includes('/settings/system-ai') || path.includes('/settings/system-pro')) return 'system-general';
-    if (path.includes('/settings/system-network') || path.includes('/settings/api') || path.includes('/settings/security-webhooks') || path.includes('/settings/integrations')) return 'system-network';
-    if (path.includes('/settings/system-updates') || path.includes('/settings/system-backups') || path.includes('/settings/backups') || path.includes('/settings/recovery')) return 'system-updates';
-    if (path.includes('/settings/system')) return 'system-general';
+    if (path.includes('/settings/system-general') || path.includes('/settings/system-ai') || path.includes('/settings/system-pro')) return 'workspace';
+    if (path.includes('/settings/system-network') || path.includes('/settings/api') || path.includes('/settings/security-webhooks') || path.includes('/settings/integrations')) return 'integrations';
+    if (path.includes('/settings/system-updates') || path.includes('/settings/system-backups') || path.includes('/settings/backups') || path.includes('/settings/recovery')) return 'maintenance';
+    if (path.includes('/settings/system')) return 'workspace';
 
-    if (path.includes('/settings/security-overview') || path.includes('/settings/security-auth') || path.includes('/settings/security-sso')) return 'security-auth';
-    if (path.includes('/settings/security-roles') || path.includes('/settings/security-users') || path.includes('/settings/organization')) return 'security-users';
-    if (path.includes('/settings/security-audit')) return 'security-audit';
-    if (path.includes('/settings/security')) return 'security-auth';
+    if (path.includes('/settings/security-overview') || path.includes('/settings/security-auth') || path.includes('/settings/security-sso')) return 'authentication';
+    if (path.includes('/settings/security-roles') || path.includes('/settings/security-users') || path.includes('/settings/organization')) return 'team';
+    if (path.includes('/settings/security-audit')) return 'audit';
+    if (path.includes('/settings/security')) return 'authentication';
     if (path.includes('/settings/updates')) return 'updates';
 
     // Legacy platform paths map to the Proxmox tab
@@ -756,19 +756,19 @@ const Settings: Component<SettingsProps> = (props) => {
         label: 'Workspace',
         items: [
           {
-            id: 'system-general',
+            id: 'workspace',
             label: 'General Settings',
             icon: Sliders,
             iconProps: { strokeWidth: 2 },
           },
           {
-            id: 'system-network',
+            id: 'integrations',
             label: 'Integrations & API',
             icon: Network,
             iconProps: { strokeWidth: 2 },
           },
           {
-            id: 'system-updates',
+            id: 'maintenance',
             label: 'Maintenance',
             icon: RefreshCw,
             iconProps: { strokeWidth: 2 },
@@ -780,19 +780,19 @@ const Settings: Component<SettingsProps> = (props) => {
         label: 'Security & Access',
         items: [
           {
-            id: 'security-auth',
+            id: 'authentication',
             label: 'Authentication',
             icon: Lock,
             iconProps: { strokeWidth: 2 },
           },
           {
-            id: 'security-users',
+            id: 'team',
             label: 'Team & Roles',
             icon: Users,
             iconProps: { strokeWidth: 2 },
           },
           {
-            id: 'security-audit',
+            id: 'audit',
             label: 'Audit Log',
             icon: Terminal,
             iconProps: { strokeWidth: 2 },
@@ -1621,9 +1621,9 @@ const Settings: Component<SettingsProps> = (props) => {
   const saveSettings = async () => {
     try {
       if (
-        activeTab() === 'system-general' ||
-        activeTab() === 'system-network' ||
-        activeTab() === 'system-updates' ||
+        activeTab() === 'workspace' ||
+        activeTab() === 'integrations' ||
+        activeTab() === 'maintenance' ||
         activeTab() === 'system-backups'
       ) {
         // Save system settings using typed API
@@ -1992,9 +1992,9 @@ const Settings: Component<SettingsProps> = (props) => {
           when={
             hasUnsavedChanges() &&
             (activeTab() === 'proxmox' ||
-              activeTab() === 'system-general' ||
-              activeTab() === 'system-network' ||
-              activeTab() === 'system-updates' ||
+              activeTab() === 'workspace' ||
+              activeTab() === 'integrations' ||
+              activeTab() === 'maintenance' ||
               activeTab() === 'system-backups')
           }
         >
@@ -3166,7 +3166,7 @@ const Settings: Component<SettingsProps> = (props) => {
               </Show>
 
               {/* Workspace Settings */}
-              <Show when={activeTab() === 'system-general'}>
+              <Show when={activeTab() === 'workspace'}>
                 <div class="space-y-12">
                   <div>
                     <SectionHeader title="General Configuration" description="Manage core platform behavior" />
@@ -3215,7 +3215,7 @@ const Settings: Component<SettingsProps> = (props) => {
               </Show>
 
               {/* Network & Integrations */}
-              <Show when={activeTab() === 'system-network'}>
+              <Show when={activeTab() === 'integrations'}>
                 <div class="space-y-12">
                   <div>
                     <SectionHeader title="Network & Discovery" description="Manage local network and CORS settings" />
@@ -3279,7 +3279,7 @@ const Settings: Component<SettingsProps> = (props) => {
               </Show>
 
               {/* Maintenance */}
-              <Show when={activeTab() === 'system-updates'}>
+              <Show when={activeTab() === 'maintenance'}>
                 <div class="space-y-12">
                   <div>
                     <SectionHeader title="System Updates" description="Check for and install updates" />
@@ -3334,7 +3334,7 @@ const Settings: Component<SettingsProps> = (props) => {
               </Show>
 
               {/* Security & Authentication */}
-              <Show when={activeTab() === 'security-auth'}>
+              <Show when={activeTab() === 'authentication'}>
                 <div class="space-y-12">
                   <div>
                     <SectionHeader title="Security Overview" description="Health and status check" />
@@ -3380,7 +3380,7 @@ const Settings: Component<SettingsProps> = (props) => {
               </Show>
 
               {/* Team & Roles */}
-              <Show when={activeTab() === 'security-users'}>
+              <Show when={activeTab() === 'team'}>
                 <div class="space-y-12">
                   <div>
                     <SectionHeader title="User Access" description="View and assign user permissions" />
@@ -3399,7 +3399,7 @@ const Settings: Component<SettingsProps> = (props) => {
               </Show>
 
               {/* Audit Log Tab */}
-              <Show when={activeTab() === 'security-audit'}>
+              <Show when={activeTab() === 'audit'}>
                 <AuditLogPanel />
               </Show>
             </div>

@@ -397,10 +397,10 @@ export function useSystemSettingsState({
   const saveSettings = async () => {
     try {
       if (
-        activeTab() === 'system-general' ||
-        activeTab() === 'system-network' ||
-        activeTab() === 'system-updates' ||
-        activeTab() === 'system-recovery'
+        activeTab() === 'workspace' ||
+        activeTab() === 'integrations' ||
+        activeTab() === 'maintenance' ||
+        activeTab() === 'maintenance'
       ) {
         await SettingsAPI.updateSystemSettings({
           pvePollingInterval: pvePollingInterval(),

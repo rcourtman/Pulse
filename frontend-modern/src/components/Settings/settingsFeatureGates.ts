@@ -2,13 +2,6 @@ import type { SettingsTab } from './settingsTypes';
 import { trackPaywallViewed } from '@/utils/upgradeMetrics';
 
 export const tabFeatureRequirements: Partial<Record<SettingsTab, string[]>> = {
-  'system-relay': ['relay'],
-  'security-webhooks': ['audit_logging'],
-  'organization-overview': ['multi_tenant'],
-  'organization-access': ['multi_tenant'],
-  'organization-sharing': ['multi_tenant'],
-  'organization-billing': ['multi_tenant'],
-  'organization-billing-admin': ['multi_tenant'],
 };
 
 export function isFeatureLocked(

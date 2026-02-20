@@ -5,10 +5,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sync"
 
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
+
+var tenantRBACOrgIDPattern = regexp.MustCompile(`^[A-Za-z0-9._-]{1,64}$`)
 
 // TenantRBACProvider manages per-tenant RBAC Manager instances.
 // Follows the same file-based isolation pattern as MultiTenantPersistence.
@@ -147,5 +150,11 @@ func normalizeOrgID(orgID string) string {
 }
 
 func isValidTenantOrgID(orgID string) bool {
-	return filepath.Base(orgID) == orgID && orgID != "" && orgID != "." && orgID != ".."
+	if orgID == "" || orgID == "." || orgID == ".." {
+		return false
+	}
+	if filepath.Base(orgID) != orgID {
+		return false
+	}
+	return tenantRBACOrgIDPattern.MatchString(orgID)
 }

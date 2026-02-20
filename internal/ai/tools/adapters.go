@@ -24,6 +24,7 @@ type AlertManagerMCPAdapter struct {
 // AlertManager interface matches what alerts.Manager provides
 type AlertManager interface {
 	GetActiveAlerts() []alerts.Alert
+	GetRecentlyResolved() []models.ResolvedAlert
 }
 
 // NewAlertManagerMCPAdapter creates a new adapter for alert manager
@@ -58,6 +59,14 @@ func (a *AlertManagerMCPAdapter) GetActiveAlerts() []ActiveAlert {
 	}
 
 	return result
+}
+
+// GetRecentlyResolved implements mcp.AlertProvider
+func (a *AlertManagerMCPAdapter) GetRecentlyResolved(minutes int) []models.ResolvedAlert {
+	if a.manager == nil {
+		return nil
+	}
+	return a.manager.GetRecentlyResolved()
 }
 
 // GuestConfigSource provides guest configuration data with context.

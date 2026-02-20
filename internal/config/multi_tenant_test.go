@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -17,6 +18,12 @@ func TestMultiTenantPersistence_InvalidOrgIDsRejected(t *testing.T) {
 		"../bad",
 		"bad/..",
 		"bad/../evil",
+		"bad org",
+		"bad\torg",
+		"bad\norg",
+		"bad\\org",
+		"bad:org",
+		strings.Repeat("a", 65),
 	}
 
 	for _, orgID := range invalidIDs {
@@ -30,6 +37,20 @@ func TestMultiTenantPersistence_InvalidOrgIDsRejected(t *testing.T) {
 
 	if _, err := os.Stat(filepath.Join(baseDir, "orgs")); err == nil {
 		t.Fatalf("unexpected orgs directory created for invalid org IDs")
+	}
+}
+
+func TestMultiTenantPersistence_OrgIDLengthBoundaries(t *testing.T) {
+	baseDir := t.TempDir()
+	mtp := NewMultiTenantPersistence(baseDir)
+
+	maxLenID := strings.Repeat("a", 64)
+	if _, err := mtp.GetPersistence(maxLenID); err != nil {
+		t.Fatalf("expected max length org ID to be accepted: %v", err)
+	}
+
+	if _, err := mtp.GetPersistence(strings.Repeat("b", 65)); err == nil {
+		t.Fatalf("expected org ID longer than 64 chars to be rejected")
 	}
 }
 

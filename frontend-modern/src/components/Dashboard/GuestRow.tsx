@@ -279,7 +279,7 @@ function OSInfoCell(props: { osName: string; osVersion: string; agentVersion: st
           </svg>
         );
       default:
-        return <span class="text-slate-400">-</span>;
+        return <span class="text-slate-400">—</span>;
     }
   };
 
@@ -453,11 +453,11 @@ export const GUEST_COLUMNS: ColumnDef[] = [
  * - Type-specific views use the dedicated columns for that type
  */
 export const VIEW_MODE_COLUMNS: Record<ViewMode, Set<string> | null> = {
-  all:    new Set(['name','type','info','cpu','memory','disk','ip','uptime','node','backup','tags','os','diskIo','netIo','link']),
-  vm:     new Set(['name','vmid','cpu','memory','disk','ip','uptime','node','backup','tags','os','diskIo','netIo','link']),
-  lxc:    new Set(['name','vmid','cpu','memory','disk','ip','uptime','node','backup','tags','os','diskIo','netIo','link']),
-  docker: new Set(['name','cpu','memory','uptime','image','context','tags','update','link']),
-  k8s:    new Set(['name','cpu','memory','image','namespace','context','link']),
+  all: new Set(['name', 'type', 'info', 'cpu', 'memory', 'disk', 'ip', 'uptime', 'node', 'backup', 'tags', 'os', 'diskIo', 'netIo', 'link']),
+  vm: new Set(['name', 'vmid', 'cpu', 'memory', 'disk', 'ip', 'uptime', 'node', 'backup', 'tags', 'os', 'diskIo', 'netIo', 'link']),
+  lxc: new Set(['name', 'vmid', 'cpu', 'memory', 'disk', 'ip', 'uptime', 'node', 'backup', 'tags', 'os', 'diskIo', 'netIo', 'link']),
+  docker: new Set(['name', 'cpu', 'memory', 'uptime', 'image', 'context', 'tags', 'update', 'link']),
+  k8s: new Set(['name', 'cpu', 'memory', 'image', 'namespace', 'context', 'link']),
 };
 
 interface GuestRowProps {
@@ -725,18 +725,24 @@ export function GuestRow(props: GuestRowProps) {
 
 
   const rowClass = createMemo(() => {
-    const base = 'transition-all duration-200 relative';
+    const base = 'transition-all duration-200 relative group cursor-pointer';
+
+    if (props.isExpanded) {
+      return `${base} bg-blue-50 dark:bg-blue-900 z-10 hover:shadow-sm`;
+    }
+
     const hover = 'hover:shadow-sm';
     const alertBg = hasUnacknowledgedAlert()
       ? props.alertStyles?.severity === 'critical'
         ? 'bg-red-50 dark:bg-red-950'
         : 'bg-yellow-50 dark:bg-yellow-950'
-      : 'bg-white dark:bg-slate-800';
+      : '';
     const defaultHover = hasUnacknowledgedAlert()
       ? ''
       : 'hover:bg-slate-50 dark:hover:bg-slate-700';
     const stoppedDimming = !isRunning() ? 'opacity-60' : '';
-    return `${base} ${hover} ${defaultHover} ${alertBg} ${stoppedDimming}`;
+
+    return [base, hover, defaultHover, alertBg, stoppedDimming].filter(Boolean).join(' ');
   });
 
   const rowStyle = createMemo(() => {
@@ -830,7 +836,7 @@ export function GuestRow(props: GuestRowProps) {
         <Show when={isColVisible('info')}>
           <td class="px-1.5 sm:px-2 py-1 align-middle">
             <div class="flex justify-center text-xs text-slate-600 dark:text-slate-400 whitespace-nowrap">
-              <Show when={infoValue()} fallback={<span class="text-slate-400">-</span>}>
+              <Show when={infoValue()} fallback={<span class="text-slate-400">—</span>}>
                 <InfoTooltipCell value={infoValue()} tooltip={infoTooltip()} type={workloadType()} />
               </Show>
             </div>
@@ -841,7 +847,7 @@ export function GuestRow(props: GuestRowProps) {
         <Show when={isColVisible('vmid')}>
           <td class="px-1.5 sm:px-2 py-1 align-middle">
             <div class="flex justify-center text-xs text-slate-600 dark:text-slate-400 whitespace-nowrap">
-              <Show when={displayId()} fallback={<span class="text-slate-400">-</span>}>
+              <Show when={displayId()} fallback={<span class="text-slate-400">—</span>}>
                 {displayId()}
               </Show>
             </div>
@@ -906,7 +912,7 @@ export function GuestRow(props: GuestRowProps) {
         <Show when={isColVisible('ip')}>
           <td class="px-1.5 sm:px-2 py-1 align-middle">
             <div class="flex justify-center">
-              <Show when={ipAddresses().length > 0 || hasNetworkInterfaces()} fallback={<span class="text-xs text-slate-400">-</span>}>
+              <Show when={ipAddresses().length > 0 || hasNetworkInterfaces()} fallback={<span class="text-xs text-slate-400">—</span>}>
                 <NetworkInfoCell
                   ipAddresses={ipAddresses()}
                   networkInterfaces={networkInterfaces()}
@@ -920,7 +926,7 @@ export function GuestRow(props: GuestRowProps) {
         <Show when={isColVisible('uptime')}>
           <td class="px-1.5 sm:px-2 py-1 align-middle">
             <div class="flex justify-center">
-              <Show when={isRunning()} fallback={<span class="text-xs text-slate-400">-</span>}>
+              <Show when={isRunning()} fallback={<span class="text-xs text-slate-400">—</span>}>
                 <span class={`text-xs whitespace-nowrap ${props.guest.uptime > 0 && props.guest.uptime < 3600 ? 'text-orange-500' : 'text-slate-600 dark:text-slate-400'}`}>
                   <Show when={isMobile()} fallback={formatUptime(props.guest.uptime)}>
                     {formatUptime(props.guest.uptime, true)}
@@ -935,7 +941,7 @@ export function GuestRow(props: GuestRowProps) {
         <Show when={isColVisible('node')}>
           <td class="px-1.5 sm:px-2 py-1 align-middle">
             <div class="flex justify-center">
-              <Show when={props.guest.node} fallback={<span class="text-xs text-slate-400">-</span>}>
+              <Show when={props.guest.node} fallback={<span class="text-xs text-slate-400">—</span>}>
                 <button
                   type="button"
                   class="text-xs text-blue-600 dark:text-blue-400 hover:underline truncate max-w-[80px]"
@@ -958,7 +964,7 @@ export function GuestRow(props: GuestRowProps) {
             <div class="flex justify-center">
               <Show
                 when={workloadType() === 'docker' && dockerImage()}
-                fallback={<span class="text-xs text-slate-400">-</span>}
+                fallback={<span class="text-xs text-slate-400">—</span>}
               >
                 <span
                   class="text-xs text-slate-600 dark:text-slate-400 truncate max-w-[140px]"
@@ -977,7 +983,7 @@ export function GuestRow(props: GuestRowProps) {
             <div class="flex justify-center">
               <Show
                 when={workloadType() === 'k8s' && namespace()}
-                fallback={<span class="text-xs text-slate-400">-</span>}
+                fallback={<span class="text-xs text-slate-400">—</span>}
               >
                 <span
                   class="text-xs text-slate-600 dark:text-slate-400 truncate max-w-[120px]"
@@ -996,7 +1002,7 @@ export function GuestRow(props: GuestRowProps) {
             <div class="flex justify-center">
               <Show
                 when={contextLabel()}
-                fallback={<span class="text-xs text-slate-400">-</span>}
+                fallback={<span class="text-xs text-slate-400">—</span>}
               >
                 <span
                   class="text-xs text-slate-600 dark:text-slate-400 truncate max-w-[140px]"
@@ -1013,12 +1019,12 @@ export function GuestRow(props: GuestRowProps) {
         <Show when={isColVisible('backup')}>
           <td class="px-1.5 sm:px-2 py-1 align-middle">
             <div class="flex justify-center">
-              <Show when={supportsBackup()} fallback={<span class="text-xs text-slate-400">-</span>}>
+              <Show when={supportsBackup()} fallback={<span class="text-xs text-slate-400">—</span>}>
                 <Show when={!props.guest.template}>
                   <BackupStatusCell lastBackup={props.guest.lastBackup} />
                 </Show>
                 <Show when={props.guest.template}>
-                  <span class="text-xs text-slate-400">-</span>
+                  <span class="text-xs text-slate-400">—</span>
                 </Show>
               </Show>
             </div>
@@ -1048,7 +1054,7 @@ export function GuestRow(props: GuestRowProps) {
                 fallback={
                   <Show
                     when={ociImage()}
-                    fallback={<span class="text-xs text-slate-400">-</span>}
+                    fallback={<span class="text-xs text-slate-400">—</span>}
                   >
                     {/* For OCI containers without guest agent, show image name in OS column */}
                     <span
@@ -1070,53 +1076,53 @@ export function GuestRow(props: GuestRowProps) {
           </td>
         </Show>
 
-		        {/* Net I/O */}
-		        <Show when={isColVisible('netIo')}>
-		          <td class="px-1.5 sm:px-2 py-1 align-middle">
-		            <Show when={isRunning()} fallback={<div class="text-center"><span class="text-xs text-slate-400">-</span></div>}>
-		              <div class="grid w-full min-w-0 grid-cols-[0.75rem_minmax(0,1fr)_0.75rem_minmax(0,1fr)] items-center gap-x-1 overflow-hidden text-[11px] tabular-nums">
-		                <span class="inline-flex w-3 justify-center text-emerald-500">↓</span>
-		                <span
-		                  class={`block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${networkEmphasis().className}`}
-		                  title={networkEmphasis().showOutlierHint ? `${formatSpeed(networkIn())} (Top outlier)` : formatSpeed(networkIn())}
-		                >
-		                  {formatSpeed(networkIn())}
-		                </span>
-		                <span class="inline-flex w-3 justify-center text-orange-400">↑</span>
-		                <span
-		                  class={`block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${networkEmphasis().className}`}
-		                  title={networkEmphasis().showOutlierHint ? `${formatSpeed(networkOut())} (Top outlier)` : formatSpeed(networkOut())}
-		                >
-		                  {formatSpeed(networkOut())}
-		                </span>
-		              </div>
-		            </Show>
-		          </td>
-		        </Show>
+        {/* Net I/O */}
+        <Show when={isColVisible('netIo')}>
+          <td class="px-1.5 sm:px-2 py-1 align-middle">
+            <Show when={isRunning()} fallback={<div class="text-center"><span class="text-xs text-slate-400">—</span></div>}>
+              <div class="grid w-full min-w-0 grid-cols-[0.75rem_minmax(0,1fr)_0.75rem_minmax(0,1fr)] items-center gap-x-1 overflow-hidden text-[11px] tabular-nums">
+                <span class="inline-flex w-3 justify-center text-emerald-500">↓</span>
+                <span
+                  class={`block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${networkEmphasis().className}`}
+                  title={networkEmphasis().showOutlierHint ? `${formatSpeed(networkIn())} (Top outlier)` : formatSpeed(networkIn())}
+                >
+                  {formatSpeed(networkIn())}
+                </span>
+                <span class="inline-flex w-3 justify-center text-orange-400">↑</span>
+                <span
+                  class={`block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${networkEmphasis().className}`}
+                  title={networkEmphasis().showOutlierHint ? `${formatSpeed(networkOut())} (Top outlier)` : formatSpeed(networkOut())}
+                >
+                  {formatSpeed(networkOut())}
+                </span>
+              </div>
+            </Show>
+          </td>
+        </Show>
 
-		        {/* Disk I/O */}
-		        <Show when={isColVisible('diskIo')}>
-		          <td class="px-1.5 sm:px-2 py-1 align-middle">
-		            <Show when={isRunning()} fallback={<div class="text-center"><span class="text-xs text-slate-400">-</span></div>}>
-		              <div class="grid w-full min-w-0 grid-cols-[0.75rem_minmax(0,1fr)_0.75rem_minmax(0,1fr)] items-center gap-x-1 overflow-hidden text-[11px] tabular-nums">
-		                <span class="inline-flex w-3 justify-center font-mono text-blue-500">R</span>
-		                <span
-		                  class={`block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${diskIOEmphasis().className}`}
-		                  title={diskIOEmphasis().showOutlierHint ? `${formatSpeed(diskRead())} (Top outlier)` : formatSpeed(diskRead())}
-		                >
-		                  {formatSpeed(diskRead())}
-		                </span>
-		                <span class="inline-flex w-3 justify-center font-mono text-amber-500">W</span>
-		                <span
-		                  class={`block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${diskIOEmphasis().className}`}
-		                  title={diskIOEmphasis().showOutlierHint ? `${formatSpeed(diskWrite())} (Top outlier)` : formatSpeed(diskWrite())}
-		                >
-		                  {formatSpeed(diskWrite())}
-		                </span>
-		              </div>
-		            </Show>
-		          </td>
-		        </Show>
+        {/* Disk I/O */}
+        <Show when={isColVisible('diskIo')}>
+          <td class="px-1.5 sm:px-2 py-1 align-middle">
+            <Show when={isRunning()} fallback={<div class="text-center"><span class="text-xs text-slate-400">—</span></div>}>
+              <div class="grid w-full min-w-0 grid-cols-[0.75rem_minmax(0,1fr)_0.75rem_minmax(0,1fr)] items-center gap-x-1 overflow-hidden text-[11px] tabular-nums">
+                <span class="inline-flex w-3 justify-center font-mono text-blue-500">R</span>
+                <span
+                  class={`block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${diskIOEmphasis().className}`}
+                  title={diskIOEmphasis().showOutlierHint ? `${formatSpeed(diskRead())} (Top outlier)` : formatSpeed(diskRead())}
+                >
+                  {formatSpeed(diskRead())}
+                </span>
+                <span class="inline-flex w-3 justify-center font-mono text-amber-500">W</span>
+                <span
+                  class={`block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${diskIOEmphasis().className}`}
+                  title={diskIOEmphasis().showOutlierHint ? `${formatSpeed(diskWrite())} (Top outlier)` : formatSpeed(diskWrite())}
+                >
+                  {formatSpeed(diskWrite())}
+                </span>
+              </div>
+            </Show>
+          </td>
+        </Show>
 
         {/* Update (Docker only) */}
         <Show when={isColVisible('update')}>

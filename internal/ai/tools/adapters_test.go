@@ -18,11 +18,16 @@ func (f fakeStateGetter) GetState() models.StateSnapshot {
 }
 
 type fakeAlertManager struct {
-	alerts []alerts.Alert
+	alerts   []alerts.Alert
+	resolved []models.ResolvedAlert
 }
 
 func (f fakeAlertManager) GetActiveAlerts() []alerts.Alert {
 	return f.alerts
+}
+
+func (f fakeAlertManager) GetRecentlyResolved() []models.ResolvedAlert {
+	return f.resolved
 }
 
 type fakeMetricsSource struct {

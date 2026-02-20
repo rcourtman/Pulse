@@ -6,26 +6,26 @@ const canonicalTabPaths = {
   proxmox: '/settings/infrastructure',
   docker: '/settings/workloads/docker',
   agents: '/settings/workloads',
-  'system-general': '/settings/system-general',
-  'system-network': '/settings/system-network',
-  'system-updates': '/settings/system-updates',
-  'system-recovery': '/settings/system-recovery',
+  'workspace': '/settings/system-general',
+  'integrations': '/settings/system-network',
+  'maintenance': '/settings/system-updates',
+  'maintenance': '/settings/system-recovery',
   'system-ai': '/settings/system-ai',
-  'system-relay': '/settings/system-relay',
+  // // 'system-relay': '/settings/system-relay',
   'system-pro': '/settings/system-pro',
-  'organization-overview': '/settings/organization',
-  'organization-access': '/settings/organization/access',
-  'organization-billing': '/settings/organization/billing',
-  'organization-billing-admin': '/settings/organization/billing-admin',
-  'organization-sharing': '/settings/organization/sharing',
+  // // 'organization-overview': '/settings/organization',
+  // // 'organization-access': '/settings/organization/access',
+  // // 'organization-billing': '/settings/organization/billing',
+  // // 'organization-billing-admin': '/settings/organization/billing-admin',
+  // // 'organization-sharing': '/settings/organization/sharing',
   api: '/settings/integrations/api',
-  'security-overview': '/settings/security-overview',
-  'security-auth': '/settings/security-auth',
-  'security-sso': '/settings/security-sso',
-  'security-roles': '/settings/security-roles',
-  'security-users': '/settings/security-users',
-  'security-audit': '/settings/security-audit',
-  'security-webhooks': '/settings/security-webhooks',
+  'authentication': '/settings/security-overview',
+  'authentication': '/settings/security-auth',
+  'authentication': '/settings/security-sso',
+  'team': '/settings/security-roles',
+  'team': '/settings/security-users',
+  'audit': '/settings/security-audit',
+  // // 'security-webhooks': '/settings/security-webhooks',
 } as const satisfies Record<SettingsTab, string>;
 
 const hasFeatures =
@@ -34,13 +34,6 @@ const hasFeatures =
       features.includes(feature);
 
 const gatedTabs: Array<[SettingsTab, string]> = [
-  ['system-relay', 'relay'],
-  ['security-webhooks', 'audit_logging'],
-  ['organization-overview', 'multi_tenant'],
-  ['organization-access', 'multi_tenant'],
-  ['organization-sharing', 'multi_tenant'],
-  ['organization-billing', 'multi_tenant'],
-  ['organization-billing-admin', 'multi_tenant'],
 ];
 
 describe('settingsNavigation integration scaffold', () => {

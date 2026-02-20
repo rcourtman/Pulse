@@ -88,19 +88,11 @@ export const createSettingsPanelRegistry = (
   docker: {
     component: context.dockerPanel,
   },
-  'system-general': {
-    component: GeneralSettingsPanel,
-    getProps: context.getGeneralPanelProps,
-  },
-  'system-network': {
-    component: NetworkSettingsPanel,
-    getProps: context.getNetworkPanelProps,
-  },
-  'system-updates': {
+
+
     component: UpdatesSettingsPanel,
     getProps: context.getUpdatesPanelProps,
   },
-  'system-recovery': {
     component: RecoverySettingsPanel,
     getProps: context.getRecoveryPanelProps,
   },

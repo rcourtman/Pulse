@@ -138,53 +138,54 @@ func TestExecuteGetBaselinesAndPatterns(t *testing.T) {
 func TestExecuteListResolvedAlerts(t *testing.T) {
 	executor := NewPulseToolExecutor(ExecutorConfig{})
 	result, _ := executor.executeListResolvedAlerts(context.Background(), map[string]interface{}{})
-	if result.Content[0].Text != "State provider not available." {
+	if result.Content[0].Text != "Alert provider not available." {
 		t.Fatalf("unexpected response: %s", result.Content[0].Text)
 	}
 
-	executor.stateProvider = &mockStateProvider{state: models.StateSnapshot{}}
+	alertProv := &mockAlertProvider{}
+	executor.alertProvider = alertProv
+
+	alertProv.On("GetRecentlyResolved", 24*60).Return([]models.ResolvedAlert{}).Once()
 	result, _ = executor.executeListResolvedAlerts(context.Background(), map[string]interface{}{})
 	if result.Content[0].Text != "No recently resolved alerts." {
 		t.Fatalf("unexpected response: %s", result.Content[0].Text)
 	}
 
 	now := time.Now()
-	executor.stateProvider = &mockStateProvider{state: models.StateSnapshot{
-		RecentlyResolved: []models.ResolvedAlert{
-			{
-				Alert: models.Alert{
-					ID:           "a1",
-					Type:         "cpu",
-					Level:        "warning",
-					ResourceID:   "r1",
-					ResourceName: "node1",
-					Node:         "node1",
-					Instance:     "i1",
-					Message:      "msg",
-					Value:        1,
-					Threshold:    2,
-					StartTime:    now,
-				},
-				ResolvedTime: now,
+	alertProv.On("GetRecentlyResolved", 24*60).Return([]models.ResolvedAlert{
+		{
+			Alert: models.Alert{
+				ID:           "a1",
+				Type:         "cpu",
+				Level:        "warning",
+				ResourceID:   "r1",
+				ResourceName: "node1",
+				Node:         "node1",
+				Instance:     "i1",
+				Message:      "msg",
+				Value:        1,
+				Threshold:    2,
+				StartTime:    now,
 			},
-			{
-				Alert: models.Alert{
-					ID:           "a2",
-					Type:         "disk",
-					Level:        "critical",
-					ResourceID:   "r2",
-					ResourceName: "node2",
-					Node:         "node2",
-					Instance:     "i2",
-					Message:      "msg2",
-					Value:        3,
-					Threshold:    4,
-					StartTime:    now,
-				},
-				ResolvedTime: now,
-			},
+			ResolvedTime: now,
 		},
-	}}
+		{
+			Alert: models.Alert{
+				ID:           "a2",
+				Type:         "disk",
+				Level:        "critical",
+				ResourceID:   "r2",
+				ResourceName: "node2",
+				Node:         "node2",
+				Instance:     "i2",
+				Message:      "msg2",
+				Value:        3,
+				Threshold:    4,
+				StartTime:    now,
+			},
+			ResolvedTime: now,
+		},
+	})
 
 	result, _ = executor.executeListResolvedAlerts(context.Background(), map[string]interface{}{
 		"type":  "cpu",
@@ -213,6 +214,7 @@ func TestExecuteListAlertsAndFindings(t *testing.T) {
 		{ID: "a1", Severity: "warning"},
 		{ID: "a2", Severity: "critical"},
 	})
+	alertProv.On("GetRecentlyResolved", mock.Anything).Return([]models.ResolvedAlert{})
 	executor.alertProvider = alertProv
 	result, _ = executor.executeListAlerts(context.Background(), map[string]interface{}{
 		"severity": "critical",

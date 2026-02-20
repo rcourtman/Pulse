@@ -521,19 +521,18 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                     );
 
                     const rowClass = createMemo(() => {
-                      const baseBorder = 'border-b border-slate-100 dark:border-slate-800';
-                      const baseHover = `cursor-pointer transition-all duration-200 relative hover:shadow-sm group ${baseBorder}`;
+                      const baseHover = `cursor-pointer transition-all duration-200 relative hover:shadow-sm group hover:bg-slate-50 dark:hover:bg-slate-700`;
 
                       if (isExpanded()) {
-                        return `cursor-pointer transition-all duration-200 relative hover:shadow-sm z-10 group bg-blue-50 dark:bg-blue-900 ${baseBorder}`;
+                        return `cursor-pointer transition-all duration-200 relative hover:shadow-sm z-10 group bg-blue-50 dark:bg-blue-900`;
                       }
 
                       let className = baseHover;
                       if (isHighlighted()) {
                         className += ' bg-blue-50 dark:bg-blue-900 ring-1 ring-blue-300 dark:ring-blue-600';
                       }
-                      if (props.hoveredResourceId === resource.id) {
-                        className += ' bg-blue-100 dark:bg-blue-800';
+                      if (props.hoveredResourceId === resource.id && !isHighlighted()) {
+                        className += ' bg-slate-50 dark:bg-slate-700';
                       }
                       if (!isResourceOnline(resource)) {
                         className += ' opacity-60';
@@ -741,10 +740,10 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
                               <Show when={resource.temperature != null} fallback={<span class="text-xs text-slate-400">—</span>}>
                                 <span
                                   class={`text-xs whitespace-nowrap font-medium ${(resource.temperature ?? 0) >= 80
-                                      ? 'text-red-600 dark:text-red-400'
-                                      : (resource.temperature ?? 0) >= 65
-                                        ? 'text-amber-600 dark:text-amber-400'
-                                        : 'text-emerald-600 dark:text-emerald-400'
+                                    ? 'text-red-600 dark:text-red-400'
+                                    : (resource.temperature ?? 0) >= 65
+                                      ? 'text-amber-600 dark:text-amber-400'
+                                      : 'text-emerald-600 dark:text-emerald-400'
                                     }`}
                                 >
                                   {formatTemperature(resource.temperature)}

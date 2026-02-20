@@ -84,6 +84,14 @@ func (m *mockAlertProvider) GetActiveAlerts() []ActiveAlert {
 	return args.Get(0).([]ActiveAlert)
 }
 
+func (m *mockAlertProvider) GetRecentlyResolved(minutes int) []models.ResolvedAlert {
+	args := m.Called(minutes)
+	if args.Get(0) == nil {
+		return nil
+	}
+	return args.Get(0).([]models.ResolvedAlert)
+}
+
 type mockFindingsProvider struct {
 	mock.Mock
 }

@@ -3,6 +3,7 @@ package api
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
@@ -179,6 +180,40 @@ func TestTenantRBACProvider_Close(t *testing.T) {
 	}
 	if err := provider.Close(); err != nil {
 		t.Fatalf("second Close() failed: %v", err)
+	}
+}
+
+func TestTenantRBACProvider_InvalidOrgIDsRejected(t *testing.T) {
+	baseDir := t.TempDir()
+	provider := NewTenantRBACProvider(baseDir)
+	t.Cleanup(func() {
+		if err := provider.Close(); err != nil {
+			t.Errorf("cleanup close failed: %v", err)
+		}
+	})
+
+	invalidIDs := []string{
+		"",
+		".",
+		"..",
+		"../evil",
+		"evil/../org",
+		"org one",
+		"org\tone",
+		"org\none",
+		"org\\one",
+		"org:one",
+		strings.Repeat("x", 65),
+	}
+
+	for _, orgID := range invalidIDs {
+		if _, err := provider.GetManager(orgID); err == nil {
+			t.Fatalf("expected invalid orgID %q to be rejected", orgID)
+		}
+	}
+
+	if len(provider.managers) != 0 {
+		t.Fatalf("expected no managers cached for invalid org IDs, got %d", len(provider.managers))
 	}
 }
 

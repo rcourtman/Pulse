@@ -1241,9 +1241,9 @@ export function Dashboard(props: DashboardProps) {
   const bottomSpacerHeight = createMemo(() =>
     groupedWindowing.isWindowed()
       ? Math.max(
-          0,
-          (filteredGuests().length - groupedWindowing.endIndex()) * DASHBOARD_TABLE_ESTIMATED_ROW_HEIGHT,
-        )
+        0,
+        (filteredGuests().length - groupedWindowing.endIndex()) * DASHBOARD_TABLE_ESTIMATED_ROW_HEIGHT,
+      )
       : 0,
   );
 
@@ -1618,9 +1618,9 @@ export function Dashboard(props: DashboardProps) {
                                 ? { "width": isMobile() ? "70px" : "140px" }
                                 : (['netIo', 'diskIo'].includes(col.id))
                                   ? { "width": isMobile() ? "170px" : "170px" }
-                                : (isMobile() && col.id === 'name')
-                                  ? { "width": "100%", "min-width": "120px" }
-                                : (col.width ? { "width": col.width } : {})),
+                                  : (isMobile() && col.id === 'name')
+                                    ? { "width": "100%", "min-width": "120px" }
+                                    : (col.width ? { "width": col.width } : {})),
                               "vertical-align": 'middle',
                             }}
                             onClick={() => isSortable && handleSort(sortKeyForCol!)}
@@ -1640,7 +1640,7 @@ export function Dashboard(props: DashboardProps) {
                     </For>
                   </tr>
                 </thead>
-                <tbody ref={setTableBodyRef} class="divide-y divide-gray-200 dark:divide-gray-700">
+                <tbody ref={setTableBodyRef}>
                   <Show when={groupedWindowing.isWindowed() && topSpacerHeight() > 0}>
                     <tr aria-hidden="true">
                       <td colspan={totalColumns()} style={{ height: `${topSpacerHeight()}px`, padding: '0', border: '0' }} />
@@ -1719,7 +1719,7 @@ export function Dashboard(props: DashboardProps) {
                                   <Show when={selectedGuestId() === guestId()}>
                                     <tr>
                                       <td colspan={totalColumns()} class="p-0 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
-                                        <div class="p-4" onClick={(e) => e.stopPropagation()}>
+                                        <div class="px-2 sm:px-4 py-3 sm:py-4" onClick={(e) => e.stopPropagation()}>
                                           <GuestDrawer
                                             guest={guest()}
                                             onClose={() => setSelectedGuestId(null)}

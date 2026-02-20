@@ -1,14 +1,16 @@
 package audit
 
 import (
-	"path"
 	"path/filepath"
+	"regexp"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 )
+
+var tenantAuditOrgIDPattern = regexp.MustCompile(`^[A-Za-z0-9._-]{1,64}$`)
 
 // TenantLoggerManager manages per-tenant audit loggers.
 // Each tenant gets their own isolated audit database at <orgDir>/audit/audit.db
@@ -23,10 +25,10 @@ func isValidOrgID(orgID string) bool {
 	if orgID == "" || orgID == "." || orgID == ".." {
 		return false
 	}
-	if path.Clean(orgID) != orgID {
+	if filepath.Base(orgID) != orgID {
 		return false
 	}
-	return filepath.Base(orgID) == orgID
+	return tenantAuditOrgIDPattern.MatchString(orgID)
 }
 
 // LoggerFactory creates audit loggers for specific paths.

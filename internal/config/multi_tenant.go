@@ -4,12 +4,15 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"sync"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rs/zerolog/log"
 )
+
+var orgIDPattern = regexp.MustCompile(`^[A-Za-z0-9._-]{1,64}$`)
 
 // MultiTenantPersistence manages a collection of TenantPersistence instances,
 // one for each organization.
@@ -33,7 +36,13 @@ func (mtp *MultiTenantPersistence) BaseDataDir() string {
 }
 
 func isValidOrgID(orgID string) bool {
-	return filepath.Base(orgID) == orgID && orgID != "" && orgID != "." && orgID != ".."
+	if orgID == "" || orgID == "." || orgID == ".." {
+		return false
+	}
+	if filepath.Base(orgID) != orgID {
+		return false
+	}
+	return orgIDPattern.MatchString(orgID)
 }
 
 // GetPersistence returns the persistence instance for a specific organization.

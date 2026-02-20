@@ -2,26 +2,12 @@ export type SettingsTab =
   | 'proxmox'
   | 'docker'
   | 'agents'
-  | 'system-general'
-  | 'system-network'
-  | 'system-updates'
-  | 'system-recovery'
-  | 'system-ai'
-  | 'system-relay'
-  | 'system-pro'
-  | 'organization-overview'
-  | 'organization-access'
-  | 'organization-billing'
-  | 'organization-billing-admin'
-  | 'organization-sharing'
-  | 'api'
-  | 'security-overview'
-  | 'security-auth'
-  | 'security-sso'
-  | 'security-roles'
-  | 'security-users'
-  | 'security-audit'
-  | 'security-webhooks';
+  | 'workspace' // Formerly system-general
+  | 'integrations' // Formerly system-network
+  | 'maintenance' // Formerly system-updates/system-backups
+  | 'authentication' // Formerly security-auth/sso/overview
+  | 'team' // Formerly security-users/roles
+  | 'audit'; // Formerly security-audit/webhooks
 
 export type AgentKey = 'pve' | 'pbs' | 'pmg';
 
@@ -95,39 +81,39 @@ export function deriveTabFromPath(path: string): SettingsTab {
     return 'agents';
   }
 
-  if (canonicalPath.includes('/settings/system-general')) return 'system-general';
-  if (canonicalPath.includes('/settings/system-network')) return 'system-network';
-  if (canonicalPath.includes('/settings/system-updates')) return 'system-updates';
-  if (canonicalPath.includes('/settings/backups')) return 'system-recovery';
-  if (canonicalPath.includes('/settings/system-backups')) return 'system-recovery';
-  if (canonicalPath.includes('/settings/recovery')) return 'system-recovery';
-  if (canonicalPath.includes('/settings/system-recovery')) return 'system-recovery';
-  if (canonicalPath.includes('/settings/system-ai')) return 'system-ai';
-  if (canonicalPath.includes('/settings/integrations/relay')) return 'system-relay';
-  if (canonicalPath.includes('/settings/system-relay')) return 'system-relay';
-  if (canonicalPath.includes('/settings/system-pro')) return 'system-pro';
-  if (canonicalPath.includes('/settings/organization/access')) return 'organization-access';
-  if (canonicalPath.includes('/settings/organization/sharing')) return 'organization-sharing';
-  if (canonicalPath.includes('/settings/organization/billing-admin')) return 'organization-billing-admin';
-  if (canonicalPath.includes('/settings/billing')) return 'organization-billing';
-  if (canonicalPath.includes('/settings/plan')) return 'organization-billing';
-  if (canonicalPath.includes('/settings/organization/billing')) return 'organization-billing';
-  if (canonicalPath.includes('/settings/organization')) return 'organization-overview';
+  if (canonicalPath.includes('/settings/workspace')) return 'workspace';
+  if (canonicalPath.includes('/settings/system-general')) return 'workspace';
+  if (canonicalPath.includes('/settings/system-ai')) return 'workspace';
+  if (canonicalPath.includes('/settings/system-pro')) return 'workspace';
+  
+  if (canonicalPath.includes('/settings/integrations')) return 'integrations';
+  if (canonicalPath.includes('/settings/system-network')) return 'integrations';
+  if (canonicalPath.includes('/settings/api')) return 'integrations';
+  if (canonicalPath.includes('/settings/integrations/api')) return 'integrations';
+  
+  if (canonicalPath.includes('/settings/maintenance')) return 'maintenance';
+  if (canonicalPath.includes('/settings/system-updates')) return 'maintenance';
+  if (canonicalPath.includes('/settings/updates')) return 'maintenance';
+  if (canonicalPath.includes('/settings/operations/updates')) return 'maintenance';
+  if (canonicalPath.includes('/settings/system-recovery')) return 'maintenance';
+  if (canonicalPath.includes('/settings/backups')) return 'maintenance';
+  if (canonicalPath.includes('/settings/recovery')) return 'maintenance';
 
-  if (canonicalPath.includes('/settings/integrations/api')) return 'api';
-  if (canonicalPath.includes('/settings/api')) return 'api';
+  if (canonicalPath.includes('/settings/authentication')) return 'authentication';
+  if (canonicalPath.includes('/settings/security-overview')) return 'authentication';
+  if (canonicalPath.includes('/settings/security-auth')) return 'authentication';
+  if (canonicalPath.includes('/settings/security-sso')) return 'authentication';
+  if (canonicalPath.includes('/settings/security')) return 'authentication';
 
-  if (canonicalPath.includes('/settings/security-overview')) return 'security-overview';
-  if (canonicalPath.includes('/settings/security-auth')) return 'security-auth';
-  if (canonicalPath.includes('/settings/security-sso')) return 'security-sso';
-  if (canonicalPath.includes('/settings/security-roles')) return 'security-roles';
-  if (canonicalPath.includes('/settings/security-users')) return 'security-users';
-  if (canonicalPath.includes('/settings/security-audit')) return 'security-audit';
-  if (canonicalPath.includes('/settings/security-webhooks')) return 'security-webhooks';
-  if (canonicalPath.includes('/settings/security')) return 'security-overview';
+  if (canonicalPath.includes('/settings/team')) return 'team';
+  if (canonicalPath.includes('/settings/security-roles')) return 'team';
+  if (canonicalPath.includes('/settings/security-users')) return 'team';
+  if (canonicalPath.includes('/settings/organization')) return 'team';
+  if (canonicalPath.includes('/settings/organization/access')) return 'team';
 
-  if (canonicalPath.includes('/settings/operations/updates')) return 'system-updates';
-  if (canonicalPath.includes('/settings/updates')) return 'system-updates';
+  if (canonicalPath.includes('/settings/audit')) return 'audit';
+  if (canonicalPath.includes('/settings/security-audit')) return 'audit';
+  if (canonicalPath.includes('/settings/security-webhooks')) return 'audit';
 
   // Legacy platform paths map to Proxmox connections.
   if (
@@ -175,46 +161,51 @@ export function deriveTabFromQuery(search: string): SettingsTab | null {
     case 'docker':
       return 'docker';
     case 'backups':
-      return 'system-recovery';
+      return 'maintenance';
     case 'recovery':
-      return 'system-recovery';
+      return 'maintenance';
     case 'updates':
-      return 'system-updates';
+    case 'maintenance':
+      return 'maintenance';
     case 'network':
-      return 'system-network';
+    case 'integrations':
+      return 'integrations';
     case 'general':
-      return 'system-general';
-    case 'api':
-      return 'api';
+    case 'workspace':
+      return 'workspace';
+    
     case 'organization':
     case 'org':
-      return 'organization-overview';
-    case 'organization-access':
+      return 'team';
+    case 'team':
     case 'org-access':
-      return 'organization-access';
-    case 'organization-sharing':
+      return 'team';
+    case 'team':
     case 'sharing':
-      return 'organization-sharing';
+      return 'team';
     case 'billing':
     case 'plan':
-      return 'organization-billing';
+      return 'team';
     case 'billing-admin':
-      return 'organization-billing-admin';
+      return 'team';
     case 'security':
     case 'security-overview':
-      return 'security-overview';
+      return 'authentication';
     case 'security-auth':
-      return 'security-auth';
+    case 'authentication':
+      return 'authentication';
     case 'security-sso':
-      return 'security-sso';
+      return 'authentication';
     case 'security-roles':
-      return 'security-roles';
+      return 'team';
     case 'security-users':
-      return 'security-users';
+    case 'team':
+      return 'team';
     case 'security-audit':
-      return 'security-audit';
+    case 'audit':
+      return 'audit';
     case 'security-webhooks':
-      return 'security-webhooks';
+      return 'audit';
     default:
       return null;
   }
@@ -228,21 +219,21 @@ export function settingsTabPath(tab: SettingsTab): string {
       return '/settings/workloads';
     case 'docker':
       return '/settings/workloads/docker';
-    case 'system-recovery':
+    case 'maintenance':
       return '/settings/system-recovery';
-    case 'organization-overview':
+    case 'team':
       return '/settings/organization';
-    case 'organization-access':
+    case 'team':
       return '/settings/organization/access';
-    case 'organization-sharing':
+    case 'team':
       return '/settings/organization/sharing';
-    case 'organization-billing':
+    case 'team':
       return '/settings/organization/billing';
-    case 'organization-billing-admin':
+    case 'team':
       return '/settings/organization/billing-admin';
-    case 'api':
+    case 'integrations':
       return '/settings/integrations/api';
-    case 'system-relay':
+    case 'integrations':
       return '/settings/system-relay';
     default:
       return `/settings/${tab}`;

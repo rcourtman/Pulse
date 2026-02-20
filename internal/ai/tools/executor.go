@@ -77,6 +77,7 @@ type PatternProvider interface {
 // AlertProvider provides active alerts
 type AlertProvider interface {
 	GetActiveAlerts() []ActiveAlert
+	GetRecentlyResolved(minutes int) []models.ResolvedAlert
 }
 
 // FindingsProvider provides patrol findings

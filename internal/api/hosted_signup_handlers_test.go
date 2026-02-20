@@ -108,6 +108,34 @@ func TestHostedSignupValidationFailures(t *testing.T) {
 	}
 }
 
+func TestIsValidHostedOrgName(t *testing.T) {
+	testCases := []struct {
+		name    string
+		orgName string
+		want    bool
+	}{
+		{name: "simple", orgName: "Acme", want: true},
+		{name: "spaces allowed", orgName: "My Organization", want: true},
+		{name: "punctuation allowed", orgName: "Acme, Inc.", want: true},
+		{name: "empty", orgName: "", want: false},
+		{name: "too short", orgName: "ab", want: false},
+		{name: "too long", orgName: strings.Repeat("a", 65), want: false},
+		{name: "path traversal", orgName: "../evil", want: false},
+		{name: "slash", orgName: "acme/ops", want: false},
+		{name: "backslash", orgName: "acme\\ops", want: false},
+		{name: "control char", orgName: "acme\nops", want: false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := isValidHostedOrgName(tc.orgName)
+			if got != tc.want {
+				t.Fatalf("isValidHostedOrgName(%q) = %v, want %v", tc.orgName, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestHostedSignupHostedModeGate(t *testing.T) {
 	router, _, _, _, _ := newHostedSignupTestRouter(t, false)
 

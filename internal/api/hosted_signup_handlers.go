@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/google/uuid"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -247,5 +248,13 @@ func isValidHostedOrgName(orgName string) bool {
 	if len(orgName) < 3 || len(orgName) > 64 {
 		return false
 	}
-	return isValidOrganizationID(orgName)
+	for _, r := range orgName {
+		if unicode.IsControl(r) {
+			return false
+		}
+		if r == '/' || r == '\\' {
+			return false
+		}
+	}
+	return true
 }

@@ -347,23 +347,23 @@ func (e *PulseToolExecutor) executeDismissFinding(_ context.Context, args map[st
 // ========== Resolved Alerts Tool Implementation ==========
 
 func (e *PulseToolExecutor) executeListResolvedAlerts(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
-	if e.stateProvider == nil {
-		return NewTextResult("State provider not available."), nil
-	}
-
 	typeFilter, _ := args["type"].(string)
 	levelFilter, _ := args["level"].(string)
 	limit := intArg(args, "limit", 50)
 
-	state := e.stateProvider.GetState()
+	if e.alertProvider == nil {
+		return NewTextResult("Alert provider not available."), nil
+	}
 
-	if len(state.RecentlyResolved) == 0 {
+	recentlyResolved := e.alertProvider.GetRecentlyResolved(24 * 60) // past 24 hours
+
+	if len(recentlyResolved) == 0 {
 		return NewTextResult("No recently resolved alerts."), nil
 	}
 
 	var alerts []ResolvedAlertSummary
 
-	for _, alert := range state.RecentlyResolved {
+	for _, alert := range recentlyResolved {
 		// Apply filters
 		if typeFilter != "" && !strings.EqualFold(alert.Type, typeFilter) {
 			continue
@@ -398,7 +398,7 @@ func (e *PulseToolExecutor) executeListResolvedAlerts(_ context.Context, args ma
 
 	response := ResolvedAlertsResponse{
 		Alerts: alerts,
-		Total:  len(state.RecentlyResolved),
+		Total:  len(recentlyResolved),
 	}
 
 	return NewJSONResult(response), nil

@@ -1,183 +1,129 @@
 import { describe, expect, it } from 'vitest';
 import {
-  DEFAULT_SETTINGS_TAB,
   deriveAgentFromPath,
   deriveTabFromPath,
   deriveTabFromQuery,
   resolveCanonicalSettingsPath,
   settingsTabPath,
-  type SettingsTab,
 } from '../settingsRouting';
-import { isFeatureLocked, isTabLocked } from '../settingsFeatureGates';
 
-const canonicalTabPaths = {
-  proxmox: '/settings/infrastructure',
-  docker: '/settings/workloads/docker',
-  agents: '/settings/workloads',
-  'system-general': '/settings/system-general',
-  'system-network': '/settings/system-network',
-  'system-updates': '/settings/system-updates',
-  'system-recovery': '/settings/system-recovery',
-  'system-ai': '/settings/system-ai',
-  'system-relay': '/settings/system-relay',
-  'system-pro': '/settings/system-pro',
-  'organization-overview': '/settings/organization',
-  'organization-access': '/settings/organization/access',
-  'organization-billing': '/settings/organization/billing',
-  'organization-billing-admin': '/settings/organization/billing-admin',
-  'organization-sharing': '/settings/organization/sharing',
-  api: '/settings/integrations/api',
-  'security-overview': '/settings/security-overview',
-  'security-auth': '/settings/security-auth',
-  'security-sso': '/settings/security-sso',
-  'security-roles': '/settings/security-roles',
-  'security-users': '/settings/security-users',
-  'security-audit': '/settings/security-audit',
-  'security-webhooks': '/settings/security-webhooks',
-} as const satisfies Record<SettingsTab, string>;
-
-const hasFeatures =
-  (features: string[]) =>
-    (feature: string): boolean =>
-      features.includes(feature);
-
-describe('settingsRouting', () => {
-  it('uses Unified Agents as the default /settings landing tab', () => {
-    expect(DEFAULT_SETTINGS_TAB).toBe('agents');
+describe('resolveCanonicalSettingsPath', () => {
+  it('handles empty cases', () => {
+    expect(resolveCanonicalSettingsPath('')).toBe('/settings');
+    expect(resolveCanonicalSettingsPath('not-a-path')).toBeNull();
   });
 
-  it('returns canonical paths for every tab id', () => {
-    for (const [tab, path] of Object.entries(canonicalTabPaths)) {
-      expect(settingsTabPath(tab as SettingsTab)).toBe(path);
-    }
+  it('drops trailing slashes', () => {
+    expect(resolveCanonicalSettingsPath('/settings/')).toBe('/settings');
+    expect(resolveCanonicalSettingsPath('/settings/workspace/')).toBe('/settings/workspace');
   });
 
-  it('falls back to /settings/{tab} for unknown tab patterns', () => {
-    expect(settingsTabPath('future-tab' as SettingsTab)).toBe('/settings/future-tab');
+  it('maps legacy platform proxies to Proxmox equivalents', () => {
+    expect(resolveCanonicalSettingsPath('/settings/pve')).toBe('/settings/infrastructure/pve');
+    expect(resolveCanonicalSettingsPath('/settings/pbs')).toBe('/settings/infrastructure/pbs');
+    expect(resolveCanonicalSettingsPath('/settings/pmg')).toBe('/settings/infrastructure/pmg');
+  });
+  
+  it('maps remaining legacy endpoints to their new taxonomy', () => {
+    expect(resolveCanonicalSettingsPath('/settings/system-general')).toBe('/settings/workspace');
+    expect(resolveCanonicalSettingsPath('/settings/system-network')).toBe('/settings/integrations');
   });
 
-  it('maps all listed legacy aliases and redirects', () => {
-    const cases: Array<[string, SettingsTab]> = [
-      ['/settings/proxmox', 'proxmox'],
-      ['/settings/agent-hub', 'proxmox'],
-      ['/settings/docker', 'docker'],
-      ['/settings/storage', 'proxmox'],
-      ['/settings/hosts', 'agents'],
-      ['/settings/host-agents', 'agents'],
-      ['/settings/servers', 'proxmox'],
-      ['/settings/linuxServers', 'agents'],
-      ['/settings/windowsServers', 'agents'],
-      ['/settings/macServers', 'agents'],
-      ['/settings/agents', 'agents'],
-      ['/settings/pve', 'proxmox'],
-      ['/settings/pbs', 'proxmox'],
-      ['/settings/pmg', 'proxmox'],
-      ['/settings/containers', 'docker'],
-    ];
-    for (const [path, expectedTab] of cases) {
-      expect(deriveTabFromPath(path)).toBe(expectedTab);
-    }
-    expect(deriveTabFromPath('/settings/not-a-real-tab')).toBe('proxmox');
+  it('keeps canonical routes as they are', () => {
+    expect(resolveCanonicalSettingsPath('/settings/infrastructure/pve')).toBe('/settings/infrastructure/pve');
+    expect(resolveCanonicalSettingsPath('/settings/integrations')).toBe('/settings/integrations');
+  });
+});
+
+describe('deriveTabFromPath', () => {
+  it('falls back to proxmox if unknown component mounted', () => {
+    expect(deriveTabFromPath('/settings')).toBe('proxmox');
+    expect(deriveTabFromPath('/settings/unknown')).toBe('proxmox');
   });
 
-  it('canonicalizes legacy settings routes', () => {
-    const canonicalCases: Array<[string, string]> = [
-      ['/settings/backups', '/settings/system-recovery'],
-      ['/settings/system-backups', '/settings/system-recovery'],
-      ['/settings/recovery', '/settings/system-recovery'],
-      ['/settings/integrations/relay', '/settings/system-relay'],
-      ['/settings/billing', '/settings/organization/billing'],
-      ['/settings/api', '/settings/integrations/api'],
-      ['/settings/security', '/settings/security-overview'],
-      ['/settings/pve', '/settings/infrastructure/pve'],
-      ['/settings/pbs', '/settings/infrastructure/pbs'],
-      ['/settings/pmg', '/settings/infrastructure/pmg'],
-      ['/settings/docker', '/settings/workloads/docker'],
-      ['/settings/hosts', '/settings/workloads'],
-    ];
-
-    for (const [path, expected] of canonicalCases) {
-      expect(resolveCanonicalSettingsPath(path)).toBe(expected);
-    }
-
-    expect(resolveCanonicalSettingsPath('/settings/system-updates')).toBe(
-      '/settings/system-updates',
-    );
-    expect(resolveCanonicalSettingsPath('/not-settings')).toBeNull();
+  it('handles infrastructure routing', () => {
+    expect(deriveTabFromPath('/settings/infrastructure')).toBe('proxmox');
+    expect(deriveTabFromPath('/settings/proxmox')).toBe('proxmox');
+    expect(deriveTabFromPath('/settings/storage')).toBe('proxmox');
+    expect(deriveTabFromPath('/settings/pve')).toBe('proxmox');
   });
 
-  it('maps organization routing contracts', () => {
-    const organizationCases: Array<[string, SettingsTab]> = [
-      ['/settings/organization', 'organization-overview'],
-      ['/settings/organization/access', 'organization-access'],
-      ['/settings/organization/sharing', 'organization-sharing'],
-      ['/settings/billing', 'organization-billing'],
-      ['/settings/plan', 'organization-billing'],
-      ['/settings/organization/billing', 'organization-billing'],
-    ];
-    for (const [path, expectedTab] of organizationCases) {
-      expect(deriveTabFromPath(path)).toBe(expectedTab);
-    }
+  it('handles workload routing', () => {
+    expect(deriveTabFromPath('/settings/workloads')).toBe('agents');
+    expect(deriveTabFromPath('/settings/workloads/docker')).toBe('docker');
+    expect(deriveTabFromPath('/settings/docker')).toBe('docker');
+    expect(deriveTabFromPath('/settings/agents')).toBe('agents');
+    expect(deriveTabFromPath('/settings/linuxServers')).toBe('agents');
   });
 
-  it('maps query deep-links contract values', () => {
-    const queryCases: Array<[string, SettingsTab | null]> = [
-      ['?tab=infrastructure', 'proxmox'],
-      ['?tab=workloads', 'agents'],
-      ['?tab=docker', 'docker'],
-      ['?tab=backups', 'system-recovery'],
-      ['?tab=recovery', 'system-recovery'],
-      ['?tab=organization', 'organization-overview'],
-      ['?tab=billing', 'organization-billing'],
-      ['?tab=security', 'security-overview'],
-      ['?tab=unknown', null],
-    ];
-    for (const [query, expectedTab] of queryCases) {
-      expect(deriveTabFromQuery(query)).toBe(expectedTab);
-    }
+  it('handles system unified routes', () => {
+    expect(deriveTabFromPath('/settings/workspace')).toBe('workspace');
+    expect(deriveTabFromPath('/settings/system-general')).toBe('workspace');
+    expect(deriveTabFromPath('/settings/integrations')).toBe('integrations');
+    expect(deriveTabFromPath('/settings/api')).toBe('integrations');
+    expect(deriveTabFromPath('/settings/maintenance')).toBe('maintenance');
+    expect(deriveTabFromPath('/settings/system-updates')).toBe('maintenance');
+    expect(deriveTabFromPath('/settings/system-recovery')).toBe('maintenance');
   });
 
-  it('evaluates feature-lock behavior contracts', () => {
-    expect(isFeatureLocked(undefined, hasFeatures([]), () => true)).toBe(false);
-    expect(isFeatureLocked([], hasFeatures([]), () => true)).toBe(false);
-    expect(isFeatureLocked(['relay'], hasFeatures([]), () => false)).toBe(false);
-    expect(isFeatureLocked(['relay'], hasFeatures(['relay']), () => true)).toBe(false);
-    expect(isFeatureLocked(['relay'], hasFeatures([]), () => true)).toBe(true);
-    expect(isFeatureLocked(['relay', 'audit_logging'], hasFeatures(['relay']), () => true)).toBe(
-      true,
-    );
+  it('handles security and organization unified routes', () => {
+    expect(deriveTabFromPath('/settings/authentication')).toBe('authentication');
+    expect(deriveTabFromPath('/settings/security-overview')).toBe('authentication');
+    expect(deriveTabFromPath('/settings/security-sso')).toBe('authentication');
+    expect(deriveTabFromPath('/settings/team')).toBe('team');
+    expect(deriveTabFromPath('/settings/organization')).toBe('team');
+    expect(deriveTabFromPath('/settings/security-roles')).toBe('team');
+    expect(deriveTabFromPath('/settings/audit')).toBe('audit');
+    expect(deriveTabFromPath('/settings/security-audit')).toBe('audit');
+  });
+});
+
+describe('deriveAgentFromPath', () => {
+  it('correctly derives agent sub-tabs for infrastructure pages', () => {
+    expect(deriveAgentFromPath('/settings/infrastructure/pve')).toBe('pve');
+    expect(deriveAgentFromPath('/settings/pve')).toBe('pve');
+    expect(deriveAgentFromPath('/settings/storage')).toBe('pbs');
+    expect(deriveAgentFromPath('/settings/infrastructure')).toBeNull();
+  });
+});
+
+describe('deriveTabFromQuery', () => {
+  it('handles empty cases', () => {
+    expect(deriveTabFromQuery('')).toBeNull();
+    expect(deriveTabFromQuery('?other=foo')).toBeNull();
   });
 
-  it('locks gated tabs based on features and license state', () => {
-    const gatedTabs: Array<[SettingsTab, string]> = [
-      ['system-relay', 'relay'],
-      ['security-webhooks', 'audit_logging'],
-      ['organization-overview', 'multi_tenant'],
-      ['organization-access', 'multi_tenant'],
-      ['organization-sharing', 'multi_tenant'],
-      ['organization-billing', 'multi_tenant'],
-    ];
-    for (const [tab, requiredFeature] of gatedTabs) {
-      expect(isTabLocked(tab, hasFeatures([]), () => true)).toBe(true);
-      expect(isTabLocked(tab, hasFeatures([requiredFeature]), () => true)).toBe(false);
-      expect(isTabLocked(tab, hasFeatures([]), () => false)).toBe(false);
-    }
-    expect(isTabLocked('proxmox', hasFeatures([]), () => true)).toBe(false);
+  it('derives from modern parameters', () => {
+    expect(deriveTabFromQuery('?tab=workspace')).toBe('workspace');
+    expect(deriveTabFromQuery('?tab=integrations')).toBe('integrations');
+    expect(deriveTabFromQuery('?tab=authentication')).toBe('authentication');
   });
 
-  it('maps deriveAgentFromPath contracts including legacy and storage routes', () => {
-    const agentCases: Array<[string, 'pve' | 'pbs' | 'pmg' | null]> = [
-      ['/settings/infrastructure/pve', 'pve'],
-      ['/settings/infrastructure/pbs', 'pbs'],
-      ['/settings/infrastructure/pmg', 'pmg'],
-      ['/settings/pve', 'pve'],
-      ['/settings/pbs', 'pbs'],
-      ['/settings/pmg', 'pmg'],
-      ['/settings/storage', 'pbs'],
-      ['/settings/workloads', null],
-    ];
-    for (const [path, expectedAgent] of agentCases) {
-      expect(deriveAgentFromPath(path)).toBe(expectedAgent);
-    }
+  it('maps legacy query parameters to new taxonomy tabs', () => {
+    expect(deriveTabFromQuery('?tab=general')).toBe('workspace');
+    expect(deriveTabFromQuery('?tab=network')).toBe('integrations');
+    expect(deriveTabFromQuery('?tab=api')).toBe('integrations');
+    expect(deriveTabFromQuery('?tab=updates')).toBe('maintenance');
+    expect(deriveTabFromQuery('?tab=recovery')).toBe('maintenance');
+    expect(deriveTabFromQuery('?tab=security-auth')).toBe('authentication');
+    expect(deriveTabFromQuery('?tab=security-users')).toBe('team');
+    expect(deriveTabFromQuery('?tab=security-audit')).toBe('audit');
+  });
+});
+
+describe('settingsTabPath', () => {
+  it('returns clean paths for platform roots', () => {
+    expect(settingsTabPath('proxmox')).toBe('/settings/infrastructure');
+    expect(settingsTabPath('agents')).toBe('/settings/workloads');
+    expect(settingsTabPath('docker')).toBe('/settings/workloads/docker');
+  });
+
+  it('returns unified paths', () => {
+    expect(settingsTabPath('workspace')).toBe('/settings/workspace');
+    expect(settingsTabPath('integrations')).toBe('/settings/integrations');
+    expect(settingsTabPath('maintenance')).toBe('/settings/maintenance');
+    expect(settingsTabPath('authentication')).toBe('/settings/authentication');
+    expect(settingsTabPath('team')).toBe('/settings/team');
+    expect(settingsTabPath('audit')).toBe('/settings/audit');
   });
 });

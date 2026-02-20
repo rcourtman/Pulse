@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -19,6 +20,8 @@ import (
 )
 
 const orgRequestBodyLimit = 64 * 1024
+
+var organizationIDPattern = regexp.MustCompile(`^[A-Za-z0-9._-]{1,64}$`)
 
 type OrgHandlers struct {
 	persistence  *config.MultiTenantPersistence
@@ -911,5 +914,5 @@ func isValidOrganizationID(orgID string) bool {
 	if filepath.Base(orgID) != orgID {
 		return false
 	}
-	return len(orgID) <= 64
+	return organizationIDPattern.MatchString(orgID)
 }
