@@ -87,6 +87,7 @@ func TestPatrolService_GetResourceCurrentState(t *testing.T) {
 func TestPatrolService_TriggerPatrolForAlert(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 	ps.adHocTrigger = make(chan *alerts.Alert, 1)
+	ps.running = true // simulate started patrol loop
 
 	ps.TriggerPatrolForAlert(nil) // should no-op
 

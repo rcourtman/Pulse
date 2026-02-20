@@ -558,6 +558,9 @@ func (c *ConfigPersistence) LoadAlertConfig() (*alerts.AlertConfig, error) {
 					IgnoreVMIDs:   []string{},
 				},
 				Overrides: make(map[string]alerts.ThresholdConfig),
+				Schedule: alerts.ScheduleConfig{
+					NotifyOnResolve: true,
+				},
 			}, nil
 		}
 		return nil, err
@@ -718,6 +721,18 @@ func (c *ConfigPersistence) LoadAlertConfig() (*alerts.AlertConfig, error) {
 		}
 		config.BackupDefaults.IgnoreVMIDs = normalized
 	}
+	// Default NotifyOnResolve to true if not explicitly set in saved config.
+	// Older configs (pre-5.1.12) don't have this field, so Go unmarshals it
+	// as false — but the intended default is true (recovery notifications ON).
+	var scheduleProbe struct {
+		Schedule struct {
+			NotifyOnResolve *bool `json:"notifyOnResolve"`
+		} `json:"schedule"`
+	}
+	if err := json.Unmarshal(data, &scheduleProbe); err == nil && scheduleProbe.Schedule.NotifyOnResolve == nil {
+		config.Schedule.NotifyOnResolve = true
+	}
+
 	config.MetricTimeThresholds = alerts.NormalizeMetricTimeThresholds(config.MetricTimeThresholds)
 	config.DockerIgnoredContainerPrefixes = alerts.NormalizeDockerIgnoredPrefixes(config.DockerIgnoredContainerPrefixes)
 

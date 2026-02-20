@@ -96,6 +96,12 @@ func (p *PatrolService) Stop() {
 
 // patrolLoop is the main background loop
 func (p *PatrolService) patrolLoop(ctx context.Context) {
+	defer func() {
+		p.mu.Lock()
+		p.running = false
+		p.mu.Unlock()
+	}()
+
 	// Seed lastPatrol from persisted run history so the API can return
 	// last_patrol_at immediately (before the first in-process patrol completes).
 	if history := p.GetRunHistory(1); len(history) > 0 && !history[0].CompletedAt.IsZero() {
@@ -1497,10 +1503,11 @@ func (p *PatrolService) TriggerPatrolForAlert(alert *alerts.Alert) {
 
 	p.mu.RLock()
 	enabled := p.config.Enabled
+	running := p.running
 	triggerManager := p.triggerManager
 	p.mu.RUnlock()
 
-	if !enabled {
+	if !enabled || !running {
 		return
 	}
 
