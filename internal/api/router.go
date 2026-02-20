@@ -3295,10 +3295,17 @@ func canCapturePublicURL(cfg *config.Config, req *http.Request) bool {
 		}
 	}
 
-	// Session (Browser): Trusted (as Sessions are generally Admin/User with full access currently)
+	// Session (Browser): allow capture only for the configured local admin session.
+	// This prevents low-privilege session users from poisoning public URL auto-detection.
 	if cookie, err := req.Cookie("pulse_session"); err == nil && cookie.Value != "" {
 		if ValidateSession(cookie.Value) {
-			return true
+			adminUser := strings.TrimSpace(cfg.AuthUser)
+			if adminUser != "" {
+				username := strings.TrimSpace(GetSessionUsername(cookie.Value))
+				if strings.EqualFold(username, adminUser) {
+					return true
+				}
+			}
 		}
 	}
 

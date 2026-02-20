@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
@@ -1126,6 +1127,45 @@ func TestCanCapturePublicURL_Security(t *testing.T) {
 			req.Header.Set("Authorization", "Basic "+creds)
 			if !canCapturePublicURL(cfg, req) {
 				t.Error("expected true for valid basic auth")
+			}
+		})
+	})
+
+	// Session Tests
+	t.Run("Session", func(t *testing.T) {
+		InitSessionStore(t.TempDir())
+
+		cfg := &config.Config{
+			AuthUser: "admin",
+		}
+
+		adminToken := "session-admin"
+		GetSessionStore().CreateSession(adminToken, time.Hour, "agent", "127.0.0.1", "admin")
+
+		memberToken := "session-member"
+		GetSessionStore().CreateSession(memberToken, time.Hour, "agent", "127.0.0.1", "member")
+
+		t.Run("configured admin session allowed", func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/", nil)
+			req.AddCookie(&http.Cookie{Name: "pulse_session", Value: adminToken})
+			if !canCapturePublicURL(cfg, req) {
+				t.Error("expected true for configured admin session")
+			}
+		})
+
+		t.Run("non-admin session denied", func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/", nil)
+			req.AddCookie(&http.Cookie{Name: "pulse_session", Value: memberToken})
+			if canCapturePublicURL(cfg, req) {
+				t.Error("expected false for non-admin session")
+			}
+		})
+
+		t.Run("session denied when no configured admin user", func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/", nil)
+			req.AddCookie(&http.Cookie{Name: "pulse_session", Value: adminToken})
+			if canCapturePublicURL(&config.Config{}, req) {
+				t.Error("expected false when auth user is not configured")
 			}
 		})
 	})
