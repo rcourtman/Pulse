@@ -3,8 +3,6 @@ package tools
 import (
 	"context"
 	"fmt"
-
-	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
 // registerPMGTools registers the pulse_pmg tool
@@ -60,7 +58,6 @@ func (e *PulseToolExecutor) executeGetPMGStatus(_ context.Context, args map[stri
 	instanceFilter, _ := args["instance"].(string)
 
 	rs, _ := e.readStateForControl()
-	state := e.stateProvider.GetState()
 
 	// Prefer ReadState for instance selection when available.
 	var wantID, wantName string
@@ -79,68 +76,33 @@ func (e *PulseToolExecutor) executeGetPMGStatus(_ context.Context, args map[stri
 		}
 	}
 
-	if len(rs.PMGInstances()) == 0 && len(state.PMGInstances) == 0 {
+	if len(rs.PMGInstances()) == 0 {
 		return NewTextResult("No Proxmox Mail Gateway instances found. PMG monitoring may not be configured."), nil
 	}
 
 	var instances []PMGInstanceSummary
-	// Build results in ReadState order; enrich from StateSnapshot when available.
 	for _, v := range rs.PMGInstances() {
 		if instanceFilter != "" && v.ID() != instanceFilter && v.InstanceID() != instanceFilter && v.Name() != instanceFilter && v.InstanceID() != wantID && v.Name() != wantName {
 			continue
 		}
 
-		var fromState *models.PMGInstance
-		for i := range state.PMGInstances {
-			p := &state.PMGInstances[i]
-			if (wantID != "" && p.ID == wantID) || (wantName != "" && p.Name == wantName) || p.ID == v.InstanceID() || p.Name == v.Name() {
-				fromState = p
-				break
-			}
-		}
-
 		var nodes []PMGNodeSummary
-		if fromState != nil {
-			for _, node := range fromState.Nodes {
-				nodes = append(nodes, PMGNodeSummary{
-					Name:    node.Name,
-					Status:  node.Status,
-					Role:    node.Role,
-					Uptime:  node.Uptime,
-					LoadAvg: node.LoadAvg,
-				})
-			}
-		}
-
-		id := v.ID()
-		name := v.Name()
-		host := v.Hostname()
-		status := string(v.Status())
-		version := v.Version()
-		if fromState != nil {
-			if fromState.ID != "" {
-				id = fromState.ID
-			}
-			if fromState.Name != "" {
-				name = fromState.Name
-			}
-			if fromState.Host != "" {
-				host = fromState.Host
-			}
-			if fromState.Status != "" {
-				status = fromState.Status
-			}
-			if fromState.Version != "" {
-				version = fromState.Version
-			}
+		for _, node := range v.Nodes() {
+			nodes = append(nodes, PMGNodeSummary{
+				Name:    node.Name,
+				Status:  node.Status,
+				Role:    node.Role,
+				Uptime:  node.Uptime,
+				LoadAvg: node.LoadAvg,
+			})
 		}
 
 		instances = append(instances, PMGInstanceSummary{
-			ID:      id,
-			Name:    name,
-			Host:    host,
-			Status:  status,
-			Version: version,
+			ID:      v.ID(),
+			Name:    v.Name(),
+			Host:    v.Hostname(),
+			Status:  string(v.Status()),
+			Version: v.Version(),
 			Nodes:   nodes,
 		})
 	}
@@ -189,24 +151,23 @@ func (e *PulseToolExecutor) executeGetMailStats(_ context.Context, args map[stri
 		}
 	}
 
-	state := e.stateProvider.GetState()
-
-	if len(state.PMGInstances) == 0 {
+	if len(rs.PMGInstances()) == 0 {
 		return NewTextResult("No Proxmox Mail Gateway instances found. PMG monitoring may not be configured."), nil
 	}
 
 	// If filtering, find that specific instance
-	for _, pmg := range state.PMGInstances {
+	for _, pmg := range rs.PMGInstances() {
 		if instanceFilter != "" {
-			if (wantID != "" || wantName != "") && pmg.ID != wantID && pmg.Name != wantName {
+			if (wantID != "" || wantName != "") && pmg.ID() != wantID && pmg.Name() != wantName {
 				continue
 			}
-			if wantID == "" && wantName == "" && pmg.ID != instanceFilter && pmg.Name != instanceFilter {
+			if wantID == "" && wantName == "" && pmg.ID() != instanceFilter && pmg.Name() != instanceFilter {
 				continue
 			}
 		}
 
-		if pmg.MailStats == nil {
+		stats := pmg.MailStats()
+		if stats == nil {
 			if instanceFilter != "" {
 				return NewTextResult(fmt.Sprintf("No mail statistics available for PMG instance '%s'.", instanceFilter)), nil
 			}
@@ -214,22 +175,22 @@ func (e *PulseToolExecutor) executeGetMailStats(_ context.Context, args map[stri
 		}
 
 		response := MailStatsResponse{
-			Instance: pmg.Name,
+			Instance: pmg.Name(),
 			Stats: PMGMailStatsSummary{
-				Timeframe:            pmg.MailStats.Timeframe,
-				TotalIn:              pmg.MailStats.CountIn,
-				TotalOut:             pmg.MailStats.CountOut,
-				SpamIn:               pmg.MailStats.SpamIn,
-				SpamOut:              pmg.MailStats.SpamOut,
-				VirusIn:              pmg.MailStats.VirusIn,
-				VirusOut:             pmg.MailStats.VirusOut,
-				BouncesIn:            pmg.MailStats.BouncesIn,
-				BouncesOut:           pmg.MailStats.BouncesOut,
-				BytesIn:              pmg.MailStats.BytesIn,
-				BytesOut:             pmg.MailStats.BytesOut,
-				GreylistCount:        pmg.MailStats.GreylistCount,
-				RBLRejects:           pmg.MailStats.RBLRejects,
-				AverageProcessTimeMs: pmg.MailStats.AverageProcessTimeMs,
+				Timeframe:            stats.Timeframe,
+				TotalIn:              stats.CountIn,
+				TotalOut:             stats.CountOut,
+				SpamIn:               stats.SpamIn,
+				SpamOut:              stats.SpamOut,
+				VirusIn:              stats.VirusIn,
+				VirusOut:             stats.VirusOut,
+				BouncesIn:            stats.BouncesIn,
+				BouncesOut:           stats.BouncesOut,
+				BytesIn:              stats.BytesIn,
+				BytesOut:             stats.BytesOut,
+				GreylistCount:        stats.GreylistCount,
+				RBLRejects:           stats.RBLRejects,
+				AverageProcessTimeMs: stats.AverageProcessTimeMs,
 			},
 		}
 
@@ -268,25 +229,23 @@ func (e *PulseToolExecutor) executeGetMailQueues(_ context.Context, args map[str
 		}
 	}
 
-	state := e.stateProvider.GetState()
-
-	if len(state.PMGInstances) == 0 {
+	if len(rs.PMGInstances()) == 0 {
 		return NewTextResult("No Proxmox Mail Gateway instances found. PMG monitoring may not be configured."), nil
 	}
 
 	// Collect queue data from all instances (or filtered instance)
-	for _, pmg := range state.PMGInstances {
+	for _, pmg := range rs.PMGInstances() {
 		if instanceFilter != "" {
-			if (wantID != "" || wantName != "") && pmg.ID != wantID && pmg.Name != wantName {
+			if (wantID != "" || wantName != "") && pmg.ID() != wantID && pmg.Name() != wantName {
 				continue
 			}
-			if wantID == "" && wantName == "" && pmg.ID != instanceFilter && pmg.Name != instanceFilter {
+			if wantID == "" && wantName == "" && pmg.ID() != instanceFilter && pmg.Name() != instanceFilter {
 				continue
 			}
 		}
 
 		var queues []PMGQueueSummary
-		for _, node := range pmg.Nodes {
+		for _, node := range pmg.Nodes() {
 			if node.QueueStatus != nil {
 				queues = append(queues, PMGQueueSummary{
 					Node:             node.Name,
@@ -295,7 +254,7 @@ func (e *PulseToolExecutor) executeGetMailQueues(_ context.Context, args map[str
 					Hold:             node.QueueStatus.Hold,
 					Incoming:         node.QueueStatus.Incoming,
 					Total:            node.QueueStatus.Total,
-					OldestAgeSeconds: node.QueueStatus.OldestAge,
+					OldestAgeSeconds: 0, // Age not provided in unified resource
 				})
 			}
 		}
@@ -308,7 +267,7 @@ func (e *PulseToolExecutor) executeGetMailQueues(_ context.Context, args map[str
 		}
 
 		response := MailQueuesResponse{
-			Instance: pmg.Name,
+			Instance: pmg.Name(),
 			Queues:   queues,
 		}
 
@@ -347,43 +306,42 @@ func (e *PulseToolExecutor) executeGetSpamStats(_ context.Context, args map[stri
 		}
 	}
 
-	state := e.stateProvider.GetState()
-
-	if len(state.PMGInstances) == 0 {
+	if len(rs.PMGInstances()) == 0 {
 		return NewTextResult("No Proxmox Mail Gateway instances found. PMG monitoring may not be configured."), nil
 	}
 
-	for _, pmg := range state.PMGInstances {
+	for _, pmg := range rs.PMGInstances() {
 		if instanceFilter != "" {
-			if (wantID != "" || wantName != "") && pmg.ID != wantID && pmg.Name != wantName {
+			if (wantID != "" || wantName != "") && pmg.ID() != wantID && pmg.Name() != wantName {
 				continue
 			}
-			if wantID == "" && wantName == "" && pmg.ID != instanceFilter && pmg.Name != instanceFilter {
+			if wantID == "" && wantName == "" && pmg.ID() != instanceFilter && pmg.Name() != instanceFilter {
 				continue
 			}
 		}
 
 		quarantine := PMGQuarantineSummary{}
-		if pmg.Quarantine != nil {
+		qt := pmg.Quarantine()
+		if qt != nil {
 			quarantine = PMGQuarantineSummary{
-				Spam:        pmg.Quarantine.Spam,
-				Virus:       pmg.Quarantine.Virus,
-				Attachment:  pmg.Quarantine.Attachment,
-				Blacklisted: pmg.Quarantine.Blacklisted,
-				Total:       pmg.Quarantine.Spam + pmg.Quarantine.Virus + pmg.Quarantine.Attachment + pmg.Quarantine.Blacklisted,
+				Spam:        qt.Spam,
+				Virus:       qt.Virus,
+				Attachment:  qt.Attachment,
+				Blacklisted: qt.Blacklisted,
+				Total:       qt.Spam + qt.Virus + qt.Attachment + qt.Blacklisted,
 			}
 		}
 
 		var distribution []PMGSpamBucketSummary
-		for _, bucket := range pmg.SpamDistribution {
+		for _, bucket := range pmg.SpamDistribution() {
 			distribution = append(distribution, PMGSpamBucketSummary{
-				Score: bucket.Score,
+				Score: bucket.Bucket,
 				Count: bucket.Count,
 			})
 		}
 
 		response := SpamStatsResponse{
-			Instance:     pmg.Name,
+			Instance:     pmg.Name(),
 			Quarantine:   quarantine,
 			Distribution: distribution,
 		}
