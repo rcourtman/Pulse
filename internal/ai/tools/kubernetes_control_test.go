@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -433,6 +434,113 @@ func TestExecuteKubernetesExec(t *testing.T) {
 		require.NoError(t, err)
 		assert.Contains(t, result.Content[0].Text, "Command executed")
 		mockAgent.AssertExpectations(t)
+	})
+
+	t.Run("MismatchedApprovedIDDoesNotBypass", func(t *testing.T) {
+		store, err := approval.NewStore(approval.StoreConfig{
+			DataDir:            t.TempDir(),
+			DisablePersistence: true,
+		})
+		require.NoError(t, err)
+		approval.SetStore(store)
+		defer approval.SetStore(nil)
+
+		req := &approval.ApprovalRequest{
+			ID:         "approval-1",
+			Command:    "kubectl -n default exec nginx-pod -- whoami",
+			TargetType: "kubernetes",
+			TargetID:   "nginx-pod",
+		}
+		require.NoError(t, store.CreateApproval(req))
+		_, err = store.Approve("approval-1", "tester")
+		require.NoError(t, err)
+
+		mockAgent := &mockAgentServer{
+			agents: []agentexec.ConnectedAgent{{AgentID: "agent-1", Hostname: "k8s-host"}},
+		}
+
+		state := models.StateSnapshot{
+			KubernetesClusters: []models.KubernetesCluster{
+				{ID: "c1", Name: "cluster-1", AgentID: "agent-1"},
+			},
+		}
+		exec := NewPulseToolExecutor(ExecutorConfig{
+			StateProvider: &mockStateProvider{state: state},
+			AgentServer:   mockAgent,
+			ControlLevel:  ControlLevelControlled,
+		})
+
+		result, err := exec.executeKubernetesExec(ctx, map[string]interface{}{
+			"cluster":      "cluster-1",
+			"pod":          "nginx-pod",
+			"command":      "cat /etc/nginx/nginx.conf",
+			"_approval_id": "approval-1",
+		})
+		require.NoError(t, err)
+		assert.Contains(t, result.Content[0].Text, "APPROVAL_REQUIRED")
+		mockAgent.AssertNotCalled(t, "ExecuteCommand", mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("MatchingApprovedIDBypassesAndConsumes", func(t *testing.T) {
+		store, err := approval.NewStore(approval.StoreConfig{
+			DataDir:            t.TempDir(),
+			DisablePersistence: true,
+		})
+		require.NoError(t, err)
+		approval.SetStore(store)
+		defer approval.SetStore(nil)
+
+		kubeCmd := buildKubectlExecCommand("default", "nginx-pod", "", "cat /etc/nginx/nginx.conf")
+		req := &approval.ApprovalRequest{
+			ID:         "approval-2",
+			Command:    kubeCmd,
+			TargetType: "kubernetes",
+			TargetID:   "nginx-pod",
+		}
+		require.NoError(t, store.CreateApproval(req))
+		_, err = store.Approve("approval-2", "tester")
+		require.NoError(t, err)
+
+		mockAgent := &mockAgentServer{
+			agents: []agentexec.ConnectedAgent{{AgentID: "agent-1", Hostname: "k8s-host"}},
+		}
+		mockAgent.On("ExecuteCommand", mock.Anything, "agent-1", mock.MatchedBy(func(cmd agentexec.ExecuteCommandPayload) bool {
+			return cmd.Command == kubeCmd
+		})).Return(&agentexec.CommandResultPayload{
+			ExitCode: 0,
+			Stdout:   "ok",
+		}, nil)
+
+		state := models.StateSnapshot{
+			KubernetesClusters: []models.KubernetesCluster{
+				{ID: "c1", Name: "cluster-1", AgentID: "agent-1"},
+			},
+		}
+		exec := NewPulseToolExecutor(ExecutorConfig{
+			StateProvider: &mockStateProvider{state: state},
+			AgentServer:   mockAgent,
+			ControlLevel:  ControlLevelControlled,
+		})
+
+		result, err := exec.executeKubernetesExec(ctx, map[string]interface{}{
+			"cluster":      "cluster-1",
+			"pod":          "nginx-pod",
+			"command":      "cat /etc/nginx/nginx.conf",
+			"_approval_id": "approval-2",
+		})
+		require.NoError(t, err)
+		assert.NotContains(t, result.Content[0].Text, "APPROVAL_REQUIRED")
+		mockAgent.AssertExpectations(t)
+
+		// Approval is single-use; second attempt should not bypass.
+		result, err = exec.executeKubernetesExec(ctx, map[string]interface{}{
+			"cluster":      "cluster-1",
+			"pod":          "nginx-pod",
+			"command":      "cat /etc/nginx/nginx.conf",
+			"_approval_id": "approval-2",
+		})
+		require.NoError(t, err)
+		assert.Contains(t, result.Content[0].Text, "APPROVAL_REQUIRED")
 	})
 }
 

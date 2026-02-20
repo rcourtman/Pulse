@@ -324,8 +324,9 @@ func (e *PulseToolExecutor) executeControlGuest(ctx context.Context, args map[st
 		command = fmt.Sprintf("%s stop %d --skiplock", cmdTool, guest.VMID)
 	}
 
-	// Check if this is a pre-approved execution (agentic loop re-executing after user approval)
-	preApproved := isPreApproved(args)
+	// Check if this is a pre-approved execution (agentic loop re-executing after user approval).
+	// Use consumeApprovalWithValidation to enforce command-bound, single-use approvals.
+	preApproved := consumeApprovalWithValidation(args, command, guest.Type, fmt.Sprintf("%d", guest.VMID))
 
 	// Check security policy (skip if pre-approved)
 	if !preApproved && e.policy != nil {

@@ -116,15 +116,15 @@ func (e *PulseToolExecutor) executeDockerControl(ctx context.Context, args map[s
 		return NewTextResult("Docker control actions are not available in read-only mode."), nil
 	}
 
-	// Check if this is a pre-approved execution
-	preApproved := isPreApproved(args)
-
 	container, dockerHost, err := e.resolveDockerContainer(containerName, hostName)
 	if err != nil {
 		return NewTextResult(fmt.Sprintf("Could not find Docker container '%s': %v", containerName, err)), nil
 	}
 
 	command := fmt.Sprintf("docker %s %s", operation, container.Name)
+
+	// Check if this is a pre-approved execution (validated + single-use).
+	preApproved := consumeApprovalWithValidation(args, command, "docker", container.Name)
 
 	// Get the agent hostname for approval records
 	agentHostname := e.getAgentHostnameForDockerHost(dockerHost)

@@ -503,11 +503,11 @@ func (e *PulseToolExecutor) executeKubernetesScale(ctx context.Context, args map
 		return NewTextResult(err.Error()), nil
 	}
 
-	// Check if pre-approved
-	preApproved := isPreApproved(args)
-
 	// Build command
 	command := fmt.Sprintf("kubectl -n %s scale deployment %s --replicas=%d", namespace, deployment, replicas)
+
+	// Check if pre-approved (validated + single-use).
+	preApproved := consumeApprovalWithValidation(args, command, "kubernetes", deployment)
 
 	// Request approval if needed
 	if !preApproved && !e.isAutonomous && e.controlLevel == ControlLevelControlled {
@@ -578,11 +578,11 @@ func (e *PulseToolExecutor) executeKubernetesRestart(ctx context.Context, args m
 		return NewTextResult(err.Error()), nil
 	}
 
-	// Check if pre-approved
-	preApproved := isPreApproved(args)
-
 	// Build command
 	command := fmt.Sprintf("kubectl -n %s rollout restart deployment/%s", namespace, deployment)
+
+	// Check if pre-approved (validated + single-use).
+	preApproved := consumeApprovalWithValidation(args, command, "kubernetes", deployment)
 
 	// Request approval if needed
 	if !preApproved && !e.isAutonomous && e.controlLevel == ControlLevelControlled {
@@ -653,11 +653,11 @@ func (e *PulseToolExecutor) executeKubernetesDeletePod(ctx context.Context, args
 		return NewTextResult(err.Error()), nil
 	}
 
-	// Check if pre-approved
-	preApproved := isPreApproved(args)
-
 	// Build command
 	command := fmt.Sprintf("kubectl -n %s delete pod %s", namespace, pod)
+
+	// Check if pre-approved (validated + single-use).
+	preApproved := consumeApprovalWithValidation(args, command, "kubernetes", pod)
 
 	// Request approval if needed
 	if !preApproved && !e.isAutonomous && e.controlLevel == ControlLevelControlled {
@@ -738,11 +738,11 @@ func (e *PulseToolExecutor) executeKubernetesExec(ctx context.Context, args map[
 		return NewTextResult(err.Error()), nil
 	}
 
-	// Check if pre-approved
-	preApproved := isPreApproved(args)
-
 	// Build kubectl command safely to prevent shell metacharacter breakout on the host.
 	kubectlCmd := buildKubectlExecCommand(namespace, pod, container, command)
+
+	// Check if pre-approved (validated + single-use).
+	preApproved := consumeApprovalWithValidation(args, kubectlCmd, "kubernetes", pod)
 
 	// Request approval if needed
 	if !preApproved && !e.isAutonomous && e.controlLevel == ControlLevelControlled {
