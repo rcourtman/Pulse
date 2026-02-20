@@ -625,9 +625,9 @@ func RequireAuth(cfg *config.Config, handler http.HandlerFunc) http.HandlerFunc 
 	}
 }
 
-// RequireAdmin middleware checks for authentication and admin privileges
-// For proxy auth users, it ensures they have the admin role
-// For other auth methods, all authenticated users are considered admins
+// RequireAdmin middleware checks for authentication and admin privileges.
+// Proxy-auth users must have the configured admin role. Session/OIDC users
+// must match the configured admin identity.
 func RequireAdmin(cfg *config.Config, handler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Dev mode bypass for admin endpoints (disabled by default)
@@ -684,7 +684,12 @@ func RequireAdmin(cfg *config.Config, handler http.HandlerFunc) http.HandlerFunc
 			}
 		}
 
-		// User is authenticated and has admin privileges (or not using proxy auth)
+		// Enforce configured admin identity for session-based auth.
+		if !ensureAdminSession(cfg, w, r) {
+			return
+		}
+
+		// User is authenticated and has admin privileges.
 		handler(w, r)
 	}
 }

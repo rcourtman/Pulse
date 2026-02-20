@@ -1735,6 +1735,61 @@ func TestRequireAdmin_ProxyAuthNoRoleHeaderDefaultsToAdmin(t *testing.T) {
 	}
 }
 
+func TestRequireAdmin_NonAdminSessionForbidden(t *testing.T) {
+	InitSessionStore(t.TempDir())
+
+	cfg := &config.Config{AuthUser: "admin"}
+	sessionToken := "require-admin-member-session"
+	GetSessionStore().CreateSession(sessionToken, time.Hour, "test-agent", "127.0.0.1", "member")
+
+	handlerCalled := false
+	handler := RequireAdmin(cfg, func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+		w.WriteHeader(http.StatusOK)
+	})
+
+	req := httptest.NewRequest("GET", "/api/admin/test", nil)
+	req.AddCookie(&http.Cookie{Name: "pulse_session", Value: sessionToken})
+	w := httptest.NewRecorder()
+	handler(w, req)
+
+	if handlerCalled {
+		t.Error("RequireAdmin should not call handler for non-admin session user")
+	}
+	if w.Code != http.StatusForbidden {
+		t.Errorf("RequireAdmin returned status %d, want %d", w.Code, http.StatusForbidden)
+	}
+	if !strings.Contains(w.Body.String(), "Admin privileges required") {
+		t.Errorf("RequireAdmin body = %q, want to contain 'Admin privileges required'", w.Body.String())
+	}
+}
+
+func TestRequireAdmin_ConfiguredAdminSessionAllowed(t *testing.T) {
+	InitSessionStore(t.TempDir())
+
+	cfg := &config.Config{AuthUser: "admin"}
+	sessionToken := "require-admin-session"
+	GetSessionStore().CreateSession(sessionToken, time.Hour, "test-agent", "127.0.0.1", "admin")
+
+	handlerCalled := false
+	handler := RequireAdmin(cfg, func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+		w.WriteHeader(http.StatusOK)
+	})
+
+	req := httptest.NewRequest("GET", "/api/admin/test", nil)
+	req.AddCookie(&http.Cookie{Name: "pulse_session", Value: sessionToken})
+	w := httptest.NewRecorder()
+	handler(w, req)
+
+	if !handlerCalled {
+		t.Error("RequireAdmin should call handler for configured admin session user")
+	}
+	if w.Code != http.StatusOK {
+		t.Errorf("RequireAdmin returned status %d, want %d", w.Code, http.StatusOK)
+	}
+}
+
 func TestRequireAdmin_ProxyAuthInvalidSecretUnauthorized(t *testing.T) {
 	cfg := &config.Config{
 		ProxyAuthSecret:     "secret123",

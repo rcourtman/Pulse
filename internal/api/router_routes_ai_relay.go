@@ -34,7 +34,12 @@ func (r *Router) registerAIRelayRoutesGroup() {
 	// SECURITY: Connected agents list could reveal fleet topology - require ai:execute scope
 	r.mux.HandleFunc("/api/ai/agents", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleGetConnectedAgents)))
 	// SECURITY: Cost summary could reveal usage patterns - require settings:read scope
-	r.mux.HandleFunc("/api/ai/cost/summary", RequireAuth(r.config, RequireScope(config.ScopeSettingsRead, r.aiSettingsHandler.HandleGetAICostSummary)))
+	r.mux.HandleFunc("/api/ai/cost/summary", RequireAuth(r.config, RequireScope(config.ScopeSettingsRead, func(w http.ResponseWriter, req *http.Request) {
+		if !ensureSettingsReadScope(r.config, w, req) {
+			return
+		}
+		r.aiSettingsHandler.HandleGetAICostSummary(w, req)
+	})))
 	r.mux.HandleFunc("/api/ai/cost/reset", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandleResetAICostHistory)))
 	r.mux.HandleFunc("/api/ai/cost/export", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.aiSettingsHandler.HandleExportAICostHistory)))
 	// OAuth endpoints for Claude Pro/Max subscription authentication
@@ -48,9 +53,24 @@ func (r *Router) registerAIRelayRoutesGroup() {
 	r.mux.HandleFunc("GET /api/settings/relay", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, RequireLicenseFeature(r.licenseHandlers, license.FeatureRelay, r.handleGetRelayConfig))))
 	r.mux.HandleFunc("PUT /api/settings/relay", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, RequireLicenseFeature(r.licenseHandlers, license.FeatureRelay, r.handleUpdateRelayConfig))))
 	r.mux.HandleFunc("GET /api/settings/relay/status", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, RequireLicenseFeature(r.licenseHandlers, license.FeatureRelay, r.handleGetRelayStatus))))
-	r.mux.HandleFunc("GET /api/onboarding/qr", RequireAuth(r.config, RequireScope(config.ScopeSettingsRead, r.handleGetOnboardingQR)))
-	r.mux.HandleFunc("POST /api/onboarding/validate", RequireAuth(r.config, RequireScope(config.ScopeSettingsRead, r.handleValidateOnboardingConnection)))
-	r.mux.HandleFunc("GET /api/onboarding/deep-link", RequireAuth(r.config, RequireScope(config.ScopeSettingsRead, r.handleGetOnboardingDeepLink)))
+	r.mux.HandleFunc("GET /api/onboarding/qr", RequireAuth(r.config, RequireScope(config.ScopeSettingsRead, func(w http.ResponseWriter, req *http.Request) {
+		if !ensureSettingsReadScope(r.config, w, req) {
+			return
+		}
+		r.handleGetOnboardingQR(w, req)
+	})))
+	r.mux.HandleFunc("POST /api/onboarding/validate", RequireAuth(r.config, RequireScope(config.ScopeSettingsRead, func(w http.ResponseWriter, req *http.Request) {
+		if !ensureSettingsReadScope(r.config, w, req) {
+			return
+		}
+		r.handleValidateOnboardingConnection(w, req)
+	})))
+	r.mux.HandleFunc("GET /api/onboarding/deep-link", RequireAuth(r.config, RequireScope(config.ScopeSettingsRead, func(w http.ResponseWriter, req *http.Request) {
+		if !ensureSettingsReadScope(r.config, w, req) {
+			return
+		}
+		r.handleGetOnboardingDeepLink(w, req)
+	})))
 
 	// AI Patrol routes for background monitoring
 	// Note: Status remains accessible so UI can show license/upgrade state

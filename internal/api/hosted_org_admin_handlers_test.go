@@ -9,12 +9,18 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
 func TestHostedOrganizationsList_HostedModeGate(t *testing.T) {
+	hashed, err := internalauth.HashPassword("Password!1")
+	if err != nil {
+		t.Fatalf("HashPassword: %v", err)
+	}
+
 	router := &Router{
 		mux:         http.NewServeMux(),
-		config:      &config.Config{DataPath: t.TempDir()},
+		config:      &config.Config{DataPath: t.TempDir(), AuthUser: "admin", AuthPass: hashed},
 		multiTenant: config.NewMultiTenantPersistence(t.TempDir()),
 		hostedMode:  false,
 	}
@@ -22,6 +28,7 @@ func TestHostedOrganizationsList_HostedModeGate(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/hosted/organizations", nil)
+	req.SetBasicAuth("admin", "Password!1")
 	router.mux.ServeHTTP(rec, req)
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("expected 404 when hosted mode disabled, got %d: %s", rec.Code, rec.Body.String())
@@ -31,6 +38,10 @@ func TestHostedOrganizationsList_HostedModeGate(t *testing.T) {
 func TestHostedOrganizationsList_ReturnsSummaries(t *testing.T) {
 	baseDir := t.TempDir()
 	mtp := config.NewMultiTenantPersistence(baseDir)
+	hashed, err := internalauth.HashPassword("Password!1")
+	if err != nil {
+		t.Fatalf("HashPassword: %v", err)
+	}
 
 	createdAt := time.Date(2026, 2, 10, 12, 0, 0, 0, time.UTC)
 	org := &models.Organization{
@@ -46,7 +57,7 @@ func TestHostedOrganizationsList_ReturnsSummaries(t *testing.T) {
 
 	router := &Router{
 		mux:         http.NewServeMux(),
-		config:      &config.Config{DataPath: baseDir},
+		config:      &config.Config{DataPath: baseDir, AuthUser: "admin", AuthPass: hashed},
 		multiTenant: mtp,
 		hostedMode:  true,
 	}
@@ -54,6 +65,7 @@ func TestHostedOrganizationsList_ReturnsSummaries(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/hosted/organizations", nil)
+	req.SetBasicAuth("admin", "Password!1")
 	router.mux.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
