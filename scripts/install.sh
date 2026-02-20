@@ -20,6 +20,7 @@
 #   --interval <dur>    Reporting interval (default: 30s)
 #   --agent-id <id>     Custom agent identifier (default: auto-generated)
 #   --disk-exclude <pattern>  Exclude mount points matching pattern (repeatable)
+#   --env <KEY=VALUE>   Set custom environment variable in service file (repeatable)
 #   --insecure          Skip TLS certificate verification
 #   --enable-commands   Enable AI command execution on agent (disabled by default)
 #   --uninstall         Remove the agent
@@ -79,6 +80,7 @@ KUBECONFIG_PATH=""  # Path to kubeconfig file for Kubernetes monitoring
 KUBE_INCLUDE_ALL_PODS="false"
 KUBE_INCLUDE_ALL_DEPLOYMENTS="false"
 DISK_EXCLUDES=()  # Array for multiple --disk-exclude values
+CUSTOM_ENVS=()    # Array for --env KEY=VALUE pairs
 CURL_CA_BUNDLE="" # Path to CA bundle for curl and agent TLS (sets SSL_CERT_FILE)
 
 # Track if flags were explicitly set (to override auto-detection)
@@ -122,6 +124,7 @@ Options:
   --agent-id <id>         Custom agent identifier
   --hostname <name>       Override hostname reported to Pulse
   --disk-exclude <path>   Exclude mount point (repeatable)
+  --env <KEY=VALUE>       Set custom environment variable in service (repeatable)
   --insecure              Skip TLS verification
   --cacert <path>         Custom CA certificate for TLS (used by curl and agent)
   --enable-commands       Enable AI command execution
@@ -339,6 +342,7 @@ while [[ $# -gt 0 ]]; do
         --kube-include-all-pods) KUBE_INCLUDE_ALL_PODS="true"; shift ;;
         --kube-include-all-deployments) KUBE_INCLUDE_ALL_DEPLOYMENTS="true"; shift ;;
         --disk-exclude) DISK_EXCLUDES+=("$2"); shift 2 ;;
+        --env) CUSTOM_ENVS+=("$2"); shift 2 ;;
         *) fail "Unknown argument: $1" ;;
     esac
 done
@@ -373,6 +377,73 @@ if [[ -n "$CURL_CA_BUNDLE" ]]; then
         fail "--cacert path does not exist: ${CURL_CA_BUNDLE}"
     fi
 fi
+
+# --- Validate Custom Environment Variables ---
+for env_pair in ${CUSTOM_ENVS[@]+"${CUSTOM_ENVS[@]}"}; do
+    if [[ "$env_pair" != *"="* ]]; then
+        fail "--env requires KEY=VALUE format, got: ${env_pair}"
+    fi
+    env_key="${env_pair%%=*}"
+    env_val="${env_pair#*=}"
+    # Validate key is a valid POSIX environment variable name
+    if ! [[ "$env_key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+        fail "--env key must be a valid env var name (letters, digits, underscore): ${env_key}"
+    fi
+    # Reject values with characters that could cause injection in service files
+    # (shell interpolation, sed metacharacters, XML special chars)
+    if [[ "$env_val" =~ [\'\"\$\`\\\|\&\<\>] ]] || [[ "$env_val" == *$'\n'* ]]; then
+        fail "--env value for ${env_key} contains unsafe characters (quotes, \$, backtick, backslash, |, &, <, >, or newline are not allowed)"
+    fi
+done
+
+# --- Build Combined Environment Strings ---
+# Pre-compute environment variable strings for all service file formats.
+# Includes SSL_CERT_FILE (from --cacert) and custom vars (from --env).
+SYSTEMD_ENV_LINES=""
+SHELL_EXPORT_LINES=""
+PLIST_ENV_ENTRIES=""
+
+if [[ -n "$SSL_CERT_ENV_NAME" ]]; then
+    SYSTEMD_ENV_LINES+=$'\n'"Environment=\"${SSL_CERT_ENV_NAME}=${SSL_CERT_ENV_VALUE}\""
+    SHELL_EXPORT_LINES+=$'\n'"export ${SSL_CERT_ENV_NAME}='${SSL_CERT_ENV_VALUE}'"
+    PLIST_ENV_ENTRIES+="
+        <key>${SSL_CERT_ENV_NAME}</key>
+        <string>${SSL_CERT_ENV_VALUE}</string>"
+fi
+for env_pair in ${CUSTOM_ENVS[@]+"${CUSTOM_ENVS[@]}"}; do
+    env_key="${env_pair%%=*}"
+    env_val="${env_pair#*=}"
+    SYSTEMD_ENV_LINES+=$'\n'"Environment=\"${env_key}=${env_val}\""
+    SHELL_EXPORT_LINES+=$'\n'"export ${env_key}='${env_val}'"
+    PLIST_ENV_ENTRIES+="
+        <key>${env_key}</key>
+        <string>${env_val}</string>"
+    log_info "Custom environment: ${env_key}=${env_val}"
+done
+
+# Wrap plist entries in EnvironmentVariables dict if any exist
+PLIST_ENV_BLOCK=""
+if [[ -n "$PLIST_ENV_ENTRIES" ]]; then
+    PLIST_ENV_BLOCK="
+    <key>EnvironmentVariables</key>
+    <dict>${PLIST_ENV_ENTRIES}
+    </dict>"
+fi
+
+# SED_EXPORT_LINES: for sed placeholder replacement in rc.d/init.d templates.
+# No leading newline; each export on its own line.
+SED_EXPORT_LINES=""
+if [[ -n "$SSL_CERT_ENV_NAME" ]]; then
+    SED_EXPORT_LINES+="export ${SSL_CERT_ENV_NAME}='${SSL_CERT_ENV_VALUE}'"
+fi
+for env_pair in ${CUSTOM_ENVS[@]+"${CUSTOM_ENVS[@]}"}; do
+    env_key="${env_pair%%=*}"
+    env_val="${env_pair#*=}"
+    if [[ -n "$SED_EXPORT_LINES" ]]; then
+        SED_EXPORT_LINES+=$'\n'"    "
+    fi
+    SED_EXPORT_LINES+="export ${env_key}='${env_val}'"
+done
 
 # --- Platform Auto-Detection ---
 # Only auto-detect if flags weren't explicitly set
@@ -890,16 +961,6 @@ if [[ "$OS" == "darwin" ]]; then
         <string>${pattern}</string>"
     done
 
-    PLIST_ENV=""
-    if [[ -n "$SSL_CERT_ENV_NAME" ]]; then
-        PLIST_ENV="
-    <key>EnvironmentVariables</key>
-    <dict>
-        <key>${SSL_CERT_ENV_NAME}</key>
-        <string>${SSL_CERT_ENV_VALUE}</string>
-    </dict>"
-    fi
-
     cat > "$PLIST" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -910,7 +971,7 @@ if [[ "$OS" == "darwin" ]]; then
     <key>ProgramArguments</key>
     <array>
 ${PLIST_ARGS}
-    </array>${PLIST_ENV}
+    </array>${PLIST_ENV_BLOCK}
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
@@ -948,11 +1009,6 @@ if [[ -d /usr/syno ]] && [[ -f /etc/VERSION ]]; then
         UNIT="/etc/systemd/system/${AGENT_NAME}.service"
         log_info "Configuring systemd service at $UNIT (DSM 7+)..."
 
-        SYSTEMD_ENV=""
-        if [[ -n "$SSL_CERT_ENV_NAME" ]]; then
-            SYSTEMD_ENV=$'\n'"Environment=${SSL_CERT_ENV_NAME}=${SSL_CERT_ENV_VALUE}"
-        fi
-
         cat > "$UNIT" <<EOF
 [Unit]
 Description=Pulse Unified Agent
@@ -961,7 +1017,7 @@ StartLimitIntervalSec=0
 
 [Service]
 Type=simple
-ExecStart=${INSTALL_DIR}/${BINARY_NAME} ${EXEC_ARGS}${SYSTEMD_ENV}
+ExecStart=${INSTALL_DIR}/${BINARY_NAME} ${EXEC_ARGS}${SYSTEMD_ENV_LINES}
 Restart=always
 RestartSec=5s
 
@@ -976,10 +1032,14 @@ EOF
         CONF="/etc/init/${AGENT_NAME}.conf"
         log_info "Configuring Upstart service at $CONF (DSM 6.x)..."
 
+        # Build upstart env lines (env KEY=VALUE format)
         UPSTART_ENV=""
         if [[ -n "$SSL_CERT_ENV_NAME" ]]; then
-            UPSTART_ENV=$'\n'"env ${SSL_CERT_ENV_NAME}=${SSL_CERT_ENV_VALUE}"
+            UPSTART_ENV+=$'\n'"env ${SSL_CERT_ENV_NAME}='${SSL_CERT_ENV_VALUE}'"
         fi
+        for env_pair in ${CUSTOM_ENVS[@]+"${CUSTOM_ENVS[@]}"}; do
+            UPSTART_ENV+=$'\n'"env ${env_pair%%=*}='${env_pair#*=}'"
+        done
 
         cat > "$CONF" <<EOF
 description "Pulse Unified Agent"
@@ -1044,10 +1104,6 @@ if [[ -f /etc/unraid-version ]]; then
 
     # Create a wrapper script that will be called from /boot/config/go
     # This script copies from persistent storage to RAM disk on boot, then starts the agent
-    EXPORT_SSL_CERT_FILE=""
-    if [[ -n "$SSL_CERT_ENV_NAME" ]]; then
-        EXPORT_SSL_CERT_FILE=$'\n'"export ${SSL_CERT_ENV_NAME}=\"${SSL_CERT_ENV_VALUE}\""
-    fi
     WRAPPER_SCRIPT="${UNRAID_STORAGE_DIR}/start-pulse-agent.sh"
     cat > "$WRAPPER_SCRIPT" <<EOF
 #!/bin/bash
@@ -1063,7 +1119,7 @@ sleep 2
 
 # Copy binary from persistent storage to RAM disk (needed after reboot)
 cp "${UNRAID_STORED_BINARY}" "${RUNTIME_BINARY}"
-chmod +x "${RUNTIME_BINARY}"${EXPORT_SSL_CERT_FILE}
+chmod +x "${RUNTIME_BINARY}"${SHELL_EXPORT_LINES}
 
 # Watchdog loop: restart agent if it exits
 # Uses exponential backoff to prevent rapid restart loops
@@ -1219,11 +1275,6 @@ if [[ "$TRUENAS" == true ]]; then
             TRUENAS_LOG_TARGET="$TRUENAS_LOG_FILE"
         fi
 
-        SYSTEMD_ENV=""
-        if [[ -n "$SSL_CERT_ENV_NAME" ]]; then
-            SYSTEMD_ENV=$'\n'"Environment=${SSL_CERT_ENV_NAME}=${SSL_CERT_ENV_VALUE}"
-        fi
-
         cat > "$TRUENAS_SERVICE_STORAGE" <<EOF
 [Unit]
 Description=Pulse Unified Agent
@@ -1233,7 +1284,7 @@ StartLimitIntervalSec=0
 
 [Service]
 Type=simple
-ExecStart=${TRUENAS_RUNTIME_BINARY} ${EXEC_ARGS}${SYSTEMD_ENV}
+ExecStart=${TRUENAS_RUNTIME_BINARY} ${EXEC_ARGS}${SYSTEMD_ENV_LINES}
 Restart=always
 RestartSec=5s
 User=root
@@ -1302,12 +1353,8 @@ RCEOF
             sed -i "s|RUNTIME_BINARY_PLACEHOLDER|${TRUENAS_RUNTIME_BINARY}|g" "$TRUENAS_SERVICE_STORAGE"
         sed -i '' "s|EXEC_ARGS_PLACEHOLDER|${EXEC_ARGS}|g" "$TRUENAS_SERVICE_STORAGE" 2>/dev/null || \
             sed -i "s|EXEC_ARGS_PLACEHOLDER|${EXEC_ARGS}|g" "$TRUENAS_SERVICE_STORAGE"
-        SSL_CERT_LINE=""
-        if [[ -n "$SSL_CERT_ENV_NAME" ]]; then
-            SSL_CERT_LINE="export ${SSL_CERT_ENV_NAME}=\"${SSL_CERT_ENV_VALUE}\""
-        fi
-        sed -i '' "s|SSL_CERT_FILE_PLACEHOLDER|${SSL_CERT_LINE}|g" "$TRUENAS_SERVICE_STORAGE" 2>/dev/null || \
-            sed -i "s|SSL_CERT_FILE_PLACEHOLDER|${SSL_CERT_LINE}|g" "$TRUENAS_SERVICE_STORAGE"
+        sed -i '' "s|SSL_CERT_FILE_PLACEHOLDER|${SED_EXPORT_LINES}|g" "$TRUENAS_SERVICE_STORAGE" 2>/dev/null || \
+            sed -i "s|SSL_CERT_FILE_PLACEHOLDER|${SED_EXPORT_LINES}|g" "$TRUENAS_SERVICE_STORAGE"
 
         chmod +x "$TRUENAS_SERVICE_STORAGE"
     fi
@@ -1532,11 +1579,7 @@ INITEOF
     sed -i "s|INSTALL_DIR_PLACEHOLDER|${INSTALL_DIR}|g" "$INITSCRIPT"
     sed -i "s|BINARY_NAME_PLACEHOLDER|${BINARY_NAME}|g" "$INITSCRIPT"
     sed -i "s|EXEC_ARGS_PLACEHOLDER|${EXEC_ARGS}|g" "$INITSCRIPT"
-    SSL_CERT_LINE=""
-    if [[ -n "$SSL_CERT_ENV_NAME" ]]; then
-        SSL_CERT_LINE="export ${SSL_CERT_ENV_NAME}=\"${SSL_CERT_ENV_VALUE}\""
-    fi
-    sed -i "s|SSL_CERT_FILE_PLACEHOLDER|${SSL_CERT_LINE}|g" "$INITSCRIPT"
+    sed -i "s|SSL_CERT_FILE_PLACEHOLDER|${SED_EXPORT_LINES}|g" "$INITSCRIPT"
 
     chmod +x "$INITSCRIPT"
     rc-service "${AGENT_NAME}" stop 2>/dev/null || true
@@ -1621,12 +1664,8 @@ RCEOF
         sed -i "s|BINARY_NAME_PLACEHOLDER|${BINARY_NAME}|g" "$RCSCRIPT"
     sed -i '' "s|EXEC_ARGS_PLACEHOLDER|${EXEC_ARGS}|g" "$RCSCRIPT" 2>/dev/null || \
         sed -i "s|EXEC_ARGS_PLACEHOLDER|${EXEC_ARGS}|g" "$RCSCRIPT"
-    SSL_CERT_LINE=""
-    if [[ -n "$SSL_CERT_ENV_NAME" ]]; then
-        SSL_CERT_LINE="export ${SSL_CERT_ENV_NAME}=\"${SSL_CERT_ENV_VALUE}\""
-    fi
-    sed -i '' "s|SSL_CERT_FILE_PLACEHOLDER|${SSL_CERT_LINE}|g" "$RCSCRIPT" 2>/dev/null || \
-        sed -i "s|SSL_CERT_FILE_PLACEHOLDER|${SSL_CERT_LINE}|g" "$RCSCRIPT"
+    sed -i '' "s|SSL_CERT_FILE_PLACEHOLDER|${SED_EXPORT_LINES}|g" "$RCSCRIPT" 2>/dev/null || \
+        sed -i "s|SSL_CERT_FILE_PLACEHOLDER|${SED_EXPORT_LINES}|g" "$RCSCRIPT"
 
     chmod +x "$RCSCRIPT"
 
@@ -1707,11 +1746,6 @@ if command -v systemctl >/dev/null 2>&1; then
         EXEC_ARGS="$EXEC_ARGS --disk-exclude '${pattern}'"
     done
 
-    SYSTEMD_ENV=""
-    if [[ -n "$SSL_CERT_ENV_NAME" ]]; then
-        SYSTEMD_ENV=$'\n'"Environment=${SSL_CERT_ENV_NAME}=${SSL_CERT_ENV_VALUE}"
-    fi
-
     cat > "$UNIT" <<EOF
 [Unit]
 Description=Pulse Unified Agent
@@ -1721,7 +1755,7 @@ StartLimitIntervalSec=0
 
 [Service]
 Type=simple
-ExecStart=${INSTALL_DIR}/${BINARY_NAME} ${EXEC_ARGS}${SYSTEMD_ENV}
+ExecStart=${INSTALL_DIR}/${BINARY_NAME} ${EXEC_ARGS}${SYSTEMD_ENV_LINES}
 Restart=always
 RestartSec=5s
 User=root
@@ -1876,11 +1910,7 @@ INITEOF
     sed -i "s|INSTALL_DIR_PLACEHOLDER|${INSTALL_DIR}|g" "$INITSCRIPT"
     sed -i "s|BINARY_NAME_PLACEHOLDER|${BINARY_NAME}|g" "$INITSCRIPT"
     sed -i "s|EXEC_ARGS_PLACEHOLDER|${EXEC_ARGS}|g" "$INITSCRIPT"
-    SSL_CERT_LINE=""
-    if [[ -n "$SSL_CERT_ENV_NAME" ]]; then
-        SSL_CERT_LINE="export ${SSL_CERT_ENV_NAME}=\"${SSL_CERT_ENV_VALUE}\""
-    fi
-    sed -i "s|SSL_CERT_FILE_PLACEHOLDER|${SSL_CERT_LINE}|g" "$INITSCRIPT"
+    sed -i "s|SSL_CERT_FILE_PLACEHOLDER|${SED_EXPORT_LINES}|g" "$INITSCRIPT"
 
     chmod +x "$INITSCRIPT"
 

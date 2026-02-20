@@ -167,6 +167,7 @@ export const UnifiedAgents: Component = () => {
     const [lookupLoading, setLookupLoading] = createSignal(false);
     const [insecureMode, setInsecureMode] = createSignal(false); // For self-signed certificates (issue #806)
     const [enableCommands, setEnableCommands] = createSignal(false); // Enable Pulse command execution (issue #903)
+    const [customEnvVars, setCustomEnvVars] = createSignal(''); // Custom env vars for --env flag (#1277)
     const [customAgentUrl, setCustomAgentUrl] = createSignal('');
     const [profiles, setProfiles] = createSignal<AgentProfile[]>([]);
     const [assignments, setAssignments] = createSignal<AgentProfileAssignment[]>([]);
@@ -329,6 +330,23 @@ export const UnifiedAgents: Component = () => {
     const getInsecureFlag = () => insecureMode() ? ' --insecure' : '';
     const getEnableCommandsFlag = () => enableCommands() ? ' --enable-commands' : '';
     const getCurlInsecureFlag = () => insecureMode() ? '-k' : '';
+    const getEnvFlags = () => {
+        const raw = customEnvVars().trim();
+        if (!raw) return '';
+        const validKeyRe = /^[A-Za-z_][A-Za-z0-9_]*$/;
+        const unsafeValueRe = /['"`$\\|&<>]/;
+        return raw
+            .split('\n')
+            .map((line) => line.trim())
+            .filter((line) => {
+                if (!line || !line.includes('=')) return false;
+                const key = line.substring(0, line.indexOf('='));
+                const val = line.substring(line.indexOf('=') + 1);
+                return validKeyRe.test(key) && !unsafeValueRe.test(val);
+            })
+            .map((line) => ` --env '${line}'`)
+            .join('');
+    };
 
     const getUninstallCommand = () => {
         const url = customAgentUrl() || agentUrl();
@@ -817,7 +835,7 @@ export const UnifiedAgents: Component = () => {
     const getUpgradeCommand = (_hostname: string) => {
         const token = resolvedToken();
         const url = customAgentUrl() || agentUrl();
-        return `curl ${getCurlInsecureFlag()}-fsSL ${url}/install.sh | bash -s -- --url ${url} --token ${token}${getInsecureFlag()}`;
+        return `curl ${getCurlInsecureFlag()}-fsSL ${url}/install.sh | bash -s -- --url ${url} --token ${token}${getInsecureFlag()}${getEnvFlags()}`;
     };
 
     const handleRemoveAgent = async (id: string, types: ('host' | 'docker')[]) => {
@@ -1110,6 +1128,40 @@ export const UnifiedAgents: Component = () => {
                                         <span class="font-medium">Pulse commands enabled</span> — The agent will accept diagnostic and fix commands from Pulse Patrol features.
                                     </div>
                                 </Show>
+                                <div>
+                                    <label class="block text-sm text-gray-700 dark:text-gray-300 mb-1">
+                                        Custom environment variables <span class="text-gray-400">(optional, one KEY=VALUE per line)</span>
+                                    </label>
+                                    <textarea
+                                        value={customEnvVars()}
+                                        onInput={(e) => setCustomEnvVars(e.currentTarget.value)}
+                                        placeholder={'KUBECONFIG=/etc/rancher/k3s/k3s.yaml\nMY_VAR=my_value'}
+                                        rows={2}
+                                        class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-mono text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-500"
+                                    />
+                                    <Show when={customEnvVars().trim()}>
+                                        {(() => {
+                                            const lines = customEnvVars().trim().split('\n').map((l) => l.trim()).filter(Boolean);
+                                            const validKeyRe = /^[A-Za-z_][A-Za-z0-9_]*$/;
+                                            const unsafeValueRe = /['"`$\\|&<>]/;
+                                            const errors = lines.filter((line) => {
+                                                if (!line.includes('=')) return true;
+                                                const key = line.substring(0, line.indexOf('='));
+                                                const val = line.substring(line.indexOf('=') + 1);
+                                                return !validKeyRe.test(key) || unsafeValueRe.test(val);
+                                            });
+                                            return errors.length > 0 ? (
+                                                <p class="mt-1 text-xs text-red-600 dark:text-red-400">
+                                                    Invalid line(s) will be ignored. Keys must be valid env var names (e.g. MY_VAR). Values cannot contain quotes, $, backslash, |, &amp;, &lt;, or &gt;.
+                                                </p>
+                                            ) : (
+                                                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                                    These will be injected into the agent's service file as environment variables.
+                                                </p>
+                                            );
+                                        })()}
+                                    </Show>
+                                </div>
                                 <div class="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-100">
                                     <span class="font-medium">Config signing (optional)</span> — Require signed remote config payloads with <code>PULSE_AGENT_CONFIG_SIGNATURE_REQUIRED=true</code>. Provide keys via <code>PULSE_AGENT_CONFIG_SIGNING_KEY</code> (Pulse) and <code>PULSE_AGENT_CONFIG_PUBLIC_KEYS</code> (agents).
                                 </div>
@@ -1140,6 +1192,10 @@ export const UnifiedAgents: Component = () => {
                                                             // Add --enable-commands flag if enabled (issue #903)
                                                             if (enableCommands() && isBashScript) {
                                                                 cmd += getEnableCommandsFlag();
+                                                            }
+                                                            // Add custom --env flags (#1277)
+                                                            if (isBashScript) {
+                                                                cmd += getEnvFlags();
                                                             }
                                                             return cmd;
                                                         };
