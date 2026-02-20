@@ -29,23 +29,23 @@ func (r *Router) registerHostedRoutes(hostedSignupHandlers *HostedSignupHandlers
 	)
 	r.mux.HandleFunc(
 		"POST /api/admin/orgs/{id}/suspend",
-		RequireAdmin(routerConfig, RequireScope(config.ScopeSettingsWrite, lifecycleHandlers.HandleSuspendOrg)),
+		RequireOrgOwnerOrPlatformAdmin(routerConfig, r.multiTenant, RequireScope(config.ScopeSettingsWrite, lifecycleHandlers.HandleSuspendOrg)),
 	)
 	r.mux.HandleFunc(
 		"POST /api/admin/orgs/{id}/unsuspend",
-		RequireAdmin(routerConfig, RequireScope(config.ScopeSettingsWrite, lifecycleHandlers.HandleUnsuspendOrg)),
+		RequireOrgOwnerOrPlatformAdmin(routerConfig, r.multiTenant, RequireScope(config.ScopeSettingsWrite, lifecycleHandlers.HandleUnsuspendOrg)),
 	)
 	r.mux.HandleFunc(
 		"POST /api/admin/orgs/{id}/soft-delete",
-		RequireAdmin(routerConfig, RequireScope(config.ScopeSettingsWrite, lifecycleHandlers.HandleSoftDeleteOrg)),
+		RequireOrgOwnerOrPlatformAdmin(routerConfig, r.multiTenant, RequireScope(config.ScopeSettingsWrite, lifecycleHandlers.HandleSoftDeleteOrg)),
 	)
 	r.mux.HandleFunc(
 		"GET /api/hosted/organizations",
-		RequireAdmin(routerConfig, RequireScope(config.ScopeSettingsRead, hostedOrgAdminHandlers.HandleListOrganizations)),
+		RequirePlatformAdmin(routerConfig, RequireScope(config.ScopeSettingsRead, hostedOrgAdminHandlers.HandleListOrganizations)),
 	)
 	r.mux.HandleFunc(
 		"POST /api/admin/orgs/{id}/agent-install-command",
-		RequireAdmin(routerConfig, RequireScope(config.ScopeSettingsWrite, r.handleHostedTenantAgentInstallCommand)),
+		RequireOrgOwnerOrPlatformAdmin(routerConfig, r.multiTenant, RequireScope(config.ScopeSettingsWrite, r.handleHostedTenantAgentInstallCommand)),
 	)
 
 	if hostedSignupHandlers != nil {

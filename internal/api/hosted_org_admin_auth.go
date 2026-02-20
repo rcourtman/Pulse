@@ -9,6 +9,50 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// RequirePlatformAdmin restricts access to control-plane hosted routes.
+// Allowed callers:
+// - Basic auth admin
+// - Proxy auth admin role
+// - Dev bypass
+//
+// Session/OIDC users and API tokens are denied to prevent tenant users from
+// invoking hosted control-plane operations.
+func RequirePlatformAdmin(cfg *config.Config, handler http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if adminBypassEnabled() {
+			handler(w, r)
+			return
+		}
+
+		if !CheckAuth(cfg, w, r) {
+			if strings.HasPrefix(r.URL.Path, "/api/") || strings.Contains(r.Header.Get("Accept"), "application/json") {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusUnauthorized)
+				_, _ = w.Write([]byte(`{"error":"Authentication required"}`))
+			} else {
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			}
+			return
+		}
+
+		switch strings.TrimSpace(w.Header().Get("X-Auth-Method")) {
+		case "basic", "bypass":
+			handler(w, r)
+			return
+		case "proxy":
+			if cfg != nil && cfg.ProxyAuthSecret != "" {
+				if valid, username, isAdmin := CheckProxyAuth(cfg, r); valid && isAdmin {
+					log.Debug().Str("user", username).Msg("Allowing platform admin via proxy auth")
+					handler(w, r)
+					return
+				}
+			}
+		}
+
+		writeErrorResponse(w, http.StatusForbidden, "access_denied", "Platform admin required", nil)
+	}
+}
+
 // RequireOrgOwnerOrPlatformAdmin restricts access to routes scoped by a path org ID (`{id}`).
 //
 // Allowed callers:

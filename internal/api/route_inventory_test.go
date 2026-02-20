@@ -171,7 +171,7 @@ func isProtectedHandler(expr ast.Expr) bool {
 
 func isAuthWrapper(name string) bool {
 	switch name {
-	case "RequireAuth", "RequireAdmin", "RequirePermission", "RequireOrgOwnerOrPlatformAdmin":
+	case "RequireAuth", "RequireAdmin", "RequirePermission", "RequireOrgOwnerOrPlatformAdmin", "RequirePlatformAdmin":
 		return true
 	default:
 		return false
