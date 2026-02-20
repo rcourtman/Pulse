@@ -138,7 +138,11 @@ export function buildMentionResources(state: MentionStateSubset): MentionResourc
         status: vm.status,
         node: vm.node,
       },
-      [`vm-id:${vm.node}:${vm.vmid}`],
+      [
+        `vm-id:${vm.node}:${vm.vmid}`,
+        // Register backend VM ID so host agents with linkedVmId can merge (#1252)
+        `vm-backend-id:${vm.id}`,
+      ],
     );
   }
 
@@ -153,12 +157,25 @@ export function buildMentionResources(state: MentionStateSubset): MentionResourc
         status: container.status,
         node: container.node,
       },
-      [`lxc-id:${container.node}:${container.vmid}`],
+      [
+        `lxc-id:${container.node}:${container.vmid}`,
+        // Register backend container ID so host agents with linkedContainerId can merge (#1252)
+        `lxc-backend-id:${container.id}`,
+      ],
     );
   }
 
   for (const host of state.dockerHosts || []) {
     const hostName = host.displayName || host.hostname || host.id;
+    const dockerAliases = [
+      `docker-host-id:${host.id}`,
+      `host-name:${hostName}`,
+      `host-hostname:${host.hostname}`,
+    ];
+    // Link docker host to its host agent via agentId so they merge (#1252)
+    if (host.agentId) {
+      dockerAliases.push(`agent-host-id:${host.agentId}`);
+    }
     upsertMentionResource(
       byKey,
       aliasToKey,
@@ -168,11 +185,7 @@ export function buildMentionResources(state: MentionStateSubset): MentionResourc
         type: 'host',
         status: host.status || 'online',
       },
-      [
-        `docker-host-id:${host.id}`,
-        `host-name:${hostName}`,
-        `host-hostname:${host.hostname}`,
-      ],
+      dockerAliases,
     );
 
     for (const container of host.containers || []) {
@@ -223,10 +236,15 @@ export function buildMentionResources(state: MentionStateSubset): MentionResourc
       `host-name:${hostName}`,
       `host-hostname:${host.hostname}`,
     ];
-    // If this host agent is linked to a PVE node, add the node's backend ID alias so they merge (#1252).
-    // linkedNodeId is the node's backend ID (format: "instance-nodeName").
+    // If this host agent is linked to a PVE entity, add its backend ID alias so they merge (#1252).
     if (host.linkedNodeId) {
       aliases.push(`node-backend-id:${host.linkedNodeId}`);
+    }
+    if (host.linkedVmId) {
+      aliases.push(`vm-backend-id:${host.linkedVmId}`);
+    }
+    if (host.linkedContainerId) {
+      aliases.push(`lxc-backend-id:${host.linkedContainerId}`);
     }
     upsertMentionResource(
       byKey,

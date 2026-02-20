@@ -113,6 +113,109 @@ describe('mentionResources', () => {
     expect(nodeOrHost[0].name).toBe('pve01');
   });
 
+  it('deduplicates docker host and host agent via agentId (#1252)', () => {
+    // Docker host has agentId matching the host agent's id
+    const state = {
+      nodes: [],
+      vms: [],
+      containers: [],
+      dockerHosts: [
+        {
+          id: 'docker-host-abc',
+          agentId: 'agent-xyz',
+          hostname: 'docker01',
+          displayName: 'docker01',
+          status: 'online',
+          lastSeen: Date.now(),
+          containers: [],
+        },
+      ],
+      hosts: [
+        {
+          id: 'agent-xyz',
+          hostname: 'docker01',
+          displayName: 'docker01',
+          status: 'online',
+          lastSeen: Date.now(),
+          memory: { total: 16, used: 8, free: 8, usage: 50 },
+        },
+      ],
+    } as unknown as State;
+
+    const resources = buildMentionResources(state);
+    const hostEntries = resources.filter((r) => r.type === 'host');
+    expect(hostEntries).toHaveLength(1);
+    expect(hostEntries[0].name).toBe('docker01');
+  });
+
+  it('deduplicates VM and host agent running inside it via linkedVmId (#1252)', () => {
+    const state = {
+      nodes: [],
+      vms: [
+        {
+          id: 'pve01-100',
+          vmid: 100,
+          name: 'my-vm',
+          node: 'pve01',
+          instance: 'pve-instance-1',
+          status: 'running',
+        },
+      ],
+      containers: [],
+      dockerHosts: [],
+      hosts: [
+        {
+          id: 'agent-in-vm',
+          hostname: 'my-vm',
+          displayName: 'my-vm',
+          status: 'online',
+          lastSeen: Date.now(),
+          linkedVmId: 'pve01-100',
+          memory: { total: 8, used: 4, free: 4, usage: 50 },
+        },
+      ],
+    } as unknown as State;
+
+    const resources = buildMentionResources(state);
+    const vmOrHost = resources.filter((r) => r.type === 'vm' || r.type === 'host');
+    expect(vmOrHost).toHaveLength(1);
+    expect(vmOrHost[0].name).toBe('my-vm');
+  });
+
+  it('deduplicates LXC container and host agent running inside it via linkedContainerId (#1252)', () => {
+    const state = {
+      nodes: [],
+      vms: [],
+      containers: [
+        {
+          id: 'pve01-200',
+          vmid: 200,
+          name: 'my-ct',
+          node: 'pve01',
+          instance: 'pve-instance-1',
+          status: 'running',
+        },
+      ],
+      dockerHosts: [],
+      hosts: [
+        {
+          id: 'agent-in-ct',
+          hostname: 'my-ct',
+          displayName: 'my-ct',
+          status: 'online',
+          lastSeen: Date.now(),
+          linkedContainerId: 'pve01-200',
+          memory: { total: 4, used: 2, free: 2, usage: 50 },
+        },
+      ],
+    } as unknown as State;
+
+    const resources = buildMentionResources(state);
+    const ctOrHost = resources.filter((r) => r.type === 'container' || r.type === 'host');
+    expect(ctOrHost).toHaveLength(1);
+    expect(ctOrHost[0].name).toBe('my-ct');
+  });
+
   it('deduplicates cluster node mentions from multiple instances and keeps the healthiest status', () => {
     const state = {
       nodes: [

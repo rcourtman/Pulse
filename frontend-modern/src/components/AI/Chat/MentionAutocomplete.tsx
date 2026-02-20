@@ -110,12 +110,20 @@ export function MentionAutocomplete(props: MentionAutocompleteProps) {
 
   // Get status color
   const getStatusColor = (status?: string) => {
-    switch (status) {
+    switch (status?.toLowerCase()) {
       case 'running':
+      case 'online':
+      case 'healthy':
+      case 'up':
         return 'bg-green-500';
       case 'stopped':
+      case 'offline':
+      case 'error':
+      case 'failed':
         return 'bg-red-500';
       case 'paused':
+      case 'degraded':
+      case 'warning':
         return 'bg-yellow-500';
       default:
         return 'bg-gray-400';
