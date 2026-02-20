@@ -15,7 +15,7 @@ func TestExecuteGetKubernetesClusters(t *testing.T) {
 	exec := NewPulseToolExecutor(ExecutorConfig{})
 	result, err := exec.executeGetKubernetesClusters(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, "State provider not available.", result.Content[0].Text)
+	assert.Equal(t, "read state not available", result.Content[0].Text)
 
 	exec = NewPulseToolExecutor(ExecutorConfig{StateProvider: &mockStateProvider{state: models.StateSnapshot{}}})
 	result, err = exec.executeGetKubernetesClusters(ctx)

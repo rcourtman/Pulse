@@ -83,6 +83,7 @@ import { eventBus } from '@/stores/events';
 
 import { updateStore } from '@/stores/updates';
 import { isPro, loadLicenseStatus } from '@/stores/license';
+import { deriveTabFromPath, deriveAgentFromPath, settingsTabPath, type SettingsTab, type AgentKey } from './settingsRouting';
 
 // Type definitions
 interface DiscoveredServer {
@@ -117,28 +118,7 @@ interface DiscoveryScanStatus {
   errors?: string[];
 }
 
-type SettingsTab =
-  | 'proxmox'
-  | 'docker'
-  | 'hosts'
-  | 'agents'
-  | 'workspace'
-  | 'integrations'
-  | 'maintenance'
-  | 'system-backups'
-  | 'system-ai'
-  | 'system-pro'
-  | 'api'
-  | 'security-overview'
-  | 'authentication'
-  | 'security-sso'
-  | 'security-roles'
-  | 'team'
-  | 'audit'
-  | 'updates'
-  | 'security-webhooks';
 
-type AgentKey = 'pve' | 'pbs' | 'pmg';
 
 const SETTINGS_HEADER_META: Partial<Record<SettingsTab, { title: string; description: string }>> = {
   proxmox: {
@@ -150,10 +130,6 @@ const SETTINGS_HEADER_META: Partial<Record<SettingsTab, { title: string; descrip
     title: 'Docker',
     description:
       'Monitor Docker hosts, containers, images, and volumes across your infrastructure.',
-  },
-  hosts: {
-    title: 'Hosts',
-    description: 'Monitor Linux, macOS, and Windows machines—servers, desktops, and laptops.',
   },
   agents: {
     title: 'Agents',
@@ -223,53 +199,7 @@ const Settings: Component<SettingsProps> = (props) => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const deriveTabFromPath = (path: string): SettingsTab => {
-    if (path.includes('/settings/proxmox')) return 'proxmox';
-    if (path.includes('/settings/agent-hub')) return 'proxmox';
-    if (path.includes('/settings/docker')) return 'docker';
-    if (path.includes('/settings/containers')) return 'agents';
-    if (
-      path.includes('/settings/hosts') ||
-      path.includes('/settings/host-agents') ||
-      path.includes('/settings/servers') ||
-      path.includes('/settings/linuxServers') ||
-      path.includes('/settings/windowsServers') ||
-      path.includes('/settings/macServers') ||
-      path.includes('/settings/agents')
-    )
-      return 'agents';
-    if (path.includes('/settings/system-general') || path.includes('/settings/system-ai') || path.includes('/settings/system-pro')) return 'workspace';
-    if (path.includes('/settings/system-network') || path.includes('/settings/api') || path.includes('/settings/security-webhooks') || path.includes('/settings/integrations')) return 'integrations';
-    if (path.includes('/settings/system-updates') || path.includes('/settings/system-backups') || path.includes('/settings/backups') || path.includes('/settings/recovery')) return 'maintenance';
-    if (path.includes('/settings/system')) return 'workspace';
 
-    if (path.includes('/settings/security-overview') || path.includes('/settings/security-auth') || path.includes('/settings/security-sso')) return 'authentication';
-    if (path.includes('/settings/security-roles') || path.includes('/settings/security-users') || path.includes('/settings/organization')) return 'team';
-    if (path.includes('/settings/security-audit')) return 'audit';
-    if (path.includes('/settings/security')) return 'authentication';
-    if (path.includes('/settings/updates')) return 'updates';
-
-    // Legacy platform paths map to the Proxmox tab
-    if (
-      path.includes('/settings/pve') ||
-      path.includes('/settings/pbs') ||
-      path.includes('/settings/pmg') ||
-      path.includes('/settings/docker') ||
-      path.includes('/settings/linuxServers') ||
-      path.includes('/settings/windowsServers') ||
-      path.includes('/settings/macServers')
-    ) {
-      return 'proxmox';
-    }
-    return 'proxmox';
-  };
-
-  const deriveAgentFromPath = (path: string): AgentKey | null => {
-    if (path.includes('/settings/pve')) return 'pve';
-    if (path.includes('/settings/pbs')) return 'pbs';
-    if (path.includes('/settings/pmg')) return 'pmg';
-    return null;
-  };
 
   const [currentTab, setCurrentTab] = createSignal<SettingsTab>(
     deriveTabFromPath(location.pathname),
@@ -299,7 +229,7 @@ const Settings: Component<SettingsProps> = (props) => {
     if (tab === 'proxmox' && deriveAgentFromPath(location.pathname) === null) {
       setSelectedAgent('pve');
     }
-    const targetPath = `/settings/${tab}`;
+    const targetPath = settingsTabPath(tab);
     if (location.pathname !== targetPath) {
       navigate(targetPath, { scroll: false });
       return;
@@ -329,7 +259,7 @@ const Settings: Component<SettingsProps> = (props) => {
         }
 
         if (path.startsWith('/settings/agent-hub')) {
-          navigate(path.replace('/settings/agent-hub', '/settings/proxmox'), {
+          navigate(path.replace('/settings/agent-hub', '/settings/infrastructure'), {
             replace: true,
             scroll: false,
           });
@@ -337,7 +267,7 @@ const Settings: Component<SettingsProps> = (props) => {
         }
 
         if (path.startsWith('/settings/servers')) {
-          navigate(path.replace('/settings/servers', '/settings/hosts'), {
+          navigate(path.replace('/settings/servers', '/settings/workloads'), {
             replace: true,
             scroll: false,
           });
@@ -345,7 +275,7 @@ const Settings: Component<SettingsProps> = (props) => {
         }
 
         if (path.startsWith('/settings/containers')) {
-          navigate(path.replace('/settings/containers', '/settings/docker'), {
+          navigate(path.replace('/settings/containers', '/settings/workloads/docker'), {
             replace: true,
             scroll: false,
           });
@@ -355,9 +285,10 @@ const Settings: Component<SettingsProps> = (props) => {
         if (
           path.startsWith('/settings/linuxServers') ||
           path.startsWith('/settings/windowsServers') ||
-          path.startsWith('/settings/macServers')
+          path.startsWith('/settings/macServers') ||
+          path.startsWith('/settings/hosts')
         ) {
-          navigate('/settings/hosts', {
+          navigate('/settings/workloads', {
             replace: true,
             scroll: false,
           });
@@ -1623,8 +1554,7 @@ const Settings: Component<SettingsProps> = (props) => {
       if (
         activeTab() === 'workspace' ||
         activeTab() === 'integrations' ||
-        activeTab() === 'maintenance' ||
-        activeTab() === 'system-backups'
+        activeTab() === 'maintenance'
       ) {
         // Save system settings using typed API
         await SettingsAPI.updateSystemSettings({
@@ -1994,8 +1924,7 @@ const Settings: Component<SettingsProps> = (props) => {
             (activeTab() === 'proxmox' ||
               activeTab() === 'workspace' ||
               activeTab() === 'integrations' ||
-              activeTab() === 'maintenance' ||
-              activeTab() === 'system-backups')
+              activeTab() === 'maintenance')
           }
         >
           <div class="bg-amber-50 dark:bg-amber-900 border-l-4 border-amber-500 dark:border-amber-400 rounded-r-lg shadow-sm p-4">
