@@ -253,7 +253,7 @@ export function buildMentionResources(state: MentionStateSubset): MentionResourc
         id: `host:${host.id}`,
         name: hostName,
         type: 'host',
-        status: host.status,
+        status: host.status || 'online',
       },
       aliases,
     );

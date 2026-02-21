@@ -438,9 +438,11 @@ type HostFrontend struct {
 	TokenHint         string                     `json:"tokenHint,omitempty"`
 	TokenLastUsedAt   *int64                     `json:"tokenLastUsedAt,omitempty"`
 	Tags              []string                   `json:"tags,omitempty"`
-	CommandsEnabled   bool                       `json:"commandsEnabled,omitempty"` // Whether AI command execution is enabled
-	IsLegacy          bool                       `json:"isLegacy,omitempty"`        // True if using legacy agent protocol
-	LinkedNodeId      string                     `json:"linkedNodeId,omitempty"`    // ID of linked PVE node (if running on a node)
+	CommandsEnabled   bool                       `json:"commandsEnabled,omitempty"`   // Whether AI command execution is enabled
+	IsLegacy          bool                       `json:"isLegacy,omitempty"`          // True if using legacy agent protocol
+	LinkedNodeId      string                     `json:"linkedNodeId,omitempty"`      // ID of linked PVE node (if running on a node)
+	LinkedVmId        string                     `json:"linkedVmId,omitempty"`        // ID of linked VM (if running inside a VM)
+	LinkedContainerId string                     `json:"linkedContainerId,omitempty"` // ID of linked container (if running inside a container)
 }
 
 // HostSensorSummaryFrontend mirrors HostSensorSummary with primitives for the frontend.

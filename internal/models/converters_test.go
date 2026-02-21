@@ -1080,9 +1080,11 @@ func TestHostToFrontend(t *testing.T) {
 		Sensors: HostSensorSummary{
 			TemperatureCelsius: map[string]float64{"cpu": 55.0},
 		},
-		CommandsEnabled: true,
-		IsLegacy:        false,
-		LinkedNodeID:    "node-abc",
+		CommandsEnabled:   true,
+		IsLegacy:          false,
+		LinkedNodeID:      "node-abc",
+		LinkedVMID:        "vm-xyz",
+		LinkedContainerID: "ct-456",
 	}
 
 	frontend := host.ToFrontend()
@@ -1134,6 +1136,12 @@ func TestHostToFrontend(t *testing.T) {
 	}
 	if frontend.LinkedNodeId != host.LinkedNodeID {
 		t.Errorf("LinkedNodeId = %q, want %q", frontend.LinkedNodeId, host.LinkedNodeID)
+	}
+	if frontend.LinkedVmId != host.LinkedVMID {
+		t.Errorf("LinkedVmId = %q, want %q", frontend.LinkedVmId, host.LinkedVMID)
+	}
+	if frontend.LinkedContainerId != host.LinkedContainerID {
+		t.Errorf("LinkedContainerId = %q, want %q", frontend.LinkedContainerId, host.LinkedContainerID)
 	}
 	if frontend.TokenLastUsedAt == nil || *frontend.TokenLastUsedAt != tokenLastUsed.Unix()*1000 {
 		t.Errorf("TokenLastUsedAt = %v, want %d", frontend.TokenLastUsedAt, tokenLastUsed.Unix()*1000)
