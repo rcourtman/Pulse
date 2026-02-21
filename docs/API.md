@@ -166,12 +166,12 @@ Returns version, build time, and update status.
 Example response:
 ```json
 {
-  "version": "5.0.16",
-  "buildTime": "2026-01-19T22:20:18Z",
+  "version": "6.0.0",
+  "buildTime": "2026-02-21T00:00:00Z",
   "channel": "stable",
   "deploymentType": "systemd",
-  "updateAvailable": true,
-  "latestVersion": "5.0.17"
+  "updateAvailable": false,
+  "latestVersion": "6.0.0"
 }
 ```
 Version fields are returned as plain semantic versions (no leading `v`).
@@ -733,7 +733,7 @@ Revoke a resource share. Admin or owner role required.
 
 ---
 
-## 🤖 Pulse AI *(v5)*
+## 🤖 Pulse AI
 
 **Pro gating:** endpoints labeled "(Pro)" require the relevant Pro/Cloud capability and return `402 Payment Required` if the feature is not licensed.
 
@@ -884,7 +884,7 @@ Request bodies:
 - `POST /api/ai/cost/reset` (admin)
 - `GET /api/ai/cost/export` (admin)
 
-## 📈 Metrics Store (v5)
+## 📈 Metrics Store
 
 Auth required: `monitoring:read`.
 
@@ -1025,6 +1025,36 @@ Updates server-side config for an agent (e.g., `commandsEnabled`).
 `GET /api/admin/profiles/assignments` (admin, Pro)
 `POST /api/admin/profiles/assignments` (admin, Pro)
 `DELETE /api/admin/profiles/assignments/{agent_id}` (admin, Pro)
+
+---
+
+## 🐟 TrueNAS
+
+TrueNAS connection management endpoints for adding, testing, and removing TrueNAS SCALE/CORE instances.
+
+### Connection Management (Admin)
+- `GET /api/truenas/connections` (admin, `settings:read`) — List configured TrueNAS connections.
+- `POST /api/truenas/connections` (admin, `settings:write`) — Add a new TrueNAS connection.
+- `POST /api/truenas/connections/test` (admin, `settings:write`) — Test a TrueNAS connection before saving.
+- `DELETE /api/truenas/connections/{id}` (admin, `settings:write`) — Remove a TrueNAS connection.
+
+TrueNAS resources (pools, datasets, disks, ZFS snapshots, replication tasks, alerts) are surfaced through the unified `/api/resources` endpoint with `source=truenas`.
+
+---
+
+## 📱 Relay / Mobile Remote Access (Pro)
+
+End-to-end encrypted relay protocol for mobile app connectivity.
+
+### Relay Configuration (Admin, Pro)
+- `GET /api/settings/relay` (admin, `settings:read`, Pro) — Get current relay configuration.
+- `PUT /api/settings/relay` (admin, `settings:write`, Pro) — Update relay configuration.
+- `GET /api/settings/relay/status` (admin, `settings:read`, Pro) — Get relay connection status.
+
+### Mobile Onboarding
+- `GET /api/onboarding/qr` (`settings:read`) — Generate QR code for mobile app pairing.
+- `POST /api/onboarding/validate` (`settings:read`) — Validate a mobile onboarding connection.
+- `GET /api/onboarding/deep-link` (`settings:read`) — Generate deep-link URL for mobile app.
 
 ---
 

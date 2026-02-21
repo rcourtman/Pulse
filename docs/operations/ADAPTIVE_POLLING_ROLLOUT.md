@@ -1,6 +1,6 @@
 # 🚀 Adaptive Polling Rollout
 
-Safely enable dynamic scheduling (v5+).
+Safely enable dynamic scheduling.
 
 ## 📋 Pre-Flight
 1.  **Snapshot Health**:
@@ -11,7 +11,7 @@ Safely enable dynamic scheduling (v5+).
 
 ## 🟢 Enable
 Choose one method:
-- **UI**: Not currently exposed in the v5 UI (use CLI or env vars).
+- **UI**: Not currently exposed in the UI (use CLI or env vars).
 - **CLI**:
   - systemd/LXC: `jq '.adaptivePollingEnabled=true' /etc/pulse/system.json > /tmp/system.json && sudo mv /tmp/system.json /etc/pulse/system.json`
   - Docker/Kubernetes: edit `/data/system.json` in the volume and restart the container/pod

@@ -317,6 +317,17 @@ together.
 
 > **Note**: `DISABLE_AUTH` is deprecated and no longer disables authentication. Remove it from your environment and restart if it's still present.
 
+### SSO / Single Sign-On
+
+Pulse supports **OIDC** and **SAML** SSO providers with multi-provider configuration:
+
+- **OIDC**: Google, Authentik, Keycloak, Auth0, or any compliant provider.
+- **SAML**: For enterprise IdPs that use SAML assertions.
+- Multiple providers can be enabled simultaneously; the login page shows all available SSO buttons.
+- Configure via **Settings → Security → SSO Providers** (admin required).
+
+See `docs/PROXY_AUTH.md` for proxy-based auth (Authentik, Authelia, Cloudflare).
+
 ### Password Authentication
 
 #### Quick Security Setup (Recommended)
@@ -408,6 +419,27 @@ curl -X POST \
 ```
 
 Most API endpoints also accept `Authorization: Bearer <token>`, but export/import uses the `X-API-Token` header.
+
+### Scoped API Tokens
+
+API tokens can be scoped to limit access. Available scopes:
+
+| Scope | Purpose |
+|---|---|
+| `monitoring:read` | Read resource data, metrics, charts |
+| `monitoring:write` | Update metadata, trigger discovery |
+| `settings:read` | Read configuration, export |
+| `settings:write` | Modify settings, import, manage nodes |
+| `ai:chat` | Use the AI chat assistant |
+| `ai:execute` | Run AI commands, view patrol findings |
+| `docker:report` | Docker agent metric reporting |
+| `kubernetes:report` | Kubernetes agent metric reporting |
+| `host-agent:report` | Host agent metric reporting |
+| `docker:manage` | Docker host management actions |
+| `kubernetes:manage` | Kubernetes cluster management actions |
+| `host-agent:manage` | Host agent configuration updates |
+
+Endpoints enforce scope checks before processing. A token without the required scope receives `403 Forbidden`.
 
 ### Auto-Registration Security
 
@@ -520,7 +552,26 @@ curl -s http://localhost:7655/api/monitoring/scheduler/health | jq
 - **Backoff Delays**: Increased backoff may indicate rate limiting or errors
 - **Error Rates**: Track failed API calls and authentication attempts
 
-There is currently no dedicated scheduler-health UI in v5. Use the API endpoint above (or export diagnostics from **Settings → Diagnostics**) when troubleshooting.
+Use the API endpoint above or export diagnostics from **Settings → Diagnostics** when troubleshooting.
+
+### Relay Security (Pro)
+
+The relay protocol provides mobile remote access with end-to-end encryption:
+
+- **ECDH key exchange**: Per-channel encryption keys are derived via Elliptic Curve Diffie-Hellman, meaning the relay server never sees plaintext data.
+- **Per-channel authentication**: Each mobile session authenticates independently.
+- **Back-pressure**: Data limiters prevent channel flooding.
+- **License-gated**: Relay functionality requires a Pro or Cloud license.
+- **Configurable**: Enable/disable via **Settings → Relay** (admin only).
+
+### Agent Command Security
+
+**Agent commands are disabled by default.** This prevents the AI subsystem from executing arbitrary commands on monitored hosts.
+
+- Operators must explicitly opt in with `--enable-commands` on the agent.
+- Even when enabled, commands require `ai:execute` scope and admin privileges.
+- All command executions are logged to the audit trail.
+- Circuit breakers automatically halt execution when error thresholds are exceeded.
 
 ## Security Best Practices
 

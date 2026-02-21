@@ -34,13 +34,19 @@ Welcome to the Pulse documentation portal. Here you'll find everything you need 
 - **[Privacy](PRIVACY.md)** – What leaves your network (and what doesn’t).
 - **[Proxy Auth](PROXY_AUTH.md)** – Authentik/Authelia/Cloudflare proxy authentication configuration.
 
-## ✨ New in 5.0
+## ✨ New in 6.0
 
-- **[Pulse AI](AI.md)** – Optional assistant for chat, patrol findings, alert analysis, and execution workflows.
+- **[Unified Navigation](MIGRATION_UNIFIED_NAV.md)** – Task-based navigation replacing platform-specific tabs.
+- **[TrueNAS Integration](CONFIGURATION.md#truenas)** – First-class TrueNAS monitoring (pools, datasets, disks, ZFS snapshots, replication).
+- **[Relay / Mobile Remote Access](CONFIGURATION.md#relay)** – End-to-end encrypted relay protocol for mobile app connectivity (Pro).
+- **[Recovery Central](CONFIGURATION.md#recovery)** – Unified backup, snapshot, and replication timeline.
+- **[Pulse AI](AI.md)** – Chat assistant, patrol findings, alert analysis, intelligence, and forecasts.
 - **[Metrics History](METRICS_HISTORY.md)** – Persistent metrics storage with configurable retention.
 - **[Mail Gateway](MAIL_GATEWAY.md)** – Proxmox Mail Gateway (PMG) monitoring.
 - **[Auto Updates](AUTO_UPDATE.md)** – One-click updates for supported deployments.
 - **[Kubernetes](KUBERNETES.md)** – Helm deployment (ingress, persistence, HA patterns).
+- **[Multi-Tenant Organizations](MULTI_TENANT.md)** – Isolate infrastructure by organization (Enterprise, opt-in).
+- **[Entitlements Overhaul](PULSE_PRO.md)** – Capability-key-based feature gating across Community/Pro/Cloud.
 
 ## 💳 Plans (Community / Pro / Cloud)
 
@@ -53,7 +59,7 @@ Pulse is available in three plans:
 - **[Learn more at pulserelay.pro](https://pulserelay.pro)**
 - **[Plans and entitlements](PULSE_PRO.md)** (includes the Community/Pro/Cloud matrix)
 - **[AI deep dive](AI.md)**
-- **[Multi-Tenant Organizations (Cloud Enterprise)](MULTI_TENANT.md)** — Isolate infrastructure by organization for MSPs and multi-datacenter deployments.
+- **[Multi-Tenant Organizations (Enterprise)](MULTI_TENANT.md)** — Isolate infrastructure by organization for MSPs and multi-datacenter deployments.
 
 ## 📡 Monitoring & Agents
 

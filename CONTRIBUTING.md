@@ -1,17 +1,17 @@
 # Contributing to Pulse
 
 Thanks for investing time in Pulse! This document collects the essentials you
-need to be productive across the Go backend, React/TypeScript frontend, and the
+need to be productive across the Go backend, SolidJS/TypeScript frontend, and the
 installer tooling.
 
 ---
 
 ## Project Overview
 
-- **Backend (`cmd/`, `internal/`, `pkg/`)** – Go 1.23+ web server that embeds
+- **Backend (`cmd/`, `internal/`, `pkg/`)** – Go 1.25+ web server that embeds
   the built frontend and exposes REST + WebSocket APIs.
 - **Architecture (`ARCHITECTURE.md`)** – High-level system design diagrams and explanations.
-- **Frontend (`frontend-modern/`)** – Vite + React app built with TypeScript.
+- **Frontend (`frontend-modern/`)** – Vite + SolidJS app built with TypeScript.
 - **Agents (`cmd/pulse-*-agent`)** – Go binaries distributed alongside Pulse for
   host and Docker telemetry.
 - **Documentation (`docs/`)** – Markdown-based guides published to users and
@@ -81,8 +81,8 @@ examples where possible.
 - Production build: `npm run build` (copied into `internal/api/frontend-modern`
   via the Makefile).
 
-Use modern React patterns (hooks, function components) and prefer TanStack Query
-for data fetching. Add Storybook stories or screenshots when introducing new
+Use SolidJS patterns (signals, memos, createEffect) and the shared design-system
+components in `components/shared/`. Add screenshots when introducing new
 UI-heavy features.
 
 ---

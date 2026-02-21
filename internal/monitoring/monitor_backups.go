@@ -1472,19 +1472,20 @@ func convertPBSSnapshots(instanceName, datastore, namespace string, snapshots []
 		}
 
 		backups = append(backups, models.PBSBackup{
-			ID:         backupID,
-			Instance:   instanceName,
-			Datastore:  datastore,
-			Namespace:  namespace,
-			BackupType: snapshot.BackupType,
-			VMID:       snapshot.BackupID,
-			BackupTime: backupTime,
-			Size:       snapshot.Size,
-			Protected:  snapshot.Protected,
-			Verified:   verified,
-			Comment:    snapshot.Comment,
-			Files:      fileNames,
-			Owner:      snapshot.Owner,
+			ID:              backupID,
+			Instance:        instanceName,
+			Datastore:       datastore,
+			Namespace:       namespace,
+			BackupType:      snapshot.BackupType,
+			VMID:            snapshot.BackupID,
+			BackupTime:      backupTime,
+			Size:            snapshot.Size,
+			Protected:       snapshot.Protected,
+			Verified:        verified,
+			VerificationRaw: snapshot.Verification,
+			Comment:         snapshot.Comment,
+			Files:           fileNames,
+			Owner:           snapshot.Owner,
 		})
 	}
 

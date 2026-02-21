@@ -2,6 +2,8 @@
 
 This guide explains how to deploy the Pulse Server (Hub) and Pulse Agents on Kubernetes clusters, including immutable distributions like Talos Linux.
 
+> **Navigation note (v6):** Kubernetes cluster and node resources appear on the **Infrastructure** page, while pods appear on the **Workloads** page. The legacy `/kubernetes` URL redirects to `/workloads?type=k8s`.
+
 ## Prerequisites
 
 - A Kubernetes cluster (v1.19+)

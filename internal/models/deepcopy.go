@@ -656,6 +656,15 @@ func clonePMGInstances(src []PMGInstance) []PMGInstance {
 func clonePBSBackup(src PBSBackup) PBSBackup {
 	dest := src
 	dest.Files = append([]string(nil), src.Files...)
+	// Deep-copy VerificationRaw to avoid shared map references
+	if m, ok := src.VerificationRaw.(map[string]interface{}); ok {
+		cp := make(map[string]interface{}, len(m))
+		for k, v := range m {
+			cp[k] = v
+		}
+		dest.VerificationRaw = cp
+	}
+	// string and nil cases are immutable - shallow copy is fine
 	return dest
 }
 

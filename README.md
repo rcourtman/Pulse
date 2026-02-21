@@ -2,7 +2,7 @@
 
 <div align="center">
   <img src="docs/images/pulse-logo.svg" alt="Pulse Logo" width="120" />
-  <p><strong>Real-time monitoring for Proxmox, Docker, and Kubernetes infrastructure.</strong></p>
+  <p><strong>Real-time monitoring for Proxmox, Docker, Kubernetes, and TrueNAS infrastructure.</strong></p>
 
   [![GitHub Stars](https://img.shields.io/github/stars/rcourtman/Pulse?style=flat&logo=github)](https://github.com/rcourtman/Pulse)
   [![GitHub release](https://img.shields.io/github/v/release/rcourtman/Pulse)](https://github.com/rcourtman/Pulse/releases/latest)
@@ -16,7 +16,7 @@
 
 ## 🚀 Overview
 
-Pulse is a modern, unified dashboard for monitoring your **infrastructure** across Proxmox, Docker, and Kubernetes. It consolidates metrics, alerts, and AI-powered insights from all your systems into a single, beautiful interface.
+Pulse is a modern, unified dashboard for monitoring your **infrastructure** across Proxmox, Docker, Kubernetes, and TrueNAS. It consolidates metrics, alerts, and AI-powered insights from all your systems into a single, beautiful interface.
 
 Designed for homelabs, sysadmins, and MSPs who need a "single pane of glass" without the complexity of enterprise monitoring stacks.
 
@@ -39,11 +39,11 @@ Power-user shortcuts:
 ## ✨ Features
 
 ### Core Monitoring
-- **Unified Monitoring**: View health and metrics for PVE, PBS, PMG, Docker, and Kubernetes in one place
+- **Unified Monitoring**: View health and metrics for PVE, PBS, PMG, Docker, Kubernetes, and TrueNAS in one place
 - **Smart Alerts**: Get notified via Discord, Slack, Telegram, Email, and more
 - **Auto-Discovery**: Automatically finds Proxmox nodes on your network
 - **Metrics History**: Persistent storage with configurable retention
-- **Backup Explorer**: Visualize backup jobs and storage usage
+- **Recovery Central**: Unified backup/snapshot/replication timeline across PBS and TrueNAS
 
 ### AI-Powered
 - **Chat Assistant (BYOK)**: Ask questions about your infrastructure in natural language
@@ -53,14 +53,16 @@ Power-user shortcuts:
 
 ### Multi-Platform
 - **Proxmox VE/PBS/PMG**: Full monitoring and management
+- **TrueNAS**: Pools, datasets, disks, ZFS snapshots, replication tasks, and alerts
 - **Kubernetes**: Complete K8s cluster monitoring via agents
 - **Docker/Podman**: Container and Swarm service monitoring
 - **OCI Containers**: Proxmox 9.1+ native container support
 
 ### Security & Operations
-- **Secure by Design**: Credentials encrypted at rest, strict API scoping
+- **Secure by Design**: Credentials encrypted at rest, strict API scoping, agent commands disabled by default
 - **One-Click Updates**: Easy upgrades for supported deployments
-- **OIDC/SSO**: Single sign-on authentication
+- **OIDC/SSO/SAML**: Single sign-on with multi-provider support
+- **Mobile Remote Access**: Relay protocol with end-to-end encryption for mobile app connectivity (Pro)
 - **Privacy Focused**: No outbound telemetry by default. Monitoring data stays on your server.
 
 ## ⚡ Quick Start
@@ -89,13 +91,17 @@ Access the dashboard at `http://<your-ip>:7655`.
 ## 📚 Documentation
 
 - **[Installation Guide](docs/INSTALL.md)**: Detailed instructions for Docker, Kubernetes, and bare metal.
+- **[Upgrade to v6](docs/UPGRADE_v6.md)**: Migration guide for upgrading from v5 to v6.
 - **[Configuration](docs/CONFIGURATION.md)**: Setup authentication, notifications, and advanced settings.
 - **[Security](SECURITY.md)**: Learn about Pulse's security model and best practices.
 - **[API Reference](docs/API.md)**: Integrate Pulse with your own tools.
 - **[Architecture](ARCHITECTURE.md)**: High-level system design and data flow.
+- **[AI Features](docs/AI.md)**: Pulse Assistant (Chat) and Pulse Patrol documentation.
+- **[Multi-Tenant](docs/MULTI_TENANT.md)**: Enterprise multi-tenant setup and configuration.
 - **[Troubleshooting](docs/TROUBLESHOOTING.md)**: Solutions to common issues.
 - **[Agent Security](docs/AGENT_SECURITY.md)**: Details on checksum-verified updates and verification.
 - **[Docker Monitoring](docs/DOCKER.md)**: Setup and management of Docker agents.
+- **[Unified Navigation](docs/MIGRATION_UNIFIED_NAV.md)**: Guide to the new task-based navigation.
 
 ## 🌐 Community Integrations
 

@@ -40,7 +40,7 @@ The `circuitBreaker` (`internal/monitoring/circuit_breaker.go`) follows a standa
 Adaptive polling is **disabled by default**.
 
 ### UI
-There is currently no dedicated UI for adaptive polling in v5.
+There is currently no dedicated UI for adaptive polling. Use environment variables or `system.json`.
 
 ### Environment Variables
 

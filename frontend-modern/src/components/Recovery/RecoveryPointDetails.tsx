@@ -1,5 +1,7 @@
 import type { Component } from 'solid-js';
 import { For, Show, createMemo, createSignal } from 'solid-js';
+import { getGlobalWebSocketStore } from '@/stores/websocket-global';
+import type { PBSDatastore, PBSInstance } from '@/types/api';
 import type { RecoveryExternalRef, RecoveryPoint } from '@/types/recovery';
 import { formatAbsoluteTime, formatBytes, formatUptime } from '@/utils/format';
 
@@ -33,8 +35,75 @@ const labelForRef = (ref: RecoveryExternalRef | null | undefined): string => {
   return parts.length > 0 ? parts.join(' ') : 'n/a';
 };
 
+const computeDatastoreUsagePercent = (datastore: PBSDatastore): number => {
+  if (Number.isFinite(datastore.total) && datastore.total > 0 && Number.isFinite(datastore.used)) {
+    const calculated = (datastore.used / datastore.total) * 100;
+    return Math.min(100, Math.max(0, calculated));
+  }
+  if (Number.isFinite(datastore.usage)) {
+    return Math.min(100, Math.max(0, datastore.usage));
+  }
+  return 0;
+};
+
+const usageBarColorClass = (usagePercent: number): string => {
+  if (usagePercent > 85) return 'bg-red-500';
+  if (usagePercent >= 70) return 'bg-amber-500';
+  return 'bg-emerald-500';
+};
+
 export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props) => {
   const point = () => props.point;
+  const isPbsProvider = createMemo(() => String(point().provider || '').trim().toLowerCase() === 'proxmox-pbs');
+
+  const pbsComment = createMemo(() => {
+    const value = point().details?.comment;
+    return typeof value === 'string' ? value.trim() : '';
+  });
+
+  const pbsOwner = createMemo(() => {
+    const value = point().details?.owner;
+    return typeof value === 'string' ? value.trim() : '';
+  });
+
+  const pbsFiles = createMemo(() => {
+    const value = point().details?.files;
+    if (!Array.isArray(value)) return [];
+    return value
+      .map((file) => (typeof file === 'string' ? file.trim() : String(file ?? '').trim()))
+      .filter(Boolean);
+  });
+
+  const matchedDatastore = createMemo<{ datastore: PBSDatastore; instanceName: string } | null>(() => {
+    if (!isPbsProvider() || typeof window === 'undefined') return null;
+
+    const repositoryRef = point().repositoryRef;
+    const instanceName = typeof repositoryRef?.namespace === 'string' ? repositoryRef.namespace.trim() : '';
+    const datastoreName = typeof repositoryRef?.name === 'string' ? repositoryRef.name.trim() : '';
+    if (!instanceName || !datastoreName) return null;
+
+    const instances = (getGlobalWebSocketStore().state.pbs || []) as PBSInstance[];
+    const instance = instances.find((item) => item.name === instanceName);
+    if (!instance) return null;
+
+    const datastore = (instance.datastores || []).find((item) => item.name === datastoreName);
+    if (!datastore) return null;
+
+    return { datastore, instanceName: instance.name };
+  });
+
+  const hasPbsDetails = createMemo(
+    () =>
+      isPbsProvider() &&
+      (
+        pbsComment().length > 0 ||
+        pbsOwner().length > 0 ||
+        point().immutable === true ||
+        pbsFiles().length > 0 ||
+        point().verified != null ||
+        matchedDatastore() != null
+      ),
+  );
 
   const startedMs = createMemo(() => {
     const startedAt = point().startedAt;
@@ -66,8 +135,6 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
 
     if (p.verified != null) pairs.push({ k: 'Verified', v: p.verified ? 'true' : 'false' });
     if (p.encrypted != null) pairs.push({ k: 'Encrypted', v: p.encrypted ? 'true' : 'false' });
-    if (p.immutable != null) pairs.push({ k: 'Immutable', v: p.immutable ? 'true' : 'false' });
-
     if (p.subjectResourceId) pairs.push({ k: 'Subject Resource', v: p.subjectResourceId });
     if (p.repositoryResourceId) pairs.push({ k: 'Repository Resource', v: p.repositoryResourceId });
     if (p.subjectRef) pairs.push({ k: 'Subject Ref', v: labelForRef(p.subjectRef) });
@@ -113,6 +180,7 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
   });
 
   const [copied, setCopied] = createSignal(false);
+  const [showPbsFiles, setShowPbsFiles] = createSignal(false);
   const copyJSON = async () => {
     try {
       await navigator.clipboard.writeText(prettyJSON());
@@ -163,6 +231,165 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
         </div>
       </div>
 
+      <Show when={hasPbsDetails()}>
+        <div class="rounded border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-800">
+          <div class="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">PBS Details</div>
+          <div class="mt-2 space-y-2">
+            <Show when={pbsComment()}>
+              <div class="rounded border border-emerald-100 border-l-4 border-l-emerald-400 bg-emerald-50 px-3 py-2 text-xs italic leading-relaxed text-emerald-900 dark:border-emerald-900 dark:border-l-emerald-500 dark:bg-emerald-950/30 dark:text-emerald-100">
+                {pbsComment()}
+              </div>
+            </Show>
+
+            <Show when={pbsOwner()}>
+              <div class="rounded border border-slate-200 bg-white px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-800">
+                <div class="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Owner</div>
+                <div class="mt-0.5 font-mono text-[11px] text-slate-800 dark:text-slate-200 break-all">{pbsOwner()}</div>
+              </div>
+            </Show>
+
+            <Show when={point().immutable === true}>
+              <div>
+                <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300">
+                  <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3l7 4v5c0 5-3.5 7.5-7 9-3.5-1.5-7-4-7-9V7l7-4z" />
+                  </svg>
+                  Protected
+                </span>
+              </div>
+            </Show>
+
+            <Show when={isPbsProvider() && point().verified != null}>
+              <div class="rounded border border-slate-200 bg-white px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-800">
+                <div class="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Verification</div>
+                <div class="mt-0.5 flex items-center gap-2">
+                  {point().verified ? (
+                    <span class="inline-flex items-center gap-1 text-green-600 dark:text-green-400">
+                      <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
+                      </svg>
+                      Verified
+                    </span>
+                  ) : (
+                    <span class="text-amber-600 dark:text-amber-400">Failed</span>
+                  )}
+                  <Show when={typeof point().details?.verificationState === 'string'}>
+                    <span class="font-mono text-[11px] text-slate-500 dark:text-slate-400">
+                      ({String(point().details?.verificationState)})
+                    </span>
+                  </Show>
+                </div>
+                <Show
+                  when={
+                    typeof point().details?.verificationUpid === 'string' &&
+                    String(point().details?.verificationUpid || '').length > 0
+                  }
+                >
+                  <div class="mt-1 font-mono text-[10px] text-slate-400 break-all dark:text-slate-500">
+                    UPID: {String(point().details?.verificationUpid)}
+                  </div>
+                </Show>
+              </div>
+            </Show>
+
+            <Show when={matchedDatastore()}>
+              {(match) => {
+                const datastore = match().datastore;
+                const usagePercent = computeDatastoreUsagePercent(datastore);
+                const status = String(datastore.status || '').trim();
+                const dedupFactor = datastore.deduplicationFactor;
+                return (
+                  <div class="rounded border border-slate-200 bg-white px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-800">
+                    <div class="flex items-center justify-between gap-2">
+                      <div class="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                        Repository Health
+                      </div>
+                      <Show when={status.length > 0}>
+                        <span class="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-200">
+                          {status}
+                        </span>
+                      </Show>
+                    </div>
+
+                    <div class="mt-0.5 font-mono text-[11px] text-slate-800 dark:text-slate-200 break-all">
+                      Datastore: {datastore.name}
+                    </div>
+
+                    <div class="mt-2">
+                      <div class="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                        Space Usage
+                      </div>
+                      <div class="mt-0.5 font-mono text-[11px] text-slate-800 dark:text-slate-200">
+                        {formatBytes(datastore.used, 2)} / {formatBytes(datastore.total, 2)} ({Math.round(usagePercent)}%)
+                      </div>
+                      <div class="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+                        <div
+                          class={`h-full rounded-full transition-[width] ${usageBarColorClass(usagePercent)}`}
+                          style={{ width: `${usagePercent}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    <Show
+                      when={
+                        typeof dedupFactor === 'number' &&
+                        Number.isFinite(dedupFactor) &&
+                        dedupFactor > 0
+                      }
+                    >
+                      <div class="mt-2">
+                        <div class="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                          Dedup Factor
+                        </div>
+                        <div class="mt-0.5 font-mono text-[11px] text-slate-800 dark:text-slate-200">
+                          {Number(dedupFactor).toFixed(2)}x
+                        </div>
+                      </div>
+                    </Show>
+                  </div>
+                );
+              }}
+            </Show>
+
+            <Show when={pbsFiles().length > 0}>
+              <div class="rounded border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowPbsFiles((v) => !v)}
+                  class="flex w-full items-center justify-between px-3 py-2 text-left text-xs text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-700"
+                >
+                  <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                    Files ({pbsFiles().length})
+                  </span>
+                  <svg
+                    class={`h-3 w-3 text-slate-400 transition-transform ${showPbsFiles() ? 'rotate-180' : ''}`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                <Show when={showPbsFiles()}>
+                  <div class="border-t border-slate-200 px-3 py-2 dark:border-slate-700">
+                    <ul class="space-y-1">
+                      <For each={pbsFiles()}>
+                        {(file) => (
+                          <li class="font-mono text-[11px] break-all text-slate-700 dark:text-slate-200">
+                            {file}
+                          </li>
+                        )}
+                      </For>
+                    </ul>
+                  </div>
+                </Show>
+              </div>
+            </Show>
+          </div>
+        </div>
+      </Show>
+
       <div class="rounded border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-800">
         <div class="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">Raw</div>
         <pre class="mt-2 overflow-auto text-[11px] leading-relaxed text-slate-800 dark:text-slate-200 font-mono">
@@ -174,4 +401,3 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
 };
 
 export default RecoveryPointDetails;
-

@@ -463,3 +463,65 @@ For unattended displays (wall monitors, dashboards), use a kiosk token to avoid 
 - Can be revoked anytime from the UI
 
 > **Security note**: URL tokens appear in browser history and server logs. Use only for read-only dashboard access on trusted networks.
+
+---
+
+## TrueNAS Integration {#truenas}
+
+Pulse v6 supports first-class TrueNAS SCALE and CORE monitoring.
+
+### Adding a TrueNAS Instance
+
+1. Go to **Settings → TrueNAS**.
+2. Click **Add Connection**.
+3. Enter the URL (e.g., `https://truenas.local`) and an API key.
+4. Click **Test Connection** to verify, then **Save**.
+
+### Creating a TrueNAS API Key
+
+On your TrueNAS system:
+1. Navigate to the TrueNAS UI → **Settings → API Keys**.
+2. Click **Add** and create a new read-only key.
+3. Copy the key value and paste it into Pulse.
+
+### What Gets Monitored
+
+| Data | Where it appears |
+|---|---|
+| System info (CPU, memory, uptime) | Infrastructure page |
+| ZFS Pools & datasets | Storage page |
+| Physical disks | Storage page |
+| ZFS Snapshots | Recovery page |
+| Replication tasks | Recovery page |
+| TrueNAS alerts | Alerts page |
+
+TrueNAS connections are stored encrypted in `truenas.enc`.
+
+---
+
+## Relay / Mobile Remote Access (Pro) {#relay}
+
+The relay protocol provides end-to-end encrypted remote access for the Pulse mobile app.
+
+### Configuration
+
+1. Go to **Settings → Relay**.
+2. Toggle relay **On**.
+3. Use the **QR Code** or **Deep Link** to connect the mobile app.
+
+### Environment Overrides
+
+| Variable | Description | Default |
+|---|---|---|
+| `PULSE_RELAY_ENABLED` | Enable/disable relay | `false` |
+| `PULSE_RELAY_SERVER` | Override relay server URL | `relay.pulserelay.pro` |
+
+### Security
+
+- All data is encrypted end-to-end using ECDH key exchange.
+- The relay server never sees plaintext monitoring data.
+- Each mobile session has its own encryption channel.
+- Requires a valid Pro or Cloud license (gated by the `relay` feature key).
+
+Relay config is stored encrypted in `relay.enc`.
+

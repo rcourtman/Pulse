@@ -117,7 +117,7 @@ Pulse can detect and apply updates to your Docker containers directly from the U
 
 ### Updating a Container
 
-1. Navigate to the **Docker** tab
+1. Navigate to the **Workloads** page (or filter by Docker sources on **Infrastructure**)
 2. Look for containers with a blue update arrow (⬆️)
 3. Click the update button → Click **Confirm**
 4. Pulse will:

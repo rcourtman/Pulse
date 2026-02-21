@@ -594,7 +594,7 @@ const Recovery: Component = () => {
     const nowMs = Date.now();
     const staleThreshold = nowMs - STALE_ISSUE_THRESHOLD_MS;
 
-    return baseRollups().filter((r) => {
+    return (baseRollups() || []).filter((r) => {
       if (selectedOutcome !== 'all' && normalizeOutcome(r.lastOutcome) !== selectedOutcome) return false;
       if (!staleOnly) return true;
 
@@ -607,7 +607,7 @@ const Recovery: Component = () => {
   });
 
   const sortedRollups = createMemo<ProtectionRollup[]>(() => {
-    const items = filteredRollups().slice();
+    const items = (filteredRollups() || []).slice();
     const col = protectedSortCol();
     const dir = protectedSortDir();
     const resIndex = resourcesById();
@@ -716,7 +716,7 @@ const Recovery: Component = () => {
 
   const sortedPoints = createMemo<RecoveryPoint[]>(() => {
     const resIndex = resourcesById();
-    return [...filteredPoints()].sort((a, b) => {
+    return [...(filteredPoints() || [])].sort((a, b) => {
       const aTs = pointTimestampMs(a);
       const bTs = pointTimestampMs(b);
       if (aTs !== bTs) return bTs - aTs;
@@ -1048,7 +1048,7 @@ const Recovery: Component = () => {
           <div class="border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
             Protected Items
           </div>
-          <Show when={recoveryRollups.rollups.loading && filteredRollups().length === 0}>
+          <Show when={recoveryRollups.rollups.loading && (filteredRollups()?.length ?? 0) === 0}>
             <div class="px-6 py-6 text-sm text-slate-500 dark:text-slate-400">Loading protected items...</div>
           </Show>
 
@@ -1061,7 +1061,7 @@ const Recovery: Component = () => {
             </div>
           </Show>
 
-          <Show when={!recoveryRollups.rollups.loading && !recoveryRollups.rollups.error && filteredRollups().length === 0}>
+          <Show when={!recoveryRollups.rollups.loading && !recoveryRollups.rollups.error && (filteredRollups()?.length ?? 0) === 0}>
             <div class="p-6">
               <EmptyState
                 title="No protected items yet"
@@ -1070,7 +1070,7 @@ const Recovery: Component = () => {
             </div>
           </Show>
 
-          <Show when={filteredRollups().length > 0}>
+          <Show when={(filteredRollups()?.length ?? 0) > 0}>
             <div class="overflow-x-auto">
               <Table class="w-full border-collapse whitespace-nowrap" style={{ 'table-layout': 'fixed', 'min-width': isMobile() ? '100%' : '500px' }}>
                 <TableHeader>
@@ -1179,7 +1179,7 @@ const Recovery: Component = () => {
       </Show>
 
       <Show when={view() === 'events'}>
-        <Show when={recoveryPoints.response.loading && sortedPoints().length === 0}>
+        <Show when={recoveryPoints.response.loading && (sortedPoints()?.length ?? 0) === 0}>
           <Card padding="sm">
             <div class="px-3 py-6 text-sm text-slate-500 dark:text-slate-400">Loading recovery points...</div>
           </Card>
@@ -1881,6 +1881,7 @@ const Recovery: Component = () => {
                               const subject = buildSubjectLabelForPoint(p, resIndex);
                               const mode = (String(p.mode || '').trim().toLowerCase() as ArtifactMode) || 'local';
                               const repoLabel = buildRepositoryLabelForPoint(p);
+                              const detailsSummary = String(p.display?.detailsSummary || '').trim();
                               const provider = String(p.provider || '').trim();
                               const outcome = normalizeOutcome(p.outcome);
                               const completedMs = p.completedAt ? Date.parse(p.completedAt) : 0;
@@ -1912,10 +1913,33 @@ const Recovery: Component = () => {
                                           case 'subject':
                                             return (
                                               <TableCell
-                                                class="max-w-[420px] truncate whitespace-nowrap px-3 py-0.5 text-slate-900 dark:text-slate-100"
+                                                class="px-3 py-0.5 text-slate-900 dark:text-slate-100"
                                                 title={subject}
                                               >
-                                                {subject}
+                                                <div class="max-w-[420px]">
+                                                  <div class="flex min-w-0 items-center gap-1 whitespace-nowrap">
+                                                    <span class="truncate">{subject}</span>
+                                                    <Show when={p.immutable === true}>
+                                                      <svg
+                                                        class="h-3 w-3 shrink-0 text-emerald-500 dark:text-emerald-400"
+                                                        fill="none"
+                                                        stroke="currentColor"
+                                                        viewBox="0 0 24 24"
+                                                        aria-hidden="true"
+                                                      >
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3l7 4v5c0 5-3.5 7.5-7 9-3.5-1.5-7-4-7-9V7l7-4z" />
+                                                      </svg>
+                                                    </Show>
+                                                  </div>
+                                                  <Show when={detailsSummary}>
+                                                    <div
+                                                      class="max-w-[420px] truncate text-[10px] text-slate-400 dark:text-slate-500"
+                                                      title={detailsSummary}
+                                                    >
+                                                      {detailsSummary}
+                                                    </div>
+                                                  </Show>
+                                                </div>
                                               </TableCell>
                                             );
                                           case 'entityId':

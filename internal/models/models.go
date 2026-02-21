@@ -894,19 +894,20 @@ type PBSNamespace struct {
 
 // PBSBackup represents a backup stored on PBS
 type PBSBackup struct {
-	ID         string    `json:"id"`       // Unique ID combining PBS instance, namespace, type, vmid, and time
-	Instance   string    `json:"instance"` // PBS instance name
-	Datastore  string    `json:"datastore"`
-	Namespace  string    `json:"namespace"`
-	BackupType string    `json:"backupType"` // "vm" or "ct"
-	VMID       string    `json:"vmid"`
-	BackupTime time.Time `json:"backupTime"`
-	Size       int64     `json:"size"`
-	Protected  bool      `json:"protected"`
-	Verified   bool      `json:"verified"`
-	Comment    string    `json:"comment,omitempty"`
-	Files      []string  `json:"files,omitempty"`
-	Owner      string    `json:"owner,omitempty"` // User who created the backup
+	ID              string    `json:"id"`       // Unique ID combining PBS instance, namespace, type, vmid, and time
+	Instance        string    `json:"instance"` // PBS instance name
+	Datastore       string    `json:"datastore"`
+	Namespace       string    `json:"namespace"`
+	BackupType      string    `json:"backupType"` // "vm" or "ct"
+	VMID            string    `json:"vmid"`
+	BackupTime      time.Time `json:"backupTime"`
+	Size            int64     `json:"size"`
+	Protected       bool      `json:"protected"`
+	Verified        bool      `json:"verified"`
+	VerificationRaw any       `json:"verificationRaw,omitempty"`
+	Comment         string    `json:"comment,omitempty"`
+	Files           []string  `json:"files,omitempty"`
+	Owner           string    `json:"owner,omitempty"` // User who created the backup
 }
 
 // PBSBackupJob represents a PBS backup job

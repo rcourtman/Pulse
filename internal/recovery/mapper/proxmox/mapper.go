@@ -358,6 +358,28 @@ func FromPBSBackups(backups []models.PBSBackup, candidatesByKey map[string][]Gue
 		immutable := &protected
 		verified := b.Verified
 		verifiedPtr := &verified
+		details := map[string]any{
+			"datastore":  strings.TrimSpace(b.Datastore),
+			"namespace":  strings.TrimSpace(b.Namespace),
+			"backupType": strings.TrimSpace(b.BackupType),
+			"vmid":       vmidStr,
+			"comment":    strings.TrimSpace(b.Comment),
+			"owner":      strings.TrimSpace(b.Owner),
+			"files":      append([]string(nil), b.Files...),
+		}
+
+		// Extract verification detail for frontend stability.
+		switch v := b.VerificationRaw.(type) {
+		case string:
+			details["verificationState"] = v
+		case map[string]interface{}:
+			if state, ok := v["state"].(string); ok {
+				details["verificationState"] = state
+			}
+			if upid, ok := v["upid"].(string); ok {
+				details["verificationUpid"] = upid
+			}
+		}
 
 		out = append(out, recovery.RecoveryPoint{
 			ID:                "pbs-backup:" + strings.TrimSpace(b.ID),
@@ -378,15 +400,7 @@ func FromPBSBackups(backups []models.PBSBackup, candidatesByKey map[string][]Gue
 				Name:      strings.TrimSpace(b.Datastore),
 				Class:     strings.TrimSpace(b.Namespace),
 			},
-			Details: map[string]any{
-				"datastore":  strings.TrimSpace(b.Datastore),
-				"namespace":  strings.TrimSpace(b.Namespace),
-				"backupType": strings.TrimSpace(b.BackupType),
-				"vmid":       vmidStr,
-				"comment":    strings.TrimSpace(b.Comment),
-				"owner":      strings.TrimSpace(b.Owner),
-				"files":      append([]string(nil), b.Files...),
-			},
+			Details: details,
 		})
 	}
 

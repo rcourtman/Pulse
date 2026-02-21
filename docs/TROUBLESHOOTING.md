@@ -88,6 +88,33 @@ sudo pulse bootstrap-token
 - If targeting private IPs, allow them in **Settings → System → Network → Webhook Security**.
 - Check Pulse logs for HTTP status codes and response bodies.
 
+### TrueNAS
+
+#### "TrueNAS service unavailable"
+- Ensure TrueNAS was added in **Settings → TrueNAS** with a valid URL and API key.
+- Check that the TrueNAS system is reachable from the Pulse server (default HTTPS port).
+- Verify the API key has read access. Test with:
+  ```bash
+  curl -sk -H "Authorization: Bearer <api-key>" https://<truenas-ip>/api/v2.0/system/info
+  ```
+
+#### TrueNAS pools/datasets not appearing
+- TrueNAS data appears in the unified resource model and may take one polling cycle (30s) to appear.
+- Check **Infrastructure** (TrueNAS host), **Storage** (pools/datasets), and **Recovery** (snapshots/replication).
+
+### Navigation (v6)
+
+#### Old bookmarks don't work
+- Legacy URLs (`/proxmox`, `/docker`, `/kubernetes`, `/hosts`, `/services`) redirect automatically to v6 equivalents.
+- If redirects are disabled (via `PULSE_DISABLE_LEGACY_ROUTE_REDIRECTS=true`), update your bookmarks. See [Migration Guide](MIGRATION_UNIFIED_NAV.md).
+
+### Relay / Mobile
+
+#### Relay showing "Disconnected"
+- Confirm a valid Pro or Cloud license is active (**Settings → License**).
+- Check Pulse server can reach the relay server (outbound WebSocket to `relay.pulserelay.pro`).
+- Review logs: `journalctl -u pulse | grep relay` or `docker logs pulse | grep relay`.
+
 ---
 
 ## 🛠️ Advanced Diagnostics

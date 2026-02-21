@@ -51,6 +51,18 @@ See [VM Disk Monitoring](VM_DISK_MONITORING.md) for details.
 ### Does Pulse monitor Ceph?
 Yes! If Pulse detects Ceph storage, it automatically queries cluster health, OSD status, and pool usage. No extra config needed.
 
+### Does Pulse monitor TrueNAS?
+Yes! Pulse v6 includes first-class TrueNAS SCALE/CORE integration. Add your TrueNAS server in **Settings → TrueNAS** with the URL and API key. Pulse monitors pools, datasets, disks, ZFS snapshots, replication tasks, and alerts. TrueNAS resources appear in the unified Infrastructure, Storage, and Recovery views.
+
+### Where did my pages go? (Unified Navigation)
+Pulse v6 organises the UI by **task** instead of **platform**:
+- **Infrastructure** → all hosts (Proxmox, Docker, K8s, TrueNAS)
+- **Workloads** → VMs, LXCs, containers, pods
+- **Storage** → all storage pools
+- **Recovery** → backups, snapshots, replication
+
+Legacy URLs (`/proxmox`, `/docker`, `/kubernetes`, `/hosts`, `/services`) redirect automatically. See [Migration Guide](MIGRATION_UNIFIED_NAV.md) for the full mapping.
+
 ### Can I disable alerts for specific metrics?
 Yes. Go to **Alerts → Thresholds** and set any value to `-1` to disable it. You can do this globally or per-resource (VM/Node).
 
@@ -86,7 +98,7 @@ sudo pulse bootstrap-token
 Set `HTTPS_ENABLED=true` and provide `TLS_CERT_FILE` and `TLS_KEY_FILE` environment variables. See [Configuration](CONFIGURATION.md#https--tls).
 
 ### Can I use Single Sign-On (SSO)?
-Yes. Pulse supports OIDC in **Settings → Security → Single Sign-On** and Proxy Auth (Authentik, Authelia). See [Proxy Auth Guide](PROXY_AUTH.md) and [OIDC](OIDC.md).
+Yes. Pulse supports **OIDC** and **SAML** SSO providers, with multi-provider support (multiple IdPs active simultaneously). Configure in **Settings → Security → SSO Providers**. Pulse also supports Proxy Auth (Authentik, Authelia, Cloudflare). See [Proxy Auth Guide](PROXY_AUTH.md).
 
 ---
 

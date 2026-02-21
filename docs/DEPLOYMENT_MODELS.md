@@ -55,6 +55,9 @@ Pulse uses a split config model:
 - **Update history**: `update-history.jsonl`
 - **Metrics history**: `metrics.db` (SQLite)
 - **Organization metadata**: `org.json` (multi-tenant)
+- **TrueNAS connections**: `truenas.enc` (encrypted)
+- **Relay config**: `relay.enc` (encrypted, Pro/Cloud)
+- **RBAC roles**: `rbac_roles.json` (Pro/Cloud)
 
 Path mapping:
 
