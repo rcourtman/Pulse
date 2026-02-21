@@ -274,7 +274,7 @@ func hasWriteIntent(messages []providers.Message) bool {
 		}
 	}
 
-	// Explicit write/control action verbs
+	// Explicit write/control action verbs (used only for autonomous mode gating)
 	writePatterns := []string{
 		"stop ", "start ", "restart ", "reboot ", "shutdown ", "shut down",
 		"kill ", "terminate ",
@@ -285,6 +285,10 @@ func hasWriteIntent(messages []providers.Message) bool {
 		// File editing
 		"edit ", "modify ", "change ", "update ", "write ",
 		"use pulse_file_edit",
+		// Configuration changes
+		"set ", "disable ", "enable ", "configure ",
+		"remove ", "add ", "create ", "delete ", "resize ",
+		"migrate ", "clone ", "move ", "assign ",
 	}
 
 	for _, pattern := range writePatterns {

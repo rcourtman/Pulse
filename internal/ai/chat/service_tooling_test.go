@@ -44,7 +44,7 @@ func TestFilterToolsForPrompt_ReadOnlyAndSpecialty(t *testing.T) {
 
 	svc := &Service{executor: exec}
 
-	readOnlyTools := svc.filterToolsForPrompt(context.Background(), "show node status", false)
+	readOnlyTools := svc.filterToolsForPrompt(context.Background(), "show node status", true)
 	readOnlySet := toolNameSet(readOnlyTools)
 	if readOnlySet["pulse_control"] || readOnlySet["pulse_file_edit"] || readOnlySet["pulse_docker"] {
 		t.Fatalf("expected write tools to be filtered for read-only prompt")
@@ -71,7 +71,7 @@ func TestFilterToolsForPrompt_BroadInfraKeepsStorage(t *testing.T) {
 	})
 
 	svc := &Service{executor: exec}
-	toolsList := svc.filterToolsForPrompt(context.Background(), "full status overview", false)
+	toolsList := svc.filterToolsForPrompt(context.Background(), "full status overview", true)
 	set := toolNameSet(toolsList)
 	if !set["pulse_storage"] {
 		t.Fatalf("expected storage tool to be kept for broad infrastructure prompt")

@@ -1404,7 +1404,11 @@ func (s *Service) filterToolsForPrompt(ctx context.Context, prompt string, auton
 	// The tool set is determined once per user message and stays consistent for
 	// the entire agentic loop. This avoids the old problem of tools appearing/
 	// disappearing mid-conversation (which caused hallucinated tool names).
-	readOnly := !hasWriteIntent(convertPromptToMessages(prompt))
+	//
+	// Keep write-intent gating only for autonomous runs where commands execute
+	// without approval. In interactive chat, always include write tools; safety
+	// is enforced by approval flow, FSM gates, and tool-level policy checks.
+	readOnly := autonomousMode && !hasWriteIntent(convertPromptToMessages(prompt))
 
 	// Determine which specialty tools are relevant based on prompt keywords.
 	// Core tools are always included; specialty tools only when topic-relevant.
