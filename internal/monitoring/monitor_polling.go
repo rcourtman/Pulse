@@ -2060,7 +2060,7 @@ func (m *Monitor) pollPVENode(
 				usedRRDAvailableFallback := false
 				rrdMemUsedFallback := false
 
-				if effectiveAvailable == 0 && missingCacheMetrics {
+				if missingCacheMetrics {
 					if metrics, err := m.getNodeRRDMetrics(ctx, client, node.Node); err == nil {
 						haveRRDMetrics = true
 						rrdMetrics = metrics

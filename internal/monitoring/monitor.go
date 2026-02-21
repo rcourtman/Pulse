@@ -850,6 +850,7 @@ type rrdMemCacheEntry struct {
 	used      uint64
 	total     uint64
 	fetchedAt time.Time
+	negative  bool // true when the RRD fetch failed; used for backoff
 }
 
 // agentMemCacheEntry caches MemAvailable read via guest agent file-read of /proc/meminfo.
@@ -1163,6 +1164,7 @@ const (
 	hostMaximumHealthWindow          = 10 * time.Minute
 	nodeOfflineGracePeriod           = 60 * time.Second // Grace period before marking Proxmox nodes offline
 	nodeRRDCacheTTL                  = 30 * time.Second
+	nodeRRDNegativeTTL               = 2 * time.Minute // Backoff for nodes where RRD fetch fails
 	nodeRRDRequestTimeout            = 2 * time.Second
 	vmAgentMemCacheTTL               = 60 * time.Second // Cache guest-agent /proc/meminfo reads
 	vmAgentMemRequestTimeout         = 3 * time.Second  // Timeout for guest-agent file-read calls
@@ -1184,9 +1186,18 @@ func (m *Monitor) getNodeRRDMetrics(ctx context.Context, client PVEClientInterfa
 	now := time.Now()
 
 	m.rrdCacheMu.RLock()
-	if entry, ok := m.nodeRRDMemCache[nodeName]; ok && now.Sub(entry.fetchedAt) < nodeRRDCacheTTL {
-		m.rrdCacheMu.RUnlock()
-		return entry, nil
+	if entry, ok := m.nodeRRDMemCache[nodeName]; ok {
+		ttl := nodeRRDCacheTTL
+		if entry.negative {
+			ttl = nodeRRDNegativeTTL
+		}
+		if now.Sub(entry.fetchedAt) < ttl {
+			m.rrdCacheMu.RUnlock()
+			if entry.negative {
+				return rrdMemCacheEntry{}, fmt.Errorf("node RRD mem read previously failed (negative cache)")
+			}
+			return entry, nil
+		}
 	}
 	m.rrdCacheMu.RUnlock()
 
@@ -1195,6 +1206,9 @@ func (m *Monitor) getNodeRRDMetrics(ctx context.Context, client PVEClientInterfa
 
 	points, err := client.GetNodeRRDData(requestCtx, nodeName, "hour", "AVERAGE", []string{"memavailable", "memused", "memtotal"})
 	if err != nil {
+		m.rrdCacheMu.Lock()
+		m.nodeRRDMemCache[nodeName] = rrdMemCacheEntry{negative: true, fetchedAt: now}
+		m.rrdCacheMu.Unlock()
 		return rrdMemCacheEntry{}, err
 	}
 
@@ -1232,6 +1246,9 @@ func (m *Monitor) getNodeRRDMetrics(ctx context.Context, client PVEClientInterfa
 	}
 
 	if memAvailable == 0 && memUsed == 0 {
+		m.rrdCacheMu.Lock()
+		m.nodeRRDMemCache[nodeName] = rrdMemCacheEntry{negative: true, fetchedAt: now}
+		m.rrdCacheMu.Unlock()
 		return rrdMemCacheEntry{}, fmt.Errorf("rrd mem metrics not present")
 	}
 

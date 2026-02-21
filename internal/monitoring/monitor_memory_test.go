@@ -18,6 +18,7 @@ type stubPVEClient struct {
 	nodes      []proxmox.Node
 	nodeStatus *proxmox.NodeStatus
 	rrdPoints  []proxmox.NodeRRDPoint
+	rrdErr     error // if set, GetNodeRRDData returns this error
 }
 
 var _ PVEClientInterface = (*stubPVEClient)(nil)
@@ -31,6 +32,9 @@ func (s *stubPVEClient) GetNodeStatus(ctx context.Context, node string) (*proxmo
 }
 
 func (s *stubPVEClient) GetNodeRRDData(ctx context.Context, node, timeframe, cf string, ds []string) ([]proxmox.NodeRRDPoint, error) {
+	if s.rrdErr != nil {
+		return nil, s.rrdErr
+	}
 	return s.rrdPoints, nil
 }
 
@@ -349,5 +353,293 @@ func TestPollPVEInstanceMarksStaleNodesOfflineWhenGetNodesReturnsEmpty(t *testin
 	}
 	if node.ConnectionHealth != "error" {
 		t.Fatalf("expected stale node connection health error, got %q", node.ConnectionHealth)
+	}
+}
+
+func TestPollPVEInstanceUsesRRDMemAvailableWhenCacheMetricsMissing(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+
+	total := uint64(16 * 1024 * 1024 * 1024)        // 16 GB
+	reportedUsed := uint64(14 * 1024 * 1024 * 1024) // 14 GB (inflated, includes cache)
+	reportedFree := uint64(2 * 1024 * 1024 * 1024)  // 2 GB
+	rrdAvailable := uint64(10 * 1024 * 1024 * 1024) // 10 GB (cache-aware)
+
+	client := &stubPVEClient{
+		nodes: []proxmox.Node{
+			{
+				Node:    "node1",
+				Status:  "online",
+				CPU:     0.15,
+				MaxCPU:  8,
+				Mem:     reportedUsed,
+				MaxMem:  total,
+				Disk:    0,
+				MaxDisk: 0,
+				Uptime:  3600,
+			},
+		},
+		nodeStatus: &proxmox.NodeStatus{
+			Memory: &proxmox.MemoryStatus{
+				Total: total,
+				Used:  reportedUsed,
+				Free:  reportedFree,
+				// Available, Buffers, Cached all zero — triggers missingCacheMetrics
+			},
+		},
+		rrdPoints: []proxmox.NodeRRDPoint{
+			{
+				MemTotal:     floatPtr(float64(total)),
+				MemUsed:      floatPtr(float64(reportedUsed)),
+				MemAvailable: floatPtr(float64(rrdAvailable)),
+			},
+		},
+	}
+
+	mon := newTestPVEMonitor("test")
+	defer mon.alertManager.Stop()
+	defer mon.notificationMgr.Stop()
+
+	mon.pollPVEInstance(context.Background(), "test", client)
+
+	snapshot := mon.state.GetSnapshot()
+	if len(snapshot.Nodes) != 1 {
+		t.Fatalf("expected one node in state, got %d", len(snapshot.Nodes))
+	}
+
+	node := snapshot.Nodes[0]
+	expectedUsed := total - rrdAvailable // 6 GB
+	if node.Memory.Used != int64(expectedUsed) {
+		t.Fatalf("memory used mismatch: got %d want %d (should exclude reclaimable cache)", node.Memory.Used, expectedUsed)
+	}
+
+	expectedUsage := (float64(expectedUsed) / float64(total)) * 100
+	if diff := math.Abs(node.Memory.Usage - expectedUsage); diff > 0.5 {
+		t.Fatalf("memory usage mismatch: got %.2f want %.2f (diff %.2f)", node.Memory.Usage, expectedUsage, diff)
+	}
+
+	snapKey := makeNodeSnapshotKey("test", "node1")
+	mon.diagMu.RLock()
+	snap, ok := mon.nodeSnapshots[snapKey]
+	mon.diagMu.RUnlock()
+	if !ok {
+		t.Fatal("expected node snapshot entry to be recorded")
+	}
+	if snap.MemorySource != "rrd-memavailable" {
+		t.Fatalf("expected memory source rrd-memavailable, got %q", snap.MemorySource)
+	}
+	if snap.Raw.RRDAvailable != rrdAvailable {
+		t.Fatalf("expected snapshot RRD available %d, got %d", rrdAvailable, snap.Raw.RRDAvailable)
+	}
+}
+
+func TestPollPVEInstanceNodeMemoryUnchangedWhenCacheFieldsPresent(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+
+	total := uint64(16 * 1024 * 1024 * 1024)       // 16 GB
+	reportedUsed := uint64(6 * 1024 * 1024 * 1024) // 6 GB
+	reportedFree := uint64(2 * 1024 * 1024 * 1024) // 2 GB
+	buffers := uint64(2 * 1024 * 1024 * 1024)      // 2 GB
+	cached := uint64(6 * 1024 * 1024 * 1024)       // 6 GB
+	// derived available = free + buffers + cached = 10 GB
+	rrdAvailable := uint64(9 * 1024 * 1024 * 1024) // 9 GB (slightly stale)
+
+	client := &stubPVEClient{
+		nodes: []proxmox.Node{
+			{
+				Node:    "node1",
+				Status:  "online",
+				CPU:     0.15,
+				MaxCPU:  8,
+				Mem:     reportedUsed,
+				MaxMem:  total,
+				Disk:    0,
+				MaxDisk: 0,
+				Uptime:  3600,
+			},
+		},
+		nodeStatus: &proxmox.NodeStatus{
+			Memory: &proxmox.MemoryStatus{
+				Total:   total,
+				Used:    reportedUsed,
+				Free:    reportedFree,
+				Buffers: buffers,
+				Cached:  cached,
+			},
+		},
+		rrdPoints: []proxmox.NodeRRDPoint{
+			{
+				MemTotal:     floatPtr(float64(total)),
+				MemUsed:      floatPtr(float64(reportedUsed)),
+				MemAvailable: floatPtr(float64(rrdAvailable)),
+			},
+		},
+	}
+
+	mon := newTestPVEMonitor("test")
+	defer mon.alertManager.Stop()
+	defer mon.notificationMgr.Stop()
+
+	mon.pollPVEInstance(context.Background(), "test", client)
+
+	snapshot := mon.state.GetSnapshot()
+	if len(snapshot.Nodes) != 1 {
+		t.Fatalf("expected one node in state, got %d", len(snapshot.Nodes))
+	}
+
+	node := snapshot.Nodes[0]
+	// With cache fields present, derived available = free + buffers + cached = 10 GB
+	// actualUsed = total - derivedAvailable = 16 - 10 = 6 GB
+	expectedUsed := reportedUsed
+	if node.Memory.Used != int64(expectedUsed) {
+		t.Fatalf("memory used mismatch: got %d want %d (should use derived available, not RRD)", node.Memory.Used, expectedUsed)
+	}
+
+	snapKey := makeNodeSnapshotKey("test", "node1")
+	mon.diagMu.RLock()
+	snap, ok := mon.nodeSnapshots[snapKey]
+	mon.diagMu.RUnlock()
+	if !ok {
+		t.Fatal("expected node snapshot entry to be recorded")
+	}
+	if snap.MemorySource == "rrd-memavailable" {
+		t.Fatalf("memory source should NOT be rrd-memavailable when cache fields are present, got %q", snap.MemorySource)
+	}
+	if snap.MemorySource != "derived-free-buffers-cached" {
+		t.Fatalf("expected memory source derived-free-buffers-cached, got %q", snap.MemorySource)
+	}
+}
+
+func TestPollPVEInstanceRRDFailFallsBackGracefully(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+
+	total := uint64(16 * 1024 * 1024 * 1024)        // 16 GB
+	reportedUsed := uint64(14 * 1024 * 1024 * 1024) // 14 GB
+	reportedFree := uint64(2 * 1024 * 1024 * 1024)  // 2 GB
+
+	client := &stubPVEClient{
+		nodes: []proxmox.Node{
+			{
+				Node:    "node1",
+				Status:  "online",
+				CPU:     0.15,
+				MaxCPU:  8,
+				Mem:     reportedUsed,
+				MaxMem:  total,
+				Disk:    0,
+				MaxDisk: 0,
+				Uptime:  3600,
+			},
+		},
+		nodeStatus: &proxmox.NodeStatus{
+			Memory: &proxmox.MemoryStatus{
+				Total: total,
+				Used:  reportedUsed,
+				Free:  reportedFree,
+				// No Available/Buffers/Cached — missingCacheMetrics is true
+			},
+		},
+		rrdErr: fmt.Errorf("connection refused"),
+	}
+
+	mon := newTestPVEMonitor("test")
+	defer mon.alertManager.Stop()
+	defer mon.notificationMgr.Stop()
+
+	mon.pollPVEInstance(context.Background(), "test", client)
+
+	snapshot := mon.state.GetSnapshot()
+	if len(snapshot.Nodes) != 1 {
+		t.Fatalf("expected one node in state, got %d", len(snapshot.Nodes))
+	}
+
+	node := snapshot.Nodes[0]
+	// With RRD unavailable and no cache fields, the best we can do is
+	// Total - Used gap or Free — memory will appear inflated but we
+	// must not crash or report zero.
+	if node.Memory.Total != int64(total) {
+		t.Fatalf("total mismatch: got %d want %d", node.Memory.Total, total)
+	}
+	if node.Memory.Used <= 0 {
+		t.Fatal("expected non-zero memory used even when RRD fails")
+	}
+
+	snapKey := makeNodeSnapshotKey("test", "node1")
+	mon.diagMu.RLock()
+	snap, ok := mon.nodeSnapshots[snapKey]
+	mon.diagMu.RUnlock()
+	if !ok {
+		t.Fatal("expected node snapshot entry to be recorded")
+	}
+	if snap.MemorySource == "rrd-memavailable" || snap.MemorySource == "rrd-memused" {
+		t.Fatalf("should not use RRD source when RRD fetch failed, got %q", snap.MemorySource)
+	}
+}
+
+func TestPollPVEInstanceUsesRRDMemUsedWhenMemAvailableMissingAndFreeZero(t *testing.T) {
+	// When cache metrics are missing, Free=0, and RRD only has memused (no
+	// memavailable), the rrd-memused fallback should kick in. This is the
+	// same scenario as TestPollPVEInstanceUsesRRDMemUsedFallback but with
+	// the widened gate — verifying no regression.
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+
+	total := uint64(16 * 1024 * 1024 * 1024)     // 16 GB
+	rrdMemUsed := uint64(6 * 1024 * 1024 * 1024) // 6 GB
+
+	client := &stubPVEClient{
+		nodes: []proxmox.Node{
+			{
+				Node:    "node1",
+				Status:  "online",
+				CPU:     0.15,
+				MaxCPU:  8,
+				Mem:     total,
+				MaxMem:  total,
+				Disk:    0,
+				MaxDisk: 0,
+				Uptime:  3600,
+			},
+		},
+		nodeStatus: &proxmox.NodeStatus{
+			Memory: &proxmox.MemoryStatus{
+				Total: total,
+				Used:  total, // All memory reported as used
+				Free:  0,     // Free is zero
+				// No Available/Buffers/Cached
+			},
+		},
+		rrdPoints: []proxmox.NodeRRDPoint{
+			{
+				MemTotal: floatPtr(float64(total)),
+				MemUsed:  floatPtr(float64(rrdMemUsed)),
+				// No MemAvailable
+			},
+		},
+	}
+
+	mon := newTestPVEMonitor("test")
+	defer mon.alertManager.Stop()
+	defer mon.notificationMgr.Stop()
+
+	mon.pollPVEInstance(context.Background(), "test", client)
+
+	snapshot := mon.state.GetSnapshot()
+	if len(snapshot.Nodes) != 1 {
+		t.Fatalf("expected one node in state, got %d", len(snapshot.Nodes))
+	}
+
+	node := snapshot.Nodes[0]
+	if node.Memory.Used != int64(rrdMemUsed) {
+		t.Fatalf("memory used mismatch: got %d want %d (should use RRD memused fallback)", node.Memory.Used, rrdMemUsed)
+	}
+
+	snapKey := makeNodeSnapshotKey("test", "node1")
+	mon.diagMu.RLock()
+	snap, ok := mon.nodeSnapshots[snapKey]
+	mon.diagMu.RUnlock()
+	if !ok {
+		t.Fatal("expected node snapshot entry to be recorded")
+	}
+	if snap.MemorySource != "rrd-memused" {
+		t.Fatalf("expected memory source rrd-memused, got %q", snap.MemorySource)
 	}
 }
