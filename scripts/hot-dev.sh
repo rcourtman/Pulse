@@ -4,7 +4,7 @@
 # This script runs a local development environment with:
 # - Go backend with auto-rebuild on file changes (via inotifywait)
 # - Vite frontend dev server with HMR
-# - Auto-detection of pulse-pro module for Pro features
+# - Auto-detection of pulse-enterprise module for Pro features
 # - Snapshot watcher (if scripts/watch-snapshot.sh exists)
 #
 # Environment Variables:

@@ -149,8 +149,10 @@ type RegisterAckPayload struct {
 
 // ConnectPayload is sent by the app in CONNECT frames.
 type ConnectPayload struct {
-	InstanceID string `json:"instance_id"`
-	AuthToken  string `json:"auth_token"`
+	InstanceID  string `json:"instance_id"`
+	AuthToken   string `json:"auth_token"`
+	DeviceToken string `json:"device_token,omitempty"` // push notification device token (mobile apps only)
+	Platform    string `json:"platform,omitempty"`     // "ios" or "android" (mobile apps only)
 }
 
 // ConnectAckPayload is sent by the relay in CONNECT_ACK frames.

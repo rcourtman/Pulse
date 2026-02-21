@@ -77,9 +77,10 @@ func TestEncodeDecodeRoundTrip(t *testing.T) {
 func TestControlFrameRoundTrip(t *testing.T) {
 	t.Run("register payload", func(t *testing.T) {
 		orig := RegisterPayload{
-			LicenseToken:  "jwt-token-here",
-			SessionToken:  "sess-abc",
-			ClientVersion: "1.0.0",
+			LicenseToken:   "jwt-token-here",
+			SessionToken:   "sess-abc",
+			ClientVersion:  "1.0.0",
+			IdentityPubKey: "identity-pub-key",
 		}
 		frame, err := NewControlFrame(FrameRegister, 0, orig)
 		if err != nil {
@@ -109,6 +110,50 @@ func TestControlFrameRoundTrip(t *testing.T) {
 		}
 		if got.ClientVersion != orig.ClientVersion {
 			t.Errorf("ClientVersion: got %q, want %q", got.ClientVersion, orig.ClientVersion)
+		}
+		if got.IdentityPubKey != orig.IdentityPubKey {
+			t.Errorf("IdentityPubKey: got %q, want %q", got.IdentityPubKey, orig.IdentityPubKey)
+		}
+	})
+
+	t.Run("connect payload", func(t *testing.T) {
+		orig := ConnectPayload{
+			InstanceID:  "relay_abc123",
+			AuthToken:   "auth-token-xyz",
+			DeviceToken: "device-token-123",
+			Platform:    "ios",
+		}
+		frame, err := NewControlFrame(FrameConnect, 0, orig)
+		if err != nil {
+			t.Fatalf("NewControlFrame() error = %v", err)
+		}
+
+		encoded, err := EncodeFrame(frame)
+		if err != nil {
+			t.Fatalf("EncodeFrame() error = %v", err)
+		}
+
+		decoded, err := DecodeFrame(encoded)
+		if err != nil {
+			t.Fatalf("DecodeFrame() error = %v", err)
+		}
+
+		var got ConnectPayload
+		if err := UnmarshalControlPayload(decoded.Payload, &got); err != nil {
+			t.Fatalf("UnmarshalControlPayload() error = %v", err)
+		}
+
+		if got.InstanceID != orig.InstanceID {
+			t.Errorf("InstanceID: got %q, want %q", got.InstanceID, orig.InstanceID)
+		}
+		if got.AuthToken != orig.AuthToken {
+			t.Errorf("AuthToken: got %q, want %q", got.AuthToken, orig.AuthToken)
+		}
+		if got.DeviceToken != orig.DeviceToken {
+			t.Errorf("DeviceToken: got %q, want %q", got.DeviceToken, orig.DeviceToken)
+		}
+		if got.Platform != orig.Platform {
+			t.Errorf("Platform: got %q, want %q", got.Platform, orig.Platform)
 		}
 	})
 
