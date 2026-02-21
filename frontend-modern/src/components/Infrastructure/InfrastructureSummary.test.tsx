@@ -27,6 +27,16 @@ vi.mock('@/hooks/useResources', () => ({
   }),
 }));
 
+vi.mock('@/components/shared/DensityMap', () => ({
+  DensityMap: (_props: { series?: Array<{ id?: string; name?: string; data?: Array<unknown> }> }) => {
+    return (
+      <svg class="cursor-crosshair" data-testid="density-map">
+        <path vector-effect="non-scaling-stroke" />
+      </svg>
+    );
+  },
+}));
+
 const makeHost = (overrides: Partial<Resource> = {}): Resource => ({
   id: 'node-1',
   type: 'node',
@@ -45,18 +55,18 @@ const makeChartsResponse = (ids: string[] = ['node-1']) => ({
     ids.map((id, index) => [
       id,
       {
-      cpu: [
-        { timestamp: Date.now() - 60_000, value: 10 + index },
-        { timestamp: Date.now(), value: 15 + index },
-      ],
-      memory: [
-        { timestamp: Date.now() - 60_000, value: 45 + index },
-        { timestamp: Date.now(), value: 50 + index },
-      ],
-      disk: [
-        { timestamp: Date.now() - 60_000, value: 30 + index },
-        { timestamp: Date.now(), value: 35 + index },
-      ],
+        cpu: [
+          { timestamp: Date.now() - 60_000, value: 10 + index },
+          { timestamp: Date.now(), value: 15 + index },
+        ],
+        memory: [
+          { timestamp: Date.now() - 60_000, value: 45 + index },
+          { timestamp: Date.now(), value: 50 + index },
+        ],
+        disk: [
+          { timestamp: Date.now() - 60_000, value: 30 + index },
+          { timestamp: Date.now(), value: 35 + index },
+        ],
       },
     ]),
   ),
@@ -154,7 +164,7 @@ describe('InfrastructureSummary range behavior', () => {
     localStorage.setItem(`${INFRA_SUMMARY_CACHE_KEY_PREFIX}1h`, JSON.stringify(cachePayload));
 
     mockGetCharts.mockReset();
-    mockGetCharts.mockImplementationOnce(() => new Promise(() => {}));
+    mockGetCharts.mockImplementationOnce(() => new Promise(() => { }));
 
     const { container } = render(() => <InfrastructureSummary hosts={[makeHost()]} timeRange="1h" />);
 
@@ -224,7 +234,7 @@ describe('InfrastructureSummary range behavior', () => {
   it('does not render stale-range sparkline paths while new range data is loading', async () => {
     const firstResponse = makeChartsResponse();
     mockGetCharts.mockImplementationOnce(() => Promise.resolve(firstResponse));
-    mockGetCharts.mockImplementationOnce(() => new Promise(() => {}));
+    mockGetCharts.mockImplementationOnce(() => new Promise(() => { }));
 
     const [range, setRange] = createSignal<TimeRange>('1h');
     const { container } = render(() => <InfrastructureSummary hosts={[makeHost()]} timeRange={range()} />);
@@ -246,12 +256,12 @@ describe('InfrastructureSummary range behavior', () => {
     });
 
     expect(container.querySelector('svg.cursor-crosshair')).toBeNull();
-    expect(container.textContent).toContain('Loading history...');
+    expect(container.querySelectorAll('[data-testid="sparkline-skeleton"]').length).toBeGreaterThan(0);
   });
 
   it('requests the new range while the previous range request is still pending', async () => {
     mockGetCharts.mockReset();
-    mockGetCharts.mockImplementationOnce(() => new Promise(() => {}));
+    mockGetCharts.mockImplementationOnce(() => new Promise(() => { }));
     mockGetCharts.mockImplementationOnce(() => Promise.resolve(makeChartsResponse()));
 
     const [range, setRange] = createSignal<TimeRange>('1h');
@@ -328,14 +338,14 @@ describe('InfrastructureSummary range behavior', () => {
 
     await waitFor(() => {
       expect(container.querySelector('svg.cursor-crosshair')).toBeNull();
-      expect(container.textContent).toContain('Loading history...');
+      expect(container.querySelectorAll('[data-testid="sparkline-skeleton"]').length).toBeGreaterThan(0);
     });
   });
 
   it('hydrates from cache after hosts are removed and re-added', async () => {
     mockGetCharts.mockReset();
     mockGetCharts.mockImplementationOnce(() => Promise.resolve(makeChartsResponse()));
-    mockGetCharts.mockImplementationOnce(() => new Promise(() => {}));
+    mockGetCharts.mockImplementationOnce(() => new Promise(() => { }));
 
     const [hosts, setHosts] = createSignal<Resource[]>([makeHost()]);
     const { container } = render(() => <InfrastructureSummary hosts={hosts()} timeRange="1h" />);
@@ -383,6 +393,7 @@ describe('InfrastructureSummary range behavior', () => {
 
     await waitFor(() => {
       expect(mockGetCharts).toHaveBeenCalledWith('1h');
+      expect(container.querySelectorAll('[data-testid="sparkline-skeleton"]')).toHaveLength(0);
       expect(countSparklinePaths(container)).toBeGreaterThan(0);
     });
 
@@ -390,6 +401,7 @@ describe('InfrastructureSummary range behavior', () => {
     setFocusedHostId('node-2');
 
     await waitFor(() => {
+      expect(container.querySelectorAll('[data-testid="sparkline-skeleton"]')).toHaveLength(0);
       expect(countSparklinePaths(container)).toBeGreaterThan(0);
       expect(countSparklinePaths(container)).toBeLessThan(allSeriesPathCount);
     });
