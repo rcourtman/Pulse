@@ -113,6 +113,9 @@ func protocolPathsForComparison(t *testing.T) (string, string) {
 		}
 	}
 
+	if strings.EqualFold(strings.TrimSpace(os.Getenv("PULSE_RELAY_PROTOCOL_REQUIRED")), "true") {
+		t.Fatalf("pulse-pro relay protocol file not found and PULSE_RELAY_PROTOCOL_REQUIRED=true")
+	}
 	t.Skip("pulse-pro relay protocol file not found; set PULSE_RELAY_PROTOCOL_REFERENCE to enforce this check")
 	return "", ""
 }
