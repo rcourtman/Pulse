@@ -53,6 +53,41 @@ func (m *Monitor) ingestRecoveryPointsBestEffort(ctx context.Context, points []r
 	}
 }
 
+func (m *Monitor) purgeStalePVEPBSBackupsBestEffort(ctx context.Context) {
+	if m == nil {
+		return
+	}
+
+	m.mu.RLock()
+	rm := m.recoveryManager
+	orgID := strings.TrimSpace(m.orgID)
+	hasPBSDirectConnection := m.config != nil && len(m.config.PBSInstances) > 0
+	m.mu.RUnlock()
+
+	if !hasPBSDirectConnection || rm == nil {
+		return
+	}
+	if orgID == "" {
+		orgID = "default"
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	purgeCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+
+	store, err := rm.StoreForOrg(orgID)
+	if err != nil {
+		log.Warn().Err(err).Str("org_id", orgID).Msg("Failed to open recovery store for stale PBS backup purge")
+		return
+	}
+
+	if err := store.PurgeStalePVEPBSBackups(purgeCtx); err != nil {
+		log.Warn().Err(err).Str("org_id", orgID).Msg("Failed to purge stale PVE-sourced PBS backup entries")
+	}
+}
+
 func buildProxmoxGuestInfoIndex(snapshot models.StateSnapshot) map[string]proxmoxmapper.GuestInfo {
 	out := make(map[string]proxmoxmapper.GuestInfo, len(snapshot.VMs)+len(snapshot.Containers))
 

@@ -1527,6 +1527,10 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 	m.mu.Unlock()
 	defer m.stopMockMetricsSampler()
 
+	// Best-effort startup cleanup: when direct PBS is configured, remove legacy
+	// PVE-proxied PBS backup points to prevent duplicate recovery entries.
+	m.purgeStalePVEPBSBackupsBestEffort(ctx)
+
 	if mock.IsMockEnabled() {
 		m.startMockMetricsSampler(ctx)
 	}
@@ -2744,8 +2748,12 @@ func (m *Monitor) SetResourceStore(store ResourceStoreInterface) {
 // recovery points derived from polled backup/snapshot data.
 func (m *Monitor) SetRecoveryManager(manager *recoverymanager.Manager) {
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	m.recoveryManager = manager
+	m.mu.Unlock()
+
+	// Try cleanup during wiring so monitors that are already running still get
+	// the migration once a recovery manager becomes available.
+	go m.purgeStalePVEPBSBackupsBestEffort(context.Background())
 }
 
 // GetNotificationManager returns the notification manager

@@ -23,6 +23,7 @@ import (
 func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName string, client PVEClientInterface, nodes []proxmox.Node, nodeEffectiveStatus map[string]string) {
 
 	var allBackups []models.StorageBackup
+	hasPBSDirectConnection := m.config != nil && len(m.config.PBSInstances) > 0
 	seenVolids := make(map[string]bool) // Track seen volume IDs to avoid duplicates
 	hadSuccessfulNode := false          // Track if at least one node responded successfully
 	storagesWithBackup := 0             // Number of storages that should contain backups
@@ -181,6 +182,15 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 					// If not found in map, fall back to queried node (shouldn't happen normally)
 				}
 				isPBSStorage := strings.HasPrefix(storage.Storage, "pbs-") || storage.Type == "pbs"
+				if isPBSStorage && hasPBSDirectConnection {
+					log.Debug().
+						Str("instance", instanceName).
+						Str("node", node.Node).
+						Str("storage", storage.Storage).
+						Str("volid", content.Volid).
+						Msg("Skipping PBS backup from PVE storage - PBS direct connection is authoritative")
+					continue
+				}
 
 				// Check verification status for PBS backups
 				verified := false

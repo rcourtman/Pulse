@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
+	"github.com/rs/zerolog/log"
 
 	_ "modernc.org/sqlite"
 )
@@ -145,6 +146,38 @@ func (s *Store) ensureInitialized() error {
 	return nil
 }
 
+// PurgeStalePVEPBSBackups removes legacy PVE-proxied PBS backup entries.
+// It is safe to call repeatedly.
+func (s *Store) PurgeStalePVEPBSBackups(ctx context.Context) error {
+	if err := s.ensureInitialized(); err != nil {
+		return err
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	res, err := s.db.ExecContext(ctx, `
+		DELETE FROM recovery_points
+		WHERE id LIKE 'pve-backup:%'
+		  AND json_extract(details_json, '$.isPBS') = 1
+	`)
+	if err != nil {
+		return err
+	}
+
+	deleted, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if deleted > 0 {
+		log.Info().
+			Int64("deleted", deleted).
+			Msg("Purged stale PVE-sourced PBS backup entries - PBS direct is now authoritative")
+	}
+
+	return nil
+}
+
 func (s *Store) initSchema() error {
 	if err := s.ensureInitialized(); err != nil {
 		return err
@@ -194,15 +227,6 @@ func (s *Store) initSchema() error {
 
 		CREATE INDEX IF NOT EXISTS idx_recovery_points_subject_key_completed
 		ON recovery_points(subject_key, completed_at_ms);
-
-		CREATE INDEX IF NOT EXISTS idx_recovery_points_cluster_completed
-		ON recovery_points(cluster_label, completed_at_ms);
-
-		CREATE INDEX IF NOT EXISTS idx_recovery_points_node_completed
-		ON recovery_points(node_host_label, completed_at_ms);
-
-		CREATE INDEX IF NOT EXISTS idx_recovery_points_namespace_completed
-		ON recovery_points(namespace_label, completed_at_ms);
 	`
 	if _, err := s.db.Exec(schema); err != nil {
 		return err
@@ -234,6 +258,22 @@ func (s *Store) initSchema() error {
 		if err := s.ensureColumn("recovery_points", col.name, col.typ); err != nil {
 			return err
 		}
+	}
+
+	// Indexes on migrated columns — must run AFTER ensureColumn so pre-existing
+	// databases that lack these columns don't crash with "no such column".
+	postMigrationIndexes := `
+		CREATE INDEX IF NOT EXISTS idx_recovery_points_cluster_completed
+		ON recovery_points(cluster_label, completed_at_ms);
+
+		CREATE INDEX IF NOT EXISTS idx_recovery_points_node_completed
+		ON recovery_points(node_host_label, completed_at_ms);
+
+		CREATE INDEX IF NOT EXISTS idx_recovery_points_namespace_completed
+		ON recovery_points(namespace_label, completed_at_ms);
+	`
+	if _, err := s.db.Exec(postMigrationIndexes); err != nil {
+		return err
 	}
 	return nil
 }
