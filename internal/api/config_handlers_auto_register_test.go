@@ -409,6 +409,366 @@ func TestAutoRegisterAgentReRegistrationMerges(t *testing.T) {
 	}
 }
 
+// TestAutoRegisterPreservesUserConfiguredHostname verifies that when an agent
+// re-registers with the same token but sends a local IP, a user-configured
+// hostname (public URL) is preserved instead of being overwritten.
+// Regression test for Issue #1283.
+func TestAutoRegisterPreservesUserConfiguredHostname(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+
+	originalDetectPVECluster := detectPVECluster
+	detectPVECluster = func(clientConfig proxmox.ClientConfig, nodeName string, existingEndpoints []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
+		return false, "", nil
+	}
+	defer func() { detectPVECluster = originalDetectPVECluster }()
+
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+		// Agent originally registered with local IP, user later edited to public hostname
+		PVEInstances: []config.PVEInstance{
+			{
+				Name:       "pve01",
+				Host:       "https://pve.example.com:8006", // User-configured hostname
+				TokenName:  "pulse-monitor@pam!pulse-1700000000",
+				TokenValue: "old-secret",
+				Source:     "agent",
+			},
+		},
+	}
+
+	handler := newTestConfigHandlers(t, cfg)
+
+	const tokenValue = "TEMP-TOKEN"
+	tokenHash := internalauth.HashAPIToken(tokenValue)
+	handler.codeMutex.Lock()
+	handler.setupCodes[tokenHash] = &SetupCode{
+		ExpiresAt: time.Now().Add(5 * time.Minute),
+		NodeType:  "pve",
+	}
+	handler.codeMutex.Unlock()
+
+	// Agent re-registers with same token but sends local IP
+	reqBody := AutoRegisterRequest{
+		Type:       "pve",
+		Host:       "https://192.168.1.100:8006", // Local IP from agent
+		TokenID:    "pulse-monitor@pam!pulse-1700000000",
+		TokenValue: "new-secret",
+		ServerName: "pve01",
+		Source:     "agent",
+		AuthToken:  tokenValue,
+	}
+
+	body, _ := json.Marshal(reqBody)
+	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleAutoRegister(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("re-registration failed: status=%d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	// Should still be exactly 1 node
+	if len(cfg.PVEInstances) != 1 {
+		t.Fatalf("expected 1 PVE instance, got %d", len(cfg.PVEInstances))
+	}
+
+	node := cfg.PVEInstances[0]
+
+	// Host should still be the user-configured hostname, NOT overwritten with local IP
+	if node.Host != "https://pve.example.com:8006" {
+		t.Errorf("user-configured hostname was overwritten: got %q, want %q",
+			node.Host, "https://pve.example.com:8006")
+	}
+
+	// Token value should still be updated
+	if node.TokenValue != "new-secret" {
+		t.Errorf("token value not updated: got %q, want %q", node.TokenValue, "new-secret")
+	}
+}
+
+// TestAutoRegisterPreservesUserConfiguredPublicIP verifies that when an agent
+// re-registers with a local/private IP, a user-configured public IP is preserved.
+// This is the exact scenario from #1283: Host URL was a public IP, agent sends
+// its local 192.168.x.x IP, and the public IP gets overwritten.
+func TestAutoRegisterPreservesUserConfiguredPublicIP(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+
+	originalDetectPVECluster := detectPVECluster
+	detectPVECluster = func(clientConfig proxmox.ClientConfig, nodeName string, existingEndpoints []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
+		return false, "", nil
+	}
+	defer func() { detectPVECluster = originalDetectPVECluster }()
+
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+		PVEInstances: []config.PVEInstance{
+			{
+				Name:       "pve01",
+				Host:       "https://203.0.113.52:8006", // User-configured public IP
+				TokenName:  "pulse-monitor@pam!pulse-1700000000",
+				TokenValue: "old-secret",
+				Source:     "agent",
+			},
+		},
+	}
+
+	handler := newTestConfigHandlers(t, cfg)
+
+	const tokenValue = "TEMP-TOKEN"
+	tokenHash := internalauth.HashAPIToken(tokenValue)
+	handler.codeMutex.Lock()
+	handler.setupCodes[tokenHash] = &SetupCode{
+		ExpiresAt: time.Now().Add(5 * time.Minute),
+		NodeType:  "pve",
+	}
+	handler.codeMutex.Unlock()
+
+	// Agent re-registers with same token but sends local/private IP
+	reqBody := AutoRegisterRequest{
+		Type:       "pve",
+		Host:       "https://192.168.0.250:8006", // Local IP from agent
+		TokenID:    "pulse-monitor@pam!pulse-1700000000",
+		TokenValue: "new-secret",
+		ServerName: "pve01",
+		Source:     "agent",
+		AuthToken:  tokenValue,
+	}
+
+	body, _ := json.Marshal(reqBody)
+	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleAutoRegister(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("re-registration failed: status=%d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	if len(cfg.PVEInstances) != 1 {
+		t.Fatalf("expected 1 PVE instance, got %d", len(cfg.PVEInstances))
+	}
+
+	node := cfg.PVEInstances[0]
+
+	// Public IP should be preserved, NOT overwritten with agent's local IP
+	if node.Host != "https://203.0.113.52:8006" {
+		t.Errorf("user-configured public IP was overwritten: got %q, want %q",
+			node.Host, "https://203.0.113.52:8006")
+	}
+
+	if node.TokenValue != "new-secret" {
+		t.Errorf("token value not updated: got %q, want %q", node.TokenValue, "new-secret")
+	}
+}
+
+// TestAutoRegisterAgentDHCPPreservesHost verifies that when an agent re-registers
+// with a different IP (DHCP), the existing host is preserved. The entry still
+// merges (preventing duplicates), but the host is not overwritten since the user
+// may have configured it. DHCP on servers is rare; the user can update manually.
+func TestAutoRegisterAgentDHCPPreservesHost(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+
+	originalDetectPVECluster := detectPVECluster
+	detectPVECluster = func(clientConfig proxmox.ClientConfig, nodeName string, existingEndpoints []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
+		return false, "", nil
+	}
+	defer func() { detectPVECluster = originalDetectPVECluster }()
+
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+		PVEInstances: []config.PVEInstance{
+			{
+				Name:       "pve01",
+				Host:       "https://10.0.1.100:8006",
+				TokenName:  "pulse-monitor@pam!pulse-1700000000",
+				TokenValue: "secret",
+				Source:     "agent",
+			},
+		},
+	}
+
+	handler := newTestConfigHandlers(t, cfg)
+
+	const tokenValue = "TEMP-TOKEN"
+	tokenHash := internalauth.HashAPIToken(tokenValue)
+	handler.codeMutex.Lock()
+	handler.setupCodes[tokenHash] = &SetupCode{
+		ExpiresAt: time.Now().Add(5 * time.Minute),
+		NodeType:  "pve",
+	}
+	handler.codeMutex.Unlock()
+
+	reqBody := AutoRegisterRequest{
+		Type:       "pve",
+		Host:       "https://10.0.1.200:8006", // New IP from DHCP
+		TokenID:    "pulse-monitor@pam!pulse-1700000000",
+		TokenValue: "secret",
+		ServerName: "pve01",
+		Source:     "agent",
+		AuthToken:  tokenValue,
+	}
+
+	body, _ := json.Marshal(reqBody)
+	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleAutoRegister(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("re-registration failed: status=%d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	// Still 1 entry (merged, not duplicated)
+	if len(cfg.PVEInstances) != 1 {
+		t.Fatalf("expected 1 PVE instance, got %d", len(cfg.PVEInstances))
+	}
+
+	node := cfg.PVEInstances[0]
+
+	// Host should be preserved (agent source always preserves to protect user edits)
+	if node.Host != "https://10.0.1.100:8006" {
+		t.Errorf("host should be preserved for agent source: got %q, want %q",
+			node.Host, "https://10.0.1.100:8006")
+	}
+}
+
+// TestAutoRegisterNonAgentDHCPUpdatesHost verifies that DHCP IP changes from
+// non-agent sources (e.g., script-based registration) still update the host.
+func TestAutoRegisterNonAgentDHCPUpdatesHost(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+
+	originalDetectPVECluster := detectPVECluster
+	detectPVECluster = func(clientConfig proxmox.ClientConfig, nodeName string, existingEndpoints []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
+		return false, "", nil
+	}
+	defer func() { detectPVECluster = originalDetectPVECluster }()
+
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+		PVEInstances: []config.PVEInstance{
+			{
+				Name:       "pve01",
+				Host:       "https://10.0.1.100:8006",
+				TokenName:  "pulse-monitor@pam!pulse-1700000000",
+				TokenValue: "secret",
+				Source:     "script",
+			},
+		},
+	}
+
+	handler := newTestConfigHandlers(t, cfg)
+
+	const tokenValue = "TEMP-TOKEN"
+	tokenHash := internalauth.HashAPIToken(tokenValue)
+	handler.codeMutex.Lock()
+	handler.setupCodes[tokenHash] = &SetupCode{
+		ExpiresAt: time.Now().Add(5 * time.Minute),
+		NodeType:  "pve",
+	}
+	handler.codeMutex.Unlock()
+
+	reqBody := AutoRegisterRequest{
+		Type:       "pve",
+		Host:       "https://10.0.1.200:8006",
+		TokenID:    "pulse-monitor@pam!pulse-1700000000",
+		TokenValue: "secret",
+		ServerName: "pve01",
+		Source:     "script", // Non-agent source
+		AuthToken:  tokenValue,
+	}
+
+	body, _ := json.Marshal(reqBody)
+	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleAutoRegister(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("re-registration failed: status=%d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	if len(cfg.PVEInstances) != 1 {
+		t.Fatalf("expected 1 PVE instance, got %d", len(cfg.PVEInstances))
+	}
+
+	node := cfg.PVEInstances[0]
+
+	// Host should be updated for non-agent DHCP
+	if node.Host != "https://10.0.1.200:8006" {
+		t.Errorf("non-agent DHCP host update failed: got %q, want %q",
+			node.Host, "https://10.0.1.200:8006")
+	}
+}
+
+// TestAutoRegisterPBSPreservesUserConfiguredHostname verifies the same
+// hostname-preservation logic works for PBS instances. Regression test for #1283.
+func TestAutoRegisterPBSPreservesUserConfiguredHostname(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+		PBSInstances: []config.PBSInstance{
+			{
+				Name:       "pbs01",
+				Host:       "https://pbs.example.com:8007",
+				TokenName:  "pulse-monitor@pbs!pulse-1700000000",
+				TokenValue: "old-secret",
+				Source:     "agent",
+			},
+		},
+	}
+
+	handler := newTestConfigHandlers(t, cfg)
+
+	const tokenValue = "TEMP-TOKEN"
+	tokenHash := internalauth.HashAPIToken(tokenValue)
+	handler.codeMutex.Lock()
+	handler.setupCodes[tokenHash] = &SetupCode{
+		ExpiresAt: time.Now().Add(5 * time.Minute),
+		NodeType:  "pbs",
+	}
+	handler.codeMutex.Unlock()
+
+	reqBody := AutoRegisterRequest{
+		Type:       "pbs",
+		Host:       "https://192.168.1.50:8007",
+		TokenID:    "pulse-monitor@pbs!pulse-1700000000",
+		TokenValue: "new-secret",
+		ServerName: "pbs01",
+		Source:     "agent",
+		AuthToken:  tokenValue,
+	}
+
+	body, _ := json.Marshal(reqBody)
+	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleAutoRegister(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("re-registration failed: status=%d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	if len(cfg.PBSInstances) != 1 {
+		t.Fatalf("expected 1 PBS instance, got %d", len(cfg.PBSInstances))
+	}
+
+	node := cfg.PBSInstances[0]
+	if node.Host != "https://pbs.example.com:8007" {
+		t.Errorf("PBS user-configured hostname was overwritten: got %q, want %q",
+			node.Host, "https://pbs.example.com:8007")
+	}
+	if node.TokenValue != "new-secret" {
+		t.Errorf("PBS token value not updated: got %q, want %q", node.TokenValue, "new-secret")
+	}
+}
+
 // TestAutoRegisterAgentDifferentHostsSameNameStaySeparate verifies that two
 // genuinely different hosts with the same name but non-Pulse tokens (e.g.,
 // manually created tokens) are NOT merged. Regression test for Issue #891.

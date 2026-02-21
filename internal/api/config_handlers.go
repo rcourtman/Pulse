@@ -5241,12 +5241,23 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 			// This allows IP changes to update existing nodes without creating duplicates
 			if req.ServerName != "" && strings.EqualFold(node.Name, req.ServerName) && node.TokenName == req.TokenID {
 				existingIndex = i
-				// Update the host to the new IP
-				log.Info().
-					Str("oldHost", node.Host).
-					Str("newHost", host).
-					Str("node", req.ServerName).
-					Msg("Detected IP change for existing node - updating host")
+				// When an agent re-registers, preserve the existing host. The user may
+				// have edited it to a public URL/IP that differs from the agent's local
+				// IP. Only allow non-agent sources to update the host (true DHCP). (#1283)
+				if req.Source == "agent" && node.Host != host {
+					preserveHost = true
+					log.Info().
+						Str("existingHost", node.Host).
+						Str("agentHost", host).
+						Str("node", req.ServerName).
+						Msg("Agent re-registration with same token - preserving configured host URL")
+				} else if node.Host != host {
+					log.Info().
+						Str("oldHost", node.Host).
+						Str("newHost", host).
+						Str("node", req.ServerName).
+						Msg("Detected IP change for existing node - updating host")
+				}
 				break
 			}
 			// Agent re-registration: same server name + both tokens created by Pulse agent.
@@ -5299,11 +5310,21 @@ func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Reque
 			// DHCP case: same hostname AND same token = same physical host with new IP
 			if req.ServerName != "" && strings.EqualFold(node.Name, req.ServerName) && node.TokenName == req.TokenID {
 				existingIndex = i
-				log.Info().
-					Str("oldHost", node.Host).
-					Str("newHost", host).
-					Str("node", req.ServerName).
-					Msg("Detected IP change for existing node - updating host")
+				// When an agent re-registers, preserve the existing host (#1283)
+				if req.Source == "agent" && node.Host != host {
+					preserveHost = true
+					log.Info().
+						Str("existingHost", node.Host).
+						Str("agentHost", host).
+						Str("node", req.ServerName).
+						Msg("Agent re-registration with same token - preserving configured host URL")
+				} else if node.Host != host {
+					log.Info().
+						Str("oldHost", node.Host).
+						Str("newHost", host).
+						Str("node", req.ServerName).
+						Msg("Detected IP change for existing node - updating host")
+				}
 				break
 			}
 			// Agent re-registration: same server name + both Pulse agent tokens (#1245)
