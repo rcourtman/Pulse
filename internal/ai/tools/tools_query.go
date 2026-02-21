@@ -3012,13 +3012,29 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 		return NewErrorResult(fmt.Errorf("invalid type: %s. Use node, vm, container, docker, or docker_host", typeFilter)), nil
 	}
 
-	// normalizeForSearch replaces common separators with spaces for fuzzy matching
+	// normalizeForSearch replaces common separators with spaces and splits at
+	// alpha↔numeric boundaries for fuzzy matching. This allows queries like
+	// "LXC112", "VM100", "CT201" to match VMID candidates ("112", "100", "201").
 	normalizeForSearch := func(s string) string {
 		s = strings.ToLower(s)
 		s = strings.ReplaceAll(s, "-", " ")
 		s = strings.ReplaceAll(s, "_", " ")
 		s = strings.ReplaceAll(s, ".", " ")
-		return s
+		// Split at alpha↔numeric boundaries: "lxc112" → "lxc 112"
+		var buf strings.Builder
+		buf.Grow(len(s) + 4)
+		for i, ch := range s {
+			if i > 0 {
+				prev := s[i-1]
+				cur := byte(ch)
+				if (prev >= 'a' && prev <= 'z' && cur >= '0' && cur <= '9') ||
+					(prev >= '0' && prev <= '9' && cur >= 'a' && cur <= 'z') {
+					buf.WriteByte(' ')
+				}
+			}
+			buf.WriteRune(ch)
+		}
+		return buf.String()
 	}
 
 	matchesQuery := func(query string, candidates ...string) bool {
@@ -3122,8 +3138,9 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 			if !statusMatchesFilter(status, statusFilter) {
 				continue
 			}
-			// Build searchable candidates: name, ID, VMID, IPs, tags
-			candidates := []string{vm.Name(), vm.ID(), fmt.Sprintf("%d", vm.VMID())}
+			// Build searchable candidates: name, ID, VMID, type-prefixed VMID, IPs, tags
+			vmidStr := fmt.Sprintf("%d", vm.VMID())
+			candidates := []string{vm.Name(), vm.ID(), vmidStr, "vm" + vmidStr, "qemu" + vmidStr}
 			candidates = append(candidates, vm.IPAddresses()...)
 			candidates = append(candidates, vm.Tags()...)
 
@@ -3149,8 +3166,9 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 			if !statusMatchesFilter(status, statusFilter) {
 				continue
 			}
-			// Build searchable candidates: name, ID, VMID, IPs, tags
-			candidates := []string{ct.Name(), ct.ID(), fmt.Sprintf("%d", ct.VMID())}
+			// Build searchable candidates: name, ID, VMID, type-prefixed VMID, IPs, tags
+			vmidStr := fmt.Sprintf("%d", ct.VMID())
+			candidates := []string{ct.Name(), ct.ID(), vmidStr, "lxc" + vmidStr, "ct" + vmidStr}
 			candidates = append(candidates, ct.IPAddresses()...)
 			candidates = append(candidates, ct.Tags()...)
 

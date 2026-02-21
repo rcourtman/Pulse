@@ -170,6 +170,32 @@ func TestExecuteSearchResources(t *testing.T) {
 	if len(response.Matches) != 1 || response.Matches[0].Type != "vm" || response.Matches[0].Name != "web-vm" {
 		t.Fatalf("unexpected search response: %+v", response)
 	}
+
+	// Proxmox-style type+VMID patterns: "LXC200", "VM100", "CT200"
+	for _, tc := range []struct {
+		query    string
+		wantType string
+		wantName string
+	}{
+		{"LXC200", "container", "db-ct"},
+		{"CT200", "container", "db-ct"},
+		{"VM100", "vm", "web-vm"},
+		{"vm100", "vm", "web-vm"},
+	} {
+		result, err = executor.executeSearchResources(context.Background(), map[string]interface{}{
+			"query": tc.query,
+		})
+		if err != nil {
+			t.Fatalf("query %q: unexpected error: %v", tc.query, err)
+		}
+		response = ResourceSearchResponse{}
+		if err := json.Unmarshal([]byte(result.Content[0].Text), &response); err != nil {
+			t.Fatalf("query %q: decode response: %v", tc.query, err)
+		}
+		if len(response.Matches) != 1 || response.Matches[0].Type != tc.wantType || response.Matches[0].Name != tc.wantName {
+			t.Fatalf("query %q: expected 1 match (%s %s), got %+v", tc.query, tc.wantType, tc.wantName, response.Matches)
+		}
+	}
 }
 
 func TestExecuteSearchResources_Errors(t *testing.T) {
