@@ -1881,7 +1881,6 @@ const Recovery: Component = () => {
                               const subject = buildSubjectLabelForPoint(p, resIndex);
                               const mode = (String(p.mode || '').trim().toLowerCase() as ArtifactMode) || 'local';
                               const repoLabel = buildRepositoryLabelForPoint(p);
-                              const detailsSummary = String(p.display?.detailsSummary || '').trim();
                               const provider = String(p.provider || '').trim();
                               const outcome = normalizeOutcome(p.outcome);
                               const completedMs = p.completedAt ? Date.parse(p.completedAt) : 0;
@@ -1913,33 +1912,23 @@ const Recovery: Component = () => {
                                           case 'subject':
                                             return (
                                               <TableCell
-                                                class="px-3 py-0.5 text-slate-900 dark:text-slate-100"
+                                                class="max-w-[420px] whitespace-nowrap px-3 py-0.5 text-slate-900 dark:text-slate-100"
                                                 title={subject}
                                               >
-                                                <div class="max-w-[420px]">
-                                                  <div class="flex min-w-0 items-center gap-1 whitespace-nowrap">
-                                                    <span class="truncate">{subject}</span>
-                                                    <Show when={p.immutable === true}>
-                                                      <svg
-                                                        class="h-3 w-3 shrink-0 text-emerald-500 dark:text-emerald-400"
-                                                        fill="none"
-                                                        stroke="currentColor"
-                                                        viewBox="0 0 24 24"
-                                                        aria-hidden="true"
-                                                      >
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3l7 4v5c0 5-3.5 7.5-7 9-3.5-1.5-7-4-7-9V7l7-4z" />
-                                                      </svg>
-                                                    </Show>
-                                                  </div>
-                                                  <Show when={detailsSummary}>
-                                                    <div
-                                                      class="max-w-[420px] truncate text-[10px] text-slate-400 dark:text-slate-500"
-                                                      title={detailsSummary}
+                                                <span class="inline-flex min-w-0 max-w-full items-center gap-1">
+                                                  <span class="truncate">{subject}</span>
+                                                  <Show when={p.immutable === true}>
+                                                    <svg
+                                                      class="h-3 w-3 shrink-0 text-emerald-500 dark:text-emerald-400"
+                                                      fill="none"
+                                                      stroke="currentColor"
+                                                      viewBox="0 0 24 24"
+                                                      aria-hidden="true"
                                                     >
-                                                      {detailsSummary}
-                                                    </div>
+                                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3l7 4v5c0 5-3.5 7.5-7 9-3.5-1.5-7-4-7-9V7l7-4z" />
+                                                    </svg>
                                                   </Show>
-                                                </div>
+                                                </span>
                                               </TableCell>
                                             );
                                           case 'entityId':
